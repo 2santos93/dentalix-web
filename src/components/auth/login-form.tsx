@@ -43,7 +43,7 @@ export function LoginForm({ tenant }: { tenant: string | null }) {
         tenant: effectiveTenant,
       });
       setTokens({ accessToken: res.accessToken, refreshToken: res.refreshToken });
-      router.push('/dashboard');
+      router.push('/patients');
     } catch (err) {
       setError(err instanceof ApiError ? err.message : copy.genericError);
     } finally {
