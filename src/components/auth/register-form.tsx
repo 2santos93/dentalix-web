@@ -1,5 +1,6 @@
 'use client';
-import { useState, type FormEvent } from 'react';
+import * as React from 'react';
+import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { apiFetch, ApiError } from '@/lib/api/client';
 
@@ -31,7 +32,7 @@ export function RegisterForm({ tenant }: { tenant: string | null }) {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  async function handleSubmit(e: FormEvent<HTMLFormElement>) {
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
     setSubmitting(true);
