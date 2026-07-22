@@ -15,16 +15,25 @@ const copy = {
   title: 'Pacientes',
   newPatient: 'Nuevo paciente',
   genericError: 'No pudimos cargar los pacientes. Intenta de nuevo.',
+  retry: 'Reintentar',
+  checkingSession: 'Verificando sesión…',
 };
 
 export default function PatientsPage() {
   const router = useRouter();
   const accessToken = useAuthStore((s) => s.accessToken);
+  const hasHydrated = useAuthStore((s) => s._hasHydrated);
   const [patients, setPatients] = useState<Patient[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [retryCount, setRetryCount] = useState(0);
 
   useEffect(() => {
+    // Don't decide anything until the persisted store has rehydrated —
+    // accessToken is null until then, and redirecting on that would bounce
+    // an already-authenticated user.
+    if (!hasHydrated) return;
+
     if (!accessToken) {
       router.replace('/login');
       return;
@@ -52,7 +61,17 @@ export default function PatientsPage() {
     return () => {
       cancelled = true;
     };
-  }, [accessToken, router]);
+  }, [accessToken, router, hasHydrated, retryCount]);
+
+  if (!hasHydrated) {
+    return (
+      <div className="flex min-h-full flex-1 items-center justify-center bg-bg px-4 py-8">
+        <p role="status" className="text-sm text-muted">
+          {copy.checkingSession}
+        </p>
+      </div>
+    );
+  }
 
   if (!accessToken) {
     return null;
@@ -73,13 +92,26 @@ export default function PatientsPage() {
         </div>
       </div>
 
-      {error && (
-        <p role="alert" className="text-sm text-danger">
-          {error}
-        </p>
+      {error ? (
+        <div className="flex flex-col items-start gap-3">
+          <p role="alert" className="text-sm text-danger">
+            {error}
+          </p>
+          <button
+            type="button"
+            onClick={() => {
+              setLoading(true);
+              setError(null);
+              setRetryCount((c) => c + 1);
+            }}
+            className="rounded-md border border-border px-3 py-1.5 text-sm font-medium text-ink"
+          >
+            {copy.retry}
+          </button>
+        </div>
+      ) : (
+        <PatientsTable patients={patients} loading={loading} />
       )}
-
-      <PatientsTable patients={patients} loading={loading} />
     </div>
   );
 }
