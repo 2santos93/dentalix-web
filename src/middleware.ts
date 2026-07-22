@@ -3,9 +3,12 @@ import { parseTenantFromHost } from './lib/tenant';
 
 export function middleware(req: NextRequest) {
   const tenant = parseTenantFromHost(req.headers.get('host'));
-  const res = NextResponse.next();
-  if (tenant) res.headers.set('x-tenant', tenant);
-  return res;
+  // Forward on the REQUEST headers (not the response) so Server Components
+  // downstream (e.g. layout.tsx via `headers()`) can read `x-tenant`.
+  // Setting it on the response only reaches the browser/client, never RSC.
+  const requestHeaders = new Headers(req.headers);
+  if (tenant) requestHeaders.set('x-tenant', tenant);
+  return NextResponse.next({ request: { headers: requestHeaders } });
 }
 
 export const config = { matcher: ['/((?!_next|favicon.ico).*)'] };

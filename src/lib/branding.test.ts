@@ -23,4 +23,12 @@ describe('fetchBranding', () => {
     }) as unknown as typeof fetch;
     expect(await fetchBranding('sonrisa')).toEqual({ primaryColor: '#7C3AED', name: 'Sonrisa' });
   });
+
+  it('rejects an invalid/malicious primaryColor and nulls it out (CSS-injection defense)', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ primaryColor: 'red};body{display:none', name: 'Sonrisa' }),
+    }) as unknown as typeof fetch;
+    expect(await fetchBranding('sonrisa')).toEqual({ primaryColor: null, name: 'Sonrisa' });
+  });
 });

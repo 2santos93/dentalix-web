@@ -26,8 +26,12 @@ export default async function RootLayout({
 }: Readonly<{
   children: React.ReactNode;
 }>) {
-  const host = (await headers()).get("host");
-  const branding = await fetchBranding(parseTenantFromHost(host));
+  const h = await headers();
+  // Prefer the tenant resolved by middleware (forwarded on the request via
+  // `x-tenant`); fall back to parsing `host` directly so this still works
+  // when middleware didn't run (e.g. unit tests, static rendering contexts).
+  const tenant = h.get("x-tenant") ?? parseTenantFromHost(h.get("host"));
+  const branding = await fetchBranding(tenant);
 
   return (
     <html
@@ -37,7 +41,13 @@ export default async function RootLayout({
     >
       <head>
         {branding.primaryColor && (
-          <style>{`:root{--color-primary:${branding.primaryColor}}`}</style>
+          // `!important` guarantees the tenant brand color applies in BOTH
+          // light and dark mode: `.dark { --color-primary: ... }` in
+          // tokens.css has equal specificity to this injected `:root` rule,
+          // so without `!important` a dark-mode session could fall back to
+          // the default blue instead of the tenant's color. The dark-mode
+          // default only takes effect when no tenant override exists.
+          <style>{`:root{--color-primary:${branding.primaryColor} !important}`}</style>
         )}
       </head>
       <body className="min-h-full flex flex-col bg-bg text-ink">
