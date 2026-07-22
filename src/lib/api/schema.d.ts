@@ -68,12 +68,74 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/patients": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["PatientsController_list"];
+        put?: never;
+        post: operations["PatientsController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["PatientsController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["PatientsController_update"];
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
         RegisterDto: Record<string, never>;
         LoginDto: Record<string, never>;
+        CreatePatientDto: {
+            firstName: string;
+            lastName: string;
+            /** @enum {string} */
+            docType: "CC" | "TI" | "CE" | "PASSPORT" | "OTHER";
+            docNumber?: string;
+            /** Format: date-time */
+            birthDate?: string;
+            /** @enum {string} */
+            sex: "M" | "F" | "OTHER" | "UNSPECIFIED";
+            phone?: string;
+            email?: string;
+            address?: string;
+            notes?: string;
+        };
+        UpdatePatientDto: {
+            firstName?: string;
+            lastName?: string;
+            /** @enum {string} */
+            docType?: "CC" | "TI" | "CE" | "PASSPORT" | "OTHER";
+            docNumber?: string;
+            /** Format: date-time */
+            birthDate?: string;
+            /** @enum {string} */
+            sex?: "M" | "F" | "OTHER" | "UNSPECIFIED";
+            phone?: string;
+            email?: string;
+            address?: string;
+            notes?: string;
+        };
     };
     responses: never;
     parameters: never;
@@ -152,6 +214,91 @@ export interface operations {
         };
         responses: {
             201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientsController_list: {
+        parameters: {
+            query?: {
+                /** @description Free-text search (name or doc number) */
+                query?: string;
+                page?: number;
+                pageSize?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientsController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreatePatientDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientsController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientsController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdatePatientDto"];
+            };
+        };
+        responses: {
+            200: {
                 headers: {
                     [name: string]: unknown;
                 };
