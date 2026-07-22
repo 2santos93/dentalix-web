@@ -9,7 +9,8 @@
     "lint": "eslint",
     "test": "jest",
     "test:watch": "jest --watch",
-    "codegen": "openapi-typescript http://localhost:3000/docs-json -o src/lib/api/schema.d.ts"
+    "codegen": "openapi-typescript http://localhost:3000/docs-json -o src/lib/api/schema.d.ts",
+    "test:e2e": "E2E_RUN_SUFFIX=$(node -p 'Date.now()') playwright test"
   },
   "dependencies": {
     "next": "16.2.11",
@@ -19,6 +20,7 @@
     "zustand": "^5.0.14"
   },
   "devDependencies": {
+    "@playwright/test": "^1.61.1",
     "@tailwindcss/postcss": "^4",
     "@testing-library/jest-dom": "^7.0.0",
     "@testing-library/react": "^16.3.2",
