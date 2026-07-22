@@ -1,6 +1,8 @@
 import { apiFetch } from '@/lib/api/client';
 import type { components, paths } from '@/lib/api/schema';
 
+export type CreatePatientInput = components['schemas']['CreatePatientDto'];
+
 // The `docType`/`sex` unions are re-used from the generated OpenAPI schema
 // (backend DTOs carry `@ApiProperty({ enum: ... })`) so they stay in sync
 // with the API without duplicating the literal list by hand.
@@ -57,6 +59,25 @@ export async function listPatients(
   const qs = search.toString();
 
   return apiFetch<PatientsListResponse>(`/patients${qs ? `?${qs}` : ''}`, {
+    token,
+    tenant: tenant ?? null,
+  });
+}
+
+/**
+ * `POST /patients`. Like `GET /patients`, the generated `schema.d.ts` has no
+ * response body shape for this route (the controller returns the domain
+ * `Patient` entity, not a `@ApiProperty()`-decorated class) — the response
+ * is cast to the hand-written `Patient` type above.
+ */
+export async function createPatient(
+  token: string,
+  input: CreatePatientInput,
+  tenant?: string | null,
+): Promise<Patient> {
+  return apiFetch<Patient>('/patients', {
+    method: 'POST',
+    body: input,
     token,
     tenant: tenant ?? null,
   });
