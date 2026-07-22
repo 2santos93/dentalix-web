@@ -7,6 +7,9 @@ export function middleware(req: NextRequest) {
   // downstream (e.g. layout.tsx via `headers()`) can read `x-tenant`.
   // Setting it on the response only reaches the browser/client, never RSC.
   const requestHeaders = new Headers(req.headers);
+  // Strip any client-supplied x-tenant first (trust boundary): only the value we
+  // derive from the host is trustworthy. Then set ours when the host has a tenant.
+  requestHeaders.delete('x-tenant');
   if (tenant) requestHeaders.set('x-tenant', tenant);
   return NextResponse.next({ request: { headers: requestHeaders } });
 }
