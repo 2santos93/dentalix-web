@@ -1,13 +1,26 @@
 import { render, screen } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { ThemeToggle } from './theme-toggle';
 
+const mockSetTheme = jest.fn();
 jest.mock('next-themes', () => ({
-  useTheme: () => ({ theme: 'light', setTheme: jest.fn() }),
+  useTheme: () => ({ resolvedTheme: 'light', setTheme: mockSetTheme }),
 }));
 
 describe('ThemeToggle', () => {
-  it('renders a toggle button with an accessible label', () => {
+  beforeEach(() => mockSetTheme.mockClear());
+
+  it('renders a switch with an accessible label, unchecked in light mode', () => {
     render(<ThemeToggle />);
-    expect(screen.getByRole('button', { name: /tema|theme/i })).toBeInTheDocument();
+    const sw = screen.getByRole('switch', { name: /tema|theme/i });
+    expect(sw).toBeInTheDocument();
+    expect(sw).toHaveAttribute('aria-checked', 'false');
+  });
+
+  it('switches to dark when toggled from light', async () => {
+    const user = userEvent.setup();
+    render(<ThemeToggle />);
+    await user.click(screen.getByRole('switch', { name: /tema|theme/i }));
+    expect(mockSetTheme).toHaveBeenCalledWith('dark');
   });
 });
