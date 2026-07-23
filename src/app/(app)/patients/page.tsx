@@ -13,6 +13,7 @@ import { parseTenantFromHost } from '@/lib/tenant';
 // until next-intl wiring lands.
 const copy = {
   title: 'Pacientes',
+  agendaLink: 'Agenda',
   newPatient: 'Nuevo paciente',
   genericError: 'No pudimos cargar los pacientes. Intenta de nuevo.',
   retry: 'Reintentar',
@@ -80,7 +81,12 @@ export default function PatientsPage() {
   return (
     <div className="flex min-h-full flex-1 flex-col gap-6 bg-bg px-4 py-8 md:px-8">
       <div className="flex items-center justify-between gap-4">
-        <h1 className="text-2xl font-semibold text-ink">{copy.title}</h1>
+        <div className="flex items-center gap-4">
+          <h1 className="text-2xl font-semibold text-ink">{copy.title}</h1>
+          <Link href="/agenda" className="text-sm font-medium text-primary">
+            {copy.agendaLink}
+          </Link>
+        </div>
         <div className="flex items-center gap-3">
           <Link
             href="/patients/new"
