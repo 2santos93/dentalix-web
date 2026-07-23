@@ -7,6 +7,7 @@ import { ApiError } from '@/lib/api/client';
 import { getPatient, type Patient } from '@/lib/patients/patients-api';
 import { MedicalHistoryPanel } from '@/components/patients/medical-history-panel';
 import { ClinicalEntriesList } from '@/components/patients/clinical-entries-list';
+import { PatientDetailTabs, type PatientDetailTabKey } from '@/components/patients/patient-detail-tabs';
 import { ThemeToggle } from '@/components/theme/theme-toggle';
 import { parseTenantFromHost } from '@/lib/tenant';
 
@@ -42,8 +43,6 @@ function formatDate(iso: string | null): string {
   return new Date(iso).toLocaleDateString('es');
 }
 
-type TabKey = 'data' | 'clinical-history';
-
 export default function PatientDetailPage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
@@ -54,7 +53,7 @@ export default function PatientDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
-  const [activeTab, setActiveTab] = useState<TabKey>('data');
+  const [activeTab, setActiveTab] = useState<PatientDetailTabKey>('data');
 
   const tenant = typeof window !== 'undefined' ? parseTenantFromHost(window.location.host) : null;
 
@@ -143,40 +142,13 @@ export default function PatientDetailPage() {
         </div>
       ) : patient ? (
         <div className="flex flex-col gap-4">
-          <div role="tablist" aria-label={fullName(patient)} className="flex gap-2 border-b border-border">
-            <button
-              type="button"
-              role="tab"
-              id="tab-data"
-              aria-selected={activeTab === 'data'}
-              aria-controls="tabpanel-data"
-              tabIndex={activeTab === 'data' ? 0 : -1}
-              onClick={() => setActiveTab('data')}
-              className={`px-4 py-2 text-sm font-medium ${
-                activeTab === 'data'
-                  ? 'border-b-2 border-primary text-ink'
-                  : 'text-muted hover:text-ink'
-              }`}
-            >
-              {copy.tabData}
-            </button>
-            <button
-              type="button"
-              role="tab"
-              id="tab-clinical-history"
-              aria-selected={activeTab === 'clinical-history'}
-              aria-controls="tabpanel-clinical-history"
-              tabIndex={activeTab === 'clinical-history' ? 0 : -1}
-              onClick={() => setActiveTab('clinical-history')}
-              className={`px-4 py-2 text-sm font-medium ${
-                activeTab === 'clinical-history'
-                  ? 'border-b-2 border-primary text-ink'
-                  : 'text-muted hover:text-ink'
-              }`}
-            >
-              {copy.tabClinicalHistory}
-            </button>
-          </div>
+          <PatientDetailTabs
+            activeTab={activeTab}
+            onTabChange={setActiveTab}
+            tablistLabel={fullName(patient)}
+            dataLabel={copy.tabData}
+            clinicalHistoryLabel={copy.tabClinicalHistory}
+          />
 
           {activeTab === 'data' && (
             <div

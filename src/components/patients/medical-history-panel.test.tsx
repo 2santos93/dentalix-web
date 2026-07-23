@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MedicalHistoryPanel } from './medical-history-panel';
 import { getMedicalHistory, saveMedicalHistory } from '@/lib/patients/clinical-api';
@@ -52,13 +52,67 @@ describe('MedicalHistoryPanel', () => {
     mockedGet.mockResolvedValue(latest);
     render(<MedicalHistoryPanel token="tok" tenant={null} patientId="p1" />);
 
-    expect(await screen.findByText('Penicilina')).toBeInTheDocument();
-    expect(screen.getByText('Hipertensión')).toBeInTheDocument();
-    expect(screen.getByText('Losartán')).toBeInTheDocument();
-    expect(screen.getByText('Fumador')).toBeInTheDocument();
-    expect(screen.getByText('Alergia severa')).toBeInTheDocument();
-    expect(screen.getByText('Paciente colaborador')).toBeInTheDocument();
-    expect(screen.getByText(/versión 2/i)).toBeInTheDocument();
+    const versionLabel = await screen.findByText(/versión 2/i);
+    // Scope to the read-only summary card: the form below is now
+    // pre-filled (carry-forward fix) with the same values, so an
+    // unscoped `getByText` would match both the <dd> and the <textarea>.
+    const summaryCard = versionLabel.closest('div') as HTMLElement;
+
+    expect(within(summaryCard).getByText('Penicilina')).toBeInTheDocument();
+    expect(within(summaryCard).getByText('Hipertensión')).toBeInTheDocument();
+    expect(within(summaryCard).getByText('Losartán')).toBeInTheDocument();
+    expect(within(summaryCard).getByText('Fumador')).toBeInTheDocument();
+    expect(within(summaryCard).getByText('Alergia severa')).toBeInTheDocument();
+    expect(within(summaryCard).getByText('Paciente colaborador')).toBeInTheDocument();
+    expect(versionLabel).toBeInTheDocument();
+  });
+
+  it('pre-fills the save-new-version form from the latest version (carry-forward)', async () => {
+    mockedGet.mockResolvedValue(latest);
+    render(<MedicalHistoryPanel token="tok" tenant={null} patientId="p1" />);
+
+    // Wait for the fetched version to render before asserting on the form,
+    // which is synced from it in the same load effect.
+    await screen.findByText(/versión 2/i);
+
+    expect(screen.getByLabelText(/alergias/i)).toHaveValue('Penicilina');
+    expect(screen.getByLabelText(/condiciones cr[oó]nicas/i)).toHaveValue('Hipertensión');
+    expect(screen.getByLabelText(/medicamentos actuales/i)).toHaveValue('Losartán');
+    expect(screen.getByLabelText(/h[aá]bitos/i)).toHaveValue('Fumador');
+    expect(screen.getByLabelText(/alertas m[eé]dicas/i)).toHaveValue('Alergia severa');
+    expect(screen.getByLabelText(/notas/i)).toHaveValue('Paciente colaborador');
+  });
+
+  it('carries forward an untouched field on save, preventing it from being wiped', async () => {
+    mockedGet.mockResolvedValue(latest);
+    const saved = { ...latest, version: 3, notes: 'Nota actualizada' };
+    mockedSave.mockResolvedValue(saved);
+
+    const user = userEvent.setup();
+    render(<MedicalHistoryPanel token="tok" tenant={null} patientId="p1" />);
+    await screen.findByText(/versión 2/i);
+
+    // Only touch "notes" — allergies etc. must still be submitted because
+    // the form was pre-filled from `latest`, not left empty.
+    const notesField = screen.getByLabelText(/notas/i);
+    await user.clear(notesField);
+    await user.type(notesField, 'Nota actualizada');
+    await user.click(screen.getByRole('button', { name: /guardar/i }));
+
+    await waitFor(() => expect(mockedSave).toHaveBeenCalledTimes(1));
+    expect(mockedSave).toHaveBeenCalledWith(
+      'tok',
+      'p1',
+      expect.objectContaining({
+        allergies: 'Penicilina',
+        chronicConditions: 'Hipertensión',
+        currentMedications: 'Losartán',
+        habits: 'Fumador',
+        medicalAlerts: 'Alergia severa',
+        notes: 'Nota actualizada',
+      }),
+      null,
+    );
   });
 
   it('renders the save-new-version form with accessible labels', async () => {

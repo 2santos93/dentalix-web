@@ -44,6 +44,27 @@ const emptyForm = {
   notes: '',
 };
 
+/**
+ * `saveMedicalHistory` creates a brand-new version from ONLY the fields
+ * submitted in the form — any field left out (because the form was empty)
+ * comes back `null` on the new version, silently wiping previously recorded
+ * data (allergies, chronic conditions, …). Carrying the latest version's
+ * values into the form — on load AND right after a successful save —
+ * means an untouched field still gets re-submitted with its prior value
+ * instead of being dropped.
+ */
+function formFromHistory(history: MedicalHistory | null): typeof emptyForm {
+  if (!history) return emptyForm;
+  return {
+    allergies: history.allergies ?? '',
+    chronicConditions: history.chronicConditions ?? '',
+    currentMedications: history.currentMedications ?? '',
+    habits: history.habits ?? '',
+    medicalAlerts: history.medicalAlerts ?? '',
+    notes: history.notes ?? '',
+  };
+}
+
 export function MedicalHistoryPanel({ token, tenant, patientId }: MedicalHistoryPanelProps) {
   const [latest, setLatest] = useState<MedicalHistory | null>(null);
   const [loading, setLoading] = useState(true);
@@ -60,6 +81,9 @@ export function MedicalHistoryPanel({ token, tenant, patientId }: MedicalHistory
         const data = await getMedicalHistory(token, patientId, tenant);
         if (cancelled) return;
         setLatest(data);
+        // Set once, on load — carries the latest version's values forward
+        // so an untouched field isn't silently wiped on next save.
+        setForm(formFromHistory(data));
         setLoadError(null);
       } catch (err) {
         if (cancelled) return;
@@ -93,7 +117,9 @@ export function MedicalHistoryPanel({ token, tenant, patientId }: MedicalHistory
       };
       const saved = await saveMedicalHistory(token, patientId, input, tenant);
       setLatest(saved);
-      setForm(emptyForm);
+      // Re-sync the form from the just-saved version (not emptyForm) so the
+      // next edit still carries forward whatever wasn't just changed.
+      setForm(formFromHistory(saved));
     } catch (err) {
       setSaveError(err instanceof ApiError ? err.message : copy.genericSaveError);
     } finally {
