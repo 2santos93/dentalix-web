@@ -46,8 +46,15 @@ function toIsoInstant(date: string, time: string): string {
 interface AppointmentFormProps {
   token: string;
   tenant: string | null;
-  /** Called with the created appointment once `createAppointment` succeeds — the caller (the `/agenda` page) refreshes the day list in place, it does not remount this form. */
+  /** Called with the created appointment once `createAppointment` succeeds — the caller (`AgendaView`) refreshes the day list in place, it does not remount this form. */
   onCreated: (appointment: Appointment) => void;
+  /**
+   * Pre-fills the date field to the day currently being viewed (e.g.
+   * `AgendaView`'s `selectedDate`), so a cita created from an already-picked
+   * day doesn't default back to blank. Optional and backward-compatible —
+   * omitting it keeps the previous empty-by-default behavior.
+   */
+  defaultDate?: string;
 }
 
 /**
@@ -62,7 +69,7 @@ interface AppointmentFormProps {
  * v1; a live server-side search is a natural follow-up once patient rosters
  * grow past one page.
  */
-export function AppointmentForm({ token, tenant, onCreated }: AppointmentFormProps) {
+export function AppointmentForm({ token, tenant, onCreated, defaultDate }: AppointmentFormProps) {
   const [patients, setPatients] = useState<Patient[]>([]);
   const [patientsLoading, setPatientsLoading] = useState(true);
   const [patientsError, setPatientsError] = useState<string | null>(null);
@@ -76,7 +83,7 @@ export function AppointmentForm({ token, tenant, onCreated }: AppointmentFormPro
   const [staffReloadKey, setStaffReloadKey] = useState(0);
   const [providerId, setProviderId] = useState('');
 
-  const [date, setDate] = useState('');
+  const [date, setDate] = useState(defaultDate ?? '');
   const [startTime, setStartTime] = useState('');
   const [endTime, setEndTime] = useState('');
   const [reason, setReason] = useState('');
