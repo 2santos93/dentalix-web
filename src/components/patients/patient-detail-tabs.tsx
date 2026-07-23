@@ -1,6 +1,6 @@
 'use client';
 
-export type PatientDetailTabKey = 'data' | 'clinical-history';
+export type PatientDetailTabKey = 'data' | 'clinical-history' | 'odontogram';
 
 interface PatientDetailTabsProps {
   activeTab: PatientDetailTabKey;
@@ -8,12 +8,14 @@ interface PatientDetailTabsProps {
   tablistLabel: string;
   dataLabel: string;
   clinicalHistoryLabel: string;
+  odontogramLabel: string;
 }
 
 /**
- * ARIA tabs for the patient-detail page ("Datos" / "Historia clínica").
+ * ARIA tabs for the patient-detail page ("Datos" / "Historia clínica" /
+ * "Odontograma").
  *
- * Uses plain native `<button>` elements (no roving `tabIndex={-1}`) so BOTH
+ * Uses plain native `<button>` elements (no roving `tabIndex={-1}`) so ALL
  * tabs stay in the natural Tab order and activate on click AND on native
  * Enter/Space (built into `<button>` — no keydown handler needed).
  */
@@ -23,6 +25,7 @@ export function PatientDetailTabs({
   tablistLabel,
   dataLabel,
   clinicalHistoryLabel,
+  odontogramLabel,
 }: PatientDetailTabsProps) {
   return (
     <div role="tablist" aria-label={tablistLabel} className="flex gap-2 border-b border-border">
@@ -53,6 +56,19 @@ export function PatientDetailTabs({
         }`}
       >
         {clinicalHistoryLabel}
+      </button>
+      <button
+        type="button"
+        role="tab"
+        id="tab-odontogram"
+        aria-selected={activeTab === 'odontogram'}
+        aria-controls="tabpanel-odontogram"
+        onClick={() => onTabChange('odontogram')}
+        className={`px-4 py-2 text-sm font-medium ${
+          activeTab === 'odontogram' ? 'border-b-2 border-primary text-ink' : 'text-muted hover:text-ink'
+        }`}
+      >
+        {odontogramLabel}
       </button>
     </div>
   );

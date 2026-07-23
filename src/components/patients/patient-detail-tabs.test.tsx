@@ -16,6 +16,7 @@ function Harness() {
         tablistLabel="Ana García"
         dataLabel="Datos"
         clinicalHistoryLabel="Historia clínica"
+        odontogramLabel="Odontograma"
       />
       {activeTab === 'data' && (
         <div role="tabpanel" id="tabpanel-data" aria-labelledby="tab-data">
@@ -27,21 +28,39 @@ function Harness() {
           Historia clínica panel
         </div>
       )}
+      {activeTab === 'odontogram' && (
+        <div role="tabpanel" id="tabpanel-odontogram" aria-labelledby="tab-odontogram">
+          Odontograma panel
+        </div>
+      )}
     </div>
   );
 }
 
 describe('PatientDetailTabs', () => {
-  it('renders both tabs as native buttons with no roving tabindex trap', () => {
+  it('renders all three tabs as native buttons with no roving tabindex trap', () => {
     render(<Harness />);
     const dataTab = screen.getByRole('tab', { name: 'Datos' });
     const historyTab = screen.getByRole('tab', { name: 'Historia clínica' });
+    const odontogramTab = screen.getByRole('tab', { name: 'Odontograma' });
 
     expect(dataTab.tagName).toBe('BUTTON');
     expect(historyTab.tagName).toBe('BUTTON');
+    expect(odontogramTab.tagName).toBe('BUTTON');
     // The bug being fixed: the inactive tab used to carry tabIndex={-1},
     // removing it from the Tab order entirely.
     expect(historyTab).not.toHaveAttribute('tabindex', '-1');
+  });
+
+  it('lets a user click the Odontograma tab and shows its panel', async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+
+    await user.click(screen.getByRole('tab', { name: 'Odontograma' }));
+
+    expect(screen.getByRole('tab', { name: 'Odontograma' })).toHaveAttribute('aria-selected', 'true');
+    expect(screen.getByText('Odontograma panel')).toBeInTheDocument();
+    expect(screen.queryByText('Datos panel')).not.toBeInTheDocument();
   });
 
   it('lets a keyboard-only user Tab to the inactive tab and activate it with Enter', async () => {

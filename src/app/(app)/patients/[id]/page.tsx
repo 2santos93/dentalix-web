@@ -10,6 +10,12 @@ import { ClinicalEntriesList } from '@/components/patients/clinical-entries-list
 import { PatientDetailTabs, type PatientDetailTabKey } from '@/components/patients/patient-detail-tabs';
 import { ThemeToggle } from '@/components/theme/theme-toggle';
 import { parseTenantFromHost } from '@/lib/tenant';
+import { OdontogramChart } from '@/components/odontogram/odontogram-chart';
+import { ToothTimeline } from '@/components/odontogram/tooth-timeline';
+import { ToothRecordPanel } from '@/components/odontogram/tooth-record-panel';
+import { getOdontogram, type ToothGroup, type ToothSurface } from '@/lib/odontogram/odontogram-api';
+import { projectOdontogram } from '@/lib/odontogram/projection';
+import { listCatalogItems, type DentalCatalogItem } from '@/lib/odontogram/catalog-api';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
@@ -21,6 +27,12 @@ const copy = {
   retry: 'Reintentar',
   tabData: 'Datos',
   tabClinicalHistory: 'Historia clínica',
+  tabOdontogram: 'Odontograma',
+  odontogramLoading: 'Cargando odontograma…',
+  odontogramGenericError: 'No pudimos cargar el odontograma. Intenta de nuevo.',
+  catalogGenericError: 'No pudimos cargar el catálogo. Intenta de nuevo.',
+  selectToothPrompt: 'Selecciona un diente para ver su historial y registrar un hallazgo o procedimiento.',
+  toothHeading: (fdi: string) => `Diente ${fdi}`,
   docTypeLabel: 'Tipo de documento',
   docNumberLabel: 'Número de documento',
   birthDateLabel: 'Fecha de nacimiento',
@@ -41,6 +53,149 @@ function fullName(patient: Patient): string {
 function formatDate(iso: string | null): string {
   if (!iso) return copy.fieldFallback;
   return new Date(iso).toLocaleDateString('es');
+}
+
+interface OdontogramTabProps {
+  token: string;
+  patientId: string;
+}
+
+/**
+ * Composes Task 5's `OdontogramChart` with Task 6's `ToothTimeline` +
+ * `ToothRecordPanel`. Loads the odontogram + the dental catalog once, then:
+ * - clicking a tooth (or a surface) selects it, showing that tooth's
+ *   timeline + record form below the chart;
+ * - clicking a surface additionally pre-checks that surface in the form;
+ * - a successful `addToothRecord` (inside `ToothRecordPanel`) bumps
+ *   `reloadKey` (re-fetches the odontogram -> the chart recolors) and
+ *   `timelineRefreshKey` (re-fetches that tooth's timeline).
+ */
+function OdontogramTab({ token, patientId }: OdontogramTabProps) {
+  const [toothGroups, setToothGroups] = useState<ToothGroup[]>([]);
+  const [catalogItems, setCatalogItems] = useState<DentalCatalogItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
+
+  const [selectedTooth, setSelectedTooth] = useState<string | null>(null);
+  const [initialSurface, setInitialSurface] = useState<ToothSurface | null>(null);
+  const [timelineRefreshKey, setTimelineRefreshKey] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      setLoading(true);
+      try {
+        const [groups, catalog] = await Promise.all([
+          getOdontogram(token, patientId),
+          listCatalogItems(token, { activeOnly: true }),
+        ]);
+        if (cancelled) return;
+        setToothGroups(groups);
+        setCatalogItems(catalog);
+        setLoadError(null);
+      } catch (err) {
+        if (cancelled) return;
+        setLoadError(
+          err instanceof ApiError
+            ? err.message
+            : `${copy.odontogramGenericError} ${copy.catalogGenericError}`,
+        );
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [token, patientId, reloadKey]);
+
+  const catalogById = new Map(catalogItems.map((item) => [item.id, item]));
+  const states = projectOdontogram(toothGroups, catalogById);
+
+  function handleSelectTooth(fdi: string) {
+    setSelectedTooth(fdi);
+    setInitialSurface(null);
+  }
+
+  function handleSelectSurface(fdi: string, surface: ToothSurface) {
+    setSelectedTooth(fdi);
+    setInitialSurface(surface);
+  }
+
+  function handleRecordAdded() {
+    // Refetches the odontogram (so the chart recolors with the new record)
+    // and bumps the timeline's refresh key (so it re-fetches that tooth's
+    // history) — the record itself was already POSTed by ToothRecordPanel.
+    setReloadKey((k) => k + 1);
+    setTimelineRefreshKey((k) => k + 1);
+  }
+
+  if (loading) {
+    return (
+      <p role="status" className="text-sm text-muted">
+        {copy.odontogramLoading}
+      </p>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div className="flex flex-col items-start gap-3">
+        <p role="alert" className="text-sm text-danger">
+          {loadError}
+        </p>
+        <button
+          type="button"
+          onClick={() => setReloadKey((k) => k + 1)}
+          className="rounded-md border border-border px-3 py-1.5 text-sm font-medium text-ink"
+        >
+          {copy.retry}
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-6">
+      <OdontogramChart
+        states={states}
+        catalogById={catalogById}
+        selectedTooth={selectedTooth ?? undefined}
+        onSelectTooth={handleSelectTooth}
+        onSelectSurface={handleSelectSurface}
+      />
+
+      {selectedTooth ? (
+        <div className="grid gap-6 lg:grid-cols-2">
+          <section className="flex flex-col gap-3">
+            <h2 className="text-lg font-semibold text-ink">{copy.toothHeading(selectedTooth)}</h2>
+            <ToothTimeline
+              token={token}
+              patientId={patientId}
+              toothNumber={selectedTooth}
+              catalogById={catalogById}
+              refreshKey={timelineRefreshKey}
+            />
+          </section>
+          <section className="flex flex-col gap-3">
+            <ToothRecordPanel
+              token={token}
+              patientId={patientId}
+              toothNumber={selectedTooth}
+              initialSurface={initialSurface ?? undefined}
+              onRecordAdded={handleRecordAdded}
+            />
+          </section>
+        </div>
+      ) : (
+        <p role="status" className="text-sm text-muted">
+          {copy.selectToothPrompt}
+        </p>
+      )}
+    </div>
+  );
 }
 
 export default function PatientDetailPage() {
@@ -148,6 +303,7 @@ export default function PatientDetailPage() {
             tablistLabel={fullName(patient)}
             dataLabel={copy.tabData}
             clinicalHistoryLabel={copy.tabClinicalHistory}
+            odontogramLabel={copy.tabOdontogram}
           />
 
           {activeTab === 'data' && (
@@ -209,6 +365,17 @@ export default function PatientDetailPage() {
                 <h2 className="text-lg font-semibold text-ink">{copy.entriesHeading}</h2>
                 <ClinicalEntriesList token={accessToken} tenant={tenant} patientId={patientId} />
               </section>
+            </div>
+          )}
+
+          {activeTab === 'odontogram' && (
+            <div
+              role="tabpanel"
+              id="tabpanel-odontogram"
+              aria-labelledby="tab-odontogram"
+              className="flex flex-col gap-4"
+            >
+              <OdontogramTab token={accessToken} patientId={patientId} />
             </div>
           )}
         </div>
