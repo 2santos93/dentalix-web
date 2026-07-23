@@ -154,6 +154,40 @@ describe('MedicalHistoryPanel', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Error del servidor');
   });
 
+  it('does not render the save-new-version form when the initial load failed, so no version can be created from an unknown baseline', async () => {
+    const { ApiError } = jest.requireActual('../../lib/api/client');
+    mockedGet.mockRejectedValue(new ApiError(500, 'Error del servidor'));
+
+    render(<MedicalHistoryPanel token="tok" tenant={null} patientId="p1" />);
+    await screen.findByRole('alert');
+
+    // No editable fields, no submit button — there's nothing to save from
+    // (we don't have a trustworthy baseline to carry forward), so the form
+    // that would silently null out allergies/medicalAlerts/etc. on save
+    // must not be rendered at all.
+    expect(screen.queryByLabelText(/alergias/i)).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /guardar/i })).not.toBeInTheDocument();
+    expect(mockedSave).not.toHaveBeenCalled();
+  });
+
+  it('offers a retry action on load error that re-fetches the latest version', async () => {
+    const { ApiError } = jest.requireActual('../../lib/api/client');
+    mockedGet.mockRejectedValueOnce(new ApiError(500, 'Error del servidor'));
+    mockedGet.mockResolvedValueOnce(latest);
+
+    const user = userEvent.setup();
+    render(<MedicalHistoryPanel token="tok" tenant={null} patientId="p1" />);
+    await screen.findByRole('alert');
+
+    await user.click(screen.getByRole('button', { name: /reintentar/i }));
+
+    await screen.findByText(/versión 2/i);
+    expect(mockedGet).toHaveBeenCalledTimes(2);
+    // Once the retry succeeds we have a trustworthy baseline again, so the
+    // form (pre-filled, carry-forward) is back.
+    expect(screen.getByLabelText(/alergias/i)).toHaveValue('Penicilina');
+  });
+
   it('shows an alert with the API error message when saving fails', async () => {
     mockedGet.mockResolvedValue(null);
     const { ApiError } = jest.requireActual('../../lib/api/client');

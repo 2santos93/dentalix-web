@@ -27,6 +27,7 @@ const copy = {
   submitting: 'Guardando…',
   genericLoadError: 'No pudimos cargar la anamnesis. Intenta de nuevo.',
   genericSaveError: 'No pudimos guardar la anamnesis. Intenta de nuevo.',
+  retry: 'Reintentar',
 };
 
 interface MedicalHistoryPanelProps {
@@ -72,6 +73,8 @@ export function MedicalHistoryPanel({ token, tenant, patientId }: MedicalHistory
   const [form, setForm] = useState(emptyForm);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  // Bumped by the retry action to re-run the load effect below.
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -96,10 +99,20 @@ export function MedicalHistoryPanel({ token, tenant, patientId }: MedicalHistory
     return () => {
       cancelled = true;
     };
-  }, [token, tenant, patientId]);
+  }, [token, tenant, patientId, reloadKey]);
+
+  function handleRetry() {
+    setReloadKey((k) => k + 1);
+  }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    // Defense in depth: the form isn't rendered while loadError is set (see
+    // below), but block here too in case this ever gets called some other
+    // way. Without a trustworthy baseline from the latest version, saving
+    // would create a new version from only the submitted fields and
+    // silently null out everything else (allergies, medicalAlerts, …).
+    if (loadError) return;
     setSaveError(null);
     setSubmitting(true);
     try {
@@ -138,9 +151,18 @@ export function MedicalHistoryPanel({ token, tenant, patientId }: MedicalHistory
   return (
     <div className="flex flex-col gap-6">
       {loadError ? (
-        <p role="alert" className="text-sm text-danger">
-          {loadError}
-        </p>
+        <div className="flex flex-col items-start gap-2">
+          <p role="alert" className="text-sm text-danger">
+            {loadError}
+          </p>
+          <button
+            type="button"
+            onClick={handleRetry}
+            className="rounded-md border border-border px-3 py-1.5 text-sm font-medium text-ink"
+          >
+            {copy.retry}
+          </button>
+        </div>
       ) : latest ? (
         <div className="rounded-lg border border-border bg-surface p-4">
           <p className="mb-3 text-sm font-medium text-muted">{copy.versionLabel(latest.version)}</p>
@@ -177,109 +199,118 @@ export function MedicalHistoryPanel({ token, tenant, patientId }: MedicalHistory
         </p>
       )}
 
-      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-        <h3 className="text-base font-semibold text-ink">{copy.formTitle}</h3>
+      {/*
+        While loadError is set we don't have a trustworthy baseline (the
+        latest version failed to fetch) — rendering the form would let the
+        user "save a new version" that silently wipes every field it didn't
+        resubmit. No form at all until a load succeeds (or comes back
+        genuinely empty via the retry above).
+      */}
+      {!loadError && (
+        <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+          <h3 className="text-base font-semibold text-ink">{copy.formTitle}</h3>
 
-        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="flex flex-col gap-1">
+              <label htmlFor="mh-allergies" className="text-sm font-medium text-ink">
+                {copy.allergiesLabel}
+              </label>
+              <textarea
+                id="mh-allergies"
+                name="allergies"
+                rows={2}
+                value={form.allergies}
+                onChange={(e) => setForm((f) => ({ ...f, allergies: e.target.value }))}
+                className="rounded-md border border-border bg-surface px-3 py-2 text-ink"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label htmlFor="mh-chronic-conditions" className="text-sm font-medium text-ink">
+                {copy.chronicConditionsLabel}
+              </label>
+              <textarea
+                id="mh-chronic-conditions"
+                name="chronicConditions"
+                rows={2}
+                value={form.chronicConditions}
+                onChange={(e) => setForm((f) => ({ ...f, chronicConditions: e.target.value }))}
+                className="rounded-md border border-border bg-surface px-3 py-2 text-ink"
+              />
+            </div>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="flex flex-col gap-1">
+              <label htmlFor="mh-current-medications" className="text-sm font-medium text-ink">
+                {copy.currentMedicationsLabel}
+              </label>
+              <textarea
+                id="mh-current-medications"
+                name="currentMedications"
+                rows={2}
+                value={form.currentMedications}
+                onChange={(e) => setForm((f) => ({ ...f, currentMedications: e.target.value }))}
+                className="rounded-md border border-border bg-surface px-3 py-2 text-ink"
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label htmlFor="mh-habits" className="text-sm font-medium text-ink">
+                {copy.habitsLabel}
+              </label>
+              <textarea
+                id="mh-habits"
+                name="habits"
+                rows={2}
+                value={form.habits}
+                onChange={(e) => setForm((f) => ({ ...f, habits: e.target.value }))}
+                className="rounded-md border border-border bg-surface px-3 py-2 text-ink"
+              />
+            </div>
+          </div>
+
           <div className="flex flex-col gap-1">
-            <label htmlFor="mh-allergies" className="text-sm font-medium text-ink">
-              {copy.allergiesLabel}
+            <label htmlFor="mh-medical-alerts" className="text-sm font-medium text-ink">
+              {copy.medicalAlertsLabel}
             </label>
             <textarea
-              id="mh-allergies"
-              name="allergies"
+              id="mh-medical-alerts"
+              name="medicalAlerts"
               rows={2}
-              value={form.allergies}
-              onChange={(e) => setForm((f) => ({ ...f, allergies: e.target.value }))}
+              value={form.medicalAlerts}
+              onChange={(e) => setForm((f) => ({ ...f, medicalAlerts: e.target.value }))}
               className="rounded-md border border-border bg-surface px-3 py-2 text-ink"
             />
           </div>
+
           <div className="flex flex-col gap-1">
-            <label htmlFor="mh-chronic-conditions" className="text-sm font-medium text-ink">
-              {copy.chronicConditionsLabel}
+            <label htmlFor="mh-notes" className="text-sm font-medium text-ink">
+              {copy.notesLabel}
             </label>
             <textarea
-              id="mh-chronic-conditions"
-              name="chronicConditions"
-              rows={2}
-              value={form.chronicConditions}
-              onChange={(e) => setForm((f) => ({ ...f, chronicConditions: e.target.value }))}
+              id="mh-notes"
+              name="notes"
+              rows={3}
+              value={form.notes}
+              onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
               className="rounded-md border border-border bg-surface px-3 py-2 text-ink"
             />
           </div>
-        </div>
 
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div className="flex flex-col gap-1">
-            <label htmlFor="mh-current-medications" className="text-sm font-medium text-ink">
-              {copy.currentMedicationsLabel}
-            </label>
-            <textarea
-              id="mh-current-medications"
-              name="currentMedications"
-              rows={2}
-              value={form.currentMedications}
-              onChange={(e) => setForm((f) => ({ ...f, currentMedications: e.target.value }))}
-              className="rounded-md border border-border bg-surface px-3 py-2 text-ink"
-            />
-          </div>
-          <div className="flex flex-col gap-1">
-            <label htmlFor="mh-habits" className="text-sm font-medium text-ink">
-              {copy.habitsLabel}
-            </label>
-            <textarea
-              id="mh-habits"
-              name="habits"
-              rows={2}
-              value={form.habits}
-              onChange={(e) => setForm((f) => ({ ...f, habits: e.target.value }))}
-              className="rounded-md border border-border bg-surface px-3 py-2 text-ink"
-            />
-          </div>
-        </div>
+          {saveError && (
+            <p role="alert" className="text-sm text-danger">
+              {saveError}
+            </p>
+          )}
 
-        <div className="flex flex-col gap-1">
-          <label htmlFor="mh-medical-alerts" className="text-sm font-medium text-ink">
-            {copy.medicalAlertsLabel}
-          </label>
-          <textarea
-            id="mh-medical-alerts"
-            name="medicalAlerts"
-            rows={2}
-            value={form.medicalAlerts}
-            onChange={(e) => setForm((f) => ({ ...f, medicalAlerts: e.target.value }))}
-            className="rounded-md border border-border bg-surface px-3 py-2 text-ink"
-          />
-        </div>
-
-        <div className="flex flex-col gap-1">
-          <label htmlFor="mh-notes" className="text-sm font-medium text-ink">
-            {copy.notesLabel}
-          </label>
-          <textarea
-            id="mh-notes"
-            name="notes"
-            rows={3}
-            value={form.notes}
-            onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
-            className="rounded-md border border-border bg-surface px-3 py-2 text-ink"
-          />
-        </div>
-
-        {saveError && (
-          <p role="alert" className="text-sm text-danger">
-            {saveError}
-          </p>
-        )}
-
-        <button
-          type="submit"
-          disabled={submitting}
-          className="self-start rounded-md bg-primary px-4 py-2 font-medium text-primary-foreground disabled:opacity-60"
-        >
-          {submitting ? copy.submitting : copy.submit}
-        </button>
-      </form>
+          <button
+            type="submit"
+            disabled={submitting}
+            className="self-start rounded-md bg-primary px-4 py-2 font-medium text-primary-foreground disabled:opacity-60"
+          >
+            {submitting ? copy.submitting : copy.submit}
+          </button>
+        </form>
+      )}
     </div>
   );
 }
