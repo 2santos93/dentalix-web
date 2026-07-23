@@ -102,4 +102,12 @@ describe('Tooth', () => {
     expect(occlusal.getAttribute('style') ?? '').not.toContain('fill:');
     expect(occlusal.getAttribute('class')).toContain('fill-surface');
   });
+
+  it('a healthy (unmarked) surface outline uses the higher-contrast muted stroke token, not the low-contrast border token', () => {
+    render(<Tooth toothNumber="11" onSelectTooth={jest.fn()} onSelectSurface={jest.fn()} />);
+
+    const occlusal = screen.getByRole('button', { name: /diente 11.*oclusal/i });
+    expect(occlusal.getAttribute('class')).toContain('stroke-muted');
+    expect(occlusal.getAttribute('class')).not.toContain('stroke-border');
+  });
 });

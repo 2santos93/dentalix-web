@@ -116,7 +116,7 @@ export function Tooth({
               )}
               onClick={() => onSelectSurface(surface)}
               onKeyDown={(event) => handleSurfaceKeyDown(event, surface)}
-              className="cursor-pointer fill-surface stroke-border transition-colors hover:opacity-80 focus:outline-none focus-visible:stroke-primary"
+              className="cursor-pointer fill-surface stroke-muted transition-colors hover:opacity-80 focus:outline-none focus-visible:stroke-primary"
               style={color ? { fill: color } : undefined}
               strokeWidth={1}
             />
