@@ -173,11 +173,11 @@ export function AgendaView({ token, tenant }: AgendaViewProps) {
     };
   }, [token, providerId, selectedDate, tenant]);
 
-  function refreshAppointmentsInPlace() {
-    if (!token || !providerId) return;
+  function refreshAppointmentsInPlace(): Promise<void> {
+    if (!token || !providerId) return Promise.resolve();
     setAppointmentsRefreshing(true);
     const { from, to } = localDayRange(selectedDate);
-    listAppointments(token, { from, to, providerId }, tenant)
+    return listAppointments(token, { from, to, providerId }, tenant)
       .then((data) => {
         setAppointments(data);
         setAppointmentsRefreshError(null);
@@ -199,22 +199,25 @@ export function AgendaView({ token, tenant }: AgendaViewProps) {
    * `DayAgenda`'s `onStatusChange` — `PATCH`es the appointment's status, then
    * refreshes the day list in place (same no-remount pattern as
    * `handleAppointmentCreated`) so the badge reflects the new status without
-   * losing scroll/focus. Mirrors `refreshAppointmentsInPlace`'s promise-chain
-   * style rather than the `useEffect` loads' async/await style, since it's
-   * triggered by a one-off event handler, not a dependency change.
+   * losing scroll/focus. `refreshAppointmentsInPlace()` is `await`ed (not
+   * fire-and-forget) so `updatingId` — and therefore the row's disabled
+   * `<select>` — stays set for the *whole* window until the refetched
+   * `appointments` state actually lands, not just until the PATCH settles;
+   * otherwise the select would briefly re-enable showing the stale
+   * pre-change status (review fix).
    */
-  function handleStatusChange(id: string, status: AppointmentStatus) {
+  async function handleStatusChange(id: string, status: AppointmentStatus) {
     if (!token) return;
     setUpdatingId(id);
     setStatusChangeError(null);
-    updateAppointment(token, id, { status }, tenant)
-      .then(() => {
-        refreshAppointmentsInPlace();
-      })
-      .catch((err) => {
-        setStatusChangeError(err instanceof ApiError ? err.message : copy.genericStatusChangeError);
-      })
-      .finally(() => setUpdatingId(null));
+    try {
+      await updateAppointment(token, id, { status }, tenant);
+      await refreshAppointmentsInPlace();
+    } catch (err) {
+      setStatusChangeError(err instanceof ApiError ? err.message : copy.genericStatusChangeError);
+    } finally {
+      setUpdatingId(null);
+    }
   }
 
   return (

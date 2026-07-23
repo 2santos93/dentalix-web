@@ -230,6 +230,63 @@ describe('AgendaView', () => {
     expect(screen.getByRole('table', { name: /agenda del día/i })).toBe(table);
   });
 
+  it('keeps the row\'s status select disabled until the in-place refresh actually resolves, not just until the PATCH settles (review fix)', async () => {
+    mockedListStaff.mockResolvedValue(staff);
+
+    // Both the PATCH and the follow-up refetch are DEFERRED so the test can
+    // step through the timeline precisely: resolving `patch` alone must NOT
+    // be enough to re-enable the select — only resolving `refetch` (the
+    // in-place `listAppointments` call `handleStatusChange` triggers after
+    // the PATCH) may. This is exactly the window the old fire-and-forget
+    // `refreshAppointmentsInPlace()` (not awaited, with `updatingId` cleared
+    // in the PATCH's own `.finally`) left open: the select re-enabled while
+    // `appointments` still held the stale pre-change status.
+    const patch = deferred<typeof apt1>();
+    mockedUpdateAppointment.mockReturnValue(patch.promise);
+
+    const refetch = deferred<typeof apt1[]>();
+    let callCount = 0;
+    mockedListAppointments.mockImplementation(() => {
+      callCount += 1;
+      return callCount === 1 ? Promise.resolve([apt1]) : refetch.promise;
+    });
+
+    const user = userEvent.setup();
+    render(<AgendaView token="tok" tenant={null} />);
+
+    const table = await screen.findByRole('table', { name: /agenda del día/i });
+    const statusSelect = within(table).getByRole<HTMLSelectElement>('combobox');
+    expect(statusSelect.value).toBe('SCHEDULED');
+    expect(statusSelect).not.toBeDisabled();
+
+    await user.selectOptions(statusSelect, 'CONFIRMED');
+    // Selecting a new value while disabled-testing must not race ahead:
+    // the PATCH is in flight, so the select is already disabled.
+    expect(statusSelect).toBeDisabled();
+
+    // Resolve the PATCH but leave the refetch pending.
+    patch.resolve({ ...apt1, status: 'CONFIRMED' });
+    await waitFor(() => expect(mockedListAppointments).toHaveBeenCalledTimes(2));
+
+    // THE ASSERTION THAT PROVES THE FIX: the PATCH has settled and the
+    // in-place refresh has started, but has NOT resolved yet — the row must
+    // still be disabled (and must still show the stale SCHEDULED value,
+    // since `appointments` hasn't been updated yet). Against the old
+    // fire-and-forget code, `updatingId` was already cleared here (its
+    // `.finally` ran off the PATCH promise alone), so this assertion fails.
+    expect(within(table).getByRole<HTMLSelectElement>('combobox')).toBeDisabled();
+    expect(within(table).getByRole<HTMLSelectElement>('combobox').value).toBe('SCHEDULED');
+
+    // Now resolve the refresh — only now should the select re-enable, showing
+    // the new status.
+    refetch.resolve([{ ...apt1, status: 'CONFIRMED' }]);
+
+    await waitFor(() =>
+      expect(within(table).getByRole<HTMLSelectElement>('combobox')).not.toBeDisabled(),
+    );
+    expect(within(table).getByRole<HTMLSelectElement>('combobox').value).toBe('CONFIRMED');
+  });
+
   it('sets aria-expanded/aria-controls on the "Nueva cita" toggle and pre-fills AppointmentForm\'s date with the selected day', async () => {
     mockedListStaff.mockResolvedValue(staff);
     mockedListAppointments.mockResolvedValue([]);
