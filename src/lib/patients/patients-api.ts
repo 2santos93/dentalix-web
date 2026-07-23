@@ -82,3 +82,19 @@ export async function createPatient(
     tenant: tenant ?? null,
   });
 }
+
+/**
+ * `GET /patients/:id`. Like `GET /patients` above, the generated
+ * `schema.d.ts` has no response body shape for this route — cast to the
+ * hand-written `Patient` type.
+ */
+export async function getPatient(
+  token: string,
+  id: string,
+  tenant?: string | null,
+): Promise<Patient> {
+  return apiFetch<Patient>(`/patients/${id}`, {
+    token,
+    tenant: tenant ?? null,
+  });
+}

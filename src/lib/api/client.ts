@@ -17,7 +17,7 @@ interface ApiOptions {
   tenant?: string | null;
 }
 
-export async function apiFetch<T>(path: string, opts: ApiOptions = {}): Promise<T> {
+async function doFetch(path: string, opts: ApiOptions): Promise<Response> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (opts.token) headers.Authorization = `Bearer ${opts.token}`;
   if (opts.tenant) headers['X-Tenant'] = opts.tenant;
@@ -37,5 +37,26 @@ export async function apiFetch<T>(path: string, opts: ApiOptions = {}): Promise<
     }
     throw new ApiError(res.status, message);
   }
+  return res;
+}
+
+export async function apiFetch<T>(path: string, opts: ApiOptions = {}): Promise<T> {
+  const res = await doFetch(path, opts);
   return (await res.json()) as T;
+}
+
+/**
+ * Same as `apiFetch`, but tolerates a `200` response with an EMPTY body
+ * (content-length 0) by returning `null` instead of throwing — `res.json()`
+ * throws on an empty string, which is exactly what
+ * `GET /patients/:id/medical-history` returns when the patient has no
+ * anamnesis yet (a normal state, not an error; see `MedicalHistoryController`
+ * on the backend, which deliberately never 404s for "no history"). Do NOT
+ * use `apiFetch` for that endpoint.
+ */
+export async function apiFetchOrNull<T>(path: string, opts: ApiOptions = {}): Promise<T | null> {
+  const res = await doFetch(path, opts);
+  const text = await res.text();
+  if (!text) return null;
+  return JSON.parse(text) as T;
 }

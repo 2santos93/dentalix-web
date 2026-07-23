@@ -1,0 +1,259 @@
+'use client';
+import * as React from 'react';
+import { useEffect, useState } from 'react';
+import { ApiError } from '@/lib/api/client';
+import {
+  getMedicalHistory,
+  saveMedicalHistory,
+  type MedicalHistory,
+  type SaveMedicalHistoryInput,
+} from '@/lib/patients/clinical-api';
+
+// Copy as constants (i18n-ready) — es first, matches the rest of the copy
+// until next-intl wiring lands.
+const copy = {
+  loading: 'Cargando anamnesis…',
+  empty: 'Aún no hay anamnesis registrada para este paciente.',
+  versionLabel: (v: number) => `Versión ${v}`,
+  fieldFallback: '—',
+  allergiesLabel: 'Alergias',
+  chronicConditionsLabel: 'Condiciones crónicas',
+  currentMedicationsLabel: 'Medicamentos actuales',
+  habitsLabel: 'Hábitos',
+  medicalAlertsLabel: 'Alertas médicas',
+  notesLabel: 'Notas',
+  formTitle: 'Guardar nueva versión',
+  submit: 'Guardar nueva versión',
+  submitting: 'Guardando…',
+  genericLoadError: 'No pudimos cargar la anamnesis. Intenta de nuevo.',
+  genericSaveError: 'No pudimos guardar la anamnesis. Intenta de nuevo.',
+};
+
+interface MedicalHistoryPanelProps {
+  token: string;
+  tenant: string | null;
+  patientId: string;
+}
+
+const emptyForm = {
+  allergies: '',
+  chronicConditions: '',
+  currentMedications: '',
+  habits: '',
+  medicalAlerts: '',
+  notes: '',
+};
+
+export function MedicalHistoryPanel({ token, tenant, patientId }: MedicalHistoryPanelProps) {
+  const [latest, setLatest] = useState<MedicalHistory | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [form, setForm] = useState(emptyForm);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function load() {
+      setLoading(true);
+      try {
+        const data = await getMedicalHistory(token, patientId, tenant);
+        if (cancelled) return;
+        setLatest(data);
+        setLoadError(null);
+      } catch (err) {
+        if (cancelled) return;
+        setLoadError(err instanceof ApiError ? err.message : copy.genericLoadError);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [token, tenant, patientId]);
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setSaveError(null);
+    setSubmitting(true);
+    try {
+      const input: SaveMedicalHistoryInput = {
+        ...(form.allergies.trim() ? { allergies: form.allergies.trim() } : {}),
+        ...(form.chronicConditions.trim()
+          ? { chronicConditions: form.chronicConditions.trim() }
+          : {}),
+        ...(form.currentMedications.trim()
+          ? { currentMedications: form.currentMedications.trim() }
+          : {}),
+        ...(form.habits.trim() ? { habits: form.habits.trim() } : {}),
+        ...(form.medicalAlerts.trim() ? { medicalAlerts: form.medicalAlerts.trim() } : {}),
+        ...(form.notes.trim() ? { notes: form.notes.trim() } : {}),
+      };
+      const saved = await saveMedicalHistory(token, patientId, input, tenant);
+      setLatest(saved);
+      setForm(emptyForm);
+    } catch (err) {
+      setSaveError(err instanceof ApiError ? err.message : copy.genericSaveError);
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  if (loading) {
+    return (
+      <p role="status" className="text-sm text-muted">
+        {copy.loading}
+      </p>
+    );
+  }
+
+  return (
+    <div className="flex flex-col gap-6">
+      {loadError ? (
+        <p role="alert" className="text-sm text-danger">
+          {loadError}
+        </p>
+      ) : latest ? (
+        <div className="rounded-lg border border-border bg-surface p-4">
+          <p className="mb-3 text-sm font-medium text-muted">{copy.versionLabel(latest.version)}</p>
+          <dl className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <dt className="text-sm font-medium text-muted">{copy.allergiesLabel}</dt>
+              <dd className="text-ink">{latest.allergies ?? copy.fieldFallback}</dd>
+            </div>
+            <div>
+              <dt className="text-sm font-medium text-muted">{copy.chronicConditionsLabel}</dt>
+              <dd className="text-ink">{latest.chronicConditions ?? copy.fieldFallback}</dd>
+            </div>
+            <div>
+              <dt className="text-sm font-medium text-muted">{copy.currentMedicationsLabel}</dt>
+              <dd className="text-ink">{latest.currentMedications ?? copy.fieldFallback}</dd>
+            </div>
+            <div>
+              <dt className="text-sm font-medium text-muted">{copy.habitsLabel}</dt>
+              <dd className="text-ink">{latest.habits ?? copy.fieldFallback}</dd>
+            </div>
+            <div>
+              <dt className="text-sm font-medium text-muted">{copy.medicalAlertsLabel}</dt>
+              <dd className="text-ink">{latest.medicalAlerts ?? copy.fieldFallback}</dd>
+            </div>
+            <div>
+              <dt className="text-sm font-medium text-muted">{copy.notesLabel}</dt>
+              <dd className="text-ink">{latest.notes ?? copy.fieldFallback}</dd>
+            </div>
+          </dl>
+        </div>
+      ) : (
+        <p role="status" className="text-sm text-muted">
+          {copy.empty}
+        </p>
+      )}
+
+      <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+        <h3 className="text-base font-semibold text-ink">{copy.formTitle}</h3>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="flex flex-col gap-1">
+            <label htmlFor="mh-allergies" className="text-sm font-medium text-ink">
+              {copy.allergiesLabel}
+            </label>
+            <textarea
+              id="mh-allergies"
+              name="allergies"
+              rows={2}
+              value={form.allergies}
+              onChange={(e) => setForm((f) => ({ ...f, allergies: e.target.value }))}
+              className="rounded-md border border-border bg-surface px-3 py-2 text-ink"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label htmlFor="mh-chronic-conditions" className="text-sm font-medium text-ink">
+              {copy.chronicConditionsLabel}
+            </label>
+            <textarea
+              id="mh-chronic-conditions"
+              name="chronicConditions"
+              rows={2}
+              value={form.chronicConditions}
+              onChange={(e) => setForm((f) => ({ ...f, chronicConditions: e.target.value }))}
+              className="rounded-md border border-border bg-surface px-3 py-2 text-ink"
+            />
+          </div>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="flex flex-col gap-1">
+            <label htmlFor="mh-current-medications" className="text-sm font-medium text-ink">
+              {copy.currentMedicationsLabel}
+            </label>
+            <textarea
+              id="mh-current-medications"
+              name="currentMedications"
+              rows={2}
+              value={form.currentMedications}
+              onChange={(e) => setForm((f) => ({ ...f, currentMedications: e.target.value }))}
+              className="rounded-md border border-border bg-surface px-3 py-2 text-ink"
+            />
+          </div>
+          <div className="flex flex-col gap-1">
+            <label htmlFor="mh-habits" className="text-sm font-medium text-ink">
+              {copy.habitsLabel}
+            </label>
+            <textarea
+              id="mh-habits"
+              name="habits"
+              rows={2}
+              value={form.habits}
+              onChange={(e) => setForm((f) => ({ ...f, habits: e.target.value }))}
+              className="rounded-md border border-border bg-surface px-3 py-2 text-ink"
+            />
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-1">
+          <label htmlFor="mh-medical-alerts" className="text-sm font-medium text-ink">
+            {copy.medicalAlertsLabel}
+          </label>
+          <textarea
+            id="mh-medical-alerts"
+            name="medicalAlerts"
+            rows={2}
+            value={form.medicalAlerts}
+            onChange={(e) => setForm((f) => ({ ...f, medicalAlerts: e.target.value }))}
+            className="rounded-md border border-border bg-surface px-3 py-2 text-ink"
+          />
+        </div>
+
+        <div className="flex flex-col gap-1">
+          <label htmlFor="mh-notes" className="text-sm font-medium text-ink">
+            {copy.notesLabel}
+          </label>
+          <textarea
+            id="mh-notes"
+            name="notes"
+            rows={3}
+            value={form.notes}
+            onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
+            className="rounded-md border border-border bg-surface px-3 py-2 text-ink"
+          />
+        </div>
+
+        {saveError && (
+          <p role="alert" className="text-sm text-danger">
+            {saveError}
+          </p>
+        )}
+
+        <button
+          type="submit"
+          disabled={submitting}
+          className="self-start rounded-md bg-primary px-4 py-2 font-medium text-primary-foreground disabled:opacity-60"
+        >
+          {submitting ? copy.submitting : copy.submit}
+        </button>
+      </form>
+    </div>
+  );
+}

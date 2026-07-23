@@ -100,6 +100,70 @@ export interface paths {
         patch: operations["PatientsController_update"];
         trace?: never;
     };
+    "/api/v1/catalog/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["DentalCatalogController_list"];
+        put?: never;
+        post: operations["DentalCatalogController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/catalog/items/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["DentalCatalogController_update"];
+        trace?: never;
+    };
+    "/api/v1/patients/{patientId}/medical-history": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["MedicalHistoryController_get"];
+        put: operations["MedicalHistoryController_save"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{patientId}/clinical-entries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ClinicalEntriesController_list"];
+        put?: never;
+        post: operations["ClinicalEntriesController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -135,6 +199,54 @@ export interface components {
             email?: string;
             address?: string;
             notes?: string;
+        };
+        CreateCatalogItemDto: {
+            /** @description Unique code within the tenant */
+            code: string;
+            category?: string;
+            /** @enum {string} */
+            kind: "DIAGNOSIS" | "PROCEDURE";
+            /** @description Spanish label (required) */
+            labelEs: string;
+            /** @description English label */
+            labelEn?: string;
+            /** @description Portuguese label */
+            labelPt?: string;
+            /** @description Hex color (e.g. #1A2B3C) */
+            color: string;
+            defaultPrice?: number;
+            /** @default true */
+            active: boolean;
+        };
+        UpdateCatalogItemDto: {
+            code?: string;
+            category?: string;
+            /** @enum {string} */
+            kind?: "DIAGNOSIS" | "PROCEDURE";
+            labelEs?: string;
+            labelEn?: string;
+            labelPt?: string;
+            /** @description Hex color (e.g. #1A2B3C) */
+            color?: string;
+            defaultPrice?: number;
+            active?: boolean;
+        };
+        SaveMedicalHistoryDto: {
+            allergies?: string;
+            chronicConditions?: string;
+            currentMedications?: string;
+            habits?: string;
+            medicalAlerts?: string;
+            notes?: string;
+        };
+        CreateClinicalEntryDto: {
+            /**
+             * Format: date-time
+             * @description Defaults to now when omitted
+             */
+            entryDate?: string;
+            reason?: string;
+            notes: string;
         };
     };
     responses: never;
@@ -299,6 +411,158 @@ export interface operations {
         };
         responses: {
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    DentalCatalogController_list: {
+        parameters: {
+            query?: {
+                kind?: "DIAGNOSIS" | "PROCEDURE";
+                /** @description When true, only returns active items */
+                activeOnly?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    DentalCatalogController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateCatalogItemDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    DentalCatalogController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateCatalogItemDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    MedicalHistoryController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    MedicalHistoryController_save: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SaveMedicalHistoryDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ClinicalEntriesController_list: {
+        parameters: {
+            query?: {
+                from?: string;
+                to?: string;
+            };
+            header?: never;
+            path: {
+                patientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ClinicalEntriesController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateClinicalEntryDto"];
+            };
+        };
+        responses: {
+            201: {
                 headers: {
                     [name: string]: unknown;
                 };

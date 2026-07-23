@@ -1,3 +1,4 @@
+import Link from 'next/link';
 import type { Patient } from '@/lib/patients/patients-api';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
@@ -61,7 +62,11 @@ export function PatientsTable({ patients, loading }: PatientsTableProps) {
         <tbody>
           {patients.map((patient) => (
             <tr key={patient.id} className="border-b border-border last:border-0">
-              <td className="px-4 py-3 text-ink">{fullName(patient)}</td>
+              <td className="px-4 py-3 text-ink">
+                <Link href={`/patients/${patient.id}`} className="hover:underline">
+                  {fullName(patient)}
+                </Link>
+              </td>
               <td className="px-4 py-3 text-ink">{patient.docNumber ?? copy.docFallback}</td>
               <td className="px-4 py-3 text-ink">{patient.phone ?? copy.docFallback}</td>
               <td className="px-4 py-3 text-ink">{patient.email ?? copy.docFallback}</td>
@@ -77,7 +82,9 @@ export function PatientsTable({ patients, loading }: PatientsTableProps) {
             key={patient.id}
             className="rounded-lg border border-border bg-surface p-4 text-sm text-ink"
           >
-            <p className="font-medium text-ink">{fullName(patient)}</p>
+            <Link href={`/patients/${patient.id}`} className="font-medium text-ink hover:underline">
+              {fullName(patient)}
+            </Link>
             <dl className="mt-2 flex flex-col gap-1 text-muted">
               <div className="flex justify-between gap-2">
                 <dt>{copy.colDoc}</dt>
