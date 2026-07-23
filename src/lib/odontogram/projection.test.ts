@@ -101,6 +101,52 @@ describe('projectOdontogram', () => {
     expect(result.get('11')?.color).toBeNull();
   });
 
+  it('color is recency-based: a newer surface record beats an older whole-tooth record', () => {
+    const olderWholeTooth = record({
+      id: 'w1',
+      surfaces: [],
+      catalogItemId: 'cat-a',
+      recordedAt: '2026-01-01T00:00:00.000Z',
+    });
+    const newerSurface = record({
+      id: 's1',
+      surfaces: ['OCCLUSAL'],
+      catalogItemId: 'cat-b',
+      recordedAt: '2026-02-01T00:00:00.000Z',
+    });
+    // ASC by recordedAt, per backend contract
+    const groups: ToothGroup[] = [{ toothNumber: '11', records: [olderWholeTooth, newerSurface] }];
+    const catalogById = new Map([
+      ['cat-a', { color: '#AAAAAA' }],
+      ['cat-b', { color: '#BBBBBB' }],
+    ]);
+    const result = projectOdontogram(groups, catalogById);
+    expect(result.get('11')?.color).toBe('#BBBBBB');
+  });
+
+  it('color is recency-based: a newer whole-tooth record beats an older surface record', () => {
+    const olderSurface = record({
+      id: 's1',
+      surfaces: ['OCCLUSAL'],
+      catalogItemId: 'cat-a',
+      recordedAt: '2026-01-01T00:00:00.000Z',
+    });
+    const newerWholeTooth = record({
+      id: 'w1',
+      surfaces: [],
+      catalogItemId: 'cat-b',
+      recordedAt: '2026-02-01T00:00:00.000Z',
+    });
+    // ASC by recordedAt, per backend contract
+    const groups: ToothGroup[] = [{ toothNumber: '11', records: [olderSurface, newerWholeTooth] }];
+    const catalogById = new Map([
+      ['cat-a', { color: '#AAAAAA' }],
+      ['cat-b', { color: '#BBBBBB' }],
+    ]);
+    const result = projectOdontogram(groups, catalogById);
+    expect(result.get('11')?.color).toBe('#BBBBBB');
+  });
+
   it('records list on the tooth state preserves the input records', () => {
     const rec = record({ id: 'r1' });
     const groups: ToothGroup[] = [{ toothNumber: '11', records: [rec] }];

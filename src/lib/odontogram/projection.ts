@@ -16,10 +16,13 @@ import type { ToothGroup, ToothRecord, ToothSurface } from './odontogram-api';
  * whole-tooth record (e.g. an extraction) — tracked independently of
  * per-surface state (a tooth can have both).
  *
- * `color`: resolved via `catalogById` from the `catalogItemId` of the most
- * recent record that matters for this tooth (whole-tooth record if present,
- * else the latest of any surface record); `null` when there's no catalog
- * map, no matching id, or no relevant record.
+ * `color`: recency-based — resolved via `catalogById` from the
+ * `catalogItemId` of the MOST RECENT record in the group (by `recordedAt`,
+ * regardless of whether it's a whole-tooth or per-surface record) that
+ * actually resolves to a catalog color. "Latest finding wins" for the
+ * top-level summary color, same recency rule as `surfaceState` /
+ * `wholeToothRecord` — it does NOT prefer whole-tooth over surface records.
+ * `null` when there's no catalog map, or no record resolves to a color.
  */
 export interface ToothState {
   toothNumber: string;
@@ -53,20 +56,21 @@ export function projectOdontogram(
       }
     }
 
-    // The record that determines this tooth's color: prefer the
-    // whole-tooth record (it represents the tooth as a whole, e.g. an
-    // extraction), else fall back to the most recently recorded surface
-    // record (last one seen in ASC iteration order).
-    const colorSourceRecord =
-      wholeToothRecord ??
-      group.records
-        .filter((r) => r.surfaces.length > 0)
-        .reduce<ToothRecord | null>((_latest, r) => r, null);
-
-    const color =
-      colorSourceRecord?.catalogItemId && catalogById
-        ? (catalogById.get(colorSourceRecord.catalogItemId)?.color ?? null)
-        : null;
+    // The tooth's summary color is recency-based, not whole-tooth-first:
+    // scan records in ASC order (backend contract) and keep overwriting
+    // with each record that resolves to a catalog color, whole-tooth or
+    // per-surface alike — the last one standing is the most recent
+    // record that matters, i.e. "latest finding wins".
+    let color: string | null = null;
+    if (catalogById) {
+      for (const rec of group.records) {
+        if (!rec.catalogItemId) continue;
+        const resolved = catalogById.get(rec.catalogItemId)?.color;
+        if (resolved) {
+          color = resolved;
+        }
+      }
+    }
 
     result.set(group.toothNumber, {
       toothNumber: group.toothNumber,

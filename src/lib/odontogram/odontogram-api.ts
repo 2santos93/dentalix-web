@@ -17,10 +17,15 @@ export interface ToothRecord {
   toothNumber: string;
   surfaces: ToothSurface[];
   kind: 'DIAGNOSIS' | 'PROCEDURE';
-  catalogItemId?: string;
+  catalogItemId?: string | null;
   status: 'PLANNED' | 'COMPLETED';
-  notes?: string;
+  notes?: string | null;
   recordedAt: string;
+  /** Links this record to the clinical entry it was created from, if any. */
+  clinicalEntryId?: string | null;
+  /** The practitioner who performed/recorded this, if tracked. */
+  performedById?: string | null;
+  createdAt?: string;
 }
 
 /** One tooth's records as returned by `GET /patients/:id/odontogram` (ASC by `recordedAt`). */
@@ -36,6 +41,8 @@ export interface AddToothRecordInput {
   catalogItemId?: string;
   status: 'PLANNED' | 'COMPLETED';
   notes?: string;
+  /** Links the created record to a clinical entry (backend CreateToothRecordDto). */
+  clinicalEntryId?: string;
 }
 
 export async function addToothRecord(
