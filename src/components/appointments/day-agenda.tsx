@@ -1,3 +1,4 @@
+'use client';
 import type { Appointment, AppointmentStatus } from '@/lib/appointments/appointments-api';
 
 // Copy as constants (i18n-ready, es-first) — matches patients-table.tsx /
@@ -19,7 +20,20 @@ const copy = {
     CANCELLED: 'Cancelada',
     NO_SHOW: 'No asistió',
   } satisfies Record<AppointmentStatus, string>,
+  /** `aria-label` for the status <select>, filled in with the row's time range — e.g. "Estado de la cita de 09:00–09:30". */
+  statusSelectLabel: (timeRange: string) => `Estado de la cita de ${timeRange}`,
+  updatingStatus: 'Actualizando…',
 };
+
+// Fixed display order for the status <select> options — same 5 values as
+// `STATUS_BADGE_CLASSES`, order matches the natural appointment lifecycle.
+const STATUS_OPTIONS: AppointmentStatus[] = [
+  'SCHEDULED',
+  'CONFIRMED',
+  'COMPLETED',
+  'CANCELLED',
+  'NO_SHOW',
+];
 
 // One semantic-token class per status — never a raw color utility
 // (`bg-*-500`, `text-[#...]`). SCHEDULED/CONFIRMED use the neutral/brand
@@ -46,6 +60,15 @@ interface DayAgendaProps {
    * patient isn't in the map — the appointment itself never carries a name.
    */
   patientNames?: Record<string, string>;
+  /**
+   * When provided, each row renders a status `<select>` (in addition to the
+   * read-only badge) letting the caller change an appointment's status —
+   * see `AgendaView.handleStatusChange`. When omitted, rows render the
+   * badge only (read-only) — existing callers/tests are unaffected.
+   */
+  onStatusChange?: (appointmentId: string, status: AppointmentStatus) => void;
+  /** The `id` of the appointment currently being updated, if any — disables that row's status select and shows a small "Actualizando…" hint next to it. */
+  updatingId?: string | null;
 }
 
 function formatTimeRange(start: string, end: string): string {
@@ -69,6 +92,40 @@ function StatusBadge({ status }: { status: AppointmentStatus }) {
   );
 }
 
+interface StatusSelectProps {
+  appointment: Appointment;
+  timeRange: string;
+  onStatusChange: (appointmentId: string, status: AppointmentStatus) => void;
+  updating: boolean;
+}
+
+/** Labeled status `<select>` for one appointment row — rendered once per row per responsive variant (desktop table cell + mobile card) when `onStatusChange` is passed to `DayAgenda`. */
+function StatusSelect({ appointment, timeRange, onStatusChange, updating }: StatusSelectProps) {
+  return (
+    <span className="inline-flex items-center gap-2">
+      <select
+        aria-label={copy.statusSelectLabel(timeRange)}
+        data-testid="appointment-status-select"
+        value={appointment.status}
+        disabled={updating}
+        onChange={(e) => onStatusChange(appointment.id, e.target.value as AppointmentStatus)}
+        className="rounded-md border border-border bg-surface px-2 py-1 text-xs text-ink disabled:opacity-60"
+      >
+        {STATUS_OPTIONS.map((status) => (
+          <option key={status} value={status}>
+            {copy.statusLabels[status]}
+          </option>
+        ))}
+      </select>
+      {updating && (
+        <span role="status" className="text-xs text-muted">
+          {copy.updatingStatus}
+        </span>
+      )}
+    </span>
+  );
+}
+
 /**
  * Presentational day agenda for a single provider: renders whatever
  * `appointments` it's given (already scoped to a day/provider by the caller
@@ -77,7 +134,14 @@ function StatusBadge({ status }: { status: AppointmentStatus }) {
  * in the `/agenda` page (Task 5) — this component owns rendering only, so
  * it stays a plain (server-renderable) component with no state of its own.
  */
-export function DayAgenda({ appointments, loading, error, patientNames }: DayAgendaProps) {
+export function DayAgenda({
+  appointments,
+  loading,
+  error,
+  patientNames,
+  onStatusChange,
+  updatingId,
+}: DayAgendaProps) {
   if (loading) {
     return (
       <p role="status" className="text-sm text-muted">
@@ -131,27 +195,41 @@ export function DayAgenda({ appointments, loading, error, patientNames }: DayAge
           </tr>
         </thead>
         <tbody>
-          {sorted.map((appointment) => (
-            <tr key={appointment.id} className="border-b border-border last:border-0">
-              <td className="px-4 py-3 text-ink">
-                <time dateTime={appointment.start}>
-                  {formatTimeRange(appointment.start, appointment.end)}
-                </time>
-              </td>
-              <td className="px-4 py-3 text-ink">{patientLabel(appointment, patientNames)}</td>
-              <td className="px-4 py-3 text-ink">{appointment.reason ?? copy.reasonFallback}</td>
-              <td className="px-4 py-3">
-                <StatusBadge status={appointment.status} />
-              </td>
-            </tr>
-          ))}
+          {sorted.map((appointment) => {
+            const timeRange = formatTimeRange(appointment.start, appointment.end);
+            const updating = updatingId === appointment.id;
+            return (
+              <tr key={appointment.id} className="border-b border-border last:border-0">
+                <td className="px-4 py-3 text-ink">
+                  <time dateTime={appointment.start}>{timeRange}</time>
+                </td>
+                <td className="px-4 py-3 text-ink">{patientLabel(appointment, patientNames)}</td>
+                <td className="px-4 py-3 text-ink">{appointment.reason ?? copy.reasonFallback}</td>
+                <td className="px-4 py-3">
+                  <div className="flex flex-col items-start gap-1.5">
+                    <StatusBadge status={appointment.status} />
+                    {onStatusChange && (
+                      <StatusSelect
+                        appointment={appointment}
+                        timeRange={timeRange}
+                        onStatusChange={onStatusChange}
+                        updating={updating}
+                      />
+                    )}
+                  </div>
+                </td>
+              </tr>
+            );
+          })}
         </tbody>
       </table>
 
       {/* Mobile cards */}
       <ul aria-label={copy.heading} className="flex flex-col gap-3 md:hidden">
         {sorted.map((appointment) => {
-          const label = `${formatTimeRange(appointment.start, appointment.end)} · ${patientLabel(appointment, patientNames)} · ${copy.statusLabels[appointment.status]}`;
+          const timeRange = formatTimeRange(appointment.start, appointment.end);
+          const updating = updatingId === appointment.id;
+          const label = `${timeRange} · ${patientLabel(appointment, patientNames)} · ${copy.statusLabels[appointment.status]}`;
           return (
             <li
               key={appointment.id}
@@ -160,12 +238,22 @@ export function DayAgenda({ appointments, loading, error, patientNames }: DayAge
             >
               <div className="flex items-center justify-between gap-2">
                 <time dateTime={appointment.start} className="font-medium text-ink">
-                  {formatTimeRange(appointment.start, appointment.end)}
+                  {timeRange}
                 </time>
                 <StatusBadge status={appointment.status} />
               </div>
               <p className="mt-2 text-ink">{patientLabel(appointment, patientNames)}</p>
               <p className="mt-1 text-muted">{appointment.reason ?? copy.reasonFallback}</p>
+              {onStatusChange && (
+                <div className="mt-2">
+                  <StatusSelect
+                    appointment={appointment}
+                    timeRange={timeRange}
+                    onStatusChange={onStatusChange}
+                    updating={updating}
+                  />
+                </div>
+              )}
             </li>
           );
         })}

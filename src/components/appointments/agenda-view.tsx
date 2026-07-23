@@ -1,7 +1,12 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { ApiError } from '@/lib/api/client';
-import { listAppointments, type Appointment } from '@/lib/appointments/appointments-api';
+import {
+  listAppointments,
+  updateAppointment,
+  type Appointment,
+  type AppointmentStatus,
+} from '@/lib/appointments/appointments-api';
 import { listStaff, type StaffMember } from '@/lib/appointments/staff-api';
 import { listPatients } from '@/lib/patients/patients-api';
 import { localDayRange } from '@/lib/appointments/day-range';
@@ -21,6 +26,7 @@ const copy = {
   genericStaffError: 'No pudimos cargar los profesionales. Intenta de nuevo.',
   genericAppointmentsError: 'No pudimos cargar la agenda. Intenta de nuevo.',
   genericRefreshError: 'No pudimos actualizar la agenda. Intenta de nuevo.',
+  genericStatusChangeError: 'No pudimos actualizar el estado de la cita. Intenta de nuevo.',
   noProviders: 'No hay profesionales activos en esta clínica.',
   selectProviderPrompt: 'Selecciona un profesional para ver su agenda.',
 };
@@ -74,6 +80,13 @@ export function AgendaView({ token, tenant }: AgendaViewProps) {
   const [patientNames, setPatientNames] = useState<Record<string, string>>({});
 
   const [showForm, setShowForm] = useState(false);
+
+  // Status-change control (`DayAgenda`'s `onStatusChange`/`updatingId` props):
+  // `updatingId` tracks which row's PATCH is in flight so `DayAgenda` can
+  // disable just that row's select; `statusChangeError` surfaces a failed
+  // PATCH the same way `appointmentsRefreshError` does.
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [statusChangeError, setStatusChangeError] = useState<string | null>(null);
 
   // Default the provider selector to the first active staff member once
   // loaded, so the agenda shows something without an extra click. Adjusts
@@ -182,6 +195,28 @@ export function AgendaView({ token, tenant }: AgendaViewProps) {
     refreshAppointmentsInPlace();
   }
 
+  /**
+   * `DayAgenda`'s `onStatusChange` — `PATCH`es the appointment's status, then
+   * refreshes the day list in place (same no-remount pattern as
+   * `handleAppointmentCreated`) so the badge reflects the new status without
+   * losing scroll/focus. Mirrors `refreshAppointmentsInPlace`'s promise-chain
+   * style rather than the `useEffect` loads' async/await style, since it's
+   * triggered by a one-off event handler, not a dependency change.
+   */
+  function handleStatusChange(id: string, status: AppointmentStatus) {
+    if (!token) return;
+    setUpdatingId(id);
+    setStatusChangeError(null);
+    updateAppointment(token, id, { status }, tenant)
+      .then(() => {
+        refreshAppointmentsInPlace();
+      })
+      .catch((err) => {
+        setStatusChangeError(err instanceof ApiError ? err.message : copy.genericStatusChangeError);
+      })
+      .finally(() => setUpdatingId(null));
+  }
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center justify-end gap-3">
@@ -281,6 +316,14 @@ export function AgendaView({ token, tenant }: AgendaViewProps) {
         </div>
       )}
 
+      {statusChangeError && (
+        <div className="flex items-center gap-3">
+          <p role="alert" className="text-xs text-danger">
+            {statusChangeError}
+          </p>
+        </div>
+      )}
+
       {!staffLoading && staff.length > 0 && !providerId ? (
         <p role="status" className="text-sm text-muted">
           {copy.selectProviderPrompt}
@@ -291,6 +334,8 @@ export function AgendaView({ token, tenant }: AgendaViewProps) {
           loading={appointmentsLoading}
           error={appointmentsLoadError}
           patientNames={patientNames}
+          onStatusChange={handleStatusChange}
+          updatingId={updatingId}
         />
       )}
     </div>

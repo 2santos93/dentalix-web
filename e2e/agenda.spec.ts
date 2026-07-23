@@ -7,23 +7,19 @@ import { randomUUID } from 'node:crypto';
  * provider=self/OWNER + start/end time + reason) and verify:
  *   - it appears in the day agenda (`DayAgenda`) with the right time range,
  *     patient name, reason and `SCHEDULED` status badge;
- * ...and that it survives a full page reload (real backend round-trip, no
- * mocks) — proving Task 5/6 (Fase 3) end to end.
+ *   - using `DayAgenda`'s status `<select>` to change it to CONFIRMED
+ *     updates the badge (real `PATCH /appointments/:id` round-trip via
+ *     `AgendaView.handleStatusChange` -> `updateAppointment`);
+ * ...and that BOTH the appointment and its changed (CONFIRMED) status survive
+ * a full page reload (real backend round-trip, no mocks) — proving Task
+ * 5/6/6b (Fase 3, including the "cambiar estado" DoD item) end to end.
  *
- * Status-change step (brief step 6, "cambiar estado a Confirmada"): as of
- * this writing `DayAgenda` (src/components/appointments/day-agenda.tsx) is
- * presentational-only — it renders each appointment's `StatusBadge` from
- * `appointment.status` but has no button/select to change it, and
- * `AgendaView`/`AppointmentForm` wire no such control either (`PATCH
- * /appointments/:id` exists in `appointments-api.ts::updateAppointment`, but
- * nothing in the component tree calls it). Per the task brief ("if the UI
- * genuinely lacks a status control... do NOT invent UI"), this spec does NOT
- * fabricate a status-change interaction. Instead it asserts what the UI DOES
- * support: the created appointment's status badge reads "Agendada"
- * (SCHEDULED) right after creation AND still reads "Agendada" after a full
- * reload — i.e. status is correctly rendered and persists across a reload,
- * which is the only status-related behavior the current UI exposes. See the
- * task report for this gap flagged as a concern.
+ * Status-change step (brief step 6, "cambiar estado a Confirmada"): this used
+ * to be a documented gap (`DayAgenda` had no control, see git history) —
+ * fixed by Task 6b, which added a labeled status `<select>` per row
+ * (`DayAgenda`'s `onStatusChange`/`updatingId` props, wired by `AgendaView`).
+ * This spec now exercises that control for real instead of only asserting
+ * the read-only badge.
  *
  * Requires both servers up:
  *   - backend  http://localhost:3000  (dentalix-api, `npm run start:dev`, Docker DB on :5442)
@@ -55,7 +51,7 @@ const appointmentReason = `Control rutinario ${suffix}`;
 const startTime = '10:15';
 const endTime = '10:45';
 
-test('create appointment via the UI -> appears in the day agenda, status persists after reload', async ({
+test('create appointment via the UI -> appears in the day agenda, status change via the select persists after reload', async ({
   page,
 }) => {
   // --- Register ---
@@ -179,7 +175,19 @@ test('create appointment via the UI -> appears in the day agenda, status persist
   await expect(appointmentRow).toContainText(`${patientFirstName} ${patientLastName}`);
   await expect(appointmentRow.getByTestId('appointment-status-badge')).toHaveText('Agendada');
 
-  // --- Reload: the appointment and its (SCHEDULED) status persist ---
+  // --- Change status via `DayAgenda`'s status <select> (Task 6b): SCHEDULED
+  // ("Agendada") -> CONFIRMED ("Confirmada"). `AgendaView.handleStatusChange`
+  // PATCHes the appointment and refreshes the day list in place — assert the
+  // badge reflects the change (real backend round-trip, no mocks). ---
+  const statusSelect = appointmentRow.getByLabel(/Estado de la cita de/i);
+  await statusSelect.selectOption({ label: 'Confirmada' });
+
+  await expect(appointmentRow.getByTestId('appointment-status-badge')).toHaveText('Confirmada', {
+    timeout: 10_000,
+  });
+  await expect(statusSelect).toHaveValue('CONFIRMED');
+
+  // --- Reload: the appointment and its now-CONFIRMED status persist ---
   // The active day/provider selection is local component state, not
   // persisted across a reload -> `AgendaView` comes back defaulting to
   // today + the first active staff member (the same provider we booked
@@ -193,5 +201,10 @@ test('create appointment via the UI -> appears in the day agenda, status persist
   await expect(appointmentRowAfterReload).toContainText('10:15');
   await expect(appointmentRowAfterReload).toContainText('10:45');
   await expect(appointmentRowAfterReload).toContainText(`${patientFirstName} ${patientLastName}`);
-  await expect(appointmentRowAfterReload.getByTestId('appointment-status-badge')).toHaveText('Agendada');
+  await expect(appointmentRowAfterReload.getByTestId('appointment-status-badge')).toHaveText(
+    'Confirmada',
+  );
+  await expect(appointmentRowAfterReload.getByLabel(/Estado de la cita de/i)).toHaveValue(
+    'CONFIRMED',
+  );
 });

@@ -1,4 +1,5 @@
 import { render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { DayAgenda } from './day-agenda';
 import type { Appointment } from '@/lib/appointments/appointments-api';
 
@@ -144,5 +145,63 @@ describe('DayAgenda', () => {
     expect(items[0]).toHaveAccessibleName(
       new RegExp(`${timeLabel(earlier.start, earlier.end)}.*pat-1.*agendada`, 'i'),
     );
+  });
+
+  it('does NOT render a status select when onStatusChange is not provided (backward compatible, read-only badge only)', () => {
+    const { container } = render(<DayAgenda appointments={[earlier]} loading={false} />);
+    expect(container.querySelectorAll('select')).toHaveLength(0);
+  });
+
+  describe('status-change control (onStatusChange provided)', () => {
+    it('renders a labeled status select per row, in both the desktop table and the mobile cards, with the current status selected', () => {
+      const onStatusChange = jest.fn();
+      const { container } = render(
+        <DayAgenda appointments={[earlier, later]} loading={false} onStatusChange={onStatusChange} />,
+      );
+
+      const table = container.querySelector('table') as HTMLElement;
+      const desktopSelects = within(table).getAllByRole<HTMLSelectElement>('combobox');
+      expect(desktopSelects).toHaveLength(2);
+      expect(desktopSelects[0].value).toBe('SCHEDULED');
+      expect(desktopSelects[1].value).toBe('CONFIRMED');
+      expect(desktopSelects[0]).toHaveAccessibleName(
+        new RegExp(`Estado de la cita de ${timeLabel(earlier.start, earlier.end)}`, 'i'),
+      );
+
+      const mobileList = screen.getAllByRole('list').find((l) => l.tagName === 'UL') as HTMLElement;
+      const mobileSelects = within(mobileList).getAllByRole<HTMLSelectElement>('combobox');
+      expect(mobileSelects).toHaveLength(2);
+    });
+
+    it('calls onStatusChange with the appointment id and the newly picked status when changed', async () => {
+      const onStatusChange = jest.fn();
+      const user = userEvent.setup();
+      const { container } = render(
+        <DayAgenda appointments={[earlier]} loading={false} onStatusChange={onStatusChange} />,
+      );
+
+      const table = container.querySelector('table') as HTMLElement;
+      const select = within(table).getByRole<HTMLSelectElement>('combobox');
+      await user.selectOptions(select, 'CONFIRMED');
+
+      expect(onStatusChange).toHaveBeenCalledWith('apt-1', 'CONFIRMED');
+    });
+
+    it('disables the status select (both desktop and mobile) only for the row matching updatingId', () => {
+      const onStatusChange = jest.fn();
+      const { container } = render(
+        <DayAgenda
+          appointments={[earlier, later]}
+          loading={false}
+          onStatusChange={onStatusChange}
+          updatingId={earlier.id}
+        />,
+      );
+
+      const table = container.querySelector('table') as HTMLElement;
+      const desktopSelects = within(table).getAllByRole<HTMLSelectElement>('combobox');
+      expect(desktopSelects[0]).toBeDisabled();
+      expect(desktopSelects[1]).not.toBeDisabled();
+    });
   });
 });

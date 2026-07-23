@@ -1,8 +1,8 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AgendaView } from './agenda-view';
 import { localDayRange } from '@/lib/appointments/day-range';
-import { createAppointment, listAppointments } from '@/lib/appointments/appointments-api';
+import { createAppointment, listAppointments, updateAppointment } from '@/lib/appointments/appointments-api';
 import { listStaff } from '@/lib/appointments/staff-api';
 import { listPatients } from '@/lib/patients/patients-api';
 
@@ -14,6 +14,7 @@ import { listPatients } from '@/lib/patients/patients-api';
 jest.mock('../../lib/appointments/appointments-api', () => ({
   createAppointment: jest.fn(),
   listAppointments: jest.fn(),
+  updateAppointment: jest.fn(),
 }));
 jest.mock('../../lib/appointments/staff-api', () => ({
   listStaff: jest.fn(),
@@ -24,6 +25,7 @@ jest.mock('../../lib/patients/patients-api', () => ({
 
 const mockedCreateAppointment = createAppointment as jest.MockedFunction<typeof createAppointment>;
 const mockedListAppointments = listAppointments as jest.MockedFunction<typeof listAppointments>;
+const mockedUpdateAppointment = updateAppointment as jest.MockedFunction<typeof updateAppointment>;
 const mockedListStaff = listStaff as jest.MockedFunction<typeof listStaff>;
 const mockedListPatients = listPatients as jest.MockedFunction<typeof listPatients>;
 
@@ -90,6 +92,7 @@ describe('AgendaView', () => {
   beforeEach(() => {
     mockedCreateAppointment.mockReset();
     mockedListAppointments.mockReset();
+    mockedUpdateAppointment.mockReset();
     mockedListStaff.mockReset();
     mockedListPatients.mockReset();
     mockedListPatients.mockResolvedValue(patientsPage);
@@ -183,6 +186,48 @@ describe('AgendaView', () => {
     await waitFor(() => expect(screen.queryByText(/actualizando/i)).not.toBeInTheDocument());
     expect(screen.getByRole('table', { name: /agenda del día/i })).toBe(table);
     expect(screen.getAllByRole('row')).toHaveLength(3); // header + apt1 + apt2
+  });
+
+  it('changing a row\'s status select calls updateAppointment(id, {status}) then refreshes the agenda in place — DayAgenda stays mounted (no remount)', async () => {
+    mockedListStaff.mockResolvedValue(staff);
+    mockedUpdateAppointment.mockResolvedValue({ ...apt1, status: 'CONFIRMED' });
+
+    // First call (initial load) resolves immediately with apt1 as SCHEDULED;
+    // the second call (the post-PATCH refresh triggered by
+    // `handleStatusChange`) is controlled manually so the test can assert
+    // the interim state before it settles — same pattern as the
+    // create-appointment refresh-in-place test above.
+    const refetch = deferred<typeof apt1[]>();
+    let callCount = 0;
+    mockedListAppointments.mockImplementation(() => {
+      callCount += 1;
+      return callCount === 1 ? Promise.resolve([apt1]) : refetch.promise;
+    });
+
+    const user = userEvent.setup();
+    render(<AgendaView token="tok" tenant={null} />);
+
+    const table = await screen.findByRole('table', { name: /agenda del día/i });
+    const statusSelect = within(table).getByRole<HTMLSelectElement>('combobox');
+    expect(statusSelect.value).toBe('SCHEDULED');
+
+    await user.selectOptions(statusSelect, 'CONFIRMED');
+
+    await waitFor(() =>
+      expect(mockedUpdateAppointment).toHaveBeenCalledWith('tok', 'apt-1', { status: 'CONFIRMED' }, null),
+    );
+    // The refresh-in-place fetch has started (2nd listAppointments call
+    // pending on `refetch`) — same mounted table node, control disabled
+    // while its own update is in flight.
+    await waitFor(() => expect(mockedListAppointments).toHaveBeenCalledTimes(2));
+    expect(screen.getByRole('table', { name: /agenda del día/i })).toBe(table);
+
+    refetch.resolve([{ ...apt1, status: 'CONFIRMED' }]);
+
+    await waitFor(() =>
+      expect(within(table).getByRole<HTMLSelectElement>('combobox').value).toBe('CONFIRMED'),
+    );
+    expect(screen.getByRole('table', { name: /agenda del día/i })).toBe(table);
   });
 
   it('sets aria-expanded/aria-controls on the "Nueva cita" toggle and pre-fills AppointmentForm\'s date with the selected day', async () => {
