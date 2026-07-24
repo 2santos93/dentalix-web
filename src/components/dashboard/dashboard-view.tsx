@@ -24,8 +24,8 @@ const copy = {
   retry: 'Reintentar',
   forbidden: 'No tienes acceso a este panel.',
   genericError: 'No pudimos cargar el panel. Intenta de nuevo.',
-  salesHeading: 'Ventas del período',
-  salesCount: (count: number) => `${count} ${count === 1 ? 'venta' : 'ventas'}`,
+  incomesHeading: 'Ingresos del período',
+  incomesCount: (count: number) => `${count} ${count === 1 ? 'abono' : 'abonos'}`,
   byCurrencyHeading: 'Desglose por moneda',
   lowStockHeading: 'Bajo stock',
   lowStockCount: (count: number) => `${count} ${count === 1 ? 'ítem' : 'ítems'}`,
@@ -119,9 +119,9 @@ export function DashboardView({ token }: DashboardViewProps) {
       setLoading(true);
       try {
         // `to` is the user's inclusive selection (what the "Hasta" input
-        // shows); the backend's sales-totals query is half-open `[from, to)`,
-        // so extend it by one day here — sending the raw value would
-        // silently exclude sales made on the selected end date itself.
+        // shows); the backend's incomes/payments-totals query is half-open
+        // `[from, to)`, so extend it by one day here — sending the raw value
+        // would silently exclude payments made on the selected end date itself.
         const result = await getDashboard(token, { from, to: addOneDayIso(to), currency });
         if (cancelled) return;
         setData(result);
@@ -197,7 +197,7 @@ export function DashboardView({ token }: DashboardViewProps) {
         </div>
       ) : data ? (
         <div className="grid gap-4 sm:grid-cols-2">
-          <SalesCard sales={data.sales} />
+          <IncomesCard incomes={data.incomes} />
           <LowStockCard lowStockItems={data.lowStockItems} />
           <UpcomingAppointmentsCard upcomingAppointments={data.upcomingAppointments} />
           <PatientCountCard patientCount={data.patientCount} />
@@ -207,18 +207,18 @@ export function DashboardView({ token }: DashboardViewProps) {
   );
 }
 
-function SalesCard({ sales }: { sales: Dashboard['sales'] }) {
-  const byCurrencyEntries = Object.entries(sales.byCurrency);
+function IncomesCard({ incomes }: { incomes: Dashboard['incomes'] }) {
+  const byCurrencyEntries = Object.entries(incomes.byCurrency);
   return (
     <Card>
       <CardHeader>
-        <CardTitle>{copy.salesHeading}</CardTitle>
+        <CardTitle>{copy.incomesHeading}</CardTitle>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
         <p className="text-3xl font-semibold tracking-tight text-ink">
-          {currencyFormatter(sales.currency).format(sales.totalConverted)}
+          {currencyFormatter(incomes.currency).format(incomes.totalConverted)}
         </p>
-        <p className="text-sm text-muted">{copy.salesCount(sales.count)}</p>
+        <p className="text-sm text-muted">{copy.incomesCount(incomes.count)}</p>
         {byCurrencyEntries.length > 0 && (
           <div className="mt-2 flex flex-col gap-1 border-t border-border pt-3">
             <p className="text-xs font-medium uppercase tracking-wide text-muted">

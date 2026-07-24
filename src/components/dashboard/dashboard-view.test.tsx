@@ -18,7 +18,7 @@ const mockedGetDashboard = getDashboard as jest.MockedFunction<typeof getDashboa
 function dashboard(overrides: Partial<Dashboard> = {}): Dashboard {
   return {
     period: { from: '2026-07-01T00:00:00.000Z', to: '2026-07-24T00:00:00.000Z' },
-    sales: {
+    incomes: {
       from: '2026-07-01T00:00:00.000Z',
       to: '2026-07-24T00:00:00.000Z',
       currency: 'USD',
@@ -50,7 +50,7 @@ function dashboard(overrides: Partial<Dashboard> = {}): Dashboard {
 
 function emptyDashboard(): Dashboard {
   return dashboard({
-    sales: {
+    incomes: {
       from: '2026-07-01T00:00:00.000Z',
       to: '2026-07-24T00:00:00.000Z',
       currency: 'USD',
@@ -80,13 +80,13 @@ describe('DashboardView', () => {
     mockedGetDashboard.mockReset();
   });
 
-  it('renders the 4 cards (sales, low stock, upcoming appointments, patient count) with fetched data', async () => {
+  it('renders the 4 cards (incomes, low stock, upcoming appointments, patient count) with fetched data', async () => {
     mockedGetDashboard.mockResolvedValue(dashboard());
 
     render(<DashboardView token="tok" />);
 
-    await screen.findByText('Ventas del período');
-    // Sales: totalConverted formatted as currency (Intl.NumberFormat('es', {style:'currency'})) + count + byCurrency breakdown.
+    await screen.findByText('Ingresos del período');
+    // Incomes: totalConverted formatted as currency (Intl.NumberFormat('es', {style:'currency'})) + count + byCurrency breakdown.
     // `getByText`'s default normalizer collapses the formatter's non-breaking
     // space (U+00A0, between the amount and the "US$" symbol) into a plain
     // ASCII space when reading DOM text — but it does NOT run that same
@@ -97,7 +97,7 @@ describe('DashboardView', () => {
       .format(1250.5)
       .replace(/ /g, ' ');
     expect(screen.getByText(totalFormatted)).toBeInTheDocument();
-    expect(screen.getByText('12 ventas')).toBeInTheDocument();
+    expect(screen.getByText('12 abonos')).toBeInTheDocument();
     expect(screen.getByText('COP')).toBeInTheDocument();
     expect(screen.getByText('USD')).toBeInTheDocument();
 
@@ -126,9 +126,9 @@ describe('DashboardView', () => {
     const [, firstParams] = mockedGetDashboard.mock.calls[0];
     expect(firstParams.currency).toBe('USD');
     expect(firstParams.from).toMatch(/^\d{4}-\d{2}-01$/);
-    // Default "Hasta" is today, but the backend's sales-totals query is
-    // half-open `[from, to)` — the component must send an exclusive upper
-    // bound (today + 1 day) so today's sales aren't silently excluded.
+    // Default "Hasta" is today, but the backend's incomes/payments-totals
+    // query is half-open `[from, to)` — the component must send an exclusive
+    // upper bound (today + 1 day) so today's payments aren't silently excluded.
     const today = new Date();
     const tomorrow = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate() + 1));
     const expectedTomorrow = `${tomorrow.getUTCFullYear()}-${String(tomorrow.getUTCMonth() + 1).padStart(2, '0')}-${String(tomorrow.getUTCDate()).padStart(2, '0')}`;
@@ -193,13 +193,13 @@ describe('DashboardView', () => {
     expect(screen.queryByRole('status', { name: /cargando panel/i })).not.toBeInTheDocument();
   });
 
-  it('renders empty-states for low stock (0) and upcoming appointments (0), and 0 for sales/patients', async () => {
+  it('renders empty-states for low stock (0) and upcoming appointments (0), and 0 for incomes/patients', async () => {
     mockedGetDashboard.mockResolvedValue(emptyDashboard());
 
     render(<DashboardView token="tok" />);
 
     await screen.findByText('# Pacientes');
-    expect(screen.getByText('0 ventas')).toBeInTheDocument();
+    expect(screen.getByText('0 abonos')).toBeInTheDocument();
     expect(screen.getByText('No hay ítems en bajo stock.')).toBeInTheDocument();
     expect(screen.getByText('No hay citas próximas.')).toBeInTheDocument();
     expect(screen.getByText('0')).toBeInTheDocument();

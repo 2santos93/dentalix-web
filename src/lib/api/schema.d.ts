@@ -317,11 +317,27 @@ export interface paths {
         };
         get: operations["StaffController_list"];
         put?: never;
-        post?: never;
+        post: operations["StaffController_create"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/v1/staff/{userId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["StaffController_remove"];
+        options?: never;
+        head?: never;
+        patch: operations["StaffController_update"];
         trace?: never;
     };
     "/api/v1/domains": {
@@ -404,30 +420,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/sales": {
+    "/api/v1/treatment-plans/{id}/payments": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get: operations["SalesController_list"];
+        get: operations["PaymentsController_list"];
         put?: never;
-        post: operations["SalesController_create"];
+        post: operations["PaymentsController_create"];
         delete?: never;
         options?: never;
         head?: never;
         patch?: never;
         trace?: never;
     };
-    "/api/v1/sales/totals": {
+    "/api/v1/treatment-plans/{id}/balance": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get: operations["SalesController_totals"];
+        get: operations["PaymentsController_balance"];
         put?: never;
         post?: never;
         delete?: never;
@@ -436,17 +452,17 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/sales/{id}": {
+    "/api/v1/payments/{id}": {
         parameters: {
             query?: never;
             header?: never;
             path?: never;
             cookie?: never;
         };
-        get: operations["SalesController_get"];
+        get?: never;
         put?: never;
         post?: never;
-        delete: operations["SalesController_remove"];
+        delete: operations["PaymentsController_remove"];
         options?: never;
         head?: never;
         patch?: never;
@@ -867,8 +883,21 @@ export interface components {
             /** Format: uuid */
             userId: string;
             fullName: string;
+            email: string;
             /** @enum {string} */
             role: "OWNER" | "DENTIST" | "ASSISTANT" | "RECEPTION" | "ADMIN";
+        };
+        CreateStaffDto: {
+            fullName: string;
+            email: string;
+            /** @enum {string} */
+            role: "OWNER" | "DENTIST" | "ASSISTANT" | "RECEPTION" | "ADMIN";
+            password: string;
+        };
+        UpdateStaffDto: {
+            fullName?: string;
+            /** @enum {string} */
+            role?: "OWNER" | "DENTIST" | "ASSISTANT" | "RECEPTION" | "ADMIN";
         };
         CreateDomainDto: Record<string, never>;
         BrandingDto: {
@@ -907,82 +936,46 @@ export interface components {
              */
             rateUsed: number;
         };
-        CreateSaleLineItemDto: {
-            /** @description Free-text description of the line item */
-            description: string;
+        RecordPaymentDto: {
             /**
-             * Format: uuid
-             * @description Optional link to a dental catalog item
+             * @description Must be a finite number > 0
+             * @example 100
              */
-            catalogItemId?: string;
-            /**
-             * Format: uuid
-             * @description Optional link to a treatment plan item
-             */
-            treatmentPlanItemId?: string;
-            /** @example 50000 */
-            unitPrice: number;
-            /** @example 1 */
-            quantity: number;
-        };
-        CreateSaleDto: {
-            /** Format: uuid */
-            patientId?: string;
+            amount: number;
             /**
              * @description ISO 4217 currency code
-             * @example COP
+             * @example USD
              */
             currency: string;
             /**
              * Format: date-time
-             * @description When the payment was made. Its calendar date (UTC) is what GET /sales/totals uses to look up the exchange rate for this sale.
+             * @description When the abono was paid. Its calendar date (UTC) is what GET .../balance uses to look up the exchange rate when this currency differs from the plan currency.
              */
             paidAt: string;
             /** @enum {string} */
-            paymentMethod?: "CASH" | "CARD" | "TRANSFER" | "OTHER";
+            method?: "CASH" | "CARD" | "TRANSFER" | "OTHER";
             notes?: string;
-            lineItems: components["schemas"]["CreateSaleLineItemDto"][];
         };
-        SaleLineItemDto: {
+        PaymentDto: {
             /** Format: uuid */
             id: string;
             /** Format: uuid */
-            saleId: string;
-            description: string;
+            tenantId: string;
             /** Format: uuid */
-            catalogItemId: string | null;
+            treatmentPlanId: string;
             /** Format: uuid */
-            treatmentPlanItemId: string | null;
-            /** @example 50000 */
-            unitPrice: number;
-            /** @example 1 */
-            quantity: number;
-            /** @example 50000 */
+            patientId: string;
+            /** @example 100 */
             amount: number;
-            /** Format: date-time */
-            createdAt: string;
-            /** Format: date-time */
-            updatedAt: string;
-        };
-        SaleDto: {
-            /** Format: uuid */
-            id: string;
-            /** Format: uuid */
-            patientId: string | null;
             /**
              * @description ISO 4217 currency code
-             * @example COP
+             * @example USD
              */
             currency: string;
-            /**
-             * @description Stored, immutable sum of active line item amounts.
-             * @example 150000
-             */
-            total: number;
             /** Format: date-time */
             paidAt: string;
             /** @enum {string|null} */
-            paymentMethod: "CASH" | "CARD" | "TRANSFER" | "OTHER" | null;
+            method: "CASH" | "CARD" | "TRANSFER" | "OTHER" | null;
             notes: string | null;
             /** Format: uuid */
             createdById: string | null;
@@ -990,36 +983,30 @@ export interface components {
             createdAt: string;
             /** Format: date-time */
             updatedAt: string;
-            lineItems?: components["schemas"]["SaleLineItemDto"][];
         };
-        SalesTotalsDto: {
-            /** Format: date-time */
-            from: string;
-            /** Format: date-time */
-            to: string;
+        PlanBalanceDto: {
             /**
              * @description ISO 4217 currency code
              * @example USD
              */
-            currency: string;
+            planCurrency: string;
             /**
-             * @description Sum of every active sale's total in the range, each converted to `currency` using ITS OWN paidAt date (never today's rate).
-             * @example 1250.5
+             * @description Sum of ACCEPTED|DONE item prices
+             * @example 300
              */
-            totalConverted: number;
+            billable: number;
             /**
-             * @description Number of active sales in the range, any currency.
-             * @example 12
+             * @description Sum of active payments, each converted to planCurrency at its own paidAt date
+             * @example 100
              */
-            count: number;
+            paid: number;
             /**
-             * @description Breakdown of the ORIGINAL (unconverted) totals grouped by each sale's own currency.
-             * @example {
-             *       "COP": 500000,
-             *       "USD": 30
-             *     }
+             * @description billable - paid
+             * @example 200
              */
-            byCurrency: Record<string, never>;
+            balance: number;
+            /** @example 1 */
+            paymentsCount: number;
         };
         CreateInventoryItemDto: {
             /** @example Guantes de nitrilo */
@@ -1104,7 +1091,7 @@ export interface components {
             /** Format: date-time */
             to: string;
         };
-        DashboardSalesDto: {
+        DashboardIncomesDto: {
             /** Format: date-time */
             from: string;
             /** Format: date-time */
@@ -1115,17 +1102,17 @@ export interface components {
              */
             currency: string;
             /**
-             * @description Sum of every active sale's total in the range, each converted to `currency` using ITS OWN paidAt date (never today's rate).
+             * @description Sum of every active payment's amount in the range, each converted to `currency` using ITS OWN paidAt date (never today's rate).
              * @example 1250.5
              */
             totalConverted: number;
             /**
-             * @description Number of active sales in the range, any currency.
+             * @description Number of active payments in the range, any currency.
              * @example 12
              */
             count: number;
             /**
-             * @description Breakdown of the ORIGINAL (unconverted) totals grouped by each sale's own currency.
+             * @description Breakdown of the ORIGINAL (unconverted) amounts grouped by each payment's own currency.
              * @example {
              *       "COP": 500000,
              *       "USD": 30
@@ -1165,7 +1152,7 @@ export interface components {
         };
         DashboardDto: {
             period: components["schemas"]["DashboardPeriodDto"];
-            sales: components["schemas"]["DashboardSalesDto"];
+            incomes: components["schemas"]["DashboardIncomesDto"];
             lowStockItems: components["schemas"]["DashboardLowStockDto"];
             /** @description Next N appointments (start >= now), ascending by start. */
             upcomingAppointments: components["schemas"]["DashboardUpcomingAppointmentDto"][];
@@ -1865,6 +1852,73 @@ export interface operations {
             };
         };
     };
+    StaffController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateStaffDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StaffMemberDto"];
+                };
+            };
+        };
+    };
+    StaffController_remove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    StaffController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateStaffDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StaffMemberDto"];
+                };
+            };
+        };
+    };
     DomainsController_list: {
         parameters: {
             query?: never;
@@ -1990,17 +2044,13 @@ export interface operations {
             };
         };
     };
-    SalesController_list: {
+    PaymentsController_list: {
         parameters: {
-            query?: {
-                /** @description Inclusive lower bound on paidAt (half-open range [from, to)). */
-                from?: string;
-                /** @description Exclusive upper bound on paidAt (half-open range [from, to)). */
-                to?: string;
-                patientId?: string;
-            };
+            query?: never;
             header?: never;
-            path?: never;
+            path: {
+                id: string;
+            };
             cookie?: never;
         };
         requestBody?: never;
@@ -2010,21 +2060,23 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SaleDto"][];
+                    "application/json": components["schemas"]["PaymentDto"][];
                 };
             };
         };
     };
-    SalesController_create: {
+    PaymentsController_create: {
         parameters: {
             query?: never;
             header?: never;
-            path?: never;
+            path: {
+                id: string;
+            };
             cookie?: never;
         };
         requestBody: {
             content: {
-                "application/json": components["schemas"]["CreateSaleDto"];
+                "application/json": components["schemas"]["RecordPaymentDto"];
             };
         };
         responses: {
@@ -2033,38 +2085,12 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SaleDto"];
+                    "application/json": components["schemas"]["PaymentDto"];
                 };
             };
         };
     };
-    SalesController_totals: {
-        parameters: {
-            query: {
-                /** @description Inclusive lower bound on paidAt (half-open range [from, to)). */
-                from: string;
-                /** @description Exclusive upper bound on paidAt (half-open range [from, to)). */
-                to: string;
-                /** @description ISO 4217 currency code to convert every sale total into. */
-                currency: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["SalesTotalsDto"];
-                };
-            };
-        };
-    };
-    SalesController_get: {
+    PaymentsController_balance: {
         parameters: {
             query?: never;
             header?: never;
@@ -2080,12 +2106,12 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["SaleDto"];
+                    "application/json": components["schemas"]["PlanBalanceDto"];
                 };
             };
         };
     };
-    SalesController_remove: {
+    PaymentsController_remove: {
         parameters: {
             query?: never;
             header?: never;
@@ -2096,7 +2122,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Sale voided (deletedAt set) */
+            /** @description Payment voided (deletedAt set) */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -2264,9 +2290,9 @@ export interface operations {
             query: {
                 /** @description Inclusive period start (YYYY-MM-DD). */
                 from: string;
-                /** @description Period end (YYYY-MM-DD). Passed through to GetSalesTotalsUseCase, which treats the sales range as half-open [from, to). */
+                /** @description Period end (YYYY-MM-DD). Passed through to GetPaymentsTotalsUseCase, which treats the incomes/payments range as half-open [from, to). */
                 to: string;
-                /** @description ISO 4217 currency code every sale total is converted into. */
+                /** @description ISO 4217 currency code every payment amount is converted into. */
                 currency: string;
                 /** @description Max number of upcoming appointments to return. */
                 upcomingLimit?: number;

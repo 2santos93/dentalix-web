@@ -28,8 +28,20 @@ export type TreatmentPlanItem = components['schemas']['TreatmentPlanItemDto'];
  * `items`/`total` are only populated by `getPlan` (`GET /treatment-plans/:id`)
  * — `createPlan`/`listPlans`/`updatePlan` return the bare plan, so both
  * fields are optional here (see `TreatmentPlanDto` on the backend).
+ *
+ * `currency` (PAY-T1, default `"USD"` at the DB level) is genuinely returned
+ * by the backend on every route — `TreatmentPlansController` returns the raw
+ * `TreatmentPlan`/`TreatmentPlanDetail` entity, with no `@Exclude`/serializer
+ * stripping — but the presentation `TreatmentPlanDto` class used purely for
+ * Swagger documentation isn't `@ApiProperty()`-annotated for it, so
+ * `openapi-typescript` doesn't generate it. Same situation/fix as
+ * `Dashboard.incomes.byCurrency` in `dashboard-api.ts`: this intersects the
+ * generated shape with the field by hand; drop it if the backend DTO is ever
+ * annotated.
  */
-export type TreatmentPlan = components['schemas']['TreatmentPlanDto'];
+export type TreatmentPlan = components['schemas']['TreatmentPlanDto'] & {
+  currency: string;
+};
 
 /** `POST /patients/:patientId/treatment-plans` — starts a new plan in DRAFT. */
 export async function createPlan(

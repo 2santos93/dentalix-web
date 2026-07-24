@@ -11,6 +11,14 @@ import {
   updatePlan,
   type TreatmentPlanItem,
 } from '@/lib/treatment-plans/treatment-plans-api';
+import {
+  getPlanBalance,
+  listPayments,
+  recordPayment,
+  voidPayment,
+  type Payment,
+  type PlanBalance,
+} from '@/lib/payments/payments-api';
 import { listCatalogItems } from '@/lib/odontogram/catalog-api';
 
 // NOTE: jest.mock's string literal is not alias-rewritten by the SWC
@@ -26,6 +34,12 @@ jest.mock('../../lib/treatment-plans/treatment-plans-api', () => ({
   updateItem: jest.fn(),
   removeItem: jest.fn(),
 }));
+jest.mock('../../lib/payments/payments-api', () => ({
+  getPlanBalance: jest.fn(),
+  listPayments: jest.fn(),
+  recordPayment: jest.fn(),
+  voidPayment: jest.fn(),
+}));
 jest.mock('../../lib/odontogram/catalog-api', () => ({
   listCatalogItems: jest.fn(),
 }));
@@ -38,6 +52,10 @@ const mockedAddItem = addItem as jest.MockedFunction<typeof addItem>;
 const mockedUpdateItem = updateItem as jest.MockedFunction<typeof updateItem>;
 const mockedRemoveItem = removeItem as jest.MockedFunction<typeof removeItem>;
 const mockedListCatalogItems = listCatalogItems as jest.MockedFunction<typeof listCatalogItems>;
+const mockedGetPlanBalance = getPlanBalance as jest.MockedFunction<typeof getPlanBalance>;
+const mockedListPayments = listPayments as jest.MockedFunction<typeof listPayments>;
+const mockedRecordPayment = recordPayment as jest.MockedFunction<typeof recordPayment>;
+const mockedVoidPayment = voidPayment as jest.MockedFunction<typeof voidPayment>;
 
 const catalog = [
   {
@@ -77,6 +95,7 @@ function plan(overrides: Partial<import('@/lib/treatment-plans/treatment-plans-a
     tenantId: 't1',
     patientId: 'pat-1',
     status: 'DRAFT' as const,
+    currency: 'USD',
     notes: null,
     createdById: null,
     createdAt: '2026-01-01T00:00:00.000Z',
@@ -116,6 +135,34 @@ const item2: TreatmentPlanItem = {
 const plan1 = plan({ id: 'plan-1' });
 const plan1Detail = { ...plan1, items: [item1, item2], total: item1.price + item2.price };
 
+const payment1: Payment = {
+  id: 'pay-1',
+  tenantId: 't1',
+  treatmentPlanId: 'plan-1',
+  patientId: 'pat-1',
+  amount: 50000,
+  currency: 'USD',
+  paidAt: '2026-01-05T00:00:00.000Z',
+  method: 'CASH',
+  notes: null,
+  createdById: null,
+  createdAt: '2026-01-05T00:00:00.000Z',
+  updatedAt: '2026-01-05T00:00:00.000Z',
+};
+
+const balance1: PlanBalance = {
+  planCurrency: 'USD',
+  billable: 130000,
+  paid: 50000,
+  balance: 80000,
+  paymentsCount: 1,
+};
+
+/** Empty balance/payments — the default for tests that don't exercise the abonos block. */
+function emptyBalance(): PlanBalance {
+  return { planCurrency: 'USD', billable: 0, paid: 0, balance: 0, paymentsCount: 0 };
+}
+
 const currencyFormatter = new Intl.NumberFormat('es', { style: 'currency', currency: 'USD' });
 /**
  * `Intl.NumberFormat`'s `es` output places a NBSP (` `) between the
@@ -151,6 +198,15 @@ describe('TreatmentPlansTab', () => {
     mockedRemoveItem.mockReset();
     mockedListCatalogItems.mockReset();
     mockedListCatalogItems.mockResolvedValue(catalog);
+    mockedGetPlanBalance.mockReset();
+    mockedListPayments.mockReset();
+    mockedRecordPayment.mockReset();
+    mockedVoidPayment.mockReset();
+    // Default: empty balance/no abonos, so tests that don't exercise the
+    // payments block (most of the existing item/plan tests below) don't hang
+    // on an unresolved mock.
+    mockedGetPlanBalance.mockResolvedValue(emptyBalance());
+    mockedListPayments.mockResolvedValue([]);
   });
 
   it('shows the empty state when the patient has no plans, and creates a DRAFT plan on "Nuevo plan"', async () => {
@@ -370,5 +426,99 @@ describe('TreatmentPlansTab', () => {
       expect(mockedUpdatePlan).toHaveBeenCalledWith('tok', 'plan-1', { status: 'ACCEPTED' }),
     );
     await waitFor(() => expect(planStatusSelect.value).toBe('ACCEPTED'));
+  });
+
+  it('shows the balance figures (A pagar, Pagado, Saldo) formatted in the plan currency, and lists abonos in their own currency', async () => {
+    mockedListPlans.mockResolvedValue([plan1]);
+    mockedGetPlan.mockResolvedValue(plan1Detail);
+    mockedGetPlanBalance.mockResolvedValue(balance1);
+    mockedListPayments.mockResolvedValue([payment1]);
+
+    render(<TreatmentPlansTab patientId="pat-1" token="tok" />);
+    await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+
+    // Scope each figure to its own card — `billable` (130000) happens to
+    // equal the items total, which also renders in the "Total" row above, so
+    // an unscoped `getByText` on the formatted amount would match twice.
+    const billableCard = (await screen.findByText('A pagar')).closest('div') as HTMLElement;
+    expect(within(billableCard).getByText(expectedCurrencyText(balance1.billable))).toBeInTheDocument();
+    const paidCard = screen.getByText('Pagado').closest('div') as HTMLElement;
+    expect(within(paidCard).getByText(expectedCurrencyText(balance1.paid))).toBeInTheDocument();
+    const balanceCard = screen.getByText('Saldo').closest('div') as HTMLElement;
+    expect(within(balanceCard).getByText(expectedCurrencyText(balance1.balance))).toBeInTheDocument();
+
+    const paymentsTable = screen.getByRole('table', { name: /abonos del plan de tratamiento/i });
+    expect(within(paymentsTable).getByText(expectedCurrencyText(payment1.amount))).toBeInTheDocument();
+    expect(within(paymentsTable).getByText('Efectivo')).toBeInTheDocument();
+  });
+
+  it('"Registrar abono" toggles the form, defaulting moneda to the plan currency and fecha to today; submitting calls recordPayment then refreshes balance + list in place', async () => {
+    mockedListPlans.mockResolvedValue([plan1]);
+    mockedGetPlan.mockResolvedValue(plan1Detail);
+    mockedGetPlanBalance.mockResolvedValue(balance1);
+    mockedListPayments.mockResolvedValue([]);
+
+    const user = userEvent.setup();
+    render(<TreatmentPlansTab patientId="pat-1" token="tok" />);
+    await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+    expect(await screen.findByText('A pagar')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /^registrar abono$/i }));
+
+    const currencyInput = screen.getByLabelText<HTMLInputElement>(/^moneda$/i);
+    expect(currencyInput.value).toBe(plan1.currency);
+    const dateInput = screen.getByLabelText<HTMLInputElement>(/^fecha$/i);
+    expect(dateInput.value).not.toBe('');
+
+    await user.type(screen.getByLabelText(/^monto$/i), '25000');
+
+    const newPayment = { ...payment1, id: 'pay-2', amount: 25000 };
+    const updatedBalance = { ...balance1, paid: balance1.paid + 25000, balance: balance1.balance - 25000 };
+    mockedRecordPayment.mockResolvedValue(newPayment);
+    mockedGetPlanBalance.mockResolvedValueOnce(updatedBalance);
+    mockedListPayments.mockResolvedValueOnce([newPayment]);
+
+    await user.click(screen.getByRole('button', { name: /^registrar abono$/i }));
+
+    await waitFor(() => expect(mockedRecordPayment).toHaveBeenCalledTimes(1));
+    const [tokenArg, planIdArg, input] = mockedRecordPayment.mock.calls[0];
+    expect(tokenArg).toBe('tok');
+    expect(planIdArg).toBe('plan-1');
+    expect(input.amount).toBe(25000);
+    expect(input.currency).toBe('USD');
+    expect(input.paidAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    expect(input.method).toBeUndefined();
+
+    await waitFor(() => expect(mockedGetPlanBalance).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(mockedListPayments).toHaveBeenCalledTimes(2));
+    expect(await screen.findByText(expectedCurrencyText(updatedBalance.paid))).toBeInTheDocument();
+  });
+
+  it('"Anular" on an abono calls voidPayment then refreshes balance + list in place', async () => {
+    mockedListPlans.mockResolvedValue([plan1]);
+    mockedGetPlan.mockResolvedValue(plan1Detail);
+    mockedGetPlanBalance.mockResolvedValue(balance1);
+    mockedListPayments.mockResolvedValue([payment1]);
+    mockedVoidPayment.mockResolvedValue(undefined);
+
+    const user = userEvent.setup();
+    render(<TreatmentPlansTab patientId="pat-1" token="tok" />);
+
+    const paymentsTable = await screen.findByRole('table', { name: /abonos del plan de tratamiento/i });
+    const row = within(paymentsTable)
+      .getByText(expectedCurrencyText(payment1.amount))
+      .closest('tr') as HTMLTableRowElement;
+    const voidButton = within(row).getByRole('button', { name: /anular/i });
+
+    const updatedBalance = { ...balance1, paid: 0, balance: balance1.billable, paymentsCount: 0 };
+    mockedGetPlanBalance.mockResolvedValueOnce(updatedBalance);
+    mockedListPayments.mockResolvedValueOnce([]);
+
+    await user.click(voidButton);
+
+    await waitFor(() => expect(mockedVoidPayment).toHaveBeenCalledWith('tok', 'pay-1'));
+    await waitFor(() => expect(mockedGetPlanBalance).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(mockedListPayments).toHaveBeenCalledTimes(2));
+    expect(await screen.findByText(/este plan todavía no tiene abonos/i)).toBeInTheDocument();
   });
 });

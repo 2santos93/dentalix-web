@@ -16,6 +16,16 @@ import {
   type TreatmentPlanItemStatus,
   type TreatmentPlanStatus,
 } from '@/lib/treatment-plans/treatment-plans-api';
+import {
+  getPlanBalance,
+  listPayments,
+  recordPayment,
+  voidPayment,
+  type Payment,
+  type PaymentMethod,
+  type PlanBalance,
+  type RecordPaymentInput,
+} from '@/lib/payments/payments-api';
 import { listCatalogItems, type DentalCatalogItem } from '@/lib/odontogram/catalog-api';
 import type { ToothSurface } from '@/lib/odontogram/odontogram-api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -83,6 +93,42 @@ const copy = {
   genericAddItemError: 'No pudimos agregar el ítem. Intenta de nuevo.',
   emptyCatalogTitle: 'No hay procedimientos en el catálogo.',
   emptyCatalogDescription: 'Crea procedimientos en el catálogo dental para poder agregarlos a un plan.',
+
+  // Abonos + saldo (PAY-T4).
+  paymentsHeading: 'Abonos y saldo',
+  loadingBalance: 'Cargando saldo…',
+  genericBalanceError: 'No pudimos cargar el saldo. Intenta de nuevo.',
+  genericBalanceRefreshError: 'No pudimos actualizar el saldo. Intenta de nuevo.',
+  billableLabel: 'A pagar',
+  paidLabel: 'Pagado',
+  balanceLabel: 'Saldo',
+  registerPayment: 'Registrar abono',
+  cancelPaymentForm: 'Cancelar',
+  paymentAmountLabel: 'Monto',
+  paymentCurrencyLabel: 'Moneda',
+  paymentDateLabel: 'Fecha',
+  paymentMethodLabel: 'Método',
+  paymentMethodEmptyOption: 'Sin especificar',
+  paymentNotesLabel: 'Notas',
+  addPaymentSubmit: 'Registrar abono',
+  addPaymentSubmitting: 'Registrando…',
+  invalidPaymentAmount: 'Ingresa un monto válido mayor a 0.',
+  invalidPaymentCurrency: 'Ingresa una moneda válida.',
+  invalidPaymentDate: 'Ingresa una fecha válida.',
+  genericAddPaymentError: 'No pudimos registrar el abono. Intenta de nuevo.',
+  paymentsTableCaption: 'Abonos del plan de tratamiento',
+  colPaymentDate: 'Fecha',
+  colPaymentAmount: 'Monto',
+  colPaymentMethod: 'Método',
+  colPaymentNotes: 'Notas',
+  colPaymentActions: 'Acciones',
+  paymentMethodFallback: '—',
+  paymentNotesFallback: '—',
+  voidPaymentAction: 'Anular',
+  voidingPayment: 'Anulando…',
+  genericVoidPaymentError: 'No pudimos anular el abono. Intenta de nuevo.',
+  emptyPaymentsTitle: 'Este plan todavía no tiene abonos.',
+  emptyPaymentsDescription: 'Registra el primer abono con el formulario de arriba.',
 };
 
 const PLAN_STATUS_OPTIONS: TreatmentPlanStatus[] = ['DRAFT', 'ACCEPTED', 'COMPLETED', 'CANCELLED'];
@@ -118,6 +164,26 @@ const ITEM_STATUS_BADGE_VARIANT: Record<TreatmentPlanItemStatus, BadgeProps['var
   DONE: 'success',
 };
 
+const PAYMENT_METHOD_OPTIONS: PaymentMethod[] = ['CASH', 'CARD', 'TRANSFER', 'OTHER'];
+
+const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
+  CASH: 'Efectivo',
+  CARD: 'Tarjeta',
+  TRANSFER: 'Transferencia',
+  OTHER: 'Otro',
+};
+
+// Same semantic-token convention as `ITEM_STATUS_BADGE_VARIANT` above / the
+// (now removed) `sales-view.tsx`'s `PAYMENT_METHOD_BADGE_VARIANT`: CASH is
+// the "money in hand" happy path (success), the rest are neutral
+// distinctions rather than states.
+const PAYMENT_METHOD_BADGE_VARIANT: Record<PaymentMethod, BadgeProps['variant']> = {
+  CASH: 'success',
+  CARD: 'default',
+  TRANSFER: 'muted',
+  OTHER: 'muted',
+};
+
 const SURFACE_LABELS: Record<ToothSurface, string> = {
   VESTIBULAR: 'Vestibular',
   LINGUAL: 'Lingual',
@@ -139,6 +205,31 @@ function emptySurfacesState(): Record<ToothSurface, boolean> {
 const currencyFormatter = new Intl.NumberFormat('es', { style: 'currency', currency: 'USD' });
 function formatCurrency(amount: number): string {
   return currencyFormatter.format(amount);
+}
+
+/**
+ * Abonos/balance formatting (PAY-T4): unlike item prices/the plan total
+ * (always `formatCurrency`'s fixed USD, unchanged by this task), an abono
+ * may be recorded in a currency different from the plan's, and the balance
+ * figures are always in `planCurrency` — both need to format an arbitrary
+ * ISO 4217 code, not a fixed one.
+ */
+function formatCurrencyIn(amount: number, currency: string): string {
+  return new Intl.NumberFormat('es', { style: 'currency', currency }).format(amount);
+}
+
+/** `YYYY-MM-DD` for today, local time — same convention as `dashboard-view.tsx`'s `todayLocalDateString`, used to default the abono form's "fecha" field. */
+function todayLocalDateString(): string {
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
+}
+
+/** Civil (calendar) date only, no time — for the abonos list's "Fecha" column. */
+function formatCivilDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('es');
 }
 
 // FDI/ISO-3950 tooth code, client-side mirror of the backend's
@@ -308,6 +399,109 @@ function ItemsTable({ items, catalogById, updatingItemId, onStatusChange, onRemo
   );
 }
 
+interface PaymentsListProps {
+  payments: Payment[];
+  voidingPaymentId: string | null;
+  onVoid: (paymentId: string) => void;
+}
+
+/** Desktop table + mobile cards for the abonos list — same responsive split as `ItemsTable`. */
+function PaymentsList({ payments, voidingPaymentId, onVoid }: PaymentsListProps) {
+  if (payments.length === 0) {
+    return <EmptyState role="status" title={copy.emptyPaymentsTitle} description={copy.emptyPaymentsDescription} />;
+  }
+
+  return (
+    <>
+      {/* Desktop table */}
+      <div className="hidden md:block">
+        <Table>
+          <caption className="sr-only">{copy.paymentsTableCaption}</caption>
+          <TableHeader>
+            <TableRow className="hover:bg-transparent">
+              <TableHead>{copy.colPaymentDate}</TableHead>
+              <TableHead>{copy.colPaymentAmount}</TableHead>
+              <TableHead>{copy.colPaymentMethod}</TableHead>
+              <TableHead>{copy.colPaymentNotes}</TableHead>
+              <TableHead className="sr-only">{copy.colPaymentActions}</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {payments.map((payment) => {
+              const voiding = voidingPaymentId === payment.id;
+              return (
+                <TableRow key={payment.id}>
+                  <TableCell>{formatCivilDate(payment.paidAt)}</TableCell>
+                  <TableCell className="font-medium">
+                    {formatCurrencyIn(payment.amount, payment.currency)}
+                  </TableCell>
+                  <TableCell>
+                    {payment.method ? (
+                      <Badge variant={PAYMENT_METHOD_BADGE_VARIANT[payment.method]}>
+                        {PAYMENT_METHOD_LABELS[payment.method]}
+                      </Badge>
+                    ) : (
+                      <span className="text-muted">{copy.paymentMethodFallback}</span>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-muted">{payment.notes ?? copy.paymentNotesFallback}</TableCell>
+                  <TableCell>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={voiding}
+                      onClick={() => onVoid(payment.id)}
+                    >
+                      {voiding ? copy.voidingPayment : copy.voidPaymentAction}
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+          </TableBody>
+        </Table>
+      </div>
+
+      {/* Mobile cards */}
+      <ul className="flex flex-col gap-3 md:hidden">
+        {payments.map((payment) => {
+          const voiding = voidingPaymentId === payment.id;
+          return (
+            <li key={payment.id}>
+              <Card className="p-4">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-medium text-ink">{formatCivilDate(payment.paidAt)}</span>
+                  {payment.method ? (
+                    <Badge variant={PAYMENT_METHOD_BADGE_VARIANT[payment.method]}>
+                      {PAYMENT_METHOD_LABELS[payment.method]}
+                    </Badge>
+                  ) : (
+                    <span className="text-sm text-muted">{copy.paymentMethodFallback}</span>
+                  )}
+                </div>
+                <p className="mt-2 font-medium text-ink">{formatCurrencyIn(payment.amount, payment.currency)}</p>
+                <p className="mt-1 text-sm text-muted">{payment.notes ?? copy.paymentNotesFallback}</p>
+                <div className="mt-3">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={voiding}
+                    onClick={() => onVoid(payment.id)}
+                  >
+                    {voiding ? copy.voidingPayment : copy.voidPaymentAction}
+                  </Button>
+                </div>
+              </Card>
+            </li>
+          );
+        })}
+      </ul>
+    </>
+  );
+}
+
 /**
  * `'use client'` tab for the patient-detail page's "Plan de tratamiento" tab
  * — mirrors `OdontogramTab`'s data-fetching shape: it owns its own fetch(es)
@@ -329,6 +523,10 @@ function ItemsTable({ items, catalogById, updatingItemId, onStatusChange, onRemo
  *   `loadedPlanIdRef`, a plain ref rather than state, so switching plans
  *   doesn't need an extra render to know it's a genuinely new resource and
  *   therefore a full "loading" state, not a background "refreshing" one).
+ * - the SELECTED plan's balance + abonos (`getPlanBalance`/`listPayments`,
+ *   PAY-T4) — a genuinely separate pair of endpoints from `getPlan` above,
+ *   but loaded with the exact same `loadedPaymentsPlanIdRef` shape whenever
+ *   `selectedPlanId` changes.
  *
  * All item/plan mutations (`addItem`, `updateItem`, `removeItem`,
  * `updatePlan`) call `refreshPlanDetail()` directly and AWAIT it before
@@ -336,7 +534,9 @@ function ItemsTable({ items, catalogById, updatingItemId, onStatusChange, onRemo
  * fix, not `OdontogramTab`'s reload-key bump: a row's disabled control must
  * stay disabled for the whole window until the refetched `planDetail`
  * actually lands, not just until the mutation's own promise settles,
- * otherwise the control re-enables showing the stale pre-change value.
+ * otherwise the control re-enables showing the stale pre-change value. The
+ * abono mutations (`recordPayment`/`voidPayment`) follow the identical
+ * pattern against `refreshBalanceAndPayments()`.
  */
 export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) {
   // Plans list + catalog (loaded together).
@@ -367,6 +567,31 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
 
   const [updatingItemId, setUpdatingItemId] = useState<string | null>(null);
   const [itemActionError, setItemActionError] = useState<string | null>(null);
+
+  // Balance + abonos (PAY-T4) — a genuinely separate resource from
+  // `planDetail` (its own endpoints, `getPlanBalance`/`listPayments`), loaded
+  // together whenever `selectedPlanId` changes, same
+  // isInitialLoad/loadedXIdRef shape as `planDetail` below.
+  const [planBalance, setPlanBalance] = useState<PlanBalance | null>(null);
+  const [payments, setPayments] = useState<Payment[]>([]);
+  const [paymentsLoading, setPaymentsLoading] = useState(false);
+  const [paymentsError, setPaymentsError] = useState<string | null>(null);
+  const [paymentsRefreshing, setPaymentsRefreshing] = useState(false);
+  const [paymentsRefreshError, setPaymentsRefreshError] = useState<string | null>(null);
+  const loadedPaymentsPlanIdRef = useRef<string | null>(null);
+
+  const [showPaymentForm, setShowPaymentForm] = useState(false);
+  const [paymentAmount, setPaymentAmount] = useState('');
+  const [paymentCurrency, setPaymentCurrency] = useState('');
+  const [paymentDate, setPaymentDate] = useState('');
+  const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | ''>('');
+  const [paymentNotes, setPaymentNotes] = useState('');
+  const [addPaymentSubmitting, setAddPaymentSubmitting] = useState(false);
+  const [addPaymentValidationError, setAddPaymentValidationError] = useState<string | null>(null);
+  const [addPaymentError, setAddPaymentError] = useState<string | null>(null);
+
+  const [voidingPaymentId, setVoidingPaymentId] = useState<string | null>(null);
+  const [paymentActionError, setPaymentActionError] = useState<string | null>(null);
 
   // Add-item form state.
   const [toothNumber, setToothNumber] = useState('');
@@ -457,6 +682,19 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
     setNotes('');
     setAddItemValidationError(null);
     setAddItemError(null);
+    // Balance/abonos (PAY-T4) — same rationale: a different plan is a
+    // genuinely different resource, and an in-progress abono form must not
+    // carry over to the wrong plan.
+    setPlanBalance(null);
+    setPayments([]);
+    setShowPaymentForm(false);
+    setPaymentAmount('');
+    setPaymentCurrency('');
+    setPaymentDate('');
+    setPaymentMethod('');
+    setPaymentNotes('');
+    setAddPaymentValidationError(null);
+    setAddPaymentError(null);
   }
 
   const catalogById = new Map(catalogItems.map((item) => [item.id, item]));
@@ -556,6 +794,153 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
         setPlanDetailRefreshError(err instanceof ApiError ? err.message : copy.genericPlanDetailRefreshError);
       })
       .finally(() => setPlanDetailRefreshing(false));
+  }
+
+  // Balance + abonos (PAY-T4): a genuinely separate resource from
+  // `planDetail` above (different endpoints), but fetched with the exact
+  // same isInitialLoad/loadedXIdRef shape whenever `selectedPlanId` changes —
+  // `planBalance`/`payments` are already cleared synchronously (during
+  // render, see the `prevSelectedPlanId` block) whenever `selectedPlanId`
+  // changes, so this effect only needs to handle the "fetch" case.
+  useEffect(() => {
+    if (!selectedPlanId) return;
+    let cancelled = false;
+    const isInitialLoad = loadedPaymentsPlanIdRef.current !== selectedPlanId;
+
+    async function load() {
+      if (isInitialLoad) {
+        setPlanBalance(null);
+        setPayments([]);
+        setPaymentsLoading(true);
+      } else {
+        setPaymentsRefreshing(true);
+      }
+      try {
+        const [balanceData, paymentsData] = await Promise.all([
+          getPlanBalance(token, selectedPlanId as string),
+          listPayments(token, selectedPlanId as string),
+        ]);
+        if (cancelled) return;
+        setPlanBalance(balanceData);
+        setPayments(paymentsData);
+        loadedPaymentsPlanIdRef.current = selectedPlanId;
+        setPaymentsError(null);
+        setPaymentsRefreshError(null);
+      } catch (err) {
+        if (cancelled) return;
+        const message = err instanceof ApiError ? err.message : copy.genericBalanceError;
+        if (isInitialLoad) {
+          setPaymentsError(message);
+        } else {
+          setPaymentsRefreshError(copy.genericBalanceRefreshError);
+        }
+      } finally {
+        if (!cancelled) {
+          setPaymentsLoading(false);
+          setPaymentsRefreshing(false);
+        }
+      }
+    }
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [token, selectedPlanId]);
+
+  /**
+   * Re-fetches the balance + abonos list in place. Called directly by
+   * `handleAddPayment`/`handleVoidPayment` below AND awaited by them before
+   * clearing their own busy flag — same "await the refresh before
+   * re-enabling" fix as `refreshPlanDetail` above.
+   */
+  function refreshBalanceAndPayments(): Promise<void> {
+    if (!selectedPlanId) return Promise.resolve();
+    setPaymentsRefreshing(true);
+    return Promise.all([getPlanBalance(token, selectedPlanId), listPayments(token, selectedPlanId)])
+      .then(([balanceData, paymentsData]) => {
+        setPlanBalance(balanceData);
+        setPayments(paymentsData);
+        setPaymentsRefreshError(null);
+      })
+      .catch((err) => {
+        setPaymentsRefreshError(err instanceof ApiError ? err.message : copy.genericBalanceRefreshError);
+      })
+      .finally(() => setPaymentsRefreshing(false));
+  }
+
+  /** Toggles the "Registrar abono" form, defaulting currency=plan.currency / fecha=today whenever it's opened. */
+  function handleTogglePaymentForm() {
+    setShowPaymentForm((prev) => {
+      const next = !prev;
+      if (next) {
+        setPaymentAmount('');
+        setPaymentCurrency(planDetail?.currency ?? 'USD');
+        setPaymentDate(todayLocalDateString());
+        setPaymentMethod('');
+        setPaymentNotes('');
+        setAddPaymentValidationError(null);
+        setAddPaymentError(null);
+      }
+      return next;
+    });
+  }
+
+  async function handleAddPayment(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setAddPaymentValidationError(null);
+    setAddPaymentError(null);
+
+    if (!selectedPlanId) return;
+
+    const amountNumber = Number(paymentAmount.trim());
+    if (!paymentAmount.trim() || !Number.isFinite(amountNumber) || amountNumber <= 0) {
+      setAddPaymentValidationError(copy.invalidPaymentAmount);
+      return;
+    }
+    const currencyValue = paymentCurrency.trim().toUpperCase();
+    if (!currencyValue) {
+      setAddPaymentValidationError(copy.invalidPaymentCurrency);
+      return;
+    }
+    if (!paymentDate) {
+      setAddPaymentValidationError(copy.invalidPaymentDate);
+      return;
+    }
+
+    setAddPaymentSubmitting(true);
+    try {
+      const input: RecordPaymentInput = {
+        amount: amountNumber,
+        currency: currencyValue,
+        paidAt: new Date(paymentDate).toISOString(),
+        ...(paymentMethod ? { method: paymentMethod } : {}),
+        ...(paymentNotes.trim() ? { notes: paymentNotes.trim() } : {}),
+      };
+      await recordPayment(token, selectedPlanId, input);
+      setPaymentAmount('');
+      setPaymentMethod('');
+      setPaymentNotes('');
+      await refreshBalanceAndPayments();
+    } catch (err) {
+      // Surfaces the backend's 400 (invalid amount/currency) verbatim —
+      // `ApiError.message` is the backend's validation message.
+      setAddPaymentError(err instanceof ApiError ? err.message : copy.genericAddPaymentError);
+    } finally {
+      setAddPaymentSubmitting(false);
+    }
+  }
+
+  async function handleVoidPayment(paymentId: string) {
+    setVoidingPaymentId(paymentId);
+    setPaymentActionError(null);
+    try {
+      await voidPayment(token, paymentId);
+      await refreshBalanceAndPayments();
+    } catch (err) {
+      setPaymentActionError(err instanceof ApiError ? err.message : copy.genericVoidPaymentError);
+    } finally {
+      setVoidingPaymentId(null);
+    }
   }
 
   async function handlePlanStatusChange(status: TreatmentPlanStatus) {
@@ -823,6 +1208,174 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
                   <span className="text-lg font-semibold text-ink">
                     {formatCurrency(planDetail.total ?? 0)}
                   </span>
+                </div>
+
+                <Separator />
+
+                <div className="flex flex-col gap-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3">
+                    <h3 className="text-base font-semibold text-ink">{copy.paymentsHeading}</h3>
+                    <Button type="button" variant="outline" size="sm" onClick={handleTogglePaymentForm}>
+                      {showPaymentForm ? copy.cancelPaymentForm : copy.registerPayment}
+                    </Button>
+                  </div>
+
+                  {paymentsLoading && (
+                    <p role="status" className="text-sm text-muted">
+                      {copy.loadingBalance}
+                    </p>
+                  )}
+                  {paymentsError && (
+                    <div className="flex flex-col items-start gap-3">
+                      <p role="alert" className="text-sm text-danger">
+                        {paymentsError}
+                      </p>
+                      <Button type="button" variant="outline" onClick={refreshBalanceAndPayments}>
+                        {copy.retry}
+                      </Button>
+                    </div>
+                  )}
+
+                  {!paymentsLoading && !paymentsError && planBalance && (
+                    <>
+                      {paymentsRefreshing && (
+                        <p role="status" aria-live="polite" className="text-xs font-medium text-muted">
+                          {copy.refreshing}
+                        </p>
+                      )}
+                      {paymentsRefreshError && (
+                        <div className="flex items-center gap-3">
+                          <p role="alert" className="text-xs text-danger">
+                            {paymentsRefreshError}
+                          </p>
+                          <Button variant="outline" size="sm" onClick={refreshBalanceAndPayments}>
+                            {copy.retry}
+                          </Button>
+                        </div>
+                      )}
+                      {paymentActionError && (
+                        <p role="alert" className="text-sm text-danger">
+                          {paymentActionError}
+                        </p>
+                      )}
+
+                      <div className="grid gap-3 sm:grid-cols-3">
+                        <div className="rounded-lg border border-border p-3">
+                          <p className="text-xs font-medium uppercase tracking-wide text-muted">
+                            {copy.billableLabel}
+                          </p>
+                          <p className="mt-1 text-lg font-semibold text-ink">
+                            {formatCurrencyIn(planBalance.billable, planBalance.planCurrency)}
+                          </p>
+                        </div>
+                        <div className="rounded-lg border border-border p-3">
+                          <p className="text-xs font-medium uppercase tracking-wide text-muted">
+                            {copy.paidLabel}
+                          </p>
+                          <p className="mt-1 text-lg font-semibold text-ink">
+                            {formatCurrencyIn(planBalance.paid, planBalance.planCurrency)}
+                          </p>
+                        </div>
+                        <div className="rounded-lg border border-border p-3">
+                          <p className="text-xs font-medium uppercase tracking-wide text-muted">
+                            {copy.balanceLabel}
+                          </p>
+                          <p className="mt-1 text-lg font-semibold text-ink">
+                            {formatCurrencyIn(planBalance.balance, planBalance.planCurrency)}
+                          </p>
+                        </div>
+                      </div>
+
+                      {showPaymentForm && (
+                        <form
+                          onSubmit={handleAddPayment}
+                          aria-label={copy.registerPayment}
+                          className="flex flex-col gap-4 rounded-lg border border-border p-4"
+                        >
+                          <div className="grid gap-4 sm:grid-cols-2">
+                            <FormField htmlFor="tp-payment-amount" label={copy.paymentAmountLabel}>
+                              <Input
+                                id="tp-payment-amount"
+                                type="number"
+                                min={0}
+                                step="0.01"
+                                value={paymentAmount}
+                                onChange={(e) => setPaymentAmount(e.target.value)}
+                              />
+                            </FormField>
+
+                            <FormField htmlFor="tp-payment-currency" label={copy.paymentCurrencyLabel}>
+                              <Input
+                                id="tp-payment-currency"
+                                value={paymentCurrency}
+                                maxLength={3}
+                                onChange={(e) => setPaymentCurrency(e.target.value.toUpperCase())}
+                                className="uppercase"
+                              />
+                            </FormField>
+                          </div>
+
+                          <div className="grid gap-4 sm:grid-cols-2">
+                            <FormField htmlFor="tp-payment-date" label={copy.paymentDateLabel}>
+                              <Input
+                                id="tp-payment-date"
+                                type="date"
+                                value={paymentDate}
+                                onChange={(e) => setPaymentDate(e.target.value)}
+                              />
+                            </FormField>
+
+                            <FormField htmlFor="tp-payment-method" label={copy.paymentMethodLabel}>
+                              <select
+                                id="tp-payment-method"
+                                value={paymentMethod}
+                                onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod | '')}
+                                className={fieldClass}
+                              >
+                                <option value="">{copy.paymentMethodEmptyOption}</option>
+                                {PAYMENT_METHOD_OPTIONS.map((method) => (
+                                  <option key={method} value={method}>
+                                    {PAYMENT_METHOD_LABELS[method]}
+                                  </option>
+                                ))}
+                              </select>
+                            </FormField>
+                          </div>
+
+                          <FormField htmlFor="tp-payment-notes" label={copy.paymentNotesLabel}>
+                            <textarea
+                              id="tp-payment-notes"
+                              rows={2}
+                              value={paymentNotes}
+                              onChange={(e) => setPaymentNotes(e.target.value)}
+                              className={cn(fieldClass, 'h-auto')}
+                            />
+                          </FormField>
+
+                          {addPaymentValidationError && (
+                            <p role="alert" className="text-sm text-danger">
+                              {addPaymentValidationError}
+                            </p>
+                          )}
+                          {addPaymentError && (
+                            <p role="alert" className="text-sm text-danger">
+                              {addPaymentError}
+                            </p>
+                          )}
+
+                          <Button type="submit" disabled={addPaymentSubmitting} className="self-start">
+                            {addPaymentSubmitting ? copy.addPaymentSubmitting : copy.addPaymentSubmit}
+                          </Button>
+                        </form>
+                      )}
+
+                      <PaymentsList
+                        payments={payments}
+                        voidingPaymentId={voidingPaymentId}
+                        onVoid={handleVoidPayment}
+                      />
+                    </>
+                  )}
                 </div>
 
                 <Separator />

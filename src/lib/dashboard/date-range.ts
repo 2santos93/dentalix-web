@@ -3,9 +3,9 @@
  * in the same format.
  *
  * `DashboardView`'s "Hasta" date picker is inclusive from the user's
- * perspective (they expect sales made ON that day to be included), but the
- * backend's sales-totals query is half-open `[from, to)` — so the raw
- * selected date would silently exclude that day's sales. Extending the
+ * perspective (they expect payments made ON that day to be included), but the
+ * backend's incomes/payments-totals query is half-open `[from, to)` — so the
+ * raw selected date would silently exclude that day's payments. Extending the
  * upper bound by one day before it's sent to `getDashboard` closes that gap
  * while the input itself keeps showing the user's selected (inclusive) date.
  *
