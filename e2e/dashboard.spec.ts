@@ -12,14 +12,21 @@ import { registerAndLogin } from './support/auth';
  *     `ListInventoryItemsUseCase` resolves its `stock` to 0 and
  *     `lowStock = stock <= minStock` is true (`list-inventory-items.use-
  *     case.ts`) — no need to touch the movements endpoint at all;
- *   - a sale in USD, `paidAt` today, one line item (`POST /sales`);
+ *   - a treatment plan for the patient (`POST /patients/:id/treatment-
+ *     plans`), one billable item (`POST /treatment-plans/:id/items`, priced,
+ *     status flipped to DONE via `PATCH .../items/:itemId`), and an abono
+ *     recorded against the plan in USD, `paidAt` today (`POST
+ *     /treatment-plans/:id/payments`) — this is what the dashboard's
+ *     "Ingresos del período" card now sums (PAY-T4: sales/`/sales` removed,
+ *     incomes are sourced from payments, see `get-payments-totals.use-
+ *     case.ts`);
  *   - a future appointment a few days out, `providerId` = the owner's own
  *     `userId` from `GET /staff` (`POST /appointments`).
  * ...then loads `/dashboard` (default period = current month..today,
  * inclusive "Hasta" thanks to `addOneDayIso`; default currency USD) and
  * asserts each of the 4 cards renders the seeded data:
- *   - "Ventas del período": the sale's total (Intl `es`/USD-formatted, same
- *     formatter as `DashboardView`'s `currencyFormatter`) and "1 venta";
+ *   - "Ingresos del período": the abono's total (Intl `es`/USD-formatted,
+ *     same formatter as `DashboardView`'s `currencyFormatter`) and "1 abono";
  *   - "Bajo stock": "1 ítem" and the seeded item's name;
  *   - "Próximas citas": the seeded appointment's formatted time, its
  *     "Agendada" status badge, and — since v1 doesn't resolve patient names
@@ -28,12 +35,12 @@ import { registerAndLogin } from './support/auth';
  *     (`UpcomingAppointmentsCard`) built from the very patient we seeded;
  *   - "# Pacientes": exactly 1 (brand-new clinic, only patient we created).
  *
- * OFFLINE by design: the sale's currency (USD) equals the dashboard's query
- * currency (USD), so `GetSalesTotalsUseCase` -> `ConvertAmountUseCase` takes
- * the `from === to` passthrough (`convert-amount.use-case.ts`) and returns
- * `{ result: amount, rateUsed: 1 }` WITHOUT calling `GetRatesForDateUseCase`
- * (i.e. never hits Open Exchange Rates) — no exchange-snapshot seeding
- * needed for this spec to be deterministic.
+ * OFFLINE by design: the abono's currency (USD) equals the dashboard's query
+ * currency (USD), so `GetPaymentsTotalsUseCase` -> `ConvertAmountUseCase`
+ * takes the `from === to` passthrough (`convert-amount.use-case.ts`) and
+ * returns `{ result: amount, rateUsed: 1 }` WITHOUT calling
+ * `GetRatesForDateUseCase` (i.e. never hits Open Exchange Rates) — no
+ * exchange-snapshot seeding needed for this spec to be deterministic.
  *
  * Requires both servers up:
  *   - backend  http://localhost:3000  (dentalix-api, `npm run start:dev`, Docker DB on :5442)
@@ -45,8 +52,9 @@ import { registerAndLogin } from './support/auth';
  * `http://${subdomain}.localhost:3001`, each seed call setting `X-Tenant-Host`
  * itself to match.
  *
- * Uniqueness: subdomain/email/patient last name/item name are suffixed with
- * `E2E_RUN_SUFFIX` (set by the `test:e2e` npm script) so repeated runs never
+ * Uniqueness: subdomain/email/patient last name/item name/catalog code are
+ * suffixed with `E2E_RUN_SUFFIX` (set by the `test:e2e` npm script) so
+ * repeated runs never
  * collide; a local `npx playwright test` falls back to `crypto.randomUUID()`.
  * `RegisterDto.subdomain` requires `/^[a-z0-9-]+$/`, so the suffix is kept
  * lowercase-alphanumeric only.
@@ -66,7 +74,14 @@ const patientDocNumber = `DOCDASH${suffix}`;
 const inventoryItemName = `Alginato-${suffix}`;
 const inventoryMinStock = 5;
 
-const saleAmount = 250;
+// Catalog item seeded via API (needed by `POST /treatment-plans/:id/items`,
+// same convention as `treatment-plans.spec.ts`).
+const catalogCode = `dash-resina-${suffix}`;
+const catalogLabel = `Dash-Resina-${suffix}`;
+const catalogColor = '#3366CC';
+const itemPrice = 250;
+
+const paymentAmount = 250;
 
 // Same formatter as `dashboard-view.tsx`'s `currencyFormatter` (es locale).
 const currencyFormatter = new Intl.NumberFormat('es', { style: 'currency', currency: 'USD' });
@@ -79,7 +94,7 @@ function formatTime(date: Date): string {
   return date.toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' });
 }
 
-test('dashboard: aggregated cards render seeded sale, low-stock item, upcoming appointment and patient count', async ({
+test('dashboard: aggregated cards render seeded payment income, low-stock item, upcoming appointment and patient count', async ({
   page,
 }) => {
   const origin = await registerAndLogin(page, { subdomain, clinicName, fullName, email, password });
@@ -123,17 +138,73 @@ test('dashboard: aggregated cards render seeded sale, low-stock item, upcoming a
     `Seeding the inventory item failed: ${await inventoryResponse.text()}`,
   ).toBeTruthy();
 
-  // --- Seed a sale in USD, paid today, one line item ---
-  const saleResponse = await page.request.post('http://localhost:3000/api/v1/sales', {
+  // --- Seed a treatment plan + a billable (DONE) item + an abono against
+  // it, in USD, paid today — this is what "Ingresos del período" now sums
+  // (PAY-T4: `/sales` is gone, incomes are sourced from payments) ---
+  const catalogResponse = await page.request.post('http://localhost:3000/api/v1/catalog/items', {
     headers: seedHeaders,
     data: {
-      patientId: patient.id,
-      currency: 'USD',
-      paidAt: new Date().toISOString(),
-      lineItems: [{ description: `Consulta ${suffix}`, unitPrice: saleAmount, quantity: 1 }],
+      code: catalogCode,
+      kind: 'PROCEDURE',
+      labelEs: catalogLabel,
+      color: catalogColor,
+      defaultPrice: itemPrice,
     },
   });
-  expect(saleResponse.ok(), `Seeding the sale failed: ${await saleResponse.text()}`).toBeTruthy();
+  expect(
+    catalogResponse.ok(),
+    `Seeding the catalog item failed: ${await catalogResponse.text()}`,
+  ).toBeTruthy();
+  const catalogItem = (await catalogResponse.json()) as { id: string };
+
+  const planResponse = await page.request.post(
+    `http://localhost:3000/api/v1/patients/${patient.id}/treatment-plans`,
+    {
+      headers: seedHeaders,
+      data: {},
+    },
+  );
+  expect(planResponse.ok(), `Seeding the treatment plan failed: ${await planResponse.text()}`).toBeTruthy();
+  const plan = (await planResponse.json()) as { id: string };
+
+  const itemResponse = await page.request.post(
+    `http://localhost:3000/api/v1/treatment-plans/${plan.id}/items`,
+    {
+      headers: seedHeaders,
+      data: {
+        toothNumber: '11',
+        catalogItemId: catalogItem.id,
+        price: itemPrice,
+      },
+    },
+  );
+  expect(itemResponse.ok(), `Seeding the plan item failed: ${await itemResponse.text()}`).toBeTruthy();
+  const planItem = (await itemResponse.json()) as { id: string };
+
+  const markDoneResponse = await page.request.patch(
+    `http://localhost:3000/api/v1/treatment-plans/${plan.id}/items/${planItem.id}`,
+    {
+      headers: seedHeaders,
+      data: { status: 'DONE' },
+    },
+  );
+  expect(
+    markDoneResponse.ok(),
+    `Marking the plan item DONE failed: ${await markDoneResponse.text()}`,
+  ).toBeTruthy();
+
+  const paymentResponse = await page.request.post(
+    `http://localhost:3000/api/v1/treatment-plans/${plan.id}/payments`,
+    {
+      headers: seedHeaders,
+      data: {
+        amount: paymentAmount,
+        currency: 'USD',
+        paidAt: new Date().toISOString(),
+      },
+    },
+  );
+  expect(paymentResponse.ok(), `Seeding the payment failed: ${await paymentResponse.text()}`).toBeTruthy();
 
   // --- Resolve the owner's own userId (provider for the appointment) ---
   const staffResponse = await page.request.get('http://localhost:3000/api/v1/staff', {
@@ -164,19 +235,19 @@ test('dashboard: aggregated cards render seeded sale, low-stock item, upcoming a
   ).toBeTruthy();
 
   // --- Load the dashboard (default period = current month..today inclusive,
-  // default currency USD -> covers today's sale; USD->USD passthrough, no
+  // default currency USD -> covers today's abono; USD->USD passthrough, no
   // exchange call) ---
   await page.goto(`${origin}/dashboard`);
   await expect(page.getByRole('heading', { name: 'Dashboard', level: 1 })).toBeVisible();
 
   // Wait past the loading skeleton into the real card grid.
-  await expect(page.getByRole('heading', { name: 'Ventas del período' })).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole('heading', { name: 'Ingresos del período' })).toBeVisible({ timeout: 10_000 });
 
-  // --- "Ventas del período": total + count ---
-  const salesHeading = page.getByRole('heading', { name: 'Ventas del período' });
-  const salesCard = salesHeading.locator('xpath=ancestor::div[contains(@class,"rounded-xl")][1]');
-  await expect(salesCard.getByText(formatCurrency(saleAmount), { exact: true }).first()).toBeVisible();
-  await expect(salesCard.getByText('1 venta', { exact: true })).toBeVisible();
+  // --- "Ingresos del período": total + count ---
+  const incomesHeading = page.getByRole('heading', { name: 'Ingresos del período' });
+  const incomesCard = incomesHeading.locator('xpath=ancestor::div[contains(@class,"rounded-xl")][1]');
+  await expect(incomesCard.getByText(formatCurrency(paymentAmount), { exact: true }).first()).toBeVisible();
+  await expect(incomesCard.getByText('1 abono', { exact: true })).toBeVisible();
 
   // --- "Bajo stock": count + seeded item name ---
   const lowStockHeading = page.getByRole('heading', { name: 'Bajo stock' });

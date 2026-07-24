@@ -9,7 +9,7 @@ import { PageHeader } from '@/components/molecules/page-header';
 // until next-intl wiring lands.
 const copy = {
   title: 'Dashboard',
-  description: 'Resumen de ventas, inventario, agenda y pacientes de tu clínica.',
+  description: 'Resumen de ingresos, inventario, agenda y pacientes de tu clínica.',
   checkingSession: 'Verificando sesión…',
 };
 
