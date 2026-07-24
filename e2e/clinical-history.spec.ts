@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test';
 import { randomUUID } from 'node:crypto';
+import { registerAndLogin } from './support/auth';
 
 /**
  * e2e: register clinic + login, create a patient, open its detail, save a
@@ -11,6 +12,10 @@ import { randomUUID } from 'node:crypto';
  * Requires both servers up:
  *   - backend  http://localhost:3000  (dentalix-api, `npm run start:dev`, Docker DB on :5442)
  *   - frontend http://localhost:3001  (dentalix-web, managed by Playwright's `webServer`)
+ *
+ * Auth: the backend resolves the tenant from the REQUEST HOST, so the whole
+ * flow runs on `http://${subdomain}.localhost:3001` (see `./support/auth`),
+ * not the shared `baseURL` (`http://localhost:3001`, which has no tenant).
  *
  * Uniqueness: subdomain/email/patient last name/anamnesis+evolution copy are
  * suffixed with `E2E_RUN_SUFFIX`, an env var set by the `test:e2e` npm
@@ -41,63 +46,10 @@ const evolutionNotes = `EvolucionControlE2E-${suffix}`;
 test('save anamnesis + add evolution via the UI -> both persist through the backend after reload', async ({
   page,
 }) => {
-  // --- Register ---
-  await page.goto('/register');
-
-  await page.getByLabel('Nombre de la clínica').fill(clinicName);
-  await page.getByLabel('Subdominio').fill(subdomain);
-  await page.getByLabel('Nombre completo').fill(fullName);
-  await page.getByLabel('Correo electrónico').fill(email);
-  await page.getByLabel('Contraseña').fill(password);
-
-  await page.getByRole('button', { name: 'Crear cuenta' }).click();
-
-  const registerError = page.locator('p[role="alert"]');
-  await expect(page)
-    .toHaveURL(/\/login$/, { timeout: 10_000 })
-    .catch(async () => {
-      const message = (await registerError.isVisible())
-        ? await registerError.textContent()
-        : 'unknown (no redirect, no visible alert)';
-      throw new Error(`Register did not redirect to /login. API error: ${message}`);
-    });
-
-  // --- Login ---
-  // localhost:3001 has no tenant subdomain, so LoginForm renders the
-  // subdomain input in addition to email/password.
-  await page.getByLabel('Subdominio de la clínica').fill(subdomain);
-  await page.getByLabel('Correo electrónico').fill(email);
-  await page.getByLabel('Contraseña').fill(password);
-
-  await page.getByRole('button', { name: 'Iniciar sesión' }).click();
-
-  const loginError = page.locator('p[role="alert"]');
-
-  await expect
-    .poll(
-      async () => {
-        if (await loginError.isVisible()) {
-          const message = await loginError.textContent();
-          throw new Error(`Login failed with API error: ${message}`);
-        }
-        const raw = await page.evaluate(() => localStorage.getItem('dentalix-auth'));
-        if (!raw) return false;
-        const parsed = JSON.parse(raw) as { state?: { accessToken?: string | null } };
-        return Boolean(parsed.state?.accessToken);
-      },
-      { timeout: 10_000, message: 'expected a persisted accessToken after login' },
-    )
-    .toBe(true);
-
-  // LoginForm fires `router.push('/dashboard')` right after persisting the
-  // tokens — that client-side navigation can still be in flight when we
-  // issue our own `page.goto` below, which would abort it
-  // (net::ERR_ABORTED). Let it settle first (that route may 404, that's
-  // fine — we only need the in-flight navigation resolved).
-  await page.waitForURL(/\/dashboard$/, { timeout: 5_000 }).catch(() => {});
+  const origin = await registerAndLogin(page, { subdomain, clinicName, fullName, email, password });
 
   // --- Create the patient we'll open the clinical history of ---
-  await page.goto('/patients/new');
+  await page.goto(`${origin}/patients/new`);
   await expect(page).toHaveURL(/\/patients\/new$/);
 
   await page.getByLabel('Nombre', { exact: true }).fill(patientFirstName);
