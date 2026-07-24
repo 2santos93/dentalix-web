@@ -43,7 +43,6 @@ function todayLocalDateString(): string {
 
 interface AgendaViewProps {
   token: string;
-  tenant: string | null;
 }
 
 /**
@@ -62,7 +61,7 @@ interface AgendaViewProps {
  * wrapper) carries all the stateful orchestration so it's unit-testable —
  * see `agenda-view.test.tsx`.
  */
-export function AgendaView({ token, tenant }: AgendaViewProps) {
+export function AgendaView({ token }: AgendaViewProps) {
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [staffLoading, setStaffLoading] = useState(true);
   const [staffError, setStaffError] = useState<string | null>(null);
@@ -107,7 +106,7 @@ export function AgendaView({ token, tenant }: AgendaViewProps) {
     async function load() {
       setStaffLoading(true);
       try {
-        const data = await listStaff(token, tenant);
+        const data = await listStaff(token);
         if (cancelled) return;
         setStaff(data);
         setStaffError(null);
@@ -122,7 +121,7 @@ export function AgendaView({ token, tenant }: AgendaViewProps) {
     return () => {
       cancelled = true;
     };
-  }, [token, tenant, staffReloadKey]);
+  }, [token, staffReloadKey]);
 
   // Patient names for `DayAgenda`'s `patientNames` map — fetched once
   // (bounded page, see `AppointmentForm`'s doc comment on the same
@@ -133,7 +132,7 @@ export function AgendaView({ token, tenant }: AgendaViewProps) {
     let cancelled = false;
     async function load() {
       try {
-        const res = await listPatients(token, { pageSize: 100 }, tenant);
+        const res = await listPatients(token, { pageSize: 100 });
         if (cancelled) return;
         setPatientNames(
           Object.fromEntries(res.items.map((p) => [p.id, `${p.firstName} ${p.lastName}`])),
@@ -146,7 +145,7 @@ export function AgendaView({ token, tenant }: AgendaViewProps) {
     return () => {
       cancelled = true;
     };
-  }, [token, tenant]);
+  }, [token]);
 
   // Full (blocking) load whenever the provider or the selected day changes.
   useEffect(() => {
@@ -156,7 +155,7 @@ export function AgendaView({ token, tenant }: AgendaViewProps) {
       setAppointmentsLoading(true);
       try {
         const { from, to } = localDayRange(selectedDate);
-        const data = await listAppointments(token, { from, to, providerId }, tenant);
+        const data = await listAppointments(token, { from, to, providerId });
         if (cancelled) return;
         setAppointments(data);
         setAppointmentsLoadError(null);
@@ -171,13 +170,13 @@ export function AgendaView({ token, tenant }: AgendaViewProps) {
     return () => {
       cancelled = true;
     };
-  }, [token, providerId, selectedDate, tenant]);
+  }, [token, providerId, selectedDate]);
 
   function refreshAppointmentsInPlace(): Promise<void> {
     if (!token || !providerId) return Promise.resolve();
     setAppointmentsRefreshing(true);
     const { from, to } = localDayRange(selectedDate);
-    return listAppointments(token, { from, to, providerId }, tenant)
+    return listAppointments(token, { from, to, providerId })
       .then((data) => {
         setAppointments(data);
         setAppointmentsRefreshError(null);
@@ -211,7 +210,7 @@ export function AgendaView({ token, tenant }: AgendaViewProps) {
     setUpdatingId(id);
     setStatusChangeError(null);
     try {
-      await updateAppointment(token, id, { status }, tenant);
+      await updateAppointment(token, id, { status });
       await refreshAppointmentsInPlace();
     } catch (err) {
       setStatusChangeError(err instanceof ApiError ? err.message : copy.genericStatusChangeError);
@@ -291,7 +290,6 @@ export function AgendaView({ token, tenant }: AgendaViewProps) {
         >
           <AppointmentForm
             token={token}
-            tenant={tenant}
             onCreated={handleAppointmentCreated}
             defaultDate={selectedDate}
           />

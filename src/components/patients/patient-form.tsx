@@ -40,10 +40,9 @@ const sexOptions: { value: Sex; label: string }[] = [
 
 interface PatientFormProps {
   token: string;
-  tenant: string | null;
 }
 
-export function PatientForm({ token, tenant }: PatientFormProps) {
+export function PatientForm({ token }: PatientFormProps) {
   const router = useRouter();
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -75,7 +74,7 @@ export function PatientForm({ token, tenant }: PatientFormProps) {
         ...(address.trim() ? { address: address.trim() } : {}),
         ...(notes.trim() ? { notes: notes.trim() } : {}),
       };
-      await createPatient(token, input, tenant);
+      await createPatient(token, input);
       router.push('/patients');
     } catch (err) {
       setError(err instanceof ApiError ? err.message : copy.genericError);

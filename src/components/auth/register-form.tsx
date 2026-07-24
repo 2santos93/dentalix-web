@@ -40,7 +40,6 @@ export function RegisterForm({ tenant }: { tenant: string | null }) {
       await apiFetch<RegisterResponse>('/auth/register', {
         method: 'POST',
         body: { clinicName, subdomain, fullName, email, password },
-        tenant,
       });
       router.push('/login');
     } catch (err) {

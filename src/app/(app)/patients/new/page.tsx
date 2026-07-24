@@ -5,7 +5,6 @@ import Link from 'next/link';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { PatientForm } from '@/components/patients/patient-form';
 import { ThemeToggle } from '@/components/theme/theme-toggle';
-import { parseTenantFromHost } from '@/lib/tenant';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
@@ -44,8 +43,6 @@ export default function NewPatientPage() {
     return null;
   }
 
-  const tenant = typeof window !== 'undefined' ? parseTenantFromHost(window.location.host) : null;
-
   return (
     <div className="flex min-h-full flex-1 flex-col gap-6 bg-bg px-4 py-8 md:px-8">
       <div className="flex items-center justify-between gap-4">
@@ -59,7 +56,7 @@ export default function NewPatientPage() {
       </div>
 
       <div className="w-full max-w-2xl rounded-lg border border-border bg-surface p-6 shadow-sm">
-        <PatientForm token={accessToken} tenant={tenant} />
+        <PatientForm token={accessToken} />
       </div>
     </div>
   );

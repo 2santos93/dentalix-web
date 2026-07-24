@@ -50,7 +50,6 @@ export type ListPatientsParams =
 export async function listPatients(
   token: string,
   params: ListPatientsParams = {},
-  tenant?: string | null,
 ): Promise<PatientsListResponse> {
   const search = new URLSearchParams();
   if (params?.query) search.set('query', params.query);
@@ -60,7 +59,6 @@ export async function listPatients(
 
   return apiFetch<PatientsListResponse>(`/patients${qs ? `?${qs}` : ''}`, {
     token,
-    tenant: tenant ?? null,
   });
 }
 
@@ -73,13 +71,11 @@ export async function listPatients(
 export async function createPatient(
   token: string,
   input: CreatePatientInput,
-  tenant?: string | null,
 ): Promise<Patient> {
   return apiFetch<Patient>('/patients', {
     method: 'POST',
     body: input,
     token,
-    tenant: tenant ?? null,
   });
 }
 
@@ -91,10 +87,8 @@ export async function createPatient(
 export async function getPatient(
   token: string,
   id: string,
-  tenant?: string | null,
 ): Promise<Patient> {
   return apiFetch<Patient>(`/patients/${id}`, {
     token,
-    tenant: tenant ?? null,
   });
 }

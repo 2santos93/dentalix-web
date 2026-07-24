@@ -32,7 +32,6 @@ const copy = {
 
 interface MedicalHistoryPanelProps {
   token: string;
-  tenant: string | null;
   patientId: string;
 }
 
@@ -66,7 +65,7 @@ function formFromHistory(history: MedicalHistory | null): typeof emptyForm {
   };
 }
 
-export function MedicalHistoryPanel({ token, tenant, patientId }: MedicalHistoryPanelProps) {
+export function MedicalHistoryPanel({ token, patientId }: MedicalHistoryPanelProps) {
   const [latest, setLatest] = useState<MedicalHistory | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -81,7 +80,7 @@ export function MedicalHistoryPanel({ token, tenant, patientId }: MedicalHistory
     async function load() {
       setLoading(true);
       try {
-        const data = await getMedicalHistory(token, patientId, tenant);
+        const data = await getMedicalHistory(token, patientId);
         if (cancelled) return;
         setLatest(data);
         // Set once, on load — carries the latest version's values forward
@@ -99,7 +98,7 @@ export function MedicalHistoryPanel({ token, tenant, patientId }: MedicalHistory
     return () => {
       cancelled = true;
     };
-  }, [token, tenant, patientId, reloadKey]);
+  }, [token, patientId, reloadKey]);
 
   function handleRetry() {
     setReloadKey((k) => k + 1);
@@ -128,7 +127,7 @@ export function MedicalHistoryPanel({ token, tenant, patientId }: MedicalHistory
         ...(form.medicalAlerts.trim() ? { medicalAlerts: form.medicalAlerts.trim() } : {}),
         ...(form.notes.trim() ? { notes: form.notes.trim() } : {}),
       };
-      const saved = await saveMedicalHistory(token, patientId, input, tenant);
+      const saved = await saveMedicalHistory(token, patientId, input);
       setLatest(saved);
       // Re-sync the form from the just-saved version (not emptyForm) so the
       // next edit still carries forward whatever wasn't just changed.

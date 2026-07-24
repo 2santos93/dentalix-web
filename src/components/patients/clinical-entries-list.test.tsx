@@ -44,19 +44,19 @@ describe('ClinicalEntriesList', () => {
 
   it('shows a loading state while fetching', () => {
     mockedList.mockReturnValue(new Promise(() => {}));
-    render(<ClinicalEntriesList token="tok" tenant={null} patientId="p1" />);
+    render(<ClinicalEntriesList token="tok" patientId="p1" />);
     expect(screen.getByRole('status')).toHaveTextContent(/cargando/i);
   });
 
   it('shows an empty state when there are no entries', async () => {
     mockedList.mockResolvedValue([]);
-    render(<ClinicalEntriesList token="tok" tenant={null} patientId="p1" />);
+    render(<ClinicalEntriesList token="tok" patientId="p1" />);
     expect(await screen.findByText(/no hay evoluciones/i)).toBeInTheDocument();
   });
 
   it('renders the entries (reason + notes), most recent first', async () => {
     mockedList.mockResolvedValue(entries);
-    render(<ClinicalEntriesList token="tok" tenant={null} patientId="p1" />);
+    render(<ClinicalEntriesList token="tok" patientId="p1" />);
 
     // Rendered twice — desktop table + mobile cards (same convention as
     // PatientsTable).
@@ -68,7 +68,7 @@ describe('ClinicalEntriesList', () => {
 
   it('renders the add-entry form with accessible labels', async () => {
     mockedList.mockResolvedValue([]);
-    render(<ClinicalEntriesList token="tok" tenant={null} patientId="p1" />);
+    render(<ClinicalEntriesList token="tok" patientId="p1" />);
 
     await screen.findByText(/no hay evoluciones/i);
     expect(screen.getByLabelText(/fecha/i)).toBeInTheDocument();
@@ -92,7 +92,7 @@ describe('ClinicalEntriesList', () => {
     mockedCreate.mockResolvedValue(created);
 
     const user = userEvent.setup();
-    render(<ClinicalEntriesList token="tok" tenant={null} patientId="p1" />);
+    render(<ClinicalEntriesList token="tok" patientId="p1" />);
     await screen.findByText(/no hay evoluciones/i);
 
     await user.type(screen.getByLabelText(/notas/i), 'Nueva evolución');
@@ -103,7 +103,6 @@ describe('ClinicalEntriesList', () => {
       'tok',
       'p1',
       expect.objectContaining({ notes: 'Nueva evolución' }),
-      null,
     );
     // Rendered twice — desktop table + mobile cards.
     expect(await screen.findAllByText('Nueva evolución')).toHaveLength(2);
@@ -111,7 +110,7 @@ describe('ClinicalEntriesList', () => {
 
   it('requires the notes field to submit', async () => {
     mockedList.mockResolvedValue([]);
-    render(<ClinicalEntriesList token="tok" tenant={null} patientId="p1" />);
+    render(<ClinicalEntriesList token="tok" patientId="p1" />);
     await screen.findByText(/no hay evoluciones/i);
     expect(screen.getByLabelText(/notas/i)).toBeRequired();
   });
@@ -120,7 +119,7 @@ describe('ClinicalEntriesList', () => {
     const { ApiError } = jest.requireActual('../../lib/api/client');
     mockedList.mockRejectedValue(new ApiError(500, 'Error del servidor'));
 
-    render(<ClinicalEntriesList token="tok" tenant={null} patientId="p1" />);
+    render(<ClinicalEntriesList token="tok" patientId="p1" />);
     expect(await screen.findByRole('alert')).toHaveTextContent('Error del servidor');
   });
 
@@ -130,7 +129,7 @@ describe('ClinicalEntriesList', () => {
     mockedCreate.mockRejectedValue(new ApiError(400, 'Datos inválidos'));
 
     const user = userEvent.setup();
-    render(<ClinicalEntriesList token="tok" tenant={null} patientId="p1" />);
+    render(<ClinicalEntriesList token="tok" patientId="p1" />);
     await screen.findByText(/no hay evoluciones/i);
     await user.type(screen.getByLabelText(/notas/i), 'x');
     await user.click(screen.getByRole('button', { name: /agregar/i }));

@@ -19,13 +19,13 @@ describe('PatientForm', () => {
   });
 
   it('renders the required fields with accessible labels', () => {
-    render(<PatientForm token="tok" tenant={null} />);
+    render(<PatientForm token="tok" />);
     expect(screen.getByLabelText(/nombre/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/apellido/i)).toBeInTheDocument();
   });
 
   it('renders docType and sex selects with the enum options', () => {
-    render(<PatientForm token="tok" tenant={null} />);
+    render(<PatientForm token="tok" />);
     const docType = screen.getByLabelText(/tipo de documento/i) as HTMLSelectElement;
     const sex = screen.getByLabelText(/sexo/i) as HTMLSelectElement;
 
@@ -37,7 +37,7 @@ describe('PatientForm', () => {
   });
 
   it('renders optional fields with accessible labels', () => {
-    render(<PatientForm token="tok" tenant={null} />);
+    render(<PatientForm token="tok" />);
     expect(screen.getByLabelText(/número de documento/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/nacimiento/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/teléfono/i)).toBeInTheDocument();
@@ -47,7 +47,7 @@ describe('PatientForm', () => {
   });
 
   it('renders a submit button', () => {
-    render(<PatientForm token="tok" tenant={null} />);
+    render(<PatientForm token="tok" />);
     expect(screen.getByRole('button', { name: /crear|guardar/i })).toBeInTheDocument();
   });
 
@@ -77,7 +77,7 @@ describe('PatientForm', () => {
       }),
     );
 
-    render(<PatientForm token="tok" tenant={null} />);
+    render(<PatientForm token="tok" />);
     await user.type(screen.getByLabelText(/^nombre/i), 'Ana');
     await user.type(screen.getByLabelText(/apellido/i), 'García');
 
@@ -94,7 +94,7 @@ describe('PatientForm', () => {
     mockedCreatePatient.mockRejectedValue(new ApiError(409, 'Documento ya registrado'));
 
     const user = userEvent.setup();
-    render(<PatientForm token="tok" tenant={null} />);
+    render(<PatientForm token="tok" />);
     await user.type(screen.getByLabelText(/^nombre/i), 'Ana');
     await user.type(screen.getByLabelText(/apellido/i), 'García');
     await user.click(screen.getByRole('button', { name: /crear|guardar/i }));

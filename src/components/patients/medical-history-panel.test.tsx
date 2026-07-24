@@ -38,19 +38,19 @@ describe('MedicalHistoryPanel', () => {
 
   it('shows a loading state while fetching', () => {
     mockedGet.mockReturnValue(new Promise(() => {}));
-    render(<MedicalHistoryPanel token="tok" tenant={null} patientId="p1" />);
+    render(<MedicalHistoryPanel token="tok" patientId="p1" />);
     expect(screen.getByRole('status')).toHaveTextContent(/cargando/i);
   });
 
   it('shows an empty state when there is no anamnesis yet (null)', async () => {
     mockedGet.mockResolvedValue(null);
-    render(<MedicalHistoryPanel token="tok" tenant={null} patientId="p1" />);
+    render(<MedicalHistoryPanel token="tok" patientId="p1" />);
     expect(await screen.findByText(/no hay.*anamnesis|aún no/i)).toBeInTheDocument();
   });
 
   it('renders the latest anamnesis fields when present', async () => {
     mockedGet.mockResolvedValue(latest);
-    render(<MedicalHistoryPanel token="tok" tenant={null} patientId="p1" />);
+    render(<MedicalHistoryPanel token="tok" patientId="p1" />);
 
     const versionLabel = await screen.findByText(/versión 2/i);
     // Scope to the read-only summary card: the form below is now
@@ -69,7 +69,7 @@ describe('MedicalHistoryPanel', () => {
 
   it('pre-fills the save-new-version form from the latest version (carry-forward)', async () => {
     mockedGet.mockResolvedValue(latest);
-    render(<MedicalHistoryPanel token="tok" tenant={null} patientId="p1" />);
+    render(<MedicalHistoryPanel token="tok" patientId="p1" />);
 
     // Wait for the fetched version to render before asserting on the form,
     // which is synced from it in the same load effect.
@@ -89,7 +89,7 @@ describe('MedicalHistoryPanel', () => {
     mockedSave.mockResolvedValue(saved);
 
     const user = userEvent.setup();
-    render(<MedicalHistoryPanel token="tok" tenant={null} patientId="p1" />);
+    render(<MedicalHistoryPanel token="tok" patientId="p1" />);
     await screen.findByText(/versión 2/i);
 
     // Only touch "notes" — allergies etc. must still be submitted because
@@ -111,13 +111,12 @@ describe('MedicalHistoryPanel', () => {
         medicalAlerts: 'Alergia severa',
         notes: 'Nota actualizada',
       }),
-      null,
     );
   });
 
   it('renders the save-new-version form with accessible labels', async () => {
     mockedGet.mockResolvedValue(null);
-    render(<MedicalHistoryPanel token="tok" tenant={null} patientId="p1" />);
+    render(<MedicalHistoryPanel token="tok" patientId="p1" />);
 
     await screen.findByText(/no hay.*anamnesis|aún no/i);
     expect(screen.getByLabelText(/alergias/i)).toBeInTheDocument();
@@ -135,14 +134,14 @@ describe('MedicalHistoryPanel', () => {
     mockedSave.mockResolvedValue(saved);
 
     const user = userEvent.setup();
-    render(<MedicalHistoryPanel token="tok" tenant={null} patientId="p1" />);
+    render(<MedicalHistoryPanel token="tok" patientId="p1" />);
     await screen.findByText(/no hay.*anamnesis|aún no/i);
 
     await user.type(screen.getByLabelText(/alergias/i), 'Ninguna');
     await user.click(screen.getByRole('button', { name: /guardar/i }));
 
     await waitFor(() => expect(mockedSave).toHaveBeenCalledTimes(1));
-    expect(mockedSave).toHaveBeenCalledWith('tok', 'p1', expect.objectContaining({ allergies: 'Ninguna' }), null);
+    expect(mockedSave).toHaveBeenCalledWith('tok', 'p1', expect.objectContaining({ allergies: 'Ninguna' }));
     expect(await screen.findByText(/versión 1/i)).toBeInTheDocument();
   });
 
@@ -150,7 +149,7 @@ describe('MedicalHistoryPanel', () => {
     const { ApiError } = jest.requireActual('../../lib/api/client');
     mockedGet.mockRejectedValue(new ApiError(500, 'Error del servidor'));
 
-    render(<MedicalHistoryPanel token="tok" tenant={null} patientId="p1" />);
+    render(<MedicalHistoryPanel token="tok" patientId="p1" />);
     expect(await screen.findByRole('alert')).toHaveTextContent('Error del servidor');
   });
 
@@ -158,7 +157,7 @@ describe('MedicalHistoryPanel', () => {
     const { ApiError } = jest.requireActual('../../lib/api/client');
     mockedGet.mockRejectedValue(new ApiError(500, 'Error del servidor'));
 
-    render(<MedicalHistoryPanel token="tok" tenant={null} patientId="p1" />);
+    render(<MedicalHistoryPanel token="tok" patientId="p1" />);
     await screen.findByRole('alert');
 
     // No editable fields, no submit button — there's nothing to save from
@@ -176,7 +175,7 @@ describe('MedicalHistoryPanel', () => {
     mockedGet.mockResolvedValueOnce(latest);
 
     const user = userEvent.setup();
-    render(<MedicalHistoryPanel token="tok" tenant={null} patientId="p1" />);
+    render(<MedicalHistoryPanel token="tok" patientId="p1" />);
     await screen.findByRole('alert');
 
     await user.click(screen.getByRole('button', { name: /reintentar/i }));
@@ -194,7 +193,7 @@ describe('MedicalHistoryPanel', () => {
     mockedSave.mockRejectedValue(new ApiError(400, 'Datos inválidos'));
 
     const user = userEvent.setup();
-    render(<MedicalHistoryPanel token="tok" tenant={null} patientId="p1" />);
+    render(<MedicalHistoryPanel token="tok" patientId="p1" />);
     await screen.findByText(/no hay.*anamnesis|aún no/i);
     await user.click(screen.getByRole('button', { name: /guardar/i }));
 

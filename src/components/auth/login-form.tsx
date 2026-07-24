@@ -40,7 +40,6 @@ export function LoginForm({ tenant }: { tenant: string | null }) {
       const res = await apiFetch<LoginResponse>('/auth/login', {
         method: 'POST',
         body: { subdomain: effectiveTenant, email, password },
-        tenant: effectiveTenant,
       });
       setTokens({ accessToken: res.accessToken, refreshToken: res.refreshToken });
       router.push('/patients');

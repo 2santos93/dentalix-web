@@ -9,7 +9,6 @@ import { MedicalHistoryPanel } from '@/components/patients/medical-history-panel
 import { ClinicalEntriesList } from '@/components/patients/clinical-entries-list';
 import { PatientDetailTabs, type PatientDetailTabKey } from '@/components/patients/patient-detail-tabs';
 import { ThemeToggle } from '@/components/theme/theme-toggle';
-import { parseTenantFromHost } from '@/lib/tenant';
 import { OdontogramTab } from '@/components/odontogram/odontogram-tab';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
@@ -57,8 +56,6 @@ export default function PatientDetailPage() {
   const [retryCount, setRetryCount] = useState(0);
   const [activeTab, setActiveTab] = useState<PatientDetailTabKey>('data');
 
-  const tenant = typeof window !== 'undefined' ? parseTenantFromHost(window.location.host) : null;
-
   useEffect(() => {
     // Don't decide anything until the persisted store has rehydrated —
     // accessToken is null until then, and redirecting on that would bounce
@@ -74,7 +71,7 @@ export default function PatientDetailPage() {
     async function load() {
       setLoading(true);
       try {
-        const data = await getPatient(accessToken as string, patientId, tenant);
+        const data = await getPatient(accessToken as string, patientId);
         if (cancelled) return;
         setPatient(data);
         setError(null);
@@ -90,7 +87,6 @@ export default function PatientDetailPage() {
     return () => {
       cancelled = true;
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [accessToken, router, hasHydrated, patientId, retryCount]);
 
   if (!hasHydrated) {
@@ -206,11 +202,11 @@ export default function PatientDetailPage() {
             >
               <section className="flex flex-col gap-3">
                 <h2 className="text-lg font-semibold text-ink">{copy.anamnesisHeading}</h2>
-                <MedicalHistoryPanel token={accessToken} tenant={tenant} patientId={patientId} />
+                <MedicalHistoryPanel token={accessToken} patientId={patientId} />
               </section>
               <section className="flex flex-col gap-3">
                 <h2 className="text-lg font-semibold text-ink">{copy.entriesHeading}</h2>
-                <ClinicalEntriesList token={accessToken} tenant={tenant} patientId={patientId} />
+                <ClinicalEntriesList token={accessToken} patientId={patientId} />
               </section>
             </div>
           )}

@@ -42,13 +42,11 @@ export interface Appointment {
 export async function createAppointment(
   token: string,
   input: CreateAppointmentInput,
-  tenant?: string | null,
 ): Promise<Appointment> {
   return apiFetch<Appointment>('/appointments', {
     method: 'POST',
     body: input,
     token,
-    tenant: tenant ?? null,
   });
 }
 
@@ -60,7 +58,6 @@ export async function createAppointment(
 export async function listAppointments(
   token: string,
   params: ListAppointmentsParams,
-  tenant?: string | null,
 ): Promise<Appointment[]> {
   const search = new URLSearchParams();
   search.set('from', params.from);
@@ -69,18 +66,15 @@ export async function listAppointments(
 
   return apiFetch<Appointment[]>(`/appointments?${search.toString()}`, {
     token,
-    tenant: tenant ?? null,
   });
 }
 
 export async function getAppointment(
   token: string,
   id: string,
-  tenant?: string | null,
 ): Promise<Appointment> {
   return apiFetch<Appointment>(`/appointments/${id}`, {
     token,
-    tenant: tenant ?? null,
   });
 }
 
@@ -89,12 +83,10 @@ export async function updateAppointment(
   token: string,
   id: string,
   patch: UpdateAppointmentInput,
-  tenant?: string | null,
 ): Promise<Appointment> {
   return apiFetch<Appointment>(`/appointments/${id}`, {
     method: 'PATCH',
     body: patch,
     token,
-    tenant: tenant ?? null,
   });
 }

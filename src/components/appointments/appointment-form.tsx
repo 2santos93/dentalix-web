@@ -45,7 +45,6 @@ function toIsoInstant(date: string, time: string): string {
 
 interface AppointmentFormProps {
   token: string;
-  tenant: string | null;
   /** Called with the created appointment once `createAppointment` succeeds — the caller (`AgendaView`) refreshes the day list in place, it does not remount this form. */
   onCreated: (appointment: Appointment) => void;
   /**
@@ -69,7 +68,7 @@ interface AppointmentFormProps {
  * v1; a live server-side search is a natural follow-up once patient rosters
  * grow past one page.
  */
-export function AppointmentForm({ token, tenant, onCreated, defaultDate }: AppointmentFormProps) {
+export function AppointmentForm({ token, onCreated, defaultDate }: AppointmentFormProps) {
   const [patients, setPatients] = useState<Patient[]>([]);
   const [patientsLoading, setPatientsLoading] = useState(true);
   const [patientsError, setPatientsError] = useState<string | null>(null);
@@ -97,7 +96,7 @@ export function AppointmentForm({ token, tenant, onCreated, defaultDate }: Appoi
     async function load() {
       setPatientsLoading(true);
       try {
-        const res = await listPatients(token, { pageSize: 100 }, tenant);
+        const res = await listPatients(token, { pageSize: 100 });
         if (cancelled) return;
         setPatients(res.items);
         setPatientsError(null);
@@ -112,14 +111,14 @@ export function AppointmentForm({ token, tenant, onCreated, defaultDate }: Appoi
     return () => {
       cancelled = true;
     };
-  }, [token, tenant, patientsReloadKey]);
+  }, [token, patientsReloadKey]);
 
   useEffect(() => {
     let cancelled = false;
     async function load() {
       setStaffLoading(true);
       try {
-        const res = await listStaff(token, tenant);
+        const res = await listStaff(token);
         if (cancelled) return;
         setStaff(res);
         setStaffError(null);
@@ -134,7 +133,7 @@ export function AppointmentForm({ token, tenant, onCreated, defaultDate }: Appoi
     return () => {
       cancelled = true;
     };
-  }, [token, tenant, staffReloadKey]);
+  }, [token, staffReloadKey]);
 
   const filteredPatients = patientQuery.trim()
     ? patients.filter((p) => {
@@ -182,7 +181,7 @@ export function AppointmentForm({ token, tenant, onCreated, defaultDate }: Appoi
         end,
         ...(reason.trim() ? { reason: reason.trim() } : {}),
       };
-      const created = await createAppointment(token, input, tenant);
+      const created = await createAppointment(token, input);
       resetForm();
       onCreated(created);
     } catch (err) {

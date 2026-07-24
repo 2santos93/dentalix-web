@@ -85,7 +85,7 @@ const createdAppointment = {
 };
 
 async function renderFormAndWaitForLoad() {
-  render(<AppointmentForm token="tok" tenant={null} onCreated={jest.fn()} />);
+  render(<AppointmentForm token="tok" onCreated={jest.fn()} />);
   await screen.findByRole('option', { name: /dra\. ana ríos/i });
   await screen.findByRole('option', { name: /maría lópez/i });
 }
@@ -108,7 +108,7 @@ describe('AppointmentForm', () => {
   });
 
   it('renders patient, provider, date/time and reason fields with accessible labels', async () => {
-    render(<AppointmentForm token="tok" tenant={null} onCreated={jest.fn()} />);
+    render(<AppointmentForm token="tok" onCreated={jest.fn()} />);
     expect(screen.getByLabelText(/^paciente$/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/profesional/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/^fecha$/i)).toBeInTheDocument();
@@ -157,9 +157,8 @@ describe('AppointmentForm', () => {
     await user.click(screen.getByRole('button', { name: /agendar|crear|guardar/i }));
 
     await waitFor(() => expect(mockedCreateAppointment).toHaveBeenCalledTimes(1));
-    const [token, input, tenant] = mockedCreateAppointment.mock.calls[0];
+    const [token, input] = mockedCreateAppointment.mock.calls[0];
     expect(token).toBe('tok');
-    expect(tenant).toBeNull();
     expect(input.patientId).toBe('pat-1');
     expect(input.providerId).toBe('staff-1');
     expect(input.reason).toBe('Control');
@@ -172,7 +171,7 @@ describe('AppointmentForm', () => {
     const user = userEvent.setup();
     const onCreated = jest.fn();
     mockedCreateAppointment.mockResolvedValue(createdAppointment);
-    render(<AppointmentForm token="tok" tenant={null} onCreated={onCreated} />);
+    render(<AppointmentForm token="tok" onCreated={onCreated} />);
     await screen.findByRole('option', { name: /dra\. ana ríos/i });
     await screen.findByRole('option', { name: /maría lópez/i });
     await fillValidForm(user);

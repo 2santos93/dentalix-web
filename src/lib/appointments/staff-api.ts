@@ -20,12 +20,8 @@ export interface StaffMember {
   role: ClinicRole;
 }
 
-export async function listStaff(
-  token: string,
-  tenant?: string | null,
-): Promise<StaffMember[]> {
+export async function listStaff(token: string): Promise<StaffMember[]> {
   return apiFetch<StaffMember[]>('/staff', {
     token,
-    tenant: tenant ?? null,
   });
 }

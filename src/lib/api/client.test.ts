@@ -1,3 +1,16 @@
+/**
+ * jsdom 26's `window.location` (and its `host` property) is a non-
+ * configurable accessor — `Object.defineProperty`/`delete` on it throws
+ * "Cannot redefine property", and assigning `window.location.host =` tries
+ * to actually navigate (jsdom logs "Not implemented: navigation" and leaves
+ * it unchanged). The one place Jest lets a test control the jsdom URL is
+ * this per-file docblock pragma, so the whole suite below runs against a
+ * fake tenant subdomain host — mirroring what a clinic's real host looks
+ * like (e.g. `agendademo7z.localhost:3001`) — and the first test asserts
+ * `doFetch` forwards exactly that host as `X-Tenant-Host`.
+ * @jest-environment jsdom
+ * @jest-environment-options {"url": "http://acme.localhost:3001"}
+ */
 import { apiFetch, apiFetchOrNull, ApiError } from './client';
 
 describe('apiFetch', () => {
@@ -6,14 +19,21 @@ describe('apiFetch', () => {
     global.fetch = realFetch;
   });
 
-  it('sends bearer + tenant headers and returns parsed json', async () => {
+  it('sends bearer + X-Tenant-Host (from window.location.host) headers and returns parsed json', async () => {
+    // The file-level `@jest-environment-options` docblock above points this
+    // suite's jsdom at `http://acme.localhost:3001` — assert doFetch reads
+    // that mocked host straight from `window.location.host`.
+    expect(window.location.host).toBe('acme.localhost:3001');
+
     const spy = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: 1 }) });
     global.fetch = spy as unknown as typeof fetch;
-    const out = await apiFetch<{ ok: number }>('/patients', { token: 'T', tenant: 'sonrisa' });
+    const out = await apiFetch<{ ok: number }>('/patients', { token: 'T' });
     expect(out).toEqual({ ok: 1 });
     const [, init] = spy.mock.calls[0];
     expect(init.headers.Authorization).toBe('Bearer T');
-    expect(init.headers['X-Tenant']).toBe('sonrisa');
+    expect(init.headers['X-Tenant-Host']).toBe('acme.localhost:3001');
+    // The old dead header must NOT be sent — the backend never read it.
+    expect(init.headers['X-Tenant']).toBeUndefined();
   });
 
   it('throws ApiError on non-ok', async () => {

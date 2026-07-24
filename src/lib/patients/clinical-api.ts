@@ -63,11 +63,9 @@ export interface ClinicalEntry {
 export async function getMedicalHistory(
   token: string,
   patientId: string,
-  tenant?: string | null,
 ): Promise<MedicalHistory | null> {
   return apiFetchOrNull<MedicalHistory>(`/patients/${patientId}/medical-history`, {
     token,
-    tenant: tenant ?? null,
   });
 }
 
@@ -77,13 +75,11 @@ export async function saveMedicalHistory(
   token: string,
   patientId: string,
   input: SaveMedicalHistoryInput,
-  tenant?: string | null,
 ): Promise<MedicalHistory> {
   return apiFetch<MedicalHistory>(`/patients/${patientId}/medical-history`, {
     method: 'PUT',
     body: input,
     token,
-    tenant: tenant ?? null,
   });
 }
 
@@ -91,11 +87,9 @@ export async function saveMedicalHistory(
 export async function listClinicalEntries(
   token: string,
   patientId: string,
-  tenant?: string | null,
 ): Promise<ClinicalEntry[]> {
   return apiFetch<ClinicalEntry[]>(`/patients/${patientId}/clinical-entries`, {
     token,
-    tenant: tenant ?? null,
   });
 }
 
@@ -103,12 +97,10 @@ export async function createClinicalEntry(
   token: string,
   patientId: string,
   input: CreateClinicalEntryInput,
-  tenant?: string | null,
 ): Promise<ClinicalEntry> {
   return apiFetch<ClinicalEntry>(`/patients/${patientId}/clinical-entries`, {
     method: 'POST',
     body: input,
     token,
-    tenant: tenant ?? null,
   });
 }

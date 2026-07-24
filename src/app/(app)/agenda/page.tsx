@@ -4,7 +4,6 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { ThemeToggle } from '@/components/theme/theme-toggle';
-import { parseTenantFromHost } from '@/lib/tenant';
 import { AgendaView } from '@/components/appointments/agenda-view';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
@@ -19,7 +18,6 @@ export default function AgendaPage() {
   const router = useRouter();
   const accessToken = useAuthStore((s) => s.accessToken);
   const hasHydrated = useAuthStore((s) => s._hasHydrated);
-  const tenant = typeof window !== 'undefined' ? parseTenantFromHost(window.location.host) : null;
 
   useEffect(() => {
     // Don't decide anything until the persisted store has rehydrated —
@@ -57,7 +55,7 @@ export default function AgendaPage() {
         <ThemeToggle />
       </div>
 
-      <AgendaView token={accessToken} tenant={tenant} />
+      <AgendaView token={accessToken} />
     </div>
   );
 }

@@ -30,7 +30,6 @@ const copy = {
 
 interface ClinicalEntriesListProps {
   token: string;
-  tenant: string | null;
   patientId: string;
 }
 
@@ -38,7 +37,7 @@ function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString('es');
 }
 
-export function ClinicalEntriesList({ token, tenant, patientId }: ClinicalEntriesListProps) {
+export function ClinicalEntriesList({ token, patientId }: ClinicalEntriesListProps) {
   const [entries, setEntries] = useState<ClinicalEntry[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -53,7 +52,7 @@ export function ClinicalEntriesList({ token, tenant, patientId }: ClinicalEntrie
     async function load() {
       setLoading(true);
       try {
-        const data = await listClinicalEntries(token, patientId, tenant);
+        const data = await listClinicalEntries(token, patientId);
         if (cancelled) return;
         setEntries(data);
         setLoadError(null);
@@ -68,7 +67,7 @@ export function ClinicalEntriesList({ token, tenant, patientId }: ClinicalEntrie
     return () => {
       cancelled = true;
     };
-  }, [token, tenant, patientId]);
+  }, [token, patientId]);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -80,7 +79,7 @@ export function ClinicalEntriesList({ token, tenant, patientId }: ClinicalEntrie
         ...(entryDate ? { entryDate: new Date(entryDate).toISOString() } : {}),
         ...(reason.trim() ? { reason: reason.trim() } : {}),
       };
-      const created = await createClinicalEntry(token, patientId, input, tenant);
+      const created = await createClinicalEntry(token, patientId, input);
       // Entries are returned DESC by `entryDate` — prepend so the newest
       // stays on top without re-sorting the whole list.
       setEntries((prev) => [created, ...prev]);

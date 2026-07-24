@@ -7,7 +7,6 @@ import { ApiError } from '@/lib/api/client';
 import { listPatients, type Patient } from '@/lib/patients/patients-api';
 import { PatientsTable } from '@/components/patients/patients-table';
 import { ThemeToggle } from '@/components/theme/theme-toggle';
-import { parseTenantFromHost } from '@/lib/tenant';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
@@ -40,12 +39,9 @@ export default function PatientsPage() {
       return;
     }
 
-    const tenant =
-      typeof window !== 'undefined' ? parseTenantFromHost(window.location.host) : null;
-
     let cancelled = false;
 
-    listPatients(accessToken, {}, tenant)
+    listPatients(accessToken, {})
       .then((res) => {
         if (cancelled) return;
         setPatients(res.items);

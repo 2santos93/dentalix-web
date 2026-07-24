@@ -102,7 +102,7 @@ describe('AgendaView', () => {
     mockedListStaff.mockResolvedValue(staff);
     mockedListAppointments.mockResolvedValue([]);
 
-    render(<AgendaView token="tok" tenant={null} />);
+    render(<AgendaView token="tok" />);
 
     await waitFor(() =>
       expect(screen.getByLabelText<HTMLSelectElement>(/profesional/i).value).toBe('staff-1'),
@@ -114,7 +114,7 @@ describe('AgendaView', () => {
     mockedListAppointments.mockResolvedValue([]);
     const user = userEvent.setup();
 
-    render(<AgendaView token="tok" tenant={null} />);
+    render(<AgendaView token="tok" />);
     await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
 
     mockedListAppointments.mockClear();
@@ -146,7 +146,7 @@ describe('AgendaView', () => {
     });
 
     const user = userEvent.setup();
-    render(<AgendaView token="tok" tenant={null} />);
+    render(<AgendaView token="tok" />);
 
     // Initial load settles: the day table renders with the one appointment.
     const table = await screen.findByRole('table', { name: /agenda del día/i });
@@ -205,7 +205,7 @@ describe('AgendaView', () => {
     });
 
     const user = userEvent.setup();
-    render(<AgendaView token="tok" tenant={null} />);
+    render(<AgendaView token="tok" />);
 
     const table = await screen.findByRole('table', { name: /agenda del día/i });
     const statusSelect = within(table).getByRole<HTMLSelectElement>('combobox');
@@ -214,7 +214,7 @@ describe('AgendaView', () => {
     await user.selectOptions(statusSelect, 'CONFIRMED');
 
     await waitFor(() =>
-      expect(mockedUpdateAppointment).toHaveBeenCalledWith('tok', 'apt-1', { status: 'CONFIRMED' }, null),
+      expect(mockedUpdateAppointment).toHaveBeenCalledWith('tok', 'apt-1', { status: 'CONFIRMED' }),
     );
     // The refresh-in-place fetch has started (2nd listAppointments call
     // pending on `refetch`) — same mounted table node, control disabled
@@ -252,7 +252,7 @@ describe('AgendaView', () => {
     });
 
     const user = userEvent.setup();
-    render(<AgendaView token="tok" tenant={null} />);
+    render(<AgendaView token="tok" />);
 
     const table = await screen.findByRole('table', { name: /agenda del día/i });
     const statusSelect = within(table).getByRole<HTMLSelectElement>('combobox');
@@ -292,7 +292,7 @@ describe('AgendaView', () => {
     mockedListAppointments.mockResolvedValue([]);
     const user = userEvent.setup();
 
-    render(<AgendaView token="tok" tenant={null} />);
+    render(<AgendaView token="tok" />);
     await waitFor(() => expect(mockedListStaff).toHaveBeenCalled());
 
     const dateInput = screen.getByLabelText<HTMLInputElement>(/^fecha$/i);
