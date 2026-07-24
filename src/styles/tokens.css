@@ -1,32 +1,33 @@
 /*
- * Dentalix design tokens — dental identity: fresh, clean, trustworthy.
- * Primary is a deep clinical teal (AA-contrast with white for solid buttons);
- * neutrals carry a subtle teal tint (warmer than cold slate). Tenants override
- * --color-primary at runtime (see layout.tsx); everything else stays cohesive.
+ * Dentalix design tokens — "Azul confianza": the clinical medical blue.
+ * Clean, trustworthy, professional. Cool blue-tinted neutrals + a sky accent.
+ * Primary is blue-700 (#1D4ED8) so white button text and links meet WCAG AA.
+ * Tenants override --color-primary at runtime (see layout.tsx); the rest stays
+ * cohesive in light and dark.
  */
 :root {
-  --color-primary: #0F766E; /* deep teal — solid buttons, links (AA on white) */
+  --color-primary: #1D4ED8; /* clinical blue — AA with white */
   --color-primary-fg: #FFFFFF;
-  --color-accent: #0D9488; /* teal highlight */
-  --color-bg: #F1F8F7; /* soft mint-tinted canvas */
+  --color-accent: #0EA5E9; /* sky highlight */
+  --color-bg: #F5F8FF; /* cool off-white canvas */
   --color-surface: #FFFFFF;
-  --color-ink: #0C2A28; /* dark teal-charcoal text */
-  --color-muted: #5B7B78; /* teal-gray secondary text */
-  --color-border: #D8EAE7; /* soft teal border */
-  --color-success: #15803D;
-  --color-warning: #B45309;
-  --color-danger: #E11D48; /* rose — pairs with teal better than pure red */
+  --color-ink: #0F1B33; /* deep navy text */
+  --color-muted: #5B6B85; /* blue-gray secondary text */
+  --color-border: #E1E8F5; /* soft blue border */
+  --color-success: #16A34A;
+  --color-warning: #D97706;
+  --color-danger: #E11D48;
 }
 .dark {
-  --color-primary: #2DD4BF; /* bright teal — pops on the deep canvas */
-  --color-primary-fg: #05231F; /* dark text on the light-teal primary */
-  --color-accent: #5EEAD4;
-  --color-bg: #071615; /* deep teal-black */
-  --color-surface: #0E201E;
-  --color-ink: #E4F3F1;
-  --color-muted: #8FB2AF;
-  --color-border: #1C302E;
-  --color-success: #22C55E;
+  --color-primary: #60A5FA; /* bright blue — pops on navy canvas */
+  --color-primary-fg: #08152B; /* dark text on the light-blue primary */
+  --color-accent: #38BDF8;
+  --color-bg: #0A1122; /* deep navy */
+  --color-surface: #131B2E;
+  --color-ink: #E6ECF7;
+  --color-muted: #93A1BD;
+  --color-border: #243150;
+  --color-success: #4ADE80;
   --color-warning: #F59E0B;
   --color-danger: #FB7185;
 }
