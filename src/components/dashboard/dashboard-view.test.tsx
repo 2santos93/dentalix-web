@@ -126,6 +126,13 @@ describe('DashboardView', () => {
     const [, firstParams] = mockedGetDashboard.mock.calls[0];
     expect(firstParams.currency).toBe('USD');
     expect(firstParams.from).toMatch(/^\d{4}-\d{2}-01$/);
+    // Default "Hasta" is today, but the backend's sales-totals query is
+    // half-open `[from, to)` — the component must send an exclusive upper
+    // bound (today + 1 day) so today's sales aren't silently excluded.
+    const today = new Date();
+    const tomorrow = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate() + 1));
+    const expectedTomorrow = `${tomorrow.getUTCFullYear()}-${String(tomorrow.getUTCMonth() + 1).padStart(2, '0')}-${String(tomorrow.getUTCDate()).padStart(2, '0')}`;
+    expect(firstParams.to).toBe(expectedTomorrow);
 
     mockedGetDashboard.mockClear();
     const fromInput = screen.getByLabelText('Desde');
@@ -138,6 +145,23 @@ describe('DashboardView', () => {
     await waitFor(() => expect(mockedGetDashboard).toHaveBeenCalledTimes(1));
     const [, params] = mockedGetDashboard.mock.calls[0];
     expect(params.from).toBe('2026-06-01');
+  });
+
+  it('sends an exclusive (+1 day) "to" bound when the user changes "Hasta", while the input keeps showing the selected inclusive date', async () => {
+    mockedGetDashboard.mockResolvedValue(dashboard());
+
+    render(<DashboardView token="tok" />);
+    await waitFor(() => expect(mockedGetDashboard).toHaveBeenCalledTimes(1));
+
+    mockedGetDashboard.mockClear();
+    const toInput = screen.getByLabelText('Hasta') as HTMLInputElement;
+    fireEvent.change(toInput, { target: { value: '2026-07-10' } });
+
+    await waitFor(() => expect(mockedGetDashboard).toHaveBeenCalledTimes(1));
+    const [, params] = mockedGetDashboard.mock.calls[0];
+    expect(params.to).toBe('2026-07-11');
+    // The input itself still reflects the user's selected (inclusive) date.
+    expect(toInput.value).toBe('2026-07-10');
   });
 
   it('refetches with the new currency when the currency input changes, uppercased', async () => {

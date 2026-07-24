@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { ApiError } from '@/lib/api/client';
 import { getDashboard, type Dashboard } from '@/lib/dashboard/dashboard-api';
+import { addOneDayIso } from '@/lib/dashboard/date-range';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge, type BadgeProps } from '@/components/ui/badge';
@@ -117,7 +118,11 @@ export function DashboardView({ token }: DashboardViewProps) {
     async function load() {
       setLoading(true);
       try {
-        const result = await getDashboard(token, { from, to, currency });
+        // `to` is the user's inclusive selection (what the "Hasta" input
+        // shows); the backend's sales-totals query is half-open `[from, to)`,
+        // so extend it by one day here — sending the raw value would
+        // silently exclude sales made on the selected end date itself.
+        const result = await getDashboard(token, { from, to: addOneDayIso(to), currency });
         if (cancelled) return;
         setData(result);
         setError(null);
