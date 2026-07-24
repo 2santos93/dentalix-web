@@ -12,6 +12,12 @@ import { listPatients } from '@/lib/patients/patients-api';
 import { localDayRange } from '@/lib/appointments/day-range';
 import { DayAgenda } from '@/components/appointments/day-agenda';
 import { AppointmentForm } from '@/components/appointments/appointment-form';
+import { Plus, X } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Card, CardContent } from '@/components/ui/card';
+import { FormField } from '@/components/molecules/form-field';
+import { cn } from '@/lib/utils';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
@@ -32,6 +38,10 @@ const copy = {
 };
 
 const NEW_APPOINTMENT_FORM_ID = 'agenda-new-appointment-form';
+
+// Native <select> styled to match the Input atom (kept native for a11y/tests).
+const fieldClass =
+  'flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-50';
 
 function todayLocalDateString(): string {
   const d = new Date();
@@ -221,79 +231,87 @@ export function AgendaView({ token }: AgendaViewProps) {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-center justify-end gap-3">
-        <button
-          type="button"
-          onClick={() => setShowForm((v) => !v)}
-          aria-expanded={showForm}
-          aria-controls={NEW_APPOINTMENT_FORM_ID}
-          className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
-        >
-          {showForm ? copy.cancel : copy.newAppointment}
-        </button>
-      </div>
-
-      <div className="flex flex-wrap items-end gap-4">
-        <div className="flex flex-col gap-1">
-          <label htmlFor="agenda-provider" className="text-sm font-medium text-ink">
-            {copy.providerLabel}
-          </label>
-          <select
-            id="agenda-provider"
-            disabled={staffLoading || staff.length === 0}
-            value={providerId}
-            onChange={(e) => setProviderId(e.target.value)}
-            className="rounded-md border border-border bg-surface px-3 py-2 text-ink"
+      <Card>
+        <CardContent className="flex flex-wrap items-end justify-between gap-4 p-4">
+          <div className="flex flex-wrap items-end gap-4">
+            <FormField
+              htmlFor="agenda-provider"
+              label={copy.providerLabel}
+              className="min-w-[13rem]"
+            >
+              <select
+                id="agenda-provider"
+                disabled={staffLoading || staff.length === 0}
+                value={providerId}
+                onChange={(e) => setProviderId(e.target.value)}
+                className={fieldClass}
+              >
+                {staffLoading && <option value="">{copy.providerLoading}</option>}
+                {!staffLoading && staff.length === 0 && (
+                  <option value="">{copy.noProviders}</option>
+                )}
+                {staff.map((s) => (
+                  <option key={s.userId} value={s.userId}>
+                    {s.fullName}
+                  </option>
+                ))}
+              </select>
+            </FormField>
+            <FormField htmlFor="agenda-date" label={copy.dateLabel}>
+              <Input
+                id="agenda-date"
+                type="date"
+                value={selectedDate}
+                onChange={(e) => setSelectedDate(e.target.value)}
+                className="w-auto"
+              />
+            </FormField>
+          </div>
+          <Button
+            type="button"
+            variant={showForm ? 'outline' : 'default'}
+            onClick={() => setShowForm((v) => !v)}
+            aria-expanded={showForm}
+            aria-controls={NEW_APPOINTMENT_FORM_ID}
           >
-            {staffLoading && <option value="">{copy.providerLoading}</option>}
-            {!staffLoading && staff.length === 0 && <option value="">{copy.noProviders}</option>}
-            {staff.map((s) => (
-              <option key={s.userId} value={s.userId}>
-                {s.fullName}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div className="flex flex-col gap-1">
-          <label htmlFor="agenda-date" className="text-sm font-medium text-ink">
-            {copy.dateLabel}
-          </label>
-          <input
-            id="agenda-date"
-            type="date"
-            value={selectedDate}
-            onChange={(e) => setSelectedDate(e.target.value)}
-            className="rounded-md border border-border bg-surface px-3 py-2 text-ink"
-          />
-        </div>
-      </div>
+            {showForm ? (
+              <>
+                <X /> {copy.cancel}
+              </>
+            ) : (
+              <>
+                <Plus /> {copy.newAppointment}
+              </>
+            )}
+          </Button>
+        </CardContent>
+      </Card>
 
       {staffError && (
         <div className="flex items-center gap-3">
           <p role="alert" className="text-sm text-danger">
             {staffError}
           </p>
-          <button
-            type="button"
+          <Button
+            variant="outline"
+            size="sm"
             onClick={() => setStaffReloadKey((k) => k + 1)}
-            className="rounded-md border border-border px-3 py-1.5 text-sm font-medium text-ink"
           >
             {copy.retry}
-          </button>
+          </Button>
         </div>
       )}
 
       {showForm && (
-        <div
-          id={NEW_APPOINTMENT_FORM_ID}
-          className="w-full max-w-2xl rounded-lg border border-border bg-surface p-6 shadow-sm"
-        >
-          <AppointmentForm
-            token={token}
-            onCreated={handleAppointmentCreated}
-            defaultDate={selectedDate}
-          />
-        </div>
+        <Card id={NEW_APPOINTMENT_FORM_ID} className="max-w-2xl">
+          <CardContent className="p-6">
+            <AppointmentForm
+              token={token}
+              onCreated={handleAppointmentCreated}
+              defaultDate={selectedDate}
+            />
+          </CardContent>
+        </Card>
       )}
 
       {appointmentsRefreshing && (
@@ -307,13 +325,9 @@ export function AgendaView({ token }: AgendaViewProps) {
           <p role="alert" className="text-xs text-danger">
             {appointmentsRefreshError}
           </p>
-          <button
-            type="button"
-            onClick={refreshAppointmentsInPlace}
-            className="rounded-md border border-border px-2 py-1 text-xs font-medium text-ink"
-          >
+          <Button variant="outline" size="sm" onClick={refreshAppointmentsInPlace}>
             {copy.retry}
-          </button>
+          </Button>
         </div>
       )}
 

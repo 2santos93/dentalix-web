@@ -8,7 +8,6 @@ import { getPatient, type Patient } from '@/lib/patients/patients-api';
 import { MedicalHistoryPanel } from '@/components/patients/medical-history-panel';
 import { ClinicalEntriesList } from '@/components/patients/clinical-entries-list';
 import { PatientDetailTabs, type PatientDetailTabKey } from '@/components/patients/patient-detail-tabs';
-import { ThemeToggle } from '@/components/theme/theme-toggle';
 import { OdontogramTab } from '@/components/odontogram/odontogram-tab';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
@@ -104,17 +103,17 @@ export default function PatientDetailPage() {
   }
 
   return (
-    <div className="flex min-h-full flex-1 flex-col gap-6 bg-bg px-4 py-8 md:px-8">
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex flex-col gap-1">
-          <Link href="/patients" className="text-sm font-medium text-primary">
-            {copy.backLink}
-          </Link>
-          <h1 className="text-2xl font-semibold text-ink">
-            {loading ? copy.loading : patient ? fullName(patient) : ''}
-          </h1>
-        </div>
-        <ThemeToggle />
+    <div className="flex flex-1 flex-col gap-6">
+      <div className="flex flex-col gap-1">
+        <Link
+          href="/patients"
+          className="text-sm font-medium text-primary hover:underline"
+        >
+          {copy.backLink}
+        </Link>
+        <h1 className="text-2xl font-semibold tracking-tight text-ink">
+          {loading ? copy.loading : patient ? fullName(patient) : ''}
+        </h1>
       </div>
 
       {loading ? (

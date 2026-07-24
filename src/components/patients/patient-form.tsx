@@ -2,8 +2,18 @@
 import * as React from 'react';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { Loader2 } from 'lucide-react';
 import { ApiError } from '@/lib/api/client';
-import { createPatient, type CreatePatientInput, type DocType, type Sex } from '@/lib/patients/patients-api';
+import {
+  createPatient,
+  type CreatePatientInput,
+  type DocType,
+  type Sex,
+} from '@/lib/patients/patients-api';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { FormField } from '@/components/molecules/form-field';
+import { cn } from '@/lib/utils';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
@@ -37,6 +47,11 @@ const sexOptions: { value: Sex; label: string }[] = [
   { value: 'M', label: 'Masculino' },
   { value: 'OTHER', label: 'Otro' },
 ];
+
+// Native <select>/<textarea> styled to match the Input atom. We keep native
+// controls here so the form stays simple and fully accessible via labels.
+const fieldClass =
+  'flex w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors placeholder:text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-50';
 
 interface PatientFormProps {
   token: string;
@@ -84,13 +99,10 @@ export function PatientForm({ token }: PatientFormProps) {
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="flex flex-col gap-1">
-          <label htmlFor="patient-first-name" className="text-sm font-medium text-ink">
-            {copy.firstNameLabel}
-          </label>
-          <input
+    <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+      <div className="grid gap-5 sm:grid-cols-2">
+        <FormField htmlFor="patient-first-name" label={copy.firstNameLabel}>
+          <Input
             id="patient-first-name"
             name="firstName"
             type="text"
@@ -98,14 +110,10 @@ export function PatientForm({ token }: PatientFormProps) {
             required
             value={firstName}
             onChange={(e) => setFirstName(e.target.value)}
-            className="rounded-md border border-border bg-surface px-3 py-2 text-ink"
           />
-        </div>
-        <div className="flex flex-col gap-1">
-          <label htmlFor="patient-last-name" className="text-sm font-medium text-ink">
-            {copy.lastNameLabel}
-          </label>
-          <input
+        </FormField>
+        <FormField htmlFor="patient-last-name" label={copy.lastNameLabel}>
+          <Input
             id="patient-last-name"
             name="lastName"
             type="text"
@@ -113,23 +121,19 @@ export function PatientForm({ token }: PatientFormProps) {
             required
             value={lastName}
             onChange={(e) => setLastName(e.target.value)}
-            className="rounded-md border border-border bg-surface px-3 py-2 text-ink"
           />
-        </div>
+        </FormField>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="flex flex-col gap-1">
-          <label htmlFor="patient-doc-type" className="text-sm font-medium text-ink">
-            {copy.docTypeLabel}
-          </label>
+      <div className="grid gap-5 sm:grid-cols-2">
+        <FormField htmlFor="patient-doc-type" label={copy.docTypeLabel}>
           <select
             id="patient-doc-type"
             name="docType"
             required
             value={docType}
             onChange={(e) => setDocType(e.target.value as DocType)}
-            className="rounded-md border border-border bg-surface px-3 py-2 text-ink"
+            className={cn(fieldClass, 'h-10')}
           >
             {docTypeOptions.map((opt) => (
               <option key={opt.value} value={opt.value}>
@@ -137,47 +141,36 @@ export function PatientForm({ token }: PatientFormProps) {
               </option>
             ))}
           </select>
-        </div>
-        <div className="flex flex-col gap-1">
-          <label htmlFor="patient-doc-number" className="text-sm font-medium text-ink">
-            {copy.docNumberLabel}
-          </label>
-          <input
+        </FormField>
+        <FormField htmlFor="patient-doc-number" label={copy.docNumberLabel}>
+          <Input
             id="patient-doc-number"
             name="docNumber"
             type="text"
             value={docNumber}
             onChange={(e) => setDocNumber(e.target.value)}
-            className="rounded-md border border-border bg-surface px-3 py-2 text-ink"
           />
-        </div>
+        </FormField>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="flex flex-col gap-1">
-          <label htmlFor="patient-birth-date" className="text-sm font-medium text-ink">
-            {copy.birthDateLabel}
-          </label>
-          <input
+      <div className="grid gap-5 sm:grid-cols-2">
+        <FormField htmlFor="patient-birth-date" label={copy.birthDateLabel}>
+          <Input
             id="patient-birth-date"
             name="birthDate"
             type="date"
             value={birthDate}
             onChange={(e) => setBirthDate(e.target.value)}
-            className="rounded-md border border-border bg-surface px-3 py-2 text-ink"
           />
-        </div>
-        <div className="flex flex-col gap-1">
-          <label htmlFor="patient-sex" className="text-sm font-medium text-ink">
-            {copy.sexLabel}
-          </label>
+        </FormField>
+        <FormField htmlFor="patient-sex" label={copy.sexLabel}>
           <select
             id="patient-sex"
             name="sex"
             required
             value={sex}
             onChange={(e) => setSex(e.target.value as Sex)}
-            className="rounded-md border border-border bg-surface px-3 py-2 text-ink"
+            className={cn(fieldClass, 'h-10')}
           >
             {sexOptions.map((opt) => (
               <option key={opt.value} value={opt.value}>
@@ -185,82 +178,71 @@ export function PatientForm({ token }: PatientFormProps) {
               </option>
             ))}
           </select>
-        </div>
+        </FormField>
       </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <div className="flex flex-col gap-1">
-          <label htmlFor="patient-phone" className="text-sm font-medium text-ink">
-            {copy.phoneLabel}
-          </label>
-          <input
+      <div className="grid gap-5 sm:grid-cols-2">
+        <FormField htmlFor="patient-phone" label={copy.phoneLabel}>
+          <Input
             id="patient-phone"
             name="phone"
             type="tel"
             autoComplete="tel"
             value={phone}
             onChange={(e) => setPhone(e.target.value)}
-            className="rounded-md border border-border bg-surface px-3 py-2 text-ink"
           />
-        </div>
-        <div className="flex flex-col gap-1">
-          <label htmlFor="patient-email" className="text-sm font-medium text-ink">
-            {copy.emailLabel}
-          </label>
-          <input
+        </FormField>
+        <FormField htmlFor="patient-email" label={copy.emailLabel}>
+          <Input
             id="patient-email"
             name="email"
             type="email"
             autoComplete="email"
             value={email}
             onChange={(e) => setEmail(e.target.value)}
-            className="rounded-md border border-border bg-surface px-3 py-2 text-ink"
           />
-        </div>
+        </FormField>
       </div>
 
-      <div className="flex flex-col gap-1">
-        <label htmlFor="patient-address" className="text-sm font-medium text-ink">
-          {copy.addressLabel}
-        </label>
-        <input
+      <FormField htmlFor="patient-address" label={copy.addressLabel}>
+        <Input
           id="patient-address"
           name="address"
           type="text"
           autoComplete="street-address"
           value={address}
           onChange={(e) => setAddress(e.target.value)}
-          className="rounded-md border border-border bg-surface px-3 py-2 text-ink"
         />
-      </div>
+      </FormField>
 
-      <div className="flex flex-col gap-1">
-        <label htmlFor="patient-notes" className="text-sm font-medium text-ink">
-          {copy.notesLabel}
-        </label>
+      <FormField htmlFor="patient-notes" label={copy.notesLabel}>
         <textarea
           id="patient-notes"
           name="notes"
           rows={3}
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
-          className="rounded-md border border-border bg-surface px-3 py-2 text-ink"
+          className={fieldClass}
         />
-      </div>
+      </FormField>
 
-      {error && (
-        <p role="alert" className="text-sm text-danger">
+      {error ? (
+        <p role="alert" className="text-sm font-medium text-danger">
           {error}
         </p>
-      )}
+      ) : null}
 
-      <button
-        type="submit"
-        disabled={submitting}
-        className="rounded-md bg-primary px-4 py-2 font-medium text-primary-foreground disabled:opacity-60"
-      >
-        {submitting ? copy.submitting : copy.submit}
-      </button>
+      <div className="flex justify-end">
+        <Button type="submit" disabled={submitting}>
+          {submitting ? (
+            <>
+              <Loader2 className="animate-spin" /> {copy.submitting}
+            </>
+          ) : (
+            copy.submit
+          )}
+        </Button>
+      </div>
     </form>
   );
 }

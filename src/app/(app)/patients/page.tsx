@@ -2,17 +2,20 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { Plus } from 'lucide-react';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { ApiError } from '@/lib/api/client';
 import { listPatients, type Patient } from '@/lib/patients/patients-api';
-import { PatientsTable } from '@/components/patients/patients-table';
-import { ThemeToggle } from '@/components/theme/theme-toggle';
+import { PatientsTable } from '@/components/organisms/patients-table';
+import { PageHeader } from '@/components/molecules/page-header';
+import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
 const copy = {
   title: 'Pacientes',
-  agendaLink: 'Agenda',
+  description: 'Gestiona la base de pacientes de tu clínica.',
   newPatient: 'Nuevo paciente',
   genericError: 'No pudimos cargar los pacientes. Intenta de nuevo.',
   retry: 'Reintentar',
@@ -62,11 +65,9 @@ export default function PatientsPage() {
 
   if (!hasHydrated) {
     return (
-      <div className="flex min-h-full flex-1 items-center justify-center bg-bg px-4 py-8">
-        <p role="status" className="text-sm text-muted">
-          {copy.checkingSession}
-        </p>
-      </div>
+      <p role="status" className="text-sm text-muted">
+        {copy.checkingSession}
+      </p>
     );
   }
 
@@ -75,45 +76,40 @@ export default function PatientsPage() {
   }
 
   return (
-    <div className="flex min-h-full flex-1 flex-col gap-6 bg-bg px-4 py-8 md:px-8">
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex items-center gap-4">
-          <h1 className="text-2xl font-semibold text-ink">{copy.title}</h1>
-          <Link href="/agenda" className="text-sm font-medium text-primary">
-            {copy.agendaLink}
-          </Link>
-        </div>
-        <div className="flex items-center gap-3">
-          <Link
-            href="/patients/new"
-            className="rounded-md bg-primary px-4 py-2 text-sm font-medium text-primary-foreground"
-          >
-            {copy.newPatient}
-          </Link>
-          <ThemeToggle />
-        </div>
-      </div>
+    <>
+      <PageHeader
+        title={copy.title}
+        description={copy.description}
+        actions={
+          <Button asChild>
+            <Link href="/patients/new">
+              <Plus /> {copy.newPatient}
+            </Link>
+          </Button>
+        }
+      />
 
       {error ? (
-        <div className="flex flex-col items-start gap-3">
-          <p role="alert" className="text-sm text-danger">
-            {error}
-          </p>
-          <button
-            type="button"
-            onClick={() => {
-              setLoading(true);
-              setError(null);
-              setRetryCount((c) => c + 1);
-            }}
-            className="rounded-md border border-border px-3 py-1.5 text-sm font-medium text-ink"
-          >
-            {copy.retry}
-          </button>
-        </div>
+        <Card>
+          <CardContent className="flex flex-col items-start gap-3 p-6">
+            <p role="alert" className="text-sm text-danger">
+              {error}
+            </p>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setLoading(true);
+                setError(null);
+                setRetryCount((c) => c + 1);
+              }}
+            >
+              {copy.retry}
+            </Button>
+          </CardContent>
+        </Card>
       ) : (
         <PatientsTable patients={patients} loading={loading} />
       )}
-    </div>
+    </>
   );
 }

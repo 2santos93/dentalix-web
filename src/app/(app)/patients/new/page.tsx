@@ -2,9 +2,11 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
+import { ArrowLeft } from 'lucide-react';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { PatientForm } from '@/components/patients/patient-form';
-import { ThemeToggle } from '@/components/theme/theme-toggle';
+import { PageHeader } from '@/components/molecules/page-header';
+import { Card, CardContent } from '@/components/ui/card';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
@@ -31,11 +33,9 @@ export default function NewPatientPage() {
 
   if (!hasHydrated) {
     return (
-      <div className="flex min-h-full flex-1 items-center justify-center bg-bg px-4 py-8">
-        <p role="status" className="text-sm text-muted">
-          {copy.checkingSession}
-        </p>
-      </div>
+      <p role="status" className="text-sm text-muted">
+        {copy.checkingSession}
+      </p>
     );
   }
 
@@ -44,20 +44,19 @@ export default function NewPatientPage() {
   }
 
   return (
-    <div className="flex min-h-full flex-1 flex-col gap-6 bg-bg px-4 py-8 md:px-8">
-      <div className="flex items-center justify-between gap-4">
-        <div className="flex flex-col gap-1">
-          <Link href="/patients" className="text-sm font-medium text-primary">
-            {copy.backLink}
-          </Link>
-          <h1 className="text-2xl font-semibold text-ink">{copy.title}</h1>
-        </div>
-        <ThemeToggle />
-      </div>
-
-      <div className="w-full max-w-2xl rounded-lg border border-border bg-surface p-6 shadow-sm">
-        <PatientForm token={accessToken} />
-      </div>
+    <div className="mx-auto w-full max-w-2xl">
+      <Link
+        href="/patients"
+        className="mb-3 inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
+      >
+        <ArrowLeft className="size-4" /> {copy.backLink}
+      </Link>
+      <PageHeader title={copy.title} />
+      <Card>
+        <CardContent className="p-6">
+          <PatientForm token={accessToken} />
+        </CardContent>
+      </Card>
     </div>
   );
 }
