@@ -29,7 +29,7 @@ export default async function LoginPage() {
           {branding.name ?? copy.defaultTitle}
         </h1>
         <p className="mb-6 text-sm text-muted">{copy.subtitle}</p>
-        <LoginForm tenant={tenant} />
+        <LoginForm />
         <p className="mt-6 text-center text-sm text-muted">
           {copy.registerPrompt}{' '}
           <Link href="/register" className="font-medium text-primary">
