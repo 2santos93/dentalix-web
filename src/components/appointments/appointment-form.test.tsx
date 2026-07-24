@@ -141,7 +141,7 @@ describe('AppointmentForm', () => {
     await user.type(screen.getByLabelText(/hora de inicio/i), '09:30');
     await user.type(screen.getByLabelText(/hora de fin/i), '09:00');
 
-    await user.click(screen.getByRole('button', { name: /agendar|crear|guardar/i }));
+    await user.click(screen.getByRole('button', { name: /agendar|guardar/i }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/fin.*posterior.*inicio/i);
     expect(mockedCreateAppointment).not.toHaveBeenCalled();
@@ -154,7 +154,7 @@ describe('AppointmentForm', () => {
     await fillValidForm(user);
     await user.type(screen.getByLabelText(/motivo/i), 'Control');
 
-    await user.click(screen.getByRole('button', { name: /agendar|crear|guardar/i }));
+    await user.click(screen.getByRole('button', { name: /agendar|guardar/i }));
 
     await waitFor(() => expect(mockedCreateAppointment).toHaveBeenCalledTimes(1));
     const [token, input] = mockedCreateAppointment.mock.calls[0];
@@ -176,7 +176,7 @@ describe('AppointmentForm', () => {
     await screen.findByRole('option', { name: /maría lópez/i });
     await fillValidForm(user);
 
-    await user.click(screen.getByRole('button', { name: /agendar|crear|guardar/i }));
+    await user.click(screen.getByRole('button', { name: /agendar|guardar/i }));
 
     await waitFor(() => expect(onCreated).toHaveBeenCalledWith(createdAppointment));
   });
@@ -192,7 +192,7 @@ describe('AppointmentForm', () => {
     await renderFormAndWaitForLoad();
     await fillValidForm(user);
 
-    const submit = screen.getByRole('button', { name: /agendar|crear|guardar/i });
+    const submit = screen.getByRole('button', { name: /agendar|guardar/i });
     expect(submit).not.toBeDisabled();
     await user.click(submit);
     expect(submit).toBeDisabled();
@@ -210,7 +210,7 @@ describe('AppointmentForm', () => {
     await renderFormAndWaitForLoad();
     await fillValidForm(user);
 
-    await user.click(screen.getByRole('button', { name: /agendar|crear|guardar/i }));
+    await user.click(screen.getByRole('button', { name: /agendar|guardar/i }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'El profesional ya tiene una cita en ese horario',

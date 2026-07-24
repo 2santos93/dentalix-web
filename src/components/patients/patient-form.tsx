@@ -8,6 +8,7 @@ import {
   createPatient,
   type CreatePatientInput,
   type DocType,
+  type Patient,
   type Sex,
 } from '@/lib/patients/patients-api';
 import { Button } from '@/components/ui/button';
@@ -55,9 +56,15 @@ const fieldClass =
 
 interface PatientFormProps {
   token: string;
+  /**
+   * When provided, the form calls this with the created patient instead of
+   * navigating to /patients — lets it be reused inside a dialog (e.g. creating
+   * a patient without leaving the agenda). Omit for the standalone page.
+   */
+  onCreated?: (patient: Patient) => void;
 }
 
-export function PatientForm({ token }: PatientFormProps) {
+export function PatientForm({ token, onCreated }: PatientFormProps) {
   const router = useRouter();
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -89,8 +96,12 @@ export function PatientForm({ token }: PatientFormProps) {
         ...(address.trim() ? { address: address.trim() } : {}),
         ...(notes.trim() ? { notes: notes.trim() } : {}),
       };
-      await createPatient(token, input);
-      router.push('/patients');
+      const created = await createPatient(token, input);
+      if (onCreated) {
+        onCreated(created);
+      } else {
+        router.push('/patients');
+      }
     } catch (err) {
       setError(err instanceof ApiError ? err.message : copy.genericError);
     } finally {

@@ -9,6 +9,16 @@ import {
 } from '@/lib/appointments/appointments-api';
 import { listStaff, type StaffMember } from '@/lib/appointments/staff-api';
 import { listPatients, type Patient } from '@/lib/patients/patients-api';
+import { UserPlus } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
+import { PatientForm } from '@/components/patients/patient-form';
 
 // Copy as constants (i18n-ready, es-first) — matches patient-form.tsx /
 // tooth-record-panel.tsx convention until next-intl wiring lands.
@@ -17,6 +27,9 @@ const copy = {
   patientSearchPlaceholder: 'Nombre o documento…',
   patientLabel: 'Paciente',
   patientPlaceholder: 'Selecciona un paciente',
+  createPatientCta: 'Crear paciente',
+  createPatientTitle: 'Nuevo paciente',
+  createPatientDesc: 'Se agrega y queda seleccionado en la cita, sin salir de la agenda.',
   patientLoading: 'Cargando pacientes…',
   patientEmpty: 'No hay pacientes que coincidan con la búsqueda.',
   providerLabel: 'Profesional',
@@ -92,6 +105,7 @@ export function AppointmentForm({ token, onCreated, defaultDate }: AppointmentFo
   const [validationError, setValidationError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [showPatientDialog, setShowPatientDialog] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -157,6 +171,15 @@ export function AppointmentForm({ token, onCreated, defaultDate }: AppointmentFo
     setReason('');
   }
 
+  // Reused PatientForm (in a dialog) calls this on success: add the new patient
+  // to the list, select it, and close — so you never leave the agenda.
+  function handlePatientCreated(patient: Patient) {
+    setPatients((prev) => [patient, ...prev.filter((p) => p.id !== patient.id)]);
+    setPatientQuery('');
+    setPatientId(patient.id);
+    setShowPatientDialog(false);
+  }
+
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setValidationError(null);
@@ -195,6 +218,16 @@ export function AppointmentForm({ token, onCreated, defaultDate }: AppointmentFo
 
   return (
     <form onSubmit={handleSubmit} aria-label={copy.submit} className="flex flex-col gap-4">
+      <Dialog open={showPatientDialog} onOpenChange={setShowPatientDialog}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{copy.createPatientTitle}</DialogTitle>
+            <DialogDescription>{copy.createPatientDesc}</DialogDescription>
+          </DialogHeader>
+          <PatientForm token={token} onCreated={handlePatientCreated} />
+        </DialogContent>
+      </Dialog>
+
       <div className="flex flex-col gap-1">
         <label htmlFor="appointment-patient-search" className="text-sm font-medium text-ink">
           {copy.patientSearchLabel}
@@ -210,9 +243,20 @@ export function AppointmentForm({ token, onCreated, defaultDate }: AppointmentFo
       </div>
 
       <div className="flex flex-col gap-1">
-        <label htmlFor="appointment-patient" className="text-sm font-medium text-ink">
-          {copy.patientLabel}
-        </label>
+        <div className="flex items-center justify-between gap-2">
+          <label htmlFor="appointment-patient" className="text-sm font-medium text-ink">
+            {copy.patientLabel}
+          </label>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="h-7 gap-1.5 px-2 text-xs"
+            onClick={() => setShowPatientDialog(true)}
+          >
+            <UserPlus className="size-3.5" /> {copy.createPatientCta}
+          </Button>
+        </div>
         <select
           id="appointment-patient"
           required
@@ -245,9 +289,18 @@ export function AppointmentForm({ token, onCreated, defaultDate }: AppointmentFo
           </div>
         )}
         {!patientsLoading && !patientsError && filteredPatients.length === 0 && (
-          <p role="status" className="text-xs text-muted">
-            {copy.patientEmpty}
-          </p>
+          <div role="status" className="flex flex-wrap items-center gap-2">
+            <span className="text-xs text-muted">{copy.patientEmpty}</span>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-7 gap-1.5 px-2 text-xs"
+              onClick={() => setShowPatientDialog(true)}
+            >
+              <UserPlus className="size-3.5" /> {copy.createPatientCta}
+            </Button>
+          </div>
         )}
       </div>
 
