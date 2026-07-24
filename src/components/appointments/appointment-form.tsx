@@ -16,9 +16,11 @@ const copy = {
   patientSearchLabel: 'Buscar paciente',
   patientSearchPlaceholder: 'Nombre o documento…',
   patientLabel: 'Paciente',
+  patientPlaceholder: 'Selecciona un paciente',
   patientLoading: 'Cargando pacientes…',
   patientEmpty: 'No hay pacientes que coincidan con la búsqueda.',
   providerLabel: 'Profesional',
+  providerPlaceholder: 'Selecciona un profesional',
   providerLoading: 'Cargando profesionales…',
   dateLabel: 'Fecha',
   startTimeLabel: 'Hora de inicio',
@@ -220,7 +222,7 @@ export function AppointmentForm({ token, onCreated, defaultDate }: AppointmentFo
           className="rounded-md border border-border bg-surface px-3 py-2 text-ink"
         >
           <option value="" disabled>
-            {patientsLoading ? copy.patientLoading : copy.patientLabel}
+            {patientsLoading ? copy.patientLoading : copy.patientPlaceholder}
           </option>
           {filteredPatients.map((p) => (
             <option key={p.id} value={p.id}>
@@ -262,7 +264,7 @@ export function AppointmentForm({ token, onCreated, defaultDate }: AppointmentFo
           className="rounded-md border border-border bg-surface px-3 py-2 text-ink"
         >
           <option value="" disabled>
-            {staffLoading ? copy.providerLoading : copy.providerLabel}
+            {staffLoading ? copy.providerLoading : copy.providerPlaceholder}
           </option>
           {staff.map((s) => (
             <option key={s.userId} value={s.userId}>
