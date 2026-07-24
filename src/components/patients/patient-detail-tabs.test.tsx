@@ -17,6 +17,7 @@ function Harness() {
         dataLabel="Datos"
         clinicalHistoryLabel="Historia clínica"
         odontogramLabel="Odontograma"
+        treatmentPlansLabel="Plan de tratamiento"
       />
       {activeTab === 'data' && (
         <div role="tabpanel" id="tabpanel-data" aria-labelledby="tab-data">
@@ -31,6 +32,11 @@ function Harness() {
       {activeTab === 'odontogram' && (
         <div role="tabpanel" id="tabpanel-odontogram" aria-labelledby="tab-odontogram">
           Odontograma panel
+        </div>
+      )}
+      {activeTab === 'treatment-plans' && (
+        <div role="tabpanel" id="tabpanel-treatment-plans" aria-labelledby="tab-treatment-plans">
+          Plan de tratamiento panel
         </div>
       )}
     </div>

@@ -9,6 +9,7 @@ import { MedicalHistoryPanel } from '@/components/patients/medical-history-panel
 import { ClinicalEntriesList } from '@/components/patients/clinical-entries-list';
 import { PatientDetailTabs, type PatientDetailTabKey } from '@/components/patients/patient-detail-tabs';
 import { OdontogramTab } from '@/components/odontogram/odontogram-tab';
+import { TreatmentPlansTab } from '@/components/treatment-plans/treatment-plans-tab';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
@@ -21,6 +22,7 @@ const copy = {
   tabData: 'Datos',
   tabClinicalHistory: 'Historia clínica',
   tabOdontogram: 'Odontograma',
+  tabTreatmentPlans: 'Plan de tratamiento',
   docTypeLabel: 'Tipo de documento',
   docNumberLabel: 'Número de documento',
   birthDateLabel: 'Fecha de nacimiento',
@@ -146,6 +148,7 @@ export default function PatientDetailPage() {
             dataLabel={copy.tabData}
             clinicalHistoryLabel={copy.tabClinicalHistory}
             odontogramLabel={copy.tabOdontogram}
+            treatmentPlansLabel={copy.tabTreatmentPlans}
           />
 
           {activeTab === 'data' && (
@@ -218,6 +221,17 @@ export default function PatientDetailPage() {
               className="flex flex-col gap-4"
             >
               <OdontogramTab token={accessToken} patientId={patientId} />
+            </div>
+          )}
+
+          {activeTab === 'treatment-plans' && (
+            <div
+              role="tabpanel"
+              id="tabpanel-treatment-plans"
+              aria-labelledby="tab-treatment-plans"
+              className="flex flex-col gap-4"
+            >
+              <TreatmentPlansTab token={accessToken} patientId={patientId} />
             </div>
           )}
         </div>
