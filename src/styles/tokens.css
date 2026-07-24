@@ -1,26 +1,32 @@
+/*
+ * Dentalix design tokens — dental identity: fresh, clean, trustworthy.
+ * Primary is a deep clinical teal (AA-contrast with white for solid buttons);
+ * neutrals carry a subtle teal tint (warmer than cold slate). Tenants override
+ * --color-primary at runtime (see layout.tsx); everything else stays cohesive.
+ */
 :root {
-  --color-primary: #0F5E9C;
+  --color-primary: #0F766E; /* deep teal — solid buttons, links (AA on white) */
   --color-primary-fg: #FFFFFF;
-  --color-accent: #14B8A6;
-  --color-bg: #F8FAFC;
+  --color-accent: #0D9488; /* teal highlight */
+  --color-bg: #F1F8F7; /* soft mint-tinted canvas */
   --color-surface: #FFFFFF;
-  --color-ink: #0F172A;
-  --color-muted: #64748B;
-  --color-border: #E2E8F0;
-  --color-success: #16A34A;
-  --color-warning: #D97706;
-  --color-danger: #DC2626;
+  --color-ink: #0C2A28; /* dark teal-charcoal text */
+  --color-muted: #5B7B78; /* teal-gray secondary text */
+  --color-border: #D8EAE7; /* soft teal border */
+  --color-success: #15803D;
+  --color-warning: #B45309;
+  --color-danger: #E11D48; /* rose — pairs with teal better than pure red */
 }
 .dark {
-  --color-primary: #3B82F6;
-  --color-primary-fg: #F8FAFC;
-  --color-accent: #2DD4BF;
-  --color-bg: #0B1220;
-  --color-surface: #111827;
-  --color-ink: #E5E7EB;
-  --color-muted: #94A3B8;
-  --color-border: #1F2937;
+  --color-primary: #2DD4BF; /* bright teal — pops on the deep canvas */
+  --color-primary-fg: #05231F; /* dark text on the light-teal primary */
+  --color-accent: #5EEAD4;
+  --color-bg: #071615; /* deep teal-black */
+  --color-surface: #0E201E;
+  --color-ink: #E4F3F1;
+  --color-muted: #8FB2AF;
+  --color-border: #1C302E;
   --color-success: #22C55E;
   --color-warning: #F59E0B;
-  --color-danger: #F87171;
+  --color-danger: #FB7185;
 }

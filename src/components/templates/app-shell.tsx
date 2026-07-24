@@ -24,8 +24,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   return (
     <div className="flex min-h-full flex-1">
       <aside className="hidden w-60 shrink-0 flex-col border-r border-border bg-surface md:flex">
-        <div className="flex h-16 items-center gap-2 px-6 text-lg font-semibold text-ink">
-          <span aria-hidden>🦷</span> Dentalix
+        <div className="flex h-16 items-center gap-2.5 px-6 text-lg font-semibold text-ink">
+          <span
+            aria-hidden
+            className="flex size-8 items-center justify-center rounded-lg bg-primary/10 text-base"
+          >
+            🦷
+          </span>
+          Dentalix
         </div>
         <nav className="flex flex-1 flex-col gap-1 px-3 py-2">
           {NAV.map(({ href, label, icon: Icon }) => (

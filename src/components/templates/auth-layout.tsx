@@ -23,14 +23,20 @@ interface AuthLayoutProps {
 export function AuthLayout({ title, subtitle, children, footer }: AuthLayoutProps) {
   return (
     <div className="relative flex min-h-full flex-1 flex-col items-center justify-center px-4 py-12">
-      {/* subtle brand wash */}
+      {/* soft dental backdrop: teal wash up top fading into the canvas */}
       <div
         aria-hidden
-        className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-b from-primary/5 to-transparent"
+        className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-b from-primary/10 via-transparent to-transparent"
       />
       <div className="mb-6 flex w-full max-w-sm items-center justify-between">
-        <span className="flex items-center gap-2 text-sm font-semibold text-muted">
-          <span aria-hidden>🦷</span> Dentalix
+        <span className="flex items-center gap-2 text-sm font-semibold text-ink">
+          <span
+            aria-hidden
+            className="flex size-8 items-center justify-center rounded-lg bg-primary/10 text-base"
+          >
+            🦷
+          </span>
+          Dentalix
         </span>
         <ThemeToggle />
       </div>
