@@ -2,11 +2,12 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Users, Calendar } from 'lucide-react';
+import { Users, Calendar, LayoutDashboard } from 'lucide-react';
 import { ThemeToggle } from '@/components/theme/theme-toggle';
 import { cn } from '@/lib/utils';
 
 const NAV = [
+  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/patients', label: 'Pacientes', icon: Users },
   { href: '/agenda', label: 'Agenda', icon: Calendar },
 ];

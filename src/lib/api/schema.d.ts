@@ -372,6 +372,150 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/exchange/rates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ExchangeController_rates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/exchange/convert": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ExchangeController_convert"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sales": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SalesController_list"];
+        put?: never;
+        post: operations["SalesController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sales/totals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SalesController_totals"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/sales/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["SalesController_get"];
+        put?: never;
+        post?: never;
+        delete: operations["SalesController_remove"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/inventory/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["InventoryController_list"];
+        put?: never;
+        post: operations["InventoryController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/inventory/items/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["InventoryController_get"];
+        put?: never;
+        post?: never;
+        delete: operations["InventoryController_remove"];
+        options?: never;
+        head?: never;
+        patch: operations["InventoryController_update"];
+        trace?: never;
+    };
+    "/api/v1/inventory/items/{id}/movements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["InventoryController_listMovements"];
+        put?: never;
+        post: operations["InventoryController_createMovement"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/dashboard": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["DashboardController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -731,6 +875,305 @@ export interface components {
             name: string;
             primaryColor: string;
             logoUrl: string | null;
+        };
+        RatesResponseDto: {
+            /** @enum {string} */
+            base: "USD";
+            /**
+             * @description Units of each currency per 1 USD, for the requested date.
+             * @example {
+             *       "COP": 4000,
+             *       "EUR": 0.92
+             *     }
+             */
+            rates: {
+                [key: string]: number;
+            };
+        };
+        ConvertResponseDto: {
+            /** @example 100 */
+            amount: number;
+            /** @example USD */
+            from: string;
+            /** @example COP */
+            to: string;
+            /** @example 2026-07-01 */
+            date: string;
+            /** @example 400000 */
+            result: number;
+            /**
+             * @description Effective from→to rate actually applied.
+             * @example 4000
+             */
+            rateUsed: number;
+        };
+        CreateSaleLineItemDto: {
+            /** @description Free-text description of the line item */
+            description: string;
+            /**
+             * Format: uuid
+             * @description Optional link to a dental catalog item
+             */
+            catalogItemId?: string;
+            /**
+             * Format: uuid
+             * @description Optional link to a treatment plan item
+             */
+            treatmentPlanItemId?: string;
+            /** @example 50000 */
+            unitPrice: number;
+            /** @example 1 */
+            quantity: number;
+        };
+        CreateSaleDto: {
+            /** Format: uuid */
+            patientId?: string;
+            /**
+             * @description ISO 4217 currency code
+             * @example COP
+             */
+            currency: string;
+            /**
+             * Format: date-time
+             * @description When the payment was made. Its calendar date (UTC) is what GET /sales/totals uses to look up the exchange rate for this sale.
+             */
+            paidAt: string;
+            /** @enum {string} */
+            paymentMethod?: "CASH" | "CARD" | "TRANSFER" | "OTHER";
+            notes?: string;
+            lineItems: components["schemas"]["CreateSaleLineItemDto"][];
+        };
+        SaleLineItemDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            saleId: string;
+            description: string;
+            /** Format: uuid */
+            catalogItemId: string | null;
+            /** Format: uuid */
+            treatmentPlanItemId: string | null;
+            /** @example 50000 */
+            unitPrice: number;
+            /** @example 1 */
+            quantity: number;
+            /** @example 50000 */
+            amount: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        SaleDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            patientId: string | null;
+            /**
+             * @description ISO 4217 currency code
+             * @example COP
+             */
+            currency: string;
+            /**
+             * @description Stored, immutable sum of active line item amounts.
+             * @example 150000
+             */
+            total: number;
+            /** Format: date-time */
+            paidAt: string;
+            /** @enum {string|null} */
+            paymentMethod: "CASH" | "CARD" | "TRANSFER" | "OTHER" | null;
+            notes: string | null;
+            /** Format: uuid */
+            createdById: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            lineItems?: components["schemas"]["SaleLineItemDto"][];
+        };
+        SalesTotalsDto: {
+            /** Format: date-time */
+            from: string;
+            /** Format: date-time */
+            to: string;
+            /**
+             * @description ISO 4217 currency code
+             * @example USD
+             */
+            currency: string;
+            /**
+             * @description Sum of every active sale's total in the range, each converted to `currency` using ITS OWN paidAt date (never today's rate).
+             * @example 1250.5
+             */
+            totalConverted: number;
+            /**
+             * @description Number of active sales in the range, any currency.
+             * @example 12
+             */
+            count: number;
+            /**
+             * @description Breakdown of the ORIGINAL (unconverted) totals grouped by each sale's own currency.
+             * @example {
+             *       "COP": 500000,
+             *       "USD": 30
+             *     }
+             */
+            byCurrency: Record<string, never>;
+        };
+        CreateInventoryItemDto: {
+            /** @example Guantes de nitrilo */
+            name: string;
+            /** @description Optional item code */
+            sku?: string;
+            /**
+             * @description e.g. "unidad", "caja", "ml"
+             * @example caja
+             */
+            unit: string;
+            /**
+             * @default 0
+             * @example 5
+             */
+            minStock: number;
+            notes?: string;
+        };
+        InventoryMovementDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            itemId: string;
+            /** @enum {string} */
+            type: "IN" | "OUT" | "ADJUSTMENT";
+            /** @example 10 */
+            quantity: number;
+            reason: string | null;
+            /** Format: date-time */
+            occurredAt: string;
+            /** Format: uuid */
+            createdById: string | null;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        InventoryItemDto: {
+            /** Format: uuid */
+            id: string;
+            /** @example Guantes de nitrilo */
+            name: string;
+            sku: string | null;
+            /** @example caja */
+            unit: string;
+            /** @example 5 */
+            minStock: number;
+            notes: string | null;
+            /** Format: uuid */
+            createdById: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            /** @description Σ signed movements (IN +, OUT -, ADJUSTMENT ±). Computed, never stored. */
+            stock?: number;
+            /** @description true when stock <= minStock */
+            lowStock?: boolean;
+            movements?: components["schemas"]["InventoryMovementDto"][];
+        };
+        UpdateInventoryItemDto: {
+            /** @example Guantes de nitrilo */
+            name?: string;
+            sku?: string | null;
+            /** @example caja */
+            unit?: string;
+            /** @example 1 */
+            minStock?: number;
+            notes?: string | null;
+        };
+        RecordInventoryMovementDto: {
+            /** @enum {string} */
+            type: "IN" | "OUT" | "ADJUSTMENT";
+            /**
+             * @description Always > 0 for IN/OUT; may be negative (and never 0) for ADJUSTMENT.
+             * @example 10
+             */
+            quantity: number;
+            reason?: string;
+        };
+        DashboardPeriodDto: {
+            /** Format: date-time */
+            from: string;
+            /** Format: date-time */
+            to: string;
+        };
+        DashboardSalesDto: {
+            /** Format: date-time */
+            from: string;
+            /** Format: date-time */
+            to: string;
+            /**
+             * @description ISO 4217 currency code
+             * @example USD
+             */
+            currency: string;
+            /**
+             * @description Sum of every active sale's total in the range, each converted to `currency` using ITS OWN paidAt date (never today's rate).
+             * @example 1250.5
+             */
+            totalConverted: number;
+            /**
+             * @description Number of active sales in the range, any currency.
+             * @example 12
+             */
+            count: number;
+            /**
+             * @description Breakdown of the ORIGINAL (unconverted) totals grouped by each sale's own currency.
+             * @example {
+             *       "COP": 500000,
+             *       "USD": 30
+             *     }
+             */
+            byCurrency: Record<string, never>;
+        };
+        DashboardLowStockItemDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            unit: string;
+            stock: number;
+            minStock: number;
+        };
+        DashboardLowStockDto: {
+            /**
+             * @description Number of items at or below minStock.
+             * @example 3
+             */
+            count: number;
+            items: components["schemas"]["DashboardLowStockItemDto"][];
+        };
+        DashboardUpcomingAppointmentDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            patientId: string;
+            /** Format: uuid */
+            providerId: string;
+            /** Format: date-time */
+            start: string;
+            /** Format: date-time */
+            end: string;
+            /** @enum {string} */
+            status: "SCHEDULED" | "CONFIRMED" | "COMPLETED" | "CANCELLED" | "NO_SHOW";
+        };
+        DashboardDto: {
+            period: components["schemas"]["DashboardPeriodDto"];
+            sales: components["schemas"]["DashboardSalesDto"];
+            lowStockItems: components["schemas"]["DashboardLowStockDto"];
+            /** @description Next N appointments (start >= now), ascending by start. */
+            upcomingAppointments: components["schemas"]["DashboardUpcomingAppointmentDto"][];
+            /**
+             * @description Total patient count.
+             * @example 42
+             */
+            patientCount: number;
         };
     };
     responses: never;
@@ -1494,6 +1937,352 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BrandingDto"];
+                };
+            };
+        };
+    };
+    ExchangeController_rates: {
+        parameters: {
+            query: {
+                /** @description Historical day to fetch USD-base rates for (YYYY-MM-DD). */
+                date: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RatesResponseDto"];
+                };
+            };
+        };
+    };
+    ExchangeController_convert: {
+        parameters: {
+            query: {
+                amount: number;
+                /** @description ISO 4217 currency code */
+                from: string;
+                /** @description ISO 4217 currency code */
+                to: string;
+                /** @description Historical day whose rate applies to this conversion (YYYY-MM-DD). */
+                date: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConvertResponseDto"];
+                };
+            };
+        };
+    };
+    SalesController_list: {
+        parameters: {
+            query?: {
+                /** @description Inclusive lower bound on paidAt (half-open range [from, to)). */
+                from?: string;
+                /** @description Exclusive upper bound on paidAt (half-open range [from, to)). */
+                to?: string;
+                patientId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SaleDto"][];
+                };
+            };
+        };
+    };
+    SalesController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateSaleDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SaleDto"];
+                };
+            };
+        };
+    };
+    SalesController_totals: {
+        parameters: {
+            query: {
+                /** @description Inclusive lower bound on paidAt (half-open range [from, to)). */
+                from: string;
+                /** @description Exclusive upper bound on paidAt (half-open range [from, to)). */
+                to: string;
+                /** @description ISO 4217 currency code to convert every sale total into. */
+                currency: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SalesTotalsDto"];
+                };
+            };
+        };
+    };
+    SalesController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SaleDto"];
+                };
+            };
+        };
+    };
+    SalesController_remove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Sale voided (deletedAt set) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    InventoryController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryItemDto"][];
+                };
+            };
+        };
+    };
+    InventoryController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateInventoryItemDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryItemDto"];
+                };
+            };
+        };
+    };
+    InventoryController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryItemDto"];
+                };
+            };
+        };
+    };
+    InventoryController_remove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Item soft-deleted (deletedAt set) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    InventoryController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateInventoryItemDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryItemDto"];
+                };
+            };
+        };
+    };
+    InventoryController_listMovements: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryMovementDto"][];
+                };
+            };
+        };
+    };
+    InventoryController_createMovement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecordInventoryMovementDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InventoryMovementDto"];
+                };
+            };
+        };
+    };
+    DashboardController_get: {
+        parameters: {
+            query: {
+                /** @description Inclusive period start (YYYY-MM-DD). */
+                from: string;
+                /** @description Period end (YYYY-MM-DD). Passed through to GetSalesTotalsUseCase, which treats the sales range as half-open [from, to). */
+                to: string;
+                /** @description ISO 4217 currency code every sale total is converted into. */
+                currency: string;
+                /** @description Max number of upcoming appointments to return. */
+                upcomingLimit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DashboardDto"];
                 };
             };
         };
