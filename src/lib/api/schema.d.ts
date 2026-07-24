@@ -244,6 +244,70 @@ export interface paths {
         patch: operations["AppointmentsController_update"];
         trace?: never;
     };
+    "/api/v1/patients/{patientId}/treatment-plans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["TreatmentPlansController_list"];
+        put?: never;
+        post: operations["TreatmentPlansController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/treatment-plans/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["TreatmentPlansController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["TreatmentPlansController_update"];
+        trace?: never;
+    };
+    "/api/v1/treatment-plans/{id}/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["TreatmentPlansController_addItem"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/treatment-plans/{id}/items/{itemId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["TreatmentPlansController_removeItem"];
+        options?: never;
+        head?: never;
+        patch: operations["TreatmentPlansController_updateItem"];
+        trace?: never;
+    };
     "/api/v1/staff": {
         parameters: {
             query?: never;
@@ -260,12 +324,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/domains": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["DomainsController_list"];
+        put?: never;
+        post: operations["DomainsController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/domains/{id}/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["DomainsController_verify"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/tenant/branding": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["PublicBrandingController_branding"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
         RegisterDto: Record<string, never>;
+        RegisterResponseDto: {
+            /** Format: uuid */
+            tenantId: string;
+            /** Format: uuid */
+            userId: string;
+        };
         LoginDto: Record<string, never>;
+        AuthTokensDto: {
+            accessToken: string;
+            refreshToken: string;
+        };
         CreatePatientDto: {
             firstName: string;
             lastName: string;
@@ -280,6 +402,37 @@ export interface components {
             email?: string;
             address?: string;
             notes?: string;
+        };
+        PatientDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            tenantId: string;
+            firstName: string;
+            lastName: string;
+            /** @enum {string} */
+            docType: "CC" | "TI" | "CE" | "PASSPORT" | "OTHER";
+            docNumber: string | null;
+            /** Format: date-time */
+            birthDate: string | null;
+            /** @enum {string} */
+            sex: "M" | "F" | "OTHER" | "UNSPECIFIED";
+            phone: string | null;
+            email: string | null;
+            address: string | null;
+            notes: string | null;
+            /** Format: uuid */
+            createdById: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        ListPatientsResponseDto: {
+            items: components["schemas"]["PatientDto"][];
+            total: number;
+            page: number;
+            pageSize: number;
         };
         UpdatePatientDto: {
             firstName?: string;
@@ -314,6 +467,26 @@ export interface components {
             /** @default true */
             active: boolean;
         };
+        DentalCatalogItemDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            tenantId: string;
+            code: string;
+            category: string | null;
+            /** @enum {string} */
+            kind: "DIAGNOSIS" | "PROCEDURE";
+            labelEs: string;
+            labelEn: string | null;
+            labelPt: string | null;
+            color: string;
+            defaultPrice: number | null;
+            active: boolean;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
         UpdateCatalogItemDto: {
             code?: string;
             category?: string;
@@ -326,6 +499,25 @@ export interface components {
             color?: string;
             defaultPrice?: number;
             active?: boolean;
+        };
+        MedicalHistoryDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            tenantId: string;
+            /** Format: uuid */
+            patientId: string;
+            version: number;
+            allergies: string | null;
+            chronicConditions: string | null;
+            currentMedications: string | null;
+            habits: string | null;
+            medicalAlerts: string | null;
+            notes: string | null;
+            /** Format: uuid */
+            createdById: string | null;
+            /** Format: date-time */
+            createdAt: string;
         };
         SaveMedicalHistoryDto: {
             allergies?: string;
@@ -343,6 +535,22 @@ export interface components {
             entryDate?: string;
             reason?: string;
             notes: string;
+        };
+        ClinicalEntryDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            tenantId: string;
+            /** Format: uuid */
+            patientId: string;
+            /** Format: date-time */
+            entryDate: string;
+            reason: string | null;
+            notes: string;
+            /** Format: uuid */
+            performedById: string | null;
+            /** Format: date-time */
+            createdAt: string;
         };
         CreateToothRecordDto: {
             /**
@@ -365,6 +573,37 @@ export interface components {
             /** Format: uuid */
             clinicalEntryId?: string;
         };
+        ToothRecordDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            tenantId: string;
+            /** Format: uuid */
+            patientId: string;
+            /** @description FDI/ISO-3950 tooth code */
+            toothNumber: string;
+            surfaces: ("MESIAL" | "DISTAL" | "OCCLUSAL" | "VESTIBULAR" | "LINGUAL")[];
+            /** @enum {string} */
+            kind: "DIAGNOSIS" | "PROCEDURE";
+            /** Format: uuid */
+            catalogItemId: string | null;
+            /** @enum {string} */
+            status: "PLANNED" | "COMPLETED";
+            notes: string | null;
+            /** Format: uuid */
+            clinicalEntryId: string | null;
+            /** Format: uuid */
+            performedById: string | null;
+            /** Format: date-time */
+            recordedAt: string;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        OdontogramGroupDto: {
+            /** @description FDI/ISO-3950 tooth code */
+            toothNumber: string;
+            records: components["schemas"]["ToothRecordDto"][];
+        };
         CreateAppointmentDto: {
             /** Format: uuid */
             patientId: string;
@@ -377,6 +616,30 @@ export interface components {
             reason?: string;
             notes?: string;
         };
+        AppointmentDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            tenantId: string;
+            /** Format: uuid */
+            patientId: string;
+            /** Format: uuid */
+            providerId: string;
+            /** Format: date-time */
+            start: string;
+            /** Format: date-time */
+            end: string;
+            /** @enum {string} */
+            status: "SCHEDULED" | "CONFIRMED" | "COMPLETED" | "CANCELLED" | "NO_SHOW";
+            reason: string | null;
+            notes: string | null;
+            /** Format: uuid */
+            createdById: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
         UpdateAppointmentDto: {
             /** Format: date-time */
             start?: string;
@@ -386,6 +649,88 @@ export interface components {
             status?: "SCHEDULED" | "CONFIRMED" | "COMPLETED" | "CANCELLED" | "NO_SHOW";
             reason?: string;
             notes?: string;
+        };
+        CreateTreatmentPlanDto: {
+            notes?: string;
+        };
+        TreatmentPlanItemDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            tenantId: string;
+            /** Format: uuid */
+            planId: string;
+            toothNumber: string;
+            surfaces: ("MESIAL" | "DISTAL" | "OCCLUSAL" | "VESTIBULAR" | "LINGUAL")[];
+            /** Format: uuid */
+            catalogItemId: string;
+            price: number;
+            /** @enum {string} */
+            status: "PROPOSED" | "ACCEPTED" | "DONE";
+            notes: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        TreatmentPlanDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            tenantId: string;
+            /** Format: uuid */
+            patientId: string;
+            /** @enum {string} */
+            status: "DRAFT" | "ACCEPTED" | "COMPLETED" | "CANCELLED";
+            notes: string | null;
+            /** Format: uuid */
+            createdById: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            items?: components["schemas"]["TreatmentPlanItemDto"][];
+            /** @description Sum of active items price — only present on GET by id */
+            total?: number;
+        };
+        UpdateTreatmentPlanDto: {
+            /** @enum {string} */
+            status?: "DRAFT" | "ACCEPTED" | "COMPLETED" | "CANCELLED";
+            notes?: string;
+        };
+        AddTreatmentPlanItemDto: {
+            /**
+             * @description FDI/ISO-3950 tooth code: permanent 11-18/21-28/31-38/41-48, primary 51-55/61-65/71-75/81-85
+             * @example 11
+             */
+            toothNumber: string;
+            /** @description Empty/omitted means the whole tooth (no specific surface) */
+            surfaces?: ("MESIAL" | "DISTAL" | "OCCLUSAL" | "VESTIBULAR" | "LINGUAL")[];
+            /** Format: uuid */
+            catalogItemId: string;
+            /** @description Explicit price; if omitted, falls back to the catalog item defaultPrice (400 if neither is set) */
+            price?: number;
+            notes?: string;
+        };
+        UpdateTreatmentPlanItemDto: {
+            price?: number;
+            /** @enum {string} */
+            status?: "PROPOSED" | "ACCEPTED" | "DONE";
+            surfaces?: ("MESIAL" | "DISTAL" | "OCCLUSAL" | "VESTIBULAR" | "LINGUAL")[];
+            notes?: string;
+        };
+        StaffMemberDto: {
+            /** Format: uuid */
+            userId: string;
+            fullName: string;
+            /** @enum {string} */
+            role: "OWNER" | "DENTIST" | "ASSISTANT" | "RECEPTION" | "ADMIN";
+        };
+        CreateDomainDto: Record<string, never>;
+        BrandingDto: {
+            name: string;
+            primaryColor: string;
+            logoUrl: string | null;
         };
     };
     responses: never;
@@ -447,7 +792,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["RegisterResponseDto"];
+                };
             };
         };
     };
@@ -468,7 +815,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AuthTokensDto"];
+                };
             };
         };
     };
@@ -490,7 +839,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ListPatientsResponseDto"];
+                };
             };
         };
     };
@@ -511,7 +862,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["PatientDto"];
+                };
             };
         };
     };
@@ -530,7 +883,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["PatientDto"];
+                };
             };
         };
     };
@@ -553,7 +908,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["PatientDto"];
+                };
             };
         };
     };
@@ -574,7 +931,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["DentalCatalogItemDto"][];
+                };
             };
         };
     };
@@ -595,7 +954,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["DentalCatalogItemDto"];
+                };
             };
         };
     };
@@ -618,7 +979,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["DentalCatalogItemDto"];
+                };
             };
         };
     };
@@ -633,11 +996,14 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description Latest medical history version. Response body is null when the patient does not have one yet (first visit) — this is never a 404. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["MedicalHistoryDto"] | null;
+                };
             };
         };
     };
@@ -660,7 +1026,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["MedicalHistoryDto"];
+                };
             };
         };
     };
@@ -682,7 +1050,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ClinicalEntryDto"][];
+                };
             };
         };
     };
@@ -705,7 +1075,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ClinicalEntryDto"];
+                };
             };
         };
     };
@@ -728,7 +1100,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ToothRecordDto"];
+                };
             };
         };
     };
@@ -747,7 +1121,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["OdontogramGroupDto"][];
+                };
             };
         };
     };
@@ -767,7 +1143,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["ToothRecordDto"][];
+                };
             };
         };
     };
@@ -788,7 +1166,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AppointmentDto"][];
+                };
             };
         };
     };
@@ -809,7 +1189,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AppointmentDto"];
+                };
             };
         };
     };
@@ -828,7 +1210,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["AppointmentDto"];
+                };
             };
         };
     };
@@ -851,7 +1235,171 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
+                content: {
+                    "application/json": components["schemas"]["AppointmentDto"];
+                };
+            };
+        };
+    };
+    TreatmentPlansController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TreatmentPlanDto"][];
+                };
+            };
+        };
+    };
+    TreatmentPlansController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateTreatmentPlanDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TreatmentPlanDto"];
+                };
+            };
+        };
+    };
+    TreatmentPlansController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TreatmentPlanDto"];
+                };
+            };
+        };
+    };
+    TreatmentPlansController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateTreatmentPlanDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TreatmentPlanDto"];
+                };
+            };
+        };
+    };
+    TreatmentPlansController_addItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddTreatmentPlanItemDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TreatmentPlanItemDto"];
+                };
+            };
+        };
+    };
+    TreatmentPlansController_removeItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                itemId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Item soft-deleted (deletedAt set) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
                 content?: never;
+            };
+        };
+    };
+    TreatmentPlansController_updateItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                itemId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateTreatmentPlanItemDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TreatmentPlanItemDto"];
+                };
             };
         };
     };
@@ -868,7 +1416,85 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
+                content: {
+                    "application/json": components["schemas"]["StaffMemberDto"][];
+                };
+            };
+        };
+    };
+    DomainsController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
                 content?: never;
+            };
+        };
+    };
+    DomainsController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateDomainDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    DomainsController_verify: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PublicBrandingController_branding: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BrandingDto"];
+                };
             };
         };
     };
