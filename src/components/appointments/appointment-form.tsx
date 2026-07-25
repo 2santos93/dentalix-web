@@ -9,7 +9,7 @@ import {
 } from '@/lib/appointments/appointments-api';
 import { listStaff, type StaffMember } from '@/lib/appointments/staff-api';
 import { listPatients, type Patient } from '@/lib/patients/patients-api';
-import { UserPlus } from 'lucide-react';
+import { UserPlus, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -238,7 +238,7 @@ export function AppointmentForm({ token, onCreated, defaultDate }: AppointmentFo
           placeholder={copy.patientSearchPlaceholder}
           value={patientQuery}
           onChange={(e) => setPatientQuery(e.target.value)}
-          className="rounded-md border border-border bg-surface px-3 py-2 text-ink"
+          className="flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors placeholder:text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-50"
         />
       </div>
 
@@ -263,7 +263,7 @@ export function AppointmentForm({ token, onCreated, defaultDate }: AppointmentFo
           disabled={patientsLoading}
           value={patientId}
           onChange={(e) => setPatientId(e.target.value)}
-          className="rounded-md border border-border bg-surface px-3 py-2 text-ink"
+          className="flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors placeholder:text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-50"
         >
           <option value="" disabled>
             {patientsLoading ? copy.patientLoading : copy.patientPlaceholder}
@@ -282,7 +282,7 @@ export function AppointmentForm({ token, onCreated, defaultDate }: AppointmentFo
             <button
               type="button"
               onClick={() => setPatientsReloadKey((k) => k + 1)}
-              className="rounded-md border border-border px-2 py-1 text-xs font-medium text-ink"
+              className="inline-flex h-7 items-center rounded-md border border-border px-2 text-xs font-medium text-ink transition-colors hover:bg-bg"
             >
               {copy.retry}
             </button>
@@ -314,7 +314,7 @@ export function AppointmentForm({ token, onCreated, defaultDate }: AppointmentFo
           disabled={staffLoading}
           value={providerId}
           onChange={(e) => setProviderId(e.target.value)}
-          className="rounded-md border border-border bg-surface px-3 py-2 text-ink"
+          className="flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors placeholder:text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-50"
         >
           <option value="" disabled>
             {staffLoading ? copy.providerLoading : copy.providerPlaceholder}
@@ -333,7 +333,7 @@ export function AppointmentForm({ token, onCreated, defaultDate }: AppointmentFo
             <button
               type="button"
               onClick={() => setStaffReloadKey((k) => k + 1)}
-              className="rounded-md border border-border px-2 py-1 text-xs font-medium text-ink"
+              className="inline-flex h-7 items-center rounded-md border border-border px-2 text-xs font-medium text-ink transition-colors hover:bg-bg"
             >
               {copy.retry}
             </button>
@@ -352,7 +352,7 @@ export function AppointmentForm({ token, onCreated, defaultDate }: AppointmentFo
             required
             value={date}
             onChange={(e) => setDate(e.target.value)}
-            className="rounded-md border border-border bg-surface px-3 py-2 text-ink"
+            className="flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors placeholder:text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-50"
           />
         </div>
         <div className="flex flex-col gap-1">
@@ -365,7 +365,7 @@ export function AppointmentForm({ token, onCreated, defaultDate }: AppointmentFo
             required
             value={startTime}
             onChange={(e) => setStartTime(e.target.value)}
-            className="rounded-md border border-border bg-surface px-3 py-2 text-ink"
+            className="flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors placeholder:text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-50"
           />
         </div>
         <div className="flex flex-col gap-1">
@@ -378,7 +378,7 @@ export function AppointmentForm({ token, onCreated, defaultDate }: AppointmentFo
             required
             value={endTime}
             onChange={(e) => setEndTime(e.target.value)}
-            className="rounded-md border border-border bg-surface px-3 py-2 text-ink"
+            className="flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors placeholder:text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-50"
           />
         </div>
       </div>
@@ -392,7 +392,7 @@ export function AppointmentForm({ token, onCreated, defaultDate }: AppointmentFo
           type="text"
           value={reason}
           onChange={(e) => setReason(e.target.value)}
-          className="rounded-md border border-border bg-surface px-3 py-2 text-ink"
+          className="flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors placeholder:text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-50"
         />
       </div>
 
@@ -407,13 +407,15 @@ export function AppointmentForm({ token, onCreated, defaultDate }: AppointmentFo
         </p>
       )}
 
-      <button
-        type="submit"
-        disabled={submitting}
-        className="self-start rounded-md bg-primary px-4 py-2 font-medium text-primary-foreground disabled:opacity-60"
-      >
-        {submitting ? copy.submitting : copy.submit}
-      </button>
+      <Button type="submit" disabled={submitting} className="self-start">
+        {submitting ? (
+          <>
+            <Loader2 className="animate-spin" /> {copy.submitting}
+          </>
+        ) : (
+          copy.submit
+        )}
+      </Button>
     </form>
   );
 }
