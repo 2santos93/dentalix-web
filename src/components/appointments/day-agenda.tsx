@@ -1,5 +1,6 @@
 'use client';
 import type { Appointment, AppointmentStatus } from '@/lib/appointments/appointments-api';
+import { StatusBadge, formatTimeRange, patientLabel } from './appointment-display';
 
 // Copy as constants (i18n-ready, es-first) — matches patients-table.tsx /
 // clinical-entries-list.tsx convention until next-intl wiring lands.
@@ -35,19 +36,6 @@ const STATUS_OPTIONS: AppointmentStatus[] = [
   'NO_SHOW',
 ];
 
-// One semantic-token class per status — never a raw color utility
-// (`bg-*-500`, `text-[#...]`). SCHEDULED/CONFIRMED use the neutral/brand
-// tokens (nothing has happened yet / it's been acknowledged); COMPLETED maps
-// to success, CANCELLED to danger, NO_SHOW to warning (attention-worthy but
-// not an error).
-const STATUS_BADGE_CLASSES: Record<AppointmentStatus, string> = {
-  SCHEDULED: 'border-muted bg-muted/10 text-muted',
-  CONFIRMED: 'border-primary bg-primary/10 text-primary',
-  COMPLETED: 'border-success bg-success/10 text-success',
-  CANCELLED: 'border-danger bg-danger/10 text-danger',
-  NO_SHOW: 'border-warning bg-warning/10 text-warning',
-};
-
 interface DayAgendaProps {
   /** Appointments to render — any order; this component sorts by `start` ASC. */
   appointments: Appointment[];
@@ -69,27 +57,6 @@ interface DayAgendaProps {
   onStatusChange?: (appointmentId: string, status: AppointmentStatus) => void;
   /** The `id` of the appointment currently being updated, if any — disables that row's status select and shows a small "Actualizando…" hint next to it. */
   updatingId?: string | null;
-}
-
-function formatTimeRange(start: string, end: string): string {
-  const fmt = (iso: string) =>
-    new Date(iso).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' });
-  return `${fmt(start)}–${fmt(end)}`;
-}
-
-function patientLabel(appointment: Appointment, patientNames?: Record<string, string>): string {
-  return patientNames?.[appointment.patientId] ?? appointment.patientId;
-}
-
-function StatusBadge({ status }: { status: AppointmentStatus }) {
-  return (
-    <span
-      data-testid="appointment-status-badge"
-      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${STATUS_BADGE_CLASSES[status]}`}
-    >
-      {copy.statusLabels[status]}
-    </span>
-  );
 }
 
 interface StatusSelectProps {

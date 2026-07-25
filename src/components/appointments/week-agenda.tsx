@@ -1,5 +1,6 @@
 'use client';
-import type { Appointment, AppointmentStatus } from '@/lib/appointments/appointments-api';
+import type { Appointment } from '@/lib/appointments/appointments-api';
+import { StatusBadge, formatTimeRange, patientLabel } from './appointment-display';
 
 // Copy as constants (i18n-ready, es-first) — matches day-agenda.tsx's convention.
 const copy = {
@@ -7,48 +8,7 @@ const copy = {
   genericLoadError: 'No pudimos cargar la agenda. Intenta de nuevo.',
   emptyDay: 'Sin citas',
   heading: 'Agenda de la semana',
-  statusLabels: {
-    SCHEDULED: 'Agendada',
-    CONFIRMED: 'Confirmada',
-    COMPLETED: 'Completada',
-    CANCELLED: 'Cancelada',
-    NO_SHOW: 'No asistió',
-  } satisfies Record<AppointmentStatus, string>,
 };
-
-// Mirrored from `day-agenda.tsx` rather than imported/refactored — neither
-// `STATUS_BADGE_CLASSES`, `formatTimeRange`, `patientLabel` nor `StatusBadge`
-// are exported there, and hoisting them into a shared module is a bigger,
-// riskier change than this task's scope (see AGENTS-facing task brief). Kept
-// byte-for-byte identical so the two views stay visually consistent.
-const STATUS_BADGE_CLASSES: Record<AppointmentStatus, string> = {
-  SCHEDULED: 'border-muted bg-muted/10 text-muted',
-  CONFIRMED: 'border-primary bg-primary/10 text-primary',
-  COMPLETED: 'border-success bg-success/10 text-success',
-  CANCELLED: 'border-danger bg-danger/10 text-danger',
-  NO_SHOW: 'border-warning bg-warning/10 text-warning',
-};
-
-function formatTimeRange(start: string, end: string): string {
-  const fmt = (iso: string) =>
-    new Date(iso).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' });
-  return `${fmt(start)}–${fmt(end)}`;
-}
-
-function patientLabel(appointment: Appointment, patientNames?: Record<string, string>): string {
-  return patientNames?.[appointment.patientId] ?? appointment.patientId;
-}
-
-function StatusBadge({ status }: { status: AppointmentStatus }) {
-  return (
-    <span
-      data-testid="appointment-status-badge"
-      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${STATUS_BADGE_CLASSES[status]}`}
-    >
-      {copy.statusLabels[status]}
-    </span>
-  );
-}
 
 /** Local (not UTC) `YYYY-MM-DD` for the instant `iso` represents — same convention as `day-range.ts`'s date-string inputs, used here to bucket appointments by their local calendar day. */
 function localDateString(iso: string): string {
