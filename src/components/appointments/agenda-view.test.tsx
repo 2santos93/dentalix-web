@@ -1,7 +1,7 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AgendaView } from './agenda-view';
-import { localDayRange } from '@/lib/appointments/day-range';
+import { localDayRange, localWeekRange } from '@/lib/appointments/day-range';
 import { createAppointment, listAppointments, updateAppointment } from '@/lib/appointments/appointments-api';
 import { listStaff } from '@/lib/appointments/staff-api';
 import { listPatients } from '@/lib/patients/patients-api';
@@ -315,5 +315,67 @@ describe('AgendaView', () => {
     expect(document.getElementById(controlsId as string)).toContainElement(
       screen.getByRole('form', { name: /agendar cita/i }),
     );
+  });
+
+  it('defaults to Día view, and switching to Semana fetches with the week range and renders WeekAgenda', async () => {
+    mockedListStaff.mockResolvedValue(staff);
+    mockedListAppointments.mockResolvedValue([]);
+    const user = userEvent.setup();
+
+    render(<AgendaView token="tok" />);
+    await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
+
+    expect(screen.getByRole('button', { name: /^día$/i })).toHaveAttribute('aria-pressed', 'true');
+    expect(screen.getByRole('button', { name: /^semana$/i })).toHaveAttribute('aria-pressed', 'false');
+
+    const dateInput = screen.getByLabelText<HTMLInputElement>(/^fecha$/i);
+    await user.clear(dateInput);
+    await user.type(dateInput, '2026-03-11');
+    await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
+
+    mockedListAppointments.mockClear();
+    await user.click(screen.getByRole('button', { name: /^semana$/i }));
+
+    await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
+    const [, params] = mockedListAppointments.mock.calls[0];
+    const expected = localWeekRange('2026-03-11');
+    expect(params.from).toBe(expected.from);
+    expect(params.to).toBe(expected.to);
+    expect(params.providerId).toBe('staff-1');
+
+    expect(screen.getByRole('button', { name: /^semana$/i })).toHaveAttribute('aria-pressed', 'true');
+    expect(await screen.findByLabelText(/agenda de la semana/i)).toBeInTheDocument();
+  });
+
+  it('clicking a day header in Semana view switches back to Día view with that date selected', async () => {
+    mockedListStaff.mockResolvedValue(staff);
+    mockedListAppointments.mockResolvedValue([]);
+    const user = userEvent.setup();
+
+    render(<AgendaView token="tok" />);
+    await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
+
+    const dateInput = screen.getByLabelText<HTMLInputElement>(/^fecha$/i);
+    await user.clear(dateInput);
+    await user.type(dateInput, '2026-03-11');
+    await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
+
+    await user.click(screen.getByRole('button', { name: /^semana$/i }));
+    await screen.findByLabelText(/agenda de la semana/i);
+
+    const mondayHeader = screen
+      .getAllByTestId('week-day-header')
+      .find((h) => h.getAttribute('data-date') === '2026-03-09') as HTMLElement;
+    await user.click(mondayHeader);
+
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /^día$/i })).toHaveAttribute('aria-pressed', 'true'),
+    );
+    expect(dateInput.value).toBe('2026-03-09');
+    // Back in Día view (DayAgenda, not WeekAgenda) — with no appointments
+    // mocked for this test, DayAgenda's empty state confirms it's the one
+    // rendering (WeekAgenda has no such "no hay citas para este día" copy).
+    expect(await screen.findByText(/no hay citas para este día/i)).toBeInTheDocument();
+    expect(screen.queryByLabelText(/agenda de la semana/i)).not.toBeInTheDocument();
   });
 });

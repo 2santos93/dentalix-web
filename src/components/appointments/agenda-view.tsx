@@ -9,8 +9,9 @@ import {
 } from '@/lib/appointments/appointments-api';
 import { listStaff, type StaffMember } from '@/lib/appointments/staff-api';
 import { listPatients } from '@/lib/patients/patients-api';
-import { localDayRange } from '@/lib/appointments/day-range';
+import { localDayRange, localWeekRange } from '@/lib/appointments/day-range';
 import { DayAgenda } from '@/components/appointments/day-agenda';
+import { WeekAgenda } from '@/components/appointments/week-agenda';
 import { AppointmentForm } from '@/components/appointments/appointment-form';
 import { Plus, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -27,6 +28,9 @@ const copy = {
   providerLabel: 'Profesional',
   providerLoading: 'Cargando…',
   dateLabel: 'Fecha',
+  viewLabel: 'Vista',
+  dayView: 'Día',
+  weekView: 'Semana',
   refreshing: 'Actualizando…',
   retry: 'Reintentar',
   genericStaffError: 'No pudimos cargar los profesionales. Intenta de nuevo.',
@@ -43,12 +47,20 @@ const NEW_APPOINTMENT_FORM_ID = 'agenda-new-appointment-form';
 const fieldClass =
   'flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-50';
 
-function todayLocalDateString(): string {
-  const d = new Date();
+function dateToLocalDateString(d: Date): string {
   const yyyy = d.getFullYear();
   const mm = String(d.getMonth() + 1).padStart(2, '0');
   const dd = String(d.getDate()).padStart(2, '0');
   return `${yyyy}-${mm}-${dd}`;
+}
+
+function todayLocalDateString(): string {
+  return dateToLocalDateString(new Date());
+}
+
+/** `WeekAgenda`'s `weekStart` (the Monday of `date`'s week, as a local `YYYY-MM-DD`) — derived from `localWeekRange`'s `from` boundary so the two never drift apart. */
+function weekStartOf(date: string): string {
+  return dateToLocalDateString(new Date(localWeekRange(date).from));
 }
 
 interface AgendaViewProps {
@@ -79,6 +91,11 @@ export function AgendaView({ token }: AgendaViewProps) {
   const [providerId, setProviderId] = useState('');
 
   const [selectedDate, setSelectedDate] = useState(todayLocalDateString);
+  // Día | Semana toggle — 'day' keeps the existing single-day fetch/render;
+  // 'week' swaps the range to `localWeekRange(selectedDate)` and renders
+  // `WeekAgenda` instead of `DayAgenda` (see the `viewMode === 'week'` branch
+  // below). Kept additive/minimal per the task brief.
+  const [viewMode, setViewMode] = useState<'day' | 'week'>('day');
 
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [appointmentsLoading, setAppointmentsLoading] = useState(false);
@@ -164,7 +181,8 @@ export function AgendaView({ token }: AgendaViewProps) {
     async function load() {
       setAppointmentsLoading(true);
       try {
-        const { from, to } = localDayRange(selectedDate);
+        const { from, to } =
+          viewMode === 'week' ? localWeekRange(selectedDate) : localDayRange(selectedDate);
         const data = await listAppointments(token, { from, to, providerId });
         if (cancelled) return;
         setAppointments(data);
@@ -180,12 +198,13 @@ export function AgendaView({ token }: AgendaViewProps) {
     return () => {
       cancelled = true;
     };
-  }, [token, providerId, selectedDate]);
+  }, [token, providerId, selectedDate, viewMode]);
 
   function refreshAppointmentsInPlace(): Promise<void> {
     if (!token || !providerId) return Promise.resolve();
     setAppointmentsRefreshing(true);
-    const { from, to } = localDayRange(selectedDate);
+    const { from, to } =
+      viewMode === 'week' ? localWeekRange(selectedDate) : localDayRange(selectedDate);
     return listAppointments(token, { from, to, providerId })
       .then((data) => {
         setAppointments(data);
@@ -202,6 +221,12 @@ export function AgendaView({ token }: AgendaViewProps) {
   function handleAppointmentCreated() {
     setShowForm(false);
     refreshAppointmentsInPlace();
+  }
+
+  /** `WeekAgenda`'s `onSelectDay` — jumps the day selector to the clicked column and switches back to Día view, mirroring a calendar "drill in" interaction. */
+  function handleSelectDay(date: string) {
+    setSelectedDate(date);
+    setViewMode('day');
   }
 
   /**
@@ -265,6 +290,28 @@ export function AgendaView({ token }: AgendaViewProps) {
                 onChange={(e) => setSelectedDate(e.target.value)}
                 className="w-auto"
               />
+            </FormField>
+            <FormField htmlFor="agenda-view-mode-day" label={copy.viewLabel}>
+              <div id="agenda-view-mode-day" role="group" className="flex gap-1">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={viewMode === 'day' ? 'default' : 'outline'}
+                  aria-pressed={viewMode === 'day'}
+                  onClick={() => setViewMode('day')}
+                >
+                  {copy.dayView}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={viewMode === 'week' ? 'default' : 'outline'}
+                  aria-pressed={viewMode === 'week'}
+                  onClick={() => setViewMode('week')}
+                >
+                  {copy.weekView}
+                </Button>
+              </div>
             </FormField>
           </div>
           <Button
@@ -343,6 +390,15 @@ export function AgendaView({ token }: AgendaViewProps) {
         <p role="status" className="text-sm text-muted">
           {copy.selectProviderPrompt}
         </p>
+      ) : viewMode === 'week' ? (
+        <WeekAgenda
+          appointments={appointments}
+          weekStart={weekStartOf(selectedDate)}
+          loading={appointmentsLoading}
+          error={appointmentsLoadError}
+          patientNames={patientNames}
+          onSelectDay={handleSelectDay}
+        />
       ) : (
         <DayAgenda
           appointments={appointments}
