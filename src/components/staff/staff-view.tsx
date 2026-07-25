@@ -1,6 +1,6 @@
 'use client';
 import * as React from 'react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ApiError } from '@/lib/api/client';
 import {
   listStaff,
@@ -113,6 +113,13 @@ export function StaffView({ token }: StaffViewProps) {
   // Row awaiting deactivate confirmation (inline, not a dialog/native confirm()).
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
 
+  // The inline name editor is uncontrolled (defaultValue), so on a failed
+  // PATCH the DOM keeps the edited value. Without this, a later no-op blur
+  // (e.g. tabbing through the row again) would still see value !== fullName
+  // and re-fire the same mutation. Keep refs to reset the DOM value back to
+  // the last-known-good fullName after a failure.
+  const nameInputRefs = useRef<Map<string, HTMLInputElement>>(new Map());
+
   useEffect(() => {
     if (!token) return;
     let cancelled = false;
@@ -184,7 +191,7 @@ export function StaffView({ token }: StaffViewProps) {
     }
   }
 
-  async function handleNameChange(userId: string, nextName: string) {
+  async function handleNameChange(userId: string, nextName: string, previousName: string) {
     setUpdatingId(userId);
     setRowError(null);
     try {
@@ -192,6 +199,10 @@ export function StaffView({ token }: StaffViewProps) {
       await refreshInPlace();
     } catch (err) {
       setRowError(err instanceof ApiError ? err.message : copy.genericNameChangeError);
+      // Reset the (uncontrolled) input back to the last known fullName so a
+      // subsequent no-op blur doesn't keep re-firing the same failed PATCH.
+      const el = nameInputRefs.current.get(userId);
+      if (el) el.value = previousName;
     } finally {
       setUpdatingId(null);
     }
@@ -348,16 +359,22 @@ export function StaffView({ token }: StaffViewProps) {
                 return (
                   <TableRow key={s.userId}>
                     <TableCell>
-                      <input
+                      <Input
                         key={`${s.userId}-${s.fullName}`}
+                        ref={(el) => {
+                          if (el) nameInputRefs.current.set(s.userId, el);
+                          else nameInputRefs.current.delete(s.userId);
+                        }}
                         defaultValue={s.fullName}
                         aria-label={copy.nameFieldLabel(s.fullName)}
                         disabled={updating}
                         onBlur={(e) => {
                           const value = e.target.value.trim();
-                          if (value && value !== s.fullName) handleNameChange(s.userId, value);
+                          if (value && value !== s.fullName) {
+                            handleNameChange(s.userId, value, s.fullName);
+                          }
                         }}
-                        className={cn(fieldClass, 'h-9')}
+                        className="h-9"
                       />
                     </TableCell>
                     <TableCell>{s.email}</TableCell>

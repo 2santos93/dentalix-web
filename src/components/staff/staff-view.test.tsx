@@ -132,6 +132,60 @@ describe('StaffView', () => {
     await waitFor(() => expect(mockedListStaff).toHaveBeenCalledTimes(2));
   });
 
+  it('blurring the name input with a changed value calls updateStaff and refreshes the list', async () => {
+    mockedListStaff.mockResolvedValueOnce([member1]);
+    mockedUpdateStaff.mockResolvedValue({ ...member1, fullName: 'Ana Ríos Cambiado' });
+    mockedListStaff.mockResolvedValueOnce([{ ...member1, fullName: 'Ana Ríos Cambiado' }]);
+
+    const user = userEvent.setup();
+    render(<StaffView token="tok" />);
+
+    await screen.findByRole('table', { name: /personal/i });
+    const nameInput = screen.getByLabelText<HTMLInputElement>(/nombre de ana ríos/i);
+
+    await user.clear(nameInput);
+    await user.type(nameInput, 'Ana Ríos Cambiado');
+    await user.tab();
+
+    await waitFor(() =>
+      expect(mockedUpdateStaff).toHaveBeenCalledWith('tok', 'u1', {
+        fullName: 'Ana Ríos Cambiado',
+      }),
+    );
+    await waitFor(() => expect(mockedListStaff).toHaveBeenCalledTimes(2));
+  });
+
+  it('blurring the name input with an unchanged value does not call updateStaff', async () => {
+    mockedListStaff.mockResolvedValueOnce([member1]);
+
+    const user = userEvent.setup();
+    render(<StaffView token="tok" />);
+
+    await screen.findByRole('table', { name: /personal/i });
+    const nameInput = screen.getByLabelText<HTMLInputElement>(/nombre de ana ríos/i);
+
+    await user.click(nameInput);
+    await user.tab();
+
+    expect(mockedUpdateStaff).not.toHaveBeenCalled();
+  });
+
+  it('blurring the name input with a whitespace-only value does not call updateStaff', async () => {
+    mockedListStaff.mockResolvedValueOnce([member1]);
+
+    const user = userEvent.setup();
+    render(<StaffView token="tok" />);
+
+    await screen.findByRole('table', { name: /personal/i });
+    const nameInput = screen.getByLabelText<HTMLInputElement>(/nombre de ana ríos/i);
+
+    await user.clear(nameInput);
+    await user.type(nameInput, '   ');
+    await user.tab();
+
+    expect(mockedUpdateStaff).not.toHaveBeenCalled();
+  });
+
   it('a create error (e.g. 409 duplicate email) renders role="alert"', async () => {
     mockedListStaff.mockResolvedValue([member1]);
     mockedCreateStaff.mockRejectedValue(new ApiError(409, 'El correo ya está en uso.'));
