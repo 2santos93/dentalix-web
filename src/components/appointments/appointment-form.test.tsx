@@ -150,12 +150,53 @@ describe('AppointmentForm', () => {
     expect(screen.getByRole('option', { name: /dr\. luis gómez/i })).toBeInTheDocument();
   });
 
-  it('filters the patient list client-side using the search box', async () => {
+  it('loads the initial patient options from the server with a bounded pageSize (no query yet)', async () => {
+    await renderFormAndWaitForLoad();
+    expect(mockedListPatients).toHaveBeenCalledWith('tok', { pageSize: 20 });
+  });
+
+  it('debounces the server-side patient search, calling listPatients with the typed query and pageSize 20', async () => {
     const user = userEvent.setup();
     await renderFormAndWaitForLoad();
+    mockedListPatients.mockClear();
+    mockedListPatients.mockResolvedValue({
+      ...patientsPage,
+      items: [patientsPage.items[1]],
+    });
+
     await user.type(screen.getByLabelText(/buscar paciente/i), 'carlos');
+
+    // Debounced — the call doesn't happen synchronously on each keystroke.
+    expect(mockedListPatients).not.toHaveBeenCalled();
+
+    await waitFor(() =>
+      expect(mockedListPatients).toHaveBeenCalledWith('tok', { query: 'carlos', pageSize: 20 }),
+    );
     expect(screen.getByRole('option', { name: /carlos pérez/i })).toBeInTheDocument();
     expect(screen.queryByRole('option', { name: /maría lópez/i })).not.toBeInTheDocument();
+  });
+
+  it('keeps the previously selected patient visible in the options after the search narrows the results', async () => {
+    const user = userEvent.setup();
+    await renderFormAndWaitForLoad();
+    await user.selectOptions(screen.getByLabelText(/^paciente$/i), 'pat-1');
+
+    mockedListPatients.mockResolvedValue({
+      ...patientsPage,
+      items: [patientsPage.items[1]],
+    });
+    await user.type(screen.getByLabelText(/buscar paciente/i), 'carlos');
+
+    await waitFor(() =>
+      expect(mockedListPatients).toHaveBeenCalledWith('tok', { query: 'carlos', pageSize: 20 }),
+    );
+    await waitFor(() =>
+      expect(screen.getByRole('option', { name: /carlos pérez/i })).toBeInTheDocument(),
+    );
+
+    // María López (selected before the search narrowed) stays selectable.
+    expect(screen.getByRole('option', { name: /maría lópez/i })).toBeInTheDocument();
+    expect(screen.getByLabelText(/^paciente$/i)).toHaveValue('pat-1');
   });
 
   it('blocks submit and shows a validation message when end is not after start', async () => {

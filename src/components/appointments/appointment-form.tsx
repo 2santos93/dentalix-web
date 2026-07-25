@@ -9,6 +9,7 @@ import {
 } from '@/lib/appointments/appointments-api';
 import { listStaff, type StaffMember } from '@/lib/appointments/staff-api';
 import { listPatients, type Patient } from '@/lib/patients/patients-api';
+import { useDebouncedValue } from '@/lib/hooks/use-debounced-value';
 import { UserPlus, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -53,6 +54,11 @@ function fullPatientName(patient: Patient): string {
   return `${patient.firstName} ${patient.lastName}`;
 }
 
+/** How long the patient search box waits after the last keystroke before querying the server (ms). */
+const PATIENT_SEARCH_DEBOUNCE_MS = 300;
+/** Bounded page size for the patient search — matches the "typeahead" nature of the search box (not a full roster listing). */
+const PATIENT_SEARCH_PAGE_SIZE = 20;
+
 /** Builds a local-time ISO instant from a `YYYY-MM-DD` date + `HH:mm` time — the browser's timezone converts it to UTC on the wire (see `Appointment.start`/`end` docs). */
 function toIsoInstant(date: string, time: string): string {
   return new Date(`${date}T${time}:00`).toISOString();
@@ -76,12 +82,13 @@ interface AppointmentFormProps {
  * /patients`), a provider (selected from `GET /staff`), a date + start/end
  * time, and an optional reason, then `createAppointment`s.
  *
- * The patient list is fetched once (a bounded page — see `patients-api.ts`'s
- * `MAX_PAGE_SIZE`) and filtered client-side by the search box, mirroring how
- * simple the rest of this app's lists are (no debounce/typeahead machinery
- * exists elsewhere in the codebase yet) — good enough for a single-clinic
- * v1; a live server-side search is a natural follow-up once patient rosters
- * grow past one page.
+ * The patient search box queries the server (`listPatients(token, { query,
+ * pageSize })`), debounced ~300ms after the last keystroke via
+ * `useDebouncedValue` — so clinics with rosters bigger than one page can
+ * still find any patient, not just whichever page loaded first. The
+ * currently-selected patient is merged into the option list even when a
+ * later search's results don't include it, so picking a patient and then
+ * refining the query never silently clears the selection.
  */
 export function AppointmentForm({ token, onCreated, defaultDate }: AppointmentFormProps) {
   const [patients, setPatients] = useState<Patient[]>([]);
@@ -89,7 +96,12 @@ export function AppointmentForm({ token, onCreated, defaultDate }: AppointmentFo
   const [patientsError, setPatientsError] = useState<string | null>(null);
   const [patientsReloadKey, setPatientsReloadKey] = useState(0);
   const [patientQuery, setPatientQuery] = useState('');
+  const debouncedPatientQuery = useDebouncedValue(patientQuery, PATIENT_SEARCH_DEBOUNCE_MS);
   const [patientId, setPatientId] = useState('');
+  // The full selected `Patient` object — kept so it can be merged back into
+  // the option list if a later search's results no longer include it (see
+  // `patientOptions` below). Set on manual selection and on inline-create.
+  const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
 
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [staffLoading, setStaffLoading] = useState(true);
@@ -112,7 +124,11 @@ export function AppointmentForm({ token, onCreated, defaultDate }: AppointmentFo
     async function load() {
       setPatientsLoading(true);
       try {
-        const res = await listPatients(token, { pageSize: 100 });
+        const query = debouncedPatientQuery.trim();
+        const res = await listPatients(token, {
+          ...(query ? { query } : {}),
+          pageSize: PATIENT_SEARCH_PAGE_SIZE,
+        });
         if (cancelled) return;
         setPatients(res.items);
         setPatientsError(null);
@@ -127,7 +143,7 @@ export function AppointmentForm({ token, onCreated, defaultDate }: AppointmentFo
     return () => {
       cancelled = true;
     };
-  }, [token, patientsReloadKey]);
+  }, [token, debouncedPatientQuery, patientsReloadKey]);
 
   useEffect(() => {
     let cancelled = false;
@@ -151,19 +167,18 @@ export function AppointmentForm({ token, onCreated, defaultDate }: AppointmentFo
     };
   }, [token, staffReloadKey]);
 
-  const filteredPatients = patientQuery.trim()
-    ? patients.filter((p) => {
-        const q = patientQuery.trim().toLowerCase();
-        return (
-          fullPatientName(p).toLowerCase().includes(q) ||
-          (p.docNumber ?? '').toLowerCase().includes(q)
-        );
-      })
-    : patients;
+  // The current search results, plus the selected patient if the latest
+  // search no longer returns it — keeps a selection from being silently
+  // dropped just because the query changed.
+  const patientOptions =
+    selectedPatient && !patients.some((p) => p.id === selectedPatient.id)
+      ? [selectedPatient, ...patients]
+      : patients;
 
   function resetForm() {
     setPatientId('');
     setPatientQuery('');
+    setSelectedPatient(null);
     setProviderId('');
     setDate('');
     setStartTime('');
@@ -171,12 +186,18 @@ export function AppointmentForm({ token, onCreated, defaultDate }: AppointmentFo
     setReason('');
   }
 
-  // Reused PatientForm (in a dialog) calls this on success: add the new patient
-  // to the list, select it, and close — so you never leave the agenda.
+  function handlePatientSelect(id: string) {
+    setPatientId(id);
+    setSelectedPatient(patientOptions.find((p) => p.id === id) ?? null);
+  }
+
+  // Reused PatientForm (in a dialog) calls this on success: select the new
+  // patient and close — so you never leave the agenda. It's merged into
+  // `patientOptions` above even before the next search picks it up.
   function handlePatientCreated(patient: Patient) {
-    setPatients((prev) => [patient, ...prev.filter((p) => p.id !== patient.id)]);
     setPatientQuery('');
     setPatientId(patient.id);
+    setSelectedPatient(patient);
     setShowPatientDialog(false);
   }
 
@@ -262,13 +283,13 @@ export function AppointmentForm({ token, onCreated, defaultDate }: AppointmentFo
           required
           disabled={patientsLoading}
           value={patientId}
-          onChange={(e) => setPatientId(e.target.value)}
+          onChange={(e) => handlePatientSelect(e.target.value)}
           className="flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors placeholder:text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-50"
         >
           <option value="" disabled>
             {patientsLoading ? copy.patientLoading : copy.patientPlaceholder}
           </option>
-          {filteredPatients.map((p) => (
+          {patientOptions.map((p) => (
             <option key={p.id} value={p.id}>
               {fullPatientName(p)}
             </option>
@@ -288,7 +309,7 @@ export function AppointmentForm({ token, onCreated, defaultDate }: AppointmentFo
             </button>
           </div>
         )}
-        {!patientsLoading && !patientsError && filteredPatients.length === 0 && (
+        {!patientsLoading && !patientsError && patientOptions.length === 0 && (
           <div role="status" className="flex flex-wrap items-center gap-2">
             <span className="text-xs text-muted">{copy.patientEmpty}</span>
             <Button
