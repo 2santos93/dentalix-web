@@ -1,12 +1,12 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { ApiError } from '@/lib/api/client';
 import { getDashboard, type Dashboard } from '@/lib/dashboard/dashboard-api';
 import { addOneDayIso } from '@/lib/dashboard/date-range';
 import { listPatients } from '@/lib/patients/patients-api';
 import { listStaff } from '@/lib/appointments/staff-api';
-import { getExchangeRates } from '@/lib/exchange/exchange-api';
+import { getExchangeRates, type ExchangeRates } from '@/lib/exchange/exchange-api';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge, type BadgeProps } from '@/components/ui/badge';
@@ -102,7 +102,10 @@ function formatCurrencySafe(amount: number, currency: string): string {
 }
 
 // `RatesResponseDto.base` (see `exchange-api.ts`) — the currency all `rates`
-// entries are expressed relative to.
+// entries are expressed relative to. `getExchangeRates`'s response carries
+// its own `base` field (used below); this is only a last-resort fallback for
+// the (currently unreachable, since the schema types `base` as the literal
+// `"USD"`) case where a resolved response is somehow missing it.
 const EXCHANGE_BASE = 'USD';
 // Used to populate the currency `<select>` if `getExchangeRates` hasn't
 // resolved yet (or fails) — best-effort, mirrors `AgendaView`'s
@@ -158,7 +161,9 @@ export function DashboardView({ token }: DashboardViewProps) {
   // Supported currencies for the "Moneda" `<select>` (IMP-10) — fetched once
   // from `getExchangeRates` (best-effort; falls back to a small hardcoded
   // list if it hasn't resolved yet or fails, so the select is never empty).
-  const [rates, setRates] = useState<Record<string, number> | null>(null);
+  // Stores the full response (not just `rates`) so `currencyOptions` below
+  // can use the API's own `base` instead of the hardcoded `EXCHANGE_BASE`.
+  const [rates, setRates] = useState<ExchangeRates | null>(null);
 
   useEffect(() => {
     if (!token) return;
@@ -205,7 +210,7 @@ export function DashboardView({ token }: DashboardViewProps) {
       try {
         const result = await getExchangeRates(token);
         if (cancelled) return;
-        setRates(result.rates);
+        setRates(result);
       } catch {
         /* best-effort, see comment above — the select falls back to FALLBACK_CURRENCIES */
       }
@@ -260,9 +265,48 @@ export function DashboardView({ token }: DashboardViewProps) {
     };
   }, [token, from, to, currency, reloadKey, rangeInvalid]);
 
-  const currencyOptions = rates
-    ? Array.from(new Set([EXCHANGE_BASE, ...Object.keys(rates)]))
-    : FALLBACK_CURRENCIES;
+  // Memoized (rather than recomputed inline every render) so the
+  // reconciliation effect below only re-runs when `rates` itself changes —
+  // not on every unrelated render — which is what keeps it from looping.
+  const currencyOptions = useMemo(
+    () =>
+      rates
+        ? Array.from(new Set([rates.base ?? EXCHANGE_BASE, ...Object.keys(rates.rates)]))
+        : FALLBACK_CURRENCIES,
+    [rates],
+  );
+
+  // Reconciles `currency` against `currencyOptions` whenever the latter
+  // changes (i.e. once `getExchangeRates` resolves). `currency` defaults to
+  // `'COP'`, but the resolved rates for a given date may not include `COP` —
+  // in that case the controlled `<select value={currency}>` would have no
+  // matching `<option>`, silently desyncing the DOM's displayed selection
+  // from state while `getDashboard` keeps firing with the dangling value.
+  //
+  // This follows React's documented "adjusting state when a prop changes"
+  // pattern — https://react.dev/learn/you-might-not-need-an-effect#adjusting-some-state-when-a-prop-changes
+  // — calling `setState` directly in the render body (guarded by a
+  // reference-equality check against the previous `currencyOptions`) rather
+  // than in a `useEffect`. That avoids both the extra commit/paint an
+  // effect-based fix would add and the `react-hooks/set-state-in-effect`
+  // lint rule. `currencyOptions` is memoized above and only changes
+  // reference when `rates` changes, and the reconciliation only clamps when
+  // `currency` is genuinely out of range (the common case — `COP` present —
+  // is a no-op), so this settles after at most one corrective render and
+  // can't turn into a refetch loop.
+  const [prevCurrencyOptions, setPrevCurrencyOptions] = useState(currencyOptions);
+  if (currencyOptions !== prevCurrencyOptions) {
+    setPrevCurrencyOptions(currencyOptions);
+    if (!currencyOptions.includes(currency)) {
+      const base = rates?.base ?? EXCHANGE_BASE;
+      const fallback = currencyOptions.includes('COP')
+        ? 'COP'
+        : currencyOptions.includes(base)
+          ? base
+          : currencyOptions[0];
+      if (fallback && fallback !== currency) setCurrency(fallback);
+    }
+  }
 
   return (
     <div className="flex flex-col gap-6">

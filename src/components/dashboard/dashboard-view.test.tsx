@@ -271,6 +271,40 @@ describe('DashboardView', () => {
     expect(params.currency).toBe('EUR');
   });
 
+  it('reconciles the currency when the resolved rates do not include the current selection (COP), and refetches with the reconciled value instead of the stale "COP"', async () => {
+    // `rates` here has no `COP` key, and `base` ('USD') isn't in `rates`
+    // either — the options end up ['USD', 'EUR', 'MXN']. The default
+    // `currency` state ('COP') is a dangling value the <select> can't
+    // display; the component must clamp it to a real option ('USD', the
+    // base, since 'COP' itself isn't available) instead of leaving the
+    // control's value out of sync with its rendered options.
+    mockedGetExchangeRates.mockResolvedValue({ base: 'USD', rates: { EUR: 0.9, MXN: 17 } });
+    mockedGetDashboard.mockResolvedValue(dashboard());
+
+    render(<DashboardView token="tok" />);
+
+    const currencySelect = (await screen.findByLabelText('Moneda')) as HTMLSelectElement;
+    await waitFor(() => {
+      const optionValues = Array.from(currencySelect.options).map((o) => o.value);
+      expect(optionValues).toEqual(['USD', 'EUR', 'MXN']);
+    });
+
+    // The selected value must be one that's actually rendered as an option —
+    // never a dangling 'COP'.
+    await waitFor(() => expect(currencySelect.value).toBe('USD'));
+
+    // `getDashboard` must eventually (its most recent call) be invoked with
+    // the reconciled currency — not the stale initial 'COP' default (the
+    // mount-time first call may still have fired with 'COP', before
+    // `getExchangeRates` resolved; what matters is the component corrects
+    // course and doesn't keep re-fetching with a currency absent from its own
+    // options).
+    await waitFor(() => {
+      const lastCall = mockedGetDashboard.mock.calls.at(-1);
+      expect(lastCall?.[1].currency).toBe('USD');
+    });
+  });
+
   it('shows a loading skeleton while the request is in flight', async () => {
     const pending = deferred<Dashboard>();
     mockedGetDashboard.mockReturnValue(pending.promise);
