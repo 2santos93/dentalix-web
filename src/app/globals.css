@@ -35,6 +35,12 @@
   .receipt-print-root {
     position: fixed;
     inset: 0;
+    /* DialogContent centers on screen with translate(-50%,-50%); with inset:0
+       + width:auto that centering would shove the full-viewport box off-page,
+       clipping the printed receipt. Neutralize it (both the Tailwind v4
+       `translate` property and any `transform`). */
+    transform: none;
+    translate: none;
     margin: 0;
     padding: 24px;
     background: #ffffff;
