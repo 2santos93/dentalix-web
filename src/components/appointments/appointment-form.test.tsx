@@ -1,10 +1,15 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AppointmentForm } from './appointment-form';
 import { createAppointment } from '@/lib/appointments/appointments-api';
 import { listStaff } from '@/lib/appointments/staff-api';
-import { listPatients } from '@/lib/patients/patients-api';
+import { createPatient, listPatients } from '@/lib/patients/patients-api';
 
+// PatientForm (rendered inside the "Crear paciente" dialog) calls
+// useRouter() — mock it the same way patient-form.test.tsx does, since it's
+// unused here (this form always passes onCreated, so the router.push
+// fallback path never runs).
+jest.mock('next/navigation', () => ({ useRouter: () => ({ push: jest.fn() }) }));
 // NOTE: jest.mock's string literal is not alias-rewritten by the SWC
 // transform (only real `import`/`require` specifiers are) — use a relative
 // path here, matching tooth-record-panel.test.tsx's convention.
@@ -16,11 +21,13 @@ jest.mock('../../lib/appointments/staff-api', () => ({
 }));
 jest.mock('../../lib/patients/patients-api', () => ({
   listPatients: jest.fn(),
+  createPatient: jest.fn(),
 }));
 
 const mockedCreateAppointment = createAppointment as jest.MockedFunction<typeof createAppointment>;
 const mockedListStaff = listStaff as jest.MockedFunction<typeof listStaff>;
 const mockedListPatients = listPatients as jest.MockedFunction<typeof listPatients>;
+const mockedCreatePatient = createPatient as jest.MockedFunction<typeof createPatient>;
 
 const staff = [
   { userId: 'staff-1', fullName: 'Dra. Ana Ríos', role: 'DENTIST' as const },
@@ -69,6 +76,24 @@ const patientsPage = {
   pageSize: 100,
 };
 
+const newPatient = {
+  id: 'pat-new',
+  tenantId: 't1',
+  firstName: 'Sofía',
+  lastName: 'Ramírez',
+  docType: 'CC' as const,
+  docNumber: null,
+  birthDate: null,
+  sex: 'UNSPECIFIED' as const,
+  phone: null,
+  email: null,
+  address: null,
+  notes: null,
+  createdById: null,
+  createdAt: '2026-07-23T00:00:00.000Z',
+  updatedAt: '2026-07-23T00:00:00.000Z',
+};
+
 const createdAppointment = {
   id: 'apt-1',
   tenantId: 't1',
@@ -103,6 +128,7 @@ describe('AppointmentForm', () => {
     mockedCreateAppointment.mockReset();
     mockedListStaff.mockReset();
     mockedListPatients.mockReset();
+    mockedCreatePatient.mockReset();
     mockedListStaff.mockResolvedValue(staff);
     mockedListPatients.mockResolvedValue(patientsPage);
   });
@@ -215,5 +241,68 @@ describe('AppointmentForm', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(
       'El profesional ya tiene una cita en ese horario',
     );
+  });
+
+  describe('inline "Crear paciente" dialog', () => {
+    it('opens the dialog with the PatientForm fields when the trigger is clicked', async () => {
+      const user = userEvent.setup();
+      await renderFormAndWaitForLoad();
+
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: /crear paciente/i }));
+
+      const dialog = await screen.findByRole('dialog');
+      expect(within(dialog).getByLabelText(/^nombre$/i)).toBeInTheDocument();
+      expect(within(dialog).getByLabelText(/apellido/i)).toBeInTheDocument();
+      expect(within(dialog).getByLabelText(/tipo de documento/i)).toBeInTheDocument();
+    });
+
+    it('creates, selects and prepends the patient, and closes the dialog on success', async () => {
+      const user = userEvent.setup();
+      mockedCreatePatient.mockResolvedValue(newPatient);
+      await renderFormAndWaitForLoad();
+
+      await user.click(screen.getByRole('button', { name: /crear paciente/i }));
+      const dialog = await screen.findByRole('dialog');
+      await user.type(within(dialog).getByLabelText(/^nombre$/i), 'Sofía');
+      await user.type(within(dialog).getByLabelText(/apellido/i), 'Ramírez');
+
+      await user.click(within(dialog).getByRole('button', { name: /crear paciente/i }));
+
+      await waitFor(() => expect(mockedCreatePatient).toHaveBeenCalledTimes(1));
+      const [token, input] = mockedCreatePatient.mock.calls[0];
+      expect(token).toBe('tok');
+      expect(input).toEqual({
+        firstName: 'Sofía',
+        lastName: 'Ramírez',
+        docType: 'CC',
+        sex: 'UNSPECIFIED',
+      });
+
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+      expect(screen.getByLabelText(/^paciente$/i)).toHaveValue('pat-new');
+      expect(screen.getByRole('option', { name: /sofía ramírez/i })).toBeInTheDocument();
+    });
+
+    it('keeps the dialog open and shows an error when createPatient fails, without selecting anything', async () => {
+      const { ApiError } = jest.requireActual('../../lib/api/client');
+      const user = userEvent.setup();
+      mockedCreatePatient.mockRejectedValue(new ApiError(409, 'Documento ya registrado'));
+      await renderFormAndWaitForLoad();
+
+      await user.click(screen.getByRole('button', { name: /crear paciente/i }));
+      const dialog = await screen.findByRole('dialog');
+      await user.type(within(dialog).getByLabelText(/^nombre$/i), 'Sofía');
+      await user.type(within(dialog).getByLabelText(/apellido/i), 'Ramírez');
+
+      await user.click(within(dialog).getByRole('button', { name: /crear paciente/i }));
+
+      expect(await within(dialog).findByRole('alert')).toHaveTextContent(
+        'Documento ya registrado',
+      );
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+      expect(screen.getByLabelText(/^paciente$/i)).toHaveValue('');
+      expect(screen.queryByRole('option', { name: /sofía ramírez/i })).not.toBeInTheDocument();
+    });
   });
 });
