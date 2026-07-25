@@ -1,6 +1,11 @@
 'use client';
-import * as React from 'react';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import type { Payment, PaymentMethod, PlanBalance } from '@/lib/payments/payments-api';
 
@@ -8,6 +13,7 @@ import type { Payment, PaymentMethod, PlanBalance } from '@/lib/payments/payment
 // `treatment-plans-tab.tsx`'s `copy` object.
 const copy = {
   title: 'Comprobante de abono',
+  a11yDescription: 'Comprobante de abono del plan de tratamiento, listo para imprimir.',
   issuedAtLabel: 'Fecha de emisión',
   referenceLabel: 'Referencia',
   patientLabel: 'Paciente',
@@ -98,6 +104,7 @@ export function PaymentReceipt({
           <DialogHeader>
             {clinicName && <p className="text-sm font-semibold">{clinicName}</p>}
             <DialogTitle className="!text-[#111827]">{copy.title}</DialogTitle>
+            <DialogDescription className="sr-only">{copy.a11yDescription}</DialogDescription>
             <p className="text-xs text-[#6b7280]">
               {copy.issuedAtLabel}: {formatCivilDate(new Date().toISOString())} · {copy.referenceLabel}:{' '}
               {receiptReference(payment.id)}
