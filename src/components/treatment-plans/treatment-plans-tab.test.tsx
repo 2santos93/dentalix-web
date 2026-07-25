@@ -20,6 +20,8 @@ import {
   type PlanBalance,
 } from '@/lib/payments/payments-api';
 import { listCatalogItems } from '@/lib/odontogram/catalog-api';
+import { getPatient, type Patient } from '@/lib/patients/patients-api';
+import { fetchClinicName } from '@/lib/clinic-branding';
 
 // NOTE: jest.mock's string literal is not alias-rewritten by the SWC
 // transform (only real `import`/`require` specifiers are) — use a relative
@@ -43,6 +45,13 @@ jest.mock('../../lib/payments/payments-api', () => ({
 jest.mock('../../lib/odontogram/catalog-api', () => ({
   listCatalogItems: jest.fn(),
 }));
+// Recibo (RECIBO-T1): patient name + clinic name, fetched once by the tab.
+jest.mock('../../lib/patients/patients-api', () => ({
+  getPatient: jest.fn(),
+}));
+jest.mock('../../lib/clinic-branding', () => ({
+  fetchClinicName: jest.fn(),
+}));
 
 const mockedCreatePlan = createPlan as jest.MockedFunction<typeof createPlan>;
 const mockedListPlans = listPlans as jest.MockedFunction<typeof listPlans>;
@@ -56,6 +65,8 @@ const mockedGetPlanBalance = getPlanBalance as jest.MockedFunction<typeof getPla
 const mockedListPayments = listPayments as jest.MockedFunction<typeof listPayments>;
 const mockedRecordPayment = recordPayment as jest.MockedFunction<typeof recordPayment>;
 const mockedVoidPayment = voidPayment as jest.MockedFunction<typeof voidPayment>;
+const mockedGetPatient = getPatient as jest.MockedFunction<typeof getPatient>;
+const mockedFetchClinicName = fetchClinicName as jest.MockedFunction<typeof fetchClinicName>;
 
 const catalog = [
   {
@@ -163,6 +174,25 @@ function emptyBalance(): PlanBalance {
   return { planCurrency: 'USD', billable: 0, paid: 0, balance: 0, paymentsCount: 0 };
 }
 
+/** Patient fixture for the receipt's patientName fetch (RECIBO-T1). */
+const patient1: Patient = {
+  id: 'pat-1',
+  tenantId: 't1',
+  firstName: 'Ana',
+  lastName: 'García',
+  docType: 'CC',
+  docNumber: null,
+  birthDate: null,
+  sex: 'F',
+  phone: null,
+  email: null,
+  address: null,
+  notes: null,
+  createdById: null,
+  createdAt: '2026-01-01T00:00:00.000Z',
+  updatedAt: '2026-01-01T00:00:00.000Z',
+};
+
 const currencyFormatter = new Intl.NumberFormat('es', { style: 'currency', currency: 'USD' });
 /**
  * `Intl.NumberFormat`'s `es` output places a NBSP (` `) between the
@@ -202,11 +232,17 @@ describe('TreatmentPlansTab', () => {
     mockedListPayments.mockReset();
     mockedRecordPayment.mockReset();
     mockedVoidPayment.mockReset();
+    mockedGetPatient.mockReset();
+    mockedFetchClinicName.mockReset();
     // Default: empty balance/no abonos, so tests that don't exercise the
     // payments block (most of the existing item/plan tests below) don't hang
     // on an unresolved mock.
     mockedGetPlanBalance.mockResolvedValue(emptyBalance());
     mockedListPayments.mockResolvedValue([]);
+    // Default: patient/clinic name resolve — most existing tests don't
+    // assert on these, but they must not hang or reject unhandled.
+    mockedGetPatient.mockResolvedValue(patient1);
+    mockedFetchClinicName.mockResolvedValue('Clínica Sonrisa');
   });
 
   it('shows the empty state when the patient has no plans, and creates a DRAFT plan on "Nuevo plan"', async () => {
@@ -520,5 +556,59 @@ describe('TreatmentPlansTab', () => {
     await waitFor(() => expect(mockedGetPlanBalance).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(mockedListPayments).toHaveBeenCalledTimes(2));
     expect(await screen.findByText(/este plan todavía no tiene abonos/i)).toBeInTheDocument();
+  });
+
+  it('"Recibo" on an abono opens the printable receipt with that abono\'s data, the patient name, and the clinic name (RECIBO-T1)', async () => {
+    mockedListPlans.mockResolvedValue([plan1]);
+    mockedGetPlan.mockResolvedValue(plan1Detail);
+    mockedGetPlanBalance.mockResolvedValue(balance1);
+    mockedListPayments.mockResolvedValue([payment1]);
+    mockedGetPatient.mockResolvedValue(patient1);
+    mockedFetchClinicName.mockResolvedValue('Clínica Sonrisa');
+
+    const user = userEvent.setup();
+    render(<TreatmentPlansTab patientId="pat-1" token="tok" />);
+
+    // Fetched once (not per-row), independent of the receipt being opened.
+    await waitFor(() => expect(mockedGetPatient).toHaveBeenCalledWith('tok', 'pat-1'));
+    await waitFor(() => expect(mockedFetchClinicName).toHaveBeenCalledTimes(1));
+
+    const paymentsTable = await screen.findByRole('table', { name: /abonos del plan de tratamiento/i });
+    const row = within(paymentsTable)
+      .getByText(expectedCurrencyText(payment1.amount))
+      .closest('tr') as HTMLTableRowElement;
+    await user.click(within(row).getByRole('button', { name: /^recibo$/i }));
+
+    const dialog = await screen.findByRole('dialog', { name: /comprobante de abono/i });
+    expect(within(dialog).getByText('Clínica Sonrisa')).toBeInTheDocument();
+    expect(within(dialog).getByText('Ana García')).toBeInTheDocument();
+    expect(within(dialog).getByText('Efectivo')).toBeInTheDocument();
+    expect(within(dialog).getByText(new RegExp(`REC-${payment1.id.slice(0, 8)}`))).toBeInTheDocument();
+
+    // "Cerrar" closes the receipt (the button re-nulls `receiptPayment`).
+    const actions = dialog.querySelector('.receipt-print-hide') as HTMLElement;
+    await user.click(within(actions).getByRole('button', { name: /^cerrar$/i }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  });
+
+  it('a missing clinicName (branding fetch failed) does not break the receipt — it just omits the clinic line', async () => {
+    mockedListPlans.mockResolvedValue([plan1]);
+    mockedGetPlan.mockResolvedValue(plan1Detail);
+    mockedGetPlanBalance.mockResolvedValue(balance1);
+    mockedListPayments.mockResolvedValue([payment1]);
+    mockedFetchClinicName.mockResolvedValue(null);
+
+    const user = userEvent.setup();
+    render(<TreatmentPlansTab patientId="pat-1" token="tok" />);
+
+    const paymentsTable = await screen.findByRole('table', { name: /abonos del plan de tratamiento/i });
+    const row = within(paymentsTable)
+      .getByText(expectedCurrencyText(payment1.amount))
+      .closest('tr') as HTMLTableRowElement;
+    await user.click(within(row).getByRole('button', { name: /^recibo$/i }));
+
+    const dialog = await screen.findByRole('dialog', { name: /comprobante de abono/i });
+    expect(within(dialog).queryByText('Clínica Sonrisa')).not.toBeInTheDocument();
+    expect(within(dialog).getByText('Ana García')).toBeInTheDocument();
   });
 });
