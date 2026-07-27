@@ -17,7 +17,12 @@ export const useAuthStore = create<AuthState>()(
       refreshToken: null,
       _hasHydrated: false,
       setTokens: (t) => set({ accessToken: t.accessToken, refreshToken: t.refreshToken }),
-      clear: () => set({ accessToken: null, refreshToken: null }),
+      clear: () => {
+        set({ accessToken: null, refreshToken: null });
+        // Borra la key persistida por completo (no solo la nulifica), para que
+        // una rehidratación posterior no reviva una sesión fantasma.
+        useAuthStore.persist.clearStorage();
+      },
     }),
     {
       name: 'dentalix-auth',
