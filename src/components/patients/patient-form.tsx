@@ -1,6 +1,6 @@
 'use client';
 import * as React from 'react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 import { ApiError } from '@/lib/api/client';
@@ -11,6 +11,8 @@ import {
   type Patient,
   type Sex,
 } from '@/lib/patients/patients-api';
+import { listCountries, type Country } from '@/lib/reference/countries-api';
+import { CityCombobox, type CitySelection } from '@/components/molecules/city-combobox';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { FormField } from '@/components/molecules/form-field';
@@ -28,6 +30,8 @@ const copy = {
   phoneLabel: 'Teléfono',
   emailLabel: 'Correo electrónico',
   addressLabel: 'Dirección',
+  countryLabel: 'País',
+  cityLabel: 'Ciudad',
   notesLabel: 'Notas',
   submit: 'Crear paciente',
   submitting: 'Creando…',
@@ -75,9 +79,26 @@ export function PatientForm({ token, onCreated }: PatientFormProps) {
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [address, setAddress] = useState('');
+  const [countries, setCountries] = useState<Country[]>([]);
+  const [countryCode, setCountryCode] = useState('');
+  const [city, setCity] = useState<CitySelection | null>(null);
   const [notes, setNotes] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    listCountries(token)
+      .then((data) => {
+        if (!cancelled) setCountries(data);
+      })
+      .catch(() => {
+        /* fail soft — country select just stays empty */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -94,6 +115,8 @@ export function PatientForm({ token, onCreated }: PatientFormProps) {
         ...(phone.trim() ? { phone: phone.trim() } : {}),
         ...(email.trim() ? { email: email.trim().toLowerCase() } : {}),
         ...(address.trim() ? { address: address.trim() } : {}),
+        ...(countryCode ? { countryCode } : {}),
+        ...(city ? { cityId: city.id } : {}),
         ...(notes.trim() ? { notes: notes.trim() } : {}),
       };
       const created = await createPatient(token, input);
@@ -225,6 +248,37 @@ export function PatientForm({ token, onCreated }: PatientFormProps) {
           onChange={(e) => setAddress(e.target.value)}
         />
       </FormField>
+
+      <div className="grid gap-5 sm:grid-cols-2">
+        <FormField htmlFor="patient-country" label={copy.countryLabel}>
+          <select
+            id="patient-country"
+            name="countryCode"
+            value={countryCode}
+            onChange={(e) => {
+              setCountryCode(e.target.value);
+              setCity(null);
+            }}
+            className={cn(fieldClass, 'h-10')}
+          >
+            <option value="">—</option>
+            {countries.map((c) => (
+              <option key={c.code} value={c.code}>
+                {c.name}
+              </option>
+            ))}
+          </select>
+        </FormField>
+        <FormField htmlFor="patient-city" label={copy.cityLabel}>
+          <CityCombobox
+            id="patient-city"
+            token={token}
+            countryCode={countryCode || null}
+            value={city}
+            onChange={setCity}
+          />
+        </FormField>
+      </div>
 
       <FormField htmlFor="patient-notes" label={copy.notesLabel}>
         <textarea
