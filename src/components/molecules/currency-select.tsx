@@ -15,9 +15,11 @@ interface CurrencySelectProps {
   onChange: (code: string) => void;
   disabled?: boolean;
   className?: string;
+  /** Accessible name for call sites with no adjacent `<label>` (e.g. a `FormField`-less select next to a button). Optional — omit when a `<label htmlFor>` already provides one. */
+  ariaLabel?: string;
 }
 
-export function CurrencySelect({ id, token, value, onChange, disabled, className }: CurrencySelectProps) {
+export function CurrencySelect({ id, token, value, onChange, disabled, className, ariaLabel }: CurrencySelectProps) {
   const [currencies, setCurrencies] = useState<Currency[]>([]);
 
   useEffect(() => {
@@ -45,6 +47,7 @@ export function CurrencySelect({ id, token, value, onChange, disabled, className
       disabled={disabled}
       onChange={(e) => onChange(e.target.value)}
       className={cn(fieldClass, className)}
+      aria-label={ariaLabel}
     >
       {options.map((c) => (
         <option key={c.code} value={c.code}>

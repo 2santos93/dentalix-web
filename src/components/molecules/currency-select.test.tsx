@@ -26,4 +26,14 @@ describe('CurrencySelect', () => {
       ]));
     });
   });
+
+  // WCAG 4.1.2: call sites with no adjacent `<label>` (e.g. a select placed
+  // next to a button rather than inside a `FormField`) must still expose an
+  // accessible name — `ariaLabel` covers that case.
+  it('exposes an accessible name via the optional ariaLabel prop, for call sites with no <label>', async () => {
+    render(
+      <CurrencySelect id="cur" token="tok" value="USD" onChange={() => {}} ariaLabel="Moneda del nuevo plan" />,
+    );
+    expect(await screen.findByLabelText(/moneda del nuevo plan/i)).toBe(screen.getByRole('combobox'));
+  });
 });

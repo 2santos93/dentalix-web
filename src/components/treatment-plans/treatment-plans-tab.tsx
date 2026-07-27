@@ -53,6 +53,10 @@ const copy = {
   retry: 'Reintentar',
   plansHeading: 'Planes de tratamiento',
   newPlan: 'Nuevo plan',
+  // No adjacent `<label>` for this one (it sits next to the "Nuevo plan"
+  // button, not in a `FormField`) — passed as `CurrencySelect`'s `ariaLabel`
+  // so it still has an accessible name (WCAG 4.1.2).
+  newPlanCurrencyLabel: 'Moneda del nuevo plan',
   creatingPlan: 'Creando…',
   genericCreatePlanError: 'No pudimos crear el plan. Intenta de nuevo.',
   emptyPlansTitle: 'Este paciente todavía no tiene un plan de tratamiento.',
@@ -1131,6 +1135,7 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
               value={newPlanCurrency}
               onChange={setNewPlanCurrency}
               className="w-44"
+              ariaLabel={copy.newPlanCurrencyLabel}
             />
             <Button type="button" onClick={handleCreatePlan} disabled={creatingPlan}>
               {creatingPlan ? copy.creatingPlan : copy.newPlan}

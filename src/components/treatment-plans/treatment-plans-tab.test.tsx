@@ -271,6 +271,11 @@ describe('TreatmentPlansTab', () => {
 
     expect(await screen.findByText(/todavía no tiene un plan de tratamiento/i)).toBeInTheDocument();
 
+    // The "Nuevo plan" currency select has no adjacent <label> (it sits next
+    // to the button, not in a FormField) — must still be reachable by its
+    // accessible name (WCAG 4.1.2, via CurrencySelect's `ariaLabel`).
+    expect(screen.getByLabelText(/moneda del nuevo plan/i)).toHaveDisplayValue(/./);
+
     await user.click(screen.getByRole('button', { name: /nuevo plan/i }));
 
     // The "Nuevo plan" currency select defaults to USD (Task 11).
