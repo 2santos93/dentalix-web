@@ -27,15 +27,33 @@ export function CityCombobox({ id, token, countryCode, value, onChange, disabled
   const [open, setOpen] = useState(false);
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // When the country changes, clear any prior city selection + text.
+  // When the country changes, clear this component's OWN state (text +
+  // results + open) synchronously — the sanctioned "adjust state during
+  // render" pattern, same `prevX` convention used elsewhere in the app.
   const [prevCountry, setPrevCountry] = useState(countryCode);
   if (countryCode !== prevCountry) {
     setPrevCountry(countryCode);
     setText('');
     setResults([]);
     setOpen(false);
-    if (value !== null) onChange(null);
   }
+
+  // Notifying the PARENT (`onChange(null)`) must NOT happen during render —
+  // that's a different component's state and triggers React's "Cannot
+  // update a component while rendering a different component" warning once
+  // the parent's onChange actually calls setState (Task 13's patient-form).
+  // So this is deferred to an effect keyed on `countryCode`. `notifiedCountryRef`
+  // is only ever read/written from inside the effect (never during render —
+  // that's a separate lint error, "Cannot access refs during render"), so it
+  // safely tracks "did we already notify for this country" across renders,
+  // same "ref, not state" idiom as `loadedPlanIdRef` in treatment-plans-tab.tsx.
+  const notifiedCountryRef = useRef(countryCode);
+
+  useEffect(() => {
+    if (notifiedCountryRef.current === countryCode) return; // no-op on mount, and on renders where the country didn't change
+    notifiedCountryRef.current = countryCode;
+    if (value !== null) onChange(null);
+  }, [countryCode, value, onChange]);
 
   useEffect(() => {
     // Results/open are already cleared at the point text became empty (see
