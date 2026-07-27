@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { ApiError } from '@/lib/api/client';
 import { getDashboard, type Dashboard } from '@/lib/dashboard/dashboard-api';
 import { addOneDayIso } from '@/lib/dashboard/date-range';
+import { formatCurrency } from '@/lib/format/currency';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge, type BadgeProps } from '@/components/ui/badge';
@@ -81,10 +82,6 @@ function monthStartLocalDateString(): string {
 
 function formatTime(iso: string): string {
   return new Date(iso).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' });
-}
-
-function currencyFormatter(currency: string): Intl.NumberFormat {
-  return new Intl.NumberFormat('es', { style: 'currency', currency });
 }
 
 interface DashboardViewProps {
@@ -216,7 +213,7 @@ function IncomesCard({ incomes }: { incomes: Dashboard['incomes'] }) {
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
         <p className="text-3xl font-semibold tracking-tight text-ink">
-          {currencyFormatter(incomes.currency).format(incomes.totalConverted)}
+          {formatCurrency(incomes.totalConverted, incomes.currency)}
         </p>
         <p className="text-sm text-muted">{copy.incomesCount(incomes.count)}</p>
         {byCurrencyEntries.length > 0 && (
@@ -228,7 +225,7 @@ function IncomesCard({ incomes }: { incomes: Dashboard['incomes'] }) {
               {byCurrencyEntries.map(([cur, amount]) => (
                 <li key={cur} className="flex items-center justify-between text-sm text-ink">
                   <span>{cur}</span>
-                  <span className="font-medium">{currencyFormatter(cur).format(amount)}</span>
+                  <span className="font-medium">{formatCurrency(amount, cur)}</span>
                 </li>
               ))}
             </ul>

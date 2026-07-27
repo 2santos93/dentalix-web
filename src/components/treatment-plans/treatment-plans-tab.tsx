@@ -30,6 +30,7 @@ import { listCatalogItems, type DentalCatalogItem } from '@/lib/odontogram/catal
 import type { ToothSurface } from '@/lib/odontogram/odontogram-api';
 import { getPatient } from '@/lib/patients/patients-api';
 import { fetchClinicName } from '@/lib/clinic-branding';
+import { formatCurrency } from '@/lib/format/currency';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge, type BadgeProps } from '@/components/ui/badge';
@@ -203,26 +204,6 @@ function emptySurfacesState(): Record<ToothSurface, boolean> {
   return { VESTIBULAR: false, LINGUAL: false, MESIAL: false, DISTAL: false, OCCLUSAL: false };
 }
 
-// v1 currency formatting: fixed `es`/`USD` per the plan's notes — per-group
-// currency is an explicit follow-up, no existing formatCurrency helper to
-// reuse (checked: no `Intl.NumberFormat`/currency helper anywhere else in
-// this app yet).
-const currencyFormatter = new Intl.NumberFormat('es', { style: 'currency', currency: 'USD' });
-function formatCurrency(amount: number): string {
-  return currencyFormatter.format(amount);
-}
-
-/**
- * Abonos/balance formatting (PAY-T4): unlike item prices/the plan total
- * (always `formatCurrency`'s fixed USD, unchanged by this task), an abono
- * may be recorded in a currency different from the plan's, and the balance
- * figures are always in `planCurrency` — both need to format an arbitrary
- * ISO 4217 code, not a fixed one.
- */
-function formatCurrencyIn(amount: number, currency: string): string {
-  return new Intl.NumberFormat('es', { style: 'currency', currency }).format(amount);
-}
-
 /** `YYYY-MM-DD` for today, local time — same convention as `dashboard-view.tsx`'s `todayLocalDateString`, used to default the abono form's "fecha" field. */
 function todayLocalDateString(): string {
   const d = new Date();
@@ -265,6 +246,8 @@ interface TreatmentPlansTabProps {
 interface ItemsTableProps {
   items: TreatmentPlanItem[];
   catalogById: Map<string, DentalCatalogItem>;
+  /** The plan's currency (`planDetail.currency`) — item prices don't carry their own currency. */
+  currency: string;
   updatingItemId: string | null;
   onStatusChange: (itemId: string, status: TreatmentPlanItemStatus) => void;
   onRemove: (itemId: string) => void;
@@ -280,7 +263,7 @@ function surfacesLabel(item: TreatmentPlanItem): string {
     : copy.wholeToothFallback;
 }
 
-function ItemsTable({ items, catalogById, updatingItemId, onStatusChange, onRemove }: ItemsTableProps) {
+function ItemsTable({ items, catalogById, currency, updatingItemId, onStatusChange, onRemove }: ItemsTableProps) {
   if (items.length === 0) {
     return <EmptyState role="status" title={copy.emptyItemsTitle} description={copy.emptyItemsDescription} />;
   }
@@ -309,7 +292,7 @@ function ItemsTable({ items, catalogById, updatingItemId, onStatusChange, onRemo
                   <TableCell className="font-medium">{item.toothNumber}</TableCell>
                   <TableCell>{procedureName(item, catalogById)}</TableCell>
                   <TableCell className="text-muted">{surfacesLabel(item)}</TableCell>
-                  <TableCell>{formatCurrency(item.price)}</TableCell>
+                  <TableCell>{formatCurrency(item.price, currency)}</TableCell>
                   <TableCell>
                     <div className="flex flex-col items-start gap-1.5">
                       <Badge variant={ITEM_STATUS_BADGE_VARIANT[item.status]}>
@@ -370,7 +353,7 @@ function ItemsTable({ items, catalogById, updatingItemId, onStatusChange, onRemo
                 </div>
                 <p className="mt-2 text-ink">{procedureName(item, catalogById)}</p>
                 <p className="mt-1 text-sm text-muted">{surfacesLabel(item)}</p>
-                <p className="mt-1 font-medium text-ink">{formatCurrency(item.price)}</p>
+                <p className="mt-1 font-medium text-ink">{formatCurrency(item.price, currency)}</p>
                 <div className="mt-3 flex items-center justify-between gap-2">
                   <select
                     aria-label={copy.itemStatusSelectLabel(item.toothNumber)}
@@ -439,7 +422,7 @@ function PaymentsList({ payments, voidingPaymentId, onVoid, onReceipt }: Payment
                 <TableRow key={payment.id}>
                   <TableCell>{formatCivilDate(payment.paidAt)}</TableCell>
                   <TableCell className="font-medium">
-                    {formatCurrencyIn(payment.amount, payment.currency)}
+                    {formatCurrency(payment.amount, payment.currency)}
                   </TableCell>
                   <TableCell>
                     {payment.method ? (
@@ -491,7 +474,7 @@ function PaymentsList({ payments, voidingPaymentId, onVoid, onReceipt }: Payment
                     <span className="text-sm text-muted">{copy.paymentMethodFallback}</span>
                   )}
                 </div>
-                <p className="mt-2 font-medium text-ink">{formatCurrencyIn(payment.amount, payment.currency)}</p>
+                <p className="mt-2 font-medium text-ink">{formatCurrency(payment.amount, payment.currency)}</p>
                 <p className="mt-1 text-sm text-muted">{payment.notes ?? copy.paymentNotesFallback}</p>
                 <div className="mt-3 flex items-center gap-2">
                   <Button type="button" variant="outline" size="sm" onClick={() => onReceipt(payment)}>
@@ -1247,6 +1230,7 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
                 <ItemsTable
                   items={planDetail.items ?? []}
                   catalogById={catalogById}
+                  currency={planDetail.currency}
                   updatingItemId={updatingItemId}
                   onStatusChange={handleItemStatusChange}
                   onRemove={handleRemoveItem}
@@ -1255,7 +1239,7 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
                 <div className="flex items-center justify-between border-t border-border pt-3">
                   <span className="text-sm font-medium text-muted">{copy.totalLabel}</span>
                   <span className="text-lg font-semibold text-ink">
-                    {formatCurrency(planDetail.total ?? 0)}
+                    {formatCurrency(planDetail.total ?? 0, planDetail.currency)}
                   </span>
                 </div>
 
@@ -1314,7 +1298,7 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
                             {copy.billableLabel}
                           </p>
                           <p className="mt-1 text-lg font-semibold text-ink">
-                            {formatCurrencyIn(planBalance.billable, planBalance.planCurrency)}
+                            {formatCurrency(planBalance.billable, planBalance.planCurrency)}
                           </p>
                         </div>
                         <div className="rounded-lg border border-border p-3">
@@ -1322,7 +1306,7 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
                             {copy.paidLabel}
                           </p>
                           <p className="mt-1 text-lg font-semibold text-ink">
-                            {formatCurrencyIn(planBalance.paid, planBalance.planCurrency)}
+                            {formatCurrency(planBalance.paid, planBalance.planCurrency)}
                           </p>
                         </div>
                         <div className="rounded-lg border border-border p-3">
@@ -1330,7 +1314,7 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
                             {copy.balanceLabel}
                           </p>
                           <p className="mt-1 text-lg font-semibold text-ink">
-                            {formatCurrencyIn(planBalance.balance, planBalance.planCurrency)}
+                            {formatCurrency(planBalance.balance, planBalance.planCurrency)}
                           </p>
                         </div>
                       </div>

@@ -7,6 +7,7 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
+import { formatCurrency } from '@/lib/format/currency';
 import type { Payment, PaymentMethod, PlanBalance } from '@/lib/payments/payments-api';
 
 // Copy as constants (i18n-ready, es-first) — same convention as
@@ -45,11 +46,6 @@ const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   TRANSFER: 'Transferencia',
   OTHER: 'Otro',
 };
-
-/** Same arbitrary-ISO-4217 currency formatting as `treatment-plans-tab.tsx`'s `formatCurrencyIn`. */
-function formatCurrencyIn(amount: number, currency: string): string {
-  return new Intl.NumberFormat('es', { style: 'currency', currency }).format(amount);
-}
 
 /** Civil (calendar) date only — same as `treatment-plans-tab.tsx`'s `formatCivilDate`. */
 function formatCivilDate(iso: string): string {
@@ -126,7 +122,7 @@ export function PaymentReceipt({
               <div className="mt-2 grid grid-cols-2 gap-3">
                 <div>
                   <dt className="text-xs uppercase tracking-wide text-[#6b7280]">{copy.amountLabel}</dt>
-                  <dd className="font-medium">{formatCurrencyIn(payment.amount, payment.currency)}</dd>
+                  <dd className="font-medium">{formatCurrency(payment.amount, payment.currency)}</dd>
                 </div>
                 <div>
                   <dt className="text-xs uppercase tracking-wide text-[#6b7280]">{copy.paymentDateLabel}</dt>
@@ -150,17 +146,17 @@ export function PaymentReceipt({
                   <div>
                     <dt className="text-xs uppercase tracking-wide text-[#6b7280]">{copy.billableLabel}</dt>
                     <dd className="font-medium">
-                      {formatCurrencyIn(planBalance.billable, planBalance.planCurrency)}
+                      {formatCurrency(planBalance.billable, planBalance.planCurrency)}
                     </dd>
                   </div>
                   <div>
                     <dt className="text-xs uppercase tracking-wide text-[#6b7280]">{copy.paidLabel}</dt>
-                    <dd className="font-medium">{formatCurrencyIn(planBalance.paid, planBalance.planCurrency)}</dd>
+                    <dd className="font-medium">{formatCurrency(planBalance.paid, planBalance.planCurrency)}</dd>
                   </div>
                   <div>
                     <dt className="text-xs uppercase tracking-wide text-[#6b7280]">{copy.balanceLabel}</dt>
                     <dd className="font-medium">
-                      {formatCurrencyIn(planBalance.balance, planBalance.planCurrency)}
+                      {formatCurrency(planBalance.balance, planBalance.planCurrency)}
                     </dd>
                   </div>
                 </div>
