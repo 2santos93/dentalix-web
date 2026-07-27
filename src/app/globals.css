@@ -14,3 +14,44 @@
   --color-warning: var(--color-warning);
   --color-danger: var(--color-danger);
 }
+
+/*
+ * Print CSS for the payment receipt (RECIBO-T1, docs/plans/2026-07-26-
+ * payment-receipt.md). "Visibility" technique (not `display`) so the
+ * receipt's own internal layout/spacing survives the print — only the
+ * `.receipt-print-root` subtree (the receipt Dialog's content) stays
+ * visible, everything else in the page (app shell, sidebar, other dialogs)
+ * is hidden. `.receipt-print-hide` additionally removes the receipt's own
+ * "Imprimir"/"Cerrar" action buttons from the printed page.
+ */
+@media print {
+  body * {
+    visibility: hidden !important;
+  }
+  .receipt-print-root,
+  .receipt-print-root * {
+    visibility: visible !important;
+  }
+  .receipt-print-root {
+    position: fixed;
+    inset: 0;
+    /* DialogContent centers on screen with translate(-50%,-50%); with inset:0
+       + width:auto that centering would shove the full-viewport box off-page,
+       clipping the printed receipt. Neutralize it (both the Tailwind v4
+       `translate` property and any `transform`). */
+    transform: none;
+    translate: none;
+    margin: 0;
+    padding: 24px;
+    background: #ffffff;
+    color: #111827;
+    box-shadow: none;
+    border: 0;
+    max-height: none;
+    overflow: visible;
+    width: auto;
+  }
+  .receipt-print-hide {
+    display: none !important;
+  }
+}

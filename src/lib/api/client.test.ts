@@ -12,6 +12,7 @@
  * @jest-environment-options {"url": "http://acme.localhost:3001"}
  */
 import { apiFetch, apiFetchOrNull, ApiError } from './client';
+import { useAuthStore } from '@/lib/auth/auth-store';
 
 describe('apiFetch', () => {
   const realFetch = global.fetch;
@@ -42,7 +43,117 @@ describe('apiFetch', () => {
       status: 401,
       json: async () => ({ message: 'nope' }),
     }) as unknown as typeof fetch;
+    // No refresh token in the store → a 401 cannot be recovered and bubbles.
+    useAuthStore.getState().clear();
     await expect(apiFetch('/x')).rejects.toBeInstanceOf(ApiError);
+  });
+});
+
+describe('apiFetch — expired access token refresh', () => {
+  const realFetch = global.fetch;
+  afterEach(() => {
+    global.fetch = realFetch;
+    useAuthStore.getState().clear();
+  });
+
+  function ok(json: unknown, status = 200) {
+    return { ok: true, status, json: async () => json, text: async () => JSON.stringify(json) };
+  }
+  function unauthorized(message = 'Invalid token') {
+    return { ok: false, status: 401, json: async () => ({ message }) };
+  }
+
+  it('on 401, refreshes with the stored refresh token and replays the request with the new access token', async () => {
+    useAuthStore.getState().setTokens({ accessToken: 'OLD', refreshToken: 'R' });
+
+    const calls: Array<{ url: string; auth?: string; body?: string }> = [];
+    let protectedHits = 0;
+    global.fetch = jest.fn(async (url: string, init: RequestInit) => {
+      const headers = init.headers as Record<string, string>;
+      calls.push({ url, auth: headers.Authorization, body: init.body as string });
+      if (url.endsWith('/auth/refresh')) {
+        return ok({ accessToken: 'NEW', refreshToken: 'R2' });
+      }
+      // First hit: expired token → 401. After refresh: succeeds.
+      protectedHits += 1;
+      return protectedHits === 1 ? unauthorized() : ok({ items: [] });
+    }) as unknown as typeof fetch;
+
+    const out = await apiFetch<{ items: unknown[] }>('/patients', { token: 'OLD' });
+
+    expect(out).toEqual({ items: [] });
+    // 3 calls: protected(401) → refresh → protected(200).
+    expect(calls.map((c) => c.url.replace(/^.*\/api\/v1/, ''))).toEqual([
+      '/patients',
+      '/auth/refresh',
+      '/patients',
+    ]);
+    // The refresh POST carried the stored refresh token.
+    expect(JSON.parse(calls[1].body!)).toEqual({ refreshToken: 'R' });
+    // The replay used the freshly-minted access token, not the stale one.
+    expect(calls[2].auth).toBe('Bearer NEW');
+    // Store was updated with the rotated pair.
+    expect(useAuthStore.getState().accessToken).toBe('NEW');
+    expect(useAuthStore.getState().refreshToken).toBe('R2');
+  });
+
+  it('clears the session and throws when the refresh token is also dead', async () => {
+    useAuthStore.getState().setTokens({ accessToken: 'OLD', refreshToken: 'DEAD' });
+
+    global.fetch = jest.fn(async (url: string) => {
+      if (url.endsWith('/auth/refresh')) return unauthorized('Invalid refresh token');
+      return unauthorized();
+    }) as unknown as typeof fetch;
+
+    await expect(apiFetch('/patients', { token: 'OLD' })).rejects.toBeInstanceOf(ApiError);
+    // Store cleared → the page's `accessToken` guard bounces the user to /login.
+    expect(useAuthStore.getState().accessToken).toBeNull();
+    expect(useAuthStore.getState().refreshToken).toBeNull();
+  });
+
+  it('coalesces concurrent 401s into a single /auth/refresh (rotation-safe)', async () => {
+    useAuthStore.getState().setTokens({ accessToken: 'OLD', refreshToken: 'R' });
+
+    let refreshCount = 0;
+    const protectedHits: Record<string, number> = {};
+    global.fetch = jest.fn(async (url: string) => {
+      if (url.endsWith('/auth/refresh')) {
+        refreshCount += 1;
+        return ok({ accessToken: 'NEW', refreshToken: 'R2' });
+      }
+      const key = url.replace(/^.*\/api\/v1/, '');
+      protectedHits[key] = (protectedHits[key] ?? 0) + 1;
+      return protectedHits[key] === 1 ? unauthorized() : ok({ ok: 1 });
+    }) as unknown as typeof fetch;
+
+    const [a, b, c] = await Promise.all([
+      apiFetch('/patients', { token: 'OLD' }),
+      apiFetch('/appointments', { token: 'OLD' }),
+      apiFetch('/staff', { token: 'OLD' }),
+    ]);
+
+    expect(a).toEqual({ ok: 1 });
+    expect(b).toEqual({ ok: 1 });
+    expect(c).toEqual({ ok: 1 });
+    expect(refreshCount).toBe(1);
+  });
+
+  it('does NOT refresh on a 401 from an /auth/* endpoint (wrong password is not an expired session)', async () => {
+    useAuthStore.getState().setTokens({ accessToken: 'OLD', refreshToken: 'R' });
+
+    let refreshCount = 0;
+    global.fetch = jest.fn(async (url: string) => {
+      if (url.endsWith('/auth/refresh')) {
+        refreshCount += 1;
+        return ok({ accessToken: 'NEW', refreshToken: 'R2' });
+      }
+      return unauthorized('Invalid credentials');
+    }) as unknown as typeof fetch;
+
+    await expect(
+      apiFetch('/auth/login', { method: 'POST', body: { email: 'a', password: 'b' } }),
+    ).rejects.toBeInstanceOf(ApiError);
+    expect(refreshCount).toBe(0);
   });
 });
 

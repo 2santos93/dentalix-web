@@ -1,5 +1,6 @@
 'use client';
 import type { Appointment, AppointmentStatus } from '@/lib/appointments/appointments-api';
+import { formatTime } from '@/lib/format/date';
 
 /** es status labels — shared by `DayAgenda` and `WeekAgenda` (and their status <select>s). */
 export const STATUS_LABELS: Record<AppointmentStatus, string> = {
@@ -23,11 +24,9 @@ export const STATUS_BADGE_CLASSES: Record<AppointmentStatus, string> = {
   NO_SHOW: 'border-warning bg-warning/10 text-warning',
 };
 
-/** e.g. "09:00–09:30", es-locale 24h times. */
+/** e.g. "09:00–09:30", 24h times in the user's local timezone. */
 export function formatTimeRange(start: string, end: string): string {
-  const fmt = (iso: string) =>
-    new Date(iso).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' });
-  return `${fmt(start)}–${fmt(end)}`;
+  return `${formatTime(start)}–${formatTime(end)}`;
 }
 
 /** Resolves `appointment.patientId` to a display name via `patientNames`, falling back to the raw id when it isn't in the map (or no map is given). */

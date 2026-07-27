@@ -10,6 +10,7 @@ import { ClinicalEntriesList } from '@/components/patients/clinical-entries-list
 import { PatientDetailTabs, type PatientDetailTabKey } from '@/components/patients/patient-detail-tabs';
 import { OdontogramTab } from '@/components/odontogram/odontogram-tab';
 import { TreatmentPlansTab } from '@/components/treatment-plans/treatment-plans-tab';
+import { formatCivilDate } from '@/lib/format/date';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
@@ -38,11 +39,6 @@ const copy = {
 
 function fullName(patient: Patient): string {
   return `${patient.firstName} ${patient.lastName}`;
-}
-
-function formatDate(iso: string | null): string {
-  if (!iso) return copy.fieldFallback;
-  return new Date(iso).toLocaleDateString('es');
 }
 
 export default function PatientDetailPage() {
@@ -169,7 +165,7 @@ export default function PatientDetailPage() {
                 </div>
                 <div>
                   <dt className="text-sm font-medium text-muted">{copy.birthDateLabel}</dt>
-                  <dd className="text-ink">{formatDate(patient.birthDate)}</dd>
+                  <dd className="text-ink">{formatCivilDate(patient.birthDate, copy.fieldFallback)}</dd>
                 </div>
                 <div>
                   <dt className="text-sm font-medium text-muted">{copy.sexLabel}</dt>

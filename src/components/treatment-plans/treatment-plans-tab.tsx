@@ -28,6 +28,8 @@ import {
 } from '@/lib/payments/payments-api';
 import { listCatalogItems, type DentalCatalogItem } from '@/lib/odontogram/catalog-api';
 import type { ToothSurface } from '@/lib/odontogram/odontogram-api';
+import { getPatient } from '@/lib/patients/patients-api';
+import { fetchClinicName } from '@/lib/clinic-branding';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge, type BadgeProps } from '@/components/ui/badge';
@@ -36,7 +38,9 @@ import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import { FormField } from '@/components/molecules/form-field';
 import { EmptyState } from '@/components/molecules/empty-state';
+import { PaymentReceipt } from './payment-receipt';
 import { cn } from '@/lib/utils';
+import { formatCivilDate, formatDate } from '@/lib/format/date';
 
 // Copy as constants (i18n-ready, es-first) — matches odontogram-tab.tsx /
 // agenda-view.tsx convention until next-intl wiring lands.
@@ -54,7 +58,7 @@ const copy = {
   emptyPlansDescription: 'Crea el primer plan para empezar a registrar procedimientos.',
   selectPlanLabel: 'Plan',
   planOptionLabel: (createdAt: string, status: TreatmentPlanStatus) =>
-    `Plan del ${new Date(createdAt).toLocaleDateString('es')} — ${PLAN_STATUS_LABELS[status]}`,
+    `Plan del ${formatDate(createdAt)} — ${PLAN_STATUS_LABELS[status]}`,
   detailHeading: 'Detalle del plan',
   planStatusLabel: 'Estado del plan',
   loadingPlanDetail: 'Cargando plan…',
@@ -126,6 +130,8 @@ const copy = {
   paymentNotesFallback: '—',
   voidPaymentAction: 'Anular',
   voidingPayment: 'Anulando…',
+  // Recibo imprimible (RECIBO-T1).
+  receiptAction: 'Recibo',
   genericVoidPaymentError: 'No pudimos anular el abono. Intenta de nuevo.',
   emptyPaymentsTitle: 'Este plan todavía no tiene abonos.',
   emptyPaymentsDescription: 'Registra el primer abono con el formulario de arriba.',
@@ -225,11 +231,6 @@ function todayLocalDateString(): string {
   const mm = String(d.getMonth() + 1).padStart(2, '0');
   const dd = String(d.getDate()).padStart(2, '0');
   return `${yyyy}-${mm}-${dd}`;
-}
-
-/** Civil (calendar) date only, no time — for the abonos list's "Fecha" column. */
-function formatCivilDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('es');
 }
 
 // FDI/ISO-3950 tooth code, client-side mirror of the backend's
@@ -403,10 +404,11 @@ interface PaymentsListProps {
   payments: Payment[];
   voidingPaymentId: string | null;
   onVoid: (paymentId: string) => void;
+  onReceipt: (payment: Payment) => void;
 }
 
 /** Desktop table + mobile cards for the abonos list — same responsive split as `ItemsTable`. */
-function PaymentsList({ payments, voidingPaymentId, onVoid }: PaymentsListProps) {
+function PaymentsList({ payments, voidingPaymentId, onVoid, onReceipt }: PaymentsListProps) {
   if (payments.length === 0) {
     return <EmptyState role="status" title={copy.emptyPaymentsTitle} description={copy.emptyPaymentsDescription} />;
   }
@@ -446,15 +448,20 @@ function PaymentsList({ payments, voidingPaymentId, onVoid }: PaymentsListProps)
                   </TableCell>
                   <TableCell className="text-muted">{payment.notes ?? copy.paymentNotesFallback}</TableCell>
                   <TableCell>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      disabled={voiding}
-                      onClick={() => onVoid(payment.id)}
-                    >
-                      {voiding ? copy.voidingPayment : copy.voidPaymentAction}
-                    </Button>
+                    <div className="flex items-center gap-2">
+                      <Button type="button" variant="outline" size="sm" onClick={() => onReceipt(payment)}>
+                        {copy.receiptAction}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={voiding}
+                        onClick={() => onVoid(payment.id)}
+                      >
+                        {voiding ? copy.voidingPayment : copy.voidPaymentAction}
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               );
@@ -482,7 +489,10 @@ function PaymentsList({ payments, voidingPaymentId, onVoid }: PaymentsListProps)
                 </div>
                 <p className="mt-2 font-medium text-ink">{formatCurrencyIn(payment.amount, payment.currency)}</p>
                 <p className="mt-1 text-sm text-muted">{payment.notes ?? copy.paymentNotesFallback}</p>
-                <div className="mt-3">
+                <div className="mt-3 flex items-center gap-2">
+                  <Button type="button" variant="outline" size="sm" onClick={() => onReceipt(payment)}>
+                    {copy.receiptAction}
+                  </Button>
                   <Button
                     type="button"
                     variant="outline"
@@ -593,6 +603,14 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
   const [voidingPaymentId, setVoidingPaymentId] = useState<string | null>(null);
   const [paymentActionError, setPaymentActionError] = useState<string | null>(null);
 
+  // Receipt (RECIBO-T1): `receiptPayment` doubles as the printable receipt
+  // dialog's target abono AND its open flag (`PaymentReceipt` treats
+  // `payment !== null` as "open"). `patientName`/`clinicName` are fetched
+  // ONCE per patient (not per row/receipt-open) — see the effect below.
+  const [receiptPayment, setReceiptPayment] = useState<Payment | null>(null);
+  const [patientName, setPatientName] = useState<string | null>(null);
+  const [clinicName, setClinicName] = useState<string | null>(null);
+
   // Add-item form state.
   const [toothNumber, setToothNumber] = useState('');
   const [catalogItemId, setCatalogItemId] = useState('');
@@ -651,6 +669,33 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
     // effect on success.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, patientId, reloadKey]);
+
+  // Patient name + clinic name (RECIBO-T1): fetched ONCE per patient — the
+  // receipt is the only consumer, and neither value changes while this tab
+  // is mounted, so there is no "refresh in place" concern like `planDetail`/
+  // `planBalance` above. Both fail soft (no loading/error UI): a failure
+  // here only degrades the receipt's header (name/clinic fallback), it must
+  // never block or error out the rest of the tab.
+  useEffect(() => {
+    let cancelled = false;
+    getPatient(token, patientId)
+      .then((data) => {
+        if (!cancelled) setPatientName(`${data.firstName} ${data.lastName}`.trim());
+      })
+      .catch(() => {
+        /* fail soft — the receipt shows a fallback for a missing patientName */
+      });
+    fetchClinicName()
+      .then((name) => {
+        if (!cancelled) setClinicName(name);
+      })
+      .catch(() => {
+        /* fail soft — fetchClinicName already resolves null on failure, this is just a safety net */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token, patientId]);
 
   // Default the plan selector to the first plan once plans load, so the
   // detail shows without an extra click — adjusts state DURING render (the
@@ -1373,6 +1418,7 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
                         payments={payments}
                         voidingPaymentId={voidingPaymentId}
                         onVoid={handleVoidPayment}
+                        onReceipt={setReceiptPayment}
                       />
                     </>
                   )}
@@ -1482,6 +1528,17 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
           </CardContent>
         </Card>
       )}
+
+      <PaymentReceipt
+        payment={receiptPayment}
+        planBalance={planBalance}
+        planLabel={selectedPlan ? copy.planOptionLabel(selectedPlan.createdAt, selectedPlan.status) : ''}
+        patientName={patientName}
+        clinicName={clinicName}
+        onOpenChange={(open) => {
+          if (!open) setReceiptPayment(null);
+        }}
+      />
     </div>
   );
 }

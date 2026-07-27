@@ -7,6 +7,7 @@ import { addOneDayIso } from '@/lib/dashboard/date-range';
 import { listPatients } from '@/lib/patients/patients-api';
 import { listStaff } from '@/lib/appointments/staff-api';
 import { getExchangeRates, type ExchangeRates } from '@/lib/exchange/exchange-api';
+import { formatTime } from '@/lib/format/date';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge, type BadgeProps } from '@/components/ui/badge';
@@ -80,10 +81,6 @@ function monthStartLocalDateString(): string {
   const yyyy = d.getFullYear();
   const mm = String(d.getMonth() + 1).padStart(2, '0');
   return `${yyyy}-${mm}-01`;
-}
-
-function formatTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' });
 }
 
 /**
