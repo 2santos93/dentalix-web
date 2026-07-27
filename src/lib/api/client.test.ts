@@ -200,3 +200,33 @@ describe('apiFetchOrNull', () => {
     await expect(apiFetchOrNull('/patients/1/medical-history')).rejects.toBeInstanceOf(ApiError);
   });
 });
+
+describe('apiFetch — FormData body', () => {
+  const realFetch = global.fetch;
+  afterEach(() => {
+    global.fetch = realFetch;
+  });
+
+  // NOTE: this suite's jsdom environment (no per-file docblock override, see
+  // the top-of-file pragma on the first `describe`) has no native `fetch` /
+  // `Response` globals to `jest.spyOn` — same as every other test in this
+  // file, we plain-assign `global.fetch` to a jest.fn() that resolves a
+  // minimal fetch-shaped object.
+  it('sends a FormData body without JSON content-type and without stringifying', async () => {
+    useAuthStore.getState().setTokens({ accessToken: 'T', refreshToken: 'R' });
+    const fetchMock = jest.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ ok: true }),
+    });
+    global.fetch = fetchMock as unknown as typeof fetch;
+    const fd = new FormData();
+    fd.append('file', new Blob(['x'], { type: 'image/png' }), 'a.png');
+
+    await apiFetch('/me/avatar', { method: 'POST', token: 'T', body: fd });
+
+    const [, init] = fetchMock.mock.calls[0] as [string, RequestInit];
+    expect(init.body).toBe(fd);
+    const headers = init.headers as Record<string, string>;
+    expect(headers['Content-Type']).toBeUndefined();
+  });
+});

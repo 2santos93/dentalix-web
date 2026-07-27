@@ -71,7 +71,13 @@ async function doFetch(
   opts: ApiOptions,
   allowRefresh = true,
 ): Promise<Response> {
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  // A FormData body (e.g. avatar upload) must NOT be JSON-serialized and must
+  // NOT carry a `Content-Type: application/json` header — the browser sets
+  // the correct `multipart/form-data; boundary=...` header itself when the
+  // fetch `body` is a FormData instance.
+  const isForm = typeof FormData !== 'undefined' && opts.body instanceof FormData;
+  const headers: Record<string, string> = {};
+  if (!isForm) headers['Content-Type'] = 'application/json';
   if (opts.token) headers.Authorization = `Bearer ${opts.token}`;
   // The backend resolves the tenant from the request host (see
   // `select-host.ts`: `x-tenant-host` → `x-forwarded-host` → `Host`, in that
@@ -85,7 +91,12 @@ async function doFetch(
   const res = await fetch(`${API}${path}`, {
     method: opts.method ?? 'GET',
     headers,
-    body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
+    body:
+      opts.body === undefined
+        ? undefined
+        : isForm
+          ? (opts.body as FormData)
+          : JSON.stringify(opts.body),
     cache: 'no-store',
   });
   // Expired access token → transparently refresh once and replay the request
