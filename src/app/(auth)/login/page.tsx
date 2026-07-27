@@ -1,7 +1,8 @@
 import Link from 'next/link';
 import { headers } from 'next/headers';
 import { LoginForm } from '@/components/organisms/login-form';
-import { AuthLayout } from '@/components/templates/auth-layout';
+import { SplitAuthLayout } from '@/components/templates/split-auth-layout';
+import { randomHeroImage } from '@/lib/auth/hero-images';
 import { fetchBranding } from '@/lib/branding';
 import { parseTenantFromHost } from '@/lib/tenant';
 
@@ -12,17 +13,21 @@ const copy = {
   subtitle: 'Inicia sesión en tu cuenta',
   registerPrompt: '¿No tienes cuenta?',
   registerLink: 'Regístrate',
+  heroCaption: 'Tu clínica, siempre al día',
 };
 
 export default async function LoginPage() {
   const h = await headers();
   const tenant = h.get('x-tenant') ?? parseTenantFromHost(h.get('host'));
   const branding = await fetchBranding(tenant);
+  const heroImage = randomHeroImage();
 
   return (
-    <AuthLayout
+    <SplitAuthLayout
       title={branding.name ?? copy.defaultTitle}
       subtitle={copy.subtitle}
+      heroImage={heroImage}
+      heroCaption={copy.heroCaption}
       footer={
         <>
           {copy.registerPrompt}{' '}
@@ -33,6 +38,6 @@ export default async function LoginPage() {
       }
     >
       <LoginForm />
-    </AuthLayout>
+    </SplitAuthLayout>
   );
 }
