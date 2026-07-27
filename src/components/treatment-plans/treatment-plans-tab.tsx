@@ -40,6 +40,7 @@ import { FormField } from '@/components/molecules/form-field';
 import { EmptyState } from '@/components/molecules/empty-state';
 import { PaymentReceipt } from './payment-receipt';
 import { cn } from '@/lib/utils';
+import { formatCivilDate, formatDate } from '@/lib/format/date';
 
 // Copy as constants (i18n-ready, es-first) — matches odontogram-tab.tsx /
 // agenda-view.tsx convention until next-intl wiring lands.
@@ -57,7 +58,7 @@ const copy = {
   emptyPlansDescription: 'Crea el primer plan para empezar a registrar procedimientos.',
   selectPlanLabel: 'Plan',
   planOptionLabel: (createdAt: string, status: TreatmentPlanStatus) =>
-    `Plan del ${new Date(createdAt).toLocaleDateString('es')} — ${PLAN_STATUS_LABELS[status]}`,
+    `Plan del ${formatDate(createdAt)} — ${PLAN_STATUS_LABELS[status]}`,
   detailHeading: 'Detalle del plan',
   planStatusLabel: 'Estado del plan',
   loadingPlanDetail: 'Cargando plan…',
@@ -230,11 +231,6 @@ function todayLocalDateString(): string {
   const mm = String(d.getMonth() + 1).padStart(2, '0');
   const dd = String(d.getDate()).padStart(2, '0');
   return `${yyyy}-${mm}-${dd}`;
-}
-
-/** Civil (calendar) date only, no time — for the abonos list's "Fecha" column. */
-function formatCivilDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('es');
 }
 
 // FDI/ISO-3950 tooth code, client-side mirror of the backend's

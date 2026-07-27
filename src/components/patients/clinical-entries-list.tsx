@@ -8,6 +8,7 @@ import {
   type ClinicalEntry,
   type CreateClinicalEntryInput,
 } from '@/lib/patients/clinical-api';
+import { formatCivilDate } from '@/lib/format/date';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
@@ -31,10 +32,6 @@ const copy = {
 interface ClinicalEntriesListProps {
   token: string;
   patientId: string;
-}
-
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('es');
 }
 
 export function ClinicalEntriesList({ token, patientId }: ClinicalEntriesListProps) {
@@ -127,7 +124,7 @@ export function ClinicalEntriesList({ token, patientId }: ClinicalEntriesListPro
             <tbody>
               {entries.map((entry) => (
                 <tr key={entry.id} className="border-b border-border last:border-0">
-                  <td className="px-4 py-3 text-ink">{formatDate(entry.entryDate)}</td>
+                  <td className="px-4 py-3 text-ink">{formatCivilDate(entry.entryDate)}</td>
                   <td className="px-4 py-3 text-ink">{entry.reason ?? copy.reasonFallback}</td>
                   <td className="px-4 py-3 text-ink">{entry.notes}</td>
                 </tr>
@@ -142,7 +139,7 @@ export function ClinicalEntriesList({ token, patientId }: ClinicalEntriesListPro
                 key={entry.id}
                 className="rounded-lg border border-border bg-surface p-4 text-sm text-ink"
               >
-                <p className="font-medium text-ink">{formatDate(entry.entryDate)}</p>
+                <p className="font-medium text-ink">{formatCivilDate(entry.entryDate)}</p>
                 <p className="mt-1 text-muted">{entry.reason ?? copy.reasonFallback}</p>
                 <p className="mt-2 text-ink">{entry.notes}</p>
               </div>
