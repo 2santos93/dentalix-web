@@ -4,6 +4,7 @@ import { DashboardView } from './dashboard-view';
 import { ApiError } from '@/lib/api/client';
 import { getDashboard } from '@/lib/dashboard/dashboard-api';
 import type { Dashboard } from '@/lib/dashboard/dashboard-api';
+import { listCurrencies } from '@/lib/reference/currencies-api';
 
 // NOTE: jest.mock's string literal is not alias-rewritten by the SWC
 // transform (only real `import`/`require` specifiers are) — use a relative
@@ -12,8 +13,15 @@ import type { Dashboard } from '@/lib/dashboard/dashboard-api';
 jest.mock('../../lib/dashboard/dashboard-api', () => ({
   getDashboard: jest.fn(),
 }));
+// CurrencySelect (Task 10, wired here per Task 11) fetches its own options
+// via `listCurrencies` — mock it so the currency filter select renders
+// deterministically.
+jest.mock('../../lib/reference/currencies-api', () => ({
+  listCurrencies: jest.fn(),
+}));
 
 const mockedGetDashboard = getDashboard as jest.MockedFunction<typeof getDashboard>;
+const mockedListCurrencies = listCurrencies as jest.MockedFunction<typeof listCurrencies>;
 
 function dashboard(overrides: Partial<Dashboard> = {}): Dashboard {
   return {
@@ -78,6 +86,11 @@ function deferred<T>() {
 describe('DashboardView', () => {
   beforeEach(() => {
     mockedGetDashboard.mockReset();
+    mockedListCurrencies.mockReset();
+    mockedListCurrencies.mockResolvedValue([
+      { code: 'USD', name: 'Dólar estadounidense', symbol: '$' },
+      { code: 'COP', name: 'Peso colombiano', symbol: '$' },
+    ]);
   });
 
   it('renders the 4 cards (incomes, low stock, upcoming appointments, patient count) with fetched data', async () => {
@@ -164,15 +177,20 @@ describe('DashboardView', () => {
     expect(toInput.value).toBe('2026-07-10');
   });
 
-  it('refetches with the new currency when the currency input changes, uppercased', async () => {
+  it('refetches with the new currency when the currency select changes', async () => {
     mockedGetDashboard.mockResolvedValue(dashboard());
+    const user = userEvent.setup();
 
     render(<DashboardView token="tok" />);
     await waitFor(() => expect(mockedGetDashboard).toHaveBeenCalledTimes(1));
 
     mockedGetDashboard.mockClear();
-    const currencyInput = screen.getByLabelText('Moneda');
-    fireEvent.change(currencyInput, { target: { value: 'cop' } });
+    // CurrencySelect (Task 11) replaces the old free-text currency input —
+    // pick an option instead of typing, once its options (from the mocked
+    // `listCurrencies`) have loaded in.
+    const currencySelect = screen.getByLabelText<HTMLSelectElement>('Moneda');
+    await waitFor(() => expect(currencySelect.querySelector('option[value="COP"]')).not.toBeNull());
+    await user.selectOptions(currencySelect, 'COP');
 
     await waitFor(() => expect(mockedGetDashboard).toHaveBeenCalledTimes(1));
     const [, params] = mockedGetDashboard.mock.calls[0];

@@ -39,6 +39,7 @@ import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import { FormField } from '@/components/molecules/form-field';
 import { EmptyState } from '@/components/molecules/empty-state';
+import { CurrencySelect } from '@/components/molecules/currency-select';
 import { PaymentReceipt } from './payment-receipt';
 import { cn } from '@/lib/utils';
 
@@ -548,6 +549,7 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
 
   const [creatingPlan, setCreatingPlan] = useState(false);
   const [createPlanError, setCreatePlanError] = useState<string | null>(null);
+  const [newPlanCurrency, setNewPlanCurrency] = useState('USD');
 
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
 
@@ -748,7 +750,7 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
     setCreatingPlan(true);
     setCreatePlanError(null);
     try {
-      const created = await createPlan(token, patientId, {});
+      const created = await createPlan(token, patientId, { currency: newPlanCurrency });
       await refreshPlansInPlace();
       setSelectedPlanId(created.id);
     } catch (err) {
@@ -1122,9 +1124,18 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
       <Card>
         <CardHeader className="flex flex-row items-center justify-between gap-3">
           <CardTitle>{copy.plansHeading}</CardTitle>
-          <Button type="button" onClick={handleCreatePlan} disabled={creatingPlan}>
-            {creatingPlan ? copy.creatingPlan : copy.newPlan}
-          </Button>
+          <div className="flex items-center gap-2">
+            <CurrencySelect
+              id="tp-new-plan-currency"
+              token={token}
+              value={newPlanCurrency}
+              onChange={setNewPlanCurrency}
+              className="w-44"
+            />
+            <Button type="button" onClick={handleCreatePlan} disabled={creatingPlan}>
+              {creatingPlan ? copy.creatingPlan : copy.newPlan}
+            </Button>
+          </div>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
           {createPlanError && (
@@ -1338,12 +1349,11 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
                             </FormField>
 
                             <FormField htmlFor="tp-payment-currency" label={copy.paymentCurrencyLabel}>
-                              <Input
+                              <CurrencySelect
                                 id="tp-payment-currency"
-                                value={paymentCurrency}
-                                maxLength={3}
-                                onChange={(e) => setPaymentCurrency(e.target.value.toUpperCase())}
-                                className="uppercase"
+                                token={token}
+                                value={paymentCurrency || (planDetail?.currency ?? 'USD')}
+                                onChange={setPaymentCurrency}
                               />
                             </FormField>
                           </div>

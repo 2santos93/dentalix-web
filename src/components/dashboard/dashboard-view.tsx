@@ -12,6 +12,7 @@ import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { FormField } from '@/components/molecules/form-field';
 import { EmptyState } from '@/components/molecules/empty-state';
+import { CurrencySelect } from '@/components/molecules/currency-select';
 
 // Copy as constants (i18n-ready, es-first) — matches
 // treatment-plans-tab.tsx / agenda-view.tsx convention until next-intl
@@ -20,7 +21,6 @@ const copy = {
   fromLabel: 'Desde',
   toLabel: 'Hasta',
   currencyLabel: 'Moneda',
-  currencyPlaceholder: 'USD',
   loading: 'Cargando panel…',
   retry: 'Reintentar',
   forbidden: 'No tienes acceso a este panel.',
@@ -163,15 +163,8 @@ export function DashboardView({ token }: DashboardViewProps) {
               className="w-auto"
             />
           </FormField>
-          <FormField htmlFor="dashboard-currency" label={copy.currencyLabel} className="w-28">
-            <Input
-              id="dashboard-currency"
-              value={currency}
-              placeholder={copy.currencyPlaceholder}
-              maxLength={3}
-              onChange={(e) => setCurrency(e.target.value.toUpperCase())}
-              className="uppercase"
-            />
+          <FormField htmlFor="dashboard-currency" label={copy.currencyLabel} className="w-44">
+            <CurrencySelect id="dashboard-currency" token={token} value={currency} onChange={setCurrency} />
           </FormField>
         </CardContent>
       </Card>
