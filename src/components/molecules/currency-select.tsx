@@ -1,5 +1,4 @@
 'use client';
-import * as React from 'react';
 import { useEffect, useState } from 'react';
 import { listCurrencies, type Currency } from '@/lib/reference/currencies-api';
 import { cn } from '@/lib/utils';

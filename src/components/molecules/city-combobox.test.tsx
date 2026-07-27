@@ -50,6 +50,26 @@ describe('CityCombobox', () => {
     expect(onChange).toHaveBeenCalledWith({ id: 1, name: 'Bogotá' });
   });
 
+  it('does not reopen the dropdown after a city is picked', async () => {
+    const onChange = jest.fn();
+    const user = userEvent.setup();
+    render(<CityCombobox id="city" token="tok" countryCode="CO" value={null} onChange={onChange} />);
+    await user.type(screen.getByRole('combobox'), 'bog');
+    await waitFor(() => expect(mocked).toHaveBeenCalledWith('tok', { countryCode: 'CO', q: 'bog' }));
+    const option = await screen.findByText('Bogotá');
+    await user.click(option);
+
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+    mocked.mockClear();
+
+    // Wait well past the 250ms debounce window that setting `text` to the
+    // picked city's name would otherwise schedule a search on.
+    await new Promise((resolve) => setTimeout(resolve, 400));
+
+    expect(mocked).not.toHaveBeenCalled();
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+  });
+
   it('clears the selection when countryCode changes, without a React render-phase warning', async () => {
     const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {});
     const user = userEvent.setup();
