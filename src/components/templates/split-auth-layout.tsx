@@ -58,6 +58,7 @@ export function SplitAuthLayout({
 
       {/* Panel derecho: foto de odontología + degradado de marca */}
       <div className="relative hidden lg:block lg:w-[55%]">
+        {/* eslint-disable-next-line @next/next/no-img-element -- random per-request src, object-cover fill; next/image adds no value here */}
         <img
           src={heroImage.src}
           alt={heroImage.alt}
@@ -65,7 +66,7 @@ export function SplitAuthLayout({
         />
         <div
           aria-hidden
-          className="absolute inset-0 bg-gradient-to-t from-primary/50 via-primary/10 to-transparent"
+          className="absolute inset-0 bg-gradient-to-t from-black/60 via-primary/20 to-transparent"
         />
         {heroCaption ? (
           <p className="absolute bottom-10 left-10 right-10 text-2xl font-semibold leading-snug text-white drop-shadow-md">
