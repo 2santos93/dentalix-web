@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Users, Calendar, LayoutDashboard, UserCog } from 'lucide-react';
 import { ThemeToggle } from '@/components/theme/theme-toggle';
+import { UserMenu } from '@/components/profile/user-menu';
 import { cn } from '@/lib/utils';
 
 const NAV = [
@@ -79,7 +80,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             ))}
           </nav>
           <div className="hidden md:block" />
-          <ThemeToggle />
+          <div className="flex items-center gap-3">
+            <ThemeToggle />
+            <UserMenu />
+          </div>
         </header>
 
         <main className="flex flex-1 flex-col bg-bg px-4 py-8 md:px-8">
