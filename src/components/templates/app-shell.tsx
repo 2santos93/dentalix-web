@@ -2,7 +2,13 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Users, Calendar, LayoutDashboard, UserCog } from 'lucide-react';
+import {
+  Users,
+  Calendar,
+  LayoutDashboard,
+  UserCog,
+  Package,
+} from 'lucide-react';
 import { ThemeToggle } from '@/components/theme/theme-toggle';
 import { LogoutButton } from '@/components/organisms/logout-button';
 import { cn } from '@/lib/utils';
@@ -12,6 +18,7 @@ const NAV = [
   { href: '/patients', label: 'Pacientes', icon: Users },
   { href: '/agenda', label: 'Agenda', icon: Calendar },
   { href: '/staff', label: 'Personal', icon: UserCog },
+  { href: '/inventory', label: 'Inventario', icon: Package },
 ];
 
 /**
