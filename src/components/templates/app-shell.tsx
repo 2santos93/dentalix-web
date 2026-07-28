@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Users, Calendar, LayoutDashboard, UserCog } from 'lucide-react';
 import { ThemeToggle } from '@/components/theme/theme-toggle';
+import { LogoutButton } from '@/components/organisms/logout-button';
 import { cn } from '@/lib/utils';
 
 const NAV = [
@@ -53,6 +54,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </Link>
           ))}
         </nav>
+        <div className="mt-auto flex flex-col gap-1 border-t border-border p-3">
+          <div className="flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium text-muted">
+            <span>Tema</span>
+            <ThemeToggle />
+          </div>
+          <LogoutButton className="px-3 py-2" />
+        </div>
       </aside>
 
       <div className="flex min-w-0 flex-1 flex-col">
@@ -79,7 +87,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             ))}
           </nav>
           <div className="hidden md:block" />
-          <ThemeToggle />
+          {/* Controles de sesión en el topbar SOLO en móvil (en desktop viven
+              al fondo del sidebar). */}
+          <div className="flex items-center gap-2 md:hidden">
+            <ThemeToggle />
+            <LogoutButton label={false} className="p-2" />
+          </div>
         </header>
 
         <main className="flex flex-1 flex-col bg-bg px-4 py-8 md:px-8">

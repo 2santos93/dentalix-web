@@ -66,14 +66,20 @@ interface PatientFormProps {
    * a patient without leaving the agenda). Omit for the standalone page.
    */
   onCreated?: (patient: Patient) => void;
+  /**
+   * Pre-fills the document-number field — e.g. when the agenda's patient
+   * search found no match for a typed document and opens this form to create
+   * that patient, so the number isn't retyped. Optional.
+   */
+  initialDocNumber?: string;
 }
 
-export function PatientForm({ token, onCreated }: PatientFormProps) {
+export function PatientForm({ token, onCreated, initialDocNumber }: PatientFormProps) {
   const router = useRouter();
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [docType, setDocType] = useState<DocType>('CC');
-  const [docNumber, setDocNumber] = useState('');
+  const [docNumber, setDocNumber] = useState(initialDocNumber ?? '');
   const [birthDate, setBirthDate] = useState('');
   const [sex, setSex] = useState<Sex>('UNSPECIFIED');
   const [phone, setPhone] = useState('');

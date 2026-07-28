@@ -1,9 +1,13 @@
 'use client';
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { ApiError } from '@/lib/api/client';
 import { getDashboard, type Dashboard } from '@/lib/dashboard/dashboard-api';
 import { addOneDayIso } from '@/lib/dashboard/date-range';
 import { formatCurrency } from '@/lib/format/currency';
+import { listPatients } from '@/lib/patients/patients-api';
+import { listStaff } from '@/lib/appointments/staff-api';
+import { formatTime } from '@/lib/format/date';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge, type BadgeProps } from '@/components/ui/badge';
@@ -25,6 +29,7 @@ const copy = {
   retry: 'Reintentar',
   forbidden: 'No tienes acceso a este panel.',
   genericError: 'No pudimos cargar el panel. Intenta de nuevo.',
+  rangeInvalid: 'La fecha "Hasta" debe ser igual o posterior a la fecha "Desde".',
   incomesHeading: 'Ingresos del período',
   incomesCount: (count: number) => `${count} ${count === 1 ? 'abono' : 'abonos'}`,
   byCurrencyHeading: 'Desglose por moneda',
@@ -39,7 +44,6 @@ const copy = {
   upcomingHeading: 'Próximas citas',
   emptyUpcomingTitle: 'No hay citas próximas.',
   emptyUpcomingDescription: 'Las próximas citas agendadas aparecerán aquí.',
-  patientFallback: 'Paciente',
   patientCountHeading: '# Pacientes',
   statusLabels: {
     SCHEDULED: 'Agendada',
@@ -80,10 +84,6 @@ function monthStartLocalDateString(): string {
   return `${yyyy}-${mm}-01`;
 }
 
-function formatTime(iso: string): string {
-  return new Date(iso).toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' });
-}
-
 interface DashboardViewProps {
   token: string;
 }
@@ -91,26 +91,91 @@ interface DashboardViewProps {
 /**
  * `'use client'` view for the `/dashboard` page — owner/admin-only read-only
  * summary. Owns its own from/to/currency controls (defaulting to the
- * current month..today / USD) and re-fetches `getDashboard` whenever any of
+ * current month..today / COP) and re-fetches `getDashboard` whenever any of
  * them change, mirroring `AgendaView`'s selector-driven refetch shape (day +
  * provider there, date range + currency here). Unlike `AgendaView` /
  * `TreatmentPlansTab` there is no "refresh in place while keeping stale data
  * mounted" state here — every filter change is a genuinely new query (a
  * different period/currency), so it's rendered as a fresh loading skeleton,
  * not a background refresh over the previous period's numbers.
+ *
+ * The "Moneda" control is a `CurrencySelect` (reference-data currencies)
+ * instead of a free-text input — that input could produce an invalid ISO 4217
+ * code and crash `Intl.NumberFormat` with a `RangeError` (all money now
+ * renders through the crash-safe `formatCurrency`). "Desde"/"Hasta" also get a
+ * client-side range guard (IMP-11): if `from > to` the request is never fired
+ * and a friendly message is shown instead, mirroring `appointment-form.tsx`'s
+ * `validationEndAfterStart`.
  */
 export function DashboardView({ token }: DashboardViewProps) {
   const [from, setFrom] = useState(monthStartLocalDateString);
   const [to, setTo] = useState(todayLocalDateString);
-  const [currency, setCurrency] = useState('USD');
+  const [currency, setCurrency] = useState('COP');
 
   const [data, setData] = useState<Dashboard | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
+  // Patient/provider name maps for `UpcomingAppointmentsCard` — fetched once
+  // (bounded page, same tradeoff as `AgendaView`'s `patientNames`). Best-effort:
+  // a failure here just leaves names falling back to the raw id, it's not
+  // worth its own error UI.
+  const [patientNames, setPatientNames] = useState<Record<string, string>>({});
+  const [staffNames, setStaffNames] = useState<Record<string, string>>({});
+
   useEffect(() => {
     if (!token) return;
+    let cancelled = false;
+    async function load() {
+      try {
+        const res = await listPatients(token, { pageSize: 100 });
+        if (cancelled) return;
+        setPatientNames(
+          Object.fromEntries(res.items.map((p) => [p.id, `${p.firstName} ${p.lastName}`])),
+        );
+      } catch {
+        /* best-effort, see comment above */
+      }
+    }
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
+
+  useEffect(() => {
+    if (!token) return;
+    let cancelled = false;
+    async function load() {
+      try {
+        const data = await listStaff(token);
+        if (cancelled) return;
+        setStaffNames(Object.fromEntries(data.map((s) => [s.userId, s.fullName])));
+      } catch {
+        /* best-effort, see comment above */
+      }
+    }
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
+
+  // IMP-11: client-side range guard — if the user picks a "Desde" after
+  // "Hasta", show a friendly message (mirrors `appointment-form.tsx`'s
+  // `validationEndAfterStart`) instead of firing a request the backend would
+  // just reject/return nothing useful for.
+  const rangeInvalid = from > to;
+
+  useEffect(() => {
+    if (!token) return;
+    // `rangeInvalid` is derived straight from `from`/`to` at render time (see
+    // above), so the guard message below already renders ahead of
+    // `loading`/`error`/`data` in the JSX regardless of what they hold here —
+    // no need to reset them, which would just be a same-render synchronous
+    // `setState` this effect doesn't otherwise need.
+    if (rangeInvalid) return;
     let cancelled = false;
     async function load() {
       setLoading(true);
@@ -139,7 +204,7 @@ export function DashboardView({ token }: DashboardViewProps) {
     return () => {
       cancelled = true;
     };
-  }, [token, from, to, currency, reloadKey]);
+  }, [token, from, to, currency, reloadKey, rangeInvalid]);
 
   return (
     <div className="flex flex-col gap-6">
@@ -169,7 +234,11 @@ export function DashboardView({ token }: DashboardViewProps) {
         </CardContent>
       </Card>
 
-      {loading ? (
+      {rangeInvalid ? (
+        <p role="alert" className="text-sm text-danger">
+          {copy.rangeInvalid}
+        </p>
+      ) : loading ? (
         <div className="grid gap-4 sm:grid-cols-2">
           <Skeleton className="h-40" role="status" aria-label={copy.loading} />
           <Skeleton className="h-40" />
@@ -189,7 +258,11 @@ export function DashboardView({ token }: DashboardViewProps) {
         <div className="grid gap-4 sm:grid-cols-2">
           <IncomesCard incomes={data.incomes} />
           <LowStockCard lowStockItems={data.lowStockItems} />
-          <UpcomingAppointmentsCard upcomingAppointments={data.upcomingAppointments} />
+          <UpcomingAppointmentsCard
+            upcomingAppointments={data.upcomingAppointments}
+            patientNames={patientNames}
+            staffNames={staffNames}
+          />
           <PatientCountCard patientCount={data.patientCount} />
         </div>
       ) : null}
@@ -275,13 +348,21 @@ function LowStockCard({ lowStockItems }: { lowStockItems: Dashboard['lowStockIte
 
 function UpcomingAppointmentsCard({
   upcomingAppointments,
+  patientNames,
+  staffNames,
 }: {
   upcomingAppointments: Dashboard['upcomingAppointments'];
+  patientNames: Record<string, string>;
+  staffNames: Record<string, string>;
 }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>{copy.upcomingHeading}</CardTitle>
+        <CardTitle>
+          <Link href="/agenda" className="hover:text-primary hover:underline">
+            {copy.upcomingHeading}
+          </Link>
+        </CardTitle>
       </CardHeader>
       <CardContent>
         {upcomingAppointments.length === 0 ? (
@@ -292,22 +373,28 @@ function UpcomingAppointmentsCard({
           />
         ) : (
           <ul className="flex flex-col gap-3">
-            {upcomingAppointments.map((appointment) => (
-              <li
-                key={appointment.id}
-                className="flex items-center justify-between gap-3 border-b border-border pb-2 last:border-0 last:pb-0"
-              >
-                <div className="flex flex-col">
-                  <span className="text-sm font-medium text-ink">{formatTime(appointment.start)}</span>
-                  <span className="text-xs text-muted">
-                    {copy.patientFallback} {appointment.patientId.slice(0, 8)}
-                  </span>
-                </div>
-                <Badge variant={STATUS_BADGE_VARIANT[appointment.status]}>
-                  {copy.statusLabels[appointment.status]}
-                </Badge>
-              </li>
-            ))}
+            {upcomingAppointments.map((appointment) => {
+              // Fallback to the raw id when the name lookup has no match —
+              // same convention as `DayAgenda`'s `patientLabel`.
+              const patientLabel = patientNames[appointment.patientId] ?? appointment.patientId;
+              const providerLabel = staffNames[appointment.providerId] ?? appointment.providerId;
+              return (
+                <li
+                  key={appointment.id}
+                  className="flex items-center justify-between gap-3 border-b border-border pb-2 last:border-0 last:pb-0"
+                >
+                  <div className="flex flex-col">
+                    <span className="text-sm font-medium text-ink">{formatTime(appointment.start)}</span>
+                    <span className="text-xs text-muted">
+                      {patientLabel} · {providerLabel}
+                    </span>
+                  </div>
+                  <Badge variant={STATUS_BADGE_VARIANT[appointment.status]}>
+                    {copy.statusLabels[appointment.status]}
+                  </Badge>
+                </li>
+              );
+            })}
           </ul>
         )}
       </CardContent>
@@ -319,7 +406,11 @@ function PatientCountCard({ patientCount }: { patientCount: number }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>{copy.patientCountHeading}</CardTitle>
+        <CardTitle>
+          <Link href="/patients" className="hover:text-primary hover:underline">
+            {copy.patientCountHeading}
+          </Link>
+        </CardTitle>
       </CardHeader>
       <CardContent>
         <p className="text-4xl font-semibold tracking-tight text-ink">{patientCount}</p>

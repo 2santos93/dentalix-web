@@ -111,12 +111,23 @@ const createdAppointment = {
 
 async function renderFormAndWaitForLoad() {
   render(<AppointmentForm token="tok" onCreated={jest.fn()} />);
+  // Provider select is a native <select> populated from GET /staff.
   await screen.findByRole('option', { name: /dra\. ana ríos/i });
-  await screen.findByRole('option', { name: /maría lópez/i });
+  // The initial (empty-query) patient load settles.
+  await waitFor(() => expect(mockedListPatients).toHaveBeenCalled());
+}
+
+// Picks María López (pat-1) by typing her exact document number, which
+// auto-selects her — the primary "I know the document" flow. Waits for the
+// chosen-patient chip (its "Cambiar" button) so the debounced auto-select has
+// actually landed before the caller moves on.
+async function selectMariaByDoc(user: ReturnType<typeof userEvent.setup>) {
+  await user.type(screen.getByLabelText(/^paciente$/i), '123');
+  await screen.findByRole('button', { name: /cambiar/i });
 }
 
 async function fillValidForm(user: ReturnType<typeof userEvent.setup>) {
-  await user.selectOptions(screen.getByLabelText(/^paciente$/i), 'pat-1');
+  await selectMariaByDoc(user);
   await user.selectOptions(screen.getByLabelText(/profesional/i), 'staff-1');
   await user.type(screen.getByLabelText(/^fecha$/i), '2026-07-23');
   await user.type(screen.getByLabelText(/hora de inicio/i), '09:00');
@@ -144,24 +155,76 @@ describe('AppointmentForm', () => {
     await waitFor(() => expect(mockedListStaff).toHaveBeenCalled());
   });
 
-  it('populates the patient select from GET /patients and the provider select from GET /staff', async () => {
+  it('shows matching patients as a clickable list once you search, and the provider select from GET /staff', async () => {
+    const user = userEvent.setup();
     await renderFormAndWaitForLoad();
-    expect(screen.getByRole('option', { name: /carlos pérez/i })).toBeInTheDocument();
+    // No search yet: results are hidden behind a hint, not shown as a list.
+    expect(screen.getByText(/escribe el documento o el nombre/i)).toBeInTheDocument();
+
+    await user.type(screen.getByLabelText(/^paciente$/i), 'pérez');
+    expect(await screen.findByRole('option', { name: /carlos pérez/i })).toBeInTheDocument();
+    expect(screen.getByRole('option', { name: /maría lópez/i })).toBeInTheDocument();
     expect(screen.getByRole('option', { name: /dr\. luis gómez/i })).toBeInTheDocument();
   });
 
-  it('filters the patient list client-side using the search box', async () => {
+  it('loads the initial patient options from the server with a bounded pageSize (no query yet)', async () => {
+    await renderFormAndWaitForLoad();
+    expect(mockedListPatients).toHaveBeenCalledWith('tok', { pageSize: 20 });
+  });
+
+  it('debounces the server-side patient search, calling listPatients with the typed query and pageSize 20', async () => {
     const user = userEvent.setup();
     await renderFormAndWaitForLoad();
-    await user.type(screen.getByLabelText(/buscar paciente/i), 'carlos');
-    expect(screen.getByRole('option', { name: /carlos pérez/i })).toBeInTheDocument();
+    mockedListPatients.mockClear();
+    mockedListPatients.mockResolvedValue({
+      ...patientsPage,
+      items: [patientsPage.items[1]],
+    });
+
+    await user.type(screen.getByLabelText(/^paciente$/i), 'carlos');
+
+    // Debounced — the call doesn't happen synchronously on each keystroke.
+    expect(mockedListPatients).not.toHaveBeenCalled();
+
+    await waitFor(() =>
+      expect(mockedListPatients).toHaveBeenCalledWith('tok', { query: 'carlos', pageSize: 20 }),
+    );
+    expect(await screen.findByRole('option', { name: /carlos pérez/i })).toBeInTheDocument();
     expect(screen.queryByRole('option', { name: /maría lópez/i })).not.toBeInTheDocument();
+  });
+
+  it('auto-selects the patient when the typed query exactly matches one document number', async () => {
+    const user = userEvent.setup();
+    await renderFormAndWaitForLoad();
+
+    await user.type(screen.getByLabelText(/^paciente$/i), '123');
+
+    // The chosen-patient chip shows who's booked — no list to pick from.
+    expect(await screen.findByRole('button', { name: /cambiar/i })).toBeInTheDocument();
+    expect(screen.getByText('María López')).toBeInTheDocument();
+    expect(screen.getByText(/cc 123/i)).toBeInTheDocument();
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+    // The search box collapses once a patient is chosen.
+    expect(screen.queryByLabelText(/^paciente$/i)).not.toBeInTheDocument();
+  });
+
+  it('lets you swap the chosen patient with "Cambiar", restoring the search box', async () => {
+    const user = userEvent.setup();
+    await renderFormAndWaitForLoad();
+    await selectMariaByDoc(user);
+
+    await user.click(screen.getByRole('button', { name: /cambiar/i }));
+
+    // Back to searching, with the query cleared so it doesn't re-select.
+    const search = await screen.findByLabelText(/^paciente$/i);
+    expect(search).toHaveValue('');
+    expect(screen.queryByText('María López')).not.toBeInTheDocument();
   });
 
   it('blocks submit and shows a validation message when end is not after start', async () => {
     const user = userEvent.setup();
     await renderFormAndWaitForLoad();
-    await user.selectOptions(screen.getByLabelText(/^paciente$/i), 'pat-1');
+    await selectMariaByDoc(user);
     await user.selectOptions(screen.getByLabelText(/profesional/i), 'staff-1');
     await user.type(screen.getByLabelText(/^fecha$/i), '2026-07-23');
     await user.type(screen.getByLabelText(/hora de inicio/i), '09:30');
@@ -199,7 +262,7 @@ describe('AppointmentForm', () => {
     mockedCreateAppointment.mockResolvedValue(createdAppointment);
     render(<AppointmentForm token="tok" onCreated={onCreated} />);
     await screen.findByRole('option', { name: /dra\. ana ríos/i });
-    await screen.findByRole('option', { name: /maría lópez/i });
+    await waitFor(() => expect(mockedListPatients).toHaveBeenCalled());
     await fillValidForm(user);
 
     await user.click(screen.getByRole('button', { name: /agendar|guardar/i }));
@@ -257,7 +320,23 @@ describe('AppointmentForm', () => {
       expect(within(dialog).getByLabelText(/tipo de documento/i)).toBeInTheDocument();
     });
 
-    it('creates, selects and prepends the patient, and closes the dialog on success', async () => {
+    it('offers to create a patient (pre-filling the document) when a document search finds no match', async () => {
+      const user = userEvent.setup();
+      mockedListPatients.mockResolvedValue({ ...patientsPage, items: [], total: 0 });
+      await renderFormAndWaitForLoad();
+
+      await user.type(screen.getByLabelText(/^paciente$/i), '999');
+      // The "no match" region (role=status) offers its own create button.
+      const noMatch = await screen.findByRole('status');
+      expect(noMatch).toHaveTextContent(/no se encontró/i);
+
+      await user.click(within(noMatch).getByRole('button', { name: /crear paciente/i }));
+      const dialog = await screen.findByRole('dialog');
+      // The typed document number is carried into the create form.
+      expect(within(dialog).getByLabelText(/número de documento/i)).toHaveValue('999');
+    });
+
+    it('creates, selects and shows the new patient as the chosen one, and closes the dialog', async () => {
       const user = userEvent.setup();
       mockedCreatePatient.mockResolvedValue(newPatient);
       await renderFormAndWaitForLoad();
@@ -280,8 +359,7 @@ describe('AppointmentForm', () => {
       });
 
       await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
-      expect(screen.getByLabelText(/^paciente$/i)).toHaveValue('pat-new');
-      expect(screen.getByRole('option', { name: /sofía ramírez/i })).toBeInTheDocument();
+      expect(screen.getByText('Sofía Ramírez')).toBeInTheDocument();
     });
 
     it('keeps the dialog open and shows an error when createPatient fails, without selecting anything', async () => {
@@ -297,12 +375,11 @@ describe('AppointmentForm', () => {
 
       await user.click(within(dialog).getByRole('button', { name: /crear paciente/i }));
 
-      expect(await within(dialog).findByRole('alert')).toHaveTextContent(
-        'Documento ya registrado',
-      );
+      expect(await within(dialog).findByRole('alert')).toHaveTextContent('Documento ya registrado');
       expect(screen.getByRole('dialog')).toBeInTheDocument();
-      expect(screen.getByLabelText(/^paciente$/i)).toHaveValue('');
-      expect(screen.queryByRole('option', { name: /sofía ramírez/i })).not.toBeInTheDocument();
+      // Nothing got selected: the search box is still there, no chip.
+      expect(screen.getByLabelText(/^paciente$/i)).toBeInTheDocument();
+      expect(screen.queryByText('Sofía Ramírez')).not.toBeInTheDocument();
     });
   });
 });

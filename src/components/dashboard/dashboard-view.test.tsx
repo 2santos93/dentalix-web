@@ -1,10 +1,12 @@
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { DashboardView } from './dashboard-view';
 import { ApiError } from '@/lib/api/client';
 import { getDashboard } from '@/lib/dashboard/dashboard-api';
 import type { Dashboard } from '@/lib/dashboard/dashboard-api';
 import { listCurrencies } from '@/lib/reference/currencies-api';
+import { listPatients } from '@/lib/patients/patients-api';
+import { listStaff } from '@/lib/appointments/staff-api';
 
 // NOTE: jest.mock's string literal is not alias-rewritten by the SWC
 // transform (only real `import`/`require` specifiers are) — use a relative
@@ -19,9 +21,46 @@ jest.mock('../../lib/dashboard/dashboard-api', () => ({
 jest.mock('../../lib/reference/currencies-api', () => ({
   listCurrencies: jest.fn(),
 }));
+jest.mock('../../lib/patients/patients-api', () => ({
+  listPatients: jest.fn(),
+}));
+jest.mock('../../lib/appointments/staff-api', () => ({
+  listStaff: jest.fn(),
+}));
 
 const mockedGetDashboard = getDashboard as jest.MockedFunction<typeof getDashboard>;
 const mockedListCurrencies = listCurrencies as jest.MockedFunction<typeof listCurrencies>;
+const mockedListPatients = listPatients as jest.MockedFunction<typeof listPatients>;
+const mockedListStaff = listStaff as jest.MockedFunction<typeof listStaff>;
+
+const PATIENT_ID = 'aaaaaaaa-1111-2222-3333-444444444444';
+
+const patientsPage = {
+  items: [
+    {
+      id: PATIENT_ID,
+      tenantId: 't1',
+      firstName: 'María',
+      lastName: 'López',
+      docType: 'CC' as const,
+      docNumber: '123',
+      birthDate: null,
+      sex: 'F' as const,
+      phone: null,
+      email: null,
+      address: null,
+      notes: null,
+      createdById: null,
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    },
+  ],
+  total: 1,
+  page: 1,
+  pageSize: 100,
+};
+
+const staff = [{ userId: 'staff-1', fullName: 'Dra. Ana Ríos', role: 'DENTIST' as const }];
 
 function dashboard(overrides: Partial<Dashboard> = {}): Dashboard {
   return {
@@ -44,7 +83,7 @@ function dashboard(overrides: Partial<Dashboard> = {}): Dashboard {
     upcomingAppointments: [
       {
         id: 'apt-1',
-        patientId: 'aaaaaaaa-1111-2222-3333-444444444444',
+        patientId: PATIENT_ID,
         providerId: 'staff-1',
         start: '2026-07-24T14:00:00.000Z',
         end: '2026-07-24T14:30:00.000Z',
@@ -91,6 +130,10 @@ describe('DashboardView', () => {
       { code: 'USD', name: 'Dólar estadounidense', symbol: '$' },
       { code: 'COP', name: 'Peso colombiano', symbol: '$' },
     ]);
+    mockedListPatients.mockReset();
+    mockedListStaff.mockReset();
+    mockedListPatients.mockResolvedValue(patientsPage);
+    mockedListStaff.mockResolvedValue(staff);
   });
 
   it('renders the 4 cards (incomes, low stock, upcoming appointments, patient count) with fetched data', async () => {
@@ -111,8 +154,12 @@ describe('DashboardView', () => {
       .replace(/ /g, ' ');
     expect(screen.getByText(totalFormatted)).toBeInTheDocument();
     expect(screen.getByText('12 abonos')).toBeInTheDocument();
-    expect(screen.getByText('COP')).toBeInTheDocument();
-    expect(screen.getByText('USD')).toBeInTheDocument();
+    // Scoped to the "Desglose por moneda" breakdown — the currency <select>
+    // (IMP-10) also renders "COP"/"USD" as option text, so an unscoped
+    // `getByText` would match more than one element.
+    const byCurrencySection = screen.getByText('Desglose por moneda').closest('div') as HTMLElement;
+    expect(within(byCurrencySection).getByText('COP')).toBeInTheDocument();
+    expect(within(byCurrencySection).getByText('USD')).toBeInTheDocument();
 
     // Low stock: count + item rows. `getByText('Bajo stock')` would match
     // twice (the card heading AND the table's sr-only caption) — scope to
@@ -122,13 +169,39 @@ describe('DashboardView', () => {
     expect(screen.getByText('Guantes de nitrilo')).toBeInTheDocument();
     expect(screen.getByText('Anestesia')).toBeInTheDocument();
 
-    // Upcoming appointments: at least one row with a status badge.
+    // Upcoming appointments: at least one row with a status badge, and the
+    // patient/provider names resolved (see the dedicated name-resolution
+    // test below for the fallback-to-id case).
     expect(screen.getByText('Próximas citas')).toBeInTheDocument();
     expect(screen.getByText('Confirmada')).toBeInTheDocument();
+    await screen.findByText(/María López/);
 
     // Patient count.
     expect(screen.getByText('# Pacientes')).toBeInTheDocument();
     expect(screen.getByText('42')).toBeInTheDocument();
+  });
+
+  it('resolves patient + provider names in "Próximas citas" (falling back to the raw id when unresolved)', async () => {
+    mockedGetDashboard.mockResolvedValue(dashboard());
+
+    render(<DashboardView token="tok" />);
+
+    await screen.findByText(/María López/);
+    expect(screen.getByText(/Dra\. Ana Ríos/)).toBeInTheDocument();
+    // The raw uuid/truncated-id rendering this replaces must be gone.
+    expect(screen.queryByText(new RegExp(PATIENT_ID))).not.toBeInTheDocument();
+  });
+
+  it('falls back to the raw patientId/providerId when the name lookups have no match', async () => {
+    mockedListPatients.mockResolvedValue({ ...patientsPage, items: [] });
+    mockedListStaff.mockResolvedValue([]);
+    mockedGetDashboard.mockResolvedValue(dashboard());
+
+    render(<DashboardView token="tok" />);
+
+    await screen.findByText('Próximas citas');
+    expect(screen.getByText(new RegExp(PATIENT_ID))).toBeInTheDocument();
+    expect(screen.getByText(/staff-1/)).toBeInTheDocument();
   });
 
   it('fetches with the default from/to/currency on mount, then refetches with the new params when the range changes', async () => {
@@ -137,7 +210,9 @@ describe('DashboardView', () => {
     render(<DashboardView token="tok" />);
     await waitFor(() => expect(mockedGetDashboard).toHaveBeenCalledTimes(1));
     const [, firstParams] = mockedGetDashboard.mock.calls[0];
-    expect(firstParams.currency).toBe('USD');
+    // Default currency is COP (IMP-10) — the free-text currency input (which
+    // could crash `Intl.NumberFormat` on an invalid code) is gone.
+    expect(firstParams.currency).toBe('COP');
     expect(firstParams.from).toMatch(/^\d{4}-\d{2}-01$/);
     // Default "Hasta" is today, but the backend's incomes/payments-totals
     // query is half-open `[from, to)` — the component must send an exclusive
@@ -184,17 +259,23 @@ describe('DashboardView', () => {
     render(<DashboardView token="tok" />);
     await waitFor(() => expect(mockedGetDashboard).toHaveBeenCalledTimes(1));
 
+    // The "Moneda" control is a native <select> rendered by CurrencySelect.
+    const currencySelect = (await screen.findByLabelText('Moneda')) as HTMLSelectElement;
+    expect(currencySelect.tagName).toBe('SELECT');
+    // Defaults to COP.
+    await waitFor(() => expect(currencySelect.value).toBe('COP'));
+
     mockedGetDashboard.mockClear();
     // CurrencySelect (Task 11) replaces the old free-text currency input —
     // pick an option instead of typing, once its options (from the mocked
-    // `listCurrencies`) have loaded in.
-    const currencySelect = screen.getByLabelText<HTMLSelectElement>('Moneda');
-    await waitFor(() => expect(currencySelect.querySelector('option[value="COP"]')).not.toBeNull());
-    await user.selectOptions(currencySelect, 'COP');
+    // `listCurrencies`) have loaded in. The default is COP, so pick USD to
+    // force a genuinely new value (and therefore a refetch).
+    await waitFor(() => expect(currencySelect.querySelector('option[value="USD"]')).not.toBeNull());
+    await user.selectOptions(currencySelect, 'USD');
 
     await waitFor(() => expect(mockedGetDashboard).toHaveBeenCalledTimes(1));
     const [, params] = mockedGetDashboard.mock.calls[0];
-    expect(params.currency).toBe('COP');
+    expect(params.currency).toBe('USD');
   });
 
   it('shows a loading skeleton while the request is in flight', async () => {
@@ -238,5 +319,38 @@ describe('DashboardView', () => {
 
     await screen.findByText('# Pacientes');
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('shows a friendly guard message (and does NOT fetch) when "Desde" is after "Hasta"', async () => {
+    mockedGetDashboard.mockResolvedValue(dashboard());
+
+    render(<DashboardView token="tok" />);
+    await waitFor(() => expect(mockedGetDashboard).toHaveBeenCalledTimes(1));
+
+    mockedGetDashboard.mockClear();
+    const fromInput = screen.getByLabelText('Desde');
+    fireEvent.change(fromInput, { target: { value: '2026-08-01' } });
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(/desde.*hasta|hasta.*desde/i);
+    expect(screen.queryByText('# Pacientes')).not.toBeInTheDocument();
+    expect(mockedGetDashboard).not.toHaveBeenCalled();
+  });
+
+  it('links "Próximas citas" to /agenda and "# Pacientes" to /patients', async () => {
+    mockedGetDashboard.mockResolvedValue(dashboard());
+
+    render(<DashboardView token="tok" />);
+    await screen.findByText('# Pacientes');
+
+    const agendaLink = screen.getByRole('link', { name: 'Próximas citas' });
+    expect(agendaLink).toHaveAttribute('href', '/agenda');
+
+    const patientsLink = screen.getByRole('link', { name: '# Pacientes' });
+    expect(patientsLink).toHaveAttribute('href', '/patients');
+
+    // "Bajo stock" has no inventory route in this app yet — it must NOT be
+    // rendered as a link.
+    expect(screen.queryByRole('link', { name: 'Bajo stock' })).not.toBeInTheDocument();
   });
 });

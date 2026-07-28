@@ -98,9 +98,12 @@ test('create appointment via the UI -> appears in the day agenda, status change 
 
   // --- Fill it: patient, provider (the registered owner, self), same day
   // currently viewed (pre-filled by `defaultDate`), start/end time, reason ---
-  await appointmentForm
-    .getByLabel('Paciente', { exact: true })
-    .selectOption({ label: `${patientFirstName} ${patientLastName}` });
+  // Typing the exact document number auto-selects the matching patient
+  // (documents are unique) — no list to pick from.
+  await appointmentForm.getByLabel('Paciente', { exact: true }).fill(patientDocNumber);
+  await expect(appointmentForm.getByText(`${patientFirstName} ${patientLastName}`)).toBeVisible({
+    timeout: 10_000,
+  });
   await appointmentForm.getByLabel('Profesional', { exact: true }).selectOption({ label: fullName });
   await appointmentForm.getByLabel('Hora de inicio').fill(startTime);
   await appointmentForm.getByLabel('Hora de fin').fill(endTime);

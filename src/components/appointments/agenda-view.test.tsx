@@ -156,8 +156,10 @@ describe('AgendaView', () => {
     // form share the "Profesional"/"Fecha" label text while the form is
     // open — disambiguate by id (the form's fields, per `appointment-form.tsx`).
     await user.click(screen.getByRole('button', { name: /nueva cita/i }));
-    await screen.findByRole('option', { name: /maría lópez/i });
-    await user.selectOptions(screen.getByLabelText(/^paciente$/i), 'pat-1');
+    // Auto-select María López (pat-1) by typing her exact document number —
+    // wait for the chosen-patient chip ("Cambiar") so the debounced select lands.
+    await user.type(screen.getByLabelText(/^paciente$/i), '123');
+    await screen.findByRole('button', { name: /cambiar/i });
     await user.selectOptions(
       screen.getByLabelText(/profesional/i, { selector: '#appointment-provider' }),
       'staff-1',

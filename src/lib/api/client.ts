@@ -1,4 +1,8 @@
+import { useAuthStore } from '@/lib/auth/auth-store';
+
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000/api/v1';
+
+const REFRESH_PATH = '/auth/refresh';
 
 export class ApiError extends Error {
   constructor(
@@ -16,7 +20,57 @@ interface ApiOptions {
   token?: string;
 }
 
-async function doFetch(path: string, opts: ApiOptions): Promise<Response> {
+// A single in-flight refresh shared by every request that hits a 401 at the
+// same time. Access tokens are short-lived (JWT_ACCESS_TTL, ~15m), so when
+// one expires it's common for several concurrent requests to 401 together —
+// without this, each would POST /auth/refresh and, because the backend
+// ROTATES the refresh token on every call, the second refresh would race the
+// first and could run against an already-rotated token. Funnelling them
+// through one promise rotates exactly once.
+let refreshInFlight: Promise<string | null> | null = null;
+
+/**
+ * Exchanges the stored refresh token for a fresh access+refresh pair via
+ * `POST /auth/refresh`, updates the auth store, and resolves to the new
+ * access token. Resolves to `null` (and clears the store, forcing re-login)
+ * when there is no refresh token or the refresh itself fails. Server-side
+ * (no `window`) there is no persisted store, so it's always `null`.
+ */
+function refreshAccessToken(): Promise<string | null> {
+  if (refreshInFlight) return refreshInFlight;
+  refreshInFlight = (async () => {
+    if (typeof window === 'undefined') return null;
+    const { refreshToken, setTokens, clear } = useAuthStore.getState();
+    if (!refreshToken) return null;
+    try {
+      // `allowRefresh: false` — never recurse: a 401 from the refresh call
+      // itself means the refresh token is dead, not that we should refresh.
+      const res = await doFetch(
+        REFRESH_PATH,
+        { method: 'POST', body: { refreshToken } },
+        false,
+      );
+      const data = (await res.json()) as {
+        accessToken: string;
+        refreshToken: string;
+      };
+      setTokens(data);
+      return data.accessToken;
+    } catch {
+      clear();
+      return null;
+    }
+  })().finally(() => {
+    refreshInFlight = null;
+  });
+  return refreshInFlight;
+}
+
+async function doFetch(
+  path: string,
+  opts: ApiOptions,
+  allowRefresh = true,
+): Promise<Response> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (opts.token) headers.Authorization = `Bearer ${opts.token}`;
   // The backend resolves the tenant from the request host (see
@@ -34,6 +88,21 @@ async function doFetch(path: string, opts: ApiOptions): Promise<Response> {
     body: opts.body === undefined ? undefined : JSON.stringify(opts.body),
     cache: 'no-store',
   });
+  // Expired access token → transparently refresh once and replay the request
+  // with the new token. Skipped for the auth endpoints themselves (a 401 from
+  // /login is "wrong password", not "expired session") and when a prior call
+  // in this chain already refreshed (`allowRefresh: false`) so we retry at
+  // most once.
+  if (
+    res.status === 401 &&
+    allowRefresh &&
+    !path.startsWith('/auth/')
+  ) {
+    const newToken = await refreshAccessToken();
+    if (newToken) {
+      return doFetch(path, { ...opts, token: newToken }, false);
+    }
+  }
   if (!res.ok) {
     let message = `Request failed (${res.status})`;
     try {

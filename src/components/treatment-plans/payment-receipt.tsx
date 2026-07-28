@@ -9,6 +9,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { formatCurrency } from '@/lib/format/currency';
 import type { Payment, PaymentMethod, PlanBalance } from '@/lib/payments/payments-api';
+import { formatCivilDate, formatDate } from '@/lib/format/date';
 
 // Copy as constants (i18n-ready, es-first) — same convention as
 // `treatment-plans-tab.tsx`'s `copy` object.
@@ -46,11 +47,6 @@ const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
   TRANSFER: 'Transferencia',
   OTHER: 'Otro',
 };
-
-/** Civil (calendar) date only — same as `treatment-plans-tab.tsx`'s `formatCivilDate`. */
-function formatCivilDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('es');
-}
 
 /** `REC-<first 8 chars of payment.id>` — v1 receipt reference (see plan notes: real sequential numbering is a follow-up). */
 function receiptReference(paymentId: string): string {
@@ -102,7 +98,7 @@ export function PaymentReceipt({
             <DialogTitle className="!text-[#111827]">{copy.title}</DialogTitle>
             <DialogDescription className="sr-only">{copy.a11yDescription}</DialogDescription>
             <p className="text-xs text-[#6b7280]">
-              {copy.issuedAtLabel}: {formatCivilDate(new Date().toISOString())} · {copy.referenceLabel}:{' '}
+              {copy.issuedAtLabel}: {formatDate(new Date().toISOString())} · {copy.referenceLabel}:{' '}
               {receiptReference(payment.id)}
             </p>
           </DialogHeader>

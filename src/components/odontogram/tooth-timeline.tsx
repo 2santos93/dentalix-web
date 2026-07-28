@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { ApiError } from '@/lib/api/client';
 import { getToothTimeline, type ToothRecord, type ToothSurface } from '@/lib/odontogram/odontogram-api';
+import { formatDate } from '@/lib/format/date';
 
 // Copy as constants (i18n-ready, es-first) — matches medical-history-panel.tsx convention.
 const copy = {
@@ -42,10 +43,6 @@ interface ToothTimelineProps {
   catalogById?: Map<string, TimelineCatalogEntry>;
   /** Bump this to force a refetch (e.g. after a new record is added). */
   refreshKey?: number;
-}
-
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('es');
 }
 
 function surfacesLabel(record: ToothRecord): string {
