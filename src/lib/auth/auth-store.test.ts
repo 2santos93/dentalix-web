@@ -17,4 +17,15 @@ describe('useAuthStore', () => {
     // boolean, matching the state-shape contract without depending on timing.
     expect(typeof useAuthStore.getState()._hasHydrated).toBe('boolean');
   });
+
+  it('clear() wipes the persisted localStorage key, not just the in-memory tokens', () => {
+    useAuthStore.getState().setTokens({ accessToken: 'a', refreshToken: 'r' });
+    // persist escribe la key de forma síncrona al setear estado en jsdom.
+    expect(localStorage.getItem('dentalix-auth')).not.toBeNull();
+
+    useAuthStore.getState().clear();
+
+    expect(useAuthStore.getState().accessToken).toBeNull();
+    expect(localStorage.getItem('dentalix-auth')).toBeNull();
+  });
 });
