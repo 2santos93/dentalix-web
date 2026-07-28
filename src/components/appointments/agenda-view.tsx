@@ -34,6 +34,7 @@ const copy = {
   weekView: 'Semana',
   refreshing: 'Actualizando…',
   retry: 'Reintentar',
+  loading: 'Cargando agenda…',
   genericStaffError: 'No pudimos cargar los profesionales. Intenta de nuevo.',
   genericAppointmentsError: 'No pudimos cargar la agenda. Intenta de nuevo.',
   genericRefreshError: 'No pudimos actualizar la agenda. Intenta de nuevo.',
@@ -289,6 +290,17 @@ export function AgendaView({ token }: AgendaViewProps) {
     }
   }
 
+  // The detail panel's displayed appointment, kept in sync with the
+  // server-confirmed `appointments` array (same pattern as `DayAgenda`'s row
+  // `<select>`, whose `value` is also read off `appointments`, not local
+  // state) — so a failed status PATCH leaves the real, unchanged status
+  // showing instead of the optimistic one (review fix). Falls back to
+  // `detailAppointment` itself if it's since dropped out of `appointments`
+  // (e.g. a day/week range change while the panel is open).
+  const liveDetailAppointment = detailAppointment
+    ? appointments.find((a) => a.id === detailAppointment.id) ?? detailAppointment
+    : null;
+
   return (
     <div className="flex flex-col gap-6">
       <Card>
@@ -428,14 +440,28 @@ export function AgendaView({ token }: AgendaViewProps) {
           {copy.selectProviderPrompt}
         </p>
       ) : viewMode === 'week' ? (
-        <WeekTimeGrid
-          appointments={appointments}
-          weekStart={weekStartOf(selectedDate)}
-          patientNames={patientNames}
-          onSelectDay={handleSelectDay}
-          onSelectSlot={handleSelectSlot}
-          onSelectAppointment={(a) => setDetailAppointment(a)}
-        />
+        // `WeekTimeGrid` is purely presentational (no loading/error props,
+        // unlike `DayAgenda`) — mirror `DayAgenda`'s own loading/error
+        // branches here so Semana keeps the same feedback it had via
+        // `WeekAgenda` before the swap (review fix).
+        appointmentsLoading ? (
+          <p role="status" className="text-sm text-muted">
+            {copy.loading}
+          </p>
+        ) : appointmentsLoadError ? (
+          <p role="alert" className="text-sm text-danger">
+            {appointmentsLoadError}
+          </p>
+        ) : (
+          <WeekTimeGrid
+            appointments={appointments}
+            weekStart={weekStartOf(selectedDate)}
+            patientNames={patientNames}
+            onSelectDay={handleSelectDay}
+            onSelectSlot={handleSelectSlot}
+            onSelectAppointment={(a) => setDetailAppointment(a)}
+          />
+        )
       ) : (
         <DayAgenda
           appointments={appointments}
@@ -447,19 +473,19 @@ export function AgendaView({ token }: AgendaViewProps) {
         />
       )}
 
-      {detailAppointment && (
+      {liveDetailAppointment && (
         <Card>
           <CardContent className="flex flex-col gap-3 p-4">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="font-medium text-ink">
-                  {patientNames[detailAppointment.patientId] ?? detailAppointment.patientId}
+                  {patientNames[liveDetailAppointment.patientId] ?? liveDetailAppointment.patientId}
                 </p>
                 <p className="text-sm text-muted">
-                  {formatTimeRange(detailAppointment.start, detailAppointment.end)}
+                  {formatTimeRange(liveDetailAppointment.start, liveDetailAppointment.end)}
                 </p>
-                {detailAppointment.reason && (
-                  <p className="text-sm text-ink">{detailAppointment.reason}</p>
+                {liveDetailAppointment.reason && (
+                  <p className="text-sm text-ink">{liveDetailAppointment.reason}</p>
                 )}
               </div>
               <Button
@@ -475,12 +501,12 @@ export function AgendaView({ token }: AgendaViewProps) {
               <select
                 id="detail-status"
                 className={fieldClass}
-                value={detailAppointment.status}
-                disabled={updatingId === detailAppointment.id}
+                value={liveDetailAppointment.status}
+                disabled={updatingId === liveDetailAppointment.id}
                 onChange={(e) => {
-                  void handleStatusChange(detailAppointment.id, e.target.value as AppointmentStatus);
-                  setDetailAppointment((prev) =>
-                    prev ? { ...prev, status: e.target.value as AppointmentStatus } : prev,
+                  void handleStatusChange(
+                    liveDetailAppointment.id,
+                    e.target.value as AppointmentStatus,
                   );
                 }}
               >
