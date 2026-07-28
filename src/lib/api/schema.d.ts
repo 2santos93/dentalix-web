@@ -420,6 +420,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/currencies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ReferenceController_currencies"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/countries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ReferenceController_countries"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ReferenceController_cities"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/treatment-plans/{id}/payments": {
         parameters: {
             query?: never;
@@ -561,6 +609,16 @@ export interface components {
             phone?: string;
             email?: string;
             address?: string;
+            /**
+             * @description ISO 3166-1 alpha-2
+             * @example CO
+             */
+            countryCode?: string;
+            /**
+             * @description City id from GET /cities
+             * @example 12345
+             */
+            cityId?: number;
             notes?: string;
         };
         PatientDto: {
@@ -580,6 +638,8 @@ export interface components {
             phone: string | null;
             email: string | null;
             address: string | null;
+            countryCode: string | null;
+            cityId: number | null;
             notes: string | null;
             /** Format: uuid */
             createdById: string | null;
@@ -607,6 +667,16 @@ export interface components {
             phone?: string;
             email?: string;
             address?: string;
+            /**
+             * @description ISO 3166-1 alpha-2
+             * @example CO
+             */
+            countryCode?: string;
+            /**
+             * @description City id from GET /cities
+             * @example 12345
+             */
+            cityId?: number;
             notes?: string;
         };
         CreateCatalogItemDto: {
@@ -811,6 +881,11 @@ export interface components {
             notes?: string;
         };
         CreateTreatmentPlanDto: {
+            /**
+             * @description ISO 4217 (default USD)
+             * @example USD
+             */
+            currency?: string;
             notes?: string;
         };
         TreatmentPlanItemDto: {
@@ -842,6 +917,11 @@ export interface components {
             patientId: string;
             /** @enum {string} */
             status: "DRAFT" | "ACCEPTED" | "COMPLETED" | "CANCELLED";
+            /**
+             * @description ISO 4217 (default USD)
+             * @example USD
+             */
+            currency: string;
             notes: string | null;
             /** Format: uuid */
             createdById: string | null;
@@ -856,6 +936,11 @@ export interface components {
         UpdateTreatmentPlanDto: {
             /** @enum {string} */
             status?: "DRAFT" | "ACCEPTED" | "COMPLETED" | "CANCELLED";
+            /**
+             * @description ISO 4217
+             * @example USD
+             */
+            currency?: string;
             notes?: string;
         };
         AddTreatmentPlanItemDto: {
@@ -935,6 +1020,28 @@ export interface components {
              * @example 4000
              */
             rateUsed: number;
+        };
+        CurrencyDto: {
+            /** @example USD */
+            code: string;
+            /** @example Dólar estadounidense */
+            name: string;
+            /** @example $ */
+            symbol: string;
+        };
+        CountryDto: {
+            /** @example CO */
+            code: string;
+            /** @example Colombia */
+            name: string;
+        };
+        CityDto: {
+            /** @example 12345 */
+            id: number;
+            /** @example Bogotá */
+            name: string;
+            /** @example Bogota D.C. */
+            region: string | null;
         };
         RecordPaymentDto: {
             /**
@@ -2040,6 +2147,69 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["ConvertResponseDto"];
+                };
+            };
+        };
+    };
+    ReferenceController_currencies: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CurrencyDto"][];
+                };
+            };
+        };
+    };
+    ReferenceController_countries: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CountryDto"][];
+                };
+            };
+        };
+    };
+    ReferenceController_cities: {
+        parameters: {
+            query: {
+                /** @description ISO 3166-1 alpha-2 country code */
+                countryCode: string;
+                /** @description Case-insensitive name filter */
+                q?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CityDto"][];
                 };
             };
         };
