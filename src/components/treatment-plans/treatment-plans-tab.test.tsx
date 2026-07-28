@@ -22,6 +22,7 @@ import {
 import { listCatalogItems } from '@/lib/odontogram/catalog-api';
 import { getPatient, type Patient } from '@/lib/patients/patients-api';
 import { fetchClinicName } from '@/lib/clinic-branding';
+import { listCurrencies } from '@/lib/reference/currencies-api';
 
 // NOTE: jest.mock's string literal is not alias-rewritten by the SWC
 // transform (only real `import`/`require` specifiers are) — use a relative
@@ -45,6 +46,12 @@ jest.mock('../../lib/payments/payments-api', () => ({
 jest.mock('../../lib/odontogram/catalog-api', () => ({
   listCatalogItems: jest.fn(),
 }));
+// CurrencySelect (Task 10, wired in this component per Task 11) fetches its
+// own options via `listCurrencies` — mock it here so the abono-currency and
+// new-plan-currency selects render deterministically.
+jest.mock('../../lib/reference/currencies-api', () => ({
+  listCurrencies: jest.fn(),
+}));
 // Recibo (RECIBO-T1): patient name + clinic name, fetched once by the tab.
 jest.mock('../../lib/patients/patients-api', () => ({
   getPatient: jest.fn(),
@@ -67,6 +74,7 @@ const mockedRecordPayment = recordPayment as jest.MockedFunction<typeof recordPa
 const mockedVoidPayment = voidPayment as jest.MockedFunction<typeof voidPayment>;
 const mockedGetPatient = getPatient as jest.MockedFunction<typeof getPatient>;
 const mockedFetchClinicName = fetchClinicName as jest.MockedFunction<typeof fetchClinicName>;
+const mockedListCurrencies = listCurrencies as jest.MockedFunction<typeof listCurrencies>;
 
 const catalog = [
   {
@@ -234,6 +242,11 @@ describe('TreatmentPlansTab', () => {
     mockedVoidPayment.mockReset();
     mockedGetPatient.mockReset();
     mockedFetchClinicName.mockReset();
+    mockedListCurrencies.mockReset();
+    mockedListCurrencies.mockResolvedValue([
+      { code: 'USD', name: 'Dólar estadounidense', symbol: '$' },
+      { code: 'COP', name: 'Peso colombiano', symbol: '$' },
+    ]);
     // Default: empty balance/no abonos, so tests that don't exercise the
     // payments block (most of the existing item/plan tests below) don't hang
     // on an unresolved mock.
@@ -258,9 +271,17 @@ describe('TreatmentPlansTab', () => {
 
     expect(await screen.findByText(/todavía no tiene un plan de tratamiento/i)).toBeInTheDocument();
 
+    // The "Nuevo plan" currency select has no adjacent <label> (it sits next
+    // to the button, not in a FormField) — must still be reachable by its
+    // accessible name (WCAG 4.1.2, via CurrencySelect's `ariaLabel`).
+    expect(screen.getByLabelText(/moneda del nuevo plan/i)).toHaveDisplayValue(/./);
+
     await user.click(screen.getByRole('button', { name: /nuevo plan/i }));
 
-    await waitFor(() => expect(mockedCreatePlan).toHaveBeenCalledWith('tok', 'pat-1', {}));
+    // The "Nuevo plan" currency select defaults to USD (Task 11).
+    await waitFor(() =>
+      expect(mockedCreatePlan).toHaveBeenCalledWith('tok', 'pat-1', { currency: 'USD' }),
+    );
     await waitFor(() => expect(mockedListPlans).toHaveBeenCalledTimes(2));
     // The new plan is auto-selected -> its (empty) detail is fetched.
     await waitFor(() => expect(mockedGetPlan).toHaveBeenCalledWith('tok', 'plan-new'));
@@ -501,14 +522,22 @@ describe('TreatmentPlansTab', () => {
 
     await user.click(screen.getByRole('button', { name: /^registrar abono$/i }));
 
-    const currencyInput = screen.getByLabelText<HTMLInputElement>(/^moneda$/i);
-    expect(currencyInput.value).toBe(plan1.currency);
+    const currencySelect = screen.getByLabelText<HTMLSelectElement>(/^moneda$/i);
+    expect(currencySelect.value).toBe(plan1.currency);
     const dateInput = screen.getByLabelText<HTMLInputElement>(/^fecha$/i);
     expect(dateInput.value).not.toBe('');
 
+    // Picking a different currency from the select (Task 11: CurrencySelect
+    // replaces the old free-text input) must be what's submitted — wait for
+    // its (mocked `listCurrencies`) options to load in first. Scoped to this
+    // select specifically: the "Nuevo plan" currency select above also
+    // renders the same options once loaded.
+    await waitFor(() => expect(currencySelect.querySelector('option[value="COP"]')).not.toBeNull());
+    await user.selectOptions(currencySelect, 'COP');
+
     await user.type(screen.getByLabelText(/^monto$/i), '25000');
 
-    const newPayment = { ...payment1, id: 'pay-2', amount: 25000 };
+    const newPayment = { ...payment1, id: 'pay-2', amount: 25000, currency: 'COP' };
     const updatedBalance = { ...balance1, paid: balance1.paid + 25000, balance: balance1.balance - 25000 };
     mockedRecordPayment.mockResolvedValue(newPayment);
     mockedGetPlanBalance.mockResolvedValueOnce(updatedBalance);
@@ -521,7 +550,7 @@ describe('TreatmentPlansTab', () => {
     expect(tokenArg).toBe('tok');
     expect(planIdArg).toBe('plan-1');
     expect(input.amount).toBe(25000);
-    expect(input.currency).toBe('USD');
+    expect(input.currency).toBe('COP');
     expect(input.paidAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
     expect(input.method).toBeUndefined();
 

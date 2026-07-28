@@ -1,12 +1,12 @@
 'use client';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ApiError } from '@/lib/api/client';
 import { getDashboard, type Dashboard } from '@/lib/dashboard/dashboard-api';
 import { addOneDayIso } from '@/lib/dashboard/date-range';
+import { formatCurrency } from '@/lib/format/currency';
 import { listPatients } from '@/lib/patients/patients-api';
 import { listStaff } from '@/lib/appointments/staff-api';
-import { getExchangeRates, type ExchangeRates } from '@/lib/exchange/exchange-api';
 import { formatTime } from '@/lib/format/date';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
@@ -16,6 +16,7 @@ import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { FormField } from '@/components/molecules/form-field';
 import { EmptyState } from '@/components/molecules/empty-state';
+import { CurrencySelect } from '@/components/molecules/currency-select';
 
 // Copy as constants (i18n-ready, es-first) — matches
 // treatment-plans-tab.tsx / agenda-view.tsx convention until next-intl
@@ -83,38 +84,6 @@ function monthStartLocalDateString(): string {
   return `${yyyy}-${mm}-01`;
 }
 
-/**
- * `Intl.NumberFormat`'s constructor throws a `RangeError` on an unsupported
- * `currency` code — this used to be directly reachable via the free-text
- * currency `Input` (IMP-10). That input is gone now (a `<select>` populated
- * from `getExchangeRates` only ever offers real codes), but this guard stays
- * so an unexpected/unsupported code can never crash the render.
- */
-function formatCurrencySafe(amount: number, currency: string): string {
-  try {
-    return new Intl.NumberFormat('es', { style: 'currency', currency }).format(amount);
-  } catch {
-    return `${amount} ${currency}`;
-  }
-}
-
-// `RatesResponseDto.base` (see `exchange-api.ts`) — the currency all `rates`
-// entries are expressed relative to. `getExchangeRates`'s response carries
-// its own `base` field (used below); this is only a last-resort fallback for
-// the (currently unreachable, since the schema types `base` as the literal
-// `"USD"`) case where a resolved response is somehow missing it.
-const EXCHANGE_BASE = 'USD';
-// Used to populate the currency `<select>` if `getExchangeRates` hasn't
-// resolved yet (or fails) — best-effort, mirrors `AgendaView`'s
-// fetched-once/best-effort name maps.
-const FALLBACK_CURRENCIES = ['USD', 'COP', 'EUR', 'MXN', 'BRL'];
-
-// Native <select> styled to match the Input atom (kept native for
-// a11y/tests) — same documented convention as `agenda-view.tsx` /
-// `treatment-plans-tab.tsx`'s `fieldClass`.
-const fieldClass =
-  'flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-50';
-
 interface DashboardViewProps {
   token: string;
 }
@@ -130,13 +99,13 @@ interface DashboardViewProps {
  * different period/currency), so it's rendered as a fresh loading skeleton,
  * not a background refresh over the previous period's numbers.
  *
- * The "Moneda" `<select>` (IMP-10) is populated from `getExchangeRates`
- * (the base currency, `USD`, plus every key of its `rates` map) instead of a
- * free-text input — that input could produce an invalid ISO 4217 code and
- * crash `Intl.NumberFormat` with a `RangeError`, and it refetched on every
- * keystroke. "Desde"/"Hasta" also get a client-side range guard (IMP-11): if
- * `from > to` the request is never fired and a friendly message is shown
- * instead, mirroring `appointment-form.tsx`'s `validationEndAfterStart`.
+ * The "Moneda" control is a `CurrencySelect` (reference-data currencies)
+ * instead of a free-text input — that input could produce an invalid ISO 4217
+ * code and crash `Intl.NumberFormat` with a `RangeError` (all money now
+ * renders through the crash-safe `formatCurrency`). "Desde"/"Hasta" also get a
+ * client-side range guard (IMP-11): if `from > to` the request is never fired
+ * and a friendly message is shown instead, mirroring `appointment-form.tsx`'s
+ * `validationEndAfterStart`.
  */
 export function DashboardView({ token }: DashboardViewProps) {
   const [from, setFrom] = useState(monthStartLocalDateString);
@@ -154,13 +123,6 @@ export function DashboardView({ token }: DashboardViewProps) {
   // worth its own error UI.
   const [patientNames, setPatientNames] = useState<Record<string, string>>({});
   const [staffNames, setStaffNames] = useState<Record<string, string>>({});
-
-  // Supported currencies for the "Moneda" `<select>` (IMP-10) — fetched once
-  // from `getExchangeRates` (best-effort; falls back to a small hardcoded
-  // list if it hasn't resolved yet or fails, so the select is never empty).
-  // Stores the full response (not just `rates`) so `currencyOptions` below
-  // can use the API's own `base` instead of the hardcoded `EXCHANGE_BASE`.
-  const [rates, setRates] = useState<ExchangeRates | null>(null);
 
   useEffect(() => {
     if (!token) return;
@@ -192,24 +154,6 @@ export function DashboardView({ token }: DashboardViewProps) {
         setStaffNames(Object.fromEntries(data.map((s) => [s.userId, s.fullName])));
       } catch {
         /* best-effort, see comment above */
-      }
-    }
-    void load();
-    return () => {
-      cancelled = true;
-    };
-  }, [token]);
-
-  useEffect(() => {
-    if (!token) return;
-    let cancelled = false;
-    async function load() {
-      try {
-        const result = await getExchangeRates(token);
-        if (cancelled) return;
-        setRates(result);
-      } catch {
-        /* best-effort, see comment above — the select falls back to FALLBACK_CURRENCIES */
       }
     }
     void load();
@@ -262,49 +206,6 @@ export function DashboardView({ token }: DashboardViewProps) {
     };
   }, [token, from, to, currency, reloadKey, rangeInvalid]);
 
-  // Memoized (rather than recomputed inline every render) so the
-  // reconciliation effect below only re-runs when `rates` itself changes —
-  // not on every unrelated render — which is what keeps it from looping.
-  const currencyOptions = useMemo(
-    () =>
-      rates
-        ? Array.from(new Set([rates.base ?? EXCHANGE_BASE, ...Object.keys(rates.rates)]))
-        : FALLBACK_CURRENCIES,
-    [rates],
-  );
-
-  // Reconciles `currency` against `currencyOptions` whenever the latter
-  // changes (i.e. once `getExchangeRates` resolves). `currency` defaults to
-  // `'COP'`, but the resolved rates for a given date may not include `COP` —
-  // in that case the controlled `<select value={currency}>` would have no
-  // matching `<option>`, silently desyncing the DOM's displayed selection
-  // from state while `getDashboard` keeps firing with the dangling value.
-  //
-  // This follows React's documented "adjusting state when a prop changes"
-  // pattern — https://react.dev/learn/you-might-not-need-an-effect#adjusting-some-state-when-a-prop-changes
-  // — calling `setState` directly in the render body (guarded by a
-  // reference-equality check against the previous `currencyOptions`) rather
-  // than in a `useEffect`. That avoids both the extra commit/paint an
-  // effect-based fix would add and the `react-hooks/set-state-in-effect`
-  // lint rule. `currencyOptions` is memoized above and only changes
-  // reference when `rates` changes, and the reconciliation only clamps when
-  // `currency` is genuinely out of range (the common case — `COP` present —
-  // is a no-op), so this settles after at most one corrective render and
-  // can't turn into a refetch loop.
-  const [prevCurrencyOptions, setPrevCurrencyOptions] = useState(currencyOptions);
-  if (currencyOptions !== prevCurrencyOptions) {
-    setPrevCurrencyOptions(currencyOptions);
-    if (!currencyOptions.includes(currency)) {
-      const base = rates?.base ?? EXCHANGE_BASE;
-      const fallback = currencyOptions.includes('COP')
-        ? 'COP'
-        : currencyOptions.includes(base)
-          ? base
-          : currencyOptions[0];
-      if (fallback && fallback !== currency) setCurrency(fallback);
-    }
-  }
-
   return (
     <div className="flex flex-col gap-6">
       <Card>
@@ -327,19 +228,8 @@ export function DashboardView({ token }: DashboardViewProps) {
               className="w-auto"
             />
           </FormField>
-          <FormField htmlFor="dashboard-currency" label={copy.currencyLabel} className="w-28">
-            <select
-              id="dashboard-currency"
-              value={currency}
-              onChange={(e) => setCurrency(e.target.value)}
-              className={fieldClass}
-            >
-              {currencyOptions.map((code) => (
-                <option key={code} value={code}>
-                  {code}
-                </option>
-              ))}
-            </select>
+          <FormField htmlFor="dashboard-currency" label={copy.currencyLabel} className="w-44">
+            <CurrencySelect id="dashboard-currency" token={token} value={currency} onChange={setCurrency} />
           </FormField>
         </CardContent>
       </Card>
@@ -389,7 +279,7 @@ function IncomesCard({ incomes }: { incomes: Dashboard['incomes'] }) {
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
         <p className="text-3xl font-semibold tracking-tight text-ink">
-          {formatCurrencySafe(incomes.totalConverted, incomes.currency)}
+          {formatCurrency(incomes.totalConverted, incomes.currency)}
         </p>
         <p className="text-sm text-muted">{copy.incomesCount(incomes.count)}</p>
         {byCurrencyEntries.length > 0 && (
@@ -401,7 +291,7 @@ function IncomesCard({ incomes }: { incomes: Dashboard['incomes'] }) {
               {byCurrencyEntries.map(([cur, amount]) => (
                 <li key={cur} className="flex items-center justify-between text-sm text-ink">
                   <span>{cur}</span>
-                  <span className="font-medium">{formatCurrencySafe(amount, cur)}</span>
+                  <span className="font-medium">{formatCurrency(amount, cur)}</span>
                 </li>
               ))}
             </ul>
