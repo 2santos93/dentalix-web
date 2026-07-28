@@ -2,7 +2,7 @@
 import * as React from 'react';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { Loader2 } from 'lucide-react';
+import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import { apiFetch, ApiError } from '@/lib/api/client';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { Button } from '@/components/ui/button';
@@ -14,10 +14,14 @@ import { FormField } from '@/components/molecules/form-field';
 const copy = {
   emailLabel: 'Correo electrónico',
   passwordLabel: 'Contraseña',
+  showPassword: 'Mostrar clave',
+  hidePassword: 'Ocultar clave',
   submit: 'Iniciar sesión',
   submitting: 'Iniciando…',
   genericError: 'No pudimos iniciar sesión. Intenta de nuevo.',
 };
+
+const ERROR_ID = 'login-error';
 
 interface LoginResponse {
   accessToken: string;
@@ -29,6 +33,7 @@ export function LoginForm() {
   const setTokens = useAuthStore((s) => s.setTokens);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -59,25 +64,48 @@ export function LoginForm() {
           type="email"
           autoComplete="email"
           required
+          disabled={submitting}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={error ? ERROR_ID : undefined}
           value={email}
           onChange={(e) => setEmail(e.target.value)}
         />
       </FormField>
 
       <FormField htmlFor="login-password" label={copy.passwordLabel}>
-        <Input
-          id="login-password"
-          name="password"
-          type="password"
-          autoComplete="current-password"
-          required
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-        />
+        <div className="relative">
+          <Input
+            id="login-password"
+            name="password"
+            type={showPassword ? 'text' : 'password'}
+            autoComplete="current-password"
+            required
+            disabled={submitting}
+            aria-invalid={error ? true : undefined}
+            aria-describedby={error ? ERROR_ID : undefined}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="pr-10"
+          />
+          <button
+            type="button"
+            onClick={() => setShowPassword((v) => !v)}
+            disabled={submitting}
+            aria-pressed={showPassword}
+            aria-label={showPassword ? copy.hidePassword : copy.showPassword}
+            className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-muted transition-colors hover:text-ink disabled:pointer-events-none disabled:opacity-50"
+          >
+            {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+          </button>
+        </div>
       </FormField>
 
       {error ? (
-        <p role="alert" className="text-sm font-medium text-danger">
+        <p
+          id={ERROR_ID}
+          role="alert"
+          className="rounded-lg border border-danger/20 bg-danger/10 px-3 py-2 text-sm font-medium text-danger"
+        >
           {error}
         </p>
       ) : null}

@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { headers } from 'next/headers';
 import { RegisterForm } from '@/components/auth/register-form';
-import { ThemeToggle } from '@/components/theme/theme-toggle';
+import { AuthLayout } from '@/components/templates/auth-layout';
 import { fetchBranding } from '@/lib/branding';
 import { parseTenantFromHost } from '@/lib/tenant';
 
@@ -20,23 +20,19 @@ export default async function RegisterPage() {
   const branding = await fetchBranding(tenant);
 
   return (
-    <div className="flex min-h-full flex-1 flex-col items-center justify-center gap-6 bg-bg px-4 py-12">
-      <div className="flex w-full max-w-sm justify-end">
-        <ThemeToggle />
-      </div>
-      <div className="w-full max-w-sm rounded-lg border border-border bg-surface p-8 shadow-sm">
-        <h1 className="mb-1 text-2xl font-semibold text-ink">
-          {branding.name ?? copy.defaultTitle}
-        </h1>
-        <p className="mb-6 text-sm text-muted">{copy.subtitle}</p>
-        <RegisterForm tenant={tenant} />
-        <p className="mt-6 text-center text-sm text-muted">
+    <AuthLayout
+      title={branding.name ?? copy.defaultTitle}
+      subtitle={copy.subtitle}
+      footer={
+        <>
           {copy.loginPrompt}{' '}
-          <Link href="/login" className="font-medium text-primary">
+          <Link href="/login" className="font-medium text-primary hover:underline">
             {copy.loginLink}
           </Link>
-        </p>
-      </div>
-    </div>
+        </>
+      }
+    >
+      <RegisterForm tenant={tenant} />
+    </AuthLayout>
   );
 }

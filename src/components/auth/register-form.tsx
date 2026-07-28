@@ -2,7 +2,11 @@
 import * as React from 'react';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { Eye, EyeOff, Loader2 } from 'lucide-react';
 import { apiFetch, ApiError } from '@/lib/api/client';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { FormField } from '@/components/molecules/form-field';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
@@ -12,10 +16,14 @@ const copy = {
   fullNameLabel: 'Nombre completo',
   emailLabel: 'Correo electrónico',
   passwordLabel: 'Contraseña',
+  showPassword: 'Mostrar clave',
+  hidePassword: 'Ocultar clave',
   submit: 'Crear cuenta',
   submitting: 'Creando cuenta…',
   genericError: 'No pudimos crear la cuenta. Intenta de nuevo.',
 };
+
+const ERROR_ID = 'register-error';
 
 interface RegisterResponse {
   accessToken: string;
@@ -29,6 +37,7 @@ export function RegisterForm({ tenant }: { tenant: string | null }) {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -51,91 +60,111 @@ export function RegisterForm({ tenant }: { tenant: string | null }) {
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-      <div className="flex flex-col gap-1">
-        <label htmlFor="register-clinic-name" className="text-sm font-medium text-ink">
-          {copy.clinicNameLabel}
-        </label>
-        <input
+      <FormField htmlFor="register-clinic-name" label={copy.clinicNameLabel}>
+        <Input
           id="register-clinic-name"
           name="clinicName"
           type="text"
           required
+          disabled={submitting}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={error ? ERROR_ID : undefined}
           value={clinicName}
           onChange={(e) => setClinicName(e.target.value)}
-          className="rounded-md border border-border bg-surface px-3 py-2 text-ink"
         />
-      </div>
-      <div className="flex flex-col gap-1">
-        <label htmlFor="register-subdomain" className="text-sm font-medium text-ink">
-          {copy.subdomainLabel}
-        </label>
-        <input
+      </FormField>
+
+      <FormField htmlFor="register-subdomain" label={copy.subdomainLabel}>
+        <Input
           id="register-subdomain"
           name="subdomain"
           type="text"
           required
+          disabled={submitting}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={error ? ERROR_ID : undefined}
           value={subdomain}
           onChange={(e) => setSubdomain(e.target.value)}
-          className="rounded-md border border-border bg-surface px-3 py-2 text-ink"
         />
-      </div>
-      <div className="flex flex-col gap-1">
-        <label htmlFor="register-full-name" className="text-sm font-medium text-ink">
-          {copy.fullNameLabel}
-        </label>
-        <input
+      </FormField>
+
+      <FormField htmlFor="register-full-name" label={copy.fullNameLabel}>
+        <Input
           id="register-full-name"
           name="fullName"
           type="text"
           autoComplete="name"
           required
+          disabled={submitting}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={error ? ERROR_ID : undefined}
           value={fullName}
           onChange={(e) => setFullName(e.target.value)}
-          className="rounded-md border border-border bg-surface px-3 py-2 text-ink"
         />
-      </div>
-      <div className="flex flex-col gap-1">
-        <label htmlFor="register-email" className="text-sm font-medium text-ink">
-          {copy.emailLabel}
-        </label>
-        <input
+      </FormField>
+
+      <FormField htmlFor="register-email" label={copy.emailLabel}>
+        <Input
           id="register-email"
           name="email"
           type="email"
           autoComplete="email"
           required
+          disabled={submitting}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={error ? ERROR_ID : undefined}
           value={email}
           onChange={(e) => setEmail(e.target.value)}
-          className="rounded-md border border-border bg-surface px-3 py-2 text-ink"
         />
-      </div>
-      <div className="flex flex-col gap-1">
-        <label htmlFor="register-password" className="text-sm font-medium text-ink">
-          {copy.passwordLabel}
-        </label>
-        <input
-          id="register-password"
-          name="password"
-          type="password"
-          autoComplete="new-password"
-          required
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          className="rounded-md border border-border bg-surface px-3 py-2 text-ink"
-        />
-      </div>
-      {error && (
-        <p role="alert" className="text-sm text-danger">
+      </FormField>
+
+      <FormField htmlFor="register-password" label={copy.passwordLabel}>
+        <div className="relative">
+          <Input
+            id="register-password"
+            name="password"
+            type={showPassword ? 'text' : 'password'}
+            autoComplete="new-password"
+            required
+            disabled={submitting}
+            aria-invalid={error ? true : undefined}
+            aria-describedby={error ? ERROR_ID : undefined}
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            className="pr-10"
+          />
+          <button
+            type="button"
+            onClick={() => setShowPassword((v) => !v)}
+            disabled={submitting}
+            aria-pressed={showPassword}
+            aria-label={showPassword ? copy.hidePassword : copy.showPassword}
+            className="absolute inset-y-0 right-0 flex w-10 items-center justify-center text-muted transition-colors hover:text-ink disabled:pointer-events-none disabled:opacity-50"
+          >
+            {showPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+          </button>
+        </div>
+      </FormField>
+
+      {error ? (
+        <p
+          id={ERROR_ID}
+          role="alert"
+          className="rounded-lg border border-danger/20 bg-danger/10 px-3 py-2 text-sm font-medium text-danger"
+        >
           {error}
         </p>
-      )}
-      <button
-        type="submit"
-        disabled={submitting}
-        className="rounded-md bg-primary px-4 py-2 font-medium text-primary-foreground disabled:opacity-60"
-      >
-        {submitting ? copy.submitting : copy.submit}
-      </button>
+      ) : null}
+
+      <Button type="submit" size="lg" disabled={submitting} className="mt-1 w-full">
+        {submitting ? (
+          <>
+            <Loader2 className="animate-spin" /> {copy.submitting}
+          </>
+        ) : (
+          copy.submit
+        )}
+      </Button>
     </form>
   );
 }
