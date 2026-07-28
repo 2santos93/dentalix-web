@@ -1,0 +1,23 @@
+- generic [active] [ref=f1e1]:
+  - generic [ref=f1e2]:
+    - generic [ref=f1e4]:
+      - generic [ref=f1e5]: 🦷
+      - text: Dentalix
+    - generic [ref=f1e7]:
+      - generic [ref=f1e8]:
+        - heading "Dentalix" [level=3] [ref=f1e9]
+        - paragraph [ref=f1e10]: Inicia sesión en tu cuenta
+      - generic [ref=f1e11]:
+        - generic [ref=f1e12]:
+          - generic [ref=f1e13]:
+            - generic [ref=f1e14]: Correo electrónico
+            - textbox "Correo electrónico" [ref=f1e15]
+          - generic [ref=f1e16]:
+            - generic [ref=f1e17]: Contraseña
+            - textbox "Contraseña" [ref=f1e18]
+          - button "Iniciar sesión" [ref=f1e19]
+        - generic [ref=f1e20]:
+          - text: ¿No tienes cuenta?
+          - link "Regístrate" [ref=f1e21] [cursor=pointer]:
+            - /url: /register
+  - button "Open Next.js Dev Tools" [ref=f1e27] [cursor=pointer]

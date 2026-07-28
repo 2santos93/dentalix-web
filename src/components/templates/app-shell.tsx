@@ -3,8 +3,7 @@ import * as React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Users, Calendar, LayoutDashboard, UserCog } from 'lucide-react';
-import { ThemeToggle } from '@/components/theme/theme-toggle';
-import { LogoutButton } from '@/components/organisms/logout-button';
+import { UserMenu } from '@/components/profile/user-menu';
 import { cn } from '@/lib/utils';
 
 const NAV = [
@@ -17,7 +16,9 @@ const NAV = [
 /**
  * Template: the authenticated app chrome — persistent sidebar (md+), a top bar
  * with the theme switch, and a scrollable content area. Nav highlights the
- * active section via usePathname.
+ * active section via usePathname. Session controls (perfil, tema, cerrar
+ * sesión) viven en el `UserMenu`: tarjeta al pie del sidebar en desktop y
+ * avatar compacto en el topbar en móvil.
  */
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
@@ -54,12 +55,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </Link>
           ))}
         </nav>
-        <div className="mt-auto flex flex-col gap-1 border-t border-border p-3">
-          <div className="flex items-center justify-between rounded-lg px-3 py-2 text-sm font-medium text-muted">
-            <span>Tema</span>
-            <ThemeToggle />
-          </div>
-          <LogoutButton className="px-3 py-2" />
+        <div className="mt-auto border-t border-border p-3">
+          <UserMenu variant="card" />
         </div>
       </aside>
 
@@ -87,11 +84,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             ))}
           </nav>
           <div className="hidden md:block" />
-          {/* Controles de sesión en el topbar SOLO en móvil (en desktop viven
-              al fondo del sidebar). */}
-          <div className="flex items-center gap-2 md:hidden">
-            <ThemeToggle />
-            <LogoutButton label={false} className="p-2" />
+          {/* En móvil el sidebar está oculto: el menú de cuenta (perfil, tema,
+              cerrar sesión) vive en el topbar como avatar compacto. */}
+          <div className="md:hidden">
+            <UserMenu variant="compact" />
           </div>
         </header>
 

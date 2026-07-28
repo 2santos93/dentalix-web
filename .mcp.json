@@ -1,0 +1,23 @@
+{
+  "mcpServers": {
+    "shadcn": {
+      "command": "npx",
+      "args": ["shadcn@latest", "mcp"]
+    },
+    "magicui": {
+      "command": "npx",
+      "args": ["-y", "@magicuidesign/mcp@latest"]
+    },
+    "nextjs-devtools": {
+      "command": "npx",
+      "args": ["-y", "@vercel/next-devtools-mcp"]
+    },
+    "memory": {
+      "command": "npx",
+      "args": ["-y", "@modelcontextprotocol/server-memory"],
+      "env": {
+        "MEMORY_FILE_PATH": "/Users/ncaicedo/Desktop/dentalix/.mcp-memory.json"
+      }
+    }
+  }
+}

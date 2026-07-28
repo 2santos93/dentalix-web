@@ -1,0 +1,26 @@
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - generic [ref=e3]:
+      - generic [ref=e4]:
+        - generic [ref=e5]: 🦷
+        - text: Dentalix
+      - switch "Cambiar tema" [ref=e6]:
+        - generic [ref=e7]: ☀️
+    - generic [ref=e8]:
+      - generic [ref=e9]:
+        - heading "Dentalix" [level=3] [ref=e10]
+        - paragraph [ref=e11]: Inicia sesión en tu cuenta
+      - generic [ref=e12]:
+        - generic [ref=e13]:
+          - generic [ref=e14]:
+            - generic [ref=e15]: Correo electrónico
+            - textbox "Correo electrónico" [ref=e16]
+          - generic [ref=e17]:
+            - generic [ref=e18]: Contraseña
+            - textbox "Contraseña" [ref=e19]
+          - button "Iniciar sesión" [ref=e20]
+        - generic [ref=e21]:
+          - text: ¿No tienes cuenta?
+          - link "Regístrate" [ref=e22] [cursor=pointer]:
+            - /url: /register
+  - alert [ref=e23]

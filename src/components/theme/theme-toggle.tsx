@@ -5,6 +5,9 @@ import { useTheme } from 'next-themes';
 export function ThemeToggle() {
   const { resolvedTheme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
+  // setState-en-effect intencional: marca el montaje en cliente para el guard
+  // de hidratación de next-themes.
+  // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => setMounted(true), []);
 
   const isDark = resolvedTheme === 'dark';
