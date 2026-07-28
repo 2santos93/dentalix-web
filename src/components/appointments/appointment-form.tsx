@@ -86,6 +86,10 @@ interface AppointmentFormProps {
    * omitting it keeps the previous empty-by-default behavior.
    */
   defaultDate?: string;
+  /** Pre-rellena la hora de inicio ("HH:mm"), p. ej. al crear desde un hueco del calendario. Opcional/backward-compatible. */
+  defaultStartTime?: string;
+  /** Pre-rellena la hora de fin ("HH:mm"). Opcional/backward-compatible. */
+  defaultEndTime?: string;
 }
 
 /**
@@ -103,7 +107,13 @@ interface AppointmentFormProps {
  * with a "Cambiar" button, and a "Crear paciente" dialog covers the
  * not-yet-registered case.
  */
-export function AppointmentForm({ token, onCreated, defaultDate }: AppointmentFormProps) {
+export function AppointmentForm({
+  token,
+  onCreated,
+  defaultDate,
+  defaultStartTime,
+  defaultEndTime,
+}: AppointmentFormProps) {
   const [patients, setPatients] = useState<Patient[]>([]);
   const [patientsLoading, setPatientsLoading] = useState(true);
   const [patientsError, setPatientsError] = useState<string | null>(null);
@@ -123,8 +133,8 @@ export function AppointmentForm({ token, onCreated, defaultDate }: AppointmentFo
   const [providerId, setProviderId] = useState('');
 
   const [date, setDate] = useState(defaultDate ?? '');
-  const [startTime, setStartTime] = useState('');
-  const [endTime, setEndTime] = useState('');
+  const [startTime, setStartTime] = useState(defaultStartTime ?? '');
+  const [endTime, setEndTime] = useState(defaultEndTime ?? '');
   const [reason, setReason] = useState('');
 
   const [validationError, setValidationError] = useState<string | null>(null);
