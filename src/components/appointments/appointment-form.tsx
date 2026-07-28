@@ -28,7 +28,8 @@ const copy = {
   patientSearchPlaceholder: 'Buscar por documento o nombre…',
   patientSearchHint: 'Escribe el documento o el nombre del paciente.',
   patientSearching: 'Buscando…',
-  patientNoMatch: 'No se encontró ningún paciente con esos datos.',
+  patientNoMatchTitle: 'No encontramos a nadie',
+  patientNoMatch: 'Ningún paciente coincide con lo que escribiste.',
   patientNoDoc: 'Sin documento',
   changePatient: 'Cambiar',
   createPatientCta: 'Crear paciente',
@@ -264,6 +265,16 @@ export function AppointmentForm({ token, onCreated, defaultDate }: AppointmentFo
     }
   }
 
+  const trimmedPatientQuery = patientQuery.trim();
+  // The "no match" empty state owns the create CTA, so we hide the header's
+  // duplicate "Crear paciente" button while it's showing — one clear action.
+  const showNoPatientMatch =
+    !selectedPatient &&
+    !patientsError &&
+    trimmedPatientQuery !== '' &&
+    !patientsLoading &&
+    patients.length === 0;
+
   return (
     <form onSubmit={handleSubmit} aria-label={copy.submit} className="flex flex-col gap-4">
       <Dialog open={showPatientDialog} onOpenChange={setShowPatientDialog}>
@@ -287,15 +298,17 @@ export function AppointmentForm({ token, onCreated, defaultDate }: AppointmentFo
           <label htmlFor="appointment-patient-search" className="text-sm font-medium text-ink">
             {copy.patientLabel}
           </label>
-          <Button
-            type="button"
-            variant="ghost"
-            size="sm"
-            className="h-7 gap-1.5 px-2 text-xs"
-            onClick={() => setShowPatientDialog(true)}
-          >
-            <UserPlus className="size-3.5" /> {copy.createPatientCta}
-          </Button>
+          {!showNoPatientMatch && (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="h-7 gap-1.5 px-2 text-xs"
+              onClick={() => setShowPatientDialog(true)}
+            >
+              <UserPlus className="size-3.5" /> {copy.createPatientCta}
+            </Button>
+          )}
         </div>
 
         {selectedPatient ? (
@@ -359,13 +372,24 @@ export function AppointmentForm({ token, onCreated, defaultDate }: AppointmentFo
             ) : patientsLoading ? (
               <p className="text-xs text-muted">{copy.patientSearching}</p>
             ) : patients.length === 0 ? (
-              <div role="status" className="flex flex-wrap items-center gap-2">
-                <span className="text-xs text-muted">{copy.patientNoMatch}</span>
+              <div
+                role="status"
+                className="flex flex-col items-center gap-3 rounded-lg border border-dashed border-border bg-surface px-4 py-6 text-center"
+              >
+                <span
+                  aria-hidden
+                  className="flex size-9 items-center justify-center rounded-full bg-bg text-muted"
+                >
+                  <Search className="size-4" />
+                </span>
+                <div className="flex flex-col gap-0.5">
+                  <p className="text-sm font-medium text-ink">{copy.patientNoMatchTitle}</p>
+                  <p className="text-xs text-muted">{copy.patientNoMatch}</p>
+                </div>
                 <Button
                   type="button"
-                  variant="outline"
                   size="sm"
-                  className="h-7 gap-1.5 px-2 text-xs"
+                  className="gap-1.5"
                   onClick={() => setShowPatientDialog(true)}
                 >
                   <UserPlus className="size-3.5" /> {copy.createPatientCta}

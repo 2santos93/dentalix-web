@@ -328,7 +328,7 @@ describe('AppointmentForm', () => {
       await user.type(screen.getByLabelText(/^paciente$/i), '999');
       // The "no match" region (role=status) offers its own create button.
       const noMatch = await screen.findByRole('status');
-      expect(noMatch).toHaveTextContent(/no se encontró/i);
+      expect(noMatch).toHaveTextContent(/no encontramos/i);
 
       await user.click(within(noMatch).getByRole('button', { name: /crear paciente/i }));
       const dialog = await screen.findByRole('dialog');
