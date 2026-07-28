@@ -10,7 +10,7 @@ import {
 import { listStaff, type StaffMember } from '@/lib/appointments/staff-api';
 import { listPatients, type Patient } from '@/lib/patients/patients-api';
 import { useDebouncedValue } from '@/lib/hooks/use-debounced-value';
-import { UserPlus, Loader2 } from 'lucide-react';
+import { UserPlus, Loader2, Search, Check, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -24,15 +24,16 @@ import { PatientForm } from '@/components/patients/patient-form';
 // Copy as constants (i18n-ready, es-first) — matches patient-form.tsx /
 // tooth-record-panel.tsx convention until next-intl wiring lands.
 const copy = {
-  patientSearchLabel: 'Buscar paciente',
-  patientSearchPlaceholder: 'Nombre o documento…',
   patientLabel: 'Paciente',
-  patientPlaceholder: 'Selecciona un paciente',
+  patientSearchPlaceholder: 'Buscar por documento o nombre…',
+  patientSearchHint: 'Escribe el documento o el nombre del paciente.',
+  patientSearching: 'Buscando…',
+  patientNoMatch: 'No se encontró ningún paciente con esos datos.',
+  patientNoDoc: 'Sin documento',
+  changePatient: 'Cambiar',
   createPatientCta: 'Crear paciente',
   createPatientTitle: 'Nuevo paciente',
   createPatientDesc: 'Se agrega y queda seleccionado en la cita, sin salir de la agenda.',
-  patientLoading: 'Cargando pacientes…',
-  patientEmpty: 'No hay pacientes que coincidan con la búsqueda.',
   providerLabel: 'Profesional',
   providerPlaceholder: 'Selecciona un profesional',
   providerLoading: 'Cargando profesionales…',
@@ -52,6 +53,16 @@ const copy = {
 
 function fullPatientName(patient: Patient): string {
   return `${patient.firstName} ${patient.lastName}`;
+}
+
+/** Human label for a patient's document, e.g. "CC 123456" — or a "no document" note when the patient has none. */
+function patientDocLabel(patient: Patient): string {
+  return patient.docNumber ? `${patient.docType} ${patient.docNumber}` : copy.patientNoDoc;
+}
+
+/** A query is treated as a document number (to pre-fill the create-patient form) when it's all digits. */
+function looksLikeDocNumber(query: string): boolean {
+  return /^\d+$/.test(query);
 }
 
 /** How long the patient search box waits after the last keystroke before querying the server (ms). */
@@ -85,10 +96,12 @@ interface AppointmentFormProps {
  * The patient search box queries the server (`listPatients(token, { query,
  * pageSize })`), debounced ~300ms after the last keystroke via
  * `useDebouncedValue` — so clinics with rosters bigger than one page can
- * still find any patient, not just whichever page loaded first. The
- * currently-selected patient is merged into the option list even when a
- * later search's results don't include it, so picking a patient and then
- * refining the query never silently clears the selection.
+ * still find any patient, not just whichever page loaded first. Typing a
+ * document that exactly matches a single patient auto-selects them (see the
+ * exact-match branch in the search effect); otherwise matches are shown as a
+ * clickable list. Once a patient is chosen the search collapses to a chip
+ * with a "Cambiar" button, and a "Crear paciente" dialog covers the
+ * not-yet-registered case.
  */
 export function AppointmentForm({ token, onCreated, defaultDate }: AppointmentFormProps) {
   const [patients, setPatients] = useState<Patient[]>([]);
@@ -98,9 +111,9 @@ export function AppointmentForm({ token, onCreated, defaultDate }: AppointmentFo
   const [patientQuery, setPatientQuery] = useState('');
   const debouncedPatientQuery = useDebouncedValue(patientQuery, PATIENT_SEARCH_DEBOUNCE_MS);
   const [patientId, setPatientId] = useState('');
-  // The full selected `Patient` object — kept so it can be merged back into
-  // the option list if a later search's results no longer include it (see
-  // `patientOptions` below). Set on manual selection and on inline-create.
+  // The full chosen `Patient` — drives the "chosen-patient chip" that replaces
+  // the search box once someone is picked (manually, by exact-document
+  // auto-select, or via inline-create).
   const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
 
   const [staff, setStaff] = useState<StaffMember[]>([]);
@@ -132,6 +145,20 @@ export function AppointmentForm({ token, onCreated, defaultDate }: AppointmentFo
         if (cancelled) return;
         setPatients(res.items);
         setPatientsError(null);
+        // Auto-select on an exact document match: when the typed query equals
+        // a single patient's docNumber, pick that patient without making the
+        // user choose from a list — documents are unique, so one exact match
+        // is unambiguous. Done here (not in a separate effect) so it fires
+        // exactly once per search result. It's keyed off the debounced query,
+        // so clearing a pick via "Cambiar" (which leaves the debounced query
+        // untouched for a beat) doesn't re-run this and can't undo the change.
+        if (query) {
+          const exactMatches = res.items.filter((p) => p.docNumber === query);
+          if (exactMatches.length === 1) {
+            setPatientId(exactMatches[0].id);
+            setSelectedPatient(exactMatches[0]);
+          }
+        }
       } catch (err) {
         if (cancelled) return;
         setPatientsError(err instanceof ApiError ? err.message : copy.genericPatientsError);
@@ -167,14 +194,6 @@ export function AppointmentForm({ token, onCreated, defaultDate }: AppointmentFo
     };
   }, [token, staffReloadKey]);
 
-  // The current search results, plus the selected patient if the latest
-  // search no longer returns it — keeps a selection from being silently
-  // dropped just because the query changed.
-  const patientOptions =
-    selectedPatient && !patients.some((p) => p.id === selectedPatient.id)
-      ? [selectedPatient, ...patients]
-      : patients;
-
   function resetForm() {
     setPatientId('');
     setPatientQuery('');
@@ -186,14 +205,22 @@ export function AppointmentForm({ token, onCreated, defaultDate }: AppointmentFo
     setReason('');
   }
 
-  function handlePatientSelect(id: string) {
-    setPatientId(id);
-    setSelectedPatient(patientOptions.find((p) => p.id === id) ?? null);
+  function handlePatientSelect(patient: Patient) {
+    setPatientId(patient.id);
+    setSelectedPatient(patient);
+  }
+
+  // "Cambiar": drop the current pick and clear the query so the search starts
+  // fresh — clearing the query also stops the exact-match auto-select from
+  // immediately re-selecting the same patient.
+  function handleClearPatient() {
+    setPatientId('');
+    setSelectedPatient(null);
+    setPatientQuery('');
   }
 
   // Reused PatientForm (in a dialog) calls this on success: select the new
-  // patient and close — so you never leave the agenda. It's merged into
-  // `patientOptions` above even before the next search picks it up.
+  // patient and close — so you never leave the agenda.
   function handlePatientCreated(patient: Patient) {
     setPatientQuery('');
     setPatientId(patient.id);
@@ -245,27 +272,19 @@ export function AppointmentForm({ token, onCreated, defaultDate }: AppointmentFo
             <DialogTitle>{copy.createPatientTitle}</DialogTitle>
             <DialogDescription>{copy.createPatientDesc}</DialogDescription>
           </DialogHeader>
-          <PatientForm token={token} onCreated={handlePatientCreated} />
+          <PatientForm
+            token={token}
+            initialDocNumber={
+              looksLikeDocNumber(patientQuery.trim()) ? patientQuery.trim() : undefined
+            }
+            onCreated={handlePatientCreated}
+          />
         </DialogContent>
       </Dialog>
 
-      <div className="flex flex-col gap-1">
-        <label htmlFor="appointment-patient-search" className="text-sm font-medium text-ink">
-          {copy.patientSearchLabel}
-        </label>
-        <input
-          id="appointment-patient-search"
-          type="text"
-          placeholder={copy.patientSearchPlaceholder}
-          value={patientQuery}
-          onChange={(e) => setPatientQuery(e.target.value)}
-          className="flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors placeholder:text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-50"
-        />
-      </div>
-
-      <div className="flex flex-col gap-1">
+      <div className="flex flex-col gap-1.5">
         <div className="flex items-center justify-between gap-2">
-          <label htmlFor="appointment-patient" className="text-sm font-medium text-ink">
+          <label htmlFor="appointment-patient-search" className="text-sm font-medium text-ink">
             {copy.patientLabel}
           </label>
           <Button
@@ -278,50 +297,103 @@ export function AppointmentForm({ token, onCreated, defaultDate }: AppointmentFo
             <UserPlus className="size-3.5" /> {copy.createPatientCta}
           </Button>
         </div>
-        <select
-          id="appointment-patient"
-          required
-          disabled={patientsLoading}
-          value={patientId}
-          onChange={(e) => handlePatientSelect(e.target.value)}
-          className="flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors placeholder:text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          <option value="" disabled>
-            {patientsLoading ? copy.patientLoading : copy.patientPlaceholder}
-          </option>
-          {patientOptions.map((p) => (
-            <option key={p.id} value={p.id}>
-              {fullPatientName(p)}
-            </option>
-          ))}
-        </select>
-        {patientsError && (
-          <div className="flex items-center gap-3">
-            <p role="alert" className="text-xs text-danger">
-              {patientsError}
-            </p>
-            <button
-              type="button"
-              onClick={() => setPatientsReloadKey((k) => k + 1)}
-              className="inline-flex h-7 items-center rounded-md border border-border px-2 text-xs font-medium text-ink transition-colors hover:bg-bg"
-            >
-              {copy.retry}
-            </button>
-          </div>
-        )}
-        {!patientsLoading && !patientsError && patientOptions.length === 0 && (
-          <div role="status" className="flex flex-wrap items-center gap-2">
-            <span className="text-xs text-muted">{copy.patientEmpty}</span>
+
+        {selectedPatient ? (
+          // Chosen-patient chip: a document match (or a manual pick) resolves
+          // to a single patient, so we show who's booked instead of a list.
+          <div
+            role="status"
+            className="flex items-center justify-between gap-3 rounded-lg border border-border bg-surface px-3 py-2"
+          >
+            <div className="flex min-w-0 items-center gap-2">
+              <Check className="size-4 shrink-0 text-primary" />
+              <div className="min-w-0">
+                <p className="truncate text-sm font-medium text-ink">
+                  {fullPatientName(selectedPatient)}
+                </p>
+                <p className="truncate text-xs text-muted">{patientDocLabel(selectedPatient)}</p>
+              </div>
+            </div>
             <Button
               type="button"
-              variant="outline"
+              variant="ghost"
               size="sm"
-              className="h-7 gap-1.5 px-2 text-xs"
-              onClick={() => setShowPatientDialog(true)}
+              className="h-7 shrink-0 gap-1.5 px-2 text-xs"
+              onClick={handleClearPatient}
             >
-              <UserPlus className="size-3.5" /> {copy.createPatientCta}
+              <X className="size-3.5" /> {copy.changePatient}
             </Button>
           </div>
+        ) : (
+          <>
+            <div className="relative">
+              <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted" />
+              <input
+                id="appointment-patient-search"
+                type="text"
+                placeholder={copy.patientSearchPlaceholder}
+                value={patientQuery}
+                onChange={(e) => setPatientQuery(e.target.value)}
+                className="flex h-10 w-full rounded-lg border border-border bg-surface pl-9 pr-9 py-2 text-sm text-ink shadow-sm transition-colors placeholder:text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-50"
+              />
+              {patientsLoading && (
+                <Loader2 className="absolute right-3 top-1/2 size-4 -translate-y-1/2 animate-spin text-muted" />
+              )}
+            </div>
+
+            {patientsError ? (
+              <div className="flex items-center gap-3">
+                <p role="alert" className="text-xs text-danger">
+                  {patientsError}
+                </p>
+                <button
+                  type="button"
+                  onClick={() => setPatientsReloadKey((k) => k + 1)}
+                  className="inline-flex h-7 items-center rounded-md border border-border px-2 text-xs font-medium text-ink transition-colors hover:bg-bg"
+                >
+                  {copy.retry}
+                </button>
+              </div>
+            ) : patientQuery.trim() === '' ? (
+              <p className="text-xs text-muted">{copy.patientSearchHint}</p>
+            ) : patientsLoading ? (
+              <p className="text-xs text-muted">{copy.patientSearching}</p>
+            ) : patients.length === 0 ? (
+              <div role="status" className="flex flex-wrap items-center gap-2">
+                <span className="text-xs text-muted">{copy.patientNoMatch}</span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 gap-1.5 px-2 text-xs"
+                  onClick={() => setShowPatientDialog(true)}
+                >
+                  <UserPlus className="size-3.5" /> {copy.createPatientCta}
+                </Button>
+              </div>
+            ) : (
+              <ul
+                role="listbox"
+                aria-label={copy.patientLabel}
+                className="flex max-h-56 flex-col gap-0.5 overflow-y-auto rounded-lg border border-border bg-surface p-1"
+              >
+                {patients.map((p) => (
+                  <li key={p.id}>
+                    <button
+                      type="button"
+                      role="option"
+                      aria-selected={false}
+                      onClick={() => handlePatientSelect(p)}
+                      className="flex w-full items-center justify-between gap-3 rounded-md px-2 py-1.5 text-left transition-colors hover:bg-bg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                    >
+                      <span className="truncate text-sm text-ink">{fullPatientName(p)}</span>
+                      <span className="shrink-0 text-xs text-muted">{patientDocLabel(p)}</span>
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </>
         )}
       </div>
 
