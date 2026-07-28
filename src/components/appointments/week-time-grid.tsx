@@ -6,7 +6,10 @@ import {
   GRID_HEIGHT_PX,
   SLOT_MINUTES,
   DAY_MINUTES,
+  blockGeometry,
+  layoutLanes,
 } from '@/lib/appointments/week-grid-layout';
+import { STATUS_BADGE_CLASSES, formatTimeRange, patientLabel } from './appointment-display';
 
 const copy = {
   heading: 'Agenda de la semana',
@@ -138,7 +141,37 @@ export function WeekTimeGrid({
                 aria-label={copy.createSlotLabel(date, slotTime(i))}
               />
             ))}
-            {/* (Los bloques de cita se añaden en la Task 3) */}
+            {layoutLanes(
+              appointments
+                .filter((a) => localDateString(a.start) === date)
+                .map((a) => ({
+                  appointment: a,
+                  start: new Date(a.start).getTime(),
+                  end: new Date(a.end).getTime(),
+                })),
+            ).map(({ appointment: a, lane, laneCount }) => {
+              const { topPx, heightPx } = blockGeometry(a.start, a.end);
+              const widthPct = 100 / laneCount;
+              return (
+                <button
+                  key={a.id}
+                  type="button"
+                  data-testid="week-grid-appointment"
+                  data-id={a.id}
+                  onClick={() => onSelectAppointment(a)}
+                  className={`absolute overflow-hidden rounded-md border px-1 py-0.5 text-left text-xs ${STATUS_BADGE_CLASSES[a.status]}`}
+                  style={{
+                    top: topPx,
+                    height: heightPx,
+                    left: `${lane * widthPct}%`,
+                    width: `calc(${widthPct}% - 2px)`,
+                  }}
+                >
+                  <span className="block font-medium">{formatTimeRange(a.start, a.end)}</span>
+                  <span className="block truncate">{patientLabel(a, patientNames)}</span>
+                </button>
+              );
+            })}
           </div>
         ))}
       </div>
