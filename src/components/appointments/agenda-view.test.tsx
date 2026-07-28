@@ -380,4 +380,31 @@ describe('AgendaView', () => {
     expect(await screen.findByText(/no hay citas para este día/i)).toBeInTheDocument();
     expect(screen.queryByLabelText(/agenda de la semana/i)).not.toBeInTheDocument();
   });
+
+  it('week mode: clicking an empty slot opens the form prefilled with that date and time', async () => {
+    mockedListStaff.mockResolvedValue(staff);
+    mockedListAppointments.mockResolvedValue([]);
+    mockedListPatients.mockResolvedValue(patientsPage);
+    const user = userEvent.setup();
+
+    render(<AgendaView token="tok" />);
+    await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
+
+    const dateInput = screen.getByLabelText<HTMLInputElement>(/^fecha$/i);
+    await user.clear(dateInput);
+    await user.type(dateInput, '2026-03-11');
+    await user.click(screen.getByRole('button', { name: /^semana$/i }));
+    await screen.findByLabelText(/agenda de la semana/i);
+
+    // Click en el hueco de las 09:00 del lunes 2026-03-09.
+    await user.click(screen.getByTestId('week-grid-slot-2026-03-09-09:00'));
+
+    // El form se abre pre-rellenado (fecha del slot + hora inicio 09:00).
+    const formDate = await screen.findByLabelText<HTMLInputElement>(/^fecha$/i, {
+      selector: '#appointment-date',
+    });
+    expect(formDate.value).toBe('2026-03-09');
+    const startInput = document.querySelector<HTMLInputElement>('#appointment-start-time')!;
+    expect(startInput.value).toBe('09:00');
+  });
 });
