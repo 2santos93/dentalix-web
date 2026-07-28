@@ -99,11 +99,16 @@ test('create appointment via the UI -> appears in the day agenda, status change 
   // --- Fill it: patient, provider (the registered owner, self), same day
   // currently viewed (pre-filled by `defaultDate`), start/end time, reason ---
   // Typing the exact document number auto-selects the matching patient
-  // (documents are unique) — no list to pick from.
+  // (documents are unique) — no list to pick from. Gate on the chosen-patient
+  // chip's "Cambiar" button, NOT the name text: the name also appears in the
+  // (unfiltered) results list that renders before the debounced search +
+  // auto-select land, so waiting on the name alone races ahead of the actual
+  // selection and submits with no patient set ("Completa paciente…").
   await appointmentForm.getByLabel('Paciente', { exact: true }).fill(patientDocNumber);
-  await expect(appointmentForm.getByText(`${patientFirstName} ${patientLastName}`)).toBeVisible({
+  await expect(appointmentForm.getByRole('button', { name: 'Cambiar' })).toBeVisible({
     timeout: 10_000,
   });
+  await expect(appointmentForm.getByText(`${patientFirstName} ${patientLastName}`)).toBeVisible();
   await appointmentForm.getByLabel('Profesional', { exact: true }).selectOption({ label: fullName });
   await appointmentForm.getByLabel('Hora de inicio').fill(startTime);
   await appointmentForm.getByLabel('Hora de fin').fill(endTime);
