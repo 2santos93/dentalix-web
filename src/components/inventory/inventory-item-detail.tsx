@@ -90,7 +90,8 @@ const MOVEMENT_TYPE_VARIANT: Record<MovementType, 'success' | 'danger' | 'warnin
 function signedQuantity(m: InventoryMovement): string {
   if (m.type === 'IN') return `+${m.quantity}`;
   if (m.type === 'OUT') return `-${m.quantity}`;
-  return m.quantity >= 0 ? `+${m.quantity}` : `${m.quantity}`;
+  // ADJUSTMENT: el backend guarda la cantidad con su propio signo → tal cual.
+  return `${m.quantity}`;
 }
 
 function formatDate(iso: string): string {

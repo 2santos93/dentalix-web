@@ -39,6 +39,7 @@ function detail(overrides: Partial<ItemDetail> = {}): ItemDetail {
     movements: [
       { id: 'm1', itemId: 'item1', type: 'IN', quantity: 5, reason: 'Compra', occurredAt: '2026-07-02T10:00:00.000Z', createdById: null, createdAt: '2026-07-02T10:00:00.000Z' },
       { id: 'm2', itemId: 'item1', type: 'OUT', quantity: 3, reason: null, occurredAt: '2026-07-03T10:00:00.000Z', createdById: null, createdAt: '2026-07-03T10:00:00.000Z' },
+      { id: 'm3', itemId: 'item1', type: 'ADJUSTMENT', quantity: -2, reason: 'Merma', occurredAt: '2026-07-04T10:00:00.000Z', createdById: null, createdAt: '2026-07-04T10:00:00.000Z' },
     ],
     ...overrides,
   };
@@ -59,9 +60,10 @@ describe('InventoryItemDetail', () => {
     // Stock actual + badge de stock bajo.
     expect(screen.getByText('7')).toBeInTheDocument();
     expect(screen.getByText(/stock bajo/i)).toBeInTheDocument();
-    // Ledger: IN suma, OUT resta.
+    // Ledger: IN suma (+), OUT resta (-), ADJUSTMENT tal cual (conserva su signo).
     expect(screen.getByText('+5')).toBeInTheDocument();
     expect(screen.getByText('-3')).toBeInTheDocument();
+    expect(screen.getByText('-2')).toBeInTheDocument();
   });
 
   it('records a valid movement and refreshes', async () => {
