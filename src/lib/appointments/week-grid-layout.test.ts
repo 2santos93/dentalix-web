@@ -33,6 +33,14 @@ describe('blockGeometry', () => {
     expect(g.topPx).toBe((23 * 60 + 30) / 30 * ROW_HEIGHT_PX);
     expect(g.topPx + g.heightPx).toBeLessThanOrEqual(GRID_HEIGHT_PX);
   });
+
+  it('grid clamp wins over minimum height at end of day', () => {
+    // Starts at 23:50, duration 15 min; remaining space (10px) < MIN_BLOCK_PX (20px).
+    // Grid clamp must win, so heightPx = 10px and topPx + heightPx = GRID_HEIGHT_PX.
+    const g = blockGeometry('2026-03-09T23:50:00.000Z', '2026-03-10T00:05:00.000Z');
+    expect(g.topPx + g.heightPx).toBeLessThanOrEqual(GRID_HEIGHT_PX);
+    expect(g.heightPx).toBeLessThan(MIN_BLOCK_PX); // Grid clamp forced this below minimum
+  });
 });
 
 describe('layoutLanes', () => {

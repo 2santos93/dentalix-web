@@ -17,8 +17,9 @@ export function minutesFromMidnight(iso: string): number {
 /**
  * Geometría vertical de un bloque de cita: `topPx` desde el inicio de la
  * rejilla y `heightPx` proporcional a la duración. Duraciones no positivas
- * (dato inválido) usan `MIN_BLOCK_PX`; el alto se recorta al fondo de la
- * rejilla (una cita que cruza medianoche se ve hasta las 24:00).
+ * (dato inválido) se ven como `MIN_BLOCK_PX`; el alto se recorta al fondo de la
+ * rejilla de modo que `topPx + heightPx` nunca excede `GRID_HEIGHT_PX`
+ * (una cita que cruza medianoche se ve hasta las 24:00, aunque sea más corta que `MIN_BLOCK_PX`).
  */
 export function blockGeometry(
   startIso: string,
@@ -31,7 +32,7 @@ export function blockGeometry(
   const topPx = (startMin / SLOT_MINUTES) * ROW_HEIGHT_PX;
   const rawHeight = (durationMin / SLOT_MINUTES) * ROW_HEIGHT_PX;
   const maxHeight = GRID_HEIGHT_PX - topPx;
-  const heightPx = Math.max(MIN_BLOCK_PX, Math.min(rawHeight, maxHeight));
+  const heightPx = Math.min(maxHeight, Math.max(rawHeight, MIN_BLOCK_PX));
   return { topPx, heightPx };
 }
 
