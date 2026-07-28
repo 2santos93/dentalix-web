@@ -306,6 +306,21 @@ describe('AppointmentForm', () => {
     );
   });
 
+  it('prefills start and end time from props', async () => {
+    render(
+      <AppointmentForm
+        token="tok"
+        onCreated={jest.fn()}
+        defaultDate="2026-03-09"
+        defaultStartTime="09:00"
+        defaultEndTime="09:30"
+      />,
+    );
+    await waitFor(() => expect(mockedListStaff).toHaveBeenCalled());
+    expect(screen.getByLabelText(/hora de inicio/i)).toHaveValue('09:00');
+    expect(screen.getByLabelText(/hora de fin/i)).toHaveValue('09:30');
+  });
+
   describe('inline "Crear paciente" dialog', () => {
     it('opens the dialog with the PatientForm fields when the trigger is clicked', async () => {
       const user = userEvent.setup();
