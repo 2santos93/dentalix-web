@@ -256,6 +256,7 @@ export function AgendaView({ token }: AgendaViewProps) {
   function handleSelectDay(date: string) {
     setSelectedDate(date);
     setViewMode('day');
+    setDetailAppointment(null);
   }
 
   /** `WeekTimeGrid`'s `onSelectSlot` — opens the create form pre-filled with the clicked slot's date/start time (end defaults to +30min). */
@@ -345,7 +346,10 @@ export function AgendaView({ token }: AgendaViewProps) {
                   size="sm"
                   variant={viewMode === 'day' ? 'default' : 'outline'}
                   aria-pressed={viewMode === 'day'}
-                  onClick={() => setViewMode('day')}
+                  onClick={() => {
+                    setViewMode('day');
+                    setDetailAppointment(null);
+                  }}
                 >
                   {copy.dayView}
                 </Button>
@@ -354,7 +358,10 @@ export function AgendaView({ token }: AgendaViewProps) {
                   size="sm"
                   variant={viewMode === 'week' ? 'default' : 'outline'}
                   aria-pressed={viewMode === 'week'}
-                  onClick={() => setViewMode('week')}
+                  onClick={() => {
+                    setViewMode('week');
+                    setDetailAppointment(null);
+                  }}
                 >
                   {copy.weekView}
                 </Button>
