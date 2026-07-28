@@ -15,7 +15,7 @@ import { registerAndLogin } from './support/auth';
  *   - a treatment plan for the patient (`POST /patients/:id/treatment-
  *     plans`), one billable item (`POST /treatment-plans/:id/items`, priced,
  *     status flipped to DONE via `PATCH .../items/:itemId`), and an abono
- *     recorded against the plan in USD, `paidAt` today (`POST
+ *     recorded against the plan in COP, `paidAt` today (`POST
  *     /treatment-plans/:id/payments`) — this is what the dashboard's
  *     "Ingresos del período" card now sums (PAY-T4: sales/`/sales` removed,
  *     incomes are sourced from payments, see `get-payments-totals.use-
@@ -23,24 +23,25 @@ import { registerAndLogin } from './support/auth';
  *   - a future appointment a few days out, `providerId` = the owner's own
  *     `userId` from `GET /staff` (`POST /appointments`).
  * ...then loads `/dashboard` (default period = current month..today,
- * inclusive "Hasta" thanks to `addOneDayIso`; default currency USD) and
+ * inclusive "Hasta" thanks to `addOneDayIso`; default currency COP) and
  * asserts each of the 4 cards renders the seeded data:
- *   - "Ingresos del período": the abono's total (Intl `es`/USD-formatted,
+ *   - "Ingresos del período": the abono's total (Intl `es`/COP-formatted,
  *     same formatter as `DashboardView`'s `currencyFormatter`) and "1 abono";
  *   - "Bajo stock": "1 ítem" and the seeded item's name;
  *   - "Próximas citas": the seeded appointment's formatted time, its
- *     "Agendada" status badge, and — since v1 doesn't resolve patient names
- *     (see the plan's "Notas": nice-to-have, id is an acceptable v1
- *     fallback) — the `Paciente {id.slice(0,8)}` fallback text
- *     (`UpcomingAppointmentsCard`) built from the very patient we seeded;
+ *     "Agendada" status badge, and the resolved patient name (the card now
+ *     looks up `patientNames`/`staffNames` and renders "{patient} · {provider}",
+ *     falling back to the raw id only when a name lookup misses);
  *   - "# Pacientes": exactly 1 (brand-new clinic, only patient we created).
  *
- * OFFLINE by design: the abono's currency (USD) equals the dashboard's query
- * currency (USD), so `GetPaymentsTotalsUseCase` -> `ConvertAmountUseCase`
- * takes the `from === to` passthrough (`convert-amount.use-case.ts`) and
- * returns `{ result: amount, rateUsed: 1 }` WITHOUT calling
- * `GetRatesForDateUseCase` (i.e. never hits Open Exchange Rates) — no
- * exchange-snapshot seeding needed for this spec to be deterministic.
+ * OFFLINE by design: the abono's currency (COP) equals the dashboard's
+ * default query currency (COP), so `GetPaymentsTotalsUseCase` ->
+ * `ConvertAmountUseCase` takes the `from === to` passthrough
+ * (`convert-amount.use-case.ts`) and returns `{ result: amount, rateUsed: 1 }`
+ * WITHOUT calling `GetRatesForDateUseCase` (i.e. never hits Open Exchange
+ * Rates) — no exchange-snapshot seeding needed for this spec to be
+ * deterministic. (A mismatched currency would force a conversion the offline
+ * E2E backend can't resolve → 500 → cards never render.)
  *
  * Requires both servers up:
  *   - backend  http://localhost:3000  (dentalix-api, `npm run start:dev`, Docker DB on :5442)
@@ -83,11 +84,12 @@ const itemPrice = 250;
 
 const paymentAmount = 250;
 
-// Same formatter as `dashboard-view.tsx`'s `currencyFormatter` (es locale).
-const currencyFormatter = new Intl.NumberFormat('es', { style: 'currency', currency: 'USD' });
-function formatCurrency(amount: number): string {
-  return currencyFormatter.format(amount);
-}
+// The income amount is asserted against a value formatted INSIDE the browser
+// (see `page.evaluate` below), not with a Node-side `Intl.NumberFormat`: COP's
+// fraction-digit default differs between Node's and Chromium's ICU builds
+// (Node → "250,00 COP", Chromium → "250 COP"), so a Node-formatted string
+// would never match the DOM. Formatting in-page uses the same engine the app
+// uses (`dashboard-view.tsx`'s `formatCurrencySafe`, es locale).
 
 // Same formatter as `dashboard-view.tsx`'s `formatTime`.
 function formatTime(date: Date): string {
@@ -199,7 +201,9 @@ test('dashboard: aggregated cards render seeded payment income, low-stock item, 
       headers: seedHeaders,
       data: {
         amount: paymentAmount,
-        currency: 'USD',
+        // COP so it equals the dashboard's default query currency — keeps the
+        // conversion a `from === to` passthrough (offline, no exchange call).
+        currency: 'COP',
         paidAt: new Date().toISOString(),
       },
     },
@@ -244,9 +248,15 @@ test('dashboard: aggregated cards render seeded payment income, low-stock item, 
   await expect(page.getByRole('heading', { name: 'Ingresos del período' })).toBeVisible({ timeout: 10_000 });
 
   // --- "Ingresos del período": total + count ---
+  // Format the expected amount with the browser's own Intl (same ICU as the
+  // app) — a Node-side format wouldn't match COP's fraction digits.
+  const expectedIncome = await page.evaluate(
+    (amount) => new Intl.NumberFormat('es', { style: 'currency', currency: 'COP' }).format(amount),
+    paymentAmount,
+  );
   const incomesHeading = page.getByRole('heading', { name: 'Ingresos del período' });
   const incomesCard = incomesHeading.locator('xpath=ancestor::div[contains(@class,"rounded-xl")][1]');
-  await expect(incomesCard.getByText(formatCurrency(paymentAmount), { exact: true }).first()).toBeVisible();
+  await expect(incomesCard.getByText(expectedIncome, { exact: true }).first()).toBeVisible();
   await expect(incomesCard.getByText('1 abono', { exact: true })).toBeVisible();
 
   // --- "Bajo stock": count + seeded item name ---
@@ -260,7 +270,9 @@ test('dashboard: aggregated cards render seeded payment income, low-stock item, 
   const upcomingHeading = page.getByRole('heading', { name: 'Próximas citas' });
   const upcomingCard = upcomingHeading.locator('xpath=ancestor::div[contains(@class,"rounded-xl")][1]');
   await expect(upcomingCard.getByText(formatTime(appointmentStart), { exact: true })).toBeVisible();
-  await expect(upcomingCard.getByText(`Paciente ${patient.id.slice(0, 8)}`, { exact: true })).toBeVisible();
+  // The card now resolves the real patient name (and provider), rendered as
+  // "{patient} · {provider}" in one node — substring-match the patient name.
+  await expect(upcomingCard.getByText(`${patientFirstName} ${patientLastName}`)).toBeVisible();
   await expect(upcomingCard.getByText('Agendada', { exact: true })).toBeVisible();
 
   // --- "# Pacientes": exactly the one patient we created ---

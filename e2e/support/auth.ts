@@ -44,7 +44,10 @@ export async function registerAndLogin(
   await page.getByLabel('Subdominio').fill(subdomain);
   await page.getByLabel('Nombre completo').fill(fullName);
   await page.getByLabel('Correo electrónico').fill(email);
-  await page.getByLabel('Contraseña').fill(password);
+  // exact: true targets only the password INPUT — the field has a show/hide
+  // toggle whose accessible name would otherwise make a substring "Contraseña"
+  // match resolve to 2 elements (strict-mode violation).
+  await page.getByLabel('Contraseña', { exact: true }).fill(password);
 
   await page.getByRole('button', { name: 'Crear cuenta' }).click();
 
@@ -67,7 +70,7 @@ export async function registerAndLogin(
   // No subdomain field here — the tenant travels via the `${subdomain}.
   // localhost:3001` host we're already on.
   await page.getByLabel('Correo electrónico').fill(email);
-  await page.getByLabel('Contraseña').fill(password);
+  await page.getByLabel('Contraseña', { exact: true }).fill(password);
 
   await page.getByRole('button', { name: 'Iniciar sesión' }).click();
 
