@@ -7,12 +7,19 @@ jest.mock('next/navigation', () => ({
 }));
 
 describe('AppShell', () => {
-  it('renders the account menu button in the top bar', () => {
+  it('renders logout and theme controls in the chrome (sidebar + mobile topbar)', () => {
     render(
       <AppShell>
         <p>contenido</p>
       </AppShell>,
     );
-    expect(screen.getByRole('button', { name: /cuenta/i })).toBeInTheDocument();
+    // Se renderizan en dos ubicaciones responsivas (footer del sidebar en
+    // desktop, topbar en móvil); ambas existen en el DOM bajo jsdom.
+    expect(
+      screen.getAllByRole('button', { name: /cerrar sesión/i }).length,
+    ).toBeGreaterThanOrEqual(1);
+    expect(
+      screen.getAllByRole('switch', { name: /cambiar tema/i }).length,
+    ).toBeGreaterThanOrEqual(1);
   });
 });
