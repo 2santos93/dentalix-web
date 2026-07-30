@@ -1,7 +1,8 @@
 import Link from 'next/link';
 import { headers } from 'next/headers';
 import { RegisterForm } from '@/components/auth/register-form';
-import { AuthLayout } from '@/components/templates/auth-layout';
+import { SplitAuthLayout } from '@/components/templates/split-auth-layout';
+import { randomHeroImage } from '@/lib/auth/hero-images';
 import { fetchBranding } from '@/lib/branding';
 import { parseTenantFromHost } from '@/lib/tenant';
 
@@ -12,17 +13,21 @@ const copy = {
   subtitle: 'Crea tu cuenta',
   loginPrompt: '¿Ya tienes cuenta?',
   loginLink: 'Inicia sesión',
+  heroCaption: 'Gestiona tu clínica con confianza',
 };
 
 export default async function RegisterPage() {
   const h = await headers();
   const tenant = h.get('x-tenant') ?? parseTenantFromHost(h.get('host'));
   const branding = await fetchBranding(tenant);
+  const heroImage = randomHeroImage();
 
   return (
-    <AuthLayout
+    <SplitAuthLayout
       title={branding.name ?? copy.defaultTitle}
       subtitle={copy.subtitle}
+      heroImage={heroImage}
+      heroCaption={copy.heroCaption}
       footer={
         <>
           {copy.loginPrompt}{' '}
@@ -33,6 +38,6 @@ export default async function RegisterPage() {
       }
     >
       <RegisterForm tenant={tenant} />
-    </AuthLayout>
+    </SplitAuthLayout>
   );
 }

@@ -17,7 +17,7 @@ import { Card } from '@/components/ui/card';
 import { FormField } from '@/components/molecules/form-field';
 import { FormModal } from '@/components/molecules/form-modal';
 import { ConfirmDialog } from '@/components/molecules/confirm-dialog';
-import { EmptyState } from '@/components/molecules/empty-state';
+import { AsyncSection, TableSkeleton } from '@/components/molecules/async-section';
 import {
   Table,
   TableBody,
@@ -314,22 +314,16 @@ export function StaffView({ token }: StaffViewProps) {
         </p>
       )}
 
-      {loading ? (
-        <p role="status" className="text-sm text-muted">
-          {copy.loading}
-        </p>
-      ) : loadError ? (
-        <div className="flex items-center gap-3">
-          <p role="alert" className="text-sm text-danger">
-            {loadError}
-          </p>
-          <Button variant="outline" size="sm" onClick={() => setReloadKey((k) => k + 1)}>
-            {copy.retry}
-          </Button>
-        </div>
-      ) : staff.length === 0 ? (
-        <EmptyState role="status" title={copy.empty} description={copy.emptyHint} />
-      ) : (
+      <AsyncSection
+        loading={loading}
+        error={loadError}
+        onRetry={() => setReloadKey((k) => k + 1)}
+        retryLabel={copy.retry}
+        isEmpty={staff.length === 0}
+        emptyTitle={copy.empty}
+        emptyDescription={copy.emptyHint}
+        skeleton={<TableSkeleton rows={4} />}
+      >
         <Card className="overflow-hidden p-0">
           <Table aria-label={copy.tableLabel}>
             <TableHeader>
@@ -402,7 +396,7 @@ export function StaffView({ token }: StaffViewProps) {
             </TableBody>
           </Table>
         </Card>
-      )}
+      </AsyncSection>
 
       <ConfirmDialog
         open={confirmingId !== null}

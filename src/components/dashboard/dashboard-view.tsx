@@ -365,15 +365,22 @@ export function DashboardView({ token }: DashboardViewProps) {
           </Button>
         </div>
       ) : data ? (
-        <div className="grid gap-4 sm:grid-cols-2">
-          <IncomesCard incomes={data.incomes} />
-          <LowStockCard lowStockItems={data.lowStockItems} />
-          <UpcomingAppointmentsCard
-            upcomingAppointments={data.upcomingAppointments}
-            patientNames={patientNames}
-            staffNames={staffNames}
-          />
-          <PatientCountCard patientCount={data.patientCount} />
+        <div className="grid items-start gap-4 lg:grid-cols-3">
+          {/* Left rail: the period's headline figures, read as a clinical
+              summary strip rather than billboard hero cards. */}
+          <div className="flex flex-col gap-4">
+            <IncomesCard incomes={data.incomes} />
+            <PatientCountCard patientCount={data.patientCount} />
+          </div>
+          {/* Content column: the record-like sections that carry real rows. */}
+          <div className="flex flex-col gap-4 lg:col-span-2">
+            <UpcomingAppointmentsCard
+              upcomingAppointments={data.upcomingAppointments}
+              patientNames={patientNames}
+              staffNames={staffNames}
+            />
+            <LowStockCard lowStockItems={data.lowStockItems} />
+          </div>
         </div>
       ) : null}
     </div>
@@ -387,21 +394,19 @@ function IncomesCard({ incomes }: { incomes: Dashboard['incomes'] }) {
       <CardHeader>
         <CardTitle>{copy.incomesHeading}</CardTitle>
       </CardHeader>
-      <CardContent className="flex flex-col gap-3">
-        <p className="text-3xl font-semibold tracking-tight text-ink">
+      <CardContent className="flex flex-col gap-1">
+        <p className="text-2xl font-semibold tracking-tight text-ink tabular-nums">
           {formatCurrencySafe(incomes.totalConverted, incomes.currency)}
         </p>
         <p className="text-sm text-muted">{copy.incomesCount(incomes.count)}</p>
         {byCurrencyEntries.length > 0 && (
-          <div className="mt-2 flex flex-col gap-1 border-t border-border pt-3">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted">
-              {copy.byCurrencyHeading}
-            </p>
+          <div className="mt-3 flex flex-col gap-1.5 border-t border-hairline pt-3">
+            <p className="t-label uppercase text-muted">{copy.byCurrencyHeading}</p>
             <ul className="flex flex-col gap-1">
               {byCurrencyEntries.map(([cur, amount]) => (
                 <li key={cur} className="flex items-center justify-between text-sm text-ink">
-                  <span>{cur}</span>
-                  <span className="font-medium">{formatCurrencySafe(amount, cur)}</span>
+                  <span className="text-muted">{cur}</span>
+                  <span className="font-medium tabular-nums">{formatCurrencySafe(amount, cur)}</span>
                 </li>
               ))}
             </ul>
@@ -442,8 +447,8 @@ function LowStockCard({ lowStockItems }: { lowStockItems: Dashboard['lowStockIte
                 {lowStockItems.items.map((item) => (
                   <TableRow key={item.id}>
                     <TableCell className="font-medium">{item.name}</TableCell>
-                    <TableCell>{item.stock}</TableCell>
-                    <TableCell>{item.minStock}</TableCell>
+                    <TableCell className="tabular-nums">{item.stock}</TableCell>
+                    <TableCell className="tabular-nums">{item.minStock}</TableCell>
                     <TableCell className="text-muted">{item.unit}</TableCell>
                   </TableRow>
                 ))}
@@ -523,7 +528,8 @@ function PatientCountCard({ patientCount }: { patientCount: number }) {
         </CardTitle>
       </CardHeader>
       <CardContent>
-        <p className="text-4xl font-semibold tracking-tight text-ink">{patientCount}</p>
+        <p className="text-2xl font-semibold tracking-tight text-ink tabular-nums">{patientCount}</p>
+        <p className="mt-1 text-sm text-muted">registrados en la clínica</p>
       </CardContent>
     </Card>
   );

@@ -289,7 +289,7 @@ describe('AgendaView', () => {
     expect(within(table).getByRole<HTMLSelectElement>('combobox').value).toBe('CONFIRMED');
   });
 
-  it('sets aria-expanded/aria-controls on the "Nueva cita" toggle and pre-fills AppointmentForm\'s date with the selected day', async () => {
+  it('opens the "Nueva cita" modal and pre-fills AppointmentForm\'s date with the selected day', async () => {
     mockedListStaff.mockResolvedValue(staff);
     mockedListAppointments.mockResolvedValue([]);
     const user = userEvent.setup();
@@ -300,23 +300,18 @@ describe('AgendaView', () => {
     const dateInput = screen.getByLabelText<HTMLInputElement>(/^fecha$/i);
     const selectedDate = dateInput.value;
 
-    const toggle = screen.getByRole('button', { name: /nueva cita/i });
-    expect(toggle).toHaveAttribute('aria-expanded', 'false');
-    const controlsId = toggle.getAttribute('aria-controls');
-    expect(controlsId).toBeTruthy();
+    // The form lives in a modal now — closed until "Nueva cita" is clicked.
+    expect(screen.queryByRole('form', { name: /agendar cita/i })).not.toBeInTheDocument();
 
-    await user.click(toggle);
-    expect(toggle).toHaveAttribute('aria-expanded', 'true');
+    await user.click(screen.getByRole('button', { name: /nueva cita/i }));
+
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByRole('form', { name: /agendar cita/i })).toBeInTheDocument();
 
     const formDateInput = screen.getByLabelText<HTMLInputElement>(/^fecha$/i, {
       selector: '#appointment-date',
     });
     expect(formDateInput.value).toBe(selectedDate);
-
-    // The toggle's aria-controls must point at the actual revealed container.
-    expect(document.getElementById(controlsId as string)).toContainElement(
-      screen.getByRole('form', { name: /agendar cita/i }),
-    );
   });
 
   it('defaults to Día view, and switching to Semana fetches with the week range and renders WeekAgenda', async () => {

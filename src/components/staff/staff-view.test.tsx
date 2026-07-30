@@ -122,11 +122,13 @@ describe('StaffView', () => {
 
     await screen.findByRole('table', { name: /personal/i });
 
-    await user.click(screen.getByRole('button', { name: /desactivar/i }));
+    await user.click(screen.getByRole('button', { name: /^desactivar$/i }));
     expect(mockedDeactivateStaff).not.toHaveBeenCalled();
-    expect(screen.getByText(/¿desactivar a este miembro/i)).toBeInTheDocument();
+    // Confirmation now lives in a dialog (ConfirmDialog) instead of an inline row prompt.
+    const confirmDialog = await screen.findByRole('dialog');
+    expect(within(confirmDialog).getByText(/perderá el acceso/i)).toBeInTheDocument();
 
-    await user.click(screen.getByRole('button', { name: /sí, desactivar/i }));
+    await user.click(within(confirmDialog).getByRole('button', { name: /sí, desactivar/i }));
 
     await waitFor(() => expect(mockedDeactivateStaff).toHaveBeenCalledWith('tok', 'u1'));
     await waitFor(() => expect(mockedListStaff).toHaveBeenCalledTimes(2));
