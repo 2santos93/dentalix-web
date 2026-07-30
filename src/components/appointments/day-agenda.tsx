@@ -1,6 +1,7 @@
 'use client';
 import type { Appointment, AppointmentStatus } from '@/lib/appointments/appointments-api';
 import { StatusBadge, formatTimeRange, patientLabel } from './appointment-display';
+import { Skeleton } from '@/components/ui/skeleton';
 
 // Copy as constants (i18n-ready, es-first) — matches patients-table.tsx /
 // clinical-entries-list.tsx convention until next-intl wiring lands.
@@ -111,17 +112,30 @@ export function DayAgenda({
 }: DayAgendaProps) {
   if (loading) {
     return (
-      <p role="status" className="text-sm text-muted">
-        {copy.loading}
-      </p>
+      <div className="flex flex-col gap-2" role="status">
+        <span className="sr-only">{copy.loading}</span>
+        {Array.from({ length: 4 }).map((_, i) => (
+          <div
+            key={i}
+            className="flex items-center gap-4 rounded-xl border border-border bg-surface px-4 py-3.5"
+          >
+            <Skeleton className="h-4 w-20" />
+            <Skeleton className="h-4 flex-1" />
+            <Skeleton className="h-6 w-24 rounded-full" />
+          </div>
+        ))}
+      </div>
     );
   }
 
   if (error) {
     return (
-      <p role="alert" className="text-sm text-danger">
+      <div
+        role="alert"
+        className="rounded-xl border border-danger/30 bg-danger/5 px-4 py-3 text-sm font-medium text-danger"
+      >
         {error || copy.genericLoadError}
-      </p>
+      </div>
     );
   }
 

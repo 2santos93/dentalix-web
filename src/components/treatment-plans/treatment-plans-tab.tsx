@@ -36,6 +36,7 @@ import { Badge, type BadgeProps } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
+import { Skeleton } from '@/components/ui/skeleton';
 import { FormField } from '@/components/molecules/form-field';
 import { FormModal } from '@/components/molecules/form-modal';
 import { EmptyState } from '@/components/molecules/empty-state';
@@ -1090,9 +1091,12 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
 
   if (loading) {
     return (
-      <p role="status" className="text-sm text-muted">
-        {copy.loading}
-      </p>
+      <div className="flex flex-col gap-3" role="status">
+        <span className="sr-only">{copy.loading}</span>
+        <Skeleton className="h-9 w-40" />
+        <Skeleton className="h-24 w-full rounded-xl" />
+        <Skeleton className="h-24 w-full rounded-xl" />
+      </div>
     );
   }
 
@@ -1194,9 +1198,12 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
             {planDetailLoading && (
-              <p role="status" className="text-sm text-muted">
-                {copy.loadingPlanDetail}
-              </p>
+              <div className="flex flex-col gap-3" role="status">
+                <span className="sr-only">{copy.loadingPlanDetail}</span>
+                <Skeleton className="h-5 w-1/3" />
+                <Skeleton className="h-16 w-full rounded-lg" />
+                <Skeleton className="h-16 w-full rounded-lg" />
+              </div>
             )}
             {planDetailError && (
               <div className="flex flex-col items-start gap-3">

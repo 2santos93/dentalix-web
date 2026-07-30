@@ -7,6 +7,8 @@ import { ToothRecordPanel } from '@/components/odontogram/tooth-record-panel';
 import { getOdontogram, type ToothGroup, type ToothSurface } from '@/lib/odontogram/odontogram-api';
 import { projectOdontogram } from '@/lib/odontogram/projection';
 import { listCatalogItems, type DentalCatalogItem } from '@/lib/odontogram/catalog-api';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
 
 // Copy as constants (i18n-ready) — matches page.tsx's convention until
 // next-intl wiring lands.
@@ -140,25 +142,24 @@ export function OdontogramTab({ token, patientId }: OdontogramTabProps) {
 
   if (loading) {
     return (
-      <p role="status" className="text-sm text-muted">
-        {copy.odontogramLoading}
-      </p>
+      <div className="flex flex-col gap-4" role="status">
+        <span className="sr-only">{copy.odontogramLoading}</span>
+        <Skeleton className="h-64 w-full rounded-xl" />
+        <Skeleton className="h-4 w-2/3" />
+      </div>
     );
   }
 
   if (loadError) {
     return (
-      <div className="flex flex-col items-start gap-3">
-        <p role="alert" className="text-sm text-danger">
-          {loadError}
-        </p>
-        <button
-          type="button"
-          onClick={() => setReloadKey((k) => k + 1)}
-          className="rounded-md border border-border px-3 py-1.5 text-sm font-medium text-ink"
-        >
+      <div
+        role="alert"
+        className="flex flex-col items-start gap-3 rounded-xl border border-danger/30 bg-danger/5 px-4 py-3"
+      >
+        <p className="text-sm font-medium text-danger">{loadError}</p>
+        <Button type="button" variant="outline" size="sm" onClick={() => setReloadKey((k) => k + 1)}>
           {copy.retry}
-        </button>
+        </Button>
       </div>
     );
   }
@@ -197,7 +198,7 @@ export function OdontogramTab({ token, patientId }: OdontogramTabProps) {
       {selectedTooth ? (
         <div className="grid gap-6 lg:grid-cols-2">
           <section className="flex flex-col gap-3">
-            <h2 className="text-lg font-semibold text-ink">{copy.toothHeading(selectedTooth)}</h2>
+            <h2 className="t-title text-ink">{copy.toothHeading(selectedTooth)}</h2>
             <ToothTimeline
               token={token}
               patientId={patientId}
