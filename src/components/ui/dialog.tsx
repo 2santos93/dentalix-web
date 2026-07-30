@@ -14,7 +14,7 @@ const DialogOverlay = React.forwardRef<
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Overlay
     ref={ref}
-    className={cn('fixed inset-0 z-50 bg-ink/40 backdrop-blur-sm', className)}
+    className={cn('dlg-overlay fixed inset-0 z-50 bg-ink/40 backdrop-blur-sm', className)}
     {...props}
   />
 ));
@@ -29,7 +29,7 @@ const DialogContent = React.forwardRef<
     <DialogPrimitive.Content
       ref={ref}
       className={cn(
-        'fixed left-1/2 top-1/2 z-50 grid w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl border border-border bg-surface p-6 shadow-lg',
+        'dlg-content fixed left-1/2 top-1/2 z-50 grid w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 rounded-xl border border-border bg-surface p-6 shadow-overlay',
         'max-h-[calc(100dvh-2rem)] overflow-y-auto',
         className,
       )}
@@ -49,13 +49,29 @@ function DialogHeader({ className, ...props }: React.HTMLAttributes<HTMLDivEleme
   return <div className={cn('flex flex-col gap-1.5', className)} {...props} />;
 }
 
+/**
+ * Action row for a dialog. Reverses to a full-width stack on mobile so the
+ * primary action stays thumb-reachable; right-aligned on larger screens.
+ */
+function DialogFooter({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
+  return (
+    <div
+      className={cn(
+        'flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end',
+        className,
+      )}
+      {...props}
+    />
+  );
+}
+
 const DialogTitle = React.forwardRef<
   React.ComponentRef<typeof DialogPrimitive.Title>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Title>
 >(({ className, ...props }, ref) => (
   <DialogPrimitive.Title
     ref={ref}
-    className={cn('text-lg font-semibold tracking-tight text-ink', className)}
+    className={cn('t-title text-ink', className)}
     {...props}
   />
 ));
@@ -79,6 +95,7 @@ export {
   DialogClose,
   DialogContent,
   DialogHeader,
+  DialogFooter,
   DialogTitle,
   DialogDescription,
 };

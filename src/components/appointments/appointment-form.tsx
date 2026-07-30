@@ -500,15 +500,11 @@ export function AppointmentForm({ token, onCreated, defaultDate }: AppointmentFo
         </p>
       )}
 
-      <Button type="submit" disabled={submitting} className="self-start">
-        {submitting ? (
-          <>
-            <Loader2 className="animate-spin" /> {copy.submitting}
-          </>
-        ) : (
-          copy.submit
-        )}
-      </Button>
+      <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end">
+        <Button type="submit" loading={submitting}>
+          {submitting ? copy.submitting : copy.submit}
+        </Button>
+      </div>
     </form>
   );
 }

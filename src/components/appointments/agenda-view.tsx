@@ -13,16 +13,24 @@ import { localDayRange, localWeekRange } from '@/lib/appointments/day-range';
 import { DayAgenda } from '@/components/appointments/day-agenda';
 import { WeekAgenda } from '@/components/appointments/week-agenda';
 import { AppointmentForm } from '@/components/appointments/appointment-form';
-import { Plus, X } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
 import { FormField } from '@/components/molecules/form-field';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
 const copy = {
   newAppointment: 'Nueva cita',
+  newAppointmentDesc: 'Agenda una cita para un paciente con su profesional, fecha y horario.',
   cancel: 'Cancelar',
   providerLabel: 'Profesional',
   providerLoading: 'Cargando…',
@@ -39,8 +47,6 @@ const copy = {
   noProviders: 'No hay profesionales activos en esta clínica.',
   selectProviderPrompt: 'Selecciona un profesional para ver su agenda.',
 };
-
-const NEW_APPOINTMENT_FORM_ID = 'agenda-new-appointment-form';
 
 // Native <select> styled to match the Input atom (kept native for a11y/tests).
 const fieldClass =
@@ -313,22 +319,8 @@ export function AgendaView({ token }: AgendaViewProps) {
               </div>
             </FormField>
           </div>
-          <Button
-            type="button"
-            variant={showForm ? 'outline' : 'default'}
-            onClick={() => setShowForm((v) => !v)}
-            aria-expanded={showForm}
-            aria-controls={NEW_APPOINTMENT_FORM_ID}
-          >
-            {showForm ? (
-              <>
-                <X /> {copy.cancel}
-              </>
-            ) : (
-              <>
-                <Plus /> {copy.newAppointment}
-              </>
-            )}
+          <Button type="button" onClick={() => setShowForm(true)}>
+            <Plus /> {copy.newAppointment}
           </Button>
         </CardContent>
       </Card>
@@ -348,17 +340,19 @@ export function AgendaView({ token }: AgendaViewProps) {
         </div>
       )}
 
-      {showForm && (
-        <Card id={NEW_APPOINTMENT_FORM_ID} className="max-w-2xl">
-          <CardContent className="p-6">
-            <AppointmentForm
-              token={token}
-              onCreated={handleAppointmentCreated}
-              defaultDate={selectedDate}
-            />
-          </CardContent>
-        </Card>
-      )}
+      <Dialog open={showForm} onOpenChange={setShowForm}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{copy.newAppointment}</DialogTitle>
+            <DialogDescription>{copy.newAppointmentDesc}</DialogDescription>
+          </DialogHeader>
+          <AppointmentForm
+            token={token}
+            onCreated={handleAppointmentCreated}
+            defaultDate={selectedDate}
+          />
+        </DialogContent>
+      </Dialog>
 
       {appointmentsRefreshing && (
         <p role="status" aria-live="polite" className="text-xs font-medium text-muted">

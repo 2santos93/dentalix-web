@@ -37,6 +37,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import { FormField } from '@/components/molecules/form-field';
+import { FormModal } from '@/components/molecules/form-modal';
 import { EmptyState } from '@/components/molecules/empty-state';
 import { PaymentReceipt } from './payment-receipt';
 import { cn } from '@/lib/utils';
@@ -913,21 +914,16 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
       .finally(() => setPaymentsRefreshing(false));
   }
 
-  /** Toggles the "Registrar abono" form, defaulting currency=plan.currency / fecha=today whenever it's opened. */
-  function handleTogglePaymentForm() {
-    setShowPaymentForm((prev) => {
-      const next = !prev;
-      if (next) {
-        setPaymentAmount('');
-        setPaymentCurrency(planDetail?.currency ?? 'USD');
-        setPaymentDate(todayLocalDateString());
-        setPaymentMethod('');
-        setPaymentNotes('');
-        setAddPaymentValidationError(null);
-        setAddPaymentError(null);
-      }
-      return next;
-    });
+  /** Opens the "Registrar pago" modal, defaulting currency=plan.currency / fecha=today. */
+  function openPaymentForm() {
+    setPaymentAmount('');
+    setPaymentCurrency(planDetail?.currency ?? 'USD');
+    setPaymentDate(todayLocalDateString());
+    setPaymentMethod('');
+    setPaymentNotes('');
+    setAddPaymentValidationError(null);
+    setAddPaymentError(null);
+    setShowPaymentForm(true);
   }
 
   async function handleAddPayment(e: React.FormEvent<HTMLFormElement>) {
@@ -965,6 +961,7 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
       setPaymentAmount('');
       setPaymentMethod('');
       setPaymentNotes('');
+      setShowPaymentForm(false);
       await refreshBalanceAndPayments();
     } catch (err) {
       // Surfaces the backend's 400 (invalid amount/currency) verbatim —
@@ -1260,8 +1257,8 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
                 <div className="flex flex-col gap-4">
                   <div className="flex flex-wrap items-center justify-between gap-3">
                     <h3 className="text-base font-semibold text-ink">{copy.paymentsHeading}</h3>
-                    <Button type="button" variant="outline" size="sm" onClick={handleTogglePaymentForm}>
-                      {showPaymentForm ? copy.cancelPaymentForm : copy.registerPayment}
+                    <Button type="button" variant="outline" size="sm" onClick={openPaymentForm}>
+                      {copy.registerPayment}
                     </Button>
                   </div>
 
@@ -1331,88 +1328,76 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
                         </div>
                       </div>
 
-                      {showPaymentForm && (
-                        <form
-                          onSubmit={handleAddPayment}
-                          aria-label={copy.registerPayment}
-                          className="flex flex-col gap-4 rounded-lg border border-border p-4"
-                        >
-                          <div className="grid gap-4 sm:grid-cols-2">
-                            <FormField htmlFor="tp-payment-amount" label={copy.paymentAmountLabel}>
-                              <Input
-                                id="tp-payment-amount"
-                                type="number"
-                                min={0}
-                                step="0.01"
-                                value={paymentAmount}
-                                onChange={(e) => setPaymentAmount(e.target.value)}
-                              />
-                            </FormField>
-
-                            <FormField htmlFor="tp-payment-currency" label={copy.paymentCurrencyLabel}>
-                              <Input
-                                id="tp-payment-currency"
-                                value={paymentCurrency}
-                                maxLength={3}
-                                onChange={(e) => setPaymentCurrency(e.target.value.toUpperCase())}
-                                className="uppercase"
-                              />
-                            </FormField>
-                          </div>
-
-                          <div className="grid gap-4 sm:grid-cols-2">
-                            <FormField htmlFor="tp-payment-date" label={copy.paymentDateLabel}>
-                              <Input
-                                id="tp-payment-date"
-                                type="date"
-                                value={paymentDate}
-                                onChange={(e) => setPaymentDate(e.target.value)}
-                              />
-                            </FormField>
-
-                            <FormField htmlFor="tp-payment-method" label={copy.paymentMethodLabel}>
-                              <select
-                                id="tp-payment-method"
-                                value={paymentMethod}
-                                onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod | '')}
-                                className={fieldClass}
-                              >
-                                <option value="">{copy.paymentMethodEmptyOption}</option>
-                                {PAYMENT_METHOD_OPTIONS.map((method) => (
-                                  <option key={method} value={method}>
-                                    {PAYMENT_METHOD_LABELS[method]}
-                                  </option>
-                                ))}
-                              </select>
-                            </FormField>
-                          </div>
-
-                          <FormField htmlFor="tp-payment-notes" label={copy.paymentNotesLabel}>
-                            <textarea
-                              id="tp-payment-notes"
-                              rows={2}
-                              value={paymentNotes}
-                              onChange={(e) => setPaymentNotes(e.target.value)}
-                              className={cn(fieldClass, 'h-auto')}
+                      <FormModal
+                        open={showPaymentForm}
+                        onOpenChange={setShowPaymentForm}
+                        title={copy.registerPayment}
+                        onSubmit={handleAddPayment}
+                        submitLabel={copy.addPaymentSubmit}
+                        submitting={addPaymentSubmitting}
+                        error={addPaymentValidationError ?? addPaymentError}
+                        size="lg"
+                      >
+                        <div className="grid gap-4 sm:grid-cols-2">
+                          <FormField htmlFor="tp-payment-amount" label={copy.paymentAmountLabel}>
+                            <Input
+                              id="tp-payment-amount"
+                              type="number"
+                              min={0}
+                              step="0.01"
+                              value={paymentAmount}
+                              onChange={(e) => setPaymentAmount(e.target.value)}
                             />
                           </FormField>
 
-                          {addPaymentValidationError && (
-                            <p role="alert" className="text-sm text-danger">
-                              {addPaymentValidationError}
-                            </p>
-                          )}
-                          {addPaymentError && (
-                            <p role="alert" className="text-sm text-danger">
-                              {addPaymentError}
-                            </p>
-                          )}
+                          <FormField htmlFor="tp-payment-currency" label={copy.paymentCurrencyLabel}>
+                            <Input
+                              id="tp-payment-currency"
+                              value={paymentCurrency}
+                              maxLength={3}
+                              onChange={(e) => setPaymentCurrency(e.target.value.toUpperCase())}
+                              className="uppercase"
+                            />
+                          </FormField>
+                        </div>
 
-                          <Button type="submit" disabled={addPaymentSubmitting} className="self-start">
-                            {addPaymentSubmitting ? copy.addPaymentSubmitting : copy.addPaymentSubmit}
-                          </Button>
-                        </form>
-                      )}
+                        <div className="grid gap-4 sm:grid-cols-2">
+                          <FormField htmlFor="tp-payment-date" label={copy.paymentDateLabel}>
+                            <Input
+                              id="tp-payment-date"
+                              type="date"
+                              value={paymentDate}
+                              onChange={(e) => setPaymentDate(e.target.value)}
+                            />
+                          </FormField>
+
+                          <FormField htmlFor="tp-payment-method" label={copy.paymentMethodLabel}>
+                            <select
+                              id="tp-payment-method"
+                              value={paymentMethod}
+                              onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod | '')}
+                              className={fieldClass}
+                            >
+                              <option value="">{copy.paymentMethodEmptyOption}</option>
+                              {PAYMENT_METHOD_OPTIONS.map((method) => (
+                                <option key={method} value={method}>
+                                  {PAYMENT_METHOD_LABELS[method]}
+                                </option>
+                              ))}
+                            </select>
+                          </FormField>
+                        </div>
+
+                        <FormField htmlFor="tp-payment-notes" label={copy.paymentNotesLabel}>
+                          <textarea
+                            id="tp-payment-notes"
+                            rows={2}
+                            value={paymentNotes}
+                            onChange={(e) => setPaymentNotes(e.target.value)}
+                            className={cn(fieldClass, 'h-auto')}
+                          />
+                        </FormField>
+                      </FormModal>
 
                       <PaymentsList
                         payments={payments}

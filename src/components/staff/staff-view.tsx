@@ -10,11 +10,13 @@ import {
   type StaffMember,
   type ClinicRole,
 } from '@/lib/staff/staff-api';
-import { Plus, X } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card } from '@/components/ui/card';
 import { FormField } from '@/components/molecules/form-field';
+import { FormModal } from '@/components/molecules/form-modal';
+import { ConfirmDialog } from '@/components/molecules/confirm-dialog';
 import { EmptyState } from '@/components/molecules/empty-state';
 import {
   Table,
@@ -30,6 +32,7 @@ import { cn } from '@/lib/utils';
 // until next-intl wiring lands.
 const copy = {
   addToggle: 'Agregar personal',
+  formDescription: 'Crea una cuenta para un miembro del equipo con su rol y una contraseña temporal.',
   cancel: 'Cancelar',
   fullNameLabel: 'Nombre completo',
   emailLabel: 'Correo electrónico',
@@ -52,9 +55,10 @@ const copy = {
   colRole: 'Rol',
   colActions: 'Acciones',
   deactivateCta: 'Desactivar',
-  deactivateConfirmPrompt: '¿Desactivar a este miembro del equipo?',
+  deactivateTitle: 'Desactivar miembro del equipo',
+  deactivateBody: (name: string) =>
+    `${name} perderá el acceso a la clínica. Podrás reactivarlo/a más adelante.`,
   deactivateConfirmYes: 'Sí, desactivar',
-  deactivateConfirmNo: 'Cancelar',
   nameFieldLabel: (name: string) => `Nombre de ${name}`,
   roleFieldLabel: (name: string) => `Rol de ${name}`,
 };
@@ -66,8 +70,6 @@ const ROLE_OPTIONS: { value: ClinicRole; label: string }[] = [
   { value: 'ASSISTANT', label: 'Asistente' },
   { value: 'RECEPTION', label: 'Recepción' },
 ];
-
-const NEW_STAFF_FORM_ID = 'staff-new-member-form';
 
 // Native <select> styled to match the Input atom (kept native for a11y/tests) —
 // same class as agenda-view.tsx's `fieldClass`.
@@ -225,102 +227,88 @@ export function StaffView({ token }: StaffViewProps) {
     }
   }
 
+  function handleCreateOpenChange(next: boolean) {
+    setShowForm(next);
+    if (!next) {
+      setCreateError(null);
+      resetForm();
+    }
+  }
+
+  const confirmingMember = confirmingId
+    ? staff.find((s) => s.userId === confirmingId) ?? null
+    : null;
+
   return (
     <div className="flex flex-col gap-6">
-      <Card>
-        <CardContent className="flex flex-wrap items-center justify-end gap-4 p-4">
-          <Button
-            type="button"
-            variant={showForm ? 'outline' : 'default'}
-            onClick={() => setShowForm((v) => !v)}
-            aria-expanded={showForm}
-            aria-controls={NEW_STAFF_FORM_ID}
-          >
-            {showForm ? (
-              <>
-                <X /> {copy.cancel}
-              </>
-            ) : (
-              <>
-                <Plus /> {copy.addToggle}
-              </>
-            )}
-          </Button>
-        </CardContent>
-      </Card>
+      <div className="flex justify-end">
+        <Button type="button" onClick={() => setShowForm(true)}>
+          <Plus /> {copy.addToggle}
+        </Button>
+      </div>
 
-      {showForm && (
-        <Card id={NEW_STAFF_FORM_ID} className="max-w-2xl">
-          <CardContent className="p-6">
-            <form
-              onSubmit={handleCreateSubmit}
-              aria-label={copy.addToggle}
-              className="flex flex-col gap-4"
+      <FormModal
+        open={showForm}
+        onOpenChange={handleCreateOpenChange}
+        title={copy.addToggle}
+        description={copy.formDescription}
+        onSubmit={handleCreateSubmit}
+        submitLabel={copy.submit}
+        submitting={creating}
+        error={createError}
+        size="lg"
+      >
+        <div className="grid gap-4 sm:grid-cols-2">
+          <FormField htmlFor="staff-full-name" label={copy.fullNameLabel}>
+            <Input
+              id="staff-full-name"
+              type="text"
+              required
+              value={fullName}
+              onChange={(e) => setFullName(e.target.value)}
+            />
+          </FormField>
+          <FormField htmlFor="staff-email" label={copy.emailLabel}>
+            <Input
+              id="staff-email"
+              type="email"
+              required
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+            />
+          </FormField>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <FormField htmlFor="staff-role" label={copy.roleLabel}>
+            <select
+              id="staff-role"
+              required
+              value={role}
+              onChange={(e) => setRole(e.target.value as ClinicRole)}
+              className={fieldClass}
             >
-              <div className="grid gap-4 sm:grid-cols-2">
-                <FormField htmlFor="staff-full-name" label={copy.fullNameLabel}>
-                  <Input
-                    id="staff-full-name"
-                    type="text"
-                    required
-                    value={fullName}
-                    onChange={(e) => setFullName(e.target.value)}
-                  />
-                </FormField>
-                <FormField htmlFor="staff-email" label={copy.emailLabel}>
-                  <Input
-                    id="staff-email"
-                    type="email"
-                    required
-                    value={email}
-                    onChange={(e) => setEmail(e.target.value)}
-                  />
-                </FormField>
-              </div>
+              {ROLE_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </FormField>
+          <FormField htmlFor="staff-password" label={copy.passwordLabel}>
+            <Input
+              id="staff-password"
+              type="password"
+              required
+              autoComplete="new-password"
+              value={password}
+              onChange={(e) => setPassword(e.target.value)}
+            />
+          </FormField>
+        </div>
+      </FormModal>
 
-              <div className="grid gap-4 sm:grid-cols-2">
-                <FormField htmlFor="staff-role" label={copy.roleLabel}>
-                  <select
-                    id="staff-role"
-                    required
-                    value={role}
-                    onChange={(e) => setRole(e.target.value as ClinicRole)}
-                    className={fieldClass}
-                  >
-                    {ROLE_OPTIONS.map((opt) => (
-                      <option key={opt.value} value={opt.value}>
-                        {opt.label}
-                      </option>
-                    ))}
-                  </select>
-                </FormField>
-                <FormField htmlFor="staff-password" label={copy.passwordLabel}>
-                  <Input
-                    id="staff-password"
-                    type="password"
-                    required
-                    autoComplete="new-password"
-                    value={password}
-                    onChange={(e) => setPassword(e.target.value)}
-                  />
-                </FormField>
-              </div>
-
-              {createError && (
-                <p role="alert" className="text-sm text-danger">
-                  {createError}
-                </p>
-              )}
-
-              <Button type="submit" disabled={creating} className="self-start">
-                {creating ? copy.submitting : copy.submit}
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
-      )}
-
-      {rowError && (
+      {rowError && !confirmingId && (
         <p role="alert" className="text-sm text-danger">
           {rowError}
         </p>
@@ -355,7 +343,6 @@ export function StaffView({ token }: StaffViewProps) {
             <TableBody>
               {staff.map((s) => {
                 const updating = updatingId === s.userId;
-                const confirming = confirmingId === s.userId;
                 return (
                   <TableRow key={s.userId}>
                     <TableCell>
@@ -396,41 +383,18 @@ export function StaffView({ token }: StaffViewProps) {
                       </select>
                     </TableCell>
                     <TableCell>
-                      {confirming ? (
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="text-xs text-muted">
-                            {copy.deactivateConfirmPrompt}
-                          </span>
-                          <Button
-                            type="button"
-                            variant="destructive"
-                            size="sm"
-                            disabled={updating}
-                            onClick={() => handleDeactivate(s.userId)}
-                          >
-                            {copy.deactivateConfirmYes}
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            disabled={updating}
-                            onClick={() => setConfirmingId(null)}
-                          >
-                            {copy.deactivateConfirmNo}
-                          </Button>
-                        </div>
-                      ) : (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          disabled={updating}
-                          onClick={() => setConfirmingId(s.userId)}
-                        >
-                          {copy.deactivateCta}
-                        </Button>
-                      )}
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={updating}
+                        onClick={() => {
+                          setRowError(null);
+                          setConfirmingId(s.userId);
+                        }}
+                      >
+                        {copy.deactivateCta}
+                      </Button>
                     </TableCell>
                   </TableRow>
                 );
@@ -439,6 +403,24 @@ export function StaffView({ token }: StaffViewProps) {
           </Table>
         </Card>
       )}
+
+      <ConfirmDialog
+        open={confirmingId !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setConfirmingId(null);
+            setRowError(null);
+          }
+        }}
+        title={copy.deactivateTitle}
+        description={
+          confirmingMember ? copy.deactivateBody(confirmingMember.fullName) : undefined
+        }
+        confirmLabel={copy.deactivateConfirmYes}
+        confirming={updatingId === confirmingId}
+        error={rowError}
+        onConfirm={() => confirmingId && handleDeactivate(confirmingId)}
+      />
     </div>
   );
 }
