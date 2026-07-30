@@ -64,25 +64,32 @@ export function CityCombobox({ id, token, countryCode, value, onChange, disabled
   const justPickedRef = useRef(false);
 
   useEffect(() => {
-    // Results/open are already cleared at the point text became empty (see
-    // the input's onChange below) or the country changed (see the
-    // adjust-state-during-render block above), so this guard just skips
-    // scheduling a search — it doesn't need to setState itself.
-    if (!countryCode || text.trim() === '') return;
+    // No country selected → nothing to search; the country-change block above
+    // already cleared results, so just bail.
+    if (!countryCode) return;
     if (justPickedRef.current) {
       justPickedRef.current = false;
       return;
     }
     if (debounce.current) clearTimeout(debounce.current);
+    const q = text.trim();
+    let cancelled = false;
+    // Empty `q` is intentional: on country select — and on focus with an empty
+    // field — we load that country's first page of cities so the dropdown
+    // opens already populated instead of blank. Typing then narrows it. Open
+    // state is driven by focus/typing (below), NOT by this fetch, so results
+    // are prefetched quietly and only shown once the field is focused.
     debounce.current = setTimeout(() => {
-      searchCities(token, { countryCode, q: text.trim() })
+      searchCities(token, { countryCode, ...(q ? { q } : {}), limit: 50 })
         .then((data) => {
-          setResults(data);
-          setOpen(true);
+          if (!cancelled) setResults(data);
         })
-        .catch(() => setResults([]));
-    }, 250);
+        .catch(() => {
+          if (!cancelled) setResults([]);
+        });
+    }, q ? 250 : 0); // instant initial load, debounced while typing
     return () => {
+      cancelled = true;
       if (debounce.current) clearTimeout(debounce.current);
     };
   }, [token, countryCode, text]);
@@ -104,14 +111,19 @@ export function CityCombobox({ id, token, countryCode, value, onChange, disabled
         autoComplete="off"
         disabled={disabled || !countryCode}
         value={text}
+        onFocus={() => {
+          // Reveal the prefetched list (or trigger the initial load if the
+          // effect hasn't run yet) as soon as the field is focused.
+          if (countryCode) setOpen(true);
+        }}
+        onBlur={() => setOpen(false)}
         onChange={(e) => {
           const next = e.target.value;
           setText(next);
+          setOpen(true);
+          // Clearing the field falls back to the country's first page (the
+          // effect reloads with empty q); don't blank the results here.
           if (value !== null) onChange(null);
-          if (next.trim() === '') {
-            setResults([]);
-            setOpen(false);
-          }
         }}
         className={fieldClass}
       />
@@ -125,6 +137,9 @@ export function CityCombobox({ id, token, countryCode, value, onChange, disabled
             <li key={city.id} role="option" aria-selected={value?.id === city.id}>
               <button
                 type="button"
+                // Keep focus on the input so its onBlur doesn't close the list
+                // before this click lands.
+                onMouseDown={(e) => e.preventDefault()}
                 onClick={() => pick(city)}
                 className={cn('block w-full px-3 py-2 text-left text-sm text-ink hover:bg-muted/10')}
               >
