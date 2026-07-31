@@ -7,6 +7,7 @@ import { ApiError } from '@/lib/api/client';
 import { getPatient, type Patient } from '@/lib/patients/patients-api';
 import { MedicalHistoryPanel } from '@/components/patients/medical-history-panel';
 import { ClinicalEntriesList } from '@/components/patients/clinical-entries-list';
+import { ClinicalAlertBanner } from '@/components/patients/clinical-alert-banner';
 import { PatientDetailTabs, type PatientDetailTabKey } from '@/components/patients/patient-detail-tabs';
 import { OdontogramTab } from '@/components/odontogram/odontogram-tab';
 import { TreatmentPlansTab } from '@/components/treatment-plans/treatment-plans-tab';
@@ -137,6 +138,8 @@ export default function PatientDetailPage() {
         </div>
       ) : patient ? (
         <div className="flex flex-col gap-4">
+          <ClinicalAlertBanner token={accessToken} patientId={patientId} />
+
           <PatientDetailTabs
             activeTab={activeTab}
             onTabChange={setActiveTab}

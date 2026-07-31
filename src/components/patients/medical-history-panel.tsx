@@ -2,12 +2,15 @@
 import * as React from 'react';
 import { useEffect, useState } from 'react';
 import { ApiError } from '@/lib/api/client';
+import { Button } from '@/components/ui/button';
+import { AsyncSection } from '@/components/molecules/async-section';
+import { ClinicalHistoryFields } from '@/components/clinical/clinical-history-fields';
 import {
   getMedicalHistory,
   saveMedicalHistory,
   type MedicalHistory,
-  type SaveMedicalHistoryInput,
 } from '@/lib/patients/clinical-api';
+import type { ClinicalHistoryValue } from '@/lib/clinical/clinical-types';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
@@ -17,20 +20,17 @@ const copy = {
   emptyHint: 'Completa el formulario y guárdalo para registrar la primera anamnesis del paciente.',
   versionLabel: (v: number) => `Versión ${v}`,
   fieldFallback: '—',
-  allergiesLabel: 'Alergias',
-  chronicConditionsLabel: 'Condiciones crónicas',
-  currentMedicationsLabel: 'Medicamentos actuales',
-  habitsLabel: 'Hábitos',
-  medicalAlertsLabel: 'Alertas médicas',
+  allergiesCountLabel: 'Alergias registradas',
+  conditionsCountLabel: 'Condiciones registradas',
+  medicationsCountLabel: 'Medicamentos registrados',
+  familyHistoryLabel: 'Antecedentes familiares',
   notesLabel: 'Notas',
   formTitle: 'Guardar nueva versión',
-  submit: 'Guardar nueva versión',
   // First visit (no anamnesis yet): "Guardar nueva versión" reads as a no-op
   // when there's nothing to version, so the create affordance is labelled
   // explicitly instead.
   createTitle: 'Registrar anamnesis',
-  createSubmit: 'Registrar anamnesis',
-  submitting: 'Guardando…',
+  submit: 'Guardar',
   genericLoadError: 'No pudimos cargar la anamnesis. Intenta de nuevo.',
   genericSaveError: 'No pudimos guardar la anamnesis. Intenta de nuevo.',
   retry: 'Reintentar',
@@ -41,65 +41,86 @@ interface MedicalHistoryPanelProps {
   patientId: string;
 }
 
-const emptyForm = {
-  allergies: '',
-  chronicConditions: '',
-  currentMedications: '',
-  habits: '',
-  medicalAlerts: '',
-  notes: '',
-};
-
 /**
  * `saveMedicalHistory` creates a brand-new version from ONLY the fields
- * submitted in the form — any field left out (because the form was empty)
- * comes back `null` on the new version, silently wiping previously recorded
- * data (allergies, chronic conditions, …). Carrying the latest version's
- * values into the form — on load AND right after a successful save —
- * means an untouched field still gets re-submitted with its prior value
- * instead of being dropped.
+ * submitted — any field left out comes back `null`/empty on the new
+ * version, silently wiping previously recorded data (allergies, conditions,
+ * …). Carrying the latest version's values into `value` — on load AND right
+ * after a successful save — means an untouched section still gets
+ * re-submitted with its prior contents instead of being dropped.
+ *
+ * Deliberately excludes `hasCriticalAlert`/`id`/`tenantId`/`patientId`/
+ * `version`/`createdById`/`createdAt` — those are server-derived or identity
+ * fields, not editable input. `safetyFlags` itself is also excluded (it's
+ * derived server-side from `conditions`/`medications`, not editable), EXCEPT
+ * `embarazo`/`semanasEmbarazo` — `ClinicalHistoryFields` reads/writes those
+ * as top-level `value` fields (not nested under `safetyFlags`), so they're
+ * pulled out of `history.safetyFlags` here to carry the pregnancy flag
+ * forward between versions like every other field.
  */
-function formFromHistory(history: MedicalHistory | null): typeof emptyForm {
-  if (!history) return emptyForm;
+function valueFromHistory(history: MedicalHistory | null): ClinicalHistoryValue {
+  if (!history) return {};
   return {
-    allergies: history.allergies ?? '',
-    chronicConditions: history.chronicConditions ?? '',
-    currentMedications: history.currentMedications ?? '',
-    habits: history.habits ?? '',
-    medicalAlerts: history.medicalAlerts ?? '',
-    notes: history.notes ?? '',
+    allergies: history.allergies,
+    conditions: history.conditions,
+    medications: history.medications,
+    habits: history.habits ?? undefined,
+    dentalHistory: history.dentalHistory ?? undefined,
+    surgeries: history.surgeries,
+    vitalSigns: history.vitalSigns ?? undefined,
+    embarazo: history.safetyFlags.embarazo,
+    semanasEmbarazo: history.safetyFlags.semanasEmbarazo,
+    familyHistory: history.familyHistory ?? undefined,
+    notes: history.notes ?? undefined,
   };
 }
 
-// The six versioned anamnesis fields — drives the shallow no-op compare below.
-const FORM_FIELDS = [
-  'allergies',
-  'chronicConditions',
-  'currentMedications',
-  'habits',
-  'medicalAlerts',
-  'notes',
-] as const;
+/**
+ * Structural deep-equality over the plain JSON shapes `ClinicalHistoryValue`
+ * is made of (nested objects, arrays, and scalar leaves — no dates/maps/etc).
+ * A key that is `undefined` on one side and absent on the other counts as
+ * equal, so the carried-forward baseline (which sets optional sections to
+ * `undefined`) compares clean against an untouched form.
+ */
+function deepEqual(a: unknown, b: unknown): boolean {
+  if (a === b) return true;
+  if (typeof a !== 'object' || typeof b !== 'object' || a === null || b === null) {
+    return false;
+  }
+  if (Array.isArray(a) || Array.isArray(b)) {
+    if (!Array.isArray(a) || !Array.isArray(b) || a.length !== b.length) return false;
+    return a.every((item, i) => deepEqual(item, b[i]));
+  }
+  const ao = a as Record<string, unknown>;
+  const bo = b as Record<string, unknown>;
+  const keys = new Set(
+    [...Object.keys(ao), ...Object.keys(bo)].filter(
+      (k) => ao[k] !== undefined || bo[k] !== undefined,
+    ),
+  );
+  for (const k of keys) {
+    if (!deepEqual(ao[k], bo[k])) return false;
+  }
+  return true;
+}
 
 /**
- * Shallow field compare of the current form against the latest saved version.
- * The form is re-seeded from the saved version after every save, so without
- * this an unchanged re-submit would create an identical duplicate version.
- * Each field is trimmed to mirror the trimming `handleSubmit` applies before
- * saving — a whitespace-only edit produces the same stored version, so it
- * counts as unchanged. `formFromHistory(null)` is `emptyForm`, so an untouched
- * first-visit form is also treated as a no-op (no all-null version created).
+ * Anti-duplicate guard (ported from the free-text panel): the form is
+ * re-seeded from the latest saved version on load AND after every save, so
+ * without this an unchanged re-submit would create an identical duplicate
+ * version. `valueFromHistory(null)` is `{}`, so an untouched first-visit form
+ * is also treated as a no-op (no all-empty version created). Drives both the
+ * save button's disabled state and the short-circuit in `handleSubmit`.
  */
-function formEqualsHistory(form: typeof emptyForm, history: MedicalHistory | null): boolean {
-  const baseline = formFromHistory(history);
-  return FORM_FIELDS.every((field) => form[field].trim() === baseline[field].trim());
+function valueEqualsHistory(value: ClinicalHistoryValue, history: MedicalHistory | null): boolean {
+  return deepEqual(value, valueFromHistory(history));
 }
 
 export function MedicalHistoryPanel({ token, patientId }: MedicalHistoryPanelProps) {
   const [latest, setLatest] = useState<MedicalHistory | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [form, setForm] = useState(emptyForm);
+  const [value, setValue] = useState<ClinicalHistoryValue>({});
   const [saveError, setSaveError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   // Bumped by the retry action to re-run the load effect below.
@@ -114,8 +135,8 @@ export function MedicalHistoryPanel({ token, patientId }: MedicalHistoryPanelPro
         if (cancelled) return;
         setLatest(data);
         // Set once, on load — carries the latest version's values forward
-        // so an untouched field isn't silently wiped on next save.
-        setForm(formFromHistory(data));
+        // so an untouched section isn't silently wiped on next save.
+        setValue(valueFromHistory(data));
         setLoadError(null);
       } catch (err) {
         if (cancelled) return;
@@ -136,36 +157,19 @@ export function MedicalHistoryPanel({ token, patientId }: MedicalHistoryPanelPro
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    // Defense in depth: the form isn't rendered while loadError is set (see
-    // below), but block here too in case this ever gets called some other
-    // way. Without a trustworthy baseline from the latest version, saving
-    // would create a new version from only the submitted fields and
-    // silently null out everything else (allergies, medicalAlerts, …).
-    if (loadError) return;
     // No-op when nothing changed since the latest saved version — saving would
     // otherwise create an identical duplicate version (the form is re-seeded
-    // from the saved version after each save, below).
-    if (formEqualsHistory(form, latest)) return;
+    // from the saved version after each save, below). Mirrors the button's
+    // disabled state; kept here as defense in depth for a programmatic submit.
+    if (valueEqualsHistory(value, latest)) return;
     setSaveError(null);
     setSubmitting(true);
     try {
-      const input: SaveMedicalHistoryInput = {
-        ...(form.allergies.trim() ? { allergies: form.allergies.trim() } : {}),
-        ...(form.chronicConditions.trim()
-          ? { chronicConditions: form.chronicConditions.trim() }
-          : {}),
-        ...(form.currentMedications.trim()
-          ? { currentMedications: form.currentMedications.trim() }
-          : {}),
-        ...(form.habits.trim() ? { habits: form.habits.trim() } : {}),
-        ...(form.medicalAlerts.trim() ? { medicalAlerts: form.medicalAlerts.trim() } : {}),
-        ...(form.notes.trim() ? { notes: form.notes.trim() } : {}),
-      };
-      const saved = await saveMedicalHistory(token, patientId, input);
+      const saved = await saveMedicalHistory(token, patientId, value);
       setLatest(saved);
-      // Re-sync the form from the just-saved version (not emptyForm) so the
+      // Re-sync from the just-saved version (not an empty value) so the
       // next edit still carries forward whatever wasn't just changed.
-      setForm(formFromHistory(saved));
+      setValue(valueFromHistory(saved));
     } catch (err) {
       setSaveError(err instanceof ApiError ? err.message : copy.genericSaveError);
     } finally {
@@ -176,169 +180,69 @@ export function MedicalHistoryPanel({ token, patientId }: MedicalHistoryPanelPro
   // Drives the save button's disabled state (mirrored by the handler's
   // short-circuit above): true when the form matches the latest saved version,
   // so an unchanged save can't produce a duplicate version.
-  const isUnchanged = formEqualsHistory(form, latest);
-
-  if (loading) {
-    return (
-      <p role="status" className="text-sm text-muted">
-        {copy.loading}
-      </p>
-    );
-  }
+  const isUnchanged = valueEqualsHistory(value, latest);
 
   return (
-    <div className="flex flex-col gap-6">
-      {loadError ? (
-        <div className="flex flex-col items-start gap-2">
-          <p role="alert" className="text-sm text-danger">
-            {loadError}
-          </p>
-          <button
-            type="button"
-            onClick={handleRetry}
-            className="rounded-md border border-border px-3 py-1.5 text-sm font-medium text-ink"
+    <AsyncSection
+      loading={loading}
+      error={loadError}
+      onRetry={handleRetry}
+      retryLabel={copy.retry}
+      skeleton={
+        <p role="status" className="text-sm text-muted">
+          {copy.loading}
+        </p>
+      }
+    >
+      <div className="flex flex-col gap-6">
+        {latest ? (
+          <div className="rounded-lg border border-border bg-surface p-4">
+            <p className="mb-3 text-sm font-medium text-muted">{copy.versionLabel(latest.version)}</p>
+            <dl className="grid gap-3 sm:grid-cols-2">
+              <div>
+                <dt className="text-sm font-medium text-muted">{copy.allergiesCountLabel}</dt>
+                <dd className="text-ink">{latest.allergies.length}</dd>
+              </div>
+              <div>
+                <dt className="text-sm font-medium text-muted">{copy.conditionsCountLabel}</dt>
+                <dd className="text-ink">{latest.conditions.length}</dd>
+              </div>
+              <div>
+                <dt className="text-sm font-medium text-muted">{copy.medicationsCountLabel}</dt>
+                <dd className="text-ink">{latest.medications.length}</dd>
+              </div>
+              <div>
+                <dt className="text-sm font-medium text-muted">{copy.familyHistoryLabel}</dt>
+                <dd className="text-ink">{latest.familyHistory ?? copy.fieldFallback}</dd>
+              </div>
+              <div>
+                <dt className="text-sm font-medium text-muted">{copy.notesLabel}</dt>
+                <dd className="text-ink">{latest.notes ?? copy.fieldFallback}</dd>
+              </div>
+            </dl>
+          </div>
+        ) : (
+          <div
+            role="status"
+            className="rounded-lg border border-dashed border-border bg-surface p-4"
           >
-            {copy.retry}
-          </button>
-        </div>
-      ) : latest ? (
-        <div className="rounded-lg border border-border bg-surface p-4">
-          <p className="mb-3 text-sm font-medium text-muted">{copy.versionLabel(latest.version)}</p>
-          <dl className="grid gap-3 sm:grid-cols-2">
-            <div>
-              <dt className="text-sm font-medium text-muted">{copy.allergiesLabel}</dt>
-              <dd className="text-ink">{latest.allergies ?? copy.fieldFallback}</dd>
-            </div>
-            <div>
-              <dt className="text-sm font-medium text-muted">{copy.chronicConditionsLabel}</dt>
-              <dd className="text-ink">{latest.chronicConditions ?? copy.fieldFallback}</dd>
-            </div>
-            <div>
-              <dt className="text-sm font-medium text-muted">{copy.currentMedicationsLabel}</dt>
-              <dd className="text-ink">{latest.currentMedications ?? copy.fieldFallback}</dd>
-            </div>
-            <div>
-              <dt className="text-sm font-medium text-muted">{copy.habitsLabel}</dt>
-              <dd className="text-ink">{latest.habits ?? copy.fieldFallback}</dd>
-            </div>
-            <div>
-              <dt className="text-sm font-medium text-muted">{copy.medicalAlertsLabel}</dt>
-              <dd className="text-ink">{latest.medicalAlerts ?? copy.fieldFallback}</dd>
-            </div>
-            <div>
-              <dt className="text-sm font-medium text-muted">{copy.notesLabel}</dt>
-              <dd className="text-ink">{latest.notes ?? copy.fieldFallback}</dd>
-            </div>
-          </dl>
-        </div>
-      ) : (
-        <div
-          role="status"
-          className="rounded-lg border border-dashed border-border bg-surface p-4"
-        >
-          <p className="text-sm font-medium text-ink">{copy.empty}</p>
-          <p className="mt-1 text-sm text-muted">{copy.emptyHint}</p>
-        </div>
-      )}
+            <p className="text-sm font-medium text-ink">{copy.empty}</p>
+            <p className="mt-1 text-sm text-muted">{copy.emptyHint}</p>
+          </div>
+        )}
 
-      {/*
-        While loadError is set we don't have a trustworthy baseline (the
-        latest version failed to fetch) — rendering the form would let the
-        user "save a new version" that silently wipes every field it didn't
-        resubmit. No form at all until a load succeeds (or comes back
-        genuinely empty via the retry above).
-      */}
-      {!loadError && (
+        {/*
+          AsyncSection swaps this whole subtree for the error+retry UI while
+          loadError is set — the form (which would create a new version from
+          only what's edited, silently wiping the rest) never renders
+          without a trustworthy baseline.
+        */}
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
           <h3 className="text-base font-semibold text-ink">
             {latest ? copy.formTitle : copy.createTitle}
           </h3>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="flex flex-col gap-1">
-              <label htmlFor="mh-allergies" className="text-sm font-medium text-ink">
-                {copy.allergiesLabel}
-              </label>
-              <textarea
-                id="mh-allergies"
-                name="allergies"
-                rows={2}
-                value={form.allergies}
-                onChange={(e) => setForm((f) => ({ ...f, allergies: e.target.value }))}
-                className="rounded-md border border-border bg-surface px-3 py-2 text-ink"
-              />
-            </div>
-            <div className="flex flex-col gap-1">
-              <label htmlFor="mh-chronic-conditions" className="text-sm font-medium text-ink">
-                {copy.chronicConditionsLabel}
-              </label>
-              <textarea
-                id="mh-chronic-conditions"
-                name="chronicConditions"
-                rows={2}
-                value={form.chronicConditions}
-                onChange={(e) => setForm((f) => ({ ...f, chronicConditions: e.target.value }))}
-                className="rounded-md border border-border bg-surface px-3 py-2 text-ink"
-              />
-            </div>
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="flex flex-col gap-1">
-              <label htmlFor="mh-current-medications" className="text-sm font-medium text-ink">
-                {copy.currentMedicationsLabel}
-              </label>
-              <textarea
-                id="mh-current-medications"
-                name="currentMedications"
-                rows={2}
-                value={form.currentMedications}
-                onChange={(e) => setForm((f) => ({ ...f, currentMedications: e.target.value }))}
-                className="rounded-md border border-border bg-surface px-3 py-2 text-ink"
-              />
-            </div>
-            <div className="flex flex-col gap-1">
-              <label htmlFor="mh-habits" className="text-sm font-medium text-ink">
-                {copy.habitsLabel}
-              </label>
-              <textarea
-                id="mh-habits"
-                name="habits"
-                rows={2}
-                value={form.habits}
-                onChange={(e) => setForm((f) => ({ ...f, habits: e.target.value }))}
-                className="rounded-md border border-border bg-surface px-3 py-2 text-ink"
-              />
-            </div>
-          </div>
-
-          <div className="flex flex-col gap-1">
-            <label htmlFor="mh-medical-alerts" className="text-sm font-medium text-ink">
-              {copy.medicalAlertsLabel}
-            </label>
-            <textarea
-              id="mh-medical-alerts"
-              name="medicalAlerts"
-              rows={2}
-              value={form.medicalAlerts}
-              onChange={(e) => setForm((f) => ({ ...f, medicalAlerts: e.target.value }))}
-              className="rounded-md border border-border bg-surface px-3 py-2 text-ink"
-            />
-          </div>
-
-          <div className="flex flex-col gap-1">
-            <label htmlFor="mh-notes" className="text-sm font-medium text-ink">
-              {copy.notesLabel}
-            </label>
-            <textarea
-              id="mh-notes"
-              name="notes"
-              rows={3}
-              value={form.notes}
-              onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
-              className="rounded-md border border-border bg-surface px-3 py-2 text-ink"
-            />
-          </div>
+          <ClinicalHistoryFields value={value} onChange={setValue} />
 
           {saveError && (
             <p role="alert" className="text-sm text-danger">
@@ -346,15 +250,11 @@ export function MedicalHistoryPanel({ token, patientId }: MedicalHistoryPanelPro
             </p>
           )}
 
-          <button
-            type="submit"
-            disabled={submitting || isUnchanged}
-            className="self-start rounded-md bg-primary px-4 py-2 font-medium text-primary-foreground disabled:opacity-60"
-          >
-            {submitting ? copy.submitting : latest ? copy.submit : copy.createSubmit}
-          </button>
+          <Button type="submit" loading={submitting} disabled={isUnchanged} className="self-start">
+            {copy.submit}
+          </Button>
         </form>
-      )}
-    </div>
+      </div>
+    </AsyncSection>
   );
 }

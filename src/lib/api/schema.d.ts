@@ -759,6 +759,21 @@ export interface components {
              */
             cityId?: number;
             notes?: string;
+            dataConsentAccepted?: boolean;
+            /** Format: date-time */
+            dataConsentAt?: string;
+            dataConsentPolicyVersion?: string;
+            maritalStatus?: string;
+            occupation?: string;
+            insurerEps?: string;
+            physicianName?: string;
+            physicianPhone?: string;
+            emergencyContactName?: string;
+            emergencyContactRelationship?: string;
+            emergencyContactPhone?: string;
+            guardianName?: string;
+            guardianDocNumber?: string;
+            medicalHistory?: components["schemas"]["SaveMedicalHistoryDto"];
         };
         PatientDto: {
             /** Format: uuid */
@@ -869,6 +884,9 @@ export interface components {
             defaultPrice?: number;
             active?: boolean;
         };
+        AllergyDto: Record<string, never>;
+        ConditionDto: Record<string, never>;
+        MedicationDto: Record<string, never>;
         MedicalHistoryDto: {
             /** Format: uuid */
             id: string;
@@ -877,24 +895,34 @@ export interface components {
             /** Format: uuid */
             patientId: string;
             version: number;
-            allergies: string | null;
-            chronicConditions: string | null;
-            currentMedications: string | null;
-            habits: string | null;
-            medicalAlerts: string | null;
+            allergies: Record<string, never>[];
+            conditions: Record<string, never>[];
+            medications: Record<string, never>[];
+            habits: Record<string, never> | null;
+            dentalHistory: Record<string, never> | null;
+            surgeries: Record<string, never>[];
+            vitalSigns: Record<string, never> | null;
+            familyHistory: string | null;
             notes: string | null;
+            safetyFlags: Record<string, never>;
+            hasCriticalAlert: boolean;
             /** Format: uuid */
             createdById: string | null;
             /** Format: date-time */
             createdAt: string;
         };
         SaveMedicalHistoryDto: {
-            allergies?: string;
-            chronicConditions?: string;
-            currentMedications?: string;
-            habits?: string;
-            medicalAlerts?: string;
+            allergies?: components["schemas"]["AllergyDto"][];
+            conditions?: components["schemas"]["ConditionDto"][];
+            medications?: components["schemas"]["MedicationDto"][];
+            habits?: Record<string, never>;
+            dentalHistory?: Record<string, never>;
+            surgeries?: Record<string, never>[];
+            vitalSigns?: Record<string, never>;
+            familyHistory?: string;
             notes?: string;
+            embarazo?: boolean;
+            semanasEmbarazo?: number;
         };
         CreateClinicalEntryDto: {
             /**

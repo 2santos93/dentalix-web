@@ -1,7 +1,12 @@
 import { apiFetch, apiFetchOrNull } from '@/lib/api/client';
 import type { components } from '@/lib/api/schema';
+import type { ClinicalHistoryValue, MedicalHistory } from '@/lib/clinical/clinical-types';
 
-export type SaveMedicalHistoryInput = components['schemas']['SaveMedicalHistoryDto'];
+// `SaveMedicalHistoryDto`'s nested fields (`allergies`/`conditions`/
+// `medications`/`habits`/…) generate as `Record<string, never>` — see
+// `clinical-types.ts` for why. `ClinicalHistoryValue` is the same shape with
+// those fields hand-typed to their real structure.
+export type SaveMedicalHistoryInput = ClinicalHistoryValue;
 export type CreateClinicalEntryInput = components['schemas']['CreateClinicalEntryDto'];
 
 /**
@@ -9,27 +14,15 @@ export type CreateClinicalEntryInput = components['schemas']['CreateClinicalEntr
  * interface on the backend (`MedicalHistory`), not a class decorated with
  * `@ApiProperty()` — same situation as `Patient` in `patients-api.ts` — so
  * the generated `schema.d.ts` has no body shape for these routes
- * (`content?: never`). Hand-written to mirror `dentalix-api`'s
+ * (`content?: never`). `MedicalHistory` (imported above) mirrors
+ * `dentalix-api`'s
  * `src/modules/medical-history/domain/entities/medical-history.entity.ts` —
- * keep in sync if that changes.
+ * keep it in sync if that changes.
  *
  * This is APPEND-ONLY: "the current anamnesis" = the row with the highest
  * `version` for a patient. Saving never updates a previous row.
  */
-export interface MedicalHistory {
-  id: string;
-  tenantId: string;
-  patientId: string;
-  version: number;
-  allergies: string | null;
-  chronicConditions: string | null;
-  currentMedications: string | null;
-  habits: string | null;
-  medicalAlerts: string | null;
-  notes: string | null;
-  createdById: string | null;
-  createdAt: string;
-}
+export type { MedicalHistory };
 
 /**
  * `GET /patients/:id/clinical-entries` (and `POST`) — same situation as
