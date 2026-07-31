@@ -128,14 +128,20 @@ describe('DayAgenda', () => {
     }
   });
 
-  it('renders a desktop table hidden below md and mobile cards hidden at md+', () => {
+  it('switches table/cards on its CONTAINER width, not the viewport — so it also fits the agenda day drawer', () => {
     const { container } = render(<DayAgenda appointments={[earlier]} loading={false} />);
+    // The component declares itself a query container...
+    expect(container.querySelector('.\\@container')).toBeInTheDocument();
+
+    // ...and both variants key off that container (`@2xl` = 42rem), not the
+    // viewport: keyed on `md:` the wide table also rendered inside the ~384px
+    // day drawer, where it got clipped.
     const table = container.querySelector('table');
     expect(table).toBeInTheDocument();
-    expect(table?.closest('.hidden.md\\:block')).toBeInTheDocument();
+    expect(table?.closest('.hidden.\\@2xl\\:block')).toBeInTheDocument();
 
-    const mobileWrapper = container.querySelector('.md\\:hidden');
-    expect(mobileWrapper).toBeInTheDocument();
+    const narrowWrapper = container.querySelector('.\\@2xl\\:hidden');
+    expect(narrowWrapper).toBeInTheDocument();
   });
 
   it('gives each appointment an accessible label combining time, patient and status (mobile cards)', () => {

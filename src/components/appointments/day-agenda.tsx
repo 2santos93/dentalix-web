@@ -173,10 +173,15 @@ export function DayAgenda({
   );
 
   return (
-    <>
-      {/* Desktop table — `hidden md:block` on the WRAPPER (not the <table>, which
+    // CONTAINER query, not a viewport one: this list renders both full-width on
+    // the page (Día view) and inside the agenda's ~384px day drawer. Keyed on
+    // the viewport (`md:`), the wide 4-column table used to render — and get
+    // clipped — inside the narrow drawer. `@container` + `@2xl` (42rem) switches
+    // on the space this component actually has.
+    <div className="@container">
+      {/* Wide table — `hidden @2xl:block` on the WRAPPER (not the <table>, which
           would drop table-layout and collapse the columns to content width). */}
-      <div className="hidden overflow-hidden rounded-xl border border-border bg-surface md:block">
+      <div className="hidden overflow-hidden rounded-xl border border-border bg-surface @2xl:block">
         <table aria-label={copy.heading} className="w-full border-collapse text-sm text-ink">
           <caption className="sr-only">{copy.heading}</caption>
           <thead>
@@ -232,8 +237,8 @@ export function DayAgenda({
         </table>
       </div>
 
-      {/* Mobile cards */}
-      <ul aria-label={copy.heading} className="flex flex-col gap-3 md:hidden">
+      {/* Narrow-container cards (mobile, and the day drawer on any screen) */}
+      <ul aria-label={copy.heading} className="flex flex-col gap-3 @2xl:hidden">
         {sorted.map((appointment) => {
           const timeRange = formatTimeRange(appointment.start, appointment.end);
           const updating = updatingId === appointment.id;
@@ -268,6 +273,6 @@ export function DayAgenda({
           );
         })}
       </ul>
-    </>
+    </div>
   );
 }
