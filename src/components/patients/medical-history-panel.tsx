@@ -71,6 +71,30 @@ function formFromHistory(history: MedicalHistory | null): typeof emptyForm {
   };
 }
 
+// The six versioned anamnesis fields — drives the shallow no-op compare below.
+const FORM_FIELDS = [
+  'allergies',
+  'chronicConditions',
+  'currentMedications',
+  'habits',
+  'medicalAlerts',
+  'notes',
+] as const;
+
+/**
+ * Shallow field compare of the current form against the latest saved version.
+ * The form is re-seeded from the saved version after every save, so without
+ * this an unchanged re-submit would create an identical duplicate version.
+ * Each field is trimmed to mirror the trimming `handleSubmit` applies before
+ * saving — a whitespace-only edit produces the same stored version, so it
+ * counts as unchanged. `formFromHistory(null)` is `emptyForm`, so an untouched
+ * first-visit form is also treated as a no-op (no all-null version created).
+ */
+function formEqualsHistory(form: typeof emptyForm, history: MedicalHistory | null): boolean {
+  const baseline = formFromHistory(history);
+  return FORM_FIELDS.every((field) => form[field].trim() === baseline[field].trim());
+}
+
 export function MedicalHistoryPanel({ token, patientId }: MedicalHistoryPanelProps) {
   const [latest, setLatest] = useState<MedicalHistory | null>(null);
   const [loading, setLoading] = useState(true);
@@ -118,6 +142,10 @@ export function MedicalHistoryPanel({ token, patientId }: MedicalHistoryPanelPro
     // would create a new version from only the submitted fields and
     // silently null out everything else (allergies, medicalAlerts, …).
     if (loadError) return;
+    // No-op when nothing changed since the latest saved version — saving would
+    // otherwise create an identical duplicate version (the form is re-seeded
+    // from the saved version after each save, below).
+    if (formEqualsHistory(form, latest)) return;
     setSaveError(null);
     setSubmitting(true);
     try {
@@ -144,6 +172,11 @@ export function MedicalHistoryPanel({ token, patientId }: MedicalHistoryPanelPro
       setSubmitting(false);
     }
   }
+
+  // Drives the save button's disabled state (mirrored by the handler's
+  // short-circuit above): true when the form matches the latest saved version,
+  // so an unchanged save can't produce a duplicate version.
+  const isUnchanged = formEqualsHistory(form, latest);
 
   if (loading) {
     return (
@@ -315,7 +348,7 @@ export function MedicalHistoryPanel({ token, patientId }: MedicalHistoryPanelPro
 
           <button
             type="submit"
-            disabled={submitting}
+            disabled={submitting || isUnchanged}
             className="self-start rounded-md bg-primary px-4 py-2 font-medium text-primary-foreground disabled:opacity-60"
           >
             {submitting ? copy.submitting : latest ? copy.submit : copy.createSubmit}

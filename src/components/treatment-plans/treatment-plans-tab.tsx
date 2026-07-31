@@ -58,6 +58,9 @@ const copy = {
   newPlan: 'Nuevo plan',
   creatingPlan: 'Creando…',
   planCreated: 'Plan creado y seleccionado abajo.',
+  // Reuse path (dup guard): an empty DRAFT already existed, so "Nuevo plan"
+  // switched to it instead of POSTing another identical empty plan.
+  planReused: 'Ya había un plan en borrador vacío; lo seleccionamos abajo.',
   genericCreatePlanError: 'No pudimos crear el plan. Intenta de nuevo.',
   emptyPlansTitle: 'Este paciente todavía no tiene un plan de tratamiento.',
   emptyPlansDescription: 'Crea el primer plan para empezar a registrar procedimientos.',
@@ -575,6 +578,9 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
   // same-day identical labels the create looked like a no-op; this makes the
   // success visible. Stays until the next create (cleared at its start).
   const [planCreated, setPlanCreated] = useState(false);
+  // Distinct from `planCreated`: set when "Nuevo plan" reused an existing empty
+  // DRAFT (no POST) instead of creating one. Cleared at the next create attempt.
+  const [planReused, setPlanReused] = useState(false);
 
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
 
@@ -775,11 +781,40 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
       .finally(() => setRefreshing(false));
   }
 
+  /**
+   * Finds an existing reusable DRAFT plan (open + no items) to switch to
+   * instead of POSTing another empty plan. `listPlans` returns plans WITHOUT
+   * `items`/`total` (only `getPlan` populates them — see treatment-plans-api.ts),
+   * so each DRAFT candidate's emptiness is confirmed with a `getPlan` fetch.
+   * Returns the first empty DRAFT, or null when there's none to reuse (no DRAFT
+   * at all, or every DRAFT already has items — a real in-progress plan we must
+   * never collapse into).
+   */
+  async function findReusableDraftPlan(): Promise<TreatmentPlan | null> {
+    const drafts = plans.filter((p) => p.status === 'DRAFT');
+    for (const draft of drafts) {
+      const detail = await getPlan(token, draft.id);
+      if ((detail.items?.length ?? 0) === 0) return detail;
+    }
+    return null;
+  }
+
   async function handleCreatePlan() {
     setCreatingPlan(true);
     setCreatePlanError(null);
     setPlanCreated(false);
+    setPlanReused(false);
     try {
+      // Dup guard: before POSTing, reuse an existing open DRAFT that has no
+      // items — clicking "Nuevo plan" repeatedly used to accumulate empty
+      // DRAFTs. Only create when there's genuinely nothing to reuse.
+      const reusable = await findReusableDraftPlan();
+      if (reusable) {
+        await refreshPlansInPlace();
+        setSelectedPlanId(reusable.id);
+        setPlanReused(true);
+        return;
+      }
       const created = await createPlan(token, patientId, {});
       await refreshPlansInPlace();
       setSelectedPlanId(created.id);
@@ -1168,6 +1203,11 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
           {planCreated && !createPlanError && (
             <p role="status" className="text-sm font-medium text-primary">
               {copy.planCreated}
+            </p>
+          )}
+          {planReused && !createPlanError && (
+            <p role="status" className="text-sm font-medium text-primary">
+              {copy.planReused}
             </p>
           )}
           {plans.length === 0 ? (

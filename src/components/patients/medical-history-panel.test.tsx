@@ -214,8 +214,29 @@ describe('MedicalHistoryPanel', () => {
     const user = userEvent.setup();
     render(<MedicalHistoryPanel token="tok" patientId="p1" />);
     await screen.findByText(/no hay.*anamnesis|aún no/i);
+    // Type something so the form differs from the (empty) baseline — an
+    // all-empty anamnesis is now a no-op (dup guard), so the save only fires
+    // when there's real content to persist.
+    await user.type(screen.getByLabelText(/alergias/i), 'Penicilina');
     await user.click(screen.getByRole('button', { name: /registrar anamnesis/i }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Datos inválidos');
+  });
+
+  it('does not save an unchanged version — the save button is disabled until the form changes (dup guard)', async () => {
+    mockedGet.mockResolvedValue(latest);
+    const user = userEvent.setup();
+    render(<MedicalHistoryPanel token="tok" patientId="p1" />);
+    await screen.findByText(/versión 2/i);
+
+    // Form equals the latest saved version → saving would duplicate it, so the
+    // button is disabled.
+    const save = screen.getByRole('button', { name: /guardar/i });
+    expect(save).toBeDisabled();
+
+    // A real change re-enables it, and no save fired for the unchanged state.
+    await user.type(screen.getByLabelText(/alergias/i), ' (actualizado)');
+    expect(screen.getByRole('button', { name: /guardar/i })).toBeEnabled();
+    expect(mockedSave).not.toHaveBeenCalled();
   });
 });
