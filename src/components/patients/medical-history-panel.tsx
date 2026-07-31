@@ -14,6 +14,7 @@ import {
 const copy = {
   loading: 'Cargando anamnesis…',
   empty: 'Aún no hay anamnesis registrada para este paciente.',
+  emptyHint: 'Completa el formulario y guárdalo para registrar la primera anamnesis del paciente.',
   versionLabel: (v: number) => `Versión ${v}`,
   fieldFallback: '—',
   allergiesLabel: 'Alergias',
@@ -24,6 +25,11 @@ const copy = {
   notesLabel: 'Notas',
   formTitle: 'Guardar nueva versión',
   submit: 'Guardar nueva versión',
+  // First visit (no anamnesis yet): "Guardar nueva versión" reads as a no-op
+  // when there's nothing to version, so the create affordance is labelled
+  // explicitly instead.
+  createTitle: 'Registrar anamnesis',
+  createSubmit: 'Registrar anamnesis',
   submitting: 'Guardando…',
   genericLoadError: 'No pudimos cargar la anamnesis. Intenta de nuevo.',
   genericSaveError: 'No pudimos guardar la anamnesis. Intenta de nuevo.',
@@ -193,9 +199,13 @@ export function MedicalHistoryPanel({ token, patientId }: MedicalHistoryPanelPro
           </dl>
         </div>
       ) : (
-        <p role="status" className="text-sm text-muted">
-          {copy.empty}
-        </p>
+        <div
+          role="status"
+          className="rounded-lg border border-dashed border-border bg-surface p-4"
+        >
+          <p className="text-sm font-medium text-ink">{copy.empty}</p>
+          <p className="mt-1 text-sm text-muted">{copy.emptyHint}</p>
+        </div>
       )}
 
       {/*
@@ -207,7 +217,9 @@ export function MedicalHistoryPanel({ token, patientId }: MedicalHistoryPanelPro
       */}
       {!loadError && (
         <form onSubmit={handleSubmit} className="flex flex-col gap-4">
-          <h3 className="text-base font-semibold text-ink">{copy.formTitle}</h3>
+          <h3 className="text-base font-semibold text-ink">
+            {latest ? copy.formTitle : copy.createTitle}
+          </h3>
 
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="flex flex-col gap-1">
@@ -306,7 +318,7 @@ export function MedicalHistoryPanel({ token, patientId }: MedicalHistoryPanelPro
             disabled={submitting}
             className="self-start rounded-md bg-primary px-4 py-2 font-medium text-primary-foreground disabled:opacity-60"
           >
-            {submitting ? copy.submitting : copy.submit}
+            {submitting ? copy.submitting : latest ? copy.submit : copy.createSubmit}
           </button>
         </form>
       )}
