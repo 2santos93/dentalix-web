@@ -10,10 +10,12 @@ import {
 import { listStaff, type StaffMember } from '@/lib/appointments/staff-api';
 import { listPatients } from '@/lib/patients/patients-api';
 import { localDayRange, localWeekRange } from '@/lib/appointments/day-range';
+import { monthGridRange, addMonths, monthLabel } from '@/lib/appointments/calendar-grid';
 import { DayAgenda } from '@/components/appointments/day-agenda';
 import { WeekAgenda } from '@/components/appointments/week-agenda';
+import { MonthAgenda } from '@/components/appointments/month-agenda';
 import { AppointmentForm } from '@/components/appointments/appointment-form';
-import { Plus } from 'lucide-react';
+import { Plus, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
@@ -33,19 +35,24 @@ const copy = {
   newAppointmentDesc: 'Agenda una cita para un paciente con su profesional, fecha y horario.',
   cancel: 'Cancelar',
   providerLabel: 'Profesional',
-  providerLoading: 'Cargando…',
+  allProviders: 'Todos los profesionales',
   dateLabel: 'Fecha',
   viewLabel: 'Vista',
+  monthView: 'Mes',
   dayView: 'Día',
   weekView: 'Semana',
+  prevMonth: 'Mes anterior',
+  nextMonth: 'Mes siguiente',
+  todayBtn: 'Hoy',
+  dayDetail: 'Detalle del día',
   refreshing: 'Actualizando…',
   retry: 'Reintentar',
   genericStaffError: 'No pudimos cargar los profesionales. Intenta de nuevo.',
   genericAppointmentsError: 'No pudimos cargar la agenda. Intenta de nuevo.',
   genericRefreshError: 'No pudimos actualizar la agenda. Intenta de nuevo.',
   genericStatusChangeError: 'No pudimos actualizar el estado de la cita. Intenta de nuevo.',
-  noProviders: 'No hay profesionales activos en esta clínica.',
-  selectProviderPrompt: 'Selecciona un profesional para ver su agenda.',
+  /** Selected-day appointment count, shown above the day panel in the month view. */
+  dayCount: (n: number) => (n === 0 ? 'Sin citas' : n === 1 ? '1 cita' : `${n} citas`),
 };
 
 // Native <select> styled to match the Input atom (kept native for a11y/tests).
@@ -66,6 +73,29 @@ function todayLocalDateString(): string {
 /** `WeekAgenda`'s `weekStart` (the Monday of `date`'s week, as a local `YYYY-MM-DD`) — derived from `localWeekRange`'s `from` boundary so the two never drift apart. */
 function weekStartOf(date: string): string {
   return dateToLocalDateString(new Date(localWeekRange(date).from));
+}
+
+type ViewMode = 'month' | 'day' | 'week';
+
+/** The `{ from, to }` fetch range for the active view + selected date. */
+function rangeFor(mode: ViewMode, date: string): { from: string; to: string } {
+  if (mode === 'month') return monthGridRange(date);
+  if (mode === 'week') return localWeekRange(date);
+  return localDayRange(date);
+}
+
+/** Local `YYYY-MM-DD` of an appointment's start (for filtering to the selected day in the month panel). */
+function localDayKeyOf(iso: string): string {
+  return dateToLocalDateString(new Date(iso));
+}
+
+/** Weekday + day + month label for the day-panel header, e.g. "lunes, 15 de marzo". */
+function longDayLabel(date: string): string {
+  return new Date(`${date}T00:00:00`).toLocaleDateString('es', {
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+  });
 }
 
 interface AgendaViewProps {
@@ -96,11 +126,14 @@ export function AgendaView({ token }: AgendaViewProps) {
   const [providerId, setProviderId] = useState('');
 
   const [selectedDate, setSelectedDate] = useState(todayLocalDateString);
-  // Día | Semana toggle — 'day' keeps the existing single-day fetch/render;
-  // 'week' swaps the range to `localWeekRange(selectedDate)` and renders
-  // `WeekAgenda` instead of `DayAgenda` (see the `viewMode === 'week'` branch
-  // below). Kept additive/minimal per the task brief.
-  const [viewMode, setViewMode] = useState<'day' | 'week'>('day');
+  // Today's local date — stable across renders (set once) so the calendar's
+  // "today" highlight and the "Hoy" button never drift mid-session.
+  const [today] = useState(todayLocalDateString);
+  // Mes (calendar) | Día | Semana. 'month' is the default landing view: a
+  // month grid of all providers' appointments; picking a day reveals its full
+  // list + the new-appointment flow below (see the `viewMode === 'month'`
+  // branch). 'day'/'week' keep the original single-provider agenda.
+  const [viewMode, setViewMode] = useState<ViewMode>('month');
 
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [appointmentsLoading, setAppointmentsLoading] = useState(false);
@@ -112,24 +145,16 @@ export function AgendaView({ token }: AgendaViewProps) {
 
   const [showForm, setShowForm] = useState(false);
 
+  // Provider filter defaults to '' = "Todos los profesionales" (the month
+  // calendar shows the whole clinic; `listAppointments` omits `providerId`
+  // when it's empty). A specific provider narrows every view.
+
   // Status-change control (`DayAgenda`'s `onStatusChange`/`updatingId` props):
   // `updatingId` tracks which row's PATCH is in flight so `DayAgenda` can
   // disable just that row's select; `statusChangeError` surfaces a failed
   // PATCH the same way `appointmentsRefreshError` does.
   const [updatingId, setUpdatingId] = useState<string | null>(null);
   const [statusChangeError, setStatusChangeError] = useState<string | null>(null);
-
-  // Default the provider selector to the first active staff member once
-  // loaded, so the agenda shows something without an extra click. Adjusts
-  // state DURING render (the React-recommended pattern — see
-  // `ToothRecordPanel`'s `prevToothNumber` comment) rather than in a
-  // `useEffect`, since it's a pure derivation from `staff` becoming
-  // non-empty, not a synchronization with an external system.
-  const [prevStaffLen, setPrevStaffLen] = useState(0);
-  if (staff.length !== prevStaffLen) {
-    setPrevStaffLen(staff.length);
-    if (!providerId && staff.length > 0) setProviderId(staff[0].userId);
-  }
 
   // Fetch active staff once (retriable) — feeds the provider selector.
   useEffect(() => {
@@ -179,16 +204,17 @@ export function AgendaView({ token }: AgendaViewProps) {
     };
   }, [token]);
 
-  // Full (blocking) load whenever the provider or the selected day changes.
+  // Full (blocking) load whenever the provider, the selected day, or the view
+  // changes. No `providerId` guard: '' means "all providers" — a valid fetch
+  // (`listAppointments` just omits the param), which is the month view's default.
   useEffect(() => {
-    if (!token || !providerId) return;
+    if (!token) return;
     let cancelled = false;
     async function load() {
       setAppointmentsLoading(true);
       try {
-        const { from, to } =
-          viewMode === 'week' ? localWeekRange(selectedDate) : localDayRange(selectedDate);
-        const data = await listAppointments(token, { from, to, providerId });
+        const { from, to } = rangeFor(viewMode, selectedDate);
+        const data = await listAppointments(token, { from, to, providerId: providerId || undefined });
         if (cancelled) return;
         setAppointments(data);
         setAppointmentsLoadError(null);
@@ -206,11 +232,10 @@ export function AgendaView({ token }: AgendaViewProps) {
   }, [token, providerId, selectedDate, viewMode]);
 
   function refreshAppointmentsInPlace(): Promise<void> {
-    if (!token || !providerId) return Promise.resolve();
+    if (!token) return Promise.resolve();
     setAppointmentsRefreshing(true);
-    const { from, to } =
-      viewMode === 'week' ? localWeekRange(selectedDate) : localDayRange(selectedDate);
-    return listAppointments(token, { from, to, providerId })
+    const { from, to } = rangeFor(viewMode, selectedDate);
+    return listAppointments(token, { from, to, providerId: providerId || undefined })
       .then((data) => {
         setAppointments(data);
         setAppointmentsRefreshError(null);
@@ -233,6 +258,17 @@ export function AgendaView({ token }: AgendaViewProps) {
     setSelectedDate(date);
     setViewMode('day');
   }
+
+  /** `MonthAgenda`'s `onSelectDay` — selects the day WITHOUT leaving the month view; the day's full list + "Nueva cita" render in the panel below the calendar. */
+  function handleSelectMonthDay(date: string) {
+    setSelectedDate(date);
+  }
+
+  // The selected day's appointments, derived from the month's fetched set —
+  // no extra request; the panel and the calendar share one source of truth.
+  const selectedDayAppointments = appointments.filter(
+    (a) => localDayKeyOf(a.start) === selectedDate,
+  );
 
   /**
    * `DayAgenda`'s `onStatusChange` — `PATCH`es the appointment's status, then
@@ -271,15 +307,12 @@ export function AgendaView({ token }: AgendaViewProps) {
             >
               <select
                 id="agenda-provider"
-                disabled={staffLoading || staff.length === 0}
+                disabled={staffLoading}
                 value={providerId}
                 onChange={(e) => setProviderId(e.target.value)}
                 className={fieldClass}
               >
-                {staffLoading && <option value="">{copy.providerLoading}</option>}
-                {!staffLoading && staff.length === 0 && (
-                  <option value="">{copy.noProviders}</option>
-                )}
+                <option value="">{copy.allProviders}</option>
                 {staff.map((s) => (
                   <option key={s.userId} value={s.userId}>
                     {s.fullName}
@@ -296,8 +329,17 @@ export function AgendaView({ token }: AgendaViewProps) {
                 className="w-auto"
               />
             </FormField>
-            <FormField htmlFor="agenda-view-mode-day" label={copy.viewLabel}>
-              <div id="agenda-view-mode-day" role="group" className="flex gap-1">
+            <FormField htmlFor="agenda-view-mode" label={copy.viewLabel}>
+              <div id="agenda-view-mode" role="group" className="flex gap-1">
+                <Button
+                  type="button"
+                  size="sm"
+                  variant={viewMode === 'month' ? 'default' : 'outline'}
+                  aria-pressed={viewMode === 'month'}
+                  onClick={() => setViewMode('month')}
+                >
+                  {copy.monthView}
+                </Button>
                 <Button
                   type="button"
                   size="sm"
@@ -319,9 +361,13 @@ export function AgendaView({ token }: AgendaViewProps) {
               </div>
             </FormField>
           </div>
-          <Button type="button" onClick={() => setShowForm(true)}>
-            <Plus /> {copy.newAppointment}
-          </Button>
+          {/* In the month view the primary "Nueva cita" lives in the day panel
+              (contextual to the selected day); here it covers Día/Semana. */}
+          {viewMode !== 'month' && (
+            <Button type="button" onClick={() => setShowForm(true)}>
+              <Plus /> {copy.newAppointment}
+            </Button>
+          )}
         </CardContent>
       </Card>
 
@@ -379,10 +425,81 @@ export function AgendaView({ token }: AgendaViewProps) {
         </div>
       )}
 
-      {!staffLoading && staff.length > 0 && !providerId ? (
-        <p role="status" className="text-sm text-muted">
-          {copy.selectProviderPrompt}
-        </p>
+      {viewMode === 'month' ? (
+        <div className="flex flex-col gap-6">
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-1">
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  aria-label={copy.prevMonth}
+                  onClick={() => setSelectedDate(addMonths(selectedDate, -1))}
+                >
+                  <ChevronLeft />
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  aria-label={copy.nextMonth}
+                  onClick={() => setSelectedDate(addMonths(selectedDate, 1))}
+                >
+                  <ChevronRight />
+                </Button>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setSelectedDate(today)}
+                >
+                  {copy.todayBtn}
+                </Button>
+              </div>
+              <p className="text-sm font-semibold text-ink first-letter:uppercase">
+                {monthLabel(selectedDate)}
+              </p>
+            </div>
+            <MonthAgenda
+              appointments={appointments}
+              monthDate={selectedDate}
+              selectedDate={selectedDate}
+              today={today}
+              onSelectDay={handleSelectMonthDay}
+              patientNames={patientNames}
+              loading={appointmentsLoading}
+              error={appointmentsLoadError}
+            />
+          </div>
+
+          <section
+            aria-label={copy.dayDetail}
+            className="flex flex-col gap-3 border-t border-border pt-6"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div>
+                <h2 className="text-base font-semibold text-ink first-letter:uppercase">
+                  {longDayLabel(selectedDate)}
+                </h2>
+                <p className="text-xs text-muted">
+                  {copy.dayCount(selectedDayAppointments.length)}
+                </p>
+              </div>
+              <Button type="button" size="sm" onClick={() => setShowForm(true)}>
+                <Plus /> {copy.newAppointment}
+              </Button>
+            </div>
+            <DayAgenda
+              appointments={selectedDayAppointments}
+              loading={appointmentsLoading}
+              error={appointmentsLoadError}
+              patientNames={patientNames}
+              onStatusChange={handleStatusChange}
+              updatingId={updatingId}
+            />
+          </section>
+        </div>
       ) : viewMode === 'week' ? (
         <WeekAgenda
           appointments={appointments}
