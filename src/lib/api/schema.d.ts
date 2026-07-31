@@ -612,6 +612,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/treatment-plans/{id}/payment-plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["PaymentPlansController_get"];
+        put?: never;
+        post: operations["PaymentPlansController_create"];
+        delete: operations["PaymentPlansController_remove"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/inventory/items": {
         parameters: {
             query?: never;
@@ -719,22 +735,6 @@ export interface components {
         AvatarResponseDto: {
             avatarUrl: string;
         };
-        AllergyDto: Record<string, never>;
-        ConditionDto: Record<string, never>;
-        MedicationDto: Record<string, never>;
-        SaveMedicalHistoryDto: {
-            allergies?: components["schemas"]["AllergyDto"][];
-            conditions?: components["schemas"]["ConditionDto"][];
-            medications?: components["schemas"]["MedicationDto"][];
-            habits?: Record<string, never>;
-            dentalHistory?: Record<string, never>;
-            surgeries?: Record<string, never>[];
-            vitalSigns?: Record<string, never>;
-            familyHistory?: string;
-            notes?: string;
-            embarazo?: boolean;
-            semanasEmbarazo?: number;
-        };
         CreatePatientDto: {
             firstName: string;
             lastName: string;
@@ -795,20 +795,6 @@ export interface components {
             countryCode: string | null;
             cityId: number | null;
             notes: string | null;
-            dataConsentAccepted: boolean;
-            /** Format: date-time */
-            dataConsentAt: string | null;
-            dataConsentPolicyVersion: string | null;
-            maritalStatus: string | null;
-            occupation: string | null;
-            insurerEps: string | null;
-            physicianName: string | null;
-            physicianPhone: string | null;
-            emergencyContactName: string | null;
-            emergencyContactRelationship: string | null;
-            emergencyContactPhone: string | null;
-            guardianName: string | null;
-            guardianDocNumber: string | null;
             /** Format: uuid */
             createdById: string | null;
             /** Format: date-time */
@@ -898,6 +884,9 @@ export interface components {
             defaultPrice?: number;
             active?: boolean;
         };
+        AllergyDto: Record<string, never>;
+        ConditionDto: Record<string, never>;
+        MedicationDto: Record<string, never>;
         MedicalHistoryDto: {
             /** Format: uuid */
             id: string;
@@ -921,6 +910,19 @@ export interface components {
             createdById: string | null;
             /** Format: date-time */
             createdAt: string;
+        };
+        SaveMedicalHistoryDto: {
+            allergies?: components["schemas"]["AllergyDto"][];
+            conditions?: components["schemas"]["ConditionDto"][];
+            medications?: components["schemas"]["MedicationDto"][];
+            habits?: Record<string, never>;
+            dentalHistory?: Record<string, never>;
+            surgeries?: Record<string, never>[];
+            vitalSigns?: Record<string, never>;
+            familyHistory?: string;
+            notes?: string;
+            embarazo?: boolean;
+            semanasEmbarazo?: number;
         };
         CreateClinicalEntryDto: {
             /**
@@ -1279,6 +1281,146 @@ export interface components {
             balance: number;
             /** @example 1 */
             paymentsCount: number;
+        };
+        CreatePaymentPlanDto: {
+            /**
+             * @description Número de cuotas, entero >= 1 y <= 600
+             * @example 12
+             */
+            installmentsCount: number;
+            /** @enum {string} */
+            periodicity: "WEEKLY" | "BIWEEKLY" | "MONTHLY";
+            /**
+             * Format: date-time
+             * @description Fecha de la 1ª cuota
+             */
+            startDate: string;
+            /**
+             * @description Pie/abono inicial esperado (>= 0)
+             * @example 200
+             */
+            downPayment?: number;
+            /**
+             * @description Monto total a financiar. Default = saldo actual del plan.
+             * @example 1200
+             */
+            totalToFinance?: number;
+            notes?: string;
+        };
+        TramoViewDto: {
+            /**
+             * @description Monto del tramo (down payment o cuota)
+             * @example 100
+             */
+            amount: number;
+            /** Format: date-time */
+            dueDate: string;
+            /**
+             * @description Monto ya cubierto por pagos aplicados
+             * @example 100
+             */
+            covered: number;
+            /** @enum {string} */
+            status: "PAID" | "PARTIAL" | "PENDING" | "OVERDUE";
+        };
+        DerivedInstallmentDto: {
+            /**
+             * @description Número de cuota (1-indexed)
+             * @example 1
+             */
+            sequence: number;
+            /** Format: date-time */
+            dueDate: string;
+            /** @example 100 */
+            amount: number;
+            /**
+             * @description Monto ya cubierto por pagos aplicados
+             * @example 100
+             */
+            covered: number;
+            /** @enum {string} */
+            status: "PAID" | "PARTIAL" | "PENDING" | "OVERDUE";
+        };
+        NextDueDto: {
+            /**
+             * @description Número de cuota; null si el próximo vencimiento es el down payment
+             * @example 2
+             */
+            sequence: Record<string, never> | null;
+            /** Format: date-time */
+            dueDate: string;
+            /** @example 100 */
+            amount: number;
+        };
+        PaymentPlanDto: {
+            /** @example clx1234567890 */
+            id: string;
+            /** @example clx0987654321 */
+            treatmentPlanId: string;
+            /**
+             * @description ISO 4217 currency code
+             * @example USD
+             */
+            currency: string;
+            /** @enum {string} */
+            status: "ACTIVE" | "COMPLETED" | "CANCELLED";
+            /**
+             * @description Monto total a financiar
+             * @example 1200
+             */
+            totalToFinance: number;
+            /**
+             * @description Pie/abono inicial
+             * @example 200
+             */
+            downPayment: number;
+            /**
+             * @description totalToFinance - downPayment
+             * @example 1000
+             */
+            financedAmount: number;
+            /**
+             * @description Número de cuotas
+             * @example 12
+             */
+            installmentsCount: number;
+            /** @enum {string} */
+            periodicity: "WEEKLY" | "BIWEEKLY" | "MONTHLY";
+            /**
+             * Format: date-time
+             * @description Fecha de la 1ª cuota
+             */
+            startDate: string;
+            /**
+             * @description Total pagado, convertido a currency del plan
+             * @example 300
+             */
+            paidTotal: number;
+            /**
+             * @description totalToFinance - paidTotal, min 0
+             * @example 900
+             */
+            remaining: number;
+            /** @description Estado derivado del down payment; null si no hay down payment */
+            downPaymentStatus: components["schemas"]["TramoViewDto"] | null;
+            installments: components["schemas"]["DerivedInstallmentDto"][];
+            /** @description Próximo tramo pendiente/vencido; null si el plan está totalmente pagado */
+            nextDue: components["schemas"]["NextDueDto"] | null;
+            /**
+             * @description Cantidad de tramos vencidos (OVERDUE)
+             * @example 0
+             */
+            overdueCount: number;
+            /**
+             * @description Monto vencido no cubierto (suma de tramos OVERDUE)
+             * @example 0
+             */
+            overdueAmount: number;
+            /**
+             * @description true si remaining <= 0
+             * @example false
+             */
+            isFullyPaid: boolean;
         };
         CreateInventoryItemDto: {
             /** @example Guantes de nitrilo */
@@ -2620,6 +2762,72 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Payment voided (deletedAt set) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PaymentPlansController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentPlanDto"];
+                };
+            };
+        };
+    };
+    PaymentPlansController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreatePaymentPlanDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentPlanDto"];
+                };
+            };
+        };
+    };
+    PaymentPlansController_remove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Payment plan cancelled */
             200: {
                 headers: {
                     [name: string]: unknown;
