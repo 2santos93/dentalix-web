@@ -125,7 +125,26 @@ describe('MedicalHistoryPanel', () => {
     expect(screen.getByLabelText(/h[aá]bitos/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/alertas m[eé]dicas/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/notas/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /guardar/i })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /registrar anamnesis/i })).toBeInTheDocument();
+  });
+
+  it('labels the action "Registrar anamnesis" on first visit and "Guardar nueva versión" once one exists', async () => {
+    mockedGet.mockResolvedValue(null);
+    const { unmount } = render(<MedicalHistoryPanel token="tok" patientId="p1" />);
+    await screen.findByText(/no hay.*anamnesis|aún no/i);
+    expect(screen.getByRole('button', { name: /registrar anamnesis/i })).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /guardar nueva versión/i }),
+    ).not.toBeInTheDocument();
+    unmount();
+
+    mockedGet.mockResolvedValue(latest);
+    render(<MedicalHistoryPanel token="tok" patientId="p1" />);
+    await screen.findByText(/versión 2/i);
+    expect(screen.getByRole('button', { name: /guardar nueva versión/i })).toBeInTheDocument();
+    expect(
+      screen.queryByRole('button', { name: /registrar anamnesis/i }),
+    ).not.toBeInTheDocument();
   });
 
   it('submits the form calling saveMedicalHistory and shows the newly saved version', async () => {
@@ -138,7 +157,7 @@ describe('MedicalHistoryPanel', () => {
     await screen.findByText(/no hay.*anamnesis|aún no/i);
 
     await user.type(screen.getByLabelText(/alergias/i), 'Ninguna');
-    await user.click(screen.getByRole('button', { name: /guardar/i }));
+    await user.click(screen.getByRole('button', { name: /registrar anamnesis/i }));
 
     await waitFor(() => expect(mockedSave).toHaveBeenCalledTimes(1));
     expect(mockedSave).toHaveBeenCalledWith('tok', 'p1', expect.objectContaining({ allergies: 'Ninguna' }));
@@ -195,7 +214,7 @@ describe('MedicalHistoryPanel', () => {
     const user = userEvent.setup();
     render(<MedicalHistoryPanel token="tok" patientId="p1" />);
     await screen.findByText(/no hay.*anamnesis|aún no/i);
-    await user.click(screen.getByRole('button', { name: /guardar/i }));
+    await user.click(screen.getByRole('button', { name: /registrar anamnesis/i }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Datos inválidos');
   });

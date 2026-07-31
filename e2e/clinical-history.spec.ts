@@ -106,7 +106,9 @@ test('save anamnesis + add evolution via the UI -> both persist through the back
   await anamnesisSection.getByLabel('Alertas médicas').fill(medicalAlertsValue);
 
   const anamnesisSaveError = anamnesisSection.locator('p[role="alert"]');
-  await anamnesisSection.getByRole('button', { name: 'Guardar nueva versión' }).click();
+  // First visit -> the create action is labelled "Registrar anamnesis"
+  // (it becomes "Guardar nueva versión" only once a version already exists).
+  await anamnesisSection.getByRole('button', { name: 'Registrar anamnesis' }).click();
 
   // Scoped to `dd` — `formFromHistory` re-syncs the form's `<textarea>` with
   // the just-saved values too, so an unscoped text search matches BOTH the
