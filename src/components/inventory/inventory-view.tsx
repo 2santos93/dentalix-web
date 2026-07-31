@@ -5,17 +5,30 @@ import { ApiError } from '@/lib/api/client';
 import {
   listInventoryItems,
   createInventoryItem,
+  recordInventoryMovement,
+  listInventoryMovements,
   type InventoryItem,
   type CreateInventoryItemInput,
+  type InventoryMovement,
+  type InventoryMovementType,
+  type RecordMovementInput,
 } from '@/lib/inventory/inventory-api';
 import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import { Badge, type BadgeProps } from '@/components/ui/badge';
 import { FormField } from '@/components/molecules/form-field';
 import { FormModal } from '@/components/molecules/form-modal';
 import { AsyncSection, TableSkeleton } from '@/components/molecules/async-section';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
+import { formatDateTime } from '@/lib/format/date';
 import {
   Table,
   TableBody,
@@ -54,7 +67,57 @@ const copy = {
   colActions: 'Acciones',
   lowStock: 'Bajo stock',
   ok: 'OK',
+
+  // Movimientos (entrada/salida/ajuste).
+  movementButtonLabel: 'Movimiento',
+  historyButtonLabel: 'Historial',
+  movementAction: (name: string) => `Movimiento de ${name}`,
+  historyAction: (name: string) => `Historial de ${name}`,
+  movementTitle: 'Registrar movimiento',
+  movementDescription:
+    'El stock se recalcula a partir de todos los movimientos registrados para este insumo.',
+  movementTypeLabel: 'Tipo',
+  movementQuantityLabel: 'Cantidad',
+  movementReasonLabel: 'Motivo',
+  movementSubmit: 'Registrar',
+  invalidAdjustmentQuantity: 'La cantidad de un ajuste no puede ser 0.',
+  genericMovementError: 'No pudimos registrar el movimiento. Intenta de nuevo.',
+
+  historyTitle: (name: string) => `Historial de movimientos — ${name}`,
+  historyDescription: 'Todos los movimientos de entrada, salida y ajuste registrados para este insumo.',
+  historyTableLabel: 'Movimientos',
+  colMovementDate: 'Fecha',
+  colMovementType: 'Tipo',
+  colMovementQuantity: 'Cantidad',
+  colMovementReason: 'Motivo',
+  movementReasonFallback: '—',
+  genericHistoryError: 'No pudimos cargar el historial. Intenta de nuevo.',
+  emptyHistory: 'Este insumo todavía no tiene movimientos.',
 };
+
+const MOVEMENT_TYPE_OPTIONS: InventoryMovementType[] = ['IN', 'OUT', 'ADJUSTMENT'];
+
+const MOVEMENT_TYPE_LABELS: Record<InventoryMovementType, string> = {
+  IN: 'Entrada',
+  OUT: 'Salida',
+  ADJUSTMENT: 'Ajuste',
+};
+
+// Semantic Badge variants: IN is the happy "stock coming in" path (success),
+// OUT is a neutral fact (muted, not danger — leaving stock isn't a problem
+// by itself), ADJUSTMENT flags a manual correction worth a second look
+// (warning) — same "muted for neutral facts" convention as
+// `treatment-plans-tab.tsx`'s `PLAN_STATUS_BADGE_VARIANT`.
+const MOVEMENT_TYPE_BADGE_VARIANT: Record<InventoryMovementType, BadgeProps['variant']> = {
+  IN: 'success',
+  OUT: 'muted',
+  ADJUSTMENT: 'warning',
+};
+
+// Native <select> styled to match the Input atom (kept native for a11y/tests) —
+// same class/rationale as `catalog-view.tsx`'s `fieldClass`.
+const fieldClass =
+  'flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-50';
 
 interface InventoryViewProps {
   token: string;
@@ -83,6 +146,25 @@ export function InventoryView({ token }: InventoryViewProps) {
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+
+  // Movimientos (entrada/salida/ajuste): `movementItem` doubles as the
+  // modal's target insumo AND its open flag — same "record !== null is open"
+  // convention as `TreatmentPlansTab`'s `receiptPayment`.
+  const [movementItem, setMovementItem] = useState<InventoryItem | null>(null);
+  const [movementType, setMovementType] = useState<InventoryMovementType>('IN');
+  const [movementQuantity, setMovementQuantity] = useState('');
+  const [movementReason, setMovementReason] = useState('');
+  const [movementSubmitting, setMovementSubmitting] = useState(false);
+  const [movementError, setMovementError] = useState<string | null>(null);
+
+  // Historial de movimientos: `historyItem` doubles as the panel's target
+  // insumo AND its open flag, same convention as `movementItem` above. Owns
+  // its own loading/error state — a failure here must never break the main
+  // table.
+  const [historyItem, setHistoryItem] = useState<InventoryItem | null>(null);
+  const [historyMovements, setHistoryMovements] = useState<InventoryMovement[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!token) return;
@@ -173,6 +255,79 @@ export function InventoryView({ token }: InventoryViewProps) {
       setFormError(null);
       resetForm();
     }
+  }
+
+  function openMovement(item: InventoryItem) {
+    setMovementType('IN');
+    setMovementQuantity('');
+    setMovementReason('');
+    setMovementError(null);
+    setMovementItem(item);
+  }
+
+  function handleMovementOpenChange(next: boolean) {
+    if (!next) {
+      setMovementItem(null);
+      setMovementError(null);
+    }
+  }
+
+  async function handleMovementSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setMovementError(null);
+    if (!movementItem) return;
+
+    const quantity = Number(movementQuantity);
+    // ADJUSTMENT allows negatives (a correction can go either way) but a 0
+    // adjustment is a no-op the backend would otherwise silently accept —
+    // caught here client-side. IN/OUT already get `min={0}` on the input.
+    if (movementType === 'ADJUSTMENT' && quantity === 0) {
+      setMovementError(copy.invalidAdjustmentQuantity);
+      return;
+    }
+
+    setMovementSubmitting(true);
+    try {
+      const trimmedReason = movementReason.trim();
+      const input: RecordMovementInput = {
+        type: movementType,
+        quantity,
+        ...(trimmedReason ? { reason: trimmedReason } : {}),
+      };
+      await recordInventoryMovement(token, movementItem.id, input);
+      setMovementItem(null);
+      // Stock is recomputed server-side from the movement ledger — re-read
+      // the list rather than adjusting any number locally, and await it
+      // BEFORE clearing `movementSubmitting` (same "await the refresh before
+      // re-enabling" pattern as `treatment-plans-tab.tsx`).
+      await refreshInPlace();
+    } catch (err) {
+      // Surfaces the backend's error (e.g. stock insuficiente en una salida)
+      // verbatim.
+      setMovementError(err instanceof ApiError ? err.message : copy.genericMovementError);
+    } finally {
+      setMovementSubmitting(false);
+    }
+  }
+
+  function openHistory(item: InventoryItem) {
+    setHistoryItem(item);
+    setHistoryMovements([]);
+    setHistoryError(null);
+    setHistoryLoading(true);
+    listInventoryMovements(token, item.id)
+      .then((data) => {
+        setHistoryMovements(data);
+        setHistoryError(null);
+      })
+      .catch((err) => {
+        setHistoryError(err instanceof ApiError ? err.message : copy.genericHistoryError);
+      })
+      .finally(() => setHistoryLoading(false));
+  }
+
+  function handleHistoryOpenChange(next: boolean) {
+    if (!next) setHistoryItem(null);
   }
 
   return (
@@ -291,13 +446,126 @@ export function InventoryView({ token }: InventoryViewProps) {
                       <Badge variant="success">{copy.ok}</Badge>
                     )}
                   </TableCell>
-                  <TableCell className="text-right" />
+                  <TableCell className="text-right">
+                    <div className="flex justify-end gap-2">
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        aria-label={copy.movementAction(item.name)}
+                        onClick={() => openMovement(item)}
+                      >
+                        {copy.movementButtonLabel}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        aria-label={copy.historyAction(item.name)}
+                        onClick={() => openHistory(item)}
+                      >
+                        {copy.historyButtonLabel}
+                      </Button>
+                    </div>
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
         </Card>
       </AsyncSection>
+
+      <FormModal
+        open={movementItem !== null}
+        onOpenChange={handleMovementOpenChange}
+        title={copy.movementTitle}
+        description={copy.movementDescription}
+        onSubmit={handleMovementSubmit}
+        submitLabel={copy.movementSubmit}
+        submitting={movementSubmitting}
+        error={movementError}
+      >
+        <FormField htmlFor="movement-type" label={copy.movementTypeLabel}>
+          <select
+            id="movement-type"
+            value={movementType}
+            onChange={(e) => setMovementType(e.target.value as InventoryMovementType)}
+            className={fieldClass}
+          >
+            {MOVEMENT_TYPE_OPTIONS.map((type) => (
+              <option key={type} value={type}>
+                {MOVEMENT_TYPE_LABELS[type]}
+              </option>
+            ))}
+          </select>
+        </FormField>
+        <FormField htmlFor="movement-quantity" label={copy.movementQuantityLabel}>
+          <Input
+            id="movement-quantity"
+            type="number"
+            step="0.001"
+            min={movementType === 'ADJUSTMENT' ? undefined : 0}
+            required
+            value={movementQuantity}
+            onChange={(e) => setMovementQuantity(e.target.value)}
+          />
+        </FormField>
+        <FormField htmlFor="movement-reason" label={copy.movementReasonLabel}>
+          <Input
+            id="movement-reason"
+            type="text"
+            value={movementReason}
+            onChange={(e) => setMovementReason(e.target.value)}
+          />
+        </FormField>
+      </FormModal>
+
+      <Dialog open={historyItem !== null} onOpenChange={handleHistoryOpenChange}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{historyItem ? copy.historyTitle(historyItem.name) : copy.historyTitle('')}</DialogTitle>
+            <DialogDescription>{copy.historyDescription}</DialogDescription>
+          </DialogHeader>
+          <AsyncSection
+            loading={historyLoading}
+            error={historyError}
+            onRetry={() => {
+              if (historyItem) openHistory(historyItem);
+            }}
+            retryLabel={copy.retry}
+            isEmpty={historyMovements.length === 0}
+            emptyTitle={copy.emptyHistory}
+            skeleton={<TableSkeleton rows={3} />}
+          >
+            <Table aria-label={copy.historyTableLabel}>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead>{copy.colMovementDate}</TableHead>
+                  <TableHead>{copy.colMovementType}</TableHead>
+                  <TableHead>{copy.colMovementQuantity}</TableHead>
+                  <TableHead>{copy.colMovementReason}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {historyMovements.map((movement) => (
+                  <TableRow key={movement.id}>
+                    <TableCell>{formatDateTime(movement.occurredAt)}</TableCell>
+                    <TableCell>
+                      <Badge variant={MOVEMENT_TYPE_BADGE_VARIANT[movement.type]}>
+                        {MOVEMENT_TYPE_LABELS[movement.type]}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="tabular-nums">{movement.quantity}</TableCell>
+                    <TableCell className="text-muted">
+                      {movement.reason ?? copy.movementReasonFallback}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </AsyncSection>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
