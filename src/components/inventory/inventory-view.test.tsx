@@ -32,6 +32,12 @@ const guantes = {
   updatedAt: '2026-07-31T10:00:00.000Z', stock: 2, lowStock: true,
 };
 const gasa = { ...guantes, id: 'i2', name: 'Gasa estéril', sku: null, unit: 'unidad', minStock: 10, stock: 40, lowStock: false };
+const algodon = {
+  id: 'i3', name: 'Algodón', sku: null, unit: 'unidad', minStock: 3,
+  notes: null, createdById: null, createdAt: '2026-07-31T10:00:00.000Z',
+  updatedAt: '2026-07-31T10:00:00.000Z',
+  // stock/lowStock intentionally absent: item with no movements yet.
+};
 
 beforeEach(() => {
   mockedList.mockReset();
@@ -54,6 +60,18 @@ it('muestra los insumos con su stock y marca los que están bajo el mínimo', as
   const okRow = within(table).getByRole('row', { name: /gasa estéril/i });
   expect(within(okRow).getByText('40')).toBeInTheDocument();
   expect(within(okRow).queryByText(/bajo stock/i)).not.toBeInTheDocument();
+});
+
+it('muestra un guion cuando stock/lowStock no vienen del API (sin ocultar que faltan)', async () => {
+  mockedList.mockResolvedValue([algodon]);
+  render(<InventoryView token="tok" />);
+
+  const table = await screen.findByRole('table', { name: /inventario/i });
+  const row = within(table).getByRole('row', { name: /algodón/i });
+  // One "—" for the missing stock cell, one for the neutral status badge.
+  expect(within(row).getAllByText('—')).toHaveLength(2);
+  expect(within(row).queryByText(/^ok$/i)).not.toBeInTheDocument();
+  expect(within(row).queryByText(/bajo stock/i)).not.toBeInTheDocument();
 });
 
 it('crea un insumo con el payload correcto y refresca la lista', async () => {
@@ -104,6 +122,21 @@ it('registra una salida y refresca el stock', async () => {
     }),
   );
   await waitFor(() => expect(mockedList).toHaveBeenCalledTimes(2));
+});
+
+it('rechaza una entrada con cantidad 0 sin llamar al API', async () => {
+  mockedList.mockResolvedValueOnce([guantes]);
+
+  const user = userEvent.setup();
+  render(<InventoryView token="tok" />);
+  await screen.findByRole('table', { name: /inventario/i });
+
+  await user.click(screen.getByRole('button', { name: /movimiento de guantes de nitrilo/i }));
+  await user.type(screen.getByLabelText(/cantidad/i), '0');
+  await user.click(screen.getByRole('button', { name: /^registrar$/i }));
+
+  expect(await screen.findByText(/la cantidad debe ser mayor a 0/i)).toBeInTheDocument();
+  expect(mockedRecord).not.toHaveBeenCalled();
 });
 
 it('muestra el historial de movimientos de un insumo', async () => {

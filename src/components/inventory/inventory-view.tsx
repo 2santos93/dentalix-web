@@ -71,6 +71,7 @@ const copy = {
   colActions: 'Acciones',
   lowStock: 'Bajo stock',
   ok: 'OK',
+  unknownValue: '—',
 
   // Editar / eliminar insumo.
   editButtonLabel: 'Editar',
@@ -99,6 +100,7 @@ const copy = {
   movementReasonLabel: 'Motivo',
   movementSubmit: 'Registrar',
   invalidAdjustmentQuantity: 'La cantidad de un ajuste no puede ser 0.',
+  invalidMovementQuantity: 'La cantidad debe ser mayor a 0.',
   genericMovementError: 'No pudimos registrar el movimiento. Intenta de nuevo.',
 
   historyTitle: (name: string) => `Historial de movimientos — ${name}`,
@@ -166,7 +168,7 @@ export function InventoryView({ token }: InventoryViewProps) {
   const [name, setName] = useState('');
   const [unit, setUnit] = useState('');
   const [sku, setSku] = useState('');
-  const [minStock, setMinStock] = useState('0');
+  const [minStock, setMinStock] = useState('');
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -236,7 +238,7 @@ export function InventoryView({ token }: InventoryViewProps) {
     setName('');
     setUnit('');
     setSku('');
-    setMinStock('0');
+    setMinStock('');
     setNotes('');
   }
 
@@ -381,10 +383,16 @@ export function InventoryView({ token }: InventoryViewProps) {
 
     const quantity = Number(movementQuantity);
     // ADJUSTMENT allows negatives (a correction can go either way) but a 0
-    // adjustment is a no-op the backend would otherwise silently accept —
-    // caught here client-side. IN/OUT already get `min={0}` on the input.
-    if (movementType === 'ADJUSTMENT' && quantity === 0) {
-      setMovementError(copy.invalidAdjustmentQuantity);
+    // adjustment is a no-op the backend would otherwise silently accept.
+    // IN/OUT must be strictly positive per the API contract — the `min={0}`
+    // on the input only blocks the stepper UI, not a typed/pasted value.
+    // Both are caught here client-side to avoid a guaranteed-400 round trip.
+    if (movementType === 'ADJUSTMENT' ? quantity === 0 : quantity <= 0) {
+      setMovementError(
+        movementType === 'ADJUSTMENT'
+          ? copy.invalidAdjustmentQuantity
+          : copy.invalidMovementQuantity,
+      );
       return;
     }
 
@@ -488,6 +496,7 @@ export function InventoryView({ token }: InventoryViewProps) {
               type="number"
               min={0}
               step="0.001"
+              required
               value={minStock}
               onChange={(e) => setMinStock(e.target.value)}
             />
@@ -541,10 +550,14 @@ export function InventoryView({ token }: InventoryViewProps) {
                       </div>
                     </TableCell>
                     <TableCell>{item.unit}</TableCell>
-                    <TableCell className="tabular-nums">{item.stock ?? 0}</TableCell>
+                    <TableCell className="tabular-nums">
+                      {item.stock === undefined ? copy.unknownValue : item.stock}
+                    </TableCell>
                     <TableCell className="tabular-nums">{item.minStock}</TableCell>
                     <TableCell>
-                      {item.lowStock ? (
+                      {item.lowStock === undefined ? (
+                        <Badge variant="muted">{copy.unknownValue}</Badge>
+                      ) : item.lowStock ? (
                         <Badge variant="danger">{copy.lowStock}</Badge>
                       ) : (
                         <Badge variant="success">{copy.ok}</Badge>
