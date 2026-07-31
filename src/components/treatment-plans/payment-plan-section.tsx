@@ -16,13 +16,11 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge, type BadgeProps } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { FormField } from '@/components/molecules/form-field';
 import { FormModal } from '@/components/molecules/form-modal';
 import { ConfirmDialog } from '@/components/molecules/confirm-dialog';
 import { EmptyState } from '@/components/molecules/empty-state';
-import { cn } from '@/lib/utils';
 import { formatCivilDate } from '@/lib/format/date';
 
 const copy = {
@@ -111,6 +109,7 @@ export function PaymentPlanSection({ token, planId, planCurrency, billable, refr
   const [plan, setPlan] = useState<PaymentPlan | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [retryTick, setRetryTick] = useState(0);
 
   const [showCreate, setShowCreate] = useState(false);
   const [installmentsCount, setInstallmentsCount] = useState('12');
@@ -147,7 +146,7 @@ export function PaymentPlanSection({ token, planId, planCurrency, billable, refr
     return () => {
       cancelled = true;
     };
-  }, [token, planId, refreshSignal]);
+  }, [token, planId, refreshSignal, retryTick]);
 
   function openCreate() {
     setInstallmentsCount('12');
@@ -241,7 +240,7 @@ export function PaymentPlanSection({ token, planId, planCurrency, billable, refr
       ) : loadError ? (
         <div className="flex items-center gap-3">
           <p role="alert" className="text-sm text-danger">{loadError}</p>
-          <Button variant="outline" size="sm" onClick={() => { setLoadError(null); void refetch(); }}>
+          <Button variant="outline" size="sm" onClick={() => { setLoadError(null); setRetryTick((t) => t + 1); }}>
             {copy.retry}
           </Button>
         </div>
@@ -399,7 +398,7 @@ function InstallmentsTable({ plan, currency }: { plan: PaymentPlan; currency: st
           <TableBody>
             {rows.map((r) => (
               <TableRow key={r.key}>
-                <TableCell className="font-medium">{r.label}</TableCell>
+                <TableCell className="font-medium tabular-nums">{r.label}</TableCell>
                 <TableCell className="tabular-nums">{formatCivilDate(r.dueDate)}</TableCell>
                 <TableCell className="text-right tabular-nums">{formatMoney(r.amount, currency)}</TableCell>
                 <TableCell className="text-right tabular-nums">{formatMoney(r.covered, currency)}</TableCell>
@@ -420,14 +419,18 @@ function InstallmentsTable({ plan, currency }: { plan: PaymentPlan; currency: st
           <li key={r.key}>
             <Card className="p-4">
               <div className="flex items-center justify-between gap-2">
-                <span className="font-medium text-ink">{copy.colSeq === '#' ? `#${r.label}` : r.label}</span>
+                <span className="font-medium text-ink tabular-nums">{copy.colSeq === '#' ? `#${r.label}` : r.label}</span>
                 <Badge variant={INSTALLMENT_STATUS_BADGE_VARIANT[r.status]}>
                   {INSTALLMENT_STATUS_LABELS[r.status]}
                 </Badge>
               </div>
               <p className="mt-1 text-sm text-muted tabular-nums">{formatCivilDate(r.dueDate)}</p>
               <p className="mt-1 font-medium text-ink tabular-nums">
-                {formatMoney(r.covered, currency)} / {formatMoney(r.amount, currency)}
+                <span className="sr-only">Cubierto: </span>
+                {formatMoney(r.covered, currency)}
+                {' / '}
+                <span className="sr-only">Monto: </span>
+                {formatMoney(r.amount, currency)}
               </p>
             </Card>
           </li>
