@@ -258,12 +258,12 @@ export function InventoryView({ token }: InventoryViewProps) {
     setShowForm(true);
   }
 
-  // Builds the create/update payload — shared by both modes since
-  // `UpdateInventoryItemDto` is a subset of `CreateInventoryItemDto`'s
-  // fields. Empty optional fields are omitted (so a blank SKU/notes doesn't
-  // send anything) — same convention as `catalog-view.tsx`'s `buildPayload`.
-  // `minStock` always travels (number, default 0).
-  function buildPayload(): CreateInventoryItemInput {
+  // Builds the CREATE payload. Empty optional fields are omitted (so a blank
+  // SKU/notes doesn't send anything) — same convention as
+  // `catalog-view.tsx`'s `buildPayload`. `minStock` always travels (number,
+  // default 0). `CreateInventoryItemDto` doesn't accept `null` for
+  // `sku`/`notes`, so omitting is the only way to say "not set" here.
+  function buildCreatePayload(): CreateInventoryItemInput {
     const trimmedSku = sku.trim();
     const trimmedNotes = notes.trim();
     return {
@@ -275,16 +275,33 @@ export function InventoryView({ token }: InventoryViewProps) {
     };
   }
 
+  // Builds the UPDATE payload. Unlike create, `UpdateInventoryItemDto`
+  // accepts `string | null` for `sku`/`notes`, and the backend's PATCH
+  // (`prisma-inventory.repository`) passes the payload straight to Prisma —
+  // where `undefined` means "leave the column alone" and only an explicit
+  // `null` clears it. So an omitted field here would silently keep the old
+  // value: clearing the input must send `null`, not omit the key.
+  function buildUpdatePayload(): UpdateInventoryItemInput {
+    const trimmedSku = sku.trim();
+    const trimmedNotes = notes.trim();
+    return {
+      name: name.trim(),
+      unit: unit.trim(),
+      minStock: minStock.trim() === '' ? 0 : Number(minStock),
+      sku: trimmedSku || null,
+      notes: trimmedNotes || null,
+    };
+  }
+
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setFormError(null);
     setSaving(true);
     try {
-      const payload = buildPayload();
       if (editingItem) {
-        await updateInventoryItem(token, editingItem.id, payload as UpdateInventoryItemInput);
+        await updateInventoryItem(token, editingItem.id, buildUpdatePayload());
       } else {
-        await createInventoryItem(token, payload);
+        await createInventoryItem(token, buildCreatePayload());
       }
       resetForm();
       setShowForm(false);

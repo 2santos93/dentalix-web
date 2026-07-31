@@ -148,6 +148,30 @@ it('editar abre el modal prellenado y hace PATCH', async () => {
   await waitFor(() => expect(mockedList).toHaveBeenCalledTimes(2));
 });
 
+it('editar limpia sku y notas enviando null explícito', async () => {
+  const conNotas = { ...guantes, notes: 'Guardar en frío' };
+  mockedList.mockResolvedValueOnce([conNotas]);
+  mockedUpdate.mockResolvedValue({ ...conNotas, sku: null, notes: null });
+  mockedList.mockResolvedValueOnce([{ ...conNotas, sku: null, notes: null }]);
+
+  const user = userEvent.setup();
+  render(<InventoryView token="tok" />);
+  await screen.findByRole('table', { name: /inventario/i });
+
+  await user.click(screen.getByRole('button', { name: /editar guantes de nitrilo/i }));
+  await user.clear(screen.getByLabelText(/^sku$/i));
+  await user.clear(screen.getByLabelText(/^notas$/i));
+  await user.click(screen.getByRole('button', { name: /^guardar$/i }));
+
+  await waitFor(() =>
+    expect(mockedUpdate).toHaveBeenCalledWith(
+      'tok',
+      'i1',
+      expect.objectContaining({ sku: null, notes: null }),
+    ),
+  );
+});
+
 it('eliminar pide confirmación y luego llama al API', async () => {
   mockedList.mockResolvedValueOnce([guantes]);
   mockedDelete.mockResolvedValue(undefined);
