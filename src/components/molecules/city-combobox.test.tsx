@@ -44,7 +44,9 @@ describe('CityCombobox', () => {
     const user = userEvent.setup();
     render(<CityCombobox id="city" token="tok" countryCode="CO" value={null} onChange={onChange} />);
     await user.type(screen.getByRole('combobox'), 'bog');
-    await waitFor(() => expect(mocked).toHaveBeenCalledWith('tok', { countryCode: 'CO', q: 'bog' }));
+    await waitFor(() =>
+      expect(mocked).toHaveBeenCalledWith('tok', { countryCode: 'CO', q: 'bog', limit: 50 }),
+    );
     const option = await screen.findByText('Bogotá');
     await user.click(option);
     expect(onChange).toHaveBeenCalledWith({ id: 1, name: 'Bogotá' });
@@ -55,7 +57,9 @@ describe('CityCombobox', () => {
     const user = userEvent.setup();
     render(<CityCombobox id="city" token="tok" countryCode="CO" value={null} onChange={onChange} />);
     await user.type(screen.getByRole('combobox'), 'bog');
-    await waitFor(() => expect(mocked).toHaveBeenCalledWith('tok', { countryCode: 'CO', q: 'bog' }));
+    await waitFor(() =>
+      expect(mocked).toHaveBeenCalledWith('tok', { countryCode: 'CO', q: 'bog', limit: 50 }),
+    );
     const option = await screen.findByText('Bogotá');
     await user.click(option);
 
