@@ -10,8 +10,10 @@ import {
 import { listStaff, type StaffMember } from '@/lib/appointments/staff-api';
 import { listPatients } from '@/lib/patients/patients-api';
 import { localDayRange, localWeekRange } from '@/lib/appointments/day-range';
+import { monthGridRange } from '@/lib/appointments/calendar-grid';
 import { DayAgenda } from '@/components/appointments/day-agenda';
 import { WeekTimeGrid } from '@/components/appointments/week-time-grid';
+import { MonthAgenda } from '@/components/appointments/month-agenda';
 import { AppointmentForm } from '@/components/appointments/appointment-form';
 import { STATUS_LABELS, formatTimeRange } from '@/components/appointments/appointment-display';
 import { Plus, X } from 'lucide-react';
@@ -29,6 +31,7 @@ const copy = {
   providerLoading: 'Cargando…',
   dateLabel: 'Fecha',
   viewLabel: 'Vista',
+  monthView: 'Mes',
   dayView: 'Día',
   weekView: 'Semana',
   refreshing: 'Actualizando…',
@@ -108,11 +111,12 @@ export function AgendaView({ token }: AgendaViewProps) {
   const [providerId, setProviderId] = useState('');
 
   const [selectedDate, setSelectedDate] = useState(todayLocalDateString);
-  // Día | Semana toggle — 'day' keeps the existing single-day fetch/render;
+  // Mes | Día | Semana toggle — 'day' keeps the existing single-day fetch/render;
   // 'week' swaps the range to `localWeekRange(selectedDate)` and renders
   // `WeekAgenda` instead of `DayAgenda` (see the `viewMode === 'week'` branch
-  // below). Kept additive/minimal per the task brief.
-  const [viewMode, setViewMode] = useState<'day' | 'week'>('day');
+  // below); 'month' swaps the range to `monthGridRange(selectedDate)` and
+  // renders `MonthAgenda`. Kept additive/minimal per the task brief.
+  const [viewMode, setViewMode] = useState<'day' | 'week' | 'month'>('day');
 
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [appointmentsLoading, setAppointmentsLoading] = useState(false);
@@ -209,7 +213,11 @@ export function AgendaView({ token }: AgendaViewProps) {
       setAppointmentsLoading(true);
       try {
         const { from, to } =
-          viewMode === 'week' ? localWeekRange(selectedDate) : localDayRange(selectedDate);
+          viewMode === 'month'
+            ? monthGridRange(selectedDate)
+            : viewMode === 'week'
+              ? localWeekRange(selectedDate)
+              : localDayRange(selectedDate);
         const data = await listAppointments(token, { from, to, providerId });
         if (cancelled) return;
         setAppointments(data);
@@ -231,7 +239,11 @@ export function AgendaView({ token }: AgendaViewProps) {
     if (!token || !providerId) return Promise.resolve();
     setAppointmentsRefreshing(true);
     const { from, to } =
-      viewMode === 'week' ? localWeekRange(selectedDate) : localDayRange(selectedDate);
+      viewMode === 'month'
+        ? monthGridRange(selectedDate)
+        : viewMode === 'week'
+          ? localWeekRange(selectedDate)
+          : localDayRange(selectedDate);
     return listAppointments(token, { from, to, providerId })
       .then((data) => {
         setAppointments(data);
@@ -343,6 +355,18 @@ export function AgendaView({ token }: AgendaViewProps) {
                 <Button
                   type="button"
                   size="sm"
+                  variant={viewMode === 'month' ? 'default' : 'outline'}
+                  aria-pressed={viewMode === 'month'}
+                  onClick={() => {
+                    setViewMode('month');
+                    setDetailAppointment(null);
+                  }}
+                >
+                  {copy.monthView}
+                </Button>
+                <Button
+                  type="button"
+                  size="sm"
                   variant={viewMode === 'day' ? 'default' : 'outline'}
                   aria-pressed={viewMode === 'day'}
                   onClick={() => {
@@ -445,6 +469,17 @@ export function AgendaView({ token }: AgendaViewProps) {
         <p role="status" className="text-sm text-muted">
           {copy.selectProviderPrompt}
         </p>
+      ) : viewMode === 'month' ? (
+        <MonthAgenda
+          appointments={appointments}
+          monthDate={selectedDate}
+          selectedDate={selectedDate}
+          today={todayLocalDateString()}
+          onSelectDay={handleSelectDay}
+          patientNames={patientNames}
+          loading={appointmentsLoading}
+          error={appointmentsLoadError}
+        />
       ) : viewMode === 'week' ? (
         // `WeekTimeGrid` is purely presentational (no loading/error props,
         // unlike `DayAgenda`) — mirror `DayAgenda`'s own loading/error
