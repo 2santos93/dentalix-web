@@ -1,6 +1,7 @@
 'use client';
+import { CalendarDays, ChevronDown } from 'lucide-react';
 import type { Appointment, AppointmentStatus } from '@/lib/appointments/appointments-api';
-import { StatusBadge, formatTimeRange, patientLabel } from './appointment-display';
+import { StatusBadge, STATUS_BADGE_CLASSES, formatTimeRange, patientLabel } from './appointment-display';
 import { Skeleton } from '@/components/ui/skeleton';
 
 // Copy as constants (i18n-ready, es-first) — matches patients-table.tsx /
@@ -8,6 +9,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 const copy = {
   loading: 'Cargando agenda…',
   empty: 'No hay citas para este día.',
+  emptyHint: 'Crea una nueva cita para empezar a llenar el día.',
   genericLoadError: 'No pudimos cargar la agenda. Intenta de nuevo.',
   colTime: 'Hora',
   colPatient: 'Paciente',
@@ -67,24 +69,38 @@ interface StatusSelectProps {
   updating: boolean;
 }
 
-/** Labeled status `<select>` for one appointment row — rendered once per row per responsive variant (desktop table cell + mobile card) when `onStatusChange` is passed to `DayAgenda`. */
+/**
+ * Interactive status control for one appointment row — a single colored pill
+ * that both SHOWS the current status (tinted with the same semantic token as
+ * `StatusBadge`) and lets the user CHANGE it. A native `<select>` under the
+ * hood (kept for a11y + `selectOptions` tests), styled `appearance-none` with
+ * a chevron so it reads as one status chip instead of a bare dropdown stacked
+ * under a badge. Rendered once per row per responsive variant when
+ * `onStatusChange` is passed to `DayAgenda`.
+ */
 function StatusSelect({ appointment, timeRange, onStatusChange, updating }: StatusSelectProps) {
   return (
     <span className="inline-flex items-center gap-2">
-      <select
-        aria-label={copy.statusSelectLabel(timeRange)}
-        data-testid="appointment-status-select"
-        value={appointment.status}
-        disabled={updating}
-        onChange={(e) => onStatusChange(appointment.id, e.target.value as AppointmentStatus)}
-        className="rounded-md border border-border bg-surface px-2 py-1 text-xs text-ink disabled:opacity-60"
-      >
-        {STATUS_OPTIONS.map((status) => (
-          <option key={status} value={status}>
-            {copy.statusLabels[status]}
-          </option>
-        ))}
-      </select>
+      <span className="relative inline-flex items-center">
+        <select
+          aria-label={copy.statusSelectLabel(timeRange)}
+          data-testid="appointment-status-select"
+          value={appointment.status}
+          disabled={updating}
+          onChange={(e) => onStatusChange(appointment.id, e.target.value as AppointmentStatus)}
+          className={`cursor-pointer appearance-none rounded-full border py-1 pl-3 pr-7 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface disabled:cursor-not-allowed disabled:opacity-60 ${STATUS_BADGE_CLASSES[appointment.status]}`}
+        >
+          {STATUS_OPTIONS.map((status) => (
+            <option key={status} value={status} className="bg-surface font-normal text-ink">
+              {copy.statusLabels[status]}
+            </option>
+          ))}
+        </select>
+        <ChevronDown
+          aria-hidden
+          className="pointer-events-none absolute right-2 h-3.5 w-3.5 opacity-70"
+        />
+      </span>
       {updating && (
         <span role="status" className="text-xs text-muted">
           {copy.updatingStatus}
@@ -141,9 +157,14 @@ export function DayAgenda({
 
   if (appointments.length === 0) {
     return (
-      <p role="status" className="text-sm text-muted">
-        {copy.empty}
-      </p>
+      <div
+        role="status"
+        className="flex flex-col items-center gap-2 rounded-xl border border-dashed border-border bg-surface px-6 py-12 text-center"
+      >
+        <CalendarDays aria-hidden className="h-8 w-8 text-muted" />
+        <p className="text-sm font-medium text-ink">{copy.empty}</p>
+        <p className="text-sm text-muted">{copy.emptyHint}</p>
+      </div>
     );
   }
 
@@ -153,57 +174,63 @@ export function DayAgenda({
 
   return (
     <>
-      {/* Desktop table */}
-      <table
-        aria-label={copy.heading}
-        className="hidden md:block w-full border-collapse overflow-hidden rounded-lg border border-border bg-surface text-sm text-ink"
-      >
-        <caption className="sr-only">{copy.heading}</caption>
-        <thead>
-          <tr className="border-b border-border text-left">
-            <th scope="col" className="px-4 py-3 font-medium text-muted">
-              {copy.colTime}
-            </th>
-            <th scope="col" className="px-4 py-3 font-medium text-muted">
-              {copy.colPatient}
-            </th>
-            <th scope="col" className="px-4 py-3 font-medium text-muted">
-              {copy.colReason}
-            </th>
-            <th scope="col" className="px-4 py-3 font-medium text-muted">
-              {copy.colStatus}
-            </th>
-          </tr>
-        </thead>
-        <tbody>
-          {sorted.map((appointment) => {
-            const timeRange = formatTimeRange(appointment.start, appointment.end);
-            const updating = updatingId === appointment.id;
-            return (
-              <tr key={appointment.id} className="border-b border-border last:border-0">
-                <td className="px-4 py-3 text-ink">
-                  <time dateTime={appointment.start}>{timeRange}</time>
-                </td>
-                <td className="px-4 py-3 text-ink">{patientLabel(appointment, patientNames)}</td>
-                <td className="px-4 py-3 text-ink">{appointment.reason ?? copy.reasonFallback}</td>
-                <td className="px-4 py-3">
-                  <div className="flex flex-col items-start gap-1.5">
-                    <StatusBadge status={appointment.status} />
-                    {onStatusChange && (
+      {/* Desktop table — `hidden md:block` on the WRAPPER (not the <table>, which
+          would drop table-layout and collapse the columns to content width). */}
+      <div className="hidden overflow-hidden rounded-xl border border-border bg-surface md:block">
+        <table aria-label={copy.heading} className="w-full border-collapse text-sm text-ink">
+          <caption className="sr-only">{copy.heading}</caption>
+          <thead>
+            <tr className="border-b border-border bg-surface-2 text-left">
+              <th scope="col" className="px-4 py-2.5 text-xs font-medium tracking-wide text-muted">
+                {copy.colTime}
+              </th>
+              <th scope="col" className="px-4 py-2.5 text-xs font-medium tracking-wide text-muted">
+                {copy.colPatient}
+              </th>
+              <th scope="col" className="px-4 py-2.5 text-xs font-medium tracking-wide text-muted">
+                {copy.colReason}
+              </th>
+              <th scope="col" className="px-4 py-2.5 text-xs font-medium tracking-wide text-muted">
+                {copy.colStatus}
+              </th>
+            </tr>
+          </thead>
+          <tbody>
+            {sorted.map((appointment) => {
+              const timeRange = formatTimeRange(appointment.start, appointment.end);
+              const updating = updatingId === appointment.id;
+              return (
+                <tr
+                  key={appointment.id}
+                  className="border-b border-hairline transition-colors last:border-0 hover:bg-surface-2"
+                >
+                  <td className="whitespace-nowrap px-4 py-3 font-medium tabular-nums text-ink">
+                    <time dateTime={appointment.start}>{timeRange}</time>
+                  </td>
+                  <td className="px-4 py-3 font-medium text-ink">
+                    {patientLabel(appointment, patientNames)}
+                  </td>
+                  <td className="px-4 py-3 text-muted">
+                    {appointment.reason ?? copy.reasonFallback}
+                  </td>
+                  <td className="px-4 py-3">
+                    {onStatusChange ? (
                       <StatusSelect
                         appointment={appointment}
                         timeRange={timeRange}
                         onStatusChange={onStatusChange}
                         updating={updating}
                       />
+                    ) : (
+                      <StatusBadge status={appointment.status} />
                     )}
-                  </div>
-                </td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
 
       {/* Mobile cards */}
       <ul aria-label={copy.heading} className="flex flex-col gap-3 md:hidden">
@@ -215,18 +242,20 @@ export function DayAgenda({
             <li
               key={appointment.id}
               aria-label={label}
-              className="rounded-lg border border-border bg-surface p-4 text-sm text-ink"
+              className="rounded-xl border border-border bg-surface p-4 text-sm text-ink"
             >
               <div className="flex items-center justify-between gap-2">
-                <time dateTime={appointment.start} className="font-medium text-ink">
+                <time dateTime={appointment.start} className="font-medium tabular-nums text-ink">
                   {timeRange}
                 </time>
-                <StatusBadge status={appointment.status} />
+                {!onStatusChange && <StatusBadge status={appointment.status} />}
               </div>
-              <p className="mt-2 text-ink">{patientLabel(appointment, patientNames)}</p>
-              <p className="mt-1 text-muted">{appointment.reason ?? copy.reasonFallback}</p>
+              <p className="mt-2 font-medium text-ink">
+                {patientLabel(appointment, patientNames)}
+              </p>
+              <p className="mt-0.5 text-muted">{appointment.reason ?? copy.reasonFallback}</p>
               {onStatusChange && (
-                <div className="mt-2">
+                <div className="mt-3">
                   <StatusSelect
                     appointment={appointment}
                     timeRange={timeRange}
