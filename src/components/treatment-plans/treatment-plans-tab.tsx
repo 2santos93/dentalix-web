@@ -42,6 +42,7 @@ import { FormField } from '@/components/molecules/form-field';
 import { FormModal } from '@/components/molecules/form-modal';
 import { EmptyState } from '@/components/molecules/empty-state';
 import { PaymentReceipt } from './payment-receipt';
+import { PaymentPlanSection } from './payment-plan-section';
 import { cn } from '@/lib/utils';
 import { formatCivilDate, formatDateTime } from '@/lib/format/date';
 
@@ -616,6 +617,10 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
   const [voidingPaymentId, setVoidingPaymentId] = useState<string | null>(null);
   const [paymentActionError, setPaymentActionError] = useState<string | null>(null);
 
+  // Bumped whenever the balance/abonos refresh, so the payment-plan section
+  // refetches and recomputes installment coverage.
+  const [paymentPlanRefreshSignal, setPaymentPlanRefreshSignal] = useState(0);
+
   // Receipt (RECIBO-T1): `receiptPayment` doubles as the printable receipt
   // dialog's target abono AND its open flag (`PaymentReceipt` treats
   // `payment !== null` as "open"). `patientName`/`clinicName` are fetched
@@ -921,6 +926,7 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
         setPlanBalance(balanceData);
         setPayments(paymentsData);
         setPaymentsRefreshError(null);
+        setPaymentPlanRefreshSignal((n) => n + 1);
       })
       .catch((err) => {
         setPaymentsRefreshError(err instanceof ApiError ? err.message : copy.genericBalanceRefreshError);
@@ -1429,6 +1435,16 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
                         voidingPaymentId={voidingPaymentId}
                         onVoid={handleVoidPayment}
                         onReceipt={setReceiptPayment}
+                      />
+
+                      <Separator />
+
+                      <PaymentPlanSection
+                        token={token}
+                        planId={selectedPlanId!}
+                        planCurrency={planBalance.planCurrency}
+                        billable={planBalance.billable}
+                        refreshSignal={paymentPlanRefreshSignal}
                       />
                     </>
                   )}
