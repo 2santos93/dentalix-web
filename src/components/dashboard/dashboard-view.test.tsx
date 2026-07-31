@@ -4,9 +4,9 @@ import { DashboardView } from './dashboard-view';
 import { ApiError } from '@/lib/api/client';
 import { getDashboard } from '@/lib/dashboard/dashboard-api';
 import type { Dashboard } from '@/lib/dashboard/dashboard-api';
+import { listCurrencies } from '@/lib/reference/currencies-api';
 import { listPatients } from '@/lib/patients/patients-api';
 import { listStaff } from '@/lib/appointments/staff-api';
-import { getExchangeRates } from '@/lib/exchange/exchange-api';
 
 // NOTE: jest.mock's string literal is not alias-rewritten by the SWC
 // transform (only real `import`/`require` specifiers are) — use a relative
@@ -15,20 +15,23 @@ import { getExchangeRates } from '@/lib/exchange/exchange-api';
 jest.mock('../../lib/dashboard/dashboard-api', () => ({
   getDashboard: jest.fn(),
 }));
+// CurrencySelect (Task 10, wired here per Task 11) fetches its own options
+// via `listCurrencies` — mock it so the currency filter select renders
+// deterministically.
+jest.mock('../../lib/reference/currencies-api', () => ({
+  listCurrencies: jest.fn(),
+}));
 jest.mock('../../lib/patients/patients-api', () => ({
   listPatients: jest.fn(),
 }));
 jest.mock('../../lib/appointments/staff-api', () => ({
   listStaff: jest.fn(),
 }));
-jest.mock('../../lib/exchange/exchange-api', () => ({
-  getExchangeRates: jest.fn(),
-}));
 
 const mockedGetDashboard = getDashboard as jest.MockedFunction<typeof getDashboard>;
+const mockedListCurrencies = listCurrencies as jest.MockedFunction<typeof listCurrencies>;
 const mockedListPatients = listPatients as jest.MockedFunction<typeof listPatients>;
 const mockedListStaff = listStaff as jest.MockedFunction<typeof listStaff>;
-const mockedGetExchangeRates = getExchangeRates as jest.MockedFunction<typeof getExchangeRates>;
 
 const PATIENT_ID = 'aaaaaaaa-1111-2222-3333-444444444444';
 
@@ -58,8 +61,6 @@ const patientsPage = {
 };
 
 const staff = [{ userId: 'staff-1', fullName: 'Dra. Ana Ríos', role: 'DENTIST' as const }];
-
-const exchangeRates = { base: 'USD' as const, rates: { COP: 4000, EUR: 0.92 } };
 
 function dashboard(overrides: Partial<Dashboard> = {}): Dashboard {
   return {
@@ -124,12 +125,15 @@ function deferred<T>() {
 describe('DashboardView', () => {
   beforeEach(() => {
     mockedGetDashboard.mockReset();
+    mockedListCurrencies.mockReset();
+    mockedListCurrencies.mockResolvedValue([
+      { code: 'USD', name: 'Dólar estadounidense', symbol: '$' },
+      { code: 'COP', name: 'Peso colombiano', symbol: '$' },
+    ]);
     mockedListPatients.mockReset();
     mockedListStaff.mockReset();
-    mockedGetExchangeRates.mockReset();
     mockedListPatients.mockResolvedValue(patientsPage);
     mockedListStaff.mockResolvedValue(staff);
-    mockedGetExchangeRates.mockResolvedValue(exchangeRates);
   });
 
   it('renders the 4 cards (incomes, low stock, upcoming appointments, patient count) with fetched data', async () => {
@@ -248,61 +252,30 @@ describe('DashboardView', () => {
     expect(toInput.value).toBe('2026-07-10');
   });
 
-  it('populates the currency <select> from getExchangeRates (base + rates keys) and refetches when it changes', async () => {
+  it('refetches with the new currency when the currency select changes', async () => {
     mockedGetDashboard.mockResolvedValue(dashboard());
+    const user = userEvent.setup();
 
     render(<DashboardView token="tok" />);
     await waitFor(() => expect(mockedGetDashboard).toHaveBeenCalledTimes(1));
-    await waitFor(() => expect(mockedGetExchangeRates).toHaveBeenCalled());
 
+    // The "Moneda" control is a native <select> rendered by CurrencySelect.
     const currencySelect = (await screen.findByLabelText('Moneda')) as HTMLSelectElement;
     expect(currencySelect.tagName).toBe('SELECT');
-    // Default USD (the rates base) + rates' keys (COP, EUR) are all options.
-    const optionValues = Array.from(currencySelect.options).map((o) => o.value);
-    expect(optionValues).toEqual(expect.arrayContaining(['USD', 'COP', 'EUR']));
     // Defaults to COP.
-    expect(currencySelect.value).toBe('COP');
+    await waitFor(() => expect(currencySelect.value).toBe('COP'));
 
     mockedGetDashboard.mockClear();
-    fireEvent.change(currencySelect, { target: { value: 'EUR' } });
+    // CurrencySelect (Task 11) replaces the old free-text currency input —
+    // pick an option instead of typing, once its options (from the mocked
+    // `listCurrencies`) have loaded in. The default is COP, so pick USD to
+    // force a genuinely new value (and therefore a refetch).
+    await waitFor(() => expect(currencySelect.querySelector('option[value="USD"]')).not.toBeNull());
+    await user.selectOptions(currencySelect, 'USD');
 
     await waitFor(() => expect(mockedGetDashboard).toHaveBeenCalledTimes(1));
     const [, params] = mockedGetDashboard.mock.calls[0];
-    expect(params.currency).toBe('EUR');
-  });
-
-  it('reconciles the currency when the resolved rates do not include the current selection (COP), and refetches with the reconciled value instead of the stale "COP"', async () => {
-    // `rates` here has no `COP` key, and `base` ('USD') isn't in `rates`
-    // either — the options end up ['USD', 'EUR', 'MXN']. The default
-    // `currency` state ('COP') is a dangling value the <select> can't
-    // display; the component must clamp it to a real option ('USD', the
-    // base, since 'COP' itself isn't available) instead of leaving the
-    // control's value out of sync with its rendered options.
-    mockedGetExchangeRates.mockResolvedValue({ base: 'USD', rates: { EUR: 0.9, MXN: 17 } });
-    mockedGetDashboard.mockResolvedValue(dashboard());
-
-    render(<DashboardView token="tok" />);
-
-    const currencySelect = (await screen.findByLabelText('Moneda')) as HTMLSelectElement;
-    await waitFor(() => {
-      const optionValues = Array.from(currencySelect.options).map((o) => o.value);
-      expect(optionValues).toEqual(['USD', 'EUR', 'MXN']);
-    });
-
-    // The selected value must be one that's actually rendered as an option —
-    // never a dangling 'COP'.
-    await waitFor(() => expect(currencySelect.value).toBe('USD'));
-
-    // `getDashboard` must eventually (its most recent call) be invoked with
-    // the reconciled currency — not the stale initial 'COP' default (the
-    // mount-time first call may still have fired with 'COP', before
-    // `getExchangeRates` resolved; what matters is the component corrects
-    // course and doesn't keep re-fetching with a currency absent from its own
-    // options).
-    await waitFor(() => {
-      const lastCall = mockedGetDashboard.mock.calls.at(-1);
-      expect(lastCall?.[1].currency).toBe('USD');
-    });
+    expect(params.currency).toBe('USD');
   });
 
   it('shows a loading skeleton while the request is in flight', async () => {

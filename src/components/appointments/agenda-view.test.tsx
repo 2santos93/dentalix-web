@@ -395,4 +395,75 @@ describe('AgendaView', () => {
     expect(await screen.findByText(/no hay citas para este día/i)).toBeInTheDocument();
     expect(screen.queryByLabelText(/agenda de la semana/i)).not.toBeInTheDocument();
   });
+
+  it('week mode: clicking an empty slot opens the form prefilled with that date and time', async () => {
+    mockedListStaff.mockResolvedValue(staff);
+    mockedListAppointments.mockResolvedValue([]);
+    mockedListPatients.mockResolvedValue(patientsPage);
+    const user = userEvent.setup();
+
+    render(<AgendaView token="tok" />);
+    await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
+
+    const dateInput = screen.getByLabelText<HTMLInputElement>(/^fecha$/i);
+    await user.clear(dateInput);
+    await user.type(dateInput, '2026-03-11');
+    await user.click(screen.getByRole('button', { name: /^semana$/i }));
+    await screen.findByLabelText(/agenda de la semana/i);
+
+    // Click en el hueco de las 09:00 del lunes 2026-03-09.
+    await user.click(screen.getByTestId('week-grid-slot-2026-03-09-09:00'));
+
+    // El form se abre pre-rellenado (fecha del slot + hora inicio 09:00).
+    const formDate = await screen.findByLabelText<HTMLInputElement>(/^fecha$/i, {
+      selector: '#appointment-date',
+    });
+    expect(formDate.value).toBe('2026-03-09');
+    const startInput = document.querySelector<HTMLInputElement>('#appointment-start-time')!;
+    expect(startInput.value).toBe('09:00');
+  });
+
+  it('week mode: the detail panel\'s status select reflects the server-confirmed status, not an optimistic one — a failed PATCH leaves it showing the real (unchanged) status', async () => {
+    mockedListStaff.mockResolvedValue(staff);
+    mockedListAppointments.mockResolvedValue([apt1]);
+
+    // The PATCH itself is deferred (and later rejected) so the test can
+    // assert the select's value WHILE the PATCH is in flight and AFTER it
+    // fails — it must never jump to the picked value optimistically.
+    let rejectPatch!: (err: unknown) => void;
+    const patchPromise = new Promise<typeof apt1>((_resolve, reject) => {
+      rejectPatch = reject;
+    });
+    mockedUpdateAppointment.mockReturnValue(patchPromise);
+
+    const user = userEvent.setup();
+    render(<AgendaView token="tok" />);
+    await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
+
+    const dateInput = screen.getByLabelText<HTMLInputElement>(/^fecha$/i);
+    await user.clear(dateInput);
+    await user.type(dateInput, '2026-03-11');
+    await user.click(screen.getByRole('button', { name: /^semana$/i }));
+    await screen.findByLabelText(/agenda de la semana/i);
+
+    await user.click(screen.getByTestId('week-grid-appointment'));
+
+    const statusSelect = await screen.findByLabelText<HTMLSelectElement>(/^estado$/i);
+    expect(statusSelect.value).toBe('SCHEDULED');
+
+    await user.selectOptions(statusSelect, 'CONFIRMED');
+
+    // PATCH is in flight: the select stays bound to the (unchanged)
+    // server-confirmed status from `appointments`, and is disabled.
+    expect(statusSelect.value).toBe('SCHEDULED');
+    expect(statusSelect).toBeDisabled();
+
+    rejectPatch(new Error('boom'));
+    await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
+
+    // After the failure: re-enabled, and still showing the real status —
+    // no optimistic leak.
+    expect(statusSelect).not.toBeDisabled();
+    expect(statusSelect.value).toBe('SCHEDULED');
+  });
 });

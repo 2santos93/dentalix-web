@@ -12,9 +12,10 @@ import { listPatients } from '@/lib/patients/patients-api';
 import { localDayRange, localWeekRange } from '@/lib/appointments/day-range';
 import { monthGridRange, addMonths, monthLabel } from '@/lib/appointments/calendar-grid';
 import { DayAgenda } from '@/components/appointments/day-agenda';
-import { WeekAgenda } from '@/components/appointments/week-agenda';
+import { WeekTimeGrid } from '@/components/appointments/week-time-grid';
 import { MonthAgenda } from '@/components/appointments/month-agenda';
 import { AppointmentForm } from '@/components/appointments/appointment-form';
+import { STATUS_LABELS, formatTimeRange } from '@/components/appointments/appointment-display';
 import { Plus, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -47,13 +48,25 @@ const copy = {
   dayDetail: 'Detalle del día',
   refreshing: 'Actualizando…',
   retry: 'Reintentar',
+  loading: 'Cargando agenda…',
   genericStaffError: 'No pudimos cargar los profesionales. Intenta de nuevo.',
   genericAppointmentsError: 'No pudimos cargar la agenda. Intenta de nuevo.',
   genericRefreshError: 'No pudimos actualizar la agenda. Intenta de nuevo.',
   genericStatusChangeError: 'No pudimos actualizar el estado de la cita. Intenta de nuevo.',
   /** Selected-day appointment count, shown above the day panel in the month view. */
   dayCount: (n: number) => (n === 0 ? 'Sin citas' : n === 1 ? '1 cita' : `${n} citas`),
+  noProviders: 'No hay profesionales activos en esta clínica.',
+  selectProviderPrompt: 'Selecciona un profesional para ver su agenda.',
+  statusLabel: 'Estado',
 };
+
+const STATUS_OPTIONS: AppointmentStatus[] = [
+  'SCHEDULED',
+  'CONFIRMED',
+  'COMPLETED',
+  'CANCELLED',
+  'NO_SHOW',
+];
 
 // Native <select> styled to match the Input atom (kept native for a11y/tests).
 const fieldClass =
@@ -70,7 +83,7 @@ function todayLocalDateString(): string {
   return dateToLocalDateString(new Date());
 }
 
-/** `WeekAgenda`'s `weekStart` (the Monday of `date`'s week, as a local `YYYY-MM-DD`) — derived from `localWeekRange`'s `from` boundary so the two never drift apart. */
+/** `WeekTimeGrid`'s `weekStart` (the Monday of `date`'s week, as a local `YYYY-MM-DD`) — derived from `localWeekRange`'s `from` boundary so the two never drift apart. */
 function weekStartOf(date: string): string {
   return dateToLocalDateString(new Date(localWeekRange(date).from));
 }
@@ -96,6 +109,13 @@ function longDayLabel(date: string): string {
     day: 'numeric',
     month: 'long',
   });
+}
+
+/** Suma `mins` a una hora "HH:mm" y devuelve "HH:mm" (acota a 23:59). */
+function addMinutesToTime(hhmm: string, mins: number): string {
+  const [h, m] = hhmm.split(':').map(Number);
+  const total = Math.min(h * 60 + m + mins, 24 * 60 - 1);
+  return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
 }
 
 interface AgendaViewProps {
@@ -144,6 +164,16 @@ export function AgendaView({ token }: AgendaViewProps) {
   const [patientNames, setPatientNames] = useState<Record<string, string>>({});
 
   const [showForm, setShowForm] = useState(false);
+  // Prefill for `AppointmentForm` when opened from an empty slot in
+  // `WeekTimeGrid` (`handleSelectSlot`) — falls back to `selectedDate` alone
+  // (no start/end) when the form is opened via the "Nueva cita" toggle
+  // instead.
+  const [slotPrefill, setSlotPrefill] = useState<
+    { date: string; startTime: string; endTime: string } | null
+  >(null);
+  // The appointment whose inline detail panel (status change) is open — set
+  // by `WeekTimeGrid`'s `onSelectAppointment`.
+  const [detailAppointment, setDetailAppointment] = useState<Appointment | null>(null);
 
   // Provider filter defaults to '' = "Todos los profesionales" (the month
   // calendar shows the whole clinic; `listAppointments` omits `providerId`
@@ -250,13 +280,22 @@ export function AgendaView({ token }: AgendaViewProps) {
 
   function handleAppointmentCreated() {
     setShowForm(false);
+    setSlotPrefill(null);
     refreshAppointmentsInPlace();
   }
 
-  /** `WeekAgenda`'s `onSelectDay` — jumps the day selector to the clicked column and switches back to Día view, mirroring a calendar "drill in" interaction. */
+  /** `WeekTimeGrid`'s `onSelectDay` — jumps the day selector to the clicked column and switches back to Día view, mirroring a calendar "drill in" interaction. */
   function handleSelectDay(date: string) {
     setSelectedDate(date);
     setViewMode('day');
+    setDetailAppointment(null);
+  }
+
+  /** `WeekTimeGrid`'s `onSelectSlot` — opens the create form pre-filled with the clicked slot's date/start time (end defaults to +30min). */
+  function handleSelectSlot(date: string, startTime: string) {
+    setSlotPrefill({ date, startTime, endTime: addMinutesToTime(startTime, 30) });
+    setDetailAppointment(null);
+    setShowForm(true);
   }
 
   /** `MonthAgenda`'s `onSelectDay` — selects the day WITHOUT leaving the month view; the day's full list + "Nueva cita" render in the panel below the calendar. */
@@ -294,6 +333,17 @@ export function AgendaView({ token }: AgendaViewProps) {
       setUpdatingId(null);
     }
   }
+
+  // The detail panel's displayed appointment, kept in sync with the
+  // server-confirmed `appointments` array (same pattern as `DayAgenda`'s row
+  // `<select>`, whose `value` is also read off `appointments`, not local
+  // state) — so a failed status PATCH leaves the real, unchanged status
+  // showing instead of the optimistic one (review fix). Falls back to
+  // `detailAppointment` itself if it's since dropped out of `appointments`
+  // (e.g. a day/week range change while the panel is open).
+  const liveDetailAppointment = detailAppointment
+    ? appointments.find((a) => a.id === detailAppointment.id) ?? detailAppointment
+    : null;
 
   return (
     <div className="flex flex-col gap-6">
@@ -345,7 +395,10 @@ export function AgendaView({ token }: AgendaViewProps) {
                   size="sm"
                   variant={viewMode === 'day' ? 'default' : 'outline'}
                   aria-pressed={viewMode === 'day'}
-                  onClick={() => setViewMode('day')}
+                  onClick={() => {
+                    setViewMode('day');
+                    setDetailAppointment(null);
+                  }}
                 >
                   {copy.dayView}
                 </Button>
@@ -354,7 +407,10 @@ export function AgendaView({ token }: AgendaViewProps) {
                   size="sm"
                   variant={viewMode === 'week' ? 'default' : 'outline'}
                   aria-pressed={viewMode === 'week'}
-                  onClick={() => setViewMode('week')}
+                  onClick={() => {
+                    setViewMode('week');
+                    setDetailAppointment(null);
+                  }}
                 >
                   {copy.weekView}
                 </Button>
@@ -386,7 +442,13 @@ export function AgendaView({ token }: AgendaViewProps) {
         </div>
       )}
 
-      <Dialog open={showForm} onOpenChange={setShowForm}>
+      <Dialog
+        open={showForm}
+        onOpenChange={(open) => {
+          setShowForm(open);
+          if (!open) setSlotPrefill(null);
+        }}
+      >
         <DialogContent className="max-w-2xl">
           <DialogHeader>
             <DialogTitle>{copy.newAppointment}</DialogTitle>
@@ -395,7 +457,9 @@ export function AgendaView({ token }: AgendaViewProps) {
           <AppointmentForm
             token={token}
             onCreated={handleAppointmentCreated}
-            defaultDate={selectedDate}
+            defaultDate={slotPrefill?.date ?? selectedDate}
+            defaultStartTime={slotPrefill?.startTime}
+            defaultEndTime={slotPrefill?.endTime}
           />
         </DialogContent>
       </Dialog>
@@ -501,14 +565,28 @@ export function AgendaView({ token }: AgendaViewProps) {
           </section>
         </div>
       ) : viewMode === 'week' ? (
-        <WeekAgenda
-          appointments={appointments}
-          weekStart={weekStartOf(selectedDate)}
-          loading={appointmentsLoading}
-          error={appointmentsLoadError}
-          patientNames={patientNames}
-          onSelectDay={handleSelectDay}
-        />
+        // `WeekTimeGrid` is purely presentational (no loading/error props,
+        // unlike `DayAgenda`) — mirror `DayAgenda`'s own loading/error
+        // branches here so Semana still surfaces the loading/error feedback
+        // the grid itself doesn't render.
+        appointmentsLoading ? (
+          <p role="status" className="text-sm text-muted">
+            {copy.loading}
+          </p>
+        ) : appointmentsLoadError ? (
+          <p role="alert" className="text-sm text-danger">
+            {appointmentsLoadError}
+          </p>
+        ) : (
+          <WeekTimeGrid
+            appointments={appointments}
+            weekStart={weekStartOf(selectedDate)}
+            patientNames={patientNames}
+            onSelectDay={handleSelectDay}
+            onSelectSlot={handleSelectSlot}
+            onSelectAppointment={(a) => setDetailAppointment(a)}
+          />
+        )
       ) : (
         <DayAgenda
           appointments={appointments}
@@ -518,6 +596,54 @@ export function AgendaView({ token }: AgendaViewProps) {
           onStatusChange={handleStatusChange}
           updatingId={updatingId}
         />
+      )}
+
+      {liveDetailAppointment && (
+        <Card>
+          <CardContent className="flex flex-col gap-3 p-4">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="font-medium text-ink">
+                  {patientNames[liveDetailAppointment.patientId] ?? liveDetailAppointment.patientId}
+                </p>
+                <p className="text-sm text-muted">
+                  {formatTimeRange(liveDetailAppointment.start, liveDetailAppointment.end)}
+                </p>
+                {liveDetailAppointment.reason && (
+                  <p className="text-sm text-ink">{liveDetailAppointment.reason}</p>
+                )}
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setDetailAppointment(null)}
+              >
+                {copy.cancel}
+              </Button>
+            </div>
+            <FormField htmlFor="detail-status" label={copy.statusLabel}>
+              <select
+                id="detail-status"
+                className={fieldClass}
+                value={liveDetailAppointment.status}
+                disabled={updatingId === liveDetailAppointment.id}
+                onChange={(e) => {
+                  void handleStatusChange(
+                    liveDetailAppointment.id,
+                    e.target.value as AppointmentStatus,
+                  );
+                }}
+              >
+                {STATUS_OPTIONS.map((s) => (
+                  <option key={s} value={s}>
+                    {STATUS_LABELS[s]}
+                  </option>
+                ))}
+              </select>
+            </FormField>
+          </CardContent>
+        </Card>
       )}
     </div>
   );
