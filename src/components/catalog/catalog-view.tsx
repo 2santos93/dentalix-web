@@ -1,0 +1,345 @@
+'use client';
+import * as React from 'react';
+import { useEffect, useState } from 'react';
+import { ApiError } from '@/lib/api/client';
+import {
+  listCatalogItems,
+  createCatalogItem,
+  type DentalCatalogItem,
+  type CreateCatalogItemInput,
+} from '@/lib/odontogram/catalog-api';
+import { Plus } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Card } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { FormField } from '@/components/molecules/form-field';
+import { FormModal } from '@/components/molecules/form-modal';
+import { AsyncSection, TableSkeleton } from '@/components/molecules/async-section';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+
+type CatalogKind = 'PROCEDURE' | 'DIAGNOSIS';
+
+// Copy as constants (i18n-ready) — es first, matches the rest of the app's
+// copy convention (staff-view.tsx / treatment-plans-tab.tsx) until next-intl
+// wiring lands.
+const copy = {
+  addToggle: 'Agregar ítem',
+  formDescription:
+    'Crea un procedimiento o diagnóstico reutilizable. Los procedimientos aparecen al agregar ítems a un plan de tratamiento; los diagnósticos, en el odontograma.',
+  nameLabel: 'Nombre',
+  kindLabel: 'Tipo',
+  codeLabel: 'Código',
+  codeHint: 'Código corto único dentro de la clínica (ej. PROF, RESINA, DX-CARIES).',
+  priceLabel: 'Precio por defecto',
+  priceHint: 'Opcional. Se usa para prellenar el precio al agregarlo a un plan.',
+  colorLabel: 'Color',
+  colorHint: 'Se usa para distinguirlo en el odontograma.',
+  categoryLabel: 'Categoría',
+  categoryHint: 'Opcional (ej. Preventiva, Restauradora, Endodoncia).',
+  submit: 'Crear',
+  submitting: 'Creando…',
+  retry: 'Reintentar',
+  loading: 'Cargando catálogo…',
+  tableLabel: 'Catálogo dental',
+  genericLoadError: 'No pudimos cargar el catálogo. Intenta de nuevo.',
+  genericCreateError: 'No pudimos crear el ítem del catálogo. Intenta de nuevo.',
+  empty: 'El catálogo todavía está vacío.',
+  emptyHint: 'Agrega tu primer procedimiento para poder usarlo en los planes de tratamiento.',
+  colName: 'Nombre',
+  colKind: 'Tipo',
+  colCode: 'Código',
+  colPrice: 'Precio',
+  colStatus: 'Estado',
+  inactive: 'Inactivo',
+  active: 'Activo',
+  priceFallback: '—',
+  categoryFallback: '',
+};
+
+const KIND_OPTIONS: { value: CatalogKind; label: string }[] = [
+  { value: 'PROCEDURE', label: 'Procedimiento' },
+  { value: 'DIAGNOSIS', label: 'Diagnóstico' },
+];
+
+const KIND_LABELS: Record<CatalogKind, string> = {
+  PROCEDURE: 'Procedimiento',
+  DIAGNOSIS: 'Diagnóstico',
+};
+
+// Brand teal (DESIGN.md "The Clinical Record") as the default swatch, so the
+// required `color` field never blocks a quick "just add a procedure" flow.
+const DEFAULT_COLOR = '#0E7490';
+
+// Native <select> styled to match the Input atom (kept native for a11y/tests) —
+// same class/rationale as staff-view.tsx's `fieldClass`.
+const fieldClass =
+  'flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-50';
+
+// v1 currency formatting: fixed `es`/`USD`, same convention (and same
+// explicit follow-up for per-clinic currency) as treatment-plans-tab.tsx.
+const currencyFormatter = new Intl.NumberFormat('es', { style: 'currency', currency: 'USD' });
+function formatPrice(price: number | null): string {
+  return price == null ? copy.priceFallback : currencyFormatter.format(price);
+}
+
+interface CatalogViewProps {
+  token: string;
+}
+
+/**
+ * Catalog management screen — list of dental catalog items + a "Agregar ítem"
+ * create modal. Mirrors `StaffView`'s shape exactly (list via `AsyncSection` +
+ * `FormModal` create + `refreshInPlace` after mutation), since both are the
+ * same "clinic-config list you can add to" pattern.
+ *
+ * This screen exists to unblock treatment plans: `TreatmentPlansTab`'s "Agregar
+ * ítem" form only renders when the PROCEDURE catalog is non-empty, and there was
+ * previously no UI anywhere to populate it (the backend `POST /catalog/items`
+ * already existed).
+ */
+export function CatalogView({ token }: CatalogViewProps) {
+  const [items, setItems] = useState<DentalCatalogItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
+
+  const [showForm, setShowForm] = useState(false);
+  const [name, setName] = useState('');
+  const [kind, setKind] = useState<CatalogKind>('PROCEDURE');
+  const [code, setCode] = useState('');
+  const [price, setPrice] = useState('');
+  const [color, setColor] = useState(DEFAULT_COLOR);
+  const [category, setCategory] = useState('');
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!token) return;
+    let cancelled = false;
+    async function load() {
+      setLoading(true);
+      try {
+        const data = await listCatalogItems(token);
+        if (cancelled) return;
+        setItems(data);
+        setLoadError(null);
+      } catch (err) {
+        if (cancelled) return;
+        setLoadError(err instanceof ApiError ? err.message : copy.genericLoadError);
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    }
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [token, reloadKey]);
+
+  function refreshInPlace(): Promise<void> {
+    if (!token) return Promise.resolve();
+    return listCatalogItems(token)
+      .then((data) => {
+        setItems(data);
+        setLoadError(null);
+      })
+      .catch((err) => {
+        setLoadError(err instanceof ApiError ? err.message : copy.genericLoadError);
+      });
+  }
+
+  function resetForm() {
+    setName('');
+    setKind('PROCEDURE');
+    setCode('');
+    setPrice('');
+    setColor(DEFAULT_COLOR);
+    setCategory('');
+  }
+
+  async function handleCreateSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setCreateError(null);
+    setCreating(true);
+    try {
+      const trimmedPrice = price.trim();
+      const trimmedCategory = category.trim();
+      const input: CreateCatalogItemInput = {
+        code: code.trim(),
+        kind,
+        labelEs: name.trim(),
+        color,
+        ...(trimmedPrice ? { defaultPrice: Number(trimmedPrice) } : {}),
+        ...(trimmedCategory ? { category: trimmedCategory } : {}),
+      };
+      await createCatalogItem(token, input);
+      resetForm();
+      setShowForm(false);
+      await refreshInPlace();
+    } catch (err) {
+      // Surfaces the backend's 400/409 (duplicate code, invalid color) verbatim.
+      setCreateError(err instanceof ApiError ? err.message : copy.genericCreateError);
+    } finally {
+      setCreating(false);
+    }
+  }
+
+  function handleCreateOpenChange(next: boolean) {
+    setShowForm(next);
+    if (!next) {
+      setCreateError(null);
+      resetForm();
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-6">
+      <div className="flex justify-end">
+        <Button type="button" onClick={() => setShowForm(true)}>
+          <Plus /> {copy.addToggle}
+        </Button>
+      </div>
+
+      <FormModal
+        open={showForm}
+        onOpenChange={handleCreateOpenChange}
+        title={copy.addToggle}
+        description={copy.formDescription}
+        onSubmit={handleCreateSubmit}
+        submitLabel={copy.submit}
+        submitting={creating}
+        error={createError}
+        size="lg"
+      >
+        <div className="grid gap-4 sm:grid-cols-2">
+          <FormField htmlFor="catalog-name" label={copy.nameLabel}>
+            <Input
+              id="catalog-name"
+              type="text"
+              required
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+          </FormField>
+          <FormField htmlFor="catalog-kind" label={copy.kindLabel}>
+            <select
+              id="catalog-kind"
+              required
+              value={kind}
+              onChange={(e) => setKind(e.target.value as CatalogKind)}
+              className={fieldClass}
+            >
+              {KIND_OPTIONS.map((opt) => (
+                <option key={opt.value} value={opt.value}>
+                  {opt.label}
+                </option>
+              ))}
+            </select>
+          </FormField>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <FormField htmlFor="catalog-code" label={copy.codeLabel} hint={copy.codeHint}>
+            <Input
+              id="catalog-code"
+              type="text"
+              required
+              value={code}
+              onChange={(e) => setCode(e.target.value)}
+            />
+          </FormField>
+          <FormField htmlFor="catalog-price" label={copy.priceLabel} hint={copy.priceHint}>
+            <Input
+              id="catalog-price"
+              type="number"
+              min={0}
+              step="0.01"
+              value={price}
+              onChange={(e) => setPrice(e.target.value)}
+            />
+          </FormField>
+        </div>
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <FormField htmlFor="catalog-category" label={copy.categoryLabel} hint={copy.categoryHint}>
+            <Input
+              id="catalog-category"
+              type="text"
+              value={category}
+              onChange={(e) => setCategory(e.target.value)}
+            />
+          </FormField>
+          <FormField htmlFor="catalog-color" label={copy.colorLabel} hint={copy.colorHint}>
+            <Input
+              id="catalog-color"
+              type="color"
+              required
+              value={color}
+              onChange={(e) => setColor(e.target.value)}
+              className="h-10 w-16 cursor-pointer p-1"
+            />
+          </FormField>
+        </div>
+      </FormModal>
+
+      <AsyncSection
+        loading={loading}
+        error={loadError}
+        onRetry={() => setReloadKey((k) => k + 1)}
+        retryLabel={copy.retry}
+        isEmpty={items.length === 0}
+        emptyTitle={copy.empty}
+        emptyDescription={copy.emptyHint}
+        skeleton={<TableSkeleton rows={4} />}
+      >
+        <Card className="overflow-hidden p-0">
+          <Table aria-label={copy.tableLabel}>
+            <TableHeader>
+              <TableRow className="hover:bg-transparent">
+                <TableHead>{copy.colName}</TableHead>
+                <TableHead>{copy.colKind}</TableHead>
+                <TableHead>{copy.colCode}</TableHead>
+                <TableHead>{copy.colPrice}</TableHead>
+                <TableHead>{copy.colStatus}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {items.map((item) => (
+                <TableRow key={item.id}>
+                  <TableCell>
+                    <span className="flex items-center gap-2 font-medium text-ink">
+                      <span
+                        aria-hidden
+                        className="size-3 shrink-0 rounded-full border border-border"
+                        style={{ backgroundColor: item.color }}
+                      />
+                      {item.labelEs}
+                    </span>
+                  </TableCell>
+                  <TableCell>
+                    <Badge variant="muted">{KIND_LABELS[item.kind]}</Badge>
+                  </TableCell>
+                  <TableCell className="text-muted tabular-nums">{item.code}</TableCell>
+                  <TableCell className="tabular-nums">{formatPrice(item.defaultPrice)}</TableCell>
+                  <TableCell>
+                    <Badge variant={item.active ? 'success' : 'muted'}>
+                      {item.active ? copy.active : copy.inactive}
+                    </Badge>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </Card>
+      </AsyncSection>
+    </div>
+  );
+}

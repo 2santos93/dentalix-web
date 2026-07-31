@@ -2,7 +2,7 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Users, Calendar, LayoutDashboard, UserCog } from 'lucide-react';
+import { Users, Calendar, LayoutDashboard, UserCog, ClipboardList } from 'lucide-react';
 import { UserMenu } from '@/components/profile/user-menu';
 import { cn } from '@/lib/utils';
 
@@ -10,6 +10,7 @@ const NAV = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/patients', label: 'Pacientes', icon: Users },
   { href: '/agenda', label: 'Agenda', icon: Calendar },
+  { href: '/catalog', label: 'Catálogo', icon: ClipboardList },
   { href: '/staff', label: 'Personal', icon: UserCog },
 ];
 

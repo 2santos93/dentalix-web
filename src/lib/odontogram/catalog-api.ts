@@ -46,3 +46,34 @@ export async function listCatalogItems(
   const qs = params.toString();
   return apiFetch<DentalCatalogItem[]>(`/catalog/items${qs ? `?${qs}` : ''}`, { token });
 }
+
+/**
+ * `POST /catalog/items` — mirrors the backend `CreateCatalogItemDto`
+ * (`dentalix-api/src/modules/dental-catalog/presentation/dto/create-catalog-item.dto.ts`):
+ * `code`/`kind`/`labelEs`/`color` are required, the rest optional. `tenantId`
+ * is NOT sent — the backend derives it from the JWT (same convention as
+ * `listCatalogItems` above / `createPatient`). Guarded by `CATALOG_WRITE_ROLES`
+ * (OWNER/ADMIN) on the backend.
+ */
+export interface CreateCatalogItemInput {
+  code: string;
+  kind: 'DIAGNOSIS' | 'PROCEDURE';
+  labelEs: string;
+  color: string;
+  category?: string;
+  labelEn?: string;
+  labelPt?: string;
+  defaultPrice?: number;
+  active?: boolean;
+}
+
+export async function createCatalogItem(
+  token: string,
+  input: CreateCatalogItemInput,
+): Promise<DentalCatalogItem> {
+  return apiFetch<DentalCatalogItem>('/catalog/items', {
+    method: 'POST',
+    body: input,
+    token,
+  });
+}

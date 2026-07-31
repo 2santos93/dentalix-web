@@ -30,6 +30,7 @@ import { listCatalogItems, type DentalCatalogItem } from '@/lib/odontogram/catal
 import type { ToothSurface } from '@/lib/odontogram/odontogram-api';
 import { getPatient } from '@/lib/patients/patients-api';
 import { fetchClinicName } from '@/lib/clinic-branding';
+import Link from 'next/link';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge, type BadgeProps } from '@/components/ui/badge';
@@ -42,7 +43,7 @@ import { FormModal } from '@/components/molecules/form-modal';
 import { EmptyState } from '@/components/molecules/empty-state';
 import { PaymentReceipt } from './payment-receipt';
 import { cn } from '@/lib/utils';
-import { formatCivilDate, formatDate } from '@/lib/format/date';
+import { formatCivilDate, formatDateTime } from '@/lib/format/date';
 
 // Copy as constants (i18n-ready, es-first) — matches odontogram-tab.tsx /
 // agenda-view.tsx convention until next-intl wiring lands.
@@ -55,12 +56,17 @@ const copy = {
   plansHeading: 'Planes de tratamiento',
   newPlan: 'Nuevo plan',
   creatingPlan: 'Creando…',
+  planCreated: 'Plan creado y seleccionado abajo.',
   genericCreatePlanError: 'No pudimos crear el plan. Intenta de nuevo.',
   emptyPlansTitle: 'Este paciente todavía no tiene un plan de tratamiento.',
   emptyPlansDescription: 'Crea el primer plan para empezar a registrar procedimientos.',
   selectPlanLabel: 'Plan',
-  planOptionLabel: (createdAt: string, status: TreatmentPlanStatus) =>
-    `Plan del ${formatDate(createdAt)} — ${PLAN_STATUS_LABELS[status]}`,
+  // Numbered + timestamped down to the minute so multiple plans created the
+  // same day are distinguishable in the selector (fixes the "Nuevo plan looks
+  // like it did nothing" perception — every option used to read identically as
+  // "Plan del <date> — Borrador").
+  planOptionLabel: (createdAt: string, status: TreatmentPlanStatus, number: number) =>
+    `Plan ${number} · ${formatDateTime(createdAt)} — ${PLAN_STATUS_LABELS[status]}`,
   detailHeading: 'Detalle del plan',
   planStatusLabel: 'Estado del plan',
   loadingPlanDetail: 'Cargando plan…',
@@ -99,6 +105,7 @@ const copy = {
   genericAddItemError: 'No pudimos agregar el ítem. Intenta de nuevo.',
   emptyCatalogTitle: 'No hay procedimientos en el catálogo.',
   emptyCatalogDescription: 'Crea procedimientos en el catálogo dental para poder agregarlos a un plan.',
+  manageCatalogCta: 'Ir al catálogo',
 
   // Abonos + saldo (PAY-T4).
   paymentsHeading: 'Abonos y saldo',
@@ -563,6 +570,10 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
 
   const [creatingPlan, setCreatingPlan] = useState(false);
   const [createPlanError, setCreatePlanError] = useState<string | null>(null);
+  // Transient "Plan creado" confirmation — the POST always succeeded, but with
+  // same-day identical labels the create looked like a no-op; this makes the
+  // success visible. Stays until the next create (cleared at its start).
+  const [planCreated, setPlanCreated] = useState(false);
 
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
 
@@ -762,10 +773,12 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
   async function handleCreatePlan() {
     setCreatingPlan(true);
     setCreatePlanError(null);
+    setPlanCreated(false);
     try {
       const created = await createPlan(token, patientId, {});
       await refreshPlansInPlace();
       setSelectedPlanId(created.id);
+      setPlanCreated(true);
     } catch (err) {
       setCreatePlanError(err instanceof ApiError ? err.message : copy.genericCreatePlanError);
     } finally {
@@ -1146,6 +1159,11 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
               {createPlanError}
             </p>
           )}
+          {planCreated && !createPlanError && (
+            <p role="status" className="text-sm font-medium text-primary">
+              {copy.planCreated}
+            </p>
+          )}
           {plans.length === 0 ? (
             <EmptyState role="status" title={copy.emptyPlansTitle} description={copy.emptyPlansDescription} />
           ) : (
@@ -1156,9 +1174,9 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
                 onChange={(e) => setSelectedPlanId(e.target.value)}
                 className={fieldClass}
               >
-                {plans.map((plan) => (
+                {plans.map((plan, index) => (
                   <option key={plan.id} value={plan.id}>
-                    {copy.planOptionLabel(plan.createdAt, plan.status)}
+                    {copy.planOptionLabel(plan.createdAt, plan.status, index + 1)}
                   </option>
                 ))}
               </select>
@@ -1423,6 +1441,14 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
                     role="status"
                     title={copy.emptyCatalogTitle}
                     description={copy.emptyCatalogDescription}
+                    action={
+                      <Link
+                        href="/catalog"
+                        className="inline-flex h-10 items-center justify-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground shadow-sm transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+                      >
+                        {copy.manageCatalogCta}
+                      </Link>
+                    }
                   />
                 ) : (
                   <form onSubmit={handleAddItem} aria-label={copy.addItemHeading} className="flex flex-col gap-4">
@@ -1524,7 +1550,15 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
       <PaymentReceipt
         payment={receiptPayment}
         planBalance={planBalance}
-        planLabel={selectedPlan ? copy.planOptionLabel(selectedPlan.createdAt, selectedPlan.status) : ''}
+        planLabel={
+          selectedPlan
+            ? copy.planOptionLabel(
+                selectedPlan.createdAt,
+                selectedPlan.status,
+                plans.findIndex((p) => p.id === selectedPlan.id) + 1,
+              )
+            : ''
+        }
         patientName={patientName}
         clinicName={clinicName}
         onOpenChange={(open) => {
