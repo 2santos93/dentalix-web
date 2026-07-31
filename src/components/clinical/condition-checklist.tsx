@@ -25,7 +25,13 @@ export function ConditionChecklist({ value, onChange }: { value: Condition[]; on
       ...patch,
     };
     const rest = value.filter((c) => c.codigo !== codigo);
-    onChange(next.estado === 'NO' ? rest : [...rest, next]);
+    // Keep the row even at the default estado 'NO' as long as it carries a
+    // note — otherwise every keystroke in the note field for a not-yet-marked
+    // condition gets dropped (the row was filtered out, so the controlled
+    // Input's value resets to '' on the next render before the user can type
+    // a second character).
+    const hasNota = !!next.nota?.trim();
+    onChange(next.estado === 'NO' && !hasNota ? rest : [...rest, next]);
   };
 
   return (
@@ -40,13 +46,14 @@ export function ConditionChecklist({ value, onChange }: { value: Condition[]; on
               <div className="flex-1">
                 <FormField htmlFor={`cs-${codigo}`} label={etiqueta}>
                   <select id={`cs-${codigo}`} className={cn(fieldClass, 'h-10')} value={estado}
+                    aria-label={`${copy.status} (${etiqueta})`}
                     onChange={(e) => update(codigo, etiqueta, { estado: e.target.value as ConditionStatus })}>
                     {Object.entries(CONDITION_STATUS_LABELS).map(([v, l]) => <option key={v} value={v}>{l}</option>)}
                   </select>
                 </FormField>
               </div>
               <div className="flex-1">
-                <FormField htmlFor={`cn-${codigo}`} label={copy.note}>
+                <FormField htmlFor={`cn-${codigo}`} label={`${copy.note} (${etiqueta})`}>
                   <Input id={`cn-${codigo}`} value={row?.nota ?? ''} onChange={(e) => update(codigo, etiqueta, { nota: e.target.value })} />
                 </FormField>
               </div>
