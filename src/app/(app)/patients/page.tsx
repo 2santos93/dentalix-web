@@ -8,6 +8,7 @@ import { ApiError } from '@/lib/api/client';
 import { listPatients, type Patient } from '@/lib/patients/patients-api';
 import { PatientsTable } from '@/components/organisms/patients-table';
 import { PageHeader } from '@/components/molecules/page-header';
+import { Pagination } from '@/components/molecules/pagination';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 
@@ -30,6 +31,12 @@ export default function PatientsPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
+  // Server-side pagination: `page` drives the fetch; `total`/`pageSize` come
+  // BACK from the response (the API clamps pageSize, so never assume the
+  // requested value — see ListPatientsUseCase.normalizePageSize).
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [pageSize, setPageSize] = useState(0);
 
   useEffect(() => {
     // Don't decide anything until the persisted store has rehydrated —
@@ -42,26 +49,38 @@ export default function PatientsPage() {
       return;
     }
 
+    // Captured after the guard above so the nested async closure below sees a
+    // plain `string` (TS widens `accessToken` back to `string | null` inside it).
+    const token = accessToken;
     let cancelled = false;
 
-    listPatients(accessToken, {})
-      .then((res) => {
+    // Fetch inside an async fn (not directly in the effect body) so the
+    // `setLoading(true)` that re-shows the skeleton on a page change doesn't
+    // trip `react-hooks/set-state-in-effect` — same shape as `AgendaView` /
+    // `CatalogView`'s loaders.
+    async function load() {
+      setLoading(true);
+      try {
+        const res = await listPatients(token, { page });
         if (cancelled) return;
         setPatients(res.items);
+        setTotal(res.total);
+        setPageSize(res.pageSize);
         setError(null);
-      })
-      .catch((err) => {
+      } catch (err) {
         if (cancelled) return;
         setError(err instanceof ApiError ? err.message : copy.genericError);
-      })
-      .finally(() => {
+      } finally {
         if (!cancelled) setLoading(false);
-      });
+      }
+    }
+
+    void load();
 
     return () => {
       cancelled = true;
     };
-  }, [accessToken, router, hasHydrated, retryCount]);
+  }, [accessToken, router, hasHydrated, retryCount, page]);
 
   if (!hasHydrated) {
     return (
@@ -108,7 +127,16 @@ export default function PatientsPage() {
           </CardContent>
         </Card>
       ) : (
-        <PatientsTable patients={patients} loading={loading} />
+        <>
+          <PatientsTable patients={patients} loading={loading} />
+          <Pagination
+            page={page}
+            pageSize={pageSize}
+            total={total}
+            onPageChange={setPage}
+            disabled={loading}
+          />
+        </>
       )}
     </>
   );
