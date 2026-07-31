@@ -37,6 +37,24 @@ describe('apiFetch', () => {
     expect(init.headers['X-Tenant']).toBeUndefined();
   });
 
+  it('merges per-call opts.headers (e.g. Idempotency-Key) on top of the built-ins', async () => {
+    const spy = jest.fn().mockResolvedValue({ ok: true, json: async () => ({ ok: 1 }) });
+    global.fetch = spy as unknown as typeof fetch;
+
+    await apiFetch('/treatment-plans/plan-1/payments', {
+      method: 'POST',
+      token: 'T',
+      body: { amount: 100 },
+      headers: { 'Idempotency-Key': 'dddddddd-dddd-dddd-dddd-dddddddddddd' },
+    });
+
+    const [, init] = spy.mock.calls[0];
+    expect(init.headers['Idempotency-Key']).toBe('dddddddd-dddd-dddd-dddd-dddddddddddd');
+    // Built-in headers still present.
+    expect(init.headers.Authorization).toBe('Bearer T');
+    expect(init.headers['Content-Type']).toBe('application/json');
+  });
+
   it('throws ApiError on non-ok', async () => {
     global.fetch = jest.fn().mockResolvedValue({
       ok: false,

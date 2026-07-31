@@ -18,6 +18,9 @@ interface ApiOptions {
   method?: string;
   body?: unknown;
   token?: string;
+  // Per-call extra headers (e.g. Idempotency-Key on POST payments). Merged on
+  // top of the built-in Content-Type/Authorization/X-Tenant-Host headers.
+  headers?: Record<string, string>;
 }
 
 // A single in-flight refresh shared by every request that hits a 401 at the
@@ -88,6 +91,7 @@ async function doFetch(
   // backend then falls back to `x-forwarded-host`/`Host` from the proxied
   // request, which is fine — there is no browser host to read here.
   if (typeof window !== 'undefined') headers['X-Tenant-Host'] = window.location.host;
+  if (opts.headers) Object.assign(headers, opts.headers);
   const res = await fetch(`${API}${path}`, {
     method: opts.method ?? 'GET',
     headers,
