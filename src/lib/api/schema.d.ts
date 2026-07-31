@@ -68,6 +68,102 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/auth/refresh": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["AuthController_refreshHandler"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/logout": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["AuthController_logoutHandler"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["MeController_me"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["MeController_updateName"];
+        trace?: never;
+    };
+    "/api/v1/me/password": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["MeController_changePassword"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/me/avatar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["MeController_uploadAvatar"];
+        delete: operations["MeController_removeAvatar"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/files/avatars/{name}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["FilesController_getAvatar"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/patients": {
         parameters: {
             query?: never;
@@ -420,6 +516,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/currencies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ReferenceController_currencies"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/countries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ReferenceController_countries"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cities": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ReferenceController_cities"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/treatment-plans/{id}/payments": {
         parameters: {
             query?: never;
@@ -463,6 +607,22 @@ export interface paths {
         put?: never;
         post?: never;
         delete: operations["PaymentsController_remove"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/treatment-plans/{id}/payment-plan": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["PaymentPlansController_get"];
+        put?: never;
+        post: operations["PaymentPlansController_create"];
+        delete: operations["PaymentPlansController_remove"];
         options?: never;
         head?: never;
         patch?: never;
@@ -548,6 +708,33 @@ export interface components {
             accessToken: string;
             refreshToken: string;
         };
+        RefreshDto: Record<string, never>;
+        LogoutDto: Record<string, never>;
+        MyProfileMembershipDto: {
+            tenantId: string;
+            clinicName: string;
+            /** @enum {string} */
+            role: "OWNER" | "DENTIST" | "ASSISTANT" | "RECEPTION" | "ADMIN";
+        };
+        MyProfileDto: {
+            id: string;
+            email: string;
+            fullName: string;
+            avatarUrl: string | null;
+            emailVerifiedAt: string | null;
+            memberships: components["schemas"]["MyProfileMembershipDto"][];
+        };
+        UpdateNameDto: {
+            /** @example Ana Gómez */
+            fullName: string;
+        };
+        ChangePasswordDto: {
+            currentPassword: string;
+            newPassword: string;
+        };
+        AvatarResponseDto: {
+            avatarUrl: string;
+        };
         CreatePatientDto: {
             firstName: string;
             lastName: string;
@@ -561,6 +748,16 @@ export interface components {
             phone?: string;
             email?: string;
             address?: string;
+            /**
+             * @description ISO 3166-1 alpha-2
+             * @example CO
+             */
+            countryCode?: string;
+            /**
+             * @description City id from GET /cities
+             * @example 12345
+             */
+            cityId?: number;
             notes?: string;
         };
         PatientDto: {
@@ -580,6 +777,8 @@ export interface components {
             phone: string | null;
             email: string | null;
             address: string | null;
+            countryCode: string | null;
+            cityId: number | null;
             notes: string | null;
             /** Format: uuid */
             createdById: string | null;
@@ -607,6 +806,16 @@ export interface components {
             phone?: string;
             email?: string;
             address?: string;
+            /**
+             * @description ISO 3166-1 alpha-2
+             * @example CO
+             */
+            countryCode?: string;
+            /**
+             * @description City id from GET /cities
+             * @example 12345
+             */
+            cityId?: number;
             notes?: string;
         };
         CreateCatalogItemDto: {
@@ -811,6 +1020,11 @@ export interface components {
             notes?: string;
         };
         CreateTreatmentPlanDto: {
+            /**
+             * @description ISO 4217 (default USD)
+             * @example USD
+             */
+            currency?: string;
             notes?: string;
         };
         TreatmentPlanItemDto: {
@@ -842,6 +1056,11 @@ export interface components {
             patientId: string;
             /** @enum {string} */
             status: "DRAFT" | "ACCEPTED" | "COMPLETED" | "CANCELLED";
+            /**
+             * @description ISO 4217 (default USD)
+             * @example USD
+             */
+            currency: string;
             notes: string | null;
             /** Format: uuid */
             createdById: string | null;
@@ -856,6 +1075,11 @@ export interface components {
         UpdateTreatmentPlanDto: {
             /** @enum {string} */
             status?: "DRAFT" | "ACCEPTED" | "COMPLETED" | "CANCELLED";
+            /**
+             * @description ISO 4217
+             * @example USD
+             */
+            currency?: string;
             notes?: string;
         };
         AddTreatmentPlanItemDto: {
@@ -936,6 +1160,28 @@ export interface components {
              */
             rateUsed: number;
         };
+        CurrencyDto: {
+            /** @example USD */
+            code: string;
+            /** @example Dólar estadounidense */
+            name: string;
+            /** @example $ */
+            symbol: string;
+        };
+        CountryDto: {
+            /** @example CO */
+            code: string;
+            /** @example Colombia */
+            name: string;
+        };
+        CityDto: {
+            /** @example 12345 */
+            id: number;
+            /** @example Bogotá */
+            name: string;
+            /** @example Bogota D.C. */
+            region: string | null;
+        };
         RecordPaymentDto: {
             /**
              * @description Must be a finite number > 0
@@ -1007,6 +1253,146 @@ export interface components {
             balance: number;
             /** @example 1 */
             paymentsCount: number;
+        };
+        CreatePaymentPlanDto: {
+            /**
+             * @description Número de cuotas, entero >= 1 y <= 600
+             * @example 12
+             */
+            installmentsCount: number;
+            /** @enum {string} */
+            periodicity: "WEEKLY" | "BIWEEKLY" | "MONTHLY";
+            /**
+             * Format: date-time
+             * @description Fecha de la 1ª cuota
+             */
+            startDate: string;
+            /**
+             * @description Pie/abono inicial esperado (>= 0)
+             * @example 200
+             */
+            downPayment?: number;
+            /**
+             * @description Monto total a financiar. Default = saldo actual del plan.
+             * @example 1200
+             */
+            totalToFinance?: number;
+            notes?: string;
+        };
+        TramoViewDto: {
+            /**
+             * @description Monto del tramo (down payment o cuota)
+             * @example 100
+             */
+            amount: number;
+            /** Format: date-time */
+            dueDate: string;
+            /**
+             * @description Monto ya cubierto por pagos aplicados
+             * @example 100
+             */
+            covered: number;
+            /** @enum {string} */
+            status: "PAID" | "PARTIAL" | "PENDING" | "OVERDUE";
+        };
+        DerivedInstallmentDto: {
+            /**
+             * @description Número de cuota (1-indexed)
+             * @example 1
+             */
+            sequence: number;
+            /** Format: date-time */
+            dueDate: string;
+            /** @example 100 */
+            amount: number;
+            /**
+             * @description Monto ya cubierto por pagos aplicados
+             * @example 100
+             */
+            covered: number;
+            /** @enum {string} */
+            status: "PAID" | "PARTIAL" | "PENDING" | "OVERDUE";
+        };
+        NextDueDto: {
+            /**
+             * @description Número de cuota; null si el próximo vencimiento es el down payment
+             * @example 2
+             */
+            sequence: Record<string, never> | null;
+            /** Format: date-time */
+            dueDate: string;
+            /** @example 100 */
+            amount: number;
+        };
+        PaymentPlanDto: {
+            /** @example clx1234567890 */
+            id: string;
+            /** @example clx0987654321 */
+            treatmentPlanId: string;
+            /**
+             * @description ISO 4217 currency code
+             * @example USD
+             */
+            currency: string;
+            /** @enum {string} */
+            status: "ACTIVE" | "COMPLETED" | "CANCELLED";
+            /**
+             * @description Monto total a financiar
+             * @example 1200
+             */
+            totalToFinance: number;
+            /**
+             * @description Pie/abono inicial
+             * @example 200
+             */
+            downPayment: number;
+            /**
+             * @description totalToFinance - downPayment
+             * @example 1000
+             */
+            financedAmount: number;
+            /**
+             * @description Número de cuotas
+             * @example 12
+             */
+            installmentsCount: number;
+            /** @enum {string} */
+            periodicity: "WEEKLY" | "BIWEEKLY" | "MONTHLY";
+            /**
+             * Format: date-time
+             * @description Fecha de la 1ª cuota
+             */
+            startDate: string;
+            /**
+             * @description Total pagado, convertido a currency del plan
+             * @example 300
+             */
+            paidTotal: number;
+            /**
+             * @description totalToFinance - paidTotal, min 0
+             * @example 900
+             */
+            remaining: number;
+            /** @description Estado derivado del down payment; null si no hay down payment */
+            downPaymentStatus: components["schemas"]["TramoViewDto"] | null;
+            installments: components["schemas"]["DerivedInstallmentDto"][];
+            /** @description Próximo tramo pendiente/vencido; null si el plan está totalmente pagado */
+            nextDue: components["schemas"]["NextDueDto"] | null;
+            /**
+             * @description Cantidad de tramos vencidos (OVERDUE)
+             * @example 0
+             */
+            overdueCount: number;
+            /**
+             * @description Monto vencido no cubierto (suma de tramos OVERDUE)
+             * @example 0
+             */
+            overdueAmount: number;
+            /**
+             * @description true si remaining <= 0
+             * @example false
+             */
+            isFullyPaid: boolean;
         };
         CreateInventoryItemDto: {
             /** @example Guantes de nitrilo */
@@ -1248,6 +1634,168 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["AuthTokensDto"];
                 };
+            };
+        };
+    };
+    AuthController_refreshHandler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RefreshDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthTokensDto"];
+                };
+            };
+        };
+    };
+    AuthController_logoutHandler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["LogoutDto"];
+            };
+        };
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    MeController_me: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyProfileDto"];
+                };
+            };
+        };
+    };
+    MeController_updateName: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateNameDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["MyProfileDto"];
+                };
+            };
+        };
+    };
+    MeController_changePassword: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChangePasswordDto"];
+            };
+        };
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    MeController_uploadAvatar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AvatarResponseDto"];
+                };
+            };
+        };
+    };
+    MeController_removeAvatar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    FilesController_getAvatar: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                name: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -2044,6 +2592,69 @@ export interface operations {
             };
         };
     };
+    ReferenceController_currencies: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CurrencyDto"][];
+                };
+            };
+        };
+    };
+    ReferenceController_countries: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CountryDto"][];
+                };
+            };
+        };
+    };
+    ReferenceController_cities: {
+        parameters: {
+            query: {
+                /** @description ISO 3166-1 alpha-2 country code */
+                countryCode: string;
+                /** @description Case-insensitive name filter */
+                q?: string;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CityDto"][];
+                };
+            };
+        };
+    };
     PaymentsController_list: {
         parameters: {
             query?: never;
@@ -2123,6 +2734,72 @@ export interface operations {
         requestBody?: never;
         responses: {
             /** @description Payment voided (deletedAt set) */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PaymentPlansController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentPlanDto"];
+                };
+            };
+        };
+    };
+    PaymentPlansController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreatePaymentPlanDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentPlanDto"];
+                };
+            };
+        };
+    };
+    PaymentPlansController_remove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Payment plan cancelled */
             200: {
                 headers: {
                     [name: string]: unknown;
