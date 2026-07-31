@@ -5,10 +5,12 @@ import { ApiError } from '@/lib/api/client';
 import {
   listCatalogItems,
   createCatalogItem,
+  updateCatalogItem,
   type DentalCatalogItem,
   type CreateCatalogItemInput,
+  type UpdateCatalogItemInput,
 } from '@/lib/odontogram/catalog-api';
-import { Plus } from 'lucide-react';
+import { Plus, Pencil } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
@@ -32,6 +34,8 @@ type CatalogKind = 'PROCEDURE' | 'DIAGNOSIS';
 // wiring lands.
 const copy = {
   addToggle: 'Agregar ítem',
+  createTitle: 'Agregar ítem',
+  editTitle: 'Editar ítem',
   formDescription:
     'Crea un procedimiento o diagnóstico reutilizable. Los procedimientos aparecen al agregar ítems a un plan de tratamiento; los diagnósticos, en el odontograma.',
   nameLabel: 'Nombre',
@@ -45,12 +49,14 @@ const copy = {
   categoryLabel: 'Categoría',
   categoryHint: 'Opcional (ej. Preventiva, Restauradora, Endodoncia).',
   submit: 'Crear',
-  submitting: 'Creando…',
+  editSubmit: 'Guardar',
   retry: 'Reintentar',
   loading: 'Cargando catálogo…',
   tableLabel: 'Catálogo dental',
   genericLoadError: 'No pudimos cargar el catálogo. Intenta de nuevo.',
   genericCreateError: 'No pudimos crear el ítem del catálogo. Intenta de nuevo.',
+  genericUpdateError: 'No pudimos guardar los cambios. Intenta de nuevo.',
+  genericToggleError: 'No pudimos cambiar el estado del ítem. Intenta de nuevo.',
   empty: 'El catálogo todavía está vacío.',
   emptyHint: 'Agrega tu primer procedimiento para poder usarlo en los planes de tratamiento.',
   colName: 'Nombre',
@@ -58,6 +64,10 @@ const copy = {
   colCode: 'Código',
   colPrice: 'Precio',
   colStatus: 'Estado',
+  colActions: 'Acciones',
+  editAction: 'Editar',
+  deactivate: 'Desactivar',
+  activate: 'Activar',
   inactive: 'Inactivo',
   active: 'Activo',
   priceFallback: '—',
@@ -95,15 +105,16 @@ interface CatalogViewProps {
 }
 
 /**
- * Catalog management screen — list of dental catalog items + a "Agregar ítem"
- * create modal. Mirrors `StaffView`'s shape exactly (list via `AsyncSection` +
- * `FormModal` create + `refreshInPlace` after mutation), since both are the
- * same "clinic-config list you can add to" pattern.
+ * Catalog management screen — list of dental catalog items + a create/edit
+ * modal + per-row activate/deactivate. Mirrors `StaffView`'s shape (list via
+ * `AsyncSection` + `FormModal` + `refreshInPlace` after mutation), since both
+ * are the same "clinic-config list you manage" pattern.
  *
- * This screen exists to unblock treatment plans: `TreatmentPlansTab`'s "Agregar
- * ítem" form only renders when the PROCEDURE catalog is non-empty, and there was
- * previously no UI anywhere to populate it (the backend `POST /catalog/items`
- * already existed).
+ * This screen exists to unblock the odontogram/treatment plans: their pickers
+ * only render when the catalog is non-empty. The backend already exposes
+ * `POST`/`PATCH /catalog/items`; there is no DELETE, so "removing" an item means
+ * deactivating it (`{ active: false }`) — it disappears from the pickers but the
+ * history in `ToothRecord` / plan items that reference it is preserved.
  */
 export function CatalogView({ token }: CatalogViewProps) {
   const [items, setItems] = useState<DentalCatalogItem[]>([]);
@@ -112,14 +123,21 @@ export function CatalogView({ token }: CatalogViewProps) {
   const [reloadKey, setReloadKey] = useState(0);
 
   const [showForm, setShowForm] = useState(false);
+  // null = create mode; a DentalCatalogItem = editing that item.
+  const [editingItem, setEditingItem] = useState<DentalCatalogItem | null>(null);
   const [name, setName] = useState('');
   const [kind, setKind] = useState<CatalogKind>('PROCEDURE');
   const [code, setCode] = useState('');
   const [price, setPrice] = useState('');
   const [color, setColor] = useState(DEFAULT_COLOR);
   const [category, setCategory] = useState('');
-  const [creating, setCreating] = useState(false);
-  const [createError, setCreateError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
+
+  // Per-row activate/deactivate: the id being toggled (to disable its button)
+  // and a banner-level error surfaced above the table.
+  const [togglingId, setTogglingId] = useState<string | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!token) return;
@@ -165,58 +183,107 @@ export function CatalogView({ token }: CatalogViewProps) {
     setCategory('');
   }
 
-  async function handleCreateSubmit(e: React.FormEvent<HTMLFormElement>) {
+  function openCreate() {
+    resetForm();
+    setEditingItem(null);
+    setFormError(null);
+    setShowForm(true);
+  }
+
+  function openEdit(item: DentalCatalogItem) {
+    setName(item.labelEs);
+    setKind(item.kind);
+    setCode(item.code);
+    setPrice(item.defaultPrice == null ? '' : String(item.defaultPrice));
+    setColor(item.color);
+    setCategory(item.category ?? '');
+    setEditingItem(item);
+    setFormError(null);
+    setShowForm(true);
+  }
+
+  // Builds the shared payload from the current form fields. Empty optional
+  // fields are omitted (so a blank price/category doesn't send anything) — a
+  // known v1 limitation for edit: you can't clear an existing price/category
+  // from the UI (the backend partial DTO rejects null for those).
+  function buildPayload(): CreateCatalogItemInput {
+    const trimmedPrice = price.trim();
+    const trimmedCategory = category.trim();
+    return {
+      code: code.trim(),
+      kind,
+      labelEs: name.trim(),
+      color,
+      ...(trimmedPrice ? { defaultPrice: Number(trimmedPrice) } : {}),
+      ...(trimmedCategory ? { category: trimmedCategory } : {}),
+    };
+  }
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    setCreateError(null);
-    setCreating(true);
+    setFormError(null);
+    setSaving(true);
     try {
-      const trimmedPrice = price.trim();
-      const trimmedCategory = category.trim();
-      const input: CreateCatalogItemInput = {
-        code: code.trim(),
-        kind,
-        labelEs: name.trim(),
-        color,
-        ...(trimmedPrice ? { defaultPrice: Number(trimmedPrice) } : {}),
-        ...(trimmedCategory ? { category: trimmedCategory } : {}),
-      };
-      await createCatalogItem(token, input);
+      const payload = buildPayload();
+      if (editingItem) {
+        await updateCatalogItem(token, editingItem.id, payload as UpdateCatalogItemInput);
+      } else {
+        await createCatalogItem(token, payload);
+      }
       resetForm();
+      setEditingItem(null);
       setShowForm(false);
       await refreshInPlace();
     } catch (err) {
       // Surfaces the backend's 400/409 (duplicate code, invalid color) verbatim.
-      setCreateError(err instanceof ApiError ? err.message : copy.genericCreateError);
+      const fallback = editingItem ? copy.genericUpdateError : copy.genericCreateError;
+      setFormError(err instanceof ApiError ? err.message : fallback);
     } finally {
-      setCreating(false);
+      setSaving(false);
     }
   }
 
-  function handleCreateOpenChange(next: boolean) {
+  function handleFormOpenChange(next: boolean) {
     setShowForm(next);
     if (!next) {
-      setCreateError(null);
+      setFormError(null);
+      setEditingItem(null);
       resetForm();
     }
   }
 
+  async function handleToggleActive(item: DentalCatalogItem) {
+    setActionError(null);
+    setTogglingId(item.id);
+    try {
+      await updateCatalogItem(token, item.id, { active: !item.active });
+      await refreshInPlace();
+    } catch (err) {
+      setActionError(err instanceof ApiError ? err.message : copy.genericToggleError);
+    } finally {
+      setTogglingId(null);
+    }
+  }
+
+  const isEditing = editingItem !== null;
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex justify-end">
-        <Button type="button" onClick={() => setShowForm(true)}>
+        <Button type="button" onClick={openCreate}>
           <Plus /> {copy.addToggle}
         </Button>
       </div>
 
       <FormModal
         open={showForm}
-        onOpenChange={handleCreateOpenChange}
-        title={copy.addToggle}
+        onOpenChange={handleFormOpenChange}
+        title={isEditing ? copy.editTitle : copy.createTitle}
         description={copy.formDescription}
-        onSubmit={handleCreateSubmit}
-        submitLabel={copy.submit}
-        submitting={creating}
-        error={createError}
+        onSubmit={handleSubmit}
+        submitLabel={isEditing ? copy.editSubmit : copy.submit}
+        submitting={saving}
+        error={formError}
         size="lg"
       >
         <div className="grid gap-4 sm:grid-cols-2">
@@ -290,6 +357,12 @@ export function CatalogView({ token }: CatalogViewProps) {
         </div>
       </FormModal>
 
+      {actionError && (
+        <p role="alert" className="text-sm text-danger">
+          {actionError}
+        </p>
+      )}
+
       <AsyncSection
         loading={loading}
         error={loadError}
@@ -309,6 +382,7 @@ export function CatalogView({ token }: CatalogViewProps) {
                 <TableHead>{copy.colCode}</TableHead>
                 <TableHead>{copy.colPrice}</TableHead>
                 <TableHead>{copy.colStatus}</TableHead>
+                <TableHead className="text-right">{copy.colActions}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -333,6 +407,29 @@ export function CatalogView({ token }: CatalogViewProps) {
                     <Badge variant={item.active ? 'success' : 'muted'}>
                       {item.active ? copy.active : copy.inactive}
                     </Badge>
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <div className="flex justify-end gap-1">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => openEdit(item)}
+                        aria-label={`${copy.editAction} ${item.labelEs}`}
+                      >
+                        <Pencil className="size-3.5" /> {copy.editAction}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        loading={togglingId === item.id}
+                        onClick={() => handleToggleActive(item)}
+                        aria-label={`${item.active ? copy.deactivate : copy.activate} ${item.labelEs}`}
+                      >
+                        {item.active ? copy.deactivate : copy.activate}
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}

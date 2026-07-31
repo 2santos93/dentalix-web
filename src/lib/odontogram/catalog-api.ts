@@ -77,3 +77,35 @@ export async function createCatalogItem(
     token,
   });
 }
+
+/**
+ * `PATCH /catalog/items/:id` — mirrors the backend `UpdateCatalogItemDto`
+ * (partial: every field optional). Used to edit an item and to activate /
+ * deactivate it (`{ active }`). Deactivating is the "soft delete" (there is no
+ * DELETE endpoint): it hides the item from the pickers but keeps the history in
+ * `ToothRecord` / treatment-plan items that reference it. Guarded by
+ * `CATALOG_WRITE_ROLES` (OWNER/ADMIN) on the backend.
+ */
+export interface UpdateCatalogItemInput {
+  code?: string;
+  kind?: 'DIAGNOSIS' | 'PROCEDURE';
+  labelEs?: string;
+  color?: string;
+  category?: string;
+  labelEn?: string;
+  labelPt?: string;
+  defaultPrice?: number;
+  active?: boolean;
+}
+
+export async function updateCatalogItem(
+  token: string,
+  id: string,
+  patch: UpdateCatalogItemInput,
+): Promise<DentalCatalogItem> {
+  return apiFetch<DentalCatalogItem>(`/catalog/items/${id}`, {
+    method: 'PATCH',
+    body: patch,
+    token,
+  });
+}
