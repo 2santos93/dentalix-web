@@ -49,13 +49,14 @@ interface MedicalHistoryPanelProps {
  * after a successful save — means an untouched section still gets
  * re-submitted with its prior contents instead of being dropped.
  *
- * Deliberately excludes `safetyFlags`/`hasCriticalAlert`/`id`/`tenantId`/
- * `patientId`/`version`/`createdById`/`createdAt` — those are server-derived
- * or identity fields, not editable input. `embarazo`/`semanasEmbarazo` also
- * aren't present on the read shape (`MedicalHistory` only carries them
- * folded into the derived `safetyFlags`, not verbatim), so they default to
- * unset here — a returning patient's pregnancy flag has to be re-entered
- * rather than carried forward.
+ * Deliberately excludes `hasCriticalAlert`/`id`/`tenantId`/`patientId`/
+ * `version`/`createdById`/`createdAt` — those are server-derived or identity
+ * fields, not editable input. `safetyFlags` itself is also excluded (it's
+ * derived server-side from `conditions`/`medications`, not editable), EXCEPT
+ * `embarazo`/`semanasEmbarazo` — `ClinicalHistoryFields` reads/writes those
+ * as top-level `value` fields (not nested under `safetyFlags`), so they're
+ * pulled out of `history.safetyFlags` here to carry the pregnancy flag
+ * forward between versions like every other field.
  */
 function valueFromHistory(history: MedicalHistory | null): ClinicalHistoryValue {
   if (!history) return {};
@@ -67,6 +68,8 @@ function valueFromHistory(history: MedicalHistory | null): ClinicalHistoryValue 
     dentalHistory: history.dentalHistory ?? undefined,
     surgeries: history.surgeries,
     vitalSigns: history.vitalSigns ?? undefined,
+    embarazo: history.safetyFlags.embarazo,
+    semanasEmbarazo: history.safetyFlags.semanasEmbarazo,
     familyHistory: history.familyHistory ?? undefined,
     notes: history.notes ?? undefined,
   };

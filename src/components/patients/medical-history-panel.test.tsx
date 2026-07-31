@@ -108,6 +108,33 @@ describe('MedicalHistoryPanel', () => {
     expect(await screen.findByText(/versión 3/i)).toBeInTheDocument();
   });
 
+  it('carries forward embarazo/semanasEmbarazo across versions (safety flag, not just for display)', async () => {
+    const pregnant: MedicalHistory = {
+      ...latest,
+      safetyFlags: { ...latest.safetyFlags, embarazo: true, semanasEmbarazo: 20 },
+    };
+    mockedGet.mockResolvedValue(pregnant);
+    mockedSave.mockResolvedValue({ ...pregnant, version: 3 });
+
+    const user = userEvent.setup();
+    render(<MedicalHistoryPanel token="tok" patientId="p1" />);
+    await screen.findByText(/versión 2/i);
+
+    expect(screen.getByLabelText('Embarazo')).toBeChecked();
+    expect(screen.getByLabelText(/semanas de embarazo/i)).toHaveValue(20);
+
+    // An unrelated edit (adding an allergy) must not drop the safety flag.
+    await user.click(screen.getByRole('button', { name: /agregar alergia/i }));
+    const allergenInputs = screen.getAllByLabelText(/alérgeno/i);
+    await user.type(allergenInputs[1], 'Látex');
+    await user.click(screen.getByRole('button', { name: /guardar/i }));
+
+    await waitFor(() => expect(mockedSave).toHaveBeenCalledTimes(1));
+    const [, , input] = mockedSave.mock.calls[0];
+    expect(input.embarazo).toBe(true);
+    expect(input.semanasEmbarazo).toBe(20);
+  });
+
   it('shows an alert with the API error message when loading fails', async () => {
     const { ApiError } = jest.requireActual('../../lib/api/client');
     mockedGet.mockRejectedValue(new ApiError(500, 'Error del servidor'));
