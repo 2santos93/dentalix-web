@@ -5,10 +5,13 @@ import { ApiError } from '@/lib/api/client';
 import {
   listInventoryItems,
   createInventoryItem,
+  updateInventoryItem,
+  deleteInventoryItem,
   recordInventoryMovement,
   listInventoryMovements,
   type InventoryItem,
   type CreateInventoryItemInput,
+  type UpdateInventoryItemInput,
   type InventoryMovement,
   type InventoryMovementType,
   type RecordMovementInput,
@@ -20,6 +23,7 @@ import { Card } from '@/components/ui/card';
 import { Badge, type BadgeProps } from '@/components/ui/badge';
 import { FormField } from '@/components/molecules/form-field';
 import { FormModal } from '@/components/molecules/form-modal';
+import { ConfirmDialog } from '@/components/molecules/confirm-dialog';
 import { AsyncSection, TableSkeleton } from '@/components/molecules/async-section';
 import {
   Dialog,
@@ -67,6 +71,20 @@ const copy = {
   colActions: 'Acciones',
   lowStock: 'Bajo stock',
   ok: 'OK',
+
+  // Editar / eliminar insumo.
+  editButtonLabel: 'Editar',
+  editAction: (name: string) => `Editar ${name}`,
+  editTitle: 'Editar insumo',
+  editSubmit: 'Guardar',
+  genericEditError: 'No pudimos actualizar el insumo. Intenta de nuevo.',
+  deleteButtonLabel: 'Eliminar',
+  deleteAction: (name: string) => `Eliminar ${name}`,
+  deleteTitle: 'Eliminar insumo',
+  deleteDescription: (name: string) =>
+    `${name} dejará de aparecer en el inventario. Sus movimientos quedan registrados.`,
+  deleteConfirm: 'Sí, eliminar',
+  genericDeleteError: 'No pudimos eliminar el insumo. Intenta de nuevo.',
 
   // Movimientos (entrada/salida/ajuste).
   movementButtonLabel: 'Movimiento',
@@ -138,7 +156,13 @@ export function InventoryView({ token }: InventoryViewProps) {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
+  // The create and edit flows share this same FormModal: `editingItem`
+  // doubles as the "which insumo" AND the create/edit mode switch (`null` =
+  // crear), same convention as `movementItem`/`historyItem` below — except
+  // `showForm` stays a separate open flag because create mode needs the
+  // modal open with `editingItem === null`.
   const [showForm, setShowForm] = useState(false);
+  const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
   const [name, setName] = useState('');
   const [unit, setUnit] = useState('');
   const [sku, setSku] = useState('');
@@ -146,6 +170,13 @@ export function InventoryView({ token }: InventoryViewProps) {
   const [notes, setNotes] = useState('');
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
+
+  // Delete confirmation: `deletingItem` doubles as the ConfirmDialog's target
+  // insumo AND its open flag, same convention as `movementItem`. `updatingId`
+  // disables the in-flight row's controls, same as `staff-view.tsx`.
+  const [updatingId, setUpdatingId] = useState<string | null>(null);
+  const [deletingItem, setDeletingItem] = useState<InventoryItem | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
   // Movimientos (entrada/salida/ajuste): `movementItem` doubles as the
   // modal's target insumo AND its open flag — same "record !== null is open"
@@ -211,14 +242,27 @@ export function InventoryView({ token }: InventoryViewProps) {
 
   function openCreate() {
     resetForm();
+    setEditingItem(null);
     setFormError(null);
     setShowForm(true);
   }
 
-  // Builds the create payload. Empty optional fields are omitted (so a blank
-  // SKU/notes doesn't send anything) — same convention as
-  // `catalog-view.tsx`'s `buildPayload`. `minStock` always travels (number,
-  // default 0).
+  function openEdit(item: InventoryItem) {
+    setName(item.name);
+    setUnit(item.unit);
+    setSku(item.sku ?? '');
+    setMinStock(String(item.minStock));
+    setNotes(item.notes ?? '');
+    setEditingItem(item);
+    setFormError(null);
+    setShowForm(true);
+  }
+
+  // Builds the create/update payload — shared by both modes since
+  // `UpdateInventoryItemDto` is a subset of `CreateInventoryItemDto`'s
+  // fields. Empty optional fields are omitted (so a blank SKU/notes doesn't
+  // send anything) — same convention as `catalog-view.tsx`'s `buildPayload`.
+  // `minStock` always travels (number, default 0).
   function buildPayload(): CreateInventoryItemInput {
     const trimmedSku = sku.trim();
     const trimmedNotes = notes.trim();
@@ -237,13 +281,24 @@ export function InventoryView({ token }: InventoryViewProps) {
     setSaving(true);
     try {
       const payload = buildPayload();
-      await createInventoryItem(token, payload);
+      if (editingItem) {
+        await updateInventoryItem(token, editingItem.id, payload as UpdateInventoryItemInput);
+      } else {
+        await createInventoryItem(token, payload);
+      }
       resetForm();
       setShowForm(false);
+      setEditingItem(null);
       await refreshInPlace();
     } catch (err) {
       // Surfaces the backend's error (e.g. validation) verbatim.
-      setFormError(err instanceof ApiError ? err.message : copy.genericCreateError);
+      setFormError(
+        err instanceof ApiError
+          ? err.message
+          : editingItem
+            ? copy.genericEditError
+            : copy.genericCreateError,
+      );
     } finally {
       setSaving(false);
     }
@@ -254,6 +309,36 @@ export function InventoryView({ token }: InventoryViewProps) {
     if (!next) {
       setFormError(null);
       resetForm();
+      setEditingItem(null);
+    }
+  }
+
+  function openDelete(item: InventoryItem) {
+    setDeleteError(null);
+    setDeletingItem(item);
+  }
+
+  function handleDeleteOpenChange(next: boolean) {
+    if (!next) {
+      setDeletingItem(null);
+      setDeleteError(null);
+    }
+  }
+
+  async function handleDelete() {
+    if (!deletingItem) return;
+    setUpdatingId(deletingItem.id);
+    setDeleteError(null);
+    try {
+      await deleteInventoryItem(token, deletingItem.id);
+      setDeletingItem(null);
+      await refreshInPlace();
+    } catch (err) {
+      // Movements have `onDelete: Restrict` at the DB level, so the backend
+      // can reject the delete — surfaced verbatim here.
+      setDeleteError(err instanceof ApiError ? err.message : copy.genericDeleteError);
+    } finally {
+      setUpdatingId(null);
     }
   }
 
@@ -341,10 +426,10 @@ export function InventoryView({ token }: InventoryViewProps) {
       <FormModal
         open={showForm}
         onOpenChange={handleFormOpenChange}
-        title={copy.createTitle}
+        title={editingItem ? copy.editTitle : copy.createTitle}
         description={copy.formDescription}
         onSubmit={handleSubmit}
-        submitLabel={copy.submit}
+        submitLabel={editingItem ? copy.editSubmit : copy.submit}
         submitting={saving}
         error={formError}
         size="lg"
@@ -426,50 +511,75 @@ export function InventoryView({ token }: InventoryViewProps) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {items.map((item) => (
-                <TableRow key={item.id}>
-                  <TableCell>
-                    <div className="flex flex-col">
-                      <span className="font-medium text-ink">{item.name}</span>
-                      {item.sku ? (
-                        <span className="text-xs text-muted">{item.sku}</span>
-                      ) : null}
-                    </div>
-                  </TableCell>
-                  <TableCell>{item.unit}</TableCell>
-                  <TableCell className="tabular-nums">{item.stock ?? 0}</TableCell>
-                  <TableCell className="tabular-nums">{item.minStock}</TableCell>
-                  <TableCell>
-                    {item.lowStock ? (
-                      <Badge variant="danger">{copy.lowStock}</Badge>
-                    ) : (
-                      <Badge variant="success">{copy.ok}</Badge>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-2">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        aria-label={copy.movementAction(item.name)}
-                        onClick={() => openMovement(item)}
-                      >
-                        {copy.movementButtonLabel}
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        aria-label={copy.historyAction(item.name)}
-                        onClick={() => openHistory(item)}
-                      >
-                        {copy.historyButtonLabel}
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))}
+              {items.map((item) => {
+                const updating = updatingId === item.id;
+                return (
+                  <TableRow key={item.id}>
+                    <TableCell>
+                      <div className="flex flex-col">
+                        <span className="font-medium text-ink">{item.name}</span>
+                        {item.sku ? (
+                          <span className="text-xs text-muted">{item.sku}</span>
+                        ) : null}
+                      </div>
+                    </TableCell>
+                    <TableCell>{item.unit}</TableCell>
+                    <TableCell className="tabular-nums">{item.stock ?? 0}</TableCell>
+                    <TableCell className="tabular-nums">{item.minStock}</TableCell>
+                    <TableCell>
+                      {item.lowStock ? (
+                        <Badge variant="danger">{copy.lowStock}</Badge>
+                      ) : (
+                        <Badge variant="success">{copy.ok}</Badge>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={updating}
+                          aria-label={copy.movementAction(item.name)}
+                          onClick={() => openMovement(item)}
+                        >
+                          {copy.movementButtonLabel}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={updating}
+                          aria-label={copy.historyAction(item.name)}
+                          onClick={() => openHistory(item)}
+                        >
+                          {copy.historyButtonLabel}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={updating}
+                          aria-label={copy.editAction(item.name)}
+                          onClick={() => openEdit(item)}
+                        >
+                          {copy.editButtonLabel}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={updating}
+                          aria-label={copy.deleteAction(item.name)}
+                          onClick={() => openDelete(item)}
+                        >
+                          {copy.deleteButtonLabel}
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
             </TableBody>
           </Table>
         </Card>
@@ -566,6 +676,17 @@ export function InventoryView({ token }: InventoryViewProps) {
           </AsyncSection>
         </DialogContent>
       </Dialog>
+
+      <ConfirmDialog
+        open={deletingItem !== null}
+        onOpenChange={handleDeleteOpenChange}
+        title={copy.deleteTitle}
+        description={deletingItem ? copy.deleteDescription(deletingItem.name) : undefined}
+        confirmLabel={copy.deleteConfirm}
+        confirming={deletingItem !== null && updatingId === deletingItem.id}
+        error={deleteError}
+        onConfirm={handleDelete}
+      />
     </div>
   );
 }

@@ -4,6 +4,8 @@ import { InventoryView } from './inventory-view';
 import {
   listInventoryItems,
   createInventoryItem,
+  updateInventoryItem,
+  deleteInventoryItem,
   recordInventoryMovement,
   listInventoryMovements,
 } from '@/lib/inventory/inventory-api';
@@ -19,6 +21,8 @@ jest.mock('../../lib/inventory/inventory-api', () => ({
 
 const mockedList = listInventoryItems as jest.MockedFunction<typeof listInventoryItems>;
 const mockedCreate = createInventoryItem as jest.MockedFunction<typeof createInventoryItem>;
+const mockedUpdate = updateInventoryItem as jest.MockedFunction<typeof updateInventoryItem>;
+const mockedDelete = deleteInventoryItem as jest.MockedFunction<typeof deleteInventoryItem>;
 const mockedRecord = recordInventoryMovement as jest.MockedFunction<typeof recordInventoryMovement>;
 const mockedListMovements = listInventoryMovements as jest.MockedFunction<typeof listInventoryMovements>;
 
@@ -32,6 +36,8 @@ const gasa = { ...guantes, id: 'i2', name: 'Gasa estéril', sku: null, unit: 'un
 beforeEach(() => {
   mockedList.mockReset();
   mockedCreate.mockReset();
+  mockedUpdate.mockReset();
+  mockedDelete.mockReset();
   mockedRecord.mockReset();
   mockedListMovements.mockReset();
 });
@@ -118,4 +124,43 @@ it('muestra el historial de movimientos de un insumo', async () => {
   expect(await screen.findByText(/compra/i)).toBeInTheDocument();
   expect(screen.getByText('Entrada')).toBeInTheDocument();
   expect(screen.getByText('Salida')).toBeInTheDocument();
+});
+
+it('editar abre el modal prellenado y hace PATCH', async () => {
+  mockedList.mockResolvedValueOnce([guantes]);
+  mockedUpdate.mockResolvedValue({ ...guantes, minStock: 8 });
+  mockedList.mockResolvedValueOnce([{ ...guantes, minStock: 8 }]);
+
+  const user = userEvent.setup();
+  render(<InventoryView token="tok" />);
+  await screen.findByRole('table', { name: /inventario/i });
+
+  await user.click(screen.getByRole('button', { name: /editar guantes de nitrilo/i }));
+  const min = screen.getByLabelText(/stock mínimo/i);
+  expect(min).toHaveValue(5);
+  await user.clear(min);
+  await user.type(min, '8');
+  await user.click(screen.getByRole('button', { name: /^guardar$/i }));
+
+  await waitFor(() =>
+    expect(mockedUpdate).toHaveBeenCalledWith('tok', 'i1', expect.objectContaining({ minStock: 8 })),
+  );
+  await waitFor(() => expect(mockedList).toHaveBeenCalledTimes(2));
+});
+
+it('eliminar pide confirmación y luego llama al API', async () => {
+  mockedList.mockResolvedValueOnce([guantes]);
+  mockedDelete.mockResolvedValue(undefined);
+  mockedList.mockResolvedValueOnce([]);
+
+  const user = userEvent.setup();
+  render(<InventoryView token="tok" />);
+  await screen.findByRole('table', { name: /inventario/i });
+
+  await user.click(screen.getByRole('button', { name: /eliminar guantes de nitrilo/i }));
+  await user.click(screen.getByRole('button', { name: /sí, eliminar/i }));
+
+  await waitFor(() => expect(mockedDelete).toHaveBeenCalledWith('tok', 'i1'));
+  await waitFor(() => expect(mockedList).toHaveBeenCalledTimes(2));
+  expect(await screen.findByText(/todavía no hay insumos/i)).toBeInTheDocument();
 });
