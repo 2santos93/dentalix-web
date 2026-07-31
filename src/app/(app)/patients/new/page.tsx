@@ -4,9 +4,8 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import { useAuthStore } from '@/lib/auth/auth-store';
-import { PatientForm } from '@/components/patients/patient-form';
+import { PatientCreateWizard } from '@/components/patients/patient-create-wizard';
 import { PageHeader } from '@/components/molecules/page-header';
-import { Card, CardContent } from '@/components/ui/card';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
@@ -44,7 +43,7 @@ export default function NewPatientPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-2xl">
+    <div className="mx-auto w-full max-w-3xl">
       <Link
         href="/patients"
         className="mb-3 inline-flex items-center gap-1 text-sm font-medium text-primary hover:underline"
@@ -52,11 +51,7 @@ export default function NewPatientPage() {
         <ArrowLeft className="size-4" /> {copy.backLink}
       </Link>
       <PageHeader title={copy.title} />
-      <Card>
-        <CardContent className="p-6">
-          <PatientForm token={accessToken} />
-        </CardContent>
-      </Card>
+      <PatientCreateWizard token={accessToken} />
     </div>
   );
 }
