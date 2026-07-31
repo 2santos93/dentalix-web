@@ -149,4 +149,132 @@ describe('CatalogView', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent('El código ya existe');
   });
+
+  describe('search and filters', () => {
+    const resina = {
+      ...item1,
+      id: 'c2',
+      code: 'RESINA',
+      labelEs: 'Restauración con resina',
+      kind: 'PROCEDURE' as const,
+    };
+    const caries = {
+      ...item1,
+      id: 'c3',
+      code: 'DX-CARIES',
+      labelEs: 'Caries',
+      kind: 'DIAGNOSIS' as const,
+      active: false,
+    };
+    const all = [item1, resina, caries];
+
+    /** Names rendered in the table body, in order. */
+    function visibleNames(): string[] {
+      return screen
+        .getAllByRole('row')
+        .slice(1) // skip the header row
+        .map((row) => row.querySelectorAll('td')[0]?.textContent?.trim() ?? '');
+    }
+
+    it('filters by name, case- and accent-insensitively', async () => {
+      mockedList.mockResolvedValue(all);
+      const user = userEvent.setup();
+      render(<CatalogView token="tok" />);
+      await screen.findByRole('table', { name: /catálogo/i });
+
+      // "restauracion" (no accent, lowercase) must match "Restauración con resina".
+      await user.type(screen.getByLabelText(/^buscar$/i), 'restauracion');
+
+      await waitFor(() => expect(visibleNames()).toEqual(['Restauración con resina']));
+    });
+
+    it('filters by code as well as name', async () => {
+      mockedList.mockResolvedValue(all);
+      const user = userEvent.setup();
+      render(<CatalogView token="tok" />);
+      await screen.findByRole('table', { name: /catálogo/i });
+
+      await user.type(screen.getByLabelText(/^buscar$/i), 'dx-');
+
+      await waitFor(() => expect(visibleNames()).toEqual(['Caries']));
+    });
+
+    it('filters by kind', async () => {
+      mockedList.mockResolvedValue(all);
+      const user = userEvent.setup();
+      render(<CatalogView token="tok" />);
+      await screen.findByRole('table', { name: /catálogo/i });
+
+      await user.selectOptions(
+        screen.getByLabelText(/tipo/i, { selector: '#catalog-filter-kind' }),
+        'DIAGNOSIS',
+      );
+
+      await waitFor(() => expect(visibleNames()).toEqual(['Caries']));
+    });
+
+    it('filters by active/inactive status', async () => {
+      mockedList.mockResolvedValue(all);
+      const user = userEvent.setup();
+      render(<CatalogView token="tok" />);
+      await screen.findByRole('table', { name: /catálogo/i });
+
+      await user.selectOptions(
+        screen.getByLabelText(/estado/i, { selector: '#catalog-filter-status' }),
+        'INACTIVE',
+      );
+      // Only `caries` is inactive.
+      await waitFor(() => expect(visibleNames()).toEqual(['Caries']));
+
+      await user.selectOptions(
+        screen.getByLabelText(/estado/i, { selector: '#catalog-filter-status' }),
+        'ACTIVE',
+      );
+      await waitFor(() =>
+        expect(visibleNames()).toEqual(['Profilaxis', 'Restauración con resina']),
+      );
+    });
+
+    it('shows the visible count while filtering and the plain total otherwise', async () => {
+      mockedList.mockResolvedValue(all);
+      const user = userEvent.setup();
+      render(<CatalogView token="tok" />);
+      await screen.findByRole('table', { name: /catálogo/i });
+
+      expect(screen.getByText('3 ítems')).toBeInTheDocument();
+
+      await user.type(screen.getByLabelText(/^buscar$/i), 'caries');
+      expect(await screen.findByText('1 de 3')).toBeInTheDocument();
+    });
+
+    it('offers a no-matches state that clears the filters (distinct from the empty-catalog state)', async () => {
+      mockedList.mockResolvedValue(all);
+      const user = userEvent.setup();
+      render(<CatalogView token="tok" />);
+      await screen.findByRole('table', { name: /catálogo/i });
+
+      await user.type(screen.getByLabelText(/^buscar$/i), 'zzzz');
+
+      expect(await screen.findByText(/ningún ítem coincide/i)).toBeInTheDocument();
+      // NOT the "catalog is empty" copy — there are items, they're filtered out.
+      expect(screen.queryByText(/el catálogo todavía está vacío/i)).not.toBeInTheDocument();
+      expect(screen.queryByRole('table')).not.toBeInTheDocument();
+
+      await user.click(screen.getByRole('button', { name: /limpiar filtros/i }));
+
+      await screen.findByRole('table', { name: /catálogo/i });
+      expect(visibleNames()).toHaveLength(3);
+      expect(screen.getByLabelText<HTMLInputElement>(/^buscar$/i).value).toBe('');
+    });
+
+    it('does not render the filter bar when the catalog is empty', async () => {
+      mockedList.mockResolvedValue([]);
+      render(<CatalogView token="tok" />);
+
+      expect(await screen.findByText(/el catálogo todavía está vacío/i)).toBeInTheDocument();
+      expect(screen.queryByLabelText(/^buscar$/i)).not.toBeInTheDocument();
+      // The primary action stays reachable.
+      expect(screen.getByRole('button', { name: /agregar ítem/i })).toBeInTheDocument();
+    });
+  });
 });

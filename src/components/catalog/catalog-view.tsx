@@ -17,6 +17,7 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { FormField } from '@/components/molecules/form-field';
 import { FormModal } from '@/components/molecules/form-modal';
+import { EmptyState } from '@/components/molecules/empty-state';
 import { AsyncSection, TableSkeleton } from '@/components/molecules/async-section';
 import {
   Table,
@@ -59,6 +60,20 @@ const copy = {
   genericToggleError: 'No pudimos cambiar el estado del ítem. Intenta de nuevo.',
   empty: 'El catálogo todavía está vacío.',
   emptyHint: 'Agrega tu primer procedimiento para poder usarlo en los planes de tratamiento.',
+  searchLabel: 'Buscar',
+  searchPlaceholder: 'Nombre o código',
+  filterKindLabel: 'Tipo',
+  filterStatusLabel: 'Estado',
+  filterAll: 'Todos',
+  filterActive: 'Activos',
+  filterInactive: 'Inactivos',
+  /** Total when no filter is applied, e.g. "98 ítems". */
+  totalCount: (n: number) => `${n} ${n === 1 ? 'ítem' : 'ítems'}`,
+  /** Visible slice while filtering, e.g. "12 de 98". */
+  filteredCount: (shown: number, total: number) => `${shown} de ${total}`,
+  noMatches: 'Ningún ítem coincide con la búsqueda.',
+  noMatchesHint: 'Prueba con otro término o quita los filtros.',
+  clearFilters: 'Limpiar filtros',
   colName: 'Nombre',
   colKind: 'Tipo',
   colCode: 'Código',
@@ -100,6 +115,21 @@ function formatPrice(price: number | null): string {
   return price == null ? copy.priceFallback : currencyFormatter.format(price);
 }
 
+type KindFilter = 'ALL' | CatalogKind;
+type StatusFilter = 'ALL' | 'ACTIVE' | 'INACTIVE';
+
+/**
+ * Lowercased and diacritic-stripped, so "paginacion" matches "Paginación" and
+ * "PROFILAXIS" matches "Profilaxis" — the catalog is written in Spanish and
+ * nobody types accents into a search box.
+ */
+function normalize(value: string): string {
+  return value
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+}
+
 interface CatalogViewProps {
   token: string;
 }
@@ -138,6 +168,31 @@ export function CatalogView({ token }: CatalogViewProps) {
   // and a banner-level error surfaced above the table.
   const [togglingId, setTogglingId] = useState<string | null>(null);
   const [actionError, setActionError] = useState<string | null>(null);
+
+  // Client-side search/filters: the catalog is a bounded per-clinic list
+  // (~100 items) that's already fully fetched, so filtering in memory is
+  // instant and needs no request per keystroke. The API's `kind`/`activeOnly`
+  // params stay unused here on purpose — refetching would be slower and would
+  // lose the "N de M" total.
+  const [search, setSearch] = useState('');
+  const [kindFilter, setKindFilter] = useState<KindFilter>('ALL');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
+
+  const query = normalize(search.trim());
+  const filteredItems = items.filter((item) => {
+    if (kindFilter !== 'ALL' && item.kind !== kindFilter) return false;
+    if (statusFilter === 'ACTIVE' && !item.active) return false;
+    if (statusFilter === 'INACTIVE' && item.active) return false;
+    if (!query) return true;
+    return normalize(item.labelEs).includes(query) || normalize(item.code).includes(query);
+  });
+  const isFiltering = query !== '' || kindFilter !== 'ALL' || statusFilter !== 'ALL';
+
+  function clearFilters() {
+    setSearch('');
+    setKindFilter('ALL');
+    setStatusFilter('ALL');
+  }
 
   useEffect(() => {
     if (!token) return;
@@ -269,7 +324,55 @@ export function CatalogView({ token }: CatalogViewProps) {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex justify-end">
+      <div className="flex flex-wrap items-end justify-between gap-4">
+        {/* Filters only once there's something to filter — an empty catalog
+            shows just the primary action. */}
+        {items.length > 0 ? (
+          <div className="flex flex-wrap items-end gap-3">
+            <FormField
+              htmlFor="catalog-search"
+              label={copy.searchLabel}
+              className="min-w-[13rem]"
+            >
+              <Input
+                id="catalog-search"
+                type="search"
+                placeholder={copy.searchPlaceholder}
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </FormField>
+            <FormField htmlFor="catalog-filter-kind" label={copy.filterKindLabel}>
+              <select
+                id="catalog-filter-kind"
+                value={kindFilter}
+                onChange={(e) => setKindFilter(e.target.value as KindFilter)}
+                className={fieldClass}
+              >
+                <option value="ALL">{copy.filterAll}</option>
+                {KIND_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </FormField>
+            <FormField htmlFor="catalog-filter-status" label={copy.filterStatusLabel}>
+              <select
+                id="catalog-filter-status"
+                value={statusFilter}
+                onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+                className={fieldClass}
+              >
+                <option value="ALL">{copy.filterAll}</option>
+                <option value="ACTIVE">{copy.filterActive}</option>
+                <option value="INACTIVE">{copy.filterInactive}</option>
+              </select>
+            </FormField>
+          </div>
+        ) : (
+          <span />
+        )}
         <Button type="button" onClick={openCreate}>
           <Plus /> {copy.addToggle}
         </Button>
@@ -363,6 +466,14 @@ export function CatalogView({ token }: CatalogViewProps) {
         </p>
       )}
 
+      {!loading && !loadError && items.length > 0 && (
+        <p role="status" className="-mb-2 text-xs text-muted tabular-nums">
+          {isFiltering
+            ? copy.filteredCount(filteredItems.length, items.length)
+            : copy.totalCount(items.length)}
+        </p>
+      )}
+
       <AsyncSection
         loading={loading}
         error={loadError}
@@ -373,6 +484,20 @@ export function CatalogView({ token }: CatalogViewProps) {
         emptyDescription={copy.emptyHint}
         skeleton={<TableSkeleton rows={4} />}
       >
+        {filteredItems.length === 0 ? (
+          // Distinct from the catalog-is-empty state above: there ARE items,
+          // the active search/filters just exclude all of them.
+          <EmptyState
+            role="status"
+            title={copy.noMatches}
+            description={copy.noMatchesHint}
+            action={
+              <Button type="button" variant="outline" size="sm" onClick={clearFilters}>
+                {copy.clearFilters}
+              </Button>
+            }
+          />
+        ) : (
         <Card className="overflow-hidden p-0">
           <Table aria-label={copy.tableLabel}>
             <TableHeader>
@@ -386,7 +511,7 @@ export function CatalogView({ token }: CatalogViewProps) {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {items.map((item) => (
+              {filteredItems.map((item) => (
                 <TableRow key={item.id}>
                   <TableCell>
                     <span className="flex items-center gap-2 font-medium text-ink">
@@ -436,6 +561,7 @@ export function CatalogView({ token }: CatalogViewProps) {
             </TableBody>
           </Table>
         </Card>
+        )}
       </AsyncSection>
     </div>
   );
