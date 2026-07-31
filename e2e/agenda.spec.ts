@@ -51,10 +51,21 @@ const patientDocNumber = `DOCAGE${suffix}`;
 
 const appointmentReason = `Control rutinario ${suffix}`;
 
-// Fixed, distinctive time slot for the appointment — unlikely to collide
-// with anything else created for this same brand-new provider/day.
-const startTime = '10:15';
-const endTime = '10:45';
+// Slot for the appointment: a time LATER TODAY, not a fixed clock time. The app
+// now rejects booking in the past, so a hardcoded '10:15' failed every run after
+// 10:15. It stays on TODAY (not tomorrow) because the day agenda below asserts
+// the appointment shows up on the currently-viewed day, which the form pre-fills
+// with today via `defaultDate`. Minutes are offset by a distinctive amount so the
+// slot is unlikely to collide with anything else for this brand-new provider/day.
+// Caveat: a run started within ~2h of midnight would wrap past midnight; e2e runs
+// are not scheduled then.
+function hhmm(date: Date): string {
+  return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
+}
+const startAt = new Date(Date.now() + 61 * 60 * 1000);
+const endAt = new Date(startAt.getTime() + 30 * 60 * 1000);
+const startTime = hhmm(startAt);
+const endTime = hhmm(endAt);
 
 test('create appointment via the UI -> appears in the day agenda, status change via the select persists after reload', async ({
   page,
@@ -130,8 +141,8 @@ test('create appointment via the UI -> appears in the day agenda, status change 
   // reason and SCHEDULED ("Agendada") status ---
   const appointmentRow = page.locator('table tr', { hasText: appointmentReason });
   await expect(appointmentRow).toBeVisible({ timeout: 10_000 });
-  await expect(appointmentRow).toContainText('10:15');
-  await expect(appointmentRow).toContainText('10:45');
+  await expect(appointmentRow).toContainText(startTime);
+  await expect(appointmentRow).toContainText(endTime);
   await expect(appointmentRow).toContainText(`${patientFirstName} ${patientLastName}`);
   await expect(appointmentRow.getByTestId('appointment-status-badge')).toHaveText('Agendada');
 
@@ -158,8 +169,8 @@ test('create appointment via the UI -> appears in the day agenda, status change 
 
   const appointmentRowAfterReload = page.locator('table tr', { hasText: appointmentReason });
   await expect(appointmentRowAfterReload).toBeVisible({ timeout: 10_000 });
-  await expect(appointmentRowAfterReload).toContainText('10:15');
-  await expect(appointmentRowAfterReload).toContainText('10:45');
+  await expect(appointmentRowAfterReload).toContainText(startTime);
+  await expect(appointmentRowAfterReload).toContainText(endTime);
   await expect(appointmentRowAfterReload).toContainText(`${patientFirstName} ${patientLastName}`);
   await expect(appointmentRowAfterReload.getByTestId('appointment-status-badge')).toHaveText(
     'Confirmada',
