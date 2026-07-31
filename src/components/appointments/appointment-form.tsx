@@ -50,6 +50,7 @@ const copy = {
   genericSaveError: 'No pudimos crear la cita. Intenta de nuevo.',
   validationMissingFields: 'Completa paciente, profesional, fecha y horas.',
   validationEndAfterStart: 'La hora de fin debe ser posterior a la hora de inicio.',
+  validationPastStart: 'No se puede agendar en el pasado. Elige una fecha y hora futuras.',
 };
 
 function fullPatientName(patient: Patient): string {
@@ -74,6 +75,20 @@ const PATIENT_SEARCH_PAGE_SIZE = 20;
 /** Builds a local-time ISO instant from a `YYYY-MM-DD` date + `HH:mm` time — the browser's timezone converts it to UTC on the wire (see `Appointment.start`/`end` docs). */
 function toIsoInstant(date: string, time: string): string {
   return new Date(`${date}T${time}:00`).toISOString();
+}
+
+/**
+ * Today as a local `YYYY-MM-DD`, for the date field's `min` — you can't book in
+ * the past. Local (not `toISOString()`) so the boundary is the user's own day,
+ * not UTC's. Same shape as `agenda-view.tsx`/`dashboard-view.tsx`'s helper of
+ * the same name (that duplication is the existing house convention here).
+ */
+function todayLocalDateString(): string {
+  const d = new Date();
+  const yyyy = d.getFullYear();
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${yyyy}-${mm}-${dd}`;
 }
 
 interface AppointmentFormProps {
@@ -253,6 +268,15 @@ export function AppointmentForm({
     const end = toIsoInstant(date, endTime);
     if (new Date(end).getTime() <= new Date(start).getTime()) {
       setValidationError(copy.validationEndAfterStart);
+      return;
+    }
+
+    // No agendar en el pasado. El `min` del input de fecha ya evita elegir un
+    // día anterior, pero no cubre "hoy a una hora que ya pasó" (el input de hora
+    // no tiene un `min` dependiente del día elegido), así que se valida el
+    // INSTANTE acá. Mismo criterio que el backend, que lo rechaza con 400.
+    if (new Date(start).getTime() < Date.now()) {
+      setValidationError(copy.validationPastStart);
       return;
     }
 
@@ -477,6 +501,10 @@ export function AppointmentForm({
             id="appointment-date"
             type="date"
             required
+            // No se puede agendar en el pasado: el date picker no ofrece días
+            // anteriores a hoy. "Hoy a una hora ya pasada" lo cubre la validación
+            // del instante en handleSubmit (y el backend con un 400).
+            min={todayLocalDateString()}
             value={date}
             onChange={(e) => setDate(e.target.value)}
             className="flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors placeholder:text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-50"

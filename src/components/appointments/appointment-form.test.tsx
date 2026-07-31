@@ -109,6 +109,19 @@ const createdAppointment = {
   updatedAt: '2026-07-01T00:00:00.000Z',
 };
 
+/**
+ * A local `YYYY-MM-DD` always in the FUTURE (tomorrow): the form now rejects a
+ * start instant in the past, so a hardcoded date would make these specs fail as
+ * soon as it goes by. Times below (09:00/09:30) are read as LOCAL by the form's
+ * `toIsoInstant`, so pairing them with tomorrow is safely ahead of `now`.
+ */
+const FUTURE_DATE = (() => {
+  const d = new Date(Date.now() + 24 * 60 * 60 * 1000);
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${mm}-${dd}`;
+})();
+
 async function renderFormAndWaitForLoad() {
   render(<AppointmentForm token="tok" onCreated={jest.fn()} />);
   // Provider select is a native <select> populated from GET /staff.
@@ -129,7 +142,7 @@ async function selectMariaByDoc(user: ReturnType<typeof userEvent.setup>) {
 async function fillValidForm(user: ReturnType<typeof userEvent.setup>) {
   await selectMariaByDoc(user);
   await user.selectOptions(screen.getByLabelText(/profesional/i), 'staff-1');
-  await user.type(screen.getByLabelText(/^fecha$/i), '2026-07-23');
+  await user.type(screen.getByLabelText(/^fecha$/i), FUTURE_DATE);
   await user.type(screen.getByLabelText(/hora de inicio/i), '09:00');
   await user.type(screen.getByLabelText(/hora de fin/i), '09:30');
 }
@@ -226,7 +239,7 @@ describe('AppointmentForm', () => {
     await renderFormAndWaitForLoad();
     await selectMariaByDoc(user);
     await user.selectOptions(screen.getByLabelText(/profesional/i), 'staff-1');
-    await user.type(screen.getByLabelText(/^fecha$/i), '2026-07-23');
+    await user.type(screen.getByLabelText(/^fecha$/i), FUTURE_DATE);
     await user.type(screen.getByLabelText(/hora de inicio/i), '09:30');
     await user.type(screen.getByLabelText(/hora de fin/i), '09:00');
 
@@ -234,6 +247,44 @@ describe('AppointmentForm', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/fin.*posterior.*inicio/i);
     expect(mockedCreateAppointment).not.toHaveBeenCalled();
+  });
+
+  describe('no agendar en el pasado', () => {
+    it('el date picker no ofrece días anteriores a hoy (min = hoy local)', async () => {
+      await renderFormAndWaitForLoad();
+      const today = new Date();
+      const mm = String(today.getMonth() + 1).padStart(2, '0');
+      const dd = String(today.getDate()).padStart(2, '0');
+
+      expect(screen.getByLabelText(/^fecha$/i)).toHaveAttribute(
+        'min',
+        `${today.getFullYear()}-${mm}-${dd}`,
+      );
+    });
+
+    // El caso que el `min` del date input NO puede cubrir (el día es válido, la
+    // HORA ya pasó) y que motivó esta validación. La fecha/hora se derivan de
+    // `now - 5min`, así que es siempre "hoy, un instante ya pasado" salvo que la
+    // corrida caiga en los primeros 5 minutos del día.
+    it('bloquea el submit con HOY a una hora que ya pasó y no llama a createAppointment', async () => {
+      const user = userEvent.setup();
+      await renderFormAndWaitForLoad();
+      const past = new Date(Date.now() - 5 * 60 * 1000);
+      const pad = (n: number) => String(n).padStart(2, '0');
+      const pastDate = `${past.getFullYear()}-${pad(past.getMonth() + 1)}-${pad(past.getDate())}`;
+      const pastTime = `${pad(past.getHours())}:${pad(past.getMinutes())}`;
+
+      await selectMariaByDoc(user);
+      await user.selectOptions(screen.getByLabelText(/profesional/i), 'staff-1');
+      await user.type(screen.getByLabelText(/^fecha$/i), pastDate);
+      await user.type(screen.getByLabelText(/hora de inicio/i), pastTime);
+      await user.type(screen.getByLabelText(/hora de fin/i), '23:59');
+
+      await user.click(screen.getByRole('button', { name: /agendar|guardar/i }));
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(/no se puede agendar en el pasado/i);
+      expect(mockedCreateAppointment).not.toHaveBeenCalled();
+    });
   });
 
   it('submits createAppointment with the correct ISO start/end payload', async () => {
@@ -252,8 +303,8 @@ describe('AppointmentForm', () => {
     expect(input.providerId).toBe('staff-1');
     expect(input.reason).toBe('Control');
     expect(new Date(input.start).getTime()).toBeLessThan(new Date(input.end).getTime());
-    expect(input.start).toBe(new Date('2026-07-23T09:00:00').toISOString());
-    expect(input.end).toBe(new Date('2026-07-23T09:30:00').toISOString());
+    expect(input.start).toBe(new Date(`${FUTURE_DATE}T09:00:00`).toISOString());
+    expect(input.end).toBe(new Date(`${FUTURE_DATE}T09:30:00`).toISOString());
   });
 
   it('calls onCreated with the created appointment on success', async () => {

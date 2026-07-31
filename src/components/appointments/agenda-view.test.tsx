@@ -88,6 +88,15 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
+// Local `YYYY-MM-DD` always in the FUTURE: AppointmentForm now rejects a start
+// instant in the past, so a hardcoded date would rot.
+const FUTURE_DATE = (() => {
+  const d = new Date(Date.now() + 24 * 60 * 60 * 1000);
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${mm}-${dd}`;
+})();
+
 describe('AgendaView', () => {
   beforeEach(() => {
     mockedCreateAppointment.mockReset();
@@ -179,7 +188,7 @@ describe('AgendaView', () => {
     );
     const formDate = screen.getByLabelText(/^fecha$/i, { selector: '#appointment-date' });
     await user.clear(formDate);
-    await user.type(formDate, '2026-07-23');
+    await user.type(formDate, FUTURE_DATE);
     await user.type(screen.getByLabelText(/hora de inicio/i), '09:00');
     await user.type(screen.getByLabelText(/hora de fin/i), '09:30');
 
