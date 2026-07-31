@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { ApiError } from '@/lib/api/client';
 import { OdontogramChart } from '@/components/odontogram/odontogram-chart';
+import { OdontogramLegend } from '@/components/odontogram/odontogram-legend';
 import { ToothTimeline } from '@/components/odontogram/tooth-timeline';
 import { ToothRecordPanel } from '@/components/odontogram/tooth-record-panel';
 import { getOdontogram, type ToothGroup, type ToothSurface } from '@/lib/odontogram/odontogram-api';
@@ -119,6 +120,17 @@ export function OdontogramTab({ token, patientId }: OdontogramTabProps) {
   const catalogById = new Map(catalogItems.map((item) => [item.id, item]));
   const states = projectOdontogram(toothGroups, catalogById);
 
+  // The distinct catalog items actually painted on the chart (from the
+  // patient's records), for the color legend — so it explains what's on
+  // screen, not the whole catalog.
+  const usedCatalogIds = new Set<string>();
+  for (const state of states.values()) {
+    for (const record of state.records) {
+      if (record.catalogItemId) usedCatalogIds.add(record.catalogItemId);
+    }
+  }
+  const legendItems = catalogItems.filter((item) => usedCatalogIds.has(item.id));
+
   function handleSelectTooth(fdi: string) {
     setSelectedTooth(fdi);
     setInitialSurface(null);
@@ -194,6 +206,8 @@ export function OdontogramTab({ token, patientId }: OdontogramTabProps) {
         onSelectTooth={handleSelectTooth}
         onSelectSurface={handleSelectSurface}
       />
+
+      <OdontogramLegend items={legendItems} />
 
       {selectedTooth ? (
         <div className="grid gap-6 lg:grid-cols-2">

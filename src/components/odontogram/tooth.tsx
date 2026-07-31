@@ -139,7 +139,7 @@ export function Tooth({
         tabIndex={0}
         onClick={onSelectTooth}
         onKeyDown={handleToothKeyDown}
-        className={`cursor-pointer text-xs font-medium ${selected ? 'text-primary' : 'text-ink'}`}
+        className={`cursor-pointer text-xs font-medium tabular-nums ${selected ? 'text-primary' : 'text-ink'}`}
       >
         {toothNumber}
       </span>
