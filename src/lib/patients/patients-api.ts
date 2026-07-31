@@ -32,6 +32,24 @@ export interface Patient {
   email: string | null;
   address: string | null;
   notes: string | null;
+  // Optional: `PatientDto` (the generated read shape) wasn't updated to
+  // carry these when `CreatePatientDto`/`SaveMedicalHistoryDto` gained them
+  // (see Task 1 report) — declared optional here so the ficha can read them
+  // defensively from `GET /patients/:id` once the backend response shape
+  // catches up, without a hard compile-time guarantee they're present.
+  dataConsentAccepted?: boolean;
+  dataConsentAt?: string | null;
+  dataConsentPolicyVersion?: string | null;
+  maritalStatus?: string | null;
+  occupation?: string | null;
+  insurerEps?: string | null;
+  physicianName?: string | null;
+  physicianPhone?: string | null;
+  emergencyContactName?: string | null;
+  emergencyContactRelationship?: string | null;
+  emergencyContactPhone?: string | null;
+  guardianName?: string | null;
+  guardianDocNumber?: string | null;
   createdById: string | null;
   createdAt: string;
   updatedAt: string;
