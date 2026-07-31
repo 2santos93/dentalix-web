@@ -74,16 +74,16 @@ describe('staff-api', () => {
     expect(init.method).toBe('DELETE');
   });
 
-  it('deactivateStaff: surfaces the backend 409 (last OWNER / self-deactivation) as an ApiError', async () => {
+  it('deactivateStaff: surfaces the backend 409 (last admin / self-deactivation) as an ApiError', async () => {
     global.fetch = jest.fn().mockResolvedValue({
       ok: false,
       status: 409,
-      json: async () => ({ message: 'No puedes desactivar al último propietario.' }),
+      json: async () => ({ message: 'No puedes desactivar al último administrador.' }),
     }) as unknown as typeof fetch;
 
     await expect(deactivateStaff('tok', 'u1')).rejects.toBeInstanceOf(ApiError);
     await expect(deactivateStaff('tok', 'u1')).rejects.toThrow(
-      'No puedes desactivar al último propietario.',
+      'No puedes desactivar al último administrador.',
     );
   });
 });

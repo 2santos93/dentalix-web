@@ -17,7 +17,6 @@ const copy = {
 
 // Etiquetas de rol en español — espejo de las de profile-view.tsx.
 const ROLE_LABEL: Record<ClinicRole, string> = {
-  OWNER: 'Propietario/a',
   ADMIN: 'Administrador/a',
   DENTIST: 'Odontólogo/a',
   ASSISTANT: 'Asistente',

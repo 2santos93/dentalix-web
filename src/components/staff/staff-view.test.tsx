@@ -51,6 +51,24 @@ describe('StaffView', () => {
     expect(screen.getAllByRole('row')).toHaveLength(3); // header + 2 members
   });
 
+  it('the role select offers the 4 current roles and no Propietario/a (OWNER) option', async () => {
+    mockedListStaff.mockResolvedValue([member1]);
+
+    const user = userEvent.setup();
+    render(<StaffView token="tok" />);
+
+    await screen.findByRole('table', { name: /personal/i });
+    await user.click(screen.getByRole('button', { name: /agregar personal/i }));
+
+    const roleSelect = screen.getByLabelText<HTMLSelectElement>(/^rol$/i);
+    const options = within(roleSelect)
+      .getAllByRole('option')
+      .map((o) => (o as HTMLOptionElement).value);
+
+    expect(options).toEqual(['ADMIN', 'DENTIST', 'ASSISTANT', 'RECEPTION']);
+    expect(screen.queryByText('Propietario/a')).not.toBeInTheDocument();
+  });
+
   it('submitting the add form calls createStaff with the right payload and refreshes the list', async () => {
     mockedListStaff.mockResolvedValueOnce([member1]);
     mockedCreateStaff.mockResolvedValue({

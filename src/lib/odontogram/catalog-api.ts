@@ -53,7 +53,7 @@ export async function listCatalogItems(
  * `code`/`kind`/`labelEs`/`color` are required, the rest optional. `tenantId`
  * is NOT sent — the backend derives it from the JWT (same convention as
  * `listCatalogItems` above / `createPatient`). Guarded by `CATALOG_WRITE_ROLES`
- * (OWNER/ADMIN) on the backend.
+ * (ADMIN) on the backend.
  */
 export interface CreateCatalogItemInput {
   code: string;
@@ -84,7 +84,7 @@ export async function createCatalogItem(
  * deactivate it (`{ active }`). Deactivating is the "soft delete" (there is no
  * DELETE endpoint): it hides the item from the pickers but keeps the history in
  * `ToothRecord` / treatment-plan items that reference it. Guarded by
- * `CATALOG_WRITE_ROLES` (OWNER/ADMIN) on the backend.
+ * `CATALOG_WRITE_ROLES` (ADMIN) on the backend.
  */
 export interface UpdateCatalogItemInput {
   code?: string;

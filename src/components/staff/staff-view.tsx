@@ -64,7 +64,6 @@ const copy = {
 };
 
 const ROLE_OPTIONS: { value: ClinicRole; label: string }[] = [
-  { value: 'OWNER', label: 'Propietario/a' },
   { value: 'ADMIN', label: 'Administrador/a' },
   { value: 'DENTIST', label: 'Odontólogo/a' },
   { value: 'ASSISTANT', label: 'Asistente' },
@@ -214,7 +213,7 @@ export function StaffView({ token }: StaffViewProps) {
     setUpdatingId(userId);
     setRowError(null);
     try {
-      // The backend 409s (last OWNER / self-deactivation) — surfaced via
+      // The backend 409s (last admin / self-deactivation) — surfaced via
       // `rowError` below like any other row action; no client-side check
       // (the auth store only holds tokens, not the current user's identity).
       await deactivateStaff(token, userId);

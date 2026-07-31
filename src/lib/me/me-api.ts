@@ -2,7 +2,7 @@ import { apiFetch, apiFetchOrNull } from '@/lib/api/client';
 
 // Espejo del enum Prisma `ClinicRole` (no se expone como componente propio en
 // el OpenAPI). Mantener en sync — mismo criterio que staff-api.ts.
-export type ClinicRole = 'OWNER' | 'DENTIST' | 'ASSISTANT' | 'RECEPTION' | 'ADMIN';
+export type ClinicRole = 'DENTIST' | 'ASSISTANT' | 'RECEPTION' | 'ADMIN';
 
 export interface MyProfileMembership {
   tenantId: string;

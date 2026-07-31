@@ -714,7 +714,7 @@ export interface components {
             tenantId: string;
             clinicName: string;
             /** @enum {string} */
-            role: "OWNER" | "DENTIST" | "ASSISTANT" | "RECEPTION" | "ADMIN";
+            role: "DENTIST" | "ASSISTANT" | "RECEPTION" | "ADMIN";
         };
         MyProfileDto: {
             id: string;
@@ -1109,19 +1109,19 @@ export interface components {
             fullName: string;
             email: string;
             /** @enum {string} */
-            role: "OWNER" | "DENTIST" | "ASSISTANT" | "RECEPTION" | "ADMIN";
+            role: "DENTIST" | "ASSISTANT" | "RECEPTION" | "ADMIN";
         };
         CreateStaffDto: {
             fullName: string;
             email: string;
             /** @enum {string} */
-            role: "OWNER" | "DENTIST" | "ASSISTANT" | "RECEPTION" | "ADMIN";
+            role: "DENTIST" | "ASSISTANT" | "RECEPTION" | "ADMIN";
             password: string;
         };
         UpdateStaffDto: {
             fullName?: string;
             /** @enum {string} */
-            role?: "OWNER" | "DENTIST" | "ASSISTANT" | "RECEPTION" | "ADMIN";
+            role?: "DENTIST" | "ASSISTANT" | "RECEPTION" | "ADMIN";
         };
         CreateDomainDto: Record<string, never>;
         BrandingDto: {

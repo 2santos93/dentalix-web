@@ -34,7 +34,6 @@ const copy = {
 };
 
 const ROLE_LABEL: Record<string, string> = {
-  OWNER: 'Propietario/a',
   ADMIN: 'Administrador/a',
   DENTIST: 'Odontólogo/a',
   ASSISTANT: 'Asistente',

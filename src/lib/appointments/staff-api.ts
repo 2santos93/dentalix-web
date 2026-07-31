@@ -4,7 +4,7 @@ import { apiFetch } from '@/lib/api/client';
 // up inline wherever a DTO references it) — re-declare the literal union here
 // mirroring `dentalix-api`'s Prisma `ClinicRole` enum. Keep in sync if it
 // changes.
-export type ClinicRole = 'OWNER' | 'DENTIST' | 'ASSISTANT' | 'RECEPTION' | 'ADMIN';
+export type ClinicRole = 'DENTIST' | 'ASSISTANT' | 'RECEPTION' | 'ADMIN';
 
 /**
  * `GET /staff` returns the plain TS `StaffMember` interface on the backend

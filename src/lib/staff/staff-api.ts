@@ -4,7 +4,7 @@ import { apiFetch, apiFetchOrNull } from '@/lib/api/client';
 // up inline wherever a DTO references it) — re-declare the literal union here
 // mirroring `dentalix-api`'s Prisma `ClinicRole` enum, same convention as
 // `src/lib/appointments/staff-api.ts`. Keep in sync if it changes.
-export type ClinicRole = 'OWNER' | 'DENTIST' | 'ASSISTANT' | 'RECEPTION' | 'ADMIN';
+export type ClinicRole = 'DENTIST' | 'ASSISTANT' | 'RECEPTION' | 'ADMIN';
 
 /**
  * `GET /staff` (and the `POST`/`PATCH` responses below) return the plain TS
@@ -75,7 +75,7 @@ export async function updateStaff(
  * `res.json()` would throw on (same situation as `GET
  * /patients/:id/medical-history`, see `client.ts`'s `apiFetchOrNull` doc
  * comment) — use `apiFetchOrNull` and discard the (always-null) result.
- * Returns 409 if you try to deactivate the last OWNER or yourself; that
+ * Returns 409 if you try to deactivate the last admin or yourself; that
  * throws `ApiError` same as any other non-ok response, and the caller
  * surfaces `err.message`.
  */
