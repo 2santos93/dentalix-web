@@ -24,16 +24,24 @@ export type PlanBalance = components['schemas']['PlanBalanceDto'];
  * `POST /treatment-plans/:id/payments` — records an abono (`createdById` is
  * derived server-side from the JWT). `amount`/`currency`/`paidAt` are
  * required; `method`/`notes` are optional.
+ *
+ * `idempotencyKey` (UUID) dedups double-submits/retries: the backend returns
+ * the EXISTING payment for a replay of the same key instead of creating a
+ * second row. The CALLER generates it (once per form-open, stable across
+ * retries of the same submit) and passes it here — generating it inside this
+ * function would mint a fresh key per call and defeat the dedup.
  */
 export async function recordPayment(
   token: string,
   planId: string,
   input: RecordPaymentInput,
+  idempotencyKey: string,
 ): Promise<Payment> {
   return apiFetch<Payment>(`/treatment-plans/${planId}/payments`, {
     method: 'POST',
     body: input,
     token,
+    headers: { 'Idempotency-Key': idempotencyKey },
   });
 }
 

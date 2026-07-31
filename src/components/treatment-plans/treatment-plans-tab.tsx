@@ -598,6 +598,11 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
   const [paymentsRefreshing, setPaymentsRefreshing] = useState(false);
   const [paymentsRefreshError, setPaymentsRefreshError] = useState<string | null>(null);
   const loadedPaymentsPlanIdRef = useRef<string | null>(null);
+  // Idempotency-Key for the in-progress abono. Minted when the form opens
+  // (openPaymentForm) and rotated after a SUCCESSFUL submit, so every retry of
+  // the SAME click (network error → user clicks again) reuses the same key and
+  // the backend dedups it, while each new abono gets a fresh key.
+  const paymentIdempotencyKeyRef = useRef<string | null>(null);
 
   const [showPaymentForm, setShowPaymentForm] = useState(false);
   const [paymentAmount, setPaymentAmount] = useState('');
@@ -960,6 +965,7 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
 
   /** Opens the "Registrar pago" modal, defaulting currency=plan.currency / fecha=today. */
   function openPaymentForm() {
+    paymentIdempotencyKeyRef.current = crypto.randomUUID();
     setPaymentAmount('');
     setPaymentCurrency(planDetail?.currency ?? 'USD');
     setPaymentDate(todayLocalDateString());
@@ -1001,15 +1007,23 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
         ...(paymentMethod ? { method: paymentMethod } : {}),
         ...(paymentNotes.trim() ? { notes: paymentNotes.trim() } : {}),
       };
-      await recordPayment(token, selectedPlanId, input);
+      // Defensive: if the form was somehow submitted without an open-time key,
+      // mint one now so this submit still dedups.
+      const idempotencyKey =
+        paymentIdempotencyKeyRef.current ??
+        (paymentIdempotencyKeyRef.current = crypto.randomUUID());
+      await recordPayment(token, selectedPlanId, input, idempotencyKey);
+      // Success → rotate: the next abono is a genuinely different payment.
+      paymentIdempotencyKeyRef.current = crypto.randomUUID();
       setPaymentAmount('');
       setPaymentMethod('');
       setPaymentNotes('');
       setShowPaymentForm(false);
       await refreshBalanceAndPayments();
     } catch (err) {
-      // Surfaces the backend's 400 (invalid amount/currency) verbatim —
-      // `ApiError.message` is the backend's validation message.
+      // Key intentionally NOT rotated here: a retry of this same click must
+      // reuse it so the backend dedups instead of double-charging.
+      // Surfaces the backend's 400 (invalid amount/currency) verbatim.
       setAddPaymentError(err instanceof ApiError ? err.message : copy.genericAddPaymentError);
     } finally {
       setAddPaymentSubmitting(false);
