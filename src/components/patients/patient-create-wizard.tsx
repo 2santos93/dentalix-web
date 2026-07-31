@@ -155,16 +155,11 @@ export function PatientCreateWizard({ token }: PatientCreateWizardProps) {
         ...(email.trim() ? { email: email.trim().toLowerCase() } : {}),
         ...(address.trim() ? { address: address.trim() } : {}),
         ...(notes.trim() ? { notes: notes.trim() } : {}),
-        // `CreatePatientInput['medicalHistory']` is the *generated* shape,
-        // where the nested array/object fields collapse to
-        // `Record<string, never>` (see clinical-types.ts's file-level
-        // comment — Swagger can't introspect those nested DTO classes). The
-        // hand-typed `ClinicalHistoryValue` we edit here is structurally
-        // compatible with what the API actually expects; the cast bridges
-        // the generated type's blind spot.
-        ...(historyHasContent(history)
-          ? { medicalHistory: history as CreatePatientInput['medicalHistory'] }
-          : {}),
+        // `CreatePatientInput.medicalHistory` is typed as
+        // `ClinicalHistoryValue` (patients-api.ts overrides the generated
+        // field, whose nested shape Swagger can't introspect), so `history`
+        // is assignable as-is — no cast.
+        ...(historyHasContent(history) ? { medicalHistory: history } : {}),
         ...(dataConsentAccepted
           ? {
               dataConsentAccepted: true,
@@ -337,8 +332,10 @@ export function PatientCreateWizard({ token }: PatientCreateWizardProps) {
           />
         )}
 
+        {/* Last clinical step owns the shared "Notas" field, so it appears once
+            in the wizard instead of on every clinical step. */}
         {step === 3 && (
-          <ClinicalHistoryFields value={history} onChange={setHistory} sections={['habits']} />
+          <ClinicalHistoryFields value={history} onChange={setHistory} sections={['habits', 'notes']} />
         )}
 
         {step === 4 && (

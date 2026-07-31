@@ -4,7 +4,11 @@ import { useState } from 'react';
 import { ClinicalHistoryFields } from './clinical-history-fields';
 import type { ClinicalHistoryValue } from '@/lib/clinical/clinical-types';
 
-function Harness({ sections }: { sections?: Array<'conditions' | 'allergies' | 'medications' | 'habits'> }) {
+function Harness({
+  sections,
+}: {
+  sections?: Array<'conditions' | 'allergies' | 'medications' | 'habits' | 'notes'>;
+}) {
   const [v, setV] = useState<ClinicalHistoryValue>({});
   return (
     <>
@@ -44,4 +48,13 @@ it('respeta la prop sections, renderizando solo las secciones pedidas', () => {
   render(<Harness sections={['allergies']} />);
   expect(screen.getByRole('button', { name: /agregar alergia/i })).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: /agregar medicamento/i })).not.toBeInTheDocument();
+});
+
+// `notes` is a section too: a multi-step consumer places it on ONE step, so it
+// must NOT render on the steps that don't ask for it (it used to appear on all
+// of them). Rendering it when requested is covered by the "escribe notas" test
+// above, which passes no `sections` (defaults to all).
+it('oculta el campo de notas cuando sections no lo pide', () => {
+  render(<Harness sections={['habits']} />);
+  expect(screen.queryByLabelText(/notas/i)).not.toBeInTheDocument();
 });

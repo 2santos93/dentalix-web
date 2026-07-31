@@ -14,8 +14,13 @@ const copy = {
   pregnant: 'Embarazo', weeksPregnant: 'Semanas de embarazo', notes: 'Notas',
 };
 
-type Section = 'conditions' | 'allergies' | 'medications' | 'habits';
-const ALL_SECTIONS: Section[] = ['conditions', 'allergies', 'medications', 'habits'];
+// `notes` is a section like the rest so a multi-step consumer (the create
+// wizard) can place the shared "Notas" field on ONE step instead of having it
+// reappear on every step that mounts this component. Consumers that render the
+// whole anamnesis at once (the patient-detail panel) pass no `sections` and get
+// all of them, notes included.
+type Section = 'conditions' | 'allergies' | 'medications' | 'habits' | 'notes';
+const ALL_SECTIONS: Section[] = ['conditions', 'allergies', 'medications', 'habits', 'notes'];
 
 interface ClinicalHistoryFieldsProps {
   value: ClinicalHistoryValue;
@@ -85,14 +90,16 @@ export function ClinicalHistoryFields({ value, onChange, sections = ALL_SECTIONS
         />
       )}
 
-      <FormField htmlFor="ch-notes" label={copy.notes}>
-        <textarea
-          id="ch-notes"
-          className={cn(fieldClass, 'min-h-24')}
-          value={value.notes ?? ''}
-          onChange={(e) => onChange({ ...value, notes: e.target.value })}
-        />
-      </FormField>
+      {show('notes') && (
+        <FormField htmlFor="ch-notes" label={copy.notes}>
+          <textarea
+            id="ch-notes"
+            className={cn(fieldClass, 'min-h-24')}
+            value={value.notes ?? ''}
+            onChange={(e) => onChange({ ...value, notes: e.target.value })}
+          />
+        </FormField>
+      )}
     </div>
   );
 }
