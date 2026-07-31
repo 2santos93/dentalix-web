@@ -86,7 +86,7 @@ export function WeekTimeGrid({
   return (
     <div
       aria-label={copy.heading}
-      className="overflow-auto rounded-lg border border-border bg-surface"
+      className="max-h-[70vh] overflow-auto rounded-lg border border-border bg-surface"
       ref={scrollRef}
     >
       {/* min-width fuerza scroll horizontal en pantallas chicas */}
