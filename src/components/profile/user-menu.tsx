@@ -84,9 +84,15 @@ function ThemeRow() {
  *
  * - `variant="card"` (default): tarjeta a lo ancho para el pie del sidebar; el
  *   menú se abre hacia ARRIBA, sobre la tarjeta.
+ * - `variant="rail"`: solo el avatar, para el sidebar colapsado; el menú abre
+ *   hacia arriba y desborda el rail hacia el contenido.
  * - `variant="compact"`: solo el avatar (topbar en móvil); el menú abre abajo.
  */
-export function UserMenu({ variant = 'card' }: { variant?: 'card' | 'compact' }) {
+export function UserMenu({
+  variant = 'card',
+}: {
+  variant?: 'card' | 'compact' | 'rail';
+}) {
   const router = useRouter();
   const accessToken = useAuthStore((s) => s.accessToken);
   const [name, setName] = useState<string | null>(null);
@@ -160,7 +166,11 @@ export function UserMenu({ variant = 'card' }: { variant?: 'card' | 'compact' })
       role="menu"
       className={cn(
         'absolute z-20 rounded-xl border border-border bg-surface py-1 shadow-lg',
-        variant === 'card' ? 'bottom-full left-0 right-0 mb-2' : 'right-0 top-full mt-2 w-56',
+        variant === 'card' && 'bottom-full left-0 right-0 mb-2',
+        // En rail el menú no puede heredar el ancho del disparador (40px): se le
+        // da uno propio y desborda sobre el contenido, hacia arriba.
+        variant === 'rail' && 'bottom-full left-0 mb-2 w-56',
+        variant === 'compact' && 'right-0 top-full mt-2 w-56',
       )}
     >
       <Link
@@ -175,7 +185,7 @@ export function UserMenu({ variant = 'card' }: { variant?: 'card' | 'compact' })
       {/* El horario es de la clínica, no de la cuenta, pero este menú es el
           único sitio de ajustes que hay: meterlo en la nav lateral sumaría una
           séptima sección que en móvil ya no cabe. Aplica a la sede activa que
-          marca el selector del topbar. */}
+          marca el selector de sede (pie del sidebar / topbar en móvil). */}
       <Link
         href="/settings/horarios"
         role="menuitem"
@@ -200,18 +210,25 @@ export function UserMenu({ variant = 'card' }: { variant?: 'card' | 'compact' })
     </div>
   );
 
-  if (variant === 'compact') {
+  if (variant === 'compact' || variant === 'rail') {
+    const isRail = variant === 'rail';
     return (
       <div className="relative" ref={wrapRef}>
         <button
           type="button"
-          aria-label={copy.account}
+          // En rail el avatar es lo único que se ve: el nombre pasa al title
+          // para que el hover lo revele, igual que los ítems de la nav.
+          aria-label={isRail ? (name ?? copy.account) : copy.account}
+          title={isRail ? (name ?? copy.account) : undefined}
           aria-haspopup="menu"
           aria-expanded={open}
           onClick={() => setOpen((v) => !v)}
-          className="flex items-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          className={cn(
+            'flex items-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
+            isRail && 'size-10 justify-center',
+          )}
         >
-          {avatar('size-8')}
+          {avatar(isRail ? 'size-9' : 'size-8')}
         </button>
         {open && menu}
       </div>
