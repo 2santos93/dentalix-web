@@ -5,7 +5,6 @@ import { ApiError } from '@/lib/api/client';
 import { getDashboard, type Dashboard } from '@/lib/dashboard/dashboard-api';
 import { addOneDayIso } from '@/lib/dashboard/date-range';
 import { formatCurrency } from '@/lib/format/currency';
-import { listPatients } from '@/lib/patients/patients-api';
 import { listStaff } from '@/lib/appointments/staff-api';
 import { formatTime } from '@/lib/format/date';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -117,32 +116,12 @@ export function DashboardView({ token }: DashboardViewProps) {
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
-  // Patient/provider name maps for `UpcomingAppointmentsCard` — fetched once
-  // (bounded page, same tradeoff as `AgendaView`'s `patientNames`). Best-effort:
-  // a failure here just leaves names falling back to the raw id, it's not
-  // worth its own error UI.
-  const [patientNames, setPatientNames] = useState<Record<string, string>>({});
+  // El nombre del paciente viene joinado en cada cita
+  // (`patientFirstName`/`patientLastName`). Antes se resolvía con un mapa
+  // armado desde `GET /patients?pageSize=100`, que la API acota en 100: a
+  // partir del paciente 101 la tarjeta mostraba el UUID crudo.
+  // `staffNames` sí se mantiene: el endpoint de personal no está acotado así.
   const [staffNames, setStaffNames] = useState<Record<string, string>>({});
-
-  useEffect(() => {
-    if (!token) return;
-    let cancelled = false;
-    async function load() {
-      try {
-        const res = await listPatients(token, { pageSize: 100 });
-        if (cancelled) return;
-        setPatientNames(
-          Object.fromEntries(res.items.map((p) => [p.id, `${p.firstName} ${p.lastName}`])),
-        );
-      } catch {
-        /* best-effort, see comment above */
-      }
-    }
-    void load();
-    return () => {
-      cancelled = true;
-    };
-  }, [token]);
 
   useEffect(() => {
     if (!token) return;
@@ -266,7 +245,6 @@ export function DashboardView({ token }: DashboardViewProps) {
           <div className="flex flex-col gap-4 lg:col-span-2">
             <UpcomingAppointmentsCard
               upcomingAppointments={data.upcomingAppointments}
-              patientNames={patientNames}
               staffNames={staffNames}
             />
             <LowStockCard lowStockItems={data.lowStockItems} />
@@ -353,11 +331,9 @@ function LowStockCard({ lowStockItems }: { lowStockItems: Dashboard['lowStockIte
 
 function UpcomingAppointmentsCard({
   upcomingAppointments,
-  patientNames,
   staffNames,
 }: {
   upcomingAppointments: Dashboard['upcomingAppointments'];
-  patientNames: Record<string, string>;
   staffNames: Record<string, string>;
 }) {
   return (
@@ -379,9 +355,13 @@ function UpcomingAppointmentsCard({
         ) : (
           <ul className="flex flex-col gap-3">
             {upcomingAppointments.map((appointment) => {
-              // Fallback to the raw id when the name lookup has no match —
-              // same convention as `DayAgenda`'s `patientLabel`.
-              const patientLabel = patientNames[appointment.patientId] ?? appointment.patientId;
+              // Nombre joinado en la cita; cae al id crudo solo si la API no
+              // pudo resolverlo (misma convención que `patientLabel` de la agenda).
+              const patientLabel =
+                [appointment.patientFirstName, appointment.patientLastName]
+                  .filter(Boolean)
+                  .join(' ')
+                  .trim() || appointment.patientId;
               const providerLabel = staffNames[appointment.providerId] ?? appointment.providerId;
               return (
                 <li

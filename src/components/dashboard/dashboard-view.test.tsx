@@ -105,6 +105,8 @@ function dashboard(overrides: Partial<Dashboard> = {}): Dashboard {
       {
         id: 'apt-1',
         patientId: PATIENT_ID,
+        patientFirstName: 'María',
+        patientLastName: 'López',
         providerId: 'staff-1',
         start: '2026-07-24T14:00:00.000Z',
         end: '2026-07-24T14:30:00.000Z',
@@ -202,21 +204,40 @@ describe('DashboardView', () => {
     expect(screen.getByText('42')).toBeInTheDocument();
   });
 
-  it('resolves patient + provider names in "Próximas citas" (falling back to the raw id when unresolved)', async () => {
+  it('names the patient from the appointment itself (no /patients lookup) and the provider from staff', async () => {
     mockedGetDashboard.mockResolvedValue(dashboard());
+    // Sin mapa de pacientes: el nombre sale de `patientFirstName`/`patientLastName`
+    // que ya trae la cita. Antes esto dependía de `GET /patients?pageSize=100`,
+    // que topa en 100 y dejaba un UUID en pantalla a partir de ahí.
+    mockedListPatients.mockResolvedValue({ ...patientsPage, items: [] });
 
     render(<DashboardView token="tok" />);
 
     await screen.findByText(/María López/);
+    expect(mockedListPatients).not.toHaveBeenCalled();
     expect(screen.getByText(/Dra\. Ana Ríos/)).toBeInTheDocument();
     // The raw uuid/truncated-id rendering this replaces must be gone.
     expect(screen.queryByText(new RegExp(PATIENT_ID))).not.toBeInTheDocument();
   });
 
-  it('falls back to the raw patientId/providerId when the name lookups have no match', async () => {
-    mockedListPatients.mockResolvedValue({ ...patientsPage, items: [] });
+  it('falls back to the raw patientId/providerId when the API returned no name and staff has no match', async () => {
     mockedListStaff.mockResolvedValue([]);
-    mockedGetDashboard.mockResolvedValue(dashboard());
+    mockedGetDashboard.mockResolvedValue(
+      dashboard({
+        upcomingAppointments: [
+          {
+            id: 'apt-1',
+            patientId: PATIENT_ID,
+            patientFirstName: null,
+            patientLastName: null,
+            providerId: 'staff-1',
+            start: '2026-07-24T14:00:00.000Z',
+            end: '2026-07-24T14:30:00.000Z',
+            status: 'CONFIRMED',
+          },
+        ],
+      }),
+    );
 
     render(<DashboardView token="tok" />);
 

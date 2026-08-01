@@ -1527,6 +1527,9 @@ export interface components {
             id: string;
             /** Format: uuid */
             patientId: string;
+            /** @description Patient's first name, joined so the dashboard can label the appointment without fetching the patient list. */
+            patientFirstName: string | null;
+            patientLastName: string | null;
             /** Format: uuid */
             providerId: string;
             /** Format: date-time */
