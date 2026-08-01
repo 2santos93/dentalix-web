@@ -140,25 +140,55 @@ export function PatientEditModal({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [seededPatient, setSeededPatient] = useState(patient);
+  // Recuerda si `open` era true en el render anterior, para detectar la
+  // transición false→true (reabrir) sin un efecto — mismo patrón de React
+  // que `seededPatient` ("store information from previous renders").
+  const [wasOpen, setWasOpen] = useState(open);
 
   // Re-sembrar al cambiar de paciente (reabrir con otro, o con el mismo tras
-  // guardar) sin mostrar datos obsoletos. Se ajusta durante el render — no
-  // en un efecto — siguiendo el patrón de React para "adjust state when a
-  // prop changes"; un `useEffect` aquí dispara `react-hooks/set-state-in-effect`.
-  if (patient !== seededPatient) {
+  // guardar) o al reabrir el modal con el mismo paciente — así una edición
+  // cancelada (Cancelar cierra pero no desmonta este componente) no
+  // sobrevive a un cierre. Se ajusta durante el render — no en un efecto —
+  // siguiendo el patrón de React para "adjust state when a prop changes";
+  // un `useEffect` aquí dispara `react-hooks/set-state-in-effect`.
+  if (patient !== seededPatient || (open && !wasOpen)) {
     setSeededPatient(patient);
     setText(textStateFrom(patient));
     setDocType(patient.docType);
     setSex(patient.sex);
     setError(null);
   }
+  if (open !== wasOpen) {
+    setWasOpen(open);
+  }
 
+  /**
+   * Sólo viaja lo que cambió respecto a `seededPatient`: sin diff, cada
+   * guardado reescribía los 20 campos con el snapshot cargado al abrir la
+   * página, así que el segundo de dos editores en paralelo revertía en
+   * silencio los campos que el primero acababa de corregir (y bumpeaba
+   * `updatedAt` aunque no hubiera cambios reales).
+   *
+   * - sin cambios → se omite
+   * - cambiado a un valor → se manda el valor
+   * - vaciado → se manda `null` (excepto `birthDate`: el backend hace
+   *   `dto.birthDate !== undefined ? new Date(...) : undefined`, así que un
+   *   `null` ahí escribiría 1970-01-01; se omite en vez de "borrarlo").
+   */
   function buildPatch(): UpdatePatientInput {
-    const patch: Record<string, unknown> = { docType, sex };
+    const seededText = textStateFrom(seededPatient);
+    const patch: Record<string, unknown> = {};
+    if (docType !== seededPatient.docType) patch.docType = docType;
+    if (sex !== seededPatient.sex) patch.sex = sex;
     for (const group of GROUPS) {
       for (const f of group.fields) {
         const value = text[f.key].trim();
-        if (value) patch[f.key] = value;
+        if (value === seededText[f.key]) continue;
+        if (f.key === 'birthDate') {
+          if (value) patch.birthDate = value;
+          continue;
+        }
+        patch[f.key] = value || null;
       }
     }
     return patch as UpdatePatientInput;
