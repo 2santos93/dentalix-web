@@ -277,7 +277,18 @@ go stale. The test: can the captured value change before the retry fires
 without the retry being wrong? If yes, it's ambient state and needs the
 reload-mechanism treatment; if the value *is* what's being retried, close
 over it directly. A modal that stays open on failure makes its own toast
-inert underneath it; close the dialog on failure too.
+inert underneath it; close the dialog on failure too. And a toast that carries
+an action does not expire — it is reporting something that was left undone, so
+letting it lapse leaves the divergence with nobody informed. The close button
+is the way out.
+
+**A failed retry stays on its own rung.** When a rung-1 retry fails again, ask
+the Rung Test once more: nothing new disappeared, the section still has nothing
+to show — so it is still rung 1. The surface stays with the new message; it does
+not sprout a rung-3 toast beside itself, because rung 3's precondition (content
+on screen and still correct) does not hold. In practice: wire a rung-1 retry to
+the reload key that re-runs the load, not to the background-refresh function
+that shares its fetch — those two look interchangeable and are not.
 
 ### Tables
 - **Header:** surface-2, label type, muted. **Rows:** hairline separators, 44px min height,
