@@ -17,7 +17,19 @@
 - **Copy: el mensaje dice qué falló y qué sigue funcionando**, no solo que algo falló. «No pudimos cargar los profesionales» → el filtro; la agenda sigue usable.
 - **Nunca significado solo por color** (WCAG 1.4.1). Todo error lleva icono además del color.
 - **Roles ARIA fijados por escalón** (ver tabla abajo). No improvisar: ~20 tests existentes dependen de ellos.
-- **`onRetry` de un toast nunca captura estado mutable del componente.** Un toast se construye en el `catch`; si su `onRetry` cierra sobre filtros o fechas, reintenta los de *ese* instante y puede sobreescribir datos correctos con datos viejos. Pasar `() => ref.current()` con un ref mantenido al día, no la referencia capturada. Excepción: closures cuyos argumentos **son** la operación (`handleStatusChange(id, status)`) no tienen el problema y se dejan tal cual. *(Corrección introducida tras la revisión de T6; los snippets de las tareas 6, 8 y 9 la reflejan.)*
+- **`onRetry` de un toast nunca captura estado mutable del componente.** Un toast se construye en el `catch`; si su `onRetry` cierra sobre filtros o fechas, reintenta los de *ese* instante y puede sobreescribir datos correctos con datos viejos.
+
+  Formas aceptables, en orden de preferencia:
+  1. **Reusar el mecanismo de recarga existente:** `onRetry: () => setReloadKey((k) => k + 1)`. Los updaters funcionales tienen identidad estable, así que no hay estado obsoleto ni maquinaria extra.
+  2. **Ref escrito en un efecto** (nunca en el cuerpo del render — la regla `react-hooks/refs` lo trata como error: «Cannot update ref during render»):
+     ```tsx
+     const refreshRef = useRef(refresh);
+     useEffect(() => { refreshRef.current = refresh; });  // sin deps: corre tras cada render
+     ```
+
+  Excepción: closures cuyos argumentos **son** la operación (`handleStatusChange(id, status)`) no tienen el problema y se dejan tal cual.
+
+  **Ningún toast puede quedarse sin `onRetry` para silenciar el linter.** Si un aviso no ofrece salida, el escalón 3 deja de cumplir su función. *(Convención introducida tras la revisión de T6 y corregida tras la de T8, donde la variante escrita en el render dejó el lint en rojo.)*
 - Radios y alturas según `DESIGN.md`: 8px (`rounded-lg`) para controles, 12px (`rounded-xl`) para bloques de sección.
 - Todo texto de UI en español, es-first, como constante `copy` en el módulo (convención vigente hasta que entre next-intl).
 
@@ -931,14 +943,7 @@ Anotar el estado de partida.
 
 - [ ] **Step 5: Migrar escalón 3 (`refreshError`, `planDetailRefreshError`)**
 
-Borrar los bloques de render y llamar a `notifyError` desde el `catch`. `onRetry` **no** recibe la referencia capturada de la función de refresco: usar un ref mantenido al día, según la constraint global sobre closures obsoletos.
-
-```tsx
-const refreshPlansRef = useRef(refreshPlansInPlace);
-refreshPlansRef.current = refreshPlansInPlace;
-// ...
-onRetry: () => refreshPlansRef.current(),
-```
+Borrar los bloques de render y llamar a `notifyError` desde el `catch`. `onRetry` **no** recibe la referencia capturada de la función de refresco — aplicar la constraint global sobre closures obsoletos, preferiblemente la opción 1 (`setReloadKey`) y, si no encaja, el ref escrito en un efecto. Nunca asignar el ref en el cuerpo del render: el lint lo rechaza.
 
 Eliminar los `useState` huérfanos.
 
