@@ -101,6 +101,28 @@ describe('AcceptInvitationForm', () => {
     );
   });
 
+  it('un fallo al verificar la invitación se puede reintentar y el error desaparece al cargar', async () => {
+    (getPublicInvitation as jest.Mock).mockRejectedValueOnce(new ApiError(500, 'Fallo el servidor.'));
+    (getPublicInvitation as jest.Mock).mockResolvedValueOnce({
+      status: 'VALID',
+      clinicName: 'Sonrisa Dental',
+      role: 'DENTIST',
+      maskedEmail: 'j***@example.com',
+      userExists: false,
+    });
+
+    render(<AcceptInvitationForm inviteToken="tok-5" />);
+
+    expect(await screen.findByRole('alert')).toHaveTextContent('Fallo el servidor.');
+    fireEvent.click(screen.getByRole('button', { name: /reintentar/i }));
+
+    // The load error must clear and the actual content take its place — not
+    // both, and not neither (the "loads but stays invisible" bug this
+    // project already hit once).
+    expect(await screen.findByText('Sonrisa Dental')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
   it('muestra el error verbatim de una contraseña incorrecta sin guardar tokens', async () => {
     (getPublicInvitation as jest.Mock).mockResolvedValueOnce({
       status: 'VALID',
