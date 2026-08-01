@@ -17,6 +17,7 @@ import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { FormField } from '@/components/molecules/form-field';
 import { AsyncSection } from '@/components/molecules/async-section';
+import { InlineError } from '@/components/errors/inline-error';
 import { Skeleton } from '@/components/ui/skeleton';
 
 // Copy as constants (i18n-ready, es-first), igual que el resto de la app.
@@ -306,11 +307,7 @@ export function BusinessHoursForm({ token }: BusinessHoursFormProps) {
           })}
         </div>
 
-        {saveError && (
-          <p role="alert" className="text-sm text-danger">
-            {saveError}
-          </p>
-        )}
+        {saveError && <InlineError>{saveError}</InlineError>}
         {saved && !saveError && (
           <p role="status" className="text-sm font-medium text-primary">
             {copy.saved}
