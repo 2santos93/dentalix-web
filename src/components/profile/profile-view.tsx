@@ -20,7 +20,6 @@ import { InlineError } from '@/components/errors/inline-error';
 const copy = {
   loading: 'Cargando perfil…',
   loadError: 'No pudimos cargar tu perfil.',
-  retry: 'Reintentar',
   nameLabel: 'Nombre completo',
   save: 'Guardar',
   saving: 'Guardando…',
@@ -149,7 +148,6 @@ export function ProfileView({ token }: ProfileViewProps) {
       <SectionError
         description={loadError ?? copy.loadError}
         onRetry={() => setReloadKey((k) => k + 1)}
-        retryLabel={copy.retry}
       />
     );
   }

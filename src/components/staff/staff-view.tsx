@@ -41,7 +41,6 @@ const copy = {
   passwordLabel: 'Contraseña temporal',
   submit: 'Crear',
   submitting: 'Creando…',
-  retry: 'Reintentar',
   loading: 'Cargando personal…',
   tableLabel: 'Personal de la clínica',
   genericLoadError: 'No pudimos cargar el personal.',
@@ -322,7 +321,6 @@ export function StaffView({ token }: StaffViewProps) {
         loading={loading}
         error={loadError}
         onRetry={() => setReloadKey((k) => k + 1)}
-        retryLabel={copy.retry}
         isEmpty={staff.length === 0}
         emptyTitle={copy.empty}
         emptyDescription={copy.emptyHint}

@@ -26,7 +26,6 @@ const copy = {
   toLabel: 'Hasta',
   currencyLabel: 'Moneda',
   loading: 'Cargando panel…',
-  retry: 'Reintentar',
   forbidden: 'No tienes acceso a este panel.',
   genericError: 'No pudimos cargar el panel.',
   rangeInvalid: 'La fecha "Hasta" debe ser igual o posterior a la fecha "Desde".',
@@ -227,7 +226,6 @@ export function DashboardView({ token }: DashboardViewProps) {
         <SectionError
           description={error}
           onRetry={() => setReloadKey((k) => k + 1)}
-          retryLabel={copy.retry}
         />
       ) : data ? (
         <div className="grid items-start gap-4 lg:grid-cols-3">

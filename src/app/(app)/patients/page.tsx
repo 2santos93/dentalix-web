@@ -19,7 +19,6 @@ const copy = {
   description: 'Gestiona la base de pacientes de tu clínica.',
   newPatient: 'Nuevo paciente',
   genericError: 'No pudimos cargar los pacientes.',
-  retry: 'Reintentar',
   checkingSession: 'Verificando sesión…',
 };
 
@@ -116,7 +115,6 @@ export default function PatientsPage() {
             setError(null);
             setRetryCount((c) => c + 1);
           }}
-          retryLabel={copy.retry}
         />
       ) : (
         <>
