@@ -2,6 +2,7 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MedicalHistoryPanel } from './medical-history-panel';
 import { getMedicalHistory, saveMedicalHistory } from '@/lib/patients/clinical-api';
+import type { MedicalHistory, SafetyFlags } from '@/lib/patients/clinical-api';
 
 // NOTE: jest.mock's string literal is not alias-rewritten by the SWC
 // transform (only real `import`/`require` specifiers are) — use a relative
@@ -15,20 +16,54 @@ jest.mock('../../lib/patients/clinical-api', () => ({
 const mockedGet = getMedicalHistory as jest.MockedFunction<typeof getMedicalHistory>;
 const mockedSave = saveMedicalHistory as jest.MockedFunction<typeof saveMedicalHistory>;
 
-const latest = {
-  id: 'mh-1',
-  tenantId: 't1',
-  patientId: 'p1',
-  version: 2,
-  allergies: 'Penicilina',
-  chronicConditions: 'Hipertensión',
-  currentMedications: 'Losartán',
-  habits: 'Fumador',
-  medicalAlerts: 'Alergia severa',
-  notes: 'Paciente colaborador',
-  createdById: 'u1',
-  createdAt: '2026-01-02T00:00:00.000Z',
+const noFlags: SafetyFlags = {
+  embarazo: false,
+  anticoagulantes: false,
+  bifosfonatos: false,
+  diabetes: false,
+  profilaxisAntibiotica: false,
+  alergiaAnestesico: false,
+  alergiaPenicilina: false,
+  alergiaLatex: false,
 };
+
+function history(overrides: Partial<MedicalHistory> = {}): MedicalHistory {
+  return {
+    id: 'mh-1',
+    tenantId: 't1',
+    patientId: 'p1',
+    version: 2,
+    allergies: [
+      {
+        alergeno: 'Penicilina',
+        tipo: 'MEDICAMENTO',
+        severidad: 'ANAFILAXIA',
+        reaccion: 'Edema',
+        esAlerta: true,
+      },
+    ],
+    conditions: [
+      { codigo: 'HIPERTENSION', etiqueta: 'Hipertensión', estado: 'SI', esAlerta: false },
+    ],
+    medications: [{ nombre: 'Losartán', dosis: '50mg', esAlerta: false }],
+    habits: { bruxismo: true },
+    dentalHistory: { motivoConsulta: 'Dolor' },
+    surgeries: [{ descripcion: 'Extracción de cordal' }],
+    vitalSigns: { sistolica: 120, diastolica: 80 },
+    familyHistory: 'Diabetes materna',
+    notes: 'Paciente colaborador',
+    safetyFlags: { ...noFlags, alergiaPenicilina: true },
+    hasCriticalAlert: true,
+    createdById: 'u1',
+    createdAt: '2026-01-02T00:00:00.000Z',
+    ...overrides,
+  };
+}
+
+/** The read-only summary card (the form below repeats the same values in inputs). */
+function summaryCard(): HTMLElement {
+  return screen.getByText(/versión \d+/i).closest('div')!.parentElement as HTMLElement;
+}
 
 describe('MedicalHistoryPanel', () => {
   beforeEach(() => {
@@ -48,119 +83,189 @@ describe('MedicalHistoryPanel', () => {
     expect(await screen.findByText(/no hay.*anamnesis|aún no/i)).toBeInTheDocument();
   });
 
-  it('renders the latest anamnesis fields when present', async () => {
-    mockedGet.mockResolvedValue(latest);
+  it('renders the structured anamnesis (allergies, conditions, medications) instead of crashing on the objects', async () => {
+    mockedGet.mockResolvedValue(history());
     render(<MedicalHistoryPanel token="tok" patientId="p1" />);
 
-    const versionLabel = await screen.findByText(/versión 2/i);
-    // Scope to the read-only summary card: the form below is now
-    // pre-filled (carry-forward fix) with the same values, so an
-    // unscoped `getByText` would match both the <dd> and the <textarea>.
-    const summaryCard = versionLabel.closest('div') as HTMLElement;
+    await screen.findByText(/versión 2/i);
+    const card = summaryCard();
 
-    expect(within(summaryCard).getByText('Penicilina')).toBeInTheDocument();
-    expect(within(summaryCard).getByText('Hipertensión')).toBeInTheDocument();
-    expect(within(summaryCard).getByText('Losartán')).toBeInTheDocument();
-    expect(within(summaryCard).getByText('Fumador')).toBeInTheDocument();
-    expect(within(summaryCard).getByText('Alergia severa')).toBeInTheDocument();
-    expect(within(summaryCard).getByText('Paciente colaborador')).toBeInTheDocument();
-    expect(versionLabel).toBeInTheDocument();
+    // Allergy: allergen + type + severity + reaction, all from the object.
+    expect(within(card).getByText('Penicilina')).toBeInTheDocument();
+    expect(within(card).getByText(/Medicamento · Anafilaxia · Edema/)).toBeInTheDocument();
+    expect(within(card).getByText('Hipertensión')).toBeInTheDocument();
+    expect(within(card).getByText('Losartán')).toBeInTheDocument();
+    expect(within(card).getByText('Diabetes materna')).toBeInTheDocument();
+    // A raw "[object Object]" is exactly what the old string-based panel produced.
+    expect(within(card).queryByText(/\[object Object\]/)).not.toBeInTheDocument();
   });
 
-  it('pre-fills the save-new-version form from the latest version (carry-forward)', async () => {
-    mockedGet.mockResolvedValue(latest);
+  it('flags the entries marked as alerts and the version-level critical alert', async () => {
+    mockedGet.mockResolvedValue(history());
     render(<MedicalHistoryPanel token="tok" patientId="p1" />);
 
-    // Wait for the fetched version to render before asserting on the form,
-    // which is synced from it in the same load effect.
+    await screen.findByText(/versión 2/i);
+    expect(screen.getByText(/alertas críticas/i)).toBeInTheDocument();
+    // The penicillin allergy carries esAlerta: true.
+    expect(within(summaryCard()).getAllByText(/^alerta$/i).length).toBeGreaterThan(0);
+  });
+
+  it('shows an empty section instead of a blank when there are no records of a kind', async () => {
+    mockedGet.mockResolvedValue(history({ medications: [], conditions: [] }));
+    render(<MedicalHistoryPanel token="tok" patientId="p1" />);
+
+    await screen.findByText(/versión 2/i);
+    expect(within(summaryCard()).getAllByText(/sin registros/i).length).toBe(2);
+  });
+
+  it('pre-fills the form from the latest version (carry-forward)', async () => {
+    mockedGet.mockResolvedValue(history());
+    render(<MedicalHistoryPanel token="tok" patientId="p1" />);
+
     await screen.findByText(/versión 2/i);
 
-    expect(screen.getByLabelText(/alergias/i)).toHaveValue('Penicilina');
-    expect(screen.getByLabelText(/condiciones cr[oó]nicas/i)).toHaveValue('Hipertensión');
-    expect(screen.getByLabelText(/medicamentos actuales/i)).toHaveValue('Losartán');
-    expect(screen.getByLabelText(/h[aá]bitos/i)).toHaveValue('Fumador');
-    expect(screen.getByLabelText(/alertas m[eé]dicas/i)).toHaveValue('Alergia severa');
-    expect(screen.getByLabelText(/notas/i)).toHaveValue('Paciente colaborador');
+    expect(screen.getByLabelText(/^alergias 1$/i)).toHaveValue('Penicilina');
+    expect(screen.getByLabelText(/^tipo de alergia 1$/i)).toHaveValue('MEDICAMENTO');
+    expect(screen.getByLabelText(/^severidad 1$/i)).toHaveValue('ANAFILAXIA');
+    expect(screen.getByLabelText(/^condiciones 1$/i)).toHaveValue('Hipertensión');
+    expect(screen.getByLabelText(/^medicamentos 1$/i)).toHaveValue('Losartán');
+    expect(screen.getByLabelText(/antecedentes familiares/i)).toHaveValue('Diabetes materna');
+    expect(screen.getByLabelText(/^notas$/i)).toHaveValue('Paciente colaborador');
   });
 
-  it('carries forward an untouched field on save, preventing it from being wiped', async () => {
-    mockedGet.mockResolvedValue(latest);
-    const saved = { ...latest, version: 3, notes: 'Nota actualizada' };
-    mockedSave.mockResolvedValue(saved);
+  it('adds and removes rows', async () => {
+    mockedGet.mockResolvedValue(null);
+    const user = userEvent.setup();
+    render(<MedicalHistoryPanel token="tok" patientId="p1" />);
+    await screen.findByText(/aún no/i);
 
+    expect(screen.queryByLabelText(/^alergias 1$/i)).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /agregar alergia/i }));
+    await user.type(screen.getByLabelText(/^alergias 1$/i), 'Látex');
+    expect(screen.getByLabelText(/^alergias 1$/i)).toHaveValue('Látex');
+
+    await user.click(screen.getByRole('button', { name: /quitar látex/i }));
+    expect(screen.queryByLabelText(/^alergias 1$/i)).not.toBeInTheDocument();
+  });
+
+  it('submits structured rows, deriving the required condition code from its label', async () => {
+    mockedGet.mockResolvedValue(null);
+    mockedSave.mockResolvedValue(history({ version: 1 }));
+    const user = userEvent.setup();
+    render(<MedicalHistoryPanel token="tok" patientId="p1" />);
+    await screen.findByText(/aún no/i);
+
+    await user.click(screen.getByRole('button', { name: /agregar alergia/i }));
+    await user.type(screen.getByLabelText(/^alergias 1$/i), 'Látex');
+    await user.selectOptions(screen.getByLabelText(/^tipo de alergia 1$/i), 'MATERIAL');
+    await user.selectOptions(screen.getByLabelText(/^severidad 1$/i), 'MODERADA');
+
+    await user.click(screen.getByRole('button', { name: /agregar condición/i }));
+    await user.type(screen.getByLabelText(/^condiciones 1$/i), 'Diabetes tipo 2');
+
+    await user.click(screen.getByRole('button', { name: /registrar anamnesis/i }));
+
+    await waitFor(() => expect(mockedSave).toHaveBeenCalledTimes(1));
+    const [, , input] = mockedSave.mock.calls[0];
+    expect(input.allergies).toEqual([
+      { alergeno: 'Látex', tipo: 'MATERIAL', severidad: 'MODERADA', esAlerta: false },
+    ]);
+    // `codigo` is required by the API; with no condition catalog yet it's a
+    // slug of the label (accent-free, upper snake case).
+    expect(input.conditions).toEqual([
+      { codigo: 'DIABETES_TIPO_2', etiqueta: 'Diabetes tipo 2', estado: 'SI', esAlerta: false },
+    ]);
+  });
+
+  it('drops rows the user added but never filled in', async () => {
+    mockedGet.mockResolvedValue(null);
+    mockedSave.mockResolvedValue(history({ version: 1 }));
+    const user = userEvent.setup();
+    render(<MedicalHistoryPanel token="tok" patientId="p1" />);
+    await screen.findByText(/aún no/i);
+
+    await user.click(screen.getByRole('button', { name: /agregar medicamento/i }));
+    await user.type(screen.getByLabelText(/^medicamentos 1$/i), 'Ibuprofeno');
+    // A second, abandoned row must not reach the API as an empty medication.
+    await user.click(screen.getByRole('button', { name: /agregar medicamento/i }));
+
+    await user.click(screen.getByRole('button', { name: /registrar anamnesis/i }));
+
+    await waitFor(() => expect(mockedSave).toHaveBeenCalledTimes(1));
+    const [, , input] = mockedSave.mock.calls[0];
+    expect(input.medications).toEqual([{ nombre: 'Ibuprofeno', esAlerta: false }]);
+  });
+
+  it('records pregnancy with its weeks, and clears the weeks when unchecked', async () => {
+    mockedGet.mockResolvedValue(null);
+    mockedSave.mockResolvedValue(history({ version: 1 }));
+    const user = userEvent.setup();
+    render(<MedicalHistoryPanel token="tok" patientId="p1" />);
+    await screen.findByText(/aún no/i);
+
+    const weeks = screen.getByLabelText(/^semanas$/i);
+    expect(weeks).toBeDisabled(); // no pregnancy -> no weeks
+
+    await user.click(screen.getByLabelText(/^embarazo$/i));
+    await user.type(weeks, '12');
+    await user.click(screen.getByRole('button', { name: /registrar anamnesis/i }));
+
+    await waitFor(() => expect(mockedSave).toHaveBeenCalledTimes(1));
+    const [, , input] = mockedSave.mock.calls[0];
+    expect(input.embarazo).toBe(true);
+    expect(input.semanasEmbarazo).toBe(12);
+  });
+
+  it('carries the sections this form does not edit into the new version, instead of wiping them', async () => {
+    const current = history();
+    mockedGet.mockResolvedValue(current);
+    mockedSave.mockResolvedValue(history({ version: 3 }));
     const user = userEvent.setup();
     render(<MedicalHistoryPanel token="tok" patientId="p1" />);
     await screen.findByText(/versión 2/i);
 
-    // Only touch "notes" — allergies etc. must still be submitted because
-    // the form was pre-filled from `latest`, not left empty.
-    const notesField = screen.getByLabelText(/notas/i);
-    await user.clear(notesField);
-    await user.type(notesField, 'Nota actualizada');
-    await user.click(screen.getByRole('button', { name: /guardar/i }));
+    const notes = screen.getByLabelText(/^notas$/i);
+    await user.clear(notes);
+    await user.type(notes, 'Nota actualizada');
+    await user.click(screen.getByRole('button', { name: /guardar nueva versión/i }));
 
     await waitFor(() => expect(mockedSave).toHaveBeenCalledTimes(1));
-    expect(mockedSave).toHaveBeenCalledWith(
-      'tok',
-      'p1',
-      expect.objectContaining({
-        allergies: 'Penicilina',
-        chronicConditions: 'Hipertensión',
-        currentMedications: 'Losartán',
-        habits: 'Fumador',
-        medicalAlerts: 'Alergia severa',
-        notes: 'Nota actualizada',
-      }),
-    );
-  });
-
-  it('renders the save-new-version form with accessible labels', async () => {
-    mockedGet.mockResolvedValue(null);
-    render(<MedicalHistoryPanel token="tok" patientId="p1" />);
-
-    await screen.findByText(/no hay.*anamnesis|aún no/i);
-    expect(screen.getByLabelText(/alergias/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/condiciones cr[oó]nicas/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/medicamentos actuales/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/h[aá]bitos/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/alertas m[eé]dicas/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/notas/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /registrar anamnesis/i })).toBeInTheDocument();
+    const [, , input] = mockedSave.mock.calls[0];
+    // Each save is a full snapshot: hábitos / historia dental / cirugías /
+    // signos vitales aren't editable here, so they must travel unchanged.
+    expect(input.habits).toEqual(current.habits);
+    expect(input.dentalHistory).toEqual(current.dentalHistory);
+    expect(input.surgeries).toEqual(current.surgeries);
+    expect(input.vitalSigns).toEqual(current.vitalSigns);
+    // ...and the edited/untouched fields of this form too.
+    expect(input.notes).toBe('Nota actualizada');
+    expect(input.allergies).toHaveLength(1);
   });
 
   it('labels the action "Registrar anamnesis" on first visit and "Guardar nueva versión" once one exists', async () => {
     mockedGet.mockResolvedValue(null);
     const { unmount } = render(<MedicalHistoryPanel token="tok" patientId="p1" />);
-    await screen.findByText(/no hay.*anamnesis|aún no/i);
+    await screen.findByText(/aún no/i);
     expect(screen.getByRole('button', { name: /registrar anamnesis/i })).toBeInTheDocument();
-    expect(
-      screen.queryByRole('button', { name: /guardar nueva versión/i }),
-    ).not.toBeInTheDocument();
     unmount();
 
-    mockedGet.mockResolvedValue(latest);
+    mockedGet.mockResolvedValue(history());
     render(<MedicalHistoryPanel token="tok" patientId="p1" />);
     await screen.findByText(/versión 2/i);
     expect(screen.getByRole('button', { name: /guardar nueva versión/i })).toBeInTheDocument();
-    expect(
-      screen.queryByRole('button', { name: /registrar anamnesis/i }),
-    ).not.toBeInTheDocument();
   });
 
-  it('submits the form calling saveMedicalHistory and shows the newly saved version', async () => {
+  it('shows the newly saved version after submitting', async () => {
     mockedGet.mockResolvedValue(null);
-    const saved = { ...latest, version: 1, allergies: 'Ninguna' };
-    mockedSave.mockResolvedValue(saved);
-
+    mockedSave.mockResolvedValue(history({ version: 1 }));
     const user = userEvent.setup();
     render(<MedicalHistoryPanel token="tok" patientId="p1" />);
-    await screen.findByText(/no hay.*anamnesis|aún no/i);
+    await screen.findByText(/aún no/i);
 
-    await user.type(screen.getByLabelText(/alergias/i), 'Ninguna');
+    await user.type(screen.getByLabelText(/^notas$/i), 'Primera anamnesis');
     await user.click(screen.getByRole('button', { name: /registrar anamnesis/i }));
 
-    await waitFor(() => expect(mockedSave).toHaveBeenCalledTimes(1));
-    expect(mockedSave).toHaveBeenCalledWith('tok', 'p1', expect.objectContaining({ allergies: 'Ninguna' }));
     expect(await screen.findByText(/versión 1/i)).toBeInTheDocument();
   });
 
@@ -172,26 +277,22 @@ describe('MedicalHistoryPanel', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Error del servidor');
   });
 
-  it('does not render the save-new-version form when the initial load failed, so no version can be created from an unknown baseline', async () => {
+  it('does not render the form when the initial load failed, so no version can be created from an unknown baseline', async () => {
     const { ApiError } = jest.requireActual('../../lib/api/client');
     mockedGet.mockRejectedValue(new ApiError(500, 'Error del servidor'));
 
     render(<MedicalHistoryPanel token="tok" patientId="p1" />);
     await screen.findByRole('alert');
 
-    // No editable fields, no submit button — there's nothing to save from
-    // (we don't have a trustworthy baseline to carry forward), so the form
-    // that would silently null out allergies/medicalAlerts/etc. on save
-    // must not be rendered at all.
-    expect(screen.queryByLabelText(/alergias/i)).not.toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /guardar/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /agregar alergia/i })).not.toBeInTheDocument();
+    expect(screen.queryByLabelText(/^notas$/i)).not.toBeInTheDocument();
     expect(mockedSave).not.toHaveBeenCalled();
   });
 
   it('offers a retry action on load error that re-fetches the latest version', async () => {
     const { ApiError } = jest.requireActual('../../lib/api/client');
     mockedGet.mockRejectedValueOnce(new ApiError(500, 'Error del servidor'));
-    mockedGet.mockResolvedValueOnce(latest);
+    mockedGet.mockResolvedValueOnce(history());
 
     const user = userEvent.setup();
     render(<MedicalHistoryPanel token="tok" patientId="p1" />);
@@ -201,9 +302,7 @@ describe('MedicalHistoryPanel', () => {
 
     await screen.findByText(/versión 2/i);
     expect(mockedGet).toHaveBeenCalledTimes(2);
-    // Once the retry succeeds we have a trustworthy baseline again, so the
-    // form (pre-filled, carry-forward) is back.
-    expect(screen.getByLabelText(/alergias/i)).toHaveValue('Penicilina');
+    expect(screen.getByLabelText(/^alergias 1$/i)).toHaveValue('Penicilina');
   });
 
   it('shows an alert with the API error message when saving fails', async () => {
@@ -213,30 +312,28 @@ describe('MedicalHistoryPanel', () => {
 
     const user = userEvent.setup();
     render(<MedicalHistoryPanel token="tok" patientId="p1" />);
-    await screen.findByText(/no hay.*anamnesis|aún no/i);
-    // Type something so the form differs from the (empty) baseline — an
-    // all-empty anamnesis is now a no-op (dup guard), so the save only fires
-    // when there's real content to persist.
-    await user.type(screen.getByLabelText(/alergias/i), 'Penicilina');
+    await screen.findByText(/aún no/i);
+
+    await user.type(screen.getByLabelText(/^notas$/i), 'algo');
     await user.click(screen.getByRole('button', { name: /registrar anamnesis/i }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Datos inválidos');
   });
 
-  it('does not save an unchanged version — the save button is disabled until the form changes (dup guard)', async () => {
-    mockedGet.mockResolvedValue(latest);
+  it('does not append an identical version when nothing changed (dup guard)', async () => {
+    mockedGet.mockResolvedValue(history());
     const user = userEvent.setup();
     render(<MedicalHistoryPanel token="tok" patientId="p1" />);
     await screen.findByText(/versión 2/i);
 
-    // Form equals the latest saved version → saving would duplicate it, so the
-    // button is disabled.
-    const save = screen.getByRole('button', { name: /guardar/i });
-    expect(save).toBeDisabled();
+    // The form is seeded from the saved version, so submitting untouched must
+    // be a no-op rather than appending a duplicate.
+    await user.click(screen.getByRole('button', { name: /guardar nueva versión/i }));
+    expect(mockedSave).not.toHaveBeenCalled();
 
-    // A real change re-enables it, and no save fired for the unchanged state.
-    await user.type(screen.getByLabelText(/alergias/i), ' (actualizado)');
-    expect(screen.getByRole('button', { name: /guardar/i })).toBeEnabled();
+    // An empty row left behind is still "unchanged" — it gets dropped on save.
+    await user.click(screen.getByRole('button', { name: /agregar medicamento/i }));
+    await user.click(screen.getByRole('button', { name: /guardar nueva versión/i }));
     expect(mockedSave).not.toHaveBeenCalled();
   });
 });

@@ -1,8 +1,119 @@
 import { apiFetch, apiFetchOrNull } from '@/lib/api/client';
 import type { components } from '@/lib/api/schema';
 
-export type SaveMedicalHistoryInput = components['schemas']['SaveMedicalHistoryDto'];
 export type CreateClinicalEntryInput = components['schemas']['CreateClinicalEntryDto'];
+
+/* ── Anamnesis (historia clínica estructurada) ─────────────────────────────
+ * Espejo de `dentalix-api`'s
+ * `src/modules/medical-history/domain/entities/medical-history.entity.ts`.
+ *
+ * A mano, NO desde `components['schemas']`: las clases anidadas del
+ * `SaveMedicalHistoryDto` no llevan `@ApiProperty`, así que el OpenAPI las
+ * publica como esquemas vacíos y `openapi-typescript` las emite como
+ * `Record<string, never>` — inservible para tipar el formulario. Mantener en
+ * sync si cambia la entidad del backend.
+ */
+
+export type AllergyType = 'MEDICAMENTO' | 'MATERIAL' | 'ALIMENTO' | 'AMBIENTAL';
+export type AllergySeverity = 'LEVE' | 'MODERADA' | 'ANAFILAXIA';
+export type ConditionStatus = 'SI' | 'NO' | 'DESCONOCE';
+
+export interface Allergy {
+  alergeno: string;
+  tipo: AllergyType;
+  reaccion?: string;
+  severidad: AllergySeverity;
+  /** Marca de alerta clínica: la fila se destaca y alimenta `safetyFlags`. */
+  esAlerta: boolean;
+}
+
+export interface Condition {
+  codigo: string;
+  etiqueta: string;
+  estado: ConditionStatus;
+  esAlerta: boolean;
+  nota?: string;
+}
+
+export interface Medication {
+  nombre: string;
+  dosis?: string;
+  frecuencia?: string;
+  motivo?: string;
+  esAlerta: boolean;
+}
+
+/** Secciones que el backend acepta como JSON libre; la UI de Fase 1 aún no las edita, pero se preservan al guardar una versión nueva. */
+export interface Habits {
+  tabaquismo?: { activo: boolean; porDia?: number; anios?: number };
+  alcohol?: { activo: boolean; frecuencia?: string };
+  sustancias?: boolean;
+  bruxismo?: boolean;
+  higieneOral?: {
+    cepilladoPorDia?: number;
+    hilo?: boolean;
+    enjuague?: boolean;
+    cremaConFluor?: boolean;
+  };
+  dieta?: string;
+}
+
+export interface DentalHistory {
+  motivoConsulta?: string;
+  ultimaVisita?: string;
+  tratamientosPrevios?: string[];
+  malasExperiencias?: string;
+  sangradoEncias?: boolean;
+  sensibilidad?: boolean;
+  atm?: boolean;
+  ortodonciaPrevia?: boolean;
+  enfPeriodontal?: boolean;
+}
+
+export interface Surgery {
+  descripcion: string;
+  fecha?: string;
+}
+
+export interface VitalSigns {
+  sistolica?: number;
+  diastolica?: number;
+  fc?: number;
+  fr?: number;
+  temp?: number;
+  spo2?: number;
+  peso?: number;
+  talla?: number;
+  glucometria?: number;
+}
+
+/** DERIVADO por el backend (`deriveSafetyFlags`) — nunca se envía desde el cliente. */
+export interface SafetyFlags {
+  embarazo: boolean;
+  semanasEmbarazo?: number;
+  anticoagulantes: boolean;
+  bifosfonatos: boolean;
+  diabetes: boolean;
+  profilaxisAntibiotica: boolean;
+  alergiaAnestesico: boolean;
+  alergiaPenicilina: boolean;
+  alergiaLatex: boolean;
+}
+
+/** Cuerpo del `PUT` — todo opcional: una anamnesis puede quedar parcial. */
+export interface SaveMedicalHistoryInput {
+  allergies?: Allergy[];
+  conditions?: Condition[];
+  medications?: Medication[];
+  habits?: Habits;
+  dentalHistory?: DentalHistory;
+  surgeries?: Surgery[];
+  vitalSigns?: VitalSigns;
+  familyHistory?: string;
+  notes?: string;
+  embarazo?: boolean;
+  semanasEmbarazo?: number;
+}
 
 /**
  * `GET /patients/:id/medical-history` (and `PUT`) return a plain TS
@@ -21,12 +132,18 @@ export interface MedicalHistory {
   tenantId: string;
   patientId: string;
   version: number;
-  allergies: string | null;
-  chronicConditions: string | null;
-  currentMedications: string | null;
-  habits: string | null;
-  medicalAlerts: string | null;
+  allergies: Allergy[];
+  conditions: Condition[];
+  medications: Medication[];
+  habits: Habits | null;
+  dentalHistory: DentalHistory | null;
+  surgeries: Surgery[];
+  vitalSigns: VitalSigns | null;
+  familyHistory: string | null;
   notes: string | null;
+  /** Derivados por el backend a partir de alergias/condiciones/medicamentos. */
+  safetyFlags: SafetyFlags;
+  hasCriticalAlert: boolean;
   createdById: string | null;
   createdAt: string;
 }
