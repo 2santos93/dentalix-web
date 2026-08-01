@@ -340,6 +340,38 @@ export interface paths {
         patch: operations["AppointmentsController_update"];
         trace?: never;
     };
+    "/api/v1/staff": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["StaffController_list"];
+        put?: never;
+        post: operations["StaffController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/staff/{userId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["StaffController_remove"];
+        options?: never;
+        head?: never;
+        patch: operations["StaffController_update"];
+        trace?: never;
+    };
     "/api/v1/patients/{patientId}/treatment-plans": {
         parameters: {
             query?: never;
@@ -402,38 +434,6 @@ export interface paths {
         options?: never;
         head?: never;
         patch: operations["TreatmentPlansController_updateItem"];
-        trace?: never;
-    };
-    "/api/v1/staff": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["StaffController_list"];
-        put?: never;
-        post: operations["StaffController_create"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/staff/{userId}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        delete: operations["StaffController_remove"];
-        options?: never;
-        head?: never;
-        patch: operations["StaffController_update"];
         trace?: never;
     };
     "/api/v1/domains": {
@@ -676,6 +676,54 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/locations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["LocationsController_list"];
+        put?: never;
+        post: operations["LocationsController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/locations/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["LocationsController_update"];
+        trace?: never;
+    };
+    "/api/v1/platform/tenants": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["PlatformController_tenants"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/dashboard": {
         parameters: {
             query?: never;
@@ -735,6 +783,105 @@ export interface components {
         AvatarResponseDto: {
             avatarUrl: string;
         };
+        AllergyDto: {
+            /** @example Penicilina */
+            alergeno: string;
+            /** @enum {string} */
+            tipo: "MEDICAMENTO" | "MATERIAL" | "ALIMENTO" | "AMBIENTAL";
+            /** @example Edema */
+            reaccion?: string;
+            /** @enum {string} */
+            severidad: "LEVE" | "MODERADA" | "ANAFILAXIA";
+            /** @description Marca de alerta clínica; alimenta safetyFlags. */
+            esAlerta: boolean;
+        };
+        ConditionDto: {
+            /** @example HIPERTENSION */
+            codigo: string;
+            /** @example Hipertensión */
+            etiqueta: string;
+            /** @enum {string} */
+            estado: "SI" | "NO" | "DESCONOCE";
+            esAlerta: boolean;
+            nota?: string;
+        };
+        MedicationDto: {
+            /** @example Losartán */
+            nombre: string;
+            /** @example 50mg */
+            dosis?: string;
+            /** @example Cada 12 h */
+            frecuencia?: string;
+            motivo?: string;
+            esAlerta: boolean;
+        };
+        SmokingDto: {
+            activo: boolean;
+            porDia?: number;
+            anios?: number;
+        };
+        AlcoholDto: {
+            activo: boolean;
+            frecuencia?: string;
+        };
+        OralHygieneDto: {
+            cepilladoPorDia?: number;
+            hilo?: boolean;
+            enjuague?: boolean;
+            cremaConFluor?: boolean;
+        };
+        HabitsDto: {
+            tabaquismo?: components["schemas"]["SmokingDto"];
+            alcohol?: components["schemas"]["AlcoholDto"];
+            sustancias?: boolean;
+            bruxismo?: boolean;
+            higieneOral?: components["schemas"]["OralHygieneDto"];
+            dieta?: string;
+        };
+        DentalHistoryDto: {
+            motivoConsulta?: string;
+            /** @description Fecha ISO (YYYY-MM-DD). */
+            ultimaVisita?: string;
+            tratamientosPrevios?: string[];
+            malasExperiencias?: string;
+            sangradoEncias?: boolean;
+            sensibilidad?: boolean;
+            atm?: boolean;
+            ortodonciaPrevia?: boolean;
+            enfPeriodontal?: boolean;
+        };
+        SurgeryDto: {
+            /** @example Extracción de cordal */
+            descripcion: string;
+            /** @description Fecha ISO (YYYY-MM-DD). */
+            fecha?: string;
+        };
+        VitalSignsDto: {
+            sistolica?: number;
+            diastolica?: number;
+            /** @description Frecuencia cardíaca. */
+            fc?: number;
+            /** @description Frecuencia respiratoria. */
+            fr?: number;
+            temp?: number;
+            spo2?: number;
+            peso?: number;
+            talla?: number;
+            glucometria?: number;
+        };
+        SaveMedicalHistoryDto: {
+            allergies?: components["schemas"]["AllergyDto"][];
+            conditions?: components["schemas"]["ConditionDto"][];
+            medications?: components["schemas"]["MedicationDto"][];
+            habits?: components["schemas"]["HabitsDto"];
+            dentalHistory?: components["schemas"]["DentalHistoryDto"];
+            surgeries?: components["schemas"]["SurgeryDto"][];
+            vitalSigns?: components["schemas"]["VitalSignsDto"];
+            familyHistory?: string;
+            notes?: string;
+            embarazo?: boolean;
+            semanasEmbarazo?: number;
+        };
         CreatePatientDto: {
             firstName: string;
             lastName: string;
@@ -759,6 +906,21 @@ export interface components {
              */
             cityId?: number;
             notes?: string;
+            dataConsentAccepted?: boolean;
+            /** Format: date-time */
+            dataConsentAt?: string;
+            dataConsentPolicyVersion?: string;
+            maritalStatus?: string;
+            occupation?: string;
+            insurerEps?: string;
+            physicianName?: string;
+            physicianPhone?: string;
+            emergencyContactName?: string;
+            emergencyContactRelationship?: string;
+            emergencyContactPhone?: string;
+            guardianName?: string;
+            guardianDocNumber?: string;
+            medicalHistory?: components["schemas"]["SaveMedicalHistoryDto"];
         };
         PatientDto: {
             /** Format: uuid */
@@ -780,6 +942,20 @@ export interface components {
             countryCode: string | null;
             cityId: number | null;
             notes: string | null;
+            dataConsentAccepted: boolean;
+            /** Format: date-time */
+            dataConsentAt: string | null;
+            dataConsentPolicyVersion: string | null;
+            maritalStatus: string | null;
+            occupation: string | null;
+            insurerEps: string | null;
+            physicianName: string | null;
+            physicianPhone: string | null;
+            emergencyContactName: string | null;
+            emergencyContactRelationship: string | null;
+            emergencyContactPhone: string | null;
+            guardianName: string | null;
+            guardianDocNumber: string | null;
             /** Format: uuid */
             createdById: string | null;
             /** Format: date-time */
@@ -869,6 +1045,17 @@ export interface components {
             defaultPrice?: number;
             active?: boolean;
         };
+        SafetyFlagsDto: {
+            embarazo: boolean;
+            semanasEmbarazo?: number;
+            anticoagulantes: boolean;
+            bifosfonatos: boolean;
+            diabetes: boolean;
+            profilaxisAntibiotica: boolean;
+            alergiaAnestesico: boolean;
+            alergiaPenicilina: boolean;
+            alergiaLatex: boolean;
+        };
         MedicalHistoryDto: {
             /** Format: uuid */
             id: string;
@@ -877,24 +1064,21 @@ export interface components {
             /** Format: uuid */
             patientId: string;
             version: number;
-            allergies: string | null;
-            chronicConditions: string | null;
-            currentMedications: string | null;
-            habits: string | null;
-            medicalAlerts: string | null;
+            allergies: components["schemas"]["AllergyDto"][];
+            conditions: components["schemas"]["ConditionDto"][];
+            medications: components["schemas"]["MedicationDto"][];
+            habits: components["schemas"]["HabitsDto"] | null;
+            dentalHistory: components["schemas"]["DentalHistoryDto"] | null;
+            surgeries: components["schemas"]["SurgeryDto"][];
+            vitalSigns: components["schemas"]["VitalSignsDto"] | null;
+            familyHistory: string | null;
             notes: string | null;
+            safetyFlags: components["schemas"]["SafetyFlagsDto"];
+            hasCriticalAlert: boolean;
             /** Format: uuid */
             createdById: string | null;
             /** Format: date-time */
             createdAt: string;
-        };
-        SaveMedicalHistoryDto: {
-            allergies?: string;
-            chronicConditions?: string;
-            currentMedications?: string;
-            habits?: string;
-            medicalAlerts?: string;
-            notes?: string;
         };
         CreateClinicalEntryDto: {
             /**
@@ -992,6 +1176,9 @@ export interface components {
             tenantId: string;
             /** Format: uuid */
             patientId: string;
+            /** @description Patient's first name, joined so a client can label the appointment without fetching the patient list. Null when the join is unavailable. */
+            patientFirstName: string | null;
+            patientLastName: string | null;
             /** Format: uuid */
             providerId: string;
             /** Format: date-time */
@@ -1018,6 +1205,26 @@ export interface components {
             status?: "SCHEDULED" | "CONFIRMED" | "COMPLETED" | "CANCELLED" | "NO_SHOW";
             reason?: string;
             notes?: string;
+        };
+        StaffMemberDto: {
+            /** Format: uuid */
+            userId: string;
+            fullName: string;
+            email: string;
+            /** @enum {string} */
+            role: "DENTIST" | "ASSISTANT" | "RECEPTION" | "ADMIN";
+        };
+        CreateStaffDto: {
+            fullName: string;
+            email: string;
+            /** @enum {string} */
+            role: "DENTIST" | "ASSISTANT" | "RECEPTION" | "ADMIN";
+            password: string;
+        };
+        UpdateStaffDto: {
+            fullName?: string;
+            /** @enum {string} */
+            role?: "DENTIST" | "ASSISTANT" | "RECEPTION" | "ADMIN";
         };
         CreateTreatmentPlanDto: {
             /**
@@ -1102,26 +1309,6 @@ export interface components {
             status?: "PROPOSED" | "ACCEPTED" | "DONE";
             surfaces?: ("MESIAL" | "DISTAL" | "OCCLUSAL" | "VESTIBULAR" | "LINGUAL")[];
             notes?: string;
-        };
-        StaffMemberDto: {
-            /** Format: uuid */
-            userId: string;
-            fullName: string;
-            email: string;
-            /** @enum {string} */
-            role: "DENTIST" | "ASSISTANT" | "RECEPTION" | "ADMIN";
-        };
-        CreateStaffDto: {
-            fullName: string;
-            email: string;
-            /** @enum {string} */
-            role: "DENTIST" | "ASSISTANT" | "RECEPTION" | "ADMIN";
-            password: string;
-        };
-        UpdateStaffDto: {
-            fullName?: string;
-            /** @enum {string} */
-            role?: "DENTIST" | "ASSISTANT" | "RECEPTION" | "ADMIN";
         };
         CreateDomainDto: Record<string, never>;
         BrandingDto: {
@@ -1470,6 +1657,40 @@ export interface components {
              */
             quantity: number;
             reason?: string;
+        };
+        LocationDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            address: string | null;
+            isActive: boolean;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        CreateLocationDto: {
+            /** @example Sede Norte */
+            name: string;
+            /** @example Cra 15 #90-20 */
+            address?: string;
+        };
+        UpdateLocationDto: {
+            name?: string;
+            address?: string;
+            /** @description Desactivar una sede la oculta para operar; no se puede desactivar la última activa. */
+            isActive?: boolean;
+        };
+        PlatformTenantDto: {
+            /** Format: uuid */
+            id: string;
+            /** @example Clínica Sonrisa */
+            name: string;
+            /**
+             * @description Subdominio por el que se entra a la clínica
+             * @example sonrisa
+             */
+            subdomain: string;
+            /** Format: date-time */
+            createdAt: string;
         };
         DashboardPeriodDto: {
             /** Format: date-time */
@@ -2222,6 +2443,92 @@ export interface operations {
             };
         };
     };
+    StaffController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StaffMemberDto"][];
+                };
+            };
+        };
+    };
+    StaffController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateStaffDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StaffMemberDto"];
+                };
+            };
+        };
+    };
+    StaffController_remove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    StaffController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateStaffDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StaffMemberDto"];
+                };
+            };
+        };
+    };
     TreatmentPlansController_list: {
         parameters: {
             query?: never;
@@ -2380,92 +2687,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TreatmentPlanItemDto"];
-                };
-            };
-        };
-    };
-    StaffController_list: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["StaffMemberDto"][];
-                };
-            };
-        };
-    };
-    StaffController_create: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreateStaffDto"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["StaffMemberDto"];
-                };
-            };
-        };
-    };
-    StaffController_remove: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                userId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    StaffController_update: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                userId: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpdateStaffDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["StaffMemberDto"];
                 };
             };
         };
@@ -2961,6 +3182,92 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["InventoryMovementDto"];
+                };
+            };
+        };
+    };
+    LocationsController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocationDto"][];
+                };
+            };
+        };
+    };
+    LocationsController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateLocationDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocationDto"];
+                };
+            };
+        };
+    };
+    LocationsController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateLocationDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocationDto"];
+                };
+            };
+        };
+    };
+    PlatformController_tenants: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformTenantDto"][];
                 };
             };
         };

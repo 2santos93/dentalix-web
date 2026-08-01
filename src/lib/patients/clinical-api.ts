@@ -4,149 +4,39 @@ import type { components } from '@/lib/api/schema';
 export type CreateClinicalEntryInput = components['schemas']['CreateClinicalEntryDto'];
 
 /* ── Anamnesis (historia clínica estructurada) ─────────────────────────────
- * Espejo de `dentalix-api`'s
- * `src/modules/medical-history/domain/entities/medical-history.entity.ts`.
- *
- * A mano, NO desde `components['schemas']`: las clases anidadas del
- * `SaveMedicalHistoryDto` no llevan `@ApiProperty`, así que el OpenAPI las
- * publica como esquemas vacíos y `openapi-typescript` las emite como
- * `Record<string, never>` — inservible para tipar el formulario. Mantener en
- * sync si cambia la entidad del backend.
+ * Ahora derivados del OpenAPI: el backend documenta las partes anidadas con
+ * `@ApiProperty` (ver anamnesis-parts.dto.ts), así que `openapi-typescript`
+ * emite las formas reales en vez de `Record<string, never>`. Antes había que
+ * escribirlas a mano y mantenerlas en sync con la entidad.
  */
 
-export type AllergyType = 'MEDICAMENTO' | 'MATERIAL' | 'ALIMENTO' | 'AMBIENTAL';
-export type AllergySeverity = 'LEVE' | 'MODERADA' | 'ANAFILAXIA';
-export type ConditionStatus = 'SI' | 'NO' | 'DESCONOCE';
+export type Allergy = components['schemas']['AllergyDto'];
+export type Condition = components['schemas']['ConditionDto'];
+export type Medication = components['schemas']['MedicationDto'];
+export type Habits = components['schemas']['HabitsDto'];
+export type DentalHistory = components['schemas']['DentalHistoryDto'];
+export type Surgery = components['schemas']['SurgeryDto'];
+export type VitalSigns = components['schemas']['VitalSignsDto'];
+export type SafetyFlags = components['schemas']['SafetyFlagsDto'];
 
-export interface Allergy {
-  alergeno: string;
-  tipo: AllergyType;
-  reaccion?: string;
-  severidad: AllergySeverity;
-  /** Marca de alerta clínica: la fila se destaca y alimenta `safetyFlags`. */
-  esAlerta: boolean;
-}
-
-export interface Condition {
-  codigo: string;
-  etiqueta: string;
-  estado: ConditionStatus;
-  esAlerta: boolean;
-  nota?: string;
-}
-
-export interface Medication {
-  nombre: string;
-  dosis?: string;
-  frecuencia?: string;
-  motivo?: string;
-  esAlerta: boolean;
-}
-
-/** Secciones que el backend acepta como JSON libre; la UI de Fase 1 aún no las edita, pero se preservan al guardar una versión nueva. */
-export interface Habits {
-  tabaquismo?: { activo: boolean; porDia?: number; anios?: number };
-  alcohol?: { activo: boolean; frecuencia?: string };
-  sustancias?: boolean;
-  bruxismo?: boolean;
-  higieneOral?: {
-    cepilladoPorDia?: number;
-    hilo?: boolean;
-    enjuague?: boolean;
-    cremaConFluor?: boolean;
-  };
-  dieta?: string;
-}
-
-export interface DentalHistory {
-  motivoConsulta?: string;
-  ultimaVisita?: string;
-  tratamientosPrevios?: string[];
-  malasExperiencias?: string;
-  sangradoEncias?: boolean;
-  sensibilidad?: boolean;
-  atm?: boolean;
-  ortodonciaPrevia?: boolean;
-  enfPeriodontal?: boolean;
-}
-
-export interface Surgery {
-  descripcion: string;
-  fecha?: string;
-}
-
-export interface VitalSigns {
-  sistolica?: number;
-  diastolica?: number;
-  fc?: number;
-  fr?: number;
-  temp?: number;
-  spo2?: number;
-  peso?: number;
-  talla?: number;
-  glucometria?: number;
-}
-
-/** DERIVADO por el backend (`deriveSafetyFlags`) — nunca se envía desde el cliente. */
-export interface SafetyFlags {
-  embarazo: boolean;
-  semanasEmbarazo?: number;
-  anticoagulantes: boolean;
-  bifosfonatos: boolean;
-  diabetes: boolean;
-  profilaxisAntibiotica: boolean;
-  alergiaAnestesico: boolean;
-  alergiaPenicilina: boolean;
-  alergiaLatex: boolean;
-}
+export type AllergyType = Allergy['tipo'];
+export type AllergySeverity = Allergy['severidad'];
+export type ConditionStatus = Condition['estado'];
 
 /** Cuerpo del `PUT` — todo opcional: una anamnesis puede quedar parcial. */
-export interface SaveMedicalHistoryInput {
-  allergies?: Allergy[];
-  conditions?: Condition[];
-  medications?: Medication[];
-  habits?: Habits;
-  dentalHistory?: DentalHistory;
-  surgeries?: Surgery[];
-  vitalSigns?: VitalSigns;
-  familyHistory?: string;
-  notes?: string;
-  embarazo?: boolean;
-  semanasEmbarazo?: number;
-}
+export type SaveMedicalHistoryInput = components['schemas']['SaveMedicalHistoryDto'];
 
 /**
- * `GET /patients/:id/medical-history` (and `PUT`) return a plain TS
- * interface on the backend (`MedicalHistory`), not a class decorated with
- * `@ApiProperty()` — same situation as `Patient` in `patients-api.ts` — so
- * the generated `schema.d.ts` has no body shape for these routes
- * (`content?: never`). Hand-written to mirror `dentalix-api`'s
- * `src/modules/medical-history/domain/entities/medical-history.entity.ts` —
- * keep in sync if that changes.
+ * La anamnesis vigente de un paciente (`GET /patients/:id/medical-history`,
+ * y lo que devuelve el `PUT`). Sale del OpenAPI, no de una copia a mano.
  *
- * This is APPEND-ONLY: "the current anamnesis" = the row with the highest
- * `version` for a patient. Saving never updates a previous row.
+ * APPEND-ONLY: "la anamnesis actual" = la fila con el `version` más alto del
+ * paciente. Guardar nunca actualiza una versión anterior, y cada guardado es
+ * un SNAPSHOT COMPLETO: una sección omitida desaparece de la versión nueva.
+ *
+ * `safetyFlags`/`hasCriticalAlert` los DERIVA el backend; no se envían.
  */
-export interface MedicalHistory {
-  id: string;
-  tenantId: string;
-  patientId: string;
-  version: number;
-  allergies: Allergy[];
-  conditions: Condition[];
-  medications: Medication[];
-  habits: Habits | null;
-  dentalHistory: DentalHistory | null;
-  surgeries: Surgery[];
-  vitalSigns: VitalSigns | null;
-  familyHistory: string | null;
-  notes: string | null;
-  /** Derivados por el backend a partir de alergias/condiciones/medicamentos. */
-  safetyFlags: SafetyFlags;
-  hasCriticalAlert: boolean;
-  createdById: string | null;
-  createdAt: string;
-}
+export type MedicalHistory = components['schemas']['MedicalHistoryDto'];
 
 /**
  * `GET /patients/:id/clinical-entries` (and `POST`) — same situation as
