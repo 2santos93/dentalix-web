@@ -17,6 +17,8 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { FormField } from '@/components/molecules/form-field';
+import { SectionError } from '@/components/errors/section-error';
+import { InlineError } from '@/components/errors/inline-error';
 import {
   Table,
   TableBody,
@@ -30,8 +32,8 @@ import {
 // until next-intl wiring lands.
 const copy = {
   loading: 'Cargando insumo…',
-  retry: 'Reintentar',
-  genericLoadError: 'No pudimos cargar el insumo. Intenta de nuevo.',
+  // Sin "Intenta de nuevo." — `SectionError` trae su propio botón.
+  genericLoadError: 'No pudimos cargar el insumo.',
   forbidden: 'No tienes permiso para ver el inventario.',
   stockLabel: 'Stock actual',
   lowStockBadge: 'Stock bajo',
@@ -277,16 +279,7 @@ export function InventoryItem({ token, id }: InventoryItemDetailProps) {
   }
 
   if (loadError) {
-    return (
-      <div className="flex items-center gap-3">
-        <p role="alert" className="text-sm text-danger">
-          {loadError}
-        </p>
-        <Button variant="outline" size="sm" onClick={() => setReloadKey((k) => k + 1)}>
-          {copy.retry}
-        </Button>
-      </div>
-    );
+    return <SectionError description={loadError} onRetry={() => setReloadKey((k) => k + 1)} />;
   }
 
   if (!item) return null;
@@ -365,11 +358,7 @@ export function InventoryItem({ token, id }: InventoryItemDetailProps) {
                 </Button>
               </div>
             )}
-            {deleteError && (
-              <p role="alert" className="text-sm text-danger">
-                {deleteError}
-              </p>
-            )}
+            {deleteError && <InlineError>{deleteError}</InlineError>}
           </div>
         </CardContent>
       </Card>
@@ -396,11 +385,7 @@ export function InventoryItem({ token, id }: InventoryItemDetailProps) {
               <FormField htmlFor="edit-notes" label={copy.notesLabel}>
                 <Input id="edit-notes" type="text" value={eNotes} onChange={(e) => setENotes(e.target.value)} />
               </FormField>
-              {editError && (
-                <p role="alert" className="text-sm text-danger">
-                  {editError}
-                </p>
-              )}
+              {editError && <InlineError>{editError}</InlineError>}
               <div className="flex items-center gap-2">
                 <Button type="submit" disabled={saving}>
                   {saving ? copy.saving : copy.save}
@@ -450,11 +435,7 @@ export function InventoryItem({ token, id }: InventoryItemDetailProps) {
                 />
               </FormField>
             </div>
-            {moveError && (
-              <p role="alert" className="text-sm text-danger">
-                {moveError}
-              </p>
-            )}
+            {moveError && <InlineError>{moveError}</InlineError>}
             <Button type="submit" disabled={recording} className="self-start">
               {recording ? copy.recording : copy.record}
             </Button>
