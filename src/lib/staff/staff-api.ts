@@ -7,7 +7,7 @@ import { apiFetch, apiFetchOrNull } from '@/lib/api/client';
 export type ClinicRole = 'DENTIST' | 'ASSISTANT' | 'RECEPTION' | 'ADMIN';
 
 /**
- * `GET /staff` (and the `POST`/`PATCH` responses below) return the plain TS
+ * `GET /staff` (and the `PATCH` response below) return the plain TS
  * `StaffMember` interface on the backend
  * (`src/modules/staff/domain/entities/staff-member.entity.ts`), not a class
  * decorated with `@ApiProperty()` — same situation as `Appointment`/`Patient`
@@ -27,13 +27,6 @@ export interface StaffMember {
   role: ClinicRole;
 }
 
-export interface CreateStaffInput {
-  fullName: string;
-  email: string;
-  role: ClinicRole;
-  password: string;
-}
-
 export interface UpdateStaffInput {
   fullName?: string;
   role?: ClinicRole;
@@ -41,17 +34,6 @@ export interface UpdateStaffInput {
 
 export async function listStaff(token: string): Promise<StaffMember[]> {
   return apiFetch<StaffMember[]>('/staff', {
-    token,
-  });
-}
-
-export async function createStaff(
-  token: string,
-  input: CreateStaffInput,
-): Promise<StaffMember> {
-  return apiFetch<StaffMember>('/staff', {
-    method: 'POST',
-    body: input,
     token,
   });
 }
