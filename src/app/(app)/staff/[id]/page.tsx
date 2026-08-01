@@ -1,21 +1,22 @@
 'use client';
 import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import { useAuthStore } from '@/lib/auth/auth-store';
-import { StaffView } from '@/components/staff/staff-view';
 import { PageHeader } from '@/components/molecules/page-header';
+import { StaffMemberProfile } from '@/components/staff/staff-member-profile';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
 const copy = {
-  title: 'Personal',
-  description:
-    'Tu equipo y las invitaciones sin aceptar. Abre a una persona para cambiar su rol o su acceso.',
+  title: 'Perfil del miembro',
+  description: 'Cambia su nombre, su rol o su acceso a la clínica.',
   checkingSession: 'Verificando sesión…',
 };
 
-export default function StaffPage() {
+export default function StaffMemberPage() {
   const router = useRouter();
+  const params = useParams<{ id: string }>();
+  const userId = params.id;
   const accessToken = useAuthStore((s) => s.accessToken);
   const hasHydrated = useAuthStore((s) => s._hasHydrated);
 
@@ -24,9 +25,7 @@ export default function StaffPage() {
     // accessToken is null until then, and redirecting on that would bounce
     // an already-authenticated user.
     if (!hasHydrated) return;
-    if (!accessToken) {
-      router.replace('/login');
-    }
+    if (!accessToken) router.replace('/login');
   }, [accessToken, router, hasHydrated]);
 
   if (!hasHydrated) {
@@ -36,15 +35,12 @@ export default function StaffPage() {
       </p>
     );
   }
-
-  if (!accessToken) {
-    return null;
-  }
+  if (!accessToken) return null;
 
   return (
     <>
       <PageHeader title={copy.title} description={copy.description} />
-      <StaffView token={accessToken} />
+      <StaffMemberProfile token={accessToken} userId={userId} />
     </>
   );
 }

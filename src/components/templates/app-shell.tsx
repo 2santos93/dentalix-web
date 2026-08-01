@@ -116,8 +116,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
         {/* `min-h-0` deja que main se encoja por debajo de su contenido; lo que
             sobra scrollea aquí dentro, no en la página: la barra lateral y el
-            topbar se quedan fijos. */}
-        <main className="flex min-h-0 flex-1 flex-col overflow-y-auto bg-bg px-4 py-8 md:px-8">
+            topbar se quedan fijos.
+            `relative` no es decorativo: sin él, un descendiente `absolute` sin
+            ancestro posicionado toma como bloque contenedor el documento y lo
+            estira. Pasaba con el `sr-only` (que es `position: absolute`) de la
+            región aria-live de `Pagination`: en una tabla larga caía fuera de
+            la ventana y devolvía el scroll a la página entera. */}
+        <main className="relative flex min-h-0 flex-1 flex-col overflow-y-auto bg-bg px-4 py-8 md:px-8">
           <div className="mx-auto w-full max-w-6xl">{children}</div>
         </main>
       </div>

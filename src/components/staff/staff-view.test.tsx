@@ -1,295 +1,232 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { StaffView } from './staff-view';
-import { Toaster } from '@/components/errors/toaster';
-import { listStaff, updateStaff, deactivateStaff } from '@/lib/staff/staff-api';
-import { createInvitation, listInvitations } from '@/lib/staff/invitations-api';
+import { listStaffDirectory, type StaffDirectoryEntry } from '@/lib/staff/staff-api';
+import { createInvitation, revokeInvitation } from '@/lib/staff/invitations-api';
 import { ApiError } from '@/lib/api/client';
+import { Toaster } from '@/components/errors/toaster';
 
 // NOTE: jest.mock's string literal is not alias-rewritten by the SWC
 // transform (only real `import`/`require` specifiers are) — use a relative
 // path here, same convention as agenda-view.test.tsx.
 jest.mock('../../lib/staff/staff-api', () => ({
-  listStaff: jest.fn(),
-  updateStaff: jest.fn(),
-  deactivateStaff: jest.fn(),
+  listStaffDirectory: jest.fn(),
 }));
-
-// `listInvitations` is exercised here too because `StaffView` now mounts
-// `PendingInvitations`, which fetches on its own — see the "refreshKey"
-// test below.
 jest.mock('../../lib/staff/invitations-api', () => ({
   createInvitation: jest.fn(),
-  listInvitations: jest.fn(),
+  revokeInvitation: jest.fn(),
 }));
 
-const mockedListStaff = listStaff as jest.MockedFunction<typeof listStaff>;
-const mockedUpdateStaff = updateStaff as jest.MockedFunction<typeof updateStaff>;
-const mockedDeactivateStaff = deactivateStaff as jest.MockedFunction<typeof deactivateStaff>;
-const mockedCreateInvitation = createInvitation as jest.MockedFunction<typeof createInvitation>;
-const mockedListInvitations = listInvitations as jest.MockedFunction<typeof listInvitations>;
+const mockedList = listStaffDirectory as jest.MockedFunction<typeof listStaffDirectory>;
+const mockedCreate = createInvitation as jest.MockedFunction<typeof createInvitation>;
+const mockedRevoke = revokeInvitation as jest.MockedFunction<typeof revokeInvitation>;
 
-const member1 = {
-  userId: 'u1',
+const miembro: StaffDirectoryEntry = {
+  kind: 'MEMBER',
+  id: 'u1',
   fullName: 'Ana Ríos',
   email: 'ana@clinic.com',
-  role: 'DENTIST' as const,
+  role: 'DENTIST',
+  status: 'ACTIVE',
+  expiresAt: null,
 };
-const member2 = {
-  userId: 'u2',
-  fullName: 'Luis Gómez',
-  email: 'luis@clinic.com',
-  role: 'ASSISTANT' as const,
+const invitacion: StaffDirectoryEntry = {
+  kind: 'INVITATION',
+  id: 'i1',
+  fullName: 'Beto Pendiente',
+  email: 'beto@clinic.com',
+  role: 'ASSISTANT',
+  status: 'PENDING',
+  expiresAt: '2026-08-08T00:00:00.000Z',
 };
+const inactivo: StaffDirectoryEntry = {
+  kind: 'MEMBER',
+  id: 'u2',
+  fullName: 'Caro Inactiva',
+  email: 'caro@clinic.com',
+  role: 'RECEPTION',
+  status: 'INACTIVE',
+  expiresAt: null,
+};
+
+function page(items: StaffDirectoryEntry[], total = items.length) {
+  return { items, total, page: 1, pageSize: 20 };
+}
 
 describe('StaffView', () => {
   beforeEach(() => {
-    mockedListStaff.mockReset();
-    mockedUpdateStaff.mockReset();
-    mockedDeactivateStaff.mockReset();
-    mockedCreateInvitation.mockReset();
-    mockedListInvitations.mockReset();
-    mockedListInvitations.mockResolvedValue([]);
+    mockedList.mockReset();
+    mockedCreate.mockReset();
+    mockedRevoke.mockReset();
+    mockedList.mockResolvedValue(page([miembro, invitacion]));
   });
 
-  it('renders rows from listStaff', async () => {
-    mockedListStaff.mockResolvedValue([member1, member2]);
-
+  it('lista miembros e invitaciones juntos, cada uno con su estado', async () => {
     render(<StaffView token="tok" />);
 
     const table = await screen.findByRole('table', { name: /personal/i });
-    expect(within(table).getByText('ana@clinic.com')).toBeInTheDocument();
-    expect(within(table).getByText('luis@clinic.com')).toBeInTheDocument();
-    expect(within(table).getAllByRole('row')).toHaveLength(3); // header + 2 members
+    const filaMiembro = within(table).getByText('ana@clinic.com').closest('tr')!;
+    const filaInvitacion = within(table).getByText('beto@clinic.com').closest('tr')!;
+
+    expect(within(filaMiembro).getByText('Aceptado')).toBeInTheDocument();
+    expect(within(filaInvitacion).getByText('Pendiente')).toBeInTheDocument();
   });
 
-  it('the role select offers the 4 current roles and no Propietario/a (OWNER) option', async () => {
-    mockedListStaff.mockResolvedValue([member1]);
-
-    const user = userEvent.setup();
+  it('un miembro se abre en su perfil; una invitación no tiene perfil que abrir', async () => {
     render(<StaffView token="tok" />);
-
-    await screen.findByRole('table', { name: /personal/i });
-    await user.click(screen.getByRole('button', { name: /^invitar$/i }));
-
-    const roleSelect = screen.getByLabelText<HTMLSelectElement>(/^rol$/i);
-    const options = within(roleSelect)
-      .getAllByRole('option')
-      .map((o) => (o as HTMLOptionElement).value);
-
-    expect(options).toEqual(['ADMIN', 'DENTIST', 'ASSISTANT', 'RECEPTION']);
-    expect(screen.queryByText('Propietario/a')).not.toBeInTheDocument();
-  });
-
-  it('submitting the invite form calls createInvitation with no password and shows the copyable link', async () => {
-    mockedListStaff.mockResolvedValue([member1]);
-    mockedCreateInvitation.mockResolvedValue({
-      id: 'inv-1',
-      fullName: 'Nueva Persona',
-      email: 'nueva@clinic.com',
-      role: 'RECEPTION',
-      expiresAt: '2026-08-08T00:00:00.000Z',
-      status: 'VALID',
-      token: 'tok-abc123',
-    });
-
-    const user = userEvent.setup();
-    // `userEvent.setup()` attaches its own jsdom clipboard stub (jsdom itself
-    // has none) — spy on its `writeText` rather than pre-defining
-    // `navigator.clipboard` ourselves, which `setup()` would just overwrite.
-    render(<StaffView token="tok" />);
-    const writeText = jest.spyOn(navigator.clipboard, 'writeText');
-
     await screen.findByRole('table', { name: /personal/i });
 
-    await user.click(screen.getByRole('button', { name: /^invitar$/i }));
-    expect(screen.queryByLabelText(/contraseña/i)).not.toBeInTheDocument();
-
-    await user.type(screen.getByLabelText(/nombre completo/i), 'Nueva Persona');
-    await user.type(screen.getByLabelText(/correo electrónico/i), 'nueva@clinic.com');
-    await user.selectOptions(screen.getByLabelText(/^rol$/i), 'RECEPTION');
-
-    await user.click(screen.getByRole('button', { name: /enviar invitación/i }));
-
-    await waitFor(() =>
-      expect(mockedCreateInvitation).toHaveBeenCalledWith('tok', {
-        fullName: 'Nueva Persona',
-        email: 'nueva@clinic.com',
-        role: 'RECEPTION',
-      }),
-    );
-
-    // The modal stays open and now shows the one-time link + copy affordance
-    // instead of closing/refreshing the staff table (the invitee isn't staff
-    // until they accept).
     expect(
-      await screen.findByText(`${window.location.origin}/invitacion/tok-abc123`),
+      screen.getByRole('link', { name: /ver el perfil de ana ríos/i }),
+    ).toHaveAttribute('href', '/staff/u1');
+    expect(
+      screen.queryByRole('link', { name: /ver el perfil de beto/i }),
+    ).not.toBeInTheDocument();
+  });
+
+  it('la tabla ya no edita: ni el nombre ni el rol son campos dentro de ella', async () => {
+    render(<StaffView token="tok" />);
+    const table = await screen.findByRole('table', { name: /personal/i });
+
+    // La versión anterior ponía un <input> y un <select> por fila; eso vive
+    // ahora en el perfil, así que dentro de la tabla no debe quedar ninguno.
+    expect(within(table).queryByRole('textbox')).not.toBeInTheDocument();
+    expect(within(table).queryByRole('combobox')).not.toBeInTheDocument();
+  });
+
+  it('solo las invitaciones traen acciones en la fila', async () => {
+    render(<StaffView token="tok" />);
+    const table = await screen.findByRole('table', { name: /personal/i });
+    const filaMiembro = within(table).getByText('ana@clinic.com').closest('tr')!;
+
+    expect(
+      screen.getByRole('button', { name: /reenviar a beto@clinic\.com/i }),
     ).toBeInTheDocument();
-    const copyButton = screen.getByRole('button', { name: /^copiar$/i });
-    expect(screen.getByText(/no podrás verlo de nuevo/i)).toBeInTheDocument();
-    expect(mockedListStaff).toHaveBeenCalledTimes(1);
-
-    await user.click(copyButton);
-    expect(writeText).toHaveBeenCalledWith(`${window.location.origin}/invitacion/tok-abc123`);
-    expect(await screen.findByRole('button', { name: /^copiado$/i })).toBeInTheDocument();
-
-    await user.click(screen.getByRole('button', { name: /^listo$/i }));
-    expect(screen.queryByText(`${window.location.origin}/invitacion/tok-abc123`)).not.toBeInTheDocument();
+    expect(within(filaMiembro).queryByRole('button')).not.toBeInTheDocument();
   });
 
-  it('creating an invitation refreshes the pending-invitations list (refreshKey wiring)', async () => {
-    mockedListStaff.mockResolvedValue([member1]);
-    mockedCreateInvitation.mockResolvedValue({
-      id: 'inv-1',
-      fullName: 'Nueva Persona',
-      email: 'nueva@clinic.com',
-      role: 'RECEPTION',
-      expiresAt: '2026-08-08T00:00:00.000Z',
-      status: 'VALID',
-      token: 'tok-abc123',
-    });
-
-    const user = userEvent.setup();
+  it('un desactivado se muestra como Inactivo, no como Aceptado', async () => {
+    mockedList.mockResolvedValue(page([inactivo]));
     render(<StaffView token="tok" />);
 
-    await screen.findByRole('table', { name: /personal/i });
-    // Mount fetch for PendingInvitations.
-    await waitFor(() => expect(mockedListInvitations).toHaveBeenCalledTimes(1));
-
-    await user.click(screen.getByRole('button', { name: /^invitar$/i }));
-    await user.type(screen.getByLabelText(/nombre completo/i), 'Nueva Persona');
-    await user.type(screen.getByLabelText(/correo electrónico/i), 'nueva@clinic.com');
-    await user.selectOptions(screen.getByLabelText(/^rol$/i), 'RECEPTION');
-    await user.click(screen.getByRole('button', { name: /enviar invitación/i }));
-
-    await waitFor(() => expect(mockedCreateInvitation).toHaveBeenCalled());
-    // The pending list must reload on its own, without waiting for the user
-    // to close the "invitation created" dialog or refresh the page.
-    await waitFor(() => expect(mockedListInvitations).toHaveBeenCalledTimes(2));
+    const table = await screen.findByRole('table', { name: /personal/i });
+    expect(within(table).getByText('Inactivo')).toBeInTheDocument();
+    expect(within(table).queryByText('Aceptado')).not.toBeInTheDocument();
   });
 
-  it('changing a role calls updateStaff', async () => {
-    mockedListStaff.mockResolvedValueOnce([member1]);
-    mockedUpdateStaff.mockResolvedValue({ ...member1, role: 'ADMIN' });
-    mockedListStaff.mockResolvedValueOnce([{ ...member1, role: 'ADMIN' as const }]);
-
+  it('buscar consulta al servidor con el término', async () => {
     const user = userEvent.setup();
     render(<StaffView token="tok" />);
-
     await screen.findByRole('table', { name: /personal/i });
-    const roleSelect = screen.getByLabelText<HTMLSelectElement>(/rol de ana ríos/i);
-    expect(roleSelect.value).toBe('DENTIST');
 
-    await user.selectOptions(roleSelect, 'ADMIN');
+    await user.type(screen.getByRole('searchbox', { name: /buscar/i }), 'ana');
 
     await waitFor(() =>
-      expect(mockedUpdateStaff).toHaveBeenCalledWith('tok', 'u1', { role: 'ADMIN' }),
+      expect(mockedList).toHaveBeenCalledWith(
+        'tok',
+        expect.objectContaining({ search: 'ana' }),
+      ),
     );
-    await waitFor(() => expect(mockedListStaff).toHaveBeenCalledTimes(2));
   });
 
-  it('deactivate asks for confirm then calls deactivateStaff', async () => {
-    mockedListStaff.mockResolvedValueOnce([member1]);
-    mockedDeactivateStaff.mockResolvedValue(undefined);
-    mockedListStaff.mockResolvedValueOnce([]);
-
+  it('los filtros de rol y estado se mandan al servidor', async () => {
     const user = userEvent.setup();
     render(<StaffView token="tok" />);
-
     await screen.findByRole('table', { name: /personal/i });
 
-    await user.click(screen.getByRole('button', { name: /^desactivar$/i }));
-    expect(mockedDeactivateStaff).not.toHaveBeenCalled();
-    // Confirmation now lives in a dialog (ConfirmDialog) instead of an inline row prompt.
-    const confirmDialog = await screen.findByRole('dialog');
-    expect(within(confirmDialog).getByText(/perderá el acceso/i)).toBeInTheDocument();
-
-    await user.click(within(confirmDialog).getByRole('button', { name: /sí, desactivar/i }));
-
-    await waitFor(() => expect(mockedDeactivateStaff).toHaveBeenCalledWith('tok', 'u1'));
-    await waitFor(() => expect(mockedListStaff).toHaveBeenCalledTimes(2));
-  });
-
-  it('blurring the name input with a changed value calls updateStaff and refreshes the list', async () => {
-    mockedListStaff.mockResolvedValueOnce([member1]);
-    mockedUpdateStaff.mockResolvedValue({ ...member1, fullName: 'Ana Ríos Cambiado' });
-    mockedListStaff.mockResolvedValueOnce([{ ...member1, fullName: 'Ana Ríos Cambiado' }]);
-
-    const user = userEvent.setup();
-    render(<StaffView token="tok" />);
-
-    await screen.findByRole('table', { name: /personal/i });
-    const nameInput = screen.getByLabelText<HTMLInputElement>(/nombre de ana ríos/i);
-
-    await user.clear(nameInput);
-    await user.type(nameInput, 'Ana Ríos Cambiado');
-    await user.tab();
-
+    await user.selectOptions(screen.getByLabelText(/filtrar por rol/i), 'DENTIST');
     await waitFor(() =>
-      expect(mockedUpdateStaff).toHaveBeenCalledWith('tok', 'u1', {
-        fullName: 'Ana Ríos Cambiado',
+      expect(mockedList).toHaveBeenCalledWith(
+        'tok',
+        expect.objectContaining({ role: 'DENTIST' }),
+      ),
+    );
+
+    await user.selectOptions(screen.getByLabelText(/filtrar por estado/i), 'INACTIVE');
+    await waitFor(() =>
+      expect(mockedList).toHaveBeenCalledWith(
+        'tok',
+        expect.objectContaining({ status: 'INACTIVE' }),
+      ),
+    );
+  });
+
+  it('cambiar un filtro vuelve a la página 1', async () => {
+    mockedList.mockResolvedValue(page([miembro, invitacion], 50));
+    const user = userEvent.setup();
+    render(<StaffView token="tok" />);
+    await screen.findByRole('table', { name: /personal/i });
+
+    await user.click(screen.getByRole('button', { name: /siguiente/i }));
+    await waitFor(() =>
+      expect(mockedList).toHaveBeenCalledWith(
+        'tok',
+        expect.objectContaining({ page: 2 }),
+      ),
+    );
+
+    await user.selectOptions(screen.getByLabelText(/filtrar por rol/i), 'ADMIN');
+
+    // Quedarse en la página 2 de un resultado que ahora puede tener una sola
+    // página dejaría la tabla vacía sin motivo aparente.
+    await waitFor(() =>
+      expect(mockedList).toHaveBeenCalledWith(
+        'tok',
+        expect.objectContaining({ page: 1, role: 'ADMIN' }),
+      ),
+    );
+  });
+
+  it('reenviar crea otra invitación para el mismo correo y muestra el enlace nuevo', async () => {
+    mockedCreate.mockResolvedValue({
+      id: 'i2',
+      email: 'beto@clinic.com',
+      fullName: 'Beto Pendiente',
+      role: 'ASSISTANT',
+      status: 'VALID',
+      expiresAt: '2026-08-15T00:00:00.000Z',
+      token: 'token-nuevo',
+    });
+    const user = userEvent.setup();
+    render(<StaffView token="tok" />);
+    await screen.findByRole('table', { name: /personal/i });
+
+    await user.click(
+      screen.getByRole('button', { name: /reenviar a beto@clinic\.com/i }),
+    );
+
+    // No hay endpoint de reenvío: crear otra para el mismo correo revoca la
+    // anterior en el backend, así que solo vive un enlace por persona.
+    await waitFor(() =>
+      expect(mockedCreate).toHaveBeenCalledWith('tok', {
+        fullName: 'Beto Pendiente',
+        email: 'beto@clinic.com',
+        role: 'ASSISTANT',
       }),
     );
-    await waitFor(() => expect(mockedListStaff).toHaveBeenCalledTimes(2));
+    expect(await screen.findByText(/token-nuevo/)).toBeInTheDocument();
   });
 
-  it('blurring the name input with an unchanged value does not call updateStaff', async () => {
-    mockedListStaff.mockResolvedValueOnce([member1]);
-
+  it('revocar pide confirmación antes de llamar al servidor', async () => {
+    mockedRevoke.mockResolvedValue(undefined);
     const user = userEvent.setup();
     render(<StaffView token="tok" />);
-
-    await screen.findByRole('table', { name: /personal/i });
-    const nameInput = screen.getByLabelText<HTMLInputElement>(/nombre de ana ríos/i);
-
-    await user.click(nameInput);
-    await user.tab();
-
-    expect(mockedUpdateStaff).not.toHaveBeenCalled();
-  });
-
-  it('blurring the name input with a whitespace-only value does not call updateStaff', async () => {
-    mockedListStaff.mockResolvedValueOnce([member1]);
-
-    const user = userEvent.setup();
-    render(<StaffView token="tok" />);
-
-    await screen.findByRole('table', { name: /personal/i });
-    const nameInput = screen.getByLabelText<HTMLInputElement>(/nombre de ana ríos/i);
-
-    await user.clear(nameInput);
-    await user.type(nameInput, '   ');
-    await user.tab();
-
-    expect(mockedUpdateStaff).not.toHaveBeenCalled();
-  });
-
-  it('an invite error (e.g. 409 duplicate email) renders role="alert"', async () => {
-    mockedListStaff.mockResolvedValue([member1]);
-    mockedCreateInvitation.mockRejectedValue(new ApiError(409, 'El correo ya está en uso.'));
-
-    const user = userEvent.setup();
-    render(<StaffView token="tok" />);
-
     await screen.findByRole('table', { name: /personal/i });
 
-    await user.click(screen.getByRole('button', { name: /^invitar$/i }));
-    await user.type(screen.getByLabelText(/nombre completo/i), 'Duplicado');
-    await user.type(screen.getByLabelText(/correo electrónico/i), 'ana@clinic.com');
-    await user.click(screen.getByRole('button', { name: /enviar invitación/i }));
+    await user.click(
+      screen.getByRole('button', { name: /revocar la invitación de beto@clinic\.com/i }),
+    );
+    expect(mockedRevoke).not.toHaveBeenCalled();
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(/el correo ya está en uso/i);
+    const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).getByText(/dejará de funcionar/i)).toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: /sí, revocar/i }));
+
+    await waitFor(() => expect(mockedRevoke).toHaveBeenCalledWith('tok', 'i1'));
   });
 
-  // Regression coverage (see DRIFT-TASK.md): a parallel-branch merge reverted
-  // `rowError` back to a bare inline `<p role="alert">`, undoing the escalón-3
-  // (toast) migration these two cases already verified once (ff48621).
-  it('a failed deactivate closes the confirm dialog, toasts with a retry, and retrying calls deactivateStaff again', async () => {
-    mockedListStaff.mockResolvedValueOnce([member1]);
-    mockedDeactivateStaff.mockRejectedValueOnce(new ApiError(409, 'No puedes desactivar al último admin.'));
-    mockedDeactivateStaff.mockResolvedValueOnce(undefined);
-    mockedListStaff.mockResolvedValueOnce([]);
-
+  it('un fallo al revocar cierra el diálogo y ofrece reintentar en el toast', async () => {
+    mockedRevoke.mockRejectedValue(new ApiError(500, 'Se cayó el servidor'));
     const user = userEvent.setup();
     render(
       <>
@@ -297,50 +234,24 @@ describe('StaffView', () => {
         <Toaster />
       </>,
     );
-
     await screen.findByRole('table', { name: /personal/i });
-    await user.click(screen.getByRole('button', { name: /^desactivar$/i }));
-    const confirmDialog = await screen.findByRole('dialog');
-    await user.click(within(confirmDialog).getByRole('button', { name: /sí, desactivar/i }));
 
-    await waitFor(() => expect(mockedDeactivateStaff).toHaveBeenCalledTimes(1));
-    // The Radix dialog must be gone — while open it marks the toast's
-    // "Reintentar" inert (visible but unclickable), the bug ff48621 fixed.
+    await user.click(
+      screen.getByRole('button', { name: /revocar la invitación de beto@clinic\.com/i }),
+    );
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: /sí, revocar/i }));
+
+    // El diálogo tiene que cerrarse: mientras está abierto deja inerte el
+    // toast, y un "Reintentar" que no se puede pulsar incumple el escalón 3.
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
-    const retryButton = await screen.findByRole('button', { name: 'Reintentar' });
-
-    await user.click(retryButton);
-
-    await waitFor(() => expect(mockedDeactivateStaff).toHaveBeenCalledTimes(2));
-    expect(mockedDeactivateStaff).toHaveBeenNthCalledWith(2, 'tok', 'u1');
-    await waitFor(() => expect(mockedListStaff).toHaveBeenCalledTimes(2));
+    expect(await screen.findByText(/se cayó el servidor/i)).toBeInTheDocument();
   });
 
-  it('a failed role change toasts with a retry and retrying calls updateStaff again', async () => {
-    mockedListStaff.mockResolvedValueOnce([member1]);
-    mockedUpdateStaff.mockRejectedValueOnce(new ApiError(500, 'Fallo el servidor.'));
-    mockedUpdateStaff.mockResolvedValueOnce({ ...member1, role: 'ADMIN' });
-    mockedListStaff.mockResolvedValueOnce([{ ...member1, role: 'ADMIN' as const }]);
+  it('un error de carga se muestra en la sección', async () => {
+    mockedList.mockRejectedValue(new ApiError(500, 'No se pudo listar'));
+    render(<StaffView token="tok" />);
 
-    const user = userEvent.setup();
-    render(
-      <>
-        <StaffView token="tok" />
-        <Toaster />
-      </>,
-    );
-
-    await screen.findByRole('table', { name: /personal/i });
-    const roleSelect = screen.getByLabelText<HTMLSelectElement>(/rol de ana ríos/i);
-    await user.selectOptions(roleSelect, 'ADMIN');
-
-    await waitFor(() => expect(mockedUpdateStaff).toHaveBeenCalledTimes(1));
-    const retryButton = await screen.findByRole('button', { name: 'Reintentar' });
-
-    await user.click(retryButton);
-
-    await waitFor(() => expect(mockedUpdateStaff).toHaveBeenCalledTimes(2));
-    expect(mockedUpdateStaff).toHaveBeenNthCalledWith(2, 'tok', 'u1', { role: 'ADMIN' });
-    await waitFor(() => expect(mockedListStaff).toHaveBeenCalledTimes(2));
+    expect(await screen.findByText(/no se pudo listar/i)).toBeInTheDocument();
   });
 });

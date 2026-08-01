@@ -1,25 +1,30 @@
 'use client';
 import * as React from 'react';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { ApiError } from '@/lib/api/client';
 import {
-  listStaff,
-  updateStaff,
-  deactivateStaff,
-  type StaffMember,
+  listStaffDirectory,
   type ClinicRole,
+  type StaffDirectoryEntry,
+  type StaffDirectoryStatus,
 } from '@/lib/staff/staff-api';
-import { createInvitation, type CreatedInvitation } from '@/lib/staff/invitations-api';
-import { PendingInvitations } from '@/components/staff/pending-invitations';
+import {
+  createInvitation,
+  revokeInvitation,
+  type CreatedInvitation,
+} from '@/lib/staff/invitations-api';
 import { useCopyToClipboard } from '@/lib/ui/use-copy-to-clipboard';
-import { Plus } from 'lucide-react';
+import { Plus, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { FormField } from '@/components/molecules/form-field';
 import { FormModal } from '@/components/molecules/form-modal';
 import { ConfirmDialog } from '@/components/molecules/confirm-dialog';
 import { AsyncSection, TableSkeleton } from '@/components/molecules/async-section';
+import { Pagination } from '@/components/molecules/pagination';
 import { notifyError } from '@/components/errors/notify';
 import {
   Dialog,
@@ -46,43 +51,47 @@ const copy = {
   formTitle: 'Invitar a la clínica',
   formDescription:
     'La persona recibirá un enlace para crear su propia contraseña y unirse a la clínica.',
-  cancel: 'Cancelar',
   fullNameLabel: 'Nombre completo',
   emailLabel: 'Correo electrónico',
   roleLabel: 'Rol',
   submit: 'Enviar invitación',
   submitting: 'Enviando…',
-  loading: 'Cargando personal…',
   tableLabel: 'Personal de la clínica',
-  genericLoadError: 'No pudimos cargar el personal. Intenta de nuevo.',
-  genericCreateError: 'No pudimos crear la invitación. Intenta de nuevo.',
-  // Escalón 3 (segundo plano): sin "Intenta de nuevo." — el toast trae acción.
-  genericRoleChangeError: 'No pudimos actualizar el rol.',
-  genericNameChangeError: 'No pudimos actualizar el nombre.',
-  genericDeactivateError: 'No pudimos desactivar al miembro del equipo.',
-  empty: 'No hay personal registrado todavía.',
-  emptyHint: 'Agrega al primer miembro del equipo para empezar.',
+  searchLabel: 'Buscar por nombre o correo',
+  searchPlaceholder: 'Buscar…',
+  filterRoleLabel: 'Filtrar por rol',
+  filterStatusLabel: 'Filtrar por estado',
+  allRoles: 'Todos los roles',
+  allStatuses: 'Activos y pendientes',
   colName: 'Nombre',
   colEmail: 'Correo electrónico',
   colRole: 'Rol',
+  colStatus: 'Estado',
   colActions: 'Acciones',
-  deactivateCta: 'Desactivar',
-  deactivateTitle: 'Desactivar miembro del equipo',
-  deactivateBody: (name: string) =>
-    `${name} perderá el acceso a la clínica. Podrás reactivarlo/a más adelante.`,
-  deactivateConfirmYes: 'Sí, desactivar',
-  nameFieldLabel: (name: string) => `Nombre de ${name}`,
-  roleFieldLabel: (name: string) => `Rol de ${name}`,
+  statusActive: 'Aceptado',
+  statusPending: 'Pendiente',
+  statusInactive: 'Inactivo',
+  resend: 'Reenviar',
+  revoke: 'Revocar',
+  revokeTitle: '¿Revocar la invitación?',
+  revokeBody: (email: string) => `El enlace enviado a ${email} dejará de funcionar.`,
+  revokeConfirmYes: 'Sí, revocar',
+  viewProfile: (name: string) => `Ver el perfil de ${name}`,
+  empty: 'No hay nadie que coincida.',
+  emptyHint: 'Prueba con otra búsqueda o quita los filtros.',
+  genericLoadError: 'No pudimos cargar el personal. Intenta de nuevo.',
+  genericCreateError: 'No pudimos crear la invitación. Intenta de nuevo.',
+  // Escalón 3 (segundo plano): sin "Intenta de nuevo." — el toast trae acción.
+  genericResendError: 'No pudimos reenviar la invitación.',
+  genericRevokeError: 'No pudimos revocar la invitación.',
   inviteCreatedTitle: 'Invitación creada',
   inviteCreatedDescription: 'Comparte este enlace con la persona invitada.',
   copyLabel: 'Copiar',
   copiedLabel: 'Copiado',
   copyWarning: 'Cópialo ahora: por seguridad no podrás verlo de nuevo.',
-  // Not "Cerrar" — `DialogContent`'s built-in X button already has that as
-  // its (hardcoded, sr-only) accessible name; a second "Cerrar" button would
-  // be ambiguous for both a11y and tests.
+  // No "Cerrar": `DialogContent` ya trae una X con ese nombre accesible, y dos
+  // "Cerrar" serían ambiguos para lectores de pantalla y para los tests.
   closeLabel: 'Listo',
-  pendingInvitationsTitle: 'Invitaciones pendientes',
 };
 
 const ROLE_OPTIONS: { value: ClinicRole; label: string }[] = [
@@ -92,34 +101,74 @@ const ROLE_OPTIONS: { value: ClinicRole; label: string }[] = [
   { value: 'RECEPTION', label: 'Recepción' },
 ];
 
+const ROLE_LABEL: Record<ClinicRole, string> = {
+  ADMIN: 'Administrador/a',
+  DENTIST: 'Odontólogo/a',
+  ASSISTANT: 'Asistente',
+  RECEPTION: 'Recepción',
+};
+
+const STATUS_OPTIONS: { value: StaffDirectoryStatus; label: string }[] = [
+  { value: 'ACTIVE', label: copy.statusActive },
+  { value: 'PENDING', label: copy.statusPending },
+  { value: 'INACTIVE', label: copy.statusInactive },
+];
+
+// Verde solo para "Aceptado": es el único estado que significa "esta persona ya
+// trabaja aquí". Pendiente es ámbar (algo por hacer) e inactivo es neutro (no
+// es un error, solo alguien que ya no está).
+const STATUS_BADGE: Record<
+  StaffDirectoryStatus,
+  { label: string; variant: 'success' | 'warning' | 'secondary' }
+> = {
+  ACTIVE: { label: copy.statusActive, variant: 'success' },
+  PENDING: { label: copy.statusPending, variant: 'warning' },
+  INACTIVE: { label: copy.statusInactive, variant: 'secondary' },
+};
+
 // Native <select> styled to match the Input atom (kept native for a11y/tests) —
 // same class as agenda-view.tsx's `fieldClass`.
 const fieldClass =
   'flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-50';
+
+const PAGE_SIZE = 20;
+// Lo bastante corto para no notarse al teclear, lo bastante largo para no
+// disparar una petición por tecla.
+const SEARCH_DEBOUNCE_MS = 300;
 
 interface StaffViewProps {
   token: string;
 }
 
 /**
- * Composes the staff list (table) + an inline "add staff" reveal section
- * (this app has no top-level modal convention for its primary create flow —
- * see `agenda-view.tsx`'s "Nueva cita" toggle; `Dialog` is only used for a
- * *secondary*, nested creation inside another form, e.g.
- * `appointment-form.tsx`'s "Crear paciente" — so this mirrors the dominant,
- * primary-action pattern: a `Button` toggling a revealed `Card`, not a
- * dialog).
+ * Directorio de personal: miembros e invitaciones pendientes en UNA sola lista
+ * paginada, con búsqueda y filtros de rol y estado (todo server-side, vía
+ * `GET /staff/directory`).
  *
- * Row actions (role change, name change, deactivate) all follow
- * `agenda-view.tsx`/`day-agenda.tsx`'s status-change convention: mutate, then
- * re-fetch the list in place (`refreshInPlace`) so the table never remounts,
- * with `updatingId` disabling just the row being changed.
+ * La tabla no edita nada. Un miembro se abre en su perfil (`/staff/[id]`) y ahí
+ * se le cambia el nombre, el rol o el acceso; así una fila no es a la vez lista
+ * y formulario, que era lo que hacía la versión anterior. Las invitaciones no
+ * tienen perfil que abrir —todavía no hay persona— y por eso son las únicas con
+ * acciones en la fila: reenviar y revocar.
  */
 export function StaffView({ token }: StaffViewProps) {
-  const [staff, setStaff] = useState<StaffMember[]>([]);
+  const [entries, setEntries] = useState<StaffDirectoryEntry[]>([]);
+  const [total, setTotal] = useState(0);
+  const [pageSize, setPageSize] = useState(PAGE_SIZE);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+
+  // `searchInput` es lo que se teclea; `search` es lo que se consulta. Separar
+  // los dos es lo que permite el debounce sin que el campo se sienta lento.
+  const [searchInput, setSearchInput] = useState('');
+  const [search, setSearch] = useState('');
+  const [roleFilter, setRoleFilter] = useState<ClinicRole | ''>('');
+  const [statusFilter, setStatusFilter] = useState<StaffDirectoryStatus | ''>('');
+  // Todo cambio de filtro vuelve a la página 1 (se hace en los manejadores, no
+  // en un efecto): quedarse en la página 3 de un resultado que ahora tiene una
+  // sola deja la tabla vacía sin motivo aparente.
+  const [page, setPage] = useState(1);
 
   const [showForm, setShowForm] = useState(false);
   const [fullName, setFullName] = useState('');
@@ -127,27 +176,18 @@ export function StaffView({ token }: StaffViewProps) {
   const [role, setRole] = useState<ClinicRole>('ASSISTANT');
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
-  // Set on a successful invite; while non-null the modal shows the one-time
-  // link instead of the form (the invitee isn't staff yet, so there's
-  // nothing to refresh in the table above — see `handleCreateSubmit`).
-  const [createdInvitation, setCreatedInvitation] = useState<CreatedInvitation | null>(null);
+  const [createdInvitation, setCreatedInvitation] = useState<CreatedInvitation | null>(
+    null,
+  );
   const { copied, copy: copyInviteLink } = useCopyToClipboard();
-  // Bumped on a successful invite so `PendingInvitations` (which owns its own
-  // fetch) reloads without this component knowing anything about its state.
-  const [invitationsRefreshKey, setInvitationsRefreshKey] = useState(0);
 
-  // Which row is currently being mutated (role/name change or deactivate) —
-  // disables that row's controls, same as agenda-view.tsx's `updatingId`.
-  const [updatingId, setUpdatingId] = useState<string | null>(null);
-  // Row awaiting deactivate confirmation (inline, not a dialog/native confirm()).
-  const [confirmingId, setConfirmingId] = useState<string | null>(null);
+  const [busyId, setBusyId] = useState<string | null>(null);
+  const [revokingId, setRevokingId] = useState<string | null>(null);
 
-  // The inline name editor is uncontrolled (defaultValue), so on a failed
-  // PATCH the DOM keeps the edited value. Without this, a later no-op blur
-  // (e.g. tabbing through the row again) would still see value !== fullName
-  // and re-fire the same mutation. Keep refs to reset the DOM value back to
-  // the last-known-good fullName after a failure.
-  const nameInputRefs = useRef<Map<string, HTMLInputElement>>(new Map());
+  useEffect(() => {
+    const debounce = setTimeout(() => setSearch(searchInput), SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(debounce);
+  }, [searchInput]);
 
   useEffect(() => {
     if (!token) return;
@@ -155,9 +195,19 @@ export function StaffView({ token }: StaffViewProps) {
     async function load() {
       setLoading(true);
       try {
-        const data = await listStaff(token);
+        const res = await listStaffDirectory(token, {
+          page,
+          pageSize: PAGE_SIZE,
+          search: search || undefined,
+          role: roleFilter || undefined,
+          status: statusFilter || undefined,
+        });
         if (cancelled) return;
-        setStaff(data);
+        setEntries(res.items);
+        setTotal(res.total);
+        // El backend acota `pageSize`, así que se lee de la respuesta y no se
+        // asume el valor pedido.
+        setPageSize(res.pageSize);
         setLoadError(null);
       } catch (err) {
         if (cancelled) return;
@@ -170,18 +220,10 @@ export function StaffView({ token }: StaffViewProps) {
     return () => {
       cancelled = true;
     };
-  }, [token, reloadKey]);
+  }, [token, page, search, roleFilter, statusFilter, reloadKey]);
 
-  function refreshInPlace(): Promise<void> {
-    if (!token) return Promise.resolve();
-    return listStaff(token)
-      .then((data) => {
-        setStaff(data);
-        setLoadError(null);
-      })
-      .catch((err) => {
-        setLoadError(err instanceof ApiError ? err.message : copy.genericLoadError);
-      });
+  function refresh() {
+    setReloadKey((k) => k + 1);
   }
 
   function resetForm() {
@@ -196,71 +238,13 @@ export function StaffView({ token }: StaffViewProps) {
     setCreating(true);
     try {
       const created = await createInvitation(token, { fullName, email, role });
-      // Keep the modal open: this is the only time the raw token is ever
-      // shown, so the caller must copy the link before dismissing it.
       setCreatedInvitation(created);
-      setInvitationsRefreshKey((k) => k + 1);
+      resetForm();
+      refresh();
     } catch (err) {
       setCreateError(err instanceof ApiError ? err.message : copy.genericCreateError);
     } finally {
       setCreating(false);
-    }
-  }
-
-  async function handleRoleChange(userId: string, nextRole: ClinicRole) {
-    setUpdatingId(userId);
-    try {
-      await updateStaff(token, userId, { role: nextRole });
-      await refreshInPlace();
-    } catch (err) {
-      notifyError(err instanceof ApiError ? err.message : copy.genericRoleChangeError, {
-        onRetry: () => handleRoleChange(userId, nextRole),
-      });
-    } finally {
-      setUpdatingId(null);
-    }
-  }
-
-  async function handleNameChange(userId: string, nextName: string, previousName: string) {
-    setUpdatingId(userId);
-    try {
-      await updateStaff(token, userId, { fullName: nextName });
-      await refreshInPlace();
-    } catch (err) {
-      notifyError(err instanceof ApiError ? err.message : copy.genericNameChangeError, {
-        onRetry: () => handleNameChange(userId, nextName, previousName),
-      });
-      // Reset the (uncontrolled) input back to the last known fullName so a
-      // subsequent no-op blur doesn't keep re-firing the same failed PATCH.
-      const el = nameInputRefs.current.get(userId);
-      if (el) el.value = previousName;
-    } finally {
-      setUpdatingId(null);
-    }
-  }
-
-  async function handleDeactivate(userId: string) {
-    setUpdatingId(userId);
-    try {
-      // The backend 409s (last admin / self-deactivation) — surfaced via
-      // `notifyError` like any other row action; no client-side check (the
-      // auth store only holds tokens, not the current user's identity).
-      await deactivateStaff(token, userId);
-      setConfirmingId(null);
-      await refreshInPlace();
-    } catch (err) {
-      // Close the confirm dialog on failure too, not just success: it's a
-      // Radix modal, so while it's open it marks everything outside it
-      // (including the toast this fires) inert — a "Reintentar" button the
-      // user can see but can't click fails rung 3's own contract. Closing it
-      // makes the toast the one, reachable place to retry, same as
-      // role/name change (which never had a dialog in the way).
-      setConfirmingId(null);
-      notifyError(err instanceof ApiError ? err.message : copy.genericDeactivateError, {
-        onRetry: () => handleDeactivate(userId),
-      });
-    } finally {
-      setUpdatingId(null);
     }
   }
 
@@ -273,17 +257,112 @@ export function StaffView({ token }: StaffViewProps) {
     }
   }
 
-  const confirmingMember = confirmingId
-    ? staff.find((s) => s.userId === confirmingId) ?? null
+  async function handleResend(entry: StaffDirectoryEntry) {
+    setBusyId(entry.id);
+    try {
+      // No hay endpoint de reenvío: crear otra invitación para el mismo correo
+      // revoca la anterior en el backend, así que solo vive un enlace por
+      // persona.
+      const created = await createInvitation(token, {
+        fullName: entry.fullName,
+        email: entry.email,
+        role: entry.role,
+      });
+      setCreatedInvitation(created);
+      setShowForm(true);
+      refresh();
+    } catch (err) {
+      notifyError(err instanceof ApiError ? err.message : copy.genericResendError, {
+        onRetry: () => handleResend(entry),
+      });
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  async function handleRevoke(id: string) {
+    setBusyId(id);
+    try {
+      await revokeInvitation(token, id);
+      setRevokingId(null);
+      refresh();
+    } catch (err) {
+      // Se cierra el diálogo también al fallar: mientras esté abierto, Radix
+      // marca inerte todo lo de fuera (incluido el toast), y un "Reintentar"
+      // visible pero no clicable incumple el contrato del escalón 3.
+      setRevokingId(null);
+      notifyError(err instanceof ApiError ? err.message : copy.genericRevokeError, {
+        onRetry: () => handleRevoke(id),
+      });
+    } finally {
+      setBusyId(null);
+    }
+  }
+
+  const revokingEntry = revokingId
+    ? entries.find((e) => e.id === revokingId) ?? null
     : null;
 
   const inviteLink = createdInvitation
     ? `${window.location.origin}/invitacion/${createdInvitation.token}`
     : '';
 
+  const hasFilters = Boolean(search || roleFilter || statusFilter);
+
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex justify-end">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
+          <div className="relative">
+            <Search
+              aria-hidden
+              className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted"
+            />
+            <Input
+              type="search"
+              aria-label={copy.searchLabel}
+              placeholder={copy.searchPlaceholder}
+              value={searchInput}
+              onChange={(e) => {
+                setSearchInput(e.target.value);
+                setPage(1);
+              }}
+              className="pl-9 sm:w-64"
+            />
+          </div>
+          <select
+            aria-label={copy.filterRoleLabel}
+            value={roleFilter}
+            onChange={(e) => {
+              setRoleFilter(e.target.value as ClinicRole | '');
+              setPage(1);
+            }}
+            className={cn(fieldClass, 'sm:w-48')}
+          >
+            <option value="">{copy.allRoles}</option>
+            {ROLE_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+          <select
+            aria-label={copy.filterStatusLabel}
+            value={statusFilter}
+            onChange={(e) => {
+              setStatusFilter(e.target.value as StaffDirectoryStatus | '');
+              setPage(1);
+            }}
+            className={cn(fieldClass, 'sm:w-52')}
+          >
+            <option value="">{copy.allStatuses}</option>
+            {STATUS_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </div>
         <Button type="button" onClick={() => setShowForm(true)}>
           <Plus /> {copy.inviteToggle}
         </Button>
@@ -337,7 +416,7 @@ export function StaffView({ token }: StaffViewProps) {
         </div>
       </FormModal>
 
-      <Dialog open={showForm && !!createdInvitation} onOpenChange={handleCreateOpenChange}>
+      <Dialog open={!!createdInvitation} onOpenChange={handleCreateOpenChange}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>{copy.inviteCreatedTitle}</DialogTitle>
@@ -367,11 +446,11 @@ export function StaffView({ token }: StaffViewProps) {
       <AsyncSection
         loading={loading}
         error={loadError}
-        onRetry={() => setReloadKey((k) => k + 1)}
-        isEmpty={staff.length === 0}
+        onRetry={refresh}
+        isEmpty={entries.length === 0}
         emptyTitle={copy.empty}
-        emptyDescription={copy.emptyHint}
-        skeleton={<TableSkeleton rows={4} />}
+        emptyDescription={hasFilters ? copy.emptyHint : undefined}
+        skeleton={<TableSkeleton rows={5} />}
       >
         <Card className="overflow-hidden p-0">
           <Table aria-label={copy.tableLabel}>
@@ -380,61 +459,73 @@ export function StaffView({ token }: StaffViewProps) {
                 <TableHead>{copy.colName}</TableHead>
                 <TableHead>{copy.colEmail}</TableHead>
                 <TableHead>{copy.colRole}</TableHead>
+                <TableHead>{copy.colStatus}</TableHead>
                 <TableHead>{copy.colActions}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {staff.map((s) => {
-                const updating = updatingId === s.userId;
+              {entries.map((entry) => {
+                const badge = STATUS_BADGE[entry.status];
+                const isMember = entry.kind === 'MEMBER';
+                const busy = busyId === entry.id;
                 return (
-                  <TableRow key={s.userId}>
-                    <TableCell>
-                      <Input
-                        key={`${s.userId}-${s.fullName}`}
-                        ref={(el) => {
-                          if (el) nameInputRefs.current.set(s.userId, el);
-                          else nameInputRefs.current.delete(s.userId);
-                        }}
-                        defaultValue={s.fullName}
-                        aria-label={copy.nameFieldLabel(s.fullName)}
-                        disabled={updating}
-                        onBlur={(e) => {
-                          const value = e.target.value.trim();
-                          if (value && value !== s.fullName) {
-                            handleNameChange(s.userId, value, s.fullName);
-                          }
-                        }}
-                        className="h-9"
-                      />
+                  <TableRow
+                    key={`${entry.kind}-${entry.id}`}
+                    className={cn(isMember && 'relative')}
+                  >
+                    <TableCell className="font-medium text-ink">
+                      {isMember ? (
+                        // El enlace se estira sobre toda la fila con un
+                        // pseudo-elemento: la fila entera es clicable pero el
+                        // foco y el nombre accesible siguen viviendo en un <a>
+                        // de verdad, no en un onClick sobre el <tr>.
+                        <Link
+                          href={`/staff/${entry.id}`}
+                          aria-label={copy.viewProfile(entry.fullName)}
+                          className="rounded-sm after:absolute after:inset-0 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                        >
+                          {entry.fullName}
+                        </Link>
+                      ) : (
+                        entry.fullName
+                      )}
                     </TableCell>
-                    <TableCell>{s.email}</TableCell>
+                    <TableCell className="text-muted">{entry.email}</TableCell>
+                    <TableCell className="text-muted">{ROLE_LABEL[entry.role]}</TableCell>
                     <TableCell>
-                      <select
-                        aria-label={copy.roleFieldLabel(s.fullName)}
-                        value={s.role}
-                        disabled={updating}
-                        onChange={(e) =>
-                          handleRoleChange(s.userId, e.target.value as ClinicRole)
-                        }
-                        className={cn(fieldClass, 'h-9')}
-                      >
-                        {ROLE_OPTIONS.map((opt) => (
-                          <option key={opt.value} value={opt.value}>
-                            {opt.label}
-                          </option>
-                        ))}
-                      </select>
+                      <Badge variant={badge.variant}>{badge.label}</Badge>
                     </TableCell>
                     <TableCell>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        disabled={updating}
-                        onClick={() => setConfirmingId(s.userId)}
-                      >
-                        {copy.deactivateCta}
-                      </Button>
+                      {entry.kind === 'INVITATION' ? (
+                        // `relative` para que estos botones queden por encima
+                        // del pseudo-elemento del enlace de la fila (aquí no
+                        // hay ninguno, pero mantiene el patrón si un día un
+                        // miembro gana acciones).
+                        <div className="relative flex flex-wrap gap-2">
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            loading={busy}
+                            onClick={() => void handleResend(entry)}
+                            aria-label={`${copy.resend} a ${entry.email}`}
+                          >
+                            {copy.resend}
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="sm"
+                            disabled={busy}
+                            onClick={() => setRevokingId(entry.id)}
+                            aria-label={`${copy.revoke} la invitación de ${entry.email}`}
+                          >
+                            {copy.revoke}
+                          </Button>
+                        </div>
+                      ) : (
+                        <span className="text-sm text-muted">—</span>
+                      )}
                     </TableCell>
                   </TableRow>
                 );
@@ -444,23 +535,24 @@ export function StaffView({ token }: StaffViewProps) {
         </Card>
       </AsyncSection>
 
-      <div className="flex flex-col gap-4">
-        <h2 className="text-lg font-semibold text-ink">{copy.pendingInvitationsTitle}</h2>
-        <PendingInvitations token={token} refreshKey={invitationsRefreshKey} />
-      </div>
+      <Pagination
+        page={page}
+        pageSize={pageSize}
+        total={total}
+        onPageChange={setPage}
+        disabled={loading}
+      />
 
       <ConfirmDialog
-        open={confirmingId !== null}
+        open={revokingId !== null}
         onOpenChange={(open) => {
-          if (!open) setConfirmingId(null);
+          if (!open) setRevokingId(null);
         }}
-        title={copy.deactivateTitle}
-        description={
-          confirmingMember ? copy.deactivateBody(confirmingMember.fullName) : undefined
-        }
-        confirmLabel={copy.deactivateConfirmYes}
-        confirming={updatingId === confirmingId}
-        onConfirm={() => confirmingId && handleDeactivate(confirmingId)}
+        title={copy.revokeTitle}
+        description={revokingEntry ? copy.revokeBody(revokingEntry.email) : undefined}
+        confirmLabel={copy.revokeConfirmYes}
+        confirming={busyId === revokingId}
+        onConfirm={() => revokingId && handleRevoke(revokingId)}
       />
     </div>
   );
