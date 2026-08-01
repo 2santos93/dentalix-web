@@ -1,6 +1,7 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { StaffView } from './staff-view';
+import { Toaster } from '@/components/errors/toaster';
 import { listStaff, updateStaff, deactivateStaff } from '@/lib/staff/staff-api';
 import { createInvitation, listInvitations } from '@/lib/staff/invitations-api';
 import { ApiError } from '@/lib/api/client';
@@ -278,5 +279,68 @@ describe('StaffView', () => {
     await user.click(screen.getByRole('button', { name: /enviar invitación/i }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/el correo ya está en uso/i);
+  });
+
+  // Regression coverage (see DRIFT-TASK.md): a parallel-branch merge reverted
+  // `rowError` back to a bare inline `<p role="alert">`, undoing the escalón-3
+  // (toast) migration these two cases already verified once (ff48621).
+  it('a failed deactivate closes the confirm dialog, toasts with a retry, and retrying calls deactivateStaff again', async () => {
+    mockedListStaff.mockResolvedValueOnce([member1]);
+    mockedDeactivateStaff.mockRejectedValueOnce(new ApiError(409, 'No puedes desactivar al último admin.'));
+    mockedDeactivateStaff.mockResolvedValueOnce(undefined);
+    mockedListStaff.mockResolvedValueOnce([]);
+
+    const user = userEvent.setup();
+    render(
+      <>
+        <StaffView token="tok" />
+        <Toaster />
+      </>,
+    );
+
+    await screen.findByRole('table', { name: /personal/i });
+    await user.click(screen.getByRole('button', { name: /^desactivar$/i }));
+    const confirmDialog = await screen.findByRole('dialog');
+    await user.click(within(confirmDialog).getByRole('button', { name: /sí, desactivar/i }));
+
+    await waitFor(() => expect(mockedDeactivateStaff).toHaveBeenCalledTimes(1));
+    // The Radix dialog must be gone — while open it marks the toast's
+    // "Reintentar" inert (visible but unclickable), the bug ff48621 fixed.
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    const retryButton = await screen.findByRole('button', { name: 'Reintentar' });
+
+    await user.click(retryButton);
+
+    await waitFor(() => expect(mockedDeactivateStaff).toHaveBeenCalledTimes(2));
+    expect(mockedDeactivateStaff).toHaveBeenNthCalledWith(2, 'tok', 'u1');
+    await waitFor(() => expect(mockedListStaff).toHaveBeenCalledTimes(2));
+  });
+
+  it('a failed role change toasts with a retry and retrying calls updateStaff again', async () => {
+    mockedListStaff.mockResolvedValueOnce([member1]);
+    mockedUpdateStaff.mockRejectedValueOnce(new ApiError(500, 'Fallo el servidor.'));
+    mockedUpdateStaff.mockResolvedValueOnce({ ...member1, role: 'ADMIN' });
+    mockedListStaff.mockResolvedValueOnce([{ ...member1, role: 'ADMIN' as const }]);
+
+    const user = userEvent.setup();
+    render(
+      <>
+        <StaffView token="tok" />
+        <Toaster />
+      </>,
+    );
+
+    await screen.findByRole('table', { name: /personal/i });
+    const roleSelect = screen.getByLabelText<HTMLSelectElement>(/rol de ana ríos/i);
+    await user.selectOptions(roleSelect, 'ADMIN');
+
+    await waitFor(() => expect(mockedUpdateStaff).toHaveBeenCalledTimes(1));
+    const retryButton = await screen.findByRole('button', { name: 'Reintentar' });
+
+    await user.click(retryButton);
+
+    await waitFor(() => expect(mockedUpdateStaff).toHaveBeenCalledTimes(2));
+    expect(mockedUpdateStaff).toHaveBeenNthCalledWith(2, 'tok', 'u1', { role: 'ADMIN' });
+    await waitFor(() => expect(mockedListStaff).toHaveBeenCalledTimes(2));
   });
 });
