@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ChevronUp, LogOut, Settings, Sun, Moon } from 'lucide-react';
+import { ChevronUp, Clock, LogOut, Settings, Sun, Moon } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { getMe, type ClinicRole } from '@/lib/me/me-api';
@@ -11,6 +11,7 @@ import { cn } from '@/lib/utils';
 const copy = {
   account: 'Cuenta',
   profile: 'Mi perfil',
+  businessHours: 'Horario de atención',
   logout: 'Cerrar sesión',
   theme: 'Cambiar tema',
 };
@@ -170,6 +171,19 @@ export function UserMenu({ variant = 'card' }: { variant?: 'card' | 'compact' })
       >
         <Settings className="size-4 text-muted" aria-hidden />
         {copy.profile}
+      </Link>
+      {/* El horario es de la clínica, no de la cuenta, pero este menú es el
+          único sitio de ajustes que hay: meterlo en la nav lateral sumaría una
+          séptima sección que en móvil ya no cabe. Aplica a la sede activa que
+          marca el selector del topbar. */}
+      <Link
+        href="/settings/horarios"
+        role="menuitem"
+        onClick={() => setOpen(false)}
+        className="flex items-center gap-3 px-3 py-2 text-sm text-ink hover:bg-bg"
+      >
+        <Clock className="size-4 text-muted" aria-hidden />
+        {copy.businessHours}
       </Link>
       <div className="my-1 border-t border-border" />
       <ThemeRow />
