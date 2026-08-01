@@ -4,6 +4,7 @@ import { AppointmentForm } from './appointment-form';
 import { createAppointment } from '@/lib/appointments/appointments-api';
 import { listStaff } from '@/lib/appointments/staff-api';
 import { createPatient, listPatients } from '@/lib/patients/patients-api';
+import { getLocationSchedule } from '@/lib/locations/schedule-api';
 
 // PatientForm (rendered inside the "Crear paciente" dialog) calls
 // useRouter() — mock it the same way patient-form.test.tsx does, since it's
@@ -19,6 +20,13 @@ jest.mock('../../lib/appointments/appointments-api', () => ({
 jest.mock('../../lib/appointments/staff-api', () => ({
   listStaff: jest.fn(),
 }));
+// El formulario lee el horario de la sede. Se mockea el módulo entero pero se
+// mantienen los helpers REALES (fitsBusinessHoursLocal/describeDay) para que los
+// tests ejerciten la lógica de verdad, no un doble de ella.
+jest.mock('../../lib/locations/schedule-api', () => ({
+  ...jest.requireActual('../../lib/locations/schedule-api'),
+  getLocationSchedule: jest.fn(),
+}));
 jest.mock('../../lib/patients/patients-api', () => ({
   listPatients: jest.fn(),
   createPatient: jest.fn(),
@@ -28,6 +36,7 @@ const mockedCreateAppointment = createAppointment as jest.MockedFunction<typeof 
 const mockedListStaff = listStaff as jest.MockedFunction<typeof listStaff>;
 const mockedListPatients = listPatients as jest.MockedFunction<typeof listPatients>;
 const mockedCreatePatient = createPatient as jest.MockedFunction<typeof createPatient>;
+const mockedGetSchedule = getLocationSchedule as jest.MockedFunction<typeof getLocationSchedule>;
 
 const staff = [
   { userId: 'staff-1', fullName: 'Dra. Ana Ríos', role: 'DENTIST' as const },
@@ -157,6 +166,9 @@ describe('AppointmentForm', () => {
     mockedCreatePatient.mockReset();
     mockedListStaff.mockResolvedValue(staff);
     mockedListPatients.mockResolvedValue(patientsPage);
+    mockedGetSchedule.mockReset();
+    // Sede sin horario configurado => sin restricción (igual que el backend).
+    mockedGetSchedule.mockResolvedValue(null);
   });
 
   it('renders patient, provider, date/time and reason fields with accessible labels', async () => {
@@ -249,6 +261,79 @@ describe('AppointmentForm', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/fin.*posterior.*inicio/i);
     expect(mockedCreateAppointment).not.toHaveBeenCalled();
+  });
+
+
+  describe('horario de atención de la sede', () => {
+    /** Horario del día de FUTURE_DATE: 09:00–13:00, para probar dentro y fuera. */
+    function hoursForFutureDate() {
+      const weekday = new Date(`${FUTURE_DATE}T00:00:00`).getDay();
+      return {
+        timezone: 'America/Bogota',
+        ranges: [{ weekday, startMinute: 9 * 60, endMinute: 13 * 60 }],
+      };
+    }
+
+    it('muestra el horario del día como pista al elegir la fecha', async () => {
+      mockedGetSchedule.mockResolvedValue(hoursForFutureDate());
+      const user = userEvent.setup();
+      await renderFormAndWaitForLoad();
+
+      await user.type(screen.getByLabelText(/^fecha$/i), FUTURE_DATE);
+
+      expect(await screen.findByText(/horario de ese día: 09:00–13:00/i)).toBeInTheDocument();
+    });
+
+    it('bloquea el submit fuera del horario, diciendo cuándo SÍ se atiende', async () => {
+      mockedGetSchedule.mockResolvedValue(hoursForFutureDate());
+      const user = userEvent.setup();
+      await renderFormAndWaitForLoad();
+
+      await selectMariaByDoc(user);
+      await user.selectOptions(screen.getByLabelText(/profesional/i), 'staff-1');
+      await user.type(screen.getByLabelText(/^fecha$/i), FUTURE_DATE);
+      await user.type(screen.getByLabelText(/hora de inicio/i), '20:00');
+      await user.type(screen.getByLabelText(/hora de fin/i), '20:30');
+
+      await user.click(screen.getByRole('button', { name: /agendar|guardar/i }));
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        /fuera del horario de atención.*09:00–13:00/i,
+      );
+      expect(mockedCreateAppointment).not.toHaveBeenCalled();
+    });
+
+    it('acepta una cita DENTRO del horario', async () => {
+      mockedGetSchedule.mockResolvedValue(hoursForFutureDate());
+      mockedCreateAppointment.mockResolvedValue(createdAppointment);
+      const user = userEvent.setup();
+      await renderFormAndWaitForLoad();
+
+      await selectMariaByDoc(user);
+      await user.selectOptions(screen.getByLabelText(/profesional/i), 'staff-1');
+      await user.type(screen.getByLabelText(/^fecha$/i), FUTURE_DATE);
+      await user.type(screen.getByLabelText(/hora de inicio/i), '10:00');
+      await user.type(screen.getByLabelText(/hora de fin/i), '10:30');
+
+      await user.click(screen.getByRole('button', { name: /agendar|guardar/i }));
+
+      await waitFor(() => expect(mockedCreateAppointment).toHaveBeenCalledTimes(1));
+    });
+
+    it('avisa que la sede no atiende ese día cuando está cerrado', async () => {
+      // Horario que solo abre OTRO día que el de FUTURE_DATE.
+      const weekday = new Date(`${FUTURE_DATE}T00:00:00`).getDay();
+      mockedGetSchedule.mockResolvedValue({
+        timezone: 'America/Bogota',
+        ranges: [{ weekday: (weekday + 1) % 7, startMinute: 540, endMinute: 780 }],
+      });
+      const user = userEvent.setup();
+      await renderFormAndWaitForLoad();
+
+      await user.type(screen.getByLabelText(/^fecha$/i), FUTURE_DATE);
+
+      expect(await screen.findByText(/la sede no atiende ese día/i)).toBeInTheDocument();
+    });
   });
 
   describe('no agendar en el pasado', () => {

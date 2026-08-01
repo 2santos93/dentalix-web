@@ -10,6 +10,12 @@ import {
 import { listStaff, type StaffMember } from '@/lib/appointments/staff-api';
 import { listPatients, type Patient } from '@/lib/patients/patients-api';
 import { useDebouncedValue } from '@/lib/hooks/use-debounced-value';
+import {
+  getLocationSchedule,
+  fitsBusinessHoursLocal,
+  describeDay,
+  type BusinessHours,
+} from '@/lib/locations/schedule-api';
 import { UserPlus, Loader2, Search, Check, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -52,6 +58,12 @@ const copy = {
   validationMissingFields: 'Completa paciente, profesional, fecha y horas.',
   validationEndAfterStart: 'La hora de fin debe ser posterior a la hora de inicio.',
   validationPastStart: 'No se puede agendar en el pasado. Elige una fecha y hora futuras.',
+  validationOutsideHours: (ranges: string) =>
+    ranges === ''
+      ? 'La sede no atiende ese día.'
+      : `Fuera del horario de atención. Ese día se atiende: ${ranges}.`,
+  hoursHint: (ranges: string) => `Horario de ese día: ${ranges}`,
+  hoursHintClosed: 'La sede no atiende ese día.',
 };
 
 function fullPatientName(patient: Patient): string {
@@ -158,6 +170,9 @@ export function AppointmentForm({
   const [endTime, setEndTime] = useState(defaultEndTime ?? '');
   const [reason, setReason] = useState('');
 
+  // Horario de atención de la sede activa: `null` = sin configurar => sin
+  // restricción (misma semántica que el backend).
+  const [hours, setHours] = useState<BusinessHours | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -209,6 +224,13 @@ export function AppointmentForm({
       setStaffLoading(true);
       try {
         const res = await listStaff(token);
+        // Best-effort: si el horario no se puede leer, no se bloquea el
+        // formulario — el backend sigue validando y es la autoridad.
+        void getLocationSchedule(token)
+          .then((h) => {
+            if (!cancelled) setHours(h);
+          })
+          .catch(() => {});
         if (cancelled) return;
         setStaff(res);
         setStaffError(false);
@@ -282,6 +304,14 @@ export function AppointmentForm({
     // INSTANTE acá. Mismo criterio que el backend, que lo rechaza con 400.
     if (new Date(start).getTime() < Date.now()) {
       setValidationError(copy.validationPastStart);
+      return;
+    }
+
+    // Horario de atención. El backend lo rechaza igual con 400; esto lo avisa
+    // antes de enviar y con el horario real del día en el mensaje.
+    if (!fitsBusinessHoursLocal(date, startTime, endTime, hours)) {
+      const weekday = new Date(`${date}T00:00:00`).getDay();
+      setValidationError(copy.validationOutsideHours(describeDay(weekday, hours)));
       return;
     }
 
@@ -501,6 +531,18 @@ export function AppointmentForm({
             onChange={(e) => setDate(e.target.value)}
             className="flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors placeholder:text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-50"
           />
+          {/* Pista del horario del día elegido: que se VEA por qué una hora no
+              entra, en vez de descubrirlo al enviar. Solo cuando la sede tiene
+              horario configurado. */}
+          {hours && date !== '' && (
+            <p className="text-xs text-muted">
+              {describeDay(new Date(`${date}T00:00:00`).getDay(), hours) === ''
+                ? copy.hoursHintClosed
+                : copy.hoursHint(
+                    describeDay(new Date(`${date}T00:00:00`).getDay(), hours),
+                  )}
+            </p>
+          )}
         </div>
         <div className="flex flex-col gap-1">
           <label htmlFor="appointment-start-time" className="text-sm font-medium text-ink">
