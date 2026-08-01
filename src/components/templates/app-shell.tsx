@@ -2,7 +2,14 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { Users, Calendar, LayoutDashboard, UserCog, ClipboardList } from 'lucide-react';
+import {
+  Users,
+  Calendar,
+  LayoutDashboard,
+  UserCog,
+  ClipboardList,
+  Package,
+} from 'lucide-react';
 import { UserMenu } from '@/components/profile/user-menu';
 import { LocationSwitcher } from '@/components/locations/location-switcher';
 import { cn } from '@/lib/utils';
@@ -13,6 +20,7 @@ const NAV = [
   { href: '/agenda', label: 'Agenda', icon: Calendar },
   { href: '/catalog', label: 'Catálogo', icon: ClipboardList },
   { href: '/staff', label: 'Personal', icon: UserCog },
+  { href: '/inventory', label: 'Inventario', icon: Package },
 ];
 
 /**

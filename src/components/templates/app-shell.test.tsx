@@ -42,4 +42,19 @@ describe('AppShell', () => {
       screen.getAllByRole('button', { name: /ana gómez|cuenta/i }).length,
     ).toBeGreaterThanOrEqual(2);
   });
+
+  it('includes an Inventario nav link pointing to /inventory', () => {
+    render(
+      <AppShell>
+        <p>contenido</p>
+      </AppShell>,
+    );
+    // Se renderiza en dos ubicaciones responsivas (sidebar desktop + topbar
+    // móvil); ambas existen en el DOM bajo jsdom.
+    const links = screen.getAllByRole('link', { name: /inventario/i });
+    expect(links.length).toBeGreaterThanOrEqual(1);
+    links.forEach((link) => {
+      expect(link).toHaveAttribute('href', '/inventory');
+    });
+  });
 });
