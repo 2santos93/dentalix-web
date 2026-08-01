@@ -2,7 +2,7 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { StaffView } from './staff-view';
 import { listStaff, updateStaff, deactivateStaff } from '@/lib/staff/staff-api';
-import { createInvitation } from '@/lib/staff/invitations-api';
+import { createInvitation, listInvitations } from '@/lib/staff/invitations-api';
 import { ApiError } from '@/lib/api/client';
 
 // NOTE: jest.mock's string literal is not alias-rewritten by the SWC
@@ -14,14 +14,19 @@ jest.mock('../../lib/staff/staff-api', () => ({
   deactivateStaff: jest.fn(),
 }));
 
+// `listInvitations` is exercised here too because `StaffView` now mounts
+// `PendingInvitations`, which fetches on its own — see the "refreshKey"
+// test below.
 jest.mock('../../lib/staff/invitations-api', () => ({
   createInvitation: jest.fn(),
+  listInvitations: jest.fn(),
 }));
 
 const mockedListStaff = listStaff as jest.MockedFunction<typeof listStaff>;
 const mockedUpdateStaff = updateStaff as jest.MockedFunction<typeof updateStaff>;
 const mockedDeactivateStaff = deactivateStaff as jest.MockedFunction<typeof deactivateStaff>;
 const mockedCreateInvitation = createInvitation as jest.MockedFunction<typeof createInvitation>;
+const mockedListInvitations = listInvitations as jest.MockedFunction<typeof listInvitations>;
 
 const member1 = {
   userId: 'u1',
@@ -42,6 +47,8 @@ describe('StaffView', () => {
     mockedUpdateStaff.mockReset();
     mockedDeactivateStaff.mockReset();
     mockedCreateInvitation.mockReset();
+    mockedListInvitations.mockReset();
+    mockedListInvitations.mockResolvedValue([]);
   });
 
   it('renders rows from listStaff', async () => {
@@ -127,6 +134,37 @@ describe('StaffView', () => {
 
     await user.click(screen.getByRole('button', { name: /^listo$/i }));
     expect(screen.queryByText(`${window.location.origin}/invitacion/tok-abc123`)).not.toBeInTheDocument();
+  });
+
+  it('creating an invitation refreshes the pending-invitations list (refreshKey wiring)', async () => {
+    mockedListStaff.mockResolvedValue([member1]);
+    mockedCreateInvitation.mockResolvedValue({
+      id: 'inv-1',
+      fullName: 'Nueva Persona',
+      email: 'nueva@clinic.com',
+      role: 'RECEPTION',
+      expiresAt: '2026-08-08T00:00:00.000Z',
+      status: 'VALID',
+      token: 'tok-abc123',
+    });
+
+    const user = userEvent.setup();
+    render(<StaffView token="tok" />);
+
+    await screen.findByRole('table', { name: /personal/i });
+    // Mount fetch for PendingInvitations.
+    await waitFor(() => expect(mockedListInvitations).toHaveBeenCalledTimes(1));
+
+    await user.click(screen.getByRole('button', { name: /^invitar$/i }));
+    await user.type(screen.getByLabelText(/nombre completo/i), 'Nueva Persona');
+    await user.type(screen.getByLabelText(/correo electrónico/i), 'nueva@clinic.com');
+    await user.selectOptions(screen.getByLabelText(/^rol$/i), 'RECEPTION');
+    await user.click(screen.getByRole('button', { name: /enviar invitación/i }));
+
+    await waitFor(() => expect(mockedCreateInvitation).toHaveBeenCalled());
+    // The pending list must reload on its own, without waiting for the user
+    // to close the "invitation created" dialog or refresh the page.
+    await waitFor(() => expect(mockedListInvitations).toHaveBeenCalledTimes(2));
   });
 
   it('changing a role calls updateStaff', async () => {
