@@ -1,6 +1,7 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { PendingInvitations } from './pending-invitations';
+import { Toaster } from '@/components/errors/toaster';
 import { listInvitations, revokeInvitation, createInvitation } from '@/lib/staff/invitations-api';
 import { ApiError } from '@/lib/api/client';
 
@@ -137,5 +138,77 @@ describe('PendingInvitations', () => {
     render(<PendingInvitations token="tok" />);
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Fallo el servidor.');
+  });
+
+  // Same lesson as staff-view.tsx (see DRIFT-TASK.md): this `rowError` was a
+  // literal copy of staff-view's, so the modal-inert defect ff48621 fixed
+  // there needed the same fix here.
+  it('a failed revoke closes the confirm dialog, toasts with a retry, and retrying calls revokeInvitation again', async () => {
+    mockedListInvitations.mockResolvedValueOnce([invitation1]);
+    mockedRevokeInvitation.mockRejectedValueOnce(new ApiError(409, 'No pudimos revocarla.'));
+    mockedRevokeInvitation.mockResolvedValueOnce(undefined);
+    mockedListInvitations.mockResolvedValueOnce([]);
+
+    const user = userEvent.setup();
+    render(
+      <>
+        <PendingInvitations token="tok" />
+        <Toaster />
+      </>,
+    );
+
+    await screen.findByRole('table', { name: /invitaciones pendientes/i });
+    await user.click(screen.getByRole('button', { name: /revocar invitación de nueva persona/i }));
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: /confirmar|revocar/i }));
+
+    await waitFor(() => expect(mockedRevokeInvitation).toHaveBeenCalledTimes(1));
+    // The Radix dialog must be gone — while open it marks the toast's
+    // "Reintentar" inert (visible but unclickable).
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    const retryButton = await screen.findByRole('button', { name: 'Reintentar' });
+
+    await user.click(retryButton);
+
+    await waitFor(() => expect(mockedRevokeInvitation).toHaveBeenCalledTimes(2));
+    expect(mockedRevokeInvitation).toHaveBeenNthCalledWith(2, 'tok', 'inv-1');
+    await waitFor(() => expect(mockedListInvitations).toHaveBeenCalledTimes(2));
+  });
+
+  it('a failed resend toasts with a retry and retrying calls createInvitation again', async () => {
+    mockedListInvitations.mockResolvedValueOnce([invitation1]);
+    mockedCreateInvitation.mockRejectedValueOnce(new ApiError(500, 'Fallo el servidor.'));
+    mockedCreateInvitation.mockResolvedValueOnce({
+      id: 'inv-1-new',
+      fullName: 'Nueva Persona',
+      email: 'nueva@clinic.com',
+      role: 'RECEPTION',
+      expiresAt: '2026-08-15T00:00:00.000Z',
+      status: 'VALID',
+      token: 'tok-resent-456',
+    });
+    mockedListInvitations.mockResolvedValueOnce([invitation1]);
+
+    const user = userEvent.setup();
+    render(
+      <>
+        <PendingInvitations token="tok" />
+        <Toaster />
+      </>,
+    );
+
+    await screen.findByRole('table', { name: /invitaciones pendientes/i });
+    await user.click(screen.getByRole('button', { name: /reenviar invitación de nueva persona/i }));
+
+    await waitFor(() => expect(mockedCreateInvitation).toHaveBeenCalledTimes(1));
+    const retryButton = await screen.findByRole('button', { name: 'Reintentar' });
+
+    await user.click(retryButton);
+
+    await waitFor(() => expect(mockedCreateInvitation).toHaveBeenCalledTimes(2));
+    expect(
+      await screen.findByText(`${window.location.origin}/invitacion/tok-resent-456`),
+    ).toBeInTheDocument();
+    await waitFor(() => expect(mockedListInvitations).toHaveBeenCalledTimes(2));
   });
 });
