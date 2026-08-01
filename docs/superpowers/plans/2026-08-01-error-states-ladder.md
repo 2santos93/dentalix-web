@@ -1117,30 +1117,87 @@ git commit -m "refactor(errores): resto de pantallas migradas a la escalera de s
 - Modify: `src/components/profile/change-password-form.tsx`
 
 **Interfaces:**
-- Consumes: `InlineError` (Tarea 2).
+- Consumes: `InlineError` (Tarea 2), **ampliado en el Step 2 de esta tarea**.
+- Produces: `InlineError` con dos props nuevas — `id?: string` y `variant?: 'inline' | 'summary'`.
 
-Estos siete no son fallos de carga: son el escalón 4 y ya viven donde deben. Lo único que falta es que se vean igual entre sí y que lleven icono.
+Estos siete no son fallos de carga: son el escalón 4 y ya viven donde deben. Lo que falta es que se vean como un solo sistema y que lleven icono.
+
+**Dos cosas que el plan original se saltó y que se resuelven aquí** (descubiertas inspeccionando los siete sitios antes de despachar):
+
+1. **No son un patrón, son dos.** Tres sitios son una línea de texto desnuda (`form-field.tsx`, `patient-form.tsx`, `change-password-form.tsx`). Los otros cuatro son una **caja de resumen** con borde y fondo tintado (`form-modal.tsx`, `confirm-dialog.tsx`, `login-form.tsx`, `register-form.tsx`): `rounded-lg border border-danger/20|30 bg-danger/10 px-3 py-2`. Son errores a nivel de formulario, no de un campo. Aplanar los cuatro a una línea desnuda haría que un fallo de envío se leyera igual que la validación de un campo suelto: pérdida real de jerarquía.
+
+2. **`aria-describedby` se rompería en silencio.** `login-form.tsx:105` y `register-form.tsx:151` llevan `id={ERROR_ID}`, referenciado por `aria-describedby` desde **siete campos** (2 en login, 5 en registro). `InlineError` no acepta `id`, así que un reemplazo literal borraría la asociación y quien use lector de pantalla dejaría de oír el error al enfocar un campo. Regresión de accesibilidad.
 
 - [ ] **Step 1: Ejecutar los tests de partida**
 
 Run: `npx jest src/components/molecules src/components/organisms src/components/auth src/components/patients/patient-form.test.tsx src/components/profile`
 Esperado: PASS.
 
-- [ ] **Step 2: Sustituir cada mensaje por `<InlineError>`**
+- [ ] **Step 2: Ampliar `InlineError` con `id` y `variant`**
 
-En los siete ficheros, reemplazar el patrón
+Excepcionalmente, esta tarea **sí modifica** `src/components/errors/inline-error.tsx`. Dos props que se ganan su sitio: `id` para no romper el cableado aria, y `variant` para que la caja de resumen se defina una vez en vez de repetir el bloque de clases en cuatro ficheros.
 
 ```tsx
-<p role="alert" className="text-sm text-danger">{error}</p>
+export function InlineError({
+  children,
+  id,
+  variant = 'inline',
+  className,
+}: {
+  children: React.ReactNode;
+  /** Para `aria-describedby` desde los campos del formulario. */
+  id?: string;
+  /**
+   * `inline` — mensaje junto a un campo.
+   * `summary` — resumen a nivel de formulario o modal: misma familia, más peso
+   *   visual, porque resume el fallo de un envío y no la validación de un campo.
+   */
+  variant?: 'inline' | 'summary';
+  className?: string;
+}) {
+  return (
+    <p
+      id={id}
+      role="alert"
+      className={cn(
+        'flex items-start gap-1.5 text-sm text-danger',
+        variant === 'summary' &&
+          'rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 font-medium',
+        className,
+      )}
+    >
+      <AlertCircle aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
+      <span>{children}</span>
+    </p>
+  );
+}
 ```
 
-por
+Añadir tests a `inline-error.test.tsx` para: `id` se refleja en el DOM (es lo que sostiene `aria-describedby`), y `variant="summary"` añade el contenedor mientras `inline` no.
+
+- [ ] **Step 3: Migrar los siete sitios, respetando los dos patrones**
+
+Línea desnuda (`form-field.tsx`, `patient-form.tsx`, `change-password-form.tsx`):
 
 ```tsx
 <InlineError>{error}</InlineError>
 ```
 
-Conservar cualquier `className` de posicionamiento pasándolo por la prop `className`.
+Caja de resumen (`form-modal.tsx`, `confirm-dialog.tsx`):
+
+```tsx
+<InlineError variant="summary">{error}</InlineError>
+```
+
+Caja de resumen con cableado aria (`login-form.tsx`, `register-form.tsx`) — **el `id` no es opcional aquí**:
+
+```tsx
+<InlineError id={ERROR_ID} variant="summary">{error}</InlineError>
+```
+
+Conservar cualquier `className` de posicionamiento pasándolo por `className`. `form-field.tsx` usa `text-xs`; pásalo por `className` si el cambio a `text-sm` desalinea el campo, y dilo.
+
+Verificar explícitamente que los siete `aria-describedby` siguen resolviendo: cada `ERROR_ID` debe seguir existiendo en el DOM cuando hay error.
 
 - [ ] **Step 3: Verificar que no queda ningún `text-danger` suelto en render de error**
 
