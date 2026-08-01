@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { randomUUID } from 'node:crypto';
 import { registerAndLogin } from './support/auth';
+import { disableBusinessHours } from './support/business-hours';
 
 /**
  * e2e: register clinic + login, create a patient through the real UI, go to
@@ -71,6 +72,7 @@ test('create appointment via the UI -> appears in the day agenda, status change 
   page,
 }) => {
   const origin = await registerAndLogin(page, { subdomain, clinicName, fullName, email, password });
+  await disableBusinessHours(page, origin);
 
   // --- Create the patient we'll book an appointment for ---
   await page.goto(`${origin}/patients/new`);
