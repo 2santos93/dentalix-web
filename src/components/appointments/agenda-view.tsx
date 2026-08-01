@@ -29,6 +29,8 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 import { FormField } from '@/components/molecules/form-field';
+import { FieldError } from '@/components/errors/field-error';
+import { notifyError } from '@/components/errors/notify';
 import {
   Sheet,
   SheetContent,
@@ -65,10 +67,12 @@ const copy = {
   refreshing: 'Actualizando…',
   retry: 'Reintentar',
   loading: 'Cargando agenda…',
-  genericStaffError: 'No pudimos cargar los profesionales. Intenta de nuevo.',
+  // Escalón 2 (control): etiqueta corta, el contexto lo da el propio filtro.
+  staffFieldError: 'No se pudieron cargar',
   genericAppointmentsError: 'No pudimos cargar la agenda. Intenta de nuevo.',
-  genericRefreshError: 'No pudimos actualizar la agenda. Intenta de nuevo.',
-  genericStatusChangeError: 'No pudimos actualizar el estado de la cita. Intenta de nuevo.',
+  // Escalón 3 (segundo plano): sin "Intenta de nuevo." — el toast trae acción.
+  genericRefreshError: 'No pudimos actualizar la agenda.',
+  genericStatusChangeError: 'No pudimos cambiar el estado de la cita.',
   /** Selected-day appointment count, shown above the day panel in the month view. */
   dayCount: (n: number) => (n === 0 ? 'Sin citas' : n === 1 ? '1 cita' : `${n} citas`),
   noProviders: 'No hay profesionales activos en esta clínica.',
@@ -241,7 +245,9 @@ interface AgendaViewProps {
 export function AgendaView({ token }: AgendaViewProps) {
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [staffLoading, setStaffLoading] = useState(true);
-  const [staffError, setStaffError] = useState<string | null>(null);
+  // Truthy is all that's needed — the rendered `FieldError` shows a fixed
+  // short label (`copy.staffFieldError`), never the server's message.
+  const [staffError, setStaffError] = useState(false);
   const [staffReloadKey, setStaffReloadKey] = useState(0);
   const [providerId, setProviderId] = useState('');
 
@@ -263,7 +269,6 @@ export function AgendaView({ token }: AgendaViewProps) {
   const [appointmentsLoading, setAppointmentsLoading] = useState(false);
   const [appointmentsLoadError, setAppointmentsLoadError] = useState<string | null>(null);
   const [appointmentsRefreshing, setAppointmentsRefreshing] = useState(false);
-  const [appointmentsRefreshError, setAppointmentsRefreshError] = useState<string | null>(null);
 
 
   const [showForm, setShowForm] = useState(false);
@@ -284,10 +289,9 @@ export function AgendaView({ token }: AgendaViewProps) {
 
   // Status-change control (`DayAgenda`'s `onStatusChange`/`updatingId` props):
   // `updatingId` tracks which row's PATCH is in flight so `DayAgenda` can
-  // disable just that row's select; `statusChangeError` surfaces a failed
-  // PATCH the same way `appointmentsRefreshError` does.
+  // disable just that row's select; a failed PATCH surfaces via
+  // `notifyError` (background, rung 3) instead of blocking state.
   const [updatingId, setUpdatingId] = useState<string | null>(null);
-  const [statusChangeError, setStatusChangeError] = useState<string | null>(null);
 
   // Fetch active staff once (retriable) — feeds the provider selector.
   useEffect(() => {
@@ -299,10 +303,10 @@ export function AgendaView({ token }: AgendaViewProps) {
         const data = await listStaff(token);
         if (cancelled) return;
         setStaff(data);
-        setStaffError(null);
-      } catch (err) {
+        setStaffError(false);
+      } catch {
         if (cancelled) return;
-        setStaffError(err instanceof ApiError ? err.message : copy.genericStaffError);
+        setStaffError(true);
       } finally {
         if (!cancelled) setStaffLoading(false);
       }
@@ -354,12 +358,11 @@ export function AgendaView({ token }: AgendaViewProps) {
     return listAppointments(token, { from, to, providerId: providerId || undefined })
       .then((data) => {
         setAppointments(data);
-        setAppointmentsRefreshError(null);
       })
       .catch((err) => {
-        setAppointmentsRefreshError(
-          err instanceof ApiError ? err.message : copy.genericRefreshError,
-        );
+        notifyError(err instanceof ApiError ? err.message : copy.genericRefreshError, {
+          onRetry: refreshAppointmentsInPlace,
+        });
       })
       .finally(() => setAppointmentsRefreshing(false));
   }
@@ -428,12 +431,13 @@ export function AgendaView({ token }: AgendaViewProps) {
   async function handleStatusChange(id: string, status: AppointmentStatus) {
     if (!token) return;
     setUpdatingId(id);
-    setStatusChangeError(null);
     try {
       await updateAppointment(token, id, { status });
       await refreshAppointmentsInPlace();
     } catch (err) {
-      setStatusChangeError(err instanceof ApiError ? err.message : copy.genericStatusChangeError);
+      notifyError(err instanceof ApiError ? err.message : copy.genericStatusChangeError, {
+        onRetry: () => handleStatusChange(id, status),
+      });
     } finally {
       setUpdatingId(null);
     }
@@ -483,64 +487,38 @@ export function AgendaView({ token }: AgendaViewProps) {
               );
             })}
           </div>
-          <select
-            aria-label={copy.providerLabel}
-            disabled={staffLoading}
-            value={providerId}
-            onChange={(e) => setProviderId(e.target.value)}
-            className={cn(fieldClass, 'h-9 w-auto min-w-[11rem] text-sm')}
-          >
-            <option value="">{copy.allProviders}</option>
-            {staff.map((s) => (
-              <option key={s.userId} value={s.userId}>
-                {s.fullName}
-              </option>
-            ))}
-          </select>
+          {staffError ? (
+            <FieldError
+              label={copy.staffFieldError}
+              onRetry={() => setStaffReloadKey((k) => k + 1)}
+              className="h-9"
+            />
+          ) : (
+            <select
+              aria-label={copy.providerLabel}
+              disabled={staffLoading}
+              value={providerId}
+              onChange={(e) => setProviderId(e.target.value)}
+              className={cn(fieldClass, 'h-9 w-auto min-w-[11rem] text-sm')}
+            >
+              <option value="">{copy.allProviders}</option>
+              {staff.map((s) => (
+                <option key={s.userId} value={s.userId}>
+                  {s.fullName}
+                </option>
+              ))}
+            </select>
+          )}
         </div>
         <Button type="button" onClick={openNewAppointment}>
           <Plus /> {copy.newAppointment}
         </Button>
       </div>
 
-      {staffError && (
-        <div className="flex items-center gap-3">
-          <p role="alert" className="text-sm text-danger">
-            {staffError}
-          </p>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setStaffReloadKey((k) => k + 1)}
-          >
-            {copy.retry}
-          </Button>
-        </div>
-      )}
-
       {appointmentsRefreshing && (
         <p role="status" aria-live="polite" className="text-xs font-medium text-muted">
           {copy.refreshing}
         </p>
-      )}
-
-      {appointmentsRefreshError && (
-        <div className="flex items-center gap-3">
-          <p role="alert" className="text-xs text-danger">
-            {appointmentsRefreshError}
-          </p>
-          <Button variant="outline" size="sm" onClick={refreshAppointmentsInPlace}>
-            {copy.retry}
-          </Button>
-        </div>
-      )}
-
-      {statusChangeError && (
-        <div className="flex items-center gap-3">
-          <p role="alert" className="text-xs text-danger">
-            {statusChangeError}
-          </p>
-        </div>
       )}
 
       {/* The active view, full width — nothing renders below it, so the page
@@ -659,11 +637,6 @@ export function AgendaView({ token }: AgendaViewProps) {
             </SheetDescription>
           </SheetHeader>
           <SheetBody className="flex flex-col gap-3">
-            {statusChangeError && (
-              <p role="alert" className="text-sm text-danger">
-                {statusChangeError}
-              </p>
-            )}
             <DayAgenda
               appointments={selectedDayAppointments}
               loading={appointmentsLoading}
@@ -709,13 +682,6 @@ export function AgendaView({ token }: AgendaViewProps) {
             <SheetBody className="flex flex-col gap-4">
               {liveDetailAppointment.reason && (
                 <p className="text-sm text-ink">{liveDetailAppointment.reason}</p>
-              )}
-              {/* Status-change error rendered here (inside the open sheet) so
-                  it's not aria-hidden by the sheet's own focus scope. */}
-              {statusChangeError && (
-                <p role="alert" className="text-sm text-danger">
-                  {statusChangeError}
-                </p>
               )}
               <FormField htmlFor="detail-status" label={copy.statusLabel}>
                 <select
