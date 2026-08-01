@@ -13,6 +13,7 @@ import { Wizard, WizardNav, type WizardStep } from '@/components/ui/wizard';
 import { ClinicalHistoryFields } from '@/components/clinical/clinical-history-fields';
 import { Input } from '@/components/ui/input';
 import { FormField } from '@/components/molecules/form-field';
+import { InlineError } from '@/components/errors/inline-error';
 import { fieldClass } from '@/lib/ui/field-class';
 import { cn } from '@/lib/utils';
 import type { ClinicalHistoryValue } from '@/lib/clinical/clinical-types';
@@ -308,11 +309,7 @@ export function PatientCreateWizard({ token }: PatientCreateWizardProps) {
               />
             </FormField>
 
-            {validationError ? (
-              <p role="alert" className="text-sm font-medium text-danger">
-                {validationError}
-              </p>
-            ) : null}
+            {validationError ? <InlineError>{validationError}</InlineError> : null}
           </div>
         )}
 
@@ -354,11 +351,7 @@ export function PatientCreateWizard({ token }: PatientCreateWizardProps) {
               />
               {copy.consentLabel}
             </label>
-            {error ? (
-              <p role="alert" className="text-sm font-medium text-danger">
-                {error}
-              </p>
-            ) : null}
+            {error ? <InlineError>{error}</InlineError> : null}
           </div>
         )}
       </Wizard>
