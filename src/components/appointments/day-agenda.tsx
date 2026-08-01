@@ -46,6 +46,8 @@ interface DayAgendaProps {
   loading: boolean;
   /** Error message to show instead of the list/empty state, if loading failed. */
   error?: string | null;
+  /** Retries the load that produced `error` — renders as `SectionError`'s own retry button. */
+  onRetry?: () => void;
   /**
    * Optional `patientId -> fullName` lookup (e.g. built from `GET /patients`
    * by the page in Task 5). Falls back to the raw `patientId` when a
@@ -123,6 +125,7 @@ export function DayAgenda({
   appointments,
   loading,
   error,
+  onRetry,
   patientNames,
   onStatusChange,
   updatingId,
@@ -146,7 +149,7 @@ export function DayAgenda({
   }
 
   if (error) {
-    return <SectionError description={error || copy.genericLoadError} />;
+    return <SectionError description={error || copy.genericLoadError} onRetry={onRetry} />;
   }
 
   if (appointments.length === 0) {

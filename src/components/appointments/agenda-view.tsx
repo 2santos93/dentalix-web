@@ -70,8 +70,8 @@ const copy = {
   loading: 'Cargando agenda…',
   // Escalón 2 (control): etiqueta corta, el contexto lo da el propio filtro.
   staffFieldError: 'No se pudieron cargar',
-  // Escalón 1 con reintento (ver Semana más abajo): sin "Intenta de nuevo." —
-  // `SectionError` trae su propio botón.
+  // Escalón 1 con reintento (Mes/Día/Semana, las tres vía `appointmentsReloadKey`):
+  // sin "Intenta de nuevo." — `SectionError` trae su propio botón.
   genericAppointmentsError: 'No pudimos cargar la agenda.',
   // Escalón 3 (segundo plano): sin "Intenta de nuevo." — el toast trae acción.
   genericRefreshError: 'No pudimos actualizar la agenda.',
@@ -272,11 +272,11 @@ export function AgendaView({ token }: AgendaViewProps) {
   const [appointmentsLoading, setAppointmentsLoading] = useState(false);
   const [appointmentsLoadError, setAppointmentsLoadError] = useState<string | null>(null);
   const [appointmentsRefreshing, setAppointmentsRefreshing] = useState(false);
-  // Bumped by the Semana view's `SectionError` retry button below — the only
-  // one of the three views whose error is hand-rolled here instead of owned
-  // by a `DayAgenda`/`MonthAgenda`-style component (see that section's
-  // comment), so it's also the only one that needs a way to force the load
-  // effect below to refire.
+  // Bumped by the retry button on any of the three views' `SectionError` —
+  // Mes/Día pass it straight through as `MonthAgenda`/`DayAgenda`'s `onRetry`
+  // prop; Semana's error is hand-rolled here instead (no `WeekTimeGrid` error
+  // prop exists), so it wires the same key directly. Either way this is the
+  // one thing that forces the load effect below to refire.
   const [appointmentsReloadKey, setAppointmentsReloadKey] = useState(0);
 
 
@@ -564,6 +564,7 @@ export function AgendaView({ token }: AgendaViewProps) {
             onSelectDay={handleSelectMonthDay}
             loading={appointmentsLoading}
             error={appointmentsLoadError}
+            onRetry={() => setAppointmentsReloadKey((k) => k + 1)}
           />
         </div>
       ) : viewMode === 'week' ? (
@@ -618,6 +619,7 @@ export function AgendaView({ token }: AgendaViewProps) {
             appointments={appointments}
             loading={appointmentsLoading}
             error={appointmentsLoadError}
+            onRetry={() => setAppointmentsReloadKey((k) => k + 1)}
             onStatusChange={handleStatusChange}
             updatingId={updatingId}
           />
@@ -664,7 +666,8 @@ export function AgendaView({ token }: AgendaViewProps) {
               appointments={selectedDayAppointments}
               loading={appointmentsLoading}
               error={appointmentsLoadError}
-                onStatusChange={handleStatusChange}
+              onRetry={() => setAppointmentsReloadKey((k) => k + 1)}
+              onStatusChange={handleStatusChange}
               updatingId={updatingId}
             />
           </SheetBody>

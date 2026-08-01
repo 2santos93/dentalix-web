@@ -40,6 +40,8 @@ interface MonthAgendaProps {
   patientNames?: Record<string, string>;
   loading: boolean;
   error?: string | null;
+  /** Retries the load that produced `error` — renders as `SectionError`'s own retry button. */
+  onRetry?: () => void;
   /** Max appointment chips per cell before collapsing to "+N más" (default 3). */
   maxPerCell?: number;
 }
@@ -78,10 +80,11 @@ export function MonthAgenda({
   patientNames,
   loading,
   error,
+  onRetry,
   maxPerCell = 3,
 }: MonthAgendaProps) {
   if (error) {
-    return <SectionError description={error || copy.genericLoadError} />;
+    return <SectionError description={error || copy.genericLoadError} onRetry={onRetry} />;
   }
 
   const days = monthGridDays(monthDate);

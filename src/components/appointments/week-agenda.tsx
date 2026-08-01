@@ -44,6 +44,8 @@ interface WeekAgendaProps {
   loading: boolean;
   /** Error message to show instead of the grid, if loading failed. */
   error?: string | null;
+  /** Retries the load that produced `error` — renders as `SectionError`'s own retry button. */
+  onRetry?: () => void;
   /** Optional `patientId -> fullName` lookup — see `DayAgenda`'s prop of the same name. */
   patientNames?: Record<string, string>;
   /** Called with a day's `YYYY-MM-DD` local date when its header is clicked. */
@@ -63,6 +65,7 @@ export function WeekAgenda({
   weekStart,
   loading,
   error,
+  onRetry,
   patientNames,
   onSelectDay,
 }: WeekAgendaProps) {
@@ -75,7 +78,7 @@ export function WeekAgenda({
   }
 
   if (error) {
-    return <SectionError description={error || copy.genericLoadError} />;
+    return <SectionError description={error || copy.genericLoadError} onRetry={onRetry} />;
   }
 
   const dates = weekDates(weekStart);

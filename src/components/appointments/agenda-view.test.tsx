@@ -472,6 +472,24 @@ describe('AgendaView', () => {
     expect(await screen.findByLabelText(/agenda de la semana/i)).toBeInTheDocument();
   });
 
+  it('shows a SectionError with a retry button when Mes (the default view) fails to load, and the retry re-fetches (fix ronda 1: Mes/Día no tenían onRetry)', async () => {
+    mockedListStaff.mockResolvedValue(staff);
+    mockedListAppointments.mockRejectedValueOnce(new ApiError(500, 'Error del servidor'));
+    const user = userEvent.setup();
+
+    render(<AgendaView token="tok" />);
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('Error del servidor');
+    const retryButton = within(alert).getByRole('button', { name: /reintentar/i });
+
+    mockedListAppointments.mockResolvedValueOnce([]);
+    await user.click(retryButton);
+
+    await waitFor(() => expect(mockedListAppointments).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
+  });
+
   it('clicking a day header in Semana view switches back to Día view with that date selected', async () => {
     mockedListStaff.mockResolvedValue(staff);
     mockedListAppointments.mockResolvedValue([]);
