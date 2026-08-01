@@ -1086,35 +1086,35 @@ export interface components {
             lastName?: string;
             /** @enum {string} */
             docType?: "CC" | "TI" | "CE" | "PASSPORT" | "OTHER";
-            docNumber?: string;
+            docNumber?: string | null;
             /** Format: date-time */
-            birthDate?: string;
+            birthDate?: string | null;
             /** @enum {string} */
             sex?: "M" | "F" | "OTHER" | "UNSPECIFIED";
-            phone?: string;
-            email?: string;
-            address?: string;
+            phone?: string | null;
+            email?: string | null;
+            address?: string | null;
             /**
              * @description ISO 3166-1 alpha-2
              * @example CO
              */
-            countryCode?: string;
+            countryCode?: string | null;
             /**
              * @description City id from GET /cities
              * @example 12345
              */
-            cityId?: number;
-            notes?: string;
-            maritalStatus?: string;
-            occupation?: string;
-            insurerEps?: string;
-            physicianName?: string;
-            physicianPhone?: string;
-            emergencyContactName?: string;
-            emergencyContactRelationship?: string;
-            emergencyContactPhone?: string;
-            guardianName?: string;
-            guardianDocNumber?: string;
+            cityId?: number | null;
+            notes?: string | null;
+            maritalStatus?: string | null;
+            occupation?: string | null;
+            insurerEps?: string | null;
+            physicianName?: string | null;
+            physicianPhone?: string | null;
+            emergencyContactName?: string | null;
+            emergencyContactRelationship?: string | null;
+            emergencyContactPhone?: string | null;
+            guardianName?: string | null;
+            guardianDocNumber?: string | null;
         };
         CreateCatalogItemDto: {
             /** @description Unique code within the tenant */

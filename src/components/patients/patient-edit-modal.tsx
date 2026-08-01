@@ -46,27 +46,38 @@ const SEXES: { value: Patient['sex']; label: string }[] = [
 ];
 
 /** Campos de texto editables. El consentimiento NO está: es un hecho fechado. */
-type TextKey =
-  | 'firstName' | 'lastName' | 'docNumber' | 'birthDate' | 'phone' | 'email'
-  | 'address' | 'notes' | 'emergencyContactName' | 'emergencyContactRelationship'
-  | 'emergencyContactPhone' | 'guardianName' | 'guardianDocNumber' | 'insurerEps'
-  | 'occupation' | 'maritalStatus' | 'physicianName' | 'physicianPhone';
+/**
+ * Columnas `NOT NULL`: un vaciado se OMITE, nunca viaja como `null`. El
+ * backend hoy responde 400 si igual llegara (ver `@NotNullable()` en
+ * `UpdatePatientDto`), y el `required` del `<input>` lo bloquea antes en el
+ * navegador — pero el tipo es la primera de las tres barreras.
+ */
+type RequiredTextKey = 'firstName' | 'lastName';
 
-interface TextFieldSpec {
-  key: TextKey;
+/** Columnas nullable: vaciarlas manda `null`, que es lo que borra el dato. */
+type NullableTextKey =
+  | 'docNumber' | 'birthDate' | 'phone' | 'email' | 'address' | 'notes'
+  | 'emergencyContactName' | 'emergencyContactRelationship'
+  | 'emergencyContactPhone' | 'guardianName' | 'guardianDocNumber'
+  | 'insurerEps' | 'occupation' | 'maritalStatus' | 'physicianName'
+  | 'physicianPhone';
+
+type TextKey = RequiredTextKey | NullableTextKey;
+
+interface TextFieldBase {
   label: string;
   type?: 'text' | 'date' | 'email' | 'tel';
-  /**
-   * `NOT NULL` en el schema (`firstName`/`lastName`, sin `?`). Como
-   * `birthDate`, un vaciado no puede viajar como `null` — `IsOptional` de
-   * class-validator se salta TODOS los validadores cuando el valor es
-   * `null`, así que `@MinLength(1)` nunca corre y el `UPDATE` llega directo
-   * a Postgres, que revienta con un 500 (no un 409, `PrismaExceptionFilter`
-   * no lo mapea). Se omite en vez de mandarse. `required` en el `<input>`
-   * además bloquea el submit en el navegador antes de llegar ahí.
-   */
-  required?: boolean;
 }
+
+/**
+ * Unión discriminada por `required`: es lo que deja a TypeScript verificar la
+ * regla de arriba en vez de confiar en un `if`. Sin esto, `buildPatch` tenía
+ * que castear su resultado y el compilador no podía impedir que un `null`
+ * saliera hacia una columna `NOT NULL`.
+ */
+type TextFieldSpec =
+  | (TextFieldBase & { key: RequiredTextKey; required: true })
+  | (TextFieldBase & { key: NullableTextKey; required?: false });
 
 const GROUPS: { title: string; fields: TextFieldSpec[] }[] = [
   {
@@ -185,23 +196,29 @@ export function PatientEditModal({
    *   `required` (`firstName`/`lastName`: `NOT NULL` en el schema), que se
    *   omiten en vez de "borrarse" — ver el comentario en `TextFieldSpec`.
    */
+  /**
+   * Sólo viaja lo que cambió: omitido = no se toca, con valor = se escribe,
+   * vaciado = `null` (borra el dato). Ya no hace falta castear el resultado:
+   * `UpdatePatientDto` declara qué campos aceptan `null`, así que el
+   * compilador rechaza mandarlo a una columna `NOT NULL`.
+   */
   function buildPatch(): UpdatePatientInput {
     const seededText = textStateFrom(seededPatient);
-    const patch: Record<string, unknown> = {};
+    const patch: UpdatePatientInput = {};
     if (docType !== seededPatient.docType) patch.docType = docType;
     if (sex !== seededPatient.sex) patch.sex = sex;
     for (const group of GROUPS) {
       for (const f of group.fields) {
         const value = text[f.key].trim();
         if (value === seededText[f.key]) continue;
-        if (f.key === 'birthDate' || f.required) {
+        if (f.required) {
           if (value) patch[f.key] = value;
-          continue;
+        } else {
+          patch[f.key] = value || null;
         }
-        patch[f.key] = value || null;
       }
     }
-    return patch as UpdatePatientInput;
+    return patch;
   }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {

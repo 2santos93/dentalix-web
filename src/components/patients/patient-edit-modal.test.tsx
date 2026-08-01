@@ -103,10 +103,11 @@ describe('PatientEditModal', () => {
     expect(input.email).toBeNull();
   });
 
-  it('omite birthDate en vez de mandar null al borrarlo (el backend lo escribiría como 1970-01-01)', async () => {
-    // Junto con el email, borrados los dos: el email debe viajar como `null`
-    // (regla general de FIX 2) pero `birthDate` debe brillar por su ausencia,
-    // no por un `null` — si el fix tratara ambos igual, este test lo detecta.
+  it('manda null al borrar una fecha de nacimiento, que ahora sí la vacía', async () => {
+    // Antes `birthDate` era la excepción: el handler hacía `new Date(null)` y
+    // escribía 1970-01-01, así que había que omitirlo. Con el backend
+    // arreglado (`null` vacía la columna) sigue la regla general, y borrar una
+    // fecha mal cargada por fin funciona.
     const withBoth = { ...patient, birthDate: '2000-05-01T00:00:00.000Z', email: 'viejo@x.com' };
     mockedUpdate.mockResolvedValue(withBoth);
     const user = userEvent.setup();
@@ -120,7 +121,7 @@ describe('PatientEditModal', () => {
 
     await waitFor(() => expect(mockedUpdate).toHaveBeenCalledTimes(1));
     const [, , input] = mockedUpdate.mock.calls[0];
-    expect(input).not.toHaveProperty('birthDate');
+    expect(input.birthDate).toBeNull();
     expect(input.email).toBeNull();
   });
 
