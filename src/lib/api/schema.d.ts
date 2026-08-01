@@ -372,6 +372,22 @@ export interface paths {
         patch: operations["StaffController_update"];
         trace?: never;
     };
+    "/api/v1/locations/schedule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["LocationScheduleController_get"];
+        put: operations["LocationScheduleController_replace"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/patients/{patientId}/treatment-plans": {
         parameters: {
             query?: never;
@@ -1057,6 +1073,16 @@ export interface components {
              */
             cityId?: number;
             notes?: string;
+            maritalStatus?: string;
+            occupation?: string;
+            insurerEps?: string;
+            physicianName?: string;
+            physicianPhone?: string;
+            emergencyContactName?: string;
+            emergencyContactRelationship?: string;
+            emergencyContactPhone?: string;
+            guardianName?: string;
+            guardianDocNumber?: string;
         };
         CreateCatalogItemDto: {
             /** @description Unique code within the tenant */
@@ -1282,6 +1308,22 @@ export interface components {
             fullName?: string;
             /** @enum {string} */
             role?: "DENTIST" | "ASSISTANT" | "RECEPTION" | "ADMIN";
+        };
+        ScheduleRangeDto: {
+            /** @description 0=domingo .. 6=sábado */
+            weekday: number;
+            /** @description Minutos desde 00:00 */
+            startMinute: number;
+            endMinute: number;
+        };
+        ReplaceLocationScheduleDto: {
+            /**
+             * @description Zona IANA de la sede
+             * @example America/Bogota
+             */
+            timezone: string;
+            /** @description La semana COMPLETA. Un día sin tramos = cerrado. Lista vacía = sede sin restricción. */
+            ranges: components["schemas"]["ScheduleRangeDto"][];
         };
         CreateTreatmentPlanDto: {
             /**
@@ -2603,6 +2645,46 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["StaffMemberDto"];
                 };
+            };
+        };
+    };
+    LocationScheduleController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Horario de la sede, o null si no se configuró */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    LocationScheduleController_replace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReplaceLocationScheduleDto"];
+            };
+        };
+        responses: {
+            /** @description Horario reemplazado */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
