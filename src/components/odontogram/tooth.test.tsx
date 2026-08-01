@@ -110,4 +110,64 @@ describe('Tooth', () => {
     expect(occlusal.getAttribute('class')).toContain('stroke-muted');
     expect(occlusal.getAttribute('class')).not.toContain('stroke-border');
   });
+
+  it('mirrors the shared geometry per quadrant (vestibular outward, mesial toward the midline)', () => {
+    // Quadrant 2 is the orientation the geometry is authored in.
+    const { container: q2 } = render(
+      <Tooth toothNumber="21" onSelectTooth={jest.fn()} onSelectSurface={jest.fn()} />,
+    );
+    expect(q2.querySelector('g')).not.toHaveAttribute('transform');
+
+    // Quadrant 1 sits in the chart's left half -> mesial must face right.
+    const { container: q1 } = render(
+      <Tooth toothNumber="11" onSelectTooth={jest.fn()} onSelectSurface={jest.fn()} />,
+    );
+    expect(q1.querySelector('g')).toHaveAttribute('transform', 'translate(40, 0) scale(-1, 1)');
+
+    // Quadrant 4: lower arch AND left half -> both mirrors.
+    const { container: q4 } = render(
+      <Tooth toothNumber="41" onSelectTooth={jest.fn()} onSelectSurface={jest.fn()} />,
+    );
+    expect(q4.querySelector('g')).toHaveAttribute('transform', 'translate(40, 40) scale(-1, -1)');
+  });
+
+  it('keeps every outline at 1px even though narrow teeth stretch the viewBox', () => {
+    const { container } = render(
+      <Tooth toothNumber="11" onSelectTooth={jest.fn()} onSelectSurface={jest.fn()} />,
+    );
+    const svg = container.querySelector('svg');
+    expect(svg).toHaveAttribute('preserveAspectRatio', 'none');
+    for (const polygon of container.querySelectorAll('polygon')) {
+      expect(polygon).toHaveAttribute('vector-effect', 'non-scaling-stroke');
+    }
+  });
+
+  it('puts the FDI number on the arch outer edge as asked (above for the upper arch)', () => {
+    const { container } = render(
+      <Tooth
+        toothNumber="16"
+        numberPlacement="above"
+        onSelectTooth={jest.fn()}
+        onSelectSurface={jest.fn()}
+      />,
+    );
+    const children = Array.from(container.firstElementChild?.children ?? []);
+    expect(children[0].tagName).toBe('BUTTON');
+    expect(children[1].tagName.toLowerCase()).toBe('svg');
+  });
+
+  it('is a single tooth-level tab stop, with the surfaces out of the tab order', () => {
+    render(<Tooth toothNumber="11" tabbable onSelectTooth={jest.fn()} onSelectSurface={jest.fn()} />);
+
+    expect(screen.getByRole('button', { name: '11' })).toHaveAttribute('tabindex', '0');
+    expect(screen.getByRole('button', { name: /diente 11.*oclusal/i })).toHaveAttribute(
+      'tabindex',
+      '-1',
+    );
+  });
+
+  it('marks the selected tooth on its FDI control for assistive tech', () => {
+    render(<Tooth toothNumber="11" selected onSelectTooth={jest.fn()} onSelectSurface={jest.fn()} />);
+    expect(screen.getByRole('button', { name: '11' })).toHaveAttribute('aria-pressed', 'true');
+  });
 });

@@ -4,6 +4,7 @@ import { ApiError } from '@/lib/api/client';
 import { getToothTimeline, type ToothRecord, type ToothSurface } from '@/lib/odontogram/odontogram-api';
 import { formatDate } from '@/lib/format/date';
 import { SectionError } from '@/components/errors/section-error';
+import { Badge } from '@/components/ui/badge';
 
 // Copy as constants (i18n-ready, es-first) — matches medical-history-panel.tsx convention.
 const copy = {
@@ -13,7 +14,6 @@ const copy = {
   statusPlanned: 'Planificado',
   statusCompleted: 'Completado',
   wholeTooth: 'Diente completo',
-  notesFallback: '—',
   heading: (fdi: string) => `Historial del diente ${fdi}`,
 };
 
@@ -103,34 +103,46 @@ export function ToothTimeline({ token, patientId, toothNumber, catalogById, refr
     );
   }
 
+  /**
+   * A dated clinical list, per DESIGN.md's "Odontogram (signature)": one
+   * hairline-separated row per record, dates in a tabular column so they align
+   * down the page — not a stack of bordered cards.
+   */
   return (
-    <ul aria-label={copy.heading(toothNumber)} className="flex flex-col gap-3">
+    <ol
+      aria-label={copy.heading(toothNumber)}
+      className="divide-y divide-hairline border-t border-hairline"
+    >
       {records.map((record) => {
         const catalogEntry = record.catalogItemId ? catalogById?.get(record.catalogItemId) : undefined;
         return (
-          <li
-            key={record.id}
-            className="flex flex-col gap-1 rounded-lg border border-border bg-surface p-3 text-sm"
-          >
-            <div className="flex items-center justify-between gap-2">
+          <li key={record.id} className="grid grid-cols-[5.5rem_minmax(0,1fr)] items-baseline gap-x-3 py-2.5 text-sm">
+            <time dateTime={record.recordedAt} className="tabular-nums text-xs text-muted">
+              {formatDate(record.recordedAt)}
+            </time>
+            <div className="flex flex-col gap-1">
               <div className="flex items-center gap-2">
                 {catalogEntry && (
                   <span
                     aria-hidden="true"
-                    className="inline-block h-3 w-3 shrink-0 rounded-full border border-border"
+                    className="size-2.5 shrink-0 rounded-[3px] border border-border"
                     style={{ backgroundColor: catalogEntry.color }}
                   />
                 )}
                 <span className="font-medium text-ink">{catalogEntry?.labelEs ?? record.kind}</span>
+                <Badge
+                  variant={record.status === 'COMPLETED' ? 'success' : 'warning'}
+                  className="ml-auto shrink-0"
+                >
+                  {STATUS_LABELS[record.status]}
+                </Badge>
               </div>
-              <span className="text-xs font-medium text-muted">{formatDate(record.recordedAt)}</span>
+              <p className="text-xs text-muted">{surfacesLabel(record)}</p>
+              {record.notes ? <p className="text-ink">{record.notes}</p> : null}
             </div>
-            <p className="text-ink">{surfacesLabel(record)}</p>
-            <p className="text-muted">{STATUS_LABELS[record.status]}</p>
-            <p className="text-ink">{record.notes ?? copy.notesFallback}</p>
           </li>
         );
       })}
-    </ul>
+    </ol>
   );
 }
