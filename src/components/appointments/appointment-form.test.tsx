@@ -359,6 +359,33 @@ describe('AppointmentForm', () => {
     );
   });
 
+  it('cuando falla la carga de profesionales, sustituye el select por el error', async () => {
+    const { ApiError } = jest.requireActual('../../lib/api/client');
+    mockedListStaff.mockRejectedValueOnce(new ApiError(500, 'Error del servidor'));
+
+    render(<AppointmentForm token="tok" onCreated={jest.fn()} />);
+
+    // Se busca por texto (no `findByRole('status')` a secas): el chip del
+    // paciente elegido y el estado "sin resultados" también usan
+    // `role="status"`, así que una consulta de rol sin más sería una carrera.
+    const region = await screen.findByText(/no se pudieron cargar/i);
+    expect(region.closest('[role="status"]')).not.toBeNull();
+    expect(screen.queryByLabelText(/profesional/i)).not.toBeInTheDocument();
+  });
+
+  it('cuando falla la carga de pacientes, el buscador se queda y el error aparece debajo', async () => {
+    const { ApiError } = jest.requireActual('../../lib/api/client');
+    mockedListPatients.mockRejectedValueOnce(new ApiError(500, 'Error del servidor'));
+
+    render(<AppointmentForm token="tok" onCreated={jest.fn()} />);
+    await waitFor(() => expect(mockedListPatients).toHaveBeenCalled());
+
+    const region = await screen.findByText(/no se pudieron cargar/i);
+    expect(region.closest('[role="status"]')).not.toBeNull();
+    // Escribir sigue siendo válido: el input se queda, solo falló la lista.
+    expect(screen.getByLabelText(/^paciente$/i)).toBeInTheDocument();
+  });
+
   it('prefills start and end time from props', async () => {
     render(
       <AppointmentForm
