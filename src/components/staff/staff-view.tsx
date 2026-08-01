@@ -54,7 +54,8 @@ const copy = {
   submitting: 'Enviando…',
   loading: 'Cargando personal…',
   tableLabel: 'Personal de la clínica',
-  genericLoadError: 'No pudimos cargar el personal. Intenta de nuevo.',
+  // Sin "Intenta de nuevo." — alimenta AsyncSection -> SectionError, que trae su propio botón.
+  genericLoadError: 'No pudimos cargar el personal.',
   genericCreateError: 'No pudimos crear la invitación. Intenta de nuevo.',
   // Escalón 3 (segundo plano): sin "Intenta de nuevo." — el toast trae acción.
   genericRoleChangeError: 'No pudimos actualizar el rol.',

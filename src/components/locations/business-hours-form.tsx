@@ -36,7 +36,8 @@ const copy = {
   unconfiguredNotice:
     'Esta sede no tiene horario configurado, así que hoy se puede agendar a cualquier hora. Define los tramos y guarda para empezar a restringir.',
   retry: 'Reintentar',
-  genericLoadError: 'No pudimos cargar el horario. Intenta de nuevo.',
+  // Sin "Intenta de nuevo." — alimenta AsyncSection -> SectionError, que trae su propio botón.
+  genericLoadError: 'No pudimos cargar el horario.',
   genericSaveError: 'No pudimos guardar el horario. Intenta de nuevo.',
   invalidRange: 'Cada tramo debe tener una hora de fin posterior a la de inicio.',
   overlapping: 'Hay tramos solapados en el mismo día; únelos en uno.',

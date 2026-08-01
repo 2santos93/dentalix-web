@@ -36,7 +36,8 @@ import {
 const copy = {
   retry: 'Reintentar',
   tableLabel: 'Invitaciones pendientes',
-  genericLoadError: 'No pudimos cargar las invitaciones. Intenta de nuevo.',
+  // Sin "Intenta de nuevo." — alimenta AsyncSection -> SectionError, que trae su propio botón.
+  genericLoadError: 'No pudimos cargar las invitaciones.',
   // Escalón 3 (segundo plano): sin "Intenta de nuevo." — el toast trae acción.
   genericRevokeError: 'No pudimos revocar la invitación.',
   genericResendError: 'No pudimos reenviar la invitación.',

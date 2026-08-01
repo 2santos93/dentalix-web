@@ -32,9 +32,9 @@ const copy = {
   // explicitly instead.
   createTitle: 'Registrar anamnesis',
   submit: 'Guardar',
-  genericLoadError: 'No pudimos cargar la anamnesis. Intenta de nuevo.',
+  // Sin "Intenta de nuevo." — alimenta AsyncSection -> SectionError, que trae su propio botón.
+  genericLoadError: 'No pudimos cargar la anamnesis.',
   genericSaveError: 'No pudimos guardar la anamnesis. Intenta de nuevo.',
-  retry: 'Reintentar',
 };
 
 interface MedicalHistoryPanelProps {
@@ -188,7 +188,6 @@ export function MedicalHistoryPanel({ token, patientId }: MedicalHistoryPanelPro
       loading={loading}
       error={loadError}
       onRetry={handleRetry}
-      retryLabel={copy.retry}
       skeleton={
         <p role="status" className="text-sm text-muted">
           {copy.loading}

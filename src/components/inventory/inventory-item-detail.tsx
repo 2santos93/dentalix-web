@@ -338,7 +338,10 @@ export function InventoryItem({ token, id }: InventoryItemDetailProps) {
                   variant="outline"
                   size="sm"
                   disabled={deleting}
-                  onClick={() => setConfirmingDelete(false)}
+                  onClick={() => {
+                    setConfirmingDelete(false);
+                    setDeleteError(null);
+                  }}
                 >
                   {copy.cancel}
                 </Button>
