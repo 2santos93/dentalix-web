@@ -27,4 +27,12 @@ describe('FieldError', () => {
 
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
+
+  it('permite al llamante sobreescribir la altura con className', () => {
+    render(<FieldError label="Error" className="h-9" />);
+
+    const region = screen.getByRole('status');
+    expect(region).toHaveClass('h-9');
+    expect(region).not.toHaveClass('h-10');
+  });
 });
