@@ -10,6 +10,7 @@ import { ClinicalEntriesList } from '@/components/patients/clinical-entries-list
 import { ClinicalAlertBanner } from '@/components/patients/clinical-alert-banner';
 import { PatientDetailTabs, type PatientDetailTabKey } from '@/components/patients/patient-detail-tabs';
 import { PatientDataPanel } from '@/components/patients/patient-data-panel';
+import { PatientEditModal } from '@/components/patients/patient-edit-modal';
 import { OdontogramTab } from '@/components/odontogram/odontogram-tab';
 import { TreatmentPlansTab } from '@/components/treatment-plans/treatment-plans-tab';
 import { SectionError } from '@/components/errors/section-error';
@@ -138,6 +139,16 @@ export default function PatientDetailPage() {
             <div role="tabpanel" id="tabpanel-data" aria-labelledby="tab-data">
               <PatientDataPanel patient={patient} onEdit={() => setEditing(true)} />
             </div>
+          )}
+
+          {patient && (
+            <PatientEditModal
+              open={editing}
+              patient={patient}
+              token={accessToken}
+              onOpenChange={setEditing}
+              onSaved={(updated) => setPatient(updated)}
+            />
           )}
 
           {activeTab === 'clinical-history' && (
