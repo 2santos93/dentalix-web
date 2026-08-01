@@ -62,6 +62,27 @@ const patientsPage = {
 
 const staff = [{ userId: 'staff-1', fullName: 'Dra. Ana Ríos', role: 'DENTIST' as const }];
 
+
+// El componente arranca con Desde = inicio del MES ACTUAL y Hasta = HOY
+// (monthStartLocalDateString / todayLocalDateString). Estas fechas se derivan de
+// esas mismas reglas: hardcodear un mes concreto hacía que los tests dependieran
+// del mes en que corrieran — al pasar a agosto, "Hasta = 10 de julio" quedaba
+// ANTES del "Desde" por defecto (1 de agosto) y disparaba la guarda de rango.
+function ymd(d: Date): string {
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  return `${d.getFullYear()}-${mm}-${dd}`;
+}
+const NOW = new Date();
+/** Día 10 del mes actual: siempre >= el "Desde" por defecto (día 1) -> rango válido. */
+const TENTH_OF_MONTH = ymd(new Date(NOW.getFullYear(), NOW.getMonth(), 10));
+/** Su cota exclusiva (+1 día), que es lo que el componente debe enviar como `to`. */
+const ELEVENTH_OF_MONTH = ymd(new Date(NOW.getFullYear(), NOW.getMonth(), 11));
+/** Mañana: estrictamente DESPUÉS del "Hasta" por defecto (hoy) -> dispara la guarda. */
+const TOMORROW = ymd(
+  new Date(NOW.getFullYear(), NOW.getMonth(), NOW.getDate() + 1),
+);
+
 function dashboard(overrides: Partial<Dashboard> = {}): Dashboard {
   return {
     period: { from: '2026-07-01T00:00:00.000Z', to: '2026-07-24T00:00:00.000Z' },
@@ -243,13 +264,13 @@ describe('DashboardView', () => {
 
     mockedGetDashboard.mockClear();
     const toInput = screen.getByLabelText('Hasta') as HTMLInputElement;
-    fireEvent.change(toInput, { target: { value: '2026-07-10' } });
+    fireEvent.change(toInput, { target: { value: TENTH_OF_MONTH } });
 
     await waitFor(() => expect(mockedGetDashboard).toHaveBeenCalledTimes(1));
     const [, params] = mockedGetDashboard.mock.calls[0];
-    expect(params.to).toBe('2026-07-11');
+    expect(params.to).toBe(ELEVENTH_OF_MONTH);
     // The input itself still reflects the user's selected (inclusive) date.
-    expect(toInput.value).toBe('2026-07-10');
+    expect(toInput.value).toBe(TENTH_OF_MONTH);
   });
 
   it('refetches with the new currency when the currency select changes', async () => {
@@ -329,7 +350,7 @@ describe('DashboardView', () => {
 
     mockedGetDashboard.mockClear();
     const fromInput = screen.getByLabelText('Desde');
-    fireEvent.change(fromInput, { target: { value: '2026-08-01' } });
+    fireEvent.change(fromInput, { target: { value: TOMORROW } });
 
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent(/desde.*hasta|hasta.*desde/i);
