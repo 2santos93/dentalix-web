@@ -21,7 +21,6 @@ const copy = {
   checkingSession: 'Verificando sesión…',
   loading: 'Cargando paciente…',
   genericError: 'No pudimos cargar el paciente.',
-  retry: 'Reintentar',
   tabData: 'Datos',
   tabClinicalHistory: 'Historia clínica',
   tabOdontogram: 'Odontograma',
@@ -128,7 +127,6 @@ export default function PatientDetailPage() {
             setError(null);
             setRetryCount((c) => c + 1);
           }}
-          retryLabel={copy.retry}
         />
       ) : patient ? (
         <div className="flex flex-col gap-4">

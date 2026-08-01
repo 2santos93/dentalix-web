@@ -11,7 +11,7 @@ const copy = {
   loading: 'Cargando agenda…',
   empty: 'No hay citas para este día.',
   emptyHint: 'Crea una nueva cita para empezar a llenar el día.',
-  genericLoadError: 'No pudimos cargar la agenda. Intenta de nuevo.',
+  genericLoadError: 'No pudimos cargar la agenda.',
   colTime: 'Hora',
   colPatient: 'Paciente',
   colReason: 'Motivo',

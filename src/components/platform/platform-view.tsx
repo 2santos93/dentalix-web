@@ -30,7 +30,6 @@ const copy = {
   enter: 'Entrar',
   invalid: 'Credenciales inválidas.',
   loadError: 'No pudimos cargar las clínicas.',
-  retry: 'Reintentar',
   emptyTitle: 'Sin clínicas',
   emptyDescription: 'Todavía no hay ninguna clínica registrada.',
   count: (n: number) => (n === 1 ? '1 clínica' : `${n} clínicas`),
@@ -131,7 +130,7 @@ export function PlatformView() {
         <Card className="mt-6">
           <CardContent className="p-6">
             <form onSubmit={handleSignIn} className="flex flex-col gap-4">
-              {signInError && <InlineError>{signInError}</InlineError>}
+              {signInError && <InlineError variant="summary">{signInError}</InlineError>}
               <FormField htmlFor="platform-email" label={copy.email}>
                 <Input
                   id="platform-email"
@@ -190,7 +189,6 @@ export function PlatformView() {
             setLoadError(null);
             setRetryTick((t) => t + 1);
           }}
-          retryLabel={copy.retry}
         />
       ) : tenants.length === 0 ? (
         <EmptyState

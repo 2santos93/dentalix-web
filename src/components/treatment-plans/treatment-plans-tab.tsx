@@ -917,6 +917,7 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
     return getPlan(token, selectedPlanId)
       .then((data) => {
         setPlanDetail(data);
+        setPlanDetailError(null);
       })
       .catch((err) => {
         // The toast's `onRetry` is built once inside this `catch` and can
@@ -1004,6 +1005,7 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
         setPlanBalance(balanceData);
         setPayments(paymentsData);
         setPaymentPlanRefreshSignal((n) => n + 1);
+        setPaymentsError(null);
       })
       .catch((err) => {
         // The toast's `onRetry` is built once inside this `catch` and can
