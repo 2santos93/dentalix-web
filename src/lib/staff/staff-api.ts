@@ -67,3 +67,90 @@ export async function deactivateStaff(token: string, userId: string): Promise<vo
     token,
   });
 }
+
+// ---------------------------------------------------------------------------
+// Directorio: la pantalla de gestión de Personal
+// ---------------------------------------------------------------------------
+
+/**
+ * `GET /staff` sigue devolviendo la lista COMPLETA sin paginar porque alimenta
+ * selectores (profesional de una cita, filtro de la agenda, dashboard). El
+ * directorio de abajo es lo contrario: una página filtrada que mezcla miembros
+ * e invitaciones para la pantalla de gestión. Son dos necesidades distintas y
+ * por eso son dos endpoints.
+ */
+export type StaffDirectoryStatus = 'ACTIVE' | 'INACTIVE' | 'PENDING';
+
+export interface StaffDirectoryEntry {
+  /** `MEMBER` tiene perfil que abrir; `INVITATION` solo se reenvía o revoca. */
+  kind: 'MEMBER' | 'INVITATION';
+  /** `userId` si es MEMBER, id de la invitación si no. Léelo junto a `kind`. */
+  id: string;
+  fullName: string;
+  email: string;
+  role: ClinicRole;
+  status: StaffDirectoryStatus;
+  /** Caducidad del enlace; `null` en los miembros. */
+  expiresAt: string | null;
+}
+
+export interface StaffDirectoryPage {
+  items: StaffDirectoryEntry[];
+  total: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface StaffDirectoryFilters {
+  page?: number;
+  pageSize?: number;
+  search?: string;
+  role?: ClinicRole;
+  status?: StaffDirectoryStatus;
+}
+
+/** `GET /staff/directory` — página del directorio unificado. */
+export async function listStaffDirectory(
+  token: string,
+  filters: StaffDirectoryFilters = {},
+): Promise<StaffDirectoryPage> {
+  const qs = new URLSearchParams();
+  if (filters.page) qs.set('page', String(filters.page));
+  if (filters.pageSize) qs.set('pageSize', String(filters.pageSize));
+  // Se omiten los vacíos en vez de mandarlos: `search=` haría que el backend
+  // trate "sin búsqueda" como una búsqueda de cadena vacía.
+  if (filters.search) qs.set('search', filters.search);
+  if (filters.role) qs.set('role', filters.role);
+  if (filters.status) qs.set('status', filters.status);
+  const query = qs.toString();
+  return apiFetch<StaffDirectoryPage>(`/staff/directory${query ? `?${query}` : ''}`, {
+    token,
+  });
+}
+
+export interface StaffMemberDetail extends StaffMember {
+  status: 'ACTIVE' | 'INACTIVE';
+}
+
+/**
+ * `GET /staff/:userId` — perfil del miembro. Devuelve también a los
+ * desactivados (con `status: 'INACTIVE'`), porque su perfil es justo desde
+ * donde se les reactiva.
+ */
+export async function getStaffMember(
+  token: string,
+  userId: string,
+): Promise<StaffMemberDetail> {
+  return apiFetch<StaffMemberDetail>(`/staff/${userId}`, { token });
+}
+
+/** `POST /staff/:userId/reactivate` — devuelve el acceso a un desactivado. */
+export async function reactivateStaff(
+  token: string,
+  userId: string,
+): Promise<StaffMember> {
+  return apiFetch<StaffMember>(`/staff/${userId}/reactivate`, {
+    method: 'POST',
+    token,
+  });
+}

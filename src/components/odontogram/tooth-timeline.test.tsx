@@ -136,4 +136,50 @@ describe('ToothTimeline', () => {
     );
     expect(await screen.findByRole('alert')).toHaveTextContent('Error del servidor');
   });
+
+  it('reads as a dated clinical list: a <time> per row, hairline separation, no card per record', async () => {
+    mockedGetTimeline.mockResolvedValue([newer, older]);
+    const { container } = render(
+      <ToothTimeline token="tok" patientId="p1" toothNumber="11" catalogById={catalogById} />,
+    );
+
+    const list = await screen.findByRole('list', { name: /historial del diente 11/i });
+    expect(list.tagName).toBe('OL');
+    expect(list.className).toContain('divide-y');
+
+    // Dates are machine-readable and tabular so the column aligns.
+    const times = container.querySelectorAll('time');
+    expect(times).toHaveLength(2);
+    expect(times[0]).toHaveAttribute('dateTime', newer.recordedAt);
+    expect(times[0].className).toContain('tabular-nums');
+
+    // DESIGN.md: "not a decorated card stack" — rows carry no border/background
+    // of their own.
+    for (const item of screen.getAllByRole('listitem')) {
+      expect(item.className).not.toMatch(/\bborder\b|\brounded-lg\b|\bbg-surface\b/);
+    }
+  });
+
+  it('marks the status as a semantic chip and omits the notes line when there are none', async () => {
+    mockedGetTimeline.mockResolvedValue([newer, older]);
+    render(<ToothTimeline token="tok" patientId="p1" toothNumber="11" catalogById={catalogById} />);
+
+    const items = await screen.findAllByRole('listitem');
+
+    // COMPLETED -> success tint; PLANNED -> warning tint (status only, never decoration).
+    expect(within(items[0]).getByText('Completado').className).toContain('text-success');
+    expect(within(items[1]).getByText('Planificado').className).toContain('text-warning');
+
+    // `newer` has no notes: no em-dash placeholder row.
+    expect(within(items[0]).queryByText('—')).not.toBeInTheDocument();
+    expect(within(items[1]).getByText('Revisar en próxima cita')).toBeInTheDocument();
+  });
+
+  it('labels a whole-tooth record instead of listing surfaces', async () => {
+    mockedGetTimeline.mockResolvedValue([newer]);
+    render(<ToothTimeline token="tok" patientId="p1" toothNumber="11" catalogById={catalogById} />);
+
+    const item = (await screen.findAllByRole('listitem'))[0];
+    expect(within(item).getByText('Diente completo')).toBeInTheDocument();
+  });
 });

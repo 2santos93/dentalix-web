@@ -356,7 +356,39 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/staff/directory": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["StaffController_directory"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/staff/{userId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["StaffController_detail"];
+        put?: never;
+        post?: never;
+        delete: operations["StaffController_remove"];
+        options?: never;
+        head?: never;
+        patch: operations["StaffController_update"];
+        trace?: never;
+    };
+    "/api/v1/staff/{userId}/reactivate": {
         parameters: {
             query?: never;
             header?: never;
@@ -365,11 +397,11 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        post?: never;
-        delete: operations["StaffController_remove"];
+        post: operations["StaffController_reactivate"];
+        delete?: never;
         options?: never;
         head?: never;
-        patch: operations["StaffController_update"];
+        patch?: never;
         trace?: never;
     };
     "/api/v1/locations/schedule": {
@@ -1073,6 +1105,16 @@ export interface components {
              */
             cityId?: number;
             notes?: string;
+            maritalStatus?: string;
+            occupation?: string;
+            insurerEps?: string;
+            physicianName?: string;
+            physicianPhone?: string;
+            emergencyContactName?: string;
+            emergencyContactRelationship?: string;
+            emergencyContactPhone?: string;
+            guardianName?: string;
+            guardianDocNumber?: string;
         };
         CreateCatalogItemDto: {
             /** @description Unique code within the tenant */
@@ -1293,6 +1335,46 @@ export interface components {
             email: string;
             /** @enum {string} */
             role: "DENTIST" | "ASSISTANT" | "RECEPTION" | "ADMIN";
+        };
+        StaffDirectoryEntryDto: {
+            /**
+             * @description MEMBER = persona con acceso; INVITATION = invitación sin aceptar
+             * @enum {string}
+             */
+            kind: "MEMBER" | "INVITATION";
+            /**
+             * Format: uuid
+             * @description userId si es MEMBER, id de la invitación si es INVITATION
+             */
+            id: string;
+            fullName: string;
+            email: string;
+            /** @enum {string} */
+            role: "DENTIST" | "ASSISTANT" | "RECEPTION" | "ADMIN";
+            /** @enum {string} */
+            status: "ACTIVE" | "INACTIVE" | "PENDING";
+            /**
+             * Format: date-time
+             * @description Caducidad del enlace; null en los miembros
+             */
+            expiresAt: string | null;
+        };
+        StaffDirectoryPageDto: {
+            items: components["schemas"]["StaffDirectoryEntryDto"][];
+            /** @description Total de filas que pasan los filtros */
+            total: number;
+            page: number;
+            pageSize: number;
+        };
+        StaffMemberDetailDto: {
+            /** Format: uuid */
+            userId: string;
+            fullName: string;
+            email: string;
+            /** @enum {string} */
+            role: "DENTIST" | "ASSISTANT" | "RECEPTION" | "ADMIN";
+            /** @enum {string} */
+            status: "ACTIVE" | "INACTIVE";
         };
         UpdateStaffDto: {
             fullName?: string;
@@ -2600,6 +2682,54 @@ export interface operations {
             };
         };
     };
+    StaffController_directory: {
+        parameters: {
+            query?: {
+                /** @description Busca en nombre o correo */
+                search?: string;
+                role?: "DENTIST" | "ASSISTANT" | "RECEPTION" | "ADMIN";
+                /** @description Sin filtro: activos + invitaciones pendientes */
+                status?: "ACTIVE" | "INACTIVE" | "PENDING";
+                page?: number;
+                pageSize?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StaffDirectoryPageDto"];
+                };
+            };
+        };
+    };
+    StaffController_detail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StaffMemberDetailDto"];
+                };
+            };
+        };
+    };
     StaffController_remove: {
         parameters: {
             query?: never;
@@ -2633,6 +2763,27 @@ export interface operations {
                 "application/json": components["schemas"]["UpdateStaffDto"];
             };
         };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StaffMemberDto"];
+                };
+            };
+        };
+    };
+    StaffController_reactivate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
         responses: {
             200: {
                 headers: {

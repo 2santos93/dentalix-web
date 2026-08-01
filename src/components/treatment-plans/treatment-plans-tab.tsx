@@ -1319,7 +1319,20 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
                 <Skeleton className="h-16 w-full rounded-lg" />
               </div>
             )}
-            {planDetailError && <SectionError description={planDetailError} onRetry={refreshPlanDetail} />}
+            {/* El reintento de un fallo de escalón 1 bombea la reload key, no
+                llama a `refreshPlanDetail`. Las dos cargan lo mismo, pero
+                `refreshPlanDetail` es el camino de escalón 3 y su `catch`
+                lanza un toast: si el reintento vuelve a fallar, el aviso se
+                apilaría sobre esta misma superficie. La reload key re-dispara
+                el efecto, cuyo `isInitialLoad` sigue siendo cierto (la carga
+                inicial nunca fijó `loadedPlanIdRef`), así que el fallo se
+                queda en el escalón 1 donde le corresponde. */}
+            {planDetailError && (
+              <SectionError
+                description={planDetailError}
+                onRetry={() => setPlanDetailReloadKey((k) => k + 1)}
+              />
+            )}
 
             {!planDetailLoading && !planDetailError && planDetail && (
               <>
@@ -1363,7 +1376,13 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
                     </p>
                   )}
                   {paymentsError && (
-                    <SectionError description={paymentsError} onRetry={refreshBalanceAndPayments} />
+                    // Misma razón que en `planDetailError` arriba: la reload
+                    // key mantiene el fallo en el escalón 1 en vez de apilarle
+                    // un toast de escalón 3.
+                    <SectionError
+                      description={paymentsError}
+                      onRetry={() => setPaymentsReloadKey((k) => k + 1)}
+                    />
                   )}
 
                   {!paymentsLoading && !paymentsError && planBalance && (

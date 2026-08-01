@@ -22,6 +22,7 @@ const copy = {
   catalogGenericError: 'No pudimos cargar el catálogo.',
   selectToothPrompt: 'Selecciona un diente para ver su historial y registrar un hallazgo o procedimiento.',
   toothHeading: (fdi: string) => `Diente ${fdi}`,
+  historyHeading: 'Historial',
 };
 
 interface OdontogramTabProps {
@@ -166,46 +167,61 @@ export function OdontogramTab({ token, patientId }: OdontogramTabProps) {
 
   return (
     <div className="flex flex-col gap-6">
-      {refreshing && (
-        <p role="status" aria-live="polite" className="text-xs font-medium text-muted">
-          {copy.odontogramRefreshing}
-        </p>
-      )}
-
-      <OdontogramChart
-        states={states}
-        catalogById={catalogById}
-        selectedTooth={selectedTooth ?? undefined}
-        onSelectTooth={handleSelectTooth}
-        onSelectSurface={handleSelectSurface}
-      />
-
-      <OdontogramLegend items={legendItems} />
+      {/* The chart and its color key read as one object: the field, then its
+          caption. The refresh notice rides on that same line so nothing shifts
+          vertically while a save settles. */}
+      <div className="flex flex-col gap-2">
+        <OdontogramChart
+          states={states}
+          catalogById={catalogById}
+          selectedTooth={selectedTooth ?? undefined}
+          onSelectTooth={handleSelectTooth}
+          onSelectSurface={handleSelectSurface}
+        />
+        <div className="flex items-start justify-between gap-4">
+          <OdontogramLegend items={legendItems} />
+          {refreshing && (
+            <p role="status" aria-live="polite" className="t-label shrink-0 text-muted">
+              {copy.odontogramRefreshing}
+            </p>
+          )}
+        </div>
+      </div>
 
       {selectedTooth ? (
-        <div className="grid gap-6 lg:grid-cols-2">
-          <section className="flex flex-col gap-3">
-            <h2 className="t-title text-ink">{copy.toothHeading(selectedTooth)}</h2>
-            <ToothTimeline
-              token={token}
-              patientId={patientId}
-              toothNumber={selectedTooth}
-              catalogById={catalogById}
-              refreshKey={timelineRefreshKey}
-            />
-          </section>
-          <section className="flex flex-col gap-3">
-            <ToothRecordPanel
-              token={token}
-              patientId={patientId}
-              toothNumber={selectedTooth}
-              initialSurface={initialSurface ?? undefined}
-              onRecordAdded={handleRecordAdded}
-            />
-          </section>
-        </div>
+        <section aria-labelledby="odontogram-tooth-heading" className="flex flex-col gap-4">
+          <h2 id="odontogram-tooth-heading" className="t-title text-ink">
+            {copy.toothHeading(selectedTooth)}
+          </h2>
+          <div className="grid min-w-0 items-start gap-6 lg:grid-cols-2">
+            <div className="flex min-w-0 flex-col gap-2">
+              <h3 className="t-label text-muted">{copy.historyHeading}</h3>
+              <ToothTimeline
+                token={token}
+                patientId={patientId}
+                toothNumber={selectedTooth}
+                catalogById={catalogById}
+                refreshKey={timelineRefreshKey}
+              />
+            </div>
+            {/* `min-w-0` para que el formulario pueda encogerse por debajo de su
+                max-content en móvil (si no, el catálogo lo estira a ~435px). */}
+            <div className="min-w-0">
+              <ToothRecordPanel
+                token={token}
+                patientId={patientId}
+                toothNumber={selectedTooth}
+                initialSurface={initialSurface ?? undefined}
+                onRecordAdded={handleRecordAdded}
+              />
+            </div>
+          </div>
+        </section>
       ) : (
-        <p role="status" className="text-sm text-muted">
+        <p
+          role="status"
+          className="rounded-xl border border-dashed border-border px-4 py-6 text-center text-sm text-muted"
+        >
           {copy.selectToothPrompt}
         </p>
       )}

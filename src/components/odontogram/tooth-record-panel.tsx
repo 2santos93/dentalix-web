@@ -11,6 +11,11 @@ import {
 } from '@/lib/odontogram/odontogram-api';
 import { SectionError } from '@/components/errors/section-error';
 import { InlineError } from '@/components/errors/inline-error';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { fieldClass } from '@/lib/ui/field-class';
+import { cn } from '@/lib/utils';
 
 // Copy as constants (i18n-ready, es-first) — matches medical-history-panel.tsx convention.
 const copy = {
@@ -19,6 +24,10 @@ const copy = {
   genericCatalogError: 'No pudimos cargar el catálogo.',
   formTitle: (fdi: string) => `Registrar en el diente ${fdi}`,
   catalogItemLegend: 'Diagnóstico o procedimiento',
+  catalogFilterLabel: 'Buscar en el catálogo',
+  catalogFilterPlaceholder: 'Caries, resina, corona…',
+  catalogNoMatches: (query: string) => `Ningún ítem del catálogo coincide con "${query}".`,
+  kindLabels: { DIAGNOSIS: 'Diagnóstico', PROCEDURE: 'Procedimiento' } as const,
   surfacesLegend: 'Caras',
   wholeTooth: 'Diente completo',
   notesLabel: 'Notas',
@@ -72,6 +81,9 @@ export function ToothRecordPanel({
   const [catalogLoading, setCatalogLoading] = useState(true);
   const [catalogError, setCatalogError] = useState<string | null>(null);
   const [catalogReloadKey, setCatalogReloadKey] = useState(0);
+  // El catálogo sembrado trae ~100 ítems: sin filtro, elegir uno es recorrer
+  // una lista de radios más alta que la pantalla.
+  const [catalogQuery, setCatalogQuery] = useState('');
 
   const [catalogItemId, setCatalogItemId] = useState<string | null>(null);
   const [wholeTooth, setWholeTooth] = useState(false);
@@ -216,45 +228,73 @@ export function ToothRecordPanel({
     );
   }
 
+  const query = catalogQuery.trim().toLowerCase();
+  const visibleCatalog = query
+    ? catalog.filter(
+        (item) =>
+          item.labelEs.toLowerCase().includes(query) || item.code.toLowerCase().includes(query),
+      )
+    : catalog;
+
   return (
     <form
       onSubmit={handleSubmit}
       aria-label={copy.formTitle(toothNumber)}
-      className="flex flex-col gap-4"
+      className="flex flex-col gap-4 rounded-xl border border-border bg-surface p-4"
     >
-      <h3 className="text-base font-semibold text-ink">{copy.formTitle(toothNumber)}</h3>
+      <h3 className="t-title text-ink">{copy.formTitle(toothNumber)}</h3>
 
-      <fieldset className="flex flex-col gap-2">
-        <legend className="text-sm font-medium text-ink">{copy.catalogItemLegend}</legend>
-        <div className="flex flex-col gap-1">
-          {catalog.map((item) => (
-            <label
-              key={item.id}
-              htmlFor={`trp-catalog-${item.id}`}
-              className="flex items-center gap-2 text-sm text-ink"
-            >
-              <input
-                id={`trp-catalog-${item.id}`}
-                type="radio"
-                name="catalogItem"
-                value={item.id}
-                checked={catalogItemId === item.id}
-                onChange={() => setCatalogItemId(item.id)}
-              />
-              <span
-                aria-hidden="true"
-                className="inline-block h-3 w-3 shrink-0 rounded-full border border-border"
-                style={{ backgroundColor: item.color }}
-              />
-              {item.labelEs}
-            </label>
-          ))}
-        </div>
+      <fieldset className="flex min-w-0 flex-col gap-2.5">
+        <legend className="t-label mb-0.5 text-muted">{copy.catalogItemLegend}</legend>
+        <Label htmlFor="trp-catalog-filter" className="sr-only">
+          {copy.catalogFilterLabel}
+        </Label>
+        <Input
+          id="trp-catalog-filter"
+          type="search"
+          value={catalogQuery}
+          onChange={(e) => setCatalogQuery(e.target.value)}
+          placeholder={copy.catalogFilterPlaceholder}
+        />
+        {visibleCatalog.length === 0 ? (
+          <p role="status" className="py-2 text-sm text-muted">
+            {copy.catalogNoMatches(catalogQuery.trim())}
+          </p>
+        ) : (
+          <div className="max-h-56 overflow-y-auto rounded-lg border border-border">
+            {visibleCatalog.map((item) => (
+              <label
+                key={item.id}
+                htmlFor={`trp-catalog-${item.id}`}
+                className={cn(
+                  'flex cursor-pointer items-center gap-2 border-b border-hairline px-3 py-2 text-sm text-ink last:border-0 transition-colors hover:bg-surface-2',
+                  catalogItemId === item.id && 'bg-surface-2',
+                )}
+              >
+                <input
+                  id={`trp-catalog-${item.id}`}
+                  type="radio"
+                  name="catalogItem"
+                  value={item.id}
+                  checked={catalogItemId === item.id}
+                  onChange={() => setCatalogItemId(item.id)}
+                />
+                <span
+                  aria-hidden="true"
+                  className="size-2.5 shrink-0 rounded-[3px] border border-border"
+                  style={{ backgroundColor: item.color }}
+                />
+                <span className="min-w-0 flex-1 truncate">{item.labelEs}</span>
+                <span className="t-label shrink-0 text-muted">{copy.kindLabels[item.kind]}</span>
+              </label>
+            ))}
+          </div>
+        )}
       </fieldset>
 
-      <fieldset className="flex flex-col gap-2">
-        <legend className="text-sm font-medium text-ink">{copy.surfacesLegend}</legend>
-        <div className="flex flex-wrap gap-3">
+      <fieldset className="flex min-w-0 flex-col gap-2">
+        <legend className="t-label text-muted">{copy.surfacesLegend}</legend>
+        <div className="flex flex-wrap gap-x-4 gap-y-2">
           {SURFACE_ORDER.map((surface) => (
             <label
               key={surface}
@@ -283,44 +323,36 @@ export function ToothRecordPanel({
         </div>
       </fieldset>
 
-      <div className="flex flex-col gap-1">
-        <label htmlFor="trp-status" className="text-sm font-medium text-ink">
-          {copy.statusLabel}
-        </label>
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="trp-status">{copy.statusLabel}</Label>
         <select
           id="trp-status"
           value={status}
           onChange={(e) => setStatus(e.target.value as 'PLANNED' | 'COMPLETED')}
-          className="rounded-md border border-border bg-surface px-3 py-2 text-ink"
+          className={cn(fieldClass, 'h-10')}
         >
           <option value="COMPLETED">{copy.statusCompleted}</option>
           <option value="PLANNED">{copy.statusPlanned}</option>
         </select>
       </div>
 
-      <div className="flex flex-col gap-1">
-        <label htmlFor="trp-notes" className="text-sm font-medium text-ink">
-          {copy.notesLabel}
-        </label>
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="trp-notes">{copy.notesLabel}</Label>
         <textarea
           id="trp-notes"
           rows={2}
           value={notes}
           onChange={(e) => setNotes(e.target.value)}
-          className="rounded-md border border-border bg-surface px-3 py-2 text-ink"
+          className={fieldClass}
         />
       </div>
 
       {validationError && <InlineError>{validationError}</InlineError>}
       {saveError && <InlineError>{saveError}</InlineError>}
 
-      <button
-        type="submit"
-        disabled={submitting}
-        className="self-start rounded-md bg-primary px-4 py-2 font-medium text-primary-foreground disabled:opacity-60"
-      >
+      <Button type="submit" disabled={submitting} className="self-start">
         {submitting ? copy.submitting : copy.submit}
-      </button>
+      </Button>
     </form>
   );
 }

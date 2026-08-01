@@ -25,6 +25,8 @@ export type CreatePatientInput = Omit<
 export type DocType = components['schemas']['CreatePatientDto']['docType'];
 export type Sex = components['schemas']['CreatePatientDto']['sex'];
 
+export type UpdatePatientInput = components['schemas']['UpdatePatientDto'];
+
 /**
  * `GET /patients` (and `GET /patients/:id`) return a plain TS interface on
  * the backend (`Patient`, `ListPatientsOutput`), not a class decorated with
@@ -123,6 +125,22 @@ export async function getPatient(
   id: string,
 ): Promise<Patient> {
   return apiFetch<Patient>(`/patients/${id}`, {
+    token,
+  });
+}
+
+/**
+ * `PATCH /patients/:id` — actualización parcial. Sólo viajan los campos
+ * presentes en `input`; los ausentes quedan como estaban.
+ */
+export async function updatePatient(
+  token: string,
+  id: string,
+  input: UpdatePatientInput,
+): Promise<Patient> {
+  return apiFetch<Patient>(`/patients/${id}`, {
+    method: 'PATCH',
+    body: input,
     token,
   });
 }
