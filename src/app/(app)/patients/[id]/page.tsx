@@ -141,15 +141,13 @@ export default function PatientDetailPage() {
             </div>
           )}
 
-          {patient && (
-            <PatientEditModal
-              open={editing}
-              patient={patient}
-              token={accessToken}
-              onOpenChange={setEditing}
-              onSaved={(updated) => setPatient(updated)}
-            />
-          )}
+          <PatientEditModal
+            open={editing}
+            patient={patient}
+            token={accessToken}
+            onOpenChange={setEditing}
+            onSaved={(updated) => setPatient(updated)}
+          />
 
           {activeTab === 'clinical-history' && (
             <div
