@@ -1,6 +1,7 @@
 import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { OdontogramTab } from './odontogram-tab';
+import { Toaster } from '@/components/errors/toaster';
 import { listCatalogItems } from '@/lib/odontogram/catalog-api';
 import { getOdontogram, addToothRecord, getToothTimeline } from '@/lib/odontogram/odontogram-api';
 
@@ -139,5 +140,47 @@ describe('OdontogramTab', () => {
     expect(screen.getByRole('group', { name: /odontograma/i })).toBe(chart);
     expect(screen.getByRole('button', { name: /guardar/i })).toBe(guardarButton);
     expect(screen.queryByText(/cargando odontograma/i)).not.toBeInTheDocument();
+  });
+
+  it('surfaces a failed background refresh as a toast with a retry, keeping the already-loaded chart on screen (rung 3, not a full-page error)', async () => {
+    mockedListCatalog.mockResolvedValue(catalog);
+    mockedGetTimeline.mockResolvedValue([]);
+    mockedAddRecord.mockResolvedValue(createdRecord);
+
+    let callCount = 0;
+    mockedGetOdontogram.mockImplementation(() => {
+      callCount += 1;
+      // First call (initial load) succeeds; the second call (the post-add
+      // refresh) fails.
+      return callCount === 1 ? Promise.resolve(initialGroups) : Promise.reject(new Error('boom'));
+    });
+
+    const user = userEvent.setup();
+    render(
+      <>
+        <OdontogramTab token="tok" patientId="p1" />
+        <Toaster />
+      </>,
+    );
+
+    const chart = await screen.findByRole('group', { name: /odontograma/i });
+    await user.click(screen.getByRole('button', { name: '11' }));
+    await screen.findByRole('radio', { name: /caries/i });
+    await user.click(screen.getByRole('radio', { name: /caries/i }));
+    await user.click(screen.getByRole('checkbox', { name: /oclusal/i }));
+    await user.click(screen.getByRole('button', { name: /guardar/i }));
+
+    await waitFor(() => expect(mockedGetOdontogram).toHaveBeenCalledTimes(2));
+
+    // The failed refresh surfaces as a toast with a retry action — the
+    // already-loaded chart stays mounted, and there's no full-page error.
+    const retryButton = await screen.findByRole('button', { name: 'Reintentar' });
+    expect(screen.getByRole('group', { name: /odontograma/i })).toBe(chart);
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+
+    // Clicking the toast's retry re-triggers the fetch.
+    mockedGetOdontogram.mockResolvedValueOnce(refreshedGroups);
+    await user.click(retryButton);
+    await waitFor(() => expect(mockedGetOdontogram).toHaveBeenCalledTimes(3));
   });
 });

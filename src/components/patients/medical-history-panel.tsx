@@ -22,6 +22,8 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
+import { SectionError } from '@/components/errors/section-error';
+import { InlineError } from '@/components/errors/inline-error';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
@@ -55,9 +57,8 @@ const copy = {
   createTitle: 'Registrar anamnesis',
   createSubmit: 'Registrar anamnesis',
   submitting: 'Guardando…',
-  genericLoadError: 'No pudimos cargar la anamnesis. Intenta de nuevo.',
+  genericLoadError: 'No pudimos cargar la anamnesis.',
   genericSaveError: 'No pudimos guardar la anamnesis. Intenta de nuevo.',
-  retry: 'Reintentar',
   // Field placeholders — the row editors are dense, so labels live in the
   // column header and the input carries the hint.
   allergenPlaceholder: 'Alérgeno (ej. Penicilina)',
@@ -804,14 +805,7 @@ export function MedicalHistoryPanel({ token, patientId }: MedicalHistoryPanelPro
   return (
     <div className="flex flex-col gap-6">
       {loadError ? (
-        <div className="flex flex-col items-start gap-2">
-          <p role="alert" className="text-sm text-danger">
-            {loadError}
-          </p>
-          <Button type="button" variant="outline" size="sm" onClick={handleRetry}>
-            {copy.retry}
-          </Button>
-        </div>
+        <SectionError description={loadError} onRetry={handleRetry} />
       ) : latest ? (
         <div className="rounded-lg border border-border bg-surface p-4">
           <div className="mb-3 flex flex-wrap items-center gap-2">
@@ -1530,11 +1524,7 @@ export function MedicalHistoryPanel({ token, patientId }: MedicalHistoryPanelPro
             />
           </div>
 
-          {saveError && (
-            <p role="alert" className="text-sm text-danger">
-              {saveError}
-            </p>
-          )}
+          {saveError && <InlineError>{saveError}</InlineError>}
 
           <Button type="submit" className="self-start" loading={submitting}>
             {submitting ? copy.submitting : latest ? copy.submit : copy.createSubmit}

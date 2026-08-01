@@ -79,14 +79,21 @@ describe('ToothRecordPanel', () => {
     expect(await screen.findByText(/no hay.*cat[aá]logo/i)).toBeInTheDocument();
   });
 
-  it('shows an alert with the API error message when loading the catalog fails, with a retry', async () => {
+  it('shows a field error (not an alert) with a fixed label — not the raw server message — when loading the catalog fails, with a retry', async () => {
+    // Rung 2: the catalog is a control failing to load its own options, not a
+    // blocking page-level failure — `role="status"`, not `role="alert"`, and
+    // a fixed short label instead of the server's message (same convention as
+    // agenda-view.tsx's `staffFieldError`, Task 6).
     const { ApiError } = jest.requireActual('../../lib/api/client');
     mockedListCatalog.mockRejectedValueOnce(new ApiError(500, 'Error del servidor'));
     mockedListCatalog.mockResolvedValueOnce(catalog);
 
     const user = userEvent.setup();
     render(<ToothRecordPanel token="tok" patientId="p1" toothNumber="11" onRecordAdded={jest.fn()} />);
-    expect(await screen.findByRole('alert')).toHaveTextContent('Error del servidor');
+    const label = await screen.findByText(/no se pudo cargar el cat[aá]logo/i);
+    expect(label.closest('[role="status"]')).toBeInTheDocument();
+    expect(screen.queryByText('Error del servidor')).not.toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: /reintentar/i }));
     expect(await screen.findByRole('radio', { name: /caries/i })).toBeInTheDocument();

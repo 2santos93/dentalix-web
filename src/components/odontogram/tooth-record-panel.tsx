@@ -9,13 +9,18 @@ import {
   type ToothRecord,
   type ToothSurface,
 } from '@/lib/odontogram/odontogram-api';
+import { FieldError } from '@/components/errors/field-error';
+import { InlineError } from '@/components/errors/inline-error';
 
 // Copy as constants (i18n-ready, es-first) — matches medical-history-panel.tsx convention.
 const copy = {
   loadingCatalog: 'Cargando catálogo…',
   emptyCatalog: 'No hay procedimientos ni diagnósticos en el catálogo.',
-  genericCatalogError: 'No pudimos cargar el catálogo. Intenta de nuevo.',
-  retry: 'Reintentar',
+  // Fixed short label for the FieldError, not the server's message — same
+  // convention as agenda-view.tsx's `staffFieldError` (Task 6): the control
+  // (here, the whole catalog-dependent form) can't offer anything useful
+  // regardless of which error the server sent.
+  catalogFieldError: 'No se pudo cargar el catálogo',
   formTitle: (fdi: string) => `Registrar en el diente ${fdi}`,
   catalogItemLegend: 'Diagnóstico o procedimiento',
   surfacesLegend: 'Caras',
@@ -69,7 +74,10 @@ export function ToothRecordPanel({
 }: ToothRecordPanelProps) {
   const [catalog, setCatalog] = useState<DentalCatalogItem[]>([]);
   const [catalogLoading, setCatalogLoading] = useState(true);
-  const [catalogError, setCatalogError] = useState<string | null>(null);
+  // Truthy is all that's needed — the rendered `FieldError` shows a fixed
+  // short label (`copy.catalogFieldError`), never the server's message (see
+  // the copy comment above).
+  const [catalogError, setCatalogError] = useState(false);
   const [catalogReloadKey, setCatalogReloadKey] = useState(0);
 
   const [catalogItemId, setCatalogItemId] = useState<string | null>(null);
@@ -125,10 +133,10 @@ export function ToothRecordPanel({
         const data = await listCatalogItems(token, { activeOnly: true });
         if (cancelled) return;
         setCatalog(data);
-        setCatalogError(null);
-      } catch (err) {
+        setCatalogError(false);
+      } catch {
         if (cancelled) return;
-        setCatalogError(err instanceof ApiError ? err.message : copy.genericCatalogError);
+        setCatalogError(true);
       } finally {
         if (!cancelled) setCatalogLoading(false);
       }
@@ -205,18 +213,7 @@ export function ToothRecordPanel({
 
   if (catalogError) {
     return (
-      <div className="flex flex-col items-start gap-2">
-        <p role="alert" className="text-sm text-danger">
-          {catalogError}
-        </p>
-        <button
-          type="button"
-          onClick={() => setCatalogReloadKey((k) => k + 1)}
-          className="rounded-md border border-border px-3 py-1.5 text-sm font-medium text-ink"
-        >
-          {copy.retry}
-        </button>
-      </div>
+      <FieldError label={copy.catalogFieldError} onRetry={() => setCatalogReloadKey((k) => k + 1)} />
     );
   }
 
@@ -323,16 +320,8 @@ export function ToothRecordPanel({
         />
       </div>
 
-      {validationError && (
-        <p role="alert" className="text-sm text-danger">
-          {validationError}
-        </p>
-      )}
-      {saveError && (
-        <p role="alert" className="text-sm text-danger">
-          {saveError}
-        </p>
-      )}
+      {validationError && <InlineError>{validationError}</InlineError>}
+      {saveError && <InlineError>{saveError}</InlineError>}
 
       <button
         type="submit"
