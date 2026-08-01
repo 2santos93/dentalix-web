@@ -1,7 +1,8 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { StaffView } from './staff-view';
-import { listStaff, createStaff, updateStaff, deactivateStaff } from '@/lib/staff/staff-api';
+import { listStaff, updateStaff, deactivateStaff } from '@/lib/staff/staff-api';
+import { createInvitation } from '@/lib/staff/invitations-api';
 import { ApiError } from '@/lib/api/client';
 import { Toaster } from '@/components/errors/toaster';
 
@@ -10,13 +11,15 @@ import { Toaster } from '@/components/errors/toaster';
 // path here, same convention as agenda-view.test.tsx.
 jest.mock('../../lib/staff/staff-api', () => ({
   listStaff: jest.fn(),
-  createStaff: jest.fn(),
   updateStaff: jest.fn(),
   deactivateStaff: jest.fn(),
 }));
+jest.mock('../../lib/staff/invitations-api', () => ({
+  createInvitation: jest.fn(),
+}));
 
 const mockedListStaff = listStaff as jest.MockedFunction<typeof listStaff>;
-const mockedCreateStaff = createStaff as jest.MockedFunction<typeof createStaff>;
+const mockedCreateInvitation = createInvitation as jest.MockedFunction<typeof createInvitation>;
 const mockedUpdateStaff = updateStaff as jest.MockedFunction<typeof updateStaff>;
 const mockedDeactivateStaff = deactivateStaff as jest.MockedFunction<typeof deactivateStaff>;
 
@@ -36,7 +39,7 @@ const member2 = {
 describe('StaffView', () => {
   beforeEach(() => {
     mockedListStaff.mockReset();
-    mockedCreateStaff.mockReset();
+    mockedCreateInvitation.mockReset();
     mockedUpdateStaff.mockReset();
     mockedDeactivateStaff.mockReset();
   });
@@ -70,18 +73,18 @@ describe('StaffView', () => {
     expect(screen.queryByText('Propietario/a')).not.toBeInTheDocument();
   });
 
-  it('submitting the add form calls createStaff with the right payload and refreshes the list', async () => {
+  it('submitting the add form issues an invitation and shows the shareable link', async () => {
     mockedListStaff.mockResolvedValueOnce([member1]);
-    mockedCreateStaff.mockResolvedValue({
-      userId: 'u3',
-      fullName: 'Nueva Persona',
+    mockedCreateInvitation.mockResolvedValue({
+      id: 'i1',
       email: 'nueva@clinic.com',
+      fullName: 'Nueva Persona',
       role: 'RECEPTION',
+      status: 'VALID',
+      expiresAt: '2026-08-08T00:00:00.000Z',
+      token: 'raw-token-abc',
     });
-    mockedListStaff.mockResolvedValueOnce([
-      member1,
-      { userId: 'u3', fullName: 'Nueva Persona', email: 'nueva@clinic.com', role: 'RECEPTION' as const },
-    ]);
+    mockedListStaff.mockResolvedValueOnce([member1]);
 
     const user = userEvent.setup();
     render(<StaffView token="tok" />);
@@ -92,23 +95,23 @@ describe('StaffView', () => {
     await user.type(screen.getByLabelText(/nombre completo/i), 'Nueva Persona');
     await user.type(screen.getByLabelText(/correo electrónico/i), 'nueva@clinic.com');
     await user.selectOptions(screen.getByLabelText(/^rol$/i), 'RECEPTION');
-    await user.type(screen.getByLabelText(/contraseña/i), 'S3cret!!');
 
-    await user.click(screen.getByRole('button', { name: /^crear$/i }));
+    await user.click(screen.getByRole('button', { name: /^invitar$/i }));
 
     await waitFor(() =>
-      expect(mockedCreateStaff).toHaveBeenCalledWith('tok', {
+      expect(mockedCreateInvitation).toHaveBeenCalledWith('tok', {
         fullName: 'Nueva Persona',
         email: 'nueva@clinic.com',
         role: 'RECEPTION',
-        password: 'S3cret!!',
       }),
     );
 
-    await waitFor(() => expect(mockedListStaff).toHaveBeenCalledTimes(2));
-    expect(await screen.findByText('nueva@clinic.com')).toBeInTheDocument();
-    // The form collapses again after a successful create.
-    expect(screen.queryByRole('form', { name: /agregar personal/i })).not.toBeInTheDocument();
+    // El token en claro solo se devuelve al crear: el modal se queda abierto
+    // mostrando el enlace, porque cerrarlo lo perdería para siempre.
+    const link = await screen.findByLabelText<HTMLInputElement>(/invitación creada/i);
+    // El origen lo pone el navegador (en jsdom, http://localhost): lo que
+    // importa es que la ruta lleve el token en claro que devolvió el backend.
+    expect(link.value).toContain('/invitaciones/raw-token-abc');
   });
 
   it('changing a role calls updateStaff', async () => {
@@ -267,7 +270,7 @@ describe('StaffView', () => {
 
   it('a create error (e.g. 409 duplicate email) renders role="alert"', async () => {
     mockedListStaff.mockResolvedValue([member1]);
-    mockedCreateStaff.mockRejectedValue(new ApiError(409, 'El correo ya está en uso.'));
+    mockedCreateInvitation.mockRejectedValue(new ApiError(409, 'El correo ya está en uso.'));
 
     const user = userEvent.setup();
     render(<StaffView token="tok" />);
@@ -277,8 +280,7 @@ describe('StaffView', () => {
     await user.click(screen.getByRole('button', { name: /agregar personal/i }));
     await user.type(screen.getByLabelText(/nombre completo/i), 'Duplicado');
     await user.type(screen.getByLabelText(/correo electrónico/i), 'ana@clinic.com');
-    await user.type(screen.getByLabelText(/contraseña/i), 'S3cret!!');
-    await user.click(screen.getByRole('button', { name: /^crear$/i }));
+    await user.click(screen.getByRole('button', { name: /^invitar$/i }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent(/el correo ya está en uso/i);
   });

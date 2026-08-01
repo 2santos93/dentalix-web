@@ -4,12 +4,13 @@ import { useEffect, useRef, useState } from 'react';
 import { ApiError } from '@/lib/api/client';
 import {
   listStaff,
-  createStaff,
   updateStaff,
   deactivateStaff,
   type StaffMember,
   type ClinicRole,
 } from '@/lib/staff/staff-api';
+import { createInvitation } from '@/lib/staff/invitations-api';
+import { useCopyToClipboard } from '@/lib/ui/use-copy-to-clipboard';
 import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -33,19 +34,27 @@ import { cn } from '@/lib/utils';
 // until next-intl wiring lands.
 const copy = {
   addToggle: 'Agregar personal',
-  formDescription: 'Crea una cuenta para un miembro del equipo con su rol y una contraseña temporal.',
+  formDescription:
+    'Invita a un miembro del equipo: recibe un enlace para elegir su propia contraseña y entrar.',
   cancel: 'Cancelar',
   fullNameLabel: 'Nombre completo',
   emailLabel: 'Correo electrónico',
   roleLabel: 'Rol',
-  passwordLabel: 'Contraseña temporal',
-  submit: 'Crear',
-  submitting: 'Creando…',
+  submit: 'Invitar',
+  submitting: 'Invitando…',
+  // La invitación se entrega como enlace: el backend solo devuelve el token
+  // en el momento de crearla, así que hay que mostrarlo aquí o se pierde.
+  inviteReadyTitle: 'Invitación creada',
+  inviteReadyHint:
+    'Comparte este enlace con la persona. Caduca en 7 días y solo se muestra ahora.',
+  copyLink: 'Copiar enlace',
+  copied: 'Copiado',
+  done: 'Listo',
   retry: 'Reintentar',
   loading: 'Cargando personal…',
   tableLabel: 'Personal de la clínica',
   genericLoadError: 'No pudimos cargar el personal.',
-  genericCreateError: 'No pudimos crear el miembro del equipo. Intenta de nuevo.',
+  genericCreateError: 'No pudimos crear la invitación. Intenta de nuevo.',
   // Escalón 3 (segundo plano): sin "Intenta de nuevo." — el toast trae acción.
   genericRoleChangeError: 'No pudimos actualizar el rol.',
   genericNameChangeError: 'No pudimos actualizar el nombre.',
@@ -105,7 +114,10 @@ export function StaffView({ token }: StaffViewProps) {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<ClinicRole>('ASSISTANT');
-  const [password, setPassword] = useState('');
+  // El enlace solo existe en memoria: el token en claro se devuelve una única
+  // vez, al crear la invitación. Si se pierde, hay que reinvitar.
+  const [inviteLink, setInviteLink] = useState<string | null>(null);
+  const { copy: copyToClipboard, copied } = useCopyToClipboard();
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
 
@@ -161,7 +173,6 @@ export function StaffView({ token }: StaffViewProps) {
     setFullName('');
     setEmail('');
     setRole('ASSISTANT');
-    setPassword('');
   }
 
   async function handleCreateSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -169,9 +180,12 @@ export function StaffView({ token }: StaffViewProps) {
     setCreateError(null);
     setCreating(true);
     try {
-      await createStaff(token, { fullName, email, role, password });
+      const invitation = await createInvitation(token, { fullName, email, role });
+      // El backend solo conoce su propio host; el enlace que abre la persona
+      // invitada es el del front, en el subdominio de esta clínica.
+      setInviteLink(`${window.location.origin}/invitaciones/${invitation.token}`);
       resetForm();
-      setShowForm(false);
+      // El modal NO se cierra: el enlace se muestra ahí y es irrecuperable.
       await refreshInPlace();
     } catch (err) {
       setCreateError(err instanceof ApiError ? err.message : copy.genericCreateError);
@@ -241,6 +255,7 @@ export function StaffView({ token }: StaffViewProps) {
     setShowForm(next);
     if (!next) {
       setCreateError(null);
+      setInviteLink(null);
       resetForm();
     }
   }
@@ -305,17 +320,27 @@ export function StaffView({ token }: StaffViewProps) {
               ))}
             </select>
           </FormField>
-          <FormField htmlFor="staff-password" label={copy.passwordLabel}>
-            <Input
-              id="staff-password"
-              type="password"
-              required
-              autoComplete="new-password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-          </FormField>
         </div>
+
+        {inviteLink && (
+          <div
+            role="status"
+            className="grid gap-2 rounded-lg border border-border bg-surface-2 p-3"
+          >
+            <p className="text-sm font-semibold text-ink">{copy.inviteReadyTitle}</p>
+            <p className="text-sm text-muted">{copy.inviteReadyHint}</p>
+            <div className="flex items-center gap-2">
+              <Input readOnly value={inviteLink} aria-label={copy.inviteReadyTitle} />
+              <Button
+                type="button"
+                variant="secondary"
+                onClick={() => void copyToClipboard(inviteLink)}
+              >
+                {copied ? copy.copied : copy.copyLink}
+              </Button>
+            </div>
+          </div>
+        )}
       </FormModal>
 
       <AsyncSection
