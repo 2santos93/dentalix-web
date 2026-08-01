@@ -285,4 +285,51 @@ describe('ToothRecordPanel', () => {
     rerender(<ToothRecordPanel token="tok" patientId="p1" toothNumber="21" onRecordAdded={jest.fn()} />);
     expect(mockedListCatalog).toHaveBeenCalledTimes(1);
   });
+
+  describe('catalog filter', () => {
+    it('narrows the catalog by label or code as you type', async () => {
+      const user = userEvent.setup();
+      mockedListCatalog.mockResolvedValue(catalog);
+      render(
+        <ToothRecordPanel token="tok" patientId="p1" toothNumber="11" onRecordAdded={jest.fn()} />,
+      );
+
+      expect(await screen.findByRole('radio', { name: /caries/i })).toBeInTheDocument();
+      expect(screen.getByRole('radio', { name: /resina/i })).toBeInTheDocument();
+
+      const filter = screen.getByLabelText('Buscar en el catálogo');
+      await user.type(filter, 'resi');
+      expect(screen.queryByRole('radio', { name: /caries/i })).not.toBeInTheDocument();
+      expect(screen.getByRole('radio', { name: /resina/i })).toBeInTheDocument();
+
+      // Codes are searchable too — that's how a clinic's own shorthand works.
+      await user.clear(filter);
+      await user.type(filter, 'CAR');
+      expect(screen.getByRole('radio', { name: /caries/i })).toBeInTheDocument();
+      expect(screen.queryByRole('radio', { name: /resina/i })).not.toBeInTheDocument();
+    });
+
+    it('names the problem when nothing matches', async () => {
+      const user = userEvent.setup();
+      mockedListCatalog.mockResolvedValue(catalog);
+      render(
+        <ToothRecordPanel token="tok" patientId="p1" toothNumber="11" onRecordAdded={jest.fn()} />,
+      );
+
+      await user.type(await screen.findByLabelText('Buscar en el catálogo'), 'implante');
+      expect(screen.getByRole('status')).toHaveTextContent(
+        'Ningún ítem del catálogo coincide con "implante".',
+      );
+    });
+
+    it('shows each item kind so a long catalog stays scannable', async () => {
+      mockedListCatalog.mockResolvedValue(catalog);
+      render(
+        <ToothRecordPanel token="tok" patientId="p1" toothNumber="11" onRecordAdded={jest.fn()} />,
+      );
+
+      expect(await screen.findByRole('radio', { name: /caries.*diagn/i })).toBeInTheDocument();
+      expect(screen.getByRole('radio', { name: /resina.*procedimiento/i })).toBeInTheDocument();
+    });
+  });
 });

@@ -29,7 +29,7 @@ export function OdontogramLegend({ items }: OdontogramLegendProps) {
   return (
     <ul
       aria-label={copy.title}
-      className="flex flex-wrap items-center gap-x-4 gap-y-1.5"
+      className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-1.5"
     >
       {items.map((item) => (
         <li key={item.id} className="inline-flex items-center gap-1.5 text-xs">
