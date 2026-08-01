@@ -158,7 +158,7 @@ test('register a procedure on a tooth -> colored + in timeline, persists after r
 
   // --- Fill and submit the tooth-record form ---
   await recordForm.getByLabel(catalogLabel).check();
-  await expect(recordForm.getByLabel('Oclusal')).toBeChecked();
+  await expect(recordForm.getByLabel('Oclusal', { exact: true })).toBeChecked();
 
   const saveError = recordForm.locator('p[role="alert"]');
   await recordForm.getByRole('button', { name: 'Guardar' }).click();
