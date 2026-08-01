@@ -6,7 +6,7 @@
  * indirectly through their component tests), so this follows `client.test.ts`'s
  * fetch-mocking convention instead.
  */
-import { listStaff, createStaff, updateStaff, deactivateStaff } from './staff-api';
+import { listStaff, updateStaff, deactivateStaff } from './staff-api';
 import { ApiError } from '@/lib/api/client';
 
 describe('staff-api', () => {
@@ -27,26 +27,6 @@ describe('staff-api', () => {
     expect(String(url)).toMatch(/\/staff$/);
     expect(init.method).toBe('GET');
     expect(init.headers.Authorization).toBe('Bearer tok');
-  });
-
-  it('createStaff: POST /staff with the fullName/email/role/password payload', async () => {
-    const created = { userId: 'u2', fullName: 'Luis Gómez', email: 'luis@clinic.com', role: 'ASSISTANT' };
-    const spy = jest.fn().mockResolvedValue({ ok: true, json: async () => created });
-    global.fetch = spy as unknown as typeof fetch;
-
-    const input = {
-      fullName: 'Luis Gómez',
-      email: 'luis@clinic.com',
-      role: 'ASSISTANT' as const,
-      password: 'S3cret!!',
-    };
-    const out = await createStaff('tok', input);
-
-    expect(out).toEqual(created);
-    const [url, init] = spy.mock.calls[0];
-    expect(String(url)).toMatch(/\/staff$/);
-    expect(init.method).toBe('POST');
-    expect(JSON.parse(init.body)).toEqual(input);
   });
 
   it('updateStaff: PATCH /staff/:userId with the given patch', async () => {

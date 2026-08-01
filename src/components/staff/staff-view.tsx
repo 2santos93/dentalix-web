@@ -4,12 +4,13 @@ import { useEffect, useRef, useState } from 'react';
 import { ApiError } from '@/lib/api/client';
 import {
   listStaff,
-  createStaff,
   updateStaff,
   deactivateStaff,
   type StaffMember,
   type ClinicRole,
 } from '@/lib/staff/staff-api';
+import { createInvitation, type CreatedInvitation } from '@/lib/staff/invitations-api';
+import { useCopyToClipboard } from '@/lib/ui/use-copy-to-clipboard';
 import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -18,6 +19,14 @@ import { FormField } from '@/components/molecules/form-field';
 import { FormModal } from '@/components/molecules/form-modal';
 import { ConfirmDialog } from '@/components/molecules/confirm-dialog';
 import { AsyncSection, TableSkeleton } from '@/components/molecules/async-section';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from '@/components/ui/dialog';
 import {
   Table,
   TableBody,
@@ -31,20 +40,21 @@ import { cn } from '@/lib/utils';
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
 const copy = {
-  addToggle: 'Agregar personal',
-  formDescription: 'Crea una cuenta para un miembro del equipo con su rol y una contraseña temporal.',
+  inviteToggle: 'Invitar',
+  formTitle: 'Invitar a la clínica',
+  formDescription:
+    'La persona recibirá un enlace para crear su propia contraseña y unirse a la clínica.',
   cancel: 'Cancelar',
   fullNameLabel: 'Nombre completo',
   emailLabel: 'Correo electrónico',
   roleLabel: 'Rol',
-  passwordLabel: 'Contraseña temporal',
-  submit: 'Crear',
-  submitting: 'Creando…',
+  submit: 'Enviar invitación',
+  submitting: 'Enviando…',
   retry: 'Reintentar',
   loading: 'Cargando personal…',
   tableLabel: 'Personal de la clínica',
   genericLoadError: 'No pudimos cargar el personal. Intenta de nuevo.',
-  genericCreateError: 'No pudimos crear el miembro del equipo. Intenta de nuevo.',
+  genericCreateError: 'No pudimos crear la invitación. Intenta de nuevo.',
   genericRoleChangeError: 'No pudimos actualizar el rol. Intenta de nuevo.',
   genericNameChangeError: 'No pudimos actualizar el nombre. Intenta de nuevo.',
   genericDeactivateError: 'No pudimos desactivar al miembro del equipo. Intenta de nuevo.',
@@ -61,6 +71,15 @@ const copy = {
   deactivateConfirmYes: 'Sí, desactivar',
   nameFieldLabel: (name: string) => `Nombre de ${name}`,
   roleFieldLabel: (name: string) => `Rol de ${name}`,
+  inviteCreatedTitle: 'Invitación creada',
+  inviteCreatedDescription: 'Comparte este enlace con la persona invitada.',
+  copyLabel: 'Copiar',
+  copiedLabel: 'Copiado',
+  copyWarning: 'Cópialo ahora: por seguridad no podrás verlo de nuevo.',
+  // Not "Cerrar" — `DialogContent`'s built-in X button already has that as
+  // its (hardcoded, sr-only) accessible name; a second "Cerrar" button would
+  // be ambiguous for both a11y and tests.
+  closeLabel: 'Listo',
 };
 
 const ROLE_OPTIONS: { value: ClinicRole; label: string }[] = [
@@ -103,9 +122,13 @@ export function StaffView({ token }: StaffViewProps) {
   const [fullName, setFullName] = useState('');
   const [email, setEmail] = useState('');
   const [role, setRole] = useState<ClinicRole>('ASSISTANT');
-  const [password, setPassword] = useState('');
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+  // Set on a successful invite; while non-null the modal shows the one-time
+  // link instead of the form (the invitee isn't staff yet, so there's
+  // nothing to refresh in the table above — see `handleCreateSubmit`).
+  const [createdInvitation, setCreatedInvitation] = useState<CreatedInvitation | null>(null);
+  const { copied, copy: copyInviteLink } = useCopyToClipboard();
 
   // Which row is currently being mutated (role/name change or deactivate) —
   // disables that row's controls, same as agenda-view.tsx's `updatingId`.
@@ -160,7 +183,6 @@ export function StaffView({ token }: StaffViewProps) {
     setFullName('');
     setEmail('');
     setRole('ASSISTANT');
-    setPassword('');
   }
 
   async function handleCreateSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -168,10 +190,10 @@ export function StaffView({ token }: StaffViewProps) {
     setCreateError(null);
     setCreating(true);
     try {
-      await createStaff(token, { fullName, email, role, password });
-      resetForm();
-      setShowForm(false);
-      await refreshInPlace();
+      const created = await createInvitation(token, { fullName, email, role });
+      // Keep the modal open: this is the only time the raw token is ever
+      // shown, so the caller must copy the link before dismissing it.
+      setCreatedInvitation(created);
     } catch (err) {
       setCreateError(err instanceof ApiError ? err.message : copy.genericCreateError);
     } finally {
@@ -230,6 +252,7 @@ export function StaffView({ token }: StaffViewProps) {
     setShowForm(next);
     if (!next) {
       setCreateError(null);
+      setCreatedInvitation(null);
       resetForm();
     }
   }
@@ -238,18 +261,22 @@ export function StaffView({ token }: StaffViewProps) {
     ? staff.find((s) => s.userId === confirmingId) ?? null
     : null;
 
+  const inviteLink = createdInvitation
+    ? `${window.location.origin}/invitacion/${createdInvitation.token}`
+    : '';
+
   return (
     <div className="flex flex-col gap-6">
       <div className="flex justify-end">
         <Button type="button" onClick={() => setShowForm(true)}>
-          <Plus /> {copy.addToggle}
+          <Plus /> {copy.inviteToggle}
         </Button>
       </div>
 
       <FormModal
-        open={showForm}
+        open={showForm && !createdInvitation}
         onOpenChange={handleCreateOpenChange}
-        title={copy.addToggle}
+        title={copy.formTitle}
         description={copy.formDescription}
         onSubmit={handleCreateSubmit}
         submitLabel={copy.submit}
@@ -257,7 +284,7 @@ export function StaffView({ token }: StaffViewProps) {
         error={createError}
         size="lg"
       >
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-4 sm:grid-cols-3">
           <FormField htmlFor="staff-full-name" label={copy.fullNameLabel}>
             <Input
               id="staff-full-name"
@@ -276,9 +303,6 @@ export function StaffView({ token }: StaffViewProps) {
               onChange={(e) => setEmail(e.target.value)}
             />
           </FormField>
-        </div>
-
-        <div className="grid gap-4 sm:grid-cols-2">
           <FormField htmlFor="staff-role" label={copy.roleLabel}>
             <select
               id="staff-role"
@@ -294,18 +318,35 @@ export function StaffView({ token }: StaffViewProps) {
               ))}
             </select>
           </FormField>
-          <FormField htmlFor="staff-password" label={copy.passwordLabel}>
-            <Input
-              id="staff-password"
-              type="password"
-              required
-              autoComplete="new-password"
-              value={password}
-              onChange={(e) => setPassword(e.target.value)}
-            />
-          </FormField>
         </div>
       </FormModal>
+
+      <Dialog open={showForm && !!createdInvitation} onOpenChange={handleCreateOpenChange}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{copy.inviteCreatedTitle}</DialogTitle>
+            <DialogDescription>{copy.inviteCreatedDescription}</DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-2 rounded-lg border border-border bg-bg px-3 py-2">
+            <p className="break-all font-mono text-sm text-ink">{inviteLink}</p>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="self-start"
+              onClick={() => copyInviteLink(inviteLink)}
+            >
+              {copied ? copy.copiedLabel : copy.copyLabel}
+            </Button>
+          </div>
+          <p className="text-sm text-muted">{copy.copyWarning}</p>
+          <DialogFooter>
+            <Button type="button" onClick={() => handleCreateOpenChange(false)}>
+              {copy.closeLabel}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {rowError && !confirmingId && (
         <p role="alert" className="text-sm text-danger">
