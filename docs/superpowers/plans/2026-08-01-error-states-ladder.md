@@ -17,6 +17,7 @@
 - **Copy: el mensaje dice qué falló y qué sigue funcionando**, no solo que algo falló. «No pudimos cargar los profesionales» → el filtro; la agenda sigue usable.
 - **Nunca significado solo por color** (WCAG 1.4.1). Todo error lleva icono además del color.
 - **Roles ARIA fijados por escalón** (ver tabla abajo). No improvisar: ~20 tests existentes dependen de ellos.
+- **`onRetry` de un toast nunca captura estado mutable del componente.** Un toast se construye en el `catch`; si su `onRetry` cierra sobre filtros o fechas, reintenta los de *ese* instante y puede sobreescribir datos correctos con datos viejos. Pasar `() => ref.current()` con un ref mantenido al día, no la referencia capturada. Excepción: closures cuyos argumentos **son** la operación (`handleStatusChange(id, status)`) no tienen el problema y se dejan tal cual. *(Corrección introducida tras la revisión de T6; los snippets de las tareas 6, 8 y 9 la reflejan.)*
 - Radios y alturas según `DESIGN.md`: 8px (`rounded-lg`) para controles, 12px (`rounded-xl`) para bloques de sección.
 - Todo texto de UI en español, es-first, como constante `copy` en el módulo (convención vigente hasta que entre next-intl).
 
@@ -930,7 +931,16 @@ Anotar el estado de partida.
 
 - [ ] **Step 5: Migrar escalón 3 (`refreshError`, `planDetailRefreshError`)**
 
-Borrar los bloques de render y llamar a `notifyError` desde el `catch`, con `onRetry` apuntando a la función de refresco. Eliminar los `useState` huérfanos.
+Borrar los bloques de render y llamar a `notifyError` desde el `catch`. `onRetry` **no** recibe la referencia capturada de la función de refresco: usar un ref mantenido al día, según la constraint global sobre closures obsoletos.
+
+```tsx
+const refreshPlansRef = useRef(refreshPlansInPlace);
+refreshPlansRef.current = refreshPlansInPlace;
+// ...
+onRetry: () => refreshPlansRef.current(),
+```
+
+Eliminar los `useState` huérfanos.
 
 - [ ] **Step 6: Migrar escalón 4 (el resto)**
 
@@ -985,7 +995,7 @@ Esperado: PASS (estado base). Estas suites tienen 8 aserciones `findByRole('aler
 - [ ] **Step 2: Migrar `odontogram-tab.tsx`**
 
 `loadError` (168-176) → `<SectionError description={loadError} onRetry={() => setReloadKey((k) => k + 1)} />`.
-`refreshError` (187-198) → borrar el bloque, `notifyError(mensaje, { onRetry: () => setReloadKey((k) => k + 1) })` desde el `catch`.
+`refreshError` (187-198) → borrar el bloque, `notifyError(mensaje, { onRetry: () => setReloadKey((k) => k + 1) })` desde el `catch`. Aquí el closure solo toca el setter de `reloadKey`, que es estable, así que no necesita ref — pero si acabas pasando una función que lee estado mutable, aplica la constraint global sobre closures obsoletos.
 
 - [ ] **Step 3: Migrar `tooth-timeline.tsx`, `medical-history-panel.tsx`, `clinical-entries-list.tsx`**
 
