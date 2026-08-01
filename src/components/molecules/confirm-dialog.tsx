@@ -10,6 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { InlineError } from '@/components/errors/inline-error';
 
 interface ConfirmDialogProps {
   open: boolean;
@@ -50,14 +51,7 @@ export function ConfirmDialog({
           <DialogTitle>{title}</DialogTitle>
           {description ? <DialogDescription>{description}</DialogDescription> : null}
         </DialogHeader>
-        {error ? (
-          <p
-            role="alert"
-            className="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-sm font-medium text-danger"
-          >
-            {error}
-          </p>
-        ) : null}
+        {error ? <InlineError variant="summary">{error}</InlineError> : null}
         <DialogFooter>
           <DialogClose asChild>
             <Button type="button" variant="secondary" disabled={confirming}>

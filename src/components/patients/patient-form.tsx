@@ -16,6 +16,7 @@ import { CityCombobox, type CitySelection } from '@/components/molecules/city-co
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { FormField } from '@/components/molecules/form-field';
+import { InlineError } from '@/components/errors/inline-error';
 import { cn } from '@/lib/utils';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
@@ -297,11 +298,7 @@ export function PatientForm({ token, onCreated, initialDocNumber }: PatientFormP
         />
       </FormField>
 
-      {error ? (
-        <p role="alert" className="text-sm font-medium text-danger">
-          {error}
-        </p>
-      ) : null}
+      {error ? <InlineError>{error}</InlineError> : null}
 
       <div className="flex justify-end">
         <Button type="submit" disabled={submitting}>

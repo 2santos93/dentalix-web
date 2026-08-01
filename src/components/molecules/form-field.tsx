@@ -1,5 +1,6 @@
 import * as React from 'react';
 import { Label } from '@/components/ui/label';
+import { InlineError } from '@/components/errors/inline-error';
 import { cn } from '@/lib/utils';
 
 interface FormFieldProps {
@@ -26,11 +27,7 @@ export function FormField({
       <Label htmlFor={htmlFor}>{label}</Label>
       {children}
       {hint && !error ? <p className="text-xs text-muted">{hint}</p> : null}
-      {error ? (
-        <p role="alert" className="text-xs font-medium text-danger">
-          {error}
-        </p>
-      ) : null}
+      {error ? <InlineError className="text-xs">{error}</InlineError> : null}
     </div>
   );
 }

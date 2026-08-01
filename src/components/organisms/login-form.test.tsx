@@ -71,4 +71,25 @@ describe('LoginForm', () => {
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Credenciales inválidas');
   });
+
+  it('keeps aria-describedby resolving to the error banner on both fields', async () => {
+    (apiFetch as jest.Mock).mockRejectedValueOnce(new ApiError(401, 'Credenciales inválidas'));
+    render(<LoginForm />);
+    fireEvent.change(screen.getByLabelText(/email|correo/i), {
+      target: { value: 'user@example.com' },
+    });
+    fireEvent.change(screen.getByLabelText(/password|contraseña/i), {
+      target: { value: 'secret123' },
+    });
+    fireEvent.click(screen.getByRole('button', { name: /iniciar|entrar|login/i }));
+
+    const alert = await screen.findByRole('alert');
+    const errorId = alert.getAttribute('id');
+    expect(errorId).toBeTruthy();
+    expect(screen.getByLabelText(/email|correo/i)).toHaveAttribute('aria-describedby', errorId);
+    expect(screen.getByLabelText(/password|contraseña/i)).toHaveAttribute(
+      'aria-describedby',
+      errorId,
+    );
+  });
 });

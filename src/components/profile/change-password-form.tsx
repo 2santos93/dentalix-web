@@ -6,6 +6,7 @@ import { changePassword } from '@/lib/me/me-api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { FormField } from '@/components/molecules/form-field';
+import { InlineError } from '@/components/errors/inline-error';
 
 // Copy as constants (i18n-ready) — same convention as login-form.tsx.
 const copy = {
@@ -86,11 +87,7 @@ export function ChangePasswordForm({ token }: { token: string }) {
           onChange={(e) => setConfirm(e.target.value)}
         />
       </FormField>
-      {error && (
-        <p role="alert" className="text-sm font-medium text-danger">
-          {error}
-        </p>
-      )}
+      {error && <InlineError>{error}</InlineError>}
       {success && (
         <p role="status" className="text-sm text-success">
           {copy.success}

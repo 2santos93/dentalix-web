@@ -12,15 +12,31 @@ import { cn } from '@/lib/utils';
  */
 export function InlineError({
   children,
+  id,
+  variant = 'inline',
   className,
 }: {
   children: React.ReactNode;
+  /** Para `aria-describedby` desde los campos del formulario. */
+  id?: string;
+  /**
+   * `inline` — mensaje junto a un campo.
+   * `summary` — resumen a nivel de formulario o modal: misma familia, más peso
+   *   visual, porque resume el fallo de un envío y no la validación de un campo.
+   */
+  variant?: 'inline' | 'summary';
   className?: string;
 }) {
   return (
     <p
+      id={id}
       role="alert"
-      className={cn('flex items-start gap-1.5 text-sm text-danger', className)}
+      className={cn(
+        'flex items-start gap-1.5 text-sm text-danger',
+        variant === 'summary' &&
+          'rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 font-medium',
+        className,
+      )}
     >
       <AlertCircle aria-hidden="true" className="mt-0.5 size-4 shrink-0" />
       <span>{children}</span>

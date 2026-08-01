@@ -8,6 +8,7 @@ import { useAuthStore } from '@/lib/auth/auth-store';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { FormField } from '@/components/molecules/form-field';
+import { InlineError } from '@/components/errors/inline-error';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
@@ -101,13 +102,9 @@ export function LoginForm() {
       </FormField>
 
       {error ? (
-        <p
-          id={ERROR_ID}
-          role="alert"
-          className="rounded-lg border border-danger/20 bg-danger/10 px-3 py-2 text-sm font-medium text-danger"
-        >
+        <InlineError id={ERROR_ID} variant="summary">
           {error}
-        </p>
+        </InlineError>
       ) : null}
 
       <Button type="submit" size="lg" disabled={submitting} className="mt-1 w-full">
