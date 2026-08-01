@@ -121,7 +121,7 @@ describe('AgendaView', () => {
     // texto (no `findByRole('status')` a secas): el spinner de carga del
     // calendario también usa `role="status"` y aparece/desaparece en la
     // misma ventana, así que una consulta de rol sin más es una carrera.
-    const region = await screen.findByText(/no se pudieron cargar/i);
+    const region = await screen.findByText(/no pudimos cargar profesionales/i);
     expect(region.closest('[role="status"]')).not.toBeNull();
     expect(screen.queryByLabelText('Profesional')).not.toBeInTheDocument();
 
