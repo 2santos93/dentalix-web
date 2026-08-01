@@ -16,6 +16,16 @@ const config: Config = {
   testEnvironment: 'jest-environment-jsdom',
   setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],
   // Playwright e2e specs live in ./e2e and run via `npm run test:e2e`, not jest.
-  testPathIgnorePatterns: ['<rootDir>/node_modules/', '<rootDir>/e2e/'],
+  // `.claude/worktrees/` son worktrees de git ANIDADOS dentro del repo (el flujo
+  // de trabajo del equipo los crea ahí). Sin ignorarlos, jest entra y corre una
+  // COPIA de toda la suite desde esa rama — 33 suites duplicadas que fallan y
+  // dejan `npm test` en rojo aunque `src/` esté verde, volviendo inútil la señal.
+  // Sus `e2e/` también caían dentro, porque el patrón de abajo está anclado a
+  // rootDir y no cubría rutas anidadas.
+  testPathIgnorePatterns: [
+    '<rootDir>/node_modules/',
+    '<rootDir>/e2e/',
+    '<rootDir>/.claude/worktrees/',
+  ],
 };
 export default createJestConfig(config);
