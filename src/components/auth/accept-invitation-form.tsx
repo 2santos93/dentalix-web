@@ -14,13 +14,15 @@ import { useAuthStore } from '@/lib/auth/auth-store';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { FormField } from '@/components/molecules/form-field';
+import { SectionError } from '@/components/errors/section-error';
+import { InlineError } from '@/components/errors/inline-error';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
 const copy = {
   loading: 'Verificando invitación…',
-  loadError: 'No pudimos verificar la invitación. Intenta de nuevo.',
-  retry: 'Reintentar',
+  // Sin "Intenta de nuevo." — `SectionError` trae su propio botón.
+  loadError: 'No pudimos verificar la invitación.',
   invitedAs: (role: string) => `Te invitaron como ${role}`,
   newUserHint: 'Crea tu contraseña para activar tu cuenta.',
   existingUserHint: 'Ingresa tu contraseña de Dentalix para continuar.',
@@ -125,22 +127,7 @@ export function AcceptInvitationForm({ inviteToken }: { inviteToken: string }) {
   }
 
   if (loadError) {
-    return (
-      <div
-        role="alert"
-        className="flex flex-col items-start gap-3 rounded-xl border border-danger/30 bg-danger/5 px-4 py-3"
-      >
-        <p className="text-sm font-medium text-danger">{loadError}</p>
-        <Button
-          type="button"
-          variant="outline"
-          size="sm"
-          onClick={() => setReloadKey((k) => k + 1)}
-        >
-          {copy.retry}
-        </Button>
-      </div>
-    );
+    return <SectionError description={loadError} onRetry={() => setReloadKey((k) => k + 1)} />;
   }
 
   // Unreachable in practice — loading is false and loadError is null only
@@ -194,13 +181,9 @@ export function AcceptInvitationForm({ inviteToken }: { inviteToken: string }) {
       </FormField>
 
       {submitError ? (
-        <p
-          id={ERROR_ID}
-          role="alert"
-          className="rounded-lg border border-danger/20 bg-danger/10 px-3 py-2 text-sm font-medium text-danger"
-        >
+        <InlineError id={ERROR_ID} variant="summary">
           {submitError}
-        </p>
+        </InlineError>
       ) : null}
 
       <Button type="submit" size="lg" disabled={submitting} className="mt-1 w-full">

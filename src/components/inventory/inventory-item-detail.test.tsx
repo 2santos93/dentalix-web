@@ -105,6 +105,23 @@ describe('InventoryItem', () => {
     expect(mockedRecord).not.toHaveBeenCalled();
   });
 
+  it('a load error can be retried, and clears once the item loads', async () => {
+    mockedGetItem.mockRejectedValueOnce(new Error('Fallo el servidor.'));
+    mockedGetItem.mockResolvedValueOnce(detail());
+
+    const user = userEvent.setup();
+    render(<InventoryItem token="tok" id="item1" />);
+
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /reintentar/i }));
+
+    // The load error must clear and the item's own content take its place —
+    // not both, and not neither (the "loads but stays invisible" bug this
+    // project already hit once).
+    expect(await screen.findByText('Jeringas')).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
   it('shows an empty-ledger message when there are no movements', async () => {
     mockedGetItem.mockResolvedValue(detail({ movements: [] }));
     render(<InventoryItem token="tok" id="item1" />);

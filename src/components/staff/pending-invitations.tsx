@@ -14,6 +14,7 @@ import { Badge } from '@/components/ui/badge';
 import { Card } from '@/components/ui/card';
 import { ConfirmDialog } from '@/components/molecules/confirm-dialog';
 import { AsyncSection, TableSkeleton } from '@/components/molecules/async-section';
+import { notifyError } from '@/components/errors/notify';
 import {
   Dialog,
   DialogContent,
@@ -36,8 +37,9 @@ const copy = {
   retry: 'Reintentar',
   tableLabel: 'Invitaciones pendientes',
   genericLoadError: 'No pudimos cargar las invitaciones. Intenta de nuevo.',
-  genericRevokeError: 'No pudimos revocar la invitación. Intenta de nuevo.',
-  genericResendError: 'No pudimos reenviar la invitación. Intenta de nuevo.',
+  // Escalón 3 (segundo plano): sin "Intenta de nuevo." — el toast trae acción.
+  genericRevokeError: 'No pudimos revocar la invitación.',
+  genericResendError: 'No pudimos reenviar la invitación.',
   empty: 'No hay invitaciones pendientes.',
   emptyHint: 'Las invitaciones que envíes aparecerán aquí hasta que se acepten o expiren.',
   colName: 'Nombre',
@@ -94,7 +96,6 @@ export function PendingInvitations({ token, refreshKey }: PendingInvitationsProp
   // Which row is currently being mutated (revoke or resend) — disables that
   // row's buttons, same convention as staff-view.tsx.
   const [updatingId, setUpdatingId] = useState<string | null>(null);
-  const [rowError, setRowError] = useState<string | null>(null);
   // Row awaiting revoke confirmation.
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
   // Set on a successful resend; while non-null the reveal dialog shows the
@@ -139,13 +140,19 @@ export function PendingInvitations({ token, refreshKey }: PendingInvitationsProp
 
   async function handleRevoke(id: string) {
     setUpdatingId(id);
-    setRowError(null);
     try {
       await revokeInvitation(token, id);
       setConfirmingId(null);
       await refreshInPlace();
     } catch (err) {
-      setRowError(err instanceof ApiError ? err.message : copy.genericRevokeError);
+      // Close the confirm dialog on failure too, not just success: while a
+      // Radix modal stays open it marks everything outside it (including
+      // this toast) inert, so a "Reintentar" the user can see but can't
+      // click — same lesson as staff-view.tsx's handleDeactivate.
+      setConfirmingId(null);
+      notifyError(err instanceof ApiError ? err.message : copy.genericRevokeError, {
+        onRetry: () => handleRevoke(id),
+      });
     } finally {
       setUpdatingId(null);
     }
@@ -153,7 +160,6 @@ export function PendingInvitations({ token, refreshKey }: PendingInvitationsProp
 
   async function handleResend(invitation: Invitation) {
     setUpdatingId(invitation.id);
-    setRowError(null);
     try {
       const created = await createInvitation(token, {
         fullName: invitation.fullName,
@@ -163,7 +169,9 @@ export function PendingInvitations({ token, refreshKey }: PendingInvitationsProp
       setResentInvitation(created);
       await refreshInPlace();
     } catch (err) {
-      setRowError(err instanceof ApiError ? err.message : copy.genericResendError);
+      notifyError(err instanceof ApiError ? err.message : copy.genericResendError, {
+        onRetry: () => handleResend(invitation),
+      });
     } finally {
       setUpdatingId(null);
     }
@@ -179,12 +187,6 @@ export function PendingInvitations({ token, refreshKey }: PendingInvitationsProp
 
   return (
     <div className="flex flex-col gap-4">
-      {rowError && !confirmingId && (
-        <p role="alert" className="text-sm text-danger">
-          {rowError}
-        </p>
-      )}
-
       <AsyncSection
         loading={loading}
         error={loadError}
@@ -239,10 +241,7 @@ export function PendingInvitations({ token, refreshKey }: PendingInvitationsProp
                           size="sm"
                           disabled={updating}
                           aria-label={copy.revokeLabel(inv.fullName)}
-                          onClick={() => {
-                            setRowError(null);
-                            setConfirmingId(inv.id);
-                          }}
+                          onClick={() => setConfirmingId(inv.id)}
                         >
                           {copy.revokeCta}
                         </Button>
@@ -259,10 +258,7 @@ export function PendingInvitations({ token, refreshKey }: PendingInvitationsProp
       <ConfirmDialog
         open={confirmingId !== null}
         onOpenChange={(open) => {
-          if (!open) {
-            setConfirmingId(null);
-            setRowError(null);
-          }
+          if (!open) setConfirmingId(null);
         }}
         title={copy.revokeTitle}
         description={
@@ -270,7 +266,6 @@ export function PendingInvitations({ token, refreshKey }: PendingInvitationsProp
         }
         confirmLabel={copy.revokeConfirmYes}
         confirming={updatingId === confirmingId}
-        error={rowError}
         onConfirm={() => confirmingId && handleRevoke(confirmingId)}
       />
 
