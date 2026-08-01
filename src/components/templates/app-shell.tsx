@@ -21,7 +21,6 @@ const NAV = [
   { href: '/catalog', label: 'Catálogo', icon: ClipboardList },
   { href: '/inventory', label: 'Inventario', icon: Package },
   { href: '/staff', label: 'Personal', icon: UserCog },
-  { href: '/inventory', label: 'Inventario', icon: Package },
 ];
 
 /**
