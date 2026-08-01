@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { ApiError } from '@/lib/api/client';
 import { Button } from '@/components/ui/button';
 import { AsyncSection } from '@/components/molecules/async-section';
+import { InlineError } from '@/components/errors/inline-error';
 import { ClinicalHistoryFields } from '@/components/clinical/clinical-history-fields';
 import {
   getMedicalHistory,
@@ -244,11 +245,7 @@ export function MedicalHistoryPanel({ token, patientId }: MedicalHistoryPanelPro
 
           <ClinicalHistoryFields value={value} onChange={setValue} />
 
-          {saveError && (
-            <p role="alert" className="text-sm text-danger">
-              {saveError}
-            </p>
-          )}
+          {saveError && <InlineError variant="summary">{saveError}</InlineError>}
 
           <Button type="submit" loading={submitting} disabled={isUnchanged} className="self-start">
             {copy.submit}

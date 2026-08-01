@@ -36,7 +36,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     pathname === href || pathname.startsWith(`${href}/`);
 
   return (
-    <div className="flex min-h-full flex-1">
+    // El shell se ata a la altura de la ventana (dvh, no vh: en móvil la barra
+    // del navegador entra y sale). Sin esto el contenedor crece con el
+    // contenido y los `flex-1` de dentro reparten sobre esa altura crecida, así
+    // que la agenda no podía "caber" nunca y la página acababa con scroll.
+    // Y nada de `flex-1` aquí: siendo hijo flex de <body> (flex-col),
+    // `flex: 1 1 0%` haría que mandara el crecimiento y no `h-[100dvh]`.
+    <div className="flex h-[100dvh] min-h-0">
       <aside className="hidden w-60 shrink-0 flex-col border-r border-border bg-surface md:flex">
         <div className="flex h-16 items-center gap-2.5 px-6 text-lg font-semibold text-ink">
           <span
@@ -70,10 +76,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       </aside>
 
-      <div className="flex min-w-0 flex-1 flex-col">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
         <header className="flex h-16 items-center justify-between gap-4 border-b border-border bg-surface px-4 md:px-8">
-          <nav className="flex items-center gap-1 md:hidden">
-            <span className="mr-1 text-lg" aria-hidden>
+          {/* Scrollable en horizontal: con 6 secciones los ítems suman más que
+              el ancho de un móvil, y sin esto desbordan la página entera. */}
+          <nav className="-mx-1 flex min-w-0 items-center gap-1 overflow-x-auto px-1 md:hidden">
+            <span className="mr-1 shrink-0 text-lg" aria-hidden>
               🦷
             </span>
             {NAV.map(({ href, label, icon: Icon }) => (
@@ -82,13 +90,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 href={href}
                 aria-current={isActive(href) ? 'page' : undefined}
                 className={cn(
-                  'flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-sm font-medium transition-colors',
+                  'flex h-11 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-sm font-medium transition-colors',
                   isActive(href)
                     ? 'bg-primary/10 text-primary'
                     : 'text-muted hover:text-ink',
                 )}
               >
-                <Icon className="size-4" />
+                <Icon className="size-4 shrink-0" />
                 <span>{label}</span>
               </Link>
             ))}
@@ -100,13 +108,16 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
           {/* En móvil el sidebar está oculto: el menú de cuenta (perfil, tema,
               cerrar sesión) vive en el topbar como avatar compacto. */}
-          <div className="flex items-center gap-2 md:hidden">
+          <div className="flex shrink-0 items-center gap-2 md:hidden">
             <LocationSwitcher />
             <UserMenu variant="compact" />
           </div>
         </header>
 
-        <main className="flex flex-1 flex-col bg-bg px-4 py-8 md:px-8">
+        {/* `min-h-0` deja que main se encoja por debajo de su contenido; lo que
+            sobra scrollea aquí dentro, no en la página: la barra lateral y el
+            topbar se quedan fijos. */}
+        <main className="flex min-h-0 flex-1 flex-col overflow-y-auto bg-bg px-4 py-8 md:px-8">
           <div className="mx-auto w-full max-w-6xl">{children}</div>
         </main>
       </div>

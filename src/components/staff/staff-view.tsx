@@ -9,7 +9,12 @@ import {
   type StaffMember,
   type ClinicRole,
 } from '@/lib/staff/staff-api';
-import { createInvitation } from '@/lib/staff/invitations-api';
+import {
+  createInvitation,
+  listInvitations,
+  revokeInvitation,
+  type Invitation,
+} from '@/lib/staff/invitations-api';
 import { useCopyToClipboard } from '@/lib/ui/use-copy-to-clipboard';
 import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -20,6 +25,8 @@ import { FormModal } from '@/components/molecules/form-modal';
 import { ConfirmDialog } from '@/components/molecules/confirm-dialog';
 import { AsyncSection, TableSkeleton } from '@/components/molecules/async-section';
 import { notifyError } from '@/components/errors/notify';
+import { SectionError } from '@/components/errors/section-error';
+import { formatDate } from '@/lib/format/date';
 import {
   Table,
   TableBody,
@@ -53,6 +60,26 @@ const copy = {
   retry: 'Reintentar',
   loading: 'Cargando personal…',
   tableLabel: 'Personal de la clínica',
+  // Invitaciones pendientes. No hay "reenviar" como endpoint: el token va
+  // hasheado y solo se ve al crearlo, pero crear otra invitación para el mismo
+  // correo revoca la anterior en el backend — eso ES reinvitar.
+  invitesTitle: 'Invitaciones pendientes',
+  invitesTableLabel: 'Invitaciones pendientes',
+  invitesEmail: 'Correo electrónico',
+  invitesRole: 'Rol',
+  invitesExpires: 'Caduca',
+  invitesActions: 'Acciones',
+  resend: 'Reinvitar',
+  resending: 'Reinvitando…',
+  revoke: 'Revocar',
+  revokeTitle: '¿Revocar la invitación?',
+  revokeBody: (email: string) => `El enlace enviado a ${email} dejará de funcionar.`,
+  revokeConfirmYes: 'Sí, revocar',
+  newLinkTitle: 'Enlace nuevo',
+  newLinkHint: 'El enlace anterior quedó anulado. Comparte este.',
+  genericInvitesLoadError: 'No pudimos cargar las invitaciones.',
+  genericResendError: 'No pudimos reinvitar.',
+  genericRevokeError: 'No pudimos revocar la invitación.',
   genericLoadError: 'No pudimos cargar el personal.',
   genericCreateError: 'No pudimos crear la invitación. Intenta de nuevo.',
   // Escalón 3 (segundo plano): sin "Intenta de nuevo." — el toast trae acción.
@@ -118,6 +145,14 @@ export function StaffView({ token }: StaffViewProps) {
   // vez, al crear la invitación. Si se pierde, hay que reinvitar.
   const [inviteLink, setInviteLink] = useState<string | null>(null);
   const { copy: copyToClipboard, copied } = useCopyToClipboard();
+
+  // Invitaciones pendientes: se cargan junto al personal y se refrescan con la
+  // misma `reloadKey`, porque invitar cambia las dos listas a la vez.
+  const [invitations, setInvitations] = useState<Invitation[]>([]);
+  const [invitesError, setInvitesError] = useState<string | null>(null);
+  const [busyInviteId, setBusyInviteId] = useState<string | null>(null);
+  const [revokingId, setRevokingId] = useState<string | null>(null);
+  const [resentLink, setResentLink] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
 
@@ -157,8 +192,79 @@ export function StaffView({ token }: StaffViewProps) {
     };
   }, [token, reloadKey]);
 
+  // Solo interesan las vigentes: las aceptadas ya salen en la tabla de
+  // personal, y las caducadas/revocadas no admiten ninguna acción.
+  function refreshInvitations(): Promise<void> {
+    if (!token) return Promise.resolve();
+    return listInvitations(token)
+      .then((data) => {
+        setInvitations(data.filter((i) => i.status === 'VALID'));
+        setInvitesError(null);
+      })
+      .catch((err) => {
+        setInvitesError(err instanceof ApiError ? err.message : copy.genericInvitesLoadError);
+      });
+  }
+
+  useEffect(() => {
+    if (!token) return;
+    let cancelled = false;
+    void listInvitations(token)
+      .then((data) => {
+        if (cancelled) return;
+        setInvitations(data.filter((i) => i.status === 'VALID'));
+        setInvitesError(null);
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        setInvitesError(err instanceof ApiError ? err.message : copy.genericInvitesLoadError);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token, reloadKey]);
+
+  async function handleResend(invitation: Invitation) {
+    setBusyInviteId(invitation.id);
+    setResentLink(null);
+    try {
+      // Crear para el mismo correo revoca la pendiente en el backend: un solo
+      // token vivo por correo, sin endpoint de reenvío.
+      const fresh = await createInvitation(token, {
+        fullName: invitation.fullName,
+        email: invitation.email,
+        role: invitation.role,
+      });
+      setResentLink(`${window.location.origin}/invitaciones/${fresh.token}`);
+      await refreshInvitations();
+    } catch (err) {
+      notifyError(err instanceof ApiError ? err.message : copy.genericResendError, {
+        onRetry: () => handleResend(invitation),
+      });
+    } finally {
+      setBusyInviteId(null);
+    }
+  }
+
+  async function handleRevoke(id: string) {
+    setBusyInviteId(id);
+    try {
+      await revokeInvitation(token, id);
+      setRevokingId(null);
+      setResentLink(null);
+      await refreshInvitations();
+    } catch (err) {
+      notifyError(err instanceof ApiError ? err.message : copy.genericRevokeError, {
+        onRetry: () => handleRevoke(id),
+      });
+    } finally {
+      setBusyInviteId(null);
+    }
+  }
+
   function refreshInPlace(): Promise<void> {
     if (!token) return Promise.resolve();
+    void refreshInvitations();
     return listStaff(token)
       .then((data) => {
         setStaff(data);
@@ -423,6 +529,108 @@ export function StaffView({ token }: StaffViewProps) {
           </Table>
         </Card>
       </AsyncSection>
+
+      {/* Solo aparece si hay algo que hacer: una sección vacía permanente
+          añadiría ruido a la pantalla que más se mira a diario. */}
+      {(invitations.length > 0 || invitesError) && (
+        <section className="flex flex-col gap-3">
+          <h2 className="text-base font-semibold text-ink">{copy.invitesTitle}</h2>
+
+          {invitesError ? (
+            <SectionError
+              description={invitesError}
+              onRetry={() => setReloadKey((k) => k + 1)}
+              retryLabel={copy.retry}
+            />
+          ) : (
+            <>
+              {resentLink && (
+                <div
+                  role="status"
+                  className="grid gap-2 rounded-lg border border-border bg-surface-2 p-3"
+                >
+                  <p className="text-sm font-semibold text-ink">{copy.newLinkTitle}</p>
+                  <p className="text-sm text-muted">{copy.newLinkHint}</p>
+                  <div className="flex items-center gap-2">
+                    <Input readOnly value={resentLink} aria-label={copy.newLinkTitle} />
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      onClick={() => void copyToClipboard(resentLink)}
+                    >
+                      {copied ? copy.copied : copy.copyLink}
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              <Card className="overflow-hidden p-0">
+                <Table aria-label={copy.invitesTableLabel}>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>{copy.invitesEmail}</TableHead>
+                      <TableHead>{copy.invitesRole}</TableHead>
+                      <TableHead>{copy.invitesExpires}</TableHead>
+                      <TableHead>{copy.invitesActions}</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {invitations.map((inv) => (
+                      <TableRow key={inv.id}>
+                        <TableCell>{inv.email}</TableCell>
+                        <TableCell>
+                          {ROLE_OPTIONS.find((o) => o.value === inv.role)?.label ?? inv.role}
+                        </TableCell>
+                        <TableCell>{formatDate(inv.expiresAt)}</TableCell>
+                        <TableCell>
+                          <div className="flex flex-wrap gap-2">
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              size="sm"
+                              loading={busyInviteId === inv.id}
+                              onClick={() => void handleResend(inv)}
+                              aria-label={`${copy.resend} a ${inv.email}`}
+                            >
+                              {copy.resend}
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="sm"
+                              disabled={busyInviteId === inv.id}
+                              onClick={() => setRevokingId(inv.id)}
+                              aria-label={`${copy.revoke} la invitación de ${inv.email}`}
+                            >
+                              {copy.revoke}
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </Card>
+            </>
+          )}
+        </section>
+      )}
+
+      <ConfirmDialog
+        open={revokingId !== null}
+        onOpenChange={(open) => {
+          if (!open) setRevokingId(null);
+        }}
+        title={copy.revokeTitle}
+        description={
+          revokingId
+            ? copy.revokeBody(invitations.find((i) => i.id === revokingId)?.email ?? '')
+            : undefined
+        }
+        confirmLabel={copy.revokeConfirmYes}
+        confirming={busyInviteId === revokingId}
+        onConfirm={() => revokingId && handleRevoke(revokingId)}
+      />
 
       <ConfirmDialog
         open={confirmingId !== null}
