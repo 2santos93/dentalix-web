@@ -10,12 +10,13 @@ import { formatTime } from '@/lib/format/date';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge, type BadgeProps } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { FormField } from '@/components/molecules/form-field';
 import { EmptyState } from '@/components/molecules/empty-state';
 import { CurrencySelect } from '@/components/molecules/currency-select';
+import { SectionError } from '@/components/errors/section-error';
+import { InlineError } from '@/components/errors/inline-error';
 
 // Copy as constants (i18n-ready, es-first) — matches
 // treatment-plans-tab.tsx / agenda-view.tsx convention until next-intl
@@ -27,7 +28,7 @@ const copy = {
   loading: 'Cargando panel…',
   retry: 'Reintentar',
   forbidden: 'No tienes acceso a este panel.',
-  genericError: 'No pudimos cargar el panel. Intenta de nuevo.',
+  genericError: 'No pudimos cargar el panel.',
   rangeInvalid: 'La fecha "Hasta" debe ser igual o posterior a la fecha "Desde".',
   incomesHeading: 'Ingresos del período',
   incomesCount: (count: number) => `${count} ${count === 1 ? 'abono' : 'abonos'}`,
@@ -214,9 +215,7 @@ export function DashboardView({ token }: DashboardViewProps) {
       </Card>
 
       {rangeInvalid ? (
-        <p role="alert" className="text-sm text-danger">
-          {copy.rangeInvalid}
-        </p>
+        <InlineError>{copy.rangeInvalid}</InlineError>
       ) : loading ? (
         <div className="grid gap-4 sm:grid-cols-2">
           <Skeleton className="h-40" role="status" aria-label={copy.loading} />
@@ -225,14 +224,11 @@ export function DashboardView({ token }: DashboardViewProps) {
           <Skeleton className="h-40" />
         </div>
       ) : error ? (
-        <div className="flex flex-col items-start gap-3">
-          <p role="alert" className="text-sm text-danger">
-            {error}
-          </p>
-          <Button type="button" variant="outline" onClick={() => setReloadKey((k) => k + 1)}>
-            {copy.retry}
-          </Button>
-        </div>
+        <SectionError
+          description={error}
+          onRetry={() => setReloadKey((k) => k + 1)}
+          retryLabel={copy.retry}
+        />
       ) : data ? (
         <div className="grid items-start gap-4 lg:grid-cols-3">
           {/* Left rail: the period's headline figures, read as a clinical

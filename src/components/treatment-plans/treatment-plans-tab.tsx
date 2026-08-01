@@ -45,6 +45,9 @@ import { EmptyState } from '@/components/molecules/empty-state';
 import { CurrencySelect } from '@/components/molecules/currency-select';
 import { PaymentReceipt } from './payment-receipt';
 import { PaymentPlanSection } from './payment-plan-section';
+import { SectionError } from '@/components/errors/section-error';
+import { InlineError } from '@/components/errors/inline-error';
+import { notifyError } from '@/components/errors/notify';
 import { cn } from '@/lib/utils';
 import { formatCivilDate, formatDateTime } from '@/lib/format/date';
 
@@ -52,10 +55,11 @@ import { formatCivilDate, formatDateTime } from '@/lib/format/date';
 // agenda-view.tsx convention until next-intl wiring lands.
 const copy = {
   loading: 'Cargando planes de tratamiento…',
-  genericLoadError: 'No pudimos cargar los planes de tratamiento. Intenta de nuevo.',
+  // No «Intenta de nuevo.» — `SectionError` has its own retry button.
+  genericLoadError: 'No pudimos cargar los planes de tratamiento.',
   refreshing: 'Actualizando…',
-  genericRefreshError: 'No pudimos actualizar los planes de tratamiento. Intenta de nuevo.',
-  retry: 'Reintentar',
+  // No «Intenta de nuevo.» — the toast carries its own retry action.
+  genericRefreshError: 'No pudimos actualizar los planes de tratamiento.',
   plansHeading: 'Planes de tratamiento',
   newPlan: 'Nuevo plan',
   // No adjacent `<label>` for this one (it sits next to the "Nuevo plan"
@@ -80,8 +84,10 @@ const copy = {
   detailHeading: 'Detalle del plan',
   planStatusLabel: 'Estado del plan',
   loadingPlanDetail: 'Cargando plan…',
-  genericPlanDetailError: 'No pudimos cargar el plan. Intenta de nuevo.',
-  genericPlanDetailRefreshError: 'No pudimos actualizar el plan. Intenta de nuevo.',
+  // No «Intenta de nuevo.» — `SectionError` has its own retry button.
+  genericPlanDetailError: 'No pudimos cargar el plan.',
+  // No «Intenta de nuevo.» — the toast carries its own retry action.
+  genericPlanDetailRefreshError: 'No pudimos actualizar el plan.',
   genericPlanStatusError: 'No pudimos actualizar el estado del plan. Intenta de nuevo.',
   itemsTableCaption: 'Ítems del plan de tratamiento',
   colTooth: 'Diente',
@@ -120,8 +126,10 @@ const copy = {
   // Abonos + saldo (PAY-T4).
   paymentsHeading: 'Abonos y saldo',
   loadingBalance: 'Cargando saldo…',
-  genericBalanceError: 'No pudimos cargar el saldo. Intenta de nuevo.',
-  genericBalanceRefreshError: 'No pudimos actualizar el saldo. Intenta de nuevo.',
+  // No «Intenta de nuevo.» — `SectionError` has its own retry button.
+  genericBalanceError: 'No pudimos cargar el saldo.',
+  // No «Intenta de nuevo.» — the toast carries its own retry action.
+  genericBalanceRefreshError: 'No pudimos actualizar el saldo.',
   billableLabel: 'A pagar',
   paidLabel: 'Pagado',
   balanceLabel: 'Saldo',
@@ -557,7 +565,6 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
-  const [refreshError, setRefreshError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
   const [creatingPlan, setCreatingPlan] = useState(false);
@@ -578,7 +585,12 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
   const [planDetailLoading, setPlanDetailLoading] = useState(false);
   const [planDetailError, setPlanDetailError] = useState<string | null>(null);
   const [planDetailRefreshing, setPlanDetailRefreshing] = useState(false);
-  const [planDetailRefreshError, setPlanDetailRefreshError] = useState<string | null>(null);
+  // Bumped by the `planDetailRefreshError` toast's retry action — a
+  // functional `setState` updater has stable identity across renders, so
+  // this needs no ref to stay "fresh": the effect below re-derives from
+  // whatever `selectedPlanId` currently is when it re-runs, rather than the
+  // stale one captured when the toast was built (Fix round 1, see plan doc).
+  const [planDetailReloadKey, setPlanDetailReloadKey] = useState(0);
   const loadedPlanIdRef = useRef<string | null>(null);
 
   const [updatingPlanStatus, setUpdatingPlanStatus] = useState(false);
@@ -596,7 +608,9 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
   const [paymentsLoading, setPaymentsLoading] = useState(false);
   const [paymentsError, setPaymentsError] = useState<string | null>(null);
   const [paymentsRefreshing, setPaymentsRefreshing] = useState(false);
-  const [paymentsRefreshError, setPaymentsRefreshError] = useState<string | null>(null);
+  // Same rationale as `planDetailReloadKey` above: the `paymentsRefreshError`
+  // toast's retry bumps this instead of closing over a ref.
+  const [paymentsReloadKey, setPaymentsReloadKey] = useState(0);
   const loadedPaymentsPlanIdRef = useRef<string | null>(null);
   // Idempotency-Key for the in-progress abono. Minted when the form opens
   // (openPaymentForm) and rotated after a SUCCESSFUL submit, so every retry of
@@ -660,7 +674,6 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
         setPlans(plansData);
         setCatalogItems(catalogData);
         setLoadError(null);
-        setRefreshError(null);
         setHasLoadedOnce(true);
       } catch (err) {
         if (cancelled) return;
@@ -668,7 +681,11 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
         if (isInitialLoad) {
           setLoadError(message);
         } else {
-          setRefreshError(copy.genericRefreshError);
+          // Retry re-triggers this same effect (dep below) rather than
+          // closing over a ref — a functional `setState` updater has stable
+          // identity, so it can't go stale even if `token`/`patientId`
+          // change again before the toast is dismissed (Fix round 1).
+          notifyError(copy.genericRefreshError, { onRetry: () => setReloadKey((k) => k + 1) });
         }
       } finally {
         if (!cancelled) {
@@ -767,10 +784,18 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
     return listPlans(token, patientId)
       .then((data) => {
         setPlans(data);
-        setRefreshError(null);
       })
       .catch((err) => {
-        setRefreshError(err instanceof ApiError ? err.message : copy.genericRefreshError);
+        // The toast's `onRetry` is built once inside this `catch` and can sit
+        // on screen across renders. Bumping `reloadKey` (a functional
+        // `setState` updater, stable identity) re-triggers the mount effect
+        // above instead of closing over `refreshPlansInPlace` directly — a
+        // ref-based guard was tried first but writing `ref.current` during
+        // render trips this project's `react-hooks/refs` lint (Fix round 1;
+        // see the plan doc's "Global Constraints" for the accepted forms).
+        notifyError(err instanceof ApiError ? err.message : copy.genericRefreshError, {
+          onRetry: () => setReloadKey((k) => k + 1),
+        });
       })
       .finally(() => setRefreshing(false));
   }
@@ -822,10 +847,12 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
 
   // Selected plan's detail: a genuinely new plan id (tracked via
   // `loadedPlanIdRef`, not state) is an initial load — full blocking status,
-  // nothing to preserve from the previously-selected plan. Reloading the
-  // SAME plan (`planDetailReloadKey` isn't used — mutations call
-  // `refreshPlanDetail()` directly, see below) never hits this branch as a
-  // refresh; this effect only fires again when `selectedPlanId` changes.
+  // nothing to preserve from the previously-selected plan. Reloading the SAME
+  // plan happens two ways: mutations call `refreshPlanDetail()` directly
+  // (see below), and the `planDetailRefreshError` toast's retry bumps
+  // `planDetailReloadKey` instead — either way this effect only ever treats
+  // it as a background refresh (`isInitialLoad` stays false once a plan has
+  // loaded once), never as the initial blocking load.
   // `planDetail` is already cleared synchronously (during render, see the
   // `prevSelectedPlanId` block above) whenever `selectedPlanId` changes —
   // including to `null` — so this effect only needs to handle the "fetch a
@@ -848,14 +875,18 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
         setPlanDetail(data);
         loadedPlanIdRef.current = selectedPlanId;
         setPlanDetailError(null);
-        setPlanDetailRefreshError(null);
       } catch (err) {
         if (cancelled) return;
         const message = err instanceof ApiError ? err.message : copy.genericPlanDetailError;
         if (isInitialLoad) {
           setPlanDetailError(message);
         } else {
-          setPlanDetailRefreshError(copy.genericPlanDetailRefreshError);
+          // Retry bumps `planDetailReloadKey` (functional `setState`
+          // updater, stable identity) rather than closing over a ref — see
+          // `refreshPlanDetail`'s catch below for the full rationale.
+          notifyError(copy.genericPlanDetailRefreshError, {
+            onRetry: () => setPlanDetailReloadKey((k) => k + 1),
+          });
         }
       } finally {
         if (!cancelled) {
@@ -868,13 +899,17 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
     return () => {
       cancelled = true;
     };
-  }, [token, selectedPlanId]);
+    // `planDetailReloadKey` is a dep purely so the toast above can retry by
+    // bumping it — it re-runs this exact effect, which re-reads
+    // `selectedPlanId` fresh rather than a value closed over when the toast
+    // was built.
+  }, [token, selectedPlanId, planDetailReloadKey]);
 
   /**
-   * Re-fetches the selected plan's detail in place. Called directly (never
-   * via a reload-key bump) by every item/plan mutation below AND awaited by
-   * them before clearing their own busy flag — see the component doc
-   * comment for why (`AgendaView.handleStatusChange`'s fix).
+   * Re-fetches the selected plan's detail in place. Called directly by every
+   * item/plan mutation below AND awaited by them before clearing their own
+   * busy flag — see the component doc comment for why
+   * (`AgendaView.handleStatusChange`'s fix).
    */
   function refreshPlanDetail(): Promise<void> {
     if (!selectedPlanId) return Promise.resolve();
@@ -882,10 +917,18 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
     return getPlan(token, selectedPlanId)
       .then((data) => {
         setPlanDetail(data);
-        setPlanDetailRefreshError(null);
       })
       .catch((err) => {
-        setPlanDetailRefreshError(err instanceof ApiError ? err.message : copy.genericPlanDetailRefreshError);
+        // The toast's `onRetry` is built once inside this `catch` and can
+        // sit on screen across renders. Bumping `planDetailReloadKey`
+        // re-triggers the effect above (which re-reads `selectedPlanId`
+        // fresh) instead of closing over `refreshPlanDetail` directly — a
+        // ref-based guard was tried first but writing `ref.current` during
+        // render trips this project's `react-hooks/refs` lint (Fix round 1;
+        // see the plan doc's "Global Constraints" for the accepted forms).
+        notifyError(err instanceof ApiError ? err.message : copy.genericPlanDetailRefreshError, {
+          onRetry: () => setPlanDetailReloadKey((k) => k + 1),
+        });
       })
       .finally(() => setPlanDetailRefreshing(false));
   }
@@ -919,14 +962,18 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
         setPayments(paymentsData);
         loadedPaymentsPlanIdRef.current = selectedPlanId;
         setPaymentsError(null);
-        setPaymentsRefreshError(null);
       } catch (err) {
         if (cancelled) return;
         const message = err instanceof ApiError ? err.message : copy.genericBalanceError;
         if (isInitialLoad) {
           setPaymentsError(message);
         } else {
-          setPaymentsRefreshError(copy.genericBalanceRefreshError);
+          // Retry bumps `paymentsReloadKey` (functional `setState` updater,
+          // stable identity) rather than closing over a ref — see
+          // `refreshBalanceAndPayments`'s catch below for the full rationale.
+          notifyError(copy.genericBalanceRefreshError, {
+            onRetry: () => setPaymentsReloadKey((k) => k + 1),
+          });
         }
       } finally {
         if (!cancelled) {
@@ -939,7 +986,9 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
     return () => {
       cancelled = true;
     };
-  }, [token, selectedPlanId]);
+    // `paymentsReloadKey` is a dep purely so the toast above can retry by
+    // bumping it — same rationale as `planDetailReloadKey` above.
+  }, [token, selectedPlanId, paymentsReloadKey]);
 
   /**
    * Re-fetches the balance + abonos list in place. Called directly by
@@ -954,11 +1003,20 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
       .then(([balanceData, paymentsData]) => {
         setPlanBalance(balanceData);
         setPayments(paymentsData);
-        setPaymentsRefreshError(null);
         setPaymentPlanRefreshSignal((n) => n + 1);
       })
       .catch((err) => {
-        setPaymentsRefreshError(err instanceof ApiError ? err.message : copy.genericBalanceRefreshError);
+        // The toast's `onRetry` is built once inside this `catch` and can
+        // sit on screen across renders. Bumping `paymentsReloadKey`
+        // re-triggers the effect above (which re-reads `selectedPlanId`
+        // fresh) instead of closing over `refreshBalanceAndPayments`
+        // directly — a ref-based guard was tried first but writing
+        // `ref.current` during render trips this project's `react-hooks/refs`
+        // lint (Fix round 1; see the plan doc's "Global Constraints" for the
+        // accepted forms).
+        notifyError(err instanceof ApiError ? err.message : copy.genericBalanceRefreshError, {
+          onRetry: () => setPaymentsReloadKey((k) => k + 1),
+        });
       })
       .finally(() => setPaymentsRefreshing(false));
   }
@@ -1158,16 +1216,7 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
   }
 
   if (loadError) {
-    return (
-      <div className="flex flex-col items-start gap-3">
-        <p role="alert" className="text-sm text-danger">
-          {loadError}
-        </p>
-        <Button type="button" variant="outline" onClick={() => setReloadKey((k) => k + 1)}>
-          {copy.retry}
-        </Button>
-      </div>
-    );
+    return <SectionError description={loadError} onRetry={() => setReloadKey((k) => k + 1)} />;
   }
 
   const selectedPlan = plans.find((p) => p.id === selectedPlanId) ?? null;
@@ -1178,16 +1227,6 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
         <p role="status" aria-live="polite" className="text-xs font-medium text-muted">
           {copy.refreshing}
         </p>
-      )}
-      {refreshError && (
-        <div className="flex items-center gap-3">
-          <p role="alert" className="text-xs text-danger">
-            {refreshError}
-          </p>
-          <Button variant="outline" size="sm" onClick={refreshPlansInPlace}>
-            {copy.retry}
-          </Button>
-        </div>
       )}
 
       <Card>
@@ -1208,11 +1247,7 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
           </div>
         </CardHeader>
         <CardContent className="flex flex-col gap-4">
-          {createPlanError && (
-            <p role="alert" className="text-sm text-danger">
-              {createPlanError}
-            </p>
-          )}
+          {createPlanError && <InlineError>{createPlanError}</InlineError>}
           {planCreated && !createPlanError && (
             <p role="status" className="text-sm font-medium text-primary">
               {copy.planCreated}
@@ -1282,16 +1317,7 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
                 <Skeleton className="h-16 w-full rounded-lg" />
               </div>
             )}
-            {planDetailError && (
-              <div className="flex flex-col items-start gap-3">
-                <p role="alert" className="text-sm text-danger">
-                  {planDetailError}
-                </p>
-                <Button type="button" variant="outline" onClick={refreshPlanDetail}>
-                  {copy.retry}
-                </Button>
-              </div>
-            )}
+            {planDetailError && <SectionError description={planDetailError} onRetry={refreshPlanDetail} />}
 
             {!planDetailLoading && !planDetailError && planDetail && (
               <>
@@ -1300,26 +1326,8 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
                     {copy.refreshing}
                   </p>
                 )}
-                {planDetailRefreshError && (
-                  <div className="flex items-center gap-3">
-                    <p role="alert" className="text-xs text-danger">
-                      {planDetailRefreshError}
-                    </p>
-                    <Button variant="outline" size="sm" onClick={refreshPlanDetail}>
-                      {copy.retry}
-                    </Button>
-                  </div>
-                )}
-                {planStatusError && (
-                  <p role="alert" className="text-sm text-danger">
-                    {planStatusError}
-                  </p>
-                )}
-                {itemActionError && (
-                  <p role="alert" className="text-sm text-danger">
-                    {itemActionError}
-                  </p>
-                )}
+                {planStatusError && <InlineError>{planStatusError}</InlineError>}
+                {itemActionError && <InlineError>{itemActionError}</InlineError>}
 
                 <ItemsTable
                   items={planDetail.items ?? []}
@@ -1353,14 +1361,7 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
                     </p>
                   )}
                   {paymentsError && (
-                    <div className="flex flex-col items-start gap-3">
-                      <p role="alert" className="text-sm text-danger">
-                        {paymentsError}
-                      </p>
-                      <Button type="button" variant="outline" onClick={refreshBalanceAndPayments}>
-                        {copy.retry}
-                      </Button>
-                    </div>
+                    <SectionError description={paymentsError} onRetry={refreshBalanceAndPayments} />
                   )}
 
                   {!paymentsLoading && !paymentsError && planBalance && (
@@ -1370,21 +1371,7 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
                           {copy.refreshing}
                         </p>
                       )}
-                      {paymentsRefreshError && (
-                        <div className="flex items-center gap-3">
-                          <p role="alert" className="text-xs text-danger">
-                            {paymentsRefreshError}
-                          </p>
-                          <Button variant="outline" size="sm" onClick={refreshBalanceAndPayments}>
-                            {copy.retry}
-                          </Button>
-                        </div>
-                      )}
-                      {paymentActionError && (
-                        <p role="alert" className="text-sm text-danger">
-                          {paymentActionError}
-                        </p>
-                      )}
+                      {paymentActionError && <InlineError>{paymentActionError}</InlineError>}
 
                       <div className="grid gap-3 sm:grid-cols-3">
                         <div className="rounded-lg border border-border p-3">
@@ -1594,16 +1581,8 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
                       />
                     </FormField>
 
-                    {addItemValidationError && (
-                      <p role="alert" className="text-sm text-danger">
-                        {addItemValidationError}
-                      </p>
-                    )}
-                    {addItemError && (
-                      <p role="alert" className="text-sm text-danger">
-                        {addItemError}
-                      </p>
-                    )}
+                    {addItemValidationError && <InlineError>{addItemValidationError}</InlineError>}
+                    {addItemError && <InlineError>{addItemError}</InlineError>}
 
                     <Button type="submit" disabled={addItemSubmitting} className="self-start">
                       {addItemSubmitting ? copy.addItemSubmitting : copy.addItemSubmit}

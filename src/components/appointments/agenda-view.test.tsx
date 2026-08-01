@@ -1,6 +1,8 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AgendaView } from './agenda-view';
+import { Toaster } from '@/components/errors/toaster';
+import { ApiError } from '@/lib/api/client';
 import { localDayRange, localWeekRange } from '@/lib/appointments/day-range';
 import { createAppointment, listAppointments, updateAppointment } from '@/lib/appointments/appointments-api';
 import { listStaff } from '@/lib/appointments/staff-api';
@@ -107,6 +109,25 @@ describe('AgendaView', () => {
     mockedListStaff.mockReset();
     mockedListPatients.mockReset();
     mockedListPatients.mockResolvedValue(patientsPage);
+  });
+
+  it('cuando falla la carga de profesionales, el filtro se sustituye por el error en su sitio', async () => {
+    mockedListStaff.mockRejectedValueOnce(new ApiError(500, 'Error del servidor'));
+    mockedListAppointments.mockResolvedValue([]);
+
+    render(<AgendaView token="tok" />);
+
+    // El error ocupa el lugar del filtro, no una franja debajo. Se busca por
+    // texto (no `findByRole('status')` a secas): el spinner de carga del
+    // calendario también usa `role="status"` y aparece/desaparece en la
+    // misma ventana, así que una consulta de rol sin más es una carrera.
+    const region = await screen.findByText(/no se pudieron cargar/i);
+    expect(region.closest('[role="status"]')).not.toBeNull();
+    expect(screen.queryByLabelText('Profesional')).not.toBeInTheDocument();
+
+    // Y no interrumpe: la agenda sigue en pantalla y no hay alerta asertiva.
+    expect(screen.getByRole('button', { name: /nueva cita/i })).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
   });
 
   it('defaults the provider filter to "Todos" (all providers) and offers each staff member as an option', async () => {
@@ -319,6 +340,58 @@ describe('AgendaView', () => {
     expect(within(table).getByRole<HTMLSelectElement>('combobox').value).toBe('CONFIRMED');
   });
 
+  it('el reintento del toast de refresh usa el filtro vigente al pulsar "Reintentar", no el capturado cuando el refresh falló (fix ronda 1: closure obsoleto)', async () => {
+    mockedListStaff.mockResolvedValue(staff);
+    mockedUpdateAppointment.mockResolvedValue({ ...apt1, status: 'CONFIRMED' });
+
+    let callCount = 0;
+    mockedListAppointments.mockImplementation(() => {
+      callCount += 1;
+      // #1 mount (month), #2 switch to Día: resolve regardless of filter.
+      if (callCount <= 2) return Promise.resolve([apt1]);
+      // #3: the in-place refresh right after the status PATCH — fails while
+      // providerId is still '' (todos). This is what builds the toast.
+      if (callCount === 3) return Promise.reject(new Error('boom'));
+      // #4: the user narrows the filter to staff-2 WHILE the toast is still
+      // up — an ordinary fetch for that provider.
+      if (callCount === 4) return Promise.resolve([]);
+      // #5: clicking the toast's "Reintentar" — must replay with the
+      // *current* filter (staff-2), not '' from when the toast was built.
+      return Promise.resolve([apt2]);
+    });
+
+    const user = userEvent.setup();
+    render(
+      <>
+        <AgendaView token="tok" />
+        <Toaster />
+      </>,
+    );
+
+    await user.click(screen.getByRole('button', { name: /^día$/i }));
+    const table = await screen.findByRole('table', { name: /agenda del día/i });
+    const statusSelect = within(table).getByRole<HTMLSelectElement>('combobox');
+
+    await user.selectOptions(statusSelect, 'CONFIRMED');
+
+    // The failed in-place refresh surfaces as a toast with a retry action.
+    const retryButton = await screen.findByRole('button', { name: 'Reintentar' });
+    await waitFor(() => expect(callCount).toBe(3));
+
+    // Narrow the provider filter while the toast is still on screen — the
+    // stale-closure trap: the toast's `onRetry` was built during the failed
+    // refresh, when `providerId` was still ''.
+    const providerSelect = screen.getByLabelText<HTMLSelectElement>(/^profesional$/i);
+    await user.selectOptions(providerSelect, 'staff-2');
+    await waitFor(() => expect(callCount).toBe(4));
+
+    await user.click(retryButton);
+
+    await waitFor(() => expect(callCount).toBe(5));
+    const lastCallOpts = mockedListAppointments.mock.calls[4][1];
+    expect(lastCallOpts).toMatchObject({ providerId: 'staff-2' });
+  });
+
   it('opens the "Nueva cita" modal and pre-fills AppointmentForm\'s date with the selected day', async () => {
     mockedListStaff.mockResolvedValue(staff);
     mockedListAppointments.mockResolvedValue([]);
@@ -373,6 +446,48 @@ describe('AgendaView', () => {
 
     expect(screen.getByRole('button', { name: /^semana$/i })).toHaveAttribute('aria-pressed', 'true');
     expect(await screen.findByLabelText(/agenda de la semana/i)).toBeInTheDocument();
+  });
+
+  it('shows a SectionError with a retry button (not a bare alert) when Semana fails to load, and the retry re-fetches (escalón 1)', async () => {
+    mockedListStaff.mockResolvedValue(staff);
+    mockedListAppointments.mockResolvedValueOnce([]); // month mount
+    const user = userEvent.setup();
+
+    render(<AgendaView token="tok" />);
+    await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
+
+    mockedListAppointments.mockRejectedValueOnce(new ApiError(500, 'Error del servidor'));
+    await user.click(screen.getByRole('button', { name: /^semana$/i }));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('Error del servidor');
+    // `SectionError` renders its own retry button next to the message — no
+    // naked red text with nothing to press.
+    const retryButton = within(alert).getByRole('button', { name: /reintentar/i });
+
+    mockedListAppointments.mockResolvedValueOnce([]);
+    await user.click(retryButton);
+
+    await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
+    expect(await screen.findByLabelText(/agenda de la semana/i)).toBeInTheDocument();
+  });
+
+  it('shows a SectionError with a retry button when Mes (the default view) fails to load, and the retry re-fetches (fix ronda 1: Mes/Día no tenían onRetry)', async () => {
+    mockedListStaff.mockResolvedValue(staff);
+    mockedListAppointments.mockRejectedValueOnce(new ApiError(500, 'Error del servidor'));
+    const user = userEvent.setup();
+
+    render(<AgendaView token="tok" />);
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('Error del servidor');
+    const retryButton = within(alert).getByRole('button', { name: /reintentar/i });
+
+    mockedListAppointments.mockResolvedValueOnce([]);
+    await user.click(retryButton);
+
+    await waitFor(() => expect(mockedListAppointments).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
   });
 
   it('clicking a day header in Semana view switches back to Día view with that date selected', async () => {
@@ -470,7 +585,10 @@ describe('AgendaView', () => {
     expect(statusSelect).toBeDisabled();
 
     rejectPatch(new Error('boom'));
-    await waitFor(() => expect(screen.getByRole('alert')).toBeInTheDocument());
+    // Sync point: the status failure is now a toast (rung 3), not a
+    // role="alert" in this tree — wait on the select re-enabling instead,
+    // which only happens once the failure has actually landed.
+    await waitFor(() => expect(statusSelect).not.toBeDisabled());
 
     // After the failure: re-enabled, and still showing the real status —
     // no optimistic leak.

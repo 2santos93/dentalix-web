@@ -3,6 +3,7 @@ import { CalendarDays, ChevronDown } from 'lucide-react';
 import type { Appointment, AppointmentStatus } from '@/lib/appointments/appointments-api';
 import { StatusBadge, STATUS_BADGE_CLASSES, formatTimeRange, patientLabel } from './appointment-display';
 import { Skeleton } from '@/components/ui/skeleton';
+import { SectionError } from '@/components/errors/section-error';
 
 // Copy as constants (i18n-ready, es-first) — matches patients-table.tsx /
 // clinical-entries-list.tsx convention until next-intl wiring lands.
@@ -45,6 +46,8 @@ interface DayAgendaProps {
   loading: boolean;
   /** Error message to show instead of the list/empty state, if loading failed. */
   error?: string | null;
+  /** Retries the load that produced `error` — renders as `SectionError`'s own retry button. */
+  onRetry?: () => void;
   /**
    * Optional `patientId -> fullName` lookup (e.g. built from `GET /patients`
    * by the page in Task 5). Falls back to the raw `patientId` when a
@@ -122,6 +125,7 @@ export function DayAgenda({
   appointments,
   loading,
   error,
+  onRetry,
   patientNames,
   onStatusChange,
   updatingId,
@@ -145,14 +149,7 @@ export function DayAgenda({
   }
 
   if (error) {
-    return (
-      <div
-        role="alert"
-        className="rounded-xl border border-danger/30 bg-danger/5 px-4 py-3 text-sm font-medium text-danger"
-      >
-        {error || copy.genericLoadError}
-      </div>
-    );
+    return <SectionError description={error || copy.genericLoadError} onRetry={onRetry} />;
   }
 
   if (appointments.length === 0) {

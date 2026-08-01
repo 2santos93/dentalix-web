@@ -10,7 +10,7 @@ import { PatientsTable } from '@/components/organisms/patients-table';
 import { PageHeader } from '@/components/molecules/page-header';
 import { Pagination } from '@/components/molecules/pagination';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
+import { SectionError } from '@/components/errors/section-error';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
@@ -18,7 +18,7 @@ const copy = {
   title: 'Pacientes',
   description: 'Gestiona la base de pacientes de tu clínica.',
   newPatient: 'Nuevo paciente',
-  genericError: 'No pudimos cargar los pacientes. Intenta de nuevo.',
+  genericError: 'No pudimos cargar los pacientes.',
   retry: 'Reintentar',
   checkingSession: 'Verificando sesión…',
 };
@@ -109,23 +109,15 @@ export default function PatientsPage() {
       />
 
       {error ? (
-        <Card>
-          <CardContent className="flex flex-col items-start gap-3 p-6">
-            <p role="alert" className="text-sm text-danger">
-              {error}
-            </p>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setLoading(true);
-                setError(null);
-                setRetryCount((c) => c + 1);
-              }}
-            >
-              {copy.retry}
-            </Button>
-          </CardContent>
-        </Card>
+        <SectionError
+          description={error}
+          onRetry={() => {
+            setLoading(true);
+            setError(null);
+            setRetryCount((c) => c + 1);
+          }}
+          retryLabel={copy.retry}
+        />
       ) : (
         <>
           <PatientsTable patients={patients} loading={loading} />

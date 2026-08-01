@@ -1,6 +1,7 @@
 'use client';
 import type { Appointment } from '@/lib/appointments/appointments-api';
 import { StatusBadge, formatTimeRange, patientLabel } from './appointment-display';
+import { SectionError } from '@/components/errors/section-error';
 
 // Copy as constants (i18n-ready, es-first) — matches day-agenda.tsx's convention.
 const copy = {
@@ -43,6 +44,15 @@ interface WeekAgendaProps {
   loading: boolean;
   /** Error message to show instead of the grid, if loading failed. */
   error?: string | null;
+  /**
+   * Retries the load that produced `error` — renders as `SectionError`'s own
+   * retry button. NOT wired today: `WeekAgenda` itself isn't rendered
+   * anywhere in the app (`agenda-view.tsx`'s Semana view uses `WeekTimeGrid`
+   * instead, whose hand-rolled error branch has its own retry) — this prop
+   * only exists for parity with `DayAgenda`/`MonthAgenda` and is exercised by
+   * this component's own test, not by a real caller.
+   */
+  onRetry?: () => void;
   /** Optional `patientId -> fullName` lookup — see `DayAgenda`'s prop of the same name. */
   patientNames?: Record<string, string>;
   /** Called with a day's `YYYY-MM-DD` local date when its header is clicked. */
@@ -62,6 +72,7 @@ export function WeekAgenda({
   weekStart,
   loading,
   error,
+  onRetry,
   patientNames,
   onSelectDay,
 }: WeekAgendaProps) {
@@ -74,11 +85,7 @@ export function WeekAgenda({
   }
 
   if (error) {
-    return (
-      <p role="alert" className="text-sm text-danger">
-        {error || copy.genericLoadError}
-      </p>
-    );
+    return <SectionError description={error || copy.genericLoadError} onRetry={onRetry} />;
   }
 
   const dates = weekDates(weekStart);

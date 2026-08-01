@@ -1,6 +1,8 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { TreatmentPlansTab } from './treatment-plans-tab';
+import { ApiError } from '@/lib/api/client';
+import { Toaster } from '@/components/errors/toaster';
 import {
   addItem,
   createPlan,
@@ -23,6 +25,7 @@ import { listCatalogItems } from '@/lib/odontogram/catalog-api';
 import { getPatient, type Patient } from '@/lib/patients/patients-api';
 import { fetchClinicName } from '@/lib/clinic-branding';
 import { listCurrencies } from '@/lib/reference/currencies-api';
+import { getPaymentPlan } from '@/lib/payment-plans/payment-plan-api';
 
 // NOTE: jest.mock's string literal is not alias-rewritten by the SWC
 // transform (only real `import`/`require` specifiers are) — use a relative
@@ -45,6 +48,15 @@ jest.mock('../../lib/payments/payments-api', () => ({
 }));
 jest.mock('../../lib/odontogram/catalog-api', () => ({
   listCatalogItems: jest.fn(),
+}));
+// PaymentPlanSection (a child rendered whenever the balance loads) fetches
+// its own payment plan — unmocked, it hits the real (unavailable) network
+// and pollutes the DOM with its own error alert. Mock it to the normal
+// "no active plan" (`null`) response so it renders its empty state instead.
+jest.mock('../../lib/payment-plans/payment-plan-api', () => ({
+  getPaymentPlan: jest.fn(),
+  createPaymentPlan: jest.fn(),
+  deletePaymentPlan: jest.fn(),
 }));
 // CurrencySelect (Task 10, wired in this component per Task 11) fetches its
 // own options via `listCurrencies` — mock it here so the abono-currency and
@@ -75,6 +87,7 @@ const mockedVoidPayment = voidPayment as jest.MockedFunction<typeof voidPayment>
 const mockedGetPatient = getPatient as jest.MockedFunction<typeof getPatient>;
 const mockedFetchClinicName = fetchClinicName as jest.MockedFunction<typeof fetchClinicName>;
 const mockedListCurrencies = listCurrencies as jest.MockedFunction<typeof listCurrencies>;
+const mockedGetPaymentPlan = getPaymentPlan as jest.MockedFunction<typeof getPaymentPlan>;
 
 const catalog = [
   {
@@ -247,6 +260,11 @@ describe('TreatmentPlansTab', () => {
       { code: 'USD', name: 'Dólar estadounidense', symbol: '$' },
       { code: 'COP', name: 'Peso colombiano', symbol: '$' },
     ]);
+    mockedGetPaymentPlan.mockReset();
+    // Default: no active payment plan — PaymentPlanSection renders its empty
+    // state instead of erroring, same rationale as the balance/patient
+    // defaults below.
+    mockedGetPaymentPlan.mockResolvedValue(null);
     // Default: empty balance/no abonos, so tests that don't exercise the
     // payments block (most of the existing item/plan tests below) don't hang
     // on an unresolved mock.
@@ -639,5 +657,236 @@ describe('TreatmentPlansTab', () => {
     const dialog = await screen.findByRole('dialog', { name: /comprobante de abono/i });
     expect(within(dialog).queryByText('Clínica Sonrisa')).not.toBeInTheDocument();
     expect(within(dialog).getByText('Ana García')).toBeInTheDocument();
+  });
+
+  // Error-states ladder (Task 8): each `text-danger` site classified by what
+  // the user can still do — see task-8-report.md for the full table.
+  describe('error states ladder', () => {
+    it('cuando no hay planes que mostrar, usa el estado de sección con reintento (escalón 1: loadError)', async () => {
+      mockedListPlans.mockRejectedValueOnce(new ApiError(500, 'Error del servidor'));
+
+      render(<TreatmentPlansTab patientId="pat-1" token="tok" />);
+
+      const alert = await screen.findByRole('alert');
+      expect(alert).toHaveTextContent('Error del servidor');
+      expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument();
+      // Rung-1 copy with its own retry affordance drops "Intenta de nuevo."
+      expect(screen.queryByText(/intenta de nuevo/i)).not.toBeInTheDocument();
+    });
+
+    it('un refresh en segundo plano fallido de los planes se muestra como un toast, no como una franja roja (escalón 3: refreshError)', async () => {
+      mockedListPlans
+        // Initial mount load.
+        .mockResolvedValueOnce([plan1])
+        // `refreshPlansInPlace()`, called after "Nuevo plan" reuses the
+        // existing empty DRAFT below — this is what we rig to fail.
+        .mockRejectedValueOnce(new ApiError(500, 'No se pudo refrescar'));
+      mockedGetPlan
+        // Initial plan-detail load (has items, so the table renders).
+        .mockResolvedValueOnce(plan1Detail)
+        // `findReusableDraftPlan`'s emptiness check on plan1 — reports it
+        // empty so "Nuevo plan" takes the reuse path (straight into
+        // `refreshPlansInPlace()`) instead of POSTing a new plan.
+        .mockResolvedValueOnce({ ...plan1, items: [], total: 0 });
+
+      const user = userEvent.setup();
+      render(
+        <>
+          <TreatmentPlansTab patientId="pat-1" token="tok" />
+          <Toaster />
+        </>,
+      );
+      await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+
+      // No inline red strip for a background refresh failure.
+      expect(screen.queryAllByRole('alert')).toHaveLength(0);
+
+      await user.click(screen.getByRole('button', { name: /^nuevo plan$/i }));
+
+      const toastText = await screen.findByText('No se pudo refrescar');
+      expect(toastText.closest('[role="alert"]')).toBeNull();
+      expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument();
+      expect(screen.queryByText(/intenta de nuevo/i)).not.toBeInTheDocument();
+
+      // Fix round 1: the toast's retry must trigger a genuinely fresh fetch
+      // (via `reloadKey`, not a stale captured closure) — not just show a
+      // button that does nothing.
+      mockedListPlans.mockResolvedValueOnce([plan1]);
+      await user.click(screen.getByRole('button', { name: 'Reintentar' }));
+      await waitFor(() => expect(mockedListPlans).toHaveBeenCalledTimes(3));
+    });
+
+    it('crear un plan que falla se muestra junto al botón que se acaba de pulsar (escalón 4: createPlanError)', async () => {
+      mockedListPlans.mockResolvedValueOnce([]);
+      mockedCreatePlan.mockRejectedValueOnce(new ApiError(500, 'No se pudo crear'));
+
+      const user = userEvent.setup();
+      render(<TreatmentPlansTab patientId="pat-1" token="tok" />);
+      await screen.findByText(/todavía no tiene un plan de tratamiento/i);
+
+      await user.click(screen.getByRole('button', { name: /^nuevo plan$/i }));
+
+      const alert = await screen.findByRole('alert');
+      expect(alert).toHaveTextContent('No se pudo crear');
+    });
+
+    it('el detalle del plan que falla al cargar usa el estado de sección con reintento (escalón 1: planDetailError)', async () => {
+      mockedListPlans.mockResolvedValue([plan1]);
+      mockedGetPlan.mockRejectedValueOnce(new ApiError(500, 'No se pudo cargar el plan'));
+
+      render(<TreatmentPlansTab patientId="pat-1" token="tok" />);
+
+      const alert = await screen.findByRole('alert');
+      expect(alert).toHaveTextContent('No se pudo cargar el plan');
+      expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument();
+      expect(screen.queryByText(/intenta de nuevo/i)).not.toBeInTheDocument();
+    });
+
+    it('un refresh en segundo plano fallido del detalle del plan se muestra como un toast (escalón 3: planDetailRefreshError)', async () => {
+      mockedListPlans.mockResolvedValue([plan1]);
+      mockedUpdatePlan.mockResolvedValue({ ...plan1, status: 'ACCEPTED' });
+      mockedGetPlan
+        .mockResolvedValueOnce(plan1Detail)
+        .mockRejectedValueOnce(new ApiError(500, 'No se pudo refrescar el plan'));
+
+      const user = userEvent.setup();
+      render(
+        <>
+          <TreatmentPlansTab patientId="pat-1" token="tok" />
+          <Toaster />
+        </>,
+      );
+      await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+
+      const planStatusSelect = screen.getByLabelText<HTMLSelectElement>(/^estado del plan$/i);
+      await user.selectOptions(planStatusSelect, 'ACCEPTED');
+
+      const toastText = await screen.findByText('No se pudo refrescar el plan');
+      expect(toastText.closest('[role="alert"]')).toBeNull();
+      expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument();
+
+      // Fix round 1: retry must bump `planDetailReloadKey` and genuinely
+      // re-fetch, not replay a stale closure.
+      mockedGetPlan.mockResolvedValueOnce({ ...plan1Detail, status: 'ACCEPTED' });
+      await user.click(screen.getByRole('button', { name: 'Reintentar' }));
+      await waitFor(() => expect(mockedGetPlan).toHaveBeenCalledTimes(3));
+    });
+
+    it('un cambio de estado del plan que falla se muestra en línea (escalón 4: planStatusError)', async () => {
+      mockedListPlans.mockResolvedValue([plan1]);
+      mockedGetPlan.mockResolvedValue(plan1Detail);
+      mockedUpdatePlan.mockRejectedValueOnce(new ApiError(500, 'No se pudo cambiar el estado'));
+
+      const user = userEvent.setup();
+      render(<TreatmentPlansTab patientId="pat-1" token="tok" />);
+      await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+
+      const planStatusSelect = screen.getByLabelText<HTMLSelectElement>(/^estado del plan$/i);
+      await user.selectOptions(planStatusSelect, 'ACCEPTED');
+
+      const alert = await screen.findByText('No se pudo cambiar el estado');
+      expect(alert.closest('[role="alert"]')).not.toBeNull();
+    });
+
+    it('quitar un ítem que falla se muestra en línea, junto a la tabla (escalón 4: itemActionError)', async () => {
+      mockedListPlans.mockResolvedValue([plan1]);
+      mockedGetPlan.mockResolvedValue(plan1Detail);
+      mockedRemoveItem.mockRejectedValueOnce(new ApiError(500, 'No se pudo quitar'));
+
+      const user = userEvent.setup();
+      render(<TreatmentPlansTab patientId="pat-1" token="tok" />);
+      const table = await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+      const row = within(table).getByText('11').closest('tr') as HTMLTableRowElement;
+
+      await user.click(within(row).getByRole('button', { name: /quitar/i }));
+
+      const alert = await screen.findByText('No se pudo quitar');
+      expect(alert.closest('[role="alert"]')).not.toBeNull();
+    });
+
+    it('el saldo/abonos que fallan al cargar usan el estado de sección con reintento (escalón 1: paymentsError)', async () => {
+      mockedListPlans.mockResolvedValue([plan1]);
+      mockedGetPlan.mockResolvedValue(plan1Detail);
+      mockedGetPlanBalance.mockRejectedValueOnce(new ApiError(500, 'No se pudo cargar el saldo'));
+
+      render(<TreatmentPlansTab patientId="pat-1" token="tok" />);
+      await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+
+      const alert = await screen.findByRole('alert');
+      expect(alert).toHaveTextContent('No se pudo cargar el saldo');
+      expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument();
+      expect(screen.queryByText(/intenta de nuevo/i)).not.toBeInTheDocument();
+    });
+
+    it('un refresh en segundo plano fallido del saldo/abonos se muestra como un toast (escalón 3: paymentsRefreshError)', async () => {
+      mockedListPlans.mockResolvedValue([plan1]);
+      mockedGetPlan.mockResolvedValue(plan1Detail);
+      mockedVoidPayment.mockResolvedValue(undefined);
+      mockedGetPlanBalance
+        .mockResolvedValueOnce(balance1)
+        .mockRejectedValueOnce(new ApiError(500, 'No se pudo refrescar el saldo'));
+      mockedListPayments.mockResolvedValue([payment1]);
+
+      const user = userEvent.setup();
+      render(
+        <>
+          <TreatmentPlansTab patientId="pat-1" token="tok" />
+          <Toaster />
+        </>,
+      );
+      const paymentsTable = await screen.findByRole('table', { name: /abonos del plan de tratamiento/i });
+      const row = within(paymentsTable)
+        .getByText(expectedCurrencyText(payment1.amount))
+        .closest('tr') as HTMLTableRowElement;
+
+      await user.click(within(row).getByRole('button', { name: /anular/i }));
+
+      const toastText = await screen.findByText('No se pudo refrescar el saldo');
+      expect(toastText.closest('[role="alert"]')).toBeNull();
+      expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument();
+
+      // Fix round 1: retry must bump `paymentsReloadKey` and genuinely
+      // re-fetch, not replay a stale closure.
+      mockedGetPlanBalance.mockResolvedValueOnce(balance1);
+      await user.click(screen.getByRole('button', { name: 'Reintentar' }));
+      await waitFor(() => expect(mockedGetPlanBalance).toHaveBeenCalledTimes(3));
+    });
+
+    it('anular un abono que falla se muestra en línea (escalón 4: paymentActionError)', async () => {
+      mockedListPlans.mockResolvedValue([plan1]);
+      mockedGetPlan.mockResolvedValue(plan1Detail);
+      mockedGetPlanBalance.mockResolvedValue(balance1);
+      mockedListPayments.mockResolvedValue([payment1]);
+      mockedVoidPayment.mockRejectedValueOnce(new ApiError(500, 'No se pudo anular'));
+
+      const user = userEvent.setup();
+      render(<TreatmentPlansTab patientId="pat-1" token="tok" />);
+      const paymentsTable = await screen.findByRole('table', { name: /abonos del plan de tratamiento/i });
+      const row = within(paymentsTable)
+        .getByText(expectedCurrencyText(payment1.amount))
+        .closest('tr') as HTMLTableRowElement;
+
+      await user.click(within(row).getByRole('button', { name: /anular/i }));
+
+      const alert = await screen.findByText('No se pudo anular');
+      expect(alert.closest('[role="alert"]')).not.toBeNull();
+    });
+
+    it('agregar un ítem que falla en el backend se muestra en línea junto al formulario (escalón 4: addItemError)', async () => {
+      mockedListPlans.mockResolvedValue([plan1]);
+      mockedGetPlan.mockResolvedValue(plan1Detail);
+      mockedAddItem.mockRejectedValueOnce(new ApiError(400, 'Precio requerido'));
+
+      const user = userEvent.setup();
+      render(<TreatmentPlansTab patientId="pat-1" token="tok" />);
+      await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+
+      await user.type(screen.getByLabelText(/diente \(fdi\)/i), '16');
+      await user.selectOptions(screen.getByLabelText<HTMLSelectElement>(/^procedimiento$/i), 'cat-1');
+      await user.click(screen.getByRole('button', { name: /^agregar ítem$/i }));
+
+      const alert = await screen.findByText('Precio requerido');
+      expect(alert.closest('[role="alert"]')).not.toBeNull();
+    });
   });
 });

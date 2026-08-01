@@ -13,11 +13,13 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { FormField } from '@/components/molecules/form-field';
+import { SectionError } from '@/components/errors/section-error';
+import { InlineError } from '@/components/errors/inline-error';
 
 // Copy as constants (i18n-ready) — same convention as staff-view.tsx.
 const copy = {
   loading: 'Cargando perfil…',
-  loadError: 'No pudimos cargar tu perfil. Intenta de nuevo.',
+  loadError: 'No pudimos cargar tu perfil.',
   retry: 'Reintentar',
   nameLabel: 'Nombre completo',
   save: 'Guardar',
@@ -144,14 +146,11 @@ export function ProfileView({ token }: ProfileViewProps) {
   }
   if (loadError || !profile) {
     return (
-      <div className="flex flex-col items-start gap-3">
-        <p role="alert" className="text-sm text-danger">
-          {loadError}
-        </p>
-        <Button variant="outline" onClick={() => setReloadKey((k) => k + 1)}>
-          {copy.retry}
-        </Button>
-      </div>
+      <SectionError
+        description={loadError ?? copy.loadError}
+        onRetry={() => setReloadKey((k) => k + 1)}
+        retryLabel={copy.retry}
+      />
     );
   }
 
@@ -200,11 +199,7 @@ export function ProfileView({ token }: ProfileViewProps) {
               aria-label={copy.upload}
               onChange={handleUpload}
             />
-            {avatarError && (
-              <p role="alert" className="text-sm text-danger">
-                {avatarError}
-              </p>
-            )}
+            {avatarError && <InlineError>{avatarError}</InlineError>}
           </div>
         </div>
 
@@ -212,11 +207,7 @@ export function ProfileView({ token }: ProfileViewProps) {
           <FormField htmlFor="profile-name" label={copy.nameLabel}>
             <Input id="profile-name" value={name} onChange={(e) => setName(e.target.value)} required />
           </FormField>
-          {nameError && (
-            <p role="alert" className="text-sm text-danger">
-              {nameError}
-            </p>
-          )}
+          {nameError && <InlineError>{nameError}</InlineError>}
           <div>
             <Button type="submit" disabled={savingName}>
               {savingName ? copy.saving : copy.save}

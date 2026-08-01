@@ -9,19 +9,19 @@ import { getOdontogram, type ToothGroup, type ToothSurface } from '@/lib/odontog
 import { projectOdontogram } from '@/lib/odontogram/projection';
 import { listCatalogItems, type DentalCatalogItem } from '@/lib/odontogram/catalog-api';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Button } from '@/components/ui/button';
+import { SectionError } from '@/components/errors/section-error';
+import { notifyError } from '@/components/errors/notify';
 
 // Copy as constants (i18n-ready) — matches page.tsx's convention until
 // next-intl wiring lands.
 const copy = {
   odontogramLoading: 'Cargando odontograma…',
   odontogramRefreshing: 'Actualizando…',
-  odontogramGenericError: 'No pudimos cargar el odontograma. Intenta de nuevo.',
-  odontogramRefreshError: 'No pudimos actualizar el odontograma. Intenta de nuevo.',
-  catalogGenericError: 'No pudimos cargar el catálogo. Intenta de nuevo.',
+  odontogramGenericError: 'No pudimos cargar el odontograma.',
+  odontogramRefreshError: 'No pudimos actualizar el odontograma.',
+  catalogGenericError: 'No pudimos cargar el catálogo.',
   selectToothPrompt: 'Selecciona un diente para ver su historial y registrar un hallazgo o procedimiento.',
   toothHeading: (fdi: string) => `Diente ${fdi}`,
-  retry: 'Reintentar',
 };
 
 interface OdontogramTabProps {
@@ -50,9 +50,9 @@ interface OdontogramTabProps {
  * subtree (which used to steal focus off the just-clicked "Guardar" button
  * and defeated `timelineRefreshKey`'s refresh-without-unmount contract).
  * Likewise, a failed background refresh does NOT blank the already-loaded
- * chart/panel — it surfaces a small inline retry instead of the full-page
- * error, which is still reserved for a failed FIRST load (nothing to show
- * yet in that case).
+ * chart/panel — it surfaces a `notifyError` toast (with its own retry
+ * action) instead of the full-page `SectionError`, which is still reserved
+ * for a failed FIRST load (nothing to show yet in that case).
  */
 export function OdontogramTab({ token, patientId }: OdontogramTabProps) {
   const [toothGroups, setToothGroups] = useState<ToothGroup[]>([]);
@@ -61,7 +61,6 @@ export function OdontogramTab({ token, patientId }: OdontogramTabProps) {
   const [refreshing, setRefreshing] = useState(false);
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [refreshError, setRefreshError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
   const [selectedTooth, setSelectedTooth] = useState<string | null>(null);
@@ -87,7 +86,6 @@ export function OdontogramTab({ token, patientId }: OdontogramTabProps) {
         setToothGroups(groups);
         setCatalogItems(catalog);
         setLoadError(null);
-        setRefreshError(null);
         setHasLoadedOnce(true);
       } catch (err) {
         if (cancelled) return;
@@ -96,7 +94,7 @@ export function OdontogramTab({ token, patientId }: OdontogramTabProps) {
         if (isInitialLoad) {
           setLoadError(message);
         } else {
-          setRefreshError(copy.odontogramRefreshError);
+          notifyError(copy.odontogramRefreshError, { onRetry: () => setReloadKey((k) => k + 1) });
         }
       } finally {
         if (!cancelled) {
@@ -163,17 +161,7 @@ export function OdontogramTab({ token, patientId }: OdontogramTabProps) {
   }
 
   if (loadError) {
-    return (
-      <div
-        role="alert"
-        className="flex flex-col items-start gap-3 rounded-xl border border-danger/30 bg-danger/5 px-4 py-3"
-      >
-        <p className="text-sm font-medium text-danger">{loadError}</p>
-        <Button type="button" variant="outline" size="sm" onClick={() => setReloadKey((k) => k + 1)}>
-          {copy.retry}
-        </Button>
-      </div>
-    );
+    return <SectionError description={loadError} onRetry={() => setReloadKey((k) => k + 1)} />;
   }
 
   return (
@@ -182,21 +170,6 @@ export function OdontogramTab({ token, patientId }: OdontogramTabProps) {
         <p role="status" aria-live="polite" className="text-xs font-medium text-muted">
           {copy.odontogramRefreshing}
         </p>
-      )}
-
-      {refreshError && (
-        <div className="flex items-center gap-3">
-          <p role="alert" className="text-xs text-danger">
-            {refreshError}
-          </p>
-          <button
-            type="button"
-            onClick={() => setReloadKey((k) => k + 1)}
-            className="rounded-md border border-border px-2 py-1 text-xs font-medium text-ink"
-          >
-            {copy.retry}
-          </button>
-        </div>
       )}
 
       <OdontogramChart

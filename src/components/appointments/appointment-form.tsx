@@ -20,6 +20,8 @@ import {
   DialogDescription,
 } from '@/components/ui/dialog';
 import { PatientForm } from '@/components/patients/patient-form';
+import { FieldError } from '@/components/errors/field-error';
+import { InlineError } from '@/components/errors/inline-error';
 
 // Copy as constants (i18n-ready, es-first) — matches patient-form.tsx /
 // tooth-record-panel.tsx convention until next-intl wiring lands.
@@ -44,9 +46,8 @@ const copy = {
   reasonLabel: 'Motivo (opcional)',
   submit: 'Agendar cita',
   submitting: 'Guardando…',
-  retry: 'Reintentar',
-  genericPatientsError: 'No pudimos cargar los pacientes. Intenta de nuevo.',
-  genericStaffError: 'No pudimos cargar los profesionales. Intenta de nuevo.',
+  patientsFieldError: 'No se pudieron cargar',
+  staffFieldError: 'No se pudieron cargar',
   genericSaveError: 'No pudimos crear la cita. Intenta de nuevo.',
   validationMissingFields: 'Completa paciente, profesional, fecha y horas.',
   validationEndAfterStart: 'La hora de fin debe ser posterior a la hora de inicio.',
@@ -132,7 +133,9 @@ export function AppointmentForm({
 }: AppointmentFormProps) {
   const [patients, setPatients] = useState<Patient[]>([]);
   const [patientsLoading, setPatientsLoading] = useState(true);
-  const [patientsError, setPatientsError] = useState<string | null>(null);
+  // Truthy is all that's needed — the rendered `FieldError` shows a fixed
+  // short label (`copy.patientsFieldError`), never the server's message.
+  const [patientsError, setPatientsError] = useState(false);
   const [patientsReloadKey, setPatientsReloadKey] = useState(0);
   const [patientQuery, setPatientQuery] = useState('');
   const debouncedPatientQuery = useDebouncedValue(patientQuery, PATIENT_SEARCH_DEBOUNCE_MS);
@@ -144,7 +147,9 @@ export function AppointmentForm({
 
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [staffLoading, setStaffLoading] = useState(true);
-  const [staffError, setStaffError] = useState<string | null>(null);
+  // Truthy is all that's needed — the rendered `FieldError` shows a fixed
+  // short label (`copy.staffFieldError`), never the server's message.
+  const [staffError, setStaffError] = useState(false);
   const [staffReloadKey, setStaffReloadKey] = useState(0);
   const [providerId, setProviderId] = useState('');
 
@@ -170,7 +175,7 @@ export function AppointmentForm({
         });
         if (cancelled) return;
         setPatients(res.items);
-        setPatientsError(null);
+        setPatientsError(false);
         // Auto-select on an exact document match: when the typed query equals
         // a single patient's docNumber, pick that patient without making the
         // user choose from a list — documents are unique, so one exact match
@@ -185,9 +190,9 @@ export function AppointmentForm({
             setSelectedPatient(exactMatches[0]);
           }
         }
-      } catch (err) {
+      } catch {
         if (cancelled) return;
-        setPatientsError(err instanceof ApiError ? err.message : copy.genericPatientsError);
+        setPatientsError(true);
       } finally {
         if (!cancelled) setPatientsLoading(false);
       }
@@ -206,10 +211,10 @@ export function AppointmentForm({
         const res = await listStaff(token);
         if (cancelled) return;
         setStaff(res);
-        setStaffError(null);
-      } catch (err) {
+        setStaffError(false);
+      } catch {
         if (cancelled) return;
-        setStaffError(err instanceof ApiError ? err.message : copy.genericStaffError);
+        setStaffError(true);
       } finally {
         if (!cancelled) setStaffLoading(false);
       }
@@ -389,18 +394,11 @@ export function AppointmentForm({
             </div>
 
             {patientsError ? (
-              <div className="flex items-center gap-3">
-                <p role="alert" className="text-xs text-danger">
-                  {patientsError}
-                </p>
-                <button
-                  type="button"
-                  onClick={() => setPatientsReloadKey((k) => k + 1)}
-                  className="inline-flex h-7 items-center rounded-md border border-border px-2 text-xs font-medium text-ink transition-colors hover:bg-bg"
-                >
-                  {copy.retry}
-                </button>
-              </div>
+              <FieldError
+                label={copy.patientsFieldError}
+                onRetry={() => setPatientsReloadKey((k) => k + 1)}
+                className="h-9 w-full"
+              />
             ) : patientQuery.trim() === '' ? (
               <p className="text-xs text-muted">{copy.patientSearchHint}</p>
             ) : patientsLoading ? (
@@ -459,36 +457,30 @@ export function AppointmentForm({
         <label htmlFor="appointment-provider" className="text-sm font-medium text-ink">
           {copy.providerLabel}
         </label>
-        <select
-          id="appointment-provider"
-          required
-          disabled={staffLoading}
-          value={providerId}
-          onChange={(e) => setProviderId(e.target.value)}
-          className="flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors placeholder:text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-50"
-        >
-          <option value="" disabled>
-            {staffLoading ? copy.providerLoading : copy.providerPlaceholder}
-          </option>
-          {staff.map((s) => (
-            <option key={s.userId} value={s.userId}>
-              {s.fullName}
+        {staffError ? (
+          <FieldError
+            label={copy.staffFieldError}
+            onRetry={() => setStaffReloadKey((k) => k + 1)}
+            className="h-10 w-full"
+          />
+        ) : (
+          <select
+            id="appointment-provider"
+            required
+            disabled={staffLoading}
+            value={providerId}
+            onChange={(e) => setProviderId(e.target.value)}
+            className="flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors placeholder:text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-50"
+          >
+            <option value="" disabled>
+              {staffLoading ? copy.providerLoading : copy.providerPlaceholder}
             </option>
-          ))}
-        </select>
-        {staffError && (
-          <div className="flex items-center gap-3">
-            <p role="alert" className="text-xs text-danger">
-              {staffError}
-            </p>
-            <button
-              type="button"
-              onClick={() => setStaffReloadKey((k) => k + 1)}
-              className="inline-flex h-7 items-center rounded-md border border-border px-2 text-xs font-medium text-ink transition-colors hover:bg-bg"
-            >
-              {copy.retry}
-            </button>
-          </div>
+            {staff.map((s) => (
+              <option key={s.userId} value={s.userId}>
+                {s.fullName}
+              </option>
+            ))}
+          </select>
         )}
       </div>
 
@@ -551,16 +543,8 @@ export function AppointmentForm({
         />
       </div>
 
-      {validationError && (
-        <p role="alert" className="text-sm text-danger">
-          {validationError}
-        </p>
-      )}
-      {saveError && (
-        <p role="alert" className="text-sm text-danger">
-          {saveError}
-        </p>
-      )}
+      {validationError && <InlineError>{validationError}</InlineError>}
+      {saveError && <InlineError>{saveError}</InlineError>}
 
       <div className="flex flex-col-reverse gap-2 pt-2 sm:flex-row sm:justify-end">
         <Button type="submit" loading={submitting}>

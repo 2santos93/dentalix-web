@@ -9,13 +9,14 @@ import {
   type ToothRecord,
   type ToothSurface,
 } from '@/lib/odontogram/odontogram-api';
+import { SectionError } from '@/components/errors/section-error';
+import { InlineError } from '@/components/errors/inline-error';
 
 // Copy as constants (i18n-ready, es-first) — matches medical-history-panel.tsx convention.
 const copy = {
   loadingCatalog: 'Cargando catálogo…',
   emptyCatalog: 'No hay procedimientos ni diagnósticos en el catálogo.',
-  genericCatalogError: 'No pudimos cargar el catálogo. Intenta de nuevo.',
-  retry: 'Reintentar',
+  genericCatalogError: 'No pudimos cargar el catálogo.',
   formTitle: (fdi: string) => `Registrar en el diente ${fdi}`,
   catalogItemLegend: 'Diagnóstico o procedimiento',
   surfacesLegend: 'Caras',
@@ -204,20 +205,7 @@ export function ToothRecordPanel({
   }
 
   if (catalogError) {
-    return (
-      <div className="flex flex-col items-start gap-2">
-        <p role="alert" className="text-sm text-danger">
-          {catalogError}
-        </p>
-        <button
-          type="button"
-          onClick={() => setCatalogReloadKey((k) => k + 1)}
-          className="rounded-md border border-border px-3 py-1.5 text-sm font-medium text-ink"
-        >
-          {copy.retry}
-        </button>
-      </div>
-    );
+    return <SectionError description={catalogError} onRetry={() => setCatalogReloadKey((k) => k + 1)} />;
   }
 
   if (catalog.length === 0) {
@@ -323,16 +311,8 @@ export function ToothRecordPanel({
         />
       </div>
 
-      {validationError && (
-        <p role="alert" className="text-sm text-danger">
-          {validationError}
-        </p>
-      )}
-      {saveError && (
-        <p role="alert" className="text-sm text-danger">
-          {saveError}
-        </p>
-      )}
+      {validationError && <InlineError>{validationError}</InlineError>}
+      {saveError && <InlineError>{saveError}</InlineError>}
 
       <button
         type="submit"

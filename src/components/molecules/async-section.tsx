@@ -1,7 +1,7 @@
 'use client';
 import * as React from 'react';
-import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { SectionError } from '@/components/errors/section-error';
 import { EmptyState } from './empty-state';
 
 interface AsyncSectionProps {
@@ -43,19 +43,7 @@ export function AsyncSection({
     return <>{skeleton ?? <DefaultSkeleton />}</>;
   }
   if (error) {
-    return (
-      <div
-        role="alert"
-        className="flex flex-col items-start gap-3 rounded-xl border border-danger/30 bg-danger/5 px-4 py-3"
-      >
-        <p className="text-sm font-medium text-danger">{error}</p>
-        {onRetry ? (
-          <Button type="button" variant="outline" size="sm" onClick={onRetry}>
-            {retryLabel}
-          </Button>
-        ) : null}
-      </div>
-    );
+    return <SectionError description={error} onRetry={onRetry} retryLabel={retryLabel} />;
   }
   if (isEmpty) {
     return (

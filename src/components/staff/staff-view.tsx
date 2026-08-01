@@ -18,6 +18,7 @@ import { FormField } from '@/components/molecules/form-field';
 import { FormModal } from '@/components/molecules/form-modal';
 import { ConfirmDialog } from '@/components/molecules/confirm-dialog';
 import { AsyncSection, TableSkeleton } from '@/components/molecules/async-section';
+import { notifyError } from '@/components/errors/notify';
 import {
   Table,
   TableBody,
@@ -43,11 +44,12 @@ const copy = {
   retry: 'Reintentar',
   loading: 'Cargando personal…',
   tableLabel: 'Personal de la clínica',
-  genericLoadError: 'No pudimos cargar el personal. Intenta de nuevo.',
+  genericLoadError: 'No pudimos cargar el personal.',
   genericCreateError: 'No pudimos crear el miembro del equipo. Intenta de nuevo.',
-  genericRoleChangeError: 'No pudimos actualizar el rol. Intenta de nuevo.',
-  genericNameChangeError: 'No pudimos actualizar el nombre. Intenta de nuevo.',
-  genericDeactivateError: 'No pudimos desactivar al miembro del equipo. Intenta de nuevo.',
+  // Escalón 3 (segundo plano): sin "Intenta de nuevo." — el toast trae acción.
+  genericRoleChangeError: 'No pudimos actualizar el rol.',
+  genericNameChangeError: 'No pudimos actualizar el nombre.',
+  genericDeactivateError: 'No pudimos desactivar al miembro del equipo.',
   empty: 'No hay personal registrado todavía.',
   emptyHint: 'Agrega al primer miembro del equipo para empezar.',
   colName: 'Nombre',
@@ -110,7 +112,6 @@ export function StaffView({ token }: StaffViewProps) {
   // Which row is currently being mutated (role/name change or deactivate) —
   // disables that row's controls, same as agenda-view.tsx's `updatingId`.
   const [updatingId, setUpdatingId] = useState<string | null>(null);
-  const [rowError, setRowError] = useState<string | null>(null);
   // Row awaiting deactivate confirmation (inline, not a dialog/native confirm()).
   const [confirmingId, setConfirmingId] = useState<string | null>(null);
 
@@ -181,12 +182,13 @@ export function StaffView({ token }: StaffViewProps) {
 
   async function handleRoleChange(userId: string, nextRole: ClinicRole) {
     setUpdatingId(userId);
-    setRowError(null);
     try {
       await updateStaff(token, userId, { role: nextRole });
       await refreshInPlace();
     } catch (err) {
-      setRowError(err instanceof ApiError ? err.message : copy.genericRoleChangeError);
+      notifyError(err instanceof ApiError ? err.message : copy.genericRoleChangeError, {
+        onRetry: () => handleRoleChange(userId, nextRole),
+      });
     } finally {
       setUpdatingId(null);
     }
@@ -194,12 +196,13 @@ export function StaffView({ token }: StaffViewProps) {
 
   async function handleNameChange(userId: string, nextName: string, previousName: string) {
     setUpdatingId(userId);
-    setRowError(null);
     try {
       await updateStaff(token, userId, { fullName: nextName });
       await refreshInPlace();
     } catch (err) {
-      setRowError(err instanceof ApiError ? err.message : copy.genericNameChangeError);
+      notifyError(err instanceof ApiError ? err.message : copy.genericNameChangeError, {
+        onRetry: () => handleNameChange(userId, nextName, previousName),
+      });
       // Reset the (uncontrolled) input back to the last known fullName so a
       // subsequent no-op blur doesn't keep re-firing the same failed PATCH.
       const el = nameInputRefs.current.get(userId);
@@ -211,16 +214,24 @@ export function StaffView({ token }: StaffViewProps) {
 
   async function handleDeactivate(userId: string) {
     setUpdatingId(userId);
-    setRowError(null);
     try {
       // The backend 409s (last admin / self-deactivation) — surfaced via
-      // `rowError` below like any other row action; no client-side check
-      // (the auth store only holds tokens, not the current user's identity).
+      // `notifyError` like any other row action; no client-side check (the
+      // auth store only holds tokens, not the current user's identity).
       await deactivateStaff(token, userId);
       setConfirmingId(null);
       await refreshInPlace();
     } catch (err) {
-      setRowError(err instanceof ApiError ? err.message : copy.genericDeactivateError);
+      // Close the confirm dialog on failure too, not just success: it's a
+      // Radix modal, so while it's open it marks everything outside it
+      // (including the toast this fires) inert — a "Reintentar" button the
+      // user can see but can't click fails rung 3's own contract. Closing it
+      // makes the toast the one, reachable place to retry, same as
+      // role/name change (which never had a dialog in the way).
+      setConfirmingId(null);
+      notifyError(err instanceof ApiError ? err.message : copy.genericDeactivateError, {
+        onRetry: () => handleDeactivate(userId),
+      });
     } finally {
       setUpdatingId(null);
     }
@@ -307,12 +318,6 @@ export function StaffView({ token }: StaffViewProps) {
         </div>
       </FormModal>
 
-      {rowError && !confirmingId && (
-        <p role="alert" className="text-sm text-danger">
-          {rowError}
-        </p>
-      )}
-
       <AsyncSection
         loading={loading}
         error={loadError}
@@ -381,10 +386,7 @@ export function StaffView({ token }: StaffViewProps) {
                         variant="outline"
                         size="sm"
                         disabled={updating}
-                        onClick={() => {
-                          setRowError(null);
-                          setConfirmingId(s.userId);
-                        }}
+                        onClick={() => setConfirmingId(s.userId)}
                       >
                         {copy.deactivateCta}
                       </Button>
@@ -400,10 +402,7 @@ export function StaffView({ token }: StaffViewProps) {
       <ConfirmDialog
         open={confirmingId !== null}
         onOpenChange={(open) => {
-          if (!open) {
-            setConfirmingId(null);
-            setRowError(null);
-          }
+          if (!open) setConfirmingId(null);
         }}
         title={copy.deactivateTitle}
         description={
@@ -411,7 +410,6 @@ export function StaffView({ token }: StaffViewProps) {
         }
         confirmLabel={copy.deactivateConfirmYes}
         confirming={updatingId === confirmingId}
-        error={rowError}
         onConfirm={() => confirmingId && handleDeactivate(confirmingId)}
       />
     </div>

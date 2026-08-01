@@ -3,13 +3,13 @@ import { useEffect, useState } from 'react';
 import { ApiError } from '@/lib/api/client';
 import { getToothTimeline, type ToothRecord, type ToothSurface } from '@/lib/odontogram/odontogram-api';
 import { formatDate } from '@/lib/format/date';
+import { SectionError } from '@/components/errors/section-error';
 
 // Copy as constants (i18n-ready, es-first) — matches medical-history-panel.tsx convention.
 const copy = {
   loading: 'Cargando historial del diente…',
   empty: 'No hay registros para este diente todavía.',
-  genericLoadError: 'No pudimos cargar el historial del diente. Intenta de nuevo.',
-  retry: 'Reintentar',
+  genericLoadError: 'No pudimos cargar el historial del diente.',
   statusPlanned: 'Planificado',
   statusCompleted: 'Completado',
   wholeTooth: 'Diente completo',
@@ -92,20 +92,7 @@ export function ToothTimeline({ token, patientId, toothNumber, catalogById, refr
   }
 
   if (loadError) {
-    return (
-      <div className="flex flex-col items-start gap-2">
-        <p role="alert" className="text-sm text-danger">
-          {loadError}
-        </p>
-        <button
-          type="button"
-          onClick={() => setReloadKey((k) => k + 1)}
-          className="rounded-md border border-border px-3 py-1.5 text-sm font-medium text-ink"
-        >
-          {copy.retry}
-        </button>
-      </div>
-    );
+    return <SectionError description={loadError} onRetry={() => setReloadKey((k) => k + 1)} />;
   }
 
   if (records.length === 0) {

@@ -9,6 +9,8 @@ import {
   type CreateClinicalEntryInput,
 } from '@/lib/patients/clinical-api';
 import { formatCivilDate } from '@/lib/format/date';
+import { SectionError } from '@/components/errors/section-error';
+import { InlineError } from '@/components/errors/inline-error';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
@@ -25,7 +27,7 @@ const copy = {
   notesLabel: 'Notas',
   submit: 'Agregar evolución',
   submitting: 'Guardando…',
-  genericLoadError: 'No pudimos cargar las evoluciones. Intenta de nuevo.',
+  genericLoadError: 'No pudimos cargar las evoluciones.',
   genericCreateError: 'No pudimos agregar la evolución. Intenta de nuevo.',
 };
 
@@ -43,6 +45,8 @@ export function ClinicalEntriesList({ token, patientId }: ClinicalEntriesListPro
   const [notes, setNotes] = useState('');
   const [createError, setCreateError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  // Bumped by the retry action to re-run the load effect below.
+  const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -64,7 +68,7 @@ export function ClinicalEntriesList({ token, patientId }: ClinicalEntriesListPro
     return () => {
       cancelled = true;
     };
-  }, [token, patientId]);
+  }, [token, patientId, reloadKey]);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -97,9 +101,7 @@ export function ClinicalEntriesList({ token, patientId }: ClinicalEntriesListPro
           {copy.loading}
         </p>
       ) : loadError ? (
-        <p role="alert" className="text-sm text-danger">
-          {loadError}
-        </p>
+        <SectionError description={loadError} onRetry={() => setReloadKey((k) => k + 1)} />
       ) : entries.length === 0 ? (
         <p role="status" className="text-sm text-muted">
           {copy.empty}
@@ -195,11 +197,7 @@ export function ClinicalEntriesList({ token, patientId }: ClinicalEntriesListPro
           />
         </div>
 
-        {createError && (
-          <p role="alert" className="text-sm text-danger">
-            {createError}
-          </p>
-        )}
+        {createError && <InlineError>{createError}</InlineError>}
 
         <button
           type="submit"

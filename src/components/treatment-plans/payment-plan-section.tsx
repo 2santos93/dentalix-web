@@ -21,6 +21,7 @@ import { FormField } from '@/components/molecules/form-field';
 import { FormModal } from '@/components/molecules/form-modal';
 import { ConfirmDialog } from '@/components/molecules/confirm-dialog';
 import { EmptyState } from '@/components/molecules/empty-state';
+import { SectionError } from '@/components/errors/section-error';
 import { formatCivilDate } from '@/lib/format/date';
 
 const copy = {
@@ -28,8 +29,8 @@ const copy = {
   createCta: 'Crear plan de pagos',
   emptyTitle: 'Sin plan de pagos',
   emptyDescription: 'Financia este tratamiento en cuotas: define el pie, el número de cuotas y la periodicidad.',
-  loadError: 'No pudimos cargar el plan de pagos. Intenta de nuevo.',
-  retry: 'Reintentar',
+  // No «Intenta de nuevo.» — `SectionError` has its own retry button.
+  loadError: 'No pudimos cargar el plan de pagos.',
   cancelPlan: 'Cancelar plan',
   cancelConfirmTitle: '¿Cancelar el plan de pagos?',
   cancelConfirmDescription: 'Se cancelará el calendario de cuotas. Los abonos registrados no se ven afectados. Podrás crear uno nuevo.',
@@ -238,12 +239,13 @@ export function PaymentPlanSection({ token, planId, planCurrency, billable, refr
       {loading ? (
         <Skeleton className="h-24 w-full" />
       ) : loadError ? (
-        <div className="flex items-center gap-3">
-          <p role="alert" className="text-sm text-danger">{loadError}</p>
-          <Button variant="outline" size="sm" onClick={() => { setLoadError(null); setRetryTick((t) => t + 1); }}>
-            {copy.retry}
-          </Button>
-        </div>
+        <SectionError
+          description={loadError}
+          onRetry={() => {
+            setLoadError(null);
+            setRetryTick((t) => t + 1);
+          }}
+        />
       ) : !plan ? (
         <div className="flex flex-col items-start gap-3">
           <EmptyState role="status" title={copy.emptyTitle} description={copy.emptyDescription} />
