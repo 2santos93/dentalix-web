@@ -372,6 +372,22 @@ export interface paths {
         patch: operations["StaffController_update"];
         trace?: never;
     };
+    "/api/v1/locations/schedule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["LocationScheduleController_get"];
+        put: operations["LocationScheduleController_replace"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/patients/{patientId}/treatment-plans": {
         parameters: {
             query?: never;
@@ -1283,6 +1299,22 @@ export interface components {
             /** @enum {string} */
             role?: "DENTIST" | "ASSISTANT" | "RECEPTION" | "ADMIN";
         };
+        ScheduleRangeDto: {
+            /** @description 0=domingo .. 6=sábado */
+            weekday: number;
+            /** @description Minutos desde 00:00 */
+            startMinute: number;
+            endMinute: number;
+        };
+        ReplaceLocationScheduleDto: {
+            /**
+             * @description Zona IANA de la sede
+             * @example America/Bogota
+             */
+            timezone: string;
+            /** @description La semana COMPLETA. Un día sin tramos = cerrado. Lista vacía = sede sin restricción. */
+            ranges: components["schemas"]["ScheduleRangeDto"][];
+        };
         CreateTreatmentPlanDto: {
             /**
              * @description ISO 4217 (default USD)
@@ -1737,6 +1769,12 @@ export interface components {
             /** @description true when stock <= minStock */
             lowStock?: boolean;
             movements?: components["schemas"]["InventoryMovementDto"][];
+        };
+        ListInventoryItemsResponseDto: {
+            items: components["schemas"]["InventoryItemDto"][];
+            total: number;
+            page: number;
+            pageSize: number;
         };
         UpdateInventoryItemDto: {
             /** @example Guantes de nitrilo */
@@ -2606,6 +2644,46 @@ export interface operations {
             };
         };
     };
+    LocationScheduleController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Horario de la sede, o null si no se configuró */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    LocationScheduleController_replace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReplaceLocationScheduleDto"];
+            };
+        };
+        responses: {
+            /** @description Horario reemplazado */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     TreatmentPlansController_list: {
         parameters: {
             query?: never;
@@ -3218,7 +3296,14 @@ export interface operations {
     };
     InventoryController_list: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Búsqueda libre (nombre o SKU) */
+                query?: string;
+                page?: number;
+                pageSize?: number;
+                /** @description Solo insumos en o por debajo del mínimo */
+                lowStockOnly?: boolean;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -3230,7 +3315,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["InventoryItemDto"][];
+                    "application/json": components["schemas"]["ListInventoryItemsResponseDto"];
                 };
             };
         };
