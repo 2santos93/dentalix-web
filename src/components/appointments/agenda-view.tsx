@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ApiError } from '@/lib/api/client';
 import {
   listAppointments,
@@ -361,11 +361,23 @@ export function AgendaView({ token }: AgendaViewProps) {
       })
       .catch((err) => {
         notifyError(err instanceof ApiError ? err.message : copy.genericRefreshError, {
-          onRetry: refreshAppointmentsInPlace,
+          onRetry: () => refreshAppointmentsInPlaceRef.current(),
         });
       })
       .finally(() => setAppointmentsRefreshing(false));
   }
+
+  // `refreshAppointmentsInPlace` closes over `providerId`/`selectedDate`/
+  // `viewMode` from the render it was created in. The old inline retry
+  // button got the current filters for free (a fresh `onClick` every
+  // render); the toast's `onRetry` is built once inside the `catch` and can
+  // sit on screen across renders, so it must call through a ref kept in
+  // sync every render instead of closing over the function directly —
+  // otherwise switching provider/date/view while the toast is still up and
+  // then hitting "Reintentar" replays the *stale* filters and can overwrite
+  // fresh data with the old provider's appointments.
+  const refreshAppointmentsInPlaceRef = useRef(refreshAppointmentsInPlace);
+  refreshAppointmentsInPlaceRef.current = refreshAppointmentsInPlace;
 
   function handleAppointmentCreated() {
     setShowForm(false);

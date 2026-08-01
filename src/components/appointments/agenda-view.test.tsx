@@ -1,6 +1,7 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AgendaView } from './agenda-view';
+import { Toaster } from '@/components/errors/toaster';
 import { ApiError } from '@/lib/api/client';
 import { localDayRange, localWeekRange } from '@/lib/appointments/day-range';
 import { createAppointment, listAppointments, updateAppointment } from '@/lib/appointments/appointments-api';
@@ -337,6 +338,58 @@ describe('AgendaView', () => {
       expect(within(table).getByRole<HTMLSelectElement>('combobox')).not.toBeDisabled(),
     );
     expect(within(table).getByRole<HTMLSelectElement>('combobox').value).toBe('CONFIRMED');
+  });
+
+  it('el reintento del toast de refresh usa el filtro vigente al pulsar "Reintentar", no el capturado cuando el refresh falló (fix ronda 1: closure obsoleto)', async () => {
+    mockedListStaff.mockResolvedValue(staff);
+    mockedUpdateAppointment.mockResolvedValue({ ...apt1, status: 'CONFIRMED' });
+
+    let callCount = 0;
+    mockedListAppointments.mockImplementation(() => {
+      callCount += 1;
+      // #1 mount (month), #2 switch to Día: resolve regardless of filter.
+      if (callCount <= 2) return Promise.resolve([apt1]);
+      // #3: the in-place refresh right after the status PATCH — fails while
+      // providerId is still '' (todos). This is what builds the toast.
+      if (callCount === 3) return Promise.reject(new Error('boom'));
+      // #4: the user narrows the filter to staff-2 WHILE the toast is still
+      // up — an ordinary fetch for that provider.
+      if (callCount === 4) return Promise.resolve([]);
+      // #5: clicking the toast's "Reintentar" — must replay with the
+      // *current* filter (staff-2), not '' from when the toast was built.
+      return Promise.resolve([apt2]);
+    });
+
+    const user = userEvent.setup();
+    render(
+      <>
+        <AgendaView token="tok" />
+        <Toaster />
+      </>,
+    );
+
+    await user.click(screen.getByRole('button', { name: /^día$/i }));
+    const table = await screen.findByRole('table', { name: /agenda del día/i });
+    const statusSelect = within(table).getByRole<HTMLSelectElement>('combobox');
+
+    await user.selectOptions(statusSelect, 'CONFIRMED');
+
+    // The failed in-place refresh surfaces as a toast with a retry action.
+    const retryButton = await screen.findByRole('button', { name: 'Reintentar' });
+    await waitFor(() => expect(callCount).toBe(3));
+
+    // Narrow the provider filter while the toast is still on screen — the
+    // stale-closure trap: the toast's `onRetry` was built during the failed
+    // refresh, when `providerId` was still ''.
+    const providerSelect = screen.getByLabelText<HTMLSelectElement>(/^profesional$/i);
+    await user.selectOptions(providerSelect, 'staff-2');
+    await waitFor(() => expect(callCount).toBe(4));
+
+    await user.click(retryButton);
+
+    await waitFor(() => expect(callCount).toBe(5));
+    const lastCallOpts = mockedListAppointments.mock.calls[4][1];
+    expect(lastCallOpts).toMatchObject({ providerId: 'staff-2' });
   });
 
   it('opens the "Nueva cita" modal and pre-fills AppointmentForm\'s date with the selected day', async () => {
