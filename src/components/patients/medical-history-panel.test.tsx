@@ -320,6 +320,148 @@ describe('MedicalHistoryPanel', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Datos inválidos');
   });
 
+  describe('fase 2 — hábitos, historia dental, cirugías y signos vitales', () => {
+    it('nests the habit details under their own objects', async () => {
+      mockedGet.mockResolvedValue(null);
+      mockedSave.mockResolvedValue(history({ version: 1 }));
+      const user = userEvent.setup();
+      render(<MedicalHistoryPanel token="tok" patientId="p1" />);
+      await screen.findByText(/aún no/i);
+
+      await user.click(screen.getByLabelText(/^tabaquismo$/i));
+      await user.type(screen.getByLabelText(/cigarrillos\/día/i), '10');
+      await user.type(screen.getByLabelText(/^años$/i), '5');
+      await user.click(screen.getByLabelText(/^bruxismo$/i));
+      await user.type(screen.getByLabelText(/cepillados\/día/i), '2');
+      await user.click(screen.getByLabelText(/hilo dental/i));
+
+      await user.click(screen.getByRole('button', { name: /registrar anamnesis/i }));
+
+      await waitFor(() => expect(mockedSave).toHaveBeenCalledTimes(1));
+      const [, , input] = mockedSave.mock.calls[0];
+      expect(input.habits).toEqual({
+        tabaquismo: { activo: true, porDia: 10, anios: 5 },
+        bruxismo: true,
+        higieneOral: { cepilladoPorDia: 2, hilo: true },
+      });
+    });
+
+    it('clears the smoking details when the habit is unchecked, so a stale count cannot travel', async () => {
+      mockedGet.mockResolvedValue(null);
+      mockedSave.mockResolvedValue(history({ version: 1 }));
+      const user = userEvent.setup();
+      render(<MedicalHistoryPanel token="tok" patientId="p1" />);
+      await screen.findByText(/aún no/i);
+
+      await user.click(screen.getByLabelText(/^tabaquismo$/i));
+      await user.type(screen.getByLabelText(/cigarrillos\/día/i), '20');
+      await user.click(screen.getByLabelText(/^tabaquismo$/i)); // desmarcar
+
+      expect(screen.getByLabelText(/cigarrillos\/día/i)).toHaveValue(null);
+      expect(screen.getByLabelText(/cigarrillos\/día/i)).toBeDisabled();
+
+      await user.type(screen.getByLabelText(/^notas$/i), 'algo');
+      await user.click(screen.getByRole('button', { name: /registrar anamnesis/i }));
+
+      await waitFor(() => expect(mockedSave).toHaveBeenCalledTimes(1));
+      const [, , input] = mockedSave.mock.calls[0];
+      expect(input.habits).toBeUndefined();
+    });
+
+    it('splits the comma-separated previous treatments into the array the API expects', async () => {
+      mockedGet.mockResolvedValue(null);
+      mockedSave.mockResolvedValue(history({ version: 1 }));
+      const user = userEvent.setup();
+      render(<MedicalHistoryPanel token="tok" patientId="p1" />);
+      await screen.findByText(/aún no/i);
+
+      await user.type(screen.getByLabelText(/motivo de consulta/i), 'Dolor molar');
+      await user.type(
+        screen.getByLabelText(/tratamientos previos/i),
+        'Endodoncia, Corona ,  Blanqueamiento',
+      );
+      await user.click(screen.getByLabelText(/sangrado de encías/i));
+
+      await user.click(screen.getByRole('button', { name: /registrar anamnesis/i }));
+
+      await waitFor(() => expect(mockedSave).toHaveBeenCalledTimes(1));
+      const [, , input] = mockedSave.mock.calls[0];
+      expect(input.dentalHistory).toEqual({
+        motivoConsulta: 'Dolor molar',
+        tratamientosPrevios: ['Endodoncia', 'Corona', 'Blanqueamiento'],
+        sangradoEncias: true,
+      });
+    });
+
+    it('adds surgeries as rows and sends the vital signs as numbers', async () => {
+      mockedGet.mockResolvedValue(null);
+      mockedSave.mockResolvedValue(history({ version: 1 }));
+      const user = userEvent.setup();
+      render(<MedicalHistoryPanel token="tok" patientId="p1" />);
+      await screen.findByText(/aún no/i);
+
+      await user.click(screen.getByRole('button', { name: /agregar cirugía/i }));
+      await user.type(screen.getByLabelText(/^cirugías 1$/i), 'Extracción de cordal');
+
+      await user.type(screen.getByLabelText(/^sistólica$/i), '120');
+      await user.type(screen.getByLabelText(/^diastólica$/i), '80');
+      await user.type(screen.getByLabelText(/^temp\.$/i), '36.6');
+
+      await user.click(screen.getByRole('button', { name: /registrar anamnesis/i }));
+
+      await waitFor(() => expect(mockedSave).toHaveBeenCalledTimes(1));
+      const [, , input] = mockedSave.mock.calls[0];
+      expect(input.surgeries).toEqual([{ descripcion: 'Extracción de cordal' }]);
+      // Numbers, not the raw input strings.
+      expect(input.vitalSigns).toEqual({ sistolica: 120, diastolica: 80, temp: 36.6 });
+    });
+
+    it('omits an untouched section instead of sending a hollow object', async () => {
+      mockedGet.mockResolvedValue(null);
+      mockedSave.mockResolvedValue(history({ version: 1 }));
+      const user = userEvent.setup();
+      render(<MedicalHistoryPanel token="tok" patientId="p1" />);
+      await screen.findByText(/aún no/i);
+
+      await user.type(screen.getByLabelText(/^notas$/i), 'Sólo una nota');
+      await user.click(screen.getByRole('button', { name: /registrar anamnesis/i }));
+
+      await waitFor(() => expect(mockedSave).toHaveBeenCalledTimes(1));
+      const [, , input] = mockedSave.mock.calls[0];
+      expect(input.habits).toBeUndefined();
+      expect(input.dentalHistory).toBeUndefined();
+      expect(input.vitalSigns).toBeUndefined();
+      expect(input.surgeries).toBeUndefined();
+    });
+
+    it('seeds the fase-2 fields from the latest version and summarizes them for reading', async () => {
+      mockedGet.mockResolvedValue(
+        history({
+          habits: {
+            tabaquismo: { activo: true, porDia: 10 },
+            bruxismo: true,
+            higieneOral: { cepilladoPorDia: 3 },
+          },
+          dentalHistory: { motivoConsulta: 'Control', sangradoEncias: true },
+          vitalSigns: { sistolica: 130, diastolica: 85, temp: 36.8 },
+        }),
+      );
+      render(<MedicalHistoryPanel token="tok" patientId="p1" />);
+      await screen.findByText(/versión 2/i);
+
+      // Read view: one readable line per nested section.
+      expect(screen.getByText(/Tabaquismo \(10\/día\).*Bruxismo/)).toBeInTheDocument();
+      expect(screen.getByText(/TA 130\/85/)).toBeInTheDocument();
+      expect(screen.getByText(/Control · Sangrado de encías/)).toBeInTheDocument();
+
+      // Form: seeded so the next save doesn't wipe them.
+      expect(screen.getByLabelText(/^tabaquismo$/i)).toBeChecked();
+      expect(screen.getByLabelText(/cigarrillos\/día/i)).toHaveValue(10);
+      expect(screen.getByLabelText(/^sistólica$/i)).toHaveValue(130);
+      expect(screen.getByLabelText(/motivo de consulta/i)).toHaveValue('Control');
+    });
+  });
+
   it('does not append an identical version when nothing changed (dup guard)', async () => {
     mockedGet.mockResolvedValue(history());
     const user = userEvent.setup();
