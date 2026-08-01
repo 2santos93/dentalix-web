@@ -68,8 +68,11 @@ const copy = {
   refreshing: 'Actualizando…',
   retry: 'Reintentar',
   loading: 'Cargando agenda…',
-  // Escalón 2 (control): etiqueta corta, el contexto lo da el propio filtro.
-  staffFieldError: 'No se pudieron cargar',
+  // Escalón 2 (control): sin `<label>` visible que le dé contexto (a
+  // diferencia de `appointment-form`, donde el mismo fallo se apoya en el
+  // `<label htmlFor="appointment-provider">` de fuera del ternario) — la
+  // etiqueta tiene que bastarse sola.
+  staffFieldError: 'No pudimos cargar profesionales',
   // Escalón 1 con reintento (Mes/Día/Semana, las tres vía `appointmentsReloadKey`):
   // sin "Intenta de nuevo." — `SectionError` trae su propio botón.
   genericAppointmentsError: 'No pudimos cargar la agenda.',
@@ -386,7 +389,9 @@ export function AgendaView({ token }: AgendaViewProps) {
   // then hitting "Reintentar" replays the *stale* filters and can overwrite
   // fresh data with the old provider's appointments.
   const refreshAppointmentsInPlaceRef = useRef(refreshAppointmentsInPlace);
-  refreshAppointmentsInPlaceRef.current = refreshAppointmentsInPlace;
+  useEffect(() => {
+    refreshAppointmentsInPlaceRef.current = refreshAppointmentsInPlace;
+  });
 
   function handleAppointmentCreated() {
     setShowForm(false);
