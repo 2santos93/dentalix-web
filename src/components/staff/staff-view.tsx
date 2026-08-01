@@ -10,6 +10,7 @@ import {
   type ClinicRole,
 } from '@/lib/staff/staff-api';
 import { createInvitation, type CreatedInvitation } from '@/lib/staff/invitations-api';
+import { PendingInvitations } from '@/components/staff/pending-invitations';
 import { useCopyToClipboard } from '@/lib/ui/use-copy-to-clipboard';
 import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -80,6 +81,7 @@ const copy = {
   // its (hardcoded, sr-only) accessible name; a second "Cerrar" button would
   // be ambiguous for both a11y and tests.
   closeLabel: 'Listo',
+  pendingInvitationsTitle: 'Invitaciones pendientes',
 };
 
 const ROLE_OPTIONS: { value: ClinicRole; label: string }[] = [
@@ -129,6 +131,9 @@ export function StaffView({ token }: StaffViewProps) {
   // nothing to refresh in the table above — see `handleCreateSubmit`).
   const [createdInvitation, setCreatedInvitation] = useState<CreatedInvitation | null>(null);
   const { copied, copy: copyInviteLink } = useCopyToClipboard();
+  // Bumped on a successful invite so `PendingInvitations` (which owns its own
+  // fetch) reloads without this component knowing anything about its state.
+  const [invitationsRefreshKey, setInvitationsRefreshKey] = useState(0);
 
   // Which row is currently being mutated (role/name change or deactivate) —
   // disables that row's controls, same as agenda-view.tsx's `updatingId`.
@@ -194,6 +199,7 @@ export function StaffView({ token }: StaffViewProps) {
       // Keep the modal open: this is the only time the raw token is ever
       // shown, so the caller must copy the link before dismissing it.
       setCreatedInvitation(created);
+      setInvitationsRefreshKey((k) => k + 1);
     } catch (err) {
       setCreateError(err instanceof ApiError ? err.message : copy.genericCreateError);
     } finally {
@@ -437,6 +443,11 @@ export function StaffView({ token }: StaffViewProps) {
           </Table>
         </Card>
       </AsyncSection>
+
+      <div className="flex flex-col gap-4">
+        <h2 className="text-lg font-semibold text-ink">{copy.pendingInvitationsTitle}</h2>
+        <PendingInvitations token={token} refreshKey={invitationsRefreshKey} />
+      </div>
 
       <ConfirmDialog
         open={confirmingId !== null}
