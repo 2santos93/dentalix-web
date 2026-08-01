@@ -235,6 +235,50 @@ inputs, small cards), **12px** (lg — cards and panels), pill for status chips 
 - **Style:** pill, label type, tinted semantic bg + dark hue text (success/warning/danger),
   or surface-2 + muted for neutral. Status like `●completado / ○planeado` reads at a glance.
 
+### Error States
+Severity follows what a user can still do, not how bad the failure sounds. The
+test for picking a rung: when the error state is truthy, what disappears from
+the screen? Four rungs, one component each, in `src/components/errors/`:
+
+1. **Section** (`SectionError`) — the section has nothing to show. Fills the
+   content's own slot with `EmptyState`'s geometry (12px radius, `px-6 py-16`)
+   but a solid border instead of dashed, so "empty" and "broken" read as one
+   system. Icon in a `danger/10` chip, title in `ink`, primary retry button.
+   `role="alert"`.
+2. **Field** (`FieldError`) — a control failed to load its own options; the
+   rest of the section still works. Replaces the control in place, matching
+   its height, so nothing shifts and nothing sits broken wearing a normal
+   face. `danger/40` border, `danger/5` fill, icon-button retry. `role="status"`
+   — polite, not alert. Not for the result of an action, and not for a
+   component that early-returns leaving nothing behind — that's rung 1,
+   however small the section.
+3. **Background** (`notifyError()`) — a background refresh or a row action
+   failed and the content on screen is still correct. Toast with a retry
+   action; never touches layout, never leaves a permanent red mark.
+4. **Form** (`InlineError`) — validation or a failed submit. A line with an
+   icon next to the control that caused it, `role="alert"`.
+
+**The Rung Test.** No height class passed to a `FieldError` (nothing to
+match), a label over four words (it's carrying section-level weight), or
+softening a pre-existing `role="alert"` to `"status"` — each is a tell that
+rung 2 was picked for what is really a section failure.
+
+**The Way-Out Rule.** No error surface exists without a retry — a
+`SectionError` button, a `FieldError` icon-button, or a toast action.
+"Intenta de nuevo." drops from the copy only when the surface already carries
+one of these; `InlineError` has none, so it keeps the phrase. A toast's retry
+must never close over stale component state — reuse an existing reload
+mechanism (a functional state updater has a stable identity) rather than a
+ref kept in sync by hand (`react-hooks/refs` rejects assigning one during
+render). Exception: a closure is fine when what it captures *is* the
+operation, not ambient state — `onRetry: () => handleStatusChange(id, status)`
+closes over `id`/`status`, the retry's own arguments, so there's nothing to
+go stale. The test: can the captured value change before the retry fires
+without the retry being wrong? If yes, it's ambient state and needs the
+reload-mechanism treatment; if the value *is* what's being retried, close
+over it directly. A modal that stays open on failure makes its own toast
+inert underneath it; close the dialog on failure too.
+
 ### Tables
 - **Header:** surface-2, label type, muted. **Rows:** hairline separators, 44px min height,
   hover = surface-2. **Numbers:** right-aligned, tabular. Collapse to stacked labeled cards below `sm`.

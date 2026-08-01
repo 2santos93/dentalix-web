@@ -397,7 +397,7 @@ export function AppointmentForm({
               <FieldError
                 label={copy.patientsFieldError}
                 onRetry={() => setPatientsReloadKey((k) => k + 1)}
-                className="h-9 w-full"
+                className="w-full"
               />
             ) : patientQuery.trim() === '' ? (
               <p className="text-xs text-muted">{copy.patientSearchHint}</p>

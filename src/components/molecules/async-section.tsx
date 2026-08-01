@@ -30,7 +30,7 @@ export function AsyncSection({
   loading,
   error,
   onRetry,
-  retryLabel = 'Reintentar',
+  retryLabel,
   isEmpty = false,
   emptyTitle = 'Sin datos por ahora',
   emptyDescription,
