@@ -39,8 +39,8 @@ const patientDocNumber = `DOCCH${suffix}`;
 
 // Distinctive values so a plain text search on the page after reload can
 // only match content that survived a real backend round-trip.
-const allergiesValue = `AlergiaPenicilina-${suffix}`;
-const medicalAlertsValue = `AlertaCardiaca-${suffix}`;
+const allergenValue = `AlergiaPenicilina-${suffix}`;
+const anamnesisNotesValue = `NotaAnamnesisE2E-${suffix}`;
 const evolutionNotes = `EvolucionControlE2E-${suffix}`;
 
 test('save anamnesis + add evolution via the UI -> both persist through the backend after reload', async ({
@@ -114,18 +114,21 @@ test('save anamnesis + add evolution via the UI -> both persist through the back
   ).toBeVisible({ timeout: 10_000 });
 
   // --- Save a new anamnesis version ---
-  await anamnesisSection.getByLabel('Alergias').fill(allergiesValue);
-  await anamnesisSection.getByLabel('Alertas médicas').fill(medicalAlertsValue);
+  // Las alergias son una LISTA estructurada (`AllergyListEditor`): hay que
+  // agregar una fila y llenar su "Alérgeno", no un textarea.
+  await anamnesisSection.getByRole('button', { name: 'Agregar alergia' }).click();
+  await anamnesisSection.getByLabel('Alérgeno').fill(allergenValue);
+  await anamnesisSection.getByLabel('Notas').fill(anamnesisNotesValue);
 
   const anamnesisSaveError = anamnesisSection.locator('p[role="alert"]');
-  // First visit -> the create action is labelled "Registrar anamnesis"
-  // (it becomes "Guardar nueva versión" only once a version already exists).
-  await anamnesisSection.getByRole('button', { name: 'Registrar anamnesis' }).click();
+  // "Registrar anamnesis" / "Guardar nueva versión" es el TÍTULO (<h3>) del
+  // formulario según haya o no versión previa; el botón de envío es "Guardar".
+  await anamnesisSection.getByRole('button', { name: 'Guardar', exact: true }).click();
 
   // Scoped to `dd` — `formFromHistory` re-syncs the form's `<textarea>` with
   // the just-saved values too, so an unscoped text search matches BOTH the
   // rendered "Versión N" card AND the form field (strict-mode violation).
-  await expect(anamnesisSection.locator('dd', { hasText: allergiesValue }))
+  await expect(anamnesisSection.locator('dd', { hasText: anamnesisNotesValue }))
     .toBeVisible({ timeout: 10_000 })
     .catch(async () => {
       const message = (await anamnesisSaveError.isVisible())
@@ -133,7 +136,7 @@ test('save anamnesis + add evolution via the UI -> both persist through the back
         : 'unknown (no visible alert)';
       throw new Error(`Saving anamnesis failed. API error: ${message}`);
     });
-  await expect(anamnesisSection.locator('dd', { hasText: medicalAlertsValue })).toBeVisible();
+  await expect(anamnesisSection.getByLabel('Alérgeno')).toHaveValue(allergenValue);
   await expect(anamnesisSection.getByText('Versión 1')).toBeVisible();
 
   // --- Add a clinical evolution ---
@@ -172,11 +175,9 @@ test('save anamnesis + add evolution via the UI -> both persist through the back
   const evolutionsSectionAfterReload = page.locator('section', { hasText: 'Evoluciones' });
 
   await expect(
-    anamnesisSectionAfterReload.locator('dd', { hasText: allergiesValue }),
+    anamnesisSectionAfterReload.locator('dd', { hasText: anamnesisNotesValue }),
   ).toBeVisible({ timeout: 10_000 });
-  await expect(
-    anamnesisSectionAfterReload.locator('dd', { hasText: medicalAlertsValue }),
-  ).toBeVisible();
+  await expect(anamnesisSectionAfterReload.getByLabel('Alérgeno')).toHaveValue(allergenValue);
   await expect(anamnesisSectionAfterReload.getByText('Versión 1')).toBeVisible();
   await expect(
     evolutionsSectionAfterReload.locator('table').getByText(evolutionNotes),

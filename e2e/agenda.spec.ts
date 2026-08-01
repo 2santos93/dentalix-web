@@ -107,6 +107,11 @@ test('create appointment via the UI -> appears in the day agenda, status change 
   await page.goto(`${origin}/agenda`);
   await expect(page.getByRole('heading', { name: 'Agenda' })).toBeVisible();
 
+  // La agenda arranca en vista MES (agenda-view.tsx: useState<ViewMode>('month')),
+  // así que hay que pasar a "Día" para que se renderice `DayAgenda` — es la vista
+  // cuyo estado vacío y cuya tabla asevera este spec.
+  await page.getByRole('button', { name: 'Día', exact: true }).click();
+
   // Brand-new clinic/provider/day -> nothing scheduled yet.
   await expect(page.getByRole('status').filter({ hasText: 'No hay citas para este día.' })).toBeVisible({
     timeout: 10_000,
@@ -154,7 +159,7 @@ test('create appointment via the UI -> appears in the day agenda, status change 
   await expect(appointmentRow).toContainText(startTime);
   await expect(appointmentRow).toContainText(endTime);
   await expect(appointmentRow).toContainText(`${patientFirstName} ${patientLastName}`);
-  await expect(appointmentRow.getByTestId('appointment-status-badge')).toHaveText('Agendada');
+  await expect(appointmentRow.getByLabel(/Estado de la cita de/i)).toHaveValue('SCHEDULED');
 
   // --- Change status via `DayAgenda`'s status <select> (Task 6b): SCHEDULED
   // ("Agendada") -> CONFIRMED ("Confirmada"). `AgendaView.handleStatusChange`
@@ -163,10 +168,7 @@ test('create appointment via the UI -> appears in the day agenda, status change 
   const statusSelect = appointmentRow.getByLabel(/Estado de la cita de/i);
   await statusSelect.selectOption({ label: 'Confirmada' });
 
-  await expect(appointmentRow.getByTestId('appointment-status-badge')).toHaveText('Confirmada', {
-    timeout: 10_000,
-  });
-  await expect(statusSelect).toHaveValue('CONFIRMED');
+  await expect(statusSelect).toHaveValue('CONFIRMED', { timeout: 10_000 });
 
   // --- Reload: the appointment and its now-CONFIRMED status persist ---
   // The active day/provider selection is local component state, not
@@ -177,14 +179,14 @@ test('create appointment via the UI -> appears in the day agenda, status change 
 
   await expect(page.getByRole('heading', { name: 'Agenda' })).toBeVisible();
 
+  // `viewMode` no se persiste: el reload vuelve a la vista MES por defecto.
+  await page.getByRole('button', { name: 'Día', exact: true }).click();
+
   const appointmentRowAfterReload = page.locator('table tr', { hasText: appointmentReason });
   await expect(appointmentRowAfterReload).toBeVisible({ timeout: 10_000 });
   await expect(appointmentRowAfterReload).toContainText(startTime);
   await expect(appointmentRowAfterReload).toContainText(endTime);
   await expect(appointmentRowAfterReload).toContainText(`${patientFirstName} ${patientLastName}`);
-  await expect(appointmentRowAfterReload.getByTestId('appointment-status-badge')).toHaveText(
-    'Confirmada',
-  );
   await expect(appointmentRowAfterReload.getByLabel(/Estado de la cita de/i)).toHaveValue(
     'CONFIRMED',
   );
