@@ -6,7 +6,7 @@ import { SectionError } from '@/components/errors/section-error';
 // Copy as constants (i18n-ready, es-first) — matches day-agenda.tsx's convention.
 const copy = {
   loading: 'Cargando agenda…',
-  genericLoadError: 'No pudimos cargar la agenda. Intenta de nuevo.',
+  genericLoadError: 'No pudimos cargar la agenda.',
   emptyDay: 'Sin citas',
   heading: 'Agenda de la semana',
 };

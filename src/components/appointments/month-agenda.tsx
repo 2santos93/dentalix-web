@@ -8,7 +8,7 @@ import { SectionError } from '@/components/errors/section-error';
 // Copy as constants (i18n-ready, es-first) — matches day-agenda.tsx convention.
 const copy = {
   loading: 'Cargando calendario…',
-  genericLoadError: 'No pudimos cargar el calendario. Intenta de nuevo.',
+  genericLoadError: 'No pudimos cargar el calendario.',
   heading: 'Calendario del mes',
   weekdays: ['Lun', 'Mar', 'Mié', 'Jue', 'Vie', 'Sáb', 'Dom'],
   more: (n: number) => `+${n} más`,
