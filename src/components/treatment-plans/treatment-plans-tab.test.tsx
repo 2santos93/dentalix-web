@@ -707,6 +707,13 @@ describe('TreatmentPlansTab', () => {
       expect(toastText.closest('[role="alert"]')).toBeNull();
       expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument();
       expect(screen.queryByText(/intenta de nuevo/i)).not.toBeInTheDocument();
+
+      // Fix round 1: the toast's retry must trigger a genuinely fresh fetch
+      // (via `reloadKey`, not a stale captured closure) — not just show a
+      // button that does nothing.
+      mockedListPlans.mockResolvedValueOnce([plan1]);
+      await user.click(screen.getByRole('button', { name: 'Reintentar' }));
+      await waitFor(() => expect(mockedListPlans).toHaveBeenCalledTimes(3));
     });
 
     it('crear un plan que falla se muestra junto al botón que se acaba de pulsar (escalón 4: createPlanError)', async () => {
@@ -757,6 +764,12 @@ describe('TreatmentPlansTab', () => {
       const toastText = await screen.findByText('No se pudo refrescar el plan');
       expect(toastText.closest('[role="alert"]')).toBeNull();
       expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument();
+
+      // Fix round 1: retry must bump `planDetailReloadKey` and genuinely
+      // re-fetch, not replay a stale closure.
+      mockedGetPlan.mockResolvedValueOnce({ ...plan1Detail, status: 'ACCEPTED' });
+      await user.click(screen.getByRole('button', { name: 'Reintentar' }));
+      await waitFor(() => expect(mockedGetPlan).toHaveBeenCalledTimes(3));
     });
 
     it('un cambio de estado del plan que falla se muestra en línea (escalón 4: planStatusError)', async () => {
@@ -831,6 +844,12 @@ describe('TreatmentPlansTab', () => {
       const toastText = await screen.findByText('No se pudo refrescar el saldo');
       expect(toastText.closest('[role="alert"]')).toBeNull();
       expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument();
+
+      // Fix round 1: retry must bump `paymentsReloadKey` and genuinely
+      // re-fetch, not replay a stale closure.
+      mockedGetPlanBalance.mockResolvedValueOnce(balance1);
+      await user.click(screen.getByRole('button', { name: 'Reintentar' }));
+      await waitFor(() => expect(mockedGetPlanBalance).toHaveBeenCalledTimes(3));
     });
 
     it('anular un abono que falla se muestra en línea (escalón 4: paymentActionError)', async () => {

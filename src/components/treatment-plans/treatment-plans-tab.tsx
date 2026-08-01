@@ -585,6 +585,12 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
   const [planDetailLoading, setPlanDetailLoading] = useState(false);
   const [planDetailError, setPlanDetailError] = useState<string | null>(null);
   const [planDetailRefreshing, setPlanDetailRefreshing] = useState(false);
+  // Bumped by the `planDetailRefreshError` toast's retry action — a
+  // functional `setState` updater has stable identity across renders, so
+  // this needs no ref to stay "fresh": the effect below re-derives from
+  // whatever `selectedPlanId` currently is when it re-runs, rather than the
+  // stale one captured when the toast was built (Fix round 1, see plan doc).
+  const [planDetailReloadKey, setPlanDetailReloadKey] = useState(0);
   const loadedPlanIdRef = useRef<string | null>(null);
 
   const [updatingPlanStatus, setUpdatingPlanStatus] = useState(false);
@@ -602,6 +608,9 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
   const [paymentsLoading, setPaymentsLoading] = useState(false);
   const [paymentsError, setPaymentsError] = useState<string | null>(null);
   const [paymentsRefreshing, setPaymentsRefreshing] = useState(false);
+  // Same rationale as `planDetailReloadKey` above: the `paymentsRefreshError`
+  // toast's retry bumps this instead of closing over a ref.
+  const [paymentsReloadKey, setPaymentsReloadKey] = useState(0);
   const loadedPaymentsPlanIdRef = useRef<string | null>(null);
   // Idempotency-Key for the in-progress abono. Minted when the form opens
   // (openPaymentForm) and rotated after a SUCCESSFUL submit, so every retry of
@@ -672,14 +681,11 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
         if (isInitialLoad) {
           setLoadError(message);
         } else {
-          // No retry action here: this branch only runs when `token`/`patientId`
-          // change while the tab stays mounted (a prop change, not a user
-          // click) — an effect body must not read `refreshPlansInPlaceRef`
-          // (that ref is written elsewhere, and this project's lint forbids
-          // mutating a ref that's also read from inside an effect). The
-          // common "Nuevo plan" → `refreshPlansInPlace()` path below still
-          // gets a working retry.
-          notifyError(copy.genericRefreshError);
+          // Retry re-triggers this same effect (dep below) rather than
+          // closing over a ref — a functional `setState` updater has stable
+          // identity, so it can't go stale even if `token`/`patientId`
+          // change again before the toast is dismissed (Fix round 1).
+          notifyError(copy.genericRefreshError, { onRetry: () => setReloadKey((k) => k + 1) });
         }
       } finally {
         if (!cancelled) {
@@ -780,20 +786,19 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
         setPlans(data);
       })
       .catch((err) => {
+        // The toast's `onRetry` is built once inside this `catch` and can sit
+        // on screen across renders. Bumping `reloadKey` (a functional
+        // `setState` updater, stable identity) re-triggers the mount effect
+        // above instead of closing over `refreshPlansInPlace` directly — a
+        // ref-based guard was tried first but writing `ref.current` during
+        // render trips this project's `react-hooks/refs` lint (Fix round 1;
+        // see the plan doc's "Global Constraints" for the accepted forms).
         notifyError(err instanceof ApiError ? err.message : copy.genericRefreshError, {
-          onRetry: () => refreshPlansInPlaceRef.current(),
+          onRetry: () => setReloadKey((k) => k + 1),
         });
       })
       .finally(() => setRefreshing(false));
   }
-
-  // The toast's `onRetry` is built once inside the `catch` and can sit on
-  // screen across renders — it must call through a ref kept in sync every
-  // render instead of closing over `refreshPlansInPlace` directly, or a
-  // stale retry could replay against old props after they've changed
-  // (`agenda-view.tsx`'s fix, generalized here per the same constraint).
-  const refreshPlansInPlaceRef = useRef(refreshPlansInPlace);
-  refreshPlansInPlaceRef.current = refreshPlansInPlace;
 
   /**
    * Finds an existing reusable DRAFT plan (open + no items) to switch to
@@ -842,10 +847,12 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
 
   // Selected plan's detail: a genuinely new plan id (tracked via
   // `loadedPlanIdRef`, not state) is an initial load — full blocking status,
-  // nothing to preserve from the previously-selected plan. Reloading the
-  // SAME plan (`planDetailReloadKey` isn't used — mutations call
-  // `refreshPlanDetail()` directly, see below) never hits this branch as a
-  // refresh; this effect only fires again when `selectedPlanId` changes.
+  // nothing to preserve from the previously-selected plan. Reloading the SAME
+  // plan happens two ways: mutations call `refreshPlanDetail()` directly
+  // (see below), and the `planDetailRefreshError` toast's retry bumps
+  // `planDetailReloadKey` instead — either way this effect only ever treats
+  // it as a background refresh (`isInitialLoad` stays false once a plan has
+  // loaded once), never as the initial blocking load.
   // `planDetail` is already cleared synchronously (during render, see the
   // `prevSelectedPlanId` block above) whenever `selectedPlanId` changes —
   // including to `null` — so this effect only needs to handle the "fetch a
@@ -874,11 +881,12 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
         if (isInitialLoad) {
           setPlanDetailError(message);
         } else {
-          // No retry action here — same rationale as the plans-list load
-          // effect above: this branch runs from inside an effect, which must
-          // not read a ref that's written elsewhere. `refreshPlanDetail()`
-          // (the common path, called after every mutation) keeps its retry.
-          notifyError(copy.genericPlanDetailRefreshError);
+          // Retry bumps `planDetailReloadKey` (functional `setState`
+          // updater, stable identity) rather than closing over a ref — see
+          // `refreshPlanDetail`'s catch below for the full rationale.
+          notifyError(copy.genericPlanDetailRefreshError, {
+            onRetry: () => setPlanDetailReloadKey((k) => k + 1),
+          });
         }
       } finally {
         if (!cancelled) {
@@ -891,13 +899,17 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
     return () => {
       cancelled = true;
     };
-  }, [token, selectedPlanId]);
+    // `planDetailReloadKey` is a dep purely so the toast above can retry by
+    // bumping it — it re-runs this exact effect, which re-reads
+    // `selectedPlanId` fresh rather than a value closed over when the toast
+    // was built.
+  }, [token, selectedPlanId, planDetailReloadKey]);
 
   /**
-   * Re-fetches the selected plan's detail in place. Called directly (never
-   * via a reload-key bump) by every item/plan mutation below AND awaited by
-   * them before clearing their own busy flag — see the component doc
-   * comment for why (`AgendaView.handleStatusChange`'s fix).
+   * Re-fetches the selected plan's detail in place. Called directly by every
+   * item/plan mutation below AND awaited by them before clearing their own
+   * busy flag — see the component doc comment for why
+   * (`AgendaView.handleStatusChange`'s fix).
    */
   function refreshPlanDetail(): Promise<void> {
     if (!selectedPlanId) return Promise.resolve();
@@ -907,16 +919,19 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
         setPlanDetail(data);
       })
       .catch((err) => {
+        // The toast's `onRetry` is built once inside this `catch` and can
+        // sit on screen across renders. Bumping `planDetailReloadKey`
+        // re-triggers the effect above (which re-reads `selectedPlanId`
+        // fresh) instead of closing over `refreshPlanDetail` directly — a
+        // ref-based guard was tried first but writing `ref.current` during
+        // render trips this project's `react-hooks/refs` lint (Fix round 1;
+        // see the plan doc's "Global Constraints" for the accepted forms).
         notifyError(err instanceof ApiError ? err.message : copy.genericPlanDetailRefreshError, {
-          onRetry: () => refreshPlanDetailRef.current(),
+          onRetry: () => setPlanDetailReloadKey((k) => k + 1),
         });
       })
       .finally(() => setPlanDetailRefreshing(false));
   }
-
-  // Same stale-closure guard as `refreshPlansInPlaceRef` above.
-  const refreshPlanDetailRef = useRef(refreshPlanDetail);
-  refreshPlanDetailRef.current = refreshPlanDetail;
 
   // Balance + abonos (PAY-T4): a genuinely separate resource from
   // `planDetail` above (different endpoints), but fetched with the exact
@@ -953,10 +968,12 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
         if (isInitialLoad) {
           setPaymentsError(message);
         } else {
-          // No retry action here — same rationale as the two effects above.
-          // `refreshBalanceAndPayments()` (the common path, called after
-          // every abono mutation) keeps its retry.
-          notifyError(copy.genericBalanceRefreshError);
+          // Retry bumps `paymentsReloadKey` (functional `setState` updater,
+          // stable identity) rather than closing over a ref — see
+          // `refreshBalanceAndPayments`'s catch below for the full rationale.
+          notifyError(copy.genericBalanceRefreshError, {
+            onRetry: () => setPaymentsReloadKey((k) => k + 1),
+          });
         }
       } finally {
         if (!cancelled) {
@@ -969,7 +986,9 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
     return () => {
       cancelled = true;
     };
-  }, [token, selectedPlanId]);
+    // `paymentsReloadKey` is a dep purely so the toast above can retry by
+    // bumping it — same rationale as `planDetailReloadKey` above.
+  }, [token, selectedPlanId, paymentsReloadKey]);
 
   /**
    * Re-fetches the balance + abonos list in place. Called directly by
@@ -987,16 +1006,20 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
         setPaymentPlanRefreshSignal((n) => n + 1);
       })
       .catch((err) => {
+        // The toast's `onRetry` is built once inside this `catch` and can
+        // sit on screen across renders. Bumping `paymentsReloadKey`
+        // re-triggers the effect above (which re-reads `selectedPlanId`
+        // fresh) instead of closing over `refreshBalanceAndPayments`
+        // directly — a ref-based guard was tried first but writing
+        // `ref.current` during render trips this project's `react-hooks/refs`
+        // lint (Fix round 1; see the plan doc's "Global Constraints" for the
+        // accepted forms).
         notifyError(err instanceof ApiError ? err.message : copy.genericBalanceRefreshError, {
-          onRetry: () => refreshBalanceAndPaymentsRef.current(),
+          onRetry: () => setPaymentsReloadKey((k) => k + 1),
         });
       })
       .finally(() => setPaymentsRefreshing(false));
   }
-
-  // Same stale-closure guard as `refreshPlansInPlaceRef` above.
-  const refreshBalanceAndPaymentsRef = useRef(refreshBalanceAndPayments);
-  refreshBalanceAndPaymentsRef.current = refreshBalanceAndPayments;
 
   /** Opens the "Registrar pago" modal, defaulting currency=plan.currency / fecha=today. */
   function openPaymentForm() {
