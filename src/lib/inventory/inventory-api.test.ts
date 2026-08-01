@@ -19,7 +19,7 @@ describe('inventory-api', () => {
     global.fetch = realFetch;
   });
 
-  it('listInventoryItems: GET /inventory/items', async () => {
+  it('listInventoryItems: GET /inventory/items, returning the paginated envelope', async () => {
     const items = [
       {
         id: 'i1',
@@ -35,16 +35,45 @@ describe('inventory-api', () => {
         lowStock: false,
       },
     ];
-    const spy = jest.fn().mockResolvedValue({ ok: true, json: async () => items });
+    const envelope = { items, total: 1, page: 1, pageSize: 20 };
+    const spy = jest.fn().mockResolvedValue({ ok: true, json: async () => envelope });
     global.fetch = spy as unknown as typeof fetch;
 
     const out = await listInventoryItems('tok');
 
-    expect(out).toEqual(items);
+    expect(out).toEqual(envelope);
     const [url, init] = spy.mock.calls[0];
     expect(String(url)).toContain('/inventory/items');
     expect(init.method).toBe('GET');
     expect(init.headers.Authorization).toBe('Bearer tok');
+  });
+
+  it('listInventoryItems: builds the query string from query/page/pageSize/lowStockOnly, omitting empty ones', async () => {
+    const envelope = { items: [], total: 0, page: 2, pageSize: 20 };
+    const spy = jest.fn().mockResolvedValue({ ok: true, json: async () => envelope });
+    global.fetch = spy as unknown as typeof fetch;
+
+    await listInventoryItems('tok', { query: 'guantes', page: 2, lowStockOnly: true });
+
+    const [url] = spy.mock.calls[0];
+    const parsed = new URL(String(url));
+    expect(parsed.searchParams.get('query')).toBe('guantes');
+    expect(parsed.searchParams.get('page')).toBe('2');
+    expect(parsed.searchParams.get('lowStockOnly')).toBe('true');
+    expect(parsed.searchParams.has('pageSize')).toBe(false);
+  });
+
+  it('listInventoryItems: omits query/lowStockOnly entirely when unset', async () => {
+    const envelope = { items: [], total: 0, page: 1, pageSize: 20 };
+    const spy = jest.fn().mockResolvedValue({ ok: true, json: async () => envelope });
+    global.fetch = spy as unknown as typeof fetch;
+
+    await listInventoryItems('tok');
+
+    const [url] = spy.mock.calls[0];
+    const parsed = new URL(String(url));
+    expect(parsed.searchParams.has('query')).toBe(false);
+    expect(parsed.searchParams.has('lowStockOnly')).toBe(false);
   });
 
   it('createInventoryItem: POST /inventory/items with the given input', async () => {

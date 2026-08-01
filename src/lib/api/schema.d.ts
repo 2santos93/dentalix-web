@@ -1852,6 +1852,12 @@ export interface components {
             lowStock?: boolean;
             movements?: components["schemas"]["InventoryMovementDto"][];
         };
+        ListInventoryItemsResponseDto: {
+            items: components["schemas"]["InventoryItemDto"][];
+            total: number;
+            page: number;
+            pageSize: number;
+        };
         UpdateInventoryItemDto: {
             /** @example Guantes de nitrilo */
             name?: string;
@@ -3441,7 +3447,14 @@ export interface operations {
     };
     InventoryController_list: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description Búsqueda libre (nombre o SKU) */
+                query?: string;
+                page?: number;
+                pageSize?: number;
+                /** @description Solo insumos en o por debajo del mínimo */
+                lowStockOnly?: boolean;
+            };
             header?: never;
             path?: never;
             cookie?: never;
@@ -3453,7 +3466,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["InventoryItemDto"][];
+                    "application/json": components["schemas"]["ListInventoryItemsResponseDto"];
                 };
             };
         };
