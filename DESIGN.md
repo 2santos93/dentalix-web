@@ -269,8 +269,15 @@ rung 2 was picked for what is really a section failure.
 one of these; `InlineError` has none, so it keeps the phrase. A toast's retry
 must never close over stale component state — reuse an existing reload
 mechanism (a functional state updater has a stable identity) rather than a
-ref kept in sync by hand. A modal that stays open on failure makes its own
-toast inert underneath it; close the dialog on failure too.
+ref kept in sync by hand (`react-hooks/refs` rejects assigning one during
+render). Exception: a closure is fine when what it captures *is* the
+operation, not ambient state — `onRetry: () => handleStatusChange(id, status)`
+closes over `id`/`status`, the retry's own arguments, so there's nothing to
+go stale. The test: can the captured value change before the retry fires
+without the retry being wrong? If yes, it's ambient state and needs the
+reload-mechanism treatment; if the value *is* what's being retried, close
+over it directly. A modal that stays open on failure makes its own toast
+inert underneath it; close the dialog on failure too.
 
 ### Tables
 - **Header:** surface-2, label type, muted. **Rows:** hairline separators, 44px min height,
