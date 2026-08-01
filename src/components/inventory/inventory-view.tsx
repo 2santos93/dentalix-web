@@ -111,7 +111,8 @@ const copy = {
   colMovementQuantity: 'Cantidad',
   colMovementReason: 'Motivo',
   movementReasonFallback: '—',
-  genericHistoryError: 'No pudimos cargar el historial. Intenta de nuevo.',
+  // Sin "Intenta de nuevo." — alimenta AsyncSection -> SectionError, que trae su propio botón.
+  genericHistoryError: 'No pudimos cargar el historial.',
   emptyHistory: 'Este insumo todavía no tiene movimientos.',
 };
 
