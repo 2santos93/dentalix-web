@@ -349,7 +349,7 @@ export interface paths {
         };
         get: operations["StaffController_list"];
         put?: never;
-        post: operations["StaffController_create"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -434,6 +434,70 @@ export interface paths {
         options?: never;
         head?: never;
         patch: operations["TreatmentPlansController_updateItem"];
+        trace?: never;
+    };
+    "/api/v1/staff/invitations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["StaffInvitationsController_list"];
+        put?: never;
+        post: operations["StaffInvitationsController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/staff/invitations/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["StaffInvitationsController_remove"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/invitations/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["PublicInvitationsController_getByToken"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/invitations/{token}/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["PublicInvitationsController_accept"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/domains": {
@@ -1214,13 +1278,6 @@ export interface components {
             /** @enum {string} */
             role: "DENTIST" | "ASSISTANT" | "RECEPTION" | "ADMIN";
         };
-        CreateStaffDto: {
-            fullName: string;
-            email: string;
-            /** @enum {string} */
-            role: "DENTIST" | "ASSISTANT" | "RECEPTION" | "ADMIN";
-            password: string;
-        };
         UpdateStaffDto: {
             fullName?: string;
             /** @enum {string} */
@@ -1309,6 +1366,49 @@ export interface components {
             status?: "PROPOSED" | "ACCEPTED" | "DONE";
             surfaces?: ("MESIAL" | "DISTAL" | "OCCLUSAL" | "VESTIBULAR" | "LINGUAL")[];
             notes?: string;
+        };
+        CreateInvitationDto: {
+            fullName: string;
+            email: string;
+            /** @enum {string} */
+            role: "DENTIST" | "ASSISTANT" | "RECEPTION" | "ADMIN";
+        };
+        CreatedInvitationDto: {
+            /** Format: uuid */
+            id: string;
+            fullName: string;
+            email: string;
+            /** @enum {string} */
+            role: "DENTIST" | "ASSISTANT" | "RECEPTION" | "ADMIN";
+            /** Format: date-time */
+            expiresAt: string;
+            /** @enum {string} */
+            status: "VALID" | "EXPIRED" | "USED" | "REVOKED";
+            token: string;
+        };
+        InvitationDto: {
+            /** Format: uuid */
+            id: string;
+            fullName: string;
+            email: string;
+            /** @enum {string} */
+            role: "DENTIST" | "ASSISTANT" | "RECEPTION" | "ADMIN";
+            /** Format: date-time */
+            expiresAt: string;
+            /** @enum {string} */
+            status: "VALID" | "EXPIRED" | "USED" | "REVOKED";
+        };
+        PublicInvitationDto: {
+            /** @enum {string} */
+            status: "VALID" | "EXPIRED" | "USED" | "REVOKED" | "NOT_FOUND";
+            clinicName?: string;
+            /** @enum {string} */
+            role?: "DENTIST" | "ASSISTANT" | "RECEPTION" | "ADMIN";
+            maskedEmail?: string;
+            userExists?: boolean;
+        };
+        AcceptInvitationDto: {
+            password: string;
         };
         CreateDomainDto: Record<string, never>;
         BrandingDto: {
@@ -2462,29 +2562,6 @@ export interface operations {
             };
         };
     };
-    StaffController_create: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreateStaffDto"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["StaffMemberDto"];
-                };
-            };
-        };
-    };
     StaffController_remove: {
         parameters: {
             query?: never;
@@ -2687,6 +2764,113 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["TreatmentPlanItemDto"];
+                };
+            };
+        };
+    };
+    StaffInvitationsController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvitationDto"][];
+                };
+            };
+        };
+    };
+    StaffInvitationsController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateInvitationDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreatedInvitationDto"];
+                };
+            };
+        };
+    };
+    StaffInvitationsController_remove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PublicInvitationsController_getByToken: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicInvitationDto"];
+                };
+            };
+        };
+    };
+    PublicInvitationsController_accept: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AcceptInvitationDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthTokensDto"];
                 };
             };
         };
