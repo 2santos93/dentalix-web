@@ -44,7 +44,14 @@ interface WeekAgendaProps {
   loading: boolean;
   /** Error message to show instead of the grid, if loading failed. */
   error?: string | null;
-  /** Retries the load that produced `error` — renders as `SectionError`'s own retry button. */
+  /**
+   * Retries the load that produced `error` — renders as `SectionError`'s own
+   * retry button. NOT wired today: `WeekAgenda` itself isn't rendered
+   * anywhere in the app (`agenda-view.tsx`'s Semana view uses `WeekTimeGrid`
+   * instead, whose hand-rolled error branch has its own retry) — this prop
+   * only exists for parity with `DayAgenda`/`MonthAgenda` and is exercised by
+   * this component's own test, not by a real caller.
+   */
   onRetry?: () => void;
   /** Optional `patientId -> fullName` lookup — see `DayAgenda`'s prop of the same name. */
   patientNames?: Record<string, string>;

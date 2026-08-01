@@ -235,7 +235,10 @@ describe('StaffView', () => {
 
   it('a failed deactivate surfaces as a background toast with a retry action, not an inline banner (escalón 3)', async () => {
     mockedListStaff.mockResolvedValue([member1]);
-    mockedDeactivateStaff.mockRejectedValueOnce(new ApiError(409, 'No puedes desactivar al último administrador'));
+    mockedDeactivateStaff.mockRejectedValueOnce(
+      new ApiError(409, 'No puedes desactivar al último administrador'),
+    );
+    mockedDeactivateStaff.mockResolvedValueOnce(undefined);
 
     const user = userEvent.setup();
     render(
@@ -253,8 +256,13 @@ describe('StaffView', () => {
     expect(
       await screen.findByText('No puedes desactivar al último administrador'),
     ).toBeInTheDocument();
-    // The confirm dialog no longer renders its own inline error for this case.
-    expect(within(confirmDialog).queryByRole('alert')).not.toBeInTheDocument();
+    // The confirm dialog closes on failure too (not just success) — it's a
+    // Radix modal, so leaving it open would mark the toast's own retry
+    // button inert (unreachable), same contract violation as no retry at all.
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+
+    await user.click(screen.getByRole('button', { name: /reintentar/i }));
+    await waitFor(() => expect(mockedDeactivateStaff).toHaveBeenCalledTimes(2));
   });
 
   it('a create error (e.g. 409 duplicate email) renders role="alert"', async () => {

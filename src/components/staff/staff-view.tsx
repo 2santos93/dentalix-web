@@ -222,6 +222,13 @@ export function StaffView({ token }: StaffViewProps) {
       setConfirmingId(null);
       await refreshInPlace();
     } catch (err) {
+      // Close the confirm dialog on failure too, not just success: it's a
+      // Radix modal, so while it's open it marks everything outside it
+      // (including the toast this fires) inert — a "Reintentar" button the
+      // user can see but can't click fails rung 3's own contract. Closing it
+      // makes the toast the one, reachable place to retry, same as
+      // role/name change (which never had a dialog in the way).
+      setConfirmingId(null);
       notifyError(err instanceof ApiError ? err.message : copy.genericDeactivateError, {
         onRetry: () => handleDeactivate(userId),
       });
