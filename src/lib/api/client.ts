@@ -1,4 +1,5 @@
 import { useAuthStore } from '@/lib/auth/auth-store';
+import { getActiveLocationId } from '@/lib/locations/location-store';
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000/api/v1';
 
@@ -91,6 +92,12 @@ async function doFetch(
   // backend then falls back to `x-forwarded-host`/`Host` from the proxied
   // request, which is fine — there is no browser host to read here.
   if (typeof window !== 'undefined') headers['X-Tenant-Host'] = window.location.host;
+  // Sede activa: igual que el tenant, viaja sola en cada request en vez de
+  // tener que pasarla por parámetro a cada llamada. Si no hay ninguna elegida
+  // no se manda la cabecera, y el backend responde la vista CONSOLIDADA de la
+  // clínica — que es el comportamiento de siempre.
+  const activeLocationId = getActiveLocationId();
+  if (activeLocationId) headers['X-Location-Id'] = activeLocationId;
   if (opts.headers) Object.assign(headers, opts.headers);
   const res = await fetch(`${API}${path}`, {
     method: opts.method ?? 'GET',

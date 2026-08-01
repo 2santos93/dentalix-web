@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Users, Calendar, LayoutDashboard, UserCog, ClipboardList } from 'lucide-react';
 import { UserMenu } from '@/components/profile/user-menu';
+import { LocationSwitcher } from '@/components/locations/location-switcher';
 import { cn } from '@/lib/utils';
 
 const NAV = [
@@ -84,10 +85,15 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </Link>
             ))}
           </nav>
-          <div className="hidden md:block" />
+          {/* En desktop este hueco del topbar lo ocupa el selector de sede
+              (que se autooculta si la clínica solo tiene una). */}
+          <div className="hidden md:block">
+            <LocationSwitcher />
+          </div>
           {/* En móvil el sidebar está oculto: el menú de cuenta (perfil, tema,
               cerrar sesión) vive en el topbar como avatar compacto. */}
-          <div className="md:hidden">
+          <div className="flex items-center gap-2 md:hidden">
+            <LocationSwitcher />
             <UserMenu variant="compact" />
           </div>
         </header>
