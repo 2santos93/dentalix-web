@@ -84,15 +84,23 @@ test('create appointment via the UI -> appears in the day agenda, status change 
   await page.getByLabel('Sexo').selectOption('F');
 
   const createPatientError = page.locator('p[role="alert"]');
-  await page.getByRole('button', { name: 'Crear paciente' }).click();
+  // El alta de paciente es un WIZARD de 5 pasos y el submit ("Guardar") vive en
+  // el último; con nombre+apellido llenos se puede saltar directo al final (ver
+  // `goToStep` en patient-create-wizard.tsx). Antes esto pulsaba un botón "Crear
+  // paciente" que ya no existe, y el spec se colgaba 30s en el click.
+  await page.getByRole('button', { name: /Consentimiento/ }).click();
+  await page.getByRole('button', { name: 'Guardar' }).click();
 
+  // El wizard redirige al DETALLE del paciente recién creado
+  // (patient-create-wizard.tsx: `router.push(`/patients/${created.id}`)`), no a
+  // la lista como hacía el formulario anterior.
   await expect(page)
-    .toHaveURL(/\/patients$/, { timeout: 10_000 })
+    .toHaveURL(/\/patients\/[^/]+$/, { timeout: 10_000 })
     .catch(async () => {
       const message = (await createPatientError.isVisible())
         ? await createPatientError.textContent()
         : 'unknown (no redirect, no visible alert)';
-      throw new Error(`Create patient did not redirect to /patients. API error: ${message}`);
+      throw new Error(`Create patient did not land on the patient detail page. API error: ${message}`);
     });
 
   // --- Go to the agenda ---
