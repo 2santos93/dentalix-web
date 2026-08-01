@@ -94,16 +94,28 @@ test('register a procedure on a tooth -> colored + in timeline, persists after r
   await page.getByLabel('Sexo').selectOption('M');
 
   const createError = page.locator('p[role="alert"]');
-  await page.getByRole('button', { name: 'Crear paciente' }).click();
+  // El alta de paciente es un WIZARD de 5 pasos y el submit ("Guardar") vive en
+  // el último; con nombre+apellido llenos se puede saltar directo al final (ver
+  // `goToStep` en patient-create-wizard.tsx). Antes esto pulsaba un botón "Crear
+  // paciente" que ya no existe, y el spec se colgaba 30s en el click.
+  await page.getByRole('button', { name: /Consentimiento/ }).click();
+  await page.getByRole('button', { name: 'Guardar' }).click();
 
+  // El wizard redirige al DETALLE del paciente recién creado
+  // (patient-create-wizard.tsx: `router.push(`/patients/${created.id}`)`), no a
+  // la lista como hacía el formulario anterior.
   await expect(page)
-    .toHaveURL(/\/patients$/, { timeout: 10_000 })
+    .toHaveURL(/\/patients\/[^/]+$/, { timeout: 10_000 })
     .catch(async () => {
       const message = (await createError.isVisible())
         ? await createError.textContent()
         : 'unknown (no redirect, no visible alert)';
-      throw new Error(`Create patient did not redirect to /patients. API error: ${message}`);
+      throw new Error(`Create patient did not land on the patient detail page. API error: ${message}`);
     });
+
+  // Los pasos siguientes buscan al paciente en la LISTA, así que se vuelve a
+  // ella (antes se llegaba ahí por la redirección).
+  await page.goto(`${origin}/patients`);
 
   // --- Open the patient's detail page ---
   // Scope to the desktop `table` — the mobile card list is CSS-hidden but
@@ -146,7 +158,7 @@ test('register a procedure on a tooth -> colored + in timeline, persists after r
 
   // --- Fill and submit the tooth-record form ---
   await recordForm.getByLabel(catalogLabel).check();
-  await expect(recordForm.getByLabel('Oclusal')).toBeChecked();
+  await expect(recordForm.getByLabel('Oclusal', { exact: true })).toBeChecked();
 
   const saveError = recordForm.locator('p[role="alert"]');
   await recordForm.getByRole('button', { name: 'Guardar' }).click();
