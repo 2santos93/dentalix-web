@@ -11,6 +11,7 @@ import { PatientDetailTabs, type PatientDetailTabKey } from '@/components/patien
 import { OdontogramTab } from '@/components/odontogram/odontogram-tab';
 import { TreatmentPlansTab } from '@/components/treatment-plans/treatment-plans-tab';
 import { formatCivilDate } from '@/lib/format/date';
+import { SectionError } from '@/components/errors/section-error';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
@@ -18,7 +19,7 @@ const copy = {
   backLink: 'Volver a pacientes',
   checkingSession: 'Verificando sesión…',
   loading: 'Cargando paciente…',
-  genericError: 'No pudimos cargar el paciente. Intenta de nuevo.',
+  genericError: 'No pudimos cargar el paciente.',
   retry: 'Reintentar',
   tabData: 'Datos',
   tabClinicalHistory: 'Historia clínica',
@@ -119,22 +120,15 @@ export default function PatientDetailPage() {
           {copy.loading}
         </p>
       ) : error ? (
-        <div className="flex flex-col items-start gap-3">
-          <p role="alert" className="text-sm text-danger">
-            {error}
-          </p>
-          <button
-            type="button"
-            onClick={() => {
-              setLoading(true);
-              setError(null);
-              setRetryCount((c) => c + 1);
-            }}
-            className="rounded-md border border-border px-3 py-1.5 text-sm font-medium text-ink"
-          >
-            {copy.retry}
-          </button>
-        </div>
+        <SectionError
+          description={error}
+          onRetry={() => {
+            setLoading(true);
+            setError(null);
+            setRetryCount((c) => c + 1);
+          }}
+          retryLabel={copy.retry}
+        />
       ) : patient ? (
         <div className="flex flex-col gap-4">
           <PatientDetailTabs

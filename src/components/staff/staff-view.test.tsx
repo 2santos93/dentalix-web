@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { StaffView } from './staff-view';
 import { listStaff, createStaff, updateStaff, deactivateStaff } from '@/lib/staff/staff-api';
 import { ApiError } from '@/lib/api/client';
+import { Toaster } from '@/components/errors/toaster';
 
 // NOTE: jest.mock's string literal is not alias-rewritten by the SWC
 // transform (only real `import`/`require` specifiers are) — use a relative
@@ -204,6 +205,56 @@ describe('StaffView', () => {
     await user.tab();
 
     expect(mockedUpdateStaff).not.toHaveBeenCalled();
+  });
+
+  it('a failed role change surfaces as a background toast with a retry action, not an inline banner (escalón 3)', async () => {
+    mockedListStaff.mockResolvedValue([member1]);
+    mockedUpdateStaff.mockRejectedValueOnce(new ApiError(500, 'Error del servidor'));
+    mockedUpdateStaff.mockResolvedValueOnce({ ...member1, role: 'ADMIN' });
+    mockedListStaff.mockResolvedValueOnce([{ ...member1, role: 'ADMIN' as const }]);
+
+    const user = userEvent.setup();
+    render(
+      <>
+        <Toaster />
+        <StaffView token="tok" />
+      </>,
+    );
+
+    await screen.findByRole('table', { name: /personal/i });
+    const roleSelect = screen.getByLabelText<HTMLSelectElement>(/rol de ana ríos/i);
+    await user.selectOptions(roleSelect, 'ADMIN');
+
+    expect(await screen.findByText('Error del servidor')).toBeInTheDocument();
+    // No inline banner competes with the toast for the same failure.
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /reintentar/i }));
+    await waitFor(() => expect(mockedUpdateStaff).toHaveBeenCalledTimes(2));
+  });
+
+  it('a failed deactivate surfaces as a background toast with a retry action, not an inline banner (escalón 3)', async () => {
+    mockedListStaff.mockResolvedValue([member1]);
+    mockedDeactivateStaff.mockRejectedValueOnce(new ApiError(409, 'No puedes desactivar al último administrador'));
+
+    const user = userEvent.setup();
+    render(
+      <>
+        <Toaster />
+        <StaffView token="tok" />
+      </>,
+    );
+
+    await screen.findByRole('table', { name: /personal/i });
+    await user.click(screen.getByRole('button', { name: /^desactivar$/i }));
+    const confirmDialog = await screen.findByRole('dialog');
+    await user.click(within(confirmDialog).getByRole('button', { name: /sí, desactivar/i }));
+
+    expect(
+      await screen.findByText('No puedes desactivar al último administrador'),
+    ).toBeInTheDocument();
+    // The confirm dialog no longer renders its own inline error for this case.
+    expect(within(confirmDialog).queryByRole('alert')).not.toBeInTheDocument();
   });
 
   it('a create error (e.g. 409 duplicate email) renders role="alert"', async () => {

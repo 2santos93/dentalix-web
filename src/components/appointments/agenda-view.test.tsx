@@ -448,6 +448,30 @@ describe('AgendaView', () => {
     expect(await screen.findByLabelText(/agenda de la semana/i)).toBeInTheDocument();
   });
 
+  it('shows a SectionError with a retry button (not a bare alert) when Semana fails to load, and the retry re-fetches (escalón 1)', async () => {
+    mockedListStaff.mockResolvedValue(staff);
+    mockedListAppointments.mockResolvedValueOnce([]); // month mount
+    const user = userEvent.setup();
+
+    render(<AgendaView token="tok" />);
+    await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
+
+    mockedListAppointments.mockRejectedValueOnce(new ApiError(500, 'Error del servidor'));
+    await user.click(screen.getByRole('button', { name: /^semana$/i }));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('Error del servidor');
+    // `SectionError` renders its own retry button next to the message — no
+    // naked red text with nothing to press.
+    const retryButton = within(alert).getByRole('button', { name: /reintentar/i });
+
+    mockedListAppointments.mockResolvedValueOnce([]);
+    await user.click(retryButton);
+
+    await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
+    expect(await screen.findByLabelText(/agenda de la semana/i)).toBeInTheDocument();
+  });
+
   it('clicking a day header in Semana view switches back to Día view with that date selected', async () => {
     mockedListStaff.mockResolvedValue(staff);
     mockedListAppointments.mockResolvedValue([]);

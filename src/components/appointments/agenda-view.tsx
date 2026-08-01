@@ -30,6 +30,7 @@ import {
 } from '@/components/ui/dialog';
 import { FormField } from '@/components/molecules/form-field';
 import { FieldError } from '@/components/errors/field-error';
+import { SectionError } from '@/components/errors/section-error';
 import { notifyError } from '@/components/errors/notify';
 import {
   Sheet,
@@ -69,7 +70,9 @@ const copy = {
   loading: 'Cargando agenda…',
   // Escalón 2 (control): etiqueta corta, el contexto lo da el propio filtro.
   staffFieldError: 'No se pudieron cargar',
-  genericAppointmentsError: 'No pudimos cargar la agenda. Intenta de nuevo.',
+  // Escalón 1 con reintento (ver Semana más abajo): sin "Intenta de nuevo." —
+  // `SectionError` trae su propio botón.
+  genericAppointmentsError: 'No pudimos cargar la agenda.',
   // Escalón 3 (segundo plano): sin "Intenta de nuevo." — el toast trae acción.
   genericRefreshError: 'No pudimos actualizar la agenda.',
   genericStatusChangeError: 'No pudimos cambiar el estado de la cita.',
@@ -269,6 +272,12 @@ export function AgendaView({ token }: AgendaViewProps) {
   const [appointmentsLoading, setAppointmentsLoading] = useState(false);
   const [appointmentsLoadError, setAppointmentsLoadError] = useState<string | null>(null);
   const [appointmentsRefreshing, setAppointmentsRefreshing] = useState(false);
+  // Bumped by the Semana view's `SectionError` retry button below — the only
+  // one of the three views whose error is hand-rolled here instead of owned
+  // by a `DayAgenda`/`MonthAgenda`-style component (see that section's
+  // comment), so it's also the only one that needs a way to force the load
+  // effect below to refire.
+  const [appointmentsReloadKey, setAppointmentsReloadKey] = useState(0);
 
 
   const [showForm, setShowForm] = useState(false);
@@ -349,7 +358,7 @@ export function AgendaView({ token }: AgendaViewProps) {
     return () => {
       cancelled = true;
     };
-  }, [token, providerId, selectedDate, viewMode]);
+  }, [token, providerId, selectedDate, viewMode, appointmentsReloadKey]);
 
   function refreshAppointmentsInPlace(): Promise<void> {
     if (!token) return Promise.resolve();
@@ -578,9 +587,11 @@ export function AgendaView({ token }: AgendaViewProps) {
               {copy.loading}
             </p>
           ) : appointmentsLoadError ? (
-            <p role="alert" className="text-sm text-danger">
-              {appointmentsLoadError}
-            </p>
+            <SectionError
+              description={appointmentsLoadError}
+              onRetry={() => setAppointmentsReloadKey((k) => k + 1)}
+              retryLabel={copy.retry}
+            />
           ) : (
             <WeekTimeGrid
               appointments={appointments}

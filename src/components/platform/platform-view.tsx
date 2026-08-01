@@ -13,6 +13,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import { FormField } from '@/components/molecules/form-field';
 import { EmptyState } from '@/components/molecules/empty-state';
 import { Skeleton } from '@/components/ui/skeleton';
+import { SectionError } from '@/components/errors/section-error';
+import { InlineError } from '@/components/errors/inline-error';
 import { ArrowUpRight, LogOut } from 'lucide-react';
 
 const copy = {
@@ -27,7 +29,7 @@ const copy = {
   signOut: 'Salir',
   enter: 'Entrar',
   invalid: 'Credenciales inválidas.',
-  loadError: 'No pudimos cargar las clínicas. Intenta de nuevo.',
+  loadError: 'No pudimos cargar las clínicas.',
   retry: 'Reintentar',
   emptyTitle: 'Sin clínicas',
   emptyDescription: 'Todavía no hay ninguna clínica registrada.',
@@ -129,14 +131,7 @@ export function PlatformView() {
         <Card className="mt-6">
           <CardContent className="p-6">
             <form onSubmit={handleSignIn} className="flex flex-col gap-4">
-              {signInError && (
-                <p
-                  role="alert"
-                  className="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-sm font-medium text-danger"
-                >
-                  {signInError}
-                </p>
-              )}
+              {signInError && <InlineError>{signInError}</InlineError>}
               <FormField htmlFor="platform-email" label={copy.email}>
                 <Input
                   id="platform-email"
@@ -189,21 +184,14 @@ export function PlatformView() {
           ))}
         </div>
       ) : loadError ? (
-        <div className="flex items-center gap-3">
-          <p role="alert" className="text-sm text-danger">
-            {loadError}
-          </p>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => {
-              setLoadError(null);
-              setRetryTick((t) => t + 1);
-            }}
-          >
-            {copy.retry}
-          </Button>
-        </div>
+        <SectionError
+          description={loadError}
+          onRetry={() => {
+            setLoadError(null);
+            setRetryTick((t) => t + 1);
+          }}
+          retryLabel={copy.retry}
+        />
       ) : tenants.length === 0 ? (
         <EmptyState
           role="status"

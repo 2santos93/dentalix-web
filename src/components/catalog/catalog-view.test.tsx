@@ -2,6 +2,7 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { CatalogView } from './catalog-view';
 import { listCatalogItems, createCatalogItem, updateCatalogItem } from '@/lib/odontogram/catalog-api';
+import { Toaster } from '@/components/errors/toaster';
 
 // NOTE: jest.mock's string literal is not alias-rewritten by the SWC transform
 // (only real import/require specifiers are) — use a relative path here, same
@@ -133,6 +134,32 @@ describe('CatalogView', () => {
     // The row now shows "Inactivo" and offers to re-activate.
     expect(await screen.findByText('Inactivo')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: /activar profilaxis/i })).toBeInTheDocument();
+  });
+
+  it('a failed toggle surfaces as a background toast with a retry action, not an inline banner (escalón 3)', async () => {
+    const { ApiError } = jest.requireActual('../../lib/api/client');
+    mockedList.mockResolvedValue([item1]);
+    mockedUpdate.mockRejectedValueOnce(new ApiError(500, 'Error del servidor'));
+    mockedUpdate.mockResolvedValueOnce({ ...item1, active: false });
+
+    const user = userEvent.setup();
+    render(
+      <>
+        <Toaster />
+        <CatalogView token="tok" />
+      </>,
+    );
+
+    await screen.findByRole('table', { name: /catálogo/i });
+    await user.click(screen.getByRole('button', { name: /desactivar profilaxis/i }));
+
+    expect(await screen.findByText('Error del servidor')).toBeInTheDocument();
+    // No inline banner competes with the toast for the same failure — the
+    // table's rows (still showing the item as active) stay untouched.
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: /reintentar/i }));
+    await waitFor(() => expect(mockedUpdate).toHaveBeenCalledTimes(2));
   });
 
   it('surfaces a backend error (e.g. duplicate code) verbatim when editing fails', async () => {

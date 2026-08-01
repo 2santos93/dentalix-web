@@ -1,6 +1,7 @@
 'use client';
 import type { Appointment } from '@/lib/appointments/appointments-api';
 import { StatusBadge, formatTimeRange, patientLabel } from './appointment-display';
+import { SectionError } from '@/components/errors/section-error';
 
 // Copy as constants (i18n-ready, es-first) — matches day-agenda.tsx's convention.
 const copy = {
@@ -74,11 +75,7 @@ export function WeekAgenda({
   }
 
   if (error) {
-    return (
-      <p role="alert" className="text-sm text-danger">
-        {error || copy.genericLoadError}
-      </p>
-    );
+    return <SectionError description={error || copy.genericLoadError} />;
   }
 
   const dates = weekDates(weekStart);

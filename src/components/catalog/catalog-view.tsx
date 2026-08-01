@@ -19,6 +19,7 @@ import { FormField } from '@/components/molecules/form-field';
 import { FormModal } from '@/components/molecules/form-modal';
 import { EmptyState } from '@/components/molecules/empty-state';
 import { AsyncSection, TableSkeleton } from '@/components/molecules/async-section';
+import { notifyError } from '@/components/errors/notify';
 import {
   Table,
   TableBody,
@@ -54,10 +55,11 @@ const copy = {
   retry: 'Reintentar',
   loading: 'Cargando catálogo…',
   tableLabel: 'Catálogo dental',
-  genericLoadError: 'No pudimos cargar el catálogo. Intenta de nuevo.',
+  genericLoadError: 'No pudimos cargar el catálogo.',
   genericCreateError: 'No pudimos crear el ítem del catálogo. Intenta de nuevo.',
   genericUpdateError: 'No pudimos guardar los cambios. Intenta de nuevo.',
-  genericToggleError: 'No pudimos cambiar el estado del ítem. Intenta de nuevo.',
+  // Escalón 3 (segundo plano): sin "Intenta de nuevo." — el toast trae acción.
+  genericToggleError: 'No pudimos cambiar el estado del ítem.',
   empty: 'El catálogo todavía está vacío.',
   emptyHint: 'Agrega tu primer procedimiento para poder usarlo en los planes de tratamiento.',
   searchLabel: 'Buscar',
@@ -164,10 +166,10 @@ export function CatalogView({ token }: CatalogViewProps) {
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
-  // Per-row activate/deactivate: the id being toggled (to disable its button)
-  // and a banner-level error surfaced above the table.
+  // Per-row activate/deactivate: the id being toggled, to disable its button.
+  // A failure surfaces as a background toast (escalón 3) — the table stays
+  // correct and on screen, so nothing needs to block it.
   const [togglingId, setTogglingId] = useState<string | null>(null);
-  const [actionError, setActionError] = useState<string | null>(null);
 
   // Client-side search/filters: the catalog is a bounded per-clinic list
   // (~100 items) that's already fully fetched, so filtering in memory is
@@ -308,13 +310,14 @@ export function CatalogView({ token }: CatalogViewProps) {
   }
 
   async function handleToggleActive(item: DentalCatalogItem) {
-    setActionError(null);
     setTogglingId(item.id);
     try {
       await updateCatalogItem(token, item.id, { active: !item.active });
       await refreshInPlace();
     } catch (err) {
-      setActionError(err instanceof ApiError ? err.message : copy.genericToggleError);
+      notifyError(err instanceof ApiError ? err.message : copy.genericToggleError, {
+        onRetry: () => handleToggleActive(item),
+      });
     } finally {
       setTogglingId(null);
     }
@@ -459,12 +462,6 @@ export function CatalogView({ token }: CatalogViewProps) {
           </FormField>
         </div>
       </FormModal>
-
-      {actionError && (
-        <p role="alert" className="text-sm text-danger">
-          {actionError}
-        </p>
-      )}
 
       {!loading && !loadError && items.length > 0 && (
         <p role="status" className="-mb-2 text-xs text-muted tabular-nums">

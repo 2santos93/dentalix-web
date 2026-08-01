@@ -3,6 +3,7 @@ import type { Appointment, AppointmentStatus } from '@/lib/appointments/appointm
 import { monthGridDays } from '@/lib/appointments/calendar-grid';
 import { formatTime } from '@/lib/format/date';
 import { patientLabel } from './appointment-display';
+import { SectionError } from '@/components/errors/section-error';
 
 // Copy as constants (i18n-ready, es-first) — matches day-agenda.tsx convention.
 const copy = {
@@ -80,14 +81,7 @@ export function MonthAgenda({
   maxPerCell = 3,
 }: MonthAgendaProps) {
   if (error) {
-    return (
-      <div
-        role="alert"
-        className="rounded-xl border border-danger/30 bg-danger/5 px-4 py-3 text-sm font-medium text-danger"
-      >
-        {error || copy.genericLoadError}
-      </div>
-    );
+    return <SectionError description={error || copy.genericLoadError} />;
   }
 
   const days = monthGridDays(monthDate);
