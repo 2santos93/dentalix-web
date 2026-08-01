@@ -10,6 +10,7 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
+import { InlineError } from '@/components/errors/inline-error';
 import { cn } from '@/lib/utils';
 
 interface FormModalProps {
@@ -63,14 +64,7 @@ export function FormModal({
           {description ? <DialogDescription>{description}</DialogDescription> : null}
         </DialogHeader>
         <form onSubmit={onSubmit} className="flex flex-col gap-4">
-          {error ? (
-            <p
-              role="alert"
-              className="rounded-lg border border-danger/30 bg-danger/10 px-3 py-2 text-sm font-medium text-danger"
-            >
-              {error}
-            </p>
-          ) : null}
+          {error ? <InlineError variant="summary">{error}</InlineError> : null}
           {children}
           <DialogFooter>
             <DialogClose asChild>

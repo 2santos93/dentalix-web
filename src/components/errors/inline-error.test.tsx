@@ -15,4 +15,18 @@ describe('InlineError', () => {
     expect(icon).toBeInTheDocument();
     expect(icon).toHaveAttribute('aria-hidden', 'true');
   });
+
+  it('refleja el id recibido, para sostener aria-describedby desde el campo', () => {
+    render(<InlineError id="login-error">Credenciales inválidas</InlineError>);
+
+    expect(screen.getByRole('alert')).toHaveAttribute('id', 'login-error');
+  });
+
+  it('variant="summary" añade la caja de resumen; "inline" (por defecto) no', () => {
+    const { rerender } = render(<InlineError>Correo inválido</InlineError>);
+    expect(screen.getByRole('alert')).not.toHaveClass('rounded-lg', 'border', 'bg-danger/10');
+
+    rerender(<InlineError variant="summary">No pudimos guardar</InlineError>);
+    expect(screen.getByRole('alert')).toHaveClass('rounded-lg', 'border', 'bg-danger/10');
+  });
 });
