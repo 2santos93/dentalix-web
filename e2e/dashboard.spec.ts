@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { randomUUID } from 'node:crypto';
 import { registerAndLogin } from './support/auth';
+import { disableBusinessHours } from './support/business-hours';
 
 /**
  * e2e: register clinic + login (owner, `DASHBOARD_ROLES` includes OWNER —
@@ -100,6 +101,7 @@ test('dashboard: aggregated cards render seeded payment income, low-stock item, 
   page,
 }) => {
   const origin = await registerAndLogin(page, { subdomain, clinicName, fullName, email, password });
+  await disableBusinessHours(page, origin);
 
   const authRaw = await page.evaluate(() => localStorage.getItem('dentalix-auth'));
   const accessToken =

@@ -57,9 +57,9 @@ const copy = {
   minStockLabel: 'Stock mínimo',
   notesLabel: 'Notas',
   submit: 'Crear',
-  retry: 'Reintentar',
   tableLabel: 'Inventario',
-  genericLoadError: 'No pudimos cargar el inventario. Intenta de nuevo.',
+  // Sin "Intenta de nuevo." — alimenta AsyncSection -> SectionError, que trae su propio botón.
+  genericLoadError: 'No pudimos cargar el inventario.',
   genericCreateError: 'No pudimos crear el insumo. Intenta de nuevo.',
   empty: 'Todavía no hay insumos registrados.',
   emptyHint: 'Agrega tu primer insumo para controlar el stock.',
@@ -111,7 +111,8 @@ const copy = {
   colMovementQuantity: 'Cantidad',
   colMovementReason: 'Motivo',
   movementReasonFallback: '—',
-  genericHistoryError: 'No pudimos cargar el historial. Intenta de nuevo.',
+  // Sin "Intenta de nuevo." — alimenta AsyncSection -> SectionError, que trae su propio botón.
+  genericHistoryError: 'No pudimos cargar el historial.',
   emptyHistory: 'Este insumo todavía no tiene movimientos.',
 };
 
@@ -518,7 +519,6 @@ export function InventoryView({ token }: InventoryViewProps) {
         loading={loading}
         error={loadError}
         onRetry={() => setReloadKey((k) => k + 1)}
-        retryLabel={copy.retry}
         isEmpty={items.length === 0}
         emptyTitle={copy.empty}
         emptyDescription={copy.emptyHint}
@@ -672,7 +672,6 @@ export function InventoryView({ token }: InventoryViewProps) {
             onRetry={() => {
               if (historyItem) openHistory(historyItem);
             }}
-            retryLabel={copy.retry}
             isEmpty={historyMovements.length === 0}
             emptyTitle={copy.emptyHistory}
             skeleton={<TableSkeleton rows={3} />}

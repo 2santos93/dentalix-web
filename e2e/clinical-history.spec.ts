@@ -39,8 +39,8 @@ const patientDocNumber = `DOCCH${suffix}`;
 
 // Distinctive values so a plain text search on the page after reload can
 // only match content that survived a real backend round-trip.
-const allergiesValue = `AlergiaPenicilina-${suffix}`;
-const medicalAlertsValue = `AlertaCardiaca-${suffix}`;
+const allergenValue = `AlergiaPenicilina-${suffix}`;
+const anamnesisNotesValue = `NotaAnamnesisE2E-${suffix}`;
 const evolutionNotes = `EvolucionControlE2E-${suffix}`;
 
 test('save anamnesis + add evolution via the UI -> both persist through the backend after reload', async ({
@@ -58,16 +58,28 @@ test('save anamnesis + add evolution via the UI -> both persist through the back
   await page.getByLabel('Sexo').selectOption('F');
 
   const createError = page.locator('p[role="alert"]');
-  await page.getByRole('button', { name: 'Crear paciente' }).click();
+  // El alta de paciente es un WIZARD de 5 pasos y el submit ("Guardar") vive en
+  // el último; con nombre+apellido llenos se puede saltar directo al final (ver
+  // `goToStep` en patient-create-wizard.tsx). Antes esto pulsaba un botón "Crear
+  // paciente" que ya no existe, y el spec se colgaba 30s en el click.
+  await page.getByRole('button', { name: /Consentimiento/ }).click();
+  await page.getByRole('button', { name: 'Guardar' }).click();
 
+  // El wizard redirige al DETALLE del paciente recién creado
+  // (patient-create-wizard.tsx: `router.push(`/patients/${created.id}`)`), no a
+  // la lista como hacía el formulario anterior.
   await expect(page)
-    .toHaveURL(/\/patients$/, { timeout: 10_000 })
+    .toHaveURL(/\/patients\/[^/]+$/, { timeout: 10_000 })
     .catch(async () => {
       const message = (await createError.isVisible())
         ? await createError.textContent()
         : 'unknown (no redirect, no visible alert)';
-      throw new Error(`Create patient did not redirect to /patients. API error: ${message}`);
+      throw new Error(`Create patient did not land on the patient detail page. API error: ${message}`);
     });
+
+  // Los pasos siguientes buscan al paciente en la LISTA, así que se vuelve a
+  // ella (antes se llegaba ahí por la redirección).
+  await page.goto(`${origin}/patients`);
 
   // --- Open the patient's detail page ---
   // Scope to the desktop `table` — the mobile card list is CSS-hidden but
@@ -102,18 +114,21 @@ test('save anamnesis + add evolution via the UI -> both persist through the back
   ).toBeVisible({ timeout: 10_000 });
 
   // --- Save a new anamnesis version ---
-  await anamnesisSection.getByLabel('Alergias').fill(allergiesValue);
-  await anamnesisSection.getByLabel('Alertas médicas').fill(medicalAlertsValue);
+  // Las alergias son una LISTA estructurada (`AllergyListEditor`): hay que
+  // agregar una fila y llenar su "Alérgeno", no un textarea.
+  await anamnesisSection.getByRole('button', { name: 'Agregar alergia' }).click();
+  await anamnesisSection.getByLabel('Alérgeno').fill(allergenValue);
+  await anamnesisSection.getByLabel('Notas').fill(anamnesisNotesValue);
 
   const anamnesisSaveError = anamnesisSection.locator('p[role="alert"]');
-  // First visit -> the create action is labelled "Registrar anamnesis"
-  // (it becomes "Guardar nueva versión" only once a version already exists).
-  await anamnesisSection.getByRole('button', { name: 'Registrar anamnesis' }).click();
+  // "Registrar anamnesis" / "Guardar nueva versión" es el TÍTULO (<h3>) del
+  // formulario según haya o no versión previa; el botón de envío es "Guardar".
+  await anamnesisSection.getByRole('button', { name: 'Guardar', exact: true }).click();
 
   // Scoped to `dd` — `formFromHistory` re-syncs the form's `<textarea>` with
   // the just-saved values too, so an unscoped text search matches BOTH the
   // rendered "Versión N" card AND the form field (strict-mode violation).
-  await expect(anamnesisSection.locator('dd', { hasText: allergiesValue }))
+  await expect(anamnesisSection.locator('dd', { hasText: anamnesisNotesValue }))
     .toBeVisible({ timeout: 10_000 })
     .catch(async () => {
       const message = (await anamnesisSaveError.isVisible())
@@ -121,7 +136,7 @@ test('save anamnesis + add evolution via the UI -> both persist through the back
         : 'unknown (no visible alert)';
       throw new Error(`Saving anamnesis failed. API error: ${message}`);
     });
-  await expect(anamnesisSection.locator('dd', { hasText: medicalAlertsValue })).toBeVisible();
+  await expect(anamnesisSection.getByLabel('Alérgeno')).toHaveValue(allergenValue);
   await expect(anamnesisSection.getByText('Versión 1')).toBeVisible();
 
   // --- Add a clinical evolution ---
@@ -160,11 +175,9 @@ test('save anamnesis + add evolution via the UI -> both persist through the back
   const evolutionsSectionAfterReload = page.locator('section', { hasText: 'Evoluciones' });
 
   await expect(
-    anamnesisSectionAfterReload.locator('dd', { hasText: allergiesValue }),
+    anamnesisSectionAfterReload.locator('dd', { hasText: anamnesisNotesValue }),
   ).toBeVisible({ timeout: 10_000 });
-  await expect(
-    anamnesisSectionAfterReload.locator('dd', { hasText: medicalAlertsValue }),
-  ).toBeVisible();
+  await expect(anamnesisSectionAfterReload.getByLabel('Alérgeno')).toHaveValue(allergenValue);
   await expect(anamnesisSectionAfterReload.getByText('Versión 1')).toBeVisible();
   await expect(
     evolutionsSectionAfterReload.locator('table').getByText(evolutionNotes),

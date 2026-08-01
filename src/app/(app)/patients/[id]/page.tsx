@@ -9,9 +9,10 @@ import { MedicalHistoryPanel } from '@/components/patients/medical-history-panel
 import { ClinicalEntriesList } from '@/components/patients/clinical-entries-list';
 import { ClinicalAlertBanner } from '@/components/patients/clinical-alert-banner';
 import { PatientDetailTabs, type PatientDetailTabKey } from '@/components/patients/patient-detail-tabs';
+import { PatientDataPanel } from '@/components/patients/patient-data-panel';
+import { PatientEditModal } from '@/components/patients/patient-edit-modal';
 import { OdontogramTab } from '@/components/odontogram/odontogram-tab';
 import { TreatmentPlansTab } from '@/components/treatment-plans/treatment-plans-tab';
-import { formatCivilDate } from '@/lib/format/date';
 import { SectionError } from '@/components/errors/section-error';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
@@ -25,15 +26,6 @@ const copy = {
   tabClinicalHistory: 'Historia clínica',
   tabOdontogram: 'Odontograma',
   tabTreatmentPlans: 'Plan de tratamiento',
-  docTypeLabel: 'Tipo de documento',
-  docNumberLabel: 'Número de documento',
-  birthDateLabel: 'Fecha de nacimiento',
-  sexLabel: 'Sexo',
-  phoneLabel: 'Teléfono',
-  emailLabel: 'Correo electrónico',
-  addressLabel: 'Dirección',
-  notesLabel: 'Notas',
-  fieldFallback: '—',
   anamnesisHeading: 'Anamnesis',
   entriesHeading: 'Evoluciones',
 };
@@ -53,6 +45,7 @@ export default function PatientDetailPage() {
   const [error, setError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
   const [activeTab, setActiveTab] = useState<PatientDetailTabKey>('data');
+  const [editing, setEditing] = useState(false);
 
   useEffect(() => {
     // Don't decide anything until the persisted store has rehydrated —
@@ -143,47 +136,19 @@ export default function PatientDetailPage() {
           />
 
           {activeTab === 'data' && (
-            <div
-              role="tabpanel"
-              id="tabpanel-data"
-              aria-labelledby="tab-data"
-              className="rounded-lg border border-border bg-surface p-4"
-            >
-              <dl className="grid gap-4 sm:grid-cols-2">
-                <div>
-                  <dt className="text-sm font-medium text-muted">{copy.docTypeLabel}</dt>
-                  <dd className="text-ink">{patient.docType}</dd>
-                </div>
-                <div>
-                  <dt className="text-sm font-medium text-muted">{copy.docNumberLabel}</dt>
-                  <dd className="text-ink">{patient.docNumber ?? copy.fieldFallback}</dd>
-                </div>
-                <div>
-                  <dt className="text-sm font-medium text-muted">{copy.birthDateLabel}</dt>
-                  <dd className="text-ink">{formatCivilDate(patient.birthDate, copy.fieldFallback)}</dd>
-                </div>
-                <div>
-                  <dt className="text-sm font-medium text-muted">{copy.sexLabel}</dt>
-                  <dd className="text-ink">{patient.sex}</dd>
-                </div>
-                <div>
-                  <dt className="text-sm font-medium text-muted">{copy.phoneLabel}</dt>
-                  <dd className="text-ink">{patient.phone ?? copy.fieldFallback}</dd>
-                </div>
-                <div>
-                  <dt className="text-sm font-medium text-muted">{copy.emailLabel}</dt>
-                  <dd className="text-ink">{patient.email ?? copy.fieldFallback}</dd>
-                </div>
-                <div>
-                  <dt className="text-sm font-medium text-muted">{copy.addressLabel}</dt>
-                  <dd className="text-ink">{patient.address ?? copy.fieldFallback}</dd>
-                </div>
-                <div>
-                  <dt className="text-sm font-medium text-muted">{copy.notesLabel}</dt>
-                  <dd className="text-ink">{patient.notes ?? copy.fieldFallback}</dd>
-                </div>
-              </dl>
+            <div role="tabpanel" id="tabpanel-data" aria-labelledby="tab-data">
+              <PatientDataPanel patient={patient} onEdit={() => setEditing(true)} />
             </div>
+          )}
+
+          {patient && (
+            <PatientEditModal
+              open={editing}
+              patient={patient}
+              token={accessToken}
+              onOpenChange={setEditing}
+              onSaved={(updated) => setPatient(updated)}
+            />
           )}
 
           {activeTab === 'clinical-history' && (

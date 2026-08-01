@@ -1,5 +1,6 @@
 'use client';
 import { useTheme } from 'next-themes';
+import { AlertCircle } from 'lucide-react';
 import { Toaster as SonnerToaster } from 'sonner';
 
 /**
@@ -18,6 +19,15 @@ export function Toaster() {
       theme={resolvedTheme === 'dark' ? 'dark' : 'light'}
       position="bottom-right"
       closeButton
+      // El icono de error de sonner es `fill="currentColor"`, así que heredaba
+      // `--normal-text` y salía en tinta: el único escalón cuyo icono no
+      // hablaba el idioma del sistema. Verificado en navegador — el estilo
+      // computado daba `rgb(15,23,42)` donde los otros tres dan `danger`.
+      // Sustituirlo por el mismo `AlertCircle` que usan `FieldError` e
+      // `InlineError` cierra la familia.
+      icons={{
+        error: <AlertCircle aria-hidden="true" className="size-4 shrink-0 text-danger" />,
+      }}
       // Los tokens de la app, no los de sonner, para que el toast pertenezca
       // al mismo sistema visual que el resto (radio 12px = card).
       //

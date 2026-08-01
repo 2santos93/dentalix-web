@@ -1105,6 +1105,16 @@ export interface components {
              */
             cityId?: number;
             notes?: string;
+            maritalStatus?: string;
+            occupation?: string;
+            insurerEps?: string;
+            physicianName?: string;
+            physicianPhone?: string;
+            emergencyContactName?: string;
+            emergencyContactRelationship?: string;
+            emergencyContactPhone?: string;
+            guardianName?: string;
+            guardianDocNumber?: string;
         };
         CreateCatalogItemDto: {
             /** @description Unique code within the tenant */
