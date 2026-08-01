@@ -40,7 +40,6 @@ describe('Toaster', () => {
       '!border-border',
       '!bg-surface',
       '!text-ink',
-      '!shadow-lg',
       '!border-danger/30',
     );
 
@@ -50,5 +49,49 @@ describe('Toaster', () => {
       '!bg-primary',
       '!text-primary-foreground',
     );
+  });
+
+  // Fix round 2: `!shadow-lg` tapaba el `box-shadow` de `:focus-visible` de
+  // sonner en TODOS los estados — el `<li>` del toast es focusable
+  // (`tabIndex: 0`) y ese `box-shadow` era su único indicador de foco
+  // (WCAG 2.4.7). `shadow-lg` va ahora SIN `!` — regresión: que no vuelva.
+  it('no lleva `!shadow-lg` (taparía el único indicador de foco del toast)', async () => {
+    const user = userEvent.setup();
+    render(
+      <>
+        <button onClick={() => notifyError('No se pudo cargar', { onRetry: () => {} })}>
+          disparar
+        </button>
+        <Toaster />
+      </>,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'disparar' }));
+
+    const toastText = await screen.findByText('No se pudo cargar');
+    const toastEl = toastText.closest('[data-sonner-toast]');
+    expect(toastEl).not.toHaveClass('!shadow-lg');
+  });
+
+  // Fix round 2: `!bg-surface` sin más gana en TODOS los estados, incluido
+  // el `:hover` normal de sonner sobre `[data-close-button]` — el botón de
+  // cerrar no daba realimentación al pasar el cursor. Regresión: que
+  // `hover:!bg-surface-2` no desaparezca.
+  it('el botón de cerrar lleva un fondo de hover propio', async () => {
+    const user = userEvent.setup();
+    render(
+      <>
+        <button onClick={() => notifyError('No se pudo cargar', { onRetry: () => {} })}>
+          disparar
+        </button>
+        <Toaster />
+      </>,
+    );
+
+    await user.click(screen.getByRole('button', { name: 'disparar' }));
+    await screen.findByText('No se pudo cargar');
+
+    const closeButton = screen.getByRole('button', { name: 'Close toast' });
+    expect(closeButton).toHaveClass('!border-border', '!bg-surface', '!text-muted', 'hover:!bg-surface-2');
   });
 });
