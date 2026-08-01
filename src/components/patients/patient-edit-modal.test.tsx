@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, fireEvent } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { PatientEditModal } from './patient-edit-modal';
 import { updatePatient } from '@/lib/patients/patients-api';
@@ -122,6 +122,40 @@ describe('PatientEditModal', () => {
     const [, , input] = mockedUpdate.mock.calls[0];
     expect(input).not.toHaveProperty('birthDate');
     expect(input.email).toBeNull();
+  });
+
+  it('omite firstName en vez de mandar null al borrarlo (NOT NULL en el schema)', async () => {
+    // `firstName`/`lastName` son NOT NULL en Prisma; un `null` se cuela
+    // pasando de largo `@IsOptional()` (que salta TODOS los validadores,
+    // incluido `@MinLength`) y revienta en un 500 al llegar a Postgres.
+    mockedUpdate.mockResolvedValue(patient);
+    render(
+      <PatientEditModal open patient={patient} token="tok" onOpenChange={() => {}} onSaved={() => {}} />,
+    );
+
+    const firstNameInput = screen.getByLabelText(/^nombre$/i);
+    fireEvent.change(firstNameInput, { target: { value: '' } });
+    // El input es `required`: un click normal dispararía la validación
+    // nativa del navegador y ni llegaría a `onSubmit`. Se dispara el submit
+    // directo para probar la guarda de `buildPatch` en sí (defensa en
+    // profundidad, no sólo el `required` del DOM).
+    fireEvent.submit(firstNameInput.closest('form')!);
+
+    await waitFor(() => expect(mockedUpdate).toHaveBeenCalledTimes(1));
+    const [, , input] = mockedUpdate.mock.calls[0];
+    expect(input).not.toHaveProperty('firstName');
+  });
+
+  it('el required en Nombre bloquea el guardado antes de llegar al backend', async () => {
+    const user = userEvent.setup();
+    render(
+      <PatientEditModal open patient={patient} token="tok" onOpenChange={() => {}} onSaved={() => {}} />,
+    );
+
+    await user.clear(screen.getByLabelText(/^nombre$/i));
+    await user.click(screen.getByRole('button', { name: /guardar/i }));
+
+    expect(mockedUpdate).not.toHaveBeenCalled();
   });
 
   it('no reenvía un campo que no cambió, aunque tuviera valor', async () => {

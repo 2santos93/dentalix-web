@@ -56,14 +56,24 @@ interface TextFieldSpec {
   key: TextKey;
   label: string;
   type?: 'text' | 'date' | 'email' | 'tel';
+  /**
+   * `NOT NULL` en el schema (`firstName`/`lastName`, sin `?`). Como
+   * `birthDate`, un vaciado no puede viajar como `null` — `IsOptional` de
+   * class-validator se salta TODOS los validadores cuando el valor es
+   * `null`, así que `@MinLength(1)` nunca corre y el `UPDATE` llega directo
+   * a Postgres, que revienta con un 500 (no un 409, `PrismaExceptionFilter`
+   * no lo mapea). Se omite en vez de mandarse. `required` en el `<input>`
+   * además bloquea el submit en el navegador antes de llegar ahí.
+   */
+  required?: boolean;
 }
 
 const GROUPS: { title: string; fields: TextFieldSpec[] }[] = [
   {
     title: copy.identification,
     fields: [
-      { key: 'firstName', label: 'Nombre' },
-      { key: 'lastName', label: 'Apellido' },
+      { key: 'firstName', label: 'Nombre', required: true },
+      { key: 'lastName', label: 'Apellido', required: true },
       { key: 'docNumber', label: 'Número de documento' },
       { key: 'birthDate', label: 'Fecha de nacimiento', type: 'date' },
     ],
@@ -171,9 +181,9 @@ export function PatientEditModal({
    *
    * - sin cambios → se omite
    * - cambiado a un valor → se manda el valor
-   * - vaciado → se manda `null` (excepto `birthDate`: el backend hace
-   *   `dto.birthDate !== undefined ? new Date(...) : undefined`, así que un
-   *   `null` ahí escribiría 1970-01-01; se omite en vez de "borrarlo").
+   * - vaciado → se manda `null`, excepto para `birthDate` y los campos
+   *   `required` (`firstName`/`lastName`: `NOT NULL` en el schema), que se
+   *   omiten en vez de "borrarse" — ver el comentario en `TextFieldSpec`.
    */
   function buildPatch(): UpdatePatientInput {
     const seededText = textStateFrom(seededPatient);
@@ -184,8 +194,8 @@ export function PatientEditModal({
       for (const f of group.fields) {
         const value = text[f.key].trim();
         if (value === seededText[f.key]) continue;
-        if (f.key === 'birthDate') {
-          if (value) patch.birthDate = value;
+        if (f.key === 'birthDate' || f.required) {
+          if (value) patch[f.key] = value;
           continue;
         }
         patch[f.key] = value || null;
@@ -232,6 +242,7 @@ export function PatientEditModal({
                     id={`pe-${f.key}`}
                     type={f.type ?? 'text'}
                     value={text[f.key]}
+                    required={f.required}
                     onChange={(e) =>
                       setText((prev) => ({ ...prev, [f.key]: e.target.value }))
                     }
