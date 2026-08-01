@@ -304,6 +304,10 @@ describe('StaffView', () => {
     await user.click(within(confirmDialog).getByRole('button', { name: /sí, desactivar/i }));
 
     await waitFor(() => expect(mockedDeactivateStaff).toHaveBeenCalledTimes(1));
+    // The API's literal message reaches the toast, not just the retry action.
+    expect(
+      await screen.findByText('No puedes desactivar al último admin.'),
+    ).toBeInTheDocument();
     // The Radix dialog must be gone — while open it marks the toast's
     // "Reintentar" inert (visible but unclickable), the bug ff48621 fixed.
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
