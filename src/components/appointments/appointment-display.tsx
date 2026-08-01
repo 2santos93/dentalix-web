@@ -29,11 +29,24 @@ export function formatTimeRange(start: string, end: string): string {
   return `${formatTime(start)}–${formatTime(end)}`;
 }
 
-/** Resolves `appointment.patientId` to a display name via `patientNames`, falling back to the raw id when it isn't in the map (or no map is given). */
+/**
+ * Display name for an appointment's patient. Prefers the name the API joins
+ * onto the appointment itself; falls back to an optional `patientId -> name`
+ * map (kept for callers that still pass one), then to the raw id.
+ *
+ * The name used to come ONLY from that map, built via
+ * `GET /patients?pageSize=100` — so any patient past the first 100 rendered
+ * as a UUID. The joined fields make the label correct at any clinic size.
+ */
 export function patientLabel(
   appointment: Appointment,
   patientNames?: Record<string, string>,
 ): string {
+  const joined = [appointment.patientFirstName, appointment.patientLastName]
+    .filter(Boolean)
+    .join(' ')
+    .trim();
+  if (joined) return joined;
   return patientNames?.[appointment.patientId] ?? appointment.patientId;
 }
 

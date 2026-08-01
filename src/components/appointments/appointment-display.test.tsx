@@ -12,6 +12,8 @@ const appointment: Appointment = {
   id: 'apt-1',
   tenantId: 't1',
   patientId: 'pat-1',
+  patientFirstName: null,
+  patientLastName: null,
   providerId: 'prov-1',
   start: '2026-07-23T09:00:00.000Z',
   end: '2026-07-23T09:30:00.000Z',
@@ -36,6 +38,24 @@ describe('appointment-display (shared day/week agenda helpers)', () => {
     expect(patientLabel(appointment, { 'pat-1': 'Ana García' })).toBe('Ana García');
     expect(patientLabel(appointment)).toBe('pat-1');
     expect(patientLabel(appointment, {})).toBe('pat-1');
+  });
+
+  it('patientLabel prefers the name joined on the appointment — no lookup map needed', () => {
+    const withName: Appointment = {
+      ...appointment,
+      patientFirstName: 'Ana',
+      patientLastName: 'García',
+    };
+    // This is the case that used to break past the 100-patient cap: no map at
+    // all, yet the row still shows a name instead of the UUID.
+    expect(patientLabel(withName)).toBe('Ana García');
+    // The joined name wins over a stale map entry.
+    expect(patientLabel(withName, { 'pat-1': 'Nombre viejo' })).toBe('Ana García');
+  });
+
+  it('patientLabel copes with a half-populated name instead of rendering a stray space', () => {
+    expect(patientLabel({ ...appointment, patientFirstName: 'Ana' })).toBe('Ana');
+    expect(patientLabel({ ...appointment, patientLastName: 'García' })).toBe('García');
   });
 
   it('gives each of the five statuses a distinct semantic-token color class (no raw color utilities)', () => {

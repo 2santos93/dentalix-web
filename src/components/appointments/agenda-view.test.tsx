@@ -63,6 +63,8 @@ function appointment(overrides: Partial<import('@/lib/appointments/appointments-
   return {
     tenantId: 't1',
     patientId: 'pat-1',
+    patientFirstName: null,
+    patientLastName: null,
     providerId: 'staff-1',
     start: '2026-03-10T09:00:00.000Z',
     end: '2026-03-10T09:30:00.000Z',

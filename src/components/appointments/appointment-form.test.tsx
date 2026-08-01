@@ -98,6 +98,8 @@ const createdAppointment = {
   id: 'apt-1',
   tenantId: 't1',
   patientId: 'pat-1',
+  patientFirstName: null,
+  patientLastName: null,
   providerId: 'staff-1',
   start: '2026-07-23T09:00:00.000Z',
   end: '2026-07-23T09:30:00.000Z',

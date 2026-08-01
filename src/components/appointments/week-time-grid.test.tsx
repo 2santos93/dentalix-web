@@ -8,6 +8,7 @@ const WEEK_START = '2026-03-09'; // lunes
 function appointment(o: Partial<Appointment> & { id: string }): Appointment {
   return {
     tenantId: 't1', patientId: 'pat-1', providerId: 'prov-1',
+    patientFirstName: null, patientLastName: null,
     start: '2026-03-09T09:00:00.000Z', end: '2026-03-09T09:30:00.000Z',
     status: 'SCHEDULED', reason: null, notes: null, createdById: 'u1',
     createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',

@@ -8,14 +8,17 @@ import {
   type AppointmentStatus,
 } from '@/lib/appointments/appointments-api';
 import { listStaff, type StaffMember } from '@/lib/appointments/staff-api';
-import { listPatients } from '@/lib/patients/patients-api';
 import { localDayRange, localWeekRange } from '@/lib/appointments/day-range';
 import { monthGridRange, addMonths, monthLabel } from '@/lib/appointments/calendar-grid';
 import { DayAgenda } from '@/components/appointments/day-agenda';
 import { WeekTimeGrid } from '@/components/appointments/week-time-grid';
 import { MonthAgenda } from '@/components/appointments/month-agenda';
 import { AppointmentForm } from '@/components/appointments/appointment-form';
-import { STATUS_LABELS, formatTimeRange } from '@/components/appointments/appointment-display';
+import {
+  STATUS_LABELS,
+  formatTimeRange,
+  patientLabel,
+} from '@/components/appointments/appointment-display';
 import { Plus, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
@@ -262,7 +265,6 @@ export function AgendaView({ token }: AgendaViewProps) {
   const [appointmentsRefreshing, setAppointmentsRefreshing] = useState(false);
   const [appointmentsRefreshError, setAppointmentsRefreshError] = useState<string | null>(null);
 
-  const [patientNames, setPatientNames] = useState<Record<string, string>>({});
 
   const [showForm, setShowForm] = useState(false);
   // Prefill for `AppointmentForm` when opened from an empty slot in
@@ -311,29 +313,12 @@ export function AgendaView({ token }: AgendaViewProps) {
     };
   }, [token, staffReloadKey]);
 
-  // Patient names for `DayAgenda`'s `patientNames` map — fetched once
-  // (bounded page, see `AppointmentForm`'s doc comment on the same
-  // tradeoff). Best-effort: a failure here just leaves names falling back
-  // to the raw `patientId` in `DayAgenda`, it's not worth its own error UI.
-  useEffect(() => {
-    if (!token) return;
-    let cancelled = false;
-    async function load() {
-      try {
-        const res = await listPatients(token, { pageSize: 100 });
-        if (cancelled) return;
-        setPatientNames(
-          Object.fromEntries(res.items.map((p) => [p.id, `${p.firstName} ${p.lastName}`])),
-        );
-      } catch {
-        /* best-effort, see comment above */
-      }
-    }
-    void load();
-    return () => {
-      cancelled = true;
-    };
-  }, [token]);
+  // Patient names come joined on each appointment (`patientFirstName` /
+  // `patientLastName`, see `patientLabel`). This used to fetch a
+  // `patientId -> name` map via `GET /patients?pageSize=100`, which the API
+  // caps at 100 — so in a clinic with more patients than that, every
+  // appointment for patient #101+ rendered as a raw UUID. Nothing to fetch
+  // here anymore.
 
   // Full (blocking) load whenever the provider, the selected day, or the view
   // changes. No `providerId` guard: '' means "all providers" — a valid fetch
@@ -578,7 +563,6 @@ export function AgendaView({ token }: AgendaViewProps) {
             selectedDate={selectedDate}
             today={today}
             onSelectDay={handleSelectMonthDay}
-            patientNames={patientNames}
             loading={appointmentsLoading}
             error={appointmentsLoadError}
           />
@@ -611,8 +595,7 @@ export function AgendaView({ token }: AgendaViewProps) {
             <WeekTimeGrid
               appointments={appointments}
               weekStart={weekStartOf(selectedDate)}
-              patientNames={patientNames}
-              onSelectDay={handleSelectDay}
+                onSelectDay={handleSelectDay}
               onSelectSlot={handleSelectSlot}
               onSelectAppointment={(a) => setDetailAppointment(a)}
             />
@@ -634,7 +617,6 @@ export function AgendaView({ token }: AgendaViewProps) {
             appointments={appointments}
             loading={appointmentsLoading}
             error={appointmentsLoadError}
-            patientNames={patientNames}
             onStatusChange={handleStatusChange}
             updatingId={updatingId}
           />
@@ -686,8 +668,7 @@ export function AgendaView({ token }: AgendaViewProps) {
               appointments={selectedDayAppointments}
               loading={appointmentsLoading}
               error={appointmentsLoadError}
-              patientNames={patientNames}
-              onStatusChange={handleStatusChange}
+                onStatusChange={handleStatusChange}
               updatingId={updatingId}
             />
           </SheetBody>
@@ -719,8 +700,7 @@ export function AgendaView({ token }: AgendaViewProps) {
           <SheetContent>
             <SheetHeader>
               <SheetTitle>
-                {patientNames[liveDetailAppointment.patientId] ??
-                  liveDetailAppointment.patientId}
+                {patientLabel(liveDetailAppointment)}
               </SheetTitle>
               <SheetDescription>
                 {formatTimeRange(liveDetailAppointment.start, liveDetailAppointment.end)}

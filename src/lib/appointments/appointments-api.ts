@@ -26,6 +26,14 @@ export interface Appointment {
   id: string;
   tenantId: string;
   patientId: string;
+  /**
+   * Patient's name, joined server-side so a row can be labeled without
+   * fetching the patient list. Replaces the old `GET /patients?pageSize=100`
+   * name map, which showed a raw UUID for everyone past the first 100
+   * patients (the endpoint's hard cap). Null if the API couldn't join it.
+   */
+  patientFirstName: string | null;
+  patientLastName: string | null;
   providerId: string;
   /** ISO datetime (UTC on the wire; the frontend renders it in local time). */
   start: string;
