@@ -1,91 +1,41 @@
 import { apiFetch, apiFetchOrNull } from '@/lib/api/client';
+import type { components } from '@/lib/api/schema';
 
 /**
- * `InventoryMovement.type` isn't exposed as its own named schema component
- * (it only shows up inline wherever a DTO references it) — re-declare the
- * literal union here mirroring `dentalix-api`'s Prisma `MovementType` enum,
- * same convention as `ClinicRole` in `src/lib/staff/staff-api.ts`. Keep in
- * sync if it changes.
+ * `InventoryController` is fully `@ApiProperty()`-decorated on the backend
+ * (`@ApiOkResponse`/`@ApiCreatedResponse` on every route), so the generated
+ * `schema.d.ts` already carries the exact wire shape — no hand-typing needed
+ * here, unlike `DentalCatalogItem` in `catalog-api.ts`.
  */
-export type MovementType = 'IN' | 'OUT' | 'ADJUSTMENT';
+export type InventoryItem = components['schemas']['InventoryItemDto'];
+export type CreateInventoryItemInput = components['schemas']['CreateInventoryItemDto'];
+export type UpdateInventoryItemInput = components['schemas']['UpdateInventoryItemDto'];
+export type InventoryMovement = components['schemas']['InventoryMovementDto'];
+export type RecordMovementInput = components['schemas']['RecordInventoryMovementDto'];
+export type InventoryMovementType = InventoryMovement['type'];
 
 /**
- * These endpoints return plain TS interfaces on the backend
- * (`src/modules/inventory/domain/entities/*.entity.ts`), not classes
- * decorated with `@ApiProperty()` — same situation as `StaffMember` in
- * `src/lib/staff/staff-api.ts` — so the generated `schema.d.ts` has no body
- * shape for these routes. Hand-written to mirror those entities — keep in
- * sync if they change.
+ * `GET /inventory/items` — every inventory item for the tenant, with
+ * `stock`/`lowStock` computed server-side from the movement ledger (never
+ * cache/derive these client-side). Tenant is resolved from the JWT, same
+ * convention as `listCatalogItems`.
  */
-export interface InventoryItem {
-  id: string;
-  name: string;
-  sku: string | null;
-  unit: string;
-  minStock: number;
-  notes: string | null;
-  createdById: string | null;
-  createdAt: string;
-  updatedAt: string;
+export async function listInventoryItems(token: string): Promise<InventoryItem[]> {
+  return apiFetch<InventoryItem[]>('/inventory/items', { token });
 }
 
-export interface InventoryItemWithStock extends InventoryItem {
-  stock: number;
-  lowStock: boolean;
+/** `GET /inventory/items/:id` — item detail, including its `movements`. */
+export async function getInventoryItem(token: string, id: string): Promise<InventoryItem> {
+  return apiFetch<InventoryItem>(`/inventory/items/${id}`, { token });
 }
 
-export interface InventoryMovement {
-  id: string;
-  itemId: string;
-  type: MovementType;
-  quantity: number;
-  reason: string | null;
-  occurredAt: string;
-  createdById: string | null;
-  createdAt: string;
-}
-
-export interface InventoryItemDetail extends InventoryItemWithStock {
-  movements: InventoryMovement[];
-}
-
-export interface CreateItemInput {
-  name: string;
-  unit: string;
-  sku?: string;
-  minStock?: number;
-  notes?: string;
-}
-
-export interface UpdateItemInput {
-  name?: string;
-  unit?: string;
-  sku?: string | null;
-  minStock?: number;
-  notes?: string | null;
-}
-
-export interface RecordMovementInput {
-  type: MovementType;
-  quantity: number;
-  reason?: string;
-}
-
-export async function listItems(token: string): Promise<InventoryItemWithStock[]> {
-  return apiFetch<InventoryItemWithStock[]>('/inventory/items', {
-    token,
-  });
-}
-
-export async function getItem(token: string, id: string): Promise<InventoryItemDetail> {
-  return apiFetch<InventoryItemDetail>(`/inventory/items/${id}`, {
-    token,
-  });
-}
-
-export async function createItem(
+/**
+ * `POST /inventory/items` — creates an insumo. `minStock` always travels
+ * (backend default is `0`); `sku`/`notes` are optional.
+ */
+export async function createInventoryItem(
   token: string,
-  input: CreateItemInput,
+  input: CreateInventoryItemInput,
 ): Promise<InventoryItem> {
   return apiFetch<InventoryItem>('/inventory/items', {
     method: 'POST',
@@ -94,10 +44,11 @@ export async function createItem(
   });
 }
 
-export async function updateItem(
+/** `PATCH /inventory/items/:id` — partial update (name/sku/unit/minStock/notes). */
+export async function updateInventoryItem(
   token: string,
   id: string,
-  patch: UpdateItemInput,
+  patch: UpdateInventoryItemInput,
 ): Promise<InventoryItem> {
   return apiFetch<InventoryItem>(`/inventory/items/${id}`, {
     method: 'PATCH',
@@ -107,27 +58,37 @@ export async function updateItem(
 }
 
 /**
- * `DELETE /inventory/items/:id` — the backend returns `204` with an EMPTY
- * body on success, which `apiFetch`'s `res.json()` would throw on (same
- * situation as `DELETE /staff/:userId`, see `deactivateStaff` in
- * `src/lib/staff/staff-api.ts`) — use `apiFetchOrNull` and discard the
- * (always-null) result.
+ * `DELETE /inventory/items/:id` — soft-deletes the item (`deletedAt` set on
+ * the backend). The route responds `200` with an EMPTY body (`content?:
+ * never` in the generated schema), so this uses `apiFetchOrNull` — same
+ * rationale as `removeItem` in `treatment-plans-api.ts` — instead of
+ * `apiFetch`, which would throw trying to `res.json()` an empty response.
  */
-export async function deleteItem(token: string, id: string): Promise<void> {
-  await apiFetchOrNull<null>(`/inventory/items/${id}`, {
-    method: 'DELETE',
-    token,
-  });
+export async function deleteInventoryItem(token: string, id: string): Promise<void> {
+  await apiFetchOrNull<null>(`/inventory/items/${id}`, { method: 'DELETE', token });
 }
 
-export async function recordMovement(
+/**
+ * `POST /inventory/items/:id/movements` — records a stock movement (IN/OUT/
+ * ADJUSTMENT); `stock`/`lowStock` on the item are recomputed from the ledger,
+ * never sent here.
+ */
+export async function recordInventoryMovement(
   token: string,
-  id: string,
+  itemId: string,
   input: RecordMovementInput,
 ): Promise<InventoryMovement> {
-  return apiFetch<InventoryMovement>(`/inventory/items/${id}/movements`, {
+  return apiFetch<InventoryMovement>(`/inventory/items/${itemId}/movements`, {
     method: 'POST',
     body: input,
     token,
   });
+}
+
+/** `GET /inventory/items/:id/movements` — the item's full movement ledger. */
+export async function listInventoryMovements(
+  token: string,
+  itemId: string,
+): Promise<InventoryMovement[]> {
+  return apiFetch<InventoryMovement[]>(`/inventory/items/${itemId}/movements`, { token });
 }

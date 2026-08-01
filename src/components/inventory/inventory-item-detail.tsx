@@ -4,13 +4,13 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ApiError } from '@/lib/api/client';
 import {
-  getItem,
-  updateItem,
-  deleteItem,
-  recordMovement,
-  type InventoryItemDetail as InventoryItemDetailData,
+  getInventoryItem,
+  updateInventoryItem,
+  deleteInventoryItem,
+  recordInventoryMovement,
+  type InventoryItem as InventoryItemDetailData,
   type InventoryMovement,
-  type MovementType,
+  type InventoryMovementType,
 } from '@/lib/inventory/inventory-api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -74,13 +74,13 @@ const copy = {
   colReason: 'Motivo',
 };
 
-const MOVEMENT_TYPE_LABEL: Record<MovementType, string> = {
+const MOVEMENT_TYPE_LABEL: Record<InventoryMovementType, string> = {
   IN: copy.typeIn,
   OUT: copy.typeOut,
   ADJUSTMENT: copy.typeAdjustment,
 };
 
-const MOVEMENT_TYPE_VARIANT: Record<MovementType, 'success' | 'danger' | 'warning'> = {
+const MOVEMENT_TYPE_VARIANT: Record<InventoryMovementType, 'success' | 'danger' | 'warning'> = {
   IN: 'success',
   OUT: 'danger',
   ADJUSTMENT: 'warning',
@@ -112,7 +112,7 @@ interface InventoryItemDetailProps {
  * `role="alert"`, confirmación de borrado inline, y refresco en sitio tras
  * cada mutación.
  */
-export function InventoryItemDetail({ token, id }: InventoryItemDetailProps) {
+export function InventoryItem({ token, id }: InventoryItemDetailProps) {
   const router = useRouter();
   const [item, setItem] = useState<InventoryItemDetailData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -121,7 +121,7 @@ export function InventoryItemDetail({ token, id }: InventoryItemDetailProps) {
   const [reloadKey, setReloadKey] = useState(0);
 
   // Movement form
-  const [mType, setMType] = useState<MovementType>('IN');
+  const [mType, setMType] = useState<InventoryMovementType>('IN');
   const [mQty, setMQty] = useState('');
   const [mReason, setMReason] = useState('');
   const [recording, setRecording] = useState(false);
@@ -148,7 +148,7 @@ export function InventoryItemDetail({ token, id }: InventoryItemDetailProps) {
     async function load() {
       setLoading(true);
       try {
-        const data = await getItem(token, id);
+        const data = await getInventoryItem(token, id);
         if (cancelled) return;
         setItem(data);
         setLoadError(null);
@@ -173,7 +173,7 @@ export function InventoryItemDetail({ token, id }: InventoryItemDetailProps) {
   }, [token, id, reloadKey]);
 
   function refreshInPlace(): Promise<void> {
-    return getItem(token, id)
+    return getInventoryItem(token, id)
       .then((data) => {
         setItem(data);
         setLoadError(null);
@@ -199,7 +199,7 @@ export function InventoryItemDetail({ token, id }: InventoryItemDetailProps) {
     setEditError(null);
     setSaving(true);
     try {
-      await updateItem(token, id, {
+      await updateInventoryItem(token, id, {
         name: eName,
         unit: eUnit,
         sku: eSku.trim() || null,
@@ -219,7 +219,7 @@ export function InventoryItemDetail({ token, id }: InventoryItemDetailProps) {
     setDeleteError(null);
     setDeleting(true);
     try {
-      await deleteItem(token, id);
+      await deleteInventoryItem(token, id);
       router.push('/inventory');
     } catch (err) {
       setDeleteError(err instanceof ApiError ? err.message : copy.genericDeleteError);
@@ -245,7 +245,7 @@ export function InventoryItemDetail({ token, id }: InventoryItemDetailProps) {
     }
     setRecording(true);
     try {
-      await recordMovement(token, id, {
+      await recordInventoryMovement(token, id, {
         type: mType,
         quantity: qty,
         reason: mReason.trim() || undefined,
@@ -291,7 +291,9 @@ export function InventoryItemDetail({ token, id }: InventoryItemDetailProps) {
 
   if (!item) return null;
 
-  const movements = [...item.movements].sort(
+  // `movements` es opcional en el DTO (el listado devuelve el ítem pelado);
+  // en el detalle siempre viene, pero el ledger vacío es un caso legítimo.
+  const movements = [...(item.movements ?? [])].sort(
     (a, b) => new Date(b.occurredAt).getTime() - new Date(a.occurredAt).getTime(),
   );
 
@@ -422,7 +424,7 @@ export function InventoryItemDetail({ token, id }: InventoryItemDetailProps) {
                 <select
                   id="movement-type"
                   value={mType}
-                  onChange={(e) => setMType(e.target.value as MovementType)}
+                  onChange={(e) => setMType(e.target.value as InventoryMovementType)}
                   className="flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink transition-colors focus-visible:border-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
                 >
                   <option value="IN">{copy.typeIn}</option>

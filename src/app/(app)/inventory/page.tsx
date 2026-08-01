@@ -5,11 +5,11 @@ import { useAuthStore } from '@/lib/auth/auth-store';
 import { InventoryView } from '@/components/inventory/inventory-view';
 import { PageHeader } from '@/components/molecules/page-header';
 
-// Copy as constants (i18n-ready) — es first, matches the rest of the copy
-// until next-intl wiring lands.
+// Copy as constants (i18n-ready) — es first, matches the rest of the app's
+// copy convention until next-intl wiring lands.
 const copy = {
   title: 'Inventario',
-  description: 'Gestiona los insumos de tu clínica: crea, edita y controla el stock.',
+  description: 'Controla los insumos de tu clínica: stock actual, mínimos y movimientos.',
   checkingSession: 'Verificando sesión…',
 };
 
@@ -21,7 +21,7 @@ export default function InventoryPage() {
   useEffect(() => {
     // Don't decide anything until the persisted store has rehydrated —
     // accessToken is null until then, and redirecting on that would bounce
-    // an already-authenticated user.
+    // an already-authenticated user. (Same guard as the Catalog page.)
     if (!hasHydrated) return;
     if (!accessToken) {
       router.replace('/login');

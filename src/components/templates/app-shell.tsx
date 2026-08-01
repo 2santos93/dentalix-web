@@ -19,6 +19,7 @@ const NAV = [
   { href: '/patients', label: 'Pacientes', icon: Users },
   { href: '/agenda', label: 'Agenda', icon: Calendar },
   { href: '/catalog', label: 'Catálogo', icon: ClipboardList },
+  { href: '/inventory', label: 'Inventario', icon: Package },
   { href: '/staff', label: 'Personal', icon: UserCog },
   { href: '/inventory', label: 'Inventario', icon: Package },
 ];

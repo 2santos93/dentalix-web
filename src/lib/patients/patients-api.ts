@@ -1,7 +1,23 @@
 import { apiFetch } from '@/lib/api/client';
 import type { components, paths } from '@/lib/api/schema';
+import type { ClinicalHistoryValue } from '@/lib/clinical/clinical-types';
 
-export type CreatePatientInput = components['schemas']['CreatePatientDto'];
+/**
+ * The generated `CreatePatientDto.medicalHistory` collapses its nested
+ * array/object fields to `Record<string, never>` — the backend's nested DTO
+ * classes carry class-validator decorators but no `@ApiProperty()`, so
+ * NestJS Swagger can't introspect them (see clinical-types.ts's file-level
+ * comment). Override that one field with the hand-typed
+ * `ClinicalHistoryValue`, exactly as `clinical-api.ts` does for
+ * `SaveMedicalHistoryInput`, so callers pass a real structured value with no
+ * cast. Drop the override once those backend DTOs are annotated.
+ */
+export type CreatePatientInput = Omit<
+  components['schemas']['CreatePatientDto'],
+  'medicalHistory'
+> & {
+  medicalHistory?: ClinicalHistoryValue;
+};
 
 // The `docType`/`sex` unions are re-used from the generated OpenAPI schema
 // (backend DTOs carry `@ApiProperty({ enum: ... })`) so they stay in sync
@@ -32,6 +48,24 @@ export interface Patient {
   email: string | null;
   address: string | null;
   notes: string | null;
+  // Optional: `PatientDto` (the generated read shape) wasn't updated to
+  // carry these when `CreatePatientDto`/`SaveMedicalHistoryDto` gained them
+  // (see Task 1 report) — declared optional here so the ficha can read them
+  // defensively from `GET /patients/:id` once the backend response shape
+  // catches up, without a hard compile-time guarantee they're present.
+  dataConsentAccepted?: boolean;
+  dataConsentAt?: string | null;
+  dataConsentPolicyVersion?: string | null;
+  maritalStatus?: string | null;
+  occupation?: string | null;
+  insurerEps?: string | null;
+  physicianName?: string | null;
+  physicianPhone?: string | null;
+  emergencyContactName?: string | null;
+  emergencyContactRelationship?: string | null;
+  emergencyContactPhone?: string | null;
+  guardianName?: string | null;
+  guardianDocNumber?: string | null;
   createdById: string | null;
   createdAt: string;
   updatedAt: string;

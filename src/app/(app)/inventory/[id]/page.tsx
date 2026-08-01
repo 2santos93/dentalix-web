@@ -3,7 +3,7 @@ import { useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuthStore } from '@/lib/auth/auth-store';
-import { InventoryItemDetail } from '@/components/inventory/inventory-item-detail';
+import { InventoryItem } from '@/components/inventory/inventory-item-detail';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
@@ -50,7 +50,7 @@ export default function InventoryItemPage() {
         </Link>
         <h1 className="text-2xl font-semibold tracking-tight text-ink">{copy.title}</h1>
       </div>
-      <InventoryItemDetail token={accessToken} id={itemId} />
+      <InventoryItem token={accessToken} id={itemId} />
     </div>
   );
 }

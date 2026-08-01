@@ -1,22 +1,38 @@
 'use client';
 import * as React from 'react';
-import { useEffect, useRef, useState } from 'react';
-import Link from 'next/link';
+import { useEffect, useState } from 'react';
 import { ApiError } from '@/lib/api/client';
 import {
-  listItems,
-  createItem,
-  updateItem,
-  deleteItem,
-  type InventoryItemWithStock,
+  listInventoryItems,
+  createInventoryItem,
+  updateInventoryItem,
+  deleteInventoryItem,
+  recordInventoryMovement,
+  listInventoryMovements,
+  type InventoryItem,
+  type CreateInventoryItemInput,
+  type UpdateInventoryItemInput,
+  type InventoryMovement,
+  type InventoryMovementType,
+  type RecordMovementInput,
 } from '@/lib/inventory/inventory-api';
-import { Plus, X } from 'lucide-react';
+import { Plus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import { Card } from '@/components/ui/card';
+import { Badge, type BadgeProps } from '@/components/ui/badge';
 import { FormField } from '@/components/molecules/form-field';
-import { EmptyState } from '@/components/molecules/empty-state';
+import { FormModal } from '@/components/molecules/form-modal';
+import { ConfirmDialog } from '@/components/molecules/confirm-dialog';
+import { AsyncSection, TableSkeleton } from '@/components/molecules/async-section';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from '@/components/ui/dialog';
+import { formatDateTime } from '@/lib/format/date';
 import {
   Table,
   TableBody,
@@ -26,91 +42,162 @@ import {
   TableRow,
 } from '@/components/ui/table';
 
-// Copy as constants (i18n-ready) — es first, matches the rest of the copy
-// until next-intl wiring lands.
+// Copy as constants (i18n-ready) — es first, matches the rest of the app's
+// copy convention (catalog-view.tsx / staff-view.tsx) until next-intl wiring
+// lands.
 const copy = {
-  addToggle: 'Nuevo insumo',
-  cancel: 'Cancelar',
+  addToggle: 'Agregar insumo',
+  createTitle: 'Agregar insumo',
+  formDescription:
+    'Registra un insumo para controlar su stock. El stock actual se calcula a partir de los movimientos (entradas, salidas y ajustes).',
   nameLabel: 'Nombre',
   unitLabel: 'Unidad',
+  unitPlaceholder: 'caja, unidad, ml',
   skuLabel: 'SKU',
   minStockLabel: 'Stock mínimo',
   notesLabel: 'Notas',
   submit: 'Crear',
-  submitting: 'Creando…',
   retry: 'Reintentar',
-  loading: 'Cargando inventario…',
-  tableLabel: 'Inventario de insumos',
+  tableLabel: 'Inventario',
   genericLoadError: 'No pudimos cargar el inventario. Intenta de nuevo.',
   genericCreateError: 'No pudimos crear el insumo. Intenta de nuevo.',
-  genericUpdateError: 'No pudimos actualizar el insumo. Intenta de nuevo.',
-  genericDeleteError: 'No pudimos eliminar el insumo. Intenta de nuevo.',
-  forbidden: 'No tienes permiso para ver el inventario.',
-  empty: 'No hay insumos registrados todavía.',
-  emptyHint: 'Agrega el primer insumo para empezar a llevar el control de stock.',
-  colName: 'Nombre',
-  colSku: 'SKU',
+  empty: 'Todavía no hay insumos registrados.',
+  emptyHint: 'Agrega tu primer insumo para controlar el stock.',
+  colItem: 'Insumo',
   colUnit: 'Unidad',
   colStock: 'Stock',
-  colMin: 'Mín',
+  colMinStock: 'Mínimo',
+  colStatus: 'Estado',
   colActions: 'Acciones',
-  lowStockBadge: 'Stock bajo',
-  viewCta: 'Ver',
-  deleteCta: 'Eliminar',
-  deleteConfirmPrompt: '¿Eliminar este insumo?',
-  deleteConfirmYes: 'Sí, eliminar',
-  deleteConfirmNo: 'Cancelar',
-  skuFallback: '—',
-  nameFieldLabel: (name: string) => `Nombre de ${name}`,
-  unitFieldLabel: (name: string) => `Unidad de ${name}`,
-  skuFieldLabel: (name: string) => `SKU de ${name}`,
-  minStockFieldLabel: (name: string) => `Stock mínimo de ${name}`,
+  lowStock: 'Bajo stock',
+  ok: 'OK',
+  unknownValue: '—',
+
+  // Editar / eliminar insumo.
+  editButtonLabel: 'Editar',
+  editAction: (name: string) => `Editar ${name}`,
+  editTitle: 'Editar insumo',
+  editSubmit: 'Guardar',
+  genericEditError: 'No pudimos actualizar el insumo. Intenta de nuevo.',
+  deleteButtonLabel: 'Eliminar',
+  deleteAction: (name: string) => `Eliminar ${name}`,
+  deleteTitle: 'Eliminar insumo',
+  deleteDescription: (name: string) =>
+    `${name} dejará de aparecer en el inventario. Sus movimientos quedan registrados.`,
+  deleteConfirm: 'Sí, eliminar',
+  genericDeleteError: 'No pudimos eliminar el insumo. Intenta de nuevo.',
+
+  // Movimientos (entrada/salida/ajuste).
+  movementButtonLabel: 'Movimiento',
+  historyButtonLabel: 'Historial',
+  movementAction: (name: string) => `Movimiento de ${name}`,
+  historyAction: (name: string) => `Historial de ${name}`,
+  movementTitle: 'Registrar movimiento',
+  movementDescription:
+    'El stock se recalcula a partir de todos los movimientos registrados para este insumo.',
+  movementTypeLabel: 'Tipo',
+  movementQuantityLabel: 'Cantidad',
+  movementReasonLabel: 'Motivo',
+  movementSubmit: 'Registrar',
+  invalidAdjustmentQuantity: 'La cantidad de un ajuste no puede ser 0.',
+  invalidMovementQuantity: 'La cantidad debe ser mayor a 0.',
+  genericMovementError: 'No pudimos registrar el movimiento. Intenta de nuevo.',
+
+  historyTitle: (name: string) => `Historial de movimientos — ${name}`,
+  historyDescription: 'Todos los movimientos de entrada, salida y ajuste registrados para este insumo.',
+  historyTableLabel: 'Movimientos',
+  colMovementDate: 'Fecha',
+  colMovementType: 'Tipo',
+  colMovementQuantity: 'Cantidad',
+  colMovementReason: 'Motivo',
+  movementReasonFallback: '—',
+  genericHistoryError: 'No pudimos cargar el historial. Intenta de nuevo.',
+  emptyHistory: 'Este insumo todavía no tiene movimientos.',
 };
 
-const NEW_ITEM_FORM_ID = 'inventory-new-item-form';
+const MOVEMENT_TYPE_OPTIONS: InventoryMovementType[] = ['IN', 'OUT', 'ADJUSTMENT'];
+
+const MOVEMENT_TYPE_LABELS: Record<InventoryMovementType, string> = {
+  IN: 'Entrada',
+  OUT: 'Salida',
+  ADJUSTMENT: 'Ajuste',
+};
+
+// Semantic Badge variants: IN is the happy "stock coming in" path (success),
+// OUT is a neutral fact (muted, not danger — leaving stock isn't a problem
+// by itself), ADJUSTMENT flags a manual correction worth a second look
+// (warning) — same "muted for neutral facts" convention as
+// `treatment-plans-tab.tsx`'s `PLAN_STATUS_BADGE_VARIANT`.
+const MOVEMENT_TYPE_BADGE_VARIANT: Record<InventoryMovementType, BadgeProps['variant']> = {
+  IN: 'success',
+  OUT: 'muted',
+  ADJUSTMENT: 'warning',
+};
+
+// Native <select> styled to match the Input atom (kept native for a11y/tests) —
+// same class/rationale as `catalog-view.tsx`'s `fieldClass`.
+const fieldClass =
+  'flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-50';
 
 interface InventoryViewProps {
   token: string;
 }
 
 /**
- * Composes the inventory list (table) + an inline "add item" reveal section,
- * mirroring `staff-view.tsx`'s dominant pattern for this app: a `Button`
- * toggling a revealed `Card` (not a dialog), inline row edit (blur-triggered
- * field updates) and inline delete confirmation (not `window.confirm`), with
- * `refreshInPlace` re-fetching the list in place after any mutation so the
- * table never remounts.
+ * Inventory management screen — list of insumos with computed stock/lowStock
+ * + a create modal. Mirrors `CatalogView`'s shape (list via `AsyncSection` +
+ * `FormModal` + `refreshInPlace` after mutation): both are the same
+ * "clinic-config list you manage" pattern.
+ *
+ * `stock`/`lowStock` always come from the API — they're derived server-side
+ * from the movement ledger and never computed or cached here.
  */
 export function InventoryView({ token }: InventoryViewProps) {
-  const [items, setItems] = useState<InventoryItemWithStock[]>([]);
+  const [items, setItems] = useState<InventoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
-  // Distinguishes a 403 (no permission — nothing to retry) from any other
-  // load failure (transient — show Reintentar).
-  const [forbidden, setForbidden] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
 
+  // The create and edit flows share this same FormModal: `editingItem`
+  // doubles as the "which insumo" AND the create/edit mode switch (`null` =
+  // crear), same convention as `movementItem`/`historyItem` below — except
+  // `showForm` stays a separate open flag because create mode needs the
+  // modal open with `editingItem === null`.
   const [showForm, setShowForm] = useState(false);
+  const [editingItem, setEditingItem] = useState<InventoryItem | null>(null);
   const [name, setName] = useState('');
   const [unit, setUnit] = useState('');
   const [sku, setSku] = useState('');
   const [minStock, setMinStock] = useState('');
   const [notes, setNotes] = useState('');
-  const [creating, setCreating] = useState(false);
-  const [createError, setCreateError] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [formError, setFormError] = useState<string | null>(null);
 
-  // Which row is currently being mutated (field edit or delete) — disables
-  // that row's controls, same as staff-view.tsx's `updatingId`.
+  // Delete confirmation: `deletingItem` doubles as the ConfirmDialog's target
+  // insumo AND its open flag, same convention as `movementItem`. `updatingId`
+  // disables the in-flight row's controls, same as `staff-view.tsx`.
   const [updatingId, setUpdatingId] = useState<string | null>(null);
-  const [rowError, setRowError] = useState<string | null>(null);
-  // Row awaiting delete confirmation (inline, not a dialog/native confirm()).
-  const [confirmingId, setConfirmingId] = useState<string | null>(null);
+  const [deletingItem, setDeletingItem] = useState<InventoryItem | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  // The inline field editors are uncontrolled (defaultValue), so on a failed
-  // PATCH the DOM keeps the edited value. Keep refs to reset the DOM value
-  // back to the last-known-good value after a failure — same convention as
-  // staff-view.tsx's `nameInputRefs`.
-  const fieldRefs = useRef<Map<string, HTMLInputElement>>(new Map());
+  // Movimientos (entrada/salida/ajuste): `movementItem` doubles as the
+  // modal's target insumo AND its open flag — same "record !== null is open"
+  // convention as `TreatmentPlansTab`'s `receiptPayment`.
+  const [movementItem, setMovementItem] = useState<InventoryItem | null>(null);
+  const [movementType, setMovementType] = useState<InventoryMovementType>('IN');
+  const [movementQuantity, setMovementQuantity] = useState('');
+  const [movementReason, setMovementReason] = useState('');
+  const [movementSubmitting, setMovementSubmitting] = useState(false);
+  const [movementError, setMovementError] = useState<string | null>(null);
+
+  // Historial de movimientos: `historyItem` doubles as the panel's target
+  // insumo AND its open flag, same convention as `movementItem` above. Owns
+  // its own loading/error state — a failure here must never break the main
+  // table.
+  const [historyItem, setHistoryItem] = useState<InventoryItem | null>(null);
+  const [historyMovements, setHistoryMovements] = useState<InventoryMovement[]>([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
+  const [historyError, setHistoryError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!token) return;
@@ -118,20 +205,13 @@ export function InventoryView({ token }: InventoryViewProps) {
     async function load() {
       setLoading(true);
       try {
-        const data = await listItems(token);
+        const data = await listInventoryItems(token);
         if (cancelled) return;
         setItems(data);
         setLoadError(null);
-        setForbidden(false);
       } catch (err) {
         if (cancelled) return;
-        if (err instanceof ApiError && err.status === 403) {
-          setForbidden(true);
-          setLoadError(null);
-        } else {
-          setLoadError(err instanceof ApiError ? err.message : copy.genericLoadError);
-          setForbidden(false);
-        }
+        setLoadError(err instanceof ApiError ? err.message : copy.genericLoadError);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -144,18 +224,13 @@ export function InventoryView({ token }: InventoryViewProps) {
 
   function refreshInPlace(): Promise<void> {
     if (!token) return Promise.resolve();
-    return listItems(token)
+    return listInventoryItems(token)
       .then((data) => {
         setItems(data);
         setLoadError(null);
-        setForbidden(false);
       })
       .catch((err) => {
-        if (err instanceof ApiError && err.status === 403) {
-          setForbidden(true);
-        } else {
-          setLoadError(err instanceof ApiError ? err.message : copy.genericLoadError);
-        }
+        setLoadError(err instanceof ApiError ? err.message : copy.genericLoadError);
       });
   }
 
@@ -167,348 +242,370 @@ export function InventoryView({ token }: InventoryViewProps) {
     setNotes('');
   }
 
-  async function handleCreateSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setCreateError(null);
-    setCreating(true);
-    try {
-      const payload: Parameters<typeof createItem>[1] = {
-        name,
-        unit,
-      };
-      if (sku.trim()) payload.sku = sku.trim();
-      if (minStock.trim()) payload.minStock = Number(minStock);
-      if (notes.trim()) payload.notes = notes.trim();
+  function openCreate() {
+    resetForm();
+    setEditingItem(null);
+    setFormError(null);
+    setShowForm(true);
+  }
 
-      await createItem(token, payload);
+  function openEdit(item: InventoryItem) {
+    setName(item.name);
+    setUnit(item.unit);
+    setSku(item.sku ?? '');
+    setMinStock(String(item.minStock));
+    setNotes(item.notes ?? '');
+    setEditingItem(item);
+    setFormError(null);
+    setShowForm(true);
+  }
+
+  // Builds the CREATE payload. Empty optional fields are omitted (so a blank
+  // SKU/notes doesn't send anything) — same convention as
+  // `catalog-view.tsx`'s `buildPayload`. `minStock` always travels (number,
+  // default 0). `CreateInventoryItemDto` doesn't accept `null` for
+  // `sku`/`notes`, so omitting is the only way to say "not set" here.
+  function buildCreatePayload(): CreateInventoryItemInput {
+    const trimmedSku = sku.trim();
+    const trimmedNotes = notes.trim();
+    return {
+      name: name.trim(),
+      unit: unit.trim(),
+      minStock: minStock.trim() === '' ? 0 : Number(minStock),
+      ...(trimmedSku ? { sku: trimmedSku } : {}),
+      ...(trimmedNotes ? { notes: trimmedNotes } : {}),
+    };
+  }
+
+  // Builds the UPDATE payload. Unlike create, `UpdateInventoryItemDto`
+  // accepts `string | null` for `sku`/`notes`, and the backend's PATCH
+  // (`prisma-inventory.repository`) passes the payload straight to Prisma —
+  // where `undefined` means "leave the column alone" and only an explicit
+  // `null` clears it. So an omitted field here would silently keep the old
+  // value: clearing the input must send `null`, not omit the key.
+  function buildUpdatePayload(): UpdateInventoryItemInput {
+    const trimmedSku = sku.trim();
+    const trimmedNotes = notes.trim();
+    return {
+      name: name.trim(),
+      unit: unit.trim(),
+      minStock: minStock.trim() === '' ? 0 : Number(minStock),
+      sku: trimmedSku || null,
+      notes: trimmedNotes || null,
+    };
+  }
+
+  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setFormError(null);
+    setSaving(true);
+    try {
+      if (editingItem) {
+        await updateInventoryItem(token, editingItem.id, buildUpdatePayload());
+      } else {
+        await createInventoryItem(token, buildCreatePayload());
+      }
       resetForm();
       setShowForm(false);
+      setEditingItem(null);
       await refreshInPlace();
     } catch (err) {
-      setCreateError(err instanceof ApiError ? err.message : copy.genericCreateError);
+      // Surfaces the backend's error (e.g. validation) verbatim.
+      setFormError(
+        err instanceof ApiError
+          ? err.message
+          : editingItem
+            ? copy.genericEditError
+            : copy.genericCreateError,
+      );
     } finally {
-      setCreating(false);
+      setSaving(false);
     }
   }
 
-  async function handleFieldChange(
-    itemId: string,
-    patch: Parameters<typeof updateItem>[2],
-    fieldKey: string,
-    previousValue: string,
-  ) {
-    setUpdatingId(itemId);
-    setRowError(null);
+  function handleFormOpenChange(next: boolean) {
+    setShowForm(next);
+    if (!next) {
+      setFormError(null);
+      resetForm();
+      setEditingItem(null);
+    }
+  }
+
+  function openDelete(item: InventoryItem) {
+    setDeleteError(null);
+    setDeletingItem(item);
+  }
+
+  function handleDeleteOpenChange(next: boolean) {
+    if (!next) {
+      setDeletingItem(null);
+      setDeleteError(null);
+    }
+  }
+
+  async function handleDelete() {
+    if (!deletingItem) return;
+    setUpdatingId(deletingItem.id);
+    setDeleteError(null);
     try {
-      await updateItem(token, itemId, patch);
+      await deleteInventoryItem(token, deletingItem.id);
+      setDeletingItem(null);
       await refreshInPlace();
     } catch (err) {
-      setRowError(err instanceof ApiError ? err.message : copy.genericUpdateError);
-      // Reset the (uncontrolled) input back to the last known value so a
-      // subsequent no-op blur doesn't keep re-firing the same failed PATCH.
-      const el = fieldRefs.current.get(`${itemId}:${fieldKey}`);
-      if (el) el.value = previousValue;
+      // Movements have `onDelete: Restrict` at the DB level, so the backend
+      // can reject the delete — surfaced verbatim here.
+      setDeleteError(err instanceof ApiError ? err.message : copy.genericDeleteError);
     } finally {
       setUpdatingId(null);
     }
   }
 
-  async function handleDelete(itemId: string) {
-    setUpdatingId(itemId);
-    setRowError(null);
+  function openMovement(item: InventoryItem) {
+    setMovementType('IN');
+    setMovementQuantity('');
+    setMovementReason('');
+    setMovementError(null);
+    setMovementItem(item);
+  }
+
+  function handleMovementOpenChange(next: boolean) {
+    if (!next) {
+      setMovementItem(null);
+      setMovementError(null);
+    }
+  }
+
+  async function handleMovementSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setMovementError(null);
+    if (!movementItem) return;
+
+    const quantity = Number(movementQuantity);
+    // ADJUSTMENT allows negatives (a correction can go either way) but a 0
+    // adjustment is a no-op the backend would otherwise silently accept.
+    // IN/OUT must be strictly positive per the API contract — the `min={0}`
+    // on the input only blocks the stepper UI, not a typed/pasted value.
+    // Both are caught here client-side to avoid a guaranteed-400 round trip.
+    if (movementType === 'ADJUSTMENT' ? quantity === 0 : quantity <= 0) {
+      setMovementError(
+        movementType === 'ADJUSTMENT'
+          ? copy.invalidAdjustmentQuantity
+          : copy.invalidMovementQuantity,
+      );
+      return;
+    }
+
+    setMovementSubmitting(true);
     try {
-      await deleteItem(token, itemId);
-      setConfirmingId(null);
+      const trimmedReason = movementReason.trim();
+      const input: RecordMovementInput = {
+        type: movementType,
+        quantity,
+        ...(trimmedReason ? { reason: trimmedReason } : {}),
+      };
+      await recordInventoryMovement(token, movementItem.id, input);
+      setMovementItem(null);
+      // Stock is recomputed server-side from the movement ledger — re-read
+      // the list rather than adjusting any number locally, and await it
+      // BEFORE clearing `movementSubmitting` (same "await the refresh before
+      // re-enabling" pattern as `treatment-plans-tab.tsx`).
       await refreshInPlace();
     } catch (err) {
-      setRowError(err instanceof ApiError ? err.message : copy.genericDeleteError);
+      // Surfaces the backend's error (e.g. stock insuficiente en una salida)
+      // verbatim.
+      setMovementError(err instanceof ApiError ? err.message : copy.genericMovementError);
     } finally {
-      setUpdatingId(null);
+      setMovementSubmitting(false);
     }
+  }
+
+  function openHistory(item: InventoryItem) {
+    setHistoryItem(item);
+    setHistoryMovements([]);
+    setHistoryError(null);
+    setHistoryLoading(true);
+    listInventoryMovements(token, item.id)
+      .then((data) => {
+        setHistoryMovements(data);
+        setHistoryError(null);
+      })
+      .catch((err) => {
+        setHistoryError(err instanceof ApiError ? err.message : copy.genericHistoryError);
+      })
+      .finally(() => setHistoryLoading(false));
+  }
+
+  function handleHistoryOpenChange(next: boolean) {
+    if (!next) setHistoryItem(null);
   }
 
   return (
     <div className="flex flex-col gap-6">
-      <Card>
-        <CardContent className="flex flex-wrap items-center justify-end gap-4 p-4">
-          <Button
-            type="button"
-            variant={showForm ? 'outline' : 'default'}
-            onClick={() => setShowForm((v) => !v)}
-            aria-expanded={showForm}
-            aria-controls={NEW_ITEM_FORM_ID}
-          >
-            {showForm ? (
-              <>
-                <X /> {copy.cancel}
-              </>
-            ) : (
-              <>
-                <Plus /> {copy.addToggle}
-              </>
-            )}
-          </Button>
-        </CardContent>
-      </Card>
+      <div className="flex justify-end">
+        <Button type="button" onClick={openCreate}>
+          <Plus /> {copy.addToggle}
+        </Button>
+      </div>
 
-      {showForm && (
-        <Card id={NEW_ITEM_FORM_ID} className="max-w-2xl">
-          <CardContent className="p-6">
-            <form
-              onSubmit={handleCreateSubmit}
-              aria-label={copy.addToggle}
-              className="flex flex-col gap-4"
-            >
-              <div className="grid gap-4 sm:grid-cols-2">
-                <FormField htmlFor="inventory-name" label={copy.nameLabel}>
-                  <Input
-                    id="inventory-name"
-                    type="text"
-                    required
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                  />
-                </FormField>
-                <FormField htmlFor="inventory-unit" label={copy.unitLabel}>
-                  <Input
-                    id="inventory-unit"
-                    type="text"
-                    required
-                    value={unit}
-                    onChange={(e) => setUnit(e.target.value)}
-                  />
-                </FormField>
-              </div>
-
-              <div className="grid gap-4 sm:grid-cols-2">
-                <FormField htmlFor="inventory-sku" label={copy.skuLabel}>
-                  <Input
-                    id="inventory-sku"
-                    type="text"
-                    value={sku}
-                    onChange={(e) => setSku(e.target.value)}
-                  />
-                </FormField>
-                <FormField htmlFor="inventory-min-stock" label={copy.minStockLabel}>
-                  <Input
-                    id="inventory-min-stock"
-                    type="number"
-                    step="0.001"
-                    min={0}
-                    value={minStock}
-                    onChange={(e) => setMinStock(e.target.value)}
-                  />
-                </FormField>
-              </div>
-
-              <FormField htmlFor="inventory-notes" label={copy.notesLabel}>
-                <Input
-                  id="inventory-notes"
-                  type="text"
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                />
-              </FormField>
-
-              {createError && (
-                <p role="alert" className="text-sm text-danger">
-                  {createError}
-                </p>
-              )}
-
-              <Button type="submit" disabled={creating} className="self-start">
-                {creating ? copy.submitting : copy.submit}
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
-      )}
-
-      {rowError && (
-        <p role="alert" className="text-sm text-danger">
-          {rowError}
-        </p>
-      )}
-
-      {loading ? (
-        <p role="status" className="text-sm text-muted">
-          {copy.loading}
-        </p>
-      ) : forbidden ? (
-        <p role="status" className="text-sm text-muted">
-          {copy.forbidden}
-        </p>
-      ) : loadError ? (
-        <div className="flex items-center gap-3">
-          <p role="alert" className="text-sm text-danger">
-            {loadError}
-          </p>
-          <Button variant="outline" size="sm" onClick={() => setReloadKey((k) => k + 1)}>
-            {copy.retry}
-          </Button>
+      <FormModal
+        open={showForm}
+        onOpenChange={handleFormOpenChange}
+        title={editingItem ? copy.editTitle : copy.createTitle}
+        description={copy.formDescription}
+        onSubmit={handleSubmit}
+        submitLabel={editingItem ? copy.editSubmit : copy.submit}
+        submitting={saving}
+        error={formError}
+        size="lg"
+      >
+        <div className="grid gap-4 sm:grid-cols-2">
+          <FormField htmlFor="inventory-name" label={copy.nameLabel}>
+            <Input
+              id="inventory-name"
+              type="text"
+              required
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+            />
+          </FormField>
+          <FormField htmlFor="inventory-unit" label={copy.unitLabel}>
+            <Input
+              id="inventory-unit"
+              type="text"
+              required
+              placeholder={copy.unitPlaceholder}
+              value={unit}
+              onChange={(e) => setUnit(e.target.value)}
+            />
+          </FormField>
         </div>
-      ) : items.length === 0 ? (
-        <EmptyState role="status" title={copy.empty} description={copy.emptyHint} />
-      ) : (
+
+        <div className="grid gap-4 sm:grid-cols-2">
+          <FormField htmlFor="inventory-sku" label={copy.skuLabel}>
+            <Input
+              id="inventory-sku"
+              type="text"
+              value={sku}
+              onChange={(e) => setSku(e.target.value)}
+            />
+          </FormField>
+          <FormField htmlFor="inventory-min-stock" label={copy.minStockLabel}>
+            <Input
+              id="inventory-min-stock"
+              type="number"
+              min={0}
+              step="0.001"
+              required
+              value={minStock}
+              onChange={(e) => setMinStock(e.target.value)}
+            />
+          </FormField>
+        </div>
+
+        <FormField htmlFor="inventory-notes" label={copy.notesLabel}>
+          <textarea
+            id="inventory-notes"
+            rows={3}
+            value={notes}
+            onChange={(e) => setNotes(e.target.value)}
+            className="flex w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-50"
+          />
+        </FormField>
+      </FormModal>
+
+      <AsyncSection
+        loading={loading}
+        error={loadError}
+        onRetry={() => setReloadKey((k) => k + 1)}
+        retryLabel={copy.retry}
+        isEmpty={items.length === 0}
+        emptyTitle={copy.empty}
+        emptyDescription={copy.emptyHint}
+        skeleton={<TableSkeleton rows={4} />}
+      >
         <Card className="overflow-hidden p-0">
           <Table aria-label={copy.tableLabel}>
             <TableHeader>
               <TableRow className="hover:bg-transparent">
-                <TableHead>{copy.colName}</TableHead>
-                <TableHead>{copy.colSku}</TableHead>
+                <TableHead>{copy.colItem}</TableHead>
                 <TableHead>{copy.colUnit}</TableHead>
                 <TableHead>{copy.colStock}</TableHead>
-                <TableHead>{copy.colMin}</TableHead>
-                <TableHead>{copy.colActions}</TableHead>
+                <TableHead>{copy.colMinStock}</TableHead>
+                <TableHead>{copy.colStatus}</TableHead>
+                <TableHead className="text-right">{copy.colActions}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {items.map((item) => {
                 const updating = updatingId === item.id;
-                const confirming = confirmingId === item.id;
                 return (
                   <TableRow key={item.id}>
                     <TableCell>
-                      <Input
-                        key={`${item.id}-name-${item.name}`}
-                        ref={(el) => {
-                          if (el) fieldRefs.current.set(`${item.id}:name`, el);
-                          else fieldRefs.current.delete(`${item.id}:name`);
-                        }}
-                        defaultValue={item.name}
-                        aria-label={copy.nameFieldLabel(item.name)}
-                        disabled={updating}
-                        onBlur={(e) => {
-                          const value = e.target.value.trim();
-                          if (value && value !== item.name) {
-                            handleFieldChange(item.id, { name: value }, 'name', item.name);
-                          }
-                        }}
-                        className="h-9"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Input
-                        key={`${item.id}-sku-${item.sku}`}
-                        ref={(el) => {
-                          if (el) fieldRefs.current.set(`${item.id}:sku`, el);
-                          else fieldRefs.current.delete(`${item.id}:sku`);
-                        }}
-                        defaultValue={item.sku ?? ''}
-                        aria-label={copy.skuFieldLabel(item.name)}
-                        disabled={updating}
-                        onBlur={(e) => {
-                          const value = e.target.value.trim();
-                          const previous = item.sku ?? '';
-                          if (value !== previous) {
-                            handleFieldChange(
-                              item.id,
-                              { sku: value || null },
-                              'sku',
-                              previous,
-                            );
-                          }
-                        }}
-                        className="h-9"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <Input
-                        key={`${item.id}-unit-${item.unit}`}
-                        ref={(el) => {
-                          if (el) fieldRefs.current.set(`${item.id}:unit`, el);
-                          else fieldRefs.current.delete(`${item.id}:unit`);
-                        }}
-                        defaultValue={item.unit}
-                        aria-label={copy.unitFieldLabel(item.name)}
-                        disabled={updating}
-                        onBlur={(e) => {
-                          const value = e.target.value.trim();
-                          if (value && value !== item.unit) {
-                            handleFieldChange(item.id, { unit: value }, 'unit', item.unit);
-                          }
-                        }}
-                        className="h-9"
-                      />
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <span>{item.stock}</span>
-                        {item.lowStock && (
-                          <Badge variant="warning">{copy.lowStockBadge}</Badge>
-                        )}
+                      <div className="flex flex-col">
+                        <span className="font-medium text-ink">{item.name}</span>
+                        {item.sku ? (
+                          <span className="text-xs text-muted">{item.sku}</span>
+                        ) : null}
                       </div>
                     </TableCell>
-                    <TableCell>
-                      <Input
-                        key={`${item.id}-min-${item.minStock}`}
-                        ref={(el) => {
-                          if (el) fieldRefs.current.set(`${item.id}:minStock`, el);
-                          else fieldRefs.current.delete(`${item.id}:minStock`);
-                        }}
-                        type="number"
-                        step="0.001"
-                        min={0}
-                        defaultValue={item.minStock}
-                        aria-label={copy.minStockFieldLabel(item.name)}
-                        disabled={updating}
-                        onBlur={(e) => {
-                          const raw = e.target.value.trim();
-                          if (!raw) return;
-                          const value = Number(raw);
-                          if (!Number.isNaN(value) && value !== item.minStock) {
-                            handleFieldChange(
-                              item.id,
-                              { minStock: value },
-                              'minStock',
-                              String(item.minStock),
-                            );
-                          }
-                        }}
-                        className="h-9 w-24"
-                      />
+                    <TableCell>{item.unit}</TableCell>
+                    <TableCell className="tabular-nums">
+                      {item.stock === undefined ? copy.unknownValue : item.stock}
                     </TableCell>
+                    <TableCell className="tabular-nums">{item.minStock}</TableCell>
                     <TableCell>
-                      {confirming ? (
-                        <div className="flex flex-wrap items-center gap-2">
-                          <span className="text-xs text-muted">
-                            {copy.deleteConfirmPrompt}
-                          </span>
-                          <Button
-                            type="button"
-                            variant="destructive"
-                            size="sm"
-                            disabled={updating}
-                            onClick={() => handleDelete(item.id)}
-                          >
-                            {copy.deleteConfirmYes}
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            disabled={updating}
-                            onClick={() => setConfirmingId(null)}
-                          >
-                            {copy.deleteConfirmNo}
-                          </Button>
-                        </div>
+                      {item.lowStock === undefined ? (
+                        <Badge variant="muted">{copy.unknownValue}</Badge>
+                      ) : item.lowStock ? (
+                        <Badge variant="danger">{copy.lowStock}</Badge>
                       ) : (
-                        <div className="flex flex-wrap items-center gap-2">
-                          <Button variant="outline" size="sm" asChild>
-                            <Link href={`/inventory/${item.id}`}>{copy.viewCta}</Link>
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            disabled={updating}
-                            onClick={() => setConfirmingId(item.id)}
-                          >
-                            {copy.deleteCta}
-                          </Button>
-                        </div>
+                        <Badge variant="success">{copy.ok}</Badge>
                       )}
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <div className="flex justify-end gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={updating}
+                          aria-label={copy.movementAction(item.name)}
+                          onClick={() => openMovement(item)}
+                        >
+                          {copy.movementButtonLabel}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={updating}
+                          aria-label={copy.historyAction(item.name)}
+                          onClick={() => openHistory(item)}
+                        >
+                          {copy.historyButtonLabel}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={updating}
+                          aria-label={copy.editAction(item.name)}
+                          onClick={() => openEdit(item)}
+                        >
+                          {copy.editButtonLabel}
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={updating}
+                          aria-label={copy.deleteAction(item.name)}
+                          onClick={() => openDelete(item)}
+                        >
+                          {copy.deleteButtonLabel}
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 );
@@ -516,7 +613,110 @@ export function InventoryView({ token }: InventoryViewProps) {
             </TableBody>
           </Table>
         </Card>
-      )}
+      </AsyncSection>
+
+      <FormModal
+        open={movementItem !== null}
+        onOpenChange={handleMovementOpenChange}
+        title={copy.movementTitle}
+        description={copy.movementDescription}
+        onSubmit={handleMovementSubmit}
+        submitLabel={copy.movementSubmit}
+        submitting={movementSubmitting}
+        error={movementError}
+      >
+        <FormField htmlFor="movement-type" label={copy.movementTypeLabel}>
+          <select
+            id="movement-type"
+            value={movementType}
+            onChange={(e) => setMovementType(e.target.value as InventoryMovementType)}
+            className={fieldClass}
+          >
+            {MOVEMENT_TYPE_OPTIONS.map((type) => (
+              <option key={type} value={type}>
+                {MOVEMENT_TYPE_LABELS[type]}
+              </option>
+            ))}
+          </select>
+        </FormField>
+        <FormField htmlFor="movement-quantity" label={copy.movementQuantityLabel}>
+          <Input
+            id="movement-quantity"
+            type="number"
+            step="0.001"
+            min={movementType === 'ADJUSTMENT' ? undefined : 0}
+            required
+            value={movementQuantity}
+            onChange={(e) => setMovementQuantity(e.target.value)}
+          />
+        </FormField>
+        <FormField htmlFor="movement-reason" label={copy.movementReasonLabel}>
+          <Input
+            id="movement-reason"
+            type="text"
+            value={movementReason}
+            onChange={(e) => setMovementReason(e.target.value)}
+          />
+        </FormField>
+      </FormModal>
+
+      <Dialog open={historyItem !== null} onOpenChange={handleHistoryOpenChange}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>{historyItem ? copy.historyTitle(historyItem.name) : copy.historyTitle('')}</DialogTitle>
+            <DialogDescription>{copy.historyDescription}</DialogDescription>
+          </DialogHeader>
+          <AsyncSection
+            loading={historyLoading}
+            error={historyError}
+            onRetry={() => {
+              if (historyItem) openHistory(historyItem);
+            }}
+            retryLabel={copy.retry}
+            isEmpty={historyMovements.length === 0}
+            emptyTitle={copy.emptyHistory}
+            skeleton={<TableSkeleton rows={3} />}
+          >
+            <Table aria-label={copy.historyTableLabel}>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead>{copy.colMovementDate}</TableHead>
+                  <TableHead>{copy.colMovementType}</TableHead>
+                  <TableHead>{copy.colMovementQuantity}</TableHead>
+                  <TableHead>{copy.colMovementReason}</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {historyMovements.map((movement) => (
+                  <TableRow key={movement.id}>
+                    <TableCell>{formatDateTime(movement.occurredAt)}</TableCell>
+                    <TableCell>
+                      <Badge variant={MOVEMENT_TYPE_BADGE_VARIANT[movement.type]}>
+                        {MOVEMENT_TYPE_LABELS[movement.type]}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="tabular-nums">{movement.quantity}</TableCell>
+                    <TableCell className="text-muted">
+                      {movement.reason ?? copy.movementReasonFallback}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </AsyncSection>
+        </DialogContent>
+      </Dialog>
+
+      <ConfirmDialog
+        open={deletingItem !== null}
+        onOpenChange={handleDeleteOpenChange}
+        title={copy.deleteTitle}
+        description={deletingItem ? copy.deleteDescription(deletingItem.name) : undefined}
+        confirmLabel={copy.deleteConfirm}
+        confirming={deletingItem !== null && updatingId === deletingItem.id}
+        error={deleteError}
+        onConfirm={handleDelete}
+      />
     </div>
   );
 }

@@ -1,191 +1,223 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { InventoryView } from './inventory-view';
-import { listItems, createItem, updateItem, deleteItem } from '@/lib/inventory/inventory-api';
-import type { InventoryItemWithStock } from '@/lib/inventory/inventory-api';
-import { ApiError } from '@/lib/api/client';
+import {
+  listInventoryItems,
+  createInventoryItem,
+  updateInventoryItem,
+  deleteInventoryItem,
+  recordInventoryMovement,
+  listInventoryMovements,
+} from '@/lib/inventory/inventory-api';
 
-// NOTE: jest.mock's string literal is not alias-rewritten by the SWC
-// transform (only real `import`/`require` specifiers are) — use a relative
-// path here, same convention as staff-view.test.tsx / logout-button.test.tsx.
 jest.mock('../../lib/inventory/inventory-api', () => ({
-  listItems: jest.fn(),
-  createItem: jest.fn(),
-  updateItem: jest.fn(),
-  deleteItem: jest.fn(),
+  listInventoryItems: jest.fn(),
+  createInventoryItem: jest.fn(),
+  updateInventoryItem: jest.fn(),
+  deleteInventoryItem: jest.fn(),
+  recordInventoryMovement: jest.fn(),
+  listInventoryMovements: jest.fn(),
 }));
 
-jest.mock('next/navigation', () => ({
-  useRouter: () => ({ push: jest.fn(), replace: jest.fn() }),
-}));
+const mockedList = listInventoryItems as jest.MockedFunction<typeof listInventoryItems>;
+const mockedCreate = createInventoryItem as jest.MockedFunction<typeof createInventoryItem>;
+const mockedUpdate = updateInventoryItem as jest.MockedFunction<typeof updateInventoryItem>;
+const mockedDelete = deleteInventoryItem as jest.MockedFunction<typeof deleteInventoryItem>;
+const mockedRecord = recordInventoryMovement as jest.MockedFunction<typeof recordInventoryMovement>;
+const mockedListMovements = listInventoryMovements as jest.MockedFunction<typeof listInventoryMovements>;
 
-const mockedListItems = listItems as jest.MockedFunction<typeof listItems>;
-const mockedCreateItem = createItem as jest.MockedFunction<typeof createItem>;
-const mockedUpdateItem = updateItem as jest.MockedFunction<typeof updateItem>;
-const mockedDeleteItem = deleteItem as jest.MockedFunction<typeof deleteItem>;
-
-const lowStockItem: InventoryItemWithStock = {
-  id: 'i1',
-  name: 'Guantes de nitrilo',
-  sku: 'GUA-001',
-  unit: 'caja',
-  minStock: 5,
-  notes: null,
-  createdById: null,
-  createdAt: '2026-01-01T00:00:00.000Z',
-  updatedAt: '2026-01-01T00:00:00.000Z',
-  stock: 2,
-  lowStock: true,
+const guantes = {
+  id: 'i1', name: 'Guantes de nitrilo', sku: 'GUA-N', unit: 'caja', minStock: 5,
+  notes: null, createdById: null, createdAt: '2026-07-31T10:00:00.000Z',
+  updatedAt: '2026-07-31T10:00:00.000Z', stock: 2, lowStock: true,
+};
+const gasa = { ...guantes, id: 'i2', name: 'Gasa estéril', sku: null, unit: 'unidad', minStock: 10, stock: 40, lowStock: false };
+const algodon = {
+  id: 'i3', name: 'Algodón', sku: null, unit: 'unidad', minStock: 3,
+  notes: null, createdById: null, createdAt: '2026-07-31T10:00:00.000Z',
+  updatedAt: '2026-07-31T10:00:00.000Z',
+  // stock/lowStock intentionally absent: item with no movements yet.
 };
 
-const okStockItem: InventoryItemWithStock = {
-  id: 'i2',
-  name: 'Algodón',
-  sku: null,
-  unit: 'paquete',
-  minStock: 3,
-  notes: null,
-  createdById: null,
-  createdAt: '2026-01-01T00:00:00.000Z',
-  updatedAt: '2026-01-01T00:00:00.000Z',
-  stock: 10,
-  lowStock: false,
-};
+beforeEach(() => {
+  mockedList.mockReset();
+  mockedCreate.mockReset();
+  mockedUpdate.mockReset();
+  mockedDelete.mockReset();
+  mockedRecord.mockReset();
+  mockedListMovements.mockReset();
+});
 
-describe('InventoryView', () => {
-  beforeEach(() => {
-    mockedListItems.mockReset();
-    mockedCreateItem.mockReset();
-    mockedUpdateItem.mockReset();
-    mockedDeleteItem.mockReset();
+it('muestra los insumos con su stock y marca los que están bajo el mínimo', async () => {
+  mockedList.mockResolvedValue([guantes, gasa]);
+  render(<InventoryView token="tok" />);
+
+  const table = await screen.findByRole('table', { name: /inventario/i });
+  const lowRow = within(table).getByRole('row', { name: /guantes de nitrilo/i });
+  expect(within(lowRow).getByText('2')).toBeInTheDocument();
+  expect(within(lowRow).getByText(/bajo stock/i)).toBeInTheDocument();
+
+  const okRow = within(table).getByRole('row', { name: /gasa estéril/i });
+  expect(within(okRow).getByText('40')).toBeInTheDocument();
+  expect(within(okRow).queryByText(/bajo stock/i)).not.toBeInTheDocument();
+});
+
+it('muestra un guion cuando stock/lowStock no vienen del API (sin ocultar que faltan)', async () => {
+  mockedList.mockResolvedValue([algodon]);
+  render(<InventoryView token="tok" />);
+
+  const table = await screen.findByRole('table', { name: /inventario/i });
+  const row = within(table).getByRole('row', { name: /algodón/i });
+  // One "—" for the missing stock cell, one for the neutral status badge.
+  expect(within(row).getAllByText('—')).toHaveLength(2);
+  expect(within(row).queryByText(/^ok$/i)).not.toBeInTheDocument();
+  expect(within(row).queryByText(/bajo stock/i)).not.toBeInTheDocument();
+});
+
+it('crea un insumo con el payload correcto y refresca la lista', async () => {
+  mockedList.mockResolvedValueOnce([]);
+  mockedCreate.mockResolvedValue(guantes);
+  mockedList.mockResolvedValueOnce([guantes]);
+
+  const user = userEvent.setup();
+  render(<InventoryView token="tok" />);
+  await screen.findByText(/todavía no hay insumos/i);
+
+  await user.click(screen.getByRole('button', { name: /agregar insumo/i }));
+  await user.type(screen.getByLabelText(/^nombre$/i), 'Guantes de nitrilo');
+  await user.type(screen.getByLabelText(/unidad/i), 'caja');
+  await user.type(screen.getByLabelText(/stock mínimo/i), '5');
+  await user.click(screen.getByRole('button', { name: /^crear$/i }));
+
+  await waitFor(() =>
+    expect(mockedCreate).toHaveBeenCalledWith('tok', {
+      name: 'Guantes de nitrilo', unit: 'caja', minStock: 5,
+    }),
+  );
+  await waitFor(() => expect(mockedList).toHaveBeenCalledTimes(2));
+  expect(await screen.findByText('Guantes de nitrilo')).toBeInTheDocument();
+});
+
+it('registra una salida y refresca el stock', async () => {
+  mockedList.mockResolvedValueOnce([guantes]);
+  mockedRecord.mockResolvedValue({
+    id: 'm1', itemId: 'i1', type: 'OUT', quantity: 1, reason: 'Uso en consulta',
+    occurredAt: '2026-07-31T12:00:00.000Z', createdById: null, createdAt: '2026-07-31T12:00:00.000Z',
   });
+  mockedList.mockResolvedValueOnce([{ ...guantes, stock: 1 }]);
 
-  it('renders rows with name, unit and stock; shows a "Stock bajo" badge only on low-stock items', async () => {
-    mockedListItems.mockResolvedValue([lowStockItem, okStockItem]);
+  const user = userEvent.setup();
+  render(<InventoryView token="tok" />);
+  await screen.findByRole('table', { name: /inventario/i });
 
-    render(<InventoryView token="tok" />);
+  await user.click(screen.getByRole('button', { name: /movimiento de guantes de nitrilo/i }));
+  await user.selectOptions(screen.getByLabelText(/tipo/i), 'OUT');
+  await user.type(screen.getByLabelText(/cantidad/i), '1');
+  await user.type(screen.getByLabelText(/motivo/i), 'Uso en consulta');
+  await user.click(screen.getByRole('button', { name: /^registrar$/i }));
 
-    const table = await screen.findByRole('table', { name: /inventario/i });
-    const rows = within(table).getAllByRole('row');
-    expect(rows).toHaveLength(3); // header + 2 items
+  await waitFor(() =>
+    expect(mockedRecord).toHaveBeenCalledWith('tok', 'i1', {
+      type: 'OUT', quantity: 1, reason: 'Uso en consulta',
+    }),
+  );
+  await waitFor(() => expect(mockedList).toHaveBeenCalledTimes(2));
+});
 
-    const row1 = rows[1];
-    expect(within(row1).getByDisplayValue('Guantes de nitrilo')).toBeInTheDocument();
-    expect(within(row1).getByDisplayValue('caja')).toBeInTheDocument();
-    expect(within(row1).getByText('2')).toBeInTheDocument();
-    expect(within(row1).getByText(/stock bajo/i)).toBeInTheDocument();
+it('rechaza una entrada con cantidad 0 sin llamar al API', async () => {
+  mockedList.mockResolvedValueOnce([guantes]);
 
-    const row2 = rows[2];
-    expect(within(row2).getByDisplayValue('Algodón')).toBeInTheDocument();
-    expect(within(row2).queryByText(/stock bajo/i)).not.toBeInTheDocument();
-  });
+  const user = userEvent.setup();
+  render(<InventoryView token="tok" />);
+  await screen.findByRole('table', { name: /inventario/i });
 
-  it('shows an EmptyState with a create CTA when there are no items', async () => {
-    mockedListItems.mockResolvedValue([]);
+  await user.click(screen.getByRole('button', { name: /movimiento de guantes de nitrilo/i }));
+  await user.type(screen.getByLabelText(/cantidad/i), '0');
+  await user.click(screen.getByRole('button', { name: /^registrar$/i }));
 
-    render(<InventoryView token="tok" />);
+  expect(await screen.findByText(/la cantidad debe ser mayor a 0/i)).toBeInTheDocument();
+  expect(mockedRecord).not.toHaveBeenCalled();
+});
 
-    expect(await screen.findByText(/no hay insumos/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /nuevo insumo/i })).toBeInTheDocument();
-  });
+it('muestra el historial de movimientos de un insumo', async () => {
+  mockedList.mockResolvedValue([guantes]);
+  mockedListMovements.mockResolvedValue([
+    { id: 'm1', itemId: 'i1', type: 'IN', quantity: 10, reason: 'Compra',
+      occurredAt: '2026-07-30T10:00:00.000Z', createdById: null, createdAt: '2026-07-30T10:00:00.000Z' },
+    { id: 'm2', itemId: 'i1', type: 'OUT', quantity: 8, reason: null,
+      occurredAt: '2026-07-31T10:00:00.000Z', createdById: null, createdAt: '2026-07-31T10:00:00.000Z' },
+  ]);
 
-  it('submitting the create form calls createItem with the entered values and refreshes the list', async () => {
-    mockedListItems.mockResolvedValueOnce([okStockItem]);
-    mockedCreateItem.mockResolvedValue({
-      id: 'i3',
-      name: 'Jeringas',
-      sku: null,
-      unit: 'unidad',
-      minStock: 0,
-      notes: null,
-      createdById: null,
-      createdAt: '2026-01-02T00:00:00.000Z',
-      updatedAt: '2026-01-02T00:00:00.000Z',
-    });
-    mockedListItems.mockResolvedValueOnce([
-      okStockItem,
-      { ...okStockItem, id: 'i3', name: 'Jeringas', sku: null, unit: 'unidad', minStock: 0, stock: 0, lowStock: false },
-    ]);
+  const user = userEvent.setup();
+  render(<InventoryView token="tok" />);
+  await screen.findByRole('table', { name: /inventario/i });
 
-    const user = userEvent.setup();
-    render(<InventoryView token="tok" />);
+  await user.click(screen.getByRole('button', { name: /historial de guantes de nitrilo/i }));
 
-    await screen.findByRole('table', { name: /inventario/i });
+  expect(await screen.findByText(/compra/i)).toBeInTheDocument();
+  expect(screen.getByText('Entrada')).toBeInTheDocument();
+  expect(screen.getByText('Salida')).toBeInTheDocument();
+});
 
-    await user.click(screen.getByRole('button', { name: /nuevo insumo/i }));
-    await user.type(screen.getByLabelText(/^nombre$/i), 'Jeringas');
-    await user.type(screen.getByLabelText(/^unidad$/i), 'unidad');
-    await user.click(screen.getByRole('button', { name: /^crear$/i }));
+it('editar abre el modal prellenado y hace PATCH', async () => {
+  mockedList.mockResolvedValueOnce([guantes]);
+  mockedUpdate.mockResolvedValue({ ...guantes, minStock: 8 });
+  mockedList.mockResolvedValueOnce([{ ...guantes, minStock: 8 }]);
 
-    await waitFor(() =>
-      expect(mockedCreateItem).toHaveBeenCalledWith('tok', { name: 'Jeringas', unit: 'unidad' }),
-    );
-    await waitFor(() => expect(mockedListItems).toHaveBeenCalledTimes(2));
-    expect(await screen.findByDisplayValue('Jeringas')).toBeInTheDocument();
-  });
+  const user = userEvent.setup();
+  render(<InventoryView token="tok" />);
+  await screen.findByRole('table', { name: /inventario/i });
 
-  it('shows role="alert" and a retry button on a load error, and retry reloads', async () => {
-    mockedListItems.mockRejectedValueOnce(new ApiError(500, 'Ups, algo salió mal.'));
-    mockedListItems.mockResolvedValueOnce([lowStockItem]);
+  await user.click(screen.getByRole('button', { name: /editar guantes de nitrilo/i }));
+  const min = screen.getByLabelText(/stock mínimo/i);
+  expect(min).toHaveValue(5);
+  await user.clear(min);
+  await user.type(min, '8');
+  await user.click(screen.getByRole('button', { name: /^guardar$/i }));
 
-    const user = userEvent.setup();
-    render(<InventoryView token="tok" />);
+  await waitFor(() =>
+    expect(mockedUpdate).toHaveBeenCalledWith('tok', 'i1', expect.objectContaining({ minStock: 8 })),
+  );
+  await waitFor(() => expect(mockedList).toHaveBeenCalledTimes(2));
+});
 
-    expect(await screen.findByRole('alert')).toHaveTextContent(/ups, algo salió mal/i);
-    await user.click(screen.getByRole('button', { name: /reintentar/i }));
+it('editar limpia sku y notas enviando null explícito', async () => {
+  const conNotas = { ...guantes, notes: 'Guardar en frío' };
+  mockedList.mockResolvedValueOnce([conNotas]);
+  mockedUpdate.mockResolvedValue({ ...conNotas, sku: null, notes: null });
+  mockedList.mockResolvedValueOnce([{ ...conNotas, sku: null, notes: null }]);
 
-    await screen.findByRole('table', { name: /inventario/i });
-    expect(mockedListItems).toHaveBeenCalledTimes(2);
-  });
+  const user = userEvent.setup();
+  render(<InventoryView token="tok" />);
+  await screen.findByRole('table', { name: /inventario/i });
 
-  it('shows a friendly forbidden message on a 403, without the retry button', async () => {
-    mockedListItems.mockRejectedValue(new ApiError(403, 'Forbidden'));
+  await user.click(screen.getByRole('button', { name: /editar guantes de nitrilo/i }));
+  await user.clear(screen.getByLabelText(/^sku$/i));
+  await user.clear(screen.getByLabelText(/^notas$/i));
+  await user.click(screen.getByRole('button', { name: /^guardar$/i }));
 
-    render(<InventoryView token="tok" />);
+  await waitFor(() =>
+    expect(mockedUpdate).toHaveBeenCalledWith(
+      'tok',
+      'i1',
+      expect.objectContaining({ sku: null, notes: null }),
+    ),
+  );
+});
 
-    expect(await screen.findByText(/no tienes permiso/i)).toBeInTheDocument();
-    expect(screen.queryByRole('button', { name: /reintentar/i })).not.toBeInTheDocument();
-    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
-  });
+it('eliminar pide confirmación y luego llama al API', async () => {
+  mockedList.mockResolvedValueOnce([guantes]);
+  mockedDelete.mockResolvedValue(undefined);
+  mockedList.mockResolvedValueOnce([]);
 
-  it('editing a row field (blur) calls updateItem and refreshes the list', async () => {
-    mockedListItems.mockResolvedValueOnce([lowStockItem]);
-    mockedUpdateItem.mockResolvedValue({ ...lowStockItem, name: 'Guantes de nitrilo M' });
-    mockedListItems.mockResolvedValueOnce([{ ...lowStockItem, name: 'Guantes de nitrilo M' }]);
+  const user = userEvent.setup();
+  render(<InventoryView token="tok" />);
+  await screen.findByRole('table', { name: /inventario/i });
 
-    const user = userEvent.setup();
-    render(<InventoryView token="tok" />);
+  await user.click(screen.getByRole('button', { name: /eliminar guantes de nitrilo/i }));
+  await user.click(screen.getByRole('button', { name: /sí, eliminar/i }));
 
-    await screen.findByRole('table', { name: /inventario/i });
-    const nameInput = screen.getByLabelText<HTMLInputElement>(/nombre de guantes de nitrilo/i);
-
-    await user.clear(nameInput);
-    await user.type(nameInput, 'Guantes de nitrilo M');
-    await user.tab();
-
-    await waitFor(() =>
-      expect(mockedUpdateItem).toHaveBeenCalledWith('tok', 'i1', { name: 'Guantes de nitrilo M' }),
-    );
-    await waitFor(() => expect(mockedListItems).toHaveBeenCalledTimes(2));
-  });
-
-  it('deleting a row asks for inline confirmation, then calls deleteItem', async () => {
-    mockedListItems.mockResolvedValueOnce([lowStockItem]);
-    mockedDeleteItem.mockResolvedValue(undefined);
-    mockedListItems.mockResolvedValueOnce([]);
-
-    const user = userEvent.setup();
-    render(<InventoryView token="tok" />);
-
-    await screen.findByRole('table', { name: /inventario/i });
-
-    await user.click(screen.getByRole('button', { name: /eliminar/i }));
-    expect(mockedDeleteItem).not.toHaveBeenCalled();
-    expect(screen.getByText(/¿eliminar este insumo\?/i)).toBeInTheDocument();
-
-    await user.click(screen.getByRole('button', { name: /sí, eliminar/i }));
-
-    await waitFor(() => expect(mockedDeleteItem).toHaveBeenCalledWith('tok', 'i1'));
-    await waitFor(() => expect(mockedListItems).toHaveBeenCalledTimes(2));
-  });
+  await waitFor(() => expect(mockedDelete).toHaveBeenCalledWith('tok', 'i1'));
+  await waitFor(() => expect(mockedList).toHaveBeenCalledTimes(2));
+  expect(await screen.findByText(/todavía no hay insumos/i)).toBeInTheDocument();
 });

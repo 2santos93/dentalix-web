@@ -1,42 +1,28 @@
 import { apiFetch, apiFetchOrNull } from '@/lib/api/client';
 import type { components } from '@/lib/api/schema';
+import type { ClinicalHistoryValue, MedicalHistory } from '@/lib/clinical/clinical-types';
 
+// `SaveMedicalHistoryDto`'s nested fields (`allergies`/`conditions`/
+// `medications`/`habits`/…) generate as `Record<string, never>` — see
+// `clinical-types.ts` for why. `ClinicalHistoryValue` is the same shape with
+// those fields hand-typed to their real structure.
+export type SaveMedicalHistoryInput = ClinicalHistoryValue;
 export type CreateClinicalEntryInput = components['schemas']['CreateClinicalEntryDto'];
 
-/* ── Anamnesis (historia clínica estructurada) ─────────────────────────────
- * Ahora derivados del OpenAPI: el backend documenta las partes anidadas con
- * `@ApiProperty` (ver anamnesis-parts.dto.ts), así que `openapi-typescript`
- * emite las formas reales en vez de `Record<string, never>`. Antes había que
- * escribirlas a mano y mantenerlas en sync con la entidad.
- */
-
-export type Allergy = components['schemas']['AllergyDto'];
-export type Condition = components['schemas']['ConditionDto'];
-export type Medication = components['schemas']['MedicationDto'];
-export type Habits = components['schemas']['HabitsDto'];
-export type DentalHistory = components['schemas']['DentalHistoryDto'];
-export type Surgery = components['schemas']['SurgeryDto'];
-export type VitalSigns = components['schemas']['VitalSignsDto'];
-export type SafetyFlags = components['schemas']['SafetyFlagsDto'];
-
-export type AllergyType = Allergy['tipo'];
-export type AllergySeverity = Allergy['severidad'];
-export type ConditionStatus = Condition['estado'];
-
-/** Cuerpo del `PUT` — todo opcional: una anamnesis puede quedar parcial. */
-export type SaveMedicalHistoryInput = components['schemas']['SaveMedicalHistoryDto'];
-
 /**
- * La anamnesis vigente de un paciente (`GET /patients/:id/medical-history`,
- * y lo que devuelve el `PUT`). Sale del OpenAPI, no de una copia a mano.
+ * `GET /patients/:id/medical-history` (and `PUT`) return a plain TS
+ * interface on the backend (`MedicalHistory`), not a class decorated with
+ * `@ApiProperty()` — same situation as `Patient` in `patients-api.ts` — so
+ * the generated `schema.d.ts` has no body shape for these routes
+ * (`content?: never`). `MedicalHistory` (imported above) mirrors
+ * `dentalix-api`'s
+ * `src/modules/medical-history/domain/entities/medical-history.entity.ts` —
+ * keep it in sync if that changes.
  *
- * APPEND-ONLY: "la anamnesis actual" = la fila con el `version` más alto del
- * paciente. Guardar nunca actualiza una versión anterior, y cada guardado es
- * un SNAPSHOT COMPLETO: una sección omitida desaparece de la versión nueva.
- *
- * `safetyFlags`/`hasCriticalAlert` los DERIVA el backend; no se envían.
+ * This is APPEND-ONLY: "the current anamnesis" = the row with the highest
+ * `version` for a patient. Saving never updates a previous row.
  */
-export type MedicalHistory = components['schemas']['MedicalHistoryDto'];
+export type { MedicalHistory };
 
 /**
  * `GET /patients/:id/clinical-entries` (and `POST`) — same situation as

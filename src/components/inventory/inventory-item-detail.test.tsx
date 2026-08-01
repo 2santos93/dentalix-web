@@ -1,12 +1,12 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { InventoryItemDetail } from './inventory-item-detail';
+import { InventoryItem } from './inventory-item-detail';
 // Relative path: SWC no reescribe el alias '@/' dentro de jest.mock, así que el
 // mock debe resolver al mismo módulo absoluto que importa el componente.
 import {
-  getItem,
-  recordMovement,
-  type InventoryItemDetail as ItemDetail,
+  getInventoryItem,
+  recordInventoryMovement,
+  type InventoryItem as ItemDetail,
 } from '../../lib/inventory/inventory-api';
 
 const push = jest.fn();
@@ -14,14 +14,14 @@ jest.mock('next/navigation', () => ({
   useRouter: () => ({ push }),
 }));
 jest.mock('../../lib/inventory/inventory-api', () => ({
-  getItem: jest.fn(),
-  recordMovement: jest.fn(),
-  updateItem: jest.fn(),
-  deleteItem: jest.fn(),
+  getInventoryItem: jest.fn(),
+  recordInventoryMovement: jest.fn(),
+  updateInventoryItem: jest.fn(),
+  deleteInventoryItem: jest.fn(),
 }));
 
-const mockedGetItem = getItem as jest.MockedFunction<typeof getItem>;
-const mockedRecord = recordMovement as jest.MockedFunction<typeof recordMovement>;
+const mockedGetItem = getInventoryItem as jest.MockedFunction<typeof getInventoryItem>;
+const mockedRecord = recordInventoryMovement as jest.MockedFunction<typeof recordInventoryMovement>;
 
 function detail(overrides: Partial<ItemDetail> = {}): ItemDetail {
   return {
@@ -45,7 +45,7 @@ function detail(overrides: Partial<ItemDetail> = {}): ItemDetail {
   };
 }
 
-describe('InventoryItemDetail', () => {
+describe('InventoryItem', () => {
   beforeEach(() => {
     push.mockClear();
     mockedGetItem.mockReset();
@@ -54,7 +54,7 @@ describe('InventoryItemDetail', () => {
 
   it('loads the item and renders its ledger with signed quantities', async () => {
     mockedGetItem.mockResolvedValue(detail());
-    render(<InventoryItemDetail token="tok" id="item1" />);
+    render(<InventoryItem token="tok" id="item1" />);
 
     expect(await screen.findByText('Jeringas')).toBeInTheDocument();
     // Stock actual + badge de stock bajo.
@@ -73,7 +73,7 @@ describe('InventoryItemDetail', () => {
       occurredAt: '2026-07-04T10:00:00.000Z', createdById: null, createdAt: '2026-07-04T10:00:00.000Z',
     });
     const user = userEvent.setup();
-    render(<InventoryItemDetail token="tok" id="item1" />);
+    render(<InventoryItem token="tok" id="item1" />);
     await screen.findByText('Jeringas');
 
     const form = screen.getByRole('form', { name: /registrar movimiento/i });
@@ -87,14 +87,14 @@ describe('InventoryItemDetail', () => {
         expect.objectContaining({ type: 'IN', quantity: 5 }),
       ),
     );
-    // Refresco: getItem se llama de nuevo (inicial + refresh).
+    // Refresco: getInventoryItem se llama de nuevo (inicial + refresh).
     await waitFor(() => expect(mockedGetItem).toHaveBeenCalledTimes(2));
   });
 
-  it('blocks an invalid quantity (IN with 0) with an inline error and does not call recordMovement', async () => {
+  it('blocks an invalid quantity (IN with 0) with an inline error and does not call recordInventoryMovement', async () => {
     mockedGetItem.mockResolvedValue(detail());
     const user = userEvent.setup();
-    render(<InventoryItemDetail token="tok" id="item1" />);
+    render(<InventoryItem token="tok" id="item1" />);
     await screen.findByText('Jeringas');
 
     const form = screen.getByRole('form', { name: /registrar movimiento/i });
@@ -107,7 +107,7 @@ describe('InventoryItemDetail', () => {
 
   it('shows an empty-ledger message when there are no movements', async () => {
     mockedGetItem.mockResolvedValue(detail({ movements: [] }));
-    render(<InventoryItemDetail token="tok" id="item1" />);
+    render(<InventoryItem token="tok" id="item1" />);
     await screen.findByText('Jeringas');
 
     expect(screen.getByText(/sin movimientos aún/i)).toBeInTheDocument();
