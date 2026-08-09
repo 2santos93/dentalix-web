@@ -1,5 +1,5 @@
 import { apiFetch, apiFetchOrNull } from '@/lib/api/client';
-import type { components } from '@/lib/api/schema';
+import type { components, paths } from '@/lib/api/schema';
 
 /**
  * `InventoryController` is fully `@ApiProperty()`-decorated on the backend
@@ -14,14 +14,34 @@ export type InventoryMovement = components['schemas']['InventoryMovementDto'];
 export type RecordMovementInput = components['schemas']['RecordInventoryMovementDto'];
 export type InventoryMovementType = InventoryMovement['type'];
 
+/** `GET /inventory/items` response envelope — same shape as `PatientsListResponse`. */
+export type ListInventoryItemsResponse = components['schemas']['ListInventoryItemsResponseDto'];
+
+export type ListInventoryItemsParams =
+  paths['/api/v1/inventory/items']['get']['parameters']['query'];
+
 /**
- * `GET /inventory/items` — every inventory item for the tenant, with
+ * `GET /inventory/items` — a page of inventory items for the tenant, with
  * `stock`/`lowStock` computed server-side from the movement ledger (never
  * cache/derive these client-side). Tenant is resolved from the JWT, same
- * convention as `listCatalogItems`.
+ * convention as `listCatalogItems`. Server-paginated + filterable, same
+ * envelope/query-building shape as `listPatients`: empty/undefined params are
+ * omitted from the query string rather than sent as `""`/`"undefined"`.
  */
-export async function listInventoryItems(token: string): Promise<InventoryItem[]> {
-  return apiFetch<InventoryItem[]>('/inventory/items', { token });
+export async function listInventoryItems(
+  token: string,
+  params: ListInventoryItemsParams = {},
+): Promise<ListInventoryItemsResponse> {
+  const search = new URLSearchParams();
+  if (params?.query) search.set('query', params.query);
+  if (params?.page !== undefined) search.set('page', String(params.page));
+  if (params?.pageSize !== undefined) search.set('pageSize', String(params.pageSize));
+  if (params?.lowStockOnly) search.set('lowStockOnly', String(params.lowStockOnly));
+  const qs = search.toString();
+
+  return apiFetch<ListInventoryItemsResponse>(`/inventory/items${qs ? `?${qs}` : ''}`, {
+    token,
+  });
 }
 
 /** `GET /inventory/items/:id` — item detail, including its `movements`. */

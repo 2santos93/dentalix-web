@@ -1,6 +1,6 @@
 'use client';
 import * as React from 'react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ApiError } from '@/lib/api/client';
 import {
   listInventoryItems,
@@ -16,7 +16,8 @@ import {
   type InventoryMovementType,
   type RecordMovementInput,
 } from '@/lib/inventory/inventory-api';
-import { Plus } from 'lucide-react';
+import { useDebouncedValue } from '@/lib/hooks/use-debounced-value';
+import { Plus, Search } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
@@ -25,6 +26,7 @@ import { FormField } from '@/components/molecules/form-field';
 import { FormModal } from '@/components/molecules/form-modal';
 import { ConfirmDialog } from '@/components/molecules/confirm-dialog';
 import { AsyncSection, TableSkeleton } from '@/components/molecules/async-section';
+import { Pagination } from '@/components/molecules/pagination';
 import {
   Dialog,
   DialogContent,
@@ -41,6 +43,11 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+
+// Search box waits this long after the last keystroke before hitting the
+// server — same value/rationale as `AppointmentForm`'s
+// `PATIENT_SEARCH_DEBOUNCE_MS`.
+const SEARCH_DEBOUNCE_MS = 300;
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the app's
 // copy convention (catalog-view.tsx / staff-view.tsx) until next-intl wiring
@@ -61,8 +68,16 @@ const copy = {
   // Sin "Intenta de nuevo." — alimenta AsyncSection -> SectionError, que trae su propio botón.
   genericLoadError: 'No pudimos cargar el inventario.',
   genericCreateError: 'No pudimos crear el insumo. Intenta de nuevo.',
+  // Inventario vacío de verdad (sin insumos registrados) vs. una búsqueda/
+  // filtro sin resultados — dos mensajes distintos, no uno solo (ver
+  // `hasActiveFilters` en el componente).
   empty: 'Todavía no hay insumos registrados.',
   emptyHint: 'Agrega tu primer insumo para controlar el stock.',
+  emptyFiltered: 'Ningún insumo coincide con tu búsqueda.',
+  emptyFilteredHint: 'Prueba con otro término o quita el filtro de bajo mínimo.',
+  searchLabel: 'Buscar insumos',
+  searchPlaceholder: 'Buscar por nombre o SKU…',
+  lowStockOnlyLabel: 'Solo bajo mínimo',
   colItem: 'Insumo',
   colUnit: 'Unidad',
   colStock: 'Stock',
@@ -159,6 +174,29 @@ export function InventoryView({ token }: InventoryViewProps) {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
+  // Búsqueda, filtro de bajo mínimo y paginación: viven en estado del
+  // componente (no en la URL, a propósito — ver el plan). `query` es lo que
+  // se escribe; `debouncedQuery` (300ms) es lo que de verdad dispara la
+  // petición, igual que `AppointmentForm`'s `debouncedPatientQuery`.
+  // `total`/`pageSize` vuelven DEL servidor, igual que en `patients/page.tsx`
+  // — nunca se asume el valor pedido.
+  const [query, setQuery] = useState('');
+  const debouncedQuery = useDebouncedValue(query, SEARCH_DEBOUNCE_MS);
+  const [lowStockOnly, setLowStockOnly] = useState(false);
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [pageSize, setPageSize] = useState(0);
+  // Filtros efectivamente usados en la última carga completada — separado de
+  // `debouncedQuery`/`lowStockOnly` para que el mensaje de "sin resultados"
+  // no cambie a mitad del debounce, antes de que la petición correspondiente
+  // haya vuelto.
+  const [activeFilters, setActiveFilters] = useState({ query: '', lowStockOnly: false });
+  // Recuerda los filtros de la última petición DISPARADA (no completada) para
+  // decidir, en el efecto de abajo, si un cambio de query/lowStockOnly debe
+  // resetear la página a 1 antes de pedir — ver el comentario en el efecto.
+  const lastRequestedFiltersRef = useRef({ query: debouncedQuery, lowStockOnly });
+  const hasActiveFilters = activeFilters.query !== '' || activeFilters.lowStockOnly;
+
   // The create and edit flows share this same FormModal: `editingItem`
   // doubles as the "which insumo" AND the create/edit mode switch (`null` =
   // crear), same convention as `movementItem`/`historyItem` below — except
@@ -200,15 +238,51 @@ export function InventoryView({ token }: InventoryViewProps) {
   const [historyLoading, setHistoryLoading] = useState(false);
   const [historyError, setHistoryError] = useState<string | null>(null);
 
+  // Params for the current filters at a given page — shared by the load
+  // effect below and `refreshInPlace` (a mutation refetches the CURRENT page/
+  // filters, not page 1 unconditionally).
+  function buildListParams(forPage: number) {
+    const trimmedQuery = debouncedQuery.trim();
+    return {
+      ...(trimmedQuery ? { query: trimmedQuery } : {}),
+      page: forPage,
+      ...(lowStockOnly ? { lowStockOnly: true as const } : {}),
+    };
+  }
+
   useEffect(() => {
     if (!token) return;
+
+    // Typing or toggling the filter must reset to page 1. Doing that AND
+    // fetching in the same effect run would fire two requests (once with the
+    // stale page, once after the reset): instead, when the filters actually
+    // changed since the last request and we're not already on page 1, reset
+    // the page and bail without fetching — the resulting re-render (page 1)
+    // reruns this effect, which then falls through to the real fetch below
+    // with the filters already in sync. Exactly one request either way.
+    const filtersChanged =
+      lastRequestedFiltersRef.current.query !== debouncedQuery ||
+      lastRequestedFiltersRef.current.lowStockOnly !== lowStockOnly;
+    if (filtersChanged && page !== 1) {
+      lastRequestedFiltersRef.current = { query: debouncedQuery, lowStockOnly };
+      setPage(1);
+      return;
+    }
+    lastRequestedFiltersRef.current = { query: debouncedQuery, lowStockOnly };
+
     let cancelled = false;
     async function load() {
       setLoading(true);
       try {
-        const data = await listInventoryItems(token);
+        const data = await listInventoryItems(token, buildListParams(page));
         if (cancelled) return;
-        setItems(data);
+        setItems(data.items);
+        setTotal(data.total);
+        setPageSize(data.pageSize);
+        // Snapshots the filters THIS response actually used — drives the
+        // "no hay insumos" vs. "ningún insumo coincide" choice below without
+        // flickering mid-debounce, before the matching response is back.
+        setActiveFilters({ query: debouncedQuery.trim(), lowStockOnly });
         setLoadError(null);
       } catch (err) {
         if (cancelled) return;
@@ -221,13 +295,20 @@ export function InventoryView({ token }: InventoryViewProps) {
     return () => {
       cancelled = true;
     };
-  }, [token, reloadKey]);
+    // `buildListParams` is intentionally excluded: it's a plain function
+    // closing over `debouncedQuery`/`lowStockOnly`/`page`, all three already
+    // listed below — adding it would just be the same values under a
+    // different name, recreated fresh every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [token, debouncedQuery, lowStockOnly, page, reloadKey]);
 
   function refreshInPlace(): Promise<void> {
     if (!token) return Promise.resolve();
-    return listInventoryItems(token)
+    return listInventoryItems(token, buildListParams(page))
       .then((data) => {
-        setItems(data);
+        setItems(data.items);
+        setTotal(data.total);
+        setPageSize(data.pageSize);
         setLoadError(null);
       })
       .catch((err) => {
@@ -515,13 +596,36 @@ export function InventoryView({ token }: InventoryViewProps) {
         </FormField>
       </FormModal>
 
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="relative w-full sm:max-w-xs">
+          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted" />
+          <Input
+            id="inventory-search"
+            type="text"
+            aria-label={copy.searchLabel}
+            placeholder={copy.searchPlaceholder}
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            className="pl-9"
+          />
+        </div>
+        <label className="inline-flex items-center gap-2 text-sm text-ink">
+          <input
+            type="checkbox"
+            checked={lowStockOnly}
+            onChange={(e) => setLowStockOnly(e.target.checked)}
+          />
+          {copy.lowStockOnlyLabel}
+        </label>
+      </div>
+
       <AsyncSection
         loading={loading}
         error={loadError}
         onRetry={() => setReloadKey((k) => k + 1)}
         isEmpty={items.length === 0}
-        emptyTitle={copy.empty}
-        emptyDescription={copy.emptyHint}
+        emptyTitle={hasActiveFilters ? copy.emptyFiltered : copy.empty}
+        emptyDescription={hasActiveFilters ? copy.emptyFilteredHint : copy.emptyHint}
         skeleton={<TableSkeleton rows={4} />}
       >
         <Card className="overflow-hidden p-0">
@@ -614,6 +718,14 @@ export function InventoryView({ token }: InventoryViewProps) {
           </Table>
         </Card>
       </AsyncSection>
+
+      <Pagination
+        page={page}
+        pageSize={pageSize}
+        total={total}
+        onPageChange={setPage}
+        disabled={loading}
+      />
 
       <FormModal
         open={movementItem !== null}

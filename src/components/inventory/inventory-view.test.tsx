@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { InventoryView } from './inventory-view';
 import {
@@ -8,6 +8,7 @@ import {
   deleteInventoryItem,
   recordInventoryMovement,
   listInventoryMovements,
+  type InventoryItem,
 } from '@/lib/inventory/inventory-api';
 
 jest.mock('../../lib/inventory/inventory-api', () => ({
@@ -39,6 +40,12 @@ const algodon = {
   // stock/lowStock intentionally absent: item with no movements yet.
 };
 
+// Wraps items in the paginated envelope the API now returns — same shape as
+// `PatientsListResponse` (`listPatients`).
+function page(items: InventoryItem[], overrides: Partial<{ total: number; page: number; pageSize: number }> = {}) {
+  return { items, total: overrides.total ?? items.length, page: overrides.page ?? 1, pageSize: overrides.pageSize ?? 20 };
+}
+
 beforeEach(() => {
   mockedList.mockReset();
   mockedCreate.mockReset();
@@ -49,7 +56,7 @@ beforeEach(() => {
 });
 
 it('muestra los insumos con su stock y marca los que están bajo el mínimo', async () => {
-  mockedList.mockResolvedValue([guantes, gasa]);
+  mockedList.mockResolvedValue(page([guantes, gasa]));
   render(<InventoryView token="tok" />);
 
   const table = await screen.findByRole('table', { name: /inventario/i });
@@ -63,7 +70,7 @@ it('muestra los insumos con su stock y marca los que están bajo el mínimo', as
 });
 
 it('muestra un guion cuando stock/lowStock no vienen del API (sin ocultar que faltan)', async () => {
-  mockedList.mockResolvedValue([algodon]);
+  mockedList.mockResolvedValue(page([algodon]));
   render(<InventoryView token="tok" />);
 
   const table = await screen.findByRole('table', { name: /inventario/i });
@@ -75,9 +82,9 @@ it('muestra un guion cuando stock/lowStock no vienen del API (sin ocultar que fa
 });
 
 it('crea un insumo con el payload correcto y refresca la lista', async () => {
-  mockedList.mockResolvedValueOnce([]);
+  mockedList.mockResolvedValueOnce(page([]));
   mockedCreate.mockResolvedValue(guantes);
-  mockedList.mockResolvedValueOnce([guantes]);
+  mockedList.mockResolvedValueOnce(page([guantes]));
 
   const user = userEvent.setup();
   render(<InventoryView token="tok" />);
@@ -99,12 +106,12 @@ it('crea un insumo con el payload correcto y refresca la lista', async () => {
 });
 
 it('registra una salida y refresca el stock', async () => {
-  mockedList.mockResolvedValueOnce([guantes]);
+  mockedList.mockResolvedValueOnce(page([guantes]));
   mockedRecord.mockResolvedValue({
     id: 'm1', itemId: 'i1', type: 'OUT', quantity: 1, reason: 'Uso en consulta',
     occurredAt: '2026-07-31T12:00:00.000Z', createdById: null, createdAt: '2026-07-31T12:00:00.000Z',
   });
-  mockedList.mockResolvedValueOnce([{ ...guantes, stock: 1 }]);
+  mockedList.mockResolvedValueOnce(page([{ ...guantes, stock: 1 }]));
 
   const user = userEvent.setup();
   render(<InventoryView token="tok" />);
@@ -125,7 +132,7 @@ it('registra una salida y refresca el stock', async () => {
 });
 
 it('rechaza una entrada con cantidad 0 sin llamar al API', async () => {
-  mockedList.mockResolvedValueOnce([guantes]);
+  mockedList.mockResolvedValueOnce(page([guantes]));
 
   const user = userEvent.setup();
   render(<InventoryView token="tok" />);
@@ -140,7 +147,7 @@ it('rechaza una entrada con cantidad 0 sin llamar al API', async () => {
 });
 
 it('muestra el historial de movimientos de un insumo', async () => {
-  mockedList.mockResolvedValue([guantes]);
+  mockedList.mockResolvedValue(page([guantes]));
   mockedListMovements.mockResolvedValue([
     { id: 'm1', itemId: 'i1', type: 'IN', quantity: 10, reason: 'Compra',
       occurredAt: '2026-07-30T10:00:00.000Z', createdById: null, createdAt: '2026-07-30T10:00:00.000Z' },
@@ -160,9 +167,9 @@ it('muestra el historial de movimientos de un insumo', async () => {
 });
 
 it('editar abre el modal prellenado y hace PATCH', async () => {
-  mockedList.mockResolvedValueOnce([guantes]);
+  mockedList.mockResolvedValueOnce(page([guantes]));
   mockedUpdate.mockResolvedValue({ ...guantes, minStock: 8 });
-  mockedList.mockResolvedValueOnce([{ ...guantes, minStock: 8 }]);
+  mockedList.mockResolvedValueOnce(page([{ ...guantes, minStock: 8 }]));
 
   const user = userEvent.setup();
   render(<InventoryView token="tok" />);
@@ -183,9 +190,9 @@ it('editar abre el modal prellenado y hace PATCH', async () => {
 
 it('editar limpia sku y notas enviando null explícito', async () => {
   const conNotas = { ...guantes, notes: 'Guardar en frío' };
-  mockedList.mockResolvedValueOnce([conNotas]);
+  mockedList.mockResolvedValueOnce(page([conNotas]));
   mockedUpdate.mockResolvedValue({ ...conNotas, sku: null, notes: null });
-  mockedList.mockResolvedValueOnce([{ ...conNotas, sku: null, notes: null }]);
+  mockedList.mockResolvedValueOnce(page([{ ...conNotas, sku: null, notes: null }]));
 
   const user = userEvent.setup();
   render(<InventoryView token="tok" />);
@@ -206,9 +213,9 @@ it('editar limpia sku y notas enviando null explícito', async () => {
 });
 
 it('eliminar pide confirmación y luego llama al API', async () => {
-  mockedList.mockResolvedValueOnce([guantes]);
+  mockedList.mockResolvedValueOnce(page([guantes]));
   mockedDelete.mockResolvedValue(undefined);
-  mockedList.mockResolvedValueOnce([]);
+  mockedList.mockResolvedValueOnce(page([]));
 
   const user = userEvent.setup();
   render(<InventoryView token="tok" />);
@@ -220,4 +227,79 @@ it('eliminar pide confirmación y luego llama al API', async () => {
   await waitFor(() => expect(mockedDelete).toHaveBeenCalledWith('tok', 'i1'));
   await waitFor(() => expect(mockedList).toHaveBeenCalledTimes(2));
   expect(await screen.findByText(/todavía no hay insumos/i)).toBeInTheDocument();
+});
+
+describe('buscador, filtro de bajo mínimo y paginación', () => {
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it('escribir en el buscador dispara una sola petición tras el retardo, con query y page 1', async () => {
+    mockedList.mockResolvedValueOnce(page([guantes, gasa]));
+    render(<InventoryView token="tok" />);
+    await screen.findByRole('table', { name: /inventario/i });
+
+    jest.useFakeTimers({ advanceTimers: true });
+    const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
+    mockedList.mockClear();
+    mockedList.mockResolvedValueOnce(page([guantes]));
+
+    const search = screen.getByLabelText(/buscar insumos/i);
+    await user.type(search, 'guantes');
+
+    // Still within the debounce window — typing itself must not hit the API.
+    expect(mockedList).not.toHaveBeenCalled();
+
+    act(() => {
+      jest.advanceTimersByTime(300);
+    });
+
+    await waitFor(() =>
+      expect(mockedList).toHaveBeenCalledWith('tok', expect.objectContaining({ query: 'guantes', page: 1 })),
+    );
+    expect(mockedList).toHaveBeenCalledTimes(1);
+  });
+
+  it('marcar "Solo bajo mínimo" pide lowStockOnly y vuelve a la página 1', async () => {
+    mockedList.mockResolvedValueOnce(page([guantes, gasa], { total: 25 }));
+    render(<InventoryView token="tok" />);
+    await screen.findByRole('table', { name: /inventario/i });
+
+    // Move off page 1 first, so toggling the filter has to reset it.
+    mockedList.mockResolvedValueOnce(page([guantes], { total: 25, page: 2 }));
+    await userEvent.click(screen.getByRole('button', { name: /siguiente/i }));
+    await waitFor(() => expect(mockedList).toHaveBeenCalledWith('tok', expect.objectContaining({ page: 2 })));
+
+    mockedList.mockClear();
+    mockedList.mockResolvedValueOnce(page([guantes], { total: 1 }));
+    await userEvent.click(screen.getByLabelText(/solo bajo mínimo/i));
+
+    await waitFor(() =>
+      expect(mockedList).toHaveBeenCalledWith('tok', expect.objectContaining({ lowStockOnly: true, page: 1 })),
+    );
+  });
+
+  it('pulsar "Siguiente" pide la página 2', async () => {
+    mockedList.mockResolvedValueOnce(page([guantes, gasa], { total: 40 }));
+    render(<InventoryView token="tok" />);
+    await screen.findByRole('table', { name: /inventario/i });
+
+    mockedList.mockClear();
+    mockedList.mockResolvedValueOnce(page([guantes], { total: 40, page: 2 }));
+    await userEvent.click(screen.getByRole('button', { name: /siguiente/i }));
+
+    await waitFor(() => expect(mockedList).toHaveBeenCalledWith('tok', expect.objectContaining({ page: 2 })));
+  });
+
+  it('con filtros y cero resultados muestra "ningún insumo coincide", distinto del inventario vacío', async () => {
+    mockedList.mockResolvedValueOnce(page([guantes]));
+    render(<InventoryView token="tok" />);
+    await screen.findByRole('table', { name: /inventario/i });
+
+    mockedList.mockResolvedValueOnce(page([], { total: 0 }));
+    await userEvent.click(screen.getByLabelText(/solo bajo mínimo/i));
+
+    expect(await screen.findByText(/ningún insumo coincide/i)).toBeInTheDocument();
+    expect(screen.queryByText(/todavía no hay insumos/i)).not.toBeInTheDocument();
+  });
 });
