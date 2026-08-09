@@ -47,6 +47,49 @@ export async function listCatalogItems(
   return apiFetch<DentalCatalogItem[]>(`/catalog/items${qs ? `?${qs}` : ''}`, { token });
 }
 
+export interface ListCatalogDirectoryOptions extends ListCatalogItemsOptions {
+  /** Texto libre: código, etiqueta o categoría. */
+  query?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+export interface CatalogDirectoryPage {
+  items: DentalCatalogItem[];
+  /** Total que casa con los filtros, no el del catálogo entero. */
+  total: number;
+  page: number;
+  /** El que aplicó el servidor, que acota lo pedido — léelo de aquí, no lo asumas. */
+  pageSize: number;
+}
+
+/**
+ * `GET /catalog/items/directory` — UNA página del catálogo, con búsqueda.
+ *
+ * Es el endpoint de la pantalla de gestión. `listCatalogItems` (arriba) sigue
+ * siendo el de los selectores del odontograma y del plan de tratamiento, que
+ * necesitan el catálogo completo: si esos pasaran por aquí verían solo los 20
+ * primeros procedimientos y nadie lo notaría hasta echar en falta uno.
+ *
+ * Los parámetros vacíos se omiten de la query en vez de enviarse como `""`,
+ * misma convención que `listPatients`/`listInventoryItems`.
+ */
+export async function listCatalogDirectory(
+  token: string,
+  options: ListCatalogDirectoryOptions = {},
+): Promise<CatalogDirectoryPage> {
+  const params = new URLSearchParams();
+  if (options.query) params.set('query', options.query);
+  if (options.kind) params.set('kind', options.kind);
+  if (options.activeOnly !== undefined) params.set('activeOnly', String(options.activeOnly));
+  if (options.page !== undefined) params.set('page', String(options.page));
+  if (options.pageSize !== undefined) params.set('pageSize', String(options.pageSize));
+  const qs = params.toString();
+  return apiFetch<CatalogDirectoryPage>(`/catalog/items/directory${qs ? `?${qs}` : ''}`, {
+    token,
+  });
+}
+
 /**
  * `POST /catalog/items` — mirrors the backend `CreateCatalogItemDto`
  * (`dentalix-api/src/modules/dental-catalog/presentation/dto/create-catalog-item.dto.ts`):

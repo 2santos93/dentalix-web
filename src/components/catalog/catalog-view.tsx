@@ -3,14 +3,14 @@ import * as React from 'react';
 import { useEffect, useState } from 'react';
 import { ApiError } from '@/lib/api/client';
 import {
-  listCatalogItems,
+  listCatalogDirectory,
   createCatalogItem,
   updateCatalogItem,
   type DentalCatalogItem,
   type CreateCatalogItemInput,
   type UpdateCatalogItemInput,
 } from '@/lib/odontogram/catalog-api';
-import { Plus, Pencil } from 'lucide-react';
+import { Plus, Pencil, Eye, EyeOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
@@ -18,8 +18,19 @@ import { Badge } from '@/components/ui/badge';
 import { FormField } from '@/components/molecules/form-field';
 import { FormModal } from '@/components/molecules/form-modal';
 import { EmptyState } from '@/components/molecules/empty-state';
-import { AsyncSection, TableSkeleton } from '@/components/molecules/async-section';
+import {
+  AsyncSection,
+  TableSkeleton,
+} from '@/components/molecules/async-section';
+import { Pagination } from '@/components/molecules/pagination';
+import { RowActions } from '@/components/molecules/row-actions';
+import {
+  ListToolbar,
+  ResultCount,
+  toolbarFieldClass,
+} from '@/components/molecules/list-toolbar';
 import { notifyError } from '@/components/errors/notify';
+import { cn } from '@/lib/utils';
 import {
   Table,
   TableBody,
@@ -43,9 +54,11 @@ const copy = {
   nameLabel: 'Nombre',
   kindLabel: 'Tipo',
   codeLabel: 'Código',
-  codeHint: 'Código corto único dentro de la clínica (ej. PROF, RESINA, DX-CARIES).',
+  codeHint:
+    'Código corto único dentro de la clínica (ej. PROF, RESINA, DX-CARIES).',
   priceLabel: 'Precio por defecto',
-  priceHint: 'Opcional. Se usa para prellenar el precio al agregarlo a un plan.',
+  priceHint:
+    'Opcional. Se usa para prellenar el precio al agregarlo a un plan.',
   colorLabel: 'Color',
   colorHint: 'Se usa para distinguirlo en el odontograma.',
   categoryLabel: 'Categoría',
@@ -56,23 +69,25 @@ const copy = {
   loading: 'Cargando catálogo…',
   tableLabel: 'Catálogo dental',
   genericLoadError: 'No pudimos cargar el catálogo.',
-  genericCreateError: 'No pudimos crear el ítem del catálogo. Intenta de nuevo.',
+  genericCreateError:
+    'No pudimos crear el ítem del catálogo. Intenta de nuevo.',
   genericUpdateError: 'No pudimos guardar los cambios. Intenta de nuevo.',
   // Escalón 3 (segundo plano): sin "Intenta de nuevo." — el toast trae acción.
   genericToggleError: 'No pudimos cambiar el estado del ítem.',
   empty: 'El catálogo todavía está vacío.',
-  emptyHint: 'Agrega tu primer procedimiento para poder usarlo en los planes de tratamiento.',
-  searchLabel: 'Buscar',
-  searchPlaceholder: 'Nombre o código',
-  filterKindLabel: 'Tipo',
-  filterStatusLabel: 'Estado',
-  filterAll: 'Todos',
-  filterActive: 'Activos',
-  filterInactive: 'Inactivos',
-  /** Total when no filter is applied, e.g. "98 ítems". */
-  totalCount: (n: number) => `${n} ${n === 1 ? 'ítem' : 'ítems'}`,
-  /** Visible slice while filtering, e.g. "12 de 98". */
-  filteredCount: (shown: number, total: number) => `${shown} de ${total}`,
+  emptyHint:
+    'Agrega tu primer procedimiento para poder usarlo en los planes de tratamiento.',
+  searchLabel: 'Buscar por nombre, código o categoría',
+  searchPlaceholder: 'Buscar…',
+  filterKindLabel: 'Filtrar por tipo',
+  filterStatusLabel: 'Filtrar por estado',
+  filterAll: 'Todos los tipos',
+  filterAllStatuses: 'Activos e inactivos',
+  filterActive: 'Solo activos',
+  filterInactive: 'Solo inactivos',
+  countNoun: 'ítem',
+  countNounPlural: 'ítems',
+  actionsFor: (name: string) => `Acciones de ${name}`,
   noMatches: 'Ningún ítem coincide con la búsqueda.',
   noMatchesHint: 'Prueba con otro término o quita los filtros.',
   clearFilters: 'Limpiar filtros',
@@ -105,14 +120,12 @@ const KIND_LABELS: Record<CatalogKind, string> = {
 // required `color` field never blocks a quick "just add a procedure" flow.
 const DEFAULT_COLOR = '#0E7490';
 
-// Native <select> styled to match the Input atom (kept native for a11y/tests) —
-// same class/rationale as staff-view.tsx's `fieldClass`.
-const fieldClass =
-  'flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-50';
-
 // v1 currency formatting: fixed `es`/`USD`, same convention (and same
 // explicit follow-up for per-clinic currency) as treatment-plans-tab.tsx.
-const currencyFormatter = new Intl.NumberFormat('es', { style: 'currency', currency: 'USD' });
+const currencyFormatter = new Intl.NumberFormat('es', {
+  style: 'currency',
+  currency: 'USD',
+});
 function formatPrice(price: number | null): string {
   return price == null ? copy.priceFallback : currencyFormatter.format(price);
 }
@@ -120,17 +133,10 @@ function formatPrice(price: number | null): string {
 type KindFilter = 'ALL' | CatalogKind;
 type StatusFilter = 'ALL' | 'ACTIVE' | 'INACTIVE';
 
-/**
- * Lowercased and diacritic-stripped, so "paginacion" matches "Paginación" and
- * "PROFILAXIS" matches "Profilaxis" — the catalog is written in Spanish and
- * nobody types accents into a search box.
- */
-function normalize(value: string): string {
-  return value
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase();
-}
+const PAGE_SIZE = 20;
+// Corto para no notarse al teclear, largo para no lanzar una petición por
+// tecla. Mismo valor que `StaffView` e `InventoryView`.
+const SEARCH_DEBOUNCE_MS = 300;
 
 interface CatalogViewProps {
   token: string;
@@ -156,7 +162,9 @@ export function CatalogView({ token }: CatalogViewProps) {
 
   const [showForm, setShowForm] = useState(false);
   // null = create mode; a DentalCatalogItem = editing that item.
-  const [editingItem, setEditingItem] = useState<DentalCatalogItem | null>(null);
+  const [editingItem, setEditingItem] = useState<DentalCatalogItem | null>(
+    null,
+  );
   const [name, setName] = useState('');
   const [kind, setKind] = useState<CatalogKind>('PROCEDURE');
   const [code, setCode] = useState('');
@@ -171,30 +179,65 @@ export function CatalogView({ token }: CatalogViewProps) {
   // correct and on screen, so nothing needs to block it.
   const [togglingId, setTogglingId] = useState<string | null>(null);
 
-  // Client-side search/filters: the catalog is a bounded per-clinic list
-  // (~100 items) that's already fully fetched, so filtering in memory is
-  // instant and needs no request per keystroke. The API's `kind`/`activeOnly`
-  // params stay unused here on purpose — refetching would be slower and would
-  // lose the "N de M" total.
+  // Búsqueda y filtros del SERVIDOR (`GET /catalog/items/directory`). Antes se
+  // filtraba en memoria sobre el catálogo entero, lo cual funcionaba mientras
+  // "el catálogo entero" fueran cien filas; en cuanto una clínica grande carga
+  // su nomenclador, traerlo completo en cada visita para descartar el 95% en el
+  // cliente deja de ser gratis. Ahora la página, el conteo y el filtro los
+  // decide la base.
+  //
+  // `searchInput` es lo que se teclea, `search` lo que se consulta: separarlos
+  // es lo que permite el debounce sin que el campo se sienta lento.
+  const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
   const [kindFilter, setKindFilter] = useState<KindFilter>('ALL');
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('ALL');
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(0);
+  const [pageSize, setPageSize] = useState(PAGE_SIZE);
 
-  const query = normalize(search.trim());
-  const filteredItems = items.filter((item) => {
-    if (kindFilter !== 'ALL' && item.kind !== kindFilter) return false;
-    if (statusFilter === 'ACTIVE' && !item.active) return false;
-    if (statusFilter === 'INACTIVE' && item.active) return false;
-    if (!query) return true;
-    return normalize(item.labelEs).includes(query) || normalize(item.code).includes(query);
-  });
-  const isFiltering = query !== '' || kindFilter !== 'ALL' || statusFilter !== 'ALL';
+  // `hasAny` distingue "el catálogo está vacío" de "la búsqueda no encuentra
+  // nada", que necesitan mensajes distintos. Con filtrado en servidor no se
+  // puede mirar `items.length`: en una búsqueda sin resultados vale 0 en los
+  // dos casos. Se recuerda que alguna vez hubo filas.
+  const [hasAny, setHasAny] = useState(false);
+
+  const isFiltering =
+    search !== '' || kindFilter !== 'ALL' || statusFilter !== 'ALL';
 
   function clearFilters() {
+    setSearchInput('');
     setSearch('');
     setKindFilter('ALL');
     setStatusFilter('ALL');
+    setPage(1);
   }
+
+  useEffect(() => {
+    const debounce = setTimeout(() => {
+      setSearch(searchInput.trim());
+      // Toda búsqueda nueva vuelve a la página 1: quedarse en la 3 de un
+      // resultado que ahora tiene una sola deja la tabla vacía sin motivo.
+      setPage(1);
+    }, SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(debounce);
+  }, [searchInput]);
+
+  // Los filtros de la UI ('ALL') y los de la API (parámetro ausente) no son la
+  // misma cosa; la traducción vive aquí, en un solo sitio, para que el efecto y
+  // el refresco no puedan discrepar.
+  const queryParams = React.useMemo(
+    () => ({
+      ...(search ? { query: search } : {}),
+      ...(kindFilter !== 'ALL' ? { kind: kindFilter } : {}),
+      ...(statusFilter !== 'ALL'
+        ? { activeOnly: statusFilter === 'ACTIVE' }
+        : {}),
+      page,
+      pageSize: PAGE_SIZE,
+    }),
+    [search, kindFilter, statusFilter, page],
+  );
 
   useEffect(() => {
     if (!token) return;
@@ -202,13 +245,21 @@ export function CatalogView({ token }: CatalogViewProps) {
     async function load() {
       setLoading(true);
       try {
-        const data = await listCatalogItems(token);
+        const data = await listCatalogDirectory(token, queryParams);
         if (cancelled) return;
-        setItems(data);
+        setItems(data.items);
+        setTotal(data.total);
+        // El backend acota `pageSize`: se lee de la respuesta, no se asume.
+        setPageSize(data.pageSize);
+        // Una sola fila devuelta alguna vez basta para saber que el catálogo no
+        // está vacío, aunque la búsqueda de ahora no encuentre nada.
+        if (data.total > 0) setHasAny(true);
         setLoadError(null);
       } catch (err) {
         if (cancelled) return;
-        setLoadError(err instanceof ApiError ? err.message : copy.genericLoadError);
+        setLoadError(
+          err instanceof ApiError ? err.message : copy.genericLoadError,
+        );
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -217,17 +268,28 @@ export function CatalogView({ token }: CatalogViewProps) {
     return () => {
       cancelled = true;
     };
-  }, [token, reloadKey]);
+  }, [token, queryParams, reloadKey]);
 
+  /**
+   * Recarga la página actual SIN pasar por el esqueleto, tras crear, editar o
+   * activar/desactivar. El `loading` no se toca a propósito: la tabla ya es
+   * correcta en pantalla, y hacerla parpadear a esqueleto por un cambio de una
+   * fila es peor que dejarla quieta medio segundo.
+   */
   function refreshInPlace(): Promise<void> {
     if (!token) return Promise.resolve();
-    return listCatalogItems(token)
+    return listCatalogDirectory(token, queryParams)
       .then((data) => {
-        setItems(data);
+        setItems(data.items);
+        setTotal(data.total);
+        setPageSize(data.pageSize);
+        if (data.total > 0) setHasAny(true);
         setLoadError(null);
       })
       .catch((err) => {
-        setLoadError(err instanceof ApiError ? err.message : copy.genericLoadError);
+        setLoadError(
+          err instanceof ApiError ? err.message : copy.genericLoadError,
+        );
       });
   }
 
@@ -283,7 +345,11 @@ export function CatalogView({ token }: CatalogViewProps) {
     try {
       const payload = buildPayload();
       if (editingItem) {
-        await updateCatalogItem(token, editingItem.id, payload as UpdateCatalogItemInput);
+        await updateCatalogItem(
+          token,
+          editingItem.id,
+          payload as UpdateCatalogItemInput,
+        );
       } else {
         await createCatalogItem(token, payload);
       }
@@ -293,7 +359,9 @@ export function CatalogView({ token }: CatalogViewProps) {
       await refreshInPlace();
     } catch (err) {
       // Surfaces the backend's 400/409 (duplicate code, invalid color) verbatim.
-      const fallback = editingItem ? copy.genericUpdateError : copy.genericCreateError;
+      const fallback = editingItem
+        ? copy.genericUpdateError
+        : copy.genericCreateError;
       setFormError(err instanceof ApiError ? err.message : fallback);
     } finally {
       setSaving(false);
@@ -315,9 +383,12 @@ export function CatalogView({ token }: CatalogViewProps) {
       await updateCatalogItem(token, item.id, { active: !item.active });
       await refreshInPlace();
     } catch (err) {
-      notifyError(err instanceof ApiError ? err.message : copy.genericToggleError, {
-        onRetry: () => handleToggleActive(item),
-      });
+      notifyError(
+        err instanceof ApiError ? err.message : copy.genericToggleError,
+        {
+          onRetry: () => handleToggleActive(item),
+        },
+      );
     } finally {
       setTogglingId(null);
     }
@@ -327,59 +398,47 @@ export function CatalogView({ token }: CatalogViewProps) {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-wrap items-end justify-between gap-4">
-        {/* Filters only once there's something to filter — an empty catalog
-            shows just the primary action. */}
-        {items.length > 0 ? (
-          <div className="flex flex-wrap items-end gap-3">
-            <FormField
-              htmlFor="catalog-search"
-              label={copy.searchLabel}
-              className="min-w-[13rem]"
-            >
-              <Input
-                id="catalog-search"
-                type="search"
-                placeholder={copy.searchPlaceholder}
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-              />
-            </FormField>
-            <FormField htmlFor="catalog-filter-kind" label={copy.filterKindLabel}>
-              <select
-                id="catalog-filter-kind"
-                value={kindFilter}
-                onChange={(e) => setKindFilter(e.target.value as KindFilter)}
-                className={fieldClass}
-              >
-                <option value="ALL">{copy.filterAll}</option>
-                {KIND_OPTIONS.map((opt) => (
-                  <option key={opt.value} value={opt.value}>
-                    {opt.label}
-                  </option>
-                ))}
-              </select>
-            </FormField>
-            <FormField htmlFor="catalog-filter-status" label={copy.filterStatusLabel}>
-              <select
-                id="catalog-filter-status"
-                value={statusFilter}
-                onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
-                className={fieldClass}
-              >
-                <option value="ALL">{copy.filterAll}</option>
-                <option value="ACTIVE">{copy.filterActive}</option>
-                <option value="INACTIVE">{copy.filterInactive}</option>
-              </select>
-            </FormField>
-          </div>
-        ) : (
-          <span />
-        )}
-        <Button type="button" onClick={openCreate}>
-          <Plus /> {copy.addToggle}
-        </Button>
-      </div>
+      <ListToolbar
+        searchLabel={copy.searchLabel}
+        searchPlaceholder={copy.searchPlaceholder}
+        value={searchInput}
+        onChange={setSearchInput}
+        action={
+          <Button type="button" onClick={openCreate}>
+            <Plus /> {copy.addToggle}
+          </Button>
+        }
+      >
+        <select
+          aria-label={copy.filterKindLabel}
+          value={kindFilter}
+          onChange={(e) => {
+            setKindFilter(e.target.value as KindFilter);
+            setPage(1);
+          }}
+          className={cn(toolbarFieldClass, 'sm:w-48')}
+        >
+          <option value="ALL">{copy.filterAll}</option>
+          {KIND_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
+        <select
+          aria-label={copy.filterStatusLabel}
+          value={statusFilter}
+          onChange={(e) => {
+            setStatusFilter(e.target.value as StatusFilter);
+            setPage(1);
+          }}
+          className={cn(toolbarFieldClass, 'sm:w-48')}
+        >
+          <option value="ALL">{copy.filterAllStatuses}</option>
+          <option value="ACTIVE">{copy.filterActive}</option>
+          <option value="INACTIVE">{copy.filterInactive}</option>
+        </select>
+      </ListToolbar>
 
       <FormModal
         open={showForm}
@@ -408,7 +467,7 @@ export function CatalogView({ token }: CatalogViewProps) {
               required
               value={kind}
               onChange={(e) => setKind(e.target.value as CatalogKind)}
-              className={fieldClass}
+              className={toolbarFieldClass}
             >
               {KIND_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>
@@ -420,7 +479,11 @@ export function CatalogView({ token }: CatalogViewProps) {
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
-          <FormField htmlFor="catalog-code" label={copy.codeLabel} hint={copy.codeHint}>
+          <FormField
+            htmlFor="catalog-code"
+            label={copy.codeLabel}
+            hint={copy.codeHint}
+          >
             <Input
               id="catalog-code"
               type="text"
@@ -429,7 +492,11 @@ export function CatalogView({ token }: CatalogViewProps) {
               onChange={(e) => setCode(e.target.value)}
             />
           </FormField>
-          <FormField htmlFor="catalog-price" label={copy.priceLabel} hint={copy.priceHint}>
+          <FormField
+            htmlFor="catalog-price"
+            label={copy.priceLabel}
+            hint={copy.priceHint}
+          >
             <Input
               id="catalog-price"
               type="number"
@@ -442,7 +509,11 @@ export function CatalogView({ token }: CatalogViewProps) {
         </div>
 
         <div className="grid gap-4 sm:grid-cols-2">
-          <FormField htmlFor="catalog-category" label={copy.categoryLabel} hint={copy.categoryHint}>
+          <FormField
+            htmlFor="catalog-category"
+            label={copy.categoryLabel}
+            hint={copy.categoryHint}
+          >
             <Input
               id="catalog-category"
               type="text"
@@ -450,7 +521,11 @@ export function CatalogView({ token }: CatalogViewProps) {
               onChange={(e) => setCategory(e.target.value)}
             />
           </FormField>
-          <FormField htmlFor="catalog-color" label={copy.colorLabel} hint={copy.colorHint}>
+          <FormField
+            htmlFor="catalog-color"
+            label={copy.colorLabel}
+            hint={copy.colorHint}
+          >
             <Input
               id="catalog-color"
               type="color"
@@ -463,38 +538,39 @@ export function CatalogView({ token }: CatalogViewProps) {
         </div>
       </FormModal>
 
-      {!loading && !loadError && items.length > 0 && (
-        <p role="status" className="-mb-2 text-xs text-muted tabular-nums">
-          {isFiltering
-            ? copy.filteredCount(filteredItems.length, items.length)
-            : copy.totalCount(items.length)}
-        </p>
-      )}
+      {!loading && !loadError && hasAny ? (
+        <ResultCount
+          total={total}
+          noun={copy.countNoun}
+          nounPlural={copy.countNounPlural}
+        />
+      ) : null}
 
       <AsyncSection
         loading={loading}
         error={loadError}
         onRetry={() => setReloadKey((k) => k + 1)}
         retryLabel={copy.retry}
+        // "Todavía no hay catálogo" y "la búsqueda no encuentra nada" son
+        // situaciones distintas y solo la segunda tiene remedio desde aquí, así
+        // que solo esa ofrece limpiar los filtros.
         isEmpty={items.length === 0}
-        emptyTitle={copy.empty}
-        emptyDescription={copy.emptyHint}
-        skeleton={<TableSkeleton rows={4} />}
+        emptyTitle={isFiltering ? copy.noMatches : copy.empty}
+        emptyDescription={isFiltering ? copy.noMatchesHint : copy.emptyHint}
+        emptyAction={
+          isFiltering ? (
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={clearFilters}
+            >
+              {copy.clearFilters}
+            </Button>
+          ) : undefined
+        }
+        skeleton={<TableSkeleton rows={5} />}
       >
-        {filteredItems.length === 0 ? (
-          // Distinct from the catalog-is-empty state above: there ARE items,
-          // the active search/filters just exclude all of them.
-          <EmptyState
-            role="status"
-            title={copy.noMatches}
-            description={copy.noMatchesHint}
-            action={
-              <Button type="button" variant="outline" size="sm" onClick={clearFilters}>
-                {copy.clearFilters}
-              </Button>
-            }
-          />
-        ) : (
         <Card className="overflow-hidden p-0">
           <Table aria-label={copy.tableLabel}>
             <TableHeader>
@@ -502,64 +578,85 @@ export function CatalogView({ token }: CatalogViewProps) {
                 <TableHead>{copy.colName}</TableHead>
                 <TableHead>{copy.colKind}</TableHead>
                 <TableHead>{copy.colCode}</TableHead>
-                <TableHead>{copy.colPrice}</TableHead>
+                <TableHead className="text-right">{copy.colPrice}</TableHead>
                 <TableHead>{copy.colStatus}</TableHead>
-                <TableHead className="text-right">{copy.colActions}</TableHead>
+                <TableHead className="w-px text-right">
+                  <span className="sr-only">{copy.colActions}</span>
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {filteredItems.map((item) => (
+              {items.map((item) => (
                 <TableRow key={item.id}>
                   <TableCell>
-                    <span className="flex items-center gap-2 font-medium text-ink">
+                    <span className="flex items-center gap-2.5 font-medium text-ink">
                       <span
                         aria-hidden
-                        className="size-3 shrink-0 rounded-full border border-border"
+                        className="size-2.5 shrink-0 rounded-full ring-1 ring-inset ring-ink/10"
                         style={{ backgroundColor: item.color }}
                       />
-                      {item.labelEs}
+                      <span className="flex flex-col">
+                        {item.labelEs}
+                        {item.category ? (
+                          <span className="text-xs font-normal text-muted">
+                            {item.category}
+                          </span>
+                        ) : null}
+                      </span>
                     </span>
                   </TableCell>
                   <TableCell>
                     <Badge variant="muted">{KIND_LABELS[item.kind]}</Badge>
                   </TableCell>
-                  <TableCell className="text-muted tabular-nums">{item.code}</TableCell>
-                  <TableCell className="tabular-nums">{formatPrice(item.defaultPrice)}</TableCell>
+                  <TableCell className="text-muted tabular-nums">
+                    {item.code}
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">
+                    {formatPrice(item.defaultPrice)}
+                  </TableCell>
                   <TableCell>
                     <Badge variant={item.active ? 'success' : 'muted'}>
                       {item.active ? copy.active : copy.inactive}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right">
-                    <div className="flex justify-end gap-1">
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => openEdit(item)}
-                        aria-label={`${copy.editAction} ${item.labelEs}`}
-                      >
-                        <Pencil className="size-3.5" /> {copy.editAction}
-                      </Button>
-                      <Button
-                        type="button"
-                        variant="ghost"
-                        size="sm"
-                        loading={togglingId === item.id}
-                        onClick={() => handleToggleActive(item)}
-                        aria-label={`${item.active ? copy.deactivate : copy.activate} ${item.labelEs}`}
-                      >
-                        {item.active ? copy.deactivate : copy.activate}
-                      </Button>
-                    </div>
+                    <RowActions
+                      label={copy.actionsFor(item.labelEs)}
+                      busy={togglingId === item.id}
+                      actions={[
+                        {
+                          label: copy.editAction,
+                          icon: <Pencil />,
+                          onSelect: () => openEdit(item),
+                        },
+                        {
+                          // No hay DELETE en el catálogo a propósito: un ítem
+                          // referenciado por un odontograma o un plan no puede
+                          // desaparecer sin romper esa historia. Desactivar lo
+                          // saca de los selectores y conserva el registro; por
+                          // eso no va marcado como destructivo.
+                          label: item.active ? copy.deactivate : copy.activate,
+                          icon: item.active ? <EyeOff /> : <Eye />,
+                          separatorBefore: true,
+                          onSelect: () => void handleToggleActive(item),
+                        },
+                      ]}
+                    />
                   </TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
         </Card>
-        )}
       </AsyncSection>
+
+      <Pagination
+        page={page}
+        pageSize={pageSize}
+        total={total}
+        onPageChange={setPage}
+        disabled={loading}
+      />
     </div>
   );
 }

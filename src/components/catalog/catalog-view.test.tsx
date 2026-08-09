@@ -1,28 +1,40 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
+import type userEvent from '@testing-library/user-event';
+import { setupUser } from '@/lib/test/user';
 import { CatalogView } from './catalog-view';
-import { listCatalogItems, createCatalogItem, updateCatalogItem } from '@/lib/odontogram/catalog-api';
+import {
+  listCatalogDirectory,
+  createCatalogItem,
+  updateCatalogItem,
+  type DentalCatalogItem,
+} from '@/lib/odontogram/catalog-api';
 import { Toaster } from '@/components/errors/toaster';
 
 // NOTE: jest.mock's string literal is not alias-rewritten by the SWC transform
 // (only real import/require specifiers are) — use a relative path here, same
 // convention as staff-view.test.tsx / agenda-view.test.tsx.
 jest.mock('../../lib/odontogram/catalog-api', () => ({
-  listCatalogItems: jest.fn(),
+  listCatalogDirectory: jest.fn(),
   createCatalogItem: jest.fn(),
   updateCatalogItem: jest.fn(),
 }));
 
-const mockedList = listCatalogItems as jest.MockedFunction<typeof listCatalogItems>;
-const mockedCreate = createCatalogItem as jest.MockedFunction<typeof createCatalogItem>;
-const mockedUpdate = updateCatalogItem as jest.MockedFunction<typeof updateCatalogItem>;
+const mockedList = listCatalogDirectory as jest.MockedFunction<
+  typeof listCatalogDirectory
+>;
+const mockedCreate = createCatalogItem as jest.MockedFunction<
+  typeof createCatalogItem
+>;
+const mockedUpdate = updateCatalogItem as jest.MockedFunction<
+  typeof updateCatalogItem
+>;
 
-const item1 = {
+const item1: DentalCatalogItem = {
   id: 'c1',
   tenantId: 't1',
   code: 'PROF',
   category: 'Preventiva',
-  kind: 'PROCEDURE' as const,
+  kind: 'PROCEDURE',
   labelEs: 'Profilaxis',
   labelEn: null,
   labelPt: null,
@@ -33,6 +45,25 @@ const item1 = {
   updatedAt: '2026-07-31T10:00:00.000Z',
 };
 
+/** Envuelve filas en la página que devuelve el endpoint de directorio. */
+function page(items: DentalCatalogItem[], total = items.length, pageNum = 1) {
+  return { items, total, page: pageNum, pageSize: 20 };
+}
+
+/** Los params de la ÚLTIMA llamada al API — lo que de verdad se le pidió al servidor. */
+function lastParams() {
+  return mockedList.mock.calls[mockedList.mock.calls.length - 1][1];
+}
+
+/** Abre el menú ⋯ de una fila y devuelve su contenido. */
+async function openRowMenu(
+  user: ReturnType<typeof userEvent.setup>,
+  name: RegExp,
+) {
+  await user.click(screen.getByRole('button', { name }));
+  return screen.findByRole('menu');
+}
+
 describe('CatalogView', () => {
   beforeEach(() => {
     mockedList.mockReset();
@@ -40,26 +71,36 @@ describe('CatalogView', () => {
     mockedUpdate.mockReset();
   });
 
-  it('renders catalog rows from listCatalogItems', async () => {
-    mockedList.mockResolvedValue([item1]);
+  it('pinta las filas de la página que devuelve el directorio', async () => {
+    mockedList.mockResolvedValue(page([item1]));
 
     render(<CatalogView token="tok" />);
 
     const table = await screen.findByRole('table', { name: /catálogo/i });
     expect(within(table).getByText('Profilaxis')).toBeInTheDocument();
     expect(within(table).getByText('PROF')).toBeInTheDocument();
-    expect(screen.getAllByRole('row')).toHaveLength(2); // header + 1 item
+    // La categoría acompaña al nombre en la misma celda, como línea secundaria.
+    expect(within(table).getByText('Preventiva')).toBeInTheDocument();
+    expect(screen.getAllByRole('row')).toHaveLength(2); // cabecera + 1 ítem
   });
 
-  it('submitting the add form calls createCatalogItem with the right payload and refreshes', async () => {
-    mockedList.mockResolvedValueOnce([]);
-    mockedCreate.mockResolvedValue(item1);
-    mockedList.mockResolvedValueOnce([item1]);
+  it('pide la primera página al montar, sin filtros', async () => {
+    mockedList.mockResolvedValue(page([item1]));
 
-    const user = userEvent.setup();
+    render(<CatalogView token="tok" />);
+    await screen.findByRole('table', { name: /catálogo/i });
+
+    expect(lastParams()).toEqual({ page: 1, pageSize: 20 });
+  });
+
+  it('crear un ítem manda el payload correcto y recarga', async () => {
+    mockedList.mockResolvedValueOnce(page([], 0));
+    mockedCreate.mockResolvedValue(item1);
+    mockedList.mockResolvedValueOnce(page([item1]));
+
+    const user = setupUser();
     render(<CatalogView token="tok" />);
 
-    // Empty state first.
     await screen.findByText(/el catálogo todavía está vacío/i);
 
     await user.click(screen.getByRole('button', { name: /agregar ítem/i }));
@@ -78,28 +119,28 @@ describe('CatalogView', () => {
         defaultPrice: 80000,
       }),
     );
-
     await waitFor(() => expect(mockedList).toHaveBeenCalledTimes(2));
     expect(await screen.findByText('Profilaxis')).toBeInTheDocument();
   });
 
-  it('editing a row opens the prefilled modal and PATCHes via updateCatalogItem, then refreshes', async () => {
-    mockedList.mockResolvedValueOnce([item1]);
+  it('«Editar» vive en el menú ⋯, abre el modal relleno y hace PATCH', async () => {
+    mockedList.mockResolvedValueOnce(page([item1]));
     mockedUpdate.mockResolvedValue({ ...item1, labelEs: 'Profilaxis dental' });
-    mockedList.mockResolvedValueOnce([{ ...item1, labelEs: 'Profilaxis dental' }]);
+    mockedList.mockResolvedValueOnce(
+      page([{ ...item1, labelEs: 'Profilaxis dental' }]),
+    );
 
-    const user = userEvent.setup();
+    const user = setupUser();
     render(<CatalogView token="tok" />);
-
     await screen.findByRole('table', { name: /catálogo/i });
-    await user.click(screen.getByRole('button', { name: /editar profilaxis/i }));
 
-    // Modal opens prefilled with the item's current name.
+    const menu = await openRowMenu(user, /acciones de profilaxis/i);
+    await user.click(within(menu).getByRole('menuitem', { name: /editar/i }));
+
     const nameInput = screen.getByLabelText(/^nombre$/i);
     expect(nameInput).toHaveValue('Profilaxis');
     await user.clear(nameInput);
     await user.type(nameInput, 'Profilaxis dental');
-
     await user.click(screen.getByRole('button', { name: /^guardar$/i }));
 
     await waitFor(() =>
@@ -112,196 +153,218 @@ describe('CatalogView', () => {
         category: 'Preventiva',
       }),
     );
-    await waitFor(() => expect(mockedList).toHaveBeenCalledTimes(2));
     expect(await screen.findByText('Profilaxis dental')).toBeInTheDocument();
   });
 
-  it('deactivating a row PATCHes { active: false } and refreshes to show it inactive', async () => {
-    mockedList.mockResolvedValueOnce([item1]);
+  it('«Desactivar» hace PATCH { active: false } y la fila pasa a ofrecer «Activar»', async () => {
+    mockedList.mockResolvedValueOnce(page([item1]));
     mockedUpdate.mockResolvedValue({ ...item1, active: false });
-    mockedList.mockResolvedValueOnce([{ ...item1, active: false }]);
+    mockedList.mockResolvedValueOnce(page([{ ...item1, active: false }]));
 
-    const user = userEvent.setup();
+    const user = setupUser();
     render(<CatalogView token="tok" />);
-
     await screen.findByRole('table', { name: /catálogo/i });
-    await user.click(screen.getByRole('button', { name: /desactivar profilaxis/i }));
+
+    const menu = await openRowMenu(user, /acciones de profilaxis/i);
+    await user.click(
+      within(menu).getByRole('menuitem', { name: /desactivar/i }),
+    );
 
     await waitFor(() =>
       expect(mockedUpdate).toHaveBeenCalledWith('tok', 'c1', { active: false }),
     );
-    await waitFor(() => expect(mockedList).toHaveBeenCalledTimes(2));
-    // The row now shows "Inactivo" and offers to re-activate.
     expect(await screen.findByText('Inactivo')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /activar profilaxis/i })).toBeInTheDocument();
+
+    const reopened = await openRowMenu(user, /acciones de profilaxis/i);
+    expect(
+      within(reopened).getByRole('menuitem', { name: /activar/i }),
+    ).toBeInTheDocument();
   });
 
-  it('a failed toggle surfaces as a background toast with a retry action, not an inline banner (escalón 3)', async () => {
+  it('un fallo al desactivar sale como toast con reintento, no como banner (escalón 3)', async () => {
     const { ApiError } = jest.requireActual('../../lib/api/client');
-    mockedList.mockResolvedValue([item1]);
+    mockedList.mockResolvedValue(page([item1]));
     mockedUpdate.mockRejectedValueOnce(new ApiError(500, 'Error del servidor'));
     mockedUpdate.mockResolvedValueOnce({ ...item1, active: false });
 
-    const user = userEvent.setup();
+    const user = setupUser();
     render(
       <>
         <Toaster />
         <CatalogView token="tok" />
       </>,
     );
-
     await screen.findByRole('table', { name: /catálogo/i });
-    await user.click(screen.getByRole('button', { name: /desactivar profilaxis/i }));
+
+    const menu = await openRowMenu(user, /acciones de profilaxis/i);
+    await user.click(
+      within(menu).getByRole('menuitem', { name: /desactivar/i }),
+    );
 
     expect(await screen.findByText('Error del servidor')).toBeInTheDocument();
-    // No inline banner competes with the toast for the same failure — the
-    // table's rows (still showing the item as active) stay untouched.
+    // Ningún banner compite con el toast por el mismo fallo: la tabla sigue
+    // siendo correcta y no se toca.
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: /reintentar/i }));
     await waitFor(() => expect(mockedUpdate).toHaveBeenCalledTimes(2));
   });
 
-  it('surfaces a backend error (e.g. duplicate code) verbatim when editing fails', async () => {
+  it('muestra el error del backend tal cual cuando falla la edición', async () => {
     const { ApiError } = jest.requireActual('../../lib/api/client');
-    mockedList.mockResolvedValueOnce([item1]);
+    mockedList.mockResolvedValueOnce(page([item1]));
     mockedUpdate.mockRejectedValue(new ApiError(409, 'El código ya existe'));
 
-    const user = userEvent.setup();
+    const user = setupUser();
     render(<CatalogView token="tok" />);
-
     await screen.findByRole('table', { name: /catálogo/i });
-    await user.click(screen.getByRole('button', { name: /editar profilaxis/i }));
+
+    const menu = await openRowMenu(user, /acciones de profilaxis/i);
+    await user.click(within(menu).getByRole('menuitem', { name: /editar/i }));
     await user.click(screen.getByRole('button', { name: /^guardar$/i }));
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('El código ya existe');
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'El código ya existe',
+    );
   });
 
-  describe('search and filters', () => {
-    const resina = {
-      ...item1,
-      id: 'c2',
-      code: 'RESINA',
-      labelEs: 'Restauración con resina',
-      kind: 'PROCEDURE' as const,
-    };
-    const caries = {
-      ...item1,
-      id: 'c3',
-      code: 'DX-CARIES',
-      labelEs: 'Caries',
-      kind: 'DIAGNOSIS' as const,
-      active: false,
-    };
-    const all = [item1, resina, caries];
-
-    /** Names rendered in the table body, in order. */
-    function visibleNames(): string[] {
-      return screen
-        .getAllByRole('row')
-        .slice(1) // skip the header row
-        .map((row) => row.querySelectorAll('td')[0]?.textContent?.trim() ?? '');
-    }
-
-    it('filters by name, case- and accent-insensitively', async () => {
-      mockedList.mockResolvedValue(all);
-      const user = userEvent.setup();
+  describe('búsqueda y filtros (en servidor)', () => {
+    it('teclear manda la búsqueda al servidor, recortada y una sola vez', async () => {
+      mockedList.mockResolvedValue(page([item1]));
+      const user = setupUser();
       render(<CatalogView token="tok" />);
       await screen.findByRole('table', { name: /catálogo/i });
 
-      // "restauracion" (no accent, lowercase) must match "Restauración con resina".
-      await user.type(screen.getByLabelText(/^buscar$/i), 'restauracion');
+      const callsBefore = mockedList.mock.calls.length;
+      await user.type(
+        screen.getByLabelText(/buscar por nombre/i),
+        '  resina  ',
+      );
 
-      await waitFor(() => expect(visibleNames()).toEqual(['Restauración con resina']));
+      await waitFor(() =>
+        expect(lastParams()).toMatchObject({ query: 'resina' }),
+      );
+      // Un debounce, no una petición por tecla: 10 caracteres, 1 llamada más.
+      expect(mockedList.mock.calls.length).toBe(callsBefore + 1);
     });
 
-    it('filters by code as well as name', async () => {
-      mockedList.mockResolvedValue(all);
-      const user = userEvent.setup();
-      render(<CatalogView token="tok" />);
-      await screen.findByRole('table', { name: /catálogo/i });
-
-      await user.type(screen.getByLabelText(/^buscar$/i), 'dx-');
-
-      await waitFor(() => expect(visibleNames()).toEqual(['Caries']));
-    });
-
-    it('filters by kind', async () => {
-      mockedList.mockResolvedValue(all);
-      const user = userEvent.setup();
+    it('el filtro de tipo viaja como `kind`', async () => {
+      mockedList.mockResolvedValue(page([item1]));
+      const user = setupUser();
       render(<CatalogView token="tok" />);
       await screen.findByRole('table', { name: /catálogo/i });
 
       await user.selectOptions(
-        screen.getByLabelText(/tipo/i, { selector: '#catalog-filter-kind' }),
+        screen.getByLabelText(/filtrar por tipo/i),
         'DIAGNOSIS',
       );
 
-      await waitFor(() => expect(visibleNames()).toEqual(['Caries']));
-    });
-
-    it('filters by active/inactive status', async () => {
-      mockedList.mockResolvedValue(all);
-      const user = userEvent.setup();
-      render(<CatalogView token="tok" />);
-      await screen.findByRole('table', { name: /catálogo/i });
-
-      await user.selectOptions(
-        screen.getByLabelText(/estado/i, { selector: '#catalog-filter-status' }),
-        'INACTIVE',
-      );
-      // Only `caries` is inactive.
-      await waitFor(() => expect(visibleNames()).toEqual(['Caries']));
-
-      await user.selectOptions(
-        screen.getByLabelText(/estado/i, { selector: '#catalog-filter-status' }),
-        'ACTIVE',
-      );
       await waitFor(() =>
-        expect(visibleNames()).toEqual(['Profilaxis', 'Restauración con resina']),
+        expect(lastParams()).toMatchObject({ kind: 'DIAGNOSIS' }),
       );
     });
 
-    it('shows the visible count while filtering and the plain total otherwise', async () => {
-      mockedList.mockResolvedValue(all);
-      const user = userEvent.setup();
+    it('«Solo activos» viaja como activeOnly=true y «Solo inactivos» como false', async () => {
+      mockedList.mockResolvedValue(page([item1]));
+      const user = setupUser();
       render(<CatalogView token="tok" />);
       await screen.findByRole('table', { name: /catálogo/i });
 
-      expect(screen.getByText('3 ítems')).toBeInTheDocument();
+      const select = screen.getByLabelText(/filtrar por estado/i);
+      await user.selectOptions(select, 'ACTIVE');
+      await waitFor(() =>
+        expect(lastParams()).toMatchObject({ activeOnly: true }),
+      );
 
-      await user.type(screen.getByLabelText(/^buscar$/i), 'caries');
-      expect(await screen.findByText('1 de 3')).toBeInTheDocument();
+      await user.selectOptions(select, 'INACTIVE');
+      await waitFor(() =>
+        expect(lastParams()).toMatchObject({ activeOnly: false }),
+      );
     });
 
-    it('offers a no-matches state that clears the filters (distinct from the empty-catalog state)', async () => {
-      mockedList.mockResolvedValue(all);
-      const user = userEvent.setup();
+    it('cambiar de filtro devuelve a la página 1', async () => {
+      mockedList.mockResolvedValue(page([item1], 60, 1));
+      const user = setupUser();
       render(<CatalogView token="tok" />);
       await screen.findByRole('table', { name: /catálogo/i });
 
-      await user.type(screen.getByLabelText(/^buscar$/i), 'zzzz');
+      await user.click(screen.getByRole('button', { name: /siguiente/i }));
+      await waitFor(() => expect(lastParams()).toMatchObject({ page: 2 }));
 
-      expect(await screen.findByText(/ningún ítem coincide/i)).toBeInTheDocument();
-      // NOT the "catalog is empty" copy — there are items, they're filtered out.
-      expect(screen.queryByText(/el catálogo todavía está vacío/i)).not.toBeInTheDocument();
-      expect(screen.queryByRole('table')).not.toBeInTheDocument();
+      await user.selectOptions(
+        screen.getByLabelText(/filtrar por tipo/i),
+        'DIAGNOSIS',
+      );
 
-      await user.click(screen.getByRole('button', { name: /limpiar filtros/i }));
-
-      await screen.findByRole('table', { name: /catálogo/i });
-      expect(visibleNames()).toHaveLength(3);
-      expect(screen.getByLabelText<HTMLInputElement>(/^buscar$/i).value).toBe('');
+      // Sin esto la tabla se quedaría en la página 3 de un resultado que ahora
+      // tiene una sola, y aparecería vacía sin motivo aparente.
+      await waitFor(() => expect(lastParams()).toMatchObject({ page: 1 }));
     });
 
-    it('does not render the filter bar when the catalog is empty', async () => {
-      mockedList.mockResolvedValue([]);
+    it('sin resultados ofrece limpiar los filtros; el catálogo vacío no', async () => {
+      mockedList.mockResolvedValueOnce(page([item1]));
+      const user = setupUser();
+      render(<CatalogView token="tok" />);
+      await screen.findByRole('table', { name: /catálogo/i });
+
+      mockedList.mockResolvedValue(page([], 0));
+      await user.type(screen.getByLabelText(/buscar por nombre/i), 'zzz');
+
+      expect(
+        await screen.findByText(/ningún ítem coincide/i),
+      ).toBeInTheDocument();
+      expect(
+        screen.getByRole('button', { name: /limpiar filtros/i }),
+      ).toBeInTheDocument();
+    });
+
+    it('el catálogo vacío de verdad enseña el mensaje de bienvenida, no el de "sin coincidencias"', async () => {
+      mockedList.mockResolvedValue(page([], 0));
       render(<CatalogView token="tok" />);
 
-      expect(await screen.findByText(/el catálogo todavía está vacío/i)).toBeInTheDocument();
-      expect(screen.queryByLabelText(/^buscar$/i)).not.toBeInTheDocument();
-      // The primary action stays reachable.
-      expect(screen.getByRole('button', { name: /agregar ítem/i })).toBeInTheDocument();
+      expect(
+        await screen.findByText(/el catálogo todavía está vacío/i),
+      ).toBeInTheDocument();
+      expect(
+        screen.queryByText(/ningún ítem coincide/i),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('button', { name: /limpiar filtros/i }),
+      ).not.toBeInTheDocument();
+    });
+
+    it('el conteo dice cuántos hay, y se anuncia', async () => {
+      mockedList.mockResolvedValue(page([item1], 137));
+      render(<CatalogView token="tok" />);
+
+      // Por texto y no por `role="status"`: el esqueleto de carga también lo
+      // lleva, así que buscar por rol encontraría ese primero.
+      const count = await screen.findByText('137 ítems');
+      expect(count).toHaveAttribute('aria-live', 'polite');
+    });
+  });
+
+  describe('paginación', () => {
+    it('no pinta controles cuando todo cabe en una página', async () => {
+      mockedList.mockResolvedValue(page([item1], 1));
+      render(<CatalogView token="tok" />);
+      await screen.findByRole('table', { name: /catálogo/i });
+
+      expect(
+        screen.queryByRole('navigation', { name: /paginación/i }),
+      ).not.toBeInTheDocument();
+    });
+
+    it('«Siguiente» pide la página 2 al servidor', async () => {
+      mockedList.mockResolvedValue(page([item1], 45, 1));
+      const user = setupUser();
+      render(<CatalogView token="tok" />);
+      await screen.findByRole('table', { name: /catálogo/i });
+
+      expect(screen.getByText('1–20 de 45')).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: /siguiente/i }));
+
+      await waitFor(() => expect(lastParams()).toMatchObject({ page: 2 }));
     });
   });
 });

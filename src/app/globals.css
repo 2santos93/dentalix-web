@@ -123,6 +123,25 @@
       animation: sheet-right-in 220ms cubic-bezier(0.16, 1, 0.3, 1);
     }
   }
+
+  /* Menú de acciones de fila. Nace desde el borde que lo ancla —Radix expone
+   * ese borde en `data-side`— así que parece salir del botón de los tres
+   * puntos y no aparecer flotando en medio. Más corto que el diálogo (120ms):
+   * un menú se abre dentro de un gesto, no interrumpe. */
+  @keyframes dm-content-in {
+    from { opacity: 0; transform: scale(0.96) translateY(-2px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+  }
+  @keyframes dm-content-in-up {
+    from { opacity: 0; transform: scale(0.96) translateY(2px); }
+    to { opacity: 1; transform: scale(1) translateY(0); }
+  }
+  .dm-content[data-state='open'][data-side='bottom'] {
+    animation: dm-content-in 120ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
+  .dm-content[data-state='open'][data-side='top'] {
+    animation: dm-content-in-up 120ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
 }
 
 /*
