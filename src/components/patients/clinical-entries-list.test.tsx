@@ -1,7 +1,8 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ClinicalEntriesList } from './clinical-entries-list';
 import { listClinicalEntries, createClinicalEntry } from '@/lib/patients/clinical-api';
+import { listStaff } from '@/lib/staff/staff-api';
 
 // NOTE: jest.mock's string literal is not alias-rewritten by the SWC
 // transform — use a relative path (same convention as the other tests).
@@ -9,9 +10,18 @@ jest.mock('../../lib/patients/clinical-api', () => ({
   listClinicalEntries: jest.fn(),
   createClinicalEntry: jest.fn(),
 }));
+// El autor de cada evolución se resuelve contra el personal de la clínica.
+jest.mock('../../lib/staff/staff-api', () => ({
+  listStaff: jest.fn(),
+}));
 
 const mockedList = listClinicalEntries as jest.MockedFunction<typeof listClinicalEntries>;
 const mockedCreate = createClinicalEntry as jest.MockedFunction<typeof createClinicalEntry>;
+const mockedListStaff = listStaff as jest.MockedFunction<typeof listStaff>;
+
+const staff = [
+  { userId: 'u1', fullName: 'Dra. Ana Ríos', email: 'ana@demo.com', role: 'DENTIST' as const },
+];
 
 const entries = [
   {
@@ -40,12 +50,69 @@ describe('ClinicalEntriesList', () => {
   beforeEach(() => {
     mockedList.mockReset();
     mockedCreate.mockReset();
+    mockedListStaff.mockReset();
+    mockedListStaff.mockResolvedValue(staff);
   });
 
-  it('shows a loading state while fetching', () => {
+  it('carga con esqueleto, nunca con un «Cargando…» pelado', () => {
+    // Contrato de `AsyncSection`, documentado en el propio componente: el
+    // estado de carga es un esqueleto con la forma del contenido, no una
+    // cadena suelta.
     mockedList.mockReturnValue(new Promise(() => {}));
+    // También el personal queda pendiente: si resolviera después de terminar
+    // el test, su `setState` caería fuera de `act()`.
+    mockedListStaff.mockReturnValue(new Promise(() => {}));
+    const { container } = render(<ClinicalEntriesList token="tok" patientId="p1" />);
+    // El esqueleto se ANUNCIA como carga (`role="status"` + `aria-label`) pero
+    // no imprime la palabra en pantalla: la forma la da el bloque pulsante.
+    expect(screen.getByRole('status', { name: /cargando/i })).toBeInTheDocument();
+    expect(container.querySelector('.animate-pulse')).toBeInTheDocument();
+    expect(screen.queryByText(/cargando/i)).not.toBeInTheDocument();
+  });
+
+  it('nombra al autor y la fecha en que el SERVIDOR registró la evolución', async () => {
+    // El dato médico-legal: `entryDate` la escribe el usuario y puede ser
+    // retroactiva; `createdAt` + `performedById` los pone el servidor. Un
+    // revisor busca lo segundo.
+    mockedList.mockResolvedValue(entries);
     render(<ClinicalEntriesList token="tok" patientId="p1" />);
-    expect(screen.getByRole('status')).toHaveTextContent(/cargando/i);
+
+    const rows = await screen.findAllByText(/Dra\. Ana Ríos/);
+    expect(rows.length).toBeGreaterThan(0);
+  });
+
+  it('si el personal no carga, la evolución conserva su marca de tiempo', async () => {
+    mockedListStaff.mockRejectedValue(new Error('sin red'));
+    mockedList.mockResolvedValue(entries);
+    render(<ClinicalEntriesList token="tok" patientId="p1" />);
+
+    // Fail soft: no se oculta el registro por no poder nombrar a quien lo hizo.
+    expect((await screen.findAllByText(/todo en orden/i)).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/Dra\. Ana Ríos/)).not.toBeInTheDocument();
+  });
+
+  it('distingue la fecha de atención del registro con dos encabezados propios', async () => {
+    mockedList.mockResolvedValue(entries);
+    render(<ClinicalEntriesList token="tok" patientId="p1" />);
+
+    const table = await screen.findByRole('table', { name: /evoluciones del paciente/i });
+    expect(within(table).getByRole('columnheader', { name: /fecha de atención/i })).toBeInTheDocument();
+    expect(within(table).getByRole('columnheader', { name: /^registro$/i })).toBeInTheDocument();
+  });
+
+  it('no acepta una atención en el futuro', async () => {
+    mockedList.mockResolvedValue([]);
+    const user = userEvent.setup();
+    render(<ClinicalEntriesList token="tok" patientId="p1" />);
+    await screen.findByText(/no hay evoluciones/i);
+
+    const date = screen.getByLabelText(/fecha de atención/i);
+    // El `max` del input lo bloquea en el navegador; el guard cubre teclado y
+    // pegado, así que se comprueba que el atributo existe.
+    expect(date).toHaveAttribute('max');
+
+    await user.type(screen.getByLabelText(/^notas$/i), 'algo');
+    expect(mockedCreate).not.toHaveBeenCalled();
   });
 
   it('shows an empty state when there are no entries', async () => {

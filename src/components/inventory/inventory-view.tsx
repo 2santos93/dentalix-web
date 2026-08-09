@@ -17,7 +17,7 @@ import {
   type RecordMovementInput,
 } from '@/lib/inventory/inventory-api';
 import { useDebouncedValue } from '@/lib/hooks/use-debounced-value';
-import { Plus, Search } from 'lucide-react';
+import { ArrowLeftRight, History, Pencil, Plus, Search, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
@@ -27,6 +27,7 @@ import { FormModal } from '@/components/molecules/form-modal';
 import { ConfirmDialog } from '@/components/molecules/confirm-dialog';
 import { AsyncSection, TableSkeleton } from '@/components/molecules/async-section';
 import { Pagination } from '@/components/molecules/pagination';
+import { RowActions } from '@/components/molecules/row-actions';
 import {
   Dialog,
   DialogContent,
@@ -84,6 +85,7 @@ const copy = {
   colMinStock: 'Mínimo',
   colStatus: 'Estado',
   colActions: 'Acciones',
+  actionsFor: (name: string) => `Acciones de ${name}`,
   lowStock: 'Bajo stock',
   ok: 'OK',
   unknownValue: '—',
@@ -103,8 +105,8 @@ const copy = {
   genericDeleteError: 'No pudimos eliminar el insumo. Intenta de nuevo.',
 
   // Movimientos (entrada/salida/ajuste).
-  movementButtonLabel: 'Movimiento',
-  historyButtonLabel: 'Historial',
+  movementButtonLabel: 'Registrar movimiento',
+  historyButtonLabel: 'Ver historial',
   movementAction: (name: string) => `Movimiento de ${name}`,
   historyAction: (name: string) => `Historial de ${name}`,
   movementTitle: 'Registrar movimiento',
@@ -637,7 +639,9 @@ export function InventoryView({ token }: InventoryViewProps) {
                 <TableHead>{copy.colStock}</TableHead>
                 <TableHead>{copy.colMinStock}</TableHead>
                 <TableHead>{copy.colStatus}</TableHead>
-                <TableHead className="text-right">{copy.colActions}</TableHead>
+                <TableHead className="w-px text-right">
+                  <span className="sr-only">{copy.colActions}</span>
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -668,48 +672,34 @@ export function InventoryView({ token }: InventoryViewProps) {
                       )}
                     </TableCell>
                     <TableCell className="text-right">
-                      <div className="flex justify-end gap-2">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          disabled={updating}
-                          aria-label={copy.movementAction(item.name)}
-                          onClick={() => openMovement(item)}
-                        >
-                          {copy.movementButtonLabel}
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          disabled={updating}
-                          aria-label={copy.historyAction(item.name)}
-                          onClick={() => openHistory(item)}
-                        >
-                          {copy.historyButtonLabel}
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          disabled={updating}
-                          aria-label={copy.editAction(item.name)}
-                          onClick={() => openEdit(item)}
-                        >
-                          {copy.editButtonLabel}
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          disabled={updating}
-                          aria-label={copy.deleteAction(item.name)}
-                          onClick={() => openDelete(item)}
-                        >
-                          {copy.deleteButtonLabel}
-                        </Button>
-                      </div>
+                      <RowActions
+                        label={copy.actionsFor(item.name)}
+                        busy={updating}
+                        actions={[
+                          {
+                            label: copy.movementButtonLabel,
+                            icon: <ArrowLeftRight />,
+                            onSelect: () => openMovement(item),
+                          },
+                          {
+                            label: copy.historyButtonLabel,
+                            icon: <History />,
+                            onSelect: () => openHistory(item),
+                          },
+                          {
+                            label: copy.editButtonLabel,
+                            icon: <Pencil />,
+                            onSelect: () => openEdit(item),
+                          },
+                          {
+                            label: copy.deleteButtonLabel,
+                            icon: <Trash2 />,
+                            destructive: true,
+                            separatorBefore: true,
+                            onSelect: () => openDelete(item),
+                          },
+                        ]}
+                      />
                     </TableCell>
                   </TableRow>
                 );

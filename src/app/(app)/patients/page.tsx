@@ -9,15 +9,24 @@ import { listPatients, type Patient } from '@/lib/patients/patients-api';
 import { PatientsTable } from '@/components/organisms/patients-table';
 import { PageHeader } from '@/components/molecules/page-header';
 import { Pagination } from '@/components/molecules/pagination';
+import { ListToolbar, ResultCount } from '@/components/molecules/list-toolbar';
 import { Button } from '@/components/ui/button';
 import { SectionError } from '@/components/errors/section-error';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
+// Corto para no notarse al teclear, largo para no lanzar una petición por
+// tecla. Mismo valor que el resto de las listas.
+const SEARCH_DEBOUNCE_MS = 300;
+
 const copy = {
   title: 'Pacientes',
   description: 'Gestiona la base de pacientes de tu clínica.',
   newPatient: 'Nuevo paciente',
+  searchLabel: 'Buscar por nombre, apellido o documento',
+  searchPlaceholder: 'Buscar…',
+  countNoun: 'paciente',
+  countNounPlural: 'pacientes',
   genericError: 'No pudimos cargar los pacientes.',
   checkingSession: 'Verificando sesión…',
 };
@@ -36,6 +45,21 @@ export default function PatientsPage() {
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [pageSize, setPageSize] = useState(0);
+  // `searchInput` es lo tecleado; `search` lo consultado. Separarlos permite el
+  // debounce sin que el campo se sienta lento. Misma forma que en catálogo,
+  // personal e inventario.
+  const [searchInput, setSearchInput] = useState('');
+  const [search, setSearch] = useState('');
+
+  useEffect(() => {
+    const debounce = setTimeout(() => {
+      setSearch(searchInput.trim());
+      // Una búsqueda nueva vuelve a la página 1: quedarse en la 3 de un
+      // resultado que ahora tiene una sola deja la tabla vacía sin motivo.
+      setPage(1);
+    }, SEARCH_DEBOUNCE_MS);
+    return () => clearTimeout(debounce);
+  }, [searchInput]);
 
   useEffect(() => {
     // Don't decide anything until the persisted store has rehydrated —
@@ -60,7 +84,10 @@ export default function PatientsPage() {
     async function load() {
       setLoading(true);
       try {
-        const res = await listPatients(token, { page });
+        const res = await listPatients(token, {
+          page,
+          ...(search ? { query: search } : {}),
+        });
         if (cancelled) return;
         setPatients(res.items);
         setTotal(res.total);
@@ -79,7 +106,7 @@ export default function PatientsPage() {
     return () => {
       cancelled = true;
     };
-  }, [accessToken, router, hasHydrated, retryCount, page]);
+  }, [accessToken, router, hasHydrated, retryCount, page, search]);
 
   if (!hasHydrated) {
     return (
@@ -107,6 +134,21 @@ export default function PatientsPage() {
         }
       />
 
+      <ListToolbar
+        searchLabel={copy.searchLabel}
+        searchPlaceholder={copy.searchPlaceholder}
+        value={searchInput}
+        onChange={setSearchInput}
+      />
+
+      {!loading && !error ? (
+        <ResultCount
+          total={total}
+          noun={copy.countNoun}
+          nounPlural={copy.countNounPlural}
+        />
+      ) : null}
+
       {error ? (
         <SectionError
           description={error}
@@ -118,7 +160,7 @@ export default function PatientsPage() {
         />
       ) : (
         <>
-          <PatientsTable patients={patients} loading={loading} />
+          <PatientsTable patients={patients} loading={loading} filtered={search !== ''} />
           <Pagination
             page={page}
             pageSize={pageSize}

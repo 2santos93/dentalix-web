@@ -2,6 +2,7 @@ import { render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MedicalHistoryPanel } from './medical-history-panel';
 import { getMedicalHistory, saveMedicalHistory } from '@/lib/patients/clinical-api';
+import { listStaff } from '@/lib/staff/staff-api';
 import type { MedicalHistory } from '@/lib/clinical/clinical-types';
 
 // NOTE: jest.mock's string literal is not alias-rewritten by the SWC
@@ -12,9 +13,18 @@ jest.mock('../../lib/patients/clinical-api', () => ({
   getMedicalHistory: jest.fn(),
   saveMedicalHistory: jest.fn(),
 }));
+// El autor de la versión se resuelve contra el personal de la clínica.
+jest.mock('../../lib/staff/staff-api', () => ({
+  listStaff: jest.fn(),
+}));
 
 const mockedGet = getMedicalHistory as jest.MockedFunction<typeof getMedicalHistory>;
 const mockedSave = saveMedicalHistory as jest.MockedFunction<typeof saveMedicalHistory>;
+const mockedListStaff = listStaff as jest.MockedFunction<typeof listStaff>;
+
+const staff = [
+  { userId: 'u1', fullName: 'Dra. Ana Ríos', email: 'ana@demo.com', role: 'DENTIST' as const },
+];
 
 const latest: MedicalHistory = {
   id: 'mh-1',
@@ -51,10 +61,44 @@ describe('MedicalHistoryPanel', () => {
   beforeEach(() => {
     mockedGet.mockReset();
     mockedSave.mockReset();
+    mockedListStaff.mockReset();
+    mockedListStaff.mockResolvedValue(staff);
+  });
+
+  it('la versión declara cuándo se registró y quién la firmó', async () => {
+    // Sin esto «Versión 2» es un número sin destino: el API todavía no expone
+    // la cadena de versiones, así que se dice lo que sí llega en la respuesta.
+    mockedGet.mockResolvedValue(latest);
+    render(<MedicalHistoryPanel token="tok" patientId="p1" />);
+
+    expect(await screen.findByText(/versión 2/i)).toBeInTheDocument();
+    expect(await screen.findByText(/registrada el .* por Dra\. Ana Ríos/i)).toBeInTheDocument();
+  });
+
+  it('si el personal no carga, la versión conserva su fecha de registro', async () => {
+    mockedListStaff.mockRejectedValue(new Error('sin red'));
+    mockedGet.mockResolvedValue(latest);
+    render(<MedicalHistoryPanel token="tok" patientId="p1" />);
+
+    expect(await screen.findByText(/^registrada el /i)).toBeInTheDocument();
+  });
+
+  it('dice en voz alta que el registro es append-only', async () => {
+    // PRODUCT.md, principio 5: la UI nunca debe sugerir que algo se borró o se
+    // editó cuando el modelo solo añade.
+    mockedGet.mockResolvedValue(latest);
+    render(<MedicalHistoryPanel token="tok" patientId="p1" />);
+
+    expect(
+      await screen.findByText(/cada corrección crea una versión nueva/i),
+    ).toBeInTheDocument();
   });
 
   it('shows a loading state while fetching', () => {
     mockedGet.mockReturnValue(new Promise(() => {}));
+    // También el personal queda pendiente: si resolviera tras terminar el
+    // test, su `setState` caería fuera de `act()`.
+    mockedListStaff.mockReturnValue(new Promise(() => {}));
     render(<MedicalHistoryPanel token="tok" patientId="p1" />);
     expect(screen.getByRole('status')).toHaveTextContent(/cargando/i);
   });

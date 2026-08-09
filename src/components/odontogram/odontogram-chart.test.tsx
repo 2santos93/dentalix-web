@@ -2,6 +2,15 @@ import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { OdontogramChart } from './odontogram-chart';
 
+// The surfaces are `aria-hidden` painted regions (the tooth announces them in
+// its own label), so they're located by `data-surface` inside their tooth.
+function surfaceRegion(fdi: string, surface: string): Element {
+  const tooth = screen.getByRole('group', { name: new RegExp(`^Diente ${fdi},`) });
+  const region = tooth.querySelector(`[data-surface="${surface}"]`);
+  if (!region) throw new Error(`No ${surface} region on tooth ${fdi}`);
+  return region;
+}
+
 describe('OdontogramChart', () => {
   it('renders all 32 permanent teeth with their FDI numbers, in the two-row layout', () => {
     render(
@@ -12,8 +21,11 @@ describe('OdontogramChart', () => {
       />,
     );
 
-    const upperRow = screen.getByRole('row', { name: /superior/i });
-    const lowerRow = screen.getByRole('row', { name: /inferior/i });
+    // The arches are labelled `group`s: a `role="row"` with no owning
+    // `grid`/`table` is invalid, and an AT drops it along with its label.
+    expect(screen.queryAllByRole('row')).toHaveLength(0);
+    const upperRow = screen.getByRole('group', { name: 'Arcada superior' });
+    const lowerRow = screen.getByRole('group', { name: 'Arcada inferior' });
 
     // Spot-check the layout boundaries documented in fdi.ts.
     expect(within(upperRow).getByText('18')).toBeInTheDocument();
@@ -56,7 +68,7 @@ describe('OdontogramChart', () => {
       />,
     );
 
-    await user.click(screen.getByRole('button', { name: /diente 21.*oclusal/i }));
+    await user.click(surfaceRegion('21', 'OCCLUSAL'));
     expect(onSelectSurface).toHaveBeenCalledWith('21', 'OCCLUSAL');
   });
 
@@ -171,12 +183,27 @@ describe('OdontogramChart', () => {
     });
 
     it('keeps the surfaces out of the tab order (they are reachable by pointer and via the form)', () => {
-      renderChart();
-      const surfaces = screen.getAllByRole('button', { name: /cara (vestibular|lingual|mesial|distal|oclusal)/i });
+      const { container } = renderChart();
+      const surfaces = container.querySelectorAll('polygon[data-surface]');
       expect(surfaces).toHaveLength(32 * 5);
       for (const surface of surfaces) {
         expect(surface).toHaveAttribute('tabindex', '-1');
       }
+    });
+
+    it('keeps the surfaces out of the screen reader buffer too — 32 stops, not 192', () => {
+      const { container } = renderChart();
+
+      // No surface announces itself...
+      for (const surface of container.querySelectorAll('polygon[data-surface]')) {
+        expect(surface).toHaveAttribute('aria-hidden', 'true');
+      }
+      expect(screen.queryAllByRole('button', { name: /cara/i })).toHaveLength(0);
+      // ...and the only announcements left are the 32 teeth.
+      const teeth = screen
+        .getAllByRole('group')
+        .filter((g) => /^Diente /.test(g.getAttribute('aria-label') ?? ''));
+      expect(teeth).toHaveLength(32);
     });
   });
 });

@@ -11,8 +11,8 @@ import {
 } from '@/lib/odontogram/odontogram-api';
 import { SectionError } from '@/components/errors/section-error';
 import { InlineError } from '@/components/errors/inline-error';
+import { CatalogPicker } from '@/components/odontogram/catalog-picker';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { fieldClass } from '@/lib/ui/field-class';
 import { cn } from '@/lib/utils';
@@ -24,10 +24,6 @@ const copy = {
   genericCatalogError: 'No pudimos cargar el catálogo.',
   formTitle: (fdi: string) => `Registrar en el diente ${fdi}`,
   catalogItemLegend: 'Diagnóstico o procedimiento',
-  catalogFilterLabel: 'Buscar en el catálogo',
-  catalogFilterPlaceholder: 'Caries, resina, corona…',
-  catalogNoMatches: (query: string) => `Ningún ítem del catálogo coincide con "${query}".`,
-  kindLabels: { DIAGNOSIS: 'Diagnóstico', PROCEDURE: 'Procedimiento' } as const,
   surfacesLegend: 'Caras',
   wholeTooth: 'Diente completo',
   notesLabel: 'Notas',
@@ -36,6 +32,11 @@ const copy = {
   statusCompleted: 'Completado',
   submit: 'Guardar',
   submitting: 'Guardando…',
+  // Nombra lo que quedó registrado en vez de un «Guardado» genérico: el
+  // formulario se vacía al guardar, y un formulario vacío es indistinguible
+  // de uno que nunca se envió para quien apartó la vista hacia el paciente.
+  saved: (fdi: string, item: string, detail: string) =>
+    `Registrado en el diente ${fdi} · ${item} · ${detail}`,
   validationNoCatalogItem: 'Selecciona un diagnóstico o procedimiento del catálogo.',
   validationNoSurfaces: 'Selecciona al menos una cara o marca "diente completo".',
   genericSaveError: 'No pudimos guardar el registro. Intenta de nuevo.',
@@ -81,9 +82,6 @@ export function ToothRecordPanel({
   const [catalogLoading, setCatalogLoading] = useState(true);
   const [catalogError, setCatalogError] = useState<string | null>(null);
   const [catalogReloadKey, setCatalogReloadKey] = useState(0);
-  // El catálogo sembrado trae ~100 ítems: sin filtro, elegir uno es recorrer
-  // una lista de radios más alta que la pantalla.
-  const [catalogQuery, setCatalogQuery] = useState('');
 
   const [catalogItemId, setCatalogItemId] = useState<string | null>(null);
   const [wholeTooth, setWholeTooth] = useState(false);
@@ -95,6 +93,10 @@ export function ToothRecordPanel({
   const [validationError, setValidationError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  // Confirmación del último guardado, construida con los valores realmente
+  // enviados. Se limpia en cuanto el usuario empieza otra entrada: dejarla
+  // colgada la convertiría en la confirmación del registro equivocado.
+  const [savedSummary, setSavedSummary] = useState<string | null>(null);
 
   // Tracks the props this component was last rendered with, so a change can
   // be detected and reacted to DURING render (the React-recommended
@@ -116,6 +118,7 @@ export function ToothRecordPanel({
     setStatus('COMPLETED');
     setValidationError(null);
     setSaveError(null);
+    setSavedSummary(null);
     setWholeTooth(false);
     setSurfaces(initialSurfacesState(initialSurface));
   } else if (initialSurface !== prevInitialSurface) {
@@ -126,6 +129,7 @@ export function ToothRecordPanel({
     setPrevInitialSurface(initialSurface);
     setSurfaces(initialSurfacesState(initialSurface));
     setWholeTooth(false);
+    setSavedSummary(null);
   }
 
   // Catalog is tenant-wide, not per-tooth — fetched once (and on explicit
@@ -160,7 +164,14 @@ export function ToothRecordPanel({
     setStatus('COMPLETED');
   }
 
+  // Tocar cualquier campo es empezar otra entrada: la confirmación anterior
+  // deja de describir lo que hay en pantalla, así que se retira.
+  function startNewEntry() {
+    setSavedSummary(null);
+  }
+
   function handleWholeToothChange(checked: boolean) {
+    startNewEntry();
     setWholeTooth(checked);
     if (checked) {
       setSurfaces({ VESTIBULAR: false, LINGUAL: false, MESIAL: false, DISTAL: false, OCCLUSAL: false });
@@ -168,6 +179,7 @@ export function ToothRecordPanel({
   }
 
   function handleSurfaceChange(surface: ToothSurface, checked: boolean) {
+    startNewEntry();
     setSurfaces((prev) => ({ ...prev, [surface]: checked }));
   }
 
@@ -199,7 +211,14 @@ export function ToothRecordPanel({
         ...(notes.trim() ? { notes: notes.trim() } : {}),
       };
       const created = await addToothRecord(token, patientId, input);
+      // Se construye con lo enviado (diente, ítem del catálogo, caras), no con
+      // la respuesta ni con el estado del formulario, que `resetForm` vacía
+      // acto seguido.
+      const detail = wholeTooth
+        ? copy.wholeTooth.toLowerCase()
+        : selectedSurfaces.map((s) => SURFACE_LABELS[s].toLowerCase()).join(', ');
       resetForm();
+      setSavedSummary(copy.saved(toothNumber, item.labelEs, detail));
       onRecordAdded(created);
     } catch (err) {
       setSaveError(err instanceof ApiError ? err.message : copy.genericSaveError);
@@ -228,14 +247,6 @@ export function ToothRecordPanel({
     );
   }
 
-  const query = catalogQuery.trim().toLowerCase();
-  const visibleCatalog = query
-    ? catalog.filter(
-        (item) =>
-          item.labelEs.toLowerCase().includes(query) || item.code.toLowerCase().includes(query),
-      )
-    : catalog;
-
   return (
     <form
       onSubmit={handleSubmit}
@@ -244,53 +255,19 @@ export function ToothRecordPanel({
     >
       <h3 className="t-title text-ink">{copy.formTitle(toothNumber)}</h3>
 
-      <fieldset className="flex min-w-0 flex-col gap-2.5">
-        <legend className="t-label mb-0.5 text-muted">{copy.catalogItemLegend}</legend>
-        <Label htmlFor="trp-catalog-filter" className="sr-only">
-          {copy.catalogFilterLabel}
-        </Label>
-        <Input
-          id="trp-catalog-filter"
-          type="search"
-          value={catalogQuery}
-          onChange={(e) => setCatalogQuery(e.target.value)}
-          placeholder={copy.catalogFilterPlaceholder}
-        />
-        {visibleCatalog.length === 0 ? (
-          <p role="status" className="py-2 text-sm text-muted">
-            {copy.catalogNoMatches(catalogQuery.trim())}
-          </p>
-        ) : (
-          <div className="max-h-56 overflow-y-auto rounded-lg border border-border">
-            {visibleCatalog.map((item) => (
-              <label
-                key={item.id}
-                htmlFor={`trp-catalog-${item.id}`}
-                className={cn(
-                  'flex cursor-pointer items-center gap-2 border-b border-hairline px-3 py-2 text-sm text-ink last:border-0 transition-colors hover:bg-surface-2',
-                  catalogItemId === item.id && 'bg-surface-2',
-                )}
-              >
-                <input
-                  id={`trp-catalog-${item.id}`}
-                  type="radio"
-                  name="catalogItem"
-                  value={item.id}
-                  checked={catalogItemId === item.id}
-                  onChange={() => setCatalogItemId(item.id)}
-                />
-                <span
-                  aria-hidden="true"
-                  className="size-2.5 shrink-0 rounded-[3px] border border-border"
-                  style={{ backgroundColor: item.color }}
-                />
-                <span className="min-w-0 flex-1 truncate">{item.labelEs}</span>
-                <span className="t-label shrink-0 text-muted">{copy.kindLabels[item.kind]}</span>
-              </label>
-            ))}
-          </div>
-        )}
-      </fieldset>
+      {/* Extraído a `CatalogPicker` (compartido con «Agregar ítem» del plan de
+          tratamiento): mismos ids `trp-catalog-*` que antes, así que los
+          `getByLabelText` existentes siguen apuntando a los mismos radios. */}
+      <CatalogPicker
+        items={catalog}
+        value={catalogItemId}
+        onChange={(id) => {
+          startNewEntry();
+          setCatalogItemId(id);
+        }}
+        idPrefix="trp-catalog"
+        legend={copy.catalogItemLegend}
+      />
 
       <fieldset className="flex min-w-0 flex-col gap-2">
         <legend className="t-label text-muted">{copy.surfacesLegend}</legend>
@@ -328,7 +305,10 @@ export function ToothRecordPanel({
         <select
           id="trp-status"
           value={status}
-          onChange={(e) => setStatus(e.target.value as 'PLANNED' | 'COMPLETED')}
+          onChange={(e) => {
+            startNewEntry();
+            setStatus(e.target.value as 'PLANNED' | 'COMPLETED');
+          }}
           className={cn(fieldClass, 'h-10')}
         >
           <option value="COMPLETED">{copy.statusCompleted}</option>
@@ -342,7 +322,10 @@ export function ToothRecordPanel({
           id="trp-notes"
           rows={2}
           value={notes}
-          onChange={(e) => setNotes(e.target.value)}
+          onChange={(e) => {
+            startNewEntry();
+            setNotes(e.target.value);
+          }}
           className={fieldClass}
         />
       </div>
@@ -350,9 +333,19 @@ export function ToothRecordPanel({
       {validationError && <InlineError>{validationError}</InlineError>}
       {saveError && <InlineError>{saveError}</InlineError>}
 
-      <Button type="submit" disabled={submitting} className="self-start">
-        {submitting ? copy.submitting : copy.submit}
-      </Button>
+      <div className="flex flex-wrap items-center gap-3">
+        <Button type="submit" disabled={submitting}>
+          {submitting ? copy.submitting : copy.submit}
+        </Button>
+        {/* La región viva se monta siempre y se vacía, en vez de montarse solo
+            cuando hay confirmación: un `aria-live` que aparece con su
+            contenido puede no llegar a anunciarse (misma estrategia que
+            documenta `odontogram-tab.tsx` para sus avisos). Sin contenido, un
+            `<p>` vacío no genera línea, así que tampoco mueve el layout. */}
+        <p role="status" aria-live="polite" className="text-sm font-medium text-primary">
+          {savedSummary}
+        </p>
+      </div>
     </form>
   );
 }

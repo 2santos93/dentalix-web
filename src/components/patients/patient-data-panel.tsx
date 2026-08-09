@@ -1,14 +1,12 @@
 'use client';
 import * as React from 'react';
-import { Pencil } from 'lucide-react';
 import type { Patient } from '@/lib/patients/patients-api';
+import { ageFrom } from '@/lib/patients/age';
 import { formatCivilDate } from '@/lib/format/date';
-import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the app.
 const copy = {
-  edit: 'Editar',
   identification: 'Identificación',
   contact: 'Contacto',
   emergency: 'Emergencia',
@@ -38,25 +36,6 @@ const copy = {
   fallback: '—',
   years: (n: number) => `${n} años`,
 };
-
-/**
- * Edad en años cumplidos; `null` si no hay fecha de nacimiento.
- *
- * `birthDate` es una fecha civil (se guarda como medianoche UTC del día
- * elegido, ver `formatCivilDate`), así que se lee con getters UTC — usar
- * getters locales aquí (como antes) hace que la edad caiga un día antes
- * de la fecha real al oeste de UTC.
- */
-function ageFrom(birthDate: string | null): number | null {
-  if (!birthDate) return null;
-  const born = new Date(birthDate);
-  if (Number.isNaN(born.getTime())) return null;
-  const now = new Date();
-  let age = now.getFullYear() - born.getUTCFullYear();
-  const monthDiff = now.getMonth() - born.getUTCMonth();
-  if (monthDiff < 0 || (monthDiff === 0 && now.getDate() < born.getUTCDate())) age -= 1;
-  return age;
-}
 
 interface Field {
   label: string;
@@ -90,15 +69,19 @@ function Block({ title, fields }: { title: string; fields: Field[] }) {
 
 interface PatientDataPanelProps {
   patient: Patient;
-  onEdit: () => void;
 }
 
 /**
  * Ficha del paciente en bloques. Extraída de `patients/[id]/page.tsx`, que
  * mostraba 8 campos sueltos, para que la página vuelva a ser una cáscara
  * delgada (mismo criterio que `AgendaView`).
+ *
+ * Sin acción propia: «Editar» era un botón secundario alineado a la derecha
+ * sobre el primer bloque, dentro de una Card sin título, colgando de nada.
+ * Ahora es la acción primaria de la cabecera (`PatientRecordHeader`), donde
+ * está a la vista desde cualquier pestaña.
  */
-export function PatientDataPanel({ patient, onEdit }: PatientDataPanelProps) {
+export function PatientDataPanel({ patient }: PatientDataPanelProps) {
   const age = ageFrom(patient.birthDate);
   const birth = patient.birthDate
     ? `${formatCivilDate(patient.birthDate)}${age === null ? '' : ` · ${copy.years(age)}`}`
@@ -112,12 +95,6 @@ export function PatientDataPanel({ patient, onEdit }: PatientDataPanelProps) {
   return (
     <Card>
       <CardContent className="flex flex-col gap-4 p-6">
-        <div className="flex justify-end">
-          <Button type="button" variant="outline" size="sm" onClick={onEdit}>
-            <Pencil className="size-4" /> {copy.edit}
-          </Button>
-        </div>
-
         <Block
           title={copy.identification}
           fields={[

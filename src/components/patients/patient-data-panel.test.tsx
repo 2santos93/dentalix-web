@@ -1,5 +1,4 @@
 import { render, screen } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 import { PatientDataPanel } from './patient-data-panel';
 import type { Patient } from '@/lib/patients/patients-api';
 
@@ -71,7 +70,7 @@ describe('PatientDataPanel', () => {
   it('muestra identificación con la edad calculada', () => {
     // Edad fija: el test no puede depender del día en que corre.
     jest.useFakeTimers().setSystemTime(new Date('2026-08-01T12:00:00.000Z'));
-    render(<PatientDataPanel patient={patient()} onEdit={() => {}} />);
+    render(<PatientDataPanel patient={patient()} />);
 
     expect(screen.getByText('CC')).toBeInTheDocument();
     expect(screen.getByText('1002')).toBeInTheDocument();
@@ -81,7 +80,7 @@ describe('PatientDataPanel', () => {
   it('formatea la fecha de nacimiento con día y mes en dos dígitos', () => {
     // `toLocaleDateString('es')` (la implementación anterior) no rellena con
     // cero: un 5 de enero se mostraba "5/1/1992" en vez de "05/01/1992".
-    render(<PatientDataPanel patient={patient({ birthDate: '1992-01-05T00:00:00.000Z' })} onEdit={() => {}} />);
+    render(<PatientDataPanel patient={patient({ birthDate: '1992-01-05T00:00:00.000Z' })} />);
     expect(screen.getByText(/05\/01\/1992/)).toBeInTheDocument();
     expect(screen.queryByText(/(^|[^0])5\/1\/1992/)).not.toBeInTheDocument();
   });
@@ -93,13 +92,13 @@ describe('PatientDataPanel', () => {
     // implementación anterior leía `birthDate` con getters locales y perdía
     // el desfase de un día, dando 26.
     jest.useFakeTimers().setSystemTime(new Date('2026-08-01T04:00:00.000Z'));
-    render(<PatientDataPanel patient={patient({ birthDate: '2000-08-01T00:00:00.000Z' })} onEdit={() => {}} />);
+    render(<PatientDataPanel patient={patient({ birthDate: '2000-08-01T00:00:00.000Z' })} />);
     expect(screen.getByText(/25 años/)).toBeInTheDocument();
     expect(screen.queryByText(/26 años/)).not.toBeInTheDocument();
   });
 
   it('oculta por completo un bloque sin datos', () => {
-    render(<PatientDataPanel patient={patient()} onEdit={() => {}} />);
+    render(<PatientDataPanel patient={patient()} />);
     // Sin contacto de emergencia ni acudiente cargados.
     expect(screen.queryByText(/^Emergencia$/)).not.toBeInTheDocument();
   });
@@ -108,7 +107,7 @@ describe('PatientDataPanel', () => {
     render(
       <PatientDataPanel
         patient={patient({ emergencyContactName: 'Ana Pérez', emergencyContactRelationship: 'Madre' })}
-        onEdit={() => {}}
+       
       />,
     );
     expect(screen.getByText(/^Emergencia$/)).toBeInTheDocument();
@@ -125,7 +124,7 @@ describe('PatientDataPanel', () => {
           dataConsentAccepted: true,
           dataConsentAt: '2026-03-12T00:00:00.000Z',
         })}
-        onEdit={() => {}}
+       
       />,
     );
     expect(screen.getByText(/consentimiento/i)).toBeInTheDocument();
@@ -140,7 +139,7 @@ describe('PatientDataPanel', () => {
           dataConsentAt: '2026-03-12T00:00:00.000Z',
           dataConsentPolicyVersion: '2.1',
         })}
-        onEdit={() => {}}
+       
       />,
     );
     expect(screen.getByText(/v2\.1/)).toBeInTheDocument();
@@ -149,16 +148,15 @@ describe('PatientDataPanel', () => {
   it('oculta el bloque administrativo aunque el consentimiento esté pendiente', () => {
     // El consentimiento siempre produce un valor ("Pendiente" o "Aceptado ·
     // fecha"), así que sin marcarlo `alwaysShown` el bloque nunca se ocultaría.
-    render(<PatientDataPanel patient={patient()} onEdit={() => {}} />);
+    render(<PatientDataPanel patient={patient()} />);
     expect(screen.queryByText(/^Administrativo$/)).not.toBeInTheDocument();
   });
 
-  it('avisa al padre cuando se pulsa Editar', async () => {
-    const onEdit = jest.fn();
-    const user = userEvent.setup();
-    render(<PatientDataPanel patient={patient()} onEdit={onEdit} />);
-
-    await user.click(screen.getByRole('button', { name: /editar/i }));
-    expect(onEdit).toHaveBeenCalledTimes(1);
+  it('no lleva ninguna acción propia: «Editar» vive ahora en la cabecera', () => {
+    // Era un botón secundario alineado a la derecha sobre el primer bloque,
+    // dentro de una Card sin título. La acción es de la ficha entera, no de
+    // esta pestaña, y su contrato está en `patient-record-header.test.tsx`.
+    render(<PatientDataPanel patient={patient()} />);
+    expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 });

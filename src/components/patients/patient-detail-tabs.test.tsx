@@ -1,13 +1,57 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { PatientDetailTabs, type PatientDetailTabKey } from './patient-detail-tabs';
 
-// Mirrors how `patients/[id]/page.tsx` wires the tabs to conditionally
-// rendered tabpanels, so the keyboard test below exercises the same
-// tab-key -> panel-visibility contract the real page relies on.
+// Mirrors how `patients/[id]/page.tsx` wires the tabs to its tabpanels: every
+// panel element is always in the DOM (so `aria-controls` always resolves) but
+// only the active one mounts its children, and activating a tab moves focus
+// into the panel. The keyboard tests below therefore exercise the same
+// tab-key -> panel-visibility -> focus contract the real page relies on.
+function Panel({
+  tab,
+  activeTab,
+  register,
+  children,
+}: {
+  tab: PatientDetailTabKey;
+  activeTab: PatientDetailTabKey;
+  register: (tab: PatientDetailTabKey, el: HTMLDivElement | null) => void;
+  children: ReactNode;
+}) {
+  const active = activeTab === tab;
+  return (
+    <div
+      role="tabpanel"
+      id={`tabpanel-${tab}`}
+      aria-labelledby={`tab-${tab}`}
+      ref={(el) => register(tab, el)}
+      tabIndex={-1}
+      hidden={!active}
+    >
+      {active ? children : null}
+    </div>
+  );
+}
+
 function Harness() {
   const [activeTab, setActiveTab] = useState<PatientDetailTabKey>('data');
+  const panels = useRef(new Map<PatientDetailTabKey, HTMLDivElement>());
+  const firstRender = useRef(true);
+
+  function register(tab: PatientDetailTabKey, el: HTMLDivElement | null) {
+    if (el) panels.current.set(tab, el);
+    else panels.current.delete(tab);
+  }
+
+  useEffect(() => {
+    if (firstRender.current) {
+      firstRender.current = false;
+      return;
+    }
+    panels.current.get(activeTab)?.focus();
+  }, [activeTab]);
+
   return (
     <div>
       <PatientDetailTabs
@@ -19,43 +63,51 @@ function Harness() {
         odontogramLabel="Odontograma"
         treatmentPlansLabel="Plan de tratamiento"
       />
-      {activeTab === 'data' && (
-        <div role="tabpanel" id="tabpanel-data" aria-labelledby="tab-data">
-          Datos panel
-        </div>
-      )}
-      {activeTab === 'clinical-history' && (
-        <div role="tabpanel" id="tabpanel-clinical-history" aria-labelledby="tab-clinical-history">
-          Historia clínica panel
-        </div>
-      )}
-      {activeTab === 'odontogram' && (
-        <div role="tabpanel" id="tabpanel-odontogram" aria-labelledby="tab-odontogram">
-          Odontograma panel
-        </div>
-      )}
-      {activeTab === 'treatment-plans' && (
-        <div role="tabpanel" id="tabpanel-treatment-plans" aria-labelledby="tab-treatment-plans">
-          Plan de tratamiento panel
-        </div>
-      )}
+      <Panel tab="data" activeTab={activeTab} register={register}>
+        Datos panel
+      </Panel>
+      <Panel tab="clinical-history" activeTab={activeTab} register={register}>
+        Historia clínica panel
+      </Panel>
+      <Panel tab="odontogram" activeTab={activeTab} register={register}>
+        Odontograma panel
+      </Panel>
+      <Panel tab="treatment-plans" activeTab={activeTab} register={register}>
+        Plan de tratamiento panel
+      </Panel>
     </div>
   );
 }
 
-describe('PatientDetailTabs', () => {
-  it('renders all three tabs as native buttons with no roving tabindex trap', () => {
-    render(<Harness />);
-    const dataTab = screen.getByRole('tab', { name: 'Datos' });
-    const historyTab = screen.getByRole('tab', { name: 'Historia clínica' });
-    const odontogramTab = screen.getByRole('tab', { name: 'Odontograma' });
+const TAB_NAMES = ['Datos', 'Historia clínica', 'Odontograma', 'Plan de tratamiento'];
 
-    expect(dataTab.tagName).toBe('BUTTON');
-    expect(historyTab.tagName).toBe('BUTTON');
-    expect(odontogramTab.tagName).toBe('BUTTON');
-    // The bug being fixed: the inactive tab used to carry tabIndex={-1},
-    // removing it from the Tab order entirely.
-    expect(historyTab).not.toHaveAttribute('tabindex', '-1');
+describe('PatientDetailTabs', () => {
+  it('renders the four tabs as native buttons', () => {
+    render(<Harness />);
+    for (const name of TAB_NAMES) {
+      expect(screen.getByRole('tab', { name }).tagName).toBe('BUTTON');
+    }
+  });
+
+  it('is a single tab stop: only the selected tab is in the Tab order', () => {
+    render(<Harness />);
+
+    expect(screen.getByRole('tab', { name: 'Datos' })).toHaveAttribute('tabindex', '0');
+    for (const name of TAB_NAMES.slice(1)) {
+      expect(screen.getByRole('tab', { name })).toHaveAttribute('tabindex', '-1');
+    }
+  });
+
+  it('gives every tab an aria-controls that resolves to a panel in the DOM', () => {
+    render(<Harness />);
+
+    // The bug being fixed: only the ACTIVE tab's panel used to be rendered, so
+    // the other three `aria-controls` pointed at nothing.
+    for (const name of TAB_NAMES) {
+      const id = screen.getByRole('tab', { name }).getAttribute('aria-controls');
+      expect(id).toBeTruthy();
+      expect(document.getElementById(id as string)).toBeInTheDocument();
+    }
   });
 
   it('lets a user click the Odontograma tab and shows its panel', async () => {
@@ -69,15 +121,81 @@ describe('PatientDetailTabs', () => {
     expect(screen.queryByText('Datos panel')).not.toBeInTheDocument();
   });
 
-  it('lets a keyboard-only user Tab to the inactive tab and activate it with Enter', async () => {
+  it('moves focus with Arrow Right/Left, wrapping around at both ends', async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+
+    await user.tab();
+    expect(screen.getByRole('tab', { name: 'Datos' })).toHaveFocus();
+
+    await user.keyboard('{ArrowRight}');
+    expect(screen.getByRole('tab', { name: 'Historia clínica' })).toHaveFocus();
+    await user.keyboard('{ArrowRight}{ArrowRight}');
+    expect(screen.getByRole('tab', { name: 'Plan de tratamiento' })).toHaveFocus();
+
+    // Past the last tab wraps to the first, and back the other way.
+    await user.keyboard('{ArrowRight}');
+    expect(screen.getByRole('tab', { name: 'Datos' })).toHaveFocus();
+    await user.keyboard('{ArrowLeft}');
+    expect(screen.getByRole('tab', { name: 'Plan de tratamiento' })).toHaveFocus();
+  });
+
+  it('jumps to the ends with Home and End', async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+
+    await user.tab();
+    await user.keyboard('{End}');
+    expect(screen.getByRole('tab', { name: 'Plan de tratamiento' })).toHaveFocus();
+
+    await user.keyboard('{Home}');
+    expect(screen.getByRole('tab', { name: 'Datos' })).toHaveFocus();
+  });
+
+  it('arrowing only moves focus — it does not activate the tab', async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+
+    await user.tab();
+    await user.keyboard('{ArrowRight}{ArrowRight}');
+
+    // Manual activation: three of the four panels fetch on mount, so arrowing
+    // across the tablist must not mount them.
+    expect(screen.getByRole('tab', { name: 'Odontograma' })).toHaveAttribute(
+      'aria-selected',
+      'false',
+    );
+    expect(screen.getByText('Datos panel')).toBeInTheDocument();
+    expect(screen.queryByText('Odontograma panel')).not.toBeInTheDocument();
+  });
+
+  it('keeps the roving tabindex on the focused tab so Tab leaves the tablist', async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+
+    await user.tab();
+    await user.keyboard('{ArrowRight}');
+    const historyTab = screen.getByRole('tab', { name: 'Historia clínica' });
+    expect(historyTab).toHaveAttribute('tabindex', '0');
+    expect(screen.getByRole('tab', { name: 'Datos' })).toHaveAttribute('tabindex', '-1');
+
+    // One more Tab and the whole tablist is behind us: the remaining two tabs
+    // are NOT stops of their own. (The panel takes focus only programmatically,
+    // on activation — `tabIndex={-1}` — so here Tab simply leaves.)
+    await user.tab();
+    expect(screen.getByRole('tablist')).not.toContainElement(
+      document.activeElement as HTMLElement | null,
+    );
+  });
+
+  it('activates the focused tab with Enter and moves focus into its panel', async () => {
     const user = userEvent.setup();
     render(<Harness />);
 
     expect(screen.getByText('Datos panel')).toBeInTheDocument();
 
     await user.tab();
-    expect(screen.getByRole('tab', { name: 'Datos' })).toHaveFocus();
-    await user.tab();
+    await user.keyboard('{ArrowRight}');
     expect(screen.getByRole('tab', { name: 'Historia clínica' })).toHaveFocus();
 
     await user.keyboard('{Enter}');
@@ -88,6 +206,9 @@ describe('PatientDetailTabs', () => {
     );
     expect(screen.getByText('Historia clínica panel')).toBeInTheDocument();
     expect(screen.queryByText('Datos panel')).not.toBeInTheDocument();
+    // Focus followed the content instead of being stranded in the tablist.
+    expect(screen.getByRole('tabpanel')).toHaveFocus();
+    expect(screen.getByRole('tabpanel')).toHaveAttribute('id', 'tabpanel-clinical-history');
   });
 
   it('also activates the focused tab with Space', async () => {
@@ -95,7 +216,7 @@ describe('PatientDetailTabs', () => {
     render(<Harness />);
 
     await user.tab();
-    await user.tab();
+    await user.keyboard('{ArrowRight}');
     expect(screen.getByRole('tab', { name: 'Historia clínica' })).toHaveFocus();
 
     await user.keyboard(' ');
@@ -105,5 +226,14 @@ describe('PatientDetailTabs', () => {
       'true',
     );
     expect(screen.getByText('Historia clínica panel')).toBeInTheDocument();
+  });
+
+  it('hides the inactive panels from the accessibility tree', () => {
+    render(<Harness />);
+
+    // Four panel elements in the DOM, exactly one exposed.
+    expect(document.querySelectorAll('[role="tabpanel"]')).toHaveLength(4);
+    expect(screen.getAllByRole('tabpanel')).toHaveLength(1);
+    expect(screen.getByRole('tabpanel')).toHaveAttribute('id', 'tabpanel-data');
   });
 });
