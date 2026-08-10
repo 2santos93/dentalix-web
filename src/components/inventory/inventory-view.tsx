@@ -17,7 +17,7 @@ import {
   type RecordMovementInput,
 } from '@/lib/inventory/inventory-api';
 import { useDebouncedValue } from '@/lib/hooks/use-debounced-value';
-import { ArrowLeftRight, History, Pencil, Plus, Search, Trash2 } from 'lucide-react';
+import { ArrowLeftRight, History, Pencil, Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
@@ -27,6 +27,8 @@ import { FormModal } from '@/components/shared/form-modal';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { AsyncSection, TableSkeleton } from '@/components/shared/async-section';
 import { Pagination } from '@/components/shared/pagination';
+import { PageHeader } from '@/components/shared/page-header';
+import { ListToolbar, ResultCount } from '@/components/shared/list-toolbar';
 import { RowActions } from '@/components/shared/row-actions';
 import {
   Dialog,
@@ -54,6 +56,13 @@ const SEARCH_DEBOUNCE_MS = 300;
 // copy convention (catalog-view.tsx / staff-view.tsx) until next-intl wiring
 // lands.
 const copy = {
+  // Título y descripción viven en la vista, no en `page.tsx`: la acción primaria
+  // va dentro de `PageHeader` y el estado que la abre (`openCreate`) es de aquí.
+  title: 'Inventario',
+  description:
+    'Controla los insumos de tu clínica: stock actual, mínimos y movimientos.',
+  countNoun: 'insumo',
+  countNounPlural: 'insumos',
   addToggle: 'Agregar insumo',
   createTitle: 'Agregar insumo',
   formDescription:
@@ -526,11 +535,15 @@ export function InventoryView({ token }: InventoryViewProps) {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex justify-end">
-        <Button type="button" onClick={openCreate}>
-          <Plus /> {copy.addToggle}
-        </Button>
-      </div>
+      <PageHeader
+        title={copy.title}
+        description={copy.description}
+        actions={
+          <Button type="button" onClick={openCreate}>
+            <Plus /> {copy.addToggle}
+          </Button>
+        }
+      />
 
       <FormModal
         open={showForm}
@@ -598,19 +611,12 @@ export function InventoryView({ token }: InventoryViewProps) {
         </FormField>
       </FormModal>
 
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="relative w-full sm:max-w-xs">
-          <Search className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted" />
-          <Input
-            id="inventory-search"
-            type="text"
-            aria-label={copy.searchLabel}
-            placeholder={copy.searchPlaceholder}
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            className="pl-9"
-          />
-        </div>
+      <ListToolbar
+        searchLabel={copy.searchLabel}
+        searchPlaceholder={copy.searchPlaceholder}
+        value={query}
+        onChange={setQuery}
+      >
         <label className="inline-flex items-center gap-2 text-sm text-ink">
           <input
             type="checkbox"
@@ -619,7 +625,15 @@ export function InventoryView({ token }: InventoryViewProps) {
           />
           {copy.lowStockOnlyLabel}
         </label>
-      </div>
+      </ListToolbar>
+
+      {!loading && !loadError ? (
+        <ResultCount
+          total={total}
+          noun={copy.countNoun}
+          nounPlural={copy.countNounPlural}
+        />
+      ) : null}
 
       <AsyncSection
         loading={loading}
