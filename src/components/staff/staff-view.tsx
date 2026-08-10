@@ -55,7 +55,7 @@ import { cn } from '@/lib/utils';
 // until next-intl wiring lands.
 const copy = {
   // Titulo y descripcion viven aqui, no en `page.tsx`: la accion primaria va
-  // dentro de `PageHeader` y el estado que la abre es de la vista.
+  // dentro de la barra de la lista y el estado que la abre es de la vista.
   title: 'Personal',
   description:
     'Tu equipo y las invitaciones sin aceptar. Abre a una persona para cambiar su rol o su acceso.',
@@ -326,241 +326,243 @@ export function StaffView({ token }: StaffViewProps) {
   const hasFilters = Boolean(search || roleFilter || statusFilter);
 
   return (
-    <div className="flex flex-col gap-6">
-      <PageHeader
-        title={copy.title}
-        description={copy.description}
-        actions={
-          <Button type="button" onClick={() => setShowForm(true)}>
-            <Plus /> {copy.inviteToggle}
-          </Button>
-        }
-      />
+    <>
+      <PageHeader title={copy.title} description={copy.description} />
 
-      <ListToolbar
-        searchLabel={copy.searchLabel}
-        searchPlaceholder={copy.searchPlaceholder}
-        value={searchInput}
-        onChange={(v) => {
-          setSearchInput(v);
-          setPage(1);
-        }}
-      >
-        <select
-          aria-label={copy.filterRoleLabel}
-          value={roleFilter}
-          onChange={(e) => {
-            setRoleFilter(e.target.value as ClinicRole | '');
+      {/* Un solo bloque apretado (12px) para filtrar → contar → leer: los tres
+          pasos son el mismo gesto. La separación grande de la página es la que
+          hay sobre él, contra la cabecera. */}
+      <div className="flex flex-col gap-3">
+        <ListToolbar
+          searchLabel={copy.searchLabel}
+          searchPlaceholder={copy.searchPlaceholder}
+          value={searchInput}
+          onChange={(v) => {
+            setSearchInput(v);
             setPage(1);
           }}
-          className={cn(toolbarFieldClass, 'sm:w-48')}
-        >
-          <option value="">{copy.allRoles}</option>
-          {ROLE_OPTIONS.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
-        </select>
-        <select
-          aria-label={copy.filterStatusLabel}
-          value={statusFilter}
-          onChange={(e) => {
-            setStatusFilter(e.target.value as StaffDirectoryStatus | '');
-            setPage(1);
-          }}
-          className={cn(toolbarFieldClass, 'sm:w-52')}
-        >
-          <option value="">{copy.allStatuses}</option>
-          {STATUS_OPTIONS.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
-        </select>
-      </ListToolbar>
-
-      <FormModal
-        open={showForm && !createdInvitation}
-        onOpenChange={handleCreateOpenChange}
-        title={copy.formTitle}
-        description={copy.formDescription}
-        onSubmit={handleCreateSubmit}
-        submitLabel={copy.submit}
-        submitting={creating}
-        error={createError}
-        size="lg"
-      >
-        <div className="grid gap-4 sm:grid-cols-3">
-          <FormField htmlFor="staff-full-name" label={copy.fullNameLabel}>
-            <Input
-              id="staff-full-name"
-              type="text"
-              required
-              value={fullName}
-              onChange={(e) => setFullName(e.target.value)}
-            />
-          </FormField>
-          <FormField htmlFor="staff-email" label={copy.emailLabel}>
-            <Input
-              id="staff-email"
-              type="email"
-              required
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-            />
-          </FormField>
-          <FormField htmlFor="staff-role" label={copy.roleLabel}>
-            <select
-              id="staff-role"
-              required
-              value={role}
-              onChange={(e) => setRole(e.target.value as ClinicRole)}
-              className={toolbarFieldClass}
-            >
-              {ROLE_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-          </FormField>
-        </div>
-      </FormModal>
-
-      <Dialog open={!!createdInvitation} onOpenChange={handleCreateOpenChange}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>{copy.inviteCreatedTitle}</DialogTitle>
-            <DialogDescription>{copy.inviteCreatedDescription}</DialogDescription>
-          </DialogHeader>
-          <div className="flex flex-col gap-2 rounded-lg border border-border bg-bg px-3 py-2">
-            <p className="break-all font-mono text-sm text-ink">{inviteLink}</p>
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="self-start"
-              onClick={() => copyInviteLink(inviteLink)}
-            >
-              {copied ? copy.copiedLabel : copy.copyLabel}
+          action={
+            <Button type="button" onClick={() => setShowForm(true)}>
+              <Plus /> {copy.inviteToggle}
             </Button>
+          }
+        >
+          <select
+            aria-label={copy.filterRoleLabel}
+            value={roleFilter}
+            onChange={(e) => {
+              setRoleFilter(e.target.value as ClinicRole | '');
+              setPage(1);
+            }}
+            className={cn(toolbarFieldClass, 'sm:w-48')}
+          >
+            <option value="">{copy.allRoles}</option>
+            {ROLE_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+          <select
+            aria-label={copy.filterStatusLabel}
+            value={statusFilter}
+            onChange={(e) => {
+              setStatusFilter(e.target.value as StaffDirectoryStatus | '');
+              setPage(1);
+            }}
+            className={cn(toolbarFieldClass, 'sm:w-52')}
+          >
+            <option value="">{copy.allStatuses}</option>
+            {STATUS_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+        </ListToolbar>
+
+        <FormModal
+          open={showForm && !createdInvitation}
+          onOpenChange={handleCreateOpenChange}
+          title={copy.formTitle}
+          description={copy.formDescription}
+          onSubmit={handleCreateSubmit}
+          submitLabel={copy.submit}
+          submitting={creating}
+          error={createError}
+          size="lg"
+        >
+          <div className="grid gap-4 sm:grid-cols-3">
+            <FormField htmlFor="staff-full-name" label={copy.fullNameLabel}>
+              <Input
+                id="staff-full-name"
+                type="text"
+                required
+                value={fullName}
+                onChange={(e) => setFullName(e.target.value)}
+              />
+            </FormField>
+            <FormField htmlFor="staff-email" label={copy.emailLabel}>
+              <Input
+                id="staff-email"
+                type="email"
+                required
+                value={email}
+                onChange={(e) => setEmail(e.target.value)}
+              />
+            </FormField>
+            <FormField htmlFor="staff-role" label={copy.roleLabel}>
+              <select
+                id="staff-role"
+                required
+                value={role}
+                onChange={(e) => setRole(e.target.value as ClinicRole)}
+                className={toolbarFieldClass}
+              >
+                {ROLE_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </FormField>
           </div>
-          <p className="text-sm text-muted">{copy.copyWarning}</p>
-          <DialogFooter>
-            <Button type="button" onClick={() => handleCreateOpenChange(false)}>
-              {copy.closeLabel}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        </FormModal>
 
-      {!loading && !loadError ? (
-        <ResultCount
+        <Dialog open={!!createdInvitation} onOpenChange={handleCreateOpenChange}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>{copy.inviteCreatedTitle}</DialogTitle>
+              <DialogDescription>{copy.inviteCreatedDescription}</DialogDescription>
+            </DialogHeader>
+            <div className="flex flex-col gap-2 rounded-lg border border-border bg-bg px-3 py-2">
+              <p className="break-all font-mono text-sm text-ink">{inviteLink}</p>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                className="self-start"
+                onClick={() => copyInviteLink(inviteLink)}
+              >
+                {copied ? copy.copiedLabel : copy.copyLabel}
+              </Button>
+            </div>
+            <p className="text-sm text-muted">{copy.copyWarning}</p>
+            <DialogFooter>
+              <Button type="button" onClick={() => handleCreateOpenChange(false)}>
+                {copy.closeLabel}
+              </Button>
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+
+        {!loading && !loadError ? (
+          <ResultCount
+            total={total}
+            noun={copy.countNoun}
+            nounPlural={copy.countNounPlural}
+          />
+        ) : null}
+
+        <AsyncSection
+          loading={loading}
+          error={loadError}
+          onRetry={refresh}
+          isEmpty={entries.length === 0}
+          emptyTitle={hasFilters ? copy.noMatches : copy.empty}
+          emptyDescription={hasFilters ? copy.noMatchesHint : copy.emptyHint}
+          skeleton={<TableSkeleton rows={5} />}
+        >
+          <Card className="overflow-hidden p-0">
+            <Table aria-label={copy.tableLabel}>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead>{copy.colName}</TableHead>
+                  <TableHead>{copy.colEmail}</TableHead>
+                  <TableHead>{copy.colRole}</TableHead>
+                  <TableHead>{copy.colStatus}</TableHead>
+                  <TableHead className="w-px text-right">
+                    <span className="sr-only">{copy.colActions}</span>
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {entries.map((entry) => {
+                  const badge = STATUS_BADGE[entry.status];
+                  const isMember = entry.kind === 'MEMBER';
+                  const busy = busyId === entry.id;
+                  return (
+                    <TableRow
+                      key={`${entry.kind}-${entry.id}`}
+                      className={cn(isMember && 'relative')}
+                    >
+                      <TableCell className="font-medium text-ink" data-label={copy.colName}>
+                        {isMember ? (
+                          // El enlace se estira sobre toda la fila con un
+                          // pseudo-elemento: la fila entera es clicable pero el
+                          // foco y el nombre accesible siguen viviendo en un <a>
+                          // de verdad, no en un onClick sobre el <tr>.
+                          <Link
+                            href={`/staff/${entry.id}`}
+                            aria-label={copy.viewProfile(entry.fullName)}
+                            className="rounded-sm after:absolute after:inset-0 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                          >
+                            {entry.fullName}
+                          </Link>
+                        ) : (
+                          entry.fullName
+                        )}
+                      </TableCell>
+                      <TableCell className="text-muted" data-label={copy.colEmail}>{entry.email}</TableCell>
+                      <TableCell className="text-muted" data-label={copy.colRole}>{ROLE_LABEL[entry.role]}</TableCell>
+                      <TableCell data-label={copy.colStatus}>
+                        <Badge variant={badge.variant}>{badge.label}</Badge>
+                      </TableCell>
+                      <TableCell className="text-right" data-label={copy.colActions}>
+                        <RowActions
+                          label={copy.actionsFor(entry.fullName)}
+                          busy={busy}
+                          // Un miembro no tiene acciones de fila: su perfil es la
+                          // fila entera (enlace estirado) y ahí se le cambia el
+                          // nombre, el rol o el acceso. Una invitación no tiene
+                          // perfil que abrir —todavía no hay persona— y por eso
+                          // es la única que las lleva.
+                          actions={
+                            entry.kind === 'INVITATION'
+                              ? [
+                                  {
+                                    label: copy.resend,
+                                    icon: <Send />,
+                                    onSelect: () => void handleResend(entry),
+                                  },
+                                  {
+                                    label: copy.revoke,
+                                    icon: <Ban />,
+                                    destructive: true,
+                                    separatorBefore: true,
+                                    onSelect: () => setRevokingId(entry.id),
+                                  },
+                                ]
+                              : []
+                          }
+                        />
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </Card>
+        </AsyncSection>
+
+        <Pagination
+          page={page}
+          pageSize={pageSize}
           total={total}
-          noun={copy.countNoun}
-          nounPlural={copy.countNounPlural}
+          onPageChange={setPage}
+          disabled={loading}
         />
-      ) : null}
-
-      <AsyncSection
-        loading={loading}
-        error={loadError}
-        onRetry={refresh}
-        isEmpty={entries.length === 0}
-        emptyTitle={hasFilters ? copy.noMatches : copy.empty}
-        emptyDescription={hasFilters ? copy.noMatchesHint : copy.emptyHint}
-        skeleton={<TableSkeleton rows={5} />}
-      >
-        <Card className="overflow-hidden p-0">
-          <Table aria-label={copy.tableLabel}>
-            <TableHeader>
-              <TableRow className="hover:bg-transparent">
-                <TableHead>{copy.colName}</TableHead>
-                <TableHead>{copy.colEmail}</TableHead>
-                <TableHead>{copy.colRole}</TableHead>
-                <TableHead>{copy.colStatus}</TableHead>
-                <TableHead className="w-px text-right">
-                  <span className="sr-only">{copy.colActions}</span>
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {entries.map((entry) => {
-                const badge = STATUS_BADGE[entry.status];
-                const isMember = entry.kind === 'MEMBER';
-                const busy = busyId === entry.id;
-                return (
-                  <TableRow
-                    key={`${entry.kind}-${entry.id}`}
-                    className={cn(isMember && 'relative')}
-                  >
-                    <TableCell className="font-medium text-ink" data-label={copy.colName}>
-                      {isMember ? (
-                        // El enlace se estira sobre toda la fila con un
-                        // pseudo-elemento: la fila entera es clicable pero el
-                        // foco y el nombre accesible siguen viviendo en un <a>
-                        // de verdad, no en un onClick sobre el <tr>.
-                        <Link
-                          href={`/staff/${entry.id}`}
-                          aria-label={copy.viewProfile(entry.fullName)}
-                          className="rounded-sm after:absolute after:inset-0 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                        >
-                          {entry.fullName}
-                        </Link>
-                      ) : (
-                        entry.fullName
-                      )}
-                    </TableCell>
-                    <TableCell className="text-muted" data-label={copy.colEmail}>{entry.email}</TableCell>
-                    <TableCell className="text-muted" data-label={copy.colRole}>{ROLE_LABEL[entry.role]}</TableCell>
-                    <TableCell data-label={copy.colStatus}>
-                      <Badge variant={badge.variant}>{badge.label}</Badge>
-                    </TableCell>
-                    <TableCell className="text-right" data-label={copy.colActions}>
-                      <RowActions
-                        label={copy.actionsFor(entry.fullName)}
-                        busy={busy}
-                        // Un miembro no tiene acciones de fila: su perfil es la
-                        // fila entera (enlace estirado) y ahí se le cambia el
-                        // nombre, el rol o el acceso. Una invitación no tiene
-                        // perfil que abrir —todavía no hay persona— y por eso
-                        // es la única que las lleva.
-                        actions={
-                          entry.kind === 'INVITATION'
-                            ? [
-                                {
-                                  label: copy.resend,
-                                  icon: <Send />,
-                                  onSelect: () => void handleResend(entry),
-                                },
-                                {
-                                  label: copy.revoke,
-                                  icon: <Ban />,
-                                  destructive: true,
-                                  separatorBefore: true,
-                                  onSelect: () => setRevokingId(entry.id),
-                                },
-                              ]
-                            : []
-                        }
-                      />
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </Card>
-      </AsyncSection>
-
-      <Pagination
-        page={page}
-        pageSize={pageSize}
-        total={total}
-        onPageChange={setPage}
-        disabled={loading}
-      />
+      </div>
 
       <ConfirmDialog
         open={revokingId !== null}
@@ -573,6 +575,6 @@ export function StaffView({ token }: StaffViewProps) {
         confirming={busyId === revokingId}
         onConfirm={() => revokingId && handleRevoke(revokingId)}
       />
-    </div>
+    </>
   );
 }

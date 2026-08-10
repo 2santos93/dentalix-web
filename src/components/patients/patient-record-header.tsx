@@ -1,5 +1,4 @@
 'use client';
-import * as React from 'react';
 import Link from 'next/link';
 import { Building2, ChevronLeft, Pencil } from 'lucide-react';
 import type { DocType, Patient } from '@/lib/patients/patients-api';
@@ -109,7 +108,12 @@ export function PatientRecordHeader({ patient, loading, onEdit }: PatientRecordH
       <PageHeader
         title={title}
         meta={
-          <div className="flex flex-col gap-1.5">
+          // `mt-2` aquí y no en `PageHeader`: el hueco `meta` no pone margen
+          // propio, para que una marca que decide en el cliente si existe
+          // (`ClinicWideNote`) no deje un vacío cuando no se pinta. Va apretado
+          // al título porque es su misma frase —quién es y qué alcance tiene—,
+          // no un párrafo aparte.
+          <div className="mt-2 flex flex-col gap-1.5">
             {items.length > 0 ? (
               <ul aria-label={copy.identityLabel} className="flex flex-wrap items-center gap-x-2 gap-y-1">
                 {items.map((item, index) => (

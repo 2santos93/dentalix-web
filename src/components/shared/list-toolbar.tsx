@@ -29,11 +29,20 @@ interface ListToolbarProps {
   onChange: (value: string) => void;
   /** Selects y conmutadores de la vista. */
   children?: React.ReactNode;
+  /**
+   * La acción primaria de la lista ("Nuevo paciente", "Agregar insumo"): un
+   * único `Button`, alineado a la derecha y a la altura de los filtros.
+   *
+   * En móvil se estira al ancho de la barra —el contenedor apila y estira— y
+   * cierra el bloque: primero se busca, después se crea.
+   */
+  action?: React.ReactNode;
   className?: string;
 }
 
 /**
- * La barra de filtrado de una lista: buscador a la izquierda, filtros a su lado.
+ * La barra de una lista: buscador y filtros a la izquierda, la acción primaria
+ * a la derecha.
  *
  * Existe porque las cuatro listas de la app la traían copiada con diferencias
  * mínimas —anchos distintos, la lupa a veces sí y a veces no, el botón unas
@@ -41,12 +50,14 @@ interface ListToolbarProps {
  * hace que un producto se sienta cosido a mano (DESIGN.md: "la misma
  * gramática visual pantalla a pantalla es una virtud").
  *
- * **Aquí no va la acción primaria.** La tuvo, y esa fue la causa de la
- * incoherencia que venía a resolver: el sistema ofrecía dos sitios válidos para
- * el mismo botón —este y `PageHeader.actions`— y cada vista eligió uno distinto.
- * Gana `PageHeader`, que es lo que manda DESIGN.md ("title left, one primary
- * action right") y lo único que funciona igual en las fichas de detalle, que no
- * tienen barra de filtros. Este componente filtra; no crea.
+ * **La acción primaria de una lista va aquí, no en `PageHeader`** (decisión del
+ * owner, 2026-08-10). Colgada de la cabecera quedaba una fila más arriba que los
+ * controles con los que se usa, con un vacío de 1000px a su izquierda y sin nada
+ * que la alineara: la cabecera es identidad, y crear no es identidad. En esta
+ * fila el botón cae al final del grupo que ya gobierna la lista —buscar,
+ * filtrar, crear— y a la misma altura, que es como lo pinta la agenda desde el
+ * principio. En las FICHAS, que no tienen barra de filtros, la acción sigue en
+ * `PageHeader.actions`; ahí no hay dos sitios posibles.
  *
  * En móvil apila y el buscador ocupa todo el ancho; desde `sm` los filtros se
  * ponen en fila. El campo lleva un botón para vaciarlo: borrar a manotazos con
@@ -58,17 +69,27 @@ export function ListToolbar({
   value,
   onChange,
   children,
+  action,
   className,
 }: ListToolbarProps) {
   return (
     <div
       className={cn(
-        'flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between',
+        // `sm:items-start` y no `items-center`: cuando los filtros no caben en
+        // una línea y el grupo de la izquierda se parte en dos, el botón se queda
+        // arriba, a la altura de la primera fila de controles, en vez de bajar a
+        // centrarse contra un bloque de dos líneas.
+        'flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4',
         className,
       )}
     >
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <div className="relative">
+      {/* `flex-wrap` + `min-w-0`: entre 768 y 1200px el buscador y dos filtros de
+          ancho fijo ya no caben junto al botón, y sin poder partirse la fila
+          empujaba el contenido fuera de la pantalla (barra horizontal en toda la
+          página). Ahora los filtros bajan de línea y el buscador puede encogerse
+          por debajo de sus 288px si hace falta. */}
+      <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+        <div className="relative min-w-0 sm:w-72">
           <Search
             aria-hidden
             className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted"
@@ -82,7 +103,9 @@ export function ListToolbar({
             // `pr-9` reserva el hueco del botón de limpiar para que el texto no
             // pase por debajo; `[&::-webkit-search-cancel-button]:hidden` quita
             // la X nativa de WebKit, que aparecería junto a la nuestra.
-            className="pl-9 pr-9 sm:w-72 [&::-webkit-search-cancel-button]:hidden"
+            // El ancho lo pone el envoltorio (`sm:w-72`), no el campo: así el
+            // campo puede seguirlo cuando el flex lo encoge.
+            className="w-full pl-9 pr-9 [&::-webkit-search-cancel-button]:hidden"
           />
           {value ? (
             <button
@@ -97,6 +120,17 @@ export function ListToolbar({
         </div>
         {children}
       </div>
+      {/* `flex-col` sin `items-*`: en móvil el botón se estira al ancho de la
+          barra por el `stretch` por defecto, sin que cada vista tenga que
+          repetir un `w-full sm:w-auto`. Desde `sm` vuelve a su ancho natural.
+          El `mt-1` de móvil (16px en total) separa "filtrar" de "crear": con los
+          mismos 12px que hay entre los selects, un botón del mismo ancho se lee
+          como un filtro más de la pila. */}
+      {action ? (
+        <div className="mt-1 flex shrink-0 flex-col sm:mt-0 sm:flex-row sm:items-center sm:gap-2">
+          {action}
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -213,7 +213,7 @@ function PatientDetailView() {
   }
 
   return (
-    // Sin `gap`: el espacio bajo la cabecera lo pone el `mb-6` de `PageHeader`,
+    // Sin `gap`: el espacio bajo la cabecera lo pone el `mb-8` de `PageHeader`,
     // igual que en las otras ocho páginas que lo usan.
     <div className="flex flex-1 flex-col">
       <PatientRecordHeader

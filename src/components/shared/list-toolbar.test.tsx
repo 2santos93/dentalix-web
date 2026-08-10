@@ -51,6 +51,34 @@ describe('ListToolbar', () => {
     expect(onChange).toHaveBeenCalledWith('');
   });
 
+  it('la acción primaria va en la barra, después de los filtros', () => {
+    render(
+      Toolbar({
+        children: <select aria-label="Filtrar por tipo" />,
+        action: <button type="button">Agregar ítem</button>,
+      }),
+    );
+
+    const toolbar = screen.getByRole('searchbox').closest('div')?.parentElement
+      ?.parentElement as HTMLElement;
+    const [buscador, filtro, accion] = [
+      screen.getByRole('searchbox'),
+      screen.getByLabelText('Filtrar por tipo'),
+      screen.getByRole('button', { name: 'Agregar ítem' }),
+    ];
+
+    // El orden del DOM es el orden de lectura y el del tabulador: buscar,
+    // filtrar, crear. Si la acción se colara antes, el teclado llegaría a
+    // "crear" antes de haber podido mirar la lista.
+    expect(toolbar).toContainElement(accion);
+    expect(buscador.compareDocumentPosition(filtro)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+    expect(filtro.compareDocumentPosition(accion)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+  });
+
   it('pinta los filtros que le pasen', () => {
     render(
       Toolbar({

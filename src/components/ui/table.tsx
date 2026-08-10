@@ -1,3 +1,4 @@
+'use client';
 import * as React from 'react';
 import { cn } from '@/lib/utils';
 
@@ -16,10 +17,59 @@ import { cn } from '@/lib/utils';
  *
  * El contrato para quien la use: **cada `TableCell` lleva `data-label` con el
  * texto de su columna.** Sin eso, en móvil la celda aparece sin decir qué es.
+ *
+ * Entre `sm` y el escritorio hay una franja incómoda —tablet en vertical, donde
+ * el raíl ya ocupa 240px— en la que una tabla de seis columnas no cabe: se
+ * desplaza de lado dentro de su tarjeta, sin que la página crezca. Eso es
+ * correcto, pero un marco que se desplaza y no lo dice esconde sus últimas
+ * columnas: no había forma de llegar a ellas con el teclado (WCAG 2.1.1) ni señal
+ * visual de que hubiera más. Cuando de verdad no cabe, el marco pasa a ser una
+ * región enfocable y con nombre, y se le pintan sombras en los bordes con
+ * contenido por ver (`.scroll-x-shadows`).
  */
 function Table({ className, ...props }: React.HTMLAttributes<HTMLTableElement>) {
+  const viewport = React.useRef<HTMLDivElement>(null);
+  const [scrollable, setScrollable] = React.useState(false);
+
+  // Se mide en el cliente porque no depende de un breakpoint sino del ancho real
+  // del contenido: los mismos 528px sobran para la tabla de pacientes y no le
+  // bastan a la del catálogo.
+  React.useEffect(() => {
+    const el = viewport.current;
+    if (!el) return;
+
+    const measure = () => setScrollable(el.scrollWidth > el.clientWidth + 1);
+    measure();
+
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    // La tabla también cambia de ancho sin que cambie el marco: al filtrar, al
+    // paginar o al editar una fila con un valor más largo.
+    if (el.firstElementChild) observer.observe(el.firstElementChild);
+    return () => observer.disconnect();
+  }, []);
+
   return (
-    <div className="relative w-full overflow-x-auto">
+    <div
+      ref={viewport}
+      className={cn(
+        'relative w-full overflow-x-auto',
+        scrollable && 'scroll-x-shadows',
+        // El anillo va por dentro (`-outline-offset-2`): la tarjeta que envuelve
+        // la tabla recorta lo que se salga, así que un foco por fuera no se vería.
+        'focus-visible:outline-2 focus-visible:-outline-offset-2 focus-visible:outline-primary',
+      )}
+      // Rol, nombre y parada de tabulador SOLO cuando hay algo escondido: en una
+      // tabla que cabe, una región de más es ruido para un lector de pantalla y
+      // una parada de tabulador que no lleva a ninguna parte.
+      {...(scrollable
+        ? {
+            role: 'region',
+            tabIndex: 0,
+            'aria-label': props['aria-label'],
+          }
+        : {})}
+    >
       <table
         className={cn(
           'w-full caption-bottom text-sm',

@@ -81,6 +81,38 @@
     font-weight: 500;
     line-height: 1.4;
   }
+
+  /*
+   * Marco que se desplaza de lado: sombra en el borde por el que todavía queda
+   * contenido. Lo pintan cuatro degradados — dos "tapa" del color de la
+   * superficie con `background-attachment: local` (se mueven con el contenido) y
+   * dos de sombra con `scroll` (fijas al marco). Al llegar a un extremo, la tapa
+   * se pone justo encima de su sombra y la apaga; en el medio se ven las dos. Sin
+   * escuchar el scroll y sin un pixel de JS.
+   *
+   * La sombra se mezcla desde `--color-ink`, así que en claro oscurece y en
+   * oscuro aclara: un `rgb(15 23 42 / .14)` fijo sería invisible sobre el lienzo
+   * grafito del tema oscuro.
+   */
+  .scroll-x-shadows {
+    background-image:
+      linear-gradient(to right, var(--color-surface) 1.25rem, transparent 2.5rem),
+      linear-gradient(to left, var(--color-surface) 1.25rem, transparent 2.5rem),
+      linear-gradient(
+        to right,
+        color-mix(in oklab, var(--color-ink) 14%, transparent),
+        transparent 1.25rem
+      ),
+      linear-gradient(
+        to left,
+        color-mix(in oklab, var(--color-ink) 14%, transparent),
+        transparent 1.25rem
+      );
+    background-position: left center, right center, left center, right center;
+    background-repeat: no-repeat;
+    background-size: 2.5rem 100%, 2.5rem 100%, 1.25rem 100%, 1.25rem 100%;
+    background-attachment: local, local, scroll, scroll;
+  }
 }
 
 /*

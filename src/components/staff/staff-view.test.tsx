@@ -1,5 +1,4 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
-import userEvent from '@testing-library/user-event';
 import { setupUser } from '@/lib/test/user';
 import { StaffView } from './staff-view';
 import { listStaffDirectory, type StaffDirectoryEntry } from '@/lib/staff/staff-api';
@@ -274,16 +273,25 @@ describe('contrato de vista de listado', () => {
     mockedList.mockResolvedValue(page([miembro]));
   });
 
-  it('la vista es dueña de su cabecera, con la accion primaria dentro', async () => {
+  it('la accion primaria vive en la barra de filtros, no colgada del titulo', async () => {
     render(<StaffView token="tok" />);
 
     const heading = await screen.findByRole('heading', {
       name: 'Personal',
       level: 1,
     });
+
+    // La cabecera es identidad: titulo y linea de apoyo, nada mas.
     const header = heading.closest('div')?.parentElement as HTMLElement;
     expect(
-      within(header).getByRole('button', { name: /invitar/i }),
+      within(header).queryByRole('button', { name: /invitar/i }),
+    ).not.toBeInTheDocument();
+
+    // El boton esta en la misma barra que el buscador, que es con lo que se usa.
+    const toolbar = screen.getByRole('searchbox').closest('div')?.parentElement
+      ?.parentElement as HTMLElement;
+    expect(
+      within(toolbar).getByRole('button', { name: /invitar/i }),
     ).toBeInTheDocument();
   });
 

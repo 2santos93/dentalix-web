@@ -62,4 +62,41 @@ describe('Table apilada en móvil', () => {
     expect(table).toBeInTheDocument();
     expect(screen.getAllByRole('row')).toHaveLength(2);
   });
+
+  describe('cuando no cabe en su hueco', () => {
+    function mockWidths(scrollWidth: number, clientWidth: number) {
+      const scroll = jest
+        .spyOn(HTMLElement.prototype, 'scrollWidth', 'get')
+        .mockReturnValue(scrollWidth);
+      const client = jest
+        .spyOn(HTMLElement.prototype, 'clientWidth', 'get')
+        .mockReturnValue(clientWidth);
+      return () => {
+        scroll.mockRestore();
+        client.mockRestore();
+      };
+    }
+
+    it('el marco que se desplaza es una región enfocable y con nombre', () => {
+      const restore = mockWidths(900, 520);
+      try {
+        renderTable();
+
+        // Sin esto, las últimas columnas son inalcanzables sin ratón (WCAG 2.1.1).
+        const region = screen.getByRole('region', { name: 'Insumos' });
+        expect(region).toHaveAttribute('tabindex', '0');
+        expect(region).toHaveClass('scroll-x-shadows');
+      } finally {
+        restore();
+      }
+    });
+
+    it('si cabe, no añade región ni parada de tabulador', () => {
+      // jsdom no maqueta: sin simular anchos, `scrollWidth` y `clientWidth`
+      // valen 0 y la tabla se considera "cabe", que es el caso normal.
+      renderTable();
+
+      expect(screen.queryByRole('region')).not.toBeInTheDocument();
+    });
+  });
 });

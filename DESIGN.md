@@ -99,8 +99,9 @@ STORY: A clinician/receptionist scans a dense record instantly, trusts it
   (states, roles, immutability are legible), and acts with a single obvious
   primary action per view.
 FIRST VIEWPORT: App shell = quiet left rail (md+) / bottom-safe on mobile; a
-  precise page header (title + one primary action); content as record-like
-  sections and tables. Primary action top-right on desktop, thumb-reachable on mobile.
+  precise page header (title + one support line); content as record-like
+  sections and tables. The one primary action sits with the controls it works
+  beside — in the filter bar on lists, in the header on records.
 FORM: International Typographic clinical record (grounded direction A, user-pinned).
 -->
 
@@ -189,8 +190,20 @@ persistent left rail from `md` up (collapses to a compact top bar + bottom-safe 
 on mobile); content sits in a centered column, `max-width` ~72rem, with generous gutters.
 Sections and tables read like a record: a labeled header, hairline-separated rows,
 comfortable row height (44px touch target min). More space above a heading than below it.
-Page header pattern: title (Display) left, one primary action right (moves to a
-thumb-reachable position on mobile). Tables collapse to stacked labeled cards below `sm`.
+Page header pattern: the header is IDENTITY — title (Display) left, one support line
+under it capped at a prose measure (~68ch), and a scope marker when the screen's data
+is clinic-wide. Nothing else.
+
+The primary action sits with the controls it is used beside, not over the title:
+- **Lists** (patients, catalog, inventory, staff, agenda): in the filter bar, right
+  aligned, same row as search and filters. It stretches to the bar's width on mobile
+  and closes the block — find first, then create.
+- **Records and forms** (patient record, staff member, profile): in the header's action
+  slot, aligned to the title's first line, because there is no filter bar to belong to.
+
+Vertical rhythm on a list page is deliberately uneven: 32px between the header and the
+rest — the page's largest interval — then 12px inside the bar → count → table → pagination
+block, which reads as one gesture. Tables collapse to stacked labeled cards below `sm`.
 
 ## Elevation & Depth
 
@@ -293,6 +306,12 @@ that shares its fetch — those two look interchangeable and are not.
 ### Tables
 - **Header:** surface-2, label type, muted. **Rows:** hairline separators, 44px min height,
   hover = surface-2. **Numbers:** right-aligned, tabular. Collapse to stacked labeled cards below `sm`.
+- **Wider than its slot** (six columns on a tablet in portrait, where the rail already takes
+  240px): the table scrolls sideways *inside its own frame* — the page itself never scrolls
+  horizontally. A frame that scrolls must say so: when it actually overflows it becomes a
+  focusable, named region, so the last columns are reachable without a mouse, and it carries
+  edge shadows on the sides that still hide content (`.scroll-x-shadows` — pure CSS, no
+  scroll listener). A table that fits gets neither: no stray region, no dead tab stop.
 
 ### Navigation (App Shell)
 - **Left rail (md+):** surface, hairline right border; items = icon + label, 8px radius; active =

@@ -40,16 +40,25 @@ describe('PatientsView', () => {
     mockedList.mockResolvedValue(page([maria]));
   });
 
-  it('la vista es dueña de su cabecera, con la accion primaria dentro', async () => {
+  it('la accion primaria vive en la barra de filtros, no colgada del titulo', async () => {
     render(<PatientsView token="tok" />);
 
     const heading = await screen.findByRole('heading', {
       name: 'Pacientes',
       level: 1,
     });
+
+    // La cabecera es identidad: titulo y linea de apoyo, nada mas.
     const header = heading.closest('div')?.parentElement as HTMLElement;
     expect(
-      within(header).getByRole('link', { name: /nuevo paciente/i }),
+      within(header).queryByRole('link', { name: /nuevo paciente/i }),
+    ).not.toBeInTheDocument();
+
+    // El boton esta en la misma barra que el buscador, que es con lo que se usa.
+    const toolbar = screen.getByRole('searchbox').closest('div')?.parentElement
+      ?.parentElement as HTMLElement;
+    expect(
+      within(toolbar).getByRole('link', { name: /nuevo paciente/i }),
     ).toBeInTheDocument();
   });
 

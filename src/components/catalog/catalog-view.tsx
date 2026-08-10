@@ -17,7 +17,6 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { FormField } from '@/components/shared/form-field';
 import { FormModal } from '@/components/shared/form-modal';
-import { EmptyState } from '@/components/shared/empty-state';
 import {
   AsyncSection,
   TableSkeleton,
@@ -49,7 +48,7 @@ type CatalogKind = 'PROCEDURE' | 'DIAGNOSIS';
 // wiring lands.
 const copy = {
   // Titulo y descripcion viven aqui, no en `page.tsx`: la accion primaria va
-  // dentro de `PageHeader` y el estado que la abre es de la vista.
+  // dentro de la barra de la lista y el estado que la abre es de la vista.
   title: 'Catálogo',
   description:
     'Procedimientos y diagnósticos reutilizables de tu clínica. Los procedimientos habilitan los ítems de los planes de tratamiento.',
@@ -406,273 +405,279 @@ export function CatalogView({ token }: CatalogViewProps) {
   const isEditing = editingItem !== null;
 
   return (
-    <div className="flex flex-col gap-6">
+    <>
       <PageHeader
         title={copy.title}
         description={copy.description}
-        actions={
-          <Button type="button" onClick={openCreate}>
-            <Plus /> {copy.addToggle}
-          </Button>
-        }
+        meta={<ClinicWideNote>{copy.clinicWideNote}</ClinicWideNote>}
       />
 
-      <ClinicWideNote>{copy.clinicWideNote}</ClinicWideNote>
-
-      <ListToolbar
-        searchLabel={copy.searchLabel}
-        searchPlaceholder={copy.searchPlaceholder}
-        value={searchInput}
-        onChange={setSearchInput}
-      >
-        <select
-          aria-label={copy.filterKindLabel}
-          value={kindFilter}
-          onChange={(e) => {
-            setKindFilter(e.target.value as KindFilter);
-            setPage(1);
-          }}
-          className={cn(toolbarFieldClass, 'sm:w-48')}
-        >
-          <option value="ALL">{copy.filterAll}</option>
-          {KIND_OPTIONS.map((opt) => (
-            <option key={opt.value} value={opt.value}>
-              {opt.label}
-            </option>
-          ))}
-        </select>
-        <select
-          aria-label={copy.filterStatusLabel}
-          value={statusFilter}
-          onChange={(e) => {
-            setStatusFilter(e.target.value as StatusFilter);
-            setPage(1);
-          }}
-          className={cn(toolbarFieldClass, 'sm:w-48')}
-        >
-          <option value="ALL">{copy.filterAllStatuses}</option>
-          <option value="ACTIVE">{copy.filterActive}</option>
-          <option value="INACTIVE">{copy.filterInactive}</option>
-        </select>
-      </ListToolbar>
-
-      <FormModal
-        open={showForm}
-        onOpenChange={handleFormOpenChange}
-        title={isEditing ? copy.editTitle : copy.createTitle}
-        description={copy.formDescription}
-        onSubmit={handleSubmit}
-        submitLabel={isEditing ? copy.editSubmit : copy.submit}
-        submitting={saving}
-        error={formError}
-        size="lg"
-      >
-        <div className="grid gap-4 sm:grid-cols-2">
-          <FormField htmlFor="catalog-name" label={copy.nameLabel}>
-            <Input
-              id="catalog-name"
-              type="text"
-              required
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-            />
-          </FormField>
-          <FormField htmlFor="catalog-kind" label={copy.kindLabel}>
-            <select
-              id="catalog-kind"
-              required
-              value={kind}
-              onChange={(e) => setKind(e.target.value as CatalogKind)}
-              className={toolbarFieldClass}
-            >
-              {KIND_OPTIONS.map((opt) => (
-                <option key={opt.value} value={opt.value}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-          </FormField>
-        </div>
-
-        <div className="grid gap-4 sm:grid-cols-2">
-          <FormField
-            htmlFor="catalog-code"
-            label={copy.codeLabel}
-            hint={copy.codeHint}
-          >
-            <Input
-              id="catalog-code"
-              type="text"
-              required
-              value={code}
-              onChange={(e) => setCode(e.target.value)}
-            />
-          </FormField>
-          <FormField
-            htmlFor="catalog-price"
-            label={copy.priceLabel}
-            hint={copy.priceHint}
-          >
-            <Input
-              id="catalog-price"
-              type="number"
-              min={0}
-              step="0.01"
-              value={price}
-              onChange={(e) => setPrice(e.target.value)}
-            />
-          </FormField>
-        </div>
-
-        <div className="grid gap-4 sm:grid-cols-2">
-          <FormField
-            htmlFor="catalog-category"
-            label={copy.categoryLabel}
-            hint={copy.categoryHint}
-          >
-            <Input
-              id="catalog-category"
-              type="text"
-              value={category}
-              onChange={(e) => setCategory(e.target.value)}
-            />
-          </FormField>
-          <FormField
-            htmlFor="catalog-color"
-            label={copy.colorLabel}
-            hint={copy.colorHint}
-          >
-            <Input
-              id="catalog-color"
-              type="color"
-              required
-              value={color}
-              onChange={(e) => setColor(e.target.value)}
-              className="h-10 w-16 cursor-pointer p-1"
-            />
-          </FormField>
-        </div>
-      </FormModal>
-
-      {!loading && !loadError && hasAny ? (
-        <ResultCount
-          total={total}
-          noun={copy.countNoun}
-          nounPlural={copy.countNounPlural}
-        />
-      ) : null}
-
-      <AsyncSection
-        loading={loading}
-        error={loadError}
-        onRetry={() => setReloadKey((k) => k + 1)}
-        retryLabel={copy.retry}
-        // "Todavía no hay catálogo" y "la búsqueda no encuentra nada" son
-        // situaciones distintas y solo la segunda tiene remedio desde aquí, así
-        // que solo esa ofrece limpiar los filtros.
-        isEmpty={items.length === 0}
-        emptyTitle={isFiltering ? copy.noMatches : copy.empty}
-        emptyDescription={isFiltering ? copy.noMatchesHint : copy.emptyHint}
-        emptyAction={
-          isFiltering ? (
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              onClick={clearFilters}
-            >
-              {copy.clearFilters}
+      {/* Un solo bloque apretado (12px) para filtrar → contar → leer: los tres
+          pasos son el mismo gesto. La separación grande de la página es la que
+          hay sobre él, contra la cabecera. El `FormModal` vive dentro sin
+          alterar el ritmo: cerrado no pinta nada y abierto se va a un portal, así
+          que no ocupa hueco en la columna. */}
+      <div className="flex flex-col gap-3">
+        <ListToolbar
+          searchLabel={copy.searchLabel}
+          searchPlaceholder={copy.searchPlaceholder}
+          value={searchInput}
+          onChange={setSearchInput}
+          action={
+            <Button type="button" onClick={openCreate}>
+              <Plus /> {copy.addToggle}
             </Button>
-          ) : undefined
-        }
-        skeleton={<TableSkeleton rows={5} />}
-      >
-        <Card className="overflow-hidden p-0">
-          <Table aria-label={copy.tableLabel}>
-            <TableHeader>
-              <TableRow className="hover:bg-transparent">
-                <TableHead>{copy.colName}</TableHead>
-                <TableHead>{copy.colKind}</TableHead>
-                <TableHead>{copy.colCode}</TableHead>
-                <TableHead className="text-right">{copy.colPrice}</TableHead>
-                <TableHead>{copy.colStatus}</TableHead>
-                <TableHead className="w-px text-right">
-                  <span className="sr-only">{copy.colActions}</span>
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {items.map((item) => (
-                <TableRow key={item.id}>
-                  <TableCell data-label={copy.colName}>
-                    <span className="flex items-center gap-2.5 font-medium text-ink">
-                      <span
-                        aria-hidden
-                        className="size-2.5 shrink-0 rounded-full ring-1 ring-inset ring-ink/10"
-                        style={{ backgroundColor: item.color }}
-                      />
-                      <span className="flex flex-col">
-                        {item.labelEs}
-                        {item.category ? (
-                          <span className="text-xs font-normal text-muted">
-                            {item.category}
-                          </span>
-                        ) : null}
-                      </span>
-                    </span>
-                  </TableCell>
-                  <TableCell data-label={copy.colKind}>
-                    <Badge variant="muted">{KIND_LABELS[item.kind]}</Badge>
-                  </TableCell>
-                  <TableCell className="text-muted tabular-nums" data-label={copy.colCode}>
-                    {item.code}
-                  </TableCell>
-                  <TableCell className="text-right tabular-nums" data-label={copy.colPrice}>
-                    {formatPrice(item.defaultPrice)}
-                  </TableCell>
-                  <TableCell data-label={copy.colStatus}>
-                    <Badge variant={item.active ? 'success' : 'muted'}>
-                      {item.active ? copy.active : copy.inactive}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-right" data-label={copy.colActions}>
-                    <RowActions
-                      label={copy.actionsFor(item.labelEs)}
-                      busy={togglingId === item.id}
-                      actions={[
-                        {
-                          label: copy.editAction,
-                          icon: <Pencil />,
-                          onSelect: () => openEdit(item),
-                        },
-                        {
-                          // No hay DELETE en el catálogo a propósito: un ítem
-                          // referenciado por un odontograma o un plan no puede
-                          // desaparecer sin romper esa historia. Desactivar lo
-                          // saca de los selectores y conserva el registro; por
-                          // eso no va marcado como destructivo.
-                          label: item.active ? copy.deactivate : copy.activate,
-                          icon: item.active ? <EyeOff /> : <Eye />,
-                          separatorBefore: true,
-                          onSelect: () => void handleToggleActive(item),
-                        },
-                      ]}
-                    />
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </Card>
-      </AsyncSection>
+          }
+        >
+          <select
+            aria-label={copy.filterKindLabel}
+            value={kindFilter}
+            onChange={(e) => {
+              setKindFilter(e.target.value as KindFilter);
+              setPage(1);
+            }}
+            className={cn(toolbarFieldClass, 'sm:w-48')}
+          >
+            <option value="ALL">{copy.filterAll}</option>
+            {KIND_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value}>
+                {opt.label}
+              </option>
+            ))}
+          </select>
+          <select
+            aria-label={copy.filterStatusLabel}
+            value={statusFilter}
+            onChange={(e) => {
+              setStatusFilter(e.target.value as StatusFilter);
+              setPage(1);
+            }}
+            className={cn(toolbarFieldClass, 'sm:w-48')}
+          >
+            <option value="ALL">{copy.filterAllStatuses}</option>
+            <option value="ACTIVE">{copy.filterActive}</option>
+            <option value="INACTIVE">{copy.filterInactive}</option>
+          </select>
+        </ListToolbar>
 
-      <Pagination
-        page={page}
-        pageSize={pageSize}
-        total={total}
-        onPageChange={setPage}
-        disabled={loading}
-      />
-    </div>
+        <FormModal
+          open={showForm}
+          onOpenChange={handleFormOpenChange}
+          title={isEditing ? copy.editTitle : copy.createTitle}
+          description={copy.formDescription}
+          onSubmit={handleSubmit}
+          submitLabel={isEditing ? copy.editSubmit : copy.submit}
+          submitting={saving}
+          error={formError}
+          size="lg"
+        >
+          <div className="grid gap-4 sm:grid-cols-2">
+            <FormField htmlFor="catalog-name" label={copy.nameLabel}>
+              <Input
+                id="catalog-name"
+                type="text"
+                required
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+              />
+            </FormField>
+            <FormField htmlFor="catalog-kind" label={copy.kindLabel}>
+              <select
+                id="catalog-kind"
+                required
+                value={kind}
+                onChange={(e) => setKind(e.target.value as CatalogKind)}
+                className={toolbarFieldClass}
+              >
+                {KIND_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+            </FormField>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <FormField
+              htmlFor="catalog-code"
+              label={copy.codeLabel}
+              hint={copy.codeHint}
+            >
+              <Input
+                id="catalog-code"
+                type="text"
+                required
+                value={code}
+                onChange={(e) => setCode(e.target.value)}
+              />
+            </FormField>
+            <FormField
+              htmlFor="catalog-price"
+              label={copy.priceLabel}
+              hint={copy.priceHint}
+            >
+              <Input
+                id="catalog-price"
+                type="number"
+                min={0}
+                step="0.01"
+                value={price}
+                onChange={(e) => setPrice(e.target.value)}
+              />
+            </FormField>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <FormField
+              htmlFor="catalog-category"
+              label={copy.categoryLabel}
+              hint={copy.categoryHint}
+            >
+              <Input
+                id="catalog-category"
+                type="text"
+                value={category}
+                onChange={(e) => setCategory(e.target.value)}
+              />
+            </FormField>
+            <FormField
+              htmlFor="catalog-color"
+              label={copy.colorLabel}
+              hint={copy.colorHint}
+            >
+              <Input
+                id="catalog-color"
+                type="color"
+                required
+                value={color}
+                onChange={(e) => setColor(e.target.value)}
+                className="h-10 w-16 cursor-pointer p-1"
+              />
+            </FormField>
+          </div>
+        </FormModal>
+
+        {!loading && !loadError && hasAny ? (
+          <ResultCount
+            total={total}
+            noun={copy.countNoun}
+            nounPlural={copy.countNounPlural}
+          />
+        ) : null}
+
+        <AsyncSection
+          loading={loading}
+          error={loadError}
+          onRetry={() => setReloadKey((k) => k + 1)}
+          retryLabel={copy.retry}
+          // "Todavía no hay catálogo" y "la búsqueda no encuentra nada" son
+          // situaciones distintas y solo la segunda tiene remedio desde aquí, así
+          // que solo esa ofrece limpiar los filtros.
+          isEmpty={items.length === 0}
+          emptyTitle={isFiltering ? copy.noMatches : copy.empty}
+          emptyDescription={isFiltering ? copy.noMatchesHint : copy.emptyHint}
+          emptyAction={
+            isFiltering ? (
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={clearFilters}
+              >
+                {copy.clearFilters}
+              </Button>
+            ) : undefined
+          }
+          skeleton={<TableSkeleton rows={5} />}
+        >
+          <Card className="overflow-hidden p-0">
+            <Table aria-label={copy.tableLabel}>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead>{copy.colName}</TableHead>
+                  <TableHead>{copy.colKind}</TableHead>
+                  <TableHead>{copy.colCode}</TableHead>
+                  <TableHead className="text-right">{copy.colPrice}</TableHead>
+                  <TableHead>{copy.colStatus}</TableHead>
+                  <TableHead className="w-px text-right">
+                    <span className="sr-only">{copy.colActions}</span>
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {items.map((item) => (
+                  <TableRow key={item.id}>
+                    <TableCell data-label={copy.colName}>
+                      <span className="flex items-center gap-2.5 font-medium text-ink">
+                        <span
+                          aria-hidden
+                          className="size-2.5 shrink-0 rounded-full ring-1 ring-inset ring-ink/10"
+                          style={{ backgroundColor: item.color }}
+                        />
+                        <span className="flex flex-col">
+                          {item.labelEs}
+                          {item.category ? (
+                            <span className="text-xs font-normal text-muted">
+                              {item.category}
+                            </span>
+                          ) : null}
+                        </span>
+                      </span>
+                    </TableCell>
+                    <TableCell data-label={copy.colKind}>
+                      <Badge variant="muted">{KIND_LABELS[item.kind]}</Badge>
+                    </TableCell>
+                    <TableCell className="text-muted tabular-nums" data-label={copy.colCode}>
+                      {item.code}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums" data-label={copy.colPrice}>
+                      {formatPrice(item.defaultPrice)}
+                    </TableCell>
+                    <TableCell data-label={copy.colStatus}>
+                      <Badge variant={item.active ? 'success' : 'muted'}>
+                        {item.active ? copy.active : copy.inactive}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right" data-label={copy.colActions}>
+                      <RowActions
+                        label={copy.actionsFor(item.labelEs)}
+                        busy={togglingId === item.id}
+                        actions={[
+                          {
+                            label: copy.editAction,
+                            icon: <Pencil />,
+                            onSelect: () => openEdit(item),
+                          },
+                          {
+                            // No hay DELETE en el catálogo a propósito: un ítem
+                            // referenciado por un odontograma o un plan no puede
+                            // desaparecer sin romper esa historia. Desactivar lo
+                            // saca de los selectores y conserva el registro; por
+                            // eso no va marcado como destructivo.
+                            label: item.active ? copy.deactivate : copy.activate,
+                            icon: item.active ? <EyeOff /> : <Eye />,
+                            separatorBefore: true,
+                            onSelect: () => void handleToggleActive(item),
+                          },
+                        ]}
+                      />
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </Card>
+        </AsyncSection>
+
+        <Pagination
+          page={page}
+          pageSize={pageSize}
+          total={total}
+          onPageChange={setPage}
+          disabled={loading}
+        />
+      </div>
+    </>
   );
 }

@@ -36,9 +36,9 @@ interface PatientsViewProps {
 }
 
 /**
- * Listado de pacientes: cabecera con la acción primaria, buscador, recuento,
- * tabla y paginación — el mismo contrato que `InventoryView`, `CatalogView` y
- * `StaffView`.
+ * Listado de pacientes: cabecera de identidad, barra con buscador y acción
+ * primaria, recuento, tabla y paginación — el mismo contrato que
+ * `InventoryView`, `CatalogView` y `StaffView`.
  *
  * Vive aquí y no en `page.tsx` por simetría con esas tres: la página resuelve la
  * sesión y la vista implementa el contrato. Antes esta pantalla era la excepción
@@ -107,61 +107,65 @@ export function PatientsView({ token }: PatientsViewProps) {
   }, [token, retryCount, page, search]);
 
   return (
-    <div className="flex flex-col gap-6">
+    <>
       <PageHeader
         title={copy.title}
         description={copy.description}
-        actions={
-          <Button asChild>
-            <Link href="/patients/new">
-              <Plus /> {copy.newPatient}
-            </Link>
-          </Button>
-        }
+        meta={<ClinicWideNote>{copy.clinicWideNote}</ClinicWideNote>}
       />
 
-      <ClinicWideNote>{copy.clinicWideNote}</ClinicWideNote>
-
-      <ListToolbar
-        searchLabel={copy.searchLabel}
-        searchPlaceholder={copy.searchPlaceholder}
-        value={searchInput}
-        onChange={setSearchInput}
-      />
-
-      {!loading && !error ? (
-        <ResultCount
-          total={total}
-          noun={copy.countNoun}
-          nounPlural={copy.countNounPlural}
+      {/* Un solo bloque apretado (12px) para buscar → contar → leer: los tres
+          pasos son el mismo gesto. La separación grande de la página es la que
+          hay sobre él, contra la cabecera. */}
+      <div className="flex flex-col gap-3">
+        <ListToolbar
+          searchLabel={copy.searchLabel}
+          searchPlaceholder={copy.searchPlaceholder}
+          value={searchInput}
+          onChange={setSearchInput}
+          action={
+            <Button asChild>
+              <Link href="/patients/new">
+                <Plus /> {copy.newPatient}
+              </Link>
+            </Button>
+          }
         />
-      ) : null}
 
-      {error ? (
-        <SectionError
-          description={error}
-          onRetry={() => {
-            setLoading(true);
-            setError(null);
-            setRetryCount((c) => c + 1);
-          }}
-        />
-      ) : (
-        <>
-          <PatientsTable
-            patients={patients}
-            loading={loading}
-            filtered={search !== ''}
-          />
-          <Pagination
-            page={page}
-            pageSize={pageSize}
+        {!loading && !error ? (
+          <ResultCount
             total={total}
-            onPageChange={setPage}
-            disabled={loading}
+            noun={copy.countNoun}
+            nounPlural={copy.countNounPlural}
           />
-        </>
-      )}
-    </div>
+        ) : null}
+
+        {error ? (
+          <SectionError
+            description={error}
+            onRetry={() => {
+              setLoading(true);
+              setError(null);
+              setRetryCount((c) => c + 1);
+            }}
+          />
+        ) : (
+          <>
+            <PatientsTable
+              patients={patients}
+              loading={loading}
+              filtered={search !== ''}
+            />
+            <Pagination
+              page={page}
+              pageSize={pageSize}
+              total={total}
+              onPageChange={setPage}
+              disabled={loading}
+            />
+          </>
+        )}
+      </div>
+    </>
   );
 }

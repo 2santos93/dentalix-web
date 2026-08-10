@@ -14,3 +14,16 @@ if (!Element.prototype.setPointerCapture) {
 if (!Element.prototype.releasePointerCapture) {
   Element.prototype.releasePointerCapture = () => {};
 }
+
+// jsdom no implementa ResizeObserver. `Table` lo usa para saber si su marco se
+// desplaza de lado (y solo entonces hacerlo enfocable), así que sin este stub
+// cualquier test que pinte una tabla revienta con `ResizeObserver is not
+// defined`. Otro stub de API del DOM que falta, no un parche de tiempos: en
+// jsdom nada cambia de tamaño, y la medición inicial del efecto ya corre.
+if (typeof globalThis.ResizeObserver === 'undefined') {
+  globalThis.ResizeObserver = class {
+    observe() {}
+    unobserve() {}
+    disconnect() {}
+  } as unknown as typeof ResizeObserver;
+}

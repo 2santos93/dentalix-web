@@ -57,7 +57,8 @@ const SEARCH_DEBOUNCE_MS = 300;
 // lands.
 const copy = {
   // Título y descripción viven en la vista, no en `page.tsx`: la acción primaria
-  // va dentro de `PageHeader` y el estado que la abre (`openCreate`) es de aquí.
+  // va dentro de la barra de la lista y el estado que la abre (`openCreate`) es
+  // de aquí.
   title: 'Inventario',
   description:
     'Controla los insumos de tu clínica: stock actual, mínimos y movimientos.',
@@ -534,16 +535,8 @@ export function InventoryView({ token }: InventoryViewProps) {
   }
 
   return (
-    <div className="flex flex-col gap-6">
-      <PageHeader
-        title={copy.title}
-        description={copy.description}
-        actions={
-          <Button type="button" onClick={openCreate}>
-            <Plus /> {copy.addToggle}
-          </Button>
-        }
-      />
+    <>
+      <PageHeader title={copy.title} description={copy.description} />
 
       <FormModal
         open={showForm}
@@ -611,125 +604,142 @@ export function InventoryView({ token }: InventoryViewProps) {
         </FormField>
       </FormModal>
 
-      <ListToolbar
-        searchLabel={copy.searchLabel}
-        searchPlaceholder={copy.searchPlaceholder}
-        value={query}
-        onChange={setQuery}
-      >
-        <label className="inline-flex items-center gap-2 text-sm text-ink">
-          <input
-            type="checkbox"
-            checked={lowStockOnly}
-            onChange={(e) => setLowStockOnly(e.target.checked)}
+      {/* Un solo bloque apretado (12px) para filtrar → contar → leer: los tres
+          pasos son el mismo gesto. La separación grande de la página es la que
+          hay sobre él, contra la cabecera. */}
+      <div className="flex flex-col gap-3">
+        <ListToolbar
+          searchLabel={copy.searchLabel}
+          searchPlaceholder={copy.searchPlaceholder}
+          value={query}
+          onChange={setQuery}
+          action={
+            <Button type="button" onClick={openCreate}>
+              <Plus /> {copy.addToggle}
+            </Button>
+          }
+        >
+          {/* El conmutador se viste como los demás controles de la barra —misma
+              altura de 40px, mismo filete, mismo radio— porque estaba al lado de
+              ellos siendo una casilla del sistema suelta: desalineada con la fila
+              y con un blanco de 16px que en una tablet es un tiro al aire. La
+              casilla sigue siendo nativa (accesible y conocida), solo teñida con
+              el acento del tenant, y ahora el blanco es la etiqueta entera. */}
+          <label className="inline-flex h-10 shrink-0 cursor-pointer items-center gap-2.5 rounded-lg border border-border bg-surface px-3 text-sm text-ink transition-colors hover:bg-bg">
+            <input
+              type="checkbox"
+              checked={lowStockOnly}
+              onChange={(e) => setLowStockOnly(e.target.checked)}
+              className="size-4 shrink-0 accent-primary"
+            />
+            {copy.lowStockOnlyLabel}
+          </label>
+        </ListToolbar>
+
+        {!loading && !loadError ? (
+          <ResultCount
+            total={total}
+            noun={copy.countNoun}
+            nounPlural={copy.countNounPlural}
           />
-          {copy.lowStockOnlyLabel}
-        </label>
-      </ListToolbar>
+        ) : null}
 
-      {!loading && !loadError ? (
-        <ResultCount
+        <AsyncSection
+          loading={loading}
+          error={loadError}
+          onRetry={() => setReloadKey((k) => k + 1)}
+          isEmpty={items.length === 0}
+          emptyTitle={hasActiveFilters ? copy.emptyFiltered : copy.empty}
+          emptyDescription={hasActiveFilters ? copy.emptyFilteredHint : copy.emptyHint}
+          skeleton={<TableSkeleton rows={4} />}
+        >
+          <Card className="overflow-hidden p-0">
+            <Table aria-label={copy.tableLabel}>
+              <TableHeader>
+                <TableRow className="hover:bg-transparent">
+                  <TableHead>{copy.colItem}</TableHead>
+                  <TableHead>{copy.colUnit}</TableHead>
+                  <TableHead>{copy.colStock}</TableHead>
+                  <TableHead>{copy.colMinStock}</TableHead>
+                  <TableHead>{copy.colStatus}</TableHead>
+                  <TableHead className="w-px text-right">
+                    <span className="sr-only">{copy.colActions}</span>
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {items.map((item) => {
+                  const updating = updatingId === item.id;
+                  return (
+                    <TableRow key={item.id}>
+                      <TableCell data-label={copy.colItem}>
+                        <div className="flex flex-col">
+                          <span className="font-medium text-ink">{item.name}</span>
+                          {item.sku ? (
+                            <span className="text-xs text-muted">{item.sku}</span>
+                          ) : null}
+                        </div>
+                      </TableCell>
+                      <TableCell data-label={copy.colUnit}>{item.unit}</TableCell>
+                      <TableCell className="tabular-nums" data-label={copy.colStock}>
+                        {item.stock === undefined ? copy.unknownValue : item.stock}
+                      </TableCell>
+                      <TableCell className="tabular-nums" data-label={copy.colMinStock}>{item.minStock}</TableCell>
+                      <TableCell data-label={copy.colStatus}>
+                        {item.lowStock === undefined ? (
+                          <Badge variant="muted">{copy.unknownValue}</Badge>
+                        ) : item.lowStock ? (
+                          <Badge variant="danger">{copy.lowStock}</Badge>
+                        ) : (
+                          <Badge variant="success">{copy.ok}</Badge>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-right" data-label={copy.colActions}>
+                        <RowActions
+                          label={copy.actionsFor(item.name)}
+                          busy={updating}
+                          actions={[
+                            {
+                              label: copy.movementButtonLabel,
+                              icon: <ArrowLeftRight />,
+                              onSelect: () => openMovement(item),
+                            },
+                            {
+                              label: copy.historyButtonLabel,
+                              icon: <History />,
+                              onSelect: () => openHistory(item),
+                            },
+                            {
+                              label: copy.editButtonLabel,
+                              icon: <Pencil />,
+                              onSelect: () => openEdit(item),
+                            },
+                            {
+                              label: copy.deleteButtonLabel,
+                              icon: <Trash2 />,
+                              destructive: true,
+                              separatorBefore: true,
+                              onSelect: () => openDelete(item),
+                            },
+                          ]}
+                        />
+                      </TableCell>
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          </Card>
+        </AsyncSection>
+
+        <Pagination
+          page={page}
+          pageSize={pageSize}
           total={total}
-          noun={copy.countNoun}
-          nounPlural={copy.countNounPlural}
+          onPageChange={setPage}
+          disabled={loading}
         />
-      ) : null}
-
-      <AsyncSection
-        loading={loading}
-        error={loadError}
-        onRetry={() => setReloadKey((k) => k + 1)}
-        isEmpty={items.length === 0}
-        emptyTitle={hasActiveFilters ? copy.emptyFiltered : copy.empty}
-        emptyDescription={hasActiveFilters ? copy.emptyFilteredHint : copy.emptyHint}
-        skeleton={<TableSkeleton rows={4} />}
-      >
-        <Card className="overflow-hidden p-0">
-          <Table aria-label={copy.tableLabel}>
-            <TableHeader>
-              <TableRow className="hover:bg-transparent">
-                <TableHead>{copy.colItem}</TableHead>
-                <TableHead>{copy.colUnit}</TableHead>
-                <TableHead>{copy.colStock}</TableHead>
-                <TableHead>{copy.colMinStock}</TableHead>
-                <TableHead>{copy.colStatus}</TableHead>
-                <TableHead className="w-px text-right">
-                  <span className="sr-only">{copy.colActions}</span>
-                </TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {items.map((item) => {
-                const updating = updatingId === item.id;
-                return (
-                  <TableRow key={item.id}>
-                    <TableCell data-label={copy.colItem}>
-                      <div className="flex flex-col">
-                        <span className="font-medium text-ink">{item.name}</span>
-                        {item.sku ? (
-                          <span className="text-xs text-muted">{item.sku}</span>
-                        ) : null}
-                      </div>
-                    </TableCell>
-                    <TableCell data-label={copy.colUnit}>{item.unit}</TableCell>
-                    <TableCell className="tabular-nums" data-label={copy.colStock}>
-                      {item.stock === undefined ? copy.unknownValue : item.stock}
-                    </TableCell>
-                    <TableCell className="tabular-nums" data-label={copy.colMinStock}>{item.minStock}</TableCell>
-                    <TableCell data-label={copy.colStatus}>
-                      {item.lowStock === undefined ? (
-                        <Badge variant="muted">{copy.unknownValue}</Badge>
-                      ) : item.lowStock ? (
-                        <Badge variant="danger">{copy.lowStock}</Badge>
-                      ) : (
-                        <Badge variant="success">{copy.ok}</Badge>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right" data-label={copy.colActions}>
-                      <RowActions
-                        label={copy.actionsFor(item.name)}
-                        busy={updating}
-                        actions={[
-                          {
-                            label: copy.movementButtonLabel,
-                            icon: <ArrowLeftRight />,
-                            onSelect: () => openMovement(item),
-                          },
-                          {
-                            label: copy.historyButtonLabel,
-                            icon: <History />,
-                            onSelect: () => openHistory(item),
-                          },
-                          {
-                            label: copy.editButtonLabel,
-                            icon: <Pencil />,
-                            onSelect: () => openEdit(item),
-                          },
-                          {
-                            label: copy.deleteButtonLabel,
-                            icon: <Trash2 />,
-                            destructive: true,
-                            separatorBefore: true,
-                            onSelect: () => openDelete(item),
-                          },
-                        ]}
-                      />
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </Card>
-      </AsyncSection>
-
-      <Pagination
-        page={page}
-        pageSize={pageSize}
-        total={total}
-        onPageChange={setPage}
-        disabled={loading}
-      />
+      </div>
 
       <FormModal
         open={movementItem !== null}
@@ -832,6 +842,6 @@ export function InventoryView({ token }: InventoryViewProps) {
         error={deleteError}
         onConfirm={handleDelete}
       />
-    </div>
+    </>
   );
 }
