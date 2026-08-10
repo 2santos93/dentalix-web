@@ -51,7 +51,7 @@ describe('ListToolbar', () => {
     expect(onChange).toHaveBeenCalledWith('');
   });
 
-  it('pinta los filtros y la acción primaria que le pasen', () => {
+  it('pinta los filtros que le pasen', () => {
     render(
       Toolbar({
         children: (
@@ -59,12 +59,10 @@ describe('ListToolbar', () => {
             <option>Todos</option>
           </select>
         ),
-        action: <button type="button">Agregar</button>,
       }),
     );
 
     expect(screen.getByLabelText('Filtrar por tipo')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Agregar' })).toBeInTheDocument();
   });
 });
 

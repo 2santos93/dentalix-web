@@ -29,14 +29,11 @@ interface ListToolbarProps {
   onChange: (value: string) => void;
   /** Selects y conmutadores de la vista. */
   children?: React.ReactNode;
-  /** Acción primaria de la pantalla — se queda a la derecha en escritorio. */
-  action?: React.ReactNode;
   className?: string;
 }
 
 /**
- * La cabecera de una lista: buscador a la izquierda, filtros a su lado, acción
- * primaria a la derecha.
+ * La barra de filtrado de una lista: buscador a la izquierda, filtros a su lado.
  *
  * Existe porque las cuatro listas de la app la traían copiada con diferencias
  * mínimas —anchos distintos, la lupa a veces sí y a veces no, el botón unas
@@ -44,10 +41,16 @@ interface ListToolbarProps {
  * hace que un producto se sienta cosido a mano (DESIGN.md: "la misma
  * gramática visual pantalla a pantalla es una virtud").
  *
+ * **Aquí no va la acción primaria.** La tuvo, y esa fue la causa de la
+ * incoherencia que venía a resolver: el sistema ofrecía dos sitios válidos para
+ * el mismo botón —este y `PageHeader.actions`— y cada vista eligió uno distinto.
+ * Gana `PageHeader`, que es lo que manda DESIGN.md ("title left, one primary
+ * action right") y lo único que funciona igual en las fichas de detalle, que no
+ * tienen barra de filtros. Este componente filtra; no crea.
+ *
  * En móvil apila y el buscador ocupa todo el ancho; desde `sm` los filtros se
- * ponen en fila y la acción primaria se separa al extremo. El campo lleva un
- * botón para vaciarlo: borrar a manotazos con la tecla de retroceso una
- * búsqueda larga es una fricción tonta y gratuita.
+ * ponen en fila. El campo lleva un botón para vaciarlo: borrar a manotazos con
+ * la tecla de retroceso una búsqueda larga es una fricción tonta y gratuita.
  */
 export function ListToolbar({
   searchLabel,
@@ -55,7 +58,6 @@ export function ListToolbar({
   value,
   onChange,
   children,
-  action,
   className,
 }: ListToolbarProps) {
   return (
@@ -95,7 +97,6 @@ export function ListToolbar({
         </div>
         {children}
       </div>
-      {action}
     </div>
   );
 }
