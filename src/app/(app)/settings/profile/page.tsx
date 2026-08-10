@@ -2,7 +2,7 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/lib/auth/auth-store';
-import { PageHeader } from '@/components/molecules/page-header';
+import { PageHeader } from '@/components/shared/page-header';
 import { ProfileView } from '@/components/profile/profile-view';
 import { ChangePasswordForm } from '@/components/profile/change-password-form';
 import { Separator } from '@/components/ui/separator';

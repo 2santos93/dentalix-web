@@ -7,7 +7,7 @@ import { apiFetch, ApiError } from '@/lib/api/client';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { FormField } from '@/components/molecules/form-field';
+import { FormField } from '@/components/shared/form-field';
 import { InlineError } from '@/components/errors/inline-error';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy

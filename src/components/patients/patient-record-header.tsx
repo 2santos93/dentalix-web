@@ -5,7 +5,7 @@ import { Building2, ChevronLeft, Pencil } from 'lucide-react';
 import type { DocType, Patient } from '@/lib/patients/patients-api';
 import { ageFrom } from '@/lib/patients/age';
 import { Button } from '@/components/ui/button';
-import { PageHeader } from '@/components/molecules/page-header';
+import { PageHeader } from '@/components/shared/page-header';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands. Cada entrada es una cadena COMPLETA: las que

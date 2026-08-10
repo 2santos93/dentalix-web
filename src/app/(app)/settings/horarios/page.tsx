@@ -2,7 +2,7 @@
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/lib/auth/auth-store';
-import { PageHeader } from '@/components/molecules/page-header';
+import { PageHeader } from '@/components/shared/page-header';
 import { BusinessHoursForm } from '@/components/locations/business-hours-form';
 
 const copy = {

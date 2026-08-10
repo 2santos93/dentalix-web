@@ -28,7 +28,7 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog';
-import { FormField } from '@/components/molecules/form-field';
+import { FormField } from '@/components/shared/form-field';
 import { FieldError } from '@/components/errors/field-error';
 import { SectionError } from '@/components/errors/section-error';
 import { notifyError } from '@/components/errors/notify';

@@ -7,8 +7,8 @@ import {
   type Patient,
   type UpdatePatientInput,
 } from '@/lib/patients/patients-api';
-import { FormModal } from '@/components/molecules/form-modal';
-import { FormField } from '@/components/molecules/form-field';
+import { FormModal } from '@/components/shared/form-modal';
+import { FormField } from '@/components/shared/form-field';
 import { Input } from '@/components/ui/input';
 
 // Copy as constants (i18n-ready) — es first.

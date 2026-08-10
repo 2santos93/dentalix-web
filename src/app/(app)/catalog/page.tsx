@@ -3,7 +3,7 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { CatalogView } from '@/components/catalog/catalog-view';
-import { PageHeader } from '@/components/molecules/page-header';
+import { PageHeader } from '@/components/shared/page-header';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the app's
 // copy convention until next-intl wiring lands.

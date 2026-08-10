@@ -1,7 +1,7 @@
 'use client';
 import * as React from 'react';
 import { Input } from '@/components/ui/input';
-import { FormField } from '@/components/molecules/form-field';
+import { FormField } from '@/components/shared/form-field';
 import { fieldClass } from '@/lib/ui/field-class';
 import { cn } from '@/lib/utils';
 import {

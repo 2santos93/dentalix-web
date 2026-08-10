@@ -12,9 +12,9 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Badge, type BadgeProps } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
-import { FormField } from '@/components/molecules/form-field';
-import { EmptyState } from '@/components/molecules/empty-state';
-import { CurrencySelect } from '@/components/molecules/currency-select';
+import { FormField } from '@/components/shared/form-field';
+import { EmptyState } from '@/components/shared/empty-state';
+import { CurrencySelect } from '@/components/shared/currency-select';
 import { SectionError } from '@/components/errors/section-error';
 import { InlineError } from '@/components/errors/inline-error';
 

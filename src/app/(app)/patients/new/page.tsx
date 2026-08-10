@@ -5,7 +5,7 @@ import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { PatientCreateWizard } from '@/components/patients/patient-create-wizard';
-import { PageHeader } from '@/components/molecules/page-header';
+import { PageHeader } from '@/components/shared/page-header';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.

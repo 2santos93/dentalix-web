@@ -15,8 +15,8 @@ import { onLocationChange } from '@/lib/locations/location-store';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
-import { FormField } from '@/components/molecules/form-field';
-import { AsyncSection } from '@/components/molecules/async-section';
+import { FormField } from '@/components/shared/form-field';
+import { AsyncSection } from '@/components/shared/async-section';
 import { InlineError } from '@/components/errors/inline-error';
 import { Skeleton } from '@/components/ui/skeleton';
 

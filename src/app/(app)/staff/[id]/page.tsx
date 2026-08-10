@@ -2,7 +2,7 @@
 import { useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuthStore } from '@/lib/auth/auth-store';
-import { PageHeader } from '@/components/molecules/page-header';
+import { PageHeader } from '@/components/shared/page-header';
 import { StaffMemberProfile } from '@/components/staff/staff-member-profile';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy

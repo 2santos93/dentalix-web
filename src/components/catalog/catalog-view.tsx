@@ -15,20 +15,20 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { FormField } from '@/components/molecules/form-field';
-import { FormModal } from '@/components/molecules/form-modal';
-import { EmptyState } from '@/components/molecules/empty-state';
+import { FormField } from '@/components/shared/form-field';
+import { FormModal } from '@/components/shared/form-modal';
+import { EmptyState } from '@/components/shared/empty-state';
 import {
   AsyncSection,
   TableSkeleton,
-} from '@/components/molecules/async-section';
-import { Pagination } from '@/components/molecules/pagination';
-import { RowActions } from '@/components/molecules/row-actions';
+} from '@/components/shared/async-section';
+import { Pagination } from '@/components/shared/pagination';
+import { RowActions } from '@/components/shared/row-actions';
 import {
   ListToolbar,
   ResultCount,
   toolbarFieldClass,
-} from '@/components/molecules/list-toolbar';
+} from '@/components/shared/list-toolbar';
 import { notifyError } from '@/components/errors/notify';
 import { ClinicWideNote } from '@/components/locations/clinic-wide-note';
 import { cn } from '@/lib/utils';
