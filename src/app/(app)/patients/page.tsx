@@ -12,6 +12,7 @@ import { Pagination } from '@/components/molecules/pagination';
 import { ListToolbar, ResultCount } from '@/components/molecules/list-toolbar';
 import { Button } from '@/components/ui/button';
 import { SectionError } from '@/components/errors/section-error';
+import { ClinicWideNote } from '@/components/locations/clinic-wide-note';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
@@ -22,6 +23,8 @@ const SEARCH_DEBOUNCE_MS = 300;
 const copy = {
   title: 'Pacientes',
   description: 'Gestiona la base de pacientes de tu clínica.',
+  clinicWideNote:
+    'La ficha de paciente es compartida: ves todos los pacientes de la clínica, no solo los de la sede activa.',
   newPatient: 'Nuevo paciente',
   searchLabel: 'Buscar por nombre, apellido o documento',
   searchPlaceholder: 'Buscar…',
@@ -133,6 +136,8 @@ export default function PatientsPage() {
           </Button>
         }
       />
+
+      <ClinicWideNote>{copy.clinicWideNote}</ClinicWideNote>
 
       <ListToolbar
         searchLabel={copy.searchLabel}

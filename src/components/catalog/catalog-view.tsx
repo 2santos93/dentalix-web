@@ -30,6 +30,7 @@ import {
   toolbarFieldClass,
 } from '@/components/molecules/list-toolbar';
 import { notifyError } from '@/components/errors/notify';
+import { ClinicWideNote } from '@/components/locations/clinic-wide-note';
 import { cn } from '@/lib/utils';
 import {
   Table,
@@ -46,6 +47,8 @@ type CatalogKind = 'PROCEDURE' | 'DIAGNOSIS';
 // copy convention (staff-view.tsx / treatment-plans-tab.tsx) until next-intl
 // wiring lands.
 const copy = {
+  clinicWideNote:
+    'El catálogo es de toda la clínica: estos procedimientos y diagnósticos son los mismos en todas las sedes.',
   addToggle: 'Agregar ítem',
   createTitle: 'Agregar ítem',
   editTitle: 'Editar ítem',
@@ -398,6 +401,7 @@ export function CatalogView({ token }: CatalogViewProps) {
 
   return (
     <div className="flex flex-col gap-6">
+      <ClinicWideNote>{copy.clinicWideNote}</ClinicWideNote>
       <ListToolbar
         searchLabel={copy.searchLabel}
         searchPlaceholder={copy.searchPlaceholder}

@@ -9,6 +9,7 @@ import {
   type DentalCatalogItem,
 } from '@/lib/odontogram/catalog-api';
 import { Toaster } from '@/components/errors/toaster';
+import { setActiveLocationId } from '@/lib/locations/location-store';
 
 // NOTE: jest.mock's string literal is not alias-rewritten by the SWC transform
 // (only real import/require specifiers are) — use a relative path here, same
@@ -69,6 +70,9 @@ describe('CatalogView', () => {
     mockedList.mockReset();
     mockedCreate.mockReset();
     mockedUpdate.mockReset();
+    // La sede activa vive en localStorage y persiste entre tests del mismo
+    // fichero: sin limpiarla, el aviso de alcance se filtra a los demás casos.
+    window.localStorage.clear();
   });
 
   it('pinta las filas de la página que devuelve el directorio', async () => {
@@ -365,6 +369,28 @@ describe('CatalogView', () => {
       await user.click(screen.getByRole('button', { name: /siguiente/i }));
 
       await waitFor(() => expect(lastParams()).toMatchObject({ page: 2 }));
+    });
+  });
+
+  describe('alcance del selector de sede', () => {
+    it('con una sede activa avisa de que el catálogo es de toda la clínica', async () => {
+      setActiveLocationId('sede-norte');
+      mockedList.mockResolvedValue(page([item1]));
+
+      render(<CatalogView token="tok" />);
+      await screen.findByRole('table', { name: /catálogo/i });
+
+      expect(await screen.findByText(/de toda la clínica/i)).toBeInTheDocument();
+    });
+
+    it('en «Todas las sedes» no aparece el aviso', async () => {
+      setActiveLocationId(null);
+      mockedList.mockResolvedValue(page([item1]));
+
+      render(<CatalogView token="tok" />);
+      await screen.findByRole('table', { name: /catálogo/i });
+
+      expect(screen.queryByText(/de toda la clínica/i)).not.toBeInTheDocument();
     });
   });
 });
