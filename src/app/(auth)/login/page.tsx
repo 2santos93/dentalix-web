@@ -1,6 +1,6 @@
 import Link from 'next/link';
 import { headers } from 'next/headers';
-import { LoginForm } from '@/components/organisms/login-form';
+import { LoginForm } from '@/components/auth/login-form';
 import { SplitAuthLayout } from '@/components/layouts/split-auth-layout';
 import { randomHeroImage } from '@/lib/auth/hero-images';
 import { fetchBranding } from '@/lib/branding';

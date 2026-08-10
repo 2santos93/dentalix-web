@@ -6,7 +6,7 @@ import { Plus } from 'lucide-react';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { ApiError } from '@/lib/api/client';
 import { listPatients, type Patient } from '@/lib/patients/patients-api';
-import { PatientsTable } from '@/components/organisms/patients-table';
+import { PatientsTable } from '@/components/patients/patients-table';
 import { PageHeader } from '@/components/shared/page-header';
 import { Pagination } from '@/components/shared/pagination';
 import { ListToolbar, ResultCount } from '@/components/shared/list-toolbar';
