@@ -280,23 +280,24 @@ describe('apiFetch — sede huérfana en localStorage', () => {
   it('descarta la sede y reintenta UNA vez, ya sin la cabecera', async () => {
     setActiveLocationId('sede-borrada');
     let hits = 0;
-    // Los parámetros van declarados (aunque no se usen) para que
-    // `spy.mock.calls[i][1]` esté tipado como RequestInit más abajo.
-    const spy = jest.fn(async (_url: string, _init: RequestInit) => {
+    // Las cabeceras se recogen DENTRO del mock (misma convención que el test de
+    // refresco de más arriba): así se leen tipadas sin declarar parámetros que
+    // no se usan.
+    const enviadas: Array<Record<string, string>> = [];
+    const spy = jest.fn(async (url: string, init: RequestInit) => {
+      enviadas.push(init.headers as Record<string, string>);
       hits += 1;
-      return hits === 1 ? unknownLocation() : ok({ items: [1] });
+      return hits === 1 ? unknownLocation() : ok({ items: [1], url });
     });
     global.fetch = spy as unknown as typeof fetch;
 
     const out = await apiFetch<{ items: number[] }>('/patients', { token: 'T' });
 
-    expect(out).toEqual({ items: [1] });
+    expect(out).toMatchObject({ items: [1] });
     expect(spy).toHaveBeenCalledTimes(2);
     // La primera llevaba la sede muerta; el reintento ya no manda la cabecera.
-    const headersDe = (i: number) =>
-      spy.mock.calls[i][1].headers as Record<string, string>;
-    expect(headersDe(0)['X-Location-Id']).toBe('sede-borrada');
-    expect(headersDe(1)['X-Location-Id']).toBeUndefined();
+    expect(enviadas[0]['X-Location-Id']).toBe('sede-borrada');
+    expect(enviadas[1]['X-Location-Id']).toBeUndefined();
     // Y queda limpia, para que las siguientes peticiones no repitan el 400.
     expect(getActiveLocationId()).toBeNull();
   });
