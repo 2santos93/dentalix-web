@@ -20,9 +20,14 @@ const fieldClass =
   'h-9 appearance-none rounded-lg border border-border bg-surface pl-8 pr-8 text-sm text-ink transition-colors hover:bg-bg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg';
 
 /**
- * Selector de sede. Solo se muestra cuando la clínica tiene MÁS DE UNA sede: la
- * inmensa mayoría tiene una sola y un selector con una única opción sería ruido
- * puro.
+ * Selector de sede. Se muestra en cuanto la clínica tiene AL MENOS UNA sede.
+ *
+ * Antes se escondía con menos de dos, por no meter ruido con un selector de una
+ * sola opción. El problema es que entonces la sede activa deja de verse en
+ * ninguna parte: con una sede el usuario no sabe si está mirando "esa sede" o
+ * "todo", y el aviso de alcance de `ClinicWideNote` aparece sin nada visible que
+ * lo explique. Mostrarlo siempre hace que el ámbito sea legible, y de paso deja
+ * de ser una sorpresa el día que se da de alta la segunda.
  *
  * - `variant="block"`: fila a lo ancho para el pie del sidebar (desktop), justo
  *   encima de la tarjeta de cuenta.
@@ -71,7 +76,9 @@ export function LocationSwitcher({
     };
   }, [token]);
 
-  if (locations.length < 2) return null;
+  // Sin ninguna sede sí se esconde: un selector vacío no ofrece nada. Con una
+  // o más, se muestra (ver la nota de arriba).
+  if (locations.length === 0) return null;
 
   function handleChange(value: string) {
     const next = value === '' ? null : value;
