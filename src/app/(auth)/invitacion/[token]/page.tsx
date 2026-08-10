@@ -1,7 +1,7 @@
 import Link from 'next/link';
 import { headers } from 'next/headers';
 import { AcceptInvitationForm } from '@/components/auth/accept-invitation-form';
-import { SplitAuthLayout } from '@/components/templates/split-auth-layout';
+import { SplitAuthLayout } from '@/components/layouts/split-auth-layout';
 import { randomHeroImage } from '@/lib/auth/hero-images';
 import { fetchBranding } from '@/lib/branding';
 import { parseTenantFromHost } from '@/lib/tenant';
