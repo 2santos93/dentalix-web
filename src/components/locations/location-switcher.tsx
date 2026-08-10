@@ -63,11 +63,33 @@ export function LocationSwitcher({
     async function load(activeToken: string) {
       try {
         const data = await listLocations(activeToken);
-        if (!cancelled) setLocations(data.filter((l) => l.isActive));
+        if (cancelled) return;
+        const usables = data.filter((l) => l.isActive);
+        setLocations(usables);
+
+        // Reconciliar la sede guardada contra las que existen DE VERDAD.
+        //
+        // La elección vive en localStorage y sobrevive a la sede: si se borra
+        // o se desactiva —o si se reseedea la base y cambian los ids— queda un
+        // id huérfano que `api/client.ts` sigue mandando como `X-Location-Id`
+        // en CADA petición, y el backend contesta 400 "Unknown location for
+        // this clinic" a todas. La app entera queda inutilizable hasta que
+        // alguien limpia localStorage a mano, sin nada en pantalla que explique
+        // por qué. Soltarla aquí devuelve al usuario a la vista consolidada,
+        // que es el comportamiento por defecto y siempre es válido.
+        const guardada = getActiveLocationId();
+        if (guardada && !usables.some((l) => l.id === guardada)) {
+          setActiveLocationId(null);
+          setActive(null);
+        }
       } catch {
         // Best-effort: si falla, simplemente no se ofrece el selector. No
         // merece un error en pantalla — la app sigue funcionando en modo
         // consolidado, que es el comportamiento por defecto.
+        //
+        // Y NO se descarta la sede guardada: un fallo de red no es prueba de
+        // que haya desaparecido, y tirarla aquí sacaría al usuario de su sede
+        // cada vez que la petición falle.
       }
     }
     void load(token);
