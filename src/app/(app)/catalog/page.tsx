@@ -3,14 +3,10 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { CatalogView } from '@/components/catalog/catalog-view';
-import { PageHeader } from '@/components/shared/page-header';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the app's
 // copy convention until next-intl wiring lands.
 const copy = {
-  title: 'Catálogo',
-  description:
-    'Procedimientos y diagnósticos reutilizables de tu clínica. Los procedimientos habilitan los ítems de los planes de tratamiento.',
   checkingSession: 'Verificando sesión…',
 };
 
@@ -42,9 +38,6 @@ export default function CatalogPage() {
   }
 
   return (
-    <>
-      <PageHeader title={copy.title} description={copy.description} />
-      <CatalogView token={accessToken} />
-    </>
+    <CatalogView token={accessToken} />
   );
 }

@@ -23,6 +23,7 @@ import {
   TableSkeleton,
 } from '@/components/shared/async-section';
 import { Pagination } from '@/components/shared/pagination';
+import { PageHeader } from '@/components/shared/page-header';
 import { RowActions } from '@/components/shared/row-actions';
 import {
   ListToolbar,
@@ -47,6 +48,11 @@ type CatalogKind = 'PROCEDURE' | 'DIAGNOSIS';
 // copy convention (staff-view.tsx / treatment-plans-tab.tsx) until next-intl
 // wiring lands.
 const copy = {
+  // Titulo y descripcion viven aqui, no en `page.tsx`: la accion primaria va
+  // dentro de `PageHeader` y el estado que la abre es de la vista.
+  title: 'Catálogo',
+  description:
+    'Procedimientos y diagnósticos reutilizables de tu clínica. Los procedimientos habilitan los ítems de los planes de tratamiento.',
   clinicWideNote:
     'El catálogo es de toda la clínica: estos procedimientos y diagnósticos son los mismos en todas las sedes.',
   addToggle: 'Agregar ítem',
@@ -401,17 +407,23 @@ export function CatalogView({ token }: CatalogViewProps) {
 
   return (
     <div className="flex flex-col gap-6">
+      <PageHeader
+        title={copy.title}
+        description={copy.description}
+        actions={
+          <Button type="button" onClick={openCreate}>
+            <Plus /> {copy.addToggle}
+          </Button>
+        }
+      />
+
       <ClinicWideNote>{copy.clinicWideNote}</ClinicWideNote>
+
       <ListToolbar
         searchLabel={copy.searchLabel}
         searchPlaceholder={copy.searchPlaceholder}
         value={searchInput}
         onChange={setSearchInput}
-        action={
-          <Button type="button" onClick={openCreate}>
-            <Plus /> {copy.addToggle}
-          </Button>
-        }
       >
         <select
           aria-label={copy.filterKindLabel}
