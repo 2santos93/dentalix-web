@@ -25,6 +25,7 @@ import { FormModal } from '@/components/shared/form-modal';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { AsyncSection, TableSkeleton } from '@/components/shared/async-section';
 import { Pagination } from '@/components/shared/pagination';
+import { PageHeader } from '@/components/shared/page-header';
 import { RowActions } from '@/components/shared/row-actions';
 import {
   ListToolbar,
@@ -53,6 +54,11 @@ import { cn } from '@/lib/utils';
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
 const copy = {
+  // Titulo y descripcion viven aqui, no en `page.tsx`: la accion primaria va
+  // dentro de `PageHeader` y el estado que la abre es de la vista.
+  title: 'Personal',
+  description:
+    'Tu equipo y las invitaciones sin aceptar. Abre a una persona para cambiar su rol o su acceso.',
   inviteToggle: 'Invitar',
   formTitle: 'Invitar a la clínica',
   formDescription:
@@ -86,8 +92,14 @@ const copy = {
   revokeBody: (email: string) => `El enlace enviado a ${email} dejará de funcionar.`,
   revokeConfirmYes: 'Sí, revocar',
   viewProfile: (name: string) => `Ver el perfil de ${name}`,
-  empty: 'No hay nadie que coincida.',
-  emptyHint: 'Prueba con otra búsqueda o quita los filtros.',
+  // Los dos vacíos son distintos y hasta ahora se confundían: se mostraba
+  // siempre el de búsqueda, así que una clínica recién creada —sin nadie dado
+  // de alta y sin ningún filtro puesto— leía "No hay nadie que coincida",
+  // como si hubiera buscado algo.
+  empty: 'Todavía no hay nadie en el equipo.',
+  emptyHint: 'Invita a la primera persona para empezar.',
+  noMatches: 'No hay nadie que coincida.',
+  noMatchesHint: 'Prueba con otra búsqueda o quita los filtros.',
   genericLoadError: 'No pudimos cargar el personal. Intenta de nuevo.',
   genericCreateError: 'No pudimos crear la invitación. Intenta de nuevo.',
   // Escalón 3 (segundo plano): sin "Intenta de nuevo." — el toast trae acción.
@@ -315,6 +327,16 @@ export function StaffView({ token }: StaffViewProps) {
 
   return (
     <div className="flex flex-col gap-6">
+      <PageHeader
+        title={copy.title}
+        description={copy.description}
+        actions={
+          <Button type="button" onClick={() => setShowForm(true)}>
+            <Plus /> {copy.inviteToggle}
+          </Button>
+        }
+      />
+
       <ListToolbar
         searchLabel={copy.searchLabel}
         searchPlaceholder={copy.searchPlaceholder}
@@ -323,11 +345,6 @@ export function StaffView({ token }: StaffViewProps) {
           setSearchInput(v);
           setPage(1);
         }}
-        action={
-          <Button type="button" onClick={() => setShowForm(true)}>
-            <Plus /> {copy.inviteToggle}
-          </Button>
-        }
       >
         <select
           aria-label={copy.filterRoleLabel}
@@ -451,8 +468,8 @@ export function StaffView({ token }: StaffViewProps) {
         error={loadError}
         onRetry={refresh}
         isEmpty={entries.length === 0}
-        emptyTitle={copy.empty}
-        emptyDescription={hasFilters ? copy.emptyHint : undefined}
+        emptyTitle={hasFilters ? copy.noMatches : copy.empty}
+        emptyDescription={hasFilters ? copy.noMatchesHint : copy.emptyHint}
         skeleton={<TableSkeleton rows={5} />}
       >
         <Card className="overflow-hidden p-0">
