@@ -17,10 +17,10 @@ import { Badge, type BadgeProps } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
-import { FormField } from '@/components/molecules/form-field';
-import { FormModal } from '@/components/molecules/form-modal';
-import { ConfirmDialog } from '@/components/molecules/confirm-dialog';
-import { EmptyState } from '@/components/molecules/empty-state';
+import { FormField } from '@/components/shared/form-field';
+import { FormModal } from '@/components/shared/form-modal';
+import { ConfirmDialog } from '@/components/shared/confirm-dialog';
+import { EmptyState } from '@/components/shared/empty-state';
 import { SectionError } from '@/components/errors/section-error';
 import { formatCivilDate } from '@/lib/format/date';
 // Crash-safe by contract: a plan whose currency isn't a valid ISO 4217 code

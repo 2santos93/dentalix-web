@@ -334,3 +334,28 @@ describe('buscador, filtro de bajo mínimo y paginación', () => {
     expect(screen.queryByText(/todavía no hay insumos/i)).not.toBeInTheDocument();
   });
 });
+
+describe('contrato de vista de listado', () => {
+  it('la vista es dueña de su cabecera, con la accion primaria dentro', async () => {
+    mockedList.mockResolvedValueOnce(page([guantes]));
+    render(<InventoryView token="tok" />);
+
+    // El h1 lo pinta la vista, no `page.tsx`: es lo que permite que el boton
+    // viva junto al titulo en vez de flotar en una fila propia debajo.
+    const heading = await screen.findByRole('heading', {
+      name: 'Inventario',
+      level: 1,
+    });
+    const header = heading.closest('div')?.parentElement as HTMLElement;
+    expect(
+      within(header).getByRole('button', { name: /agregar insumo/i }),
+    ).toBeInTheDocument();
+  });
+
+  it('dice cuantos insumos hay, y concuerda el singular', async () => {
+    mockedList.mockResolvedValueOnce(page([guantes], { total: 1 }));
+    render(<InventoryView token="tok" />);
+
+    expect(await screen.findByText('1 insumo')).toBeInTheDocument();
+  });
+});

@@ -3,13 +3,14 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { InventoryView } from '@/components/inventory/inventory-view';
-import { PageHeader } from '@/components/molecules/page-header';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the app's
 // copy convention until next-intl wiring lands.
+//
+// El título y la descripción NO están aquí: los pinta `InventoryView` dentro de
+// su `PageHeader`, porque la acción primaria va en esa cabecera y el estado que
+// la abre es de la vista. La página solo resuelve la sesión.
 const copy = {
-  title: 'Inventario',
-  description: 'Controla los insumos de tu clínica: stock actual, mínimos y movimientos.',
   checkingSession: 'Verificando sesión…',
 };
 
@@ -40,10 +41,5 @@ export default function InventoryPage() {
     return null;
   }
 
-  return (
-    <>
-      <PageHeader title={copy.title} description={copy.description} />
-      <InventoryView token={accessToken} />
-    </>
-  );
+  return <InventoryView token={accessToken} />;
 }

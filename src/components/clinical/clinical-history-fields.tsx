@@ -4,7 +4,7 @@ import { AllergyListEditor } from '@/components/clinical/allergy-list-editor';
 import { MedicationListEditor } from '@/components/clinical/medication-list-editor';
 import { ConditionChecklist } from '@/components/clinical/condition-checklist';
 import { HabitsEditor } from '@/components/clinical/habits-editor';
-import { FormField } from '@/components/molecules/form-field';
+import { FormField } from '@/components/shared/form-field';
 import { Input } from '@/components/ui/input';
 import { fieldClass } from '@/lib/ui/field-class';
 import { cn } from '@/lib/utils';

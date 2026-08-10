@@ -1,5 +1,5 @@
 import type { ReactNode } from 'react';
-import { AppShell } from '@/components/templates/app-shell';
+import { AppShell } from '@/components/layouts/app-shell';
 
 // Shared chrome for every authenticated screen (patients, agenda, detail).
 // Individual pages keep their own auth-redirect guard; this only supplies the

@@ -10,8 +10,8 @@ import {
 } from '@/lib/patients/clinical-api';
 import { listStaff, type StaffMember } from '@/lib/staff/staff-api';
 import { formatCivilDate, formatDateTime } from '@/lib/format/date';
-import { AsyncSection } from '@/components/molecules/async-section';
-import { FormField } from '@/components/molecules/form-field';
+import { AsyncSection } from '@/components/shared/async-section';
+import { FormField } from '@/components/shared/form-field';
 import { InlineError } from '@/components/errors/inline-error';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';

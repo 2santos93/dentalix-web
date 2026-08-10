@@ -15,20 +15,21 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { FormField } from '@/components/molecules/form-field';
-import { FormModal } from '@/components/molecules/form-modal';
-import { EmptyState } from '@/components/molecules/empty-state';
+import { FormField } from '@/components/shared/form-field';
+import { FormModal } from '@/components/shared/form-modal';
+import { EmptyState } from '@/components/shared/empty-state';
 import {
   AsyncSection,
   TableSkeleton,
-} from '@/components/molecules/async-section';
-import { Pagination } from '@/components/molecules/pagination';
-import { RowActions } from '@/components/molecules/row-actions';
+} from '@/components/shared/async-section';
+import { Pagination } from '@/components/shared/pagination';
+import { PageHeader } from '@/components/shared/page-header';
+import { RowActions } from '@/components/shared/row-actions';
 import {
   ListToolbar,
   ResultCount,
   toolbarFieldClass,
-} from '@/components/molecules/list-toolbar';
+} from '@/components/shared/list-toolbar';
 import { notifyError } from '@/components/errors/notify';
 import { ClinicWideNote } from '@/components/locations/clinic-wide-note';
 import { cn } from '@/lib/utils';
@@ -47,6 +48,11 @@ type CatalogKind = 'PROCEDURE' | 'DIAGNOSIS';
 // copy convention (staff-view.tsx / treatment-plans-tab.tsx) until next-intl
 // wiring lands.
 const copy = {
+  // Titulo y descripcion viven aqui, no en `page.tsx`: la accion primaria va
+  // dentro de `PageHeader` y el estado que la abre es de la vista.
+  title: 'Catálogo',
+  description:
+    'Procedimientos y diagnósticos reutilizables de tu clínica. Los procedimientos habilitan los ítems de los planes de tratamiento.',
   clinicWideNote:
     'El catálogo es de toda la clínica: estos procedimientos y diagnósticos son los mismos en todas las sedes.',
   addToggle: 'Agregar ítem',
@@ -401,17 +407,23 @@ export function CatalogView({ token }: CatalogViewProps) {
 
   return (
     <div className="flex flex-col gap-6">
+      <PageHeader
+        title={copy.title}
+        description={copy.description}
+        actions={
+          <Button type="button" onClick={openCreate}>
+            <Plus /> {copy.addToggle}
+          </Button>
+        }
+      />
+
       <ClinicWideNote>{copy.clinicWideNote}</ClinicWideNote>
+
       <ListToolbar
         searchLabel={copy.searchLabel}
         searchPlaceholder={copy.searchPlaceholder}
         value={searchInput}
         onChange={setSearchInput}
-        action={
-          <Button type="button" onClick={openCreate}>
-            <Plus /> {copy.addToggle}
-          </Button>
-        }
       >
         <select
           aria-label={copy.filterKindLabel}
@@ -592,7 +604,7 @@ export function CatalogView({ token }: CatalogViewProps) {
             <TableBody>
               {items.map((item) => (
                 <TableRow key={item.id}>
-                  <TableCell>
+                  <TableCell data-label={copy.colName}>
                     <span className="flex items-center gap-2.5 font-medium text-ink">
                       <span
                         aria-hidden
@@ -609,21 +621,21 @@ export function CatalogView({ token }: CatalogViewProps) {
                       </span>
                     </span>
                   </TableCell>
-                  <TableCell>
+                  <TableCell data-label={copy.colKind}>
                     <Badge variant="muted">{KIND_LABELS[item.kind]}</Badge>
                   </TableCell>
-                  <TableCell className="text-muted tabular-nums">
+                  <TableCell className="text-muted tabular-nums" data-label={copy.colCode}>
                     {item.code}
                   </TableCell>
-                  <TableCell className="text-right tabular-nums">
+                  <TableCell className="text-right tabular-nums" data-label={copy.colPrice}>
                     {formatPrice(item.defaultPrice)}
                   </TableCell>
-                  <TableCell>
+                  <TableCell data-label={copy.colStatus}>
                     <Badge variant={item.active ? 'success' : 'muted'}>
                       {item.active ? copy.active : copy.inactive}
                     </Badge>
                   </TableCell>
-                  <TableCell className="text-right">
+                  <TableCell className="text-right" data-label={copy.colActions}>
                     <RowActions
                       label={copy.actionsFor(item.labelEs)}
                       busy={togglingId === item.id}

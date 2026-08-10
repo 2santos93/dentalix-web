@@ -12,10 +12,10 @@ import {
   type Sex,
 } from '@/lib/patients/patients-api';
 import { listCountries, type Country } from '@/lib/reference/countries-api';
-import { CityCombobox, type CitySelection } from '@/components/molecules/city-combobox';
+import { CityCombobox, type CitySelection } from '@/components/shared/city-combobox';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { FormField } from '@/components/molecules/form-field';
+import { FormField } from '@/components/shared/form-field';
 import { InlineError } from '@/components/errors/inline-error';
 import { cn } from '@/lib/utils';
 

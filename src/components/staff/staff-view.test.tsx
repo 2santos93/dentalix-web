@@ -267,3 +267,52 @@ describe('StaffView', () => {
     expect(await screen.findByText(/no se pudo listar/i)).toBeInTheDocument();
   });
 });
+
+describe('contrato de vista de listado', () => {
+  beforeEach(() => {
+    mockedList.mockReset();
+    mockedList.mockResolvedValue(page([miembro]));
+  });
+
+  it('la vista es dueña de su cabecera, con la accion primaria dentro', async () => {
+    render(<StaffView token="tok" />);
+
+    const heading = await screen.findByRole('heading', {
+      name: 'Personal',
+      level: 1,
+    });
+    const header = heading.closest('div')?.parentElement as HTMLElement;
+    expect(
+      within(header).getByRole('button', { name: /invitar/i }),
+    ).toBeInTheDocument();
+  });
+
+  it('sin nadie dado de alta invita a crear, en vez de hablar de busquedas', async () => {
+    // El bug que arregla: `emptyTitle` era siempre el texto de búsqueda, así que
+    // una clínica recién creada leía "No hay nadie que coincida" sin haber
+    // buscado nada.
+    mockedList.mockResolvedValue(page([]));
+    render(<StaffView token="tok" />);
+
+    expect(
+      await screen.findByText('Todavía no hay nadie en el equipo.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/coincida/i)).not.toBeInTheDocument();
+  });
+
+  it('cuando hay filtros y no encuentra, lo dice como busqueda', async () => {
+    const user = setupUser();
+    render(<StaffView token="tok" />);
+    await screen.findByRole('table', { name: /personal/i });
+
+    mockedList.mockResolvedValue(page([]));
+    await user.selectOptions(
+      screen.getByLabelText('Filtrar por rol'),
+      'DENTIST',
+    );
+
+    expect(
+      await screen.findByText('No hay nadie que coincida.'),
+    ).toBeInTheDocument();
+  });
+});

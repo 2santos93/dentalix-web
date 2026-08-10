@@ -5,7 +5,7 @@ import { ApiError } from '@/lib/api/client';
 import { listStaff, type StaffMember } from '@/lib/staff/staff-api';
 import { formatDateTime } from '@/lib/format/date';
 import { Button } from '@/components/ui/button';
-import { AsyncSection } from '@/components/molecules/async-section';
+import { AsyncSection } from '@/components/shared/async-section';
 import { InlineError } from '@/components/errors/inline-error';
 import { ClinicalHistoryFields } from '@/components/clinical/clinical-history-fields';
 import {

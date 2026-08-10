@@ -3,14 +3,10 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { StaffView } from '@/components/staff/staff-view';
-import { PageHeader } from '@/components/molecules/page-header';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
 const copy = {
-  title: 'Personal',
-  description:
-    'Tu equipo y las invitaciones sin aceptar. Abre a una persona para cambiar su rol o su acceso.',
   checkingSession: 'Verificando sesión…',
 };
 
@@ -42,9 +38,6 @@ export default function StaffPage() {
   }
 
   return (
-    <>
-      <PageHeader title={copy.title} description={copy.description} />
-      <StaffView token={accessToken} />
-    </>
+    <StaffView token={accessToken} />
   );
 }

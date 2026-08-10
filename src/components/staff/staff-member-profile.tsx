@@ -16,9 +16,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { FormField } from '@/components/molecules/form-field';
-import { ConfirmDialog } from '@/components/molecules/confirm-dialog';
-import { AsyncSection } from '@/components/molecules/async-section';
+import { FormField } from '@/components/shared/form-field';
+import { ConfirmDialog } from '@/components/shared/confirm-dialog';
+import { AsyncSection } from '@/components/shared/async-section';
 import { InlineError } from '@/components/errors/inline-error';
 import { notifyError } from '@/components/errors/notify';
 

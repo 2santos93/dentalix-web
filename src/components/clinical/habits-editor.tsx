@@ -1,7 +1,7 @@
 'use client';
 import * as React from 'react';
 import { Input } from '@/components/ui/input';
-import { FormField } from '@/components/molecules/form-field';
+import { FormField } from '@/components/shared/form-field';
 import { type Habits } from '@/lib/clinical/clinical-types';
 
 const copy = {
