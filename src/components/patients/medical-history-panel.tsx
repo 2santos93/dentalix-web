@@ -1,7 +1,9 @@
 'use client';
 import * as React from 'react';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { ApiError } from '@/lib/api/client';
+import { listStaff, type StaffMember } from '@/lib/staff/staff-api';
+import { formatDateTime } from '@/lib/format/date';
 import { Button } from '@/components/ui/button';
 import { AsyncSection } from '@/components/molecules/async-section';
 import { InlineError } from '@/components/errors/inline-error';
@@ -20,6 +22,17 @@ const copy = {
   empty: 'Aún no hay anamnesis registrada para este paciente.',
   emptyHint: 'Completa el formulario y guárdalo para registrar la primera anamnesis del paciente.',
   versionLabel: (v: number) => `Versión ${v}`,
+  // El número solo no significa nada si no se puede alcanzar lo que cuenta.
+  // Mientras el API no exponga la cadena de versiones (hoy `GET` devuelve solo
+  // la última), se declara con lo que SÍ llega en la respuesta: cuándo se
+  // registró y quién la firmó.
+  versionRecordedBy: (author: string, when: string) => `Registrada el ${when} por ${author}`,
+  versionRecordedAt: (when: string) => `Registrada el ${when}`,
+  // La promesa del modelo, dicha en voz alta: sin esta línea el contador
+  // afirma una inmutabilidad que la pantalla nunca explica.
+  appendOnlyNote:
+    'Cada corrección crea una versión nueva; las anteriores se conservan y no se sobrescriben.',
+  unknownAuthor: 'autor no registrado',
   fieldFallback: '—',
   allergiesCountLabel: 'Alergias registradas',
   conditionsCountLabel: 'Condiciones registradas',
@@ -124,8 +137,37 @@ export function MedicalHistoryPanel({ token, patientId }: MedicalHistoryPanelPro
   const [value, setValue] = useState<ClinicalHistoryValue>({});
   const [saveError, setSaveError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  const [staff, setStaff] = useState<StaffMember[]>([]);
   // Bumped by the retry action to re-run the load effect below.
   const [reloadKey, setReloadKey] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    // Fail soft y aparte: sin la lista de personal la versión sigue diciendo
+    // CUÁNDO se registró, que es la mitad que nunca se puede perder.
+    listStaff(token)
+      .then((data) => {
+        if (!cancelled) setStaff(data ?? []);
+      })
+      .catch(() => {
+        /* fail soft — cae a «autor no registrado» */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
+
+  const staffById = useMemo(
+    () => new Map(staff.map((member) => [member.userId, member.fullName])),
+    [staff],
+  );
+
+  /** «Registrada el 8 ago 2026 14:32 por Dra. Ríos». */
+  function versionProvenance(history: MedicalHistory): string {
+    const when = formatDateTime(history.createdAt);
+    const author = history.createdById ? staffById.get(history.createdById) : null;
+    return author ? copy.versionRecordedBy(author, when) : copy.versionRecordedAt(when);
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -197,7 +239,13 @@ export function MedicalHistoryPanel({ token, patientId }: MedicalHistoryPanelPro
       <div className="flex flex-col gap-6">
         {latest ? (
           <div className="rounded-lg border border-border bg-surface p-4">
-            <p className="mb-3 text-sm font-medium text-muted">{copy.versionLabel(latest.version)}</p>
+            <div className="mb-3 flex flex-col gap-0.5">
+              <p className="text-sm font-medium text-muted">
+                {copy.versionLabel(latest.version)}
+                <span className="ml-2 font-normal">{versionProvenance(latest)}</span>
+              </p>
+              <p className="t-label text-muted">{copy.appendOnlyNote}</p>
+            </div>
             <dl className="grid gap-3 sm:grid-cols-2">
               <div>
                 <dt className="text-sm font-medium text-muted">{copy.allergiesCountLabel}</dt>

@@ -82,6 +82,35 @@ describe('OdontogramTab', () => {
     expect(screen.getByRole('status')).toHaveTextContent(/cargando odontograma/i);
   });
 
+  it('declara los registros en dientes temporales, que la carta no dibuja', async () => {
+    // El backend acepta 51-85 y el plan los factura, pero `OdontogramChart`
+    // solo pinta las 32 permanentes: sin este aviso, la historia clínica de un
+    // paciente pediátrico es invisible en su propio odontograma y el silencio
+    // se lee como «sano».
+    mockedListCatalog.mockResolvedValue(catalog);
+    mockedGetOdontogram.mockResolvedValue([
+      { toothNumber: '11', records: [] },
+      { toothNumber: '52', records: [{ ...createdRecord, id: 'rec-52', toothNumber: '52' }] },
+      { toothNumber: '61', records: [{ ...createdRecord, id: 'rec-61', toothNumber: '61' }] },
+    ]);
+
+    render(<OdontogramTab token="tok" patientId="p1" />);
+
+    const notice = await screen.findByText(/dentición temporal/i);
+    expect(notice).toHaveTextContent('52');
+    expect(notice).toHaveTextContent('61');
+  });
+
+  it('no dice nada de dentición temporal cuando no hay registros invisibles', async () => {
+    mockedListCatalog.mockResolvedValue(catalog);
+    mockedGetOdontogram.mockResolvedValue(refreshedGroups);
+
+    render(<OdontogramTab token="tok" patientId="p1" />);
+
+    await screen.findByRole('group', { name: /^Odontograma$/ });
+    expect(screen.queryByText(/dentición temporal/i)).not.toBeInTheDocument();
+  });
+
   it('shows an alert with a retry when the initial load fails', async () => {
     const { ApiError } = jest.requireActual('../../lib/api/client');
     mockedGetOdontogram.mockRejectedValue(new ApiError(500, 'Error del servidor'));

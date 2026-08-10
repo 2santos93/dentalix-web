@@ -15,7 +15,7 @@ import {
   type CreatedInvitation,
 } from '@/lib/staff/invitations-api';
 import { useCopyToClipboard } from '@/lib/ui/use-copy-to-clipboard';
-import { Plus, Search } from 'lucide-react';
+import { Plus, Send, Ban } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
@@ -25,6 +25,12 @@ import { FormModal } from '@/components/molecules/form-modal';
 import { ConfirmDialog } from '@/components/molecules/confirm-dialog';
 import { AsyncSection, TableSkeleton } from '@/components/molecules/async-section';
 import { Pagination } from '@/components/molecules/pagination';
+import { RowActions } from '@/components/molecules/row-actions';
+import {
+  ListToolbar,
+  ResultCount,
+  toolbarFieldClass,
+} from '@/components/molecules/list-toolbar';
 import { notifyError } from '@/components/errors/notify';
 import {
   Dialog,
@@ -59,6 +65,9 @@ const copy = {
   tableLabel: 'Personal de la clínica',
   searchLabel: 'Buscar por nombre o correo',
   searchPlaceholder: 'Buscar…',
+  countNoun: 'persona',
+  countNounPlural: 'personas',
+  actionsFor: (name: string) => `Acciones de ${name}`,
   filterRoleLabel: 'Filtrar por rol',
   filterStatusLabel: 'Filtrar por estado',
   allRoles: 'Todos los roles',
@@ -125,11 +134,6 @@ const STATUS_BADGE: Record<
   PENDING: { label: copy.statusPending, variant: 'warning' },
   INACTIVE: { label: copy.statusInactive, variant: 'secondary' },
 };
-
-// Native <select> styled to match the Input atom (kept native for a11y/tests) —
-// same class as agenda-view.tsx's `fieldClass`.
-const fieldClass =
-  'flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-50';
 
 const PAGE_SIZE = 20;
 // Lo bastante corto para no notarse al teclear, lo bastante largo para no
@@ -311,62 +315,53 @@ export function StaffView({ token }: StaffViewProps) {
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <div className="relative">
-            <Search
-              aria-hidden
-              className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted"
-            />
-            <Input
-              type="search"
-              aria-label={copy.searchLabel}
-              placeholder={copy.searchPlaceholder}
-              value={searchInput}
-              onChange={(e) => {
-                setSearchInput(e.target.value);
-                setPage(1);
-              }}
-              className="pl-9 sm:w-64"
-            />
-          </div>
-          <select
-            aria-label={copy.filterRoleLabel}
-            value={roleFilter}
-            onChange={(e) => {
-              setRoleFilter(e.target.value as ClinicRole | '');
-              setPage(1);
-            }}
-            className={cn(fieldClass, 'sm:w-48')}
-          >
-            <option value="">{copy.allRoles}</option>
-            {ROLE_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
-          <select
-            aria-label={copy.filterStatusLabel}
-            value={statusFilter}
-            onChange={(e) => {
-              setStatusFilter(e.target.value as StaffDirectoryStatus | '');
-              setPage(1);
-            }}
-            className={cn(fieldClass, 'sm:w-52')}
-          >
-            <option value="">{copy.allStatuses}</option>
-            {STATUS_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
-        </div>
-        <Button type="button" onClick={() => setShowForm(true)}>
-          <Plus /> {copy.inviteToggle}
-        </Button>
-      </div>
+      <ListToolbar
+        searchLabel={copy.searchLabel}
+        searchPlaceholder={copy.searchPlaceholder}
+        value={searchInput}
+        onChange={(v) => {
+          setSearchInput(v);
+          setPage(1);
+        }}
+        action={
+          <Button type="button" onClick={() => setShowForm(true)}>
+            <Plus /> {copy.inviteToggle}
+          </Button>
+        }
+      >
+        <select
+          aria-label={copy.filterRoleLabel}
+          value={roleFilter}
+          onChange={(e) => {
+            setRoleFilter(e.target.value as ClinicRole | '');
+            setPage(1);
+          }}
+          className={cn(toolbarFieldClass, 'sm:w-48')}
+        >
+          <option value="">{copy.allRoles}</option>
+          {ROLE_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
+        <select
+          aria-label={copy.filterStatusLabel}
+          value={statusFilter}
+          onChange={(e) => {
+            setStatusFilter(e.target.value as StaffDirectoryStatus | '');
+            setPage(1);
+          }}
+          className={cn(toolbarFieldClass, 'sm:w-52')}
+        >
+          <option value="">{copy.allStatuses}</option>
+          {STATUS_OPTIONS.map((opt) => (
+            <option key={opt.value} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
+      </ListToolbar>
 
       <FormModal
         open={showForm && !createdInvitation}
@@ -404,7 +399,7 @@ export function StaffView({ token }: StaffViewProps) {
               required
               value={role}
               onChange={(e) => setRole(e.target.value as ClinicRole)}
-              className={fieldClass}
+              className={toolbarFieldClass}
             >
               {ROLE_OPTIONS.map((opt) => (
                 <option key={opt.value} value={opt.value}>
@@ -443,6 +438,14 @@ export function StaffView({ token }: StaffViewProps) {
         </DialogContent>
       </Dialog>
 
+      {!loading && !loadError ? (
+        <ResultCount
+          total={total}
+          noun={copy.countNoun}
+          nounPlural={copy.countNounPlural}
+        />
+      ) : null}
+
       <AsyncSection
         loading={loading}
         error={loadError}
@@ -460,7 +463,9 @@ export function StaffView({ token }: StaffViewProps) {
                 <TableHead>{copy.colEmail}</TableHead>
                 <TableHead>{copy.colRole}</TableHead>
                 <TableHead>{copy.colStatus}</TableHead>
-                <TableHead>{copy.colActions}</TableHead>
+                <TableHead className="w-px text-right">
+                  <span className="sr-only">{copy.colActions}</span>
+                </TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -495,37 +500,34 @@ export function StaffView({ token }: StaffViewProps) {
                     <TableCell>
                       <Badge variant={badge.variant}>{badge.label}</Badge>
                     </TableCell>
-                    <TableCell>
-                      {entry.kind === 'INVITATION' ? (
-                        // `relative` para que estos botones queden por encima
-                        // del pseudo-elemento del enlace de la fila (aquí no
-                        // hay ninguno, pero mantiene el patrón si un día un
-                        // miembro gana acciones).
-                        <div className="relative flex flex-wrap gap-2">
-                          <Button
-                            type="button"
-                            variant="outline"
-                            size="sm"
-                            loading={busy}
-                            onClick={() => void handleResend(entry)}
-                            aria-label={`${copy.resend} a ${entry.email}`}
-                          >
-                            {copy.resend}
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="sm"
-                            disabled={busy}
-                            onClick={() => setRevokingId(entry.id)}
-                            aria-label={`${copy.revoke} la invitación de ${entry.email}`}
-                          >
-                            {copy.revoke}
-                          </Button>
-                        </div>
-                      ) : (
-                        <span className="text-sm text-muted">—</span>
-                      )}
+                    <TableCell className="text-right">
+                      <RowActions
+                        label={copy.actionsFor(entry.fullName)}
+                        busy={busy}
+                        // Un miembro no tiene acciones de fila: su perfil es la
+                        // fila entera (enlace estirado) y ahí se le cambia el
+                        // nombre, el rol o el acceso. Una invitación no tiene
+                        // perfil que abrir —todavía no hay persona— y por eso
+                        // es la única que las lleva.
+                        actions={
+                          entry.kind === 'INVITATION'
+                            ? [
+                                {
+                                  label: copy.resend,
+                                  icon: <Send />,
+                                  onSelect: () => void handleResend(entry),
+                                },
+                                {
+                                  label: copy.revoke,
+                                  icon: <Ban />,
+                                  destructive: true,
+                                  separatorBefore: true,
+                                  onSelect: () => setRevokingId(entry.id),
+                                },
+                              ]
+                            : []
+                        }
+                      />
                     </TableCell>
                   </TableRow>
                 );

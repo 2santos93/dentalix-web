@@ -135,6 +135,21 @@ export type MedicalHistory = Omit<
   surgeries: Surgery[];
   vitalSigns: VitalSigns | null;
   safetyFlags: SafetyFlags;
+  /**
+   * Procedencia de la versión. **No están en `MedicalHistoryDto`**: el
+   * `@ApiProperty` del backend no los declara, así que `schema.d.ts` no los
+   * genera — pero el runtime SÍ los devuelve
+   * (`prisma-medical-history.repository.ts` → `mapToEntity` mapea `version`,
+   * `createdById` y `createdAt`, y la entidad de dominio los declara).
+   *
+   * Se tipan aquí a mano, como el resto de este fichero, porque son lo único
+   * que permite que «Versión 3» signifique algo: sin ellos el contador afirma
+   * una inmutabilidad que la pantalla no puede sustentar. Si algún día el
+   * backend documenta el DTO, esto se cae solo al regenerar.
+   */
+  version: number;
+  createdById: string | null;
+  createdAt: string;
 };
 
 export const ALLERGY_TYPE_LABELS: Record<AllergyType, string> = {

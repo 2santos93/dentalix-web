@@ -141,7 +141,14 @@ export function OdontogramChart({
       >
         <QuadrantCaptions left={copy.quadrant1} right={copy.quadrant2} />
 
-        <div role="row" aria-label={copy.upperRow} className="flex items-end">
+        {/* The arches are labelled `group`s, not `role="row"`: a `row` only
+            exists inside a `table`/`grid`/`treegrid`/`rowgroup`, and the
+            nearest ancestor role here is `group` — so an AT dropped the role
+            and, with it, the arch's label. A nested `group` is valid and keeps
+            "Arcada superior/inferior" in the announcement. The arrow keys are
+            unaffected: they live on the field's `onKeyDown` plus the teeth's
+            roving tabindex, not on any grid semantics. */}
+        <div role="group" aria-label={copy.upperRow} className="flex items-end">
           <div className="flex items-end gap-1 pr-3 sm:pr-4">
             {UPPER_LEFT_HALF.map((fdi) => renderTooth(fdi, 'above'))}
           </div>
@@ -154,7 +161,7 @@ export function OdontogramChart({
         {/* Occlusal plane — the horizontal rule the two arches sit against. */}
         <div aria-hidden className="my-2 border-t border-border" />
 
-        <div role="row" aria-label={copy.lowerRow} className="flex items-start">
+        <div role="group" aria-label={copy.lowerRow} className="flex items-start">
           <div className="flex items-start gap-1 pr-3 sm:pr-4">
             {LOWER_LEFT_HALF.map((fdi) => renderTooth(fdi, 'below'))}
           </div>

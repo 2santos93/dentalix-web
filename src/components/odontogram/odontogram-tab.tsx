@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { ApiError } from '@/lib/api/client';
 import { OdontogramChart } from '@/components/odontogram/odontogram-chart';
 import { OdontogramLegend } from '@/components/odontogram/odontogram-legend';
@@ -7,6 +8,7 @@ import { ToothTimeline } from '@/components/odontogram/tooth-timeline';
 import { ToothRecordPanel } from '@/components/odontogram/tooth-record-panel';
 import { getOdontogram, type ToothGroup, type ToothSurface } from '@/lib/odontogram/odontogram-api';
 import { projectOdontogram } from '@/lib/odontogram/projection';
+import { isPermanentFdi } from '@/lib/odontogram/fdi';
 import { listCatalogItems, type DentalCatalogItem } from '@/lib/odontogram/catalog-api';
 import { Skeleton } from '@/components/ui/skeleton';
 import { SectionError } from '@/components/errors/section-error';
@@ -23,11 +25,38 @@ const copy = {
   selectToothPrompt: 'Selecciona un diente para ver su historial y registrar un hallazgo o procedimiento.',
   toothHeading: (fdi: string) => `Diente ${fdi}`,
   historyHeading: 'Historial',
+  /**
+   * Aviso de dentición temporal. Una cadena completa por rama (no concatenada)
+   * para que al traducir se pueda reordenar; los dientes van con conjunción
+   * española (`a, b y c`).
+   */
+  undrawnTeeth: (fdis: string[]) => {
+    const list =
+      fdis.length === 1
+        ? `el diente ${fdis[0]}`
+        : `los dientes ${fdis.slice(0, -1).join(', ')} y ${fdis[fdis.length - 1]}`;
+    return `Este paciente tiene registros en ${list}, de dentición temporal. El odontograma solo dibuja la dentición permanente, así que no aparecen en el mapa: consúltalos en el historial del diente o en el plan de tratamiento.`;
+  },
+  viewInPlan: 'Ver en el plan',
+  // El nombre accesible EMPIEZA por el texto visible (WCAG 2.5.3) y nombra el
+  // diente, para que el enlace no sea un «Ver en el plan» sin destino cuando
+  // se lee fuera de contexto.
+  viewInPlanFor: (fdi: string) => `Ver en el plan los ítems del diente ${fdi}`,
 };
 
 interface OdontogramTabProps {
   token: string;
   patientId: string;
+  /**
+   * Diente con el que abrir, sembrado desde el `?tooth=` de la página — así
+   * «Ver en el odontograma» desde una fila del plan llega al diente correcto
+   * en vez de a la carta en blanco.
+   */
+  initialTooth?: string | null;
+  /** Devuelve la selección a la URL, para que recargar o compartir el enlace vuelva al mismo diente. */
+  onToothChange?: (toothNumber: string | null) => void;
+  /** Construye el href del tab de plan enfocado en `toothNumber` (la otra mitad del puente). */
+  planHref?: (toothNumber: string) => string;
 }
 
 /**
@@ -55,7 +84,13 @@ interface OdontogramTabProps {
  * action) instead of the full-page `SectionError`, which is still reserved
  * for a failed FIRST load (nothing to show yet in that case).
  */
-export function OdontogramTab({ token, patientId }: OdontogramTabProps) {
+export function OdontogramTab({
+  token,
+  patientId,
+  initialTooth = null,
+  onToothChange,
+  planHref,
+}: OdontogramTabProps) {
   const [toothGroups, setToothGroups] = useState<ToothGroup[]>([]);
   const [catalogItems, setCatalogItems] = useState<DentalCatalogItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -64,7 +99,10 @@ export function OdontogramTab({ token, patientId }: OdontogramTabProps) {
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
-  const [selectedTooth, setSelectedTooth] = useState<string | null>(null);
+  // Se siembra desde la URL para que el enlace del plan abra en su diente.
+  // Sólo es el valor INICIAL: a partir de ahí manda la interacción, y cada
+  // cambio se devuelve a la URL con `onToothChange`.
+  const [selectedTooth, setSelectedTooth] = useState<string | null>(initialTooth);
   const [initialSurface, setInitialSurface] = useState<ToothSurface | null>(null);
   const [timelineRefreshKey, setTimelineRefreshKey] = useState(0);
 
@@ -130,14 +168,30 @@ export function OdontogramTab({ token, patientId }: OdontogramTabProps) {
   }
   const legendItems = catalogItems.filter((item) => usedCatalogIds.has(item.id));
 
+  // Dientes CON registros que la carta no puede dibujar. `OdontogramChart`
+  // sólo pinta la dentición permanente (32 piezas), pero el backend acepta
+  // temporales (51-85) y el plan de tratamiento los factura — así que un
+  // paciente pediátrico puede tener historia clínica invisible en su propio
+  // odontograma. Callarlo es peor que no dibujarlos: el silencio se lee como
+  // «este diente está sano».
+  const undrawnTeeth = [...states.values()]
+    .filter((state) => state.hasRecords && !isPermanentFdi(state.toothNumber))
+    .map((state) => state.toothNumber)
+    .sort();
+
   function handleSelectTooth(fdi: string) {
     setSelectedTooth(fdi);
     setInitialSurface(null);
+    // La URL se actualiza desde el manejador y no desde un efecto sobre
+    // `selectedTooth`: un efecto también dispararía al sembrar desde la propia
+    // URL, reescribiéndola con lo que ya decía.
+    onToothChange?.(fdi);
   }
 
   function handleSelectSurface(fdi: string, surface: ToothSurface) {
     setSelectedTooth(fdi);
     setInitialSurface(surface);
+    onToothChange?.(fdi);
   }
 
   function handleRecordAdded() {
@@ -186,13 +240,39 @@ export function OdontogramTab({ token, patientId }: OdontogramTabProps) {
             </p>
           )}
         </div>
+
+        {/* Se declara justo bajo la carta, no en un rincón: es una advertencia
+            sobre lo que la carta NO está diciendo, y sólo aparece cuando este
+            paciente concreto tiene registros invisibles. `role="status"`,
+            porque es una limitación conocida del dibujo, no un fallo. */}
+        {undrawnTeeth.length > 0 && (
+          <p role="status" className="text-sm text-muted">
+            {copy.undrawnTeeth(undrawnTeeth)}
+          </p>
+        )}
       </div>
 
       {selectedTooth ? (
         <section aria-labelledby="odontogram-tooth-heading" className="flex flex-col gap-4">
-          <h2 id="odontogram-tooth-heading" className="t-title text-ink">
-            {copy.toothHeading(selectedTooth)}
-          </h2>
+          <div className="flex flex-wrap items-baseline justify-between gap-x-4 gap-y-1">
+            <h2 id="odontogram-tooth-heading" className="t-title text-ink">
+              {copy.toothHeading(selectedTooth)}
+            </h2>
+            {/* La otra mitad del puente. Un `<Link>` de verdad y no un botón:
+                es una ubicación, así que tiene que poder abrirse en otra
+                pestaña y copiarse como cualquier dirección. El nombre
+                accesible empieza por el texto visible y nombra el diente
+                (WCAG 2.5.3). */}
+            {planHref ? (
+              <Link
+                href={planHref(selectedTooth)}
+                aria-label={copy.viewInPlanFor(selectedTooth)}
+                className="text-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+              >
+                {copy.viewInPlan}
+              </Link>
+            ) : null}
+          </div>
           <div className="grid min-w-0 items-start gap-6 lg:grid-cols-2">
             <div className="flex min-w-0 flex-col gap-2">
               <h3 className="t-label text-muted">{copy.historyHeading}</h3>

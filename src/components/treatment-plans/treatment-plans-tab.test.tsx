@@ -219,6 +219,20 @@ const patient1: Patient = {
   updatedAt: '2026-01-01T00:00:00.000Z',
 };
 
+/**
+ * La tabla de abonos vive plegada dentro de un `Disclosure` cuando el plan ya
+ * tiene abonos: lo que decide si hace falta abrirla —cuántos hay— se lee en la
+ * propia fila, y el Saldo sigue arriba. Los tests que miran el detalle abren
+ * el pliegue primero.
+ */
+async function openPaymentsTable(
+  user: ReturnType<typeof userEvent.setup>,
+): Promise<HTMLElement> {
+  const trigger = await screen.findByRole("button", { name: /abonos y saldo/i });
+  if (trigger.getAttribute("aria-expanded") === "false") await user.click(trigger);
+  return screen.findByRole("table", { name: /abonos del plan de tratamiento/i });
+}
+
 const currencyFormatter = new Intl.NumberFormat('es', { style: 'currency', currency: 'USD' });
 /**
  * `Intl.NumberFormat`'s `es` output places a NBSP (` `) between the
@@ -349,11 +363,13 @@ describe('TreatmentPlansTab', () => {
 
     await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
 
-    const procedureSelect = screen.getByLabelText<HTMLSelectElement>(/^procedimiento$/i);
+    // El procedimiento se elige en el `CatalogPicker` filtrado (radios), el
+    // mismo que usa el odontograma — ya no en un `<select>` nativo sobre el
+    // catálogo entero.
     const priceInput = screen.getByLabelText<HTMLInputElement>(/^precio$/i);
     expect(priceInput.value).toBe('');
 
-    await user.selectOptions(procedureSelect, 'cat-1');
+    await user.click(screen.getByRole('radio', { name: /resina/i }));
     expect(priceInput.value).toBe('50000');
 
     // Still editable after the prefill.
@@ -369,7 +385,7 @@ describe('TreatmentPlansTab', () => {
       total: plan1Detail.total + 45000,
     });
 
-    await user.type(screen.getByLabelText(/diente \(fdi\)/i), '16');
+    await user.type(screen.getByLabelText(/código fdi/i), '16');
     await user.click(screen.getByRole('button', { name: /^agregar ítem$/i }));
 
     await waitFor(() =>
@@ -389,8 +405,8 @@ describe('TreatmentPlansTab', () => {
     render(<TreatmentPlansTab patientId="pat-1" token="tok" />);
     await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
 
-    await user.type(screen.getByLabelText(/diente \(fdi\)/i), '99');
-    await user.selectOptions(screen.getByLabelText<HTMLSelectElement>(/^procedimiento$/i), 'cat-1');
+    await user.type(screen.getByLabelText(/código fdi/i), '99');
+    await user.click(screen.getByRole('radio', { name: /resina/i }));
     await user.click(screen.getByRole('button', { name: /^agregar ítem$/i }));
 
     expect(await screen.findByText(/número de diente inválido/i)).toBeInTheDocument();
@@ -468,6 +484,10 @@ describe('TreatmentPlansTab', () => {
     const removeButton = within(row).getByRole('button', { name: /quitar/i });
 
     await user.click(removeButton);
+    // La fila ya no quita directamente: abre la confirmación.
+    const confirm = await screen.findByRole('dialog', { name: /quitar este ítem del plan/i });
+    expect(mockedRemoveItem).not.toHaveBeenCalled();
+    await user.click(within(confirm).getByRole('button', { name: 'Quitar ítem' }));
 
     await waitFor(() => expect(mockedRemoveItem).toHaveBeenCalledWith('tok', 'plan-1', 'item-1'));
     await waitFor(() => expect(mockedGetPlan).toHaveBeenCalledTimes(2));
@@ -485,6 +505,54 @@ describe('TreatmentPlansTab', () => {
     // nodes.
     const totalRow = screen.getByText('Total').closest('div') as HTMLElement;
     expect(within(totalRow).getByText(expectedCurrencyText(item2.price))).toBeInTheDocument();
+  });
+
+  it('cancelling the "quitar ítem" confirmation leaves the item alone — removeItem is never called', async () => {
+    mockedListPlans.mockResolvedValue([plan1]);
+    mockedGetPlan.mockResolvedValue(plan1Detail);
+    mockedRemoveItem.mockResolvedValue(undefined);
+
+    const user = userEvent.setup();
+    render(<TreatmentPlansTab patientId="pat-1" token="tok" />);
+
+    const table = await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+    const row = within(table).getByText('11').closest('tr') as HTMLTableRowElement;
+    await user.click(within(row).getByRole('button', { name: /quitar/i }));
+
+    const confirm = await screen.findByRole('dialog', { name: /quitar este ítem del plan/i });
+    // La descripción dice lo que de verdad hace el backend (soft-delete: sale
+    // del plan, no se borra de la base de datos) — no promete un deshacer.
+    expect(confirm).toHaveTextContent(/no se borra de la base de datos/i);
+    await user.click(within(confirm).getByRole('button', { name: 'Cancelar' }));
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(mockedRemoveItem).not.toHaveBeenCalled();
+    expect(within(table).getByText('11')).toBeInTheDocument();
+  });
+
+  it('cancelling the "anular abono" confirmation leaves the abono alone — voidPayment is never called', async () => {
+    mockedListPlans.mockResolvedValue([plan1]);
+    mockedGetPlan.mockResolvedValue(plan1Detail);
+    mockedGetPlanBalance.mockResolvedValue(balance1);
+    mockedListPayments.mockResolvedValue([payment1]);
+    mockedVoidPayment.mockResolvedValue(undefined);
+
+    const user = userEvent.setup();
+    render(<TreatmentPlansTab patientId="pat-1" token="tok" />);
+
+    const paymentsTable = await openPaymentsTable(user);
+    const row = within(paymentsTable)
+      .getByText(expectedCurrencyText(payment1.amount))
+      .closest('tr') as HTMLTableRowElement;
+    await user.click(within(row).getByRole('button', { name: /anular/i }));
+
+    const confirm = await screen.findByRole('dialog', { name: /anular este abono/i });
+    expect(confirm).toHaveTextContent(/no se borra de la base de datos/i);
+    await user.click(within(confirm).getByRole('button', { name: 'Cancelar' }));
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(mockedVoidPayment).not.toHaveBeenCalled();
+    expect(within(paymentsTable).getByText(expectedCurrencyText(payment1.amount))).toBeInTheDocument();
   });
 
   it("changing the plan's status calls updatePlan then refreshes the detail (and the plan list) in place", async () => {
@@ -514,6 +582,7 @@ describe('TreatmentPlansTab', () => {
     mockedGetPlanBalance.mockResolvedValue(balance1);
     mockedListPayments.mockResolvedValue([payment1]);
 
+    const user = userEvent.setup();
     render(<TreatmentPlansTab patientId="pat-1" token="tok" />);
     await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
 
@@ -527,7 +596,7 @@ describe('TreatmentPlansTab', () => {
     const balanceCard = screen.getByText('Saldo').closest('div') as HTMLElement;
     expect(within(balanceCard).getByText(expectedCurrencyText(balance1.balance))).toBeInTheDocument();
 
-    const paymentsTable = screen.getByRole('table', { name: /abonos del plan de tratamiento/i });
+    const paymentsTable = await openPaymentsTable(user);
     expect(within(paymentsTable).getByText(expectedCurrencyText(payment1.amount))).toBeInTheDocument();
     expect(within(paymentsTable).getByText('Efectivo')).toBeInTheDocument();
   });
@@ -592,7 +661,7 @@ describe('TreatmentPlansTab', () => {
     const user = userEvent.setup();
     render(<TreatmentPlansTab patientId="pat-1" token="tok" />);
 
-    const paymentsTable = await screen.findByRole('table', { name: /abonos del plan de tratamiento/i });
+    const paymentsTable = await openPaymentsTable(user);
     const row = within(paymentsTable)
       .getByText(expectedCurrencyText(payment1.amount))
       .closest('tr') as HTMLTableRowElement;
@@ -603,6 +672,10 @@ describe('TreatmentPlansTab', () => {
     mockedListPayments.mockResolvedValueOnce([]);
 
     await user.click(voidButton);
+    // La fila ya no anula directamente: abre la confirmación.
+    const confirm = await screen.findByRole('dialog', { name: /anular este abono/i });
+    expect(mockedVoidPayment).not.toHaveBeenCalled();
+    await user.click(within(confirm).getByRole('button', { name: 'Anular abono' }));
 
     await waitFor(() => expect(mockedVoidPayment).toHaveBeenCalledWith('tok', 'pay-1'));
     await waitFor(() => expect(mockedGetPlanBalance).toHaveBeenCalledTimes(2));
@@ -625,7 +698,7 @@ describe('TreatmentPlansTab', () => {
     await waitFor(() => expect(mockedGetPatient).toHaveBeenCalledWith('tok', 'pat-1'));
     await waitFor(() => expect(mockedFetchClinicName).toHaveBeenCalledTimes(1));
 
-    const paymentsTable = await screen.findByRole('table', { name: /abonos del plan de tratamiento/i });
+    const paymentsTable = await openPaymentsTable(user);
     const row = within(paymentsTable)
       .getByText(expectedCurrencyText(payment1.amount))
       .closest('tr') as HTMLTableRowElement;
@@ -653,7 +726,7 @@ describe('TreatmentPlansTab', () => {
     const user = userEvent.setup();
     render(<TreatmentPlansTab patientId="pat-1" token="tok" />);
 
-    const paymentsTable = await screen.findByRole('table', { name: /abonos del plan de tratamiento/i });
+    const paymentsTable = await openPaymentsTable(user);
     const row = within(paymentsTable)
       .getByText(expectedCurrencyText(payment1.amount))
       .closest('tr') as HTMLTableRowElement;
@@ -852,7 +925,7 @@ describe('TreatmentPlansTab', () => {
       expect(alert.closest('[role="alert"]')).not.toBeNull();
     });
 
-    it('quitar un ítem que falla se muestra en línea, junto a la tabla (escalón 4: itemActionError)', async () => {
+    it('quitar un ítem que falla se muestra dentro del diálogo de confirmación (escalón 4: removeItemError)', async () => {
       mockedListPlans.mockResolvedValue([plan1]);
       mockedGetPlan.mockResolvedValue(plan1Detail);
       mockedRemoveItem.mockRejectedValueOnce(new ApiError(500, 'No se pudo quitar'));
@@ -863,9 +936,13 @@ describe('TreatmentPlansTab', () => {
       const row = within(table).getByText('11').closest('tr') as HTMLTableRowElement;
 
       await user.click(within(row).getByRole('button', { name: /quitar/i }));
+      const confirm = await screen.findByRole('dialog', { name: /quitar este ítem del plan/i });
+      await user.click(within(confirm).getByRole('button', { name: 'Quitar ítem' }));
 
       const alert = await screen.findByText('No se pudo quitar');
       expect(alert.closest('[role="alert"]')).not.toBeNull();
+      // El fallo se queda donde el usuario decidió: el diálogo sigue abierto.
+      expect(screen.getByRole('dialog', { name: /quitar este ítem del plan/i })).toBeInTheDocument();
     });
 
     it('el saldo/abonos que fallan al cargar usan el estado de sección con reintento, y el reintento limpia el error y muestra el contenido (escalón 1: paymentsError)', async () => {
@@ -912,12 +989,14 @@ describe('TreatmentPlansTab', () => {
           <Toaster />
         </>,
       );
-      const paymentsTable = await screen.findByRole('table', { name: /abonos del plan de tratamiento/i });
+      const paymentsTable = await openPaymentsTable(user);
       const row = within(paymentsTable)
         .getByText(expectedCurrencyText(payment1.amount))
         .closest('tr') as HTMLTableRowElement;
 
       await user.click(within(row).getByRole('button', { name: /anular/i }));
+      const confirm = await screen.findByRole('dialog', { name: /anular este abono/i });
+      await user.click(within(confirm).getByRole('button', { name: 'Anular abono' }));
 
       const toastText = await screen.findByText('No se pudo refrescar el saldo');
       expect(toastText.closest('[role="alert"]')).toBeNull();
@@ -930,7 +1009,7 @@ describe('TreatmentPlansTab', () => {
       await waitFor(() => expect(mockedGetPlanBalance).toHaveBeenCalledTimes(3));
     });
 
-    it('anular un abono que falla se muestra en línea (escalón 4: paymentActionError)', async () => {
+    it('anular un abono que falla se muestra dentro del diálogo de confirmación (escalón 4: paymentActionError)', async () => {
       mockedListPlans.mockResolvedValue([plan1]);
       mockedGetPlan.mockResolvedValue(plan1Detail);
       mockedGetPlanBalance.mockResolvedValue(balance1);
@@ -939,15 +1018,18 @@ describe('TreatmentPlansTab', () => {
 
       const user = userEvent.setup();
       render(<TreatmentPlansTab patientId="pat-1" token="tok" />);
-      const paymentsTable = await screen.findByRole('table', { name: /abonos del plan de tratamiento/i });
+      const paymentsTable = await openPaymentsTable(user);
       const row = within(paymentsTable)
         .getByText(expectedCurrencyText(payment1.amount))
         .closest('tr') as HTMLTableRowElement;
 
       await user.click(within(row).getByRole('button', { name: /anular/i }));
+      const confirm = await screen.findByRole('dialog', { name: /anular este abono/i });
+      await user.click(within(confirm).getByRole('button', { name: 'Anular abono' }));
 
       const alert = await screen.findByText('No se pudo anular');
       expect(alert.closest('[role="alert"]')).not.toBeNull();
+      expect(screen.getByRole('dialog', { name: /anular este abono/i })).toBeInTheDocument();
     });
 
     it('agregar un ítem que falla en el backend se muestra en línea junto al formulario (escalón 4: addItemError)', async () => {
@@ -959,8 +1041,8 @@ describe('TreatmentPlansTab', () => {
       render(<TreatmentPlansTab patientId="pat-1" token="tok" />);
       await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
 
-      await user.type(screen.getByLabelText(/diente \(fdi\)/i), '16');
-      await user.selectOptions(screen.getByLabelText<HTMLSelectElement>(/^procedimiento$/i), 'cat-1');
+      await user.type(screen.getByLabelText(/código fdi/i), '16');
+      await user.click(screen.getByRole('radio', { name: /resina/i }));
       await user.click(screen.getByRole('button', { name: /^agregar ítem$/i }));
 
       const alert = await screen.findByText('Precio requerido');

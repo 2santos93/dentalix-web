@@ -1,7 +1,7 @@
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { Tooth } from './tooth';
-import type { ToothRecord } from '@/lib/odontogram/odontogram-api';
+import type { ToothRecord, ToothSurface } from '@/lib/odontogram/odontogram-api';
 import type { ToothState } from '@/lib/odontogram/projection';
 
 function record(overrides: Partial<ToothRecord> = {}): ToothRecord {
@@ -17,15 +17,42 @@ function record(overrides: Partial<ToothRecord> = {}): ToothRecord {
   };
 }
 
-describe('Tooth', () => {
-  it('renders the 5 surface regions with accessible names', () => {
-    render(<Tooth toothNumber="11" onSelectTooth={jest.fn()} onSelectSurface={jest.fn()} />);
+// The surfaces are `aria-hidden` painted regions (the tooth announces them in
+// its own label), so they have no role and no accessible name: they're located
+// by `data-surface`.
+function surfaceRegion(container: HTMLElement, surface: ToothSurface): Element {
+  const region = container.querySelector(`[data-surface="${surface}"]`);
+  if (!region) throw new Error(`No surface region for ${surface}`);
+  return region;
+}
 
-    expect(screen.getByRole('button', { name: /diente 11.*vestibular/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /diente 11.*lingual/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /diente 11.*mesial/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /diente 11.*distal/i })).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /diente 11.*oclusal/i })).toBeInTheDocument();
+function state(overrides: Partial<ToothState> = {}): ToothState {
+  return {
+    toothNumber: '11',
+    hasRecords: true,
+    records: [record()],
+    surfaceState: { OCCLUSAL: record() },
+    wholeToothRecord: null,
+    color: null,
+    ...overrides,
+  };
+}
+
+describe('Tooth', () => {
+  it('draws the 5 surface regions but keeps them out of the accessibility tree', () => {
+    const { container } = render(
+      <Tooth toothNumber="11" onSelectTooth={jest.fn()} onSelectSurface={jest.fn()} />,
+    );
+
+    const regions = container.querySelectorAll('polygon[data-surface]');
+    expect(regions).toHaveLength(5);
+    for (const region of regions) {
+      expect(region).toHaveAttribute('aria-hidden', 'true');
+    }
+    // The bug being fixed: every surface used to be a `role="button"` with its
+    // own name — 5 extra stops per tooth in the screen reader's buffer.
+    expect(container.querySelectorAll('polygon[role="button"]')).toHaveLength(0);
+    expect(screen.queryByRole('button', { name: /cara/i })).not.toBeInTheDocument();
   });
 
   it('renders a group with an aria-label carrying the FDI number', () => {
@@ -33,29 +60,90 @@ describe('Tooth', () => {
     expect(screen.getByRole('group', { name: /diente 24/i })).toBeInTheDocument();
   });
 
+  it('announces a healthy tooth as such', () => {
+    render(<Tooth toothNumber="11" onSelectTooth={jest.fn()} onSelectSurface={jest.fn()} />);
+    expect(screen.getByRole('group')).toHaveAttribute('aria-label', 'Diente 11, sano');
+  });
+
+  it('folds a single affected surface into the tooth label', () => {
+    render(
+      <Tooth toothNumber="11" state={state()} onSelectTooth={jest.fn()} onSelectSurface={jest.fn()} />,
+    );
+    expect(screen.getByRole('group')).toHaveAttribute(
+      'aria-label',
+      'Diente 11, 1 registro, cara oclusal',
+    );
+  });
+
+  it('lists several affected surfaces in one readable string, not a comma soup', () => {
+    const three = state({
+      records: [record(), record({ id: 'rec-2' }), record({ id: 'rec-3' })],
+      surfaceState: {
+        VESTIBULAR: record({ id: 'rec-2', surfaces: ['VESTIBULAR'] }),
+        MESIAL: record({ id: 'rec-3', surfaces: ['MESIAL'] }),
+        OCCLUSAL: record(),
+      },
+    });
+
+    render(
+      <Tooth toothNumber="11" state={three} onSelectTooth={jest.fn()} onSelectSurface={jest.fn()} />,
+    );
+
+    expect(screen.getByRole('group')).toHaveAttribute(
+      'aria-label',
+      'Diente 11, 3 registros, caras vestibular, mesial y oclusal',
+    );
+  });
+
+  it('announces a whole-tooth record as every surface instead of listing all five', () => {
+    const extracted = state({
+      records: [record({ surfaces: [] })],
+      surfaceState: {},
+      wholeToothRecord: record({ surfaces: [] }),
+    });
+
+    render(
+      <Tooth
+        toothNumber="11"
+        state={extracted}
+        onSelectTooth={jest.fn()}
+        onSelectSurface={jest.fn()}
+      />,
+    );
+
+    expect(screen.getByRole('group')).toHaveAttribute(
+      'aria-label',
+      'Diente 11, 1 registro, todas las caras',
+    );
+  });
+
   it('clicking a surface fires onSelectSurface with that surface', async () => {
     const user = userEvent.setup();
     const onSelectSurface = jest.fn();
-    render(<Tooth toothNumber="11" onSelectTooth={jest.fn()} onSelectSurface={onSelectSurface} />);
+    const { container } = render(
+      <Tooth toothNumber="11" onSelectTooth={jest.fn()} onSelectSurface={onSelectSurface} />,
+    );
 
-    await user.click(screen.getByRole('button', { name: /diente 11.*oclusal/i }));
+    await user.click(surfaceRegion(container, 'OCCLUSAL'));
     expect(onSelectSurface).toHaveBeenCalledWith('OCCLUSAL');
 
-    await user.click(screen.getByRole('button', { name: /diente 11.*mesial/i }));
+    await user.click(surfaceRegion(container, 'MESIAL'));
     expect(onSelectSurface).toHaveBeenCalledWith('MESIAL');
   });
 
   it('is operable by keyboard: Enter and Space on a surface trigger onSelectSurface', async () => {
     const user = userEvent.setup();
     const onSelectSurface = jest.fn();
-    render(<Tooth toothNumber="11" onSelectTooth={jest.fn()} onSelectSurface={onSelectSurface} />);
+    const { container } = render(
+      <Tooth toothNumber="11" onSelectTooth={jest.fn()} onSelectSurface={onSelectSurface} />,
+    );
 
-    const distal = screen.getByRole('button', { name: /diente 11.*distal/i });
+    const distal = surfaceRegion(container, 'DISTAL') as SVGPolygonElement;
     distal.focus();
     await user.keyboard('{Enter}');
     expect(onSelectSurface).toHaveBeenCalledWith('DISTAL');
 
-    const lingual = screen.getByRole('button', { name: /diente 11.*lingual/i });
+    const lingual = surfaceRegion(container, 'LINGUAL') as SVGPolygonElement;
     lingual.focus();
     await user.keyboard(' ');
     expect(onSelectSurface).toHaveBeenCalledWith('LINGUAL');
@@ -71,42 +159,40 @@ describe('Tooth', () => {
   });
 
   it('applies the catalog color to a surface that has a matching record', () => {
-    const state: ToothState = {
-      toothNumber: '11',
-      hasRecords: true,
-      records: [record()],
-      surfaceState: { OCCLUSAL: record() },
-      wholeToothRecord: null,
-      color: '#DC2626',
-    };
     const catalogById = new Map([['cat-1', { color: '#DC2626' }]]);
 
-    render(
+    const { container } = render(
       <Tooth
         toothNumber="11"
-        state={state}
+        state={state({ color: '#DC2626' })}
         catalogById={catalogById}
         onSelectTooth={jest.fn()}
         onSelectSurface={jest.fn()}
       />,
     );
 
-    const occlusal = screen.getByRole('button', { name: /diente 11.*oclusal/i });
-    expect(occlusal).toHaveAttribute('style', expect.stringContaining('fill: #DC2626'));
+    expect(surfaceRegion(container, 'OCCLUSAL')).toHaveAttribute(
+      'style',
+      expect.stringContaining('fill: #DC2626'),
+    );
   });
 
   it('a healthy surface (no record) does not carry an inline fill — it relies on the neutral token class', () => {
-    render(<Tooth toothNumber="11" onSelectTooth={jest.fn()} onSelectSurface={jest.fn()} />);
+    const { container } = render(
+      <Tooth toothNumber="11" onSelectTooth={jest.fn()} onSelectSurface={jest.fn()} />,
+    );
 
-    const occlusal = screen.getByRole('button', { name: /diente 11.*oclusal/i });
+    const occlusal = surfaceRegion(container, 'OCCLUSAL');
     expect(occlusal.getAttribute('style') ?? '').not.toContain('fill:');
     expect(occlusal.getAttribute('class')).toContain('fill-surface');
   });
 
   it('a healthy (unmarked) surface outline uses the higher-contrast muted stroke token, not the low-contrast border token', () => {
-    render(<Tooth toothNumber="11" onSelectTooth={jest.fn()} onSelectSurface={jest.fn()} />);
+    const { container } = render(
+      <Tooth toothNumber="11" onSelectTooth={jest.fn()} onSelectSurface={jest.fn()} />,
+    );
 
-    const occlusal = screen.getByRole('button', { name: /diente 11.*oclusal/i });
+    const occlusal = surfaceRegion(container, 'OCCLUSAL');
     expect(occlusal.getAttribute('class')).toContain('stroke-muted');
     expect(occlusal.getAttribute('class')).not.toContain('stroke-border');
   });
@@ -157,13 +243,12 @@ describe('Tooth', () => {
   });
 
   it('is a single tooth-level tab stop, with the surfaces out of the tab order', () => {
-    render(<Tooth toothNumber="11" tabbable onSelectTooth={jest.fn()} onSelectSurface={jest.fn()} />);
+    const { container } = render(
+      <Tooth toothNumber="11" tabbable onSelectTooth={jest.fn()} onSelectSurface={jest.fn()} />,
+    );
 
     expect(screen.getByRole('button', { name: '11' })).toHaveAttribute('tabindex', '0');
-    expect(screen.getByRole('button', { name: /diente 11.*oclusal/i })).toHaveAttribute(
-      'tabindex',
-      '-1',
-    );
+    expect(surfaceRegion(container, 'OCCLUSAL')).toHaveAttribute('tabindex', '-1');
   });
 
   it('marks the selected tooth on its FDI control for assistive tech', () => {

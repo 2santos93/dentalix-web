@@ -141,10 +141,13 @@ test('register a procedure on a tooth -> colored + in timeline, persists after r
   await expect(chart).toBeVisible({ timeout: 10_000 });
 
   // --- Select tooth 11's Oclusal surface in the SVG chart ---
-  // A regex (not the exact healthy-state label) so the same locator still
-  // matches after the surface's accessible name flips to "... con registro"
-  // post-save, and again after reload.
-  const occlusalSurface = chart.getByRole('button', { name: new RegExp(`Diente ${toothFdi}, cara oclusal`) });
+  // The surfaces are `aria-hidden` painted regions (the tooth announces them
+  // in its own label, see tooth.tsx), so they're located by `data-surface`
+  // inside their tooth's group — the tooth group's name is matched with a
+  // regex so it keeps matching after the label flips to "... 1 registro,
+  // cara oclusal" post-save, and again after reload.
+  const tooth = chart.getByRole('group', { name: new RegExp(`^Diente ${toothFdi},`) });
+  const occlusalSurface = tooth.locator('[data-surface="OCCLUSAL"]');
   await occlusalSurface.click();
 
   // Clicking the surface both selects the tooth AND pre-checks "Oclusal" in
@@ -174,9 +177,9 @@ test('register a procedure on a tooth -> colored + in timeline, persists after r
 
   // --- The tooth surface in the chart is now colored with the catalog item's color ---
   await expect(occlusalSurface).toHaveCSS('fill', catalogColorRgb, { timeout: 10_000 });
-  // ...and its accessible name reflects it now has a record.
+  // ...and the tooth's accessible name reflects it now has a record on that face.
   await expect(
-    chart.getByRole('button', { name: new RegExp(`Diente ${toothFdi}, cara oclusal, con registro`) }),
+    chart.getByRole('group', { name: `Diente ${toothFdi}, 1 registro, cara oclusal` }),
   ).toBeVisible();
 
   // --- Reload: both the coloring and the timeline entry must survive ---
@@ -195,10 +198,11 @@ test('register a procedure on a tooth -> colored + in timeline, persists after r
   const chartAfterReload = page.getByRole('group', { name: 'Odontograma', exact: true });
   await expect(chartAfterReload).toBeVisible({ timeout: 10_000 });
 
-  // Colored surface, and its accessible name, persisted through the backend.
-  const occlusalSurfaceAfterReload = chartAfterReload.getByRole('button', {
-    name: new RegExp(`Diente ${toothFdi}, cara oclusal, con registro`),
+  // Colored surface, and the tooth's accessible name, persisted through the backend.
+  const toothAfterReload = chartAfterReload.getByRole('group', {
+    name: `Diente ${toothFdi}, 1 registro, cara oclusal`,
   });
+  const occlusalSurfaceAfterReload = toothAfterReload.locator('[data-surface="OCCLUSAL"]');
   await expect(occlusalSurfaceAfterReload).toBeVisible({ timeout: 10_000 });
   await expect(occlusalSurfaceAfterReload).toHaveCSS('fill', catalogColorRgb);
 

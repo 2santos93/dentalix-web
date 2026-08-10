@@ -23,6 +23,10 @@ import { ConfirmDialog } from '@/components/molecules/confirm-dialog';
 import { EmptyState } from '@/components/molecules/empty-state';
 import { SectionError } from '@/components/errors/section-error';
 import { formatCivilDate } from '@/lib/format/date';
+// Crash-safe by contract: a plan whose currency isn't a valid ISO 4217 code
+// would make an inline `Intl.NumberFormat` throw during render and take this
+// whole subtree down (~8 money cells here). See `formatCurrency`'s own doc.
+import { formatCurrency } from '@/lib/format/currency';
 
 const copy = {
   heading: 'Plan de pagos',
@@ -84,10 +88,6 @@ const PERIODICITY_OPTIONS: { value: Periodicity; label: string }[] = [
 // and rationale as treatment-plans-tab.tsx (kept native for a11y/tests).
 const fieldClass =
   'flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-50';
-
-function formatMoney(amount: number, currency: string): string {
-  return new Intl.NumberFormat('es', { style: 'currency', currency }).format(amount);
-}
 
 function round2(n: number): number {
   return Math.round(n * 100) / 100;
@@ -292,7 +292,7 @@ export function PaymentPlanSection({ token, planId, planCurrency, billable, refr
           <Input id="pp-total" type="number" min={0} step="0.01" value={totalField} onChange={(e) => setTotalField(e.target.value)} />
         </FormField>
         <p className="text-sm text-muted">
-          {copy.financedPreview(formatMoney(previewFinanced, planCurrency), formatMoney(previewPer, planCurrency))}
+          {copy.financedPreview(formatCurrency(previewFinanced, planCurrency), formatCurrency(previewPer, planCurrency))}
         </p>
       </FormModal>
 
@@ -314,20 +314,20 @@ function PaymentPlanSummary({ plan, currency }: { plan: PaymentPlan; currency: s
   return (
     <div className="flex flex-col gap-3">
       <div className="grid gap-3 sm:grid-cols-3">
-        <SummaryTile label={copy.totalToFinance} value={formatMoney(plan.totalToFinance, currency)} />
-        <SummaryTile label={copy.paid} value={formatMoney(plan.paidTotal, currency)} />
-        <SummaryTile label={copy.remaining} value={formatMoney(plan.remaining, currency)} />
+        <SummaryTile label={copy.totalToFinance} value={formatCurrency(plan.totalToFinance, currency)} />
+        <SummaryTile label={copy.paid} value={formatCurrency(plan.paidTotal, currency)} />
+        <SummaryTile label={copy.remaining} value={formatCurrency(plan.remaining, currency)} />
       </div>
       <div className="flex flex-wrap items-center gap-x-6 gap-y-1 text-sm">
         <span className="text-muted">
           {copy.nextDue}:{' '}
           <span className="font-medium text-ink">
-            {plan.nextDue ? `${formatCivilDate(plan.nextDue.dueDate)} · ${formatMoney(plan.nextDue.amount, currency)}` : copy.none}
+            {plan.nextDue ? `${formatCivilDate(plan.nextDue.dueDate)} · ${formatCurrency(plan.nextDue.amount, currency)}` : copy.none}
           </span>
         </span>
         {plan.overdueCount > 0 ? (
           <span className="font-medium text-danger">
-            {copy.overdue}: {plan.overdueCount} · {formatMoney(plan.overdueAmount, currency)}
+            {copy.overdue}: {plan.overdueCount} · {formatCurrency(plan.overdueAmount, currency)}
           </span>
         ) : null}
       </div>
@@ -402,8 +402,8 @@ function InstallmentsTable({ plan, currency }: { plan: PaymentPlan; currency: st
               <TableRow key={r.key}>
                 <TableCell className="font-medium tabular-nums">{r.label}</TableCell>
                 <TableCell className="tabular-nums">{formatCivilDate(r.dueDate)}</TableCell>
-                <TableCell className="text-right tabular-nums">{formatMoney(r.amount, currency)}</TableCell>
-                <TableCell className="text-right tabular-nums">{formatMoney(r.covered, currency)}</TableCell>
+                <TableCell className="text-right tabular-nums">{formatCurrency(r.amount, currency)}</TableCell>
+                <TableCell className="text-right tabular-nums">{formatCurrency(r.covered, currency)}</TableCell>
                 <TableCell>
                   <Badge variant={INSTALLMENT_STATUS_BADGE_VARIANT[r.status]}>
                     {INSTALLMENT_STATUS_LABELS[r.status]}
@@ -429,10 +429,10 @@ function InstallmentsTable({ plan, currency }: { plan: PaymentPlan; currency: st
               <p className="mt-1 text-sm text-muted tabular-nums">{formatCivilDate(r.dueDate)}</p>
               <p className="mt-1 font-medium text-ink tabular-nums">
                 <span className="sr-only">Cubierto: </span>
-                {formatMoney(r.covered, currency)}
+                {formatCurrency(r.covered, currency)}
                 {' / '}
                 <span className="sr-only">Monto: </span>
-                {formatMoney(r.amount, currency)}
+                {formatCurrency(r.amount, currency)}
               </p>
             </Card>
           </li>

@@ -274,6 +274,88 @@ describe('ToothRecordPanel', () => {
     expect(screen.getByRole('checkbox', { name: /oclusal/i })).not.toBeChecked();
   });
 
+  it('confirms the save by naming what was recorded — tooth, catalog item and surfaces', async () => {
+    mockedListCatalog.mockResolvedValue(catalog);
+    mockedAddRecord.mockResolvedValue(createdRecord);
+
+    const user = userEvent.setup();
+    render(<ToothRecordPanel token="tok" patientId="p1" toothNumber="26" onRecordAdded={jest.fn()} />);
+    await screen.findByRole('radio', { name: /resina/i });
+
+    await user.click(screen.getByRole('radio', { name: /resina/i }));
+    await user.click(screen.getByRole('checkbox', { name: /mesial/i }));
+    await user.click(screen.getByRole('checkbox', { name: /oclusal/i }));
+    await user.click(screen.getByRole('button', { name: /guardar/i }));
+
+    expect(await screen.findByText('Registrado en el diente 26 · Resina · mesial, oclusal')).toBeInTheDocument();
+  });
+
+  it('names "diente completo" in the confirmation when no surfaces were picked', async () => {
+    mockedListCatalog.mockResolvedValue(catalog);
+    mockedAddRecord.mockResolvedValue(createdRecord);
+
+    const user = userEvent.setup();
+    render(<ToothRecordPanel token="tok" patientId="p1" toothNumber="11" onRecordAdded={jest.fn()} />);
+    await screen.findByRole('radio', { name: /caries/i });
+
+    await user.click(screen.getByRole('radio', { name: /caries/i }));
+    await user.click(screen.getByRole('checkbox', { name: /diente completo/i }));
+    await user.click(screen.getByRole('button', { name: /guardar/i }));
+
+    expect(await screen.findByText('Registrado en el diente 11 · Caries · diente completo')).toBeInTheDocument();
+  });
+
+  it('clears the confirmation when the user starts another entry, and when the tooth changes', async () => {
+    mockedListCatalog.mockResolvedValue(catalog);
+    mockedAddRecord.mockResolvedValue(createdRecord);
+
+    const user = userEvent.setup();
+    const { rerender } = render(
+      <ToothRecordPanel token="tok" patientId="p1" toothNumber="11" onRecordAdded={jest.fn()} />,
+    );
+    await screen.findByRole('radio', { name: /caries/i });
+
+    await user.click(screen.getByRole('radio', { name: /caries/i }));
+    await user.click(screen.getByRole('checkbox', { name: /oclusal/i }));
+    await user.click(screen.getByRole('button', { name: /guardar/i }));
+    await screen.findByText(/^Registrado en el diente 11/);
+
+    // Empezar otra entrada la retira: ya no describe lo que hay en pantalla.
+    await user.click(screen.getByRole('radio', { name: /resina/i }));
+    expect(screen.queryByText(/^Registrado en el diente/)).not.toBeInTheDocument();
+
+    // Y un guardado seguido de un cambio de diente tampoco la arrastra.
+    await user.click(screen.getByRole('checkbox', { name: /oclusal/i }));
+    await user.click(screen.getByRole('button', { name: /guardar/i }));
+    await screen.findByText(/^Registrado en el diente 11/);
+
+    rerender(<ToothRecordPanel token="tok" patientId="p1" toothNumber="21" onRecordAdded={jest.fn()} />);
+    expect(screen.queryByText(/^Registrado en el diente/)).not.toBeInTheDocument();
+  });
+
+  it('keeps the save confirmation in a live region that is mounted from the start (not conditionally)', async () => {
+    mockedListCatalog.mockResolvedValue(catalog);
+    mockedAddRecord.mockResolvedValue(createdRecord);
+
+    const user = userEvent.setup();
+    const { container } = render(
+      <ToothRecordPanel token="tok" patientId="p1" toothNumber="11" onRecordAdded={jest.fn()} />,
+    );
+    await screen.findByRole('radio', { name: /caries/i });
+
+    // Presente y vacía antes de guardar: una región que se monta con su
+    // contenido puede no llegar a anunciarse.
+    const region = container.querySelector('p[role="status"][aria-live="polite"]');
+    expect(region).not.toBeNull();
+    expect(region).toBeEmptyDOMElement();
+
+    await user.click(screen.getByRole('radio', { name: /caries/i }));
+    await user.click(screen.getByRole('checkbox', { name: /oclusal/i }));
+    await user.click(screen.getByRole('button', { name: /guardar/i }));
+
+    await waitFor(() => expect(region).toHaveTextContent(/^Registrado en el diente 11/));
+  });
+
   it('does not refetch the catalog when only toothNumber changes (catalog is tenant-wide, not per-tooth)', async () => {
     mockedListCatalog.mockResolvedValue(catalog);
     const { rerender } = render(
@@ -317,9 +399,11 @@ describe('ToothRecordPanel', () => {
       );
 
       await user.type(await screen.findByLabelText('Buscar en el catálogo'), 'implante');
-      expect(screen.getByRole('status')).toHaveTextContent(
-        'Ningún ítem del catálogo coincide con "implante".',
-      );
+      // La región viva de la confirmación de guardado también es un `status`
+      // (montada siempre, vacía) — se busca por texto, no por rol a secas.
+      expect(
+        screen.getByText('Ningún ítem del catálogo coincide con "implante".'),
+      ).toHaveAttribute('role', 'status');
     });
 
     it('shows each item kind so a long catalog stays scannable', async () => {

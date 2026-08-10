@@ -18,6 +18,8 @@ const copy = {
   loading: 'Cargando pacientes…',
   empty: 'No hay pacientes registrados todavía.',
   emptyHint: 'Crea el primer paciente para empezar a gestionar su historia.',
+  noMatches: 'Ningún paciente coincide con la búsqueda.',
+  noMatchesHint: 'Revisa el nombre o el número de documento.',
   colName: 'Nombre',
   colDoc: 'Documento',
   colPhone: 'Teléfono',
@@ -36,9 +38,11 @@ function initials(patient: Patient): string {
 interface PatientsTableProps {
   patients: Patient[];
   loading: boolean;
+  /** Hay una búsqueda activa: cambia qué significa una lista vacía. */
+  filtered?: boolean;
 }
 
-export function PatientsTable({ patients, loading }: PatientsTableProps) {
+export function PatientsTable({ patients, loading, filtered = false }: PatientsTableProps) {
   if (loading) {
     return (
       <Card className="overflow-hidden p-2">
@@ -55,8 +59,15 @@ export function PatientsTable({ patients, loading }: PatientsTableProps) {
   }
 
   if (patients.length === 0) {
+    // "Todavía no hay pacientes" y "la búsqueda no encuentra ninguno" son
+    // cosas distintas: la primera invita a crear el primero, la segunda diría
+    // una falsedad si repitiera esa invitación.
     return (
-      <EmptyState role="status" title={copy.empty} description={copy.emptyHint} />
+      <EmptyState
+        role="status"
+        title={filtered ? copy.noMatches : copy.empty}
+        description={filtered ? copy.noMatchesHint : copy.emptyHint}
+      />
     );
   }
 

@@ -1,5 +1,6 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
+import { setupUser } from '@/lib/test/user';
 import { StaffView } from './staff-view';
 import { listStaffDirectory, type StaffDirectoryEntry } from '@/lib/staff/staff-api';
 import { createInvitation, revokeInvitation } from '@/lib/staff/invitations-api';
@@ -99,8 +100,10 @@ describe('StaffView', () => {
     const table = await screen.findByRole('table', { name: /personal/i });
     const filaMiembro = within(table).getByText('ana@clinic.com').closest('tr')!;
 
+    // La invitación tiene disparador de acciones; el miembro no, porque su
+    // fila entera ya enlaza a su perfil y ahí se gestiona.
     expect(
-      screen.getByRole('button', { name: /reenviar a beto@clinic\.com/i }),
+      screen.getByRole('button', { name: /acciones de Beto/i }),
     ).toBeInTheDocument();
     expect(within(filaMiembro).queryByRole('button')).not.toBeInTheDocument();
   });
@@ -115,7 +118,7 @@ describe('StaffView', () => {
   });
 
   it('buscar consulta al servidor con el término', async () => {
-    const user = userEvent.setup();
+    const user = setupUser();
     render(<StaffView token="tok" />);
     await screen.findByRole('table', { name: /personal/i });
 
@@ -130,7 +133,7 @@ describe('StaffView', () => {
   });
 
   it('los filtros de rol y estado se mandan al servidor', async () => {
-    const user = userEvent.setup();
+    const user = setupUser();
     render(<StaffView token="tok" />);
     await screen.findByRole('table', { name: /personal/i });
 
@@ -153,7 +156,7 @@ describe('StaffView', () => {
 
   it('cambiar un filtro vuelve a la página 1', async () => {
     mockedList.mockResolvedValue(page([miembro, invitacion], 50));
-    const user = userEvent.setup();
+    const user = setupUser();
     render(<StaffView token="tok" />);
     await screen.findByRole('table', { name: /personal/i });
 
@@ -187,12 +190,15 @@ describe('StaffView', () => {
       expiresAt: '2026-08-15T00:00:00.000Z',
       token: 'token-nuevo',
     });
-    const user = userEvent.setup();
+    const user = setupUser();
     render(<StaffView token="tok" />);
     await screen.findByRole('table', { name: /personal/i });
 
+    await user.click(screen.getByRole('button', { name: /acciones de Beto/i }));
     await user.click(
-      screen.getByRole('button', { name: /reenviar a beto@clinic\.com/i }),
+      within(await screen.findByRole('menu')).getByRole('menuitem', {
+        name: /reenviar/i,
+      }),
     );
 
     // No hay endpoint de reenvío: crear otra para el mismo correo revoca la
@@ -209,12 +215,15 @@ describe('StaffView', () => {
 
   it('revocar pide confirmación antes de llamar al servidor', async () => {
     mockedRevoke.mockResolvedValue(undefined);
-    const user = userEvent.setup();
+    const user = setupUser();
     render(<StaffView token="tok" />);
     await screen.findByRole('table', { name: /personal/i });
 
+    await user.click(screen.getByRole('button', { name: /acciones de Beto/i }));
     await user.click(
-      screen.getByRole('button', { name: /revocar la invitación de beto@clinic\.com/i }),
+      within(await screen.findByRole('menu')).getByRole('menuitem', {
+        name: /revocar/i,
+      }),
     );
     expect(mockedRevoke).not.toHaveBeenCalled();
 
@@ -227,7 +236,7 @@ describe('StaffView', () => {
 
   it('un fallo al revocar cierra el diálogo y ofrece reintentar en el toast', async () => {
     mockedRevoke.mockRejectedValue(new ApiError(500, 'Se cayó el servidor'));
-    const user = userEvent.setup();
+    const user = setupUser();
     render(
       <>
         <StaffView token="tok" />
@@ -236,8 +245,11 @@ describe('StaffView', () => {
     );
     await screen.findByRole('table', { name: /personal/i });
 
+    await user.click(screen.getByRole('button', { name: /acciones de Beto/i }));
     await user.click(
-      screen.getByRole('button', { name: /revocar la invitación de beto@clinic\.com/i }),
+      within(await screen.findByRole('menu')).getByRole('menuitem', {
+        name: /revocar/i,
+      }),
     );
     const dialog = await screen.findByRole('dialog');
     await user.click(within(dialog).getByRole('button', { name: /sí, revocar/i }));

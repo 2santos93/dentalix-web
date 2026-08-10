@@ -1,16 +1,20 @@
 'use client';
-import { useEffect, useState } from 'react';
-import { useParams, useRouter } from 'next/navigation';
-import Link from 'next/link';
+import { Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { ApiError } from '@/lib/api/client';
 import { getPatient, type Patient } from '@/lib/patients/patients-api';
 import { MedicalHistoryPanel } from '@/components/patients/medical-history-panel';
 import { ClinicalEntriesList } from '@/components/patients/clinical-entries-list';
 import { ClinicalAlertBanner } from '@/components/patients/clinical-alert-banner';
-import { PatientDetailTabs, type PatientDetailTabKey } from '@/components/patients/patient-detail-tabs';
+import {
+  PatientDetailTabs,
+  isPatientDetailTabKey,
+  type PatientDetailTabKey,
+} from '@/components/patients/patient-detail-tabs';
 import { PatientDataPanel } from '@/components/patients/patient-data-panel';
 import { PatientEditModal } from '@/components/patients/patient-edit-modal';
+import { PatientRecordHeader } from '@/components/patients/patient-record-header';
 import { OdontogramTab } from '@/components/odontogram/odontogram-tab';
 import { TreatmentPlansTab } from '@/components/treatment-plans/treatment-plans-tab';
 import { SectionError } from '@/components/errors/section-error';
@@ -18,7 +22,6 @@ import { SectionError } from '@/components/errors/section-error';
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
 const copy = {
-  backLink: 'Volver a pacientes',
   checkingSession: 'Verificando sesión…',
   loading: 'Cargando paciente…',
   genericError: 'No pudimos cargar el paciente.',
@@ -34,8 +37,69 @@ function fullName(patient: Patient): string {
   return `${patient.firstName} ${patient.lastName}`;
 }
 
+/**
+ * A tabpanel that is ALWAYS in the DOM (so every tab's `aria-controls` resolves
+ * to a real element, instead of three of the four dangling at any moment) but
+ * only mounts its children while it is the active one.
+ *
+ * That split is deliberate: `OdontogramTab`, `MedicalHistoryPanel`,
+ * `ClinicalEntriesList` and `TreatmentPlansTab` all fetch on mount, so
+ * rendering every panel eagerly would turn opening a patient into four round
+ * trips. The panel element is a bare `<div>` — cheap enough to always exist,
+ * and `hidden` keeps it out of both the layout and the accessibility tree.
+ *
+ * `tabIndex={-1}` makes the panel programmatically focusable so activating a
+ * tab can drop focus into the content it just revealed.
+ */
+function TabPanel({
+  tab,
+  activeTab,
+  register,
+  className,
+  children,
+}: {
+  tab: PatientDetailTabKey;
+  activeTab: PatientDetailTabKey;
+  register: (tab: PatientDetailTabKey, el: HTMLDivElement | null) => void;
+  className?: string;
+  children: ReactNode;
+}) {
+  const active = activeTab === tab;
+  return (
+    <div
+      role="tabpanel"
+      id={`tabpanel-${tab}`}
+      aria-labelledby={`tab-${tab}`}
+      ref={(el) => register(tab, el)}
+      tabIndex={-1}
+      hidden={!active}
+      // The layout classes only apply while the panel is showing: a `display`
+      // utility (`flex`) would otherwise win over `hidden`'s `display: none`.
+      className={active ? className : undefined}
+    >
+      {active ? children : null}
+    </div>
+  );
+}
+
+/**
+ * `useSearchParams` opts the subtree into client-side rendering, which Next
+ * requires to sit under a Suspense boundary. The page is `'use client'` and
+ * fully data-driven anyway (nothing below renders before the auth store
+ * rehydrates), so the boundary costs nothing visible.
+ */
 export default function PatientDetailPage() {
+  return (
+    <Suspense fallback={null}>
+      <PatientDetailView />
+    </Suspense>
+  );
+}
+
+function PatientDetailView() {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const params = useParams<{ id: string }>();
   const patientId = params.id;
   const accessToken = useAuthStore((s) => s.accessToken);
@@ -44,8 +108,62 @@ export default function PatientDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
-  const [activeTab, setActiveTab] = useState<PatientDetailTabKey>('data');
   const [editing, setEditing] = useState(false);
+  const panels = useRef(new Map<PatientDetailTabKey, HTMLDivElement>());
+  const firstRender = useRef(true);
+
+  // La pestaña abierta vive en la URL, no en `useState`: así se puede marcar,
+  // compartir y comparar dos fichas en dos pestañas del navegador, el botón
+  // Atrás vuelve a la pestaña anterior en vez de salir del paciente, y
+  // recargar el móvil devuelve al usuario donde estaba. Un valor desconocido o
+  // ausente cae en «Datos» sin romper nada.
+  const activeTab: PatientDetailTabKey = isPatientDetailTabKey(searchParams.get('tab'))
+    ? (searchParams.get('tab') as PatientDetailTabKey)
+    : 'data';
+  // El diente en foco también viaja en la URL: es el puente entre el
+  // odontograma (diente seleccionado) y el plan de tratamiento (ítems de ese
+  // diente resaltados). Solo se valida contra el formato FDI en cada consumidor.
+  const focusedTooth = searchParams.get('tooth');
+
+  /**
+   * Reescribe los parámetros SIN navegar: `router.replace` mantiene una sola
+   * entrada por cambio de pestaña en vez de llenar el historial, y
+   * `scroll: false` evita el salto al principio de la página que haría una
+   * navegación normal. Pasar `null` borra el parámetro.
+   */
+  const setParams = useCallback(
+    (next: Record<string, string | null>) => {
+      const params = new URLSearchParams(searchParams.toString());
+      for (const [key, value] of Object.entries(next)) {
+        if (value === null) params.delete(key);
+        else params.set(key, value);
+      }
+      const query = params.toString();
+      router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+    },
+    [pathname, router, searchParams],
+  );
+
+  function registerPanel(tab: PatientDetailTabKey, el: HTMLDivElement | null) {
+    if (el) panels.current.set(tab, el);
+    else panels.current.delete(tab);
+  }
+
+  // Activating a tab moves focus into its panel. The tabs use manual
+  // activation (arrows move focus, Enter/Space select — see
+  // `PatientDetailTabs`), so this only ever fires on a deliberate selection,
+  // never while arrowing across the tablist. Without it, focus stays in the
+  // tablist and a screen reader user has to hunt for the content that just
+  // replaced what was on screen.
+  useEffect(() => {
+    // The page opening on "Datos" is not a tab change; stealing focus on first
+    // paint would move it away from wherever the browser put it.
+    if (firstRender.current) {
+      firstRender.current = false;
+      return;
+    }
+    panels.current.get(activeTab)?.focus();
+  }, [activeTab]);
 
   useEffect(() => {
     // Don't decide anything until the persisted store has rehydrated —
@@ -95,21 +213,19 @@ export default function PatientDetailPage() {
   }
 
   return (
-    <div className="flex flex-1 flex-col gap-6">
-      <div className="flex flex-col gap-1">
-        <Link
-          href="/patients"
-          className="text-sm font-medium text-primary hover:underline"
-        >
-          {copy.backLink}
-        </Link>
-        <h1 className="text-2xl font-semibold tracking-tight text-ink">
-          {loading ? copy.loading : patient ? fullName(patient) : ''}
-        </h1>
-      </div>
+    // Sin `gap`: el espacio bajo la cabecera lo pone el `mb-6` de `PageHeader`,
+    // igual que en las otras ocho páginas que lo usan.
+    <div className="flex flex-1 flex-col">
+      <PatientRecordHeader
+        patient={loading ? null : patient}
+        loading={loading}
+        onEdit={() => setEditing(true)}
+      />
 
       {loading ? (
-        <p role="status" className="text-sm text-muted">
+        // El texto ya se ve en el título de la cabecera; aquí solo queda el
+        // anuncio para lectores de pantalla, que un `<h1>` no hace por sí solo.
+        <p role="status" className="sr-only">
           {copy.loading}
         </p>
       ) : error ? (
@@ -127,7 +243,7 @@ export default function PatientDetailPage() {
 
           <PatientDetailTabs
             activeTab={activeTab}
-            onTabChange={setActiveTab}
+            onTabChange={(tab) => setParams({ tab })}
             tablistLabel={fullName(patient)}
             dataLabel={copy.tabData}
             clinicalHistoryLabel={copy.tabClinicalHistory}
@@ -135,11 +251,9 @@ export default function PatientDetailPage() {
             treatmentPlansLabel={copy.tabTreatmentPlans}
           />
 
-          {activeTab === 'data' && (
-            <div role="tabpanel" id="tabpanel-data" aria-labelledby="tab-data">
-              <PatientDataPanel patient={patient} onEdit={() => setEditing(true)} />
-            </div>
-          )}
+          <TabPanel tab="data" activeTab={activeTab} register={registerPanel}>
+            <PatientDataPanel patient={patient} />
+          </TabPanel>
 
           <PatientEditModal
             open={editing}
@@ -149,45 +263,57 @@ export default function PatientDetailPage() {
             onSaved={(updated) => setPatient(updated)}
           />
 
-          {activeTab === 'clinical-history' && (
-            <div
-              role="tabpanel"
-              id="tabpanel-clinical-history"
-              aria-labelledby="tab-clinical-history"
-              className="flex flex-col gap-8"
-            >
-              <section className="flex flex-col gap-3">
-                <h2 className="text-lg font-semibold text-ink">{copy.anamnesisHeading}</h2>
-                <MedicalHistoryPanel token={accessToken} patientId={patientId} />
-              </section>
-              <section className="flex flex-col gap-3">
-                <h2 className="text-lg font-semibold text-ink">{copy.entriesHeading}</h2>
-                <ClinicalEntriesList token={accessToken} patientId={patientId} />
-              </section>
-            </div>
-          )}
+          <TabPanel
+            tab="clinical-history"
+            activeTab={activeTab}
+            register={registerPanel}
+            className="flex flex-col gap-8"
+          >
+            <section className="flex flex-col gap-3">
+              <h2 className="text-lg font-semibold text-ink">{copy.anamnesisHeading}</h2>
+              <MedicalHistoryPanel token={accessToken} patientId={patientId} />
+            </section>
+            <section className="flex flex-col gap-3">
+              <h2 className="text-lg font-semibold text-ink">{copy.entriesHeading}</h2>
+              <ClinicalEntriesList token={accessToken} patientId={patientId} />
+            </section>
+          </TabPanel>
 
-          {activeTab === 'odontogram' && (
-            <div
-              role="tabpanel"
-              id="tabpanel-odontogram"
-              aria-labelledby="tab-odontogram"
-              className="flex flex-col gap-4"
-            >
-              <OdontogramTab token={accessToken} patientId={patientId} />
-            </div>
-          )}
+          <TabPanel
+            tab="odontogram"
+            activeTab={activeTab}
+            register={registerPanel}
+            className="flex flex-col gap-4"
+          >
+            {/* El diente seleccionado se siembra desde `?tooth=` (así funciona
+                «Ver en el odontograma» desde el plan) y se devuelve a la URL en
+                cada selección, para que recargar o compartir el enlace vuelva
+                al mismo diente. */}
+            <OdontogramTab
+              token={accessToken}
+              patientId={patientId}
+              initialTooth={focusedTooth}
+              onToothChange={(tooth) => setParams({ tooth })}
+              planHref={(tooth) => `${pathname}?tab=treatment-plans&tooth=${tooth}`}
+            />
+          </TabPanel>
 
-          {activeTab === 'treatment-plans' && (
-            <div
-              role="tabpanel"
-              id="tabpanel-treatment-plans"
-              aria-labelledby="tab-treatment-plans"
-              className="flex flex-col gap-4"
-            >
-              <TreatmentPlansTab token={accessToken} patientId={patientId} />
-            </div>
-          )}
+          <TabPanel
+            tab="treatment-plans"
+            activeTab={activeTab}
+            register={registerPanel}
+            className="flex flex-col gap-4"
+          >
+            {/* Mismo puente en sentido contrario: el diente de `?tooth=` llega
+                resaltado en la tabla de ítems y presembrado en «Agregar ítem»,
+                y cada fila puede volver al odontograma con ese diente. */}
+            <TreatmentPlansTab
+              token={accessToken}
+              patientId={patientId}
+              focusedTooth={focusedTooth}
+              odontogramHref={(tooth) => `${pathname}?tab=odontogram&tooth=${tooth}`}
+            />
+          </TabPanel>
         </div>
       ) : null}
     </div>

@@ -1,4 +1,5 @@
 import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { ClinicalAlertBanner } from './clinical-alert-banner';
 import { getMedicalHistory } from '@/lib/patients/clinical-api';
 import type { MedicalHistory } from '@/lib/clinical/clinical-types';
@@ -60,36 +61,65 @@ describe('ClinicalAlertBanner', () => {
     expect(alert).toHaveTextContent('Penicilina');
   });
 
-  it('renders nothing when there is no history', async () => {
+  it('distingue «todavía no hay anamnesis» de «consultado y sin alertas»', async () => {
+    // No es el mismo hecho clínico: uno es una comprobación hecha, el otro es
+    // una comprobación que nadie hizo. Quien va a inyectar necesita saber cuál
+    // de los dos está leyendo.
     mockedGetMedicalHistory.mockResolvedValue(null);
 
-    const { container } = render(<ClinicalAlertBanner token="tok" patientId="p1" />);
+    render(<ClinicalAlertBanner token="tok" patientId="p1" />);
 
-    await waitFor(() => expect(mockedGetMedicalHistory).toHaveBeenCalledTimes(1));
+    expect(await screen.findByText(/sin anamnesis registrada/i)).toBeInTheDocument();
+    expect(screen.queryByText(/sin alertas médicas registradas/i)).not.toBeInTheDocument();
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
-    expect(container).toBeEmptyDOMElement();
   });
 
-  it('renders nothing when there is no critical alert', async () => {
+  it('affirms the absence when there is no critical alert', async () => {
     mockedGetMedicalHistory.mockResolvedValue({
       ...alertHistory,
       hasCriticalAlert: false,
     });
 
+    render(<ClinicalAlertBanner token="tok" patientId="p1" />);
+
+    expect(await screen.findByText(/sin alertas médicas registradas/i)).toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  });
+
+  it('renders nothing while the check is still in flight — no premature "sin alertas"', () => {
+    mockedGetMedicalHistory.mockReturnValue(new Promise(() => {}));
+
     const { container } = render(<ClinicalAlertBanner token="tok" patientId="p1" />);
 
-    await waitFor(() => expect(mockedGetMedicalHistory).toHaveBeenCalledTimes(1));
-    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
     expect(container).toBeEmptyDOMElement();
   });
 
-  it('fails soft (renders nothing) when the fetch throws', async () => {
+  it('renders a neutral "no pudimos comprobar" strip when the fetch throws — never silence', async () => {
     mockedGetMedicalHistory.mockRejectedValue(new Error('boom'));
 
-    const { container } = render(<ClinicalAlertBanner token="tok" patientId="p1" />);
+    render(<ClinicalAlertBanner token="tok" patientId="p1" />);
 
-    await waitFor(() => expect(mockedGetMedicalHistory).toHaveBeenCalledTimes(1));
+    const strip = await screen.findByRole('status');
+    expect(strip).toHaveTextContent(/no pudimos comprobar las alertas médicas de este paciente/i);
+    // No es una alerta médica: no interrumpe (`status`, no `alert`) y no se
+    // confunde con la ausencia de alertas.
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
-    expect(container).toBeEmptyDOMElement();
+    expect(screen.queryByText(/sin alertas médicas registradas/i)).not.toBeInTheDocument();
+  });
+
+  it('"Reintentar" re-runs the fetch and shows the alerts once it succeeds', async () => {
+    mockedGetMedicalHistory.mockRejectedValueOnce(new Error('boom'));
+    mockedGetMedicalHistory.mockResolvedValueOnce(alertHistory);
+
+    const user = userEvent.setup();
+    render(<ClinicalAlertBanner token="tok" patientId="p1" />);
+
+    await screen.findByRole('status');
+    await user.click(screen.getByRole('button', { name: /reintentar/i }));
+
+    await waitFor(() => expect(mockedGetMedicalHistory).toHaveBeenCalledTimes(2));
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('Alertas médicas');
+    expect(screen.queryByText(/no pudimos comprobar/i)).not.toBeInTheDocument();
   });
 });

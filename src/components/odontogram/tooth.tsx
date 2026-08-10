@@ -47,11 +47,43 @@ const SURFACE_ORDER: ToothSurface[] = ['VESTIBULAR', 'MESIAL', 'OCCLUSAL', 'DIST
 const copy = {
   healthy: 'sano',
   withRecords: (count: number) => `${count} registro${count === 1 ? '' : 's'}`,
+  allSurfaces: 'todas las caras',
+  surfaceList: (surfaces: string[]) =>
+    `cara${surfaces.length === 1 ? '' : 's'} ${joinEs(surfaces)}`,
   toothLabel: (fdi: string, summary: string) => `Diente ${fdi}, ${summary}`,
-  surfaceLabel: (fdi: string, surface: string, summary: string) => `Diente ${fdi}, cara ${surface}, ${summary}`,
-  surfaceHealthy: 'sana',
-  surfaceWithRecord: 'con registro',
 };
+
+/** "a, b y c" — the Spanish conjunction, with no comma before the "y". */
+function joinEs(items: string[]): string {
+  if (items.length <= 1) return items[0] ?? '';
+  return `${items.slice(0, -1).join(', ')} y ${items[items.length - 1]}`;
+}
+
+/**
+ * Everything a screen reader hears about a tooth, in ONE string: the record
+ * count plus which faces carry them. The 5 surface regions are `aria-hidden`
+ * (see below), so this label is the only place their state is announced —
+ * "3 registros, caras vestibular, mesial y oclusal" instead of the same fact
+ * spread over five separate stops in the virtual buffer.
+ *
+ * A whole-tooth record (empty `surfaces[]`, e.g. an extraction) paints every
+ * face, so it announces as "todas las caras" rather than listing all five.
+ */
+function toothSummary(state?: ToothState): string {
+  if (!state?.hasRecords) return copy.healthy;
+
+  const count = copy.withRecords(state.records.length);
+  if (state.wholeToothRecord) return `${count}, ${copy.allSurfaces}`;
+
+  const affected = SURFACE_ORDER.filter((surface) => state.surfaceState[surface]).map(
+    (surface) => SURFACE_LABELS[surface],
+  );
+  // Defensive: a record either lists surfaces or is whole-tooth, so this only
+  // fires if the projection ever hands us a third shape — the count still reads.
+  if (affected.length === 0) return count;
+
+  return `${count}, ${copy.surfaceList(affected)}`;
+}
 
 function resolveRecordColor(
   record: ToothRecord | null | undefined,
@@ -98,7 +130,7 @@ export function Tooth({
   onSelectSurface,
 }: ToothProps) {
   const wholeToothColor = resolveRecordColor(state?.wholeToothRecord ?? null, catalogById);
-  const toothSummary = state?.hasRecords ? copy.withRecords(state.records.length) : copy.healthy;
+  const summary = toothSummary(state);
 
   function handleSurfaceKeyDown(event: KeyboardEvent<SVGPolygonElement>, surface: ToothSurface) {
     if (event.key === 'Enter' || event.key === ' ' || event.key === 'Spacebar') {
@@ -134,29 +166,33 @@ export function Tooth({
         height={TOOTH_HEIGHT}
         preserveAspectRatio="none"
         role="group"
-        aria-label={copy.toothLabel(toothNumber, toothSummary)}
+        aria-label={copy.toothLabel(toothNumber, summary)}
         className="overflow-visible"
       >
         <g transform={toothTransform(toothNumber)}>
           {SURFACE_ORDER.map((surface) => {
             const record = state?.surfaceState[surface] ?? null;
             const color = resolveRecordColor(record, catalogById) ?? wholeToothColor;
-            const hasRecord = Boolean(record) || Boolean(state?.wholeToothRecord);
             return (
               <polygon
                 key={surface}
                 points={SURFACE_SHAPES[surface]}
-                role="button"
-                // Not in the tab order on purpose: the tooth's FDI button is
-                // the keyboard entry point, and surfaces are selectable from
-                // the record form's own checkboxes. Enter/Space still work
-                // when an assistive technology moves focus here.
+                // Hidden from the accessibility tree on purpose: exposing each
+                // face as its own button put 160 extra stops in the screen
+                // reader's virtual buffer (32 teeth × 5 faces) BEFORE the
+                // legend, and every one of them repeated the tooth's number.
+                // Their state now rides in the tooth's own `aria-label`
+                // (`toothSummary`), which is one stop and one sentence.
+                //
+                // Pointer targets all the same: clicking a face still selects
+                // it, and the keydown below keeps working if something moves
+                // focus here programmatically. `tabIndex={-1}` is not tabbable,
+                // so `aria-hidden` here doesn't strand a keyboard user.
+                aria-hidden="true"
                 tabIndex={-1}
-                aria-label={copy.surfaceLabel(
-                  toothNumber,
-                  SURFACE_LABELS[surface],
-                  hasRecord ? copy.surfaceWithRecord : copy.surfaceHealthy,
-                )}
+                // Names the region in the DOM now that it carries no label —
+                // the handle for tests, e2e and devtools.
+                data-surface={surface}
                 onClick={() => onSelectSurface(surface)}
                 onKeyDown={(event) => handleSurfaceKeyDown(event, surface)}
                 className="cursor-pointer fill-surface stroke-muted transition-colors hover:stroke-primary focus:outline-none focus-visible:stroke-primary"

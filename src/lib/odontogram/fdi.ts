@@ -23,3 +23,18 @@ const ALL_PERMANENT_SET = new Set(ALL_PERMANENT);
 export function isPermanentFdi(n: string): boolean {
   return ALL_PERMANENT_SET.has(n);
 }
+
+/**
+ * Whether `value` is ANY valid FDI/ISO-3950 tooth code — permanent (quadrant
+ * 1-4 + position 1-8) OR primary (quadrant 5-8 + position 1-5). Client-side
+ * mirror of the backend's `AddTreatmentPlanItemDto.toothNumber` validation.
+ *
+ * Deliberately wider than `isPermanentFdi`, which only knows the 32 codes the
+ * chart draws: a treatment-plan item or a tooth record may legitimately target
+ * a primary tooth that the chart has no mark for. Callers that need "is it on
+ * the chart?" — the tooth picker, for one — must ask `isPermanentFdi`, not
+ * this.
+ */
+export function isFdiToothNumber(value: string): boolean {
+  return /^[1-4][1-8]$|^[5-8][1-5]$/.test(value.trim());
+}

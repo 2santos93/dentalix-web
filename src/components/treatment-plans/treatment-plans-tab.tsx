@@ -27,8 +27,11 @@ import {
   type RecordPaymentInput,
 } from '@/lib/payments/payments-api';
 import { listCatalogItems, type DentalCatalogItem } from '@/lib/odontogram/catalog-api';
+import { isFdiToothNumber } from '@/lib/odontogram/fdi';
 import type { ToothSurface } from '@/lib/odontogram/odontogram-api';
 import { getPatient } from '@/lib/patients/patients-api';
+import { listLocations, type ClinicLocation } from '@/lib/locations/locations-api';
+import { getActiveLocationId } from '@/lib/locations/location-store';
 import { fetchClinicName } from '@/lib/clinic-branding';
 import Link from 'next/link';
 import { formatCurrency } from '@/lib/format/currency';
@@ -41,8 +44,12 @@ import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { FormField } from '@/components/molecules/form-field';
 import { FormModal } from '@/components/molecules/form-modal';
+import { ConfirmDialog } from '@/components/molecules/confirm-dialog';
 import { EmptyState } from '@/components/molecules/empty-state';
 import { CurrencySelect } from '@/components/molecules/currency-select';
+import { Disclosure } from '@/components/molecules/disclosure';
+import { CatalogPicker } from '@/components/odontogram/catalog-picker';
+import { ToothPicker } from '@/components/odontogram/tooth-picker';
 import { PaymentReceipt } from './payment-receipt';
 import { PaymentPlanSection } from './payment-plan-section';
 import { SectionError } from '@/components/errors/section-error';
@@ -102,17 +109,35 @@ const copy = {
   totalLabel: 'Total',
   remove: 'Quitar',
   removing: 'Quitando…',
+  removeConfirmTitle: '¿Quitar este ítem del plan?',
+  // El backend hace soft-delete (`deletedAt`) y `getPlan` incluye los ítems
+  // con `deletedAt: null`, así que el ítem desaparece del plan y de la app
+  // aunque la fila siga en la base de datos. La copia lo dice tal cual en vez
+  // de prometer un historial que en pantalla no existe. Lo que sí sobrevive
+  // es el registro que el ítem creó en el odontograma al marcarse realizado
+  // (Pieza B): `RemoveTreatmentPlanItemUseCase` no lo toca.
+  removeConfirmDescription:
+    'El ítem sale del plan y deja de contar en el total y en el saldo. No se borra de la base de datos, pero ya no podrás verlo desde la aplicación. Si ya estaba realizado, su registro en el odontograma se mantiene.',
+  removeConfirm: 'Quitar ítem',
   genericItemUpdateError: 'No pudimos actualizar el estado del ítem. Intenta de nuevo.',
   genericRemoveItemError: 'No pudimos quitar el ítem. Intenta de nuevo.',
   itemStatusSelectLabel: (tooth: string) => `Estado del ítem del diente ${tooth}`,
   addItemHeading: 'Agregar ítem',
-  toothLabel: 'Diente (FDI)',
-  toothPlaceholder: 'Ej. 11',
-  toothHint: 'Notación FDI: permanentes 11-18/21-28/31-38/41-48, temporales 51-55/61-65/71-75/81-85.',
   invalidToothNumber: 'Número de diente inválido. Usa la notación FDI (ej. 11, 26, 55).',
   procedureLabel: 'Procedimiento',
-  procedureEmptyOption: 'Selecciona un procedimiento',
+  procedureFilterPlaceholder: 'Resina, corona, limpieza…',
   selectProcedurePrompt: 'Selecciona un procedimiento del catálogo.',
+  /**
+   * El puente que faltaba. El odontograma proyecta automáticamente un ítem
+   * DONE (Pieza B); el camino de vuelta era escribir el número a mano. Estos
+   * enlaces lo cierran en los dos sentidos, y el nombre accesible EMPIEZA por
+   * el texto visible para no romper «label in name» (WCAG 2.5.3).
+   */
+  viewInOdontogram: 'Ver en el odontograma',
+  viewInOdontogramFor: (tooth: string) => `Ver en el odontograma el diente ${tooth}`,
+  focusedToothNotice: (tooth: string) => `Diente ${tooth}: sus ítems aparecen resaltados abajo.`,
+  focusedToothRow: 'Diente en foco',
+  clearFocusedTooth: 'Ver todos los dientes',
   priceLabel: 'Precio',
   surfacesLegend: 'Caras (opcional)',
   notesLabel: 'Notas',
@@ -125,6 +150,27 @@ const copy = {
 
   // Abonos + saldo (PAY-T4).
   paymentsHeading: 'Abonos y saldo',
+  /**
+   * Alcance de la región de dinero (Principio 6 de PRODUCT.md). Verificado
+   * contra el backend, NO deducido de la documentación: `listPayments` y
+   * `getPlanBalance` acaban los dos en `PrismaPaymentRepository.listByPlan`,
+   * que deliberadamente NO aplica el filtro de sede — el plan es de la
+   * clínica, no de una sede. La cabecera `X-Location-Id` viaja en estas
+   * peticiones pero el backend la ignora aquí.
+   */
+  paymentsScopeNote: 'El saldo suma los abonos de todas las sedes.',
+  /**
+   * Lo único de esta página donde la sede activa SÍ decide algo:
+   * `PrismaPaymentRepository.create` sella el abono con la sede del request,
+   * y esa atribución es la que después arquea la caja por sede del dashboard
+   * (`listReceivedInRange`, la única consulta de pagos que sí filtra).
+   */
+  paymentLocationHint: (name: string) => `Este abono quedará registrado en la sede ${name}.`,
+  // Sin sede activa el backend cae en la sede por defecto de la clínica
+  // (`resolveDefaultLocationId`: la primera activa). No se la nombra porque
+  // ese orden es una decisión del backend que la UI no puede garantizar.
+  paymentDefaultLocationHint:
+    'Sin una sede activa, este abono quedará registrado en la sede por defecto de la clínica.',
   loadingBalance: 'Cargando saldo…',
   // No «Intenta de nuevo.» — `SectionError` has its own retry button.
   genericBalanceError: 'No pudimos cargar el saldo.',
@@ -157,11 +203,25 @@ const copy = {
   paymentNotesFallback: '—',
   voidPaymentAction: 'Anular',
   voidingPayment: 'Anulando…',
+  voidConfirmTitle: '¿Anular este abono?',
+  // Mismo soft-delete que el ítem: `listPayments` filtra por `deletedAt: null`,
+  // así que el abono desaparece de la tabla. Por eso NO se promete que quede
+  // "registrado como anulado en el historial" — en pantalla no queda nada.
+  voidConfirmDescription:
+    'El abono sale de la lista y deja de contar en el saldo, que se recalcula. No se borra de la base de datos, pero ya no podrás verlo desde la aplicación. Los demás abonos y el plan no se ven afectados.',
+  voidConfirm: 'Anular abono',
   // Recibo imprimible (RECIBO-T1).
   receiptAction: 'Recibo',
   genericVoidPaymentError: 'No pudimos anular el abono. Intenta de nuevo.',
   emptyPaymentsTitle: 'Este plan todavía no tiene abonos.',
   emptyPaymentsDescription: 'Registra el primer abono con el formulario de arriba.',
+
+  // Divulgación progresiva. La lista de abonos y el calendario de cuotas son
+  // el DETALLE de cifras que ya están arriba: se pliegan, pero su encabezado
+  // lleva el dato que decide si hace falta abrirlos (cuántos abonos hay), así
+  // que plegar no esconde información necesaria para decidir.
+  paymentsDisclosure: 'Abonos registrados',
+  paymentsDisclosureMeta: (n: number) => (n === 1 ? '1 abono' : `${n} abonos`),
 };
 
 const PLAN_STATUS_OPTIONS: TreatmentPlanStatus[] = ['DRAFT', 'ACCEPTED', 'COMPLETED', 'CANCELLED'];
@@ -240,18 +300,6 @@ function todayLocalDateString(): string {
   return `${yyyy}-${mm}-${dd}`;
 }
 
-// FDI/ISO-3950 tooth code, client-side mirror of the backend's
-// `AddTreatmentPlanItemDto.toothNumber` validation (see schema.d.ts):
-// permanent dentition is quadrant 1-4 + tooth position 1-8, primary
-// dentition is quadrant 5-8 + tooth position 1-5. `isPermanentFdi` in
-// `lib/odontogram/fdi.ts` only covers the 32 permanent codes (the
-// odontogram chart only draws permanent teeth today), so it can't be reused
-// as-is here — a treatment plan item may legitimately target a primary
-// tooth. This regex mirrors both ranges without touching `fdi.ts`.
-function isValidToothNumber(value: string): boolean {
-  return /^[1-4][1-8]$|^[5-8][1-5]$/.test(value.trim());
-}
-
 // Native <select>/<input> styled to match the Input atom (kept native for
 // a11y/tests) — same documented convention as `agenda-view.tsx` /
 // `patient-form.tsx`'s `fieldClass`; this app has no tested consumer of the
@@ -263,6 +311,13 @@ const fieldClass =
 interface TreatmentPlansTabProps {
   patientId: string;
   token: string;
+  /**
+   * The tooth carried in the page's `?tooth=` param (the odontogram's half of
+   * the bridge): its items come highlighted and "Agregar ítem" opens on it.
+   */
+  focusedTooth?: string | null;
+  /** Builds the href of the odontogram tab focused on `toothNumber`. */
+  odontogramHref?: (toothNumber: string) => string;
 }
 
 interface ItemsTableProps {
@@ -271,8 +326,107 @@ interface ItemsTableProps {
   /** The plan's currency (`planDetail.currency`) — item prices don't carry their own currency. */
   currency: string;
   updatingItemId: string | null;
+  /** FDI code whose rows are marked as the ones the user arrived looking for. */
+  focusedTooth?: string | null;
+  odontogramHref?: (toothNumber: string) => string;
   onStatusChange: (itemId: string, status: TreatmentPlanItemStatus) => void;
   onRemove: (itemId: string) => void;
+}
+
+/**
+ * The row-level way back to the chart. Rendered as a real `<Link>` (not a
+ * button): it is a location, so it must open in a new tab, be copied, and be
+ * reachable with the browser's own affordances like any other address.
+ */
+function OdontogramLink({
+  toothNumber,
+  href,
+}: {
+  toothNumber: string;
+  href?: (toothNumber: string) => string;
+}) {
+  if (!href) return null;
+  return (
+    <Link
+      href={href(toothNumber)}
+      // El nombre accesible EMPIEZA por el texto visible (WCAG 2.5.3): sin eso,
+      // cinco filas ofrecerían cinco enlaces con el mismo nombre y ninguna
+      // pista de a qué diente lleva cada uno.
+      aria-label={copy.viewInOdontogramFor(toothNumber)}
+      className="text-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+    >
+      {copy.viewInOdontogram}
+    </Link>
+  );
+}
+
+/**
+ * Las cuatro cifras del plan en UNA fila etiquetada, no en tarjetas.
+ *
+ * Antes esta pantalla mostraba «Total» en su propia franja y luego tres
+ * tarjetas con borde (A pagar / Pagado / Saldo) — la plantilla de
+ * métrica-héroe que DESIGN.md prohíbe como estructura, y seis cifras con
+ * alcances distintos compitiendo por la misma atención junto a las tres del
+ * plan de pagos. Aquí las cuatro que describen ESTE plan van juntas y con el
+ * mismo peso; las del financiamiento se quedan bajo «Plan de pagos», que es lo
+ * que las distingue.
+ *
+ * `Saldo` es la única que se destaca (`text-ink` sobre el resto en `text-muted`
+ * es lo que hace jerarquía sin volver a inventar una tarjeta): es la cifra que
+ * el paciente pregunta en voz alta.
+ */
+function PlanMoneySummary({
+  total,
+  currency,
+  balance,
+}: {
+  total: number;
+  currency: string;
+  balance: PlanBalance | null;
+}) {
+  const figures: { key: string; label: string; value: string; strong?: boolean }[] = [
+    { key: 'total', label: copy.totalLabel, value: formatCurrency(total, currency) },
+  ];
+  if (balance) {
+    figures.push(
+      {
+        key: 'billable',
+        label: copy.billableLabel,
+        value: formatCurrency(balance.billable, balance.planCurrency),
+      },
+      {
+        key: 'paid',
+        label: copy.paidLabel,
+        value: formatCurrency(balance.paid, balance.planCurrency),
+      },
+      {
+        key: 'balance',
+        label: copy.balanceLabel,
+        value: formatCurrency(balance.balance, balance.planCurrency),
+        strong: true,
+      },
+    );
+  }
+
+  return (
+    // `<dl>` y no divs: son pares etiqueta/valor, y así un lector de pantalla
+    // los anuncia emparejados en vez de como ocho textos sueltos.
+    <dl className="flex flex-wrap gap-x-8 gap-y-3">
+      {figures.map((figure) => (
+        <div key={figure.key} className="min-w-0">
+          <dt className="t-label text-muted">{figure.label}</dt>
+          <dd
+            className={cn(
+              'mt-0.5 tabular-nums',
+              figure.strong ? 'text-lg font-semibold text-ink' : 'text-base text-muted',
+            )}
+          >
+            {figure.value}
+          </dd>
+        </div>
+      ))}
+    </dl>
+  );
 }
 
 function procedureName(item: TreatmentPlanItem, catalogById: Map<string, DentalCatalogItem>): string {
@@ -285,7 +439,16 @@ function surfacesLabel(item: TreatmentPlanItem): string {
     : copy.wholeToothFallback;
 }
 
-function ItemsTable({ items, catalogById, currency, updatingItemId, onStatusChange, onRemove }: ItemsTableProps) {
+function ItemsTable({
+  items,
+  catalogById,
+  currency,
+  updatingItemId,
+  focusedTooth,
+  odontogramHref,
+  onStatusChange,
+  onRemove,
+}: ItemsTableProps) {
   if (items.length === 0) {
     return <EmptyState role="status" title={copy.emptyItemsTitle} description={copy.emptyItemsDescription} />;
   }
@@ -309,12 +472,20 @@ function ItemsTable({ items, catalogById, currency, updatingItemId, onStatusChan
           <TableBody>
             {items.map((item) => {
               const updating = updatingItemId === item.id;
+              const focused = focusedTooth === item.toothNumber;
               return (
-                <TableRow key={item.id}>
-                  <TableCell className="font-medium">{item.toothNumber}</TableCell>
+                <TableRow
+                  key={item.id}
+                  // `aria-current` dice en la capa accesible lo mismo que el
+                  // fondo dice en la visual: esta es la fila que el usuario
+                  // vino a ver desde el odontograma.
+                  aria-current={focused ? true : undefined}
+                  className={cn(focused && 'bg-surface-2')}
+                >
+                  <TableCell className="font-medium tabular-nums">{item.toothNumber}</TableCell>
                   <TableCell>{procedureName(item, catalogById)}</TableCell>
                   <TableCell className="text-muted">{surfacesLabel(item)}</TableCell>
-                  <TableCell>{formatCurrency(item.price, currency)}</TableCell>
+                  <TableCell className="tabular-nums">{formatCurrency(item.price, currency)}</TableCell>
                   <TableCell>
                     <div className="flex flex-col items-start gap-1.5">
                       <Badge variant={ITEM_STATUS_BADGE_VARIANT[item.status]}>
@@ -343,15 +514,22 @@ function ItemsTable({ items, catalogById, currency, updatingItemId, onStatusChan
                     </div>
                   </TableCell>
                   <TableCell>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      disabled={updating}
-                      onClick={() => onRemove(item.id)}
-                    >
-                      {updating ? copy.removing : copy.remove}
-                    </Button>
+                    {/* Mismo aislamiento que en la tabla de abonos: el enlace
+                        inocuo y el botón destructivo no comparten zona de
+                        toque. */}
+                    <div className="flex items-center gap-3">
+                      <OdontogramLink toothNumber={item.toothNumber} href={odontogramHref} />
+                      {odontogramHref ? <Separator orientation="vertical" className="h-5" /> : null}
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={updating}
+                        onClick={() => onRemove(item.id)}
+                      >
+                        {updating ? copy.removing : copy.remove}
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               );
@@ -360,47 +538,62 @@ function ItemsTable({ items, catalogById, currency, updatingItemId, onStatusChan
         </Table>
       </div>
 
-      {/* Mobile cards */}
-      <ul className="flex flex-col gap-3 md:hidden">
+      {/* Mobile list. Hairline-separated rows inside ONE bordered container —
+          not a stack of `<Card>`s nested inside the card this section already
+          lives in (DESIGN.md: "No nested cards; use hairline sections
+          inside"). */}
+      <ul className="divide-y divide-hairline overflow-hidden rounded-lg border border-border md:hidden">
         {items.map((item) => {
           const updating = updatingItemId === item.id;
+          const focused = focusedTooth === item.toothNumber;
           return (
-            <li key={item.id}>
-              <Card className="p-4">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-medium text-ink">{copy.colTooth} {item.toothNumber}</span>
-                  <Badge variant={ITEM_STATUS_BADGE_VARIANT[item.status]}>
-                    {ITEM_STATUS_LABELS[item.status]}
-                  </Badge>
-                </div>
-                <p className="mt-2 text-ink">{procedureName(item, catalogById)}</p>
-                <p className="mt-1 text-sm text-muted">{surfacesLabel(item)}</p>
-                <p className="mt-1 font-medium text-ink">{formatCurrency(item.price, currency)}</p>
-                <div className="mt-3 flex items-center justify-between gap-2">
-                  <select
-                    aria-label={copy.itemStatusSelectLabel(item.toothNumber)}
-                    value={item.status}
-                    disabled={updating}
-                    onChange={(e) => onStatusChange(item.id, e.target.value as TreatmentPlanItemStatus)}
-                    className={cn(fieldClass, 'h-9 w-auto text-xs')}
-                  >
-                    {ITEM_STATUS_OPTIONS.map((status) => (
-                      <option key={status} value={status}>
-                        {ITEM_STATUS_LABELS[status]}
-                      </option>
-                    ))}
-                  </select>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={updating}
-                    onClick={() => onRemove(item.id)}
-                  >
-                    {updating ? copy.removing : copy.remove}
-                  </Button>
-                </div>
-              </Card>
+            <li
+              key={item.id}
+              aria-current={focused ? true : undefined}
+              className={cn('p-4', focused && 'bg-surface-2')}
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-medium text-ink tabular-nums">
+                  {copy.colTooth} {item.toothNumber}
+                </span>
+                <Badge variant={ITEM_STATUS_BADGE_VARIANT[item.status]}>
+                  {ITEM_STATUS_LABELS[item.status]}
+                </Badge>
+              </div>
+              <p className="mt-2 text-ink">{procedureName(item, catalogById)}</p>
+              <p className="mt-1 text-sm text-muted">{surfacesLabel(item)}</p>
+              <p className="mt-1 font-medium text-ink tabular-nums">
+                {formatCurrency(item.price, currency)}
+              </p>
+              <div className="mt-3 flex items-center justify-between gap-2">
+                <select
+                  aria-label={copy.itemStatusSelectLabel(item.toothNumber)}
+                  value={item.status}
+                  disabled={updating}
+                  onChange={(e) => onStatusChange(item.id, e.target.value as TreatmentPlanItemStatus)}
+                  className={cn(fieldClass, 'h-9 w-auto text-xs')}
+                >
+                  {ITEM_STATUS_OPTIONS.map((status) => (
+                    <option key={status} value={status}>
+                      {ITEM_STATUS_LABELS[status]}
+                    </option>
+                  ))}
+                </select>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={updating}
+                  onClick={() => onRemove(item.id)}
+                >
+                  {updating ? copy.removing : copy.remove}
+                </Button>
+              </div>
+              {odontogramHref ? (
+                <p className="mt-3">
+                  <OdontogramLink toothNumber={item.toothNumber} href={odontogramHref} />
+                </p>
+              ) : null}
             </li>
           );
         })}
@@ -457,10 +650,15 @@ function PaymentsList({ payments, voidingPaymentId, onVoid, onReceipt }: Payment
                   </TableCell>
                   <TableCell className="text-muted">{payment.notes ?? copy.paymentNotesFallback}</TableCell>
                   <TableCell>
-                    <div className="flex items-center gap-2">
+                    {/* «Recibo» y «Anular» son dos botones de 36px: a 8px de
+                        distancia, en tablet, anular es un dedo mal puesto.
+                        Separador vertical + hueco mayor para que el destructivo
+                        no comparta zona de toque con el inocuo. */}
+                    <div className="flex items-center gap-3">
                       <Button type="button" variant="outline" size="sm" onClick={() => onReceipt(payment)}>
                         {copy.receiptAction}
                       </Button>
+                      <Separator orientation="vertical" className="h-5" />
                       <Button
                         type="button"
                         variant="outline"
@@ -479,40 +677,45 @@ function PaymentsList({ payments, voidingPaymentId, onVoid, onReceipt }: Payment
         </Table>
       </div>
 
-      {/* Mobile cards */}
-      <ul className="flex flex-col gap-3 md:hidden">
+      {/* Mobile list — hairline rows in one bordered container, not `<Card>`s
+          nested inside the card this section lives in (DESIGN.md). */}
+      <ul className="divide-y divide-hairline overflow-hidden rounded-lg border border-border md:hidden">
         {payments.map((payment) => {
           const voiding = voidingPaymentId === payment.id;
           return (
-            <li key={payment.id}>
-              <Card className="p-4">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-medium text-ink">{formatCivilDate(payment.paidAt)}</span>
-                  {payment.method ? (
-                    <Badge variant={PAYMENT_METHOD_BADGE_VARIANT[payment.method]}>
-                      {PAYMENT_METHOD_LABELS[payment.method]}
-                    </Badge>
-                  ) : (
-                    <span className="text-sm text-muted">{copy.paymentMethodFallback}</span>
-                  )}
-                </div>
-                <p className="mt-2 font-medium text-ink">{formatCurrency(payment.amount, payment.currency)}</p>
-                <p className="mt-1 text-sm text-muted">{payment.notes ?? copy.paymentNotesFallback}</p>
-                <div className="mt-3 flex items-center gap-2">
-                  <Button type="button" variant="outline" size="sm" onClick={() => onReceipt(payment)}>
-                    {copy.receiptAction}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    disabled={voiding}
-                    onClick={() => onVoid(payment.id)}
-                  >
-                    {voiding ? copy.voidingPayment : copy.voidPaymentAction}
-                  </Button>
-                </div>
-              </Card>
+            <li key={payment.id} className="p-4">
+              <div className="flex items-center justify-between gap-2">
+                <span className="font-medium text-ink tabular-nums">{formatCivilDate(payment.paidAt)}</span>
+                {payment.method ? (
+                  <Badge variant={PAYMENT_METHOD_BADGE_VARIANT[payment.method]}>
+                    {PAYMENT_METHOD_LABELS[payment.method]}
+                  </Badge>
+                ) : (
+                  <span className="text-sm text-muted">{copy.paymentMethodFallback}</span>
+                )}
+              </div>
+              <p className="mt-2 font-medium text-ink tabular-nums">
+                {formatCurrency(payment.amount, payment.currency)}
+              </p>
+              <p className="mt-1 text-sm text-muted">{payment.notes ?? copy.paymentNotesFallback}</p>
+              {/* Mismo aislamiento del destructivo que en la tabla de
+                  escritorio — en móvil el riesgo de mal toque es mayor, no
+                  menor. */}
+              <div className="mt-3 flex items-center gap-3">
+                <Button type="button" variant="outline" size="sm" onClick={() => onReceipt(payment)}>
+                  {copy.receiptAction}
+                </Button>
+                <Separator orientation="vertical" className="h-5" />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  disabled={voiding}
+                  onClick={() => onVoid(payment.id)}
+                >
+                  {voiding ? copy.voidingPayment : copy.voidPaymentAction}
+                </Button>
+              </div>
             </li>
           );
         })}
@@ -557,7 +760,15 @@ function PaymentsList({ payments, voidingPaymentId, onVoid, onReceipt }: Payment
  * abono mutations (`recordPayment`/`voidPayment`) follow the identical
  * pattern against `refreshBalanceAndPayments()`.
  */
-export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) {
+export function TreatmentPlansTab({
+  patientId,
+  token,
+  // El diente que trajo al usuario desde el odontograma (`?tooth=` en la
+  // página). Se renombra al desestructurar porque dentro de este componente
+  // «focusedTooth» ya es el nombre de la prop que baja a `ItemsTable`.
+  focusedTooth: focusedToothOnPlan = null,
+  odontogramHref,
+}: TreatmentPlansTabProps) {
   // Plans list + catalog (loaded together).
   const [plans, setPlans] = useState<TreatmentPlan[]>([]);
   const [catalogItems, setCatalogItems] = useState<DentalCatalogItem[]>([]);
@@ -598,6 +809,12 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
 
   const [updatingItemId, setUpdatingItemId] = useState<string | null>(null);
   const [itemActionError, setItemActionError] = useState<string | null>(null);
+  // Quitar un ítem es irreversible desde la app (soft-delete que ya no se
+  // vuelve a listar): la fila abre un `ConfirmDialog` y el id vive aquí hasta
+  // que se confirma o se cancela. El error va al diálogo, no a la línea
+  // inline de arriba, que es la del cambio de estado.
+  const [itemToRemove, setItemToRemove] = useState<string | null>(null);
+  const [removeItemError, setRemoveItemError] = useState<string | null>(null);
 
   // Balance + abonos (PAY-T4) — a genuinely separate resource from
   // `planDetail` (its own endpoints, `getPlanBalance`/`listPayments`), loaded
@@ -629,6 +846,9 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
   const [addPaymentError, setAddPaymentError] = useState<string | null>(null);
 
   const [voidingPaymentId, setVoidingPaymentId] = useState<string | null>(null);
+  // Igual que `itemToRemove`: anular mueve dinero en el saldo y no tiene
+  // deshacer, así que pasa por confirmación y su fallo se queda en el diálogo.
+  const [paymentToVoid, setPaymentToVoid] = useState<string | null>(null);
   const [paymentActionError, setPaymentActionError] = useState<string | null>(null);
 
   // Bumped whenever the balance/abonos refresh, so the payment-plan section
@@ -642,6 +862,13 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
   const [receiptPayment, setReceiptPayment] = useState<Payment | null>(null);
   const [patientName, setPatientName] = useState<string | null>(null);
   const [clinicName, setClinicName] = useState<string | null>(null);
+
+  // Sedes de la clínica + sede activa, solo para decir a qué sede quedará
+  // atribuido un abono nuevo. Se piden una vez, junto al nombre del paciente
+  // y el de la clínica, y fallan en silencio: si no se sabe la sede, la
+  // línea no aparece — nunca bloquea ni rompe el formulario.
+  const [locations, setLocations] = useState<ClinicLocation[]>([]);
+  const [activeLocationId, setActiveLocationId] = useState<string | null>(null);
 
   // Add-item form state.
   const [toothNumber, setToothNumber] = useState('');
@@ -727,6 +954,24 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
       .catch(() => {
         /* fail soft — fetchClinicName already resolves null on failure, this is just a safety net */
       });
+    // La sede activa vive en localStorage, que solo existe en el cliente: se
+    // lee en el efecto, no como estado inicial, para no romper la hidratación
+    // (mismo criterio que `LocationSwitcher`). Cambiar de sede fuerza un
+    // `window.location.reload()` allí, así que no hace falta suscribirse.
+    //
+    // Se lee DENTRO del `.then` y no en el cuerpo del efecto: sin la lista de
+    // sedes el id no se puede convertir en nombre, así que antes de que
+    // resuelva no sirve de nada — y un setState síncrono en el cuerpo de un
+    // efecto encadena renders.
+    listLocations(token)
+      .then((data) => {
+        if (cancelled) return;
+        setLocations(data ?? []);
+        setActiveLocationId(getActiveLocationId());
+      })
+      .catch(() => {
+        /* fail soft — sin la lista de sedes simplemente no se nombra ninguna */
+      });
     return () => {
       cancelled = true;
     };
@@ -778,6 +1023,12 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
   }
 
   const catalogById = new Map(catalogItems.map((item) => [item.id, item]));
+
+  // Misma regla que `LocationSwitcher`: con una sola sede el concepto no
+  // existe para esa clínica y hablar de sedes sería ruido. Solo con dos o más
+  // el formulario de abono dice a cuál quedará atribuido.
+  const multiLocation = locations.filter((l) => l.isActive).length >= 2;
+  const activeLocationName = locations.find((l) => l.id === activeLocationId)?.name ?? null;
 
   function refreshPlansInPlace(): Promise<void> {
     setRefreshing(true);
@@ -1090,11 +1341,22 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
     }
   }
 
-  async function handleVoidPayment(paymentId: string) {
+  /** La fila ya no anula: abre la confirmación. */
+  function openVoidConfirm(paymentId: string) {
+    setPaymentActionError(null);
+    setPaymentToVoid(paymentId);
+  }
+
+  async function handleVoidPayment() {
+    const paymentId = paymentToVoid;
+    if (!paymentId) return;
     setVoidingPaymentId(paymentId);
     setPaymentActionError(null);
     try {
       await voidPayment(token, paymentId);
+      // Se cierra antes de refrescar, como en `payment-plan-section`: el
+      // diálogo solo sigue abierto si hay algo que decidir.
+      setPaymentToVoid(null);
       await refreshBalanceAndPayments();
     } catch (err) {
       setPaymentActionError(err instanceof ApiError ? err.message : copy.genericVoidPaymentError);
@@ -1132,15 +1394,23 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
     }
   }
 
-  async function handleRemoveItem(itemId: string) {
-    if (!selectedPlanId) return;
+  /** La fila ya no quita: abre la confirmación. */
+  function openRemoveConfirm(itemId: string) {
+    setRemoveItemError(null);
+    setItemToRemove(itemId);
+  }
+
+  async function handleRemoveItem() {
+    const itemId = itemToRemove;
+    if (!selectedPlanId || !itemId) return;
     setUpdatingItemId(itemId);
-    setItemActionError(null);
+    setRemoveItemError(null);
     try {
       await removeItem(token, selectedPlanId, itemId);
+      setItemToRemove(null);
       await refreshPlanDetail();
     } catch (err) {
-      setItemActionError(err instanceof ApiError ? err.message : copy.genericRemoveItemError);
+      setRemoveItemError(err instanceof ApiError ? err.message : copy.genericRemoveItemError);
     } finally {
       setUpdatingItemId(null);
     }
@@ -1168,7 +1438,7 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
     if (!selectedPlanId) return;
 
     const tooth = toothNumber.trim();
-    if (!isValidToothNumber(tooth)) {
+    if (!isFdiToothNumber(tooth)) {
       setAddItemValidationError(copy.invalidToothNumber);
       return;
     }
@@ -1344,26 +1614,63 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
                 {planStatusError && <InlineError>{planStatusError}</InlineError>}
                 {itemActionError && <InlineError>{itemActionError}</InlineError>}
 
+                {/* UNA región de dinero, no dos racimos de tarjetas. Antes el
+                    plan mostraba «Total» en su propia franja y luego tres
+                    tarjetas (A pagar / Pagado / Saldo), y más abajo el plan de
+                    pagos repetía otras tres — seis cifras con etiquetas de
+                    alcances distintos compitiendo por la misma atención, que es
+                    justo la plantilla de métrica-héroe que DESIGN.md prohíbe
+                    como estructura. Ahora las cuatro cifras del PLAN viven en
+                    una sola fila etiquetada; las del financiamiento se quedan
+                    bajo el encabezado «Plan de pagos», que es lo que las
+                    distingue. Ninguna cifra desapareció. */}
+                <PlanMoneySummary
+                  total={planDetail.total ?? 0}
+                  currency={planDetail.currency}
+                  balance={planBalance}
+                />
+                {/* La nota de alcance califica la región entera (las cuatro
+                    cifras y todo lo que cuelga de ellas), por eso va pegada
+                    debajo y no repetida en cada número. */}
+                <p className="t-label text-muted">{copy.paymentsScopeNote}</p>
+
+                {/* El estado de carga/fallo del saldo NO se repite aquí: vive
+                    una sola vez en la región «Abonos y saldo» de abajo, que es
+                    la que hace la petición. Duplicarlo daba dos `role="alert"`
+                    para un solo fallo. */}
+
+                <Separator />
+
+                {/* El diente que trajo al usuario desde el odontograma, dicho
+                    antes de la tabla para que se entienda por qué hay filas
+                    resaltadas. */}
+                {focusedToothOnPlan && (
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
+                    <p role="status" className="text-sm font-medium text-ink">
+                      {copy.focusedToothNotice(focusedToothOnPlan)}
+                    </p>
+                  </div>
+                )}
+
                 <ItemsTable
                   items={planDetail.items ?? []}
                   catalogById={catalogById}
                   currency={planDetail.currency}
                   updatingItemId={updatingItemId}
+                  focusedTooth={focusedToothOnPlan}
+                  odontogramHref={odontogramHref}
                   onStatusChange={handleItemStatusChange}
-                  onRemove={handleRemoveItem}
+                  onRemove={openRemoveConfirm}
                 />
-
-                <div className="flex items-center justify-between border-t border-border pt-3">
-                  <span className="text-sm font-medium text-muted">{copy.totalLabel}</span>
-                  <span className="text-lg font-semibold text-ink">
-                    {formatCurrency(planDetail.total ?? 0, planDetail.currency)}
-                  </span>
-                </div>
 
                 <Separator />
 
                 <div className="flex flex-col gap-4">
                   <div className="flex flex-wrap items-center justify-between gap-3">
+                    {/* La nota de alcance NO se repite aquí: vive una sola vez
+                        pegada a `PlanMoneySummary`, que es donde está el Saldo
+                        que califica. Decirla dos veces en la misma pantalla la
+                        convierte en ruido y sugiere que son dos alcances. */}
                     <h3 className="text-base font-semibold text-ink">{copy.paymentsHeading}</h3>
                     <Button type="button" variant="outline" size="sm" onClick={openPaymentForm}>
                       {copy.registerPayment}
@@ -1392,35 +1699,13 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
                           {copy.refreshing}
                         </p>
                       )}
-                      {paymentActionError && <InlineError>{paymentActionError}</InlineError>}
 
-                      <div className="grid gap-3 sm:grid-cols-3">
-                        <div className="rounded-lg border border-border p-3">
-                          <p className="text-xs font-medium uppercase tracking-wide text-muted">
-                            {copy.billableLabel}
-                          </p>
-                          <p className="mt-1 text-lg font-semibold text-ink">
-                            {formatCurrency(planBalance.billable, planBalance.planCurrency)}
-                          </p>
-                        </div>
-                        <div className="rounded-lg border border-border p-3">
-                          <p className="text-xs font-medium uppercase tracking-wide text-muted">
-                            {copy.paidLabel}
-                          </p>
-                          <p className="mt-1 text-lg font-semibold text-ink">
-                            {formatCurrency(planBalance.paid, planBalance.planCurrency)}
-                          </p>
-                        </div>
-                        <div className="rounded-lg border border-border p-3">
-                          <p className="text-xs font-medium uppercase tracking-wide text-muted">
-                            {copy.balanceLabel}
-                          </p>
-                          <p className="mt-1 text-lg font-semibold text-ink">
-                            {formatCurrency(planBalance.balance, planBalance.planCurrency)}
-                          </p>
-                        </div>
-                      </div>
-
+                      {/* Las tres tarjetas que vivían aquí (A pagar / Pagado /
+                          Saldo) subieron a `PlanMoneySummary`, junto al Total
+                          del plan: son cifras del MISMO plan y separarlas en
+                          dos racimos era lo que producía seis números con
+                          alcances distintos en una pantalla. Ninguna
+                          desapareció. */}
                       <FormModal
                         open={showPaymentForm}
                         onOpenChange={setShowPaymentForm}
@@ -1431,6 +1716,18 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
                         error={addPaymentValidationError ?? addPaymentError}
                         size="lg"
                       >
+                        {/* Va antes de los campos: la sede a la que se
+                            atribuye el abono se lee ANTES de escribir el
+                            monto, no como una nota al pie ya con el dedo en
+                            «Registrar abono». */}
+                        {multiLocation ? (
+                          <p className="t-label text-muted">
+                            {activeLocationName
+                              ? copy.paymentLocationHint(activeLocationName)
+                              : copy.paymentDefaultLocationHint}
+                          </p>
+                        ) : null}
+
                         <div className="grid gap-4 sm:grid-cols-2">
                           <FormField htmlFor="tp-payment-amount" label={copy.paymentAmountLabel}>
                             <Input
@@ -1491,12 +1788,27 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
                         </FormField>
                       </FormModal>
 
-                      <PaymentsList
-                        payments={payments}
-                        voidingPaymentId={voidingPaymentId}
-                        onVoid={handleVoidPayment}
-                        onReceipt={setReceiptPayment}
-                      />
+                      {/* El detalle abono a abono se pliega; lo que decide si
+                          hace falta abrirlo —cuántos abonos hay— se queda
+                          leído en la propia fila, y el Saldo sigue arriba en
+                          `PlanMoneySummary`. En una pantalla financiera no se
+                          puede esconder una cifra que alguien necesita para
+                          decidir: se esconde la TABLA, nunca el número.
+                          Abierta por defecto cuando aún no hay ningún abono,
+                          para que el estado vacío enseñe el siguiente paso en
+                          vez de esconderlo tras un plegado. */}
+                      <Disclosure
+                        summary={copy.paymentsHeading}
+                        meta={copy.paymentsDisclosureMeta(payments.length)}
+                        defaultOpen={payments.length === 0}
+                      >
+                        <PaymentsList
+                          payments={payments}
+                          voidingPaymentId={voidingPaymentId}
+                          onVoid={openVoidConfirm}
+                          onReceipt={setReceiptPayment}
+                        />
+                      </Disclosure>
 
                       <Separator />
 
@@ -1531,32 +1843,33 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
                   <form onSubmit={handleAddItem} aria-label={copy.addItemHeading} className="flex flex-col gap-4">
                     <h3 className="text-base font-semibold text-ink">{copy.addItemHeading}</h3>
 
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <FormField htmlFor="tp-tooth-number" label={copy.toothLabel} hint={copy.toothHint}>
-                        <Input
-                          id="tp-tooth-number"
-                          value={toothNumber}
-                          placeholder={copy.toothPlaceholder}
-                          onChange={(e) => setToothNumber(e.target.value)}
-                        />
-                      </FormField>
+                    {/* El diente se TOCA en el mapa, no se transcribe de
+                        memoria: es el mismo `OdontogramChart` del tab de al
+                        lado. El campo de texto sigue ahí dentro del picker
+                        como segunda vía (más rápido si ya sabes el código, y
+                        único camino para un temporal, que el mapa no dibuja).
+                        Y el procedimiento usa el MISMO selector filtrado que
+                        el odontograma: antes esta era la peor afordancia de
+                        las dos —un `<select>` nativo sobre el catálogo
+                        entero, sin filtro— y estaba justo en la vía del
+                        dinero. */}
+                    <ToothPicker
+                      inputId="tp-tooth-number"
+                      value={toothNumber}
+                      onChange={setToothNumber}
+                    />
 
-                      <FormField htmlFor="tp-procedure" label={copy.procedureLabel}>
-                        <select
-                          id="tp-procedure"
-                          value={catalogItemId}
-                          onChange={(e) => handleProcedureChange(e.target.value)}
-                          className={fieldClass}
-                        >
-                          <option value="">{copy.procedureEmptyOption}</option>
-                          {catalogItems.map((item) => (
-                            <option key={item.id} value={item.id}>
-                              {item.labelEs}
-                            </option>
-                          ))}
-                        </select>
-                      </FormField>
-                    </div>
+                    <CatalogPicker
+                      items={catalogItems}
+                      value={catalogItemId || null}
+                      onChange={handleProcedureChange}
+                      idPrefix="tp-procedure"
+                      legend={copy.procedureLabel}
+                      // Un ítem de plan sólo puede ser un PROCEDURE, así que la
+                      // etiqueta de tipo se repetiría en todas las filas sin
+                      // decir nada.
+                      showKind={false}
+                    />
 
                     <div className="grid gap-4 sm:grid-cols-2">
                       <FormField htmlFor="tp-price" label={copy.priceLabel}>
@@ -1633,6 +1946,32 @@ export function TreatmentPlansTab({ patientId, token }: TreatmentPlansTabProps) 
         onOpenChange={(open) => {
           if (!open) setReceiptPayment(null);
         }}
+      />
+
+      <ConfirmDialog
+        open={itemToRemove !== null}
+        onOpenChange={(open) => {
+          if (!open) setItemToRemove(null);
+        }}
+        title={copy.removeConfirmTitle}
+        description={copy.removeConfirmDescription}
+        confirmLabel={copy.removeConfirm}
+        onConfirm={handleRemoveItem}
+        confirming={updatingItemId !== null && updatingItemId === itemToRemove}
+        error={removeItemError}
+      />
+
+      <ConfirmDialog
+        open={paymentToVoid !== null}
+        onOpenChange={(open) => {
+          if (!open) setPaymentToVoid(null);
+        }}
+        title={copy.voidConfirmTitle}
+        description={copy.voidConfirmDescription}
+        confirmLabel={copy.voidConfirm}
+        onConfirm={handleVoidPayment}
+        confirming={voidingPaymentId !== null && voidingPaymentId === paymentToVoid}
+        error={paymentActionError}
       />
     </div>
   );
