@@ -64,24 +64,23 @@ const staff = [{ userId: 'staff-1', fullName: 'Dra. Ana Ríos', role: 'DENTIST' 
 
 
 // El componente arranca con Desde = inicio del MES ACTUAL y Hasta = HOY
-// (monthStartLocalDateString / todayLocalDateString). Estas fechas se derivan de
-// esas mismas reglas: hardcodear un mes concreto hacía que los tests dependieran
-// del mes en que corrieran — al pasar a agosto, "Hasta = 10 de julio" quedaba
-// ANTES del "Desde" por defecto (1 de agosto) y disparaba la guarda de rango.
-function ymd(d: Date): string {
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const dd = String(d.getDate()).padStart(2, '0');
-  return `${d.getFullYear()}-${mm}-${dd}`;
-}
-const NOW = new Date();
-/** Día 10 del mes actual: siempre >= el "Desde" por defecto (día 1) -> rango válido. */
-const TENTH_OF_MONTH = ymd(new Date(NOW.getFullYear(), NOW.getMonth(), 10));
+// (monthStartLocalDateString / todayLocalDateString), leyendo el reloj real. Con
+// fechas derivadas de `new Date()` eso volvía los tests dependientes del día en
+// que corrieran: el 10 de cualquier mes, "cambiar Hasta al día 10" reescribía el
+// input con el valor que YA tenía por defecto (hoy), no había cambio de estado,
+// el efecto no refetcheaba y la aserción de "una llamada" no se cumplía nunca.
+// Derivar del reloj solo movía el problema (antes era del mes, luego del día),
+// así que se congela: el reloj es fijo y las fechas son literales, igual que
+// `jest.config.ts` fija TZ=UTC por la misma razón.
+//
+// Un día a mitad de mes: deja días válidos por delante Y por detrás de "hoy".
+const FROZEN_NOW = new Date('2026-08-15T12:00:00.000Z');
+/** Día 10: >= el "Desde" por defecto (día 1) y DISTINTO de hoy -> cambio real. */
+const TENTH_OF_MONTH = '2026-08-10';
 /** Su cota exclusiva (+1 día), que es lo que el componente debe enviar como `to`. */
-const ELEVENTH_OF_MONTH = ymd(new Date(NOW.getFullYear(), NOW.getMonth(), 11));
+const ELEVENTH_OF_MONTH = '2026-08-11';
 /** Mañana: estrictamente DESPUÉS del "Hasta" por defecto (hoy) -> dispara la guarda. */
-const TOMORROW = ymd(
-  new Date(NOW.getFullYear(), NOW.getMonth(), NOW.getDate() + 1),
-);
+const TOMORROW = '2026-08-16';
 
 function dashboard(overrides: Partial<Dashboard> = {}): Dashboard {
   return {
@@ -146,6 +145,16 @@ function deferred<T>() {
 }
 
 describe('DashboardView', () => {
+  // `advanceTimers: true` deja que los temporizadores falsos avancen con el
+  // tiempo real: solo nos interesa fijar `Date`, y sin esto `waitFor` y
+  // `userEvent` se quedarían esperando un reloj que nadie adelanta.
+  beforeAll(() => {
+    jest.useFakeTimers({ now: FROZEN_NOW, advanceTimers: true });
+  });
+  afterAll(() => {
+    jest.useRealTimers();
+  });
+
   beforeEach(() => {
     mockedGetDashboard.mockReset();
     mockedListCurrencies.mockReset();
