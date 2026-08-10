@@ -495,7 +495,7 @@ export function StaffView({ token }: StaffViewProps) {
                     key={`${entry.kind}-${entry.id}`}
                     className={cn(isMember && 'relative')}
                   >
-                    <TableCell className="font-medium text-ink">
+                    <TableCell className="font-medium text-ink" data-label={copy.colName}>
                       {isMember ? (
                         // El enlace se estira sobre toda la fila con un
                         // pseudo-elemento: la fila entera es clicable pero el
@@ -512,12 +512,12 @@ export function StaffView({ token }: StaffViewProps) {
                         entry.fullName
                       )}
                     </TableCell>
-                    <TableCell className="text-muted">{entry.email}</TableCell>
-                    <TableCell className="text-muted">{ROLE_LABEL[entry.role]}</TableCell>
-                    <TableCell>
+                    <TableCell className="text-muted" data-label={copy.colEmail}>{entry.email}</TableCell>
+                    <TableCell className="text-muted" data-label={copy.colRole}>{ROLE_LABEL[entry.role]}</TableCell>
+                    <TableCell data-label={copy.colStatus}>
                       <Badge variant={badge.variant}>{badge.label}</Badge>
                     </TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="text-right" data-label={copy.colActions}>
                       <RowActions
                         label={copy.actionsFor(entry.fullName)}
                         busy={busy}

@@ -663,7 +663,7 @@ export function InventoryView({ token }: InventoryViewProps) {
                 const updating = updatingId === item.id;
                 return (
                   <TableRow key={item.id}>
-                    <TableCell>
+                    <TableCell data-label={copy.colItem}>
                       <div className="flex flex-col">
                         <span className="font-medium text-ink">{item.name}</span>
                         {item.sku ? (
@@ -671,12 +671,12 @@ export function InventoryView({ token }: InventoryViewProps) {
                         ) : null}
                       </div>
                     </TableCell>
-                    <TableCell>{item.unit}</TableCell>
-                    <TableCell className="tabular-nums">
+                    <TableCell data-label={copy.colUnit}>{item.unit}</TableCell>
+                    <TableCell className="tabular-nums" data-label={copy.colStock}>
                       {item.stock === undefined ? copy.unknownValue : item.stock}
                     </TableCell>
-                    <TableCell className="tabular-nums">{item.minStock}</TableCell>
-                    <TableCell>
+                    <TableCell className="tabular-nums" data-label={copy.colMinStock}>{item.minStock}</TableCell>
+                    <TableCell data-label={copy.colStatus}>
                       {item.lowStock === undefined ? (
                         <Badge variant="muted">{copy.unknownValue}</Badge>
                       ) : item.lowStock ? (
@@ -685,7 +685,7 @@ export function InventoryView({ token }: InventoryViewProps) {
                         <Badge variant="success">{copy.ok}</Badge>
                       )}
                     </TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="text-right" data-label={copy.colActions}>
                       <RowActions
                         label={copy.actionsFor(item.name)}
                         busy={updating}

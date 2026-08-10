@@ -87,7 +87,7 @@ export function PatientsTable({ patients, loading, filtered = false }: PatientsT
           <TableBody>
             {patients.map((patient) => (
               <TableRow key={patient.id}>
-                <TableCell>
+                <TableCell data-label={copy.colName}>
                   <Link
                     href={`/patients/${patient.id}`}
                     className="flex items-center gap-3 font-medium text-ink hover:text-primary"
@@ -98,13 +98,13 @@ export function PatientsTable({ patients, loading, filtered = false }: PatientsT
                     {fullName(patient)}
                   </Link>
                 </TableCell>
-                <TableCell className="text-muted">
+                <TableCell className="text-muted" data-label={copy.colDoc}>
                   {patient.docNumber ?? copy.docFallback}
                 </TableCell>
-                <TableCell className="text-muted">
+                <TableCell className="text-muted" data-label={copy.colPhone}>
                   {patient.phone ?? copy.docFallback}
                 </TableCell>
-                <TableCell className="text-muted">
+                <TableCell className="text-muted" data-label={copy.colEmail}>
                   {patient.email ?? copy.docFallback}
                 </TableCell>
               </TableRow>

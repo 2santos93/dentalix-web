@@ -604,7 +604,7 @@ export function CatalogView({ token }: CatalogViewProps) {
             <TableBody>
               {items.map((item) => (
                 <TableRow key={item.id}>
-                  <TableCell>
+                  <TableCell data-label={copy.colName}>
                     <span className="flex items-center gap-2.5 font-medium text-ink">
                       <span
                         aria-hidden
@@ -621,21 +621,21 @@ export function CatalogView({ token }: CatalogViewProps) {
                       </span>
                     </span>
                   </TableCell>
-                  <TableCell>
+                  <TableCell data-label={copy.colKind}>
                     <Badge variant="muted">{KIND_LABELS[item.kind]}</Badge>
                   </TableCell>
-                  <TableCell className="text-muted tabular-nums">
+                  <TableCell className="text-muted tabular-nums" data-label={copy.colCode}>
                     {item.code}
                   </TableCell>
-                  <TableCell className="text-right tabular-nums">
+                  <TableCell className="text-right tabular-nums" data-label={copy.colPrice}>
                     {formatPrice(item.defaultPrice)}
                   </TableCell>
-                  <TableCell>
+                  <TableCell data-label={copy.colStatus}>
                     <Badge variant={item.active ? 'success' : 'muted'}>
                       {item.active ? copy.active : copy.inactive}
                     </Badge>
                   </TableCell>
-                  <TableCell className="text-right">
+                  <TableCell className="text-right" data-label={copy.colActions}>
                     <RowActions
                       label={copy.actionsFor(item.labelEs)}
                       busy={togglingId === item.id}
