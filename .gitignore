@@ -51,3 +51,4 @@ next-env.d.ts
 # impeccable working artifacts
 .impeccable/
 .playwright-mcp/
+.impeccable-shots.mjs

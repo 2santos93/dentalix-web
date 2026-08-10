@@ -13,6 +13,10 @@
  */
 import { apiFetch, apiFetchOrNull, ApiError } from './client';
 import { useAuthStore } from '@/lib/auth/auth-store';
+import {
+  getActiveLocationId,
+  setActiveLocationId,
+} from '@/lib/locations/location-store';
 
 describe('apiFetch', () => {
   const realFetch = global.fetch;
@@ -246,5 +250,106 @@ describe('apiFetch — FormData body', () => {
     expect(init.body).toBe(fd);
     const headers = init.headers as Record<string, string>;
     expect(headers['Content-Type']).toBeUndefined();
+  });
+});
+
+// La sede elegida vive en localStorage y sobrevive a la sede real: si se borra,
+// se desactiva, o se reseedea la base y cambian los ids, queda un id huérfano
+// que se sigue mandando como `X-Location-Id` en CADA petición — y el backend
+// contesta 400 "Unknown location for this clinic" a TODAS, dejando la app
+// inservible hasta que alguien limpia localStorage a mano.
+//
+// `LocationSwitcher` ya reconcilia contra la lista real, pero solo cuando está
+// montado: las pantallas que piden datos sin él siguen fuera de su alcance. Así
+// que el cliente se cura solo, en el único sitio por el que pasan todas.
+describe('apiFetch — sede huérfana en localStorage', () => {
+  const realFetch = global.fetch;
+  afterEach(() => {
+    global.fetch = realFetch;
+    window.localStorage.clear();
+  });
+
+  const UNKNOWN = 'Unknown location for this clinic';
+  function unknownLocation() {
+    return { ok: false, status: 400, json: async () => ({ message: UNKNOWN }) };
+  }
+  function ok(json: unknown) {
+    return { ok: true, status: 200, json: async () => json };
+  }
+
+  it('descarta la sede y reintenta UNA vez, ya sin la cabecera', async () => {
+    setActiveLocationId('sede-borrada');
+    let hits = 0;
+    // Los parámetros van declarados (aunque no se usen) para que
+    // `spy.mock.calls[i][1]` esté tipado como RequestInit más abajo.
+    const spy = jest.fn(async (_url: string, _init: RequestInit) => {
+      hits += 1;
+      return hits === 1 ? unknownLocation() : ok({ items: [1] });
+    });
+    global.fetch = spy as unknown as typeof fetch;
+
+    const out = await apiFetch<{ items: number[] }>('/patients', { token: 'T' });
+
+    expect(out).toEqual({ items: [1] });
+    expect(spy).toHaveBeenCalledTimes(2);
+    // La primera llevaba la sede muerta; el reintento ya no manda la cabecera.
+    const headersDe = (i: number) =>
+      spy.mock.calls[i][1].headers as Record<string, string>;
+    expect(headersDe(0)['X-Location-Id']).toBe('sede-borrada');
+    expect(headersDe(1)['X-Location-Id']).toBeUndefined();
+    // Y queda limpia, para que las siguientes peticiones no repitan el 400.
+    expect(getActiveLocationId()).toBeNull();
+  });
+
+  it('no reintenta en bucle: si el reintento también falla, lanza', async () => {
+    setActiveLocationId('sede-borrada');
+    const spy = jest.fn(async () => unknownLocation());
+    global.fetch = spy as unknown as typeof fetch;
+
+    await expect(apiFetch('/patients', { token: 'T' })).rejects.toThrow(UNKNOWN);
+    expect(spy).toHaveBeenCalledTimes(2);
+  });
+
+  it('otro 400 cualquiera NO toca la sede guardada', async () => {
+    // Solo este mensaje concreto significa "tu sede no existe". Un 400 de
+    // validación no debe sacar al usuario de su sede.
+    setActiveLocationId('sede-viva');
+    const spy = jest.fn(async () => ({
+      ok: false,
+      status: 400,
+      json: async () => ({ message: 'name should not be empty' }),
+    }));
+    global.fetch = spy as unknown as typeof fetch;
+
+    await expect(apiFetch('/patients', { token: 'T' })).rejects.toThrow(
+      'name should not be empty',
+    );
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(getActiveLocationId()).toBe('sede-viva');
+  });
+
+  it('sin sede guardada no hay nada que curar: no reintenta', async () => {
+    const spy = jest.fn(async () => unknownLocation());
+    global.fetch = spy as unknown as typeof fetch;
+
+    await expect(apiFetch('/patients', { token: 'T' })).rejects.toThrow(UNKNOWN);
+    expect(spy).toHaveBeenCalledTimes(1);
+  });
+
+  it('apiFetchOrNull se cura igual', async () => {
+    setActiveLocationId('sede-borrada');
+    let hits = 0;
+    const spy = jest.fn(async () => {
+      hits += 1;
+      return hits === 1
+        ? unknownLocation()
+        : { ok: true, status: 200, text: async () => JSON.stringify({ a: 1 }) };
+    });
+    global.fetch = spy as unknown as typeof fetch;
+
+    await expect(apiFetchOrNull<{ a: number }>('/x', { token: 'T' })).resolves.toEqual({
+      a: 1,
+    });
+    expect(getActiveLocationId()).toBeNull();
   });
 });

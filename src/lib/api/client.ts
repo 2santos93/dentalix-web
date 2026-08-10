@@ -1,9 +1,19 @@
 import { useAuthStore } from '@/lib/auth/auth-store';
-import { getActiveLocationId } from '@/lib/locations/location-store';
+import {
+  getActiveLocationId,
+  setActiveLocationId,
+} from '@/lib/locations/location-store';
 
 const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000/api/v1';
 
 const REFRESH_PATH = '/auth/refresh';
+
+// Mensaje EXACTO con el que el backend rechaza una sede que no es del tenant
+// (`tenant-context.interceptor.ts`). Se compara sin distinguir mayúsculas y por
+// inclusión para sobrevivir a un retoque de redacción, pero sigue siendo un
+// acoplamiento a la respuesta del backend: si allí cambia el texto, aquí deja de
+// autocurarse (los tests de `client.test.ts` lo fijan por si acaso).
+const UNKNOWN_LOCATION = 'unknown location';
 
 export class ApiError extends Error {
   constructor(
@@ -74,6 +84,7 @@ async function doFetch(
   path: string,
   opts: ApiOptions,
   allowRefresh = true,
+  allowLocationReset = true,
 ): Promise<Response> {
   // A FormData body (e.g. avatar upload) must NOT be JSON-serialized and must
   // NOT carry a `Content-Type: application/json` header — the browser sets
@@ -96,8 +107,8 @@ async function doFetch(
   // tener que pasarla por parámetro a cada llamada. Si no hay ninguna elegida
   // no se manda la cabecera, y el backend responde la vista CONSOLIDADA de la
   // clínica — que es el comportamiento de siempre.
-  const activeLocationId = getActiveLocationId();
-  if (activeLocationId) headers['X-Location-Id'] = activeLocationId;
+  const sentLocationId = getActiveLocationId();
+  if (sentLocationId) headers['X-Location-Id'] = sentLocationId;
   if (opts.headers) Object.assign(headers, opts.headers);
   const res = await fetch(`${API}${path}`, {
     method: opts.method ?? 'GET',
@@ -132,6 +143,26 @@ async function doFetch(
       if (data?.message) message = data.message;
     } catch {
       /* keep default */
+    }
+    // Sede huérfana → autocuración. La sede elegida vive en localStorage y
+    // sobrevive a la sede real: si se borra, se desactiva, o se reseedea la base
+    // y cambian los ids, ese id se sigue mandando en CADA petición y el backend
+    // las rechaza TODAS con este 400. Sin esto la app queda inservible hasta que
+    // alguien limpia localStorage a mano, sin nada en pantalla que lo explique.
+    //
+    // `LocationSwitcher` ya reconcilia contra la lista real, pero solo mientras
+    // está montado; aquí pasan todas las peticiones, así que cubre también las
+    // pantallas que piden datos sin él. Se suelta la sede y se reintenta UNA
+    // vez (`allowLocationReset: false`), ya sin la cabecera: eso devuelve la
+    // vista consolidada, que es el comportamiento por defecto y siempre vale.
+    if (
+      res.status === 400 &&
+      allowLocationReset &&
+      sentLocationId &&
+      message.toLowerCase().includes(UNKNOWN_LOCATION)
+    ) {
+      setActiveLocationId(null);
+      return doFetch(path, opts, allowRefresh, false);
     }
     throw new ApiError(res.status, message);
   }
