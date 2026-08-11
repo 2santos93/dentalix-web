@@ -127,6 +127,55 @@ describe('CatalogView', () => {
     expect(await screen.findByText('Profilaxis')).toBeInTheDocument();
   });
 
+  // «Tipo» era el único campo del formulario sin texto de ayuda, y es el que
+  // decide dónde acaba el ítem: elegir mal no da error, simplemente el ítem no
+  // aparece nunca donde se le espera. La ayuda no es adorno, es la única señal.
+  it('el campo Tipo explica cuál elegir, y el desplegable da ejemplos', async () => {
+    mockedList.mockResolvedValue(page([], 0));
+    const user = setupUser();
+    render(<CatalogView token="tok" />);
+    await screen.findByText(/el catálogo todavía está vacío/i);
+
+    await user.click(screen.getByRole('button', { name: /agregar ítem/i }));
+
+    expect(
+      screen.getByText(/solo los procedimientos entran en un plan/i),
+    ).toBeInTheDocument();
+    // Los ejemplos van en las opciones del formulario, no en el filtro de la
+    // barra: es aquí donde hay que elegir sin conocer la distinción.
+    expect(
+      within(screen.getByLabelText(/^tipo$/i)).getByRole('option', {
+        name: /procedimiento \(resina/i,
+      }),
+    ).toBeInTheDocument();
+  });
+
+  it('elegir «Diagnóstico» manda kind DIAGNOSIS, no el PROCEDURE por defecto', async () => {
+    mockedList.mockResolvedValueOnce(page([], 0));
+    mockedCreate.mockResolvedValue({ ...item1, kind: 'DIAGNOSIS' });
+    mockedList.mockResolvedValueOnce(page([{ ...item1, kind: 'DIAGNOSIS' }]));
+
+    const user = setupUser();
+    render(<CatalogView token="tok" />);
+    await screen.findByText(/el catálogo todavía está vacío/i);
+
+    await user.click(screen.getByRole('button', { name: /agregar ítem/i }));
+    await user.type(screen.getByLabelText(/^nombre$/i), 'Caries dental');
+    await user.selectOptions(screen.getByLabelText(/^tipo$/i), 'DIAGNOSIS');
+    await user.type(screen.getByLabelText(/^código$/i), 'DX-CARIES');
+
+    await user.click(screen.getByRole('button', { name: /^crear$/i }));
+
+    await waitFor(() =>
+      expect(mockedCreate).toHaveBeenCalledWith('tok', {
+        code: 'DX-CARIES',
+        kind: 'DIAGNOSIS',
+        labelEs: 'Caries dental',
+        color: '#0E7490',
+      }),
+    );
+  });
+
   it('«Editar» vive en el menú ⋯, abre el modal relleno y hace PATCH', async () => {
     mockedList.mockResolvedValueOnce(page([item1]));
     mockedUpdate.mockResolvedValue({ ...item1, labelEs: 'Profilaxis dental' });

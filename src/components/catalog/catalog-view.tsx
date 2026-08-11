@@ -57,10 +57,27 @@ const copy = {
   addToggle: 'Agregar ítem',
   createTitle: 'Agregar ítem',
   editTitle: 'Editar ítem',
+  // La descripción dice QUÉ crea esta pantalla; la distinción entre los dos
+  // tipos es de `kindHint` y solo de él. Antes se repartía entre los dos textos
+  // —y decía además que los diagnósticos iban «en el odontograma» y los
+  // procedimientos en los planes, como si fueran sitios excluyentes, que no lo
+  // son: `tooth-record-panel.tsx` monta el picker sin filtrar por `kind`.
   formDescription:
-    'Crea un procedimiento o diagnóstico reutilizable. Los procedimientos aparecen al agregar ítems a un plan de tratamiento; los diagnósticos, en el odontograma.',
+    'Crea un procedimiento o diagnóstico reutilizable en toda la clínica.',
   nameLabel: 'Nombre',
   kindLabel: 'Tipo',
+  // El tipo era el ÚNICO campo del formulario sin ayuda, y es el que decide
+  // dónde acaba el ítem: un tratamiento creado como diagnóstico no se podrá
+  // presupuestar nunca, y un hallazgo creado como procedimiento aparecerá como
+  // cobrable. Elegir mal no da error — el ítem simplemente no aparece donde se
+  // le espera, que es la peor forma de fallar. La pregunta que lo resuelve
+  // —«¿esto se lo cobro al paciente?»— va delante, en vez de nombrar la
+  // distinción y darla por obvia.
+  //
+  // Sin ejemplos aquí a propósito: ya viven en las opciones del desplegable, a
+  // un centímetro. Repetirlos alarga el hint hasta donde deja de leerse.
+  kindHint:
+    'Procedimiento: lo que le haces al paciente y le cobras. Diagnóstico: lo que le encuentras en el diente. Los dos van al odontograma; solo los procedimientos entran en un plan de tratamiento.',
   codeLabel: 'Código',
   codeHint:
     'Código corto único dentro de la clínica (ej. PROF, RESINA, DX-CARIES).',
@@ -114,9 +131,17 @@ const copy = {
   categoryFallback: '',
 };
 
-const KIND_OPTIONS: { value: CatalogKind; label: string }[] = [
-  { value: 'PROCEDURE', label: 'Procedimiento' },
-  { value: 'DIAGNOSIS', label: 'Diagnóstico' },
+/**
+ * `label` es el nombre a secas: sirve para el filtro de la barra y para la
+ * etiqueta de la fila, donde la columna ya dice «Tipo» y un ejemplo sobraría.
+ *
+ * `example` solo se usa en el desplegable del formulario, que es el único sitio
+ * donde hay que ELEGIR entre los dos sin conocerlos. Un ejemplo concreto
+ * («resina, corona») resuelve la duda más rápido que cualquier definición.
+ */
+const KIND_OPTIONS: { value: CatalogKind; label: string; example: string }[] = [
+  { value: 'PROCEDURE', label: 'Procedimiento', example: 'resina, corona, profilaxis' },
+  { value: 'DIAGNOSIS', label: 'Diagnóstico', example: 'caries, fractura, gingivitis' },
 ];
 
 const KIND_LABELS: Record<CatalogKind, string> = {
@@ -481,7 +506,11 @@ export function CatalogView({ token }: CatalogViewProps) {
                 onChange={(e) => setName(e.target.value)}
               />
             </FormField>
-            <FormField htmlFor="catalog-kind" label={copy.kindLabel}>
+            <FormField
+              htmlFor="catalog-kind"
+              label={copy.kindLabel}
+              hint={copy.kindHint}
+            >
               <select
                 id="catalog-kind"
                 required
@@ -491,7 +520,7 @@ export function CatalogView({ token }: CatalogViewProps) {
               >
                 {KIND_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>
-                    {opt.label}
+                    {opt.label} ({opt.example})
                   </option>
                 ))}
               </select>
