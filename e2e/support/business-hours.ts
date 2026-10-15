@@ -1,4 +1,5 @@
 import { expect, type Page } from '@playwright/test';
+import { API_URL } from './urls';
 
 /**
  * Deja la sede de la clínica recién registrada SIN restricción de horario.
@@ -21,7 +22,7 @@ export async function disableBusinessHours(page: Page, origin: string): Promise<
       .state?.accessToken ?? '';
   expect(accessToken, 'disableBusinessHours necesita una sesión ya iniciada').toBeTruthy();
 
-  const res = await page.request.put('http://localhost:3000/api/v1/locations/schedule', {
+  const res = await page.request.put(`${API_URL}/locations/schedule`, {
     headers: {
       Authorization: `Bearer ${accessToken}`,
       'X-Tenant-Host': new URL(origin).host,
