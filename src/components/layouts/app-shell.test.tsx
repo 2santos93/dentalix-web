@@ -19,17 +19,61 @@ jest.mock('../../lib/me/me-api', () => ({
     memberships: [{ tenantId: 't1', clinicName: 'Sonrisa', role: 'ADMIN' }],
   }),
 }));
+// Token por test: el menú decide qué entradas ve cada rol leyendo el `role` del
+// access token. `mock` como prefijo es lo que permite usarlo dentro de
+// `jest.mock` (que se iza por encima de los imports).
+let mockAccessToken: string | null = 'T';
 jest.mock('../../lib/auth/auth-store', () => ({
   useAuthStore: Object.assign(
     (selector: (s: { accessToken: string | null; clear: () => void }) => unknown) =>
-      selector({ accessToken: 'T', clear: jest.fn() }),
+      selector({ accessToken: mockAccessToken, clear: jest.fn() }),
     { getState: () => ({ clear: jest.fn() }) },
   ),
 }));
 
+function tokenForRole(role: string): string {
+  const b64url = (value: string) =>
+    btoa(value).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  return `${b64url('{"alg":"HS256"}')}.${b64url(JSON.stringify({ sub: 'u1', tenantId: 't1', role }))}.firma`;
+}
+
 describe('AppShell', () => {
   beforeEach(() => {
     window.localStorage.clear();
+    mockAccessToken = 'T';
+  });
+
+  // La caja es dato financiero: PAYMENT_ROLES en la API (ADMIN + RECEPTION).
+  it.each(['ADMIN', 'RECEPTION'])('muestra la entrada Caja a %s', async (role) => {
+    mockAccessToken = tokenForRole(role);
+    render(
+      <AppShell>
+        <p>contenido</p>
+      </AppShell>,
+    );
+    const links = await screen.findAllByRole('link', { name: 'Caja' });
+    links.forEach((link) => expect(link).toHaveAttribute('href', '/caja'));
+  });
+
+  it.each(['DENTIST', 'ASSISTANT'])('oculta la entrada Caja a %s', async (role) => {
+    mockAccessToken = tokenForRole(role);
+    render(
+      <AppShell>
+        <p>contenido</p>
+      </AppShell>,
+    );
+    // Espera a que el resto del menú esté pintado antes de afirmar la ausencia.
+    expect(await screen.findAllByRole('link', { name: /pacientes/i })).not.toHaveLength(0);
+    expect(screen.queryByRole('link', { name: 'Caja' })).not.toBeInTheDocument();
+  });
+
+  it('sin un token legible no enseña entradas restringidas', () => {
+    render(
+      <AppShell>
+        <p>contenido</p>
+      </AppShell>,
+    );
+    expect(screen.queryByRole('link', { name: 'Caja' })).not.toBeInTheDocument();
   });
 
   it('renderiza la navegación y el menú de cuenta', async () => {

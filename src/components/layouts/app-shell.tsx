@@ -9,10 +9,14 @@ import {
   UserCog,
   ClipboardList,
   Package,
+  Wallet,
   PanelLeftClose,
   PanelLeftOpen,
 } from 'lucide-react';
 import { UserMenu } from '@/components/profile/user-menu';
+import { useAuthStore } from '@/lib/auth/auth-store';
+import { getTokenRole } from '@/lib/auth/token-role';
+import type { ClinicRole } from '@/lib/me/me-api';
 import { LocationSwitcher } from '@/components/locations/location-switcher';
 import {
   getSidebarCollapsed,
@@ -25,10 +29,24 @@ const copy = {
   expand: 'Expandir menú',
 };
 
-const NAV = [
+interface NavItem {
+  href: string;
+  label: string;
+  icon: React.ComponentType<{ className?: string }>;
+  /**
+   * Roles que ven la entrada. Sin `roles`, la ven todos. Debe copiar el
+   * `@Roles(...)` del endpoint que alimenta la pantalla: el menú solo evita
+   * enseñar un enlace que acabaría en 403, la frontera la pone la API.
+   */
+  roles?: readonly ClinicRole[];
+}
+
+const NAV: NavItem[] = [
   { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
   { href: '/patients', label: 'Pacientes', icon: Users },
   { href: '/agenda', label: 'Agenda', icon: Calendar },
+  // Dato financiero: mismos roles que PAYMENT_ROLES en la API.
+  { href: '/caja', label: 'Caja', icon: Wallet, roles: ['ADMIN', 'RECEPTION'] },
   { href: '/catalog', label: 'Catálogo', icon: ClipboardList },
   { href: '/inventory', label: 'Inventario', icon: Package },
   { href: '/staff', label: 'Personal', icon: UserCog },
@@ -48,6 +66,20 @@ const NAV = [
 export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = React.useState(false);
+  const accessToken = useAuthStore((s) => s.accessToken);
+  // El rol se resuelve en un efecto y no en el render: el token sale del store
+  // persistido, que en SSR está vacío, y leerlo durante el render haría que el
+  // menú del servidor y el del primer render del cliente no coincidieran. Hasta
+  // entonces (`null`) las entradas con `roles` no se pintan: mejor aparecer un
+  // instante tarde que enseñarle a alguien un enlace que no puede abrir.
+  const [role, setRole] = React.useState<ClinicRole | null>(null);
+  React.useEffect(() => {
+    function hydrate() {
+      setRole(getTokenRole(accessToken));
+    }
+    hydrate();
+  }, [accessToken]);
+  const nav = NAV.filter((item) => !item.roles || (role !== null && item.roles.includes(role)));
   const isActive = (href: string) =>
     pathname === href || pathname.startsWith(`${href}/`);
 
@@ -138,7 +170,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             collapsed ? 'px-2' : 'px-3',
           )}
         >
-          {NAV.map(({ href, label, icon: Icon }) => (
+          {nav.map(({ href, label, icon: Icon }) => (
             <Link
               key={href}
               href={href}
@@ -181,13 +213,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             así que la barra sobraría — y una banda vacía de 64px le robaría alto
             al contenido. */}
         <header className="flex h-16 items-center justify-between gap-4 border-b border-border bg-surface px-4 md:hidden">
-          {/* Scrollable en horizontal: con 6 secciones los ítems suman más que
+          {/* Scrollable en horizontal: con 7 secciones los ítems suman más que
               el ancho de un móvil, y sin esto desbordan la página entera. */}
           <nav className="-mx-1 flex min-w-0 items-center gap-1 overflow-x-auto px-1">
             <span className="mr-1 shrink-0 text-lg" aria-hidden>
               🦷
             </span>
-            {NAV.map(({ href, label, icon: Icon }) => (
+            {nav.map(({ href, label, icon: Icon }) => (
               <Link
                 key={href}
                 href={href}

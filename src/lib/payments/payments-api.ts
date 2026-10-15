@@ -1,5 +1,5 @@
 import { apiFetch, apiFetchOrNull } from '@/lib/api/client';
-import type { components } from '@/lib/api/schema';
+import type { components, paths } from '@/lib/api/schema';
 
 export type RecordPaymentInput = components['schemas']['RecordPaymentDto'];
 
@@ -76,4 +76,27 @@ export async function voidPayment(token: string, id: string): Promise<void> {
     method: 'DELETE',
     token,
   });
+}
+
+export type CashPaymentsResponse = components['schemas']['CashPaymentsResponseDto'];
+export type CashPayment = components['schemas']['CashPaymentDto'];
+export type CashPaymentsQuery = NonNullable<
+  paths['/api/v1/payments']['get']['parameters']['query']
+>;
+
+/**
+ * `GET /payments` — la caja: abonos de la clínica en el período (`from`/`to`
+ * días civiles, ambos inclusive), de la sede activa (la cabecera
+ * `X-Location-Id` la pone `apiFetch`) o de todas, con el resumen del período
+ * por moneda y método. `method`/`page` ausentes no viajan en la query.
+ */
+export async function listCashPayments(
+  token: string,
+  params: CashPaymentsQuery,
+): Promise<CashPaymentsResponse> {
+  const search = new URLSearchParams({ from: params.from, to: params.to });
+  if (params.method) search.set('method', params.method);
+  if (params.page) search.set('page', String(params.page));
+  if (params.pageSize) search.set('pageSize', String(params.pageSize));
+  return apiFetch<CashPaymentsResponse>(`/payments?${search.toString()}`, { token });
 }

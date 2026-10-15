@@ -692,6 +692,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/payments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Caja: abonos del período con resumen por moneda y método */
+        get: operations["PaymentsController_listCash"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/treatment-plans/{id}/payments": {
         parameters: {
             query?: never;
@@ -1605,6 +1622,104 @@ export interface components {
             name: string;
             /** @example Bogota D.C. */
             region: string | null;
+        };
+        CashLocationRefDto: {
+            /** Format: uuid */
+            id: string;
+            /** @example Sede principal */
+            name: string;
+        };
+        CashPatientRefDto: {
+            /** Format: uuid */
+            id: string;
+            /**
+             * @description Nombre y apellido
+             * @example Ana Gómez
+             */
+            fullName: string;
+        };
+        CashTreatmentPlanRefDto: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            status: "DRAFT" | "ACCEPTED" | "COMPLETED" | "CANCELLED";
+            /**
+             * Format: date-time
+             * @description El plan no tiene título: la web lo nombra por su fecha de creación.
+             */
+            createdAt: string;
+        };
+        CashPaymentDto: {
+            /** Format: uuid */
+            id: string;
+            /**
+             * Format: date-time
+             * @description Día civil del abono (medianoche UTC del día registrado).
+             */
+            paidAt: string;
+            /** @example 150000 */
+            amount: number;
+            /**
+             * @description ISO 4217 currency code
+             * @example COP
+             */
+            currency: string;
+            /** @enum {string|null} */
+            method: "CASH" | "CARD" | "TRANSFER" | "OTHER" | null;
+            notes: string | null;
+            location: components["schemas"]["CashLocationRefDto"];
+            patient: components["schemas"]["CashPatientRefDto"];
+            treatmentPlan: components["schemas"]["CashTreatmentPlanRefDto"];
+        };
+        CashScopeDto: {
+            /** @description Sede activa del request (X-Location-Id), o null = todas las sedes. */
+            location: components["schemas"]["CashLocationRefDto"] | null;
+        };
+        CashCurrencyTotalDto: {
+            /** @example COP */
+            currency: string;
+            /**
+             * @description Suma sin convertir
+             * @example 350000
+             */
+            total: number;
+            /** @example 3 */
+            count: number;
+        };
+        CashMethodTotalDto: {
+            /**
+             * @description `null` = abonos registrados sin método
+             * @enum {string|null}
+             */
+            method: "CASH" | "CARD" | "TRANSFER" | "OTHER" | null;
+            /** @example COP */
+            currency: string;
+            /** @example 200000 */
+            total: number;
+            /** @example 2 */
+            count: number;
+        };
+        CashPaymentsSummaryDto: {
+            /** @description Número de abonos del período */
+            count: number;
+            /** @description Total por moneda, sin convertir (no hay moneda base de la clínica). */
+            byCurrency: components["schemas"]["CashCurrencyTotalDto"][];
+            /** @description Total por método y moneda. */
+            byMethod: components["schemas"]["CashMethodTotalDto"][];
+        };
+        CashPaymentsResponseDto: {
+            items: components["schemas"]["CashPaymentDto"][];
+            /** @description Abonos que casan con los filtros, no solo los de la página */
+            total: number;
+            page: number;
+            pageSize: number;
+            /** @example 2026-10-01 */
+            from: string;
+            /** @example 2026-10-31 */
+            to: string;
+            scope: components["schemas"]["CashScopeDto"];
+            /** @description Resumen del período entero con los mismos filtros. */
+            summary: components["schemas"]["CashPaymentsSummaryDto"];
         };
         RecordPaymentDto: {
             /**
@@ -3339,6 +3454,51 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["CityDto"][];
                 };
+            };
+        };
+    };
+    PaymentsController_listCash: {
+        parameters: {
+            query: {
+                /** @description Primer día del período (YYYY-MM-DD), inclusive. */
+                from: string;
+                /** @description Último día del período (YYYY-MM-DD), inclusive. Debe ser >= from; el período no puede superar 366 días. */
+                to: string;
+                /** @description Solo abonos de este método. Sin él, todos los métodos. */
+                method?: "CASH" | "CARD" | "TRANSFER" | "OTHER";
+                page?: number;
+                pageSize?: number;
+            };
+            header?: {
+                /** @description Sede activa. Sin cabecera: todas las sedes de la clínica. */
+                "X-Location-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CashPaymentsResponseDto"];
+                };
+            };
+            /** @description Fecha inválida, from > to, período de más de 366 días, método desconocido o sede ajena a la clínica */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Rol sin acceso a pagos */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
