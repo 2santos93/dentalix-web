@@ -237,3 +237,50 @@ describe('PatientDetailTabs', () => {
     expect(screen.getByRole('tabpanel')).toHaveAttribute('id', 'tabpanel-data');
   });
 });
+
+describe('PatientDetailTabs — pestaña opcional «Estado de cuenta»', () => {
+  function renderTabs(accountStatementLabel?: string, onTabChange = jest.fn()) {
+    render(
+      <PatientDetailTabs
+        activeTab="data"
+        onTabChange={onTabChange}
+        tablistLabel="Ana García"
+        dataLabel="Datos"
+        clinicalHistoryLabel="Historia clínica"
+        odontogramLabel="Odontograma"
+        treatmentPlansLabel="Plan de tratamiento"
+        accountStatementLabel={accountStatementLabel}
+      />,
+    );
+    return onTabChange;
+  }
+
+  it('no aparece sin etiqueta (rol sin acceso a pagos)', () => {
+    renderTabs();
+    expect(screen.getAllByRole('tab')).toHaveLength(4);
+    expect(screen.queryByRole('tab', { name: 'Estado de cuenta' })).not.toBeInTheDocument();
+  });
+
+  it('con etiqueta es la quinta pestaña y entra en el recorrido con flechas', async () => {
+    const user = userEvent.setup();
+    const onTabChange = renderTabs('Estado de cuenta');
+    expect(screen.getAllByRole('tab')).toHaveLength(5);
+
+    await user.tab();
+    await user.keyboard('{End}');
+    const tab = screen.getByRole('tab', { name: 'Estado de cuenta' });
+    expect(tab).toHaveFocus();
+    expect(tab).toHaveAttribute('aria-controls', 'tabpanel-account-statement');
+
+    await user.keyboard('{ArrowRight}');
+    expect(screen.getByRole('tab', { name: 'Datos' })).toHaveFocus();
+
+    await user.click(tab);
+    expect(onTabChange).toHaveBeenCalledWith('account-statement');
+  });
+
+  it('el tablist se desplaza de lado en vez de ensanchar la página', () => {
+    renderTabs('Estado de cuenta');
+    expect(screen.getByRole('tablist').className).toMatch(/overflow-x-auto/);
+  });
+});

@@ -18,6 +18,9 @@ import { PatientRecordHeader } from '@/components/patients/patient-record-header
 import { OdontogramTab } from '@/components/odontogram/odontogram-tab';
 import { TreatmentPlansTab } from '@/components/treatment-plans/treatment-plans-tab';
 import { SectionError } from '@/components/errors/section-error';
+import { AccountStatementView } from '@/components/account-statement/account-statement-view';
+import { getTokenRole } from '@/lib/auth/token-role';
+import { canReadAccountStatement } from '@/lib/account-statement/account-statement-api';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
@@ -29,6 +32,7 @@ const copy = {
   tabClinicalHistory: 'Historia clínica',
   tabOdontogram: 'Odontograma',
   tabTreatmentPlans: 'Plan de tratamiento',
+  tabAccountStatement: 'Estado de cuenta',
   anamnesisHeading: 'Anamnesis',
   entriesHeading: 'Evoluciones',
 };
@@ -117,9 +121,16 @@ function PatientDetailView() {
   // Atrás vuelve a la pestaña anterior en vez de salir del paciente, y
   // recargar el móvil devuelve al usuario donde estaba. Un valor desconocido o
   // ausente cae en «Datos» sin romper nada.
-  const activeTab: PatientDetailTabKey = isPatientDetailTabKey(searchParams.get('tab'))
-    ? (searchParams.get('tab') as PatientDetailTabKey)
-    : 'data';
+  // Quién ve «Estado de cuenta»: ACCOUNT_STATEMENT_ROLES (= PAYMENT_ROLES).
+  const canSeeAccountStatement = canReadAccountStatement(getTokenRole(accessToken));
+  const requestedTab = searchParams.get('tab');
+  // Un `?tab=account-statement` en manos de un rol sin acceso (enlace
+  // compartido) cae en «Datos», igual que cualquier valor desconocido.
+  const activeTab: PatientDetailTabKey =
+    isPatientDetailTabKey(requestedTab) &&
+    (requestedTab !== 'account-statement' || canSeeAccountStatement)
+      ? requestedTab
+      : 'data';
   // El diente en foco también viaja en la URL: es el puente entre el
   // odontograma (diente seleccionado) y el plan de tratamiento (ítems de ese
   // diente resaltados). Solo se valida contra el formato FDI en cada consumidor.
@@ -249,6 +260,7 @@ function PatientDetailView() {
             clinicalHistoryLabel={copy.tabClinicalHistory}
             odontogramLabel={copy.tabOdontogram}
             treatmentPlansLabel={copy.tabTreatmentPlans}
+            accountStatementLabel={canSeeAccountStatement ? copy.tabAccountStatement : undefined}
           />
 
           <TabPanel tab="data" activeTab={activeTab} register={registerPanel}>
@@ -314,6 +326,12 @@ function PatientDetailView() {
               odontogramHref={(tooth) => `${pathname}?tab=odontogram&tooth=${tooth}`}
             />
           </TabPanel>
+
+          {canSeeAccountStatement ? (
+            <TabPanel tab="account-statement" activeTab={activeTab} register={registerPanel}>
+              <AccountStatementView token={accessToken} patientId={patientId} />
+            </TabPanel>
+          ) : null}
         </div>
       ) : null}
     </div>
