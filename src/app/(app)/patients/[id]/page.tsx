@@ -20,7 +20,7 @@ import { TreatmentPlansTab } from '@/components/treatment-plans/treatment-plans-
 import { SectionError } from '@/components/errors/section-error';
 import { AccountStatementView } from '@/components/account-statement/account-statement-view';
 import { getTokenRole } from '@/lib/auth/token-role';
-import type { ClinicRole } from '@/lib/me/me-api';
+import { canReadAccountStatement } from '@/lib/account-statement/account-statement-api';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
@@ -36,10 +36,6 @@ const copy = {
   anamnesisHeading: 'Anamnesis',
   entriesHeading: 'Evoluciones',
 };
-
-// Quién ve «Estado de cuenta»: los mismos roles que la API deja leer pagos
-// (PAYMENT_ROLES). Solo decide qué se PINTA; el endpoint vuelve a comprobarlo.
-const ACCOUNT_STATEMENT_ROLES: readonly ClinicRole[] = ['ADMIN', 'RECEPTION'];
 
 function fullName(patient: Patient): string {
   return `${patient.firstName} ${patient.lastName}`;
@@ -125,8 +121,8 @@ function PatientDetailView() {
   // Atrás vuelve a la pestaña anterior en vez de salir del paciente, y
   // recargar el móvil devuelve al usuario donde estaba. Un valor desconocido o
   // ausente cae en «Datos» sin romper nada.
-  const role = getTokenRole(accessToken);
-  const canSeeAccountStatement = role !== null && ACCOUNT_STATEMENT_ROLES.includes(role);
+  // Quién ve «Estado de cuenta»: ACCOUNT_STATEMENT_ROLES (= PAYMENT_ROLES).
+  const canSeeAccountStatement = canReadAccountStatement(getTokenRole(accessToken));
   const requestedTab = searchParams.get('tab');
   // Un `?tab=account-statement` en manos de un rol sin acceso (enlace
   // compartido) cae en «Datos», igual que cualquier valor desconocido.

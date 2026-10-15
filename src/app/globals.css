@@ -226,11 +226,17 @@
  * largo ocupa varias hojas y un elemento fijo se recortaría a la primera.
  * La barra de acciones se oculta con `print:hidden` en el propio componente.
  */
-@page {
+/* Página CON NOMBRE: un `@page` anónimo cambiaría también el tamaño y los
+ * márgenes del comprobante de abono (y de cualquier otra impresión de la app).
+ * Solo el documento del estado de cuenta pide A4. */
+@page statement {
   size: A4;
   margin: 14mm;
 }
 @media print {
+  .statement-print-root {
+    page: statement;
+  }
   .statement-print-root,
   .statement-print-root * {
     visibility: visible !important;

@@ -2,7 +2,11 @@
  * Mockea el `fetch` base (mismo enfoque que payments-api.test.ts) y comprueba
  * la ruta y la query que arma `getAccountStatement`.
  */
-import { accountStatementPrintHref, getAccountStatement } from './account-statement-api';
+import {
+  accountStatementPrintHref,
+  canReadAccountStatement,
+  getAccountStatement,
+} from './account-statement-api';
 
 describe('getAccountStatement', () => {
   const realFetch = global.fetch;
@@ -43,5 +47,15 @@ describe('getAccountStatement', () => {
 describe('accountStatementPrintHref', () => {
   it('apunta a la vista imprimible, fuera del shell de la app', () => {
     expect(accountStatementPrintHref('pat-1')).toBe('/print/patients/pat-1/account-statement');
+  });
+});
+
+describe('canReadAccountStatement', () => {
+  it('solo ADMIN y RECEPTION (PAYMENT_ROLES); sin rol legible, no', () => {
+    expect(canReadAccountStatement('ADMIN')).toBe(true);
+    expect(canReadAccountStatement('RECEPTION')).toBe(true);
+    expect(canReadAccountStatement('DENTIST')).toBe(false);
+    expect(canReadAccountStatement('ASSISTANT')).toBe(false);
+    expect(canReadAccountStatement(null)).toBe(false);
   });
 });

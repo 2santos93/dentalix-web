@@ -1,5 +1,6 @@
 import { apiFetch } from '@/lib/api/client';
 import type { components } from '@/lib/api/schema';
+import type { ClinicRole } from '@/lib/me/me-api';
 
 // El backend documenta la respuesta entera con @ApiProperty (AccountStatementDto),
 // así que el tipo sale tal cual del contrato generado.
@@ -8,6 +9,18 @@ export type AccountStatementSummary = components['schemas']['AccountStatementCur
 export type AccountStatementPlan = components['schemas']['AccountStatementPlanDto'];
 export type AccountStatementMovement = components['schemas']['AccountStatementMovementDto'];
 export type AccountStatementInstallment = components['schemas']['AccountStatementInstallmentDto'];
+
+/**
+ * Quién ve el estado de cuenta: los mismos roles que la API deja leer pagos
+ * (PAYMENT_ROLES). Solo decide qué se PINTA (la pestaña y la vista imprimible);
+ * el endpoint vuelve a comprobarlo.
+ */
+export const ACCOUNT_STATEMENT_ROLES: readonly ClinicRole[] = ['ADMIN', 'RECEPTION'];
+
+/** `null` (sin sesión de clínica legible) cuenta como "sin permiso". */
+export function canReadAccountStatement(role: ClinicRole | null): boolean {
+  return role !== null && ACCOUNT_STATEMENT_ROLES.includes(role);
+}
 
 export interface AccountStatementRange {
   /** Primer día de los movimientos (YYYY-MM-DD), inclusive. */

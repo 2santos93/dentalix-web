@@ -3,6 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { AccountStatementPrintView } from './account-statement-print-view';
 import { getAccountStatement } from '@/lib/account-statement/account-statement-api';
 import { accountStatementFixture } from '@/lib/test/account-statement';
+import { ApiError } from '@/lib/api/client';
 
 jest.mock('../../lib/account-statement/account-statement-api', () => ({
   ...jest.requireActual('../../lib/account-statement/account-statement-api'),
@@ -50,4 +51,31 @@ it('un fallo de carga deja un error con reintento y no imprime', async () => {
   expect(printSpy).not.toHaveBeenCalled();
   await userEvent.click(within(alert).getByRole('button', { name: /reintentar/i }));
   expect(await screen.findByRole('heading', { level: 1, name: /estado de cuenta/i })).toBeInTheDocument();
+});
+
+it('un rol sin acceso ve el aviso sin pedir nada ni imprimir', async () => {
+  render(<AccountStatementPrintView token="tok" patientId="pat-1" allowed={false} />);
+
+  expect(screen.getByRole('status')).toHaveTextContent(/tu rol no tiene acceso/i);
+  expect(screen.queryByRole('button', { name: /reintentar/i })).not.toBeInTheDocument();
+  expect(screen.getByRole('button', { name: /imprimir/i })).toBeDisabled();
+  expect(mockedGet).not.toHaveBeenCalled();
+  expect(printSpy).not.toHaveBeenCalled();
+});
+
+it('un 403 de la API se muestra como aviso de acceso, sin reintento', async () => {
+  mockedGet.mockRejectedValue(new ApiError(403, 'Forbidden'));
+  render(<AccountStatementPrintView token="tok" patientId="pat-1" />);
+
+  expect(await screen.findByText(/tu rol no tiene acceso/i)).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: /reintentar/i })).not.toBeInTheDocument();
+});
+
+it('un 404 dice que no hay tal paciente, sin un reintento que no lo arreglaría', async () => {
+  mockedGet.mockRejectedValue(new ApiError(404, 'Paciente no encontrado'));
+  render(<AccountStatementPrintView token="tok" patientId="pat-1" />);
+
+  expect(await screen.findByText(/no encontramos este paciente/i)).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: /reintentar/i })).not.toBeInTheDocument();
+  expect(printSpy).not.toHaveBeenCalled();
 });

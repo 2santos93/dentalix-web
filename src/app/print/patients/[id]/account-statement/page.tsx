@@ -2,6 +2,8 @@
 import { useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuthStore } from '@/lib/auth/auth-store';
+import { getTokenRole } from '@/lib/auth/token-role';
+import { canReadAccountStatement } from '@/lib/account-statement/account-statement-api';
 import { AccountStatementPrintView } from '@/components/account-statement/account-statement-print-view';
 
 const copy = {
@@ -35,5 +37,13 @@ export default function AccountStatementPrintPage() {
   }
   if (!accessToken) return null;
 
-  return <AccountStatementPrintView token={accessToken} patientId={params.id} />;
+  // Un rol sin acceso (enlace compartido) ve el aviso sin llegar a pedir nada:
+  // la ficha ya le oculta la pestaña y el botón; aquí se cierra la URL directa.
+  return (
+    <AccountStatementPrintView
+      token={accessToken}
+      patientId={params.id}
+      allowed={canReadAccountStatement(getTokenRole(accessToken))}
+    />
+  );
 }

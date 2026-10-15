@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
-import { ChevronLeft, Lock, Printer } from 'lucide-react';
+import { ChevronLeft, Lock, Printer, UserX } from 'lucide-react';
 import { ApiError } from '@/lib/api/client';
 import {
   getAccountStatement,
@@ -18,6 +18,8 @@ const copy = {
   back: 'Volver a la ficha',
   loading: 'Preparando el estado de cuenta…',
   loadError: 'No pudimos cargar el estado de cuenta.',
+  notFoundTitle: 'No encontramos este paciente.',
+  notFoundHint: 'Puede que se haya retirado o que el enlace no sea de esta clínica.',
   forbiddenTitle: 'Tu rol no tiene acceso al estado de cuenta.',
   forbiddenHint: 'Es un dato financiero: lo ven administración y recepción.',
   documentTitle: (name: string) => `Estado de cuenta · ${name}`,
@@ -26,6 +28,12 @@ const copy = {
 interface AccountStatementPrintViewProps {
   token: string;
   patientId: string;
+  /**
+   * El rol de la sesión puede leer el estado de cuenta (por defecto, sí). En
+   * `false` no se pide nada y se muestra el aviso de acceso: la API lo
+   * rechazaría con 403 igualmente.
+   */
+  allowed?: boolean;
 }
 
 /**
@@ -35,14 +43,21 @@ interface AccountStatementPrintViewProps {
  * (desde ahí se imprime o se «Guarda como PDF»). La barra de acciones lleva
  * `print:hidden`: no sale en el papel.
  */
-export function AccountStatementPrintView({ token, patientId }: AccountStatementPrintViewProps) {
+export function AccountStatementPrintView({
+  token,
+  patientId,
+  allowed = true,
+}: AccountStatementPrintViewProps) {
   const [data, setData] = useState<AccountStatement | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [forbidden, setForbidden] = useState(false);
+  const [deniedByApi, setDeniedByApi] = useState(false);
+  const [notFound, setNotFound] = useState(false);
+  const forbidden = !allowed || deniedByApi;
   const [reloadKey, setReloadKey] = useState(0);
   const printed = useRef(false);
 
   useEffect(() => {
+    if (!allowed) return;
     let cancelled = false;
     async function load() {
       try {
@@ -52,7 +67,10 @@ export function AccountStatementPrintView({ token, patientId }: AccountStatement
         setError(null);
       } catch (err) {
         if (cancelled) return;
-        setForbidden(err instanceof ApiError && err.status === 403);
+        setDeniedByApi(err instanceof ApiError && err.status === 403);
+        // 404 (paciente inexistente, retirado o de otra clínica): reintentar
+        // no lo arregla, así que va como aviso y no como error con reintento.
+        setNotFound(err instanceof ApiError && err.status === 404);
         setError(copy.loadError);
       }
     }
@@ -60,7 +78,7 @@ export function AccountStatementPrintView({ token, patientId }: AccountStatement
     return () => {
       cancelled = true;
     };
-  }, [token, patientId, reloadKey]);
+  }, [token, patientId, reloadKey, allowed]);
 
   useEffect(() => {
     if (data && !printed.current) {
@@ -105,6 +123,15 @@ export function AccountStatementPrintView({ token, patientId }: AccountStatement
               icon={<Lock aria-hidden />}
               title={copy.forbiddenTitle}
               description={copy.forbiddenHint}
+            />
+          </div>
+        ) : notFound ? (
+          <div className="mx-auto max-w-xl px-4 py-8">
+            <EmptyState
+              role="status"
+              icon={<UserX aria-hidden />}
+              title={copy.notFoundTitle}
+              description={copy.notFoundHint}
             />
           </div>
         ) : error ? (
