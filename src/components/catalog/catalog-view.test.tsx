@@ -419,6 +419,21 @@ describe('CatalogView', () => {
 
       await waitFor(() => expect(lastParams()).toMatchObject({ page: 2 }));
     });
+
+    it('el debounce del buscador no devuelve a la página 1 si no se tecleó nada', async () => {
+      mockedList.mockResolvedValue(page([item1], 45, 1));
+      const user = setupUser();
+      render(<CatalogView token="tok" />);
+      await screen.findByRole('table', { name: /catálogo/i });
+
+      await user.click(screen.getByRole('button', { name: /siguiente/i }));
+      await waitFor(() => expect(lastParams()).toMatchObject({ page: 2 }));
+
+      // Se deja vencer el debounce del montaje (300 ms): con el buscador sin
+      // tocar no hay búsqueda nueva, así que la página debe seguir en la 2.
+      await new Promise((resolve) => setTimeout(resolve, 400));
+      expect(lastParams()).toMatchObject({ page: 2 });
+    });
   });
 
   describe('alcance del selector de sede', () => {

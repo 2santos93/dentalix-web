@@ -247,14 +247,19 @@ export function CatalogView({ token }: CatalogViewProps) {
   }
 
   useEffect(() => {
+    const next = searchInput.trim();
+    // Sin búsqueda nueva no hay nada que aplicar. Sin esta guarda, el debounce
+    // que arranca al montar (y al teclear y borrar lo mismo) devolvía a la
+    // página 1 a quien ya había pulsado «Siguiente».
+    if (next === search) return;
     const debounce = setTimeout(() => {
-      setSearch(searchInput.trim());
+      setSearch(next);
       // Toda búsqueda nueva vuelve a la página 1: quedarse en la 3 de un
       // resultado que ahora tiene una sola deja la tabla vacía sin motivo.
       setPage(1);
     }, SEARCH_DEBOUNCE_MS);
     return () => clearTimeout(debounce);
-  }, [searchInput]);
+  }, [searchInput, search]);
 
   // Los filtros de la UI ('ALL') y los de la API (parámetro ausente) no son la
   // misma cosa; la traducción vive aquí, en un solo sitio, para que el efecto y
