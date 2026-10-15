@@ -436,6 +436,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/appointments/{id}/confirmation-link": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ConfirmationLinksController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/appointment-confirmations/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["PublicAppointmentConfirmationsController_get"];
+        put?: never;
+        post: operations["PublicAppointmentConfirmationsController_respond"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/patients/{patientId}/treatment-plans": {
         parameters: {
             query?: never;
@@ -1353,6 +1385,16 @@ export interface components {
             notes: string | null;
             /** Format: uuid */
             createdById: string | null;
+            /**
+             * Format: date-time
+             * @description Cuándo se generó el enlace de confirmación vigente (DX-005). null si nunca se envió o si la cita se reagendó / cambió de estado después.
+             */
+            confirmationSentAt: string | null;
+            /**
+             * Format: date-time
+             * @description El paciente pidió que lo llamen desde el enlace de confirmación (la cita sigue SCHEDULED).
+             */
+            callbackRequestedAt: string | null;
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
@@ -1436,6 +1478,56 @@ export interface components {
             timezone: string;
             /** @description La semana COMPLETA. Un día sin tramos = cerrado. Lista vacía = sede sin restricción. */
             ranges: components["schemas"]["ScheduleRangeDto"][];
+        };
+        PublicConfirmationAppointmentDto: {
+            /** @description Solo el nombre de pila. */
+            patientFirstName: string | null;
+            /** Format: date-time */
+            start: string;
+            /** Format: date-time */
+            end: string;
+            providerName: string | null;
+            locationName: string;
+            locationAddress: string | null;
+        };
+        ConfirmationLinkDto: {
+            /** @description URL pública en el host de la clínica. Contiene el token en claro: se entrega solo aquí. */
+            url: string;
+            /**
+             * Format: date-time
+             * @description Inicio de la cita.
+             */
+            expiresAt: string;
+            /**
+             * @description Teléfono del paciente en E.164 sin "+", listo para https://wa.me/<número>. null si no hay uno utilizable.
+             * @example 573105550101
+             */
+            whatsappPhone: string | null;
+            appointment: components["schemas"]["PublicConfirmationAppointmentDto"];
+        };
+        PublicConfirmationClinicDto: {
+            name: string;
+            /** @example #0E7490 */
+            primaryColor: string;
+            logoUrl: string | null;
+        };
+        PublicAppointmentConfirmationDto: {
+            /**
+             * @description PENDING: puede responder. RESPONDED: ya respondió (ver `response`). EXPIRED: caducado o sin efecto.
+             * @enum {string}
+             */
+            status: "PENDING" | "RESPONDED" | "EXPIRED";
+            clinic: components["schemas"]["PublicConfirmationClinicDto"] | null;
+            /** @description null cuando el enlace caducó. */
+            appointment: components["schemas"]["PublicConfirmationAppointmentDto"] | null;
+            /** @enum {string|null} */
+            response: "confirm" | "cancel" | "call_me" | null;
+            /** Format: date-time */
+            respondedAt: string | null;
+        };
+        RespondAppointmentConfirmationDto: {
+            /** @enum {string} */
+            action: "confirm" | "cancel" | "call_me";
         };
         CreateTreatmentPlanDto: {
             /**
@@ -2194,6 +2286,13 @@ export interface operations {
                     "application/json": components["schemas"]["RegisterResponseDto"];
                 };
             };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     AuthController_loginHandler: {
@@ -2217,6 +2316,13 @@ export interface operations {
                     "application/json": components["schemas"]["AuthTokensDto"];
                 };
             };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     AuthController_refreshHandler: {
@@ -2239,6 +2345,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["AuthTokensDto"];
                 };
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -2325,6 +2438,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["AuthTokensDto"];
                 };
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -2619,6 +2739,13 @@ export interface operations {
                     "application/json": components["schemas"]["MedicalHistoryDto"];
                 };
             };
+            /** @description Paciente no encontrado en esta clínica (inexistente o de otra clínica). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     ClinicalEntriesController_list: {
@@ -2668,6 +2795,13 @@ export interface operations {
                     "application/json": components["schemas"]["ClinicalEntryDto"];
                 };
             };
+            /** @description Paciente no encontrado en esta clínica (inexistente o de otra clínica). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     OdontogramController_create: {
@@ -2692,6 +2826,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ToothRecordDto"];
                 };
+            };
+            /** @description Paciente no encontrado en esta clínica (inexistente o de otra clínica). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -3002,6 +3143,115 @@ export interface operations {
             };
         };
     };
+    ConfirmationLinksController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConfirmationLinkDto"];
+                };
+            };
+        };
+    };
+    PublicAppointmentConfirmationsController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicAppointmentConfirmationDto"];
+                };
+            };
+            /** @description Token desconocido o de otra clínica. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PublicAppointmentConfirmationsController_respond: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RespondAppointmentConfirmationDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicAppointmentConfirmationDto"];
+                };
+            };
+            /** @description Token desconocido o de otra clínica. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El enlace ya se usó para responder. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El enlace caducó o la cita cambió desde que se envió. */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     TreatmentPlansController_list: {
         parameters: {
             query?: never;
@@ -3045,6 +3295,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["TreatmentPlanDto"];
                 };
+            };
+            /** @description Paciente no encontrado en esta clínica (inexistente o de otra clínica). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -3244,6 +3501,13 @@ export interface operations {
                     "application/json": components["schemas"]["PublicInvitationDto"];
                 };
             };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     PublicInvitationsController_accept: {
@@ -3268,6 +3532,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["AuthTokensDto"];
                 };
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

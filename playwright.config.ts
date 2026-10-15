@@ -1,4 +1,5 @@
 import { defineConfig, devices } from '@playwright/test';
+import { WEB_PORT } from './e2e/support/urls';
 
 /**
  * Smoke e2e config for the register -> login flow.
@@ -19,7 +20,7 @@ export default defineConfig({
   workers: 1,
   reporter: 'list',
   use: {
-    baseURL: 'http://localhost:3001',
+    baseURL: `http://localhost:${WEB_PORT}`,
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },
@@ -30,8 +31,9 @@ export default defineConfig({
     },
   ],
   webServer: {
-    command: 'npm run dev',
-    url: 'http://localhost:3001',
+    // Puerto configurable (ver e2e/support/urls.ts); por defecto el de `npm run dev`.
+    command: `npx next dev -p ${WEB_PORT}`,
+    url: `http://localhost:${WEB_PORT}`,
     reuseExistingServer: !process.env.CI,
     timeout: 60_000,
   },

@@ -1,4 +1,5 @@
 import { expect, type Page } from '@playwright/test';
+import { tenantOrigin } from './urls';
 
 /**
  * Shared register+login flow for the e2e suite.
@@ -35,7 +36,7 @@ export async function registerAndLogin(
   page: Page,
   { subdomain, clinicName, fullName, email, password }: RegisterAndLoginParams,
 ): Promise<string> {
-  const origin = `http://${subdomain}.localhost:3001`;
+  const origin = tenantOrigin(subdomain);
 
   // --- Register ---
   await page.goto(`${origin}/register`);

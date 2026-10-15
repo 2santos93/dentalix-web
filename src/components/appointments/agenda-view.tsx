@@ -14,6 +14,7 @@ import { DayAgenda } from '@/components/appointments/day-agenda';
 import { WeekTimeGrid } from '@/components/appointments/week-time-grid';
 import { MonthAgenda } from '@/components/appointments/month-agenda';
 import { AppointmentForm } from '@/components/appointments/appointment-form';
+import { ConfirmationLinkPanel } from '@/components/appointments/confirmation-link-panel';
 import {
   STATUS_LABELS,
   formatTimeRange,
@@ -291,8 +292,9 @@ export function AgendaView({ token }: AgendaViewProps) {
   const [slotPrefill, setSlotPrefill] = useState<
     { date: string; startTime: string; endTime: string } | null
   >(null);
-  // The appointment whose inline detail panel (status change) is open — set
-  // by `WeekTimeGrid`'s `onSelectAppointment`.
+  // The appointment whose detail sheet (status change + confirmación por
+  // enlace) is open — set by `WeekTimeGrid`'s `onSelectAppointment` and by the
+  // "Detalle" button of `DayAgenda` rows (Día view and the month's day panel).
   const [detailAppointment, setDetailAppointment] = useState<Appointment | null>(null);
 
   // Provider filter defaults to '' = "Todos los profesionales" (the month
@@ -411,6 +413,13 @@ export function AgendaView({ token }: AgendaViewProps) {
     setSlotPrefill({ date, startTime, endTime: addMinutesToTime(startTime, 30) });
     setDetailAppointment(null);
     setShowForm(true);
+  }
+
+  /** Abre el detalle de una cita desde Día o desde el panel del día del Mes.
+   * Cierra el panel del día para no apilar dos hojas. */
+  function openAppointmentDetail(appointment: Appointment) {
+    setDayPanelOpen(false);
+    setDetailAppointment(appointment);
   }
 
   /** `MonthAgenda`'s `onSelectDay` — selects the day and opens the day panel
@@ -627,6 +636,7 @@ export function AgendaView({ token }: AgendaViewProps) {
             onRetry={() => setAppointmentsReloadKey((k) => k + 1)}
             onStatusChange={handleStatusChange}
             updatingId={updatingId}
+            onSelectAppointment={openAppointmentDetail}
           />
         </div>
       )}
@@ -674,6 +684,7 @@ export function AgendaView({ token }: AgendaViewProps) {
               onRetry={() => setAppointmentsReloadKey((k) => k + 1)}
               onStatusChange={handleStatusChange}
               updatingId={updatingId}
+              onSelectAppointment={openAppointmentDetail}
             />
           </SheetBody>
           <SheetFooter>
@@ -734,6 +745,14 @@ export function AgendaView({ token }: AgendaViewProps) {
                   ))}
                 </select>
               </FormField>
+              {/* `key`: el enlace generado vive solo en este panel (el backend
+                  guarda únicamente su hash); al cambiar de cita se descarta. */}
+              <ConfirmationLinkPanel
+                key={liveDetailAppointment.id}
+                token={token}
+                appointment={liveDetailAppointment}
+                onLinkCreated={() => void refreshAppointmentsInPlace()}
+              />
             </SheetBody>
           </SheetContent>
         )}

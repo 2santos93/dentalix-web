@@ -1,6 +1,12 @@
 'use client';
+import { Phone, Send } from 'lucide-react';
 import type { Appointment, AppointmentStatus } from '@/lib/appointments/appointments-api';
+import {
+  confirmationIndicator,
+  type ConfirmationIndicator,
+} from '@/lib/appointments/confirmation-message';
 import { formatTime } from '@/lib/format/date';
+import { cn } from '@/lib/utils';
 
 /** es status labels — shared by `DayAgenda` and `WeekAgenda` (and their status <select>s). */
 export const STATUS_LABELS: Record<AppointmentStatus, string> = {
@@ -58,6 +64,66 @@ export function StatusBadge({ status }: { status: AppointmentStatus }) {
       className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${STATUS_BADGE_CLASSES[status]}`}
     >
       {STATUS_LABELS[status]}
+    </span>
+  );
+}
+
+/** Textos del indicador de confirmación por enlace (DX-005). */
+export const CONFIRMATION_INDICATOR_LABELS: Record<ConfirmationIndicator, string> = {
+  pending: 'Confirmación pendiente',
+  callback: 'Pide llamada',
+};
+
+/**
+ * Indicador de la tarjeta de la cita: "Pide llamada" (el paciente pulsó
+ * "Quiero que me llamen" — atención de recepción, tono warning) o
+ * "Confirmación pendiente" (enlace enviado, sin respuesta — neutro). Nada si
+ * no aplica (ver `confirmationIndicator`). `compact`: solo el icono, para los
+ * bloques estrechos de la grilla semanal; el texto queda para lectores de
+ * pantalla y como `title`.
+ */
+export function ConfirmationBadge({
+  appointment,
+  compact = false,
+  className,
+}: {
+  appointment: Appointment;
+  compact?: boolean;
+  className?: string;
+}) {
+  const indicator = confirmationIndicator(appointment);
+  if (!indicator) return null;
+  const Icon = indicator === 'callback' ? Phone : Send;
+  const label = CONFIRMATION_INDICATOR_LABELS[indicator];
+  const tone =
+    indicator === 'callback'
+      ? 'border-warning bg-warning/10 text-warning'
+      : 'border-border bg-surface-2 text-muted';
+  if (compact) {
+    return (
+      <span
+        data-testid="appointment-confirmation-indicator"
+        data-indicator={indicator}
+        title={label}
+        className={cn('inline-flex items-center', indicator === 'callback' ? 'text-warning' : 'text-muted', className)}
+      >
+        <Icon aria-hidden className="size-3" />
+        <span className="sr-only">{label}</span>
+      </span>
+    );
+  }
+  return (
+    <span
+      data-testid="appointment-confirmation-indicator"
+      data-indicator={indicator}
+      className={cn(
+        'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium',
+        tone,
+        className,
+      )}
+    >
+      <Icon aria-hidden className="size-3" />
+      {label}
     </span>
   );
 }

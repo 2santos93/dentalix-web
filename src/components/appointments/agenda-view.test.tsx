@@ -7,6 +7,7 @@ import { localDayRange, localWeekRange } from '@/lib/appointments/day-range';
 import { createAppointment, listAppointments, updateAppointment } from '@/lib/appointments/appointments-api';
 import { listStaff } from '@/lib/appointments/staff-api';
 import { listPatients } from '@/lib/patients/patients-api';
+import { createConfirmationLink } from '@/lib/appointments/confirmations-api';
 
 // NOTE: jest.mock's string literal is not alias-rewritten by the SWC
 // transform (only real `import`/`require` specifiers are) — use a relative
@@ -24,12 +25,18 @@ jest.mock('../../lib/appointments/staff-api', () => ({
 jest.mock('../../lib/patients/patients-api', () => ({
   listPatients: jest.fn(),
 }));
+jest.mock('../../lib/appointments/confirmations-api', () => ({
+  createConfirmationLink: jest.fn(),
+}));
 
 const mockedCreateAppointment = createAppointment as jest.MockedFunction<typeof createAppointment>;
 const mockedListAppointments = listAppointments as jest.MockedFunction<typeof listAppointments>;
 const mockedUpdateAppointment = updateAppointment as jest.MockedFunction<typeof updateAppointment>;
 const mockedListStaff = listStaff as jest.MockedFunction<typeof listStaff>;
 const mockedListPatients = listPatients as jest.MockedFunction<typeof listPatients>;
+const mockedCreateConfirmationLink = createConfirmationLink as jest.MockedFunction<
+  typeof createConfirmationLink
+>;
 
 const staff = [
   { userId: 'staff-1', fullName: 'Dra. Ana Ríos', role: 'DENTIST' as const },
@@ -74,6 +81,8 @@ function appointment(overrides: Partial<import('@/lib/appointments/appointments-
     reason: null,
     notes: null,
     createdById: null,
+    confirmationSentAt: null,
+    callbackRequestedAt: null,
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
     ...overrides,
@@ -594,5 +603,61 @@ describe('AgendaView', () => {
     // no optimistic leak.
     expect(statusSelect).not.toBeDisabled();
     expect(statusSelect.value).toBe('SCHEDULED');
+  });
+
+  // DX-005: "Enviar confirmación" vive en el detalle de la cita, que ahora
+  // también se abre desde las filas del Día (botón "Detalle").
+  it('Día: "Detalle" abre la cita; "Enviar confirmación" genera el enlace y la agenda se refresca para mostrar "Confirmación pendiente"', async () => {
+    const future = new Date(Date.now() + 3 * 24 * 3600_000);
+    const day = `${future.getFullYear()}-${String(future.getMonth() + 1).padStart(2, '0')}-${String(future.getDate()).padStart(2, '0')}`;
+    const start = new Date(`${day}T09:00:00`).toISOString();
+    const end = new Date(`${day}T09:30:00`).toISOString();
+    const pendingApt = appointment({ id: 'apt-c', start, end, patientFirstName: 'María' });
+    mockedListStaff.mockResolvedValue(staff);
+    mockedListAppointments.mockResolvedValue([pendingApt]);
+    mockedCreateConfirmationLink.mockResolvedValue({
+      url: 'http://demo.localhost:3001/confirmar/tok',
+      expiresAt: start,
+      whatsappPhone: '573105550101',
+      appointment: {
+        patientFirstName: 'María',
+        start,
+        end,
+        providerName: 'Dra. Ana Ríos',
+        locationName: 'Sede principal',
+        locationAddress: null,
+      },
+    });
+    const user = userEvent.setup();
+
+    render(<AgendaView token="tok" />);
+    await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
+    await user.click(screen.getByRole('button', { name: /^día$/i }));
+    const dateInput = screen.getByLabelText(/^fecha$/i);
+    await user.clear(dateInput);
+    await user.type(dateInput, day);
+
+    const [detail] = await screen.findAllByRole('button', { name: /detalle de la cita de 09:00–09:30/i });
+    await user.click(detail);
+
+    // Tras generar, el refresh trae la cita ya marcada como pendiente.
+    mockedListAppointments.mockResolvedValue([
+      { ...pendingApt, confirmationSentAt: new Date().toISOString() },
+    ]);
+    await user.click(await screen.findByRole('button', { name: 'Enviar confirmación' }));
+
+    await waitFor(() => expect(mockedCreateConfirmationLink).toHaveBeenCalledWith('tok', 'apt-c'));
+    expect(await screen.findByLabelText('Enlace de confirmación')).toHaveValue(
+      'http://demo.localhost:3001/confirmar/tok',
+    );
+    expect(screen.getByRole('link', { name: /abrir whatsapp/i })).toHaveAttribute(
+      'href',
+      expect.stringMatching(/^https:\/\/wa\.me\/573105550101\?text=/),
+    );
+    await waitFor(() =>
+      expect(screen.getAllByTestId('appointment-confirmation-indicator').length).toBeGreaterThan(0),
+    );
+    // El enlace sigue a la vista tras el refresh (el panel no se remonta).
+    expect(screen.getByLabelText('Enlace de confirmación')).toBeInTheDocument();
   });
 });

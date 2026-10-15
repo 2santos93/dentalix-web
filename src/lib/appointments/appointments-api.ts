@@ -43,6 +43,13 @@ export interface Appointment {
   reason: string | null;
   notes: string | null;
   createdById: string | null;
+  /**
+   * DX-005: cuándo se generó el enlace de confirmación vigente (ISO). `null` si
+   * nunca se envió o si la cita se reagendó / cambió de estado después.
+   */
+  confirmationSentAt: string | null;
+  /** DX-005: el paciente pidió que lo llamen desde el enlace (ISO); la cita sigue SCHEDULED. */
+  callbackRequestedAt: string | null;
   createdAt: string;
   updatedAt: string;
 }

@@ -21,6 +21,8 @@ const appointment: Appointment = {
   reason: null,
   notes: null,
   createdById: 'u1',
+  confirmationSentAt: null,
+  callbackRequestedAt: null,
   createdAt: '2026-07-01T00:00:00.000Z',
   updatedAt: '2026-07-01T00:00:00.000Z',
 };
