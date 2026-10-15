@@ -160,6 +160,69 @@ describe('apiFetch — expired access token refresh', () => {
     expect(refreshCount).toBe(1);
   });
 
+  // El backend hace los refresh tokens de UN SOLO USO: reusar uno ya rotado
+  // es 401. Con varias pestañas abiertas, cada una tiene el par en memoria y
+  // solo comparten localStorage; si otra pestaña ya rotó, esta debe adoptar el
+  // par nuevo en vez de gastar el viejo (y cerrar la sesión de todas).
+  function writePersistedPair(accessToken: string, refreshToken: string) {
+    window.localStorage.setItem(
+      'dentalix-auth',
+      JSON.stringify({ state: { accessToken, refreshToken }, version: 0 }),
+    );
+  }
+
+  it('adopts a pair already rotated by another tab instead of reusing the stale refresh token', async () => {
+    useAuthStore.getState().setTokens({ accessToken: 'OLD', refreshToken: 'R' });
+    // Otra pestaña rotó: localStorage tiene el par nuevo, la memoria no.
+    writePersistedPair('NEW-OTHER-TAB', 'R2');
+
+    const calls: Array<{ url: string; auth?: string }> = [];
+    let protectedHits = 0;
+    global.fetch = jest.fn(async (url: string, init: RequestInit) => {
+      const headers = init.headers as Record<string, string>;
+      calls.push({ url, auth: headers.Authorization });
+      if (url.endsWith('/auth/refresh')) return unauthorized('Invalid refresh token');
+      protectedHits += 1;
+      return protectedHits === 1 ? unauthorized() : ok({ ok: 1 });
+    }) as unknown as typeof fetch;
+
+    const out = await apiFetch('/patients', { token: 'OLD' });
+
+    expect(out).toEqual({ ok: 1 });
+    expect(calls.map((c) => c.url.replace(/^.*\/api\/v1/, ''))).toEqual([
+      '/patients',
+      '/patients',
+    ]);
+    expect(calls[1].auth).toBe('Bearer NEW-OTHER-TAB');
+    expect(useAuthStore.getState().refreshToken).toBe('R2');
+  });
+
+  it('when another tab wins the refresh race, adopts its pair instead of logging out', async () => {
+    useAuthStore.getState().setTokens({ accessToken: 'OLD', refreshToken: 'R' });
+    writePersistedPair('OLD', 'R');
+
+    let protectedHits = 0;
+    const auths: Array<string | undefined> = [];
+    global.fetch = jest.fn(async (url: string, init: RequestInit) => {
+      if (url.endsWith('/auth/refresh')) {
+        // Mientras esta petición viajaba, la otra pestaña consumió `R` y
+        // guardó su par: el backend rechaza el reuso.
+        writePersistedPair('NEW-OTHER-TAB', 'R2');
+        return unauthorized('Invalid refresh token');
+      }
+      auths.push((init.headers as Record<string, string>).Authorization);
+      protectedHits += 1;
+      return protectedHits === 1 ? unauthorized() : ok({ ok: 1 });
+    }) as unknown as typeof fetch;
+
+    const out = await apiFetch('/patients', { token: 'OLD' });
+
+    expect(out).toEqual({ ok: 1 });
+    expect(auths[1]).toBe('Bearer NEW-OTHER-TAB');
+    expect(useAuthStore.getState().accessToken).toBe('NEW-OTHER-TAB');
+    expect(useAuthStore.getState().refreshToken).toBe('R2');
+  });
+
   it('does NOT refresh on a 401 from an /auth/* endpoint (wrong password is not an expired session)', async () => {
     useAuthStore.getState().setTokens({ accessToken: 'OLD', refreshToken: 'R' });
 

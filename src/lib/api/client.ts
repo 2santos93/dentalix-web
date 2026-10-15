@@ -44,6 +44,25 @@ interface ApiOptions {
 let refreshInFlight: Promise<string | null> | null = null;
 
 /**
+ * Refresh tokens are SINGLE-USE on the backend: reusing one that was already
+ * rotated is a 401. The in-flight promise above only coalesces refreshes
+ * inside ONE tab; other tabs share the pair only through the persisted store
+ * (localStorage). So before spending — and after losing — a refresh, re-read
+ * the persisted pair: if another tab already rotated, adopt its fresh access
+ * token instead of reusing the stale refresh token (which would 401 and log
+ * every tab out). Resolves to the adopted access token, or `null` when the
+ * persisted pair is the same one this tab already had.
+ */
+async function adoptPairFromOtherTab(staleRefreshToken: string): Promise<string | null> {
+  await useAuthStore.persist.rehydrate();
+  const { accessToken, refreshToken } = useAuthStore.getState();
+  if (accessToken && refreshToken && refreshToken !== staleRefreshToken) {
+    return accessToken;
+  }
+  return null;
+}
+
+/**
  * Exchanges the stored refresh token for a fresh access+refresh pair via
  * `POST /auth/refresh`, updates the auth store, and resolves to the new
  * access token. Resolves to `null` (and clears the store, forcing re-login)
@@ -56,6 +75,8 @@ function refreshAccessToken(): Promise<string | null> {
     if (typeof window === 'undefined') return null;
     const { refreshToken, setTokens, clear } = useAuthStore.getState();
     if (!refreshToken) return null;
+    const rotatedElsewhere = await adoptPairFromOtherTab(refreshToken);
+    if (rotatedElsewhere) return rotatedElsewhere;
     try {
       // `allowRefresh: false` — never recurse: a 401 from the refresh call
       // itself means the refresh token is dead, not that we should refresh.
@@ -71,6 +92,10 @@ function refreshAccessToken(): Promise<string | null> {
       setTokens(data);
       return data.accessToken;
     } catch {
+      // Lost the race to another tab that spent the same refresh token a
+      // moment earlier: its pair is already persisted, so keep the session.
+      const winner = await adoptPairFromOtherTab(refreshToken);
+      if (winner) return winner;
       clear();
       return null;
     }
