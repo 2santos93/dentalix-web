@@ -8,7 +8,8 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { formatCurrency } from '@/lib/format/currency';
-import type { Payment, PaymentMethod, PlanBalance } from '@/lib/payments/payments-api';
+import type { Payment, PlanBalance } from '@/lib/payments/payments-api';
+import { PAYMENT_METHOD_LABELS } from '@/lib/payments/payment-method';
 import { formatCivilDate, formatDate } from '@/lib/format/date';
 
 // Copy as constants (i18n-ready, es-first) — same convention as
@@ -35,17 +36,6 @@ const copy = {
   methodFallback: '—',
   notesFallback: '—',
   patientFallback: '—',
-};
-
-// Same method labels as `treatment-plans-tab.tsx`'s `PAYMENT_METHOD_LABELS`
-// — duplicated (not imported) because the tab's copy is a local, unexported
-// module constant, matching the sibling `PaymentsList` sub-component's
-// existing pattern of keeping its own presentational mappings local.
-const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
-  CASH: 'Efectivo',
-  CARD: 'Tarjeta',
-  TRANSFER: 'Transferencia',
-  OTHER: 'Otro',
 };
 
 /** `REC-<first 8 chars of payment.id>` — v1 receipt reference (see plan notes: real sequential numbering is a follow-up). */

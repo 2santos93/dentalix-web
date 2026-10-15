@@ -2,7 +2,7 @@
 import * as React from 'react';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { Building2 } from 'lucide-react';
+import { Building2, Lock } from 'lucide-react';
 import { ApiError } from '@/lib/api/client';
 import {
   listCashPayments,
@@ -17,12 +17,18 @@ import {
   type CashPreset,
   type CashRange,
 } from '@/lib/payments/cash-period';
+import {
+  PAYMENT_METHOD_BADGE_VARIANT,
+  PAYMENT_METHOD_LABELS,
+  PAYMENT_METHOD_OPTIONS,
+} from '@/lib/payments/payment-method';
 import { formatCurrency } from '@/lib/format/currency';
 import { formatCivilDate, formatDate } from '@/lib/format/date';
 import { Card } from '@/components/ui/card';
-import { Badge, type BadgeProps } from '@/components/ui/badge';
+import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { AsyncSection, TableSkeleton } from '@/components/shared/async-section';
+import { EmptyState } from '@/components/shared/empty-state';
 import { Pagination } from '@/components/shared/pagination';
 import { PageHeader } from '@/components/shared/page-header';
 import { ResultCount, toolbarFieldClass } from '@/components/shared/list-toolbar';
@@ -74,29 +80,14 @@ const copy = {
   planLabel: (createdAt: string) => `Plan del ${formatDate(createdAt)}`,
   // Sin "Intenta de nuevo." — alimenta AsyncSection -> SectionError, que trae su propio botón.
   genericLoadError: 'No pudimos cargar la caja.',
-  forbidden: 'Tu rol no tiene acceso a la caja. Pídele acceso a quien administra la clínica.',
+  // 400: lo único que la pantalla manda es período, método y página, así que
+  // el problema está ahí; el mensaje del servidor va en inglés y no se enseña.
+  badRequest: 'El período o el método no son válidos: revisa las fechas (como mucho 366 días).',
+  forbiddenTitle: 'Tu rol no tiene acceso a la caja.',
+  forbiddenHint:
+    'La caja es para administración y recepción. Pídele acceso a quien administra la clínica.',
   empty: 'No hay abonos en este período.',
   emptyHint: 'Prueba con otro rango de fechas o con otro método.',
-};
-
-const PAYMENT_METHOD_OPTIONS: PaymentMethod[] = ['CASH', 'CARD', 'TRANSFER', 'OTHER'];
-
-// Mismas etiquetas y variantes que `treatment-plans-tab.tsx` — duplicadas (no
-// importadas) por la misma razón que en `payment-receipt.tsx`: allí son
-// constantes locales del módulo, y cada vista conserva sus mapeos de
-// presentación.
-const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
-  CASH: 'Efectivo',
-  CARD: 'Tarjeta',
-  TRANSFER: 'Transferencia',
-  OTHER: 'Otro',
-};
-
-const PAYMENT_METHOD_BADGE_VARIANT: Record<PaymentMethod, BadgeProps['variant']> = {
-  CASH: 'success',
-  CARD: 'default',
-  TRANSFER: 'muted',
-  OTHER: 'muted',
 };
 
 type PeriodChoice = CashPreset | 'custom';
@@ -144,6 +135,10 @@ export function CashRegisterView({ token }: CashRegisterViewProps) {
   const [data, setData] = useState<CashPaymentsResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  // Un 403 no es un fallo que se arregle reintentando: va aparte del error de
+  // carga, como aviso sin botón.
+  const [forbidden, setForbidden] = useState(false);
+  const rangeErrorId = React.useId();
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
@@ -162,11 +157,12 @@ export function CashRegisterView({ token }: CashRegisterViewProps) {
         if (cancelled) return;
         setData(res);
         setLoadError(null);
+        setForbidden(false);
       } catch (err) {
         if (cancelled) return;
-        setLoadError(
-          err instanceof ApiError && err.status === 403 ? copy.forbidden : copy.genericLoadError,
-        );
+        const status = err instanceof ApiError ? err.status : null;
+        setForbidden(status === 403);
+        setLoadError(status === 400 ? copy.badRequest : copy.genericLoadError);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -205,6 +201,10 @@ export function CashRegisterView({ token }: CashRegisterViewProps) {
 
   const customError = period === 'custom' ? rangeError(customRange) : null;
   const items = data?.items ?? [];
+  // Con el rango escrito inválido, lo último cargado es de OTRO rango: no se
+  // pinta (ni conteo, ni resumen, ni tabla, ni páginas) para que nadie lo lea
+  // como la respuesta a las fechas que tiene delante.
+  const showResults = customError === null && !forbidden;
 
   return (
     <>
@@ -251,6 +251,7 @@ export function CashRegisterView({ token }: CashRegisterViewProps) {
                   max={customRange.to || undefined}
                   onChange={(e) => changeCustom({ from: e.target.value })}
                   aria-invalid={customError !== null}
+                  aria-describedby={customError ? rangeErrorId : undefined}
                   className="tabular-nums sm:w-40"
                 />
               </label>
@@ -262,6 +263,7 @@ export function CashRegisterView({ token }: CashRegisterViewProps) {
                   min={customRange.from || undefined}
                   onChange={(e) => changeCustom({ to: e.target.value })}
                   aria-invalid={customError !== null}
+                  aria-describedby={customError ? rangeErrorId : undefined}
                   className="tabular-nums sm:w-40"
                 />
               </label>
@@ -283,82 +285,104 @@ export function CashRegisterView({ token }: CashRegisterViewProps) {
           </select>
         </div>
 
-        {customError ? <InlineError>{customError}</InlineError> : null}
+        {customError ? <InlineError id={rangeErrorId}>{customError}</InlineError> : null}
 
-        {!loading && !loadError && data ? (
-          <ResultCount total={data.total} noun={copy.countNoun} nounPlural={copy.countNounPlural} />
+        {forbidden && customError === null ? (
+          <EmptyState
+            role="status"
+            icon={<Lock aria-hidden />}
+            title={copy.forbiddenTitle}
+            description={copy.forbiddenHint}
+          />
         ) : null}
 
-        <AsyncSection
-          loading={loading}
-          error={loadError}
-          onRetry={() => setReloadKey((k) => k + 1)}
-          isEmpty={items.length === 0}
-          emptyTitle={copy.empty}
-          emptyDescription={copy.emptyHint}
-          skeleton={<TableSkeleton rows={4} />}
-        >
-          {data ? <CashSummary summary={data.summary} /> : null}
+        {showResults ? (
+          <>
+            {!loading && !loadError && data ? (
+              <ResultCount
+                total={data.total}
+                noun={copy.countNoun}
+                nounPlural={copy.countNounPlural}
+              />
+            ) : null}
 
-          <Card className="overflow-hidden p-0">
-            <Table aria-label={copy.tableLabel}>
-              <TableHeader>
-                <TableRow className="hover:bg-transparent">
-                  <TableHead>{copy.colDate}</TableHead>
-                  <TableHead>{copy.colPatient}</TableHead>
-                  <TableHead>{copy.colPlan}</TableHead>
-                  <TableHead>{copy.colMethod}</TableHead>
-                  <TableHead>{copy.colLocation}</TableHead>
-                  <TableHead className="text-right">{copy.colAmount}</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {items.map((payment) => (
-                  <TableRow key={payment.id}>
-                    <TableCell className="tabular-nums" data-label={copy.colDate}>
-                      {formatCivilDate(payment.paidAt)}
-                    </TableCell>
-                    <TableCell data-label={copy.colPatient}>
-                      <Link
-                        href={`/patients/${payment.patient.id}`}
-                        className="font-medium text-ink underline-offset-4 hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
-                      >
-                        {payment.patient.fullName}
-                      </Link>
-                    </TableCell>
-                    <TableCell className="text-muted" data-label={copy.colPlan}>
-                      {copy.planLabel(payment.treatmentPlan.createdAt)}
-                    </TableCell>
-                    <TableCell data-label={copy.colMethod}>
-                      {payment.method ? (
-                        <Badge variant={PAYMENT_METHOD_BADGE_VARIANT[payment.method]}>
-                          {PAYMENT_METHOD_LABELS[payment.method]}
-                        </Badge>
-                      ) : (
-                        <span className="text-muted">{copy.methodNone}</span>
-                      )}
-                    </TableCell>
-                    <TableCell data-label={copy.colLocation}>{payment.location.name}</TableCell>
-                    <TableCell
-                      className="text-right font-medium tabular-nums text-ink"
-                      data-label={copy.colAmount}
-                    >
-                      {formatCurrency(payment.amount, payment.currency)}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </Card>
-        </AsyncSection>
+            <AsyncSection
+              loading={loading}
+              error={loadError}
+              onRetry={() => setReloadKey((k) => k + 1)}
+              isEmpty={items.length === 0}
+              emptyTitle={copy.empty}
+              emptyDescription={copy.emptyHint}
+              skeleton={<TableSkeleton rows={4} />}
+            >
+              {data ? <CashSummary summary={data.summary} /> : null}
 
-        <Pagination
-          page={page}
-          pageSize={data?.pageSize ?? 0}
-          total={data?.total ?? 0}
-          onPageChange={setPage}
-          disabled={loading}
-        />
+              <Card className="overflow-hidden p-0">
+                <Table aria-label={copy.tableLabel}>
+                  <caption className="sr-only">{copy.tableLabel}</caption>
+                  <TableHeader>
+                    <TableRow className="hover:bg-transparent">
+                      <TableHead scope="col">{copy.colDate}</TableHead>
+                      <TableHead scope="col">{copy.colPatient}</TableHead>
+                      <TableHead scope="col">{copy.colPlan}</TableHead>
+                      <TableHead scope="col">{copy.colMethod}</TableHead>
+                      <TableHead scope="col">{copy.colLocation}</TableHead>
+                      <TableHead scope="col" className="text-right">
+                        {copy.colAmount}
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {items.map((payment) => (
+                      <TableRow key={payment.id}>
+                        <TableCell className="tabular-nums" data-label={copy.colDate}>
+                          {formatCivilDate(payment.paidAt)}
+                        </TableCell>
+                        <TableCell data-label={copy.colPatient}>
+                          <Link
+                            href={`/patients/${payment.patient.id}`}
+                            className="font-medium text-ink underline-offset-4 hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                          >
+                            {payment.patient.fullName}
+                          </Link>
+                        </TableCell>
+                        <TableCell className="text-muted" data-label={copy.colPlan}>
+                          {copy.planLabel(payment.treatmentPlan.createdAt)}
+                        </TableCell>
+                        <TableCell data-label={copy.colMethod}>
+                          {payment.method ? (
+                            <Badge variant={PAYMENT_METHOD_BADGE_VARIANT[payment.method]}>
+                              {PAYMENT_METHOD_LABELS[payment.method]}
+                            </Badge>
+                          ) : (
+                            <span className="text-muted">{copy.methodNone}</span>
+                          )}
+                        </TableCell>
+                        <TableCell data-label={copy.colLocation}>{payment.location.name}</TableCell>
+                        <TableCell
+                          className="text-right font-medium tabular-nums text-ink"
+                          data-label={copy.colAmount}
+                        >
+                          {formatCurrency(payment.amount, payment.currency)}
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </Card>
+            </AsyncSection>
+
+            {!loadError ? (
+              <Pagination
+                page={page}
+                pageSize={data?.pageSize ?? 0}
+                total={data?.total ?? 0}
+                onPageChange={setPage}
+                disabled={loading}
+              />
+            ) : null}
+          </>
+        ) : null}
       </div>
     </>
   );

@@ -145,11 +145,47 @@ it('si la carga falla, muestra el error de sección y reintenta al pulsar el bot
   expect(mockedList).toHaveBeenCalledTimes(2);
 });
 
-it('un 403 explica que el rol no tiene acceso en lugar de un error genérico', async () => {
+it('un 403 es un aviso de acceso, sin botón de reintentar (reintentar no cambia el rol)', async () => {
   mockedList.mockRejectedValue(new ApiError(403, 'Forbidden resource'));
   render(<CashRegisterView token="tok" />);
 
-  expect(await screen.findByRole('alert')).toHaveTextContent(/tu rol no tiene acceso a la caja/i);
+  const text = await screen.findByText(/tu rol no tiene acceso a la caja/i);
+  expect(text.closest('[role="status"]')).not.toBeNull();
+  expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: /reintentar/i })).not.toBeInTheDocument();
+  expect(screen.queryByRole('navigation', { name: /paginación/i })).not.toBeInTheDocument();
+});
+
+it('un 400 dice cuál es el problema en vez del error genérico', async () => {
+  mockedList.mockRejectedValue(new ApiError(400, 'the period cannot exceed 366 days'));
+  render(<CashRegisterView token="tok" />);
+
+  const alert = await screen.findByRole('alert');
+  expect(alert).toHaveTextContent(/el período o el método no son válidos/i);
+  expect(alert).not.toHaveTextContent(/no pudimos cargar la caja/i);
+});
+
+it('con un error de carga no deja la paginación de la respuesta anterior', async () => {
+  mockedList.mockResolvedValueOnce(response({ total: 45 })).mockRejectedValueOnce(new Error('x'));
+  const user = userEvent.setup();
+  render(<CashRegisterView token="tok" />);
+  expect(await screen.findByRole('button', { name: /siguiente/i })).toBeInTheDocument();
+
+  await user.click(screen.getByRole('button', { name: 'Esta semana' }));
+
+  expect(await screen.findByRole('alert')).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: /siguiente/i })).not.toBeInTheDocument();
+});
+
+it('la tabla lleva caption y cabeceras de columna', async () => {
+  mockedList.mockResolvedValue(response());
+  render(<CashRegisterView token="tok" />);
+
+  const table = await screen.findByRole('table', { name: /abonos/i });
+  expect(table.querySelector('caption')).toHaveTextContent(/abonos del período/i);
+  const headers = within(table).getAllByRole('columnheader');
+  expect(headers).toHaveLength(6);
+  headers.forEach((th) => expect(th).toHaveAttribute('scope', 'col'));
 });
 
 it('cambiar de período o de método vuelve a pedir la caja con el filtro nuevo, desde la página 1', async () => {
@@ -208,11 +244,36 @@ it('el rango personalizado pide las fechas elegidas y no consulta un rango inver
     }),
   );
 
+  await screen.findByRole('table', { name: /abonos/i });
   const calls = mockedList.mock.calls.length;
   await user.clear(from);
   await user.type(from, '2026-10-05');
-  expect(await screen.findByText(/la fecha final no puede ser anterior/i)).toBeInTheDocument();
+  const error = await screen.findByText(/la fecha final no puede ser anterior/i);
   expect(mockedList).toHaveBeenCalledTimes(calls);
+
+  // Los dos campos apuntan al mensaje que los explica.
+  const errorId = error.closest('[id]')?.id;
+  expect(errorId).toBeTruthy();
+  expect(from).toHaveAttribute('aria-describedby', errorId);
+  expect(to).toHaveAttribute('aria-describedby', errorId);
+
+  // Y no se queda en pantalla el resultado de OTRO rango (el de septiembre)
+  // como si respondiera al que está escrito.
+  expect(screen.queryByRole('table')).not.toBeInTheDocument();
+  expect(screen.queryByRole('region', { name: /resumen del período/i })).not.toBeInTheDocument();
+  expect(screen.queryByText(/^\d+ abonos?$/)).not.toBeInTheDocument();
+
+  // Al corregirlo vuelve a pedir y a pintar.
+  await user.clear(from);
+  await user.type(from, '2026-09-10');
+  await waitFor(() =>
+    expect(mockedList).toHaveBeenLastCalledWith('tok', {
+      from: '2026-09-10',
+      to: '2026-09-30',
+      page: 1,
+    }),
+  );
+  expect(await screen.findByRole('table', { name: /abonos/i })).toBeInTheDocument();
 });
 
 it('pagina: "Siguiente" pide la página 2 con los mismos filtros', async () => {

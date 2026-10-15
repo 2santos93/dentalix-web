@@ -50,6 +50,11 @@ import { CurrencySelect } from '@/components/shared/currency-select';
 import { Disclosure } from '@/components/shared/disclosure';
 import { CatalogPicker } from '@/components/odontogram/catalog-picker';
 import { ToothPicker } from '@/components/odontogram/tooth-picker';
+import {
+  PAYMENT_METHOD_BADGE_VARIANT,
+  PAYMENT_METHOD_LABELS,
+  PAYMENT_METHOD_OPTIONS,
+} from '@/lib/payments/payment-method';
 import { PaymentReceipt } from './payment-receipt';
 import { PaymentPlanSection } from './payment-plan-section';
 import { SectionError } from '@/components/errors/section-error';
@@ -255,26 +260,6 @@ const ITEM_STATUS_BADGE_VARIANT: Record<TreatmentPlanItemStatus, BadgeProps['var
   PROPOSED: 'muted',
   ACCEPTED: 'default',
   DONE: 'success',
-};
-
-const PAYMENT_METHOD_OPTIONS: PaymentMethod[] = ['CASH', 'CARD', 'TRANSFER', 'OTHER'];
-
-const PAYMENT_METHOD_LABELS: Record<PaymentMethod, string> = {
-  CASH: 'Efectivo',
-  CARD: 'Tarjeta',
-  TRANSFER: 'Transferencia',
-  OTHER: 'Otro',
-};
-
-// Same semantic-token convention as `ITEM_STATUS_BADGE_VARIANT` above / the
-// (now removed) `sales-view.tsx`'s `PAYMENT_METHOD_BADGE_VARIANT`: CASH is
-// the "money in hand" happy path (success), the rest are neutral
-// distinctions rather than states.
-const PAYMENT_METHOD_BADGE_VARIANT: Record<PaymentMethod, BadgeProps['variant']> = {
-  CASH: 'success',
-  CARD: 'default',
-  TRANSFER: 'muted',
-  OTHER: 'muted',
 };
 
 const SURFACE_LABELS: Record<ToothSurface, string> = {
