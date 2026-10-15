@@ -22,6 +22,8 @@ const later: Appointment = {
   reason: 'Control',
   notes: null,
   createdById: 'u1',
+  confirmationSentAt: null,
+  callbackRequestedAt: null,
   createdAt: '2026-07-01T00:00:00.000Z',
   updatedAt: '2026-07-01T00:00:00.000Z',
 };
@@ -39,6 +41,8 @@ const earlier: Appointment = {
   reason: null,
   notes: null,
   createdById: 'u1',
+  confirmationSentAt: null,
+  callbackRequestedAt: null,
   createdAt: '2026-07-01T00:00:00.000Z',
   updatedAt: '2026-07-01T00:00:00.000Z',
 };
@@ -212,6 +216,49 @@ describe('DayAgenda', () => {
       const desktopSelects = within(table).getAllByRole<HTMLSelectElement>('combobox');
       expect(desktopSelects[0]).toBeDisabled();
       expect(desktopSelects[1]).not.toBeDisabled();
+    });
+  });
+
+  describe('confirmación por enlace (DX-005)', () => {
+    // TZ=UTC en jest (jest.config.ts): la hora Z es la hora local.
+    const apt = (id: string, from: string, to: string): Appointment => ({
+      ...earlier,
+      id,
+      status: 'SCHEDULED',
+      start: `2026-07-23T${from}:00.000Z`,
+      end: `2026-07-23T${to}:00.000Z`,
+    });
+    it('muestra "Pide llamada" y "Confirmación pendiente" en la tarjeta de la cita agendada', () => {
+      const appointments = [
+        { ...apt('a-call', '09:00', '09:30'), callbackRequestedAt: '2026-03-01T00:00:00.000Z' },
+        { ...apt('a-sent', '10:00', '10:30'), confirmationSentAt: '2026-03-01T00:00:00.000Z' },
+        {
+          ...apt('a-done', '11:00', '11:30'),
+          status: 'CONFIRMED' as const,
+          confirmationSentAt: '2026-03-01T00:00:00.000Z',
+        },
+      ];
+      render(<DayAgenda appointments={appointments} loading={false} />);
+      // Tabla + tarjetas (las dos variantes responsive están en el DOM).
+      expect(screen.getAllByText('Pide llamada')).toHaveLength(2);
+      expect(screen.getAllByText('Confirmación pendiente')).toHaveLength(2);
+      expect(screen.getAllByTestId('appointment-confirmation-indicator')).toHaveLength(4);
+    });
+
+    it('"Detalle" abre la cita de esa fila', async () => {
+      const onSelect = jest.fn();
+      const appointment = apt('a-1', '09:00', '09:30');
+      render(
+        <DayAgenda appointments={[appointment]} loading={false} onSelectAppointment={onSelect} />,
+      );
+      const [first] = screen.getAllByRole('button', { name: 'Detalle de la cita de 09:00–09:30' });
+      await userEvent.click(first);
+      expect(onSelect).toHaveBeenCalledWith(appointment);
+    });
+
+    it('sin onSelectAppointment no hay botón de detalle', () => {
+      render(<DayAgenda appointments={[apt('a-1', '09:00', '09:30')]} loading={false} />);
+      expect(screen.queryByRole('button', { name: /detalle/i })).not.toBeInTheDocument();
     });
   });
 });

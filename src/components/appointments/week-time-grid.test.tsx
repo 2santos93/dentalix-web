@@ -11,6 +11,7 @@ function appointment(o: Partial<Appointment> & { id: string }): Appointment {
     patientFirstName: null, patientLastName: null,
     start: '2026-03-09T09:00:00.000Z', end: '2026-03-09T09:30:00.000Z',
     status: 'SCHEDULED', reason: null, notes: null, createdById: 'u1',
+    confirmationSentAt: null, callbackRequestedAt: null,
     createdAt: '2026-01-01T00:00:00.000Z', updatedAt: '2026-01-01T00:00:00.000Z',
     ...o,
   };
@@ -88,4 +89,19 @@ it('places two overlapping same-day appointments in two lanes', () => {
   expect(blocks).toHaveLength(2);
   // Anchos ~50% (2 carriles) — se comprueba que declaran width con "50"
   expect(blocks[0].style.width).toContain('50');
+});
+
+it('marca en el bloque de la cita "pide llamada" (DX-005), con texto para lectores de pantalla', () => {
+  render(
+    <WeekTimeGrid
+      appointments={[
+        appointment({ id: 'a1', callbackRequestedAt: '2026-03-01T00:00:00.000Z' }),
+      ]}
+      weekStart={WEEK_START}
+      onSelectDay={noop} onSelectSlot={noop} onSelectAppointment={noop}
+    />,
+  );
+  const indicator = screen.getByTestId('appointment-confirmation-indicator');
+  expect(indicator).toHaveAttribute('data-indicator', 'callback');
+  expect(indicator).toHaveTextContent('Pide llamada');
 });

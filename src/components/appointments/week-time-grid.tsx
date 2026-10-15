@@ -9,7 +9,12 @@ import {
   blockGeometry,
   layoutLanes,
 } from '@/lib/appointments/week-grid-layout';
-import { STATUS_BADGE_CLASSES, formatTimeRange, patientLabel } from './appointment-display';
+import {
+  ConfirmationBadge,
+  STATUS_BADGE_CLASSES,
+  formatTimeRange,
+  patientLabel,
+} from './appointment-display';
 
 const copy = {
   heading: 'Agenda de la semana',
@@ -167,7 +172,10 @@ export function WeekTimeGrid({
                     width: `calc(${widthPct}% - 2px)`,
                   }}
                 >
-                  <span className="block font-medium">{formatTimeRange(a.start, a.end)}</span>
+                  <span className="flex items-center gap-1 font-medium">
+                    {formatTimeRange(a.start, a.end)}
+                    <ConfirmationBadge appointment={a} compact />
+                  </span>
                   <span className="block truncate">{patientLabel(a, patientNames)}</span>
                 </button>
               );

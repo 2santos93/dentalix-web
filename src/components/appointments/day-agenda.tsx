@@ -1,7 +1,13 @@
 'use client';
-import { CalendarDays, ChevronDown } from 'lucide-react';
+import { CalendarDays, ChevronDown, ChevronRight } from 'lucide-react';
 import type { Appointment, AppointmentStatus } from '@/lib/appointments/appointments-api';
-import { StatusBadge, STATUS_BADGE_CLASSES, formatTimeRange, patientLabel } from './appointment-display';
+import {
+  ConfirmationBadge,
+  StatusBadge,
+  STATUS_BADGE_CLASSES,
+  formatTimeRange,
+  patientLabel,
+} from './appointment-display';
 import { Skeleton } from '@/components/ui/skeleton';
 import { SectionError } from '@/components/errors/section-error';
 
@@ -28,6 +34,9 @@ const copy = {
   /** `aria-label` for the status <select>, filled in with the row's time range — e.g. "Estado de la cita de 09:00–09:30". */
   statusSelectLabel: (timeRange: string) => `Estado de la cita de ${timeRange}`,
   updatingStatus: 'Actualizando…',
+  detail: 'Detalle',
+  /** `aria-label` del botón de detalle de una fila, p. ej. "Detalle de la cita de 09:00–09:30". */
+  detailLabel: (timeRange: string) => `Detalle de la cita de ${timeRange}`,
 };
 
 // Fixed display order for the status <select> options — same 5 values as
@@ -63,6 +72,33 @@ interface DayAgendaProps {
   onStatusChange?: (appointmentId: string, status: AppointmentStatus) => void;
   /** The `id` of the appointment currently being updated, if any — disables that row's status select and shows a small "Actualizando…" hint next to it. */
   updatingId?: string | null;
+  /**
+   * Cuando se pasa, cada fila lleva un botón "Detalle" que abre el detalle de
+   * la cita (donde vive, p. ej., "Enviar confirmación" — DX-005).
+   */
+  onSelectAppointment?: (appointment: Appointment) => void;
+}
+
+function DetailButton({
+  appointment,
+  timeRange,
+  onSelect,
+}: {
+  appointment: Appointment;
+  timeRange: string;
+  onSelect: (appointment: Appointment) => void;
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={copy.detailLabel(timeRange)}
+      onClick={() => onSelect(appointment)}
+      className="inline-flex h-8 items-center gap-1 rounded-md px-2 text-xs font-medium text-muted transition-colors hover:bg-surface-2 hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1"
+    >
+      {copy.detail}
+      <ChevronRight aria-hidden className="size-3.5" />
+    </button>
+  );
 }
 
 interface StatusSelectProps {
@@ -129,6 +165,7 @@ export function DayAgenda({
   patientNames,
   onStatusChange,
   updatingId,
+  onSelectAppointment,
 }: DayAgendaProps) {
   if (loading) {
     return (
@@ -195,6 +232,11 @@ export function DayAgenda({
               <th scope="col" className="px-4 py-2.5 text-xs font-medium tracking-wide text-muted">
                 {copy.colStatus}
               </th>
+              {onSelectAppointment && (
+                <th scope="col" className="px-4 py-2.5">
+                  <span className="sr-only">{copy.detail}</span>
+                </th>
+              )}
             </tr>
           </thead>
           <tbody>
@@ -210,7 +252,10 @@ export function DayAgenda({
                     <time dateTime={appointment.start}>{timeRange}</time>
                   </td>
                   <td className="px-4 py-3 font-medium text-ink">
-                    {patientLabel(appointment, patientNames)}
+                    <span className="flex flex-wrap items-center gap-2">
+                      {patientLabel(appointment, patientNames)}
+                      <ConfirmationBadge appointment={appointment} />
+                    </span>
                   </td>
                   <td className="px-4 py-3 text-muted">
                     {appointment.reason ?? copy.reasonFallback}
@@ -227,6 +272,15 @@ export function DayAgenda({
                       <StatusBadge status={appointment.status} />
                     )}
                   </td>
+                  {onSelectAppointment && (
+                    <td className="px-4 py-3 text-right">
+                      <DetailButton
+                        appointment={appointment}
+                        timeRange={timeRange}
+                        onSelect={onSelectAppointment}
+                      />
+                    </td>
+                  )}
                 </tr>
               );
             })}
@@ -256,14 +310,26 @@ export function DayAgenda({
                 {patientLabel(appointment, patientNames)}
               </p>
               <p className="mt-0.5 text-muted">{appointment.reason ?? copy.reasonFallback}</p>
-              {onStatusChange && (
-                <div className="mt-3">
-                  <StatusSelect
-                    appointment={appointment}
-                    timeRange={timeRange}
-                    onStatusChange={onStatusChange}
-                    updating={updating}
-                  />
+              <ConfirmationBadge appointment={appointment} className="mt-2" />
+              {(onStatusChange || onSelectAppointment) && (
+                <div className="mt-3 flex items-center justify-between gap-2">
+                  {onStatusChange ? (
+                    <StatusSelect
+                      appointment={appointment}
+                      timeRange={timeRange}
+                      onStatusChange={onStatusChange}
+                      updating={updating}
+                    />
+                  ) : (
+                    <span />
+                  )}
+                  {onSelectAppointment && (
+                    <DetailButton
+                      appointment={appointment}
+                      timeRange={timeRange}
+                      onSelect={onSelectAppointment}
+                    />
+                  )}
                 </div>
               )}
             </li>
