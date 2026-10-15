@@ -1,4 +1,5 @@
 import { useAuthStore } from '@/lib/auth/auth-store';
+import { isJwtExpired } from '@/lib/auth/jwt-claims';
 import {
   getActiveLocationId,
   setActiveLocationId,
@@ -43,62 +44,97 @@ interface ApiOptions {
 // through one promise rotates exactly once.
 let refreshInFlight: Promise<string | null> | null = null;
 
+// Nombre del Web Lock que serializa el refresh ENTRE pestañas del mismo origen.
+const REFRESH_LOCK = 'dentalix-refresh';
+// Sin Web Locks, la pestaña que nos ganó el refresh en el servidor puede
+// guardar su par un instante DESPUÉS de que nos llegue el 401: se espera esto
+// y se relee antes de dar la sesión por perdida.
+const NO_LOCKS_SETTLE_MS = 300;
+
 /**
- * Refresh tokens are SINGLE-USE on the backend: reusing one that was already
- * rotated is a 401. The in-flight promise above only coalesces refreshes
- * inside ONE tab; other tabs share the pair only through the persisted store
- * (localStorage). So before spending — and after losing — a refresh, re-read
- * the persisted pair: if another tab already rotated, adopt its fresh access
- * token instead of reusing the stale refresh token (which would 401 and log
- * every tab out). Resolves to the adopted access token, or `null` when the
- * persisted pair is the same one this tab already had.
+ * Re-reads the persisted pair (localStorage, shared by every tab) into the
+ * in-memory store and returns it.
  */
-async function adoptPairFromOtherTab(staleRefreshToken: string): Promise<string | null> {
+async function rereadPersistedPair(): Promise<{
+  accessToken: string | null;
+  refreshToken: string | null;
+}> {
   await useAuthStore.persist.rehydrate();
   const { accessToken, refreshToken } = useAuthStore.getState();
-  if (accessToken && refreshToken && refreshToken !== staleRefreshToken) {
+  return { accessToken, refreshToken };
+}
+
+/**
+ * The access token another tab left after rotating away from `staleRefresh`,
+ * or `null` when the persisted refresh token is still the stale one.
+ */
+async function adoptRotatedPair(staleRefresh: string): Promise<string | null> {
+  const { accessToken, refreshToken } = await rereadPersistedPair();
+  return accessToken && refreshToken && refreshToken !== staleRefresh ? accessToken : null;
+}
+
+function webLocks(): LockManager | null {
+  return typeof navigator !== 'undefined' && navigator.locks ? navigator.locks : null;
+}
+
+/**
+ * Refresh tokens are SINGLE-USE on the backend: reusing one that was already
+ * rotated is a 401. `refreshInFlight` only coalesces refreshes inside ONE tab;
+ * across tabs the refresh runs under a Web Lock, so only one tab rotates at a
+ * time and the next one, once it gets the lock, re-reads the persisted pair
+ * and adopts it instead of spending the stale refresh token.
+ */
+async function refreshUnderLock(staleRefresh: string, hasLocks: boolean): Promise<string | null> {
+  const { setTokens, clear } = useAuthStore.getState();
+  const { accessToken, refreshToken } = await rereadPersistedPair();
+  if (!refreshToken) return null;
+  // Another tab already rotated. Its access token is usable unless it has
+  // expired meanwhile; in that case renew with ITS refresh token below.
+  if (refreshToken !== staleRefresh && accessToken && !isJwtExpired(accessToken)) {
     return accessToken;
   }
-  return null;
+  try {
+    // `allowRefresh: false` — never recurse: a 401 from the refresh call
+    // itself means the refresh token is dead, not that we should refresh.
+    const res = await doFetch(REFRESH_PATH, { method: 'POST', body: { refreshToken } }, false);
+    const data = (await res.json()) as { accessToken: string; refreshToken: string };
+    setTokens(data);
+    return data.accessToken;
+  } catch (err) {
+    // Network error or 5xx: the session is not known to be dead, so keep it
+    // (the current request fails; a later one will retry the refresh).
+    if (!(err instanceof ApiError) || err.status !== 401) return null;
+    // 401: lost the race to another tab that spent the same refresh token.
+    // Adopt its pair if it is (or, without locks, soon will be) persisted.
+    const winner = await adoptRotatedPair(refreshToken);
+    if (winner) return winner;
+    if (!hasLocks) {
+      await new Promise((resolve) => setTimeout(resolve, NO_LOCKS_SETTLE_MS));
+      const lateWinner = await adoptRotatedPair(refreshToken);
+      if (lateWinner) return lateWinner;
+    }
+    clear();
+    return null;
+  }
 }
 
 /**
  * Exchanges the stored refresh token for a fresh access+refresh pair via
  * `POST /auth/refresh`, updates the auth store, and resolves to the new
- * access token. Resolves to `null` (and clears the store, forcing re-login)
- * when there is no refresh token or the refresh itself fails. Server-side
- * (no `window`) there is no persisted store, so it's always `null`.
+ * access token. Resolves to `null` when there is no refresh token or the
+ * refresh fails; only a 401 (dead refresh token) clears the store and forces
+ * re-login. Server-side (no `window`) there is no persisted store, so it's
+ * always `null`.
  */
 function refreshAccessToken(): Promise<string | null> {
   if (refreshInFlight) return refreshInFlight;
   refreshInFlight = (async () => {
     if (typeof window === 'undefined') return null;
-    const { refreshToken, setTokens, clear } = useAuthStore.getState();
-    if (!refreshToken) return null;
-    const rotatedElsewhere = await adoptPairFromOtherTab(refreshToken);
-    if (rotatedElsewhere) return rotatedElsewhere;
-    try {
-      // `allowRefresh: false` — never recurse: a 401 from the refresh call
-      // itself means the refresh token is dead, not that we should refresh.
-      const res = await doFetch(
-        REFRESH_PATH,
-        { method: 'POST', body: { refreshToken } },
-        false,
-      );
-      const data = (await res.json()) as {
-        accessToken: string;
-        refreshToken: string;
-      };
-      setTokens(data);
-      return data.accessToken;
-    } catch {
-      // Lost the race to another tab that spent the same refresh token a
-      // moment earlier: its pair is already persisted, so keep the session.
-      const winner = await adoptPairFromOtherTab(refreshToken);
-      if (winner) return winner;
-      clear();
-      return null;
-    }
+    const staleRefresh = useAuthStore.getState().refreshToken;
+    if (!staleRefresh) return null;
+    const locks = webLocks();
+    if (!locks) return refreshUnderLock(staleRefresh, false);
+    return locks.request(REFRESH_LOCK, () => refreshUnderLock(staleRefresh, true));
   })().finally(() => {
     refreshInFlight = null;
   });

@@ -1,4 +1,5 @@
 import type { ClinicRole } from '@/lib/me/me-api';
+import { readJwtClaims } from '@/lib/auth/jwt-claims';
 
 const ROLES: readonly ClinicRole[] = ['DENTIST', 'ASSISTANT', 'RECEPTION', 'ADMIN'];
 
@@ -19,17 +20,6 @@ const ROLES: readonly ClinicRole[] = ['DENTIST', 'ASSISTANT', 'RECEPTION', 'ADMI
  * como "sin permiso", nunca como "todos".
  */
 export function getTokenRole(token: string | null | undefined): ClinicRole | null {
-  if (!token) return null;
-  const payload = token.split('.')[1];
-  if (!payload) return null;
-  try {
-    const base64 = payload.replace(/-/g, '+').replace(/_/g, '/');
-    const padded = base64.padEnd(base64.length + ((4 - (base64.length % 4)) % 4), '=');
-    const claims: unknown = JSON.parse(atob(padded));
-    if (typeof claims !== 'object' || claims === null) return null;
-    const role = (claims as { role?: unknown }).role;
-    return ROLES.find((r) => r === role) ?? null;
-  } catch {
-    return null;
-  }
+  const role = readJwtClaims(token)?.role;
+  return ROLES.find((r) => r === role) ?? null;
 }
