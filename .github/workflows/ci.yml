@@ -1,0 +1,41 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+# Un push nuevo a la misma rama/PR cancela la ejecución anterior.
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    name: Lint, tipos, tests y build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      NEXT_TELEMETRY_DISABLED: '1'
+      # Valores ficticios: el build no llama a la API (todas las rutas son
+      # dinámicas), pero las NEXT_PUBLIC_* se incrustan en el bundle y así el
+      # build de CI no depende de los defaults del código.
+      NEXT_PUBLIC_API_URL: http://localhost:3000/api/v1
+      NEXT_PUBLIC_ROOT_DOMAIN: dentalix.local
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+      # `npm run lint` es `eslint` a secas (sin --fix): sirve tal cual en CI.
+      - run: npm run lint
+      - run: npx tsc --noEmit
+      - run: npx jest --ci
+      - run: npm run build
