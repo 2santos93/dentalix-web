@@ -1,8 +1,13 @@
 'use client';
 
-import { useRef, useState, type KeyboardEvent } from 'react';
+import { useEffect, useRef, useState, type KeyboardEvent } from 'react';
 
-export type PatientDetailTabKey = 'data' | 'clinical-history' | 'odontogram' | 'treatment-plans';
+export type PatientDetailTabKey =
+  | 'data'
+  | 'clinical-history'
+  | 'odontogram'
+  | 'treatment-plans'
+  | 'account-statement';
 
 interface PatientDetailTabsProps {
   activeTab: PatientDetailTabKey;
@@ -12,6 +17,12 @@ interface PatientDetailTabsProps {
   clinicalHistoryLabel: string;
   odontogramLabel: string;
   treatmentPlansLabel: string;
+  /**
+   * Etiqueta de la pestaña «Estado de cuenta». Sin ella la pestaña no existe:
+   * es un dato financiero (PAYMENT_ROLES en la API), así que la página solo la
+   * pasa a los roles que pueden leerlo.
+   */
+  accountStatementLabel?: string;
 }
 
 /** Left-to-right reading order of the tablist — the order the arrow keys walk. */
@@ -20,6 +31,7 @@ const TAB_ORDER: PatientDetailTabKey[] = [
   'clinical-history',
   'odontogram',
   'treatment-plans',
+  'account-statement',
 ];
 
 /**
@@ -34,20 +46,21 @@ export function isPatientDetailTabKey(value: string | null | undefined): value i
 
 /**
  * ARIA tabs for the patient-detail page ("Datos" / "Historia clínica" /
- * "Odontograma" / "Plan de tratamiento").
+ * "Odontograma" / "Plan de tratamiento", plus "Estado de cuenta" for the roles
+ * that can read payments).
  *
  * Implements the real tab pattern, because the markup claims it: `role="tab"`
  * makes a screen reader announce "Datos, pestaña, 1 de 4", which is a promise
- * that the arrow keys move between the four. So:
+ * that the arrow keys move between the visible tabs. So:
  *
  * - Roving tabindex: exactly ONE tab is in the Tab order (the focused one, or
  *   the selected one before any interaction), so Tab enters the tablist and
- *   the next Tab leaves it for the panel instead of walking all four.
+ *   the next Tab leaves it for the panel instead of walking all of them.
  * - Left/Right wrap around, Home/End jump to the ends, and DOM focus follows.
  * - MANUAL activation: the arrows only move focus; Enter/Space (native to
  *   `<button>`) and click select. Automatic activation is the APG default, but
- *   three of the four panels fetch on mount (see `patients/[id]/page.tsx`), so
- *   arrowing across the tablist would fire three requests the user never asked
+ *   most panels fetch on mount (see `patients/[id]/page.tsx`), so
+ *   arrowing across the tablist would fire requests the user never asked
  *   for — exactly the case where the APG prescribes manual activation.
  *
  * The page moves focus into the newly selected panel on activation; that does
@@ -61,13 +74,17 @@ export function PatientDetailTabs({
   clinicalHistoryLabel,
   odontogramLabel,
   treatmentPlansLabel,
+  accountStatementLabel,
 }: PatientDetailTabsProps) {
-  const labels: Record<PatientDetailTabKey, string> = {
+  const labels: Record<PatientDetailTabKey, string | undefined> = {
     data: dataLabel,
     'clinical-history': clinicalHistoryLabel,
     odontogram: odontogramLabel,
     'treatment-plans': treatmentPlansLabel,
+    'account-statement': accountStatementLabel,
   };
+  // Las pestañas que de verdad se pintan, en orden: las flechas recorren estas.
+  const tabs = TAB_ORDER.filter((tab) => labels[tab] !== undefined);
 
   // `null` until the user interacts: the tabbable tab then falls back to the
   // selected one. Kept as a derived value instead of an effect syncing state
@@ -76,27 +93,34 @@ export function PatientDetailTabs({
   const focused = focusedTab ?? activeTab;
   const buttons = useRef(new Map<PatientDetailTabKey, HTMLButtonElement>());
 
+  // En móvil el tablist se desplaza de lado: la pestaña activa (p. ej. al
+  // abrir `?tab=account-statement`) tiene que quedar a la vista, no escondida
+  // a la derecha. `?.` porque jsdom no implementa scrollIntoView.
+  useEffect(() => {
+    buttons.current.get(activeTab)?.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+  }, [activeTab]);
+
   function handleKeyDown(event: KeyboardEvent<HTMLDivElement>) {
-    const current = TAB_ORDER.indexOf(focused);
+    const current = tabs.indexOf(focused);
     let nextIndex: number;
     switch (event.key) {
       case 'ArrowRight':
-        nextIndex = (current + 1) % TAB_ORDER.length;
+        nextIndex = (current + 1) % tabs.length;
         break;
       case 'ArrowLeft':
-        nextIndex = (current - 1 + TAB_ORDER.length) % TAB_ORDER.length;
+        nextIndex = (current - 1 + tabs.length) % tabs.length;
         break;
       case 'Home':
         nextIndex = 0;
         break;
       case 'End':
-        nextIndex = TAB_ORDER.length - 1;
+        nextIndex = tabs.length - 1;
         break;
       default:
         return;
     }
     event.preventDefault();
-    const next = TAB_ORDER[nextIndex];
+    const next = tabs[nextIndex];
     setFocusedTab(next);
     buttons.current.get(next)?.focus();
   }
@@ -106,9 +130,11 @@ export function PatientDetailTabs({
       role="tablist"
       aria-label={tablistLabel}
       onKeyDown={handleKeyDown}
-      className="flex gap-2 border-b border-border"
+      // Con cinco pestañas no caben en 390px: el tablist se desplaza de lado
+      // dentro de su franja y la página nunca crece en horizontal.
+      className="flex gap-2 overflow-x-auto border-b border-border"
     >
-      {TAB_ORDER.map((tab) => {
+      {tabs.map((tab) => {
         const selected = activeTab === tab;
         return (
           <button
@@ -127,7 +153,7 @@ export function PatientDetailTabs({
             // including a mouse click or a Shift+Tab back from the panel.
             onFocus={() => setFocusedTab(tab)}
             onClick={() => onTabChange(tab)}
-            className={`px-4 py-2 text-sm font-medium ${
+            className={`shrink-0 whitespace-nowrap px-4 py-2 text-sm font-medium ${
               selected ? 'border-b-2 border-primary text-ink' : 'text-muted hover:text-ink'
             }`}
           >

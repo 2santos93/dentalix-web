@@ -16,6 +16,7 @@ import {
   type TreatmentPlanItemStatus,
   type TreatmentPlanStatus,
 } from '@/lib/treatment-plans/treatment-plans-api';
+import { PLAN_STATUS_BADGE_VARIANT, PLAN_STATUS_LABELS } from '@/lib/treatment-plans/plan-status';
 import {
   getPlanBalance,
   listPayments,
@@ -232,30 +233,16 @@ const copy = {
 const PLAN_STATUS_OPTIONS: TreatmentPlanStatus[] = ['DRAFT', 'ACCEPTED', 'COMPLETED', 'CANCELLED'];
 const ITEM_STATUS_OPTIONS: TreatmentPlanItemStatus[] = ['PROPOSED', 'ACCEPTED', 'DONE'];
 
-const PLAN_STATUS_LABELS: Record<TreatmentPlanStatus, string> = {
-  DRAFT: 'Borrador',
-  ACCEPTED: 'Aceptado',
-  COMPLETED: 'Completado',
-  CANCELLED: 'Cancelado',
-};
-
 const ITEM_STATUS_LABELS: Record<TreatmentPlanItemStatus, string> = {
   PROPOSED: 'Propuesto',
   ACCEPTED: 'Aceptado',
   DONE: 'Realizado',
 };
 
-// Semantic Badge variants (never raw color utilities) — DRAFT/PROPOSED are
-// neutral (nothing has happened yet), ACCEPTED maps to the brand/primary
-// token (acknowledged), COMPLETED/DONE to success, CANCELLED to danger —
-// same convention as `day-agenda.tsx`'s STATUS_BADGE_CLASSES.
-const PLAN_STATUS_BADGE_VARIANT: Record<TreatmentPlanStatus, BadgeProps['variant']> = {
-  DRAFT: 'muted',
-  ACCEPTED: 'default',
-  COMPLETED: 'success',
-  CANCELLED: 'danger',
-};
-
+// Semantic Badge variants (never raw color utilities) — PROPOSED is neutral
+// (nothing has happened yet), ACCEPTED maps to the brand/primary token
+// (acknowledged), DONE to success; the plan-level map lives in
+// `@/lib/treatment-plans/plan-status` — same convention as `day-agenda.tsx`.
 const ITEM_STATUS_BADGE_VARIANT: Record<TreatmentPlanItemStatus, BadgeProps['variant']> = {
   PROPOSED: 'muted',
   ACCEPTED: 'default',

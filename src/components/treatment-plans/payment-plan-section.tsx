@@ -13,7 +13,7 @@ import {
 } from '@/lib/payment-plans/payment-plan-api';
 import { Card } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Badge, type BadgeProps } from '@/components/ui/badge';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -27,6 +27,10 @@ import { formatCivilDate } from '@/lib/format/date';
 // would make an inline `Intl.NumberFormat` throw during render and take this
 // whole subtree down (~8 money cells here). See `formatCurrency`'s own doc.
 import { formatCurrency } from '@/lib/format/currency';
+import {
+  INSTALLMENT_STATUS_BADGE_VARIANT,
+  INSTALLMENT_STATUS_LABELS,
+} from '@/lib/payment-plans/installment-status';
 
 const copy = {
   heading: 'Plan de pagos',
@@ -62,20 +66,6 @@ const copy = {
   colStatus: 'Estado',
   downPaymentRow: 'Pie',
   tableCaption: 'Calendario de cuotas',
-};
-
-const INSTALLMENT_STATUS_BADGE_VARIANT: Record<InstallmentStatus, BadgeProps['variant']> = {
-  PAID: 'success',
-  PARTIAL: 'warning',
-  PENDING: 'muted',
-  OVERDUE: 'danger',
-};
-
-const INSTALLMENT_STATUS_LABELS: Record<InstallmentStatus, string> = {
-  PAID: 'Pagada',
-  PARTIAL: 'Parcial',
-  PENDING: 'Pendiente',
-  OVERDUE: 'Vencida',
 };
 
 const PERIODICITY_OPTIONS: { value: Periodicity; label: string }[] = [

@@ -773,6 +773,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/patients/{patientId}/account-statement": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Estado de cuenta del paciente: presupuestado, abonado, saldo y cuotas por moneda
+         * @description Totales de toda la historia del paciente (todas las sedes). `from`/`to` acotan solo la lista de movimientos. Sin datos clínicos.
+         */
+        get: operations["AccountStatementController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/inventory/items": {
         parameters: {
             query?: never;
@@ -1933,6 +1953,166 @@ export interface components {
              */
             isFullyPaid: boolean;
         };
+        AccountStatementClinicDto: {
+            /** @example Clínica Sonrisas */
+            name: string;
+            logoUrl: string | null;
+        };
+        AccountStatementPatientDto: {
+            /** Format: uuid */
+            id: string;
+            /** @example Ana */
+            firstName: string;
+            /** @example Gómez */
+            lastName: string;
+            /** @enum {string} */
+            docType: "CC" | "TI" | "CE" | "PASSPORT" | "OTHER";
+            docNumber: string | null;
+        };
+        AccountStatementRangeDto: {
+            /** @example 2026-01-01 */
+            from: string | null;
+            /** @example 2026-12-31 */
+            to: string | null;
+        };
+        AccountStatementNextInstallmentDto: {
+            /** Format: uuid */
+            treatmentPlanId: string;
+            /** @description `null` para la cuota inicial. */
+            sequence: number | null;
+            /** Format: date-time */
+            dueDate: string;
+            /**
+             * @description Lo que falta de esa cuota
+             * @example 250000
+             */
+            amount: number;
+        };
+        AccountStatementCurrencySummaryDto: {
+            /**
+             * @description ISO 4217
+             * @example COP
+             */
+            currency: string;
+            /**
+             * @description Σ ítems ACCEPTED|DONE de los planes no cancelados en esta moneda
+             * @example 3000000
+             */
+            budgeted: number;
+            /**
+             * @description Σ abonos no anulados en esta moneda (sin convertir)
+             * @example 1200000
+             */
+            paid: number;
+            /**
+             * @description budgeted - paid (negativo = saldo a favor)
+             * @example 1800000
+             */
+            balance: number;
+            /** @example 1 */
+            overdueCount: number;
+            /**
+             * @description Lo que falta de las vencidas
+             * @example 250000
+             */
+            overdueAmount: number;
+            nextInstallment: components["schemas"]["AccountStatementNextInstallmentDto"] | null;
+        };
+        AccountStatementOtherCurrencyDto: {
+            /** @example USD */
+            currency: string;
+            /** @example 50 */
+            amount: number;
+        };
+        AccountStatementPlanDto: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            status: "DRAFT" | "ACCEPTED" | "COMPLETED" | "CANCELLED";
+            /** @example COP */
+            currency: string;
+            /**
+             * Format: date-time
+             * @description El plan no tiene título: se nombra por su fecha.
+             */
+            createdAt: string;
+            /**
+             * @description Ítems ACCEPTED|DONE
+             * @example 3000000
+             */
+            budgeted: number;
+            /** @description `false` si el plan está CANCELLED: no suma al saldo. */
+            countsTowardsBalance: boolean;
+            /**
+             * @description Abonos vivos en la moneda del plan
+             * @example 1200000
+             */
+            paid: number;
+            /** @description Abonos vivos del plan hechos en otra moneda (sin convertir) */
+            paidOtherCurrencies: components["schemas"]["AccountStatementOtherCurrencyDto"][];
+            /** @example 1800000 */
+            balance: number;
+        };
+        AccountStatementLocationRefDto: {
+            /** Format: uuid */
+            id: string;
+            /** @example Sede principal */
+            name: string;
+        };
+        AccountStatementMovementDto: {
+            /** Format: uuid */
+            id: string;
+            /**
+             * Format: date-time
+             * @description Día civil del abono (medianoche UTC del día registrado).
+             */
+            paidAt: string;
+            /** @example 150000 */
+            amount: number;
+            /** @example COP */
+            currency: string;
+            /** @enum {string|null} */
+            method: "CASH" | "CARD" | "TRANSFER" | "OTHER" | null;
+            location: components["schemas"]["AccountStatementLocationRefDto"];
+            /** Format: uuid */
+            treatmentPlanId: string;
+            /** @description Abono anulado: se lista pero no suma. */
+            voided: boolean;
+            /** Format: date-time */
+            voidedAt: string | null;
+        };
+        AccountStatementInstallmentDto: {
+            /** Format: uuid */
+            paymentPlanId: string;
+            /** Format: uuid */
+            treatmentPlanId: string;
+            /** @example COP */
+            currency: string;
+            /** @enum {string} */
+            kind: "DOWN_PAYMENT" | "INSTALLMENT";
+            sequence: number | null;
+            /** Format: date-time */
+            dueDate: string;
+            /** @example 250000 */
+            amount: number;
+            /** @example 100000 */
+            covered: number;
+            /** @example 150000 */
+            outstanding: number;
+            /** @enum {string} */
+            status: "PAID" | "PARTIAL" | "PENDING" | "OVERDUE";
+        };
+        AccountStatementDto: {
+            /** Format: date-time */
+            issuedAt: string;
+            clinic: components["schemas"]["AccountStatementClinicDto"];
+            patient: components["schemas"]["AccountStatementPatientDto"];
+            range: components["schemas"]["AccountStatementRangeDto"];
+            summary: components["schemas"]["AccountStatementCurrencySummaryDto"][];
+            plans: components["schemas"]["AccountStatementPlanDto"][];
+            movements: components["schemas"]["AccountStatementMovementDto"][];
+            installments: components["schemas"]["AccountStatementInstallmentDto"][];
+        };
         CreateInventoryItemDto: {
             /** @example Guantes de nitrilo */
             name: string;
@@ -2194,6 +2374,13 @@ export interface operations {
                     "application/json": components["schemas"]["RegisterResponseDto"];
                 };
             };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     AuthController_loginHandler: {
@@ -2217,6 +2404,13 @@ export interface operations {
                     "application/json": components["schemas"]["AuthTokensDto"];
                 };
             };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     AuthController_refreshHandler: {
@@ -2239,6 +2433,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["AuthTokensDto"];
                 };
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -2325,6 +2526,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["AuthTokensDto"];
                 };
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -2619,6 +2827,13 @@ export interface operations {
                     "application/json": components["schemas"]["MedicalHistoryDto"];
                 };
             };
+            /** @description Paciente no encontrado en esta clínica (inexistente o de otra clínica). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     ClinicalEntriesController_list: {
@@ -2668,6 +2883,13 @@ export interface operations {
                     "application/json": components["schemas"]["ClinicalEntryDto"];
                 };
             };
+            /** @description Paciente no encontrado en esta clínica (inexistente o de otra clínica). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     OdontogramController_create: {
@@ -2692,6 +2914,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["ToothRecordDto"];
                 };
+            };
+            /** @description Paciente no encontrado en esta clínica (inexistente o de otra clínica). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -3046,6 +3275,13 @@ export interface operations {
                     "application/json": components["schemas"]["TreatmentPlanDto"];
                 };
             };
+            /** @description Paciente no encontrado en esta clínica (inexistente o de otra clínica). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     TreatmentPlansController_get: {
@@ -3244,6 +3480,13 @@ export interface operations {
                     "application/json": components["schemas"]["PublicInvitationDto"];
                 };
             };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     PublicInvitationsController_accept: {
@@ -3268,6 +3511,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["AuthTokensDto"];
                 };
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -3650,6 +3900,53 @@ export interface operations {
         responses: {
             /** @description Payment plan cancelled */
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AccountStatementController_get: {
+        parameters: {
+            query?: {
+                /** @description Primer día de los movimientos (YYYY-MM-DD), inclusive. */
+                from?: string;
+                /** @description Último día de los movimientos (YYYY-MM-DD), inclusive. Debe ser >= from. */
+                to?: string;
+            };
+            header?: never;
+            path: {
+                patientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AccountStatementDto"];
+                };
+            };
+            /** @description patientId no es UUID, fecha inválida o from > to */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Rol sin acceso a pagos */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente no encontrado en esta clínica (inexistente o de otra clínica). */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };

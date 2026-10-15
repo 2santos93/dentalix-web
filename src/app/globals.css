@@ -216,3 +216,32 @@
     display: none !important;
   }
 }
+
+/*
+ * Print CSS del estado de cuenta (DX-011). La vista imprimible
+ * (/print/patients/[id]/account-statement) ya no tiene shell; aquí solo se
+ * reabre la visibilidad que la regla del comprobante (`body * { visibility:
+ * hidden }`, arriba) apaga para toda la página. A diferencia del comprobante,
+ * el documento queda EN FLUJO (sin `position: fixed`): un estado de cuenta
+ * largo ocupa varias hojas y un elemento fijo se recortaría a la primera.
+ * La barra de acciones se oculta con `print:hidden` en el propio componente.
+ */
+@page {
+  size: A4;
+  margin: 14mm;
+}
+@media print {
+  .statement-print-root,
+  .statement-print-root * {
+    visibility: visible !important;
+  }
+  .statement-print-root table {
+    page-break-inside: auto;
+  }
+  .statement-print-root tr {
+    break-inside: avoid;
+  }
+  .statement-print-root thead {
+    display: table-header-group;
+  }
+}

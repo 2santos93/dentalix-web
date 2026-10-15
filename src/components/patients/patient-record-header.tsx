@@ -1,7 +1,8 @@
 'use client';
 import Link from 'next/link';
 import { Building2, ChevronLeft, Pencil } from 'lucide-react';
-import type { DocType, Patient } from '@/lib/patients/patients-api';
+import type { Patient } from '@/lib/patients/patients-api';
+import { DOC_TYPE_SHORT } from '@/lib/patients/doc-type';
 import { ageFrom } from '@/lib/patients/age';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/shared/page-header';
@@ -30,19 +31,6 @@ const copy = {
    */
   recordScope: 'Ficha centralizada · todas las sedes',
   edit: 'Editar datos',
-};
-
-/**
- * Abreviatura del tipo de documento para la tira de identidad. El panel de
- * datos muestra el nombre largo («Cédula de ciudadanía»); en la cabecera, al
- * lado del número, lo que se lee en el documento real es la sigla.
- */
-const DOC_TYPE_SHORT: Record<DocType, string> = {
-  CC: 'CC',
-  TI: 'TI',
-  CE: 'CE',
-  PASSPORT: 'Pasaporte',
-  OTHER: 'Documento',
 };
 
 function fullName(patient: Patient): string {
