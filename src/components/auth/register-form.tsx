@@ -1,9 +1,9 @@
 'use client';
 import * as React from 'react';
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
-import { Eye, EyeOff, Loader2 } from 'lucide-react';
+import { Eye, EyeOff, Loader2, MailCheck } from 'lucide-react';
 import { apiFetch } from '@/lib/api/client';
+import type { components } from '@/lib/api/schema';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -23,19 +23,23 @@ const copy = {
   submit: 'Crear cuenta',
   submitting: 'Creando cuenta…',
   genericError: 'No pudimos crear la cuenta. Intenta de nuevo.',
-  // 409 de POST /auth/register («Subdomain or email already in use»).
-  taken: 'Ese subdominio o ese correo ya están en uso. Prueba con otro.',
+  // 409 de POST /auth/register: solo el SUBDOMINIO (DX-029: el correo nunca
+  // se revela; si ya tenía cuenta, su titular recibe un aviso por correo).
+  taken: 'Ese subdominio ya está en uso. Elige otro.',
+  sentTitle: 'Revisa tu correo',
+  sentBody: (email: string) =>
+    `Si ${email} puede registrar una clínica, te llegará un correo con un enlace para confirmarla. Ábrelo en las próximas 24 horas para activar tu clínica.`,
+  sentSpam: 'Si no lo ves en unos minutos, revisa la carpeta de spam.',
 };
 
 const ERROR_ID = 'register-error';
 
-interface RegisterResponse {
-  accessToken: string;
-  refreshToken: string;
-}
+// DX-029: 202 con un mensaje genérico, exista o no el correo. La clínica se
+// crea al abrir el enlace del email (/register/verificar/[token]).
+type RegisterResponse = components['schemas']['RegisterAcceptedDto'];
 
 export function RegisterForm({ tenant }: { tenant: string | null }) {
-  const router = useRouter();
+  const [sentTo, setSentTo] = useState<string | null>(null);
   const [clinicName, setClinicName] = useState('');
   const [subdomain, setSubdomain] = useState(tenant ?? '');
   const [fullName, setFullName] = useState('');
@@ -54,7 +58,7 @@ export function RegisterForm({ tenant }: { tenant: string | null }) {
         method: 'POST',
         body: { clinicName, subdomain, fullName, email, password },
       });
-      router.push('/login');
+      setSentTo(email.trim());
     } catch (err) {
       setError(
         apiErrorMessage(err, {
@@ -66,6 +70,17 @@ export function RegisterForm({ tenant }: { tenant: string | null }) {
     } finally {
       setSubmitting(false);
     }
+  }
+
+  if (sentTo) {
+    return (
+      <div role="status" className="flex flex-col gap-3">
+        <MailCheck className="size-8 text-primary" aria-hidden="true" />
+        <h2 className="text-lg font-semibold text-ink">{copy.sentTitle}</h2>
+        <p className="text-sm text-muted">{copy.sentBody(sentTo)}</p>
+        <p className="text-sm text-muted">{copy.sentSpam}</p>
+      </div>
+    );
   }
 
   return (

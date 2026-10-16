@@ -15,3 +15,24 @@ export function parseTenantFromHost(host: string | null): string | null {
   }
   return null;
 }
+
+/**
+ * Enlace al inicio de sesión de la clínica `subdomain` desde la página actual
+ * (DX-029: tras confirmar el registro). Si ya estamos en su host, basta la
+ * ruta relativa; si no, se arma su origen sobre el dominio raíz (o
+ * `*.localhost` en local), con el mismo protocolo y puerto.
+ */
+export function clinicLoginHref(
+  subdomain: string,
+  location: Pick<Location, 'protocol' | 'host'>,
+): string {
+  const [hostname, port] = location.host.split(':');
+  if (parseTenantFromHost(location.host) === subdomain || hostname === `${subdomain}.localhost`) {
+    return '/login';
+  }
+  const base =
+    hostname === 'localhost' || hostname === '127.0.0.1' || hostname.endsWith('.localhost')
+      ? 'localhost'
+      : ROOT_DOMAIN;
+  return `${location.protocol}//${subdomain}.${base}${port ? `:${port}` : ''}/login`;
+}

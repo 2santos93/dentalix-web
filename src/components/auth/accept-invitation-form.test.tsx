@@ -34,9 +34,11 @@ describe('AcceptInvitationForm', () => {
       clinicName: 'Sonrisa Dental',
       role: 'DENTIST',
       maskedEmail: 'j***@example.com',
-      userExists: false,
+      requiresCurrentPassword: false,
     });
-    (acceptInvitation as jest.Mock).mockResolvedValueOnce({ accessToken: 'access-1' });
+    (acceptInvitation as jest.Mock).mockResolvedValueOnce({
+      accessToken: 'access-1',
+    });
 
     render(<AcceptInvitationForm inviteToken="tok-1" />);
 
@@ -62,7 +64,7 @@ describe('AcceptInvitationForm', () => {
       clinicName: 'Sonrisa Dental',
       role: 'ADMIN',
       maskedEmail: 'a***@example.com',
-      userExists: true,
+      requiresCurrentPassword: true,
     });
 
     render(<AcceptInvitationForm inviteToken="tok-2" />);
@@ -83,25 +85,26 @@ describe('AcceptInvitationForm', () => {
 
     expect((await screen.findAllByText(pattern)).length).toBeGreaterThan(0);
     expect(screen.queryByLabelText(/contraseña/i)).not.toBeInTheDocument();
-    expect(screen.getByRole('link', { name: /inicia sesión/i })).toHaveAttribute(
-      'href',
-      '/login',
-    );
+    expect(screen.getByRole('link', { name: /inicia sesión/i })).toHaveAttribute('href', '/login');
   });
 
   it('un fallo al verificar la invitación se puede reintentar y el error desaparece al cargar', async () => {
-    (getPublicInvitation as jest.Mock).mockRejectedValueOnce(new ApiError(500, 'Fallo el servidor.'));
+    (getPublicInvitation as jest.Mock).mockRejectedValueOnce(
+      new ApiError(500, 'Fallo el servidor.'),
+    );
     (getPublicInvitation as jest.Mock).mockResolvedValueOnce({
       status: 'VALID',
       clinicName: 'Sonrisa Dental',
       role: 'DENTIST',
       maskedEmail: 'j***@example.com',
-      userExists: false,
+      requiresCurrentPassword: false,
     });
 
     render(<AcceptInvitationForm inviteToken="tok-5" />);
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('No pudimos verificar la invitación.');
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'No pudimos verificar la invitación.',
+    );
     fireEvent.click(screen.getByRole('button', { name: /reintentar/i }));
 
     // The load error must clear and the actual content take its place — not
@@ -117,7 +120,7 @@ describe('AcceptInvitationForm', () => {
       clinicName: 'Sonrisa Dental',
       role: 'DENTIST',
       maskedEmail: 'j***@example.com',
-      userExists: true,
+      requiresCurrentPassword: true,
     });
     (acceptInvitation as jest.Mock).mockRejectedValueOnce(
       new ApiError(401, 'Contraseña incorrecta'),

@@ -81,7 +81,25 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** Pide el alta de una clínica: envía un enlace de verificación al email (la clínica se crea al abrirlo) */
         post: operations["AuthController_register"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/auth/register/verify": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirma el registro con el token del email y crea la clínica y su dueño */
+        post: operations["AuthController_verifyRegistration"];
         delete?: never;
         options?: never;
         head?: never;
@@ -241,6 +259,7 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /** Estado público de una invitación (el token solo llega por email a la persona invitada) */
         get: operations["PublicInvitationsController_getByToken"];
         put?: never;
         post?: never;
@@ -259,6 +278,7 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** Acepta la invitación: crea la cuenta (email verificado), entra con la contraseña de una cuenta verificada o reclama una cuenta no verificada */
         post: operations["PublicInvitationsController_accept"];
         delete?: never;
         options?: never;
@@ -1627,11 +1647,23 @@ export interface components {
             timeZone: string;
         };
         RegisterDto: Record<string, never>;
-        RegisterResponseDto: {
+        RegisterAcceptedDto: {
+            /** @example Te enviamos un correo para confirmar el registro. Abre el enlace para activar tu clínica. */
+            message: string;
+        };
+        VerifyRegistrationDto: {
+            /** @description Token del enlace del email de verificación */
+            token: string;
+            /** @description La contraseña elegida al registrarse: prueba que quien confirma es quien pidió el alta (DX-029) */
+            password: string;
+        };
+        RegisterVerifiedDto: {
             /** Format: uuid */
             tenantId: string;
             /** Format: uuid */
             userId: string;
+            /** @description Subdominio de la clínica recién creada */
+            subdomain: string;
         };
         LoginDto: Record<string, never>;
         AuthTokensDto: {
@@ -1684,9 +1716,8 @@ export interface components {
             expiresAt: string;
             /** @enum {string} */
             status: "VALID" | "EXPIRED" | "USED" | "REVOKED";
-            token: string;
             /**
-             * @description Estado del email con el enlace: PENDING = encolado (se envía en segundo plano); null = no se pudo encolar (comparte el enlace o reenvía)
+             * @description Estado del email con el enlace: PENDING = encolado (se envía en segundo plano); null = no se pudo encolar (reenvía la invitación más tarde)
              * @enum {string|null}
              */
             emailDelivery: "PENDING" | "SENT" | "FAILED" | null;
@@ -1710,7 +1741,8 @@ export interface components {
             /** @enum {string} */
             role?: "DENTIST" | "ASSISTANT" | "RECEPTION" | "ADMIN";
             maskedEmail?: string;
-            userExists?: boolean;
+            /** @description true = el email ya tiene una cuenta verificada: pide la contraseña actual. false = pide crear una contraseña (cuenta nueva, o cuenta sin verificar que se reclama). El token solo llega por email a la persona invitada. */
+            requiresCurrentPassword?: boolean;
         };
         AcceptInvitationDto: {
             password: string;
@@ -4311,13 +4343,78 @@ export interface operations {
             };
         };
         responses: {
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RegisterAcceptedDto"];
+                };
+            };
+            /** @description Datos inválidos, o la petición no llegó por un host de Dentalix (el enlace del email solo apunta a la plataforma) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El subdominio ya está en uso */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AuthController_verifyRegistration: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VerifyRegistrationDto"];
+            };
+        };
+        responses: {
             201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["RegisterResponseDto"];
+                    "application/json": components["schemas"]["RegisterVerifiedDto"];
                 };
+            };
+            /** @description Genérico: enlace inexistente o ya usado, o contraseña distinta de la del registro */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Subdominio o email ya en uso */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Enlace caducado */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
             429: {

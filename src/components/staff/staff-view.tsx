@@ -18,7 +18,6 @@ import {
   revokeInvitation,
   type CreatedInvitation,
 } from '@/lib/staff/invitations-api';
-import { useCopyToClipboard } from '@/lib/ui/use-copy-to-clipboard';
 import { Plus, Send, Ban } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -31,11 +30,7 @@ import { AsyncSection, TableSkeleton } from '@/components/shared/async-section';
 import { Pagination } from '@/components/shared/pagination';
 import { PageHeader } from '@/components/shared/page-header';
 import { RowActions } from '@/components/shared/row-actions';
-import {
-  ListToolbar,
-  ResultCount,
-  toolbarFieldClass,
-} from '@/components/shared/list-toolbar';
+import { ListToolbar, ResultCount, toolbarFieldClass } from '@/components/shared/list-toolbar';
 import { notifyError } from '@/components/errors/notify';
 import {
   Dialog,
@@ -119,19 +114,21 @@ const copy = {
   genericResendError: 'No pudimos reenviar la invitación.',
   genericRevokeError: 'No pudimos revocar la invitación.',
   inviteCreatedTitle: 'Invitación creada',
-  inviteResentTitle: 'Invitación reenviada',
   deliveryAnnounce: {
     SENT: (email: string) => `Correo de invitación enviado a ${email}.`,
     FAILED: (email: string) => `No se pudo enviar el correo de invitación a ${email}.`,
   },
-  inviteCreatedDescription:
-    'Le enviamos un correo con este enlace. Si no le llega, puedes copiarlo y compartirlo tú.',
+  // DX-029: el enlace solo viaja por correo a la persona invitada (así
+  // demuestra que el correo es suyo); la clínica nunca lo ve.
+  inviteCreatedDescription: (email: string) =>
+    `Le enviamos un correo a ${email} con el enlace para unirse. Vale 7 días.`,
+  inviteEmailOnlyNote:
+    'Por seguridad, el enlace solo llega a su correo: si no lo encuentra, que revise la carpeta de spam o reenvíale la invitación.',
   // El backend no pudo programar el correo (la invitación sí se creó).
   inviteNotQueuedDescription:
-    'No pudimos programar el correo. Comparte este enlace con la persona invitada o reenvía la invitación más tarde.',
-  copyLabel: 'Copiar',
-  copiedLabel: 'Copiado',
-  copyWarning: 'Cópialo ahora: por seguridad no podrás verlo de nuevo.',
+    'La invitación quedó creada, pero no pudimos programar el correo. Reenvíala en unos minutos desde la lista.',
+  resendNotQueued:
+    'No pudimos programar el correo de la invitación. Vuelve a intentarlo en unos minutos.',
   // No "Cerrar": `DialogContent` ya trae una X con ese nombre accesible, y dos
   // "Cerrar" serían ambiguos para lectores de pantalla y para los tests.
   closeLabel: 'Listo',
@@ -235,16 +232,11 @@ export function StaffView({ token }: StaffViewProps) {
   const [role, setRole] = useState<ClinicRole>('ASSISTANT');
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
-  const [createdInvitation, setCreatedInvitation] = useState<CreatedInvitation | null>(
-    null,
-  );
-  const { copied, copy: copyInviteLink } = useCopyToClipboard();
+  const [createdInvitation, setCreatedInvitation] = useState<CreatedInvitation | null>(null);
 
   const [busyId, setBusyId] = useState<string | null>(null);
   const [revokingId, setRevokingId] = useState<string | null>(null);
   const [resendingId, setResendingId] = useState<string | null>(null);
-  // El enlace del diálogo viene de un reenvío (cambia el título).
-  const [linkFromResend, setLinkFromResend] = useState(false);
   // Anuncio para lectores de pantalla cuando el sondeo ve salir (o fallar) un
   // correo: el cambio de la etiqueta por sí solo no se anuncia.
   const [deliveryAnnouncement, setDeliveryAnnouncement] = useState('');
@@ -351,7 +343,10 @@ export function StaffView({ token }: StaffViewProps) {
       refresh();
     } catch (err) {
       setCreateError(
-        apiErrorMessage(err, { fallback: copy.genericCreateError, byStatus: { 409: copy.alreadyMember } }),
+        apiErrorMessage(err, {
+          fallback: copy.genericCreateError,
+          byStatus: { 409: copy.alreadyMember },
+        }),
       );
     } finally {
       setCreating(false);
@@ -363,7 +358,6 @@ export function StaffView({ token }: StaffViewProps) {
     if (!next) {
       setCreateError(null);
       setCreatedInvitation(null);
-      setLinkFromResend(false);
       resetForm();
     }
   }
@@ -376,10 +370,10 @@ export function StaffView({ token }: StaffViewProps) {
       const resent = await resendInvitation(token, entry.id);
       setResendingId(null);
       if (resent.emailDelivery === null) {
-        // Sin correo programado, el enlace es la única vía: se muestra.
-        setLinkFromResend(true);
-        setCreatedInvitation(resent);
-        setShowForm(true);
+        // Sin correo programado no hay otra vía (el enlace solo va por correo).
+        notifyError(copy.resendNotQueued, {
+          onRetry: () => handleResend(entry),
+        });
       } else {
         toast.success(copy.resentToast, {
           description: copy.resentToastDescription(entry.email),
@@ -423,16 +417,8 @@ export function StaffView({ token }: StaffViewProps) {
     }
   }
 
-  const revokingEntry = revokingId
-    ? entries.find((e) => e.id === revokingId) ?? null
-    : null;
-  const resendingEntry = resendingId
-    ? entries.find((e) => e.id === resendingId) ?? null
-    : null;
-
-  const inviteLink = createdInvitation
-    ? `${window.location.origin}/invitacion/${createdInvitation.token}`
-    : '';
+  const revokingEntry = revokingId ? (entries.find((e) => e.id === revokingId) ?? null) : null;
+  const resendingEntry = resendingId ? (entries.find((e) => e.id === resendingId) ?? null) : null;
 
   const hasFilters = Boolean(search || roleFilter || statusFilter);
 
@@ -546,28 +532,14 @@ export function StaffView({ token }: StaffViewProps) {
         <Dialog open={!!createdInvitation} onOpenChange={handleCreateOpenChange}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>
-                {linkFromResend ? copy.inviteResentTitle : copy.inviteCreatedTitle}
-              </DialogTitle>
+              <DialogTitle>{copy.inviteCreatedTitle}</DialogTitle>
               <DialogDescription>
                 {createdInvitation?.emailDelivery === null
                   ? copy.inviteNotQueuedDescription
-                  : copy.inviteCreatedDescription}
+                  : copy.inviteCreatedDescription(createdInvitation?.email ?? '')}
               </DialogDescription>
             </DialogHeader>
-            <div className="flex flex-col gap-2 rounded-lg border border-border bg-bg px-3 py-2">
-              <p className="break-all font-mono text-sm text-ink">{inviteLink}</p>
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                className="self-start"
-                onClick={() => copyInviteLink(inviteLink)}
-              >
-                {copied ? copy.copiedLabel : copy.copyLabel}
-              </Button>
-            </div>
-            <p className="text-sm text-muted">{copy.copyWarning}</p>
+            <p className="text-sm text-muted">{copy.inviteEmailOnlyNote}</p>
             <DialogFooter>
               <Button type="button" onClick={() => handleCreateOpenChange(false)}>
                 {copy.closeLabel}
@@ -577,11 +549,7 @@ export function StaffView({ token }: StaffViewProps) {
         </Dialog>
 
         {!loading && !loadError ? (
-          <ResultCount
-            total={total}
-            noun={copy.countNoun}
-            nounPlural={copy.countNounPlural}
-          />
+          <ResultCount total={total} noun={copy.countNoun} nounPlural={copy.countNounPlural} />
         ) : null}
 
         <AsyncSection
@@ -633,8 +601,12 @@ export function StaffView({ token }: StaffViewProps) {
                           entry.fullName
                         )}
                       </TableCell>
-                      <TableCell className="text-muted" data-label={copy.colEmail}>{entry.email}</TableCell>
-                      <TableCell className="text-muted" data-label={copy.colRole}>{ROLE_LABEL[entry.role]}</TableCell>
+                      <TableCell className="text-muted" data-label={copy.colEmail}>
+                        {entry.email}
+                      </TableCell>
+                      <TableCell className="text-muted" data-label={copy.colRole}>
+                        {ROLE_LABEL[entry.role]}
+                      </TableCell>
                       <TableCell data-label={copy.colStatus}>
                         <div className="flex flex-wrap items-center gap-1.5">
                           <Badge variant={badge.variant}>{badge.label}</Badge>

@@ -2,6 +2,7 @@ import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { test, expect, type Page } from './support/test';
 import { accessTokenOf, registerAndLogin, SESSION_COOKIE, sessionCookie } from './support/auth';
+import { registerClinicViaApi } from './support/api';
 import { API_URL, tenantOrigin } from './support/urls';
 
 /**
@@ -138,10 +139,8 @@ test('la sesión de una clínica no sirve en otra (cookie por host y refresh val
 
   // Aunque alguien la copie a mano al host de otra clínica, la API la rechaza.
   const clinicB = newClinic('b');
-  const register = await page.request.post(`${API_URL}/auth/register`, {
-    data: clinicB,
-  });
-  expect(register.ok(), await register.text()).toBeTruthy();
+  // DX-029: el registro se confirma desde el email (lo hace el helper).
+  await registerClinicViaApi(page.request, clinicB);
   const originB = tenantOrigin(clinicB.subdomain);
   const cookieA = (await sessionCookie(page, originA))?.value as string;
   // Por el proxy de la web (localhost:<puerto>, con el host de B en cabecera:

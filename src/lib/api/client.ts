@@ -260,11 +260,13 @@ async function doFetch(
   // with the new token. Skipped for the auth endpoints themselves (a 401 from
   // /login is "wrong password", not "expired session") and when a prior call
   // in this chain already refreshed (`allowRefresh: false`) so we retry at
-  // most once.
+  // most once. Tampoco en los públicos (`/public/*`, sin sesión): el 401 de
+  // aceptar una invitación es «contraseña incorrecta» (DX-029).
   if (
     res.status === 401 &&
     allowRefresh &&
-    !path.startsWith('/auth/')
+    !path.startsWith('/auth/') &&
+    !path.startsWith('/public/')
   ) {
     const newToken = await refreshAccessToken();
     if (newToken) {

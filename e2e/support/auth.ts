@@ -1,5 +1,6 @@
 import { expect, type Page } from '@playwright/test';
 import { tenantOrigin } from './urls';
+import { registrationTokenFor } from './mail';
 
 /** Cookie HttpOnly del refresh token (DX-062), del host de la clínica. */
 export const SESSION_COOKIE = 'dentalix_rt';
@@ -37,6 +38,11 @@ export interface RegisterAndLoginParams {
   fullName: string;
   email: string;
   password: string;
+  /**
+   * Antes de confirmar el registro prueba una contraseña errónea y comprueba
+   * que la web la rechaza con el error genérico (DX-029, R2).
+   */
+  tryWrongVerifyPassword?: boolean;
 }
 
 /**
@@ -46,7 +52,14 @@ export interface RegisterAndLoginParams {
  */
 export async function registerAndLogin(
   page: Page,
-  { subdomain, clinicName, fullName, email, password }: RegisterAndLoginParams,
+  {
+    subdomain,
+    clinicName,
+    fullName,
+    email,
+    password,
+    tryWrongVerifyPassword = false,
+  }: RegisterAndLoginParams,
 ): Promise<string> {
   const origin = tenantOrigin(subdomain);
 
@@ -64,20 +77,39 @@ export async function registerAndLogin(
 
   await page.getByRole('button', { name: 'Crear cuenta' }).click();
 
-  // A real 4xx from the API (e.g. subdomain/email collision) would leave us
-  // on /register with an alert instead of redirecting — fail loudly instead
-  // of hanging, so the actual backend error is visible in the report.
-  // Scoped to the form's own error <p>, since Next.js also renders its own
-  // route-announcer element with role="alert".
+  // DX-029: el registro responde igual exista o no el correo y no crea nada
+  // hasta abrir el enlace del email. Un 4xx real (p. ej. subdominio ocupado)
+  // deja la alerta del formulario: falla con su texto en vez de colgarse.
   const registerError = page.locator('p[role="alert"]');
-  await expect(page)
-    .toHaveURL(/\/login$/, { timeout: 10_000 })
+  await expect(page.getByRole('heading', { name: 'Revisa tu correo' }))
+    .toBeVisible({ timeout: 10_000 })
     .catch(async () => {
       const message = (await registerError.isVisible())
         ? await registerError.textContent()
-        : 'unknown (no redirect, no visible alert)';
-      throw new Error(`Register did not redirect to /login. API error: ${message}`);
+        : 'unknown (no confirmation, no visible alert)';
+      throw new Error(`Register did not reach «Revisa tu correo». API error: ${message}`);
     });
+
+  // --- Confirmar desde el enlace del email ---
+  const token = await registrationTokenFor(email);
+  await page.goto(`${origin}/register/verificar/${token}`);
+  // DX-029 (R2): confirmar exige la contraseña elegida al registrarse.
+  const verifyPassword = page.getByLabel('Contraseña que elegiste al registrarte');
+  const confirm = page.getByRole('button', { name: 'Confirmar y crear mi clínica' });
+  if (tryWrongVerifyPassword) {
+    await verifyPassword.fill(`${password}-no`);
+    await confirm.click();
+    await expect(page.getByText(/la contraseña no es la que elegiste/)).toBeVisible({
+      timeout: 10_000,
+    });
+  }
+  await verifyPassword.fill(password);
+  await confirm.click();
+  await expect(page.getByRole('heading', { name: '¡Tu clínica está lista!' })).toBeVisible({
+    timeout: 15_000,
+  });
+  await page.getByRole('link', { name: 'Iniciar sesión' }).click();
+  await expect(page).toHaveURL(`${origin}/login`, { timeout: 10_000 });
 
   // --- Login ---
   // No subdomain field here — the tenant travels via the `${subdomain}.
