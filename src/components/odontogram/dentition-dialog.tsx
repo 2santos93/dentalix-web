@@ -33,6 +33,13 @@ const copy = {
     if (current === 'MIXED') return `mixta (${primary})`;
     return 'permanente';
   },
+  /** Rótulo visible bajo cada casilla, corto para que quepa en móvil (el completo va en el nombre accesible). */
+  currentTiny: (position: string, current: DentitionType) => {
+    const primary = primaryAtPosition(position);
+    if (current === 'PRIMARY') return primary ? `temp. ${primary}` : 'sin erup.';
+    if (current === 'MIXED') return 'mixta';
+    return 'perm.';
+  },
   dentitionLegend: 'Nueva dentición',
   reasonLabel: 'Motivo',
   exfoliationHint: 'Exfoliar es perder el temporal: la posición queda en permanente.',
@@ -177,7 +184,9 @@ export function DentitionDialog({
                         />
                         <span className="flex min-w-0 flex-col leading-tight">
                           <span className="font-medium tabular-nums text-ink">{position}</span>
-                          <span className="truncate text-[11px] text-muted">{copy.currentShort(position, current)}</span>
+                          <span aria-hidden="true" className="whitespace-nowrap text-[11px] text-muted">
+                            {copy.currentTiny(position, current)}
+                          </span>
                         </span>
                       </label>
                     );

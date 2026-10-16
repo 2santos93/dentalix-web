@@ -221,8 +221,8 @@ export function ToothTimeline({
                     )}
                   </span>
                 </div>
-                <p className={cn('text-xs text-muted', isVoided && 'line-through')}>
-                  {surfacesLabel(record)}
+                <p className="text-xs text-muted">
+                  <span className={cn(isVoided && 'line-through')}>{surfacesLabel(record)}</span>
                   {record.performedByName ? ` · ${copy.by(record.performedByName)}` : null}
                 </p>
                 {record.notes ? (

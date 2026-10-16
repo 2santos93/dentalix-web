@@ -17,10 +17,10 @@ export function OriginPatterns() {
           height="6"
           patternTransform="rotate(45)"
         >
-          <line x1="0" y1="0" x2="0" y2="6" stroke="currentColor" strokeWidth="1.5" strokeOpacity="0.7" />
+          <line x1="0" y1="0" x2="0" y2="6" stroke="currentColor" strokeWidth="2" strokeOpacity="0.8" />
         </pattern>
         <pattern id={ORIGIN_PATTERN_ID.OTHER_PROVIDER} patternUnits="userSpaceOnUse" width="6" height="6">
-          <circle cx="3" cy="3" r="1.3" fill="currentColor" fillOpacity="0.75" />
+          <circle cx="3" cy="3" r="1.5" fill="currentColor" fillOpacity="0.8" />
         </pattern>
       </defs>
     </svg>
