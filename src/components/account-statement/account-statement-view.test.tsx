@@ -261,7 +261,20 @@ describe('cobrar desde el estado de cuenta (DX-067)', () => {
   it('registra un abono: cierra el modal, avisa y recarga el estado de cuenta', async () => {
     mockedGet.mockResolvedValue(accountStatementFixture());
     mockedBillable.mockResolvedValue([billablePlan]);
-    mockedRecord.mockResolvedValue({} as Awaited<ReturnType<typeof recordPayment>>);
+    mockedRecord.mockResolvedValue({
+      id: 'pay-new',
+      tenantId: 't-1',
+      treatmentPlanId: 'plan-1',
+      patientId: 'pat-1',
+      amount: 50000,
+      currency: 'COP',
+      paidAt: '2026-10-16T00:00:00.000Z',
+      method: null,
+      notes: null,
+      createdById: 'u-recep',
+      createdAt: '2026-10-16T12:00:00.000Z',
+      updatedAt: '2026-10-16T12:00:00.000Z',
+    });
     const user = userEvent.setup();
     render(<AccountStatementView token={RECEPTION} patientId="pat-1" />);
     await screen.findByRole('region', { name: /resumen en COP/i });

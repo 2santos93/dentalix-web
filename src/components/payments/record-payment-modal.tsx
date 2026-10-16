@@ -124,7 +124,7 @@ export function RecordPaymentModal({
     const paidAt = new Date(form.date).toISOString();
     setSubmitting(true);
     try {
-      await recordPayment(
+      const saved = await recordPayment(
         token,
         plan.id,
         {
@@ -135,11 +135,16 @@ export function RecordPaymentModal({
         },
         idempotencyKey,
       );
+      // El aviso sale de lo que la API GUARDÓ, no del formulario: si un envío
+      // anterior con esta misma clave sí se registró (respuesta perdida) y la
+      // persona cambió los datos antes de reintentar, la API devuelve el abono
+      // original y es ese el que hay que anunciar.
+      const savedPlan = plans.find((p) => p.id === saved.treatmentPlanId) ?? plan;
       onRecorded(
         copy.recorded(
-          formatCurrency(amount, currency),
-          formatCivilDate(paidAt),
-          statementCopy.planLabel(plan.createdAt),
+          formatCurrency(saved.amount, saved.currency),
+          formatCivilDate(saved.paidAt),
+          statementCopy.planLabel(savedPlan.createdAt),
         ),
       );
     } catch (err) {

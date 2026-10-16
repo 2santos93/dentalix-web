@@ -52,6 +52,26 @@ function money(text: string | null | undefined): string {
   return (text ?? '').replace(/\s/g, ' ');
 }
 
+function savedPayment(
+  overrides: Partial<Awaited<ReturnType<typeof recordPayment>>> = {},
+): Awaited<ReturnType<typeof recordPayment>> {
+  return {
+    id: 'pay-1',
+    tenantId: 't-1',
+    treatmentPlanId: 'plan-cop',
+    patientId: 'pat-1',
+    amount: 150000,
+    currency: 'COP',
+    paidAt: '2026-10-01T00:00:00.000Z',
+    method: 'TRANSFER',
+    notes: null,
+    createdById: 'u-1',
+    createdAt: '2026-10-16T12:00:00.000Z',
+    updatedAt: '2026-10-16T12:00:00.000Z',
+    ...overrides,
+  };
+}
+
 beforeEach(() => {
   mockedRecord.mockReset();
   mockedList.mockReset();
@@ -110,7 +130,7 @@ it('propone el primer plan, su moneda y la fecha de hoy, y enseña su saldo', as
 it('registra el abono contra el plan elegido, con Idempotency-Key, y avisa', async () => {
   const user = userEvent.setup();
   mockedList.mockResolvedValue([copPlan]);
-  mockedRecord.mockResolvedValue({} as Awaited<ReturnType<typeof recordPayment>>);
+  mockedRecord.mockResolvedValue(savedPayment());
   const { onRecorded } = renderModal();
   const dialog = screen.getByRole('dialog');
   await within(dialog).findByLabelText('Plan');
@@ -216,4 +236,34 @@ it('con varias sedes dice en cuál quedará registrado el abono', async () => {
     await screen.findByText('Este abono quedará registrado en la sede Sede Norte.'),
   ).toBeInTheDocument();
   window.localStorage.clear();
+});
+
+it('el aviso dice lo que la API registró, no lo que quedó en el formulario (reintento deduplicado)', async () => {
+  // El primer envío se guardó pero la respuesta se perdió; la persona cambia
+  // plan e importe y reintenta con la MISMA clave: la API devuelve el abono
+  // original. El aviso no puede anunciar un cobro que no existe.
+  const user = userEvent.setup();
+  mockedList.mockResolvedValue([copPlan, usdPlan]);
+  mockedRecord
+    .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+    .mockResolvedValueOnce(savedPayment({ amount: 1000, method: null }));
+  const { onRecorded } = renderModal();
+  const dialog = screen.getByRole('dialog');
+  const plan = await within(dialog).findByLabelText('Plan');
+  await user.type(within(dialog).getByLabelText('Importe'), '1000');
+  await user.clear(within(dialog).getByLabelText('Fecha de pago'));
+  await user.type(within(dialog).getByLabelText('Fecha de pago'), '2026-10-01');
+  const submit = within(dialog).getByRole('button', { name: 'Registrar abono' });
+  await user.click(submit);
+  await within(dialog).findByRole('alert');
+
+  await user.selectOptions(plan, 'plan-usd');
+  await user.clear(within(dialog).getByLabelText('Importe'));
+  await user.type(within(dialog).getByLabelText('Importe'), '2000');
+  await user.click(submit);
+
+  await waitFor(() => expect(onRecorded).toHaveBeenCalledTimes(1));
+  expect(onRecorded).toHaveBeenCalledWith(
+    expect.stringMatching(/^Abono registrado: 1\.?000,00\sCOP · 01\/10\/2026 · Plan del 01\/08\/2026\.$/),
+  );
 });
