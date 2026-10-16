@@ -1,5 +1,6 @@
 import {
   civilDateInZone,
+  zoneCityLabel,
   formatCivilDate,
   formatDate,
   formatDateLabel,
@@ -121,6 +122,14 @@ describe('formatDateLabel (DX-063)', () => {
   it('valor vacío o inválido → fallback', () => {
     expect(formatDateLabel(null, { day: 'numeric' })).toBe('—');
     expect(formatDateLabel('no-es-fecha', { day: 'numeric' }, '')).toBe('');
+  });
+});
+
+describe('zoneCityLabel (DX-097)', () => {
+  it('nombre legible de la zona', () => {
+    expect(zoneCityLabel('America/Bogota')).toBe('Bogotá');
+    expect(zoneCityLabel('Europe/Madrid')).toBe('Madrid');
+    expect(zoneCityLabel('America/Mexico_City')).toBe('Mexico City');
   });
 });
 

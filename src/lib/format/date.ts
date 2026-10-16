@@ -151,6 +151,20 @@ export function zonedDayStart(day: string, timeZone: string): string | null {
   return new Date(instant).toISOString();
 }
 
+const ZONE_CITY_LABELS: Record<string, string> = {
+  'America/Bogota': 'Bogotá',
+  'Europe/Madrid': 'Madrid',
+};
+
+/**
+ * Nombre legible de una zona IANA para rótulos (DX-097): «Bogotá» para
+ * `America/Bogota`; en otras, la ciudad del id (`America/Mexico_City` →
+ * «Mexico City»).
+ */
+export function zoneCityLabel(timeZone: string): string {
+  return ZONE_CITY_LABELS[timeZone] ?? (timeZone.split('/').pop() ?? timeZone).replace(/_/g, ' ');
+}
+
 /**
  * Fecha en texto («lunes, 15 de marzo», «marzo de 2026») SIEMPRE en español,
  * sin depender del idioma del navegador, y sin lanzar con un valor inválido.

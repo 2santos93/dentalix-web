@@ -70,6 +70,7 @@ import { InlineError } from '@/components/errors/inline-error';
 import { notifyError } from '@/components/errors/notify';
 import { cn } from '@/lib/utils';
 import { formatCivilDate, formatDateTime } from '@/lib/format/date';
+import { sedeToday, useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
 import { SURFACE_LABELS, SURFACE_ORDER } from '@/lib/odontogram/surface-labels';
 
 // Copy as constants (i18n-ready, es-first) — matches odontogram-tab.tsx /
@@ -254,14 +255,6 @@ function emptySurfacesState(): Record<ToothSurface, boolean> {
   return { VESTIBULAR: false, LINGUAL: false, MESIAL: false, DISTAL: false, OCCLUSAL: false };
 }
 
-/** `YYYY-MM-DD` for today, local time — same convention as `dashboard-view.tsx`'s `todayLocalDateString`, used to default the abono form's "fecha" field. */
-function todayLocalDateString(): string {
-  const d = new Date();
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const dd = String(d.getDate()).padStart(2, '0');
-  return `${yyyy}-${mm}-${dd}`;
-}
 
 // Native <select>/<input> styled to match the Input atom (kept native for
 // a11y/tests) — same documented convention as `agenda-view.tsx` /
@@ -620,7 +613,7 @@ function PaymentsList({ payments, voidingPaymentId, onVoid, onReceipt }: Payment
               const voiding = voidingPaymentId === payment.id;
               return (
                 <TableRow key={payment.id}>
-                  <TableCell>{formatCivilDate(payment.paidAt)}</TableCell>
+                  <TableCell>{formatCivilDate(payment.paidOn)}</TableCell>
                   <TableCell className="font-medium">
                     {formatCurrency(payment.amount, payment.currency)}
                   </TableCell>
@@ -670,7 +663,7 @@ function PaymentsList({ payments, voidingPaymentId, onVoid, onReceipt }: Payment
           return (
             <li key={payment.id} className="p-4">
               <div className="flex items-center justify-between gap-2">
-                <span className="font-medium text-ink tabular-nums">{formatCivilDate(payment.paidAt)}</span>
+                <span className="font-medium text-ink tabular-nums">{formatCivilDate(payment.paidOn)}</span>
                 {payment.method ? (
                   <Badge variant={PAYMENT_METHOD_BADGE_VARIANT[payment.method]}>
                     {PAYMENT_METHOD_LABELS[payment.method]}
@@ -754,6 +747,8 @@ export function TreatmentPlansTab({
   focusedTooth: focusedToothOnPlan = null,
   odontogramHref,
 }: TreatmentPlansTabProps) {
+  // DX-097: la fecha por defecto del abono es hoy en la zona de la sede.
+  const sedeTimeZone = useSedeTimeZone(token);
   // Plans list + catalog (loaded together).
   const [plans, setPlans] = useState<TreatmentPlan[]>([]);
   const [catalogItems, setCatalogItems] = useState<DentalCatalogItem[]>([]);
@@ -1265,7 +1260,8 @@ export function TreatmentPlansTab({
     paymentIdempotencyKeyRef.current = crypto.randomUUID();
     setPaymentAmount('');
     setPaymentCurrency(planDetail?.currency ?? 'USD');
-    setPaymentDate(todayLocalDateString());
+    // DX-097: hoy en la zona de la sede, no en la del navegador.
+    setPaymentDate(sedeToday(sedeTimeZone));
     setPaymentMethod('');
     setPaymentNotes('');
     setAddPaymentValidationError(null);

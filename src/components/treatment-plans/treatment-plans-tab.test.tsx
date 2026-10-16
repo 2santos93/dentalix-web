@@ -184,6 +184,7 @@ const payment1: Payment = {
   amount: 50000,
   currency: 'USD',
   paidAt: '2026-01-05T00:00:00.000Z',
+  paidOn: '2026-01-05',
   method: 'CASH',
   notes: null,
   createdById: null,
@@ -603,6 +604,28 @@ describe('TreatmentPlansTab', () => {
     const paymentsTable = await openPaymentsTable(user);
     expect(within(paymentsTable).getByText(expectedCurrencyText(payment1.amount))).toBeInTheDocument();
     expect(within(paymentsTable).getByText('Efectivo')).toBeInTheDocument();
+  });
+
+  it('DX-097: la fecha por defecto del abono es hoy en la sede, no en el navegador (20:30 en Bogotá = 01:30Z)', async () => {
+    jest.useFakeTimers({ now: new Date('2026-10-16T01:30:00.000Z'), advanceTimers: true });
+    try {
+      mockedListPlans.mockResolvedValue([plan1]);
+      mockedGetPlan.mockResolvedValue(plan1Detail);
+      mockedGetPlanBalance.mockResolvedValue(balance1);
+      mockedListPayments.mockResolvedValue([]);
+
+      const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
+      render(<TreatmentPlansTab patientId="pat-1" token="tok" />);
+      await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+      expect(await screen.findByText('A pagar')).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: /^registrar abono$/i }));
+
+      // Sin la lista de sedes (no se simula aquí), la zona por defecto de la
+      // sede (Bogotá): el día es el 15, aunque en UTC ya sea el 16.
+      expect(screen.getByLabelText<HTMLInputElement>(/^fecha$/i).value).toBe('2026-10-15');
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it('"Registrar abono" toggles the form, defaulting moneda to the plan currency and fecha to today; submitting calls recordPayment then refreshes balance + list in place', async () => {

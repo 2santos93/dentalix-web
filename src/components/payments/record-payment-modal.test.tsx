@@ -63,6 +63,7 @@ function savedPayment(
     amount: 150000,
     currency: 'COP',
     paidAt: '2026-10-01T00:00:00.000Z',
+    paidOn: '2026-10-01',
     method: 'TRANSFER',
     notes: null,
     createdById: 'u-1',
@@ -125,6 +126,44 @@ it('propone el primer plan, su moneda y la fecha de hoy, y enseña su saldo', as
   // Cambiar de plan propone la moneda del plan nuevo.
   await userEvent.setup().selectOptions(plan, 'plan-usd');
   expect(within(dialog).getByLabelText('Moneda')).toHaveValue('USD');
+});
+
+describe('fecha por defecto en la zona de la sede (DX-097)', () => {
+  afterEach(() => jest.useRealTimers());
+
+  const sedeIn = (timeZone: string) => ({
+    id: 'loc-1',
+    name: 'Sede',
+    address: null,
+    country: 'CO' as const,
+    isActive: true,
+    timeZone,
+    createdAt: '2026-01-01T00:00:00.000Z',
+  });
+
+  it('a las 20:30 de Bogotá (01:30Z del día siguiente, navegador en UTC) propone el día de la sede', async () => {
+    jest.useFakeTimers({ now: new Date('2026-10-16T01:30:00.000Z'), advanceTimers: true });
+    mockedLocations.mockResolvedValue([sedeIn('America/Bogota')]);
+    mockedList.mockResolvedValue([copPlan]);
+    renderModal();
+    const dialog = screen.getByRole('dialog');
+    await within(dialog).findByLabelText('Plan');
+    await waitFor(() =>
+      expect((within(dialog).getByLabelText('Fecha de pago') as HTMLInputElement).value).toBe('2026-10-15'),
+    );
+  });
+
+  it('con la sede en Madrid, el mismo instante ya es el día siguiente', async () => {
+    jest.useFakeTimers({ now: new Date('2026-10-15T22:30:00.000Z'), advanceTimers: true });
+    mockedLocations.mockResolvedValue([sedeIn('Europe/Madrid')]);
+    mockedList.mockResolvedValue([copPlan]);
+    renderModal();
+    const dialog = screen.getByRole('dialog');
+    await within(dialog).findByLabelText('Plan');
+    await waitFor(() =>
+      expect((within(dialog).getByLabelText('Fecha de pago') as HTMLInputElement).value).toBe('2026-10-16'),
+    );
+  });
 });
 
 it('registra el abono contra el plan elegido, con Idempotency-Key, y avisa', async () => {

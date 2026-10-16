@@ -77,7 +77,7 @@ async function expectNightPaymentToday(page: Page, seeded: Seeded): Promise<void
 
   await expect(page.getByRole('button', { name: 'Hoy' })).toHaveAttribute('aria-pressed', 'true');
   await expect(page.getByTestId('cash-period-note')).toHaveText(
-    `${shown(seeded.day)} · días en hora de la sede (America/Bogota)`,
+    `${shown(seeded.day)} · días en hora de Bogotá`,
     { timeout: 15_000 },
   );
   const table = page.getByRole('table', { name: 'Abonos del período' });

@@ -2635,6 +2635,11 @@ export interface components {
             currency: string;
             /** Format: date-time */
             paidAt: string;
+            /**
+             * @description Día civil (YYYY-MM-DD) del pago en la zona IANA de la sede del abono (DX-097). Es el día que se muestra y el de la tasa de cambio.
+             * @example 2026-10-16
+             */
+            paidOn: string;
             /** @enum {string|null} */
             method: "CASH" | "CARD" | "TRANSFER" | "OTHER" | null;
             notes: string | null;

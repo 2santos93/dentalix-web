@@ -112,7 +112,7 @@ export function PaymentReceipt({
                 </div>
                 <div>
                   <dt className="text-xs uppercase tracking-wide text-[#6b7280]">{copy.paymentDateLabel}</dt>
-                  <dd>{formatCivilDate(payment.paidAt)}</dd>
+                  <dd>{formatCivilDate(payment.paidOn)}</dd>
                 </div>
                 <div>
                   <dt className="text-xs uppercase tracking-wide text-[#6b7280]">{copy.methodLabel}</dt>
