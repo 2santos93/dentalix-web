@@ -698,6 +698,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/appointments/openings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["AppointmentsController_openings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/appointments/{id}": {
         parameters: {
             query?: never;
@@ -824,6 +840,134 @@ export interface paths {
         options?: never;
         head?: never;
         patch: operations["AppointmentTypesController_update"];
+        trace?: never;
+    };
+    "/api/v1/schedule-blocks": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ScheduleBlocksController_list"];
+        put?: never;
+        post: operations["ScheduleBlocksController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/schedule-blocks/affected-appointments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ScheduleBlocksController_affected"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/schedule-blocks/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["ScheduleBlocksController_remove"];
+        options?: never;
+        head?: never;
+        patch: operations["ScheduleBlocksController_update"];
+        trace?: never;
+    };
+    "/api/v1/locations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["LocationsController_list"];
+        put?: never;
+        post: operations["LocationsController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/locations/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["LocationsController_update"];
+        trace?: never;
+    };
+    "/api/v1/waitlist": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["WaitlistController_list"];
+        put?: never;
+        post: operations["WaitlistController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/waitlist/{id}/dismiss": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["WaitlistController_dismiss"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/waitlist/{id}/schedule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["WaitlistController_schedule"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/appointments/{id}/confirmation-link": {
@@ -1361,38 +1505,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/locations": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["LocationsController_list"];
-        put?: never;
-        post: operations["LocationsController_create"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/locations/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch: operations["LocationsController_update"];
-        trace?: never;
-    };
     "/api/v1/platform/tenants": {
         parameters: {
             query?: never;
@@ -1672,7 +1784,7 @@ export interface components {
         /** @enum {string} */
         AuditAction: "VIEW" | "CREATE" | "UPDATE" | "DELETE" | "SIGN" | "VOID" | "LOGIN" | "LOGIN_FAILED" | "PASSWORD_RESET" | "EXPORT" | "PRINT";
         /** @enum {string} */
-        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT";
+        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY";
         /**
          * @description Rol con el que actuó (del token). `null` en un login fallido.
          * @enum {string}
@@ -2547,6 +2659,53 @@ export interface components {
             durationMinutes: number;
             color: string;
         };
+        AppointmentWriteDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            tenantId: string;
+            /**
+             * Format: uuid
+             * @description Sede donde ocurre la cita.
+             */
+            locationId: string;
+            /** Format: uuid */
+            patientId: string;
+            /** @description Patient's first name, joined so a client can label the appointment without fetching the patient list. Null when the join is unavailable. */
+            patientFirstName: string | null;
+            patientLastName: string | null;
+            /** Format: uuid */
+            providerId: string;
+            /** Format: date-time */
+            start: string;
+            /** Format: date-time */
+            end: string;
+            /** @enum {string} */
+            status: "SCHEDULED" | "CONFIRMED" | "COMPLETED" | "CANCELLED" | "NO_SHOW";
+            reason: string | null;
+            notes: string | null;
+            /** Format: uuid */
+            createdById: string | null;
+            /** Format: uuid */
+            appointmentTypeId: string | null;
+            /** @description DX-121: tipo embebido (nombre, duración, color #RRGGBB). Se mantiene aunque el tipo se desactive o retire después. */
+            appointmentType: components["schemas"]["AppointmentTypeSummaryDto"] | null;
+            /**
+             * Format: date-time
+             * @description Cuándo se generó el enlace de confirmación vigente (DX-005). null si nunca se envió o si la cita se reagendó / cambió de estado después.
+             */
+            confirmationSentAt: string | null;
+            /**
+             * Format: date-time
+             * @description El paciente pidió que lo llamen desde el enlace de confirmación (la cita sigue SCHEDULED).
+             */
+            callbackRequestedAt: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            warnings: string[];
+        };
         AppointmentDto: {
             /** Format: uuid */
             id: string;
@@ -2592,6 +2751,26 @@ export interface components {
             createdAt: string;
             /** Format: date-time */
             updatedAt: string;
+        };
+        OpeningDto: {
+            /**
+             * Format: date-time
+             * @description Inicio del hueco (múltiplo de 5 min, nunca en el pasado).
+             */
+            start: string;
+            /**
+             * Format: date-time
+             * @description Fin del hueco (cabe al menos la duración pedida).
+             */
+            end: string;
+        };
+        OpeningsDto: {
+            /** @example America/Bogota */
+            timeZone: string;
+            durationMinutes: number;
+            openings: components["schemas"]["OpeningDto"][];
+            /** @description Había más de 200 huecos: acota el rango. */
+            truncated: boolean;
         };
         UpdateAppointmentDto: {
             /** Format: date-time */
@@ -2718,6 +2897,250 @@ export interface components {
             color?: string;
             /** @description Por defecto, true */
             active?: boolean;
+        };
+        /**
+         * @description VACATION (vacaciones), MEETING (reunión o congreso), LUNCH (almuerzo), OTHER.
+         * @enum {string}
+         */
+        ScheduleBlockKind: "VACATION" | "MEETING" | "LUNCH" | "OTHER";
+        ScheduleBlockDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            tenantId: string;
+            /**
+             * Format: uuid
+             * @description Sede. null = el profesional en todas las sedes (solo con `providerId`).
+             */
+            locationId: string | null;
+            /**
+             * Format: uuid
+             * @description Profesional. null = toda la sede.
+             */
+            providerId: string | null;
+            /**
+             * Format: date-time
+             * @description Inicio (incluido).
+             */
+            start: string;
+            /**
+             * Format: date-time
+             * @description Fin (excluido).
+             */
+            end: string;
+            /** @description VACATION (vacaciones), MEETING (reunión o congreso), LUNCH (almuerzo), OTHER. */
+            kind: components["schemas"]["ScheduleBlockKind"];
+            /** @description true: se puede agendar encima y la respuesta de la cita trae un aviso; false: 409. */
+            allowsBooking: boolean;
+            note: string | null;
+            /** Format: uuid */
+            createdById: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        AffectedAppointmentDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            locationId: string;
+            /** Format: uuid */
+            providerId: string;
+            /** Format: date-time */
+            start: string;
+            /** Format: date-time */
+            end: string;
+            /** @enum {string} */
+            status: "SCHEDULED" | "CONFIRMED" | "COMPLETED" | "CANCELLED" | "NO_SHOW";
+            patientFirstName: string | null;
+            patientLastName: string | null;
+        };
+        CreateScheduleBlockDto: {
+            /**
+             * Format: uuid
+             * @description Profesional del personal de la clínica. Sin él, el bloqueo es de toda la sede (exige `locationId`). Un odontólogo solo puede indicarse a sí mismo.
+             */
+            providerId?: string;
+            /**
+             * Format: uuid
+             * @description Sede de la clínica. Con `providerId` y sin sede, el bloqueo vale en todas las sedes.
+             */
+            locationId?: string;
+            /** Format: date-time */
+            start: string;
+            /**
+             * Format: date-time
+             * @description Posterior a `start`; como mucho 366 días después.
+             */
+            end: string;
+            /** @description VACATION (vacaciones), MEETING (reunión o congreso), LUNCH (almuerzo), OTHER. */
+            kind: components["schemas"]["ScheduleBlockKind"];
+            /** @default false */
+            allowsBooking: boolean;
+            note?: string;
+            /** @description Si hay citas dentro del rango la API responde 409 (no las toca). Con true, se crea igualmente. */
+            confirmAffected?: boolean;
+        };
+        UpdateScheduleBlockDto: {
+            /** Format: date-time */
+            start?: string;
+            /** Format: date-time */
+            end?: string;
+            kind?: components["schemas"]["ScheduleBlockKind"];
+            allowsBooking?: boolean;
+            note?: string | null;
+            /** @description Igual que al crear, si el rango cambia. */
+            confirmAffected?: boolean;
+        };
+        /** @enum {string} */
+        ClinicCountry: "CO" | "ES";
+        LocationDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            address: string | null;
+            country: components["schemas"]["ClinicCountry"];
+            isActive: boolean;
+            /**
+             * @description Zona horaria IANA de la sede (la de su horario; sin horario, la de su país). Define sus días civiles: «hoy» en la caja y el dashboard (DX-097).
+             * @example America/Bogota
+             */
+            timeZone: string;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        CreateLocationDto: {
+            /** @example Sede Norte */
+            name: string;
+            /** @example Cra 15 #90-20 */
+            address?: string;
+            /** @description País de la sede: decide los campos legales obligatorios de la receta (CO o ES). Por defecto CO. */
+            country?: components["schemas"]["ClinicCountry"];
+        };
+        UpdateLocationDto: {
+            name?: string;
+            address?: string;
+            /** @description País de la sede: decide los campos legales obligatorios de la receta (CO o ES). Por defecto CO. */
+            country?: components["schemas"]["ClinicCountry"];
+            /** @description Desactivar una sede la oculta para operar; no se puede desactivar la última activa. */
+            isActive?: boolean;
+        };
+        /** @enum {string} */
+        WaitlistStatus: "OPEN" | "SCHEDULED" | "DISMISSED";
+        WaitlistSourceAppointmentDto: {
+            /** Format: date-time */
+            start: string;
+            /** Format: date-time */
+            end: string;
+            /**
+             * @description CANCELLED o NO_SHOW al crearse.
+             * @enum {string}
+             */
+            status: "SCHEDULED" | "CONFIRMED" | "COMPLETED" | "CANCELLED" | "NO_SHOW";
+        };
+        /** @enum {string} */
+        WaitlistPriority: "NORMAL" | "URGENT";
+        WaitlistEntryDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            tenantId: string;
+            /** Format: uuid */
+            locationId: string;
+            /** Format: uuid */
+            patientId: string;
+            patientFirstName: string;
+            patientLastName: string;
+            /** @description Para llamarlo sin abrir la ficha. */
+            patientPhone: string | null;
+            /**
+             * Format: uuid
+             * @description Cita cancelada o no-show que la originó; null en un alta manual.
+             */
+            sourceAppointmentId: string | null;
+            sourceAppointment: components["schemas"]["WaitlistSourceAppointmentDto"] | null;
+            /** Format: uuid */
+            providerId: string | null;
+            /** Format: uuid */
+            appointmentTypeId: string | null;
+            appointmentType: components["schemas"]["AppointmentTypeSummaryDto"] | null;
+            /** @description Duración de la cita a buscar. */
+            durationMinutes: number;
+            priority: components["schemas"]["WaitlistPriority"];
+            preferredWindow: string | null;
+            note: string | null;
+            status: components["schemas"]["WaitlistStatus"];
+            /** Format: uuid */
+            resolvedAppointmentId: string | null;
+            dismissReason: string | null;
+            /** Format: uuid */
+            createdById: string | null;
+            /** Format: uuid */
+            resolvedById: string | null;
+            /** Format: date-time */
+            resolvedAt: string | null;
+            /**
+             * Format: date-time
+             * @description Antigüedad en la lista.
+             */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        WaitlistPageDto: {
+            items: components["schemas"]["WaitlistEntryDto"][];
+            total: number;
+            page: number;
+            pageSize: number;
+        };
+        CreateWaitlistEntryDto: {
+            /** Format: uuid */
+            patientId: string;
+            /**
+             * Format: uuid
+             * @description Si falta, la sede del request o la sede por defecto.
+             */
+            locationId?: string;
+            /**
+             * Format: uuid
+             * @description Profesional preferido.
+             */
+            providerId?: string;
+            /**
+             * Format: uuid
+             * @description Tipo de cita activo: fija la duración si no viene.
+             */
+            appointmentTypeId?: string;
+            /** @default 30 */
+            durationMinutes: number;
+            /** @default NORMAL */
+            priority: components["schemas"]["WaitlistPriority"];
+            /** @example Mañanas, antes de las 11 */
+            preferredWindow?: string;
+            note?: string;
+        };
+        DismissWaitlistEntryDto: {
+            /** @example Prefiere otra clínica */
+            reason: string;
+        };
+        ScheduleFromWaitlistDto: {
+            /** Format: uuid */
+            providerId: string;
+            /** Format: date-time */
+            start: string;
+            /**
+             * Format: date-time
+             * @description Si falta, `start` + la duración de la entrada.
+             */
+            end?: string;
+            /**
+             * Format: uuid
+             * @description Si falta, el tipo de la entrada si sigue activo.
+             */
+            appointmentTypeId?: string;
+            reason?: string;
+            notes?: string;
         };
         PublicConfirmationAppointmentDto: {
             /** @description Solo el nombre de pila. */
@@ -3835,39 +4258,6 @@ export interface components {
              */
             quantity: number;
             reason?: string;
-        };
-        /** @enum {string} */
-        ClinicCountry: "CO" | "ES";
-        LocationDto: {
-            /** Format: uuid */
-            id: string;
-            name: string;
-            address: string | null;
-            country: components["schemas"]["ClinicCountry"];
-            isActive: boolean;
-            /**
-             * @description Zona horaria IANA de la sede (la de su horario; sin horario, la de su país). Define sus días civiles: «hoy» en la caja y el dashboard (DX-097).
-             * @example America/Bogota
-             */
-            timeZone: string;
-            /** Format: date-time */
-            createdAt: string;
-        };
-        CreateLocationDto: {
-            /** @example Sede Norte */
-            name: string;
-            /** @example Cra 15 #90-20 */
-            address?: string;
-            /** @description País de la sede: decide los campos legales obligatorios de la receta (CO o ES). Por defecto CO. */
-            country?: components["schemas"]["ClinicCountry"];
-        };
-        UpdateLocationDto: {
-            name?: string;
-            address?: string;
-            /** @description País de la sede: decide los campos legales obligatorios de la receta (CO o ES). Por defecto CO. */
-            country?: components["schemas"]["ClinicCountry"];
-            /** @description Desactivar una sede la oculta para operar; no se puede desactivar la última activa. */
-            isActive?: boolean;
         };
         PlatformTenantDto: {
             /** Format: uuid */
@@ -6061,12 +6451,13 @@ export interface operations {
             };
         };
         responses: {
+            /** @description La cita y `warnings` (DX-122: avisos que no impiden agendar, p. ej. un bloqueo de almuerzo que lo permite). */
             201: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AppointmentDto"];
+                    "application/json": components["schemas"]["AppointmentWriteDto"];
                 };
             };
             /** @description Datos inválidos, cita en el pasado, sin hora de fin ni tipo, o tipo desactivado/ajeno */
@@ -6076,7 +6467,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Solape con otra cita */
+            /** @description Solape con otra cita, o el horario está bloqueado para ese profesional o la sede (DX-122) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -6085,6 +6476,51 @@ export interface operations {
             };
             /** @description Fuera del horario de atención de la sede */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AppointmentsController_openings: {
+        parameters: {
+            query: {
+                providerId: string;
+                /** @description Sede: su horario, su zona horaria y sus bloqueos. */
+                locationId: string;
+                /** @description Primer día (zona de la sede), incluido. */
+                from: string;
+                /** @description Último día, incluido. Como mucho 31 días desde `from`. */
+                to: string;
+                durationMinutes: number;
+                /** @description Paciente: sus otras citas también ocupan. */
+                patientId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description DX-122 «Buscar hueco»: huecos del profesional dentro del horario de la sede (su zona horaria), fuera de bloqueos y sin solape con sus citas (ni con las del paciente, si se indica). Nunca en el pasado. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpeningsDto"];
+                };
+            };
+            /** @description Fechas inválidas, al revés o más de 31 días; duración fuera de 5–480 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sede, profesional o paciente de otra clínica */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -6133,7 +6569,7 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AppointmentDto"];
+                    "application/json": components["schemas"]["AppointmentWriteDto"];
                 };
             };
             /** @description Datos inválidos o al pasado */
@@ -6157,7 +6593,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Solape con otra cita del profesional o del paciente (también si otro movimiento ganó la carrera) */
+            /** @description Solape con otra cita del profesional o del paciente (también si otro movimiento ganó la carrera), o el nuevo horario está bloqueado (DX-122) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -6491,6 +6927,460 @@ export interface operations {
             };
             /** @description Ya existe un tipo con ese nombre */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ScheduleBlocksController_list: {
+        parameters: {
+            query: {
+                from: string;
+                /** @description Como mucho 92 días después de `from`. */
+                to: string;
+                /** @description Sede. Si falta, la del request (X-Location-Id) o todas. */
+                locationId?: string;
+                providerIds?: string[];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduleBlockDto"][];
+                };
+            };
+            /** @description Rango vacío o de más de 92 días, o profesional ajeno */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sede de otra clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ScheduleBlocksController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateScheduleBlockDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduleBlockDto"];
+                };
+            };
+            /** @description Sin sede ni profesional, fin no posterior al inicio, más de 366 días o nota inválida */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Asistente, o un odontólogo que bloquea otra agenda o la sede */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sede o profesional de otra clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Hay citas dentro del rango y no vino `confirmAffected: true` (no se tocan) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ScheduleBlocksController_affected: {
+        parameters: {
+            query: {
+                start: string;
+                end: string;
+                providerId?: string;
+                locationId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Citas vivas (programadas o confirmadas) que quedarían dentro de un bloqueo con ese alcance y rango. No se tocan. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AffectedAppointmentDto"][];
+                };
+            };
+            /** @description Sin sede ni profesional, o rango inválido */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sede o profesional de otra clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ScheduleBlocksController_remove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Retirado (borrado lógico). */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Asistente, o un odontólogo con un bloqueo ajeno */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bloqueo no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ScheduleBlocksController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateScheduleBlockDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ScheduleBlockDto"];
+                };
+            };
+            /** @description Rango o nota inválidos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Asistente, o un odontólogo con un bloqueo ajeno */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Bloqueo no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El nuevo rango cubre citas y no vino `confirmAffected` */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    LocationsController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocationDto"][];
+                };
+            };
+        };
+    };
+    LocationsController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateLocationDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocationDto"];
+                };
+            };
+        };
+    };
+    LocationsController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateLocationDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocationDto"];
+                };
+            };
+        };
+    };
+    WaitlistController_list: {
+        parameters: {
+            query?: {
+                status?: components["schemas"]["WaitlistStatus"];
+                /** @description Sede. Si falta, la del request (X-Location-Id) o todas. */
+                locationId?: string;
+                page?: number;
+                pageSize?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Urgentes primero y, dentro, la más antigua primero. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WaitlistPageDto"];
+                };
+            };
+            /** @description Sede de otra clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    WaitlistController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateWaitlistEntryDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WaitlistEntryDto"];
+                };
+            };
+            /** @description Texto vacío o largo, duración inválida o tipo desactivado */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente, sede o profesional de otra clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    WaitlistController_dismiss: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DismissWaitlistEntryDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WaitlistEntryDto"];
+                };
+            };
+            /** @description Sin motivo o de más de 200 caracteres */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Entrada no encontrada en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ya no está abierta (agendada o descartada) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    WaitlistController_schedule: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ScheduleFromWaitlistDto"];
+            };
+        };
+        responses: {
+            /** @description La cita creada (en la sede de la entrada). La entrada pasa a SCHEDULED en la misma transacción. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AppointmentWriteDto"];
+                };
+            };
+            /** @description Datos inválidos o cita en el pasado */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Entrada o profesional no encontrados en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La entrada ya no está abierta, el horario está bloqueado o se solapa con otra cita */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Fuera del horario de la sede de la entrada */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -7901,73 +8791,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["InventoryMovementDto"];
-                };
-            };
-        };
-    };
-    LocationsController_list: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LocationDto"][];
-                };
-            };
-        };
-    };
-    LocationsController_create: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreateLocationDto"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LocationDto"];
-                };
-            };
-        };
-    };
-    LocationsController_update: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpdateLocationDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LocationDto"];
                 };
             };
         };
