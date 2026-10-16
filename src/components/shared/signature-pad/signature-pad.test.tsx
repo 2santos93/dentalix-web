@@ -17,6 +17,21 @@ const ctx = {
   strokeStyle: '',
 };
 
+// jsdom no trae PointerEvent: sin él, `pointerId` se pierde y no se pueden
+// distinguir dos dedos. Basta con un MouseEvent que lo conserve.
+if (typeof window.PointerEvent === 'undefined') {
+  class PointerEventPolyfill extends MouseEvent {
+    pointerId: number;
+    pointerType: string;
+    constructor(type: string, init: PointerEventInit = {}) {
+      super(type, init);
+      this.pointerId = init.pointerId ?? 0;
+      this.pointerType = init.pointerType ?? '';
+    }
+  }
+  window.PointerEvent = PointerEventPolyfill as unknown as typeof PointerEvent;
+}
+
 beforeAll(() => {
   jest
     .spyOn(HTMLCanvasElement.prototype, 'getContext')
@@ -112,6 +127,25 @@ describe('SignaturePad', () => {
       [30, 30],
     ]);
     expect(onChange).not.toHaveBeenCalled();
+  });
+
+  it('un segundo dedo (o la palma) no se mezcla con el trazo en curso', () => {
+    const onChange = jest.fn();
+    render(<SignaturePad label="Firma" onChange={onChange} />);
+    const canvas = screen.getByRole('img', { name: 'Firma' });
+    fireEvent.pointerDown(canvas, { clientX: 10, clientY: 10, pointerId: 1, pointerType: 'touch' });
+    // La palma apoya mientras el dedo firma: ni abre trazo ni lo cierra.
+    fireEvent.pointerDown(canvas, { clientX: 200, clientY: 150, pointerId: 2, pointerType: 'touch' });
+    fireEvent.pointerMove(canvas, { clientX: 210, clientY: 150, pointerId: 2, pointerType: 'touch' });
+    fireEvent.pointerUp(canvas, { pointerId: 2, pointerType: 'touch' });
+    expect(onChange).not.toHaveBeenCalled();
+
+    ctx.beginPath.mockClear();
+    fireEvent.pointerMove(canvas, { clientX: 40, clientY: 30, pointerId: 1, pointerType: 'touch' });
+    // El repintado tiene UN solo trazo: la palma no abrió otro.
+    expect(ctx.beginPath).toHaveBeenCalledTimes(1);
+    fireEvent.pointerUp(canvas, { pointerId: 1, pointerType: 'touch' });
+    expect(onChange).toHaveBeenCalledTimes(1);
   });
 
   it('el lienzo no deja que el gesto desplace la página', () => {

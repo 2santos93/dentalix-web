@@ -73,7 +73,8 @@ export function SignaturePad({
   const wrapRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const strokes = useRef<Point[][]>([]);
-  const drawing = useRef(false);
+  /** Puntero que está firmando; otro dedo o la palma se ignoran mientras tanto. */
+  const activePointer = useRef<number | null>(null);
   const [isEmpty, setIsEmpty] = useState(true);
 
   const context = useCallback((): CanvasRenderingContext2D | null => {
@@ -87,8 +88,12 @@ export function SignaturePad({
     if (!canvas || !ctx) return;
     const width = canvas.clientWidth || canvas.width;
     const ratio = Math.min(window.devicePixelRatio || 1, MAX_PIXEL_RATIO);
-    canvas.width = Math.round(width * ratio);
-    canvas.height = Math.round(height * ratio);
+    const pixelWidth = Math.round(width * ratio);
+    const pixelHeight = Math.round(height * ratio);
+    // Reasignar el tamaño realoca el lienzo: solo si cambió (no en cada
+    // movimiento del dedo, que en una tablet modesta se nota).
+    if (canvas.width !== pixelWidth) canvas.width = pixelWidth;
+    if (canvas.height !== pixelHeight) canvas.height = pixelHeight;
     ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
     ctx.clearRect(0, 0, width, height);
     ctx.lineWidth = LINE_WIDTH;
@@ -131,22 +136,23 @@ export function SignaturePad({
   function handlePointerDown(event: React.PointerEvent<HTMLCanvasElement>) {
     if (disabled) return;
     event.preventDefault();
+    if (activePointer.current !== null) return;
     event.currentTarget.setPointerCapture?.(event.pointerId);
-    drawing.current = true;
+    activePointer.current = event.pointerId;
     strokes.current.push([pointFrom(event)]);
     redraw();
   }
 
   function handlePointerMove(event: React.PointerEvent<HTMLCanvasElement>) {
-    if (!drawing.current || disabled) return;
+    if (activePointer.current !== event.pointerId || disabled) return;
     event.preventDefault();
     strokes.current[strokes.current.length - 1].push(pointFrom(event));
     redraw();
   }
 
   function finishStroke(event: React.PointerEvent<HTMLCanvasElement>) {
-    if (!drawing.current) return;
-    drawing.current = false;
+    if (activePointer.current !== event.pointerId) return;
+    activePointer.current = null;
     event.currentTarget.releasePointerCapture?.(event.pointerId);
     setIsEmpty(false);
     onChange(canvasRef.current?.toDataURL('image/png') ?? null);
@@ -154,7 +160,7 @@ export function SignaturePad({
 
   function handleClear() {
     strokes.current = [];
-    drawing.current = false;
+    activePointer.current = null;
     redraw();
     setIsEmpty(true);
     onChange(null);
