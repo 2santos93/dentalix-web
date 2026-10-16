@@ -4,6 +4,7 @@ import { CashRegisterView } from './cash-register-view';
 import { ApiError } from '@/lib/api/client';
 import {
   listCashPayments,
+  voidPayment,
   type CashPayment,
   type CashPaymentsResponse,
 } from '@/lib/payments/payments-api';
@@ -11,12 +12,16 @@ import { presetRange } from '@/lib/payments/cash-period';
 
 jest.mock('../../lib/payments/payments-api', () => ({
   listCashPayments: jest.fn(),
+  voidPayment: jest.fn(),
 }));
 
 const mockedList = listCashPayments as jest.MockedFunction<typeof listCashPayments>;
+const mockedVoid = voidPayment as jest.MockedFunction<typeof voidPayment>;
 
 const anaCash: CashPayment = {
   id: 'pay-1',
+  createdById: 'u-recep',
+  canVoid: true,
   paidAt: '2026-10-15T00:00:00.000Z',
   amount: 150000.5,
   currency: 'COP',
@@ -24,17 +29,27 @@ const anaCash: CashPayment = {
   notes: null,
   location: { id: 'loc-1', name: 'Sede principal' },
   patient: { id: 'pat-1', fullName: 'Ana Gómez' },
-  treatmentPlan: { id: 'plan-1', status: 'ACCEPTED', createdAt: '2026-09-01T15:00:00.000Z' },
+  treatmentPlan: {
+    id: 'plan-1',
+    status: 'ACCEPTED',
+    createdAt: '2026-09-01T15:00:00.000Z',
+  },
 };
 const betoCard: CashPayment = {
   ...anaCash,
   id: 'pay-2',
+  createdById: 'u-admin',
+  canVoid: false,
   amount: 50.25,
   currency: 'USD',
   method: 'CARD',
   location: { id: 'loc-2', name: 'Sede Norte' },
   patient: { id: 'pat-2', fullName: 'Beto Ruiz' },
-  treatmentPlan: { id: 'plan-2', status: 'DRAFT', createdAt: '2026-10-02T15:00:00.000Z' },
+  treatmentPlan: {
+    id: 'plan-2',
+    status: 'DRAFT',
+    createdAt: '2026-10-02T15:00:00.000Z',
+  },
 };
 
 function response(overrides: Partial<CashPaymentsResponse> = {}): CashPaymentsResponse {
@@ -69,6 +84,7 @@ function money(text: string | null | undefined): string {
 
 beforeEach(() => {
   mockedList.mockReset();
+  mockedVoid.mockReset();
 });
 
 it('pide el día de hoy al entrar y pinta cada abono con paciente, plan, método, sede y monto', async () => {
@@ -76,7 +92,10 @@ it('pide el día de hoy al entrar y pinta cada abono con paciente, plan, método
   render(<CashRegisterView token="tok" />);
 
   const table = await screen.findByRole('table', { name: /abonos/i });
-  expect(mockedList).toHaveBeenCalledWith('tok', { ...presetRange('today'), page: 1 });
+  expect(mockedList).toHaveBeenCalledWith('tok', {
+    ...presetRange('today'),
+    page: 1,
+  });
 
   const row = within(table).getByRole('row', { name: /ana gómez/i });
   expect(within(row).getByRole('link', { name: 'Ana Gómez' })).toHaveAttribute(
@@ -95,7 +114,9 @@ it('resume el período por moneda y por método en un registro, no en tarjetas',
   mockedList.mockResolvedValue(response());
   render(<CashRegisterView token="tok" />);
 
-  const summary = await screen.findByRole('region', { name: /resumen del período/i });
+  const summary = await screen.findByRole('region', {
+    name: /resumen del período/i,
+  });
   const byCurrency = within(summary).getByRole('list', { name: /por moneda/i });
   const cop = within(byCurrency).getByText('COP').closest('li');
   expect(money(cop?.textContent)).toMatch(/150\.000,50/);
@@ -122,7 +143,11 @@ it('marca el alcance de sede: "Todas las sedes" sin sede activa, el nombre con u
 
 it('muestra el estado vacío cuando el período no tiene abonos', async () => {
   mockedList.mockResolvedValue(
-    response({ items: [], total: 0, summary: { count: 0, byCurrency: [], byMethod: [] } }),
+    response({
+      items: [],
+      total: 0,
+      summary: { count: 0, byCurrency: [], byMethod: [] },
+    }),
   );
   render(<CashRegisterView token="tok" />);
 
@@ -184,7 +209,8 @@ it('la tabla lleva caption y cabeceras de columna', async () => {
   const table = await screen.findByRole('table', { name: /abonos/i });
   expect(table.querySelector('caption')).toHaveTextContent(/abonos del período/i);
   const headers = within(table).getAllByRole('columnheader');
-  expect(headers).toHaveLength(6);
+  // 6 columnas de datos + «Acciones» (solo existe si alguna fila es anulable).
+  expect(headers).toHaveLength(7);
   headers.forEach((th) => expect(th).toHaveAttribute('scope', 'col'));
 });
 
@@ -196,7 +222,10 @@ it('cambiar de período o de método vuelve a pedir la caja con el filtro nuevo,
 
   await user.click(screen.getByRole('button', { name: 'Esta semana' }));
   await waitFor(() =>
-    expect(mockedList).toHaveBeenLastCalledWith('tok', { ...presetRange('week'), page: 1 }),
+    expect(mockedList).toHaveBeenLastCalledWith('tok', {
+      ...presetRange('week'),
+      page: 1,
+    }),
   );
   expect(screen.getByRole('button', { name: 'Esta semana' })).toHaveAttribute(
     'aria-pressed',
@@ -285,6 +314,81 @@ it('pagina: "Siguiente" pide la página 2 con los mismos filtros', async () => {
   await user.click(screen.getByRole('button', { name: /siguiente/i }));
 
   await waitFor(() =>
-    expect(mockedList).toHaveBeenLastCalledWith('tok', { ...presetRange('today'), page: 2 }),
+    expect(mockedList).toHaveBeenLastCalledWith('tok', {
+      ...presetRange('today'),
+      page: 2,
+    }),
   );
+});
+
+describe('anular desde la caja (DX-057)', () => {
+  const REASON = 'Cobro registrado dos veces';
+
+  it('enseña «Anular» solo en las filas que el servidor marca canVoid', async () => {
+    mockedList.mockResolvedValue(response());
+    render(<CashRegisterView token="tok" />);
+    const table = await screen.findByRole('table', { name: /abonos/i });
+
+    const ana = within(table).getByRole('row', { name: /ana gómez/i });
+    expect(
+      within(ana).getByRole('button', { name: /anular abono de ana gómez/i }),
+    ).toBeInTheDocument();
+    const beto = within(table).getByRole('row', { name: /beto ruiz/i });
+    expect(within(beto).queryByRole('button', { name: /anular/i })).not.toBeInTheDocument();
+  });
+
+  it('anula con motivo, cierra el modal, avisa y recarga la caja', async () => {
+    const user = userEvent.setup();
+    mockedList
+      .mockResolvedValueOnce(response())
+      .mockResolvedValueOnce(response({ items: [betoCard], total: 1 }));
+    mockedVoid.mockResolvedValue(undefined);
+    render(<CashRegisterView token="tok" />);
+
+    await user.click(await screen.findByRole('button', { name: /anular abono de ana gómez/i }));
+    const dialog = await screen.findByRole('dialog', {
+      name: /anular este abono/i,
+    });
+    // Dice QUÉ abono se anula: monto, fecha y paciente.
+    expect(money(dialog.textContent)).toMatch(/150\.000,50 COP · 15\/10\/2026 · Ana Gómez/);
+
+    await user.click(within(dialog).getByLabelText(/motivo/i));
+    await user.paste(REASON);
+    await user.click(within(dialog).getByRole('button', { name: /anular abono/i }));
+
+    await waitFor(() => expect(mockedVoid).toHaveBeenCalledWith('tok', 'pay-1', REASON));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(await screen.findByText(/abono anulado/i)).toBeInTheDocument();
+    await waitFor(() => expect(mockedList).toHaveBeenCalledTimes(2));
+    const table = await screen.findByRole('table', { name: /abonos/i });
+    await waitFor(() =>
+      expect(within(table).queryByRole('row', { name: /ana gómez/i })).not.toBeInTheDocument(),
+    );
+  });
+
+  it('un 403 o un 404 se explican en español dentro del modal, nunca en inglés', async () => {
+    const user = userEvent.setup();
+    mockedList.mockResolvedValue(response());
+    mockedVoid.mockRejectedValueOnce(new ApiError(403, 'Insufficient role'));
+    mockedVoid.mockRejectedValueOnce(new ApiError(404, 'Payment not found'));
+    render(<CashRegisterView token="tok" />);
+
+    await user.click(await screen.findByRole('button', { name: /anular abono de ana gómez/i }));
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByLabelText(/motivo/i));
+    await user.paste(REASON);
+    const submit = within(dialog).getByRole('button', {
+      name: /anular abono/i,
+    });
+
+    await user.click(submit);
+    expect(await within(dialog).findByText(/no puedes anular este abono/i)).toBeInTheDocument();
+    expect(dialog).not.toHaveTextContent(/insufficient role/i);
+
+    await user.click(submit);
+    expect(
+      await within(dialog).findByText(/ya estaba anulado o ya no existe/i),
+    ).toBeInTheDocument();
+    expect(dialog).not.toHaveTextContent(/payment not found/i);
+  });
 });

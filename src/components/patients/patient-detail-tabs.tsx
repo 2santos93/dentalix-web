@@ -16,9 +16,14 @@ interface PatientDetailTabsProps {
   onTabChange: (tab: PatientDetailTabKey) => void;
   tablistLabel: string;
   dataLabel: string;
-  clinicalHistoryLabel: string;
-  odontogramLabel: string;
-  treatmentPlansLabel: string;
+  /**
+   * «Historia clínica», «Odontograma» y «Plan de tratamiento»: dato CLÍNICO
+   * (CLINICAL_ROLES en la API). Sin etiqueta la pestaña no existe: la página no
+   * las pasa a recepción, que recibiría un 403 (DX-057).
+   */
+  clinicalHistoryLabel?: string;
+  odontogramLabel?: string;
+  treatmentPlansLabel?: string;
   /**
    * Etiqueta de la pestaña «Estado de cuenta». Sin ella la pestaña no existe:
    * es un dato financiero (PAYMENT_ROLES en la API), así que la página solo la
