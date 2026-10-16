@@ -2755,7 +2755,7 @@ export interface components {
              * @example 3000000
              */
             budgeted: number;
-            /** @description `false` si el plan está CANCELLED: no suma al saldo. */
+            /** @description `false` si el plan está CANCELLED o REJECTED: no suma al saldo. */
             countsTowardsBalance: boolean;
             /**
              * @description Abonos vivos en la moneda del plan
@@ -2851,7 +2851,7 @@ export interface components {
             /** Format: uuid */
             id: string;
             /**
-             * @description Nunca CANCELLED: un plan cancelado no se cobra.
+             * @description Nunca CANCELLED ni REJECTED: un plan cancelado o rechazado no se cobra.
              * @enum {string}
              */
             status: "DRAFT" | "ACCEPTED" | "COMPLETED" | "CANCELLED";

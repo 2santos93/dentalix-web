@@ -126,6 +126,9 @@ export function PlanOptionsPanel({
           token={token}
           options={group}
           currentPlanId={plan.id}
+          // Añadir o quitar ítems cambia el total de la opción abierta sin
+          // tocar la lista de planes: también recarga la comparación.
+          currentPlanKey={`${plan.total ?? 0}:${plan.items?.length ?? 0}`}
           onSelect={onSelectPlan}
         />
       ) : null}
@@ -151,7 +154,7 @@ export function PlanOptionsPanel({
           onOpenChange={setCreating}
           token={token}
           planId={plan.id}
-          suggestedLabel={nextOptionLabel(group.length)}
+          suggestedLabel={nextOptionLabel(plan, group)}
           onCreated={(created) => {
             setCreating(false);
             void onChanged().then(() => onSelectPlan(created.id));

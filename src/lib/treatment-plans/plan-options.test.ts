@@ -158,9 +158,12 @@ describe('mensaje de WhatsApp', () => {
 });
 
 describe('nextOptionLabel', () => {
-  it('la letra siguiente; un plan suelto deja la B', () => {
-    expect(nextOptionLabel(0)).toBe('Opción B');
-    expect(nextOptionLabel(2)).toBe('Opción C');
-    expect(nextOptionLabel(26)).toBe('Opción 27');
+  it('un plan suelto deja la B; en un grupo, la letra siguiente sin repetir', () => {
+    expect(nextOptionLabel(plan({ id: 'a' }), [])).toBe('Opción B');
+    const a = plan({ id: 'a', optionGroupId: 'a', optionLabel: 'Opción A' });
+    const c = plan({ id: 'c', optionGroupId: 'a', optionLabel: 'Opción C' });
+    expect(nextOptionLabel(a, [a, c])).toBe('Opción D');
+    const named = plan({ id: 'x', optionLabel: 'Implante' });
+    expect(nextOptionLabel(named, [])).toBe('Opción B');
   });
 });

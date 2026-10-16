@@ -29,6 +29,8 @@ interface PlanOptionsComparisonProps {
   /** Las opciones del grupo (de `listPlans`, sin ítems), ya ordenadas. */
   options: TreatmentPlan[];
   currentPlanId: string;
+  /** Cambia cuando cambian los ítems de la opción abierta (total y número). */
+  currentPlanKey?: string;
   onSelect: (planId: string) => void;
 }
 
@@ -42,6 +44,7 @@ export function PlanOptionsComparison({
   token,
   options,
   currentPlanId,
+  currentPlanKey = '',
   onSelect,
 }: PlanOptionsComparisonProps) {
   const headingId = useId();
@@ -49,8 +52,8 @@ export function PlanOptionsComparison({
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   // Clave del contenido del grupo: cambia si cambia una opción (estado,
-  // etiqueta) y entonces se recargan los totales.
-  const groupKey = options.map((o) => `${o.id}:${o.status}:${o.updatedAt}`).join('|');
+  // etiqueta) o los ítems de la abierta, y entonces se recargan los totales.
+  const groupKey = `${options.map((o) => `${o.id}:${o.status}:${o.updatedAt}`).join('|')}#${currentPlanKey}`;
 
   useEffect(() => {
     let cancelled = false;

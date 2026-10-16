@@ -84,6 +84,16 @@ describe('PlanOptionsComparison (DX-040)', () => {
     expect(onSelect).toHaveBeenCalledWith('b');
   });
 
+  it('se recarga cuando cambian los ítems de la opción abierta', async () => {
+    details();
+    const props = { token: 'tok', options: [optionA, optionB], currentPlanId: 'a', onSelect: jest.fn() };
+    const { rerender } = render(<PlanOptionsComparison {...props} currentPlanKey="5300000:2" />);
+    await screen.findByRole('listitem', { name: 'Opción A: implante' });
+    expect(mockedGetPlan).toHaveBeenCalledTimes(2);
+    rerender(<PlanOptionsComparison {...props} currentPlanKey="5450000:3" />);
+    await waitFor(() => expect(mockedGetPlan).toHaveBeenCalledTimes(4));
+  });
+
   it('una sola moneda: sin aviso', async () => {
     mockedGetPlan.mockImplementation((_t, id) =>
       Promise.resolve({ ...(id === 'a' ? optionA : { ...optionB, currency: 'COP' }), total: 1, items: [] }),

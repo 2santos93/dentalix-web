@@ -143,11 +143,25 @@ export function followUpWhatsAppHref(
 
 const LETTERS = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
 
-/**
- * Cómo llamará la API a la alternativa nueva si no se escribe nombre: la letra
- * siguiente del grupo (un plan suelto pasa a «Opción A», la nueva es la «B»).
- */
-export function nextOptionLabel(groupSize: number): string {
-  const index = Math.max(groupSize, 1);
+function letterLabel(index: number): string {
   return index < LETTERS.length ? `Opción ${LETTERS[index]}` : `Opción ${index + 1}`;
+}
+
+/**
+ * Cómo llamará la API a la alternativa nueva si no se escribe nombre (espejo
+ * de `nextOptionLabel` del dominio): la letra siguiente a la mayor «Opción X»
+ * del grupo, sin repetir; si nadie lleva letra, la que toca por número de
+ * opciones. Un plan suelto sin etiqueta pasa a «Opción A» y la nueva es la B.
+ */
+export function nextOptionLabel(plan: TreatmentPlan, group: readonly TreatmentPlan[]): string {
+  const members = group.length > 0 ? group : [plan];
+  const labels = members.map((p) => (p.id === plan.id ? (p.optionLabel ?? letterLabel(0)) : p.optionLabel));
+  const used = new Set(labels.filter((l): l is string => l !== null).map((l) => l.trim()));
+  const lettered = labels
+    .map((l) => /^Opción ([A-Z])\b/.exec(l?.trim() ?? '')?.[1])
+    .filter((letter): letter is string => letter !== undefined)
+    .map((letter) => LETTERS.indexOf(letter));
+  let index = lettered.length > 0 ? Math.max(...lettered) + 1 : labels.length;
+  while (used.has(letterLabel(index))) index++;
+  return letterLabel(index);
 }

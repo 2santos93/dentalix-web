@@ -29,7 +29,6 @@ const RECEPTION_EMAIL = process.env.E2E_DEMO_RECEPTION_EMAIL ?? 'recepcion@demo.
 const DEMO_OPTIONS_PATIENT = 'Carolina Duque Henao';
 
 const IMPLANT = 3_500_000;
-const BRIDGE = 1_150_000;
 
 const rawSuffix = process.env.E2E_RUN_SUFFIX ?? randomUUID();
 const suffix = rawSuffix
