@@ -341,7 +341,9 @@ export function StaffMemberProfile({ token, userId }: StaffMemberProfileProps) {
               </form>
             </Card>
 
-            {canBlock && member.status === 'ACTIVE' ? (
+            {canBlock &&
+            member.status === 'ACTIVE' &&
+            (member.role === 'DENTIST' || member.role === 'ADMIN') ? (
               <Card className="flex flex-col gap-3 p-5">
                 <h3 className="text-base font-semibold text-ink">{copy.agendaTitle}</h3>
                 <p className="text-sm text-muted">{copy.agendaHint}</p>

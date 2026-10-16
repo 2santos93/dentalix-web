@@ -91,6 +91,8 @@ interface DayColumnsProps {
   activeLocationId?: string | null;
   /** DX-122: abrir un bloqueo (para quitarlo); sin ella la etiqueta no es un botón. */
   onSelectBlock?: (block: ScheduleBlockLike) => void;
+  /** Qué bloqueos puede quitar quien mira (el odontólogo, solo los suyos). */
+  canSelectBlock?: (block: ScheduleBlockLike) => boolean;
 }
 
 interface DragState {
@@ -138,6 +140,7 @@ export function DayColumns({
   blocks = [],
   activeLocationId = null,
   onSelectBlock,
+  canSelectBlock = () => true,
 }: DayColumnsProps) {
   const [activeProviderId, setActiveProviderId] = useState<string | null>(null);
   const [drag, setDrag] = useState<DragState | null>(null);
@@ -427,7 +430,7 @@ export function DayColumns({
                           height: (band.end - band.start) * PX_PER_MINUTE,
                         }}
                       >
-                        {onSelectBlock ? (
+                        {onSelectBlock && canSelectBlock(block) ? (
                           <button
                             type="button"
                             aria-label={copy.blockRemove(label)}

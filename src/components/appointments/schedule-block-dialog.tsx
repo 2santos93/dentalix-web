@@ -5,7 +5,7 @@ import { apiErrorMessage } from '@/lib/api/error-message';
 import {
   createScheduleBlock,
   listAffectedAppointments,
-  type AffectedAppointment,
+  type AffectedAppointmentsPage,
   type ScheduleBlock,
 } from '@/lib/appointments/schedule-blocks-api';
 import {
@@ -19,6 +19,7 @@ import { formatTimeRange } from '@/components/appointments/appointment-display';
 import { FormModal } from '@/components/shared/form-modal';
 import { FormField } from '@/components/shared/form-field';
 import { Input } from '@/components/ui/input';
+import { Button } from '@/components/ui/button';
 import { formatDateLabel } from '@/lib/format/date';
 
 // Copy as constants (i18n-ready, es-first).
@@ -51,6 +52,8 @@ const copy = {
       ? 'Esta cita queda dentro del bloqueo. No se borra ni se mueve: avisa al paciente o muévela.'
       : `Estas ${n} citas quedan dentro del bloqueo. No se borran ni se mueven: avisa a los pacientes o muévelas.`,
   affectedList: 'Citas dentro del bloqueo',
+  affectedMore: (n: number) => (n === 1 ? 'y 1 cita más.' : `y ${n} citas más.`),
+  back: 'Volver y cambiar el bloqueo',
   genericError: 'No pudimos crear el bloqueo. Intenta de nuevo.',
 };
 
@@ -70,7 +73,7 @@ function nextDay(date: string): string {
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-function patientName(a: AffectedAppointment): string {
+function patientName(a: AffectedAppointmentsPage['items'][number]): string {
   return [a.patientFirstName, a.patientLastName].filter(Boolean).join(' ') || 'Paciente';
 }
 
@@ -78,6 +81,7 @@ interface ScheduleBlockDialogProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   token: string;
+  /** Solo quien atiende (odontología y ADMIN): la API rechaza al resto. */
   staff: StaffMember[];
   locations: ClinicLocation[];
   /** Sede activa (null = «Todas las sedes»): la propuesta para un bloqueo de sede. */
@@ -113,7 +117,10 @@ export function ScheduleBlockDialog({
   const ownOnly = ownProviderId !== null;
   const [scope, setScope] = useState<Scope>('provider');
   const [providerId, setProviderId] = useState(
-    ownProviderId ?? defaultProviderId ?? staff[0]?.userId ?? '',
+    ownProviderId ??
+      (staff.some((m) => m.userId === defaultProviderId) ? defaultProviderId : undefined) ??
+      staff[0]?.userId ??
+      '',
   );
   const [locationId, setLocationId] = useState(activeLocationId ?? locations[0]?.id ?? '');
   const [providerLocationId, setProviderLocationId] = useState('');
@@ -126,7 +133,7 @@ export function ScheduleBlockDialog({
   const [allowsBooking, setAllowsBooking] = useState(false);
   const [allowsTouched, setAllowsTouched] = useState(false);
   const [note, setNote] = useState('');
-  const [affected, setAffected] = useState<AffectedAppointment[] | null>(null);
+  const [affected, setAffected] = useState<AffectedAppointmentsPage | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -169,7 +176,7 @@ export function ScheduleBlockDialog({
       // Primer envío: ¿hay citas dentro? Se enseñan y se pide confirmación.
       if (affected === null) {
         const found = await listAffectedAppointments(token, { ...r, ...target });
-        if (found.length > 0) {
+        if (found.total > 0) {
           setAffected(found);
           return;
         }
@@ -180,7 +187,7 @@ export function ScheduleBlockDialog({
         kind,
         allowsBooking,
         note: note.trim() || undefined,
-        confirmAffected: affected !== null && affected.length > 0,
+        confirmAffected: affected !== null && affected.total > 0,
       });
       onCreated(block);
     } catch (err) {
@@ -190,15 +197,16 @@ export function ScheduleBlockDialog({
     }
   }
 
-  const affectedList = affected ?? [];
-  const confirming = affectedList.length > 0;
+  const affectedList = affected?.items ?? [];
+  const affectedTotal = affected?.total ?? 0;
+  const confirming = affectedTotal > 0;
 
   return (
     <FormModal
       open={open}
       onOpenChange={onOpenChange}
       title={confirming ? copy.confirmTitle : copy.title}
-      description={confirming ? copy.affected(affectedList.length) : copy.description}
+      description={confirming ? copy.affected(affectedTotal) : copy.description}
       onSubmit={handleSubmit}
       submitLabel={confirming ? copy.confirmSubmit : copy.submit}
       submitting={submitting}
@@ -217,6 +225,14 @@ export function ScheduleBlockDialog({
             </li>
           ))}
         </ul>
+      ) : null}
+      {confirming && affectedTotal > affectedList.length ? (
+        <p className="text-sm text-muted">{copy.affectedMore(affectedTotal - affectedList.length)}</p>
+      ) : null}
+      {confirming ? (
+        <Button type="button" variant="ghost" className="self-start" onClick={() => setAffected(null)}>
+          {copy.back}
+        </Button>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2">
           {!ownOnly && (
@@ -321,7 +337,6 @@ export function ScheduleBlockDialog({
             <Input
               id="block-from-date"
               type="date"
-              required
               value={fromDate}
               onChange={(e) => {
                 setFromDate(e.target.value);
@@ -333,8 +348,6 @@ export function ScheduleBlockDialog({
             <Input
               id="block-to-date"
               type="date"
-              required
-              min={fromDate}
               value={toDate}
               onChange={(e) => setToDate(e.target.value)}
             />
@@ -346,7 +359,6 @@ export function ScheduleBlockDialog({
                   id="block-from-time"
                   type="time"
                   step={300}
-                  required
                   value={fromTime}
                   onChange={(e) => setFromTime(e.target.value)}
                 />
@@ -356,7 +368,6 @@ export function ScheduleBlockDialog({
                   id="block-to-time"
                   type="time"
                   step={300}
-                  required
                   value={toTime}
                   onChange={(e) => setToTime(e.target.value)}
                 />

@@ -4,7 +4,6 @@ import type { components } from '@/lib/api/schema';
 // DX-122: «Pendientes por agendar» y «Buscar hueco», del contrato generado.
 export type WaitlistEntry = components['schemas']['WaitlistEntryDto'];
 export type WaitlistPage = components['schemas']['WaitlistPageDto'];
-export type CreateWaitlistEntryInput = components['schemas']['CreateWaitlistEntryDto'];
 export type ScheduleFromWaitlistInput = components['schemas']['ScheduleFromWaitlistDto'];
 export type Openings = components['schemas']['OpeningsDto'];
 export type Opening = components['schemas']['OpeningDto'];
@@ -23,13 +22,6 @@ export async function listWaitlist(
   if (params.pageSize) search.set('pageSize', String(params.pageSize));
   const query = search.toString();
   return apiFetch<WaitlistPage>(`/waitlist${query ? `?${query}` : ''}`, { token });
-}
-
-export async function createWaitlistEntry(
-  token: string,
-  input: CreateWaitlistEntryInput,
-): Promise<WaitlistEntry> {
-  return apiFetch<WaitlistEntry>('/waitlist', { method: 'POST', body: input, token });
 }
 
 /** Descartar con motivo (obligatorio); 409 si ya no estaba abierta. */

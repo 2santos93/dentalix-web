@@ -138,11 +138,15 @@ test('recepción bloquea las vacaciones de Luis: se ven en la agenda y una cita 
   await form.getByLabel('Hora de fin').fill('10:30');
   await form.getByRole('button', { name: 'Agendar cita' }).click();
   await expect(
-    form.getByText(/^La agenda del profesional está bloqueada \(Vacaciones\) del .+\. Elige otro horario\.$/),
+    // Un día completo se nombra por el día elegido, no por el fin exclusivo.
+    form.getByText(
+      `La agenda del profesional está bloqueada (Vacaciones) el ${VACATION_DAY.slice(8, 10)}/${VACATION_DAY.slice(5, 7)}. Elige otro horario.`,
+      { exact: true },
+    ),
   ).toBeVisible({ timeout: 10_000 });
 });
 
-test('cancelar una cita la deja en «Pendientes»; «Buscar hueco» respeta el bloqueo y «Agendar aquí» la saca de la lista', async ({
+test('cancelar una cita la deja en «Pendientes» y reactivarla la saca; «Buscar hueco» respeta el bloqueo y «Agendar aquí» la saca de la lista', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
@@ -159,6 +163,13 @@ test('cancelar una cita la deja en «Pendientes»; «Buscar hueco» respeta el b
   const entry = panel.getByTestId('waitlist-entry').filter({ hasText: `Bruno ${brunoLast}` });
   await expect(entry).toBeVisible({ timeout: 10_000 });
   await expect(entry).toContainText('Canceló la cita del');
+
+  // Si la cita vuelve a estar activa, el paciente sale solo de la lista (H1);
+  // si se cancela otra vez, vuelve.
+  await status.selectOption('SCHEDULED');
+  await expect(panel.getByText('No hay pacientes pendientes por agendar')).toBeVisible({ timeout: 10_000 });
+  await status.selectOption('CANCELLED');
+  await expect(entry).toBeVisible({ timeout: 10_000 });
 
   await entry.getByRole('button', { name: `Buscar hueco para Bruno ${brunoLast}` }).click();
   const search = page.getByRole('dialog', { name: `Buscar hueco para Bruno ${brunoLast}` });

@@ -37,6 +37,12 @@ interface FormModalProps {
   size?: 'default' | 'lg';
   /** Renders the submit as a destructive action. */
   destructive?: boolean;
+  /**
+   * A dónde va el foco al cerrar. Por defecto vuelve a quien abrió el modal;
+   * si ese elemento desaparece (p. ej. la tarjeta que se descartó), quien
+   * llama lo lleva a otro sitio con `event.preventDefault()`.
+   */
+  onCloseAutoFocus?: (event: Event) => void;
 }
 
 /**
@@ -59,6 +65,7 @@ export function FormModal({
   error,
   size = 'default',
   destructive = false,
+  onCloseAutoFocus,
 }: FormModalProps) {
   const errorRef = React.useRef<HTMLDivElement>(null);
   React.useEffect(() => {
@@ -71,7 +78,7 @@ export function FormModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className={cn(size === 'lg' && 'max-w-2xl')}>
+      <DialogContent className={cn(size === 'lg' && 'max-w-2xl')} onCloseAutoFocus={onCloseAutoFocus}>
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           {description ? <DialogDescription>{description}</DialogDescription> : null}

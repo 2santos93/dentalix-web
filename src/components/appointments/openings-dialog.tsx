@@ -3,6 +3,7 @@ import * as React from 'react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api/error-message';
+import { ApiError } from '@/lib/api/client';
 import {
   findOpenings,
   scheduleFromWaitlist,
@@ -33,7 +34,7 @@ import { formatDateLabel } from '@/lib/format/date';
 const copy = {
   title: (name: string) => `Buscar hueco para ${name}`,
   description: (minutes: number) =>
-    `Huecos de ${minutes} min dentro del horario de la sede, fuera de bloqueos y sin chocar con otras citas.`,
+    `Huecos de ${minutes} min dentro del horario de la sede, sin chocar con otras citas y fuera de cualquier bloqueo (también los que dejan agendar, como el almuerzo).`,
   provider: 'Profesional',
   from: 'Desde',
   to: 'Hasta',
@@ -49,6 +50,8 @@ const copy = {
   bookHereAt: (when: string) => `Agendar aquí el ${when}`,
   scheduled: (name: string, when: string) => `Cita agendada: ${name}, ${when}.`,
   scheduleError: 'No pudimos agendar la cita. Intenta de nuevo.',
+  entryGone: (name: string) =>
+    `${name} ya no está en pendientes: alguien lo agendó o lo descartó.`,
   pickProvider: 'Elige un profesional.',
 };
 
@@ -86,6 +89,19 @@ interface OpeningsDialogProps {
   /** Profesionales que se pueden elegir (odontólogos y ADMIN primero). */
   providers: StaffMember[];
   onScheduled: (appointment: AppointmentWrite) => void;
+  /** La entrada ya no está abierta (otra persona la agendó o descartó). */
+  onEntryGone: () => void;
+  /** Ver `FormModal.onCloseAutoFocus`. */
+  onCloseAutoFocus?: (event: Event) => void;
+}
+
+/** 409 de «Agendar aquí» porque la entrada ya no está OPEN (no por el hueco). */
+function isEntryGone(err: unknown): boolean {
+  return (
+    err instanceof ApiError &&
+    err.status === 409 &&
+    apiErrorMessage(err).includes('ya no está en pendientes')
+  );
 }
 
 /**
@@ -100,6 +116,8 @@ export function OpeningsDialog({
   entry,
   providers,
   onScheduled,
+  onEntryGone,
+  onCloseAutoFocus,
 }: OpeningsDialogProps) {
   const [today] = useState(() => localDay(new Date()));
   const [providerId, setProviderId] = useState(entry.providerId ?? providers[0]?.userId ?? '');
@@ -169,7 +187,16 @@ export function OpeningsDialog({
       for (const warning of created.warnings) toast.warning(warning);
       onScheduled(created);
     } catch (err) {
+      if (isEntryGone(err)) {
+        toast.info(copy.entryGone(name));
+        onEntryGone();
+        return;
+      }
       setBookError(apiErrorMessage(err, copy.scheduleError));
+      // El hueco se ocupó o se bloqueó entretanto: se vuelve a buscar.
+      if (err instanceof ApiError && (err.status === 409 || err.status === 422)) {
+        setReloadKey((k) => k + 1);
+      }
     } finally {
       setBookingStart(null);
     }
@@ -179,13 +206,13 @@ export function OpeningsDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-2xl" onCloseAutoFocus={onCloseAutoFocus}>
         <DialogHeader>
           <DialogTitle>{copy.title(name)}</DialogTitle>
           <DialogDescription>{copy.description(entry.durationMinutes)}</DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={search} className="grid gap-3 sm:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end">
+        <form onSubmit={search} noValidate className="grid gap-3 sm:grid-cols-[minmax(0,1.4fr)_minmax(0,1fr)_minmax(0,1fr)_auto] sm:items-end">
           <FormField htmlFor="openings-provider" label={copy.provider}>
             <select
               id="openings-provider"

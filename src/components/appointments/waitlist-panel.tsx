@@ -1,15 +1,15 @@
 'use client';
 import * as React from 'react';
-import { useEffect, useRef, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { CalendarSearch, Phone } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import {
   dismissWaitlistEntry,
-  listWaitlist,
   type AppointmentWrite,
   type WaitlistEntry,
 } from '@/lib/appointments/waitlist-api';
+import { WAITLIST_LOAD_ERROR, type WaitlistState } from '@/components/appointments/use-waitlist';
 import { waitingLabel, waitlistOriginLabel } from '@/lib/appointments/waitlist-display';
 import type { StaffMember } from '@/lib/appointments/staff-api';
 import {
@@ -32,7 +32,7 @@ export const waitlistCopy = {
   loading: 'Cargando pendientes…',
   empty: 'No hay pacientes pendientes por agendar',
   emptyHint: 'Al cancelar una cita o marcar que no vino, el paciente aparece aquí para volver a llamarlo.',
-  loadError: 'No pudimos cargar los pendientes.',
+  loadError: WAITLIST_LOAD_ERROR,
   retry: 'Reintentar',
   urgent: 'Urgente',
   prefers: (w: string) => `Prefiere: ${w}`,
@@ -52,21 +52,18 @@ export const waitlistCopy = {
   call: (phone: string) => `Llamar al ${phone}`,
 };
 
-/** Profesionales para «Buscar hueco»: quienes atienden primero. */
-function clinicians(staff: StaffMember[]): StaffMember[] {
-  const first = staff.filter((s) => s.role === 'DENTIST' || s.role === 'ADMIN');
-  return [...first, ...staff.filter((s) => !first.includes(s))];
+/** Quien atiende pacientes (tiene agenda): odontología y administración. */
+export function attendingStaff(staff: StaffMember[]): StaffMember[] {
+  return staff.filter((s) => s.role === 'DENTIST' || s.role === 'ADMIN');
 }
 
 interface WaitlistPanelProps {
   token: string;
   staff: StaffMember[];
-  /** Súbelo para recargar (p. ej. tras cancelar una cita en la agenda). */
-  reloadKey?: number;
+  /** La lista, cargada UNA vez por la agenda (`useWaitlist`). */
+  waitlist: WaitlistState;
   /** Se agendó una cita desde la lista: la agenda se refresca. */
   onScheduled?: (appointment: AppointmentWrite) => void;
-  /** Cuántos hay (para el botón del cajón en móvil). */
-  onCountChange?: (total: number) => void;
   className?: string;
 }
 
@@ -78,62 +75,36 @@ interface WaitlistPanelProps {
 export function WaitlistPanel({
   token,
   staff,
-  reloadKey = 0,
+  waitlist,
   onScheduled,
-  onCountChange,
   className,
 }: WaitlistPanelProps) {
-  const [entries, setEntries] = useState<WaitlistEntry[]>([]);
-  const [total, setTotal] = useState(0);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [localReload, setLocalReload] = useState(0);
+  const { entries, total, loading, error, reload, remove } = waitlist;
+  const titleId = useId();
+  const titleRef = useRef<HTMLHeadingElement>(null);
   const [searching, setSearching] = useState<WaitlistEntry | null>(null);
   const [dismissing, setDismissing] = useState<WaitlistEntry | null>(null);
   const [reason, setReason] = useState('');
   const [dismissError, setDismissError] = useState<string | null>(null);
   const [dismissSubmitting, setDismissSubmitting] = useState(false);
+  // La tarjeta que abrió el diálogo ya no está: el foco va al título del panel.
+  const entryGone = useRef(false);
 
-  useEffect(() => {
-    let cancelled = false;
-    async function load() {
-      setLoading(true);
-      try {
-        const page = await listWaitlist(token, { pageSize: 50 });
-        if (cancelled) return;
-        setEntries(page.items);
-        setTotal(page.total);
-        setError(null);
-      } catch (err) {
-        if (!cancelled) setError(apiErrorMessage(err, waitlistCopy.loadError));
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    }
-    void load();
-    return () => {
-      cancelled = true;
-    };
-  }, [token, reloadKey, localReload]);
+  function focusAfterClose(event: Event) {
+    if (!entryGone.current) return;
+    entryGone.current = false;
+    event.preventDefault();
+    titleRef.current?.focus();
+  }
 
-  // El contador del botón del cajón (móvil) sigue al de la lista. Por ref: el
-  // padre no tiene que pasar una función estable.
-  const onCountChangeRef = useRef(onCountChange);
-  useEffect(() => {
-    onCountChangeRef.current = onCountChange;
-  });
-  useEffect(() => {
-    if (!loading && !error) onCountChangeRef.current?.(total);
-  }, [total, loading, error]);
-
-  function removeEntry(id: string) {
-    setEntries((prev) => prev.filter((e) => e.id !== id));
-    setTotal((t) => Math.max(0, t - 1));
+  function resolved(entry: WaitlistEntry) {
+    entryGone.current = true;
+    remove(entry.id);
   }
 
   function handleScheduled(entry: WaitlistEntry, appointment: AppointmentWrite) {
+    resolved(entry);
     setSearching(null);
-    removeEntry(entry.id);
     onScheduled?.(appointment);
   }
 
@@ -154,7 +125,7 @@ export function WaitlistPanel({
     try {
       await dismissWaitlistEntry(token, dismissing.id, reason.trim());
       toast.success(waitlistCopy.dismissed(waitlistPatientName(dismissing)));
-      removeEntry(dismissing.id);
+      resolved(dismissing);
       setDismissing(null);
     } catch (err) {
       setDismissError(apiErrorMessage(err, waitlistCopy.dismissError));
@@ -164,9 +135,14 @@ export function WaitlistPanel({
   }
 
   return (
-    <section aria-labelledby="waitlist-title" className={cn('flex min-w-0 flex-col gap-3', className)}>
+    <section aria-labelledby={titleId} className={cn('flex min-w-0 flex-col gap-3', className)}>
       <header className="flex items-baseline justify-between gap-2">
-        <h2 id="waitlist-title" className="t-title text-ink">
+        <h2
+          id={titleId}
+          ref={titleRef}
+          tabIndex={-1}
+          className="t-title rounded text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+        >
           {waitlistCopy.title}
         </h2>
         {!loading && !error ? (
@@ -184,7 +160,7 @@ export function WaitlistPanel({
       ) : error ? (
         <SectionError
           description={error}
-          onRetry={() => setLocalReload((k) => k + 1)}
+          onRetry={reload}
           retryLabel={waitlistCopy.retry}
           className="py-10"
         />
@@ -227,6 +203,7 @@ export function WaitlistPanel({
                     <Button
                       type="button"
                       size="sm"
+                      variant="secondary"
                       aria-label={waitlistCopy.findSlotFor(name)}
                       onClick={() => setSearching(entry)}
                     >
@@ -261,8 +238,13 @@ export function WaitlistPanel({
           }}
           token={token}
           entry={searching}
-          providers={clinicians(staff)}
+          providers={attendingStaff(staff)}
           onScheduled={(appointment) => handleScheduled(searching, appointment)}
+          onEntryGone={() => {
+            resolved(searching);
+            setSearching(null);
+          }}
+          onCloseAutoFocus={focusAfterClose}
         />
       ) : null}
 
@@ -277,11 +259,11 @@ export function WaitlistPanel({
         submitLabel={waitlistCopy.dismiss}
         submitting={dismissSubmitting}
         error={dismissError}
+        onCloseAutoFocus={focusAfterClose}
       >
         <FormField htmlFor="waitlist-dismiss-reason" label={waitlistCopy.reason}>
           <textarea
             id="waitlist-dismiss-reason"
-            required
             maxLength={200}
             rows={3}
             value={reason}

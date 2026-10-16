@@ -221,4 +221,12 @@ describe('StaffMemberProfile', () => {
     expect(within(dialog).getByLabelText('Profesional')).toHaveValue('u1');
     expect(within(dialog).getByLabelText('Profesional')).toBeDisabled();
   });
+
+  it('DX-122: a un miembro no clínico no se le ofrece bloquear la agenda', async () => {
+    mockedGet.mockResolvedValue({ ...activo, role: 'RECEPTION' as const });
+    const admin = `h.${btoa(JSON.stringify({ sub: 'adm', tenantId: 't1', role: 'ADMIN' }))}.s`;
+    render(<StaffMemberProfile token={admin} userId="u1" />);
+    await screen.findByText('Ana Ríos');
+    expect(screen.queryByRole('button', { name: 'Bloquear agenda' })).not.toBeInTheDocument();
+  });
 });

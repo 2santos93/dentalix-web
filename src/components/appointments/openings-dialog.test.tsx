@@ -12,7 +12,9 @@ jest.mock('../../lib/appointments/waitlist-api', () => ({
   findOpenings: jest.fn(),
   scheduleFromWaitlist: jest.fn(),
 }));
-jest.mock('sonner', () => ({ toast: { success: jest.fn(), warning: jest.fn(), error: jest.fn() } }));
+jest.mock('sonner', () => ({
+  toast: { success: jest.fn(), warning: jest.fn(), error: jest.fn(), info: jest.fn() },
+}));
 const mockedOpenings = findOpenings as jest.MockedFunction<typeof findOpenings>;
 const mockedSchedule = scheduleFromWaitlist as jest.MockedFunction<typeof scheduleFromWaitlist>;
 
@@ -31,6 +33,8 @@ const providers = [
 ];
 const at = (day: string, hhmm: string) => new Date(`${day}T${hhmm}:00`).toISOString();
 
+const onEntryGone = jest.fn();
+
 function renderDialog() {
   const onScheduled = jest.fn();
   render(
@@ -41,6 +45,7 @@ function renderDialog() {
       entry={entry}
       providers={providers}
       onScheduled={onScheduled}
+      onEntryGone={onEntryGone}
     />,
   );
   return onScheduled;
@@ -50,6 +55,7 @@ describe('OpeningsDialog (DX-122)', () => {
   beforeEach(() => {
     mockedOpenings.mockReset();
     mockedSchedule.mockReset();
+    onEntryGone.mockReset();
   });
 
   it('busca con el profesional de la entrada y agrupa los huecos por día', async () => {
@@ -107,5 +113,8 @@ describe('OpeningsDialog (DX-122)', () => {
     await userEvent.click(await screen.findByRole('button', { name: /^Agendar aquí el / }));
     expect(await screen.findByText('El profesional ya tiene una cita en ese horario')).toBeInTheDocument();
     expect(onScheduled).not.toHaveBeenCalled();
+    // El hueco se ocupó: se vuelven a pedir los huecos.
+    await waitFor(() => expect(mockedOpenings).toHaveBeenCalledTimes(2));
+    expect(onEntryGone).not.toHaveBeenCalled();
   });
 });

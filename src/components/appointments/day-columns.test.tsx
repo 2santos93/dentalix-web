@@ -308,5 +308,11 @@ describe('DayColumns (DX-121)', () => {
       await userEvent.click(screen.getAllByRole('button', { name: /^Quitar bloqueo: Almuerzo/ })[0]);
       expect(onSelectBlock).toHaveBeenCalledWith(lunch);
     });
+
+    it('sin permiso sobre ese bloqueo, la etiqueta no ofrece quitarlo', () => {
+      renderColumns({ blocks: [lunch], activeLocationId: 'loc-1', onSelectBlock: jest.fn(), canSelectBlock: () => false });
+      expect(screen.queryByRole('button', { name: /^Quitar bloqueo/ })).not.toBeInTheDocument();
+      expect(screen.getAllByText(/^Almuerzo/).length).toBeGreaterThan(0);
+    });
   });
 });

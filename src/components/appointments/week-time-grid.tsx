@@ -73,6 +73,12 @@ interface WeekTimeGridProps {
   blocks?: ScheduleBlockLike[];
   /** Nombre del profesional de un bloqueo (para la etiqueta). */
   providerName?: (providerId: string) => string | undefined;
+  /**
+   * Profesional elegido. Con uno, sus bloqueos se pintan con trama; con
+   * «Todos», solo los de toda la sede: la trama de las vacaciones de UNA
+   * doctora no puede tapar el día de las demás (sale como etiqueta arriba).
+   */
+  selectedProviderId?: string | null;
 }
 
 const WHOLE_DAY = { start: 0, end: DAY_MINUTES };
@@ -86,7 +92,10 @@ export function WeekTimeGrid({
   onSelectAppointment,
   blocks = [],
   providerName,
+  selectedProviderId = null,
 }: WeekTimeGridProps) {
+  const labelOf = (block: ScheduleBlockLike) =>
+    blockLabel(block, block.providerId ? providerName?.(block.providerId) : undefined);
   const dates = weekDates(weekStart);
   const scrollRef = useRef<HTMLDivElement>(null);
 
@@ -125,6 +134,19 @@ export function WeekTimeGrid({
             className="sticky top-0 z-20 border-b border-border bg-surface px-2 py-2 text-left text-sm font-medium text-ink hover:underline"
           >
             {dayHeaderLabel(date)}
+            {/* Bloqueos del día, siempre visibles (la rejilla abre a las 07:00
+                y un bloqueo de día completo empieza a las 00:00). */}
+            {blocks
+              .filter((block) => blockBandForDay(block, date, WHOLE_DAY))
+              .map((block) => (
+                <span
+                  key={block.id}
+                  data-testid="week-block-chip"
+                  className="mt-1 block truncate rounded border border-dashed border-warning/50 bg-warning/10 px-1 text-[0.6875rem] font-medium text-ink"
+                >
+                  {labelOf(block)}
+                </span>
+              ))}
           </button>
         ))}
 
@@ -163,31 +185,25 @@ export function WeekTimeGrid({
                 aria-label={copy.createSlotLabel(date, slotTime(i))}
               />
             ))}
-            {blocks.map((block) => {
-              const band = blockBandForDay(block, date, WHOLE_DAY);
-              if (!band) return null;
-              const label = blockLabel(
-                block,
-                block.providerId ? providerName?.(block.providerId) : undefined,
-              );
-              return (
-                <div
-                  key={block.id}
-                  data-testid="week-schedule-block"
-                  role="note"
-                  aria-label={copy.blockAria(label)}
-                  className="pointer-events-none absolute inset-x-0 overflow-hidden border-y border-dashed border-warning/50 bg-warning/10 [background-image:repeating-linear-gradient(45deg,transparent_0_7px,color-mix(in_oklab,var(--color-warning)_22%,transparent)_7px_9px)]"
-                  style={{
-                    top: (band.start / SLOT_MINUTES) * ROW_HEIGHT_PX,
-                    height: ((band.end - band.start) / SLOT_MINUTES) * ROW_HEIGHT_PX,
-                  }}
-                >
-                  <span className="m-0.5 inline-block max-w-[calc(100%-0.25rem)] truncate rounded bg-surface/90 px-1 text-[0.6875rem] font-medium text-ink">
-                    {label}
-                  </span>
-                </div>
-              );
-            })}
+            {blocks
+              .filter((block) => block.providerId === null || block.providerId === selectedProviderId)
+              .map((block) => {
+                const band = blockBandForDay(block, date, WHOLE_DAY);
+                if (!band) return null;
+                return (
+                  <div
+                    key={block.id}
+                    data-testid="week-schedule-block"
+                    role="note"
+                    aria-label={copy.blockAria(labelOf(block))}
+                    className="pointer-events-none absolute inset-x-0 border-y border-dashed border-warning/50 bg-warning/10 [background-image:repeating-linear-gradient(45deg,transparent_0_7px,color-mix(in_oklab,var(--color-warning)_22%,transparent)_7px_9px)]"
+                    style={{
+                      top: (band.start / SLOT_MINUTES) * ROW_HEIGHT_PX,
+                      height: ((band.end - band.start) / SLOT_MINUTES) * ROW_HEIGHT_PX,
+                    }}
+                  />
+                );
+              })}
             {layoutLanes(
               appointments
                 .filter((a) => localDateString(a.start) === date)

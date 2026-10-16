@@ -49,7 +49,7 @@ function renderDialog(props: Partial<React.ComponentProps<typeof ScheduleBlockDi
 describe('ScheduleBlockDialog (DX-122)', () => {
   beforeEach(() => {
     mockedCreate.mockReset().mockResolvedValue(created);
-    mockedAffected.mockReset().mockResolvedValue([]);
+    mockedAffected.mockReset().mockResolvedValue({ items: [], total: 0 });
   });
 
   it('bloquea las vacaciones de un profesional en días completos, en todas las sedes', async () => {
@@ -93,7 +93,9 @@ describe('ScheduleBlockDialog (DX-122)', () => {
   });
 
   it('si hay citas dentro, las lista y solo crea al confirmar', async () => {
-    mockedAffected.mockResolvedValue([
+    mockedAffected.mockResolvedValue({
+      total: 3,
+      items: [
       {
         id: 'apt-1',
         locationId: 'loc-1',
@@ -104,19 +106,28 @@ describe('ScheduleBlockDialog (DX-122)', () => {
         patientFirstName: 'María',
         patientLastName: 'López',
       },
-    ]);
+      ],
+    });
     const onCreated = renderDialog();
     await userEvent.click(screen.getByRole('button', { name: 'Bloquear' }));
 
     const list = await screen.findByRole('list', { name: 'Citas dentro del bloqueo' });
     expect(within(list).getByText('María López')).toBeInTheDocument();
-    expect(screen.getByText(/No se borra ni se mueve/)).toBeInTheDocument();
+    expect(screen.getByText(/No se borran ni se mueven/)).toBeInTheDocument();
+    // La API devuelve las primeras: del resto, cuántas faltan.
+    expect(screen.getByText('y 2 citas más.')).toBeInTheDocument();
     expect(mockedCreate).not.toHaveBeenCalled();
+
+    // «Volver» deja cambiar el rango sin empezar de cero.
+    await userEvent.click(screen.getByRole('button', { name: 'Volver y cambiar el bloqueo' }));
+    expect(screen.getByLabelText('Motivo')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Bloquear' }));
+    await screen.findByRole('list', { name: 'Citas dentro del bloqueo' });
 
     await userEvent.click(screen.getByRole('button', { name: 'Bloquear igualmente' }));
     await waitFor(() => expect(onCreated).toHaveBeenCalled());
     expect(mockedCreate.mock.calls[0][1]).toMatchObject({ confirmAffected: true });
-    expect(mockedAffected).toHaveBeenCalledTimes(1);
+    expect(mockedAffected).toHaveBeenCalledTimes(2);
   });
 
   it('un odontólogo solo bloquea su agenda: sin elegir alcance ni profesional', () => {
@@ -142,5 +153,23 @@ describe('ScheduleBlockDialog (DX-122)', () => {
     );
     await userEvent.click(screen.getByRole('button', { name: 'Bloquear' }));
     expect(await screen.findByText('Solo puedes bloquear o cambiar tu propia agenda.')).toBeInTheDocument();
+  });
+
+  it('un 403 técnico de la API («Insufficient role») se enseña en español', async () => {
+    mockedCreate.mockRejectedValue(new ApiError(403, 'Insufficient role'));
+    renderDialog();
+    await userEvent.click(screen.getByRole('button', { name: 'Bloquear' }));
+    expect(
+      await screen.findByText(/No tienes permiso para hacer esto/),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Insufficient role')).not.toBeInTheDocument();
+  });
+
+  it('sin validación nativa del navegador: fechas vacías dan el mensaje propio', async () => {
+    renderDialog();
+    await userEvent.clear(screen.getByLabelText('Desde'));
+    await userEvent.click(screen.getByRole('button', { name: 'Bloquear' }));
+    expect(await screen.findByText('Completa el profesional o la sede, y las fechas.')).toBeInTheDocument();
+    expect(screen.getByLabelText('Desde')).not.toBeRequired();
   });
 });

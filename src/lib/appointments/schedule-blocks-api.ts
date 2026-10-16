@@ -6,8 +6,9 @@ import type { ClinicRole } from '@/lib/me/me-api';
 // salen tal cual del contrato generado.
 export type ScheduleBlock = components['schemas']['ScheduleBlockDto'];
 export type CreateScheduleBlockInput = components['schemas']['CreateScheduleBlockDto'];
-export type UpdateScheduleBlockInput = components['schemas']['UpdateScheduleBlockDto'];
 export type AffectedAppointment = components['schemas']['AffectedAppointmentDto'];
+/** Las primeras 50 citas afectadas por hora y cuántas hay en total. */
+export type AffectedAppointmentsPage = components['schemas']['AffectedAppointmentsPageDto'];
 
 /**
  * Quién crea, cambia y retira bloqueos (como la API): ADMIN y recepción, y el
@@ -38,11 +39,11 @@ export async function listScheduleBlocks(
 export async function listAffectedAppointments(
   token: string,
   params: { start: string; end: string; providerId?: string; locationId?: string },
-): Promise<AffectedAppointment[]> {
+): Promise<AffectedAppointmentsPage> {
   const search = new URLSearchParams({ start: params.start, end: params.end });
   if (params.providerId) search.set('providerId', params.providerId);
   if (params.locationId) search.set('locationId', params.locationId);
-  return apiFetch<AffectedAppointment[]>(
+  return apiFetch<AffectedAppointmentsPage>(
     `/schedule-blocks/affected-appointments?${search.toString()}`,
     { token },
   );
@@ -54,14 +55,6 @@ export async function createScheduleBlock(
   input: CreateScheduleBlockInput,
 ): Promise<ScheduleBlock> {
   return apiFetch<ScheduleBlock>('/schedule-blocks', { method: 'POST', body: input, token });
-}
-
-export async function updateScheduleBlock(
-  token: string,
-  id: string,
-  input: UpdateScheduleBlockInput,
-): Promise<ScheduleBlock> {
-  return apiFetch<ScheduleBlock>(`/schedule-blocks/${id}`, { method: 'PATCH', body: input, token });
 }
 
 /** Borrado lógico; la API responde 204 sin cuerpo. */

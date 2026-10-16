@@ -40,7 +40,13 @@ import { MonthAgenda } from '@/components/appointments/month-agenda';
 import { AppointmentForm } from '@/components/appointments/appointment-form';
 import { ConfirmationLinkPanel } from '@/components/appointments/confirmation-link-panel';
 import { ScheduleBlockDialog } from '@/components/appointments/schedule-block-dialog';
-import { WaitlistPanel, waitlistCopy } from '@/components/appointments/waitlist-panel';
+import {
+  WaitlistPanel,
+  attendingStaff,
+  waitlistCopy,
+} from '@/components/appointments/waitlist-panel';
+import { useWaitlist } from '@/components/appointments/use-waitlist';
+import { useMediaQuery } from '@/lib/hooks/use-media-query';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import {
   STATUS_LABELS,
@@ -134,9 +140,6 @@ const copy = {
   waitlistButtonCount: (n: number) => `Pendientes por agendar: ${n}`,
   waitlistSheetDescription: 'Pacientes que cancelaron o no vinieron, para volver a darles cita.',
 };
-
-/** Estados que mandan al paciente a «Pendientes por agendar» (como la API). */
-const WAITLIST_STATUSES: AppointmentStatus[] = ['CANCELLED', 'NO_SHOW'];
 
 /** Avisos de la API al crear o mover (p. ej. un bloqueo de almuerzo que deja agendar). */
 function announceWarnings(appointment: Appointment | null | undefined) {
@@ -355,7 +358,11 @@ export function AgendaView({ token }: AgendaViewProps) {
   const [removeBlockError, setRemoveBlockError] = useState<string | null>(null);
   const [removingBlockPending, setRemovingBlockPending] = useState(false);
   const [waitlistReloadKey, setWaitlistReloadKey] = useState(0);
-  const [waitlistCount, setWaitlistCount] = useState<number | null>(null);
+  const waitlist = useWaitlist(token, waitlistReloadKey);
+  // Desde 1400 px la lista va en un panel lateral fijo; por debajo, en un
+  // cajón. Se monta UNA sola de las dos (revisión H4).
+  const wide = useMediaQuery('(min-width: 1400px)');
+  const waitlistCount = waitlist.loading || waitlist.error ? null : waitlist.total;
   const [waitlistOpen, setWaitlistOpen] = useState(false);
   // Whether the day panel (right drawer / bottom sheet) is open — opened by
   // clicking a day in the month calendar; shows that day's appointments
@@ -735,8 +742,9 @@ export function AgendaView({ token }: AgendaViewProps) {
     setUpdatingId(id);
     try {
       await updateAppointment(token, id, { status });
-      // DX-122: cancelar o no-show deja al paciente en «Pendientes por agendar».
-      if (WAITLIST_STATUSES.includes(status)) setWaitlistReloadKey((k) => k + 1);
+      // DX-122: cancelar o no-show deja al paciente en «Pendientes por
+      // agendar», y reactivar la cita lo saca (revisión H1): se recarga siempre.
+      setWaitlistReloadKey((k) => k + 1);
       await refreshAppointmentsInPlace();
     } catch (err) {
       notifyError(apiErrorMessage(err, copy.genericStatusChangeError), {
@@ -761,7 +769,12 @@ export function AgendaView({ token }: AgendaViewProps) {
   const userId = getTokenUserId(token);
 
   return (
-    <div className="flex flex-col gap-5 min-[1400px]:grid min-[1400px]:grid-cols-[minmax(0,1fr)_20rem] min-[1400px]:items-start min-[1400px]:gap-6">
+    <div
+      className={cn(
+        'flex flex-col gap-5',
+        wide && 'grid grid-cols-[minmax(0,1fr)_20rem] items-start gap-6',
+      )}
+    >
       <div className="flex min-w-0 flex-col gap-5">
         {/* Lean control row: view segmented control + compact provider filter on
             the left, the single primary action on the right. Date navigation is
@@ -826,10 +839,10 @@ export function AgendaView({ token }: AgendaViewProps) {
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {/* DX-122: en pantallas sin panel lateral, los pendientes van en un cajón. */}
+            {!wide ? (
             <Button
               type="button"
               variant="secondary"
-              className="min-[1400px]:hidden"
               aria-label={waitlistCount === null ? copy.waitlistButton : copy.waitlistButtonCount(waitlistCount)}
               onClick={() => setWaitlistOpen(true)}
             >
@@ -840,6 +853,7 @@ export function AgendaView({ token }: AgendaViewProps) {
                 </span>
               ) : null}
             </Button>
+            ) : null}
             {canWriteBlocks ? (
               <Button type="button" variant="secondary" onClick={() => setShowBlockDialog(true)}>
                 <CalendarOff aria-hidden /> {copy.blockSchedule}
@@ -917,6 +931,7 @@ export function AgendaView({ token }: AgendaViewProps) {
                 onSelectAppointment={(a) => setDetailAppointment(a)}
                 blocks={weekBlocks}
                 providerName={staffName}
+                selectedProviderId={providerId || null}
               />
             )}
           </div>
@@ -991,6 +1006,8 @@ export function AgendaView({ token }: AgendaViewProps) {
                       }
                     : undefined
                 }
+                // El odontólogo solo quita los suyos (la API daría 403).
+                canSelectBlock={(block) => !ownBlocksOnly || block.providerId === userId}
               />
             )}
           </div>
@@ -1131,44 +1148,45 @@ export function AgendaView({ token }: AgendaViewProps) {
       </div>
 
       {/* DX-122: panel lateral fijo junto a la agenda (≥ 1400 px: a 1440 deja sitio a la tabla del día). */}
-      <aside
-        aria-label={waitlistCopy.title}
-        className="hidden min-[1400px]:sticky min-[1400px]:top-0 min-[1400px]:block min-[1400px]:max-h-[calc(100dvh-4rem)] min-[1400px]:overflow-y-auto"
-      >
-        <WaitlistPanel
-          token={token}
-          staff={staff}
-          reloadKey={waitlistReloadKey}
-          onScheduled={handleWaitlistScheduled}
-          onCountChange={setWaitlistCount}
-        />
-      </aside>
-
-      {/* Cajón: a pantalla completa en móvil, lateral en tablet. */}
-      <Sheet open={waitlistOpen} onOpenChange={setWaitlistOpen}>
-        <SheetContent className="top-0 h-dvh max-h-none rounded-none border-t-0 sm:w-[26rem]">
-          <SheetHeader className="sr-only">
-            <SheetTitle>{waitlistCopy.title}</SheetTitle>
-            <SheetDescription>{copy.waitlistSheetDescription}</SheetDescription>
-          </SheetHeader>
-          <SheetBody>
-            <WaitlistPanel
-              token={token}
-              staff={staff}
-              reloadKey={waitlistReloadKey}
-              onScheduled={handleWaitlistScheduled}
-              onCountChange={setWaitlistCount}
-            />
-          </SheetBody>
-        </SheetContent>
-      </Sheet>
+      {wide ? (
+        <aside
+          aria-label={waitlistCopy.title}
+          className="sticky top-0 max-h-[calc(100dvh-4rem)] overflow-y-auto"
+        >
+          <WaitlistPanel
+            token={token}
+            staff={staff}
+            waitlist={waitlist}
+            onScheduled={handleWaitlistScheduled}
+          />
+        </aside>
+      ) : (
+        /* Cajón: a pantalla completa en móvil, lateral en tablet. */
+        <Sheet open={waitlistOpen} onOpenChange={setWaitlistOpen}>
+          <SheetContent className="top-0 h-dvh max-h-none rounded-none border-t-0 sm:w-[26rem]">
+            <SheetHeader className="sr-only">
+              <SheetTitle>{waitlistCopy.title}</SheetTitle>
+              <SheetDescription>{copy.waitlistSheetDescription}</SheetDescription>
+            </SheetHeader>
+            {/* pt-14: la X de cerrar va arriba a la derecha, sobre el título. */}
+            <SheetBody className="pt-14">
+              <WaitlistPanel
+                token={token}
+                staff={staff}
+                waitlist={waitlist}
+                onScheduled={handleWaitlistScheduled}
+              />
+            </SheetBody>
+          </SheetContent>
+        </Sheet>
+      )}
 
       {showBlockDialog ? (
         <ScheduleBlockDialog
           open
           onOpenChange={setShowBlockDialog}
           token={token}
-          staff={staff}
+          staff={attendingStaff(staff)}
           locations={locations}
           activeLocationId={activeLocationId}
           defaultDate={selectedDate}
