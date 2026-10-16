@@ -29,7 +29,15 @@ const mockedLocations = listLocations as jest.MockedFunction<typeof listLocation
 
 function clinicIn(country: ClinicLocation['country']): ClinicLocation[] {
   return [
-    { id: 'l1', name: 'Principal', address: null, country, isActive: true, createdAt: '2026-01-01T00:00:00Z' },
+    {
+      id: 'l1',
+      name: 'Principal',
+      address: null,
+      country,
+      isActive: true,
+      timeZone: country === 'ES' ? 'Europe/Madrid' : 'America/Bogota',
+      createdAt: '2026-01-01T00:00:00Z',
+    },
   ];
 }
 
@@ -493,7 +501,15 @@ describe('CatalogView', () => {
   it('una clínica con sedes en Colombia y España pinta el importe sin moneda, elija la sede que elija', async () => {
     mockedLocations.mockResolvedValue([
       ...clinicIn('CO'),
-      { id: 'l2', name: 'Madrid', address: null, country: 'ES', isActive: true, createdAt: '2026-01-01T00:00:00Z' },
+      {
+        id: 'l2',
+        name: 'Madrid',
+        address: null,
+        country: 'ES',
+        isActive: true,
+        timeZone: 'Europe/Madrid',
+        createdAt: '2026-01-01T00:00:00Z',
+      },
     ]);
     setActiveLocationId('l2');
     mockedList.mockResolvedValue(page([item1]));

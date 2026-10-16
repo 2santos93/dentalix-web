@@ -2,7 +2,15 @@ import { clinicBaseCurrency, COUNTRY_CURRENCY } from './clinic-currency';
 import type { ClinicLocation } from './locations-api';
 
 function loc(id: string, country: ClinicLocation['country'], isActive = true): ClinicLocation {
-  return { id, name: id, address: null, country, isActive, createdAt: '2026-01-01T00:00:00Z' };
+  return {
+    id,
+    name: id,
+    address: null,
+    country,
+    isActive,
+    timeZone: country === 'ES' ? 'Europe/Madrid' : 'America/Bogota',
+    createdAt: '2026-01-01T00:00:00Z',
+  };
 }
 
 describe('clinicBaseCurrency', () => {
