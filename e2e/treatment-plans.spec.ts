@@ -111,7 +111,7 @@ test('treatment plan: create -> add item -> total -> status DONE -> remove -> to
   // el último; con nombre+apellido llenos se puede saltar directo al final (ver
   // `goToStep` en patient-create-wizard.tsx). Antes esto pulsaba un botón "Crear
   // paciente" que ya no existe, y el spec se colgaba 30s en el click.
-  await page.getByRole('button', { name: /Consentimiento/ }).click();
+  await page.getByRole('button', { name: /Autorización de datos/ }).click();
   await page.getByRole('button', { name: 'Guardar' }).click();
 
   // El wizard redirige al DETALLE del paciente recién creado
