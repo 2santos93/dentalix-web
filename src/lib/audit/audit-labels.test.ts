@@ -15,6 +15,7 @@ describe('etiquetas de auditoría', () => {
       expect(AUDIT_RESOURCE_LABELS[resource]).toMatch(/\S/);
     }
     expect(AUDIT_ACTION_LABELS.LOGIN_FAILED).toBe('Inicio de sesión fallido');
+    expect(AUDIT_ACTION_LABELS.PASSWORD_RESET).toBe('Contraseña restablecida');
     expect(AUDIT_RESOURCE_LABELS.MEDICAL_HISTORY).toBe('Historia clínica');
   });
 

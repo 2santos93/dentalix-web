@@ -13,6 +13,7 @@ export const AUDIT_ACTION_LABELS: Record<AuditAction, string> = {
   VOID: 'Anulación',
   LOGIN: 'Inicio de sesión',
   LOGIN_FAILED: 'Inicio de sesión fallido',
+  PASSWORD_RESET: 'Contraseña restablecida',
   EXPORT: 'Exportación',
   PRINT: 'Impresión',
 };
@@ -32,6 +33,7 @@ export const AUDIT_ACTION_VARIANT: Record<AuditAction, NonNullable<BadgeProps['v
   VOID: 'warning',
   LOGIN: 'muted',
   LOGIN_FAILED: 'danger',
+  PASSWORD_RESET: 'warning',
   EXPORT: 'muted',
   PRINT: 'muted',
 };
