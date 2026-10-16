@@ -14,6 +14,7 @@ import {
 import { PatientDataPanel } from '@/components/patients/patient-data-panel';
 import { PatientEditModal } from '@/components/patients/patient-edit-modal';
 import { PatientRecordHeader } from '@/components/patients/patient-record-header';
+import { PatientRetentionSection } from '@/components/patients/patient-retention-section';
 import { OdontogramTab } from '@/components/odontogram/odontogram-tab';
 import { TreatmentPlansTab } from '@/components/treatment-plans/treatment-plans-tab';
 import { SectionError } from '@/components/errors/section-error';
@@ -266,6 +267,15 @@ function PatientDetailView() {
           {access['clinical-history'] ? (
             <ClinicalAlertBanner token={accessToken} patientId={patientId} />
           ) : null}
+
+          {/* DX-039: aviso de retención legal para todos; controles, solo ADMIN. */}
+          <PatientRetentionSection
+            patient={patient}
+            token={accessToken}
+            isAdmin={getTokenRole(accessToken) === 'ADMIN'}
+            onUpdated={setPatient}
+            onArchived={() => router.push('/patients')}
+          />
 
           <PatientDetailTabs
             activeTab={activeTab}
