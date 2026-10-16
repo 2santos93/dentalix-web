@@ -809,6 +809,36 @@ describe('TreatmentPlansTab', () => {
       expect(await screen.findByRole('button', { name: /crear plan de pagos/i })).toBeInTheDocument();
       expect(screen.queryByRole('form', { name: /agregar ítem/i })).not.toBeInTheDocument();
     });
+
+    it('en un plan completado, un ítem aceptado se puede marcar como realizado (y nada más)', async () => {
+      const completed = { ...plan1Detail, status: 'COMPLETED' as const };
+      mockedListPlans.mockResolvedValue([{ ...plan1, status: 'COMPLETED' as const }]);
+      mockedGetPlan.mockResolvedValue(completed);
+      mockedUpdateItem.mockResolvedValue({ ...item2, status: 'DONE' });
+
+      const user = userEvent.setup();
+      render(<TreatmentPlansTab patientId="pat-1" token="tok" />);
+      const table = await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+
+      expect(
+        screen.getByText(
+          'Este plan está «Completado»: sus ítems ya no se pueden añadir, cambiar ni quitar. Solo puedes marcar como realizado un procedimiento que quedó aceptado.',
+        ),
+      ).toBeInTheDocument();
+      // Propuesto: congelado. Aceptado: solo puede pasar a realizado.
+      expect(within(table).getByRole('combobox', { name: /estado del ítem del diente 11/i })).toBeDisabled();
+      const accepted = within(table).getByRole<HTMLSelectElement>('combobox', {
+        name: /estado del ítem del diente 26/i,
+      });
+      expect(accepted).toBeEnabled();
+      expect(within(accepted).getByRole<HTMLOptionElement>('option', { name: 'Propuesto' }).disabled).toBe(true);
+      expect(within(accepted).getByRole<HTMLOptionElement>('option', { name: 'Realizado' }).disabled).toBe(false);
+
+      await user.selectOptions(accepted, 'DONE');
+      await waitFor(() =>
+        expect(mockedUpdateItem).toHaveBeenCalledWith('tok', 'plan-1', 'item-2', { status: 'DONE' }),
+      );
+    });
   });
 
   describe('error states ladder', () => {

@@ -205,6 +205,8 @@ const copy = {
     `Este plan está «${status}»: no admite abonos ni planes de cuotas.`,
   closedItemsNotice: (status: string) =>
     `Este plan está «${status}»: sus ítems ya no se pueden añadir, cambiar ni quitar.`,
+  completedItemsNotice:
+    'Este plan está «Completado»: sus ítems ya no se pueden añadir, cambiar ni quitar. Solo puedes marcar como realizado un procedimiento que quedó aceptado.',
   cancelPaymentForm: 'Cancelar',
   paymentAmountLabel: 'Monto',
   paymentCurrencyLabel: 'Moneda',
@@ -303,9 +305,14 @@ interface ItemsTableProps {
   locked?: boolean;
   /**
    * Plan cerrado (cancelado, rechazado o completado, DX-109): sus ítems no se
-   * tocan, ni siquiera de estado (la API responde 409).
+   * tocan, ni siquiera de estado (la API responde 409)...
    */
   closed?: boolean;
+  /**
+   * ...salvo en un plan completado: ahí un ítem aceptado sí se marca como
+   * realizado (y llega al odontograma).
+   */
+  markDoneOnly?: boolean;
 }
 
 /**
@@ -425,7 +432,14 @@ function ItemsTable({
   onRemove,
   locked = false,
   closed = false,
+  markDoneOnly = false,
 }: ItemsTableProps) {
+  // Plan cerrado: el estado no se toca, salvo en uno completado marcar como
+  // realizado lo que quedó aceptado (misma regla que la API).
+  const statusFrozen = (item: TreatmentPlanItem) =>
+    closed && !(markDoneOnly && item.status === 'ACCEPTED');
+  const optionDisabled = (item: TreatmentPlanItem, status: TreatmentPlanItemStatus) =>
+    (locked && status === 'PROPOSED') || (closed && status !== item.status && status !== 'DONE');
   if (items.length === 0) {
     return <EmptyState role="status" title={copy.emptyItemsTitle} description={copy.emptyItemsDescription} />;
   }
@@ -479,12 +493,12 @@ function ItemsTable({
                         <select
                           aria-label={copy.itemStatusSelectLabel(item.toothNumber)}
                           value={item.status}
-                          disabled={updating || closed}
+                          disabled={updating || statusFrozen(item)}
                           onChange={(e) => onStatusChange(item.id, e.target.value as TreatmentPlanItemStatus)}
                           className={cn(fieldClass, 'h-8 px-2 py-1 text-xs')}
                         >
                           {ITEM_STATUS_OPTIONS.map((status) => (
-                            <option key={status} value={status} disabled={locked && status === 'PROPOSED'}>
+                            <option key={status} value={status} disabled={optionDisabled(item, status)}>
                               {ITEM_STATUS_LABELS[status]}
                             </option>
                           ))}
@@ -560,12 +574,12 @@ function ItemsTable({
                 <select
                   aria-label={copy.itemStatusSelectLabel(item.toothNumber)}
                   value={item.status}
-                  disabled={updating || closed}
+                  disabled={updating || statusFrozen(item)}
                   onChange={(e) => onStatusChange(item.id, e.target.value as TreatmentPlanItemStatus)}
                   className={cn(fieldClass, 'h-9 w-auto text-xs')}
                 >
                   {ITEM_STATUS_OPTIONS.map((status) => (
-                    <option key={status} value={status} disabled={locked && status === 'PROPOSED'}>
+                    <option key={status} value={status} disabled={optionDisabled(item, status)}>
                       {ITEM_STATUS_LABELS[status]}
                     </option>
                   ))}
@@ -1725,6 +1739,7 @@ export function TreatmentPlansTab({
                   onRemove={openRemoveConfirm}
                   locked={signed}
                   closed={closed}
+                  markDoneOnly={planDetail?.status === 'COMPLETED'}
                 />
 
                 <Separator />
@@ -1901,7 +1916,9 @@ export function TreatmentPlansTab({
                 {/* Cerrado (DX-109): tampoco se agregan ítems. */}
                 {closed && planDetail && !signed ? (
                   <p role="status" className="text-sm text-muted">
-                    {copy.closedItemsNotice(PLAN_STATUS_LABELS[planDetail.status])}
+                    {planDetail.status === 'COMPLETED'
+                      ? copy.completedItemsNotice
+                      : copy.closedItemsNotice(PLAN_STATUS_LABELS[planDetail.status])}
                   </p>
                 ) : null}
                 {signed || closed ? null : catalogItems.length === 0 ? (
