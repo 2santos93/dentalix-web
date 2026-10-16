@@ -2,13 +2,15 @@ import { randomUUID } from 'node:crypto';
 import { test, expect } from './support/test';
 import { loginAs, sessionCookie } from './support/auth';
 import { registerClinicViaApi } from './support/api';
+import { invitationLinkFor } from './support/mail';
 
 /**
  * DX-070 (TST-004): invitar a una persona del equipo y que ACEPTE en otra
  * sesión.
  *
- *   1. El ADMIN, en /staff, invita a una odontóloga y copia el enlace del
- *      diálogo «Invitación creada» (el token solo se ve ahí).
+ *   1. El ADMIN, en /staff, invita a una odontóloga. DX-029: el diálogo
+ *      «Invitación creada» ya NO muestra el enlace; solo llega al correo de
+ *      la invitada (la suite lo lee del buzón de e2e).
  *   2. En OTRO contexto del navegador (otra persona, sin la cookie del ADMIN)
  *      se abre `/invitacion/[token]`: clínica, rol y correo enmascarado, se
  *      crea la contraseña y entra directo a la app con su propia sesión.
@@ -56,9 +58,10 @@ test('un ADMIN invita, otra sesión acepta en /invitacion/[token] y entra con su
 
   const created = page.getByRole('dialog', { name: 'Invitación creada' });
   await expect(created).toBeVisible({ timeout: 10_000 });
-  await expect(created.getByText(/le enviamos un correo con este enlace/i)).toBeVisible();
-  const link = (await created.getByText(/\/invitacion\//).textContent())?.trim() ?? '';
-  expect(link).toMatch(new RegExp(`^${origin}/invitacion/[^/\\s]+$`));
+  await expect(created.getByText(`Le enviamos un correo a ${invitee.email}`, { exact: false })).toBeVisible();
+  await expect(created.getByText(/\/invitacion\//)).toHaveCount(0);
+  const link = await invitationLinkFor(invitee.email);
+  expect(link).toMatch(new RegExp(`^${origin}/invitacion/[0-9a-f]{64}$`));
   await created.getByRole('button', { name: 'Listo' }).click();
   const table = page.getByRole('table', { name: 'Personal de la clínica' });
   await expect(table).toContainText(invitee.email);
@@ -143,8 +146,8 @@ test('«Reenviar invitación» pide confirmación, avisa y deja inservible el en
   await form.getByLabel('Rol').selectOption({ label: 'Asistente' });
   await form.getByRole('button', { name: 'Enviar invitación' }).click();
   const created = page.getByRole('dialog', { name: 'Invitación creada' });
-  const oldLink = (await created.getByText(/\/invitacion\//).textContent())?.trim() ?? '';
   await created.getByRole('button', { name: 'Listo' }).click();
+  const oldLink = await invitationLinkFor(invitee.email);
 
   const row = page
     .getByRole('table', { name: 'Personal de la clínica' })
@@ -161,6 +164,7 @@ test('«Reenviar invitación» pide confirmación, avisa y deja inservible el en
   await expect(page.getByText('Invitación reenviada')).toBeVisible({ timeout: 10_000 });
   await expect(confirm).toBeHidden();
   await expect(row).toContainText('Correo: Enviado', { timeout: 15_000 });
+  await expect.poll(() => invitationLinkFor(invitee.email)).not.toBe(oldLink);
 
   // El enlace anterior ya no sirve.
   const other = await browser.newContext({ locale: 'es-CO', timezoneId: 'America/Bogota' });

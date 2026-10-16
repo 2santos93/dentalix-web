@@ -15,11 +15,10 @@ export async function listInvitations(token: string): Promise<Invitation[]> {
 }
 
 /**
- * `POST /staff/invitations` — issues a new invitation, queues its email (sent
- * in the background, DX-088) and returns it together with the raw `token`
- * (only ever exposed here and on resend) so the caller can also build the
- * shareable invitation link. `emailDelivery` is `PENDING` when the email was
- * queued, `null` when it couldn't be.
+ * `POST /staff/invitations` — issues a new invitation and queues its email
+ * (sent in the background, DX-088). DX-029: the token is NOT returned — the
+ * link only travels by email to the invitee. `emailDelivery` is `PENDING`
+ * when the email was queued, `null` when it couldn't be.
  */
 export async function createInvitation(
   token: string,
@@ -35,13 +34,10 @@ export async function createInvitation(
 /**
  * `POST /staff/invitations/:id/resend` — «Reenviar invitación» (DX-088): la
  * misma invitación con un token nuevo (el enlace anterior deja de servir), 7
- * días más y un email nuevo. Devuelve el token nuevo (para copiar el enlace si
- * el email no se pudo programar) y `emailDelivery`.
+ * días más y un email nuevo. Devuelve `emailDelivery` (el token solo va en el
+ * email, DX-029).
  */
-export async function resendInvitation(
-  token: string,
-  id: string,
-): Promise<CreatedInvitation> {
+export async function resendInvitation(token: string, id: string): Promise<CreatedInvitation> {
   return apiFetch<CreatedInvitation>(`/staff/invitations/${encodeURIComponent(id)}/resend`, {
     method: 'POST',
     token,
@@ -83,11 +79,8 @@ export async function acceptInvitation(
   inviteToken: string,
   password: string,
 ): Promise<{ accessToken: string }> {
-  return apiFetch<{ accessToken: string }>(
-    `/public/invitations/${inviteToken}/accept`,
-    {
-      method: 'POST',
-      body: { password },
-    },
-  );
+  return apiFetch<{ accessToken: string }>(`/public/invitations/${inviteToken}/accept`, {
+    method: 'POST',
+    body: { password },
+  });
 }

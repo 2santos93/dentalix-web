@@ -2,6 +2,7 @@ import { test, expect, type APIRequestContext, type Locator, type Page } from '.
 import { randomUUID } from 'node:crypto';
 import { sessionCookie } from './support/auth';
 import { API_URL, tenantOrigin } from './support/urls';
+import { registerClinicViaApi } from './support/api';
 
 /**
  * e2e (DX-012): presupuesto imprimible del plan y aceptación firmada.
@@ -344,22 +345,16 @@ test('recepción imprime el presupuesto desde el estado de cuenta, pero no lo ac
   // Otra clínica (registrada al vuelo) no ve el presupuesto: 404.
   const otherSub = `test-clinic-dx12-${suffix}`;
   const otherEmail = `dx12.${suffix}@example.com`;
-  const reg = await page.request.post(`${API_URL}/auth/register`, {
-    data: {
-      clinicName: `Otra DX012 ${suffix}`,
-      subdomain: otherSub,
-      email: otherEmail,
-      password: 'Password123!',
-      fullName: 'Otra Clínica',
-    },
+  // DX-029: el registro se confirma desde el email (lo hace el helper).
+  const otherSession = await registerClinicViaApi(page.request, {
+    clinicName: `Otra DX012 ${suffix}`,
+    subdomain: otherSub,
+    email: otherEmail,
+    password: 'Password123!',
+    fullName: 'Otra Clínica',
   });
-  expect(reg.ok(), `register falló: ${await reg.text()}`).toBeTruthy();
   const otherHost = new URL(tenantOrigin(otherSub)).host;
-  const otherLogin = await page.request.post(`${API_URL}/auth/login`, {
-    headers: { 'X-Tenant-Host': otherHost },
-    data: { email: otherEmail, password: 'Password123!' },
-  });
-  const otherToken = ((await otherLogin.json()) as { accessToken: string }).accessToken;
+  const otherToken = otherSession.headers.Authorization.replace(/^Bearer /, '');
   const foreign = await page.request.get(
     `${API_URL}/patients/${data.patientId}/treatment-plans/${data.planId}/quote`,
     { headers: { 'X-Tenant-Host': otherHost, Authorization: `Bearer ${otherToken}` } },

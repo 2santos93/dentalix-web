@@ -24,8 +24,10 @@ const copy = {
   // Sin "Intenta de nuevo." — `SectionError` trae su propio botón.
   loadError: 'No pudimos verificar la invitación.',
   invitedAs: (role: string) => `Te invitaron como ${role}`,
-  newUserHint: 'Crea tu contraseña para activar tu cuenta.',
+  newUserHint:
+    'Crea tu contraseña para activar tu cuenta. Si ya tenías una cuenta sin confirmar, puedes usar tu contraseña de siempre o elegir una nueva (cerraremos las otras sesiones).',
   existingUserHint: 'Ingresa tu contraseña de Dentalix para continuar.',
+  forgotPassword: '¿Olvidaste tu contraseña?',
   passwordLabel: 'Contraseña',
   submit: 'Aceptar invitación',
   submitting: 'Activando…',
@@ -33,7 +35,7 @@ const copy = {
   // 404 al verificar: el enlace no corresponde a ninguna invitación.
   notFound: 'Este enlace de invitación no existe. Revisa que esté completo o pide uno nuevo.',
   // 401 al aceptar con una cuenta existente: la contraseña no coincide.
-  wrongPassword: 'La contraseña no es correcta.',
+  wrongPassword: 'La contraseña no es correcta. Usa la de tu cuenta de Dentalix o recupérala.',
   loginLink: 'Inicia sesión',
   expiredTitle: 'Invitación expirada',
   expiredMessage:
@@ -101,7 +103,10 @@ export function AcceptInvitationForm({ inviteToken }: { inviteToken: string }) {
       } catch (err) {
         if (cancelled) return;
         setLoadError(
-          apiErrorMessage(err, { fallback: copy.loadError, byStatus: { 404: copy.notFound } }),
+          apiErrorMessage(err, {
+            fallback: copy.loadError,
+            byStatus: { 404: copy.notFound },
+          }),
         );
       } finally {
         if (!cancelled) setLoading(false);
@@ -124,7 +129,10 @@ export function AcceptInvitationForm({ inviteToken }: { inviteToken: string }) {
       router.push('/patients');
     } catch (err) {
       setSubmitError(
-        apiErrorMessage(err, { fallback: copy.genericError, byStatus: { 401: copy.wrongPassword } }),
+        apiErrorMessage(err, {
+          fallback: copy.genericError,
+          byStatus: { 401: copy.wrongPassword },
+        }),
       );
     } finally {
       setSubmitting(false);
@@ -169,7 +177,7 @@ export function AcceptInvitationForm({ inviteToken }: { inviteToken: string }) {
           <p className="text-sm text-muted">{invitation.maskedEmail}</p>
         ) : null}
         <p className="text-sm text-muted">
-          {invitation.userExists ? copy.existingUserHint : copy.newUserHint}
+          {invitation.requiresCurrentPassword ? copy.existingUserHint : copy.newUserHint}
         </p>
       </div>
 
@@ -179,7 +187,7 @@ export function AcceptInvitationForm({ inviteToken }: { inviteToken: string }) {
           name="password"
           type="password"
           minLength={8}
-          autoComplete="new-password"
+          autoComplete={invitation.requiresCurrentPassword ? 'current-password' : 'new-password'}
           required
           disabled={submitting}
           aria-invalid={submitError ? true : undefined}
@@ -193,6 +201,15 @@ export function AcceptInvitationForm({ inviteToken }: { inviteToken: string }) {
         <InlineError id={ERROR_ID} variant="summary">
           {submitError}
         </InlineError>
+      ) : null}
+
+      {invitation.requiresCurrentPassword ? (
+        <Link
+          href="/olvide-contrasena"
+          className="self-start text-sm font-medium text-primary hover:underline"
+        >
+          {copy.forgotPassword}
+        </Link>
       ) : null}
 
       <Button type="submit" size="lg" disabled={submitting} className="mt-1 w-full">

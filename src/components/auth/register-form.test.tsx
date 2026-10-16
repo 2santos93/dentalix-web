@@ -66,4 +66,26 @@ describe('RegisterForm', () => {
     expect(screen.getByLabelText(/correo/i)).toHaveAttribute('aria-describedby', errorId);
     expect(screen.getByLabelText(/contraseña/i)).toHaveAttribute('aria-describedby', errorId);
   });
+
+  // DX-029: la respuesta del registro es la misma exista o no el correo.
+  it('tras enviar muestra «Revisa tu correo» sin decir si el correo ya tenía cuenta', async () => {
+    (apiFetch as jest.Mock).mockResolvedValueOnce({ message: 'genérico' });
+    render(<RegisterForm tenant={null} />);
+    fillRequiredFields();
+    fireEvent.click(screen.getByRole('button', { name: /crear cuenta/i }));
+
+    expect(await screen.findByRole('heading', { name: 'Revisa tu correo' })).toBeInTheDocument();
+    expect(screen.getByText(/Si ana@example\.com puede registrar una clínica/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /crear cuenta/i })).not.toBeInTheDocument();
+  });
+
+  it('un 409 sin mensaje propio habla solo del subdominio (nunca del correo)', async () => {
+    (apiFetch as jest.Mock).mockRejectedValueOnce(new ApiError(409, 'Conflict'));
+    render(<RegisterForm tenant={null} />);
+    fillRequiredFields();
+    fireEvent.click(screen.getByRole('button', { name: /crear cuenta/i }));
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).not.toHaveTextContent(/correo/i);
+  });
 });

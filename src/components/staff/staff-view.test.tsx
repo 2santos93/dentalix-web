@@ -2,11 +2,7 @@ import { act, render, screen, waitFor, within } from '@testing-library/react';
 import { setupUser } from '@/lib/test/user';
 import { DELIVERY_POLL_MS, StaffView } from './staff-view';
 import { listStaffDirectory, type StaffDirectoryEntry } from '@/lib/staff/staff-api';
-import {
-  createInvitation,
-  resendInvitation,
-  revokeInvitation,
-} from '@/lib/staff/invitations-api';
+import { createInvitation, resendInvitation, revokeInvitation } from '@/lib/staff/invitations-api';
 import { ApiError } from '@/lib/api/client';
 import { Toaster } from '@/components/errors/toaster';
 
@@ -86,12 +82,11 @@ describe('StaffView', () => {
     render(<StaffView token="tok" />);
     await screen.findByRole('table', { name: /personal/i });
 
-    expect(
-      screen.getByRole('link', { name: /ver el perfil de ana ríos/i }),
-    ).toHaveAttribute('href', '/staff/u1');
-    expect(
-      screen.queryByRole('link', { name: /ver el perfil de beto/i }),
-    ).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: /ver el perfil de ana ríos/i })).toHaveAttribute(
+      'href',
+      '/staff/u1',
+    );
+    expect(screen.queryByRole('link', { name: /ver el perfil de beto/i })).not.toBeInTheDocument();
   });
 
   it('la tabla ya no edita: ni el nombre ni el rol son campos dentro de ella', async () => {
@@ -111,9 +106,7 @@ describe('StaffView', () => {
 
     // La invitación tiene disparador de acciones; el miembro no, porque su
     // fila entera ya enlaza a su perfil y ahí se gestiona.
-    expect(
-      screen.getByRole('button', { name: /acciones de Beto/i }),
-    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: /acciones de Beto/i })).toBeInTheDocument();
     expect(within(filaMiembro).queryByRole('button')).not.toBeInTheDocument();
   });
 
@@ -134,10 +127,7 @@ describe('StaffView', () => {
     await user.type(screen.getByRole('searchbox', { name: /buscar/i }), 'ana');
 
     await waitFor(() =>
-      expect(mockedList).toHaveBeenCalledWith(
-        'tok',
-        expect.objectContaining({ search: 'ana' }),
-      ),
+      expect(mockedList).toHaveBeenCalledWith('tok', expect.objectContaining({ search: 'ana' })),
     );
   });
 
@@ -148,10 +138,7 @@ describe('StaffView', () => {
 
     await user.selectOptions(screen.getByLabelText(/filtrar por rol/i), 'DENTIST');
     await waitFor(() =>
-      expect(mockedList).toHaveBeenCalledWith(
-        'tok',
-        expect.objectContaining({ role: 'DENTIST' }),
-      ),
+      expect(mockedList).toHaveBeenCalledWith('tok', expect.objectContaining({ role: 'DENTIST' })),
     );
 
     await user.selectOptions(screen.getByLabelText(/filtrar por estado/i), 'INACTIVE');
@@ -171,10 +158,7 @@ describe('StaffView', () => {
 
     await user.click(screen.getByRole('button', { name: /siguiente/i }));
     await waitFor(() =>
-      expect(mockedList).toHaveBeenCalledWith(
-        'tok',
-        expect.objectContaining({ page: 2 }),
-      ),
+      expect(mockedList).toHaveBeenCalledWith('tok', expect.objectContaining({ page: 2 })),
     );
 
     await user.selectOptions(screen.getByLabelText(/filtrar por rol/i), 'ADMIN');
@@ -196,7 +180,6 @@ describe('StaffView', () => {
     role: 'ASSISTANT' as const,
     status: 'VALID' as const,
     expiresAt: '2026-08-15T00:00:00.000Z',
-    token: 'token-nuevo',
     emailDelivery: 'PENDING' as const,
   };
 
@@ -215,8 +198,20 @@ describe('StaffView', () => {
       page([
         miembro,
         invitacion,
-        { ...invitacion, id: 'i2', fullName: 'Ceci', email: 'ceci@clinic.com', emailDelivery: 'FAILED' },
-        { ...invitacion, id: 'i3', fullName: 'Dani', email: 'dani@clinic.com', emailDelivery: 'PENDING' },
+        {
+          ...invitacion,
+          id: 'i2',
+          fullName: 'Ceci',
+          email: 'ceci@clinic.com',
+          emailDelivery: 'FAILED',
+        },
+        {
+          ...invitacion,
+          id: 'i3',
+          fullName: 'Dani',
+          email: 'dani@clinic.com',
+          emailDelivery: 'PENDING',
+        },
       ]),
     );
     render(<StaffView token="tok" />);
@@ -257,18 +252,45 @@ describe('StaffView', () => {
     await waitFor(() => expect(mockedList).toHaveBeenCalled());
   });
 
-  it('si el correo no se pudo programar, muestra el enlace nuevo para compartirlo', async () => {
-    mockedResend.mockResolvedValue({ ...reenviada, emailDelivery: null });
+  it('DX-029: al invitar confirma el correo enviado y no muestra ni deja copiar el enlace', async () => {
+    mockedCreate.mockResolvedValue({ ...reenviada, email: 'nueva@clinic.com' });
     const user = setupUser();
     render(<StaffView token="tok" />);
+    await screen.findByRole('table', { name: /personal/i });
+
+    await user.click(screen.getByRole('button', { name: 'Invitar' }));
+    await user.type(screen.getByLabelText('Nombre completo'), 'Nueva Persona');
+    await user.type(screen.getByLabelText('Correo electrónico'), 'nueva@clinic.com');
+    await user.click(screen.getByRole('button', { name: 'Enviar invitación' }));
+
+    const created = await screen.findByRole('dialog', {
+      name: 'Invitación creada',
+    });
+    expect(within(created).getByText(/nueva@clinic\.com/)).toBeInTheDocument();
+    expect(within(created).getByText(/solo llega a su correo/i)).toBeInTheDocument();
+    expect(within(created).queryByRole('button', { name: 'Copiar' })).not.toBeInTheDocument();
+    expect(within(created).queryByText(/\/invitacion\//)).not.toBeInTheDocument();
+  });
+
+  it('DX-029: si el correo no se pudo programar, avisa con «Reintentar» y nunca muestra un enlace', async () => {
+    mockedResend.mockResolvedValue({ ...reenviada, emailDelivery: null });
+    const user = setupUser();
+    render(
+      <>
+        <StaffView token="tok" />
+        <Toaster />
+      </>,
+    );
     await screen.findByRole('table', { name: /personal/i });
 
     const dialog = await abrirReenviar(user);
     await user.click(within(dialog).getByRole('button', { name: /sí, reenviar/i }));
 
-    const created = await screen.findByRole('dialog', { name: 'Invitación reenviada' });
-    expect(within(created).getByText(/token-nuevo/)).toBeInTheDocument();
-    expect(within(created).getByText(/no pudimos programar el correo/i)).toBeInTheDocument();
+    expect(
+      await screen.findByText(/no pudimos programar el correo de la invitación/i),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument();
+    expect(screen.queryByText(/\/invitacion\//)).not.toBeInTheDocument();
   });
 
   it('un 404 al reenviar avisa sin «Reintentar» (no serviría) y recarga la lista', async () => {
@@ -297,7 +319,10 @@ describe('StaffView', () => {
 
   it('un 429 (tope de envíos) muestra el mensaje de la API sin «Reintentar»', async () => {
     mockedResend.mockRejectedValue(
-      new ApiError(429, 'Ya enviamos un correo a esta persona hace un momento. Espera 42 segundos antes de volver a enviarlo.'),
+      new ApiError(
+        429,
+        'Ya enviamos un correo a esta persona hace un momento. Espera 42 segundos antes de volver a enviarlo.',
+      ),
     );
     const user = setupUser();
     render(
@@ -359,9 +384,7 @@ describe('StaffView', () => {
     jest.useFakeTimers();
     try {
       const pendiente = { ...invitacion, emailDelivery: 'PENDING' as const };
-      mockedList
-        .mockResolvedValueOnce(page([pendiente]))
-        .mockResolvedValueOnce(page([invitacion]));
+      mockedList.mockResolvedValueOnce(page([pendiente])).mockResolvedValueOnce(page([invitacion]));
       render(<StaffView token="tok" />);
       expect(await screen.findByText('Correo: Pendiente')).toBeInTheDocument();
       expect(mockedList).toHaveBeenCalledTimes(1);
@@ -372,9 +395,10 @@ describe('StaffView', () => {
       expect(await screen.findByText('Correo: Enviado')).toBeInTheDocument();
       expect(mockedList).toHaveBeenCalledTimes(2);
       // Se anuncia a los lectores de pantalla (región aria-live).
-      expect(
-        screen.getByText('Correo de invitación enviado a beto@clinic.com.'),
-      ).toHaveAttribute('aria-live', 'polite');
+      expect(screen.getByText('Correo de invitación enviado a beto@clinic.com.')).toHaveAttribute(
+        'aria-live',
+        'polite',
+      );
       // Sin skeleton: la tabla siguió en pantalla durante el sondeo.
       expect(screen.getByRole('table', { name: /personal/i })).toBeInTheDocument();
 
@@ -459,16 +483,12 @@ describe('contrato de vista de listado', () => {
 
     // La cabecera es identidad: titulo y linea de apoyo, nada mas.
     const header = heading.closest('div')?.parentElement as HTMLElement;
-    expect(
-      within(header).queryByRole('button', { name: /invitar/i }),
-    ).not.toBeInTheDocument();
+    expect(within(header).queryByRole('button', { name: /invitar/i })).not.toBeInTheDocument();
 
     // El boton esta en la misma barra que el buscador, que es con lo que se usa.
     const toolbar = screen.getByRole('searchbox').closest('div')?.parentElement
       ?.parentElement as HTMLElement;
-    expect(
-      within(toolbar).getByRole('button', { name: /invitar/i }),
-    ).toBeInTheDocument();
+    expect(within(toolbar).getByRole('button', { name: /invitar/i })).toBeInTheDocument();
   });
 
   it('sin nadie dado de alta invita a crear, en vez de hablar de busquedas', async () => {
@@ -478,9 +498,7 @@ describe('contrato de vista de listado', () => {
     mockedList.mockResolvedValue(page([]));
     render(<StaffView token="tok" />);
 
-    expect(
-      await screen.findByText('Todavía no hay nadie en el equipo.'),
-    ).toBeInTheDocument();
+    expect(await screen.findByText('Todavía no hay nadie en el equipo.')).toBeInTheDocument();
     expect(screen.queryByText(/coincida/i)).not.toBeInTheDocument();
   });
 
@@ -490,13 +508,8 @@ describe('contrato de vista de listado', () => {
     await screen.findByRole('table', { name: /personal/i });
 
     mockedList.mockResolvedValue(page([]));
-    await user.selectOptions(
-      screen.getByLabelText('Filtrar por rol'),
-      'DENTIST',
-    );
+    await user.selectOptions(screen.getByLabelText('Filtrar por rol'), 'DENTIST');
 
-    expect(
-      await screen.findByText('No hay nadie que coincida.'),
-    ).toBeInTheDocument();
+    expect(await screen.findByText('No hay nadie que coincida.')).toBeInTheDocument();
   });
 });

@@ -1,6 +1,7 @@
 import { expect, type APIRequestContext } from '@playwright/test';
 import type { RegisterAndLoginParams } from './auth';
 import { API_URL, tenantOrigin } from './urls';
+import { invitationLinkFor, registrationTokenFor } from './mail';
 
 /**
  * Siembra por la API, sin pasar por la UI (DX-070): para preparar en un
@@ -32,13 +33,24 @@ export async function apiLogin(
   return { origin, headers: { Authorization: `Bearer ${accessToken}`, 'X-Tenant-Host': host } };
 }
 
-/** Registra una clínica nueva por la API e inicia sesión con su dueño (ADMIN). */
+/**
+ * Registra una clínica nueva por la API e inicia sesión con su dueño (ADMIN).
+ * DX-029: el registro (202) no crea nada hasta abrir el enlace del email, así
+ * que se lee del buzón de e2e y se confirma con `POST /auth/register/verify`.
+ */
 export async function registerClinicViaApi(
   request: APIRequestContext,
   clinic: RegisterAndLoginParams,
 ): Promise<ApiSession> {
-  const res = await request.post(`${API_URL}/auth/register`, { data: clinic });
-  expect(res.ok(), `registro por la API falló: ${await res.text()}`).toBeTruthy();
+  const host = new URL(tenantOrigin(clinic.subdomain)).host;
+  const res = await request.post(`${API_URL}/auth/register`, {
+    headers: { 'X-Tenant-Host': host },
+    data: clinic,
+  });
+  expect(res.status(), `registro por la API falló: ${await res.text()}`).toBe(202);
+  const token = await registrationTokenFor(clinic.email);
+  const verify = await request.post(`${API_URL}/auth/register/verify`, { data: { token } });
+  expect(verify.ok(), `confirmar el registro falló: ${await verify.text()}`).toBeTruthy();
   return apiLogin(request, tenantOrigin(clinic.subdomain), clinic.email, clinic.password);
 }
 
@@ -56,7 +68,8 @@ export async function apiPost<T>(
 
 /**
  * Da de alta a una persona del equipo por el camino real: el ADMIN la invita
- * (`POST /staff/invitations`) y ella acepta con su contraseña
+ * (`POST /staff/invitations`), el enlace le llega por email (DX-029: el ADMIN
+ * ya no recibe el token) y ella acepta con su contraseña
  * (`POST /public/invitations/:token/accept`).
  */
 export async function addStaffViaApi(
@@ -64,11 +77,12 @@ export async function addStaffViaApi(
   admin: ApiSession,
   person: { fullName: string; email: string; role: string; password: string },
 ): Promise<void> {
-  const { token } = await apiPost<{ token: string }>(request, admin, '/staff/invitations', {
+  await apiPost<object>(request, admin, '/staff/invitations', {
     fullName: person.fullName,
     email: person.email,
     role: person.role,
   });
+  const token = (await invitationLinkFor(person.email)).split('/').pop()!;
   const res = await request.post(`${API_URL}/public/invitations/${token}/accept`, {
     headers: { 'X-Tenant-Host': admin.headers['X-Tenant-Host'] },
     data: { password: person.password },
