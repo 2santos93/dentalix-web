@@ -27,7 +27,11 @@ interface FormModalProps {
   submitting?: boolean;
   /** Independent of `submitting` — e.g. required fields missing. */
   submitDisabled?: boolean;
-  /** Top-of-form error banner (names the problem). */
+  /**
+   * Top-of-form error banner (names the problem). When it appears it is
+   * scrolled into view and focused: in a long form the submit button sits far
+   * below it, and an off-screen banner reads as "nothing happened".
+   */
   error?: string | null;
   /** `lg` widens for denser, multi-column forms. */
   size?: 'default' | 'lg';
@@ -56,6 +60,15 @@ export function FormModal({
   size = 'default',
   destructive = false,
 }: FormModalProps) {
+  const errorRef = React.useRef<HTMLDivElement>(null);
+  React.useEffect(() => {
+    if (!error) return;
+    const el = errorRef.current;
+    // `?.` porque jsdom no implementa scrollIntoView.
+    el?.scrollIntoView?.({ block: 'nearest' });
+    el?.focus({ preventScroll: true });
+  }, [error]);
+
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className={cn(size === 'lg' && 'max-w-2xl')}>
@@ -64,7 +77,15 @@ export function FormModal({
           {description ? <DialogDescription>{description}</DialogDescription> : null}
         </DialogHeader>
         <form onSubmit={onSubmit} className="flex flex-col gap-4">
-          {error ? <InlineError variant="summary">{error}</InlineError> : null}
+          {error ? (
+            <div
+              ref={errorRef}
+              tabIndex={-1}
+              className="rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            >
+              <InlineError variant="summary">{error}</InlineError>
+            </div>
+          ) : null}
           {children}
           <DialogFooter>
             <DialogClose asChild>

@@ -1,6 +1,7 @@
 import {
   draftFromTemplateItem,
   emptyItemDraft,
+  itemDraftErrors,
   itemInputFromDraft,
   templateItemInputFromDraft,
 } from './prescription-draft';
@@ -51,5 +52,60 @@ describe('prescription-draft', () => {
 
   it('para plantillas el principio activo siempre viaja (la API dice si falta)', () => {
     expect(templateItemInputFromDraft(emptyItemDraft())).toEqual({ activeIngredient: '' });
+  });
+});
+
+describe('itemDraftErrors', () => {
+  const complete = {
+    ...emptyItemDraft(),
+    activeIngredient: 'Amoxicilina',
+    concentration: '500 mg',
+    pharmaceuticalForm: 'Cápsula',
+    route: 'Oral',
+    dose: '1 cápsula',
+    frequency: 'Cada 8 horas',
+    durationDays: '7',
+    totalQuantity: '21',
+    quantityUnit: 'cápsulas',
+  };
+
+  it('un medicamento completo en Colombia no tiene errores (envases y marca opcionales)', () => {
+    expect(itemDraftErrors(complete, 'CO')).toEqual({});
+  });
+
+  it('marca cada campo obligatorio vacío con un mensaje en español', () => {
+    const errors = itemDraftErrors(emptyItemDraft(), 'CO');
+    expect(Object.keys(errors)).toEqual([
+      'activeIngredient',
+      'concentration',
+      'pharmaceuticalForm',
+      'route',
+      'dose',
+      'frequency',
+      'durationDays',
+      'totalQuantity',
+      'quantityUnit',
+    ]);
+    expect(errors.concentration).toBe('Falta la concentración.');
+    expect(errors.durationDays).toMatch(/^Falta la duración/);
+  });
+
+  it('en España el nº de envases es obligatorio', () => {
+    expect(itemDraftErrors(complete, 'ES')).toEqual({ packages: expect.stringMatching(/envases/) });
+    expect(itemDraftErrors({ ...complete, packages: '1' }, 'ES')).toEqual({});
+  });
+
+  it('los números deben ser enteros dentro de su rango, también con coma decimal', () => {
+    const errors = itemDraftErrors(
+      { ...complete, durationDays: '7,5', totalQuantity: '0', packages: '100' },
+      'CO',
+    );
+    expect(errors.durationDays).toBe('Debe ser un número entero entre 1 y 365.');
+    expect(errors.totalQuantity).toBe('Debe ser un número entero entre 1 y 9999.');
+    expect(errors.packages).toBe('Debe ser un número entero entre 1 y 99.');
+  });
+
+  it('un texto solo con espacios cuenta como vacío', () => {
+    expect(itemDraftErrors({ ...complete, dose: '   ' }, 'CO')).toEqual({ dose: 'Falta la dosis.' });
   });
 });

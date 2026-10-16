@@ -164,17 +164,99 @@ describe('NewPrescriptionModal', () => {
     );
   });
 
-  it('400 de la API: el mensaje en español queda en el modal, que sigue abierto', async () => {
+  it('400 de la API: el resumen del error queda en el modal, visible y con el foco', async () => {
     const user = setupUser();
+    const scrollIntoView = jest.fn();
+    Element.prototype.scrollIntoView = scrollIntoView;
     mockedIssue.mockRejectedValue(
-      new ApiError(400, 'No se puede emitir la receta: Medicamento 1: falta la dosis.'),
+      new ApiError(400, 'No se puede emitir la receta: Falta el número de historia clínica.'),
     );
     const { onOpenChange } = renderModal();
     await screen.findByText(/Se emite desde/);
+    await fillAmoxicilina(user);
+    await user.click(screen.getByRole('button', { name: 'Emitir receta' }));
+    const alert = (await screen.findByText(/Falta el número de historia clínica/)).closest(
+      '[role="alert"]',
+    ) as HTMLElement;
+    expect(alert).toBeInTheDocument();
+    await waitFor(() => expect(alert.parentElement).toHaveFocus());
+    expect(scrollIntoView).toHaveBeenCalled();
+    expect(onOpenChange).not.toHaveBeenCalledWith(false);
+  });
+
+  it('valida en el cliente: marca cada campo que falta, lleva el foco al primero y no llama a la API', async () => {
+    const user = setupUser();
+    renderModal();
+    await screen.findByText(/Se emite desde/);
     await user.type(screen.getByLabelText(/principio activo/i), 'Amoxicilina');
     await user.click(screen.getByRole('button', { name: 'Emitir receta' }));
-    expect(await screen.findByText(/falta la dosis/)).toBeInTheDocument();
-    expect(onOpenChange).not.toHaveBeenCalledWith(false);
+
+    const concentration = screen.getByLabelText(/^concentración/i);
+    expect(concentration).toHaveAttribute('aria-invalid', 'true');
+    expect(concentration).toHaveAccessibleDescription('Falta la concentración.');
+    expect(concentration).toHaveFocus();
+    expect(screen.getByLabelText(/^dosis/i)).toHaveAttribute('aria-invalid', 'true');
+    expect(screen.getByLabelText(/duración/i)).toHaveAttribute('aria-invalid', 'true');
+    expect(screen.getByLabelText(/principio activo/i)).not.toHaveAttribute('aria-invalid');
+    expect(screen.getByLabelText(/marca comercial/i)).not.toHaveAttribute('aria-invalid');
+    expect(screen.getByLabelText(/nº de envases/i)).not.toHaveAttribute('aria-invalid');
+    expect(mockedIssue).not.toHaveBeenCalled();
+
+    // Al escribir en un campo, su error desaparece; los demás siguen.
+    await user.type(concentration, '500 mg');
+    expect(concentration).not.toHaveAttribute('aria-invalid');
+    expect(screen.queryByText('Falta la concentración.')).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/^dosis/i)).toHaveAttribute('aria-invalid', 'true');
+  });
+
+  it('España: el nº de envases y el nº de colegiado vacíos se marcan', async () => {
+    const user = setupUser();
+    mockedIssuer.mockResolvedValue(
+      makeIssuer({ country: 'ES', validityDays: 10, maxItems: 1, professionalLicense: null }),
+    );
+    renderModal();
+    await screen.findByText(/\(España\)/);
+    await fillAmoxicilina(user);
+    await user.click(screen.getByRole('button', { name: 'Emitir receta' }));
+    const packages = screen.getByLabelText('Nº de envases');
+    expect(packages).toHaveAttribute('aria-invalid', 'true');
+    expect(packages).toHaveFocus();
+    expect(screen.getByLabelText('Tu nº de colegiado')).toHaveAttribute('aria-invalid', 'true');
+    expect(screen.getByLabelText('Tu nº de colegiado')).toHaveAccessibleDescription(
+      /Falta tu nº de colegiado/,
+    );
+    expect(mockedIssue).not.toHaveBeenCalled();
+  });
+
+  it('elegir una plantilla limpia los errores de campo y el del servidor', async () => {
+    const user = setupUser();
+    mockedIssue.mockRejectedValueOnce(new ApiError(400, 'Falta el número de historia clínica.'));
+    renderModal();
+    const select = await screen.findByLabelText('Partir de una plantilla');
+    await waitFor(() => expect(select).not.toBeDisabled());
+    await user.click(screen.getByRole('button', { name: 'Emitir receta' }));
+    expect(screen.getByLabelText(/^concentración/i)).toHaveAttribute('aria-invalid', 'true');
+
+    await fillAmoxicilina(user);
+    await user.click(screen.getByRole('button', { name: 'Emitir receta' }));
+    expect(await screen.findByText('Falta el número de historia clínica.')).toBeInTheDocument();
+
+    await user.selectOptions(select, 'tpl1');
+    expect(screen.queryByText('Falta el número de historia clínica.')).not.toBeInTheDocument();
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/^concentración/i)).not.toHaveAttribute('aria-invalid');
+  });
+
+  it('editar un campo tras un error del servidor lo quita', async () => {
+    const user = setupUser();
+    mockedIssue.mockRejectedValueOnce(new ApiError(400, 'Falta el número de historia clínica.'));
+    renderModal();
+    await screen.findByText(/Se emite desde/);
+    await fillAmoxicilina(user);
+    await user.click(screen.getByRole('button', { name: 'Emitir receta' }));
+    expect(await screen.findByText('Falta el número de historia clínica.')).toBeInTheDocument();
+    await user.type(screen.getByLabelText(/indicaciones generales/i), 'x');
+    expect(screen.queryByText('Falta el número de historia clínica.')).not.toBeInTheDocument();
   });
 
   it('sin registro profesional en el perfil lo pide y lo manda', async () => {

@@ -1,6 +1,7 @@
 'use client';
 import * as React from 'react';
 import { useEffect, useMemo, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { Plus } from 'lucide-react';
 import { ApiError } from '@/lib/api/client';
 import {
@@ -16,13 +17,15 @@ import {
 import {
   draftFromTemplateItem,
   emptyItemDraft,
+  itemDraftErrors,
   itemInputFromDraft,
   type ItemDraft,
+  type ItemDraftErrors,
 } from '@/lib/prescriptions/prescription-draft';
 import { findAllergyMatches } from '@/lib/prescriptions/allergy-match';
 import { getMedicalHistory } from '@/lib/patients/clinical-api';
 import { FormModal } from '@/components/shared/form-modal';
-import { FormField } from '@/components/shared/form-field';
+import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { FieldError } from '@/components/errors/field-error';
 import { InlineError } from '@/components/errors/inline-error';
 import { SectionError } from '@/components/errors/section-error';
@@ -55,6 +58,7 @@ const copy = {
   notesLabel: 'Indicaciones generales (opcional)',
   licenseLabel: { CO: 'Tu registro profesional', ES: 'Tu nº de colegiado' },
   licenseHint: 'Tu perfil de esta clínica aún no lo tiene: se guardará en la receta y en tu perfil.',
+  licenseMissing: { CO: 'Falta tu registro profesional.', ES: 'Falta tu nº de colegiado.' },
   allergiesError: 'Alergias no comprobadas',
   allergyTitle: 'Alerta de alergia',
   allergyBody: (detail: string) => `El paciente tiene registrada alergia a: ${detail}.`,
@@ -75,8 +79,11 @@ interface NewPrescriptionModalProps {
 
 /**
  * «Nueva receta» (DX-013): desde una plantilla o en blanco, con uno o varios
- * medicamentos (en ES, uno). La API decide los campos obligatorios según el
- * país de la sede y responde 400 en español con todo lo que falta.
+ * medicamentos (en ES, uno). Antes de enviar valida en el cliente los campos
+ * obligatorios según el país de la sede (mismas reglas que la API): marca cada
+ * campo inválido junto al control y lleva el foco al primero. Lo que el
+ * formulario no conoce (documento o nacimiento del paciente) lo dice la API en
+ * un 400, que `FormModal` muestra en un resumen visible y con el foco.
  *
  * Alerta de alergia: el modal compara EN VIVO cada principio activo con las
  * alergias de la anamnesis y, si coincide, exige marcar una confirmación
@@ -113,6 +120,8 @@ export function NewPrescriptionModal({
   const [serverAllergy, setServerAllergy] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [itemErrors, setItemErrors] = useState<ItemDraftErrors[]>([]);
+  const [licenseError, setLicenseError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -190,11 +199,30 @@ export function NewPrescriptionModal({
   function updateItem(index: number, patch: Partial<ItemDraft>) {
     setItems((prev) => prev.map((item, i) => (i === index ? { ...item, ...patch } : item)));
     setServerAllergy(null);
+    setError(null);
+    // Al corregir un campo su error se va; los de los demás siguen.
+    setItemErrors((prev) =>
+      prev.map((errors, i) => {
+        if (i !== index) return errors;
+        const next = { ...errors };
+        for (const field of Object.keys(patch) as (keyof ItemDraft)[]) delete next[field];
+        return next;
+      }),
+    );
+  }
+
+  function removeItem(index: number) {
+    setItems((prev) => prev.filter((_, i) => i !== index));
+    setItemErrors((prev) => prev.filter((_, i) => i !== index));
+    setError(null);
   }
 
   function applyTemplate(id: string) {
     setTemplateId(id);
     setServerAllergy(null);
+    setError(null);
+    setItemErrors([]);
+    setLicenseError(null);
     const template = templates?.find((t) => t.id === id);
     if (!template) {
       setItems([emptyItemDraft()]);
@@ -207,8 +235,34 @@ export function NewPrescriptionModal({
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!issuer || tooMany || (alertKey !== null && !confirmed)) return;
-    setSubmitting(true);
     setError(null);
+
+    const nextItemErrors = items.map((item) => itemDraftErrors(item, country));
+    const nextLicenseError = needsLicense && !license.trim() ? copy.licenseMissing[country] : null;
+    // Ids en el orden en que se ven: el primero recibe el foco.
+    const invalidIds = [
+      ...nextItemErrors.flatMap((errors, index) =>
+        Object.keys(errors).map((field) => `rx-item-${index}-${field}`),
+      ),
+      ...(nextLicenseError ? ['rx-license'] : []),
+    ];
+    if (invalidIds.length > 0) {
+      // flushSync: el campo ya lleva aria-invalid y su mensaje cuando recibe
+      // el foco, así el lector de pantalla lo anuncia.
+      flushSync(() => {
+        setItemErrors(nextItemErrors);
+        setLicenseError(nextLicenseError);
+      });
+      const first = document.getElementById(invalidIds[0]);
+      // `?.` porque jsdom no implementa scrollIntoView.
+      first?.scrollIntoView?.({ block: 'center' });
+      first?.focus({ preventScroll: true });
+      return;
+    }
+    setItemErrors([]);
+    setLicenseError(null);
+
+    setSubmitting(true);
     const input: IssuePrescriptionInput = {
       items: items.map(itemInputFromDraft),
       ...(dispensationDate ? { dispensationDate } : {}),
@@ -315,12 +369,9 @@ export function NewPrescriptionModal({
                 idPrefix="rx-item"
                 mode={{ kind: 'prescription', country }}
                 allergyMatches={matchesByItem[index]}
+                errors={itemErrors[index]}
                 onChange={(patch) => updateItem(index, patch)}
-                onRemove={
-                  items.length > 1
-                    ? () => setItems((prev) => prev.filter((_, i) => i !== index))
-                    : undefined
-                }
+                onRemove={items.length > 1 ? () => removeItem(index) : undefined}
               />
             ))}
           </div>
@@ -342,17 +393,31 @@ export function NewPrescriptionModal({
                 id="rx-date"
                 type="date"
                 value={dispensationDate}
-                onChange={(e) => setDispensationDate(e.target.value)}
+                onChange={(e) => {
+                  setDispensationDate(e.target.value);
+                  setError(null);
+                }}
                 className="tabular-nums"
               />
             </FormField>
             {needsLicense ? (
-              <FormField htmlFor="rx-license" label={copy.licenseLabel[country]} hint={copy.licenseHint}>
+              <FormField
+                htmlFor="rx-license"
+                label={copy.licenseLabel[country]}
+                hint={copy.licenseHint}
+                error={licenseError}
+              >
                 <Input
                   id="rx-license"
                   value={license}
                   maxLength={60}
-                  onChange={(e) => setLicense(e.target.value)}
+                  aria-invalid={licenseError ? true : undefined}
+                  aria-describedby={licenseError ? fieldErrorId('rx-license') : undefined}
+                  onChange={(e) => {
+                    setLicense(e.target.value);
+                    setLicenseError(null);
+                    setError(null);
+                  }}
                 />
               </FormField>
             ) : null}
@@ -363,7 +428,10 @@ export function NewPrescriptionModal({
               rows={2}
               value={notes}
               maxLength={1000}
-              onChange={(e) => setNotes(e.target.value)}
+              onChange={(e) => {
+                setNotes(e.target.value);
+                setError(null);
+              }}
               className={cn(fieldClass, 'h-auto font-[inherit]')}
             />
           </FormField>
