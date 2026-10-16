@@ -28,3 +28,13 @@ describe('paymentPlanErrorMessage', () => {
     expect(message).not.toMatch(/already|cannot|insufficient|not found/i);
   });
 });
+
+describe('el 409 del plan de cuotas no manda a recepción a una pestaña que no ve', () => {
+  it('dice que la cancelación la hace un administrador', () => {
+    const message = paymentPlanErrorMessage(
+      new ApiError(409, 'This treatment plan already has an active payment plan'),
+    );
+    expect(message).toMatch(/administrador/i);
+    expect(message).not.toMatch(/cancela el actual/i);
+  });
+});

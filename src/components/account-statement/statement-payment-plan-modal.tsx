@@ -10,7 +10,8 @@ import { useBillablePlans } from '@/components/payments/use-billable-plans';
 const copy = {
   hasPaymentPlan: 'ya tiene plan de cuotas',
   allHavePaymentPlan:
-    'Todos los planes de este paciente ya tienen un plan de cuotas activo. Para cambiar uno, cancélalo desde el plan de tratamiento.',
+    // Recepción no ve el plan de tratamiento (clínico): quien cancela es ADMIN.
+    'Todos los planes de este paciente ya tienen un plan de cuotas activo. Para cambiar uno, un administrador debe cancelarlo desde el plan de tratamiento.',
   created: (plan: string) => `Plan de cuotas creado para el ${plan.toLowerCase()}.`,
 };
 

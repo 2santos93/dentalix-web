@@ -10,7 +10,8 @@ const copy = {
     'El plan ya no existe o ya no se puede cobrar. Cierra y vuelve a abrir para ver los planes actuales.',
   recordGeneric: 'No pudimos registrar el abono. Intenta de nuevo.',
   paymentPlanConflict:
-    'Este plan ya tiene un plan de cuotas activo. Elige otro plan o cancela el actual desde el plan de tratamiento.',
+    // Recepción no ve el plan de tratamiento (clínico): quien cancela es ADMIN.
+    'Este plan ya tiene un plan de cuotas activo. Para reemplazarlo, un administrador debe cancelarlo desde el plan de tratamiento.',
   paymentPlanBadRequest:
     'Revisa los datos del plan de cuotas: el total debe ser mayor que 0 y el pie no puede superarlo. Intenta de nuevo.',
   paymentPlanForbidden:
