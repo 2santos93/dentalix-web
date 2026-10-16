@@ -57,7 +57,11 @@ export function RegisterForm({ tenant }: { tenant: string | null }) {
       router.push('/login');
     } catch (err) {
       setError(
-        apiErrorMessage(err, { fallback: copy.genericError, byStatus: { 409: copy.taken } }),
+        apiErrorMessage(err, {
+          fallback: copy.genericError,
+          // 403 («Untrusted origin»): no hay administrador a quien pedir acceso.
+          byStatus: { 409: copy.taken, 403: copy.genericError },
+        }),
       );
     } finally {
       setSubmitting(false);

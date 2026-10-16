@@ -100,7 +100,8 @@ const copy = {
   emptyHint: 'Invita a la primera persona para empezar.',
   noMatches: 'No hay nadie que coincida.',
   noMatchesHint: 'Prueba con otra búsqueda o quita los filtros.',
-  genericLoadError: 'No pudimos cargar el personal. Intenta de nuevo.',
+  // Sin «Intenta de nuevo.»: alimenta SectionError, que trae Reintentar.
+  genericLoadError: 'No pudimos cargar el personal.',
   genericCreateError: 'No pudimos crear la invitación. Intenta de nuevo.',
   // 409 «Email already an active member».
   alreadyMember: 'Esa persona ya es miembro activo de la clínica.',

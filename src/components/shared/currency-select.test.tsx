@@ -51,6 +51,8 @@ describe('CurrencySelect', () => {
     expect(status).toHaveTextContent('Monedas no disponibles');
     expect(status).toHaveClass('h-10', 'w-44');
     expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
+    // Revisión M-4: el `<label htmlFor="cur">` del padre sigue teniendo destino.
+    expect(screen.getByRole('button', { name: 'Reintentar' })).toHaveAttribute('id', 'cur');
 
     await user.click(screen.getByRole('button', { name: 'Reintentar' }));
     const el = (await screen.findByRole('combobox')) as HTMLSelectElement;

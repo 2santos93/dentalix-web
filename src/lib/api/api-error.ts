@@ -27,3 +27,16 @@ export class ApiError extends Error {
     this.retryAfterSeconds = details.retryAfterSeconds ?? null;
   }
 }
+
+/**
+ * `fetch` no llegó a tener respuesta: sin red, DNS, CORS o conexión cortada
+ * (revisión D-2). Lo lanza SOLO `client.ts`, envolviendo el rechazo de `fetch`,
+ * para que «No hay conexión» no se diga ante cualquier `TypeError` de
+ * programación. `cause` guarda el error original para depurar.
+ */
+export class NetworkError extends Error {
+  constructor(public readonly cause: unknown) {
+    super('Network request failed');
+    this.name = 'NetworkError';
+  }
+}

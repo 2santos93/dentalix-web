@@ -4,10 +4,10 @@ import {
   setActiveLocationId,
 } from '@/lib/locations/location-store';
 import { apiBaseUrl } from './api-base';
-import { ApiError } from './api-error';
+import { ApiError, NetworkError } from './api-error';
 import { parseRetryAfter } from './error-message';
 
-export { ApiError };
+export { ApiError, NetworkError };
 
 const REFRESH_PATH = '/auth/refresh';
 
@@ -192,6 +192,21 @@ export function bootstrapSession(): Promise<void> {
   return bootstrapInFlight;
 }
 
+/**
+ * `fetch` que relanza su rechazo como `NetworkError` (revisión D-2), salvo
+ * `AbortError`/`TimeoutError`, que son de quien llama (cancelación o límite de
+ * tiempo) y pasan tal cual.
+ */
+async function fetchOrNetworkError(url: string, init: RequestInit): Promise<Response> {
+  try {
+    return await fetch(url, init);
+  } catch (err) {
+    const name = err instanceof Error || err instanceof DOMException ? err.name : null;
+    if (name === 'AbortError' || name === 'TimeoutError') throw err;
+    throw new NetworkError(err);
+  }
+}
+
 async function doFetch(
   path: string,
   opts: ApiOptions,
@@ -227,7 +242,7 @@ async function doFetch(
   const sentLocationId = getActiveLocationId();
   if (sentLocationId) headers['X-Location-Id'] = sentLocationId;
   if (opts.headers) Object.assign(headers, opts.headers);
-  const res = await fetch(`${apiBaseUrl()}${path}`, {
+  const res = await fetchOrNetworkError(`${apiBaseUrl()}${path}`, {
     method: opts.method ?? 'GET',
     headers,
     body:

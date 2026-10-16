@@ -1,4 +1,4 @@
-import { ApiError } from './api-error';
+import { ApiError, NetworkError } from './api-error';
 
 /**
  * El ÚNICO sitio que convierte un error de la API (o de red) en texto para la
@@ -7,8 +7,10 @@ import { ApiError } from './api-error';
  *
  * Orden de decisión:
  *
- * 1. Error de red / timeout (`fetch` rechaza; no hay status) → «sin conexión» o
- *    «tardó demasiado» (o `options.network` / `options.timeout`).
+ * 1. `NetworkError` (lo lanza `client.ts` cuando `fetch` rechaza) → «sin
+ *    conexión»; `TimeoutError` → «tardó demasiado» (o `options.network` /
+ *    `options.timeout`). Un `TypeError` cualquiera NO es «sin conexión»: suele
+ *    ser un fallo al procesar la respuesta y va al `fallback`.
  * 2. 5xx → `byStatus[status]`, o el `fallback` de la pantalla, o el genérico de
  *    servidor. El texto del servidor NUNCA se enseña en un 5xx, aunque venga en
  *    español: no aporta nada a quien lo lee y puede llevar detalles internos.
@@ -32,27 +34,30 @@ import { ApiError } from './api-error';
  * tildes/ñ/¿¡ (+2) contra vocabulario técnico inglés (must, should, not, found,
  * invalid, required…). Español solo si gana con ventaja; el empate (p. ej.
  * «Tenant mismatch», «Conflict», un 0–0) cuenta como técnico. Además se descarta
- * todo lo que parezca un volcado interno (saltos de línea, trazas, SQL, JSON o
- * más de 240 caracteres). Los casos reales de la API están fijados en
+ * todo lo que parezca un volcado interno (saltos de línea, trazas, SQL, objetos
+ * JSON o más de 240 caracteres; una pantalla que espera un mensaje de dominio
+ * largo, como la alerta de alergia de las recetas, sube el límite con
+ * `maxLength`). Los casos reales de la API están fijados en
  * `error-message.test.ts`; si la API añade un mensaje que la heurística
  * clasifique mal, se añade allí su caso.
  */
 
 export const errorMessageCopy = {
-  generic: 'Algo salió mal. Intenta de nuevo.',
+  // Sin «Intenta de nuevo»: estos textos acaban en superficies que ya traen
+  // Reintentar (SectionError, toast); DESIGN.md, «The Way-Out Rule».
+  generic: 'Algo salió mal.',
   validation: 'Revisa los datos: hay campos con valores no válidos.',
   unauthorized: 'Tu sesión expiró. Vuelve a iniciar sesión.',
   forbidden: 'No tienes permiso para hacer esto. Si lo necesitas, pide acceso a un administrador.',
   notFound: 'No encontramos lo que buscas: puede que se haya eliminado.',
-  conflict: 'Los datos cambiaron mientras trabajabas. Recarga y vuelve a intentarlo.',
+  conflict: 'No se pudo completar: choca con el estado actual de los datos. Recarga y revísalo.',
   gone: 'Este enlace o recurso ya no está disponible.',
   tooLarge: 'El archivo o los datos son demasiado grandes.',
-  tooManyRequests: 'Demasiados intentos seguidos. Espera un momento y vuelve a intentarlo.',
-  tooManyRequestsWait: (wait: string) =>
-    `Demasiados intentos seguidos. Espera ${wait} y vuelve a intentarlo.`,
-  server: 'El servidor tuvo un problema. Intenta de nuevo en unos minutos.',
+  tooManyRequests: 'Demasiados intentos seguidos. Espera un momento.',
+  tooManyRequestsWait: (wait: string) => `Demasiados intentos seguidos. Espera ${wait}.`,
+  server: 'El servidor tuvo un problema. Si sigue pasando, espera unos minutos.',
   network: 'No hay conexión con el servidor. Revisa tu conexión a internet.',
-  timeout: 'El servidor tardó demasiado en responder. Intenta de nuevo.',
+  timeout: 'El servidor tardó demasiado en responder.',
 };
 
 export interface ApiErrorMessageOptions {
@@ -64,6 +69,12 @@ export interface ApiErrorMessageOptions {
   network?: string;
   /** Sustituye al texto de «tardó demasiado». */
   timeout?: string;
+  /**
+   * Largo máximo de un mensaje del servidor para enseñarlo (240 por defecto).
+   * Para mensajes de dominio que pueden crecer, como la alerta de alergia con
+   * la lista de alérgenos.
+   */
+  maxLength?: number;
 }
 
 const MAX_HUMAN_LENGTH = 240;
@@ -103,13 +114,15 @@ const ENGLISH_WORDS = new Set([
 const SPANISH_SUFFIX = /(ción|sión|ciones|dad|dades|ado|ada|ados|adas|ido|ida|idos|idas|mente)$/;
 const SPANISH_MARKS = /[áéíóúñü¿¡]/i;
 // Cosas que nunca deben llegar a la pantalla: trazas, SQL, JSON, rutas internas.
+// Un objeto JSON (`{"…`) sí es volcado; unas llaves sueltas (`{{nombre}}` en
+// el error de una plantilla) no.
 const INTERNAL_DUMP =
-  /\n|\bat\s+\S+\s*\(|\b(select|insert|update|delete)\b[\s\S]*\b(from|into|set|where)\b|[{}]|\$\d|prisma|exception:/i;
+  /\n|\bat\s+\S+\s*\(|\b(select|insert|update|delete)\b[\s\S]*\b(from|into|set|where)\b|\{\s*"|\$\d|prisma|exception:/i;
 
 /** `true` si `message` es un texto en español escrito para personas. */
-export function isHumanSpanish(message: string): boolean {
+export function isHumanSpanish(message: string, maxLength: number = MAX_HUMAN_LENGTH): boolean {
   const text = message.trim();
-  if (!text || text.length > MAX_HUMAN_LENGTH || INTERNAL_DUMP.test(text)) return false;
+  if (!text || text.length > maxLength || INTERNAL_DUMP.test(text)) return false;
   let spanish = SPANISH_MARKS.test(text) ? 2 : 0;
   let english = 0;
   for (const word of text.toLowerCase().split(/[^a-záéíóúñü]+/)) {
@@ -147,8 +160,10 @@ function withPeriod(text: string): string {
 }
 
 /** Los mensajes del servidor que se pueden enseñar tal cual (o `null`). */
-function serverSpanish(err: ApiError): string | null {
-  const human = [...new Set(err.messages.map((m) => m.trim()))].filter(isHumanSpanish);
+function serverSpanish(err: ApiError, maxLength?: number): string | null {
+  const human = [...new Set(err.messages.map((m) => m.trim()))].filter((m) =>
+    isHumanSpanish(m, maxLength),
+  );
   if (human.length === 0) return null;
   if (human.length === 1) return human[0];
   return human.slice(0, MAX_VALIDATION_MESSAGES).map(withPeriod).join(' ');
@@ -200,15 +215,12 @@ export function apiErrorMessage(
   const fallback = options.fallback ?? errorMessageCopy.generic;
 
   if (!(err instanceof ApiError)) {
-    const name = errorName(err);
-    if (name === 'TimeoutError') return options.timeout ?? errorMessageCopy.timeout;
-    // `fetch` rechaza con TypeError cuando no hay red, DNS, CORS o el servidor
-    // cierra la conexión: para la persona, todo es «no hay conexión».
-    if (err instanceof TypeError) return options.network ?? errorMessageCopy.network;
+    if (err instanceof NetworkError) return options.network ?? errorMessageCopy.network;
+    if (errorName(err) === 'TimeoutError') return options.timeout ?? errorMessageCopy.timeout;
     return fallback;
   }
 
   const override = options.byStatus?.[err.status];
   if (err.status >= 500) return override ?? options.fallback ?? errorMessageCopy.server;
-  return serverSpanish(err) ?? override ?? statusMessage(err) ?? fallback;
+  return serverSpanish(err, options.maxLength) ?? override ?? statusMessage(err) ?? fallback;
 }

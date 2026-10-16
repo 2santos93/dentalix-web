@@ -11,24 +11,25 @@ describe('clinicBaseCurrency', () => {
   });
 
   it('una clínica en Colombia trabaja en COP', () => {
-    expect(clinicBaseCurrency([loc('a', 'CO')], null)).toBe('COP');
+    expect(clinicBaseCurrency([loc('a', 'CO')])).toBe('COP');
   });
 
-  it('con sede activa, manda el país de esa sede', () => {
-    expect(clinicBaseCurrency([loc('a', 'CO'), loc('b', 'ES')], 'b')).toBe('EUR');
+  it('varias sedes del mismo país comparten moneda', () => {
+    expect(clinicBaseCurrency([loc('a', 'CO'), loc('b', 'CO')])).toBe('COP');
   });
 
-  it('en la vista consolidada, la sede principal (la primera activa)', () => {
-    expect(clinicBaseCurrency([loc('x', 'ES', false), loc('a', 'CO'), loc('b', 'ES')], null)).toBe(
-      'COP',
-    );
+  // Revisión D-3: el catálogo es de toda la clínica; con sedes en CO y ES el
+  // mismo precio no puede ser pesos o euros según la sede elegida.
+  it('sedes activas de varios países (CO+ES) → sin moneda', () => {
+    expect(clinicBaseCurrency([loc('a', 'CO'), loc('b', 'ES')])).toBeNull();
   });
 
-  it('una sede activa que ya no existe cae en la principal', () => {
-    expect(clinicBaseCurrency([loc('a', 'CO')], 'borrada')).toBe('COP');
+  it('solo cuentan las sedes activas', () => {
+    expect(clinicBaseCurrency([loc('x', 'ES', false), loc('a', 'CO')])).toBe('COP');
   });
 
-  it('sin sedes no hay moneda que adivinar', () => {
-    expect(clinicBaseCurrency([], null)).toBeNull();
+  it('sin sedes activas no hay moneda que adivinar', () => {
+    expect(clinicBaseCurrency([])).toBeNull();
+    expect(clinicBaseCurrency([loc('x', 'ES', false)])).toBeNull();
   });
 });

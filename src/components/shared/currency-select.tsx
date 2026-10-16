@@ -55,6 +55,7 @@ export function CurrencySelect({ id, token, value, onChange, disabled, className
           setAttempt((n) => n + 1);
         }}
         className={cn('h-10 w-full', className)}
+        retryId={id}
       />
     );
   }

@@ -62,6 +62,18 @@ describe('LoginForm', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent('Credenciales inválidas');
   });
 
+  // Revisión M-2: un 403 («Origin not allowed») en el login no es «pide acceso».
+  it('un 403 en el login no habla de pedir permisos a un administrador', async () => {
+    (apiFetch as jest.Mock).mockRejectedValueOnce(new ApiError(403, 'Origin not allowed'));
+    render(<LoginForm />);
+    fireEvent.change(screen.getByLabelText(/email|correo/i), { target: { value: 'user@example.com' } });
+    fireEvent.change(screen.getByLabelText(/password|contraseña/i), { target: { value: 'secret123' } });
+    fireEvent.click(screen.getByRole('button', { name: /iniciar|entrar|login/i }));
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('No pudimos iniciar sesión');
+    expect(alert).not.toHaveTextContent(/administrador|origin/i);
+  });
+
   it('keeps aria-describedby resolving to the error banner on both fields', async () => {
     (apiFetch as jest.Mock).mockRejectedValueOnce(new ApiError(401, 'Credenciales inválidas'));
     render(<LoginForm />);

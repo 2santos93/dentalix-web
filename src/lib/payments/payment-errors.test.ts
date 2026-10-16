@@ -1,4 +1,4 @@
-import { ApiError } from '@/lib/api/client';
+import { ApiError, NetworkError } from '@/lib/api/client';
 import { paymentPlanErrorMessage, recordPaymentErrorMessage } from './payment-errors';
 
 describe('recordPaymentErrorMessage', () => {
@@ -7,7 +7,7 @@ describe('recordPaymentErrorMessage', () => {
     [new ApiError(403, 'Insufficient role'), /tu rol no puede registrar abonos/i],
     [new ApiError(404, 'Treatment plan not found'), /el plan ya no existe/i],
     [new ApiError(500, 'Internal server error'), /no pudimos registrar el abono/i],
-    [new TypeError('Failed to fetch'), /no hay conexión/i],
+    [new NetworkError(new TypeError('Failed to fetch')), /no hay conexión/i],
   ])('%p -> mensaje en español', (err, expected) => {
     const message = recordPaymentErrorMessage(err);
     expect(message).toMatch(expected);

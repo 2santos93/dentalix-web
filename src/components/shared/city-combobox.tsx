@@ -35,6 +35,20 @@ export function CityCombobox({ id, token, countryCode, value, onChange, disabled
   // búsqueda con el texto actual al reintentar.
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
+  // Si el campo tenía el foco al fallar, el foco pasa al Reintentar y, al
+  // reintentar, vuelve al campo: sustituir el control no puede perderlo.
+  const [focusAfterSwap, setFocusAfterSwap] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  // Lo marca el Reintentar (un handler) y lo consume el efecto al volver a
+  // montar el campo.
+  const refocusInputRef = useRef(false);
+
+  useEffect(() => {
+    if (!failed && refocusInputRef.current) {
+      refocusInputRef.current = false;
+      inputRef.current?.focus();
+    }
+  }, [failed]);
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // When the country changes, clear this component's OWN state (text +
@@ -100,6 +114,9 @@ export function CityCombobox({ id, token, countryCode, value, onChange, disabled
           if (cancelled) return;
           setResults([]);
           setOpen(false);
+          setFocusAfterSwap(
+            typeof document !== 'undefined' && document.activeElement === inputRef.current,
+          );
           setFailed(true);
         });
     }, q ? 250 : 0); // instant initial load, debounced while typing
@@ -121,10 +138,14 @@ export function CityCombobox({ id, token, countryCode, value, onChange, disabled
       <FieldError
         label={copy.loadError}
         onRetry={() => {
+          refocusInputRef.current = focusAfterSwap;
+          setFocusAfterSwap(false);
           setFailed(false);
           setAttempt((n) => n + 1);
         }}
         className="h-10 w-full"
+        retryId={id}
+        focusRetry={focusAfterSwap}
       />
     );
   }
@@ -132,6 +153,7 @@ export function CityCombobox({ id, token, countryCode, value, onChange, disabled
   return (
     <div className="relative">
       <input
+        ref={inputRef}
         id={id}
         role="combobox"
         aria-expanded={open}

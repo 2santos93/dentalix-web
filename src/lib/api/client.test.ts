@@ -11,7 +11,7 @@
  * @jest-environment jsdom
  * @jest-environment-options {"url": "http://acme.localhost:3001"}
  */
-import { apiFetch, apiFetchOrNull, ApiError, bootstrapSession } from './client';
+import { apiFetch, apiFetchOrNull, ApiError, bootstrapSession, NetworkError } from './client';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import {
   getActiveLocationId,
@@ -601,5 +601,30 @@ describe('apiFetch — cuerpo de error (DX-063)', () => {
     }) as unknown as typeof fetch;
     const err = await caught();
     expect(err.retryAfterSeconds).toBe(42);
+  });
+});
+
+// Revisión D-2: solo un fallo del propio `fetch` es «sin conexión».
+describe('apiFetch — fallo de red (DX-063)', () => {
+  const realFetch = global.fetch;
+  afterEach(() => {
+    global.fetch = realFetch;
+  });
+
+  it('un rechazo de fetch se relanza como NetworkError, con la causa', async () => {
+    const cause = new TypeError('Failed to fetch');
+    global.fetch = jest.fn().mockRejectedValue(cause) as unknown as typeof fetch;
+    const err = await apiFetch('/x').catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(NetworkError);
+    expect((err as NetworkError).cause).toBe(cause);
+  });
+
+  it('un AbortError o TimeoutError pasa tal cual', async () => {
+    const abort = new DOMException('aborted', 'AbortError');
+    global.fetch = jest.fn().mockRejectedValue(abort) as unknown as typeof fetch;
+    await expect(apiFetch('/x')).rejects.toBe(abort);
+    const timeout = new DOMException('timed out', 'TimeoutError');
+    global.fetch = jest.fn().mockRejectedValue(timeout) as unknown as typeof fetch;
+    await expect(apiFetch('/x')).rejects.toBe(timeout);
   });
 });

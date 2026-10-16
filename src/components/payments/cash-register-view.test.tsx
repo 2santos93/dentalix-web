@@ -1,7 +1,7 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { CashRegisterView } from './cash-register-view';
-import { ApiError } from '@/lib/api/client';
+import { ApiError, NetworkError } from '@/lib/api/client';
 import {
   listCashPayments,
   voidPayment,
@@ -189,7 +189,7 @@ it('un 500 al cargar muestra texto en español con reintento', async () => {
 });
 
 it('sin conexión lo dice, con reintento', async () => {
-  mockedList.mockRejectedValueOnce(new TypeError('Failed to fetch')).mockResolvedValueOnce(response());
+  mockedList.mockRejectedValueOnce(new NetworkError(new TypeError('Failed to fetch'))).mockResolvedValueOnce(response());
   render(<CashRegisterView token="tok" />);
   const alert = await screen.findByRole('alert');
   expect(alert).toHaveTextContent(/no hay conexión con el servidor/i);

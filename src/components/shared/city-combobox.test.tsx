@@ -107,4 +107,26 @@ describe('CityCombobox', () => {
     expect(await screen.findByText('Bogotá')).toBeInTheDocument();
     expect(screen.queryByRole('status')).not.toBeInTheDocument();
   });
+
+  // Revisión M-4: si la búsqueda falla mientras se escribe, el foco no se pierde
+  // (pasa al Reintentar, que hereda el id del campo para su <label>), y vuelve
+  // al campo al reintentar.
+  it('si falla con el foco en el campo, el foco pasa al Reintentar y vuelve al campo', async () => {
+    mocked.mockReset()
+      .mockResolvedValueOnce([])
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      .mockResolvedValue([{ id: 1, name: 'Bogotá', region: 'Bogota D.C.' }]);
+    const user = userEvent.setup();
+    render(<CityCombobox id="city" token="tok" countryCode="CO" value={null} onChange={() => {}} />);
+    await waitFor(() => expect(mocked).toHaveBeenCalledTimes(1));
+    await user.type(screen.getByRole('combobox'), 'b');
+
+    const retry = await screen.findByRole('button', { name: 'Reintentar' });
+    expect(retry).toHaveAttribute('id', 'city');
+    expect(retry).toHaveFocus();
+
+    await user.click(retry);
+    expect(await screen.findByRole('combobox')).toHaveFocus();
+    expect(screen.getByRole('combobox')).toHaveValue('b');
+  });
 });

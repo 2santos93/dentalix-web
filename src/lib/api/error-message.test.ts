@@ -1,4 +1,4 @@
-import { ApiError } from './api-error';
+import { ApiError, NetworkError } from './api-error';
 import {
   apiErrorMessage,
   errorMessageCopy,
@@ -142,16 +142,16 @@ describe('apiErrorMessage — por status', () => {
   it('429 con Retry-After en segundos', () => {
     const err = new ApiError(429, 'ThrottlerException: Too Many Requests', { retryAfterSeconds: 30 });
     expect(apiErrorMessage(err)).toBe(
-      'Demasiados intentos seguidos. Espera 30 segundos y vuelve a intentarlo.',
+      'Demasiados intentos seguidos. Espera 30 segundos.',
     );
   });
 
   it('429 con Retry-After largo → minutos; 1 → singular', () => {
     expect(apiErrorMessage(new ApiError(429, 'x', { retryAfterSeconds: 300 }))).toBe(
-      'Demasiados intentos seguidos. Espera 5 minutos y vuelve a intentarlo.',
+      'Demasiados intentos seguidos. Espera 5 minutos.',
     );
     expect(apiErrorMessage(new ApiError(429, 'x', { retryAfterSeconds: 1 }))).toBe(
-      'Demasiados intentos seguidos. Espera 1 segundo y vuelve a intentarlo.',
+      'Demasiados intentos seguidos. Espera 1 segundo.',
     );
   });
 
@@ -180,12 +180,21 @@ describe('apiErrorMessage — por status', () => {
 });
 
 describe('apiErrorMessage — red y errores que no son de la API', () => {
-  it('fallo de red (TypeError de fetch) → sin conexión', () => {
-    expect(apiErrorMessage(new TypeError('Failed to fetch'))).toBe(errorMessageCopy.network);
-    expect(apiErrorMessage(new TypeError('NetworkError when attempting to fetch resource.'))).toBe(
+  it('fallo de red (NetworkError del cliente) → sin conexión', () => {
+    expect(apiErrorMessage(new NetworkError(new TypeError('Failed to fetch')))).toBe(
       errorMessageCopy.network,
     );
-    expect(apiErrorMessage(new TypeError('Load failed'))).toBe(errorMessageCopy.network);
+  });
+
+  // Revisión D-2: un TypeError de programación (p. ej. al procesar la respuesta)
+  // no es «sin conexión»: va al texto de la pantalla.
+  it('un TypeError cualquiera NO se presenta como falta de conexión', () => {
+    expect(apiErrorMessage(new TypeError("Cannot read properties of undefined (reading 'map')"))).toBe(
+      errorMessageCopy.generic,
+    );
+    expect(apiErrorMessage(new TypeError('Failed to fetch'), 'No pudimos cargar.')).toBe(
+      'No pudimos cargar.',
+    );
   });
 
   it('timeout → tardó demasiado', () => {
@@ -232,7 +241,7 @@ describe('apiErrorMessage — overrides por pantalla', () => {
     expect(
       apiErrorMessage(new ApiError(502, 'Bad Gateway'), { byStatus: { 502: 'Pasarela caída.' } }),
     ).toBe('Pasarela caída.');
-    expect(apiErrorMessage(new TypeError('Failed to fetch'), { network: 'Sin red.' })).toBe('Sin red.');
+    expect(apiErrorMessage(new NetworkError(new TypeError('x')), { network: 'Sin red.' })).toBe('Sin red.');
   });
 
   it('fallback dentro de las opciones', () => {
@@ -255,4 +264,36 @@ describe('parseRetryAfter', () => {
     expect(parseRetryAfter('mañana')).toBeNull();
     expect(parseRetryAfter('-5')).toBeNull();
   });
+});
+
+describe('apiErrorMessage — correcciones tras la revisión', () => {
+  // D-1: un mensaje de dominio largo (la alerta de alergia con sus alérgenos)
+  // se conserva cuando la pantalla sube el límite.
+  it('maxLength permite conservar un mensaje en español de más de 240 caracteres', () => {
+    const detail = Array.from({ length: 6 }, (_, i) => `Alérgeno de nombre largo número ${i + 1} (principio activo)`).join(', ');
+    const msg = `Alerta de alergia: el paciente tiene registrada alergia a ${detail}. Confirma que prescribes igualmente.`;
+    expect(msg.length).toBeGreaterThan(240);
+    expect(apiErrorMessage(new ApiError(409, msg))).toBe(errorMessageCopy.conflict);
+    expect(apiErrorMessage(new ApiError(409, msg), { maxLength: 2000 })).toBe(msg);
+  });
+
+  // M-5: unas llaves sueltas no son un volcado; un objeto JSON sí.
+  it('conserva mensajes con {{variables}} y descarta los que llevan JSON', () => {
+    expect(isHumanSpanish('Variables desconocidas en el texto: {{nombre}}')).toBe(true);
+    expect(isHumanSpanish('Falló la validación de la petición: {"campo": "valor"}')).toBe(false);
+  });
+
+  // M-1: el genérico del 409 no presupone concurrencia.
+  it('el 409 genérico no habla de cambios concurrentes', () => {
+    expect(errorMessageCopy.conflict).not.toMatch(/mientras/i);
+  });
+
+  // M-7 (Way-Out Rule): los textos que acaban en superficies con Reintentar no
+  // repiten «Intenta de nuevo».
+  it.each(['generic', 'server', 'timeout', 'conflict', 'tooManyRequests', 'network'] as const)(
+    'el texto %s no dice «intenta de nuevo»',
+    (key) => {
+      expect(errorMessageCopy[key]).not.toMatch(/intenta de nuevo|vuelve a intentarlo/i);
+    },
+  );
 });

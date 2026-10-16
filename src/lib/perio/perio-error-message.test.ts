@@ -1,4 +1,4 @@
-import { ApiError } from '@/lib/api/client';
+import { ApiError, NetworkError } from '@/lib/api/client';
 import { perioErrorMessage } from './perio-api';
 
 describe('perioErrorMessage (QA DX-007: nada de errores crudos en inglés)', () => {
@@ -27,7 +27,7 @@ describe('perioErrorMessage (QA DX-007: nada de errores crudos en inglés)', () 
   });
 
   it('un error de red dice que no hay conexión, en español', () => {
-    expect(perioErrorMessage(new TypeError('Failed to fetch'), 'No se pudo cargar')).toMatch(
+    expect(perioErrorMessage(new NetworkError(new TypeError('Failed to fetch')), 'No se pudo cargar')).toMatch(
       /no hay conexión/i,
     );
   });

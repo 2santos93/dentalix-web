@@ -13,6 +13,13 @@ interface FieldErrorProps {
   retryLabel?: string;
   /** Para igualar la altura del control que sustituye (`h-9`, `h-10`…). */
   className?: string;
+  /**
+   * El `id` del control sustituido, para el botón de reintento: así el
+   * `<label htmlFor>` del campo sigue teniendo destino.
+   */
+  retryId?: string;
+  /** Lleva el foco al reintento al montar: el control con foco ya no existe. */
+  focusRetry?: boolean;
 }
 
 /**
@@ -31,7 +38,13 @@ export function FieldError({
   onRetry,
   retryLabel = fieldErrorCopy.retry,
   className,
+  retryId,
+  focusRetry = false,
 }: FieldErrorProps) {
+  const retryRef = React.useRef<HTMLButtonElement>(null);
+  React.useEffect(() => {
+    if (focusRetry) retryRef.current?.focus();
+  }, [focusRetry]);
   return (
     <div
       role="status"
@@ -45,6 +58,8 @@ export function FieldError({
       <span className="flex-1 truncate text-sm text-ink">{label}</span>
       {onRetry ? (
         <button
+          ref={retryRef}
+          id={retryId}
           type="button"
           onClick={onRetry}
           aria-label={retryLabel}

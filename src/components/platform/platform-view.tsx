@@ -99,7 +99,7 @@ export function PlatformView() {
       useAuthStore.getState().setAccessToken(accessToken);
       setPassword('');
     } catch (err) {
-      setSignInError(apiErrorMessage(err, { fallback: copy.invalid, byStatus: { 401: copy.invalid } }));
+      setSignInError(apiErrorMessage(err, { fallback: copy.invalid, byStatus: { 401: copy.invalid, 403: copy.invalid } }));
     } finally {
       setSigningIn(false);
     }

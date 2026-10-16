@@ -1,7 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { listLocations, type ClinicLocation } from './locations-api';
-import { getActiveLocationId, onLocationChange } from './location-store';
 
 /**
  * Moneda base de la clínica (DX-063 / FE-014). La API no guarda una moneda por
@@ -14,36 +13,33 @@ export const COUNTRY_CURRENCY: Record<ClinicLocation['country'], string> = {
 };
 
 /**
- * La moneda de la sede activa; en la vista consolidada (o si la sede guardada
- * ya no está), la de la sede principal — `GET /locations` la devuelve primero —
- * entre las activas. `null` si no hay sedes.
+ * La moneda común de las sedes ACTIVAS de la clínica, o `null` si no hay sedes
+ * activas o si son de países con monedas distintas (revisión D-3). Es para datos
+ * de toda la clínica, como el catálogo: `defaultPrice` no lleva moneda, así que
+ * con sedes en Colombia y España no se puede saber si son pesos o euros, y la
+ * sede elegida en el selector no lo decide. Sin moneda, el importe va sin
+ * símbolo.
  */
-export function clinicBaseCurrency(
-  locations: ClinicLocation[],
-  activeLocationId: string | null,
-): string | null {
-  const active = activeLocationId ? locations.find((l) => l.id === activeLocationId) : undefined;
-  const location = active ?? locations.find((l) => l.isActive) ?? locations[0];
-  return location ? COUNTRY_CURRENCY[location.country] : null;
+export function clinicBaseCurrency(locations: ClinicLocation[]): string | null {
+  const currencies = new Set(
+    locations.filter((l) => l.isActive).map((l) => COUNTRY_CURRENCY[l.country]),
+  );
+  return currencies.size === 1 ? [...currencies][0] : null;
 }
 
 /**
- * `clinicBaseCurrency` de la sesión. `undefined` mientras carga; `null` si las
- * sedes no cargaron (quien la usa decide cómo pintar sin moneda). Sigue los
- * cambios de sede activa.
+ * `clinicBaseCurrency` de la clínica de la sesión. `undefined` mientras carga;
+ * `null` si las sedes no cargaron o no comparten moneda.
  */
 export function useClinicCurrency(token: string): string | null | undefined {
   const [currency, setCurrency] = useState<string | null | undefined>(undefined);
-  const [locationKey, setLocationKey] = useState(0);
-
-  useEffect(() => onLocationChange(() => setLocationKey((k) => k + 1)), []);
 
   useEffect(() => {
     if (!token) return;
     let cancelled = false;
     listLocations(token)
       .then((locations) => {
-        if (!cancelled) setCurrency(clinicBaseCurrency(locations ?? [], getActiveLocationId()));
+        if (!cancelled) setCurrency(clinicBaseCurrency(locations ?? []));
       })
       .catch(() => {
         if (!cancelled) setCurrency(null);
@@ -51,7 +47,7 @@ export function useClinicCurrency(token: string): string | null | undefined {
     return () => {
       cancelled = true;
     };
-  }, [token, locationKey]);
+  }, [token]);
 
   return currency;
 }

@@ -56,7 +56,8 @@ export function LoginForm() {
       setError(
         apiErrorMessage(err, {
           fallback: copy.genericError,
-          byStatus: { 401: copy.invalidCredentials },
+          // 403 («Origin not allowed»): no hay administrador a quien pedir acceso.
+          byStatus: { 401: copy.invalidCredentials, 403: copy.genericError },
         }),
       );
     } finally {

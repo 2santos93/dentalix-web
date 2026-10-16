@@ -263,7 +263,7 @@ describe('StaffView', () => {
     mockedList.mockRejectedValue(new ApiError(500, 'No se pudo listar'));
     render(<StaffView token="tok" />);
 
-    expect(await screen.findByText('No pudimos cargar el personal. Intenta de nuevo.')).toBeInTheDocument();
+    expect(await screen.findByText('No pudimos cargar el personal.')).toBeInTheDocument();
   });
 });
 

@@ -490,6 +490,20 @@ describe('CatalogView', () => {
     await waitFor(() => expect(within(table).getByText('80.000,00 €')).toBeInTheDocument());
   });
 
+  it('una clínica con sedes en Colombia y España pinta el importe sin moneda, elija la sede que elija', async () => {
+    mockedLocations.mockResolvedValue([
+      ...clinicIn('CO'),
+      { id: 'l2', name: 'Madrid', address: null, country: 'ES', isActive: true, createdAt: '2026-01-01T00:00:00Z' },
+    ]);
+    setActiveLocationId('l2');
+    mockedList.mockResolvedValue(page([item1]));
+    render(<CatalogView token="tok" />);
+    const table = await screen.findByRole('table', { name: /catálogo/i });
+    await waitFor(() => expect(mockedLocations).toHaveBeenCalled());
+    await waitFor(() => expect(within(table).getByText('80.000,00')).toBeInTheDocument());
+    expect(within(table).queryByText(/€|COP|US\$/)).not.toBeInTheDocument();
+  });
+
   it('sin sedes cargadas pinta el importe sin moneda, nunca en USD', async () => {
     mockedLocations.mockRejectedValue(new TypeError('Failed to fetch'));
     mockedList.mockResolvedValue(page([item1]));
