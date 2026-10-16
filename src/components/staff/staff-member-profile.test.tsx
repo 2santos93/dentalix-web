@@ -20,6 +20,10 @@ jest.mock('../../lib/staff/staff-api', () => ({
   reactivateStaff: jest.fn(),
 }));
 
+jest.mock('../../lib/locations/locations-api', () => ({
+  listLocations: jest.fn().mockResolvedValue([]),
+}));
+
 const mockedGet = getStaffMember as jest.MockedFunction<typeof getStaffMember>;
 const mockedUpdate = updateStaff as jest.MockedFunction<typeof updateStaff>;
 const mockedDeactivate = deactivateStaff as jest.MockedFunction<typeof deactivateStaff>;
@@ -202,5 +206,27 @@ describe('StaffMemberProfile', () => {
       'href',
       '/staff',
     );
+  });
+
+  it('DX-122: quien puede bloquear agendas lo hace desde el perfil; sin rol legible, no', async () => {
+    const { unmount } = render(<StaffMemberProfile token="tok" userId="u1" />);
+    await screen.findByText('Ana Ríos');
+    expect(screen.queryByRole('button', { name: 'Bloquear agenda' })).not.toBeInTheDocument();
+    unmount();
+
+    const admin = `h.${btoa(JSON.stringify({ sub: 'adm', tenantId: 't1', role: 'ADMIN' }))}.s`;
+    render(<StaffMemberProfile token={admin} userId="u1" />);
+    await userEvent.click(await screen.findByRole('button', { name: 'Bloquear agenda' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Bloquear horario' });
+    expect(within(dialog).getByLabelText('Profesional')).toHaveValue('u1');
+    expect(within(dialog).getByLabelText('Profesional')).toBeDisabled();
+  });
+
+  it('DX-122: a un miembro no clínico no se le ofrece bloquear la agenda', async () => {
+    mockedGet.mockResolvedValue({ ...activo, role: 'RECEPTION' as const });
+    const admin = `h.${btoa(JSON.stringify({ sub: 'adm', tenantId: 't1', role: 'ADMIN' }))}.s`;
+    render(<StaffMemberProfile token={admin} userId="u1" />);
+    await screen.findByText('Ana Ríos');
+    expect(screen.queryByRole('button', { name: 'Bloquear agenda' })).not.toBeInTheDocument();
   });
 });

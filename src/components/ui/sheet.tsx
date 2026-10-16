@@ -32,29 +32,47 @@ SheetOverlay.displayName = 'SheetOverlay';
 const SheetContent = React.forwardRef<
   React.ComponentRef<typeof DialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
->(({ className, children, ...props }, ref) => (
-  <DialogPrimitive.Portal>
-    <SheetOverlay />
-    <DialogPrimitive.Content
-      ref={ref}
-      className={cn(
-        'sheet-content fixed z-50 flex flex-col border-border bg-surface shadow-overlay',
-        // Mobile: bottom sheet
-        'inset-x-0 bottom-0 max-h-[85dvh] rounded-t-xl border-t',
-        // sm+: right drawer, full height
-        'sm:inset-y-0 sm:right-0 sm:left-auto sm:h-full sm:max-h-none sm:w-[24rem] sm:rounded-none sm:border-l sm:border-t-0',
-        className,
-      )}
-      {...props}
-    >
-      {children}
-      <DialogPrimitive.Close className="absolute right-4 top-4 rounded-md p-1 text-muted transition-colors hover:bg-bg hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary print:hidden">
-        <X className="size-4" />
-        <span className="sr-only">Cerrar</span>
-      </DialogPrimitive.Close>
-    </DialogPrimitive.Content>
-  </DialogPrimitive.Portal>
-));
+>(({ className, children, onOpenAutoFocus, onCloseAutoFocus, ...props }, ref) => {
+  // Igual que `DialogContent`: las hojas se abren con `open` y sin
+  // `SheetTrigger`, así que Radix no sabe a dónde devolver el foco al cerrar.
+  // Se recuerda quién lo tenía al abrir y se le devuelve (WCAG 2.4.3).
+  const returnFocusRef = React.useRef<HTMLElement | null>(null);
+  return (
+    <DialogPrimitive.Portal>
+      <SheetOverlay />
+      <DialogPrimitive.Content
+        ref={ref}
+        onOpenAutoFocus={(event) => {
+          const active = document.activeElement;
+          returnFocusRef.current = active instanceof HTMLElement && active !== document.body ? active : null;
+          onOpenAutoFocus?.(event);
+        }}
+        onCloseAutoFocus={(event) => {
+          onCloseAutoFocus?.(event);
+          const target = returnFocusRef.current;
+          if (event.defaultPrevented || !target?.isConnected) return;
+          event.preventDefault();
+          target.focus();
+        }}
+        className={cn(
+          'sheet-content fixed z-50 flex flex-col border-border bg-surface shadow-overlay',
+          // Mobile: bottom sheet
+          'inset-x-0 bottom-0 max-h-[85dvh] rounded-t-xl border-t',
+          // sm+: right drawer, full height
+          'sm:inset-y-0 sm:right-0 sm:left-auto sm:h-full sm:max-h-none sm:w-[24rem] sm:rounded-none sm:border-l sm:border-t-0',
+          className,
+        )}
+        {...props}
+      >
+        {children}
+        <DialogPrimitive.Close className="absolute right-4 top-4 rounded-md p-1 text-muted transition-colors hover:bg-bg hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary print:hidden">
+          <X className="size-4" />
+          <span className="sr-only">Cerrar</span>
+        </DialogPrimitive.Close>
+      </DialogPrimitive.Content>
+    </DialogPrimitive.Portal>
+  );
+});
 SheetContent.displayName = 'SheetContent';
 
 /** Sticky header for a sheet — stays visible while the body scrolls. */

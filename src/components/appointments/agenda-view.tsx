@@ -10,8 +10,20 @@ import {
 } from '@/lib/appointments/appointments-api';
 import { getLocationSchedule, type BusinessHours } from '@/lib/locations/schedule-api';
 import { getActiveLocationId } from '@/lib/locations/location-store';
-import { listLocations } from '@/lib/locations/locations-api';
-import { getTokenRole } from '@/lib/auth/token-role';
+import { listLocations, type ClinicLocation } from '@/lib/locations/locations-api';
+import { getTokenRole, getTokenUserId } from '@/lib/auth/token-role';
+import {
+  blocksOwnAgendaOnly,
+  canWriteScheduleBlocks,
+  deleteScheduleBlock,
+  listScheduleBlocks,
+  type ScheduleBlock,
+} from '@/lib/appointments/schedule-blocks-api';
+import {
+  blockLabel,
+  blockShownInColumn,
+  type ScheduleBlockLike,
+} from '@/lib/appointments/schedule-blocks';
 import type { MoveTarget } from '@/lib/appointments/day-grid';
 import { listStaff, type StaffMember } from '@/lib/appointments/staff-api';
 import { localDayRange, localWeekRange } from '@/lib/appointments/day-range';
@@ -27,12 +39,21 @@ import { WeekTimeGrid } from '@/components/appointments/week-time-grid';
 import { MonthAgenda } from '@/components/appointments/month-agenda';
 import { AppointmentForm } from '@/components/appointments/appointment-form';
 import { ConfirmationLinkPanel } from '@/components/appointments/confirmation-link-panel';
+import { ScheduleBlockDialog } from '@/components/appointments/schedule-block-dialog';
+import {
+  WaitlistPanel,
+  attendingStaff,
+  waitlistCopy,
+} from '@/components/appointments/waitlist-panel';
+import { useWaitlist } from '@/components/appointments/use-waitlist';
+import { useMediaQuery } from '@/lib/hooks/use-media-query';
+import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import {
   STATUS_LABELS,
   formatTimeRange,
   patientLabel,
 } from '@/components/appointments/appointment-display';
-import { Plus, ChevronLeft, ChevronRight } from 'lucide-react';
+import { Plus, ChevronLeft, ChevronRight, CalendarOff, ListTodo } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -105,7 +126,25 @@ const copy = {
   moved: 'Cita movida.',
   selectProviderPrompt: 'Selecciona un profesional para ver su agenda.',
   statusLabel: 'Estado',
+  // DX-122: bloqueos de agenda y pendientes por agendar.
+  blockSchedule: 'Bloquear horario',
+  blockCreated: 'Horario bloqueado.',
+  blocksError: 'No pudimos cargar los bloqueos de la agenda.',
+  removeBlockTitle: 'Quitar el bloqueo',
+  removeBlockDescription: (label: string) =>
+    `«${label}» deja de bloquear la agenda. Las citas no cambian.`,
+  removeBlockConfirm: 'Quitar bloqueo',
+  removeBlockError: 'No pudimos quitar el bloqueo. Intenta de nuevo.',
+  blockRemoved: 'Bloqueo quitado.',
+  waitlistButton: 'Pendientes',
+  waitlistButtonCount: (n: number) => `Pendientes por agendar: ${n}`,
+  waitlistSheetDescription: 'Pacientes que cancelaron o no vinieron, para volver a darles cita.',
 };
+
+/** Avisos de la API al crear o mover (p. ej. un bloqueo de almuerzo que deja agendar). */
+function announceWarnings(appointment: Appointment | null | undefined) {
+  for (const warning of appointment?.warnings ?? []) toast.warning(warning);
+}
 
 const STATUS_OPTIONS: AppointmentStatus[] = [
   'SCHEDULED',
@@ -305,7 +344,26 @@ export function AgendaView({ token }: AgendaViewProps) {
   const [hours, setHours] = useState<BusinessHours | null>(null);
   const [movingAppointment, setMovingAppointment] = useState<Appointment | null>(null);
   const [movePendingId, setMovePendingId] = useState<string | null>(null);
-  const canMove = canMoveAppointments(getTokenRole(token));
+  const role = getTokenRole(token);
+  const canMove = canMoveAppointments(role);
+  // DX-122: bloqueos de agenda (Día y Semana) y «Pendientes por agendar».
+  const canWriteBlocks = canWriteScheduleBlocks(role);
+  const ownBlocksOnly = blocksOwnAgendaOnly(role);
+  const [blocks, setBlocks] = useState<ScheduleBlock[]>([]);
+  const [blocksReloadKey, setBlocksReloadKey] = useState(0);
+  const [locations, setLocations] = useState<ClinicLocation[]>([]);
+  const [activeLocationId] = useState(getActiveLocationId);
+  const [showBlockDialog, setShowBlockDialog] = useState(false);
+  const [removingBlock, setRemovingBlock] = useState<ScheduleBlockLike | null>(null);
+  const [removeBlockError, setRemoveBlockError] = useState<string | null>(null);
+  const [removingBlockPending, setRemovingBlockPending] = useState(false);
+  const [waitlistReloadKey, setWaitlistReloadKey] = useState(0);
+  const waitlist = useWaitlist(token, waitlistReloadKey);
+  // Desde 1400 px la lista va en un panel lateral fijo; por debajo, en un
+  // cajón. Se monta UNA sola de las dos (revisión H4).
+  const wide = useMediaQuery('(min-width: 1400px)');
+  const waitlistCount = waitlist.loading || waitlist.error ? null : waitlist.total;
+  const [waitlistOpen, setWaitlistOpen] = useState(false);
   // Whether the day panel (right drawer / bottom sheet) is open — opened by
   // clicking a day in the month calendar; shows that day's appointments
   // without pushing the calendar or scrolling the page.
@@ -390,6 +448,21 @@ export function AgendaView({ token }: AgendaViewProps) {
     };
   }, [token]);
 
+  // Sedes (para «Bloquear horario»). Best-effort: sin ellas se puede bloquear
+  // a un profesional en todas las sedes.
+  useEffect(() => {
+    if (!token) return;
+    let cancelled = false;
+    listLocations(token)
+      .then((data) => {
+        if (!cancelled) setLocations(data.filter((l) => l.isActive));
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
+
   // Columnas visibles: la selección del usuario (solo ids que siguen en el
   // personal) o la de por defecto.
   const columnIds = (pickedColumnIds ?? defaultColumnIds(staff)).filter((id) =>
@@ -447,6 +520,69 @@ export function AgendaView({ token }: AgendaViewProps) {
     };
   }, [token, providerId, selectedDate, viewMode, appointmentsReloadKey, columnsMode, columnsKey, waitingForStaff]);
 
+  // DX-122: bloqueos del rango visible (Día y Semana; el Mes no los pinta).
+  // Si fallan, la agenda sigue siendo correcta: aviso con Reintentar (escalón 3).
+  useEffect(() => {
+    if (!token) return;
+    let cancelled = false;
+    async function load() {
+      if (viewMode === 'month' || !selectedDate) {
+        setBlocks([]);
+        return;
+      }
+      try {
+        const { from, to } = rangeFor(viewMode, selectedDate);
+        const data = await listScheduleBlocks(token, { from, to });
+        if (!cancelled) setBlocks(data);
+      } catch (err) {
+        if (cancelled) return;
+        notifyError(apiErrorMessage(err, copy.blocksError), {
+          onRetry: () => setBlocksReloadKey((k) => k + 1),
+        });
+      }
+    }
+    void load();
+    return () => {
+      cancelled = true;
+    };
+  }, [token, viewMode, selectedDate, blocksReloadKey]);
+
+  /** Bloqueos que se pintan en la Semana: los del profesional elegido (o todos) y de la sede activa. */
+  const weekBlocks = blocks.filter((b) =>
+    providerId
+      ? blockShownInColumn(b, providerId, activeLocationId)
+      : activeLocationId === null || b.locationId === null || b.locationId === activeLocationId,
+  );
+  const staffName = (id: string) => staff.find((s) => s.userId === id)?.fullName;
+
+  function handleBlockCreated() {
+    setShowBlockDialog(false);
+    toast.success(copy.blockCreated);
+    setBlocksReloadKey((k) => k + 1);
+  }
+
+  async function confirmRemoveBlock() {
+    if (!removingBlock) return;
+    setRemovingBlockPending(true);
+    setRemoveBlockError(null);
+    try {
+      await deleteScheduleBlock(token, removingBlock.id);
+      setRemovingBlock(null);
+      toast.success(copy.blockRemoved);
+      setBlocksReloadKey((k) => k + 1);
+    } catch (err) {
+      setRemoveBlockError(apiErrorMessage(err, copy.removeBlockError));
+    } finally {
+      setRemovingBlockPending(false);
+    }
+  }
+
+  /** Se agendó desde «Pendientes»: la agenda se refresca sin desmontar. */
+  function handleWaitlistScheduled() {
+    setWaitlistOpen(false);
+    void refreshAppointmentsInPlace();
+  }
+
   function refreshAppointmentsInPlace(): Promise<void> {
     if (!token) return Promise.resolve();
     setAppointmentsRefreshing(true);
@@ -483,9 +619,10 @@ export function AgendaView({ token }: AgendaViewProps) {
     refreshAppointmentsInPlaceRef.current = refreshAppointmentsInPlace;
   });
 
-  function handleAppointmentCreated() {
+  function handleAppointmentCreated(created?: Appointment) {
     setShowForm(false);
     setSlotPrefill(null);
+    announceWarnings(created);
     refreshAppointmentsInPlace();
   }
 
@@ -528,8 +665,9 @@ export function AgendaView({ token }: AgendaViewProps) {
     );
     setMovePendingId(appointment.id);
     try {
-      await updateAppointment(token, appointment.id, target);
+      const updated = await updateAppointment(token, appointment.id, target);
       toast.success(copy.moved);
+      announceWarnings(updated);
       await refreshAppointmentsInPlace();
     } catch (err) {
       setAppointments((prev) =>
@@ -544,9 +682,10 @@ export function AgendaView({ token }: AgendaViewProps) {
   }
 
   /** «Mover a…» confirmado por el servidor: cierra el modal, lo anuncia y refresca. */
-  function handleMoved() {
+  function handleMoved(updated: Appointment) {
     setMovingAppointment(null);
     toast.success(copy.moved);
+    announceWarnings(updated);
     void refreshAppointmentsInPlace();
   }
 
@@ -603,6 +742,9 @@ export function AgendaView({ token }: AgendaViewProps) {
     setUpdatingId(id);
     try {
       await updateAppointment(token, id, { status });
+      // DX-122: cancelar o no-show deja al paciente en «Pendientes por
+      // agendar», y reactivar la cita lo saca (revisión H1): se recarga siempre.
+      setWaitlistReloadKey((k) => k + 1);
       await refreshAppointmentsInPlace();
     } catch (err) {
       notifyError(apiErrorMessage(err, copy.genericStatusChangeError), {
@@ -624,339 +766,457 @@ export function AgendaView({ token }: AgendaViewProps) {
     ? appointments.find((a) => a.id === detailAppointment.id) ?? detailAppointment
     : null;
 
+  const userId = getTokenUserId(token);
+
   return (
-    <div className="flex flex-col gap-5">
-      {/* Lean control row: view segmented control + compact provider filter on
-          the left, the single primary action on the right. Date navigation is
-          contextual (below, with the calendar) — no fat toolbar card, no date
-          input that duplicates the "Nueva cita" form. */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-wrap items-center gap-3">
-          <div
-            role="group"
-            aria-label={copy.viewLabel}
-            className="inline-flex rounded-lg border border-border bg-surface-2 p-0.5"
-          >
-            {VIEW_MODES.map((m) => {
-              const active = viewMode === m;
-              return (
-                <button
-                  key={m}
-                  type="button"
-                  aria-pressed={active}
-                  onClick={() => selectView(m)}
-                  className={cn(
-                    'h-8 rounded-md px-3.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface-2',
-                    active
-                      ? 'bg-surface text-ink shadow-sm'
-                      : 'text-muted hover:text-ink',
-                  )}
-                >
-                  {VIEW_LABEL[m]}
-                </button>
-              );
-            })}
-          </div>
-          {staffError ? (
-            <FieldError
-              label={copy.staffFieldError}
-              onRetry={() => setStaffReloadKey((k) => k + 1)}
-              className="h-9"
-            />
-          ) : columnsMode ? (
-            <ProviderColumnsPicker
-              staff={staff}
-              selected={columnIds}
-              onChange={setPickedColumnIds}
-              disabled={staffLoading || staff.length === 0}
-            />
-          ) : (
-            <select
-              aria-label={copy.providerLabel}
-              disabled={staffLoading}
-              value={providerId}
-              onChange={(e) => setProviderId(e.target.value)}
-              className={cn(fieldClass, 'h-9 w-auto min-w-[11rem] text-sm')}
+    <div
+      className={cn(
+        'flex flex-col gap-5',
+        wide && 'grid grid-cols-[minmax(0,1fr)_20rem] items-start gap-6',
+      )}
+    >
+      <div className="flex min-w-0 flex-col gap-5">
+        {/* Lean control row: view segmented control + compact provider filter on
+            the left, the single primary action on the right. Date navigation is
+            contextual (below, with the calendar) — no fat toolbar card, no date
+            input that duplicates the "Nueva cita" form. */}
+        <div className="flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-wrap items-center gap-3">
+            <div
+              role="group"
+              aria-label={copy.viewLabel}
+              className="inline-flex rounded-lg border border-border bg-surface-2 p-0.5"
             >
-              <option value="">{copy.allProviders}</option>
-              {staff.map((s) => (
-                <option key={s.userId} value={s.userId}>
-                  {s.fullName}
-                </option>
-              ))}
-            </select>
-          )}
-        </div>
-        <Button type="button" onClick={openNewAppointment}>
-          <Plus /> {copy.newAppointment}
-        </Button>
-      </div>
-
-      {appointmentsRefreshing && (
-        <p role="status" aria-live="polite" className="text-xs font-medium text-muted">
-          {copy.refreshing}
-        </p>
-      )}
-
-      {/* The active view, full width — nothing renders below it, so the page
-          never grows a second scroll region. The day detail lives in a sheet. */}
-      {viewMode === 'month' ? (
-        <div className="flex flex-col gap-3">
-          <DateNav
-            label={monthLabel(selectedDate)}
-            prevLabel={copy.prevMonth}
-            nextLabel={copy.nextMonth}
-            date={selectedDate}
-            onDateChange={setSelectedDate}
-            onPrev={() => setSelectedDate(addMonths(selectedDate, -1))}
-            onNext={() => setSelectedDate(addMonths(selectedDate, 1))}
-            onToday={() => setSelectedDate(today)}
-          />
-          <MonthAgenda
-            appointments={appointments}
-            monthDate={selectedDate}
-            selectedDate={selectedDate}
-            today={today}
-            onSelectDay={handleSelectMonthDay}
-            loading={appointmentsLoading}
-            error={appointmentsLoadError}
-            onRetry={() => setAppointmentsReloadKey((k) => k + 1)}
-          />
-        </div>
-      ) : viewMode === 'week' ? (
-        <div className="flex flex-col gap-3">
-          <DateNav
-            label={weekRangeLabel(selectedDate)}
-            prevLabel={copy.prevWeek}
-            nextLabel={copy.nextWeek}
-            date={selectedDate}
-            onDateChange={setSelectedDate}
-            onPrev={() => setSelectedDate(addDays(selectedDate, -7))}
-            onNext={() => setSelectedDate(addDays(selectedDate, 7))}
-            onToday={() => setSelectedDate(today)}
-          />
-          {/* `WeekTimeGrid` is purely presentational (no loading/error props,
-              unlike `DayAgenda`) — mirror `DayAgenda`'s own loading/error
-              branches here so Semana still surfaces the feedback the grid
-              itself doesn't render. */}
-          {appointmentsLoading ? (
-            <p role="status" className="text-sm text-muted">
-              {copy.loading}
-            </p>
-          ) : appointmentsLoadError ? (
-            <SectionError
-              description={appointmentsLoadError}
-              onRetry={() => setAppointmentsReloadKey((k) => k + 1)}
-              retryLabel={copy.retry}
-            />
-          ) : (
-            <WeekTimeGrid
-              appointments={appointments}
-              weekStart={weekStartOf(selectedDate)}
-                onSelectDay={handleSelectDay}
-              onSelectSlot={handleSelectSlot}
-              onSelectAppointment={(a) => setDetailAppointment(a)}
-            />
-          )}
-        </div>
-      ) : (
-        <div className="flex flex-col gap-3">
-          <DateNav
-            label={longDayLabel(selectedDate)}
-            prevLabel={copy.prevDay}
-            nextLabel={copy.nextDay}
-            date={selectedDate}
-            onDateChange={setSelectedDate}
-            onPrev={() => setSelectedDate(addDays(selectedDate, -1))}
-            onNext={() => setSelectedDate(addDays(selectedDate, 1))}
-            onToday={() => setSelectedDate(today)}
-          />
-          <div
-            role="group"
-            aria-label={copy.dayLayoutLabel}
-            className="inline-flex self-start rounded-lg border border-border bg-surface-2 p-0.5"
-          >
-            {(['columns', 'list'] as DayLayout[]).map((layout) => (
-              <button
-                key={layout}
-                type="button"
-                aria-pressed={dayLayout === layout}
-                onClick={() => setDayLayout(layout)}
-                className={cn(
-                  'h-7 rounded-md px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
-                  dayLayout === layout ? 'bg-surface text-ink shadow-sm' : 'text-muted hover:text-ink',
-                )}
+              {VIEW_MODES.map((m) => {
+                const active = viewMode === m;
+                return (
+                  <button
+                    key={m}
+                    type="button"
+                    aria-pressed={active}
+                    onClick={() => selectView(m)}
+                    className={cn(
+                      'h-8 rounded-md px-3.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface-2',
+                      active
+                        ? 'bg-surface text-ink shadow-sm'
+                        : 'text-muted hover:text-ink',
+                    )}
+                  >
+                    {VIEW_LABEL[m]}
+                  </button>
+                );
+              })}
+            </div>
+            {staffError ? (
+              <FieldError
+                label={copy.staffFieldError}
+                onRetry={() => setStaffReloadKey((k) => k + 1)}
+                className="h-9"
+              />
+            ) : columnsMode ? (
+              <ProviderColumnsPicker
+                staff={staff}
+                selected={columnIds}
+                onChange={setPickedColumnIds}
+                disabled={staffLoading || staff.length === 0}
+              />
+            ) : (
+              <select
+                aria-label={copy.providerLabel}
+                disabled={staffLoading}
+                value={providerId}
+                onChange={(e) => setProviderId(e.target.value)}
+                className={cn(fieldClass, 'h-9 w-auto min-w-[11rem] text-sm')}
               >
-                {layout === 'columns' ? copy.dayColumns : copy.dayList}
-              </button>
-            ))}
+                <option value="">{copy.allProviders}</option>
+                {staff.map((s) => (
+                  <option key={s.userId} value={s.userId}>
+                    {s.fullName}
+                  </option>
+                ))}
+              </select>
+            )}
           </div>
-          {dayLayout === 'list' ? (
-            <DayAgenda
-              appointments={appointments}
-              loading={appointmentsLoading}
-              error={appointmentsLoadError}
-              onRetry={() => setAppointmentsReloadKey((k) => k + 1)}
-              onStatusChange={handleStatusChange}
-              updatingId={updatingId}
-              onSelectAppointment={openAppointmentDetail}
-            />
-          ) : !staffLoading && !staffError && columnProviders.length === 0 ? (
-            <p role="status" className="rounded-lg border border-dashed border-border bg-surface px-4 py-8 text-center text-sm text-muted">
-              {copy.noProviders}
-            </p>
-          ) : (
-            <DayColumns
-              date={selectedDate}
-              providers={columnProviders}
-              appointments={appointments}
-              hours={hours}
-              loading={appointmentsLoading || staffLoading}
-              error={appointmentsLoadError}
-              onRetry={() => setAppointmentsReloadKey((k) => k + 1)}
-              canMove={canMove}
-              onSelectAppointment={openAppointmentDetail}
-              onMoveRequest={setMovingAppointment}
-              onDrop={(a, target) => void handleDrop(a, target)}
-              onNewAppointment={handleNewFromColumn}
-              pendingId={movePendingId}
-            />
-          )}
-        </div>
-      )}
-
-      {movingAppointment && (
-        <MoveAppointmentDialog
-          key={movingAppointment.id}
-          open
-          onOpenChange={(open) => {
-            if (!open) setMovingAppointment(null);
-          }}
-          token={token}
-          appointment={movingAppointment}
-          providers={staff}
-          hours={hours}
-          onMoved={handleMoved}
-        />
-      )}
-
-      {/* Create-appointment form (centered dialog — protected focus for a
-          multi-field task). */}
-      <Dialog
-        open={showForm}
-        onOpenChange={(open) => {
-          setShowForm(open);
-          if (!open) setSlotPrefill(null);
-        }}
-      >
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>{copy.newAppointment}</DialogTitle>
-            <DialogDescription>{copy.newAppointmentDesc}</DialogDescription>
-          </DialogHeader>
-          <AppointmentForm
-            token={token}
-            onCreated={handleAppointmentCreated}
-            defaultDate={slotPrefill?.date ?? selectedDate}
-            defaultStartTime={slotPrefill?.startTime}
-            defaultEndTime={slotPrefill?.endTime}
-            defaultProviderId={slotPrefill?.providerId}
-          />
-        </DialogContent>
-      </Dialog>
-
-      {/* Day panel — right drawer (sm+) / bottom sheet (mobile). Opens on a
-          day click in the month view; shows that day's appointments without
-          pushing the calendar or scrolling the page. */}
-      <Sheet open={dayPanelOpen} onOpenChange={setDayPanelOpen}>
-        <SheetContent>
-          <SheetHeader>
-            <SheetTitle>{longDayLabel(selectedDate)}</SheetTitle>
-            <SheetDescription>
-              {copy.dayCount(selectedDayAppointments.length)}
-            </SheetDescription>
-          </SheetHeader>
-          <SheetBody className="flex flex-col gap-3">
-            <DayAgenda
-              appointments={selectedDayAppointments}
-              loading={appointmentsLoading}
-              error={appointmentsLoadError}
-              onRetry={() => setAppointmentsReloadKey((k) => k + 1)}
-              onStatusChange={handleStatusChange}
-              updatingId={updatingId}
-              onSelectAppointment={openAppointmentDetail}
-            />
-          </SheetBody>
-          <SheetFooter>
+          <div className="flex flex-wrap items-center gap-2">
+            {/* DX-122: en pantallas sin panel lateral, los pendientes van en un cajón. */}
+            {!wide ? (
             <Button
               type="button"
-              className="w-full"
-              onClick={() => {
-                setDayPanelOpen(false);
-                setSlotPrefill(null);
-                setShowForm(true);
-              }}
+              variant="secondary"
+              aria-label={waitlistCount === null ? copy.waitlistButton : copy.waitlistButtonCount(waitlistCount)}
+              onClick={() => setWaitlistOpen(true)}
             >
-              <Plus /> {copy.newAppointmentForDay}
+              <ListTodo aria-hidden /> {copy.waitlistButton}
+              {waitlistCount ? (
+                <span className="rounded-full bg-primary/10 px-1.5 text-xs font-semibold tabular-nums text-primary">
+                  {waitlistCount}
+                </span>
+              ) : null}
             </Button>
-          </SheetFooter>
-        </SheetContent>
-      </Sheet>
+            ) : null}
+            {canWriteBlocks ? (
+              <Button type="button" variant="secondary" onClick={() => setShowBlockDialog(true)}>
+                <CalendarOff aria-hidden /> {copy.blockSchedule}
+              </Button>
+            ) : null}
+            <Button type="button" onClick={openNewAppointment}>
+              <Plus /> {copy.newAppointment}
+            </Button>
+          </div>
+        </div>
 
-      {/* Appointment detail (from the week grid) — same sheet, so status
-          changes never render a card that grows the page. */}
-      <Sheet
-        open={liveDetailAppointment != null}
-        onOpenChange={(open) => {
-          if (!open) setDetailAppointment(null);
-        }}
-      >
-        {liveDetailAppointment && (
+        {appointmentsRefreshing && (
+          <p role="status" aria-live="polite" className="text-xs font-medium text-muted">
+            {copy.refreshing}
+          </p>
+        )}
+
+        {/* The active view, full width — nothing renders below it, so the page
+            never grows a second scroll region. The day detail lives in a sheet. */}
+        {viewMode === 'month' ? (
+          <div className="flex flex-col gap-3">
+            <DateNav
+              label={monthLabel(selectedDate)}
+              prevLabel={copy.prevMonth}
+              nextLabel={copy.nextMonth}
+              date={selectedDate}
+              onDateChange={setSelectedDate}
+              onPrev={() => setSelectedDate(addMonths(selectedDate, -1))}
+              onNext={() => setSelectedDate(addMonths(selectedDate, 1))}
+              onToday={() => setSelectedDate(today)}
+            />
+            <MonthAgenda
+              appointments={appointments}
+              monthDate={selectedDate}
+              selectedDate={selectedDate}
+              today={today}
+              onSelectDay={handleSelectMonthDay}
+              loading={appointmentsLoading}
+              error={appointmentsLoadError}
+              onRetry={() => setAppointmentsReloadKey((k) => k + 1)}
+            />
+          </div>
+        ) : viewMode === 'week' ? (
+          <div className="flex flex-col gap-3">
+            <DateNav
+              label={weekRangeLabel(selectedDate)}
+              prevLabel={copy.prevWeek}
+              nextLabel={copy.nextWeek}
+              date={selectedDate}
+              onDateChange={setSelectedDate}
+              onPrev={() => setSelectedDate(addDays(selectedDate, -7))}
+              onNext={() => setSelectedDate(addDays(selectedDate, 7))}
+              onToday={() => setSelectedDate(today)}
+            />
+            {/* `WeekTimeGrid` is purely presentational (no loading/error props,
+                unlike `DayAgenda`) — mirror `DayAgenda`'s own loading/error
+                branches here so Semana still surfaces the feedback the grid
+                itself doesn't render. */}
+            {appointmentsLoading ? (
+              <p role="status" className="text-sm text-muted">
+                {copy.loading}
+              </p>
+            ) : appointmentsLoadError ? (
+              <SectionError
+                description={appointmentsLoadError}
+                onRetry={() => setAppointmentsReloadKey((k) => k + 1)}
+                retryLabel={copy.retry}
+              />
+            ) : (
+              <WeekTimeGrid
+                appointments={appointments}
+                weekStart={weekStartOf(selectedDate)}
+                  onSelectDay={handleSelectDay}
+                onSelectSlot={handleSelectSlot}
+                onSelectAppointment={(a) => setDetailAppointment(a)}
+                blocks={weekBlocks}
+                providerName={staffName}
+                selectedProviderId={providerId || null}
+              />
+            )}
+          </div>
+        ) : (
+          <div className="flex flex-col gap-3">
+            <DateNav
+              label={longDayLabel(selectedDate)}
+              prevLabel={copy.prevDay}
+              nextLabel={copy.nextDay}
+              date={selectedDate}
+              onDateChange={setSelectedDate}
+              onPrev={() => setSelectedDate(addDays(selectedDate, -1))}
+              onNext={() => setSelectedDate(addDays(selectedDate, 1))}
+              onToday={() => setSelectedDate(today)}
+            />
+            <div
+              role="group"
+              aria-label={copy.dayLayoutLabel}
+              className="inline-flex self-start rounded-lg border border-border bg-surface-2 p-0.5"
+            >
+              {(['columns', 'list'] as DayLayout[]).map((layout) => (
+                <button
+                  key={layout}
+                  type="button"
+                  aria-pressed={dayLayout === layout}
+                  onClick={() => setDayLayout(layout)}
+                  className={cn(
+                    'h-7 rounded-md px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
+                    dayLayout === layout ? 'bg-surface text-ink shadow-sm' : 'text-muted hover:text-ink',
+                  )}
+                >
+                  {layout === 'columns' ? copy.dayColumns : copy.dayList}
+                </button>
+              ))}
+            </div>
+            {dayLayout === 'list' ? (
+              <DayAgenda
+                appointments={appointments}
+                loading={appointmentsLoading}
+                error={appointmentsLoadError}
+                onRetry={() => setAppointmentsReloadKey((k) => k + 1)}
+                onStatusChange={handleStatusChange}
+                updatingId={updatingId}
+                onSelectAppointment={openAppointmentDetail}
+              />
+            ) : !staffLoading && !staffError && columnProviders.length === 0 ? (
+              <p role="status" className="rounded-lg border border-dashed border-border bg-surface px-4 py-8 text-center text-sm text-muted">
+                {copy.noProviders}
+              </p>
+            ) : (
+              <DayColumns
+                date={selectedDate}
+                providers={columnProviders}
+                appointments={appointments}
+                hours={hours}
+                loading={appointmentsLoading || staffLoading}
+                error={appointmentsLoadError}
+                onRetry={() => setAppointmentsReloadKey((k) => k + 1)}
+                canMove={canMove}
+                onSelectAppointment={openAppointmentDetail}
+                onMoveRequest={setMovingAppointment}
+                onDrop={(a, target) => void handleDrop(a, target)}
+                onNewAppointment={handleNewFromColumn}
+                pendingId={movePendingId}
+                blocks={blocks}
+                activeLocationId={activeLocationId}
+                onSelectBlock={
+                  canWriteBlocks
+                    ? (block) => {
+                        setRemoveBlockError(null);
+                        setRemovingBlock(block);
+                      }
+                    : undefined
+                }
+                // El odontólogo solo quita los suyos (la API daría 403).
+                canSelectBlock={(block) => !ownBlocksOnly || block.providerId === userId}
+              />
+            )}
+          </div>
+        )}
+
+        {movingAppointment && (
+          <MoveAppointmentDialog
+            key={movingAppointment.id}
+            open
+            onOpenChange={(open) => {
+              if (!open) setMovingAppointment(null);
+            }}
+            token={token}
+            appointment={movingAppointment}
+            providers={staff}
+            hours={hours}
+            onMoved={handleMoved}
+          />
+        )}
+
+        {/* Create-appointment form (centered dialog — protected focus for a
+            multi-field task). */}
+        <Dialog
+          open={showForm}
+          onOpenChange={(open) => {
+            setShowForm(open);
+            if (!open) setSlotPrefill(null);
+          }}
+        >
+          <DialogContent className="max-w-2xl">
+            <DialogHeader>
+              <DialogTitle>{copy.newAppointment}</DialogTitle>
+              <DialogDescription>{copy.newAppointmentDesc}</DialogDescription>
+            </DialogHeader>
+            <AppointmentForm
+              token={token}
+              onCreated={handleAppointmentCreated}
+              defaultDate={slotPrefill?.date ?? selectedDate}
+              defaultStartTime={slotPrefill?.startTime}
+              defaultEndTime={slotPrefill?.endTime}
+              defaultProviderId={slotPrefill?.providerId}
+            />
+          </DialogContent>
+        </Dialog>
+
+        {/* Day panel — right drawer (sm+) / bottom sheet (mobile). Opens on a
+            day click in the month view; shows that day's appointments without
+            pushing the calendar or scrolling the page. */}
+        <Sheet open={dayPanelOpen} onOpenChange={setDayPanelOpen}>
           <SheetContent>
             <SheetHeader>
-              <SheetTitle>
-                {patientLabel(liveDetailAppointment)}
-              </SheetTitle>
+              <SheetTitle>{longDayLabel(selectedDate)}</SheetTitle>
               <SheetDescription>
-                {formatTimeRange(liveDetailAppointment.start, liveDetailAppointment.end)}
+                {copy.dayCount(selectedDayAppointments.length)}
               </SheetDescription>
             </SheetHeader>
-            <SheetBody className="flex flex-col gap-4">
-              {liveDetailAppointment.reason && (
-                <p className="text-sm text-ink">{liveDetailAppointment.reason}</p>
-              )}
-              <FormField htmlFor="detail-status" label={copy.statusLabel}>
-                <select
-                  id="detail-status"
-                  className={fieldClass}
-                  value={liveDetailAppointment.status}
-                  disabled={updatingId === liveDetailAppointment.id}
-                  onChange={(e) => {
-                    void handleStatusChange(
-                      liveDetailAppointment.id,
-                      e.target.value as AppointmentStatus,
-                    );
-                  }}
-                >
-                  {STATUS_OPTIONS.map((s) => (
-                    <option key={s} value={s}>
-                      {STATUS_LABELS[s]}
-                    </option>
-                  ))}
-                </select>
-              </FormField>
-              {/* `key`: el enlace generado vive solo en este panel (el backend
-                  guarda únicamente su hash); al cambiar de cita se descarta. */}
-              <ConfirmationLinkPanel
-                key={liveDetailAppointment.id}
+            <SheetBody className="flex flex-col gap-3">
+              <DayAgenda
+                appointments={selectedDayAppointments}
+                loading={appointmentsLoading}
+                error={appointmentsLoadError}
+                onRetry={() => setAppointmentsReloadKey((k) => k + 1)}
+                onStatusChange={handleStatusChange}
+                updatingId={updatingId}
+                onSelectAppointment={openAppointmentDetail}
+              />
+            </SheetBody>
+            <SheetFooter>
+              <Button
+                type="button"
+                className="w-full"
+                onClick={() => {
+                  setDayPanelOpen(false);
+                  setSlotPrefill(null);
+                  setShowForm(true);
+                }}
+              >
+                <Plus /> {copy.newAppointmentForDay}
+              </Button>
+            </SheetFooter>
+          </SheetContent>
+        </Sheet>
+
+        {/* Appointment detail (from the week grid) — same sheet, so status
+            changes never render a card that grows the page. */}
+        <Sheet
+          open={liveDetailAppointment != null}
+          onOpenChange={(open) => {
+            if (!open) setDetailAppointment(null);
+          }}
+        >
+          {liveDetailAppointment && (
+            <SheetContent>
+              <SheetHeader>
+                <SheetTitle>
+                  {patientLabel(liveDetailAppointment)}
+                </SheetTitle>
+                <SheetDescription>
+                  {formatTimeRange(liveDetailAppointment.start, liveDetailAppointment.end)}
+                </SheetDescription>
+              </SheetHeader>
+              <SheetBody className="flex flex-col gap-4">
+                {liveDetailAppointment.reason && (
+                  <p className="text-sm text-ink">{liveDetailAppointment.reason}</p>
+                )}
+                <FormField htmlFor="detail-status" label={copy.statusLabel}>
+                  <select
+                    id="detail-status"
+                    className={fieldClass}
+                    value={liveDetailAppointment.status}
+                    disabled={updatingId === liveDetailAppointment.id}
+                    onChange={(e) => {
+                      void handleStatusChange(
+                        liveDetailAppointment.id,
+                        e.target.value as AppointmentStatus,
+                      );
+                    }}
+                  >
+                    {STATUS_OPTIONS.map((s) => (
+                      <option key={s} value={s}>
+                        {STATUS_LABELS[s]}
+                      </option>
+                    ))}
+                  </select>
+                </FormField>
+                {/* `key`: el enlace generado vive solo en este panel (el backend
+                    guarda únicamente su hash); al cambiar de cita se descarta. */}
+                <ConfirmationLinkPanel
+                  key={liveDetailAppointment.id}
+                  token={token}
+                  appointment={liveDetailAppointment}
+                  onLinkCreated={() => void refreshAppointmentsInPlace()}
+                />
+              </SheetBody>
+            </SheetContent>
+          )}
+        </Sheet>
+      </div>
+
+      {/* DX-122: panel lateral fijo junto a la agenda (≥ 1400 px: a 1440 deja sitio a la tabla del día). */}
+      {wide ? (
+        <aside
+          aria-label={waitlistCopy.title}
+          className="sticky top-0 max-h-[calc(100dvh-4rem)] overflow-y-auto"
+        >
+          <WaitlistPanel
+            token={token}
+            staff={staff}
+            waitlist={waitlist}
+            onScheduled={handleWaitlistScheduled}
+          />
+        </aside>
+      ) : (
+        /* Cajón: a pantalla completa en móvil, lateral en tablet. */
+        <Sheet open={waitlistOpen} onOpenChange={setWaitlistOpen}>
+          <SheetContent className="top-0 h-dvh max-h-none rounded-none border-t-0 sm:w-[26rem]">
+            <SheetHeader className="sr-only">
+              <SheetTitle>{waitlistCopy.title}</SheetTitle>
+              <SheetDescription>{copy.waitlistSheetDescription}</SheetDescription>
+            </SheetHeader>
+            {/* pt-14: la X de cerrar va arriba a la derecha, sobre el título. */}
+            <SheetBody className="pt-14">
+              <WaitlistPanel
                 token={token}
-                appointment={liveDetailAppointment}
-                onLinkCreated={() => void refreshAppointmentsInPlace()}
+                staff={staff}
+                waitlist={waitlist}
+                onScheduled={handleWaitlistScheduled}
               />
             </SheetBody>
           </SheetContent>
-        )}
-      </Sheet>
+        </Sheet>
+      )}
+
+      {showBlockDialog ? (
+        <ScheduleBlockDialog
+          open
+          onOpenChange={setShowBlockDialog}
+          token={token}
+          staff={attendingStaff(staff)}
+          locations={locations}
+          activeLocationId={activeLocationId}
+          defaultDate={selectedDate}
+          defaultProviderId={providerId || columnIds[0]}
+          ownProviderId={ownBlocksOnly ? userId : null}
+          onCreated={handleBlockCreated}
+        />
+      ) : null}
+
+      <ConfirmDialog
+        open={removingBlock !== null}
+        onOpenChange={(open) => {
+          if (!open) setRemovingBlock(null);
+        }}
+        title={copy.removeBlockTitle}
+        description={
+          removingBlock
+            ? copy.removeBlockDescription(
+                blockLabel(
+                  removingBlock,
+                  removingBlock.providerId ? staffName(removingBlock.providerId) : undefined,
+                ),
+              )
+            : undefined
+        }
+        confirmLabel={copy.removeBlockConfirm}
+        onConfirm={() => void confirmRemoveBlock()}
+        confirming={removingBlockPending}
+        error={removeBlockError}
+      />
     </div>
   );
 }

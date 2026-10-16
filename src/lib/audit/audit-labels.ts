@@ -56,6 +56,9 @@ export const AUDIT_RESOURCE_LABELS: Record<AuditResourceType, string> = {
   CLINICAL_ENTRY_ADDENDUM: 'Adenda de evolución',
   // DX-121: mover una cita (hora y profesional antes/después).
   APPOINTMENT: 'Cita',
+  // DX-122: bloqueos de agenda y «Pendientes por agendar».
+  SCHEDULE_BLOCK: 'Bloqueo de agenda',
+  WAITLIST_ENTRY: 'Pendiente por agendar',
 };
 
 export const AUDIT_RESOURCE_OPTIONS = Object.keys(AUDIT_RESOURCE_LABELS) as AuditResourceType[];

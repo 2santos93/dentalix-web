@@ -108,3 +108,53 @@ it('marca en el bloque de la cita "pide llamada" (DX-005), con texto para lector
   expect(indicator).toHaveAttribute('data-indicator', 'callback');
   expect(indicator).toHaveTextContent('Pide llamada');
 });
+
+const VACATION_BLOCK = {
+  id: 'b-1',
+  providerId: 'prov-1',
+  locationId: null,
+  start: new Date('2026-03-10T00:00:00').toISOString(),
+  end: new Date('2026-03-12T00:00:00').toISOString(),
+  kind: 'VACATION' as const,
+  allowsBooking: false,
+  note: null,
+};
+
+it('DX-122: pinta los bloqueos del profesional elegido con su etiqueta, sin tapar los huecos', async () => {
+  const onSelectSlot = jest.fn();
+  render(
+    <WeekTimeGrid
+      appointments={[]}
+      weekStart={WEEK_START}
+      onSelectDay={noop}
+      onSelectSlot={onSelectSlot}
+      onSelectAppointment={noop}
+      providerName={(id) => (id === 'prov-1' ? 'Dra. Ana Ríos' : undefined)}
+      selectedProviderId="prov-1"
+      blocks={[VACATION_BLOCK]}
+    />,
+  );
+  // Martes y miércoles.
+  expect(screen.getAllByTestId('week-schedule-block')).toHaveLength(2);
+  expect(screen.getAllByRole('note', { name: 'Bloqueo: Vacaciones · Dra. Ana Ríos' })).toHaveLength(2);
+  await userEvent.click(screen.getByTestId('week-grid-slot-2026-03-10-10:00'));
+  expect(onSelectSlot).toHaveBeenCalledWith('2026-03-10', '10:00');
+});
+
+it('DX-122: con «Todos» el bloqueo de un profesional no tapa el día, pero se anuncia en la cabecera', () => {
+  render(
+    <WeekTimeGrid
+      appointments={[]}
+      weekStart={WEEK_START}
+      onSelectDay={noop}
+      onSelectSlot={noop}
+      onSelectAppointment={noop}
+      providerName={(id) => (id === 'prov-1' ? 'Dra. Ana Ríos' : undefined)}
+      blocks={[VACATION_BLOCK]}
+    />,
+  );
+  expect(screen.queryAllByTestId('week-schedule-block')).toHaveLength(0);
+  const chips = screen.getAllByTestId('week-block-chip');
+  expect(chips).toHaveLength(2);
+  for (const chip of chips) expect(chip).toHaveTextContent('Vacaciones · Dra. Ana Ríos');
+});
