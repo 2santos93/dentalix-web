@@ -5,6 +5,7 @@ import { createAppointment } from '@/lib/appointments/appointments-api';
 import { listStaff } from '@/lib/appointments/staff-api';
 import { createPatient, listPatients } from '@/lib/patients/patients-api';
 import { getLocationSchedule } from '@/lib/locations/schedule-api';
+import { listAppointmentTypes } from '@/lib/appointments/appointment-types-api';
 
 // PatientForm (rendered inside the "Crear paciente" dialog) calls
 // useRouter() — mock it the same way patient-form.test.tsx does, since it's
@@ -31,12 +32,27 @@ jest.mock('../../lib/patients/patients-api', () => ({
   listPatients: jest.fn(),
   createPatient: jest.fn(),
 }));
+jest.mock('../../lib/appointments/appointment-types-api', () => ({
+  listAppointmentTypes: jest.fn(),
+}));
 
 const mockedCreateAppointment = createAppointment as jest.MockedFunction<typeof createAppointment>;
 const mockedListStaff = listStaff as jest.MockedFunction<typeof listStaff>;
 const mockedListPatients = listPatients as jest.MockedFunction<typeof listPatients>;
 const mockedCreatePatient = createPatient as jest.MockedFunction<typeof createPatient>;
 const mockedGetSchedule = getLocationSchedule as jest.MockedFunction<typeof getLocationSchedule>;
+const mockedListTypes = listAppointmentTypes as jest.MockedFunction<typeof listAppointmentTypes>;
+
+const endodoncia = {
+  id: 'type-endo',
+  tenantId: 't1',
+  name: 'Endodoncia',
+  durationMinutes: 90,
+  color: '#7C3AED',
+  active: true,
+  createdAt: '2026-01-01T00:00:00.000Z',
+  updatedAt: '2026-01-01T00:00:00.000Z',
+};
 
 const staff = [
   { userId: 'staff-1', fullName: 'Dra. Ana Ríos', role: 'DENTIST' as const },
@@ -116,6 +132,9 @@ const createdAppointment = {
   reason: 'Control',
   notes: null,
   createdById: 'u1',
+  locationId: 'loc-1',
+  appointmentTypeId: null,
+  appointmentType: null,
   confirmationSentAt: null,
   callbackRequestedAt: null,
   createdAt: '2026-07-01T00:00:00.000Z',
@@ -171,6 +190,50 @@ describe('AppointmentForm', () => {
     mockedGetSchedule.mockReset();
     // Sede sin horario configurado => sin restricción (igual que el backend).
     mockedGetSchedule.mockResolvedValue(null);
+    mockedListTypes.mockReset();
+    mockedListTypes.mockResolvedValue([endodoncia]);
+  });
+
+  // DX-121: el tipo fija la duración.
+  describe('tipo de cita', () => {
+    it('elegir «Endodoncia 90 min» fija la hora de fin y se envía el tipo', async () => {
+      const user = userEvent.setup();
+      mockedCreateAppointment.mockResolvedValue(createdAppointment);
+      await renderFormAndWaitForLoad();
+      await selectMariaByDoc(user);
+      await user.selectOptions(screen.getByLabelText(/profesional/i), 'staff-1');
+      await user.type(screen.getByLabelText(/^fecha$/i), FUTURE_DATE);
+      await user.type(screen.getByLabelText(/hora de inicio/i), '09:00');
+      await screen.findByRole('option', { name: 'Endodoncia · 90 min' });
+      await user.selectOptions(screen.getByLabelText(/tipo de cita/i), 'type-endo');
+
+      expect(screen.getByLabelText(/hora de fin/i)).toHaveValue('10:30');
+      // Cambiar la hora de inicio arrastra la de fin con la duración del tipo.
+      const start = screen.getByLabelText(/hora de inicio/i);
+      await user.clear(start);
+      await user.type(start, '11:00');
+      expect(screen.getByLabelText(/hora de fin/i)).toHaveValue('12:30');
+
+      await user.click(screen.getByRole('button', { name: /agendar/i }));
+      await waitFor(() => expect(mockedCreateAppointment).toHaveBeenCalledTimes(1));
+      expect(mockedCreateAppointment.mock.calls[0][1]).toMatchObject({
+        appointmentTypeId: 'type-endo',
+        start: new Date(`${FUTURE_DATE}T11:00:00`).toISOString(),
+        end: new Date(`${FUTURE_DATE}T12:30:00`).toISOString(),
+      });
+    });
+
+    it('solo ofrece los tipos activos que devuelve la API', async () => {
+      await renderFormAndWaitForLoad();
+      await screen.findByRole('option', { name: 'Endodoncia · 90 min' });
+      expect(mockedListTypes).toHaveBeenCalledWith('tok');
+    });
+
+    it('prefija el profesional desde la columna', async () => {
+      render(<AppointmentForm token="tok" onCreated={jest.fn()} defaultProviderId="staff-2" />);
+      await screen.findByRole('option', { name: /dr\. luis gómez/i });
+      expect(screen.getByLabelText(/profesional/i)).toHaveValue('staff-2');
+    });
   });
 
   it('renders patient, provider, date/time and reason fields with accessible labels', async () => {
@@ -391,7 +454,7 @@ describe('AppointmentForm', () => {
     expect(input.patientId).toBe('pat-1');
     expect(input.providerId).toBe('staff-1');
     expect(input.reason).toBe('Control');
-    expect(new Date(input.start).getTime()).toBeLessThan(new Date(input.end).getTime());
+    expect(new Date(input.start).getTime()).toBeLessThan(new Date(input.end ?? '').getTime());
     expect(input.start).toBe(new Date(`${FUTURE_DATE}T09:00:00`).toISOString());
     expect(input.end).toBe(new Date(`${FUTURE_DATE}T09:30:00`).toISOString());
   });

@@ -78,6 +78,8 @@ test('recepción genera el enlace -> el paciente confirma desde el móvil -> la 
   await page.goto(`${origin}/agenda`);
   await expect(page.getByRole('heading', { name: 'Agenda' })).toBeVisible();
   await page.getByRole('button', { name: 'Día', exact: true }).click();
+  // DX-121: el Día abre en columnas; la fila con estado está en «Lista».
+  await page.getByRole('button', { name: 'Lista', exact: true }).click();
   await page.getByLabel('Fecha', { exact: true }).fill(day);
 
   const row = page.locator('table tr', { hasText: `Camila Confirma${suffix}` });
@@ -125,6 +127,8 @@ test('recepción genera el enlace -> el paciente confirma desde el móvil -> la 
   // Abrir el enlace no confirmó nada: sigue agendada.
   await page.reload();
   await page.getByRole('button', { name: 'Día', exact: true }).click();
+  // DX-121: el Día abre en columnas; la fila con estado está en «Lista».
+  await page.getByRole('button', { name: 'Lista', exact: true }).click();
   await page.getByLabel('Fecha', { exact: true }).fill(day);
   await expect(row.getByLabel(/Estado de la cita de/)).toHaveValue('SCHEDULED', { timeout: 10_000 });
 
@@ -141,6 +145,8 @@ test('recepción genera el enlace -> el paciente confirma desde el móvil -> la 
   // --- La agenda refleja la respuesta sin intervención manual ---
   await page.reload();
   await page.getByRole('button', { name: 'Día', exact: true }).click();
+  // DX-121: el Día abre en columnas; la fila con estado está en «Lista».
+  await page.getByRole('button', { name: 'Lista', exact: true }).click();
   await page.getByLabel('Fecha', { exact: true }).fill(day);
   await expect(row.getByLabel(/Estado de la cita de/)).toHaveValue('CONFIRMED', { timeout: 10_000 });
   await expect(row.getByText('Confirmación pendiente')).toHaveCount(0);

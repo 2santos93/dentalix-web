@@ -54,6 +54,8 @@ export const AUDIT_RESOURCE_LABELS: Record<AuditResourceType, string> = {
   PAYMENT_PLAN: 'Plan de cuotas',
   ACCOUNT_STATEMENT: 'Estado de cuenta',
   CLINICAL_ENTRY_ADDENDUM: 'Adenda de evolución',
+  // DX-121: mover una cita (hora y profesional antes/después).
+  APPOINTMENT: 'Cita',
 };
 
 export const AUDIT_RESOURCE_OPTIONS = Object.keys(AUDIT_RESOURCE_LABELS) as AuditResourceType[];

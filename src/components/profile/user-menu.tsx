@@ -12,6 +12,7 @@ import {
   ShieldCheck,
   Sun,
   Moon,
+  CalendarClock,
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useAuthStore } from '@/lib/auth/auth-store';
@@ -20,6 +21,7 @@ import { getMe, type ClinicRole } from '@/lib/me/me-api';
 import { getTokenRole } from '@/lib/auth/token-role';
 import { canManageConsentTemplates } from '@/lib/consents/consents-api';
 import { canManagePrescriptionTemplates } from '@/lib/prescriptions/prescriptions-api';
+import { canManageAppointmentTypes } from '@/lib/appointments/appointment-types-api';
 import { cn } from '@/lib/utils';
 
 // Tope de espera a la revocación en el servidor al cerrar sesión: la API suele
@@ -52,6 +54,7 @@ const copy = {
   privacy: 'Privacidad de datos',
   consentTemplates: 'Consentimientos',
   prescriptionSettings: 'Recetas',
+  appointmentTypes: 'Tipos de cita',
   logout: 'Cerrar sesión',
   theme: 'Cambiar tema',
 };
@@ -267,6 +270,18 @@ export function UserMenu({
         >
           <FileSignature className="size-4 text-muted" aria-hidden />
           {copy.consentTemplates}
+        </Link>
+      ) : null}
+      {/* Tipos de cita con duración y color (DX-121): solo ADMIN. */}
+      {canManageAppointmentTypes(getTokenRole(accessToken)) ? (
+        <Link
+          href="/settings/tipos-de-cita"
+          role="menuitem"
+          onClick={() => setOpen(false)}
+          className="flex items-center gap-3 px-3 py-2 text-sm text-ink hover:bg-bg"
+        >
+          <CalendarClock className="size-4 text-muted" aria-hidden />
+          {copy.appointmentTypes}
         </Link>
       ) : null}
       {/* Plantillas de receta y país de las sedes (DX-013): solo ADMIN. */}

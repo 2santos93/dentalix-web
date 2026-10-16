@@ -2,15 +2,27 @@
 import { useEffect, useRef, useState } from 'react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import {
+  canMoveAppointments,
   listAppointments,
   updateAppointment,
   type Appointment,
   type AppointmentStatus,
 } from '@/lib/appointments/appointments-api';
+import { getLocationSchedule, type BusinessHours } from '@/lib/locations/schedule-api';
+import { getActiveLocationId } from '@/lib/locations/location-store';
+import { listLocations } from '@/lib/locations/locations-api';
+import { getTokenRole } from '@/lib/auth/token-role';
+import type { MoveTarget } from '@/lib/appointments/day-grid';
 import { listStaff, type StaffMember } from '@/lib/appointments/staff-api';
 import { localDayRange, localWeekRange } from '@/lib/appointments/day-range';
 import { monthGridRange, addMonths, monthLabel } from '@/lib/appointments/calendar-grid';
 import { DayAgenda } from '@/components/appointments/day-agenda';
+import { DayColumns } from '@/components/appointments/day-columns';
+import { MoveAppointmentDialog } from '@/components/appointments/move-appointment-dialog';
+import {
+  MAX_PROVIDER_COLUMNS,
+  ProviderColumnsPicker,
+} from '@/components/appointments/provider-columns-picker';
 import { WeekTimeGrid } from '@/components/appointments/week-time-grid';
 import { MonthAgenda } from '@/components/appointments/month-agenda';
 import { AppointmentForm } from '@/components/appointments/appointment-form';
@@ -33,6 +45,7 @@ import { FormField } from '@/components/shared/form-field';
 import { FieldError } from '@/components/errors/field-error';
 import { SectionError } from '@/components/errors/section-error';
 import { notifyError } from '@/components/errors/notify';
+import { toast } from 'sonner';
 import {
   Sheet,
   SheetContent,
@@ -84,6 +97,12 @@ const copy = {
   /** Selected-day appointment count, shown above the day panel in the month view. */
   dayCount: (n: number) => (n === 0 ? 'Sin citas' : n === 1 ? '1 cita' : `${n} citas`),
   noProviders: 'No hay profesionales activos en esta clínica.',
+  // DX-121: la vista Día en columnas por profesional, o en lista.
+  dayLayoutLabel: 'Presentación del día',
+  dayColumns: 'Columnas',
+  dayList: 'Lista',
+  genericMoveError: 'No pudimos mover la cita.',
+  moved: 'Cita movida.',
   selectProviderPrompt: 'Selecciona un profesional para ver su agenda.',
   statusLabel: 'Estado',
 };
@@ -117,6 +136,20 @@ function weekStartOf(date: string): string {
 }
 
 type ViewMode = 'month' | 'day' | 'week';
+/** DX-121: la vista Día se ve en columnas por profesional (por defecto) o en lista. */
+type DayLayout = 'columns' | 'list';
+
+/**
+ * Columnas por defecto: quienes atienden pacientes (odontólogos y
+ * administración, que en la clínica suele ser el titular), hasta 12. Si no hay
+ * ninguno, el personal entero. Recepción y asistentes se añaden con el selector.
+ */
+function defaultColumnIds(staff: StaffMember[]): string[] {
+  const clinicians = staff.filter((s) => s.role === 'DENTIST' || s.role === 'ADMIN');
+  return (clinicians.length > 0 ? clinicians : staff)
+    .slice(0, MAX_PROVIDER_COLUMNS)
+    .map((s) => s.userId);
+}
 
 const VIEW_MODES: ViewMode[] = ['month', 'day', 'week'];
 const VIEW_LABEL: Record<ViewMode, string> = {
@@ -264,6 +297,15 @@ export function AgendaView({ token }: AgendaViewProps) {
   // list + the new-appointment flow below (see the `viewMode === 'month'`
   // branch). 'day'/'week' keep the original single-provider agenda.
   const [viewMode, setViewMode] = useState<ViewMode>('month');
+  const [dayLayout, setDayLayout] = useState<DayLayout>('columns');
+  // `null` = todavía la selección por defecto (se deriva del personal).
+  const [pickedColumnIds, setPickedColumnIds] = useState<string[] | null>(null);
+  // Horario de la sede activa (sombreado de la vista en columnas). Best-effort:
+  // si no se puede leer no se sombrea nada; el servidor sigue validando (422).
+  const [hours, setHours] = useState<BusinessHours | null>(null);
+  const [movingAppointment, setMovingAppointment] = useState<Appointment | null>(null);
+  const [movePendingId, setMovePendingId] = useState<string | null>(null);
+  const canMove = canMoveAppointments(getTokenRole(token));
   // Whether the day panel (right drawer / bottom sheet) is open — opened by
   // clicking a day in the month calendar; shows that day's appointments
   // without pushing the calendar or scrolling the page.
@@ -287,7 +329,7 @@ export function AgendaView({ token }: AgendaViewProps) {
   // (no start/end) when the form is opened via the "Nueva cita" toggle
   // instead.
   const [slotPrefill, setSlotPrefill] = useState<
-    { date: string; startTime: string; endTime: string } | null
+    { date: string; startTime?: string; endTime?: string; providerId?: string } | null
   >(null);
   // The appointment whose detail sheet (status change + confirmación por
   // enlace) is open — set by `WeekTimeGrid`'s `onSelectAppointment` and by the
@@ -328,6 +370,40 @@ export function AgendaView({ token }: AgendaViewProps) {
     };
   }, [token, staffReloadKey]);
 
+  // Con una sede activa, su horario. En «Todas las sedes» se mezclan citas de
+  // sedes con horarios distintos: solo se sombrea si la clínica tiene UNA sede
+  // (si no, el sombreado de una sede mentiría sobre las demás).
+  useEffect(() => {
+    if (!token) return;
+    let cancelled = false;
+    async function load() {
+      if (getActiveLocationId() === null) {
+        const locations = await listLocations(token);
+        if (locations.length !== 1) return;
+      }
+      const h = await getLocationSchedule(token);
+      if (!cancelled) setHours(h);
+    }
+    load().catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
+
+  // Columnas visibles: la selección del usuario (solo ids que siguen en el
+  // personal) o la de por defecto.
+  const columnIds = (pickedColumnIds ?? defaultColumnIds(staff)).filter((id) =>
+    staff.some((s) => s.userId === id),
+  );
+  const columnProviders = columnIds
+    .map((id) => staff.find((s) => s.userId === id))
+    .filter((s): s is StaffMember => s !== undefined);
+  const columnsMode = viewMode === 'day' && dayLayout === 'columns';
+  const columnsKey = columnsMode ? columnIds.join(',') : '';
+  // Solo en columnas importa esperar al personal (en las demás vistas no se
+  // vuelve a pedir la agenda cuando termina de cargar).
+  const waitingForStaff = columnsMode && staffLoading;
+
   // Patient names come joined on each appointment (`patientFirstName` /
   // `patientLastName`, see `patientLabel`). This used to fetch a
   // `patientId -> name` map via `GET /patients?pageSize=100`, which the API
@@ -340,12 +416,21 @@ export function AgendaView({ token }: AgendaViewProps) {
   // (`listAppointments` just omits the param), which is the month view's default.
   useEffect(() => {
     if (!token) return;
+    // En columnas hace falta saber qué profesionales pedir: se espera al
+    // personal; sin ninguno no hay nada que cargar (se avisa en la vista).
+    if (waitingForStaff || (columnsMode && columnsKey === '')) return;
     let cancelled = false;
     async function load() {
       setAppointmentsLoading(true);
       try {
         const { from, to } = rangeFor(viewMode, selectedDate);
-        const data = await listAppointments(token, { from, to, providerId: providerId || undefined });
+        const data = await listAppointments(token, {
+          from,
+          to,
+          ...(columnsMode
+            ? { providerIds: columnsKey.split(',') }
+            : { providerId: providerId || undefined }),
+        });
         if (cancelled) return;
         setAppointments(data);
         setAppointmentsLoadError(null);
@@ -360,13 +445,19 @@ export function AgendaView({ token }: AgendaViewProps) {
     return () => {
       cancelled = true;
     };
-  }, [token, providerId, selectedDate, viewMode, appointmentsReloadKey]);
+  }, [token, providerId, selectedDate, viewMode, appointmentsReloadKey, columnsMode, columnsKey, waitingForStaff]);
 
   function refreshAppointmentsInPlace(): Promise<void> {
     if (!token) return Promise.resolve();
     setAppointmentsRefreshing(true);
     const { from, to } = rangeFor(viewMode, selectedDate);
-    return listAppointments(token, { from, to, providerId: providerId || undefined })
+    return listAppointments(token, {
+      from,
+      to,
+      ...(columnsMode && columnsKey !== ''
+        ? { providerIds: columnsKey.split(',') }
+        : { providerId: providerId || undefined }),
+    })
       .then((data) => {
         setAppointments(data);
       })
@@ -410,6 +501,53 @@ export function AgendaView({ token }: AgendaViewProps) {
     setSlotPrefill({ date, startTime, endTime: addMinutesToTime(startTime, 30) });
     setDetailAppointment(null);
     setShowForm(true);
+  }
+
+  /** «Nueva cita» de una columna (o clic en un hueco libre): prefija el
+   * profesional y, si viene, la hora (fin = +30 min, o la duración del tipo). */
+  function handleNewFromColumn(columnProviderId: string, startTime?: string) {
+    setSlotPrefill({
+      date: selectedDate,
+      providerId: columnProviderId,
+      ...(startTime ? { startTime, endTime: addMinutesToTime(startTime, 30) } : {}),
+    });
+    setDetailAppointment(null);
+    setShowForm(true);
+  }
+
+  /**
+   * Arrastre soltado (DX-121): la tarjeta pasa YA a su destino (vista previa
+   * confirmada) y se hace UN PATCH. Si el servidor lo rechaza (409 solape, 422
+   * fuera de horario...), la cita vuelve a su sitio y el mensaje sale en un
+   * aviso con Reintentar: nunca queda a medias.
+   */
+  async function handleDrop(appointment: Appointment, target: MoveTarget) {
+    if (!token) return;
+    setAppointments((prev) =>
+      prev.map((a) => (a.id === appointment.id ? { ...a, ...target } : a)),
+    );
+    setMovePendingId(appointment.id);
+    try {
+      await updateAppointment(token, appointment.id, target);
+      toast.success(copy.moved);
+      await refreshAppointmentsInPlace();
+    } catch (err) {
+      setAppointments((prev) =>
+        prev.map((a) => (a.id === appointment.id ? appointment : a)),
+      );
+      notifyError(apiErrorMessage(err, copy.genericMoveError), {
+        onRetry: () => handleDrop(appointment, target),
+      });
+    } finally {
+      setMovePendingId(null);
+    }
+  }
+
+  /** «Mover a…» confirmado por el servidor: cierra el modal, lo anuncia y refresca. */
+  function handleMoved() {
+    setMovingAppointment(null);
+    toast.success(copy.moved);
+    void refreshAppointmentsInPlace();
   }
 
   /** Abre el detalle de una cita desde Día o desde el panel del día del Mes.
@@ -525,6 +663,13 @@ export function AgendaView({ token }: AgendaViewProps) {
               onRetry={() => setStaffReloadKey((k) => k + 1)}
               className="h-9"
             />
+          ) : columnsMode ? (
+            <ProviderColumnsPicker
+              staff={staff}
+              selected={columnIds}
+              onChange={setPickedColumnIds}
+              disabled={staffLoading || staff.length === 0}
+            />
           ) : (
             <select
               aria-label={copy.providerLabel}
@@ -626,16 +771,73 @@ export function AgendaView({ token }: AgendaViewProps) {
             onNext={() => setSelectedDate(addDays(selectedDate, 1))}
             onToday={() => setSelectedDate(today)}
           />
-          <DayAgenda
-            appointments={appointments}
-            loading={appointmentsLoading}
-            error={appointmentsLoadError}
-            onRetry={() => setAppointmentsReloadKey((k) => k + 1)}
-            onStatusChange={handleStatusChange}
-            updatingId={updatingId}
-            onSelectAppointment={openAppointmentDetail}
-          />
+          <div
+            role="group"
+            aria-label={copy.dayLayoutLabel}
+            className="inline-flex self-start rounded-lg border border-border bg-surface-2 p-0.5"
+          >
+            {(['columns', 'list'] as DayLayout[]).map((layout) => (
+              <button
+                key={layout}
+                type="button"
+                aria-pressed={dayLayout === layout}
+                onClick={() => setDayLayout(layout)}
+                className={cn(
+                  'h-7 rounded-md px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
+                  dayLayout === layout ? 'bg-surface text-ink shadow-sm' : 'text-muted hover:text-ink',
+                )}
+              >
+                {layout === 'columns' ? copy.dayColumns : copy.dayList}
+              </button>
+            ))}
+          </div>
+          {dayLayout === 'list' ? (
+            <DayAgenda
+              appointments={appointments}
+              loading={appointmentsLoading}
+              error={appointmentsLoadError}
+              onRetry={() => setAppointmentsReloadKey((k) => k + 1)}
+              onStatusChange={handleStatusChange}
+              updatingId={updatingId}
+              onSelectAppointment={openAppointmentDetail}
+            />
+          ) : !staffLoading && !staffError && columnProviders.length === 0 ? (
+            <p role="status" className="rounded-lg border border-dashed border-border bg-surface px-4 py-8 text-center text-sm text-muted">
+              {copy.noProviders}
+            </p>
+          ) : (
+            <DayColumns
+              date={selectedDate}
+              providers={columnProviders}
+              appointments={appointments}
+              hours={hours}
+              loading={appointmentsLoading || staffLoading}
+              error={appointmentsLoadError}
+              onRetry={() => setAppointmentsReloadKey((k) => k + 1)}
+              canMove={canMove}
+              onSelectAppointment={openAppointmentDetail}
+              onMoveRequest={setMovingAppointment}
+              onDrop={(a, target) => void handleDrop(a, target)}
+              onNewAppointment={handleNewFromColumn}
+              pendingId={movePendingId}
+            />
+          )}
         </div>
+      )}
+
+      {movingAppointment && (
+        <MoveAppointmentDialog
+          key={movingAppointment.id}
+          open
+          onOpenChange={(open) => {
+            if (!open) setMovingAppointment(null);
+          }}
+          token={token}
+          appointment={movingAppointment}
+          providers={staff}
+          hours={hours}
+          onMoved={handleMoved}
+        />
       )}
 
       {/* Create-appointment form (centered dialog — protected focus for a
@@ -658,6 +860,7 @@ export function AgendaView({ token }: AgendaViewProps) {
             defaultDate={slotPrefill?.date ?? selectedDate}
             defaultStartTime={slotPrefill?.startTime}
             defaultEndTime={slotPrefill?.endTime}
+            defaultProviderId={slotPrefill?.providerId}
           />
         </DialogContent>
       </Dialog>

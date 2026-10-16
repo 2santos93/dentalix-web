@@ -15,9 +15,21 @@ import { createConfirmationLink } from '@/lib/appointments/confirmations-api';
 // convention. Both `AgendaView` and the real (unmocked) `AppointmentForm` it
 // renders import from these same modules, so one mock per module covers both.
 jest.mock('../../lib/appointments/appointments-api', () => ({
+  ...jest.requireActual('../../lib/appointments/appointments-api'),
   createAppointment: jest.fn(),
   listAppointments: jest.fn(),
   updateAppointment: jest.fn(),
+}));
+jest.mock('../../lib/appointments/appointment-types-api', () => ({
+  listAppointmentTypes: jest.fn().mockResolvedValue([]),
+}));
+jest.mock('../../lib/locations/locations-api', () => ({
+  listLocations: jest.fn().mockResolvedValue([{ id: 'loc-1', name: 'Sede principal' }]),
+}));
+// Sede sin horario configurado: nada sombreado, nada bloqueado.
+jest.mock('../../lib/locations/schedule-api', () => ({
+  ...jest.requireActual('../../lib/locations/schedule-api'),
+  getLocationSchedule: jest.fn().mockResolvedValue(null),
 }));
 jest.mock('../../lib/appointments/staff-api', () => ({
   listStaff: jest.fn(),
@@ -81,6 +93,9 @@ function appointment(overrides: Partial<import('@/lib/appointments/appointments-
     reason: null,
     notes: null,
     createdById: null,
+    locationId: 'loc-1',
+    appointmentTypeId: null,
+    appointmentType: null,
     confirmationSentAt: null,
     callbackRequestedAt: null,
     createdAt: '2026-01-01T00:00:00.000Z',
@@ -165,6 +180,7 @@ describe('AgendaView', () => {
     await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
 
     await user.click(screen.getByRole('button', { name: /^día$/i }));
+    await user.click(screen.getByRole('button', { name: /^lista$/i }));
     await user.selectOptions(screen.getByLabelText(/profesional/i), 'staff-1');
 
     mockedListAppointments.mockClear();
@@ -192,9 +208,10 @@ describe('AgendaView', () => {
     let callCount = 0;
     mockedListAppointments.mockImplementation(() => {
       callCount += 1;
-      // #1 mount (month), #2 switching to Día — resolve immediately; #3 is the
-      // deferred post-action refresh whose interim state the test asserts on.
-      return callCount <= 2 ? Promise.resolve([apt1]) : refetch.promise;
+      // #1 mount (month), #2 switching to Día (columnas), #3 «Lista» —
+      // resolve immediately; #4 is the deferred post-action refresh whose
+      // interim state the test asserts on.
+      return callCount <= 3 ? Promise.resolve([apt1]) : refetch.promise;
     });
 
     const user = userEvent.setup();
@@ -203,6 +220,7 @@ describe('AgendaView', () => {
     // Switch to Día view — where the appointment table renders — then let the
     // initial load settle with the one appointment.
     await user.click(screen.getByRole('button', { name: /^día$/i }));
+    await user.click(screen.getByRole('button', { name: /^lista$/i }));
     const table = await screen.findByRole('table', { name: /agenda del día/i });
     expect(screen.getAllByRole('row')).toHaveLength(2); // header + apt1
 
@@ -231,7 +249,7 @@ describe('AgendaView', () => {
     // pending on `refetch`); the form closes and a non-blocking refreshing
     // indicator shows, but the day table must stay the SAME mounted node —
     // no full-page reload / remount.
-    await waitFor(() => expect(mockedListAppointments).toHaveBeenCalledTimes(3));
+    await waitFor(() => expect(mockedListAppointments).toHaveBeenCalledTimes(4));
     expect(screen.queryByRole('form', { name: /agendar cita/i })).not.toBeInTheDocument();
     expect(await screen.findByText(/actualizando/i)).toBeInTheDocument();
     expect(screen.getByRole('table', { name: /agenda del día/i })).toBe(table);
@@ -257,15 +275,17 @@ describe('AgendaView', () => {
     let callCount = 0;
     mockedListAppointments.mockImplementation(() => {
       callCount += 1;
-      // #1 mount (month), #2 switching to Día — resolve immediately; #3 is the
-      // deferred post-action refresh whose interim state the test asserts on.
-      return callCount <= 2 ? Promise.resolve([apt1]) : refetch.promise;
+      // #1 mount (month), #2 switching to Día (columnas), #3 «Lista» —
+      // resolve immediately; #4 is the deferred post-action refresh whose
+      // interim state the test asserts on.
+      return callCount <= 3 ? Promise.resolve([apt1]) : refetch.promise;
     });
 
     const user = userEvent.setup();
     render(<AgendaView token="tok" />);
 
     await user.click(screen.getByRole('button', { name: /^día$/i }));
+    await user.click(screen.getByRole('button', { name: /^lista$/i }));
     const table = await screen.findByRole('table', { name: /agenda del día/i });
     const statusSelect = within(table).getByRole<HTMLSelectElement>('combobox');
     expect(statusSelect.value).toBe('SCHEDULED');
@@ -278,7 +298,7 @@ describe('AgendaView', () => {
     // The refresh-in-place fetch has started (2nd listAppointments call
     // pending on `refetch`) — same mounted table node, control disabled
     // while its own update is in flight.
-    await waitFor(() => expect(mockedListAppointments).toHaveBeenCalledTimes(3));
+    await waitFor(() => expect(mockedListAppointments).toHaveBeenCalledTimes(4));
     expect(screen.getByRole('table', { name: /agenda del día/i })).toBe(table);
 
     refetch.resolve([{ ...apt1, status: 'CONFIRMED' }]);
@@ -307,15 +327,17 @@ describe('AgendaView', () => {
     let callCount = 0;
     mockedListAppointments.mockImplementation(() => {
       callCount += 1;
-      // #1 mount (month), #2 switching to Día — resolve immediately; #3 is the
-      // deferred post-action refresh whose interim state the test asserts on.
-      return callCount <= 2 ? Promise.resolve([apt1]) : refetch.promise;
+      // #1 mount (month), #2 switching to Día (columnas), #3 «Lista» —
+      // resolve immediately; #4 is the deferred post-action refresh whose
+      // interim state the test asserts on.
+      return callCount <= 3 ? Promise.resolve([apt1]) : refetch.promise;
     });
 
     const user = userEvent.setup();
     render(<AgendaView token="tok" />);
 
     await user.click(screen.getByRole('button', { name: /^día$/i }));
+    await user.click(screen.getByRole('button', { name: /^lista$/i }));
     const table = await screen.findByRole('table', { name: /agenda del día/i });
     const statusSelect = within(table).getByRole<HTMLSelectElement>('combobox');
     expect(statusSelect.value).toBe('SCHEDULED');
@@ -328,7 +350,7 @@ describe('AgendaView', () => {
 
     // Resolve the PATCH but leave the refetch pending.
     patch.resolve({ ...apt1, status: 'CONFIRMED' });
-    await waitFor(() => expect(mockedListAppointments).toHaveBeenCalledTimes(3));
+    await waitFor(() => expect(mockedListAppointments).toHaveBeenCalledTimes(4));
 
     // THE ASSERTION THAT PROVES THE FIX: the PATCH has settled and the
     // in-place refresh has started, but has NOT resolved yet — the row must
@@ -356,15 +378,16 @@ describe('AgendaView', () => {
     let callCount = 0;
     mockedListAppointments.mockImplementation(() => {
       callCount += 1;
-      // #1 mount (month), #2 switch to Día: resolve regardless of filter.
-      if (callCount <= 2) return Promise.resolve([apt1]);
-      // #3: the in-place refresh right after the status PATCH — fails while
+      // #1 mount (month), #2 switch to Día (columnas), #3 «Lista»: resolve
+      // regardless of filter.
+      if (callCount <= 3) return Promise.resolve([apt1]);
+      // #4: the in-place refresh right after the status PATCH — fails while
       // providerId is still '' (todos). This is what builds the toast.
-      if (callCount === 3) return Promise.reject(new Error('boom'));
-      // #4: the user narrows the filter to staff-2 WHILE the toast is still
+      if (callCount === 4) return Promise.reject(new Error('boom'));
+      // #5: the user narrows the filter to staff-2 WHILE the toast is still
       // up — an ordinary fetch for that provider.
-      if (callCount === 4) return Promise.resolve([]);
-      // #5: clicking the toast's "Reintentar" — must replay with the
+      if (callCount === 5) return Promise.resolve([]);
+      // #6: clicking the toast's "Reintentar" — must replay with the
       // *current* filter (staff-2), not '' from when the toast was built.
       return Promise.resolve([apt2]);
     });
@@ -378,6 +401,7 @@ describe('AgendaView', () => {
     );
 
     await user.click(screen.getByRole('button', { name: /^día$/i }));
+    await user.click(screen.getByRole('button', { name: /^lista$/i }));
     const table = await screen.findByRole('table', { name: /agenda del día/i });
     const statusSelect = within(table).getByRole<HTMLSelectElement>('combobox');
 
@@ -385,19 +409,19 @@ describe('AgendaView', () => {
 
     // The failed in-place refresh surfaces as a toast with a retry action.
     const retryButton = await screen.findByRole('button', { name: 'Reintentar' });
-    await waitFor(() => expect(callCount).toBe(3));
+    await waitFor(() => expect(callCount).toBe(4));
 
     // Narrow the provider filter while the toast is still on screen — the
     // stale-closure trap: the toast's `onRetry` was built during the failed
     // refresh, when `providerId` was still ''.
     const providerSelect = screen.getByLabelText<HTMLSelectElement>(/^profesional$/i);
     await user.selectOptions(providerSelect, 'staff-2');
-    await waitFor(() => expect(callCount).toBe(4));
+    await waitFor(() => expect(callCount).toBe(5));
 
     await user.click(retryButton);
 
-    await waitFor(() => expect(callCount).toBe(5));
-    const lastCallOpts = mockedListAppointments.mock.calls[4][1];
+    await waitFor(() => expect(callCount).toBe(6));
+    const lastCallOpts = mockedListAppointments.mock.calls[5][1];
     expect(lastCallOpts).toMatchObject({ providerId: 'staff-2' });
   });
 
@@ -524,10 +548,10 @@ describe('AgendaView', () => {
       expect(screen.getByRole('button', { name: /^día$/i })).toHaveAttribute('aria-pressed', 'true'),
     );
     expect(dateInput.value).toBe('2026-03-09');
-    // Back in Día view (DayAgenda, not WeekAgenda) — with no appointments
-    // mocked for this test, DayAgenda's empty state confirms it's the one
-    // rendering (WeekAgenda has no such "no hay citas para este día" copy).
-    expect(await screen.findByText(/no hay citas para este día/i)).toBeInTheDocument();
+    // Back in Día view (columnas por profesional, DX-121) — with no
+    // appointments mocked for this test, each column's empty state confirms
+    // it's the one rendering (WeekAgenda has no such copy).
+    expect(await screen.findAllByText('Sin citas hoy')).toHaveLength(staff.length);
     expect(screen.queryByLabelText(/agenda de la semana/i)).not.toBeInTheDocument();
   });
 
@@ -659,5 +683,86 @@ describe('AgendaView', () => {
     );
     // El enlace sigue a la vista tras el refresh (el panel no se remonta).
     expect(screen.getByLabelText('Enlace de confirmación')).toBeInTheDocument();
+  });
+
+  // DX-121: vista Día en columnas por profesional.
+  describe('Día en columnas', () => {
+    // Token de clínica legible con rol de recepción (el arrastre y «Mover a…»
+    // solo se pintan para quien puede mover citas).
+    const receptionToken = `h.${btoa(JSON.stringify({ sub: 'u1', tenantId: 't1', role: 'RECEPTION' }))}.s`;
+    const team = [
+      ...staff,
+      { userId: 'staff-3', fullName: 'Rita Recepción', role: 'RECEPTION' as const },
+    ];
+
+    it('por defecto, una columna por odontólogo/administración y pide sus citas con providerIds', async () => {
+      mockedListStaff.mockResolvedValue(team);
+      mockedListAppointments.mockResolvedValue([]);
+      const user = userEvent.setup();
+      render(<AgendaView token="tok" />);
+      await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
+
+      await user.click(screen.getByRole('button', { name: /^día$/i }));
+
+      expect(await screen.findAllByTestId('day-column')).toHaveLength(2);
+      const params = mockedListAppointments.mock.calls.at(-1)![1];
+      expect(params.providerIds).toEqual(['staff-1', 'staff-2']);
+      expect(params.providerId).toBeUndefined();
+      expect(screen.getByRole('button', { name: /profesionales en columnas/i })).toHaveTextContent(
+        '2 profesionales',
+      );
+    });
+
+    it('«Mover a…» mueve la cita con un PATCH y refresca; un 409 deja todo como estaba', async () => {
+      const future = new Date(Date.now() + 3 * 24 * 3600_000);
+      const day = `${future.getFullYear()}-${String(future.getMonth() + 1).padStart(2, '0')}-${String(future.getDate()).padStart(2, '0')}`;
+      const apt = appointment({
+        id: 'apt-m',
+        patientFirstName: 'María',
+        start: new Date(`${day}T09:00:00`).toISOString(),
+        end: new Date(`${day}T09:30:00`).toISOString(),
+      });
+      mockedListStaff.mockResolvedValue(staff);
+      mockedListAppointments.mockResolvedValue([apt]);
+      mockedUpdateAppointment.mockRejectedValueOnce(
+        new ApiError(409, 'El profesional ya tiene una cita en ese horario'),
+      );
+      const user = userEvent.setup();
+      render(
+        <>
+          <AgendaView token={receptionToken} />
+          <Toaster />
+        </>,
+      );
+      await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
+      await user.click(screen.getByRole('button', { name: /^día$/i }));
+      const dateInput = screen.getByLabelText(/^fecha$/i);
+      await user.clear(dateInput);
+      await user.type(dateInput, day);
+
+      await user.click(await screen.findByRole('button', { name: 'Mover a… la cita de María' }));
+      await user.selectOptions(screen.getByLabelText('Profesional', { selector: '#move-provider' }), 'staff-2');
+      await user.click(screen.getByRole('button', { name: 'Mover cita' }));
+
+      expect(await screen.findByText('El profesional ya tiene una cita en ese horario')).toBeInTheDocument();
+      expect(mockedUpdateAppointment).toHaveBeenCalledWith(receptionToken, 'apt-m', {
+        start: apt.start,
+        end: apt.end,
+        providerId: 'staff-2',
+      });
+
+      // Segundo intento: el servidor acepta y la agenda se refresca.
+      mockedUpdateAppointment.mockResolvedValueOnce({ ...apt, providerId: 'staff-2' });
+      mockedListAppointments.mockResolvedValue([{ ...apt, providerId: 'staff-2' }]);
+      const calls = mockedListAppointments.mock.calls.length;
+      await user.click(screen.getByRole('button', { name: 'Mover cita' }));
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+      await waitFor(() => expect(mockedListAppointments.mock.calls.length).toBeGreaterThan(calls));
+      const [, second] = screen.getAllByTestId('day-column');
+      expect(await within(second).findByText('María')).toBeInTheDocument();
+      // Con el modal cerrado, quien usa teclado o lector de pantalla necesita
+      // saber que el movimiento se guardó.
+      expect(await screen.findByText('Cita movida.')).toBeInTheDocument();
+    });
   });
 });
