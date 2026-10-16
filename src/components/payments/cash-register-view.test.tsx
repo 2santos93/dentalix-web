@@ -8,7 +8,14 @@ import {
   type CashPayment,
   type CashPaymentsResponse,
 } from '@/lib/payments/payments-api';
-import { presetRange } from '@/lib/payments/cash-period';
+import { presetRange as presetRangeIn } from '@/lib/payments/cash-period';
+import { listLocations } from '@/lib/locations/locations-api';
+
+// DX-097: los atajos salen del día de la SEDE (su zona, de GET /locations).
+jest.mock('../../lib/locations/locations-api', () => ({ listLocations: jest.fn() }));
+const mockedLocations = listLocations as jest.MockedFunction<typeof listLocations>;
+const SEDE_ZONE = 'America/Bogota';
+const presetRange = (preset: Parameters<typeof presetRangeIn>[0]) => presetRangeIn(preset, SEDE_ZONE);
 
 jest.mock('../../lib/payments/payments-api', () => ({
   listCashPayments: jest.fn(),
@@ -22,7 +29,8 @@ const anaCash: CashPayment = {
   id: 'pay-1',
   createdById: 'u-recep',
   canVoid: true,
-  paidAt: '2026-10-15T00:00:00.000Z',
+  paidAt: '2026-10-15T17:00:00.000Z',
+  paidOn: '2026-10-15',
   registeredOn: '2026-10-15',
   registeredToday: true,
   amount: 150000.5,
@@ -87,6 +95,18 @@ function money(text: string | null | undefined): string {
 beforeEach(() => {
   mockedList.mockReset();
   mockedVoid.mockReset();
+  mockedLocations.mockReset();
+  mockedLocations.mockResolvedValue([
+    {
+      id: 'loc-1',
+      name: 'Sede principal',
+      address: null,
+      country: 'CO',
+      isActive: true,
+      timeZone: SEDE_ZONE,
+      createdAt: '2026-01-01T00:00:00.000Z',
+    },
+  ]);
 });
 
 it('pide el día de hoy al entrar y pinta cada abono con paciente, plan, método, sede y monto', async () => {
@@ -493,8 +513,8 @@ describe('fecha de pago vs. fecha de registro (DX-067)', () => {
     mockedList.mockResolvedValue(
       response({
         items: [
-          { ...anaCash, paidAt: '2026-10-01T00:00:00.000Z', registeredOn: '2026-10-16', registeredToday: true },
-          { ...betoCard, paidAt: '2026-10-01T00:00:00.000Z', registeredOn: '2026-10-12', registeredToday: false },
+          { ...anaCash, paidAt: '2026-10-01T17:00:00.000Z', paidOn: '2026-10-01', registeredOn: '2026-10-16', registeredToday: true },
+          { ...betoCard, paidAt: '2026-10-01T17:00:00.000Z', paidOn: '2026-10-01', registeredOn: '2026-10-12', registeredToday: false },
         ],
       }),
     );
@@ -516,5 +536,72 @@ describe('fecha de pago vs. fecha de registro (DX-067)', () => {
     render(<CashRegisterView token="tok" />);
     const table = await screen.findByRole('table', { name: /abonos/i });
     expect(within(table).queryByText(/registrado/i)).not.toBeInTheDocument();
+  });
+});
+
+describe('días de la sede (DX-097)', () => {
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it('«Hoy» es el día de la sede, no el del navegador: a las 22:30 de Bogotá (03:30Z del día siguiente) pide ese día', async () => {
+    jest.useFakeTimers({ now: new Date('2026-10-16T03:30:00.000Z'), advanceTimers: true });
+    mockedList.mockResolvedValue(response());
+    render(<CashRegisterView token="tok" />);
+
+    await waitFor(() =>
+      expect(mockedList).toHaveBeenCalledWith('tok', { from: '2026-10-15', to: '2026-10-15', page: 1 }),
+    );
+    expect(mockedList).toHaveBeenCalledTimes(1);
+    expect(await screen.findByTestId('cash-period-note')).toHaveTextContent(
+      '15/10/2026 · días en hora de Bogotá',
+    );
+  });
+
+  it('con la sede en Madrid, «Hoy» es el día de Madrid', async () => {
+    jest.useFakeTimers({ now: new Date('2026-10-15T22:30:00.000Z'), advanceTimers: true });
+    mockedLocations.mockResolvedValue([
+      {
+        id: 'mad',
+        name: 'Madrid',
+        address: null,
+        country: 'ES',
+        isActive: true,
+        timeZone: 'Europe/Madrid',
+        createdAt: '2026-01-01T00:00:00.000Z',
+      },
+    ]);
+    mockedList.mockResolvedValue(response());
+    render(<CashRegisterView token="tok" />);
+
+    await waitFor(() =>
+      expect(mockedList).toHaveBeenCalledWith('tok', { from: '2026-10-16', to: '2026-10-16', page: 1 }),
+    );
+  });
+
+  it('no consulta la caja hasta saber la zona de la sede (muestra la carga)', async () => {
+    let resolveLocations: (value: Awaited<ReturnType<typeof listLocations>>) => void = () => {};
+    mockedLocations.mockReturnValue(new Promise((resolve) => (resolveLocations = resolve)));
+    mockedList.mockResolvedValue(response());
+    render(<CashRegisterView token="tok" />);
+
+    expect(mockedList).not.toHaveBeenCalled();
+    resolveLocations([]);
+    // Sin sedes: la zona por defecto de la sede, nunca la del navegador.
+    await waitFor(() => expect(mockedList).toHaveBeenCalledTimes(1));
+    expect(mockedList).toHaveBeenCalledWith('tok', { ...presetRange('today'), page: 1 });
+  });
+
+  it('la fecha de cada fila es su día en la sede (paidOn): un abono de las 20:00 sale en su día', async () => {
+    mockedList.mockResolvedValue(
+      response({
+        items: [{ ...anaCash, paidAt: '2026-10-16T01:00:00.000Z', paidOn: '2026-10-15' }],
+      }),
+    );
+    render(<CashRegisterView token="tok" />);
+    const table = await screen.findByRole('table', { name: /abonos/i });
+    const row = within(table).getByRole('row', { name: /ana gómez/i });
+    expect(within(row).getByText('15/10/2026')).toBeInTheDocument();
+    expect(within(row).queryByText('16/10/2026')).not.toBeInTheDocument();
   });
 });

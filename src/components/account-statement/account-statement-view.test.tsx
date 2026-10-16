@@ -284,6 +284,7 @@ describe('cobrar desde el estado de cuenta (DX-067)', () => {
       amount: 50000,
       currency: 'COP',
       paidAt: '2026-10-16T00:00:00.000Z',
+      paidOn: '2026-10-16',
       method: null,
       notes: null,
       createdById: 'u-recep',

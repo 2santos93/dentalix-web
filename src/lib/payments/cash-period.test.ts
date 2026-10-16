@@ -1,73 +1,67 @@
-import { isValidRange, presetRange, toCivilDate } from './cash-period';
+import { isValidRange, presetRange } from './cash-period';
 
-// Constructor local (año, mes-1, día, hora): el "hoy" de la caja es el día del
-// reloj de quien la mira, no el de UTC (ver el caso de Bogotá abajo).
-const thu15Oct = new Date(2026, 9, 15, 23, 30);
+// DX-097: los atajos salen del día civil de la SEDE (su zona IANA), no del
+// reloj del navegador. La suite corre con TZ=UTC: si se leyera la fecha local,
+// los casos de Bogotá de noche saldrían un día después.
+const BOGOTA = 'America/Bogota';
+// Jueves 15/10/2026 a las 22:30 en Bogotá = viernes 16 a las 03:30 UTC.
+const bogotaThu2230 = new Date('2026-10-16T03:30:00.000Z');
 
-describe('presetRange', () => {
-  it('hoy: un solo día, el de `now`', () => {
-    expect(presetRange('today', thu15Oct)).toEqual({ from: '2026-10-15', to: '2026-10-15' });
+describe('presetRange (en la zona de la sede)', () => {
+  it('hoy: el día de la sede aunque en UTC ya sea mañana', () => {
+    expect(presetRange('today', BOGOTA, bogotaThu2230)).toEqual({ from: '2026-10-15', to: '2026-10-15' });
+    expect(presetRange('today', 'UTC', bogotaThu2230)).toEqual({ from: '2026-10-16', to: '2026-10-16' });
   });
 
-  // La suite corre con TZ=UTC (jest.config.ts) y Node no deja cambiarla en
-  // caliente, así que el reloj de Bogotá se simula sobre el propio instante:
-  // 2026-10-16T03:30Z son las 22:30 del jueves 15 en America/Bogota (UTC-5).
-  // Los getters locales devuelven lo que devolverían allí; `toISOString` sigue
-  // diciendo 16. Si el atajo leyera la fecha en UTC, saldría el viernes.
-  it('hoy y esta semana salen del reloj LOCAL, no de UTC (22:30 en Bogotá = 03:30Z del día siguiente)', () => {
-    const bogotaThu2230 = new Date('2026-10-16T03:30:00.000Z');
-    jest.spyOn(bogotaThu2230, 'getFullYear').mockReturnValue(2026);
-    jest.spyOn(bogotaThu2230, 'getMonth').mockReturnValue(9);
-    jest.spyOn(bogotaThu2230, 'getDate').mockReturnValue(15);
-    jest.spyOn(bogotaThu2230, 'getDay').mockReturnValue(4);
-    expect(bogotaThu2230.toISOString().slice(0, 10)).toBe('2026-10-16');
-
-    expect(presetRange('today', bogotaThu2230)).toEqual({ from: '2026-10-15', to: '2026-10-15' });
-    expect(presetRange('week', bogotaThu2230)).toEqual({ from: '2026-10-12', to: '2026-10-18' });
+  it('hoy en Madrid: las 00:30 del 16 (22:30Z del 15) ya son el 16', () => {
+    expect(presetRange('today', 'Europe/Madrid', new Date('2026-10-15T22:30:00.000Z'))).toEqual({
+      from: '2026-10-16',
+      to: '2026-10-16',
+    });
   });
 
-  it('esta semana: de lunes a domingo', () => {
-    expect(presetRange('week', thu15Oct)).toEqual({ from: '2026-10-12', to: '2026-10-18' });
+  it('esta semana: de lunes a domingo de la semana de la sede', () => {
+    expect(presetRange('week', BOGOTA, bogotaThu2230)).toEqual({ from: '2026-10-12', to: '2026-10-18' });
   });
 
   it('esta semana un domingo: la semana que termina ese día, no la siguiente', () => {
-    expect(presetRange('week', new Date(2026, 9, 18, 9))).toEqual({
+    // Domingo 18/10 a las 21:00 en Bogotá = lunes 19 02:00 UTC.
+    expect(presetRange('week', BOGOTA, new Date('2026-10-19T02:00:00.000Z'))).toEqual({
       from: '2026-10-12',
       to: '2026-10-18',
     });
   });
 
   it('esta semana cruzando de mes', () => {
-    expect(presetRange('week', new Date(2026, 8, 30, 9))).toEqual({
+    expect(presetRange('week', BOGOTA, new Date('2026-09-30T14:00:00.000Z'))).toEqual({
       from: '2026-09-28',
       to: '2026-10-04',
     });
   });
 
-  it('este mes: del 1 al último día, bisiestos incluidos', () => {
-    expect(presetRange('month', thu15Oct)).toEqual({ from: '2026-10-01', to: '2026-10-31' });
-    expect(presetRange('month', new Date(2028, 1, 10))).toEqual({
+  it('este mes: el de la sede, del 1 al último día (bisiestos incluidos)', () => {
+    // 31/10 a las 22:00 en Bogotá = 01/11 03:00 UTC: sigue siendo octubre.
+    expect(presetRange('month', BOGOTA, new Date('2026-11-01T03:00:00.000Z'))).toEqual({
+      from: '2026-10-01',
+      to: '2026-10-31',
+    });
+    expect(presetRange('month', BOGOTA, new Date('2028-02-10T15:00:00.000Z'))).toEqual({
       from: '2028-02-01',
       to: '2028-02-29',
     });
   });
-});
 
-describe('toCivilDate', () => {
-  it('rellena mes y día con ceros', () => {
-    expect(toCivilDate(new Date(2026, 0, 5))).toBe('2026-01-05');
+  it('una zona desconocida cae en la zona por defecto de la sede (Bogotá), nunca en la del navegador', () => {
+    expect(presetRange('today', 'Mars/Olympus', bogotaThu2230)).toEqual({ from: '2026-10-15', to: '2026-10-15' });
   });
 });
 
 describe('isValidRange', () => {
-  it('acepta un día y rangos ordenados', () => {
-    expect(isValidRange({ from: '2026-10-15', to: '2026-10-15' })).toBe(true);
-    expect(isValidRange({ from: '2026-01-01', to: '2026-12-31' })).toBe(true);
-  });
-
-  it('rechaza vacíos, invertidos y de más de 366 días', () => {
-    expect(isValidRange({ from: '', to: '2026-10-15' })).toBe(false);
-    expect(isValidRange({ from: '2026-10-16', to: '2026-10-15' })).toBe(false);
+  it('acepta from <= to dentro de 366 días y rechaza lo demás', () => {
+    expect(isValidRange({ from: '2026-10-01', to: '2026-10-31' })).toBe(true);
+    expect(isValidRange({ from: '2026-10-31', to: '2026-10-01' })).toBe(false);
+    expect(isValidRange({ from: '2028-01-01', to: '2028-12-31' })).toBe(true);
     expect(isValidRange({ from: '2026-01-01', to: '2027-01-02' })).toBe(false);
+    expect(isValidRange({ from: '', to: '2026-10-01' })).toBe(false);
   });
 });

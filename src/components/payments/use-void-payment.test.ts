@@ -28,7 +28,7 @@ describe('voidPaymentErrorMessage (siempre en español)', () => {
 });
 
 it('voidPaymentSubject: monto · fecha · paciente (el paciente es opcional)', () => {
-  const base = { id: 'p', amount: 12345, currency: 'COP', paidAt: '2026-10-16T00:00:00.000Z' };
+  const base = { id: 'p', amount: 12345, currency: 'COP', paidOn: '2026-10-16' };
   expect(voidPaymentSubject(base).replace(/\s/g, ' ')).toBe('12.345,00 COP · 16/10/2026');
   expect(voidPaymentSubject({ ...base, patientName: 'Ana' }).replace(/\s/g, ' ')).toBe(
     '12.345,00 COP · 16/10/2026 · Ana',

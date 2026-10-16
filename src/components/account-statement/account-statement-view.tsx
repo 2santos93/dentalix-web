@@ -460,7 +460,7 @@ function StatementBody({
                 {statement.movements.map((m) => (
                   <TableRow key={m.id} className={cn(m.voided && 'text-muted')}>
                     <TableCell className="tabular-nums" data-label={copy.colDate}>
-                      {formatCivilDate(m.paidAt)}
+                      {formatCivilDate(m.paidOn)}
                     </TableCell>
                     <TableCell className="text-muted" data-label={copy.colPlan}>
                       {planName(m.treatmentPlanId)}
@@ -498,14 +498,14 @@ function StatementBody({
                             size="sm"
                             aria-label={copy.voidActionLabel(
                               formatCurrency(m.amount, m.currency),
-                              formatCivilDate(m.paidAt),
+                              formatCivilDate(m.paidOn),
                             )}
                             onClick={() =>
                               onVoid({
                                 id: m.id,
                                 amount: m.amount,
                                 currency: m.currency,
-                                paidAt: m.paidAt,
+                                paidOn: m.paidOn,
                               })
                             }
                           >

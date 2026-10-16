@@ -14,6 +14,7 @@ import { CurrencySelect } from '@/components/shared/currency-select';
 import { BillablePlanField, BillablePlansEmpty } from './billable-plan-field';
 import { useBillablePlans } from './use-billable-plans';
 import { usePaymentLocationHint } from './use-payment-location-hint';
+import { sedeToday, useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
 
 // Copy como constantes (i18n-ready).
 const copy = {
@@ -36,10 +37,6 @@ const copy = {
 const fieldClass =
   'flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-50';
 
-function todayLocalDateString(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
 
 interface FormState {
   /** `''` = el primer plan de la lista (llega después de abrir). */
@@ -51,8 +48,9 @@ interface FormState {
   date: string;
 }
 
-function initialForm(): FormState {
-  return { planId: '', amount: '', currency: '', method: '', date: todayLocalDateString() };
+/** `today`: hoy en la zona de la sede (DX-097), no en la del navegador. */
+function initialForm(today: string): FormState {
+  return { planId: '', amount: '', currency: '', method: '', date: today };
 }
 
 interface RecordPaymentModalProps {
@@ -83,17 +81,28 @@ export function RecordPaymentModal({
 }: RecordPaymentModalProps) {
   const billable = useBillablePlans(token, patientId, open);
   const locationHint = usePaymentLocationHint(token, open);
-  const [form, setForm] = useState<FormState>(initialForm);
+  const timeZone = useSedeTimeZone(token);
+  const [form, setForm] = useState<FormState>(() => initialForm(sedeToday(timeZone)));
   const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Si la persona aún no tocó la fecha, sigue a «hoy» de la sede cuando llega
+  // su zona (DX-097).
+  const [dateTouched, setDateTouched] = useState(false);
+  const [prevTimeZone, setPrevTimeZone] = useState(timeZone);
+  if (timeZone !== prevTimeZone) {
+    setPrevTimeZone(timeZone);
+    if (!dateTouched) setForm((f) => ({ ...f, date: sedeToday(timeZone) }));
+  }
 
   // Ajuste durante el render: cada apertura empieza de cero, con clave nueva.
   const [prevOpen, setPrevOpen] = useState(open);
   if (open !== prevOpen) {
     setPrevOpen(open);
     if (open) {
-      setForm(initialForm());
+      setForm(initialForm(sedeToday(timeZone)));
+      setDateTouched(false);
       setIdempotencyKey(crypto.randomUUID());
       setError(null);
     }
@@ -121,7 +130,10 @@ export function RecordPaymentModal({
       setError(copy.invalidDate);
       return;
     }
-    const paidAt = new Date(form.date).toISOString();
+    // DX-097: se manda el DÍA (`YYYY-MM-DD`), no la medianoche UTC: la API lo
+    // guarda al mediodía de la sede, así cae en ese día de caja en su zona
+    // (medianoche UTC sería la tarde del día anterior en Bogotá).
+    const paidAt = form.date;
     setSubmitting(true);
     try {
       const saved = await recordPayment(
@@ -143,7 +155,7 @@ export function RecordPaymentModal({
       onRecorded(
         copy.recorded(
           formatCurrency(saved.amount, saved.currency),
-          formatCivilDate(saved.paidAt),
+          formatCivilDate(saved.paidOn),
           statementCopy.planLabel(savedPlan.createdAt),
         ),
       );
@@ -232,7 +244,10 @@ export function RecordPaymentModal({
                     id="rp-date"
                     type="date"
                     value={form.date}
-                    onChange={(e) => patch({ date: e.target.value })}
+                    onChange={(e) => {
+                      setDateTouched(true);
+                      patch({ date: e.target.value });
+                    }}
                     className="tabular-nums"
                   />
                 </FormField>

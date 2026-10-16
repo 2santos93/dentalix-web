@@ -151,6 +151,20 @@ export function zonedDayStart(day: string, timeZone: string): string | null {
   return new Date(instant).toISOString();
 }
 
+const ZONE_CITY_LABELS: Record<string, string> = {
+  'America/Bogota': 'Bogotá',
+  'Europe/Madrid': 'Madrid',
+};
+
+/**
+ * Nombre legible de una zona IANA para rótulos (DX-097): «Bogotá» para
+ * `America/Bogota`; en otras, la ciudad del id (`America/Mexico_City` →
+ * «Mexico City»).
+ */
+export function zoneCityLabel(timeZone: string): string {
+  return ZONE_CITY_LABELS[timeZone] ?? (timeZone.split('/').pop() ?? timeZone).replace(/_/g, ' ');
+}
+
 /**
  * Fecha en texto («lunes, 15 de marzo», «marzo de 2026») SIEMPRE en español,
  * sin depender del idioma del navegador, y sin lanzar con un valor inválido.
@@ -176,4 +190,26 @@ export function formatDateLabel(
   } catch {
     return fallback;
   }
+}
+
+/**
+ * Zona de una sede sin zona conocida: la misma con la que la API interpreta
+ * una sede sin horario de Colombia (DX-097). Nunca la del navegador.
+ */
+export const DEFAULT_SEDE_TIME_ZONE = 'America/Bogota';
+
+/**
+ * El día civil (`YYYY-MM-DD`) de un instante en una zona IANA — p. ej. qué día
+ * es «hoy» en la sede (DX-097). `null` si el instante o la zona no son válidos.
+ */
+export function civilDateInZone(
+  value: string | number | Date | null | undefined,
+  timeZone: string,
+): string | null {
+  const d = toDate(value);
+  if (!d) return null;
+  const p = zonedParts(d, timeZone);
+  if (!p) return null;
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${String(p.year).padStart(4, '0')}-${pad(p.month)}-${pad(p.day)}`;
 }
