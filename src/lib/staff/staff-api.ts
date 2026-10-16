@@ -30,6 +30,8 @@ export interface StaffMember {
 export interface UpdateStaffInput {
   fullName?: string;
   role?: ClinicRole;
+  /** Registro profesional / nº de colegiado (DX-013); `''` lo borra. */
+  professionalLicense?: string;
 }
 
 export async function listStaff(token: string): Promise<StaffMember[]> {
@@ -38,13 +40,16 @@ export async function listStaff(token: string): Promise<StaffMember[]> {
   });
 }
 
-/** `PATCH /staff/:userId` — update `fullName` and/or `role`. */
+/**
+ * `PATCH /staff/:userId` — update `fullName`, `role` and/or
+ * `professionalLicense` (the response carries the license too).
+ */
 export async function updateStaff(
   token: string,
   userId: string,
   patch: UpdateStaffInput,
-): Promise<StaffMember> {
-  return apiFetch<StaffMember>(`/staff/${userId}`, {
+): Promise<StaffMember & { professionalLicense?: string | null }> {
+  return apiFetch<StaffMember & { professionalLicense?: string | null }>(`/staff/${userId}`, {
     method: 'PATCH',
     body: patch,
     token,
@@ -130,6 +135,8 @@ export async function listStaffDirectory(
 
 export interface StaffMemberDetail extends StaffMember {
   status: 'ACTIVE' | 'INACTIVE';
+  /** Registro profesional (CO) / nº de colegiado (ES) que exige la receta (DX-013). */
+  professionalLicense?: string | null;
 }
 
 /**

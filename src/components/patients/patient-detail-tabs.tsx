@@ -10,6 +10,7 @@ export type PatientDetailTabKey =
   | 'treatment-plans'
   | 'account-statement'
   | 'consents'
+  | 'prescriptions'
   | 'data-consents';
 
 interface PatientDetailTabsProps {
@@ -37,6 +38,8 @@ interface PatientDetailTabsProps {
   consentsLabel?: string;
   /** «Periodontograma» (DX-007): sin etiqueta no existe (recepción no la ve). */
   perioLabel?: string;
+  /** «Recetas» (DX-013): sin etiqueta no existe (recepción no la ve). */
+  prescriptionsLabel?: string;
 }
 
 /** Left-to-right reading order of the tablist — the order the arrow keys walk. */
@@ -48,6 +51,7 @@ const TAB_ORDER: PatientDetailTabKey[] = [
   'treatment-plans',
   'account-statement',
   'consents',
+  'prescriptions',
   'data-consents',
 ];
 
@@ -95,6 +99,7 @@ export function PatientDetailTabs({
   dataConsentsLabel,
   consentsLabel,
   perioLabel,
+  prescriptionsLabel,
 }: PatientDetailTabsProps) {
   const labels: Record<PatientDetailTabKey, string | undefined> = {
     data: dataLabel,
@@ -105,6 +110,7 @@ export function PatientDetailTabs({
     'account-statement': accountStatementLabel,
     'data-consents': dataConsentsLabel,
     consents: consentsLabel,
+    prescriptions: prescriptionsLabel,
   };
   // Las pestañas que de verdad se pintan, en orden: las flechas recorren estas.
   const tabs = TAB_ORDER.filter((tab) => labels[tab] !== undefined);

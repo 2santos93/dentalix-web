@@ -4,6 +4,8 @@ export interface ClinicLocation {
   id: string;
   name: string;
   address: string | null;
+  /** País de la sede (DX-013): decide los campos legales de la receta. */
+  country: 'CO' | 'ES';
   isActive: boolean;
   createdAt: string;
 }

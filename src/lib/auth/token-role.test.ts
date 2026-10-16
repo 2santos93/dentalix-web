@@ -1,4 +1,4 @@
-import { getTokenRole } from './token-role';
+import { getTokenRole, getTokenUserId } from './token-role';
 
 function tokenWith(claims: unknown): string {
   const b64url = (value: string) =>
@@ -30,5 +30,13 @@ describe('getTokenRole', () => {
 
   it('no acepta un rol que no existe', () => {
     expect(getTokenRole(tokenWith({ role: 'OWNER' }))).toBeNull();
+  });
+});
+
+describe('getTokenUserId', () => {
+  it('lee `sub` y devuelve null sin token legible', () => {
+    expect(getTokenUserId(tokenWith({ sub: 'u1', role: 'DENTIST' }))).toBe('u1');
+    expect(getTokenUserId(tokenWith({ role: 'DENTIST' }))).toBeNull();
+    expect(getTokenUserId(null)).toBeNull();
   });
 });

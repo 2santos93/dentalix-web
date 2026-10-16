@@ -154,6 +154,11 @@ describe('UserMenu — plantillas de consentimiento (DX-006)', () => {
       'href',
       '/settings/consentimientos',
     );
+    // DX-013: plantillas de receta y país de las sedes.
+    expect(screen.getByRole('menuitem', { name: 'Recetas' })).toHaveAttribute(
+      'href',
+      '/settings/recetas',
+    );
   });
 
   it('otro rol no lo ve', async () => {
@@ -161,5 +166,6 @@ describe('UserMenu — plantillas de consentimiento (DX-006)', () => {
     render(<UserMenu />);
     fireEvent.click(await screen.findByRole('button', { name: /ana gómez/i }));
     expect(screen.queryByRole('menuitem', { name: 'Consentimientos' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'Recetas' })).not.toBeInTheDocument();
   });
 });

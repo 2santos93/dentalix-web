@@ -1151,6 +1151,102 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/patients/{patientId}/prescriptions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["PatientPrescriptionsController_list"];
+        put?: never;
+        post: operations["PatientPrescriptionsController_issue"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/prescriptions/issuer": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["PrescriptionsController_issuer"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/prescriptions/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["PrescriptionsController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/prescriptions/{id}/void": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["PrescriptionsController_void"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/prescription-templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["PrescriptionTemplatesController_list"];
+        put?: never;
+        post: operations["PrescriptionTemplatesController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/prescription-templates/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["PrescriptionTemplatesController_remove"];
+        options?: never;
+        head?: never;
+        patch: operations["PrescriptionTemplatesController_update"];
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -1689,6 +1785,8 @@ export interface components {
             email: string;
             /** @enum {string} */
             role: "DENTIST" | "ASSISTANT" | "RECEPTION" | "ADMIN";
+            /** @description Registro profesional / nº de colegiado (DX-013). Solo en el perfil y en la respuesta del PATCH. */
+            professionalLicense?: string | null;
         };
         StaffDirectoryEntryDto: {
             /**
@@ -1734,6 +1832,8 @@ export interface components {
             fullName?: string;
             /** @enum {string} */
             role?: "DENTIST" | "ASSISTANT" | "RECEPTION" | "ADMIN";
+            /** @description Registro profesional (CO: RETHUS / tarjeta profesional) o nº de colegiado (ES). Cadena vacía lo borra. Lo exige la receta (DX-013). */
+            professionalLicense?: string;
         };
         ScheduleRangeDto: {
             /** @description 0=domingo .. 6=sábado */
@@ -2710,11 +2810,14 @@ export interface components {
             quantity: number;
             reason?: string;
         };
+        /** @enum {string} */
+        ClinicCountry: "CO" | "ES";
         LocationDto: {
             /** Format: uuid */
             id: string;
             name: string;
             address: string | null;
+            country: components["schemas"]["ClinicCountry"];
             isActive: boolean;
             /** Format: date-time */
             createdAt: string;
@@ -2724,10 +2827,14 @@ export interface components {
             name: string;
             /** @example Cra 15 #90-20 */
             address?: string;
+            /** @description País de la sede: decide los campos legales obligatorios de la receta (CO o ES). Por defecto CO. */
+            country?: components["schemas"]["ClinicCountry"];
         };
         UpdateLocationDto: {
             name?: string;
             address?: string;
+            /** @description País de la sede: decide los campos legales obligatorios de la receta (CO o ES). Por defecto CO. */
+            country?: components["schemas"]["ClinicCountry"];
             /** @description Desactivar una sede la oculta para operar; no se puede desactivar la última activa. */
             isActive?: boolean;
         };
@@ -3124,6 +3231,258 @@ export interface components {
             teeth: components["schemas"]["PerioToothMeasureInputDto"][];
             /** @description Ausente = no tocar las notas; null o vacío = borrarlas. */
             notes?: string | null;
+        };
+        /** @enum {string} */
+        PrescriptionStatus: "ISSUED" | "VOIDED";
+        AllergyMatchDto: {
+            /** @example Amoxicilina */
+            activeIngredient: string;
+            /**
+             * @description Alergia de la anamnesis
+             * @example Penicilina
+             */
+            allergen: string;
+        };
+        PrescriptionItemDto: {
+            /** Format: uuid */
+            id: string;
+            position: number;
+            activeIngredient: string;
+            brandName: string | null;
+            concentration: string;
+            pharmaceuticalForm: string;
+            route: string;
+            dose: string;
+            frequency: string;
+            durationDays: number;
+            totalQuantity: number;
+            quantityUnit: string;
+            /** @example veintiuno */
+            quantityInWords: string;
+            packages: number | null;
+            instructions: string | null;
+        };
+        PrescriptionDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            tenantId: string;
+            /** Format: uuid */
+            locationId: string;
+            /** Format: uuid */
+            patientId: string;
+            /** Format: uuid */
+            professionalId: string;
+            country: components["schemas"]["ClinicCountry"];
+            status: components["schemas"]["PrescriptionStatus"];
+            /**
+             * Format: date-time
+             * @description Hora del servidor
+             */
+            issuedAt: string;
+            /**
+             * Format: date
+             * @example 2026-10-16
+             */
+            dispensationDate: string;
+            /**
+             * Format: date
+             * @description Último día en que la receta vale
+             */
+            validUntil: string;
+            patientName: string;
+            patientDocument: string | null;
+            patientBirthYear: number | null;
+            /** @description Nº de historia clínica */
+            clinicalRecordNumber: string | null;
+            professionalName: string;
+            /** @description Registro profesional (CO) / nº de colegiado (ES) */
+            professionalLicense: string;
+            professionalEmail: string | null;
+            clinicName: string;
+            locationName: string;
+            locationAddress: string | null;
+            notes: string | null;
+            /** @description El profesional confirmó una alerta de alergia */
+            allergyOverride: boolean;
+            allergyMatches: components["schemas"]["AllergyMatchDto"][];
+            /** @description SHA-256 (hex) del contenido emitido */
+            contentHash: string;
+            /** Format: date-time */
+            voidedAt: string | null;
+            /** Format: uuid */
+            voidedById: string | null;
+            voidedByName: string | null;
+            voidReason: string | null;
+            items: components["schemas"]["PrescriptionItemDto"][];
+        };
+        PrescriptionItemInputDto: {
+            /**
+             * @description Principio activo (DCI/DOE)
+             * @example Amoxicilina
+             */
+            activeIngredient?: string;
+            /** @description Nombre comercial (opcional) */
+            brandName?: string;
+            /** @example 500 mg */
+            concentration?: string;
+            /** @example Cápsula */
+            pharmaceuticalForm?: string;
+            /** @example Oral */
+            route?: string;
+            /** @example 1 cápsula */
+            dose?: string;
+            /** @example Cada 8 horas */
+            frequency?: string;
+            /** @example 7 */
+            durationDays?: number;
+            /**
+             * @description Se imprime también en letras
+             * @example 21
+             */
+            totalQuantity?: number;
+            /** @example cápsulas */
+            quantityUnit?: string;
+            /** @description Nº de envases (obligatorio en ES) */
+            packages?: number;
+            /** @description Indicaciones para el paciente */
+            instructions?: string;
+        };
+        IssuePrescriptionDto: {
+            /** @description 1 a 10 (en ES, 1) */
+            items: components["schemas"]["PrescriptionItemInputDto"][];
+            /**
+             * Format: date
+             * @description Fecha prevista de dispensación (ES) / de la receta. Por defecto hoy en la zona de la sede; no anterior a hoy ni más de 90 días después.
+             * @example 2026-10-16
+             */
+            dispensationDate?: string;
+            /** @description Indicaciones generales */
+            notes?: string;
+            /** @description Registro profesional (CO) / nº de colegiado (ES) si tu perfil aún no lo tiene; queda guardado en la receta y en tu perfil de la clínica. */
+            professionalLicense?: string;
+            /** @description Confirmación explícita del profesional ante una alerta de alergia. Sin ella, una coincidencia con la anamnesis da 409. */
+            allergyOverride?: boolean;
+        };
+        AllergyConflictDto: {
+            /** @example 409 */
+            statusCode: number;
+            message: string;
+            allergyMatches: components["schemas"]["AllergyMatchDto"][];
+        };
+        PrescriptionIssuerDto: {
+            country: components["schemas"]["ClinicCountry"];
+            /** Format: uuid */
+            locationId: string;
+            locationName: string;
+            locationAddress: string | null;
+            clinicName: string;
+            professionalName: string;
+            /** @description null = hay que pedirlo en el modal */
+            professionalLicense: string | null;
+            /** @description Días naturales de validez (ES 10, CO 30) */
+            validityDays: number;
+            /** @description Medicamentos por receta (ES 1, CO 10) */
+            maxItems: number;
+        };
+        PrescriptionDocumentDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            tenantId: string;
+            /** Format: uuid */
+            locationId: string;
+            /** Format: uuid */
+            patientId: string;
+            /** Format: uuid */
+            professionalId: string;
+            country: components["schemas"]["ClinicCountry"];
+            status: components["schemas"]["PrescriptionStatus"];
+            /**
+             * Format: date-time
+             * @description Hora del servidor
+             */
+            issuedAt: string;
+            /**
+             * Format: date
+             * @example 2026-10-16
+             */
+            dispensationDate: string;
+            /**
+             * Format: date
+             * @description Último día en que la receta vale
+             */
+            validUntil: string;
+            patientName: string;
+            patientDocument: string | null;
+            patientBirthYear: number | null;
+            /** @description Nº de historia clínica */
+            clinicalRecordNumber: string | null;
+            professionalName: string;
+            /** @description Registro profesional (CO) / nº de colegiado (ES) */
+            professionalLicense: string;
+            professionalEmail: string | null;
+            clinicName: string;
+            locationName: string;
+            locationAddress: string | null;
+            notes: string | null;
+            /** @description El profesional confirmó una alerta de alergia */
+            allergyOverride: boolean;
+            allergyMatches: components["schemas"]["AllergyMatchDto"][];
+            /** @description SHA-256 (hex) del contenido emitido */
+            contentHash: string;
+            /** Format: date-time */
+            voidedAt: string | null;
+            /** Format: uuid */
+            voidedById: string | null;
+            voidedByName: string | null;
+            voidReason: string | null;
+            items: components["schemas"]["PrescriptionItemDto"][];
+            clinicLogoUrl: string | null;
+            /** @description true si el hash guardado coincide con el recalculado al leer */
+            integrityOk: boolean;
+        };
+        VoidPrescriptionDto: {
+            /** @example Dosis equivocada */
+            reason: string;
+        };
+        PrescriptionTemplateItemDto: {
+            activeIngredient: string;
+            brandName: string | null;
+            concentration: string | null;
+            pharmaceuticalForm: string | null;
+            route: string | null;
+            dose: string | null;
+            frequency: string | null;
+            durationDays: number | null;
+            totalQuantity: number | null;
+            quantityUnit: string | null;
+            packages: number | null;
+            instructions: string | null;
+        };
+        PrescriptionTemplateDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            tenantId: string;
+            name: string;
+            notes: string | null;
+            items: components["schemas"]["PrescriptionTemplateItemDto"][];
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        CreatePrescriptionTemplateDto: {
+            /** @example Post-exodoncia */
+            name: string;
+            notes?: string;
+            items: components["schemas"]["PrescriptionItemInputDto"][];
+        };
+        UpdatePrescriptionTemplateDto: {
+            name?: string;
+            notes?: string;
+            items?: components["schemas"]["PrescriptionItemInputDto"][];
         };
     };
     responses: never;
@@ -5887,6 +6246,368 @@ export interface operations {
                 content?: never;
             };
             /** @description El examen ya estaba finalizado */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientPrescriptionsController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Más reciente primero; incluye anuladas */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrescriptionDto"][];
+                };
+            };
+            /** @description Rol sin acceso clínico (recepción) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientPrescriptionsController_issue: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Sede desde la que se emite (da el país y la dirección). Sin ella, la sede principal. */
+                "X-Location-Id"?: string;
+            };
+            path: {
+                patientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["IssuePrescriptionDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrescriptionDto"];
+                };
+            };
+            /** @description Falta un campo legal según el país de la sede (mensaje en español con todos los que faltan), fecha de dispensación inválida o ES con más de un medicamento */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo DENTIST y ADMIN emiten recetas */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Alerta de alergia: un principio activo coincide con una alergia de la anamnesis y no se envió allergyOverride=true */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AllergyConflictDto"];
+                };
+            };
+        };
+    };
+    PrescriptionsController_issuer: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Sede desde la que se emite (da el país y la dirección). Sin ella, la sede principal. */
+                "X-Location-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description País y sede desde los que se emitiría, y el registro profesional del usuario */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrescriptionIssuerDto"];
+                };
+            };
+            /** @description Rol sin acceso clínico (recepción) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PrescriptionsController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrescriptionDocumentDto"];
+                };
+            };
+            /** @description Rol sin acceso clínico (recepción) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Receta no encontrada en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PrescriptionsController_void: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VoidPrescriptionDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrescriptionDto"];
+                };
+            };
+            /** @description Motivo vacío */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo quien la emitió o un ADMIN (y nunca asistente ni recepción) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Receta no encontrada en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La receta ya está anulada */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PrescriptionTemplatesController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrescriptionTemplateDto"][];
+                };
+            };
+            /** @description Recepción no lee; solo ADMIN escribe */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PrescriptionTemplatesController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreatePrescriptionTemplateDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrescriptionTemplateDto"];
+                };
+            };
+            /** @description Nombre vacío, sin medicamentos o datos fuera de rango */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Recepción no lee; solo ADMIN escribe */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ya existe una plantilla con ese nombre */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PrescriptionTemplatesController_remove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Plantilla retirada */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Recepción no lee; solo ADMIN escribe */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Plantilla no encontrada en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PrescriptionTemplatesController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdatePrescriptionTemplateDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrescriptionTemplateDto"];
+                };
+            };
+            /** @description Recepción no lee; solo ADMIN escribe */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Plantilla no encontrada en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ya existe una plantilla con ese nombre */
             409: {
                 headers: {
                     [name: string]: unknown;

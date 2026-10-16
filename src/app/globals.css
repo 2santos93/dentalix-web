@@ -279,3 +279,28 @@
     break-inside: avoid;
   }
 }
+
+/*
+ * Print CSS de la receta (DX-013, /print/patients/[id]/prescriptions/
+ * [prescriptionId]). Mismo criterio que el consentimiento: página A4 con
+ * nombre en `html` (ninguna caja posterior abre una hoja en blanco), documento
+ * en flujo y la visibilidad reabierta frente a la regla del comprobante. Ni
+ * un medicamento ni el bloque de firma se parten entre dos hojas.
+ */
+@page prescription {
+  size: A4;
+  margin: 16mm 16mm;
+}
+@media print {
+  html:has(.prescription-print-page) {
+    page: prescription;
+  }
+  .prescription-print-root,
+  .prescription-print-root * {
+    visibility: visible !important;
+  }
+  .prescription-print-root .prescription-item,
+  .prescription-print-root .prescription-signature {
+    break-inside: avoid;
+  }
+}

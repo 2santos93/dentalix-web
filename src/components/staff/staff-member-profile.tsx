@@ -11,6 +11,7 @@ import {
   reactivateStaff,
   type ClinicRole,
   type StaffMemberDetail,
+  type UpdateStaffInput,
 } from '@/lib/staff/staff-api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -31,6 +32,9 @@ const copy = {
   emailLabel: 'Correo electrónico',
   emailHint: 'El correo identifica la cuenta y no se puede cambiar desde aquí.',
   roleLabel: 'Rol',
+  licenseLabel: 'Registro profesional / nº de colegiado',
+  licenseHint:
+    'Lo exige la receta: en Colombia, RETHUS o tarjeta profesional; en España, nº de colegiado.',
   save: 'Guardar cambios',
   saving: 'Guardando…',
   statusActive: 'Aceptado',
@@ -85,6 +89,7 @@ export function StaffMemberProfile({ token, userId }: StaffMemberProfileProps) {
 
   const [fullName, setFullName] = useState('');
   const [role, setRole] = useState<ClinicRole>('ASSISTANT');
+  const [license, setLicense] = useState('');
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
@@ -102,6 +107,7 @@ export function StaffMemberProfile({ token, userId }: StaffMemberProfileProps) {
         setMember(data);
         setFullName(data.fullName);
         setRole(data.role);
+        setLicense(data.professionalLicense ?? '');
         setLoadError(null);
       } catch (err) {
         if (cancelled) return;
@@ -125,12 +131,21 @@ export function StaffMemberProfile({ token, userId }: StaffMemberProfileProps) {
       // Solo se manda lo que cambió: un PATCH con el mismo rol dispararía la
       // guardia de "último admin" del backend sin que el usuario haya tocado
       // el rol.
-      const patch: { fullName?: string; role?: ClinicRole } = {};
+      const patch: UpdateStaffInput = {};
       if (fullName !== member.fullName) patch.fullName = fullName;
       if (role !== member.role) patch.role = role;
+      if (license.trim() !== (member.professionalLicense ?? '')) {
+        patch.professionalLicense = license.trim();
+      }
       if (Object.keys(patch).length === 0) return;
       const updated = await updateStaff(token, userId, patch);
-      setMember({ ...updated, status: member.status });
+      const next = {
+        ...updated,
+        status: member.status,
+        professionalLicense: updated.professionalLicense ?? member.professionalLicense ?? null,
+      };
+      setMember(next);
+      setLicense(next.professionalLicense ?? '');
     } catch (err) {
       setSaveError(err instanceof ApiError ? err.message : copy.genericSaveError);
     } finally {
@@ -171,7 +186,10 @@ export function StaffMemberProfile({ token, userId }: StaffMemberProfileProps) {
   }
 
   const isUnchanged =
-    !!member && fullName === member.fullName && role === member.role;
+    !!member &&
+    fullName === member.fullName &&
+    role === member.role &&
+    license.trim() === (member.professionalLicense ?? '');
 
   return (
     <div className="flex flex-col gap-6">
@@ -238,6 +256,20 @@ export function StaffMemberProfile({ token, userId }: StaffMemberProfileProps) {
                       </option>
                     ))}
                   </select>
+                </FormField>
+
+                <FormField
+                  htmlFor="profile-license"
+                  label={copy.licenseLabel}
+                  hint={copy.licenseHint}
+                >
+                  <Input
+                    id="profile-license"
+                    type="text"
+                    maxLength={60}
+                    value={license}
+                    onChange={(e) => setLicense(e.target.value)}
+                  />
                 </FormField>
 
                 {saveError && <InlineError variant="summary">{saveError}</InlineError>}

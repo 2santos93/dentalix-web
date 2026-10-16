@@ -2,13 +2,24 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ChevronUp, Clock, FileSignature, LogOut, Settings, ShieldCheck, Sun, Moon } from 'lucide-react';
+import {
+  ChevronUp,
+  Clock,
+  FileSignature,
+  LogOut,
+  Pill,
+  Settings,
+  ShieldCheck,
+  Sun,
+  Moon,
+} from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { logout } from '@/lib/auth/auth-api';
 import { getMe, type ClinicRole } from '@/lib/me/me-api';
 import { getTokenRole } from '@/lib/auth/token-role';
 import { canManageConsentTemplates } from '@/lib/consents/consents-api';
+import { canManagePrescriptionTemplates } from '@/lib/prescriptions/prescriptions-api';
 import { cn } from '@/lib/utils';
 
 // Tope de espera a la revocación en el servidor al cerrar sesión: la API suele
@@ -39,6 +50,7 @@ const copy = {
   businessHours: 'Horario de atención',
   privacy: 'Privacidad de datos',
   consentTemplates: 'Consentimientos',
+  prescriptionSettings: 'Recetas',
   logout: 'Cerrar sesión',
   theme: 'Cambiar tema',
 };
@@ -253,6 +265,18 @@ export function UserMenu({
         >
           <FileSignature className="size-4 text-muted" aria-hidden />
           {copy.consentTemplates}
+        </Link>
+      ) : null}
+      {/* Plantillas de receta y país de las sedes (DX-013): solo ADMIN. */}
+      {canManagePrescriptionTemplates(getTokenRole(accessToken)) ? (
+        <Link
+          href="/settings/recetas"
+          role="menuitem"
+          onClick={() => setOpen(false)}
+          className="flex items-center gap-3 px-3 py-2 text-sm text-ink hover:bg-bg"
+        >
+          <Pill className="size-4 text-muted" aria-hidden />
+          {copy.prescriptionSettings}
         </Link>
       ) : null}
       <div className="my-1 border-t border-border" />
