@@ -1,4 +1,4 @@
-import { formatCurrency } from './currency';
+import { formatAmount, formatCurrency } from './currency';
 
 describe('formatCurrency', () => {
   it('formats a valid ISO code', () => {
@@ -21,5 +21,12 @@ describe('formatCurrency', () => {
 
   it('does not throw on an empty code', () => {
     expect(() => formatCurrency(10, '')).not.toThrow();
+  });
+});
+
+describe('formatAmount', () => {
+  it('importe sin moneda, con dos decimales fijos', () => {
+    expect(formatAmount(80000)).toBe('80.000,00');
+    expect(formatAmount(12.5)).toBe('12,50');
   });
 });

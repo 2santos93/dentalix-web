@@ -10,6 +10,8 @@ import {
 } from '@/lib/odontogram/catalog-api';
 import { Toaster } from '@/components/errors/toaster';
 import { setActiveLocationId } from '@/lib/locations/location-store';
+import { listLocations, type ClinicLocation } from '@/lib/locations/locations-api';
+import { ApiError } from '@/lib/api/client';
 
 // NOTE: jest.mock's string literal is not alias-rewritten by the SWC transform
 // (only real import/require specifiers are) — use a relative path here, same
@@ -19,6 +21,17 @@ jest.mock('../../lib/odontogram/catalog-api', () => ({
   createCatalogItem: jest.fn(),
   updateCatalogItem: jest.fn(),
 }));
+
+// Las sedes deciden la moneda base de la clínica (DX-063): una clínica en
+// Colombia por defecto.
+jest.mock('../../lib/locations/locations-api', () => ({ listLocations: jest.fn() }));
+const mockedLocations = listLocations as jest.MockedFunction<typeof listLocations>;
+
+function clinicIn(country: ClinicLocation['country']): ClinicLocation[] {
+  return [
+    { id: 'l1', name: 'Principal', address: null, country, isActive: true, createdAt: '2026-01-01T00:00:00Z' },
+  ];
+}
 
 const mockedList = listCatalogDirectory as jest.MockedFunction<
   typeof listCatalogDirectory
@@ -70,6 +83,7 @@ describe('CatalogView', () => {
     mockedList.mockReset();
     mockedCreate.mockReset();
     mockedUpdate.mockReset();
+    mockedLocations.mockReset().mockResolvedValue(clinicIn('CO'));
     // La sede activa vive en localStorage y persiste entre tests del mismo
     // fichero: sin limpiarla, el aviso de alcance se filtra a los demás casos.
     window.localStorage.clear();
@@ -254,7 +268,7 @@ describe('CatalogView', () => {
       within(menu).getByRole('menuitem', { name: /desactivar/i }),
     );
 
-    expect(await screen.findByText('Error del servidor')).toBeInTheDocument();
+    expect(await screen.findByText('No pudimos cambiar el estado del ítem.')).toBeInTheDocument();
     // Ningún banner compite con el toast por el mismo fallo: la tabla sigue
     // siendo correcta y no se toca.
     expect(screen.queryByRole('alert')).not.toBeInTheDocument();
@@ -456,5 +470,46 @@ describe('CatalogView', () => {
 
       expect(screen.queryByText(/de toda la clínica/i)).not.toBeInTheDocument();
     });
+  });
+
+  // DX-063 / FE-014: los precios iban siempre en USD («US$») aunque la clínica
+  // cobre en pesos.
+  it('formatea los precios en la moneda base de la clínica (COP en Colombia), no en USD', async () => {
+    mockedList.mockResolvedValue(page([item1]));
+    render(<CatalogView token="tok" />);
+    const table = await screen.findByRole('table', { name: /catálogo/i });
+    await waitFor(() => expect(within(table).getByText('80.000,00 COP')).toBeInTheDocument());
+    expect(within(table).queryByText(/US\$/)).not.toBeInTheDocument();
+  });
+
+  it('una clínica en España ve los precios en euros', async () => {
+    mockedLocations.mockResolvedValue(clinicIn('ES'));
+    mockedList.mockResolvedValue(page([item1]));
+    render(<CatalogView token="tok" />);
+    const table = await screen.findByRole('table', { name: /catálogo/i });
+    await waitFor(() => expect(within(table).getByText('80.000,00 €')).toBeInTheDocument());
+  });
+
+  it('sin sedes cargadas pinta el importe sin moneda, nunca en USD', async () => {
+    mockedLocations.mockRejectedValue(new TypeError('Failed to fetch'));
+    mockedList.mockResolvedValue(page([item1]));
+    render(<CatalogView token="tok" />);
+    const table = await screen.findByRole('table', { name: /catálogo/i });
+    await waitFor(() => expect(within(table).getByText('80.000,00')).toBeInTheDocument());
+    expect(within(table).queryByText(/US\$/)).not.toBeInTheDocument();
+  });
+
+  // DX-063: un 500 de la API no llega a la pantalla como «Internal server error».
+  it('un 500 al cargar muestra texto en español con reintento', async () => {
+    const user = setupUser();
+    mockedList
+      .mockRejectedValueOnce(new ApiError(500, 'Internal server error'))
+      .mockResolvedValueOnce(page([item1]));
+    render(<CatalogView token="tok" />);
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('No pudimos cargar el catálogo.');
+    expect(alert).not.toHaveTextContent(/internal server error/i);
+    await user.click(within(alert).getByRole('button', { name: 'Reintentar' }));
+    expect(await screen.findByRole('table', { name: /catálogo/i })).toBeInTheDocument();
   });
 });

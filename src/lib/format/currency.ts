@@ -24,3 +24,15 @@ export function formatCurrency(
     return `${currency} ${amount.toFixed(2)}`;
   }
 }
+
+/**
+ * Un importe sin moneda, con los mismos dos decimales fijos (`80.000,00`). Para
+ * cuando la moneda no se conoce: mejor un número sin símbolo que uno con la
+ * moneda equivocada.
+ */
+export function formatAmount(amount: number, locale = 'es'): string {
+  return new Intl.NumberFormat(locale, {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  }).format(amount);
+}

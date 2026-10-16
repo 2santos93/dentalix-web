@@ -1,7 +1,7 @@
 'use client';
 import * as React from 'react';
 import { useEffect, useState } from 'react';
-import { ApiError } from '@/lib/api/client';
+import { apiErrorMessage } from '@/lib/api/error-message';
 import {
   listCatalogDirectory,
   createCatalogItem,
@@ -32,6 +32,8 @@ import {
 import { notifyError } from '@/components/errors/notify';
 import { ClinicWideNote } from '@/components/locations/clinic-wide-note';
 import { cn } from '@/lib/utils';
+import { formatAmount, formatCurrency } from '@/lib/format/currency';
+import { useClinicCurrency } from '@/lib/locations/clinic-currency';
 import {
   Table,
   TableBody,
@@ -153,14 +155,14 @@ const KIND_LABELS: Record<CatalogKind, string> = {
 // required `color` field never blocks a quick "just add a procedure" flow.
 const DEFAULT_COLOR = '#0E7490';
 
-// v1 currency formatting: fixed `es`/`USD`, same convention (and same
-// explicit follow-up for per-clinic currency) as treatment-plans-tab.tsx.
-const currencyFormatter = new Intl.NumberFormat('es', {
-  style: 'currency',
-  currency: 'USD',
-});
-function formatPrice(price: number | null): string {
-  return price == null ? copy.priceFallback : currencyFormatter.format(price);
+/**
+ * Precio por defecto en la moneda base de la clínica (DX-063 / FE-014: antes,
+ * siempre en USD). Mientras no se sabe la moneda — cargando, o si las sedes no
+ * cargaron — el importe va sin símbolo: nunca con una moneda que no es la suya.
+ */
+function formatPrice(price: number | null, currency: string | null | undefined): string {
+  if (price == null) return copy.priceFallback;
+  return currency ? formatCurrency(price, currency) : formatAmount(price);
 }
 
 type KindFilter = 'ALL' | CatalogKind;
@@ -188,6 +190,7 @@ interface CatalogViewProps {
  * history in `ToothRecord` / plan items that reference it is preserved.
  */
 export function CatalogView({ token }: CatalogViewProps) {
+  const currency = useClinicCurrency(token);
   const [items, setItems] = useState<DentalCatalogItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -296,7 +299,7 @@ export function CatalogView({ token }: CatalogViewProps) {
       } catch (err) {
         if (cancelled) return;
         setLoadError(
-          err instanceof ApiError ? err.message : copy.genericLoadError,
+          apiErrorMessage(err, copy.genericLoadError),
         );
       } finally {
         if (!cancelled) setLoading(false);
@@ -326,7 +329,7 @@ export function CatalogView({ token }: CatalogViewProps) {
       })
       .catch((err) => {
         setLoadError(
-          err instanceof ApiError ? err.message : copy.genericLoadError,
+          apiErrorMessage(err, copy.genericLoadError),
         );
       });
   }
@@ -396,11 +399,12 @@ export function CatalogView({ token }: CatalogViewProps) {
       setShowForm(false);
       await refreshInPlace();
     } catch (err) {
-      // Surfaces the backend's 400/409 (duplicate code, invalid color) verbatim.
+      // El 409 en español de la API («Ya existe un ítem del catálogo con ese
+      // código») se conserva; un 400 técnico se dice en español.
       const fallback = editingItem
         ? copy.genericUpdateError
         : copy.genericCreateError;
-      setFormError(err instanceof ApiError ? err.message : fallback);
+      setFormError(apiErrorMessage(err, fallback));
     } finally {
       setSaving(false);
     }
@@ -422,7 +426,7 @@ export function CatalogView({ token }: CatalogViewProps) {
       await refreshInPlace();
     } catch (err) {
       notifyError(
-        err instanceof ApiError ? err.message : copy.genericToggleError,
+        apiErrorMessage(err, copy.genericToggleError),
         {
           onRetry: () => handleToggleActive(item),
         },
@@ -666,7 +670,7 @@ export function CatalogView({ token }: CatalogViewProps) {
                       {item.code}
                     </TableCell>
                     <TableCell className="text-right tabular-nums" data-label={copy.colPrice}>
-                      {formatPrice(item.defaultPrice)}
+                      {formatPrice(item.defaultPrice, currency)}
                     </TableCell>
                     <TableCell data-label={copy.colStatus}>
                       <Badge variant={item.active ? 'success' : 'muted'}>
