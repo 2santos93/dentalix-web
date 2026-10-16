@@ -3,6 +3,7 @@ import { UserMenu } from './user-menu';
 
 const push = jest.fn();
 const clear = jest.fn();
+let mockAccessToken = 'T';
 jest.mock('next/navigation', () => ({ useRouter: () => ({ push, replace: push }) }));
 jest.mock('../../lib/me/me-api', () => ({ getMe: jest.fn() }));
 jest.mock('next-themes', () => ({
@@ -11,7 +12,7 @@ jest.mock('next-themes', () => ({
 jest.mock('../../lib/auth/auth-store', () => ({
   useAuthStore: Object.assign(
     (selector: (s: { accessToken: string | null; clear: () => void }) => unknown) =>
-      selector({ accessToken: 'T', clear }),
+      selector({ accessToken: mockAccessToken, clear }),
     { getState: () => ({ clear }) },
   ),
 }));
@@ -79,5 +80,44 @@ describe('UserMenu', () => {
     expect(screen.getByRole('menu')).toBeInTheDocument();
     fireEvent.keyDown(document, { key: 'Escape' });
     await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument());
+  });
+});
+
+describe('UserMenu — plantillas de consentimiento (DX-006)', () => {
+  function tokenForRole(role: string): string {
+    const part = (value: string) =>
+      btoa(value).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    return `${part('{"alg":"HS256"}')}.${part(JSON.stringify({ sub: 'u1', tenantId: 't1', role }))}.sig`;
+  }
+
+  beforeEach(() => {
+    (getMe as jest.Mock).mockResolvedValue({
+      id: 'u1',
+      email: 'a@b.com',
+      fullName: 'Ana Gómez',
+      avatarUrl: null,
+      emailVerifiedAt: null,
+      memberships: [{ tenantId: 't1', clinicName: 'Sonrisa', role: 'ADMIN' }],
+    });
+  });
+  afterEach(() => {
+    mockAccessToken = 'T';
+  });
+
+  it('ADMIN ve el acceso a /settings/consentimientos', async () => {
+    mockAccessToken = tokenForRole('ADMIN');
+    render(<UserMenu />);
+    fireEvent.click(await screen.findByRole('button', { name: /ana gómez/i }));
+    expect(screen.getByRole('menuitem', { name: 'Consentimientos' })).toHaveAttribute(
+      'href',
+      '/settings/consentimientos',
+    );
+  });
+
+  it('otro rol no lo ve', async () => {
+    mockAccessToken = tokenForRole('DENTIST');
+    render(<UserMenu />);
+    fireEvent.click(await screen.findByRole('button', { name: /ana gómez/i }));
+    expect(screen.queryByRole('menuitem', { name: 'Consentimientos' })).not.toBeInTheDocument();
   });
 });

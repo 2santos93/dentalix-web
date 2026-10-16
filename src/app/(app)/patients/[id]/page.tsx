@@ -22,6 +22,8 @@ import { AccountStatementView } from '@/components/account-statement/account-sta
 import { getTokenRole } from '@/lib/auth/token-role';
 import { canReadAccountStatement } from '@/lib/account-statement/account-statement-api';
 import { DataConsentsTab } from '@/components/data-consents/data-consents-tab';
+import { canUseConsents } from '@/lib/consents/consents-api';
+import { PatientConsentsTab } from '@/components/consents/patient-consents-tab';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
@@ -35,6 +37,7 @@ const copy = {
   tabTreatmentPlans: 'Plan de tratamiento',
   tabAccountStatement: 'Estado de cuenta',
   tabDataConsents: 'Autorizaciones',
+  tabConsents: 'Consentimientos',
   anamnesisHeading: 'Anamnesis',
   entriesHeading: 'Evoluciones',
 };
@@ -125,12 +128,15 @@ function PatientDetailView() {
   // ausente cae en «Datos» sin romper nada.
   // Quién ve «Estado de cuenta»: ACCOUNT_STATEMENT_ROLES (= PAYMENT_ROLES).
   const canSeeAccountStatement = canReadAccountStatement(getTokenRole(accessToken));
+  // Quién ve «Consentimientos»: CONSENT_ROLES (= CLINICAL_ROLES, sin recepción).
+  const canSeeConsents = canUseConsents(getTokenRole(accessToken));
   const requestedTab = searchParams.get('tab');
-  // Un `?tab=account-statement` en manos de un rol sin acceso (enlace
-  // compartido) cae en «Datos», igual que cualquier valor desconocido.
+  // Un `?tab=account-statement` (o `consents`) en manos de un rol sin acceso
+  // (enlace compartido) cae en «Datos», igual que cualquier valor desconocido.
   const activeTab: PatientDetailTabKey =
     isPatientDetailTabKey(requestedTab) &&
-    (requestedTab !== 'account-statement' || canSeeAccountStatement)
+    (requestedTab !== 'account-statement' || canSeeAccountStatement) &&
+    (requestedTab !== 'consents' || canSeeConsents)
       ? requestedTab
       : 'data';
   // El diente en foco también viaja en la URL: es el puente entre el
@@ -264,6 +270,7 @@ function PatientDetailView() {
             treatmentPlansLabel={copy.tabTreatmentPlans}
             accountStatementLabel={canSeeAccountStatement ? copy.tabAccountStatement : undefined}
             dataConsentsLabel={copy.tabDataConsents}
+            consentsLabel={canSeeConsents ? copy.tabConsents : undefined}
           />
 
           <TabPanel tab="data" activeTab={activeTab} register={registerPanel}>
@@ -339,6 +346,11 @@ function PatientDetailView() {
           <TabPanel tab="data-consents" activeTab={activeTab} register={registerPanel}>
             <DataConsentsTab token={accessToken} patientId={patientId} />
           </TabPanel>
+          {canSeeConsents ? (
+            <TabPanel tab="consents" activeTab={activeTab} register={registerPanel}>
+              <PatientConsentsTab token={accessToken} patientId={patientId} />
+            </TabPanel>
+          ) : null}
         </div>
       ) : null}
     </div>

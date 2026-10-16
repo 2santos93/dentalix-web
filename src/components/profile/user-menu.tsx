@@ -2,10 +2,12 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ChevronUp, Clock, LogOut, Settings, ShieldCheck, Sun, Moon } from 'lucide-react';
+import { ChevronUp, Clock, FileSignature, LogOut, Settings, ShieldCheck, Sun, Moon } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { getMe, type ClinicRole } from '@/lib/me/me-api';
+import { getTokenRole } from '@/lib/auth/token-role';
+import { canManageConsentTemplates } from '@/lib/consents/consents-api';
 import { cn } from '@/lib/utils';
 
 const copy = {
@@ -13,6 +15,7 @@ const copy = {
   profile: 'Mi perfil',
   businessHours: 'Horario de atención',
   privacy: 'Privacidad de datos',
+  consentTemplates: 'Consentimientos',
   logout: 'Cerrar sesión',
   theme: 'Cambiar tema',
 };
@@ -207,6 +210,19 @@ export function UserMenu({
         <ShieldCheck className="size-4 text-muted" aria-hidden />
         {copy.privacy}
       </Link>
+      {/* Plantillas de consentimiento (DX-006): solo ADMIN las gestiona. El rol
+          sale del token (el de ESTA clínica), no de `/me`. */}
+      {canManageConsentTemplates(getTokenRole(accessToken)) ? (
+        <Link
+          href="/settings/consentimientos"
+          role="menuitem"
+          onClick={() => setOpen(false)}
+          className="flex items-center gap-3 px-3 py-2 text-sm text-ink hover:bg-bg"
+        >
+          <FileSignature className="size-4 text-muted" aria-hidden />
+          {copy.consentTemplates}
+        </Link>
+      ) : null}
       <div className="my-1 border-t border-border" />
       <ThemeRow />
       <div className="my-1 border-t border-border" />

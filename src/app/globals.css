@@ -251,3 +251,31 @@
     display: table-header-group;
   }
 }
+
+/*
+ * Print CSS del consentimiento firmado (DX-006, /print/patients/[id]/consents/
+ * [consentId]). Mismo criterio que el estado de cuenta: página A4 con nombre
+ * (no toca otras impresiones), documento en flujo y la visibilidad reabierta
+ * frente a la regla del comprobante. El bloque de firmas no se parte entre
+ * dos hojas.
+ */
+@page consent {
+  size: A4;
+  margin: 18mm 16mm;
+}
+@media print {
+  /* La página con nombre va en `html` y no solo en el documento: cualquier
+     caja que quede después del documento con otro nombre de página (el
+     contenedor de toasts, el anunciador de rutas de Next, aunque midan 0px)
+     abriría una hoja A4 en blanco al final. */
+  html:has(.consent-print-page) {
+    page: consent;
+  }
+  .consent-print-root,
+  .consent-print-root * {
+    visibility: visible !important;
+  }
+  .consent-print-root .consent-signatures {
+    break-inside: avoid;
+  }
+}
