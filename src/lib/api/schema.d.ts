@@ -1067,6 +1067,70 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/patients/{patientId}/perio-exams": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["PerioExamsController_list"];
+        put?: never;
+        post: operations["PerioExamsController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{patientId}/perio-exams/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["PerioExamsController_get"];
+        put?: never;
+        post?: never;
+        delete: operations["PerioExamsController_remove"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{patientId}/perio-exams/{id}/measures": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["PerioExamsController_save"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{patientId}/perio-exams/{id}/finalize": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["PerioExamsController_finalize"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2863,6 +2927,138 @@ export interface components {
             patient: components["schemas"]["ConsentPatientDto"];
             /** @description true si el hash guardado coincide con el recalculado al leer */
             integrityOk: boolean;
+        };
+        /** @enum {string} */
+        PerioExamStatus: "DRAFT" | "FINAL";
+        PerioIndicesDto: {
+            /** @description Sitios con algún dato, sin dientes omitidos */
+            sitesExamined: number;
+            /** @description % de sitios con sangrado al sondaje (1 decimal) */
+            bopPercent: number;
+            /** @description % de sitios con placa (1 decimal) */
+            plaquePercent: number;
+            /** @description Sitios con sondaje ≥ 4 mm */
+            sites4mmOrMore: number;
+            /** @description Sitios con sondaje ≥ 6 mm */
+            sites6mmOrMore: number;
+        };
+        PerioExamSummaryDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            tenantId: string;
+            /** Format: uuid */
+            patientId: string;
+            /** Format: uuid */
+            providerId: string;
+            providerName: string;
+            /**
+             * @description YYYY-MM-DD
+             * @example 2026-10-16
+             */
+            examDate: string;
+            notes: string | null;
+            status: components["schemas"]["PerioExamStatus"];
+            /** Format: date-time */
+            finalizedAt: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            indices: components["schemas"]["PerioIndicesDto"];
+        };
+        CreatePerioExamDto: {
+            /**
+             * @description Fecha clínica del examen (YYYY-MM-DD). Por defecto, hoy en la zona de la clínica. No puede ser futura.
+             * @example 2026-10-16
+             */
+            examDate?: string;
+            notes?: string;
+            /** @description Copia los dientes marcados como omitidos en el examen más reciente. */
+            copySkippedFromLast?: boolean;
+        };
+        /** @enum {string} */
+        PerioSite: "MB" | "B" | "DB" | "ML" | "L" | "DL";
+        PerioSiteMeasureDto: {
+            toothFdi: number;
+            site: components["schemas"]["PerioSite"];
+            probingMm: number | null;
+            /** @description Positivo = recesión; negativo = margen coronal a la UAC */
+            recessionMm: number | null;
+            /** @description NIC (CAL) calculado = sondaje + recesión; no se persiste */
+            calMm: number | null;
+            furcation: number | null;
+            bleeding: boolean;
+            suppuration: boolean;
+            plaque: boolean;
+            calculus: boolean;
+        };
+        PerioToothMeasureDto: {
+            toothFdi: number;
+            mobility: number | null;
+            skipped: boolean;
+        };
+        PerioExamDetailDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            tenantId: string;
+            /** Format: uuid */
+            patientId: string;
+            /** Format: uuid */
+            providerId: string;
+            providerName: string;
+            /**
+             * @description YYYY-MM-DD
+             * @example 2026-10-16
+             */
+            examDate: string;
+            notes: string | null;
+            status: components["schemas"]["PerioExamStatus"];
+            /** Format: date-time */
+            finalizedAt: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            indices: components["schemas"]["PerioIndicesDto"];
+            sites: components["schemas"]["PerioSiteMeasureDto"][];
+            teeth: components["schemas"]["PerioToothMeasureDto"][];
+        };
+        PerioSiteMeasureInputDto: {
+            /**
+             * @description Diente FDI permanente (11–48)
+             * @example 16
+             */
+            toothFdi: number;
+            site: components["schemas"]["PerioSite"];
+            probingMm?: number | null;
+            /** @description Positivo = recesión (margen apical a la UAC); negativo = margen coronal a la UAC. NIC = sondaje + recesión. */
+            recessionMm?: number | null;
+            furcation?: number | null;
+            /** @description Sangrado al sondaje (BOP) */
+            bleeding?: boolean;
+            /** @description Supuración */
+            suppuration?: boolean;
+            /** @description Placa */
+            plaque?: boolean;
+            /** @description Cálculo */
+            calculus?: boolean;
+        };
+        PerioToothMeasureInputDto: {
+            /** @example 16 */
+            toothFdi: number;
+            mobility?: number | null;
+            /** @description Diente omitido (ausente / no sondable) */
+            skipped?: boolean;
+        };
+        SavePerioMeasuresDto: {
+            /** @description Sitios a escribir. Un sitio sin ningún dato limpia lo que hubiera. */
+            sites: components["schemas"]["PerioSiteMeasureInputDto"][];
+            /** @description Dientes a escribir (movilidad / omitido). */
+            teeth: components["schemas"]["PerioToothMeasureInputDto"][];
+            /** @description Ausente = no tocar las notas; null o vacío = borrarlas. */
+            notes?: string | null;
         };
     };
     responses: never;
@@ -5329,6 +5525,262 @@ export interface operations {
             };
             /** @description Consentimiento no encontrado */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PerioExamsController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PerioExamSummaryDto"][];
+                };
+            };
+            /** @description Rol sin acceso clínico (recepción) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PerioExamsController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreatePerioExamDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PerioExamDetailDto"];
+                };
+            };
+            /** @description Fecha inválida o futura */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Rol sin acceso clínico (recepción) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PerioExamsController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PerioExamDetailDto"];
+                };
+            };
+            /** @description Rol sin acceso clínico (recepción) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente o examen no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PerioExamsController_remove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Borrador eliminado */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Rol sin acceso clínico (recepción) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente o examen no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El examen está finalizado (inmutable) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PerioExamsController_save: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SavePerioMeasuresDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PerioExamDetailDto"];
+                };
+            };
+            /** @description Valores fuera de rango, FDI o sitio inválidos, duplicados */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Rol sin acceso clínico (recepción) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente o examen no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El examen está finalizado (inmutable) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PerioExamsController_finalize: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PerioExamDetailDto"];
+                };
+            };
+            /** @description Rol sin acceso clínico (recepción) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente o examen no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El examen ya estaba finalizado */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

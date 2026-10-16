@@ -350,3 +350,42 @@ describe('PatientDetailTabs — pestaña «Autorizaciones» (DX-037)', () => {
     expect(onTabChange).toHaveBeenCalledWith('data-consents');
   });
 });
+
+describe('PatientDetailTabs — pestaña opcional «Periodontograma» (DX-007)', () => {
+  function renderTabs(perioLabel?: string, onTabChange = jest.fn()) {
+    render(
+      <PatientDetailTabs
+        activeTab="data"
+        onTabChange={onTabChange}
+        tablistLabel="Ana García"
+        dataLabel="Datos"
+        clinicalHistoryLabel="Historia clínica"
+        odontogramLabel="Odontograma"
+        treatmentPlansLabel="Plan de tratamiento"
+        perioLabel={perioLabel}
+      />,
+    );
+    return onTabChange;
+  }
+
+  it('no aparece sin etiqueta (recepción)', () => {
+    renderTabs();
+    expect(screen.queryByRole('tab', { name: 'Periodontograma' })).not.toBeInTheDocument();
+  });
+
+  it('con etiqueta va justo después de «Odontograma» y selecciona perio', async () => {
+    const user = userEvent.setup();
+    const onTabChange = renderTabs('Periodontograma');
+    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual([
+      'Datos',
+      'Historia clínica',
+      'Odontograma',
+      'Periodontograma',
+      'Plan de tratamiento',
+    ]);
+    const tab = screen.getByRole('tab', { name: 'Periodontograma' });
+    expect(tab).toHaveAttribute('aria-controls', 'tabpanel-perio');
+    await user.click(tab);
+    expect(onTabChange).toHaveBeenCalledWith('perio');
+  });
+});

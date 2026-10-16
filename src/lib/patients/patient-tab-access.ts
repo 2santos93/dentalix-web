@@ -2,6 +2,7 @@ import type { ClinicRole } from '@/lib/me/me-api';
 import { canWriteClinicalHistory } from '@/lib/clinical/clinical-roles';
 import { canReadAccountStatement } from '@/lib/account-statement/account-statement-api';
 import { canUseConsents } from '@/lib/consents/consents-api';
+import { canUsePerio } from '@/lib/perio/perio-api';
 import {
   isPatientDetailTabKey,
   type PatientDetailTabKey,
@@ -17,7 +18,7 @@ export type PatientTabAccess = Record<PatientDetailTabKey, boolean>;
  *   (todos menos recepción; ver medical-history, clinical-entries, odontogram
  *   y treatment-plans en la API).
  * - Estado de cuenta: `PAYMENT_ROLES` (ADMIN y recepción).
- * - Consentimientos: `CLINICAL_ROLES`.
+ * - Consentimientos y periodontograma: `CLINICAL_ROLES`.
  * - Autorizaciones (Ley 1581) y Datos: los cuatro roles.
  *
  * Solo decide qué se PINTA; el servidor vuelve a comprobar el rol. `null` (sin
@@ -32,6 +33,7 @@ export function patientTabAccess(role: ClinicRole | null): PatientTabAccess {
     'treatment-plans': clinical,
     'account-statement': canReadAccountStatement(role),
     consents: canUseConsents(role),
+    perio: canUsePerio(role),
     'data-consents': role !== null,
   };
 }

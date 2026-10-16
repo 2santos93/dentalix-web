@@ -7,6 +7,7 @@ describe('patientTabAccess (qué pestañas de la ficha ve cada rol)', () => {
     expect(access.odontogram).toBe(false);
     expect(access['treatment-plans']).toBe(false);
     expect(access.consents).toBe(false);
+    expect(access.perio).toBe(false);
     // Sí lo suyo: datos, estado de cuenta y autorizaciones de datos.
     expect(access.data).toBe(true);
     expect(access['account-statement']).toBe(true);
@@ -21,6 +22,7 @@ describe('patientTabAccess (qué pestañas de la ficha ve cada rol)', () => {
       expect(access.odontogram).toBe(true);
       expect(access['treatment-plans']).toBe(true);
       expect(access.consents).toBe(true);
+      expect(access.perio).toBe(true);
       expect(access['account-statement']).toBe(false);
     },
   );
