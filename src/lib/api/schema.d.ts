@@ -145,7 +145,25 @@ export interface paths {
         };
         get: operations["StaffInvitationsController_list"];
         put?: never;
+        /** Invita a una persona: crea la invitación y encola el email con el enlace (se envía en segundo plano) */
         post: operations["StaffInvitationsController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/staff/invitations/{id}/resend": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Reenvía una invitación pendiente: token nuevo (el anterior deja de servir), 7 días más y un email nuevo */
+        post: operations["StaffInvitationsController_resend"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1489,6 +1507,11 @@ export interface components {
             /** @enum {string} */
             status: "VALID" | "EXPIRED" | "USED" | "REVOKED";
             token: string;
+            /**
+             * @description Estado del email con el enlace: PENDING = encolado (se envía en segundo plano); null = no se pudo encolar (comparte el enlace o reenvía)
+             * @enum {string|null}
+             */
+            emailDelivery: "PENDING" | "SENT" | "FAILED" | null;
         };
         InvitationDto: {
             /** Format: uuid */
@@ -2059,6 +2082,11 @@ export interface components {
              * @description Caducidad del enlace; null en los miembros
              */
             expiresAt: string | null;
+            /**
+             * @description Solo en invitaciones: estado del último email con el enlace (PENDING = por enviar o saliendo). null en los miembros o si nunca se encoló
+             * @enum {string|null}
+             */
+            emailDelivery: "PENDING" | "SENT" | "FAILED" | null;
         };
         StaffDirectoryPageDto: {
             items: components["schemas"]["StaffDirectoryEntryDto"][];
@@ -4136,6 +4164,34 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["CreatedInvitationDto"];
                 };
+            };
+        };
+    };
+    StaffInvitationsController_resend: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreatedInvitationDto"];
+                };
+            };
+            /** @description No hay una invitación pendiente con ese id en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
