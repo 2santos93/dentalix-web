@@ -1,7 +1,7 @@
 'use client';
 import * as React from 'react';
 import { useState } from 'react';
-import { ApiError } from '@/lib/api/client';
+import { apiErrorMessage } from '@/lib/api/error-message';
 import { changePassword } from '@/lib/me/me-api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -19,6 +19,8 @@ const copy = {
   mismatch: 'La nueva contraseña y su confirmación no coinciden.',
   tooShort: 'La nueva contraseña debe tener al menos 8 caracteres.',
   genericError: 'No pudimos cambiar tu contraseña. Intenta de nuevo.',
+  // 401 de PATCH /me/password: la contraseña actual no coincide.
+  wrongCurrent: 'La contraseña actual no es correcta.',
 };
 
 export function ChangePasswordForm({ token }: { token: string }) {
@@ -49,7 +51,12 @@ export function ChangePasswordForm({ token }: { token: string }) {
       setNext('');
       setConfirm('');
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : copy.genericError);
+      setError(
+        apiErrorMessage(err, {
+          fallback: copy.genericError,
+          byStatus: { 401: copy.wrongCurrent },
+        }),
+      );
     } finally {
       setSubmitting(false);
     }

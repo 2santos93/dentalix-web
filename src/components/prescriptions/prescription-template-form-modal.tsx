@@ -2,7 +2,7 @@
 import * as React from 'react';
 import { useState } from 'react';
 import { Plus } from 'lucide-react';
-import { ApiError } from '@/lib/api/client';
+import { apiErrorMessage } from '@/lib/api/error-message';
 import {
   createPrescriptionTemplate,
   updatePrescriptionTemplate,
@@ -82,7 +82,7 @@ export function PrescriptionTemplateFormModal({
       onOpenChange(false);
       onSaved(saved);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : copy.genericError);
+      setError(apiErrorMessage(err, copy.genericError));
     } finally {
       setSubmitting(false);
     }

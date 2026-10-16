@@ -7,15 +7,8 @@ jest.mock('next/navigation', () => ({ useRouter: () => ({ push: jest.fn() }) }))
 // transform, so this must use a relative path (see sibling *.test.tsx files).
 jest.mock('../../lib/api/client', () => ({
   apiFetch: jest.fn(),
-  ApiError: class ApiError extends Error {
-    constructor(
-      public readonly status: number,
-      message: string,
-    ) {
-      super(message);
-      this.name = 'ApiError';
-    }
-  },
+  // La clase real: `apiErrorMessage` la reconoce con `instanceof`.
+  ApiError: jest.requireActual('../../lib/api/api-error').ApiError,
 }));
 jest.mock('../../lib/auth/auth-store', () => ({
   useAuthStore: (selector: (s: { setAccessToken: jest.Mock }) => unknown) =>
@@ -67,6 +60,18 @@ describe('LoginForm', () => {
     fireEvent.click(screen.getByRole('button', { name: /iniciar|entrar|login/i }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Credenciales inválidas');
+  });
+
+  // Revisión M-2: un 403 («Origin not allowed») en el login no es «pide acceso».
+  it('un 403 en el login no habla de pedir permisos a un administrador', async () => {
+    (apiFetch as jest.Mock).mockRejectedValueOnce(new ApiError(403, 'Origin not allowed'));
+    render(<LoginForm />);
+    fireEvent.change(screen.getByLabelText(/email|correo/i), { target: { value: 'user@example.com' } });
+    fireEvent.change(screen.getByLabelText(/password|contraseña/i), { target: { value: 'secret123' } });
+    fireEvent.click(screen.getByRole('button', { name: /iniciar|entrar|login/i }));
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('No pudimos iniciar sesión');
+    expect(alert).not.toHaveTextContent(/administrador|origin/i);
   });
 
   it('keeps aria-describedby resolving to the error banner on both fields', async () => {

@@ -116,7 +116,7 @@ describe('OdontogramTab', () => {
     mockedGetOdontogram.mockRejectedValue(new ApiError(500, 'Error del servidor'));
     mockedListCatalog.mockResolvedValue(catalog);
     render(<OdontogramTab token="tok" patientId="p1" />);
-    expect(await screen.findByRole('alert')).toHaveTextContent('Error del servidor');
+    expect(await screen.findByRole('alert')).toHaveTextContent('No pudimos cargar el odontograma.');
   });
 
   it('keeps the chart and the tooth-record panel mounted (no full-page reload flash) on the refetch after a successful add', async () => {

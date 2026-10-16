@@ -187,7 +187,7 @@ describe('ClinicalEntriesList', () => {
     mockedList.mockRejectedValue(new ApiError(500, 'Error del servidor'));
 
     render(<ClinicalEntriesList token="tok" patientId="p1" />);
-    expect(await screen.findByRole('alert')).toHaveTextContent('Error del servidor');
+    expect(await screen.findByRole('alert')).toHaveTextContent('No pudimos cargar las evoluciones.');
   });
 
   it('shows an alert with the API error message when creating fails', async () => {

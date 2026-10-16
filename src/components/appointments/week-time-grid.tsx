@@ -15,6 +15,7 @@ import {
   formatTimeRange,
   patientLabel,
 } from './appointment-display';
+import { formatDateLabel } from '@/lib/format/date';
 
 const copy = {
   heading: 'Agenda de la semana',
@@ -41,8 +42,7 @@ function weekDates(weekStart: string): string[] {
 
 /** Etiqueta de encabezado, p. ej. "lun, 09/03". */
 function dayHeaderLabel(date: string): string {
-  const d = new Date(`${date}T00:00:00`);
-  return d.toLocaleDateString('es', { weekday: 'short', day: '2-digit', month: '2-digit' });
+  return formatDateLabel(date, { weekday: 'short', day: '2-digit', month: '2-digit' });
 }
 
 /** "HH:mm" del slot `index` (0 => "00:00", 18 => "09:00"). */

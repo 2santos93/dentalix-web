@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Building2, Lock } from 'lucide-react';
 import { ApiError } from '@/lib/api/client';
+import { apiErrorMessage } from '@/lib/api/error-message';
 import {
   listCashPayments,
   type CashPayment,
@@ -185,9 +186,10 @@ export function CashRegisterView({ token }: CashRegisterViewProps) {
         setForbidden(false);
       } catch (err) {
         if (cancelled) return;
-        const status = err instanceof ApiError ? err.status : null;
-        setForbidden(status === 403);
-        setLoadError(status === 400 ? copy.badRequest : copy.genericLoadError);
+        setForbidden(err instanceof ApiError && err.status === 403);
+        setLoadError(
+          apiErrorMessage(err, { fallback: copy.genericLoadError, byStatus: { 400: copy.badRequest } }),
+        );
       }
       if (!cancelled) setLoading(false);
     }

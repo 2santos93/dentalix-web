@@ -86,4 +86,47 @@ describe('CityCombobox', () => {
     expect(consoleError).not.toHaveBeenCalled();
     consoleError.mockRestore();
   });
+
+  // DX-063 / FE-013: un fallo de la búsqueda no se disfraza de «sin resultados».
+  it('si la búsqueda falla, muestra un FieldError con reintento y vuelve a buscar', async () => {
+    mocked.mockReset()
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      .mockResolvedValueOnce([{ id: 1, name: 'Bogotá', region: 'Bogota D.C.' }]);
+    const user = userEvent.setup();
+    render(<CityCombobox id="city" token="tok" countryCode="CO" value={null} onChange={() => {}} />);
+
+    const status = await screen.findByRole('status');
+    expect(status).toHaveTextContent('Ciudades no disponibles');
+    expect(status).toHaveClass('h-10', 'w-full');
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Reintentar' }));
+    const input = await screen.findByRole('combobox');
+    await waitFor(() => expect(mocked).toHaveBeenCalledTimes(2));
+    await user.click(input);
+    expect(await screen.findByText('Bogotá')).toBeInTheDocument();
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+
+  // Revisión M-4: si la búsqueda falla mientras se escribe, el foco no se pierde
+  // (pasa al Reintentar, que hereda el id del campo para su <label>), y vuelve
+  // al campo al reintentar.
+  it('si falla con el foco en el campo, el foco pasa al Reintentar y vuelve al campo', async () => {
+    mocked.mockReset()
+      .mockResolvedValueOnce([])
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      .mockResolvedValue([{ id: 1, name: 'Bogotá', region: 'Bogota D.C.' }]);
+    const user = userEvent.setup();
+    render(<CityCombobox id="city" token="tok" countryCode="CO" value={null} onChange={() => {}} />);
+    await waitFor(() => expect(mocked).toHaveBeenCalledTimes(1));
+    await user.type(screen.getByRole('combobox'), 'b');
+
+    const retry = await screen.findByRole('button', { name: 'Reintentar' });
+    expect(retry).toHaveAttribute('id', 'city');
+    expect(retry).toHaveFocus();
+
+    await user.click(retry);
+    expect(await screen.findByRole('combobox')).toHaveFocus();
+    expect(screen.getByRole('combobox')).toHaveValue('b');
+  });
 });

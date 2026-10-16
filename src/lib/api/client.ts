@@ -4,6 +4,10 @@ import {
   setActiveLocationId,
 } from '@/lib/locations/location-store';
 import { apiBaseUrl } from './api-base';
+import { ApiError, NetworkError } from './api-error';
+import { parseRetryAfter } from './error-message';
+
+export { ApiError, NetworkError };
 
 const REFRESH_PATH = '/auth/refresh';
 
@@ -13,16 +17,6 @@ const REFRESH_PATH = '/auth/refresh';
 // acoplamiento a la respuesta del backend: si allí cambia el texto, aquí deja de
 // autocurarse (los tests de `client.test.ts` lo fijan por si acaso).
 const UNKNOWN_LOCATION = 'unknown location';
-
-export class ApiError extends Error {
-  constructor(
-    public readonly status: number,
-    message: string,
-  ) {
-    super(message);
-    this.name = 'ApiError';
-  }
-}
 
 interface ApiOptions {
   method?: string;
@@ -198,6 +192,21 @@ export function bootstrapSession(): Promise<void> {
   return bootstrapInFlight;
 }
 
+/**
+ * `fetch` que relanza su rechazo como `NetworkError` (revisión D-2), salvo
+ * `AbortError`/`TimeoutError`, que son de quien llama (cancelación o límite de
+ * tiempo) y pasan tal cual.
+ */
+async function fetchOrNetworkError(url: string, init: RequestInit): Promise<Response> {
+  try {
+    return await fetch(url, init);
+  } catch (err) {
+    const name = err instanceof Error || err instanceof DOMException ? err.name : null;
+    if (name === 'AbortError' || name === 'TimeoutError') throw err;
+    throw new NetworkError(err);
+  }
+}
+
 async function doFetch(
   path: string,
   opts: ApiOptions,
@@ -233,7 +242,7 @@ async function doFetch(
   const sentLocationId = getActiveLocationId();
   if (sentLocationId) headers['X-Location-Id'] = sentLocationId;
   if (opts.headers) Object.assign(headers, opts.headers);
-  const res = await fetch(`${apiBaseUrl()}${path}`, {
+  const res = await fetchOrNetworkError(`${apiBaseUrl()}${path}`, {
     method: opts.method ?? 'GET',
     headers,
     body:
@@ -263,13 +272,20 @@ async function doFetch(
     }
   }
   if (!res.ok) {
-    let message = `Request failed (${res.status})`;
+    // El cuerpo de error de la API es `{ statusCode, message, error }`, con
+    // `message` texto o el array de class-validator. Se guarda tal cual en
+    // `messages`; qué se enseña lo decide `apiErrorMessage()`. Sin cuerpo JSON
+    // (proxy caído, HTML), `message` queda en `HTTP <status>`, solo para logs.
+    let messages: string[] = [];
     try {
-      const data = (await res.json()) as { message?: string };
-      if (data?.message) message = data.message;
+      const data = (await res.json()) as { message?: unknown };
+      const raw = data?.message;
+      if (typeof raw === 'string' && raw) messages = [raw];
+      else if (Array.isArray(raw)) messages = raw.filter((m): m is string => typeof m === 'string');
     } catch {
-      /* keep default */
+      /* sin cuerpo JSON */
     }
+    const message = messages.length > 0 ? messages.join('; ') : `HTTP ${res.status}`;
     // Sede huérfana → autocuración. La sede elegida vive en localStorage y
     // sobrevive a la sede real: si se borra, se desactiva, o se reseedea la base
     // y cambian los ids, ese id se sigue mandando en CADA petición y el backend
@@ -290,7 +306,10 @@ async function doFetch(
       setActiveLocationId(null);
       return doFetch(path, opts, allowRefresh, false);
     }
-    throw new ApiError(res.status, message);
+    throw new ApiError(res.status, message, {
+      messages,
+      retryAfterSeconds: parseRetryAfter(res.headers?.get('Retry-After') ?? null),
+    });
   }
   return res;
 }

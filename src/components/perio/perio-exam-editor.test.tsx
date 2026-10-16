@@ -171,7 +171,7 @@ describe('PerioExamEditor', () => {
     mockedGet.mockResolvedValueOnce(exam());
     renderEditor();
     expect(screen.getByRole('status', { name: /cargando examen/i })).toBeInTheDocument();
-    expect(await screen.findByRole('alert')).toHaveTextContent('No pudimos cargar el examen.');
+    expect(await screen.findByRole('alert')).toHaveTextContent('Examen periodontal no encontrado');
     await user.click(screen.getByRole('button', { name: /reintentar/i }));
     expect(await screen.findByText('Examen del 16/10/2026')).toBeInTheDocument();
   });

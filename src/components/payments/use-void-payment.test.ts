@@ -1,4 +1,4 @@
-import { ApiError } from '@/lib/api/client';
+import { ApiError, NetworkError } from '@/lib/api/client';
 import { voidPaymentErrorMessage, voidPaymentSubject } from './use-void-payment';
 
 describe('voidPaymentErrorMessage (siempre en español)', () => {
@@ -18,8 +18,12 @@ describe('voidPaymentErrorMessage (siempre en español)', () => {
     expect(text).not.toContain(message);
   });
 
-  it('un fallo de red da la copia genérica', () => {
-    expect(voidPaymentErrorMessage(new TypeError('Failed to fetch'))).toMatch(/intenta de nuevo/i);
+  it('un fallo de red dice que no hay conexión', () => {
+    expect(voidPaymentErrorMessage(new NetworkError(new TypeError('Failed to fetch')))).toMatch(/no hay conexión/i);
+  });
+
+  it('cualquier otro error da la copia genérica', () => {
+    expect(voidPaymentErrorMessage(new Error('boom'))).toMatch(/intenta de nuevo/i);
   });
 });
 

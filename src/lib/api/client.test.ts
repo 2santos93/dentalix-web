@@ -11,7 +11,7 @@
  * @jest-environment jsdom
  * @jest-environment-options {"url": "http://acme.localhost:3001"}
  */
-import { apiFetch, apiFetchOrNull, ApiError, bootstrapSession } from './client';
+import { apiFetch, apiFetchOrNull, ApiError, bootstrapSession, NetworkError } from './client';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import {
   getActiveLocationId,
@@ -549,5 +549,82 @@ describe('apiFetch — sede huérfana en localStorage', () => {
       a: 1,
     });
     expect(getActiveLocationId()).toBeNull();
+  });
+});
+
+describe('apiFetch — cuerpo de error (DX-063)', () => {
+  const realFetch = global.fetch;
+  beforeEach(() => useAuthStore.getState().clear());
+  afterEach(() => {
+    global.fetch = realFetch;
+  });
+
+  async function caught(): Promise<ApiError> {
+    try {
+      await apiFetch('/auth/x');
+    } catch (err) {
+      return err as ApiError;
+    }
+    throw new Error('apiFetch no falló');
+  }
+
+  it('guarda el array de class-validator en `messages`', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 400,
+      json: async () => ({ statusCode: 400, message: ['a debe ser texto', 'b es obligatorio'] }),
+    }) as unknown as typeof fetch;
+    const err = await caught();
+    expect(err.status).toBe(400);
+    expect(err.messages).toEqual(['a debe ser texto', 'b es obligatorio']);
+  });
+
+  it('sin cuerpo JSON no inventa «Request failed»: messages vacío', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 502,
+      json: async () => {
+        throw new SyntaxError('Unexpected token <');
+      },
+    }) as unknown as typeof fetch;
+    const err = await caught();
+    expect(err.messages).toEqual([]);
+    expect(err.message).not.toMatch(/Request failed/);
+  });
+
+  it('lee Retry-After de un 429', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 429,
+      headers: new Headers({ 'Retry-After': '42' }),
+      json: async () => ({ message: 'ThrottlerException: Too Many Requests' }),
+    }) as unknown as typeof fetch;
+    const err = await caught();
+    expect(err.retryAfterSeconds).toBe(42);
+  });
+});
+
+// Revisión D-2: solo un fallo del propio `fetch` es «sin conexión».
+describe('apiFetch — fallo de red (DX-063)', () => {
+  const realFetch = global.fetch;
+  afterEach(() => {
+    global.fetch = realFetch;
+  });
+
+  it('un rechazo de fetch se relanza como NetworkError, con la causa', async () => {
+    const cause = new TypeError('Failed to fetch');
+    global.fetch = jest.fn().mockRejectedValue(cause) as unknown as typeof fetch;
+    const err = await apiFetch('/x').catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(NetworkError);
+    expect((err as NetworkError).cause).toBe(cause);
+  });
+
+  it('un AbortError o TimeoutError pasa tal cual', async () => {
+    const abort = new DOMException('aborted', 'AbortError');
+    global.fetch = jest.fn().mockRejectedValue(abort) as unknown as typeof fetch;
+    await expect(apiFetch('/x')).rejects.toBe(abort);
+    const timeout = new DOMException('timed out', 'TimeoutError');
+    global.fetch = jest.fn().mockRejectedValue(timeout) as unknown as typeof fetch;
+    await expect(apiFetch('/x')).rejects.toBe(timeout);
   });
 });

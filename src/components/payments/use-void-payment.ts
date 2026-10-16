@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import { ApiError } from '@/lib/api/client';
+import { apiErrorMessage } from '@/lib/api/error-message';
 import { voidPayment } from '@/lib/payments/payments-api';
 import { formatCurrency } from '@/lib/format/currency';
 import { formatCivilDate } from '@/lib/format/date';
@@ -26,17 +26,10 @@ const copy = {
  * role») se sustituye.
  */
 export function voidPaymentErrorMessage(err: unknown): string {
-  if (!(err instanceof ApiError)) return copy.generic;
-  switch (err.status) {
-    case 403:
-      return err.message.startsWith('Solo puedes anular') ? err.message : copy.forbidden;
-    case 404:
-      return copy.gone;
-    case 400:
-      return copy.badReason;
-    default:
-      return copy.generic;
-  }
+  return apiErrorMessage(err, {
+    fallback: copy.generic,
+    byStatus: { 403: copy.forbidden, 404: copy.gone, 400: copy.badReason },
+  });
 }
 
 /** Lo que identifica el abono en el modal y en el aviso: monto · fecha · paciente. */

@@ -64,7 +64,7 @@ export async function updateStaff(
  * comment) — use `apiFetchOrNull` and discard the (always-null) result.
  * Returns 409 if you try to deactivate the last admin or yourself; that
  * throws `ApiError` same as any other non-ok response, and the caller
- * surfaces `err.message`.
+ * shows it in Spanish via `apiErrorMessage` (with a 409 override).
  */
 export async function deactivateStaff(token: string, userId: string): Promise<void> {
   await apiFetchOrNull<null>(`/staff/${userId}`, {

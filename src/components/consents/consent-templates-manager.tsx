@@ -2,7 +2,7 @@
 import * as React from 'react';
 import { useEffect, useState } from 'react';
 import { FileText, Lock, Plus } from 'lucide-react';
-import { ApiError } from '@/lib/api/client';
+import { apiErrorMessage } from '@/lib/api/error-message';
 import {
   listConsentTemplates,
   updateConsentTemplate,
@@ -72,7 +72,7 @@ export function ConsentTemplatesManager({ token, allowed }: ConsentTemplatesMana
         setError(null);
       } catch (err) {
         if (cancelled) return;
-        setError(err instanceof ApiError ? err.message : copy.loadError);
+        setError(apiErrorMessage(err, copy.loadError));
       } finally {
         if (!cancelled) setLoading(false);
       }

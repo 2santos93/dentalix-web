@@ -1,4 +1,5 @@
 import { render, screen, waitFor } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { CurrencySelect } from './currency-select';
 import { listCurrencies } from '@/lib/reference/currencies-api';
 
@@ -35,5 +36,28 @@ describe('CurrencySelect', () => {
       <CurrencySelect id="cur" token="tok" value="USD" onChange={() => {}} ariaLabel="Moneda del nuevo plan" />,
     );
     expect(await screen.findByLabelText(/moneda del nuevo plan/i)).toBe(screen.getByRole('combobox'));
+  });
+
+  // DX-063 / FE-013: un fallo al cargar las monedas no se esconde detrás de un
+  // select con una sola opción: escalón 2 (FieldError) con reintento.
+  it('si la lista falla, sustituye el control por un FieldError con reintento', async () => {
+    mocked.mockReset()
+      .mockRejectedValueOnce(new TypeError('Failed to fetch'))
+      .mockResolvedValueOnce([{ code: 'COP', name: 'Peso colombiano', symbol: '$' }]);
+    const user = userEvent.setup();
+    render(<CurrencySelect id="cur" token="tok" value="COP" onChange={() => {}} className="w-44" />);
+
+    const status = await screen.findByRole('status');
+    expect(status).toHaveTextContent('Monedas no disponibles');
+    expect(status).toHaveClass('h-10', 'w-44');
+    expect(screen.queryByRole('combobox')).not.toBeInTheDocument();
+    // Revisión M-4: el `<label htmlFor="cur">` del padre sigue teniendo destino.
+    expect(screen.getByRole('button', { name: 'Reintentar' })).toHaveAttribute('id', 'cur');
+
+    await user.click(screen.getByRole('button', { name: 'Reintentar' }));
+    const el = (await screen.findByRole('combobox')) as HTMLSelectElement;
+    await waitFor(() => expect(el.options[0]?.textContent).toBe('Peso colombiano ($)'));
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+    expect(mocked).toHaveBeenCalledTimes(2);
   });
 });

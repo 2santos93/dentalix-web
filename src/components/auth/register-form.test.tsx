@@ -7,15 +7,8 @@ jest.mock('next/navigation', () => ({ useRouter: () => ({ push: jest.fn() }) }))
 // transform, so this must use a relative path (see sibling *.test.tsx files).
 jest.mock('../../lib/api/client', () => ({
   apiFetch: jest.fn(),
-  ApiError: class ApiError extends Error {
-    constructor(
-      public readonly status: number,
-      message: string,
-    ) {
-      super(message);
-      this.name = 'ApiError';
-    }
-  },
+  // La clase real: `apiErrorMessage` la reconoce con `instanceof`.
+  ApiError: jest.requireActual('../../lib/api/api-error').ApiError,
 }));
 
 function fillRequiredFields() {
@@ -38,6 +31,18 @@ describe('RegisterForm', () => {
     fireEvent.click(screen.getByRole('button', { name: /crear cuenta/i }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Subdominio ya existe');
+  });
+
+  // Revisión M-2: el 403 por origen no permitido no manda a «pedir acceso a un
+  // administrador» a alguien que todavía no tiene clínica.
+  it('un 403 («Untrusted origin») no habla de pedir permisos', async () => {
+    (apiFetch as jest.Mock).mockRejectedValueOnce(new ApiError(403, 'Untrusted origin'));
+    render(<RegisterForm tenant={null} />);
+    fillRequiredFields();
+    fireEvent.click(screen.getByRole('button', { name: /crear cuenta/i }));
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('No pudimos crear la cuenta');
+    expect(alert).not.toHaveTextContent(/administrador|untrusted/i);
   });
 
   it('keeps aria-describedby resolving to the error banner on all five fields', async () => {

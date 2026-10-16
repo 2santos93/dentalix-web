@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { ApiError } from '@/lib/api/client';
+import { apiErrorMessage } from '@/lib/api/error-message';
 import { getToothTimeline, type ToothRecord, type ToothSurface } from '@/lib/odontogram/odontogram-api';
 import { formatDate } from '@/lib/format/date';
 import { SectionError } from '@/components/errors/section-error';
@@ -72,7 +72,7 @@ export function ToothTimeline({ token, patientId, toothNumber, catalogById, refr
         setLoadError(null);
       } catch (err) {
         if (cancelled) return;
-        setLoadError(err instanceof ApiError ? err.message : copy.genericLoadError);
+        setLoadError(apiErrorMessage(err, copy.genericLoadError));
       } finally {
         if (!cancelled) setLoading(false);
       }

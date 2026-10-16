@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { Plus } from 'lucide-react';
-import { ApiError } from '@/lib/api/client';
+import { apiErrorMessage } from '@/lib/api/error-message';
 import { listPatients, type Patient } from '@/lib/patients/patients-api';
 import { PatientsTable } from '@/components/patients/patients-table';
 import { PageHeader } from '@/components/shared/page-header';
@@ -93,7 +93,7 @@ export function PatientsView({ token }: PatientsViewProps) {
         setError(null);
       } catch (err) {
         if (cancelled) return;
-        setError(err instanceof ApiError ? err.message : copy.genericError);
+        setError(apiErrorMessage(err, copy.genericError));
       } finally {
         if (!cancelled) setLoading(false);
       }

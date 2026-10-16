@@ -1,7 +1,7 @@
 'use client';
 import * as React from 'react';
 import { useEffect, useMemo, useState } from 'react';
-import { ApiError } from '@/lib/api/client';
+import { apiErrorMessage } from '@/lib/api/error-message';
 import {
   listClinicalEntries,
   createClinicalEntry,
@@ -99,7 +99,7 @@ export function ClinicalEntriesList({ token, patientId }: ClinicalEntriesListPro
         setLoadError(null);
       } catch (err) {
         if (cancelled) return;
-        setLoadError(err instanceof ApiError ? err.message : copy.genericLoadError);
+        setLoadError(apiErrorMessage(err, copy.genericLoadError));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -173,7 +173,7 @@ export function ClinicalEntriesList({ token, patientId }: ClinicalEntriesListPro
       setReason('');
       setNotes('');
     } catch (err) {
-      setCreateError(err instanceof ApiError ? err.message : copy.genericCreateError);
+      setCreateError(apiErrorMessage(err, copy.genericCreateError));
     } finally {
       setSubmitting(false);
     }

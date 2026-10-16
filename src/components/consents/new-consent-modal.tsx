@@ -2,6 +2,7 @@
 import * as React from 'react';
 import { useEffect, useState } from 'react';
 import { ApiError } from '@/lib/api/client';
+import { apiErrorMessage } from '@/lib/api/error-message';
 import {
   listConsentTemplates,
   previewPatientConsent,
@@ -175,7 +176,7 @@ export function NewConsentModal({
       })
       .catch((err: unknown) => {
         if (cancelled) return;
-        setPreviewError(err instanceof ApiError ? err.message : copy.previewError);
+        setPreviewError(apiErrorMessage(err, copy.previewError));
       });
     return () => {
       cancelled = true;
@@ -212,7 +213,7 @@ export function NewConsentModal({
       onOpenChange(false);
       onSigned(consent);
     } catch (err) {
-      const message = err instanceof ApiError ? err.message : copy.genericSignError;
+      const message = apiErrorMessage(err, copy.genericSignError);
       setError(message);
       // La plantilla cambió: el paciente tiene que leer el texto nuevo.
       if (err instanceof ApiError && err.status === 409) {

@@ -184,7 +184,7 @@ describe('StaffMemberProfile', () => {
     await user.click(within(dialog).getByRole('button', { name: /sí, desactivar/i }));
 
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
-    expect(await screen.findByText(/se cayó el servidor/i)).toBeInTheDocument();
+    expect(await screen.findByText('No pudimos desactivar el acceso.')).toBeInTheDocument();
   });
 
   it('un error de carga se muestra con opción de reintentar', async () => {

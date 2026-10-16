@@ -150,3 +150,30 @@ export function zonedDayStart(day: string, timeZone: string): string | null {
   instant = guess - offsetAt(instant);
   return new Date(instant).toISOString();
 }
+
+/**
+ * Fecha en texto («lunes, 15 de marzo», «marzo de 2026») SIEMPRE en español,
+ * sin depender del idioma del navegador, y sin lanzar con un valor inválido.
+ * Para las etiquetas largas de la agenda; los listados usan `dd/mm/yyyy`.
+ *
+ * - `YYYY-MM-DD` es un día civil del calendario (el que eligió la persona): se
+ *   lee a medianoche LOCAL, no UTC, para que no se corra al día anterior al
+ *   oeste de Greenwich.
+ * - Cualquier otro valor es un instante, en la zona local.
+ */
+export function formatDateLabel(
+  value: string | number | Date | null | undefined,
+  options: Intl.DateTimeFormatOptions,
+  fallback: string = FALLBACK,
+): string {
+  const civil = typeof value === 'string' ? /^(\d{4})-(\d{2})-(\d{2})$/.exec(value) : null;
+  const d = civil
+    ? new Date(Number(civil[1]), Number(civil[2]) - 1, Number(civil[3]))
+    : toDate(value);
+  if (!d || Number.isNaN(d.getTime())) return fallback;
+  try {
+    return d.toLocaleDateString('es', options);
+  } catch {
+    return fallback;
+  }
+}

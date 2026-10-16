@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { Plus } from 'lucide-react';
 import { ApiError } from '@/lib/api/client';
+import { apiErrorMessage } from '@/lib/api/error-message';
 import {
   COUNTRY_LABELS,
   getPrescriptionIssuer,
@@ -66,7 +67,16 @@ const copy = {
     'Confirmo que conozco la alergia y prescribo igualmente bajo mi responsabilidad.',
   submit: 'Emitir receta',
   genericError: 'No pudimos emitir la receta. Intenta de nuevo.',
+  // 409 de la API sin un texto que se pueda enseñar: aun así es una alerta de
+  // alergia, y no un «los datos cambiaron».
+  serverAllergyFallback:
+    'La API detectó una posible alergia a alguno de estos principios activos. Revisa la anamnesis del paciente antes de confirmar.',
 };
+
+// La alerta de la API lista los alérgenos (texto libre de la anamnesis): con
+// varios pasa de los 240 caracteres del helper y se perdería el detalle que
+// quien prescribe necesita para confirmar (revisión D-1).
+const SERVER_ALLERGY_MAX_LENGTH = 2000;
 
 interface NewPrescriptionModalProps {
   open: boolean;
@@ -133,7 +143,7 @@ export function NewPrescriptionModal({
         setIssuerError(null);
       })
       .catch((err: unknown) => {
-        if (!cancelled) setIssuerError(err instanceof ApiError ? err.message : copy.issuerError);
+        if (!cancelled) setIssuerError(apiErrorMessage(err, copy.issuerError));
       });
     return () => {
       cancelled = true;
@@ -278,9 +288,15 @@ export function NewPrescriptionModal({
       if (err instanceof ApiError && err.status === 409) {
         // La API detectó una alergia que aquí no se vio (p. ej. la anamnesis
         // no cargó): mismo bloque de confirmación, con su mensaje.
-        setServerAllergy(err.message);
+        setServerAllergy(
+          apiErrorMessage(err, {
+            fallback: copy.serverAllergyFallback,
+            byStatus: { 409: copy.serverAllergyFallback },
+            maxLength: SERVER_ALLERGY_MAX_LENGTH,
+          }),
+        );
       } else {
-        setError(err instanceof ApiError ? err.message : copy.genericError);
+        setError(apiErrorMessage(err, copy.genericError));
       }
     } finally {
       setSubmitting(false);

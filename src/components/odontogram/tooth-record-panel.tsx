@@ -1,7 +1,7 @@
 'use client';
 import * as React from 'react';
 import { useEffect, useState } from 'react';
-import { ApiError } from '@/lib/api/client';
+import { apiErrorMessage } from '@/lib/api/error-message';
 import { listCatalogItems, type DentalCatalogItem } from '@/lib/odontogram/catalog-api';
 import {
   addToothRecord,
@@ -137,7 +137,7 @@ export function ToothRecordPanel({
         setCatalogError(null);
       } catch (err) {
         if (cancelled) return;
-        setCatalogError(err instanceof ApiError ? err.message : copy.genericCatalogError);
+        setCatalogError(apiErrorMessage(err, copy.genericCatalogError));
       } finally {
         if (!cancelled) setCatalogLoading(false);
       }
@@ -213,7 +213,7 @@ export function ToothRecordPanel({
       setSavedSummary(copy.saved(toothNumber, item.labelEs, detail));
       onRecordAdded(created);
     } catch (err) {
-      setSaveError(err instanceof ApiError ? err.message : copy.genericSaveError);
+      setSaveError(apiErrorMessage(err, copy.genericSaveError));
     } finally {
       setSubmitting(false);
     }

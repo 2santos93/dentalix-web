@@ -1,7 +1,13 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { listCurrencies, type Currency } from '@/lib/reference/currencies-api';
+import { FieldError } from '@/components/errors/field-error';
 import { cn } from '@/lib/utils';
+
+const copy = {
+  // Escalón 2 (FieldError): ≤4 palabras, el `<label>` del campo da el contexto.
+  loadError: 'Monedas no disponibles',
+};
 
 // Same native-control fieldClass convention as patient-form.tsx / treatment-plans-tab.tsx.
 const fieldClass =
@@ -20,6 +26,8 @@ interface CurrencySelectProps {
 
 export function CurrencySelect({ id, token, value, onChange, disabled, className, ariaLabel }: CurrencySelectProps) {
   const [currencies, setCurrencies] = useState<Currency[]>([]);
+  const [failed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -28,15 +36,32 @@ export function CurrencySelect({ id, token, value, onChange, disabled, className
         if (!cancelled) setCurrencies(data);
       })
       .catch(() => {
-        /* fail soft — keep the current value selectable below */
+        if (!cancelled) setFailed(true);
       });
     return () => {
       cancelled = true;
     };
-  }, [token]);
+  }, [token, attempt]);
 
-  // Until the list loads (or if it fails), keep `value` selectable so the
-  // control is never empty and never loses the current selection.
+  // Escalón 2 de la escalera de errores (DX-063): sin la lista, el select solo
+  // ofrecería la moneda actual con cara de normal. Se sustituye en su sitio por
+  // un FieldError de la misma altura; el valor elegido sigue en el padre.
+  if (failed) {
+    return (
+      <FieldError
+        label={copy.loadError}
+        onRetry={() => {
+          setFailed(false);
+          setAttempt((n) => n + 1);
+        }}
+        className={cn('h-10 w-full', className)}
+        retryId={id}
+      />
+    );
+  }
+
+  // Until the list loads, keep `value` selectable so the control is never
+  // empty and never loses the current selection.
   const options = currencies.length > 0 ? currencies : [{ code: value, name: value, symbol: '' }];
 
   return (

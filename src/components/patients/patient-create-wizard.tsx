@@ -2,7 +2,7 @@
 import * as React from 'react';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { ApiError } from '@/lib/api/client';
+import { apiErrorMessage } from '@/lib/api/error-message';
 import {
   createPatient,
   type CreatePatientInput,
@@ -179,7 +179,7 @@ export function PatientCreateWizard({ token, canWriteClinicalHistory }: PatientC
       const created = await createPatient(token, input);
       router.push(`/patients/${created.id}`);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : copy.genericError);
+      setError(apiErrorMessage(err, copy.genericError));
     } finally {
       setSubmitting(false);
     }

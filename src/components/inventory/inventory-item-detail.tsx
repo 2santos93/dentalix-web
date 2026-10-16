@@ -3,6 +3,7 @@ import * as React from 'react';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { ApiError } from '@/lib/api/client';
+import { apiErrorMessage } from '@/lib/api/error-message';
 import {
   getInventoryItem,
   updateInventoryItem,
@@ -27,6 +28,7 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { formatDate } from '@/lib/format/date';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
@@ -96,11 +98,6 @@ function signedQuantity(m: InventoryMovement): string {
   return `${m.quantity}`;
 }
 
-function formatDate(iso: string): string {
-  const d = new Date(iso);
-  return Number.isNaN(d.getTime()) ? iso : d.toLocaleDateString();
-}
-
 interface InventoryItemDetailProps {
   token: string;
   id: string;
@@ -161,7 +158,7 @@ export function InventoryItem({ token, id }: InventoryItemDetailProps) {
           setForbidden(true);
           setLoadError(null);
         } else {
-          setLoadError(err instanceof ApiError ? err.message : copy.genericLoadError);
+          setLoadError(apiErrorMessage(err, copy.genericLoadError));
           setForbidden(false);
         }
       } finally {
@@ -181,7 +178,7 @@ export function InventoryItem({ token, id }: InventoryItemDetailProps) {
         setLoadError(null);
       })
       .catch((err) => {
-        setLoadError(err instanceof ApiError ? err.message : copy.genericLoadError);
+        setLoadError(apiErrorMessage(err, copy.genericLoadError));
       });
   }
 
@@ -211,7 +208,7 @@ export function InventoryItem({ token, id }: InventoryItemDetailProps) {
       setShowEdit(false);
       await refreshInPlace();
     } catch (err) {
-      setEditError(err instanceof ApiError ? err.message : copy.genericUpdateError);
+      setEditError(apiErrorMessage(err, copy.genericUpdateError));
     } finally {
       setSaving(false);
     }
@@ -224,7 +221,7 @@ export function InventoryItem({ token, id }: InventoryItemDetailProps) {
       await deleteInventoryItem(token, id);
       router.push('/inventory');
     } catch (err) {
-      setDeleteError(err instanceof ApiError ? err.message : copy.genericDeleteError);
+      setDeleteError(apiErrorMessage(err, copy.genericDeleteError));
       setDeleting(false);
     }
   }
@@ -256,7 +253,7 @@ export function InventoryItem({ token, id }: InventoryItemDetailProps) {
       setMReason('');
       await refreshInPlace();
     } catch (err) {
-      setMoveError(err instanceof ApiError ? err.message : copy.genericMovementError);
+      setMoveError(apiErrorMessage(err, copy.genericMovementError));
     } finally {
       setRecording(false);
     }

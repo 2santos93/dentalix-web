@@ -164,6 +164,28 @@ describe('NewPrescriptionModal', () => {
     );
   });
 
+  // Revisión D-1: con varios alérgenos el mensaje pasa de 240 caracteres; quien
+  // prescribe tiene que ver a qué es alérgico el paciente antes de confirmar.
+  it('si la alerta de la API pasa de 240 caracteres, se ve entera con sus alérgenos', async () => {
+    const user = setupUser();
+    const allergens = [
+      'Penicilina (Amoxicilina, Ampicilina)',
+      'Cefalosporinas de primera generación (Cefalexina)',
+      'Antiinflamatorios no esteroideos (Ibuprofeno, Naproxeno)',
+      'Sulfonamidas (Sulfametoxazol con trimetoprima)',
+    ].join(', ');
+    const msg = `Alerta de alergia: el paciente tiene registrada alergia a ${allergens}. Confirma que prescribes igualmente.`;
+    expect(msg.length).toBeGreaterThan(240);
+    mockedIssue.mockRejectedValueOnce(new ApiError(409, msg));
+    renderModal();
+    await screen.findByText(/Se emite desde/);
+    await fillAmoxicilina(user);
+    await user.click(screen.getByRole('button', { name: 'Emitir receta' }));
+    await screen.findByRole('checkbox', { name: /confirmo que conozco la alergia/i });
+    expect(screen.getByText(msg)).toBeInTheDocument();
+    expect(screen.queryByText(/datos cambiaron|choca con el estado/i)).not.toBeInTheDocument();
+  });
+
   it('400 de la API: el resumen del error queda en el modal, visible y con el foco', async () => {
     const user = setupUser();
     const scrollIntoView = jest.fn();
@@ -292,7 +314,7 @@ describe('NewPrescriptionModal', () => {
     const user = setupUser();
     mockedIssuer.mockRejectedValueOnce(new ApiError(500, 'Caída')).mockResolvedValueOnce(makeIssuer());
     renderModal();
-    expect(await screen.findByText('Caída')).toBeInTheDocument();
+    expect(await screen.findByText('No pudimos preparar la receta.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Emitir receta' })).toBeDisabled();
     await user.click(screen.getByRole('button', { name: 'Reintentar' }));
     expect(await screen.findByText(/Se emite desde/)).toBeInTheDocument();

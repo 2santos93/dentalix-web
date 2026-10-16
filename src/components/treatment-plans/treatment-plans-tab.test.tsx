@@ -753,7 +753,7 @@ describe('TreatmentPlansTab', () => {
       render(<TreatmentPlansTab patientId="pat-1" token="tok" />);
 
       const alert = await screen.findByRole('alert');
-      expect(alert).toHaveTextContent('Error del servidor');
+      expect(alert).toHaveTextContent('No pudimos cargar los planes de tratamiento.');
       expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument();
       // Rung-1 copy with its own retry affordance drops "Intenta de nuevo."
       expect(screen.queryByText(/intenta de nuevo/i)).not.toBeInTheDocument();
@@ -788,7 +788,7 @@ describe('TreatmentPlansTab', () => {
 
       await user.click(screen.getByRole('button', { name: /^nuevo plan$/i }));
 
-      const toastText = await screen.findByText('No se pudo refrescar');
+      const toastText = await screen.findByText('No pudimos actualizar los planes de tratamiento.');
       expect(toastText.closest('[role="alert"]')).toBeNull();
       expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument();
       expect(screen.queryByText(/intenta de nuevo/i)).not.toBeInTheDocument();
@@ -812,7 +812,7 @@ describe('TreatmentPlansTab', () => {
       await user.click(screen.getByRole('button', { name: /^nuevo plan$/i }));
 
       const alert = await screen.findByRole('alert');
-      expect(alert).toHaveTextContent('No se pudo crear');
+      expect(alert).toHaveTextContent('No pudimos crear el plan. Intenta de nuevo.');
     });
 
     it('el detalle del plan que falla al cargar usa el estado de sección con reintento, y el reintento limpia el error y muestra el contenido (escalón 1: planDetailError)', async () => {
@@ -823,7 +823,7 @@ describe('TreatmentPlansTab', () => {
       render(<TreatmentPlansTab patientId="pat-1" token="tok" />);
 
       const alert = await screen.findByRole('alert');
-      expect(alert).toHaveTextContent('No se pudo cargar el plan');
+      expect(alert).toHaveTextContent('No pudimos cargar el plan.');
       expect(screen.queryByText(/intenta de nuevo/i)).not.toBeInTheDocument();
 
       // Revisión final #1: `refreshPlanDetail` no limpiaba `planDetailError`,
@@ -857,7 +857,7 @@ describe('TreatmentPlansTab', () => {
       const planStatusSelect = screen.getByLabelText<HTMLSelectElement>(/^estado del plan$/i);
       await user.selectOptions(planStatusSelect, 'CANCELLED');
 
-      const toastText = await screen.findByText('No se pudo refrescar el plan');
+      const toastText = await screen.findByText('No pudimos actualizar el plan.');
       expect(toastText.closest('[role="alert"]')).toBeNull();
       expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument();
 
@@ -897,7 +897,7 @@ describe('TreatmentPlansTab', () => {
       // comment on `refreshPlanDetail`'s catch: it re-reads `selectedPlanId`
       // fresh rather than closing over it, precisely so a leftover toast
       // can't replay a stale plan id).
-      await screen.findByText('No se pudo refrescar el plan');
+      await screen.findByText('No pudimos actualizar el plan.');
       await waitFor(() => expect(mockedGetPlan).toHaveBeenCalledTimes(2));
 
       // Switch plans *while the plan-1 toast is still on screen* — nothing
@@ -928,7 +928,7 @@ describe('TreatmentPlansTab', () => {
       const planStatusSelect = screen.getByLabelText<HTMLSelectElement>(/^estado del plan$/i);
       await user.selectOptions(planStatusSelect, 'CANCELLED');
 
-      const alert = await screen.findByText('No se pudo cambiar el estado');
+      const alert = await screen.findByText('No pudimos actualizar el estado del plan. Intenta de nuevo.');
       expect(alert.closest('[role="alert"]')).not.toBeNull();
     });
 
@@ -946,7 +946,7 @@ describe('TreatmentPlansTab', () => {
       const confirm = await screen.findByRole('dialog', { name: /quitar este ítem del plan/i });
       await user.click(within(confirm).getByRole('button', { name: 'Quitar ítem' }));
 
-      const alert = await screen.findByText('No se pudo quitar');
+      const alert = await screen.findByText('No pudimos quitar el ítem. Intenta de nuevo.');
       expect(alert.closest('[role="alert"]')).not.toBeNull();
       // El fallo se queda donde el usuario decidió: el diálogo sigue abierto.
       expect(screen.getByRole('dialog', { name: /quitar este ítem del plan/i })).toBeInTheDocument();
@@ -962,7 +962,7 @@ describe('TreatmentPlansTab', () => {
       await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
 
       const alert = await screen.findByRole('alert');
-      expect(alert).toHaveTextContent('No se pudo cargar el saldo');
+      expect(alert).toHaveTextContent('No pudimos cargar el saldo.');
       expect(screen.queryByText(/intenta de nuevo/i)).not.toBeInTheDocument();
 
       // Revisión final #1: mismo bug que planDetailError, en
@@ -1008,7 +1008,7 @@ describe('TreatmentPlansTab', () => {
       await user.paste('Cobro duplicado');
       await user.click(within(confirm).getByRole('button', { name: 'Anular abono' }));
 
-      const toastText = await screen.findByText('No se pudo refrescar el saldo');
+      const toastText = await screen.findByText('No pudimos actualizar el saldo.');
       expect(toastText.closest('[role="alert"]')).toBeNull();
       expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument();
 

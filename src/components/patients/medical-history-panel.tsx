@@ -1,7 +1,7 @@
 'use client';
 import * as React from 'react';
 import { useEffect, useMemo, useState } from 'react';
-import { ApiError } from '@/lib/api/client';
+import { apiErrorMessage } from '@/lib/api/error-message';
 import { listStaff, type StaffMember } from '@/lib/staff/staff-api';
 import { formatDateTime } from '@/lib/format/date';
 import { Button } from '@/components/ui/button';
@@ -183,7 +183,7 @@ export function MedicalHistoryPanel({ token, patientId }: MedicalHistoryPanelPro
         setLoadError(null);
       } catch (err) {
         if (cancelled) return;
-        setLoadError(err instanceof ApiError ? err.message : copy.genericLoadError);
+        setLoadError(apiErrorMessage(err, copy.genericLoadError));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -214,7 +214,7 @@ export function MedicalHistoryPanel({ token, patientId }: MedicalHistoryPanelPro
       // next edit still carries forward whatever wasn't just changed.
       setValue(valueFromHistory(saved));
     } catch (err) {
-      setSaveError(err instanceof ApiError ? err.message : copy.genericSaveError);
+      setSaveError(apiErrorMessage(err, copy.genericSaveError));
     } finally {
       setSubmitting(false);
     }

@@ -1,7 +1,13 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import { searchCities, type City } from '@/lib/reference/cities-api';
+import { FieldError } from '@/components/errors/field-error';
 import { cn } from '@/lib/utils';
+
+const copy = {
+  // Escalón 2 (FieldError): ≤4 palabras, el `<label>` del campo da el contexto.
+  loadError: 'Ciudades no disponibles',
+};
 
 const fieldClass =
   'flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-50';
@@ -24,6 +30,25 @@ export function CityCombobox({ id, token, countryCode, value, onChange, disabled
   const [text, setText] = useState(value?.name ?? '');
   const [results, setResults] = useState<City[]>([]);
   const [open, setOpen] = useState(false);
+  // La búsqueda falló: el control se sustituye por un FieldError (escalón 2,
+  // DX-063) en vez de quedar como «sin resultados». `attempt` relanza la
+  // búsqueda con el texto actual al reintentar.
+  const [failed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
+  // Si el campo tenía el foco al fallar, el foco pasa al Reintentar y, al
+  // reintentar, vuelve al campo: sustituir el control no puede perderlo.
+  const [focusAfterSwap, setFocusAfterSwap] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+  // Lo marca el Reintentar (un handler) y lo consume el efecto al volver a
+  // montar el campo.
+  const refocusInputRef = useRef(false);
+
+  useEffect(() => {
+    if (!failed && refocusInputRef.current) {
+      refocusInputRef.current = false;
+      inputRef.current?.focus();
+    }
+  }, [failed]);
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // When the country changes, clear this component's OWN state (text +
@@ -35,6 +60,7 @@ export function CityCombobox({ id, token, countryCode, value, onChange, disabled
     setText('');
     setResults([]);
     setOpen(false);
+    setFailed(false);
   }
 
   // Notifying the PARENT (`onChange(null)`) must NOT happen during render —
@@ -85,14 +111,20 @@ export function CityCombobox({ id, token, countryCode, value, onChange, disabled
           if (!cancelled) setResults(data);
         })
         .catch(() => {
-          if (!cancelled) setResults([]);
+          if (cancelled) return;
+          setResults([]);
+          setOpen(false);
+          setFocusAfterSwap(
+            typeof document !== 'undefined' && document.activeElement === inputRef.current,
+          );
+          setFailed(true);
         });
     }, q ? 250 : 0); // instant initial load, debounced while typing
     return () => {
       cancelled = true;
       if (debounce.current) clearTimeout(debounce.current);
     };
-  }, [token, countryCode, text]);
+  }, [token, countryCode, text, attempt]);
 
   function pick(city: City) {
     justPickedRef.current = true;
@@ -101,9 +133,27 @@ export function CityCombobox({ id, token, countryCode, value, onChange, disabled
     setOpen(false);
   }
 
+  if (failed) {
+    return (
+      <FieldError
+        label={copy.loadError}
+        onRetry={() => {
+          refocusInputRef.current = focusAfterSwap;
+          setFocusAfterSwap(false);
+          setFailed(false);
+          setAttempt((n) => n + 1);
+        }}
+        className="h-10 w-full"
+        retryId={id}
+        focusRetry={focusAfterSwap}
+      />
+    );
+  }
+
   return (
     <div className="relative">
       <input
+        ref={inputRef}
         id={id}
         role="combobox"
         aria-expanded={open}

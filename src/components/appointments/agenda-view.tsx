@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
-import { ApiError } from '@/lib/api/client';
+import { apiErrorMessage } from '@/lib/api/error-message';
 import {
   listAppointments,
   updateAppointment,
@@ -43,6 +43,7 @@ import {
   SheetDescription,
 } from '@/components/ui/sheet';
 import { cn } from '@/lib/utils';
+import { formatDateLabel } from '@/lib/format/date';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
@@ -138,11 +139,7 @@ function localDayKeyOf(iso: string): string {
 
 /** Weekday + day + month label for the day-panel header, e.g. "lunes, 15 de marzo". */
 function longDayLabel(date: string): string {
-  return new Date(`${date}T00:00:00`).toLocaleDateString('es', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-  });
+  return formatDateLabel(date, { weekday: 'long', day: 'numeric', month: 'long' });
 }
 
 /** `date` shifted by `n` local days, as `YYYY-MM-DD` — the ‹ › step for the
@@ -162,11 +159,11 @@ function weekRangeLabel(date: string): string {
   // inclusive Sunday shown to the user.
   const end = new Date(new Date(to).getTime() - 24 * 60 * 60 * 1000);
   const sameMonth = start.getMonth() === end.getMonth();
-  const startStr = start.toLocaleDateString('es', {
+  const startStr = formatDateLabel(start, {
     day: 'numeric',
     ...(sameMonth ? {} : { month: 'short' }),
   });
-  const endStr = end.toLocaleDateString('es', { day: 'numeric', month: 'long' });
+  const endStr = formatDateLabel(end, { day: 'numeric', month: 'long' });
   return `${startStr} – ${endStr}`;
 }
 
@@ -354,7 +351,7 @@ export function AgendaView({ token }: AgendaViewProps) {
         setAppointmentsLoadError(null);
       } catch (err) {
         if (cancelled) return;
-        setAppointmentsLoadError(err instanceof ApiError ? err.message : copy.genericAppointmentsError);
+        setAppointmentsLoadError(apiErrorMessage(err, copy.genericAppointmentsError));
       } finally {
         if (!cancelled) setAppointmentsLoading(false);
       }
@@ -374,7 +371,7 @@ export function AgendaView({ token }: AgendaViewProps) {
         setAppointments(data);
       })
       .catch((err) => {
-        notifyError(err instanceof ApiError ? err.message : copy.genericRefreshError, {
+        notifyError(apiErrorMessage(err, copy.genericRefreshError), {
           onRetry: () => refreshAppointmentsInPlaceRef.current(),
         });
       })
@@ -470,7 +467,7 @@ export function AgendaView({ token }: AgendaViewProps) {
       await updateAppointment(token, id, { status });
       await refreshAppointmentsInPlace();
     } catch (err) {
-      notifyError(err instanceof ApiError ? err.message : copy.genericStatusChangeError, {
+      notifyError(apiErrorMessage(err, copy.genericStatusChangeError), {
         onRetry: () => handleStatusChange(id, status),
       });
     } finally {

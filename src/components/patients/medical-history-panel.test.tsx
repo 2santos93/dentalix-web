@@ -184,7 +184,7 @@ describe('MedicalHistoryPanel', () => {
     mockedGet.mockRejectedValue(new ApiError(500, 'Error del servidor'));
 
     render(<MedicalHistoryPanel token="tok" patientId="p1" />);
-    expect(await screen.findByRole('alert')).toHaveTextContent('Error del servidor');
+    expect(await screen.findByRole('alert')).toHaveTextContent('No pudimos cargar la anamnesis.');
   });
 
   it('does not render the structured form when the initial load failed, so no version can be created from an unknown baseline', async () => {

@@ -57,7 +57,7 @@ describe('PatientConsentsTab', () => {
     mockedList.mockResolvedValueOnce([consent]);
     render(<PatientConsentsTab token="tok" patientId="p1" />);
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('Se cayó');
+    expect(await screen.findByRole('alert')).toHaveTextContent('No pudimos cargar los consentimientos.');
     await user.click(screen.getByRole('button', { name: 'Reintentar' }));
     expect(
       (await screen.findAllByText('Consentimiento de exodoncia')).length,

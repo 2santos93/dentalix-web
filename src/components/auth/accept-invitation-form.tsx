@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
-import { ApiError } from '@/lib/api/client';
+import { apiErrorMessage } from '@/lib/api/error-message';
 import {
   getPublicInvitation,
   acceptInvitation,
@@ -30,6 +30,10 @@ const copy = {
   submit: 'Aceptar invitación',
   submitting: 'Activando…',
   genericError: 'No pudimos aceptar la invitación. Intenta de nuevo.',
+  // 404 al verificar: el enlace no corresponde a ninguna invitación.
+  notFound: 'Este enlace de invitación no existe. Revisa que esté completo o pide uno nuevo.',
+  // 401 al aceptar con una cuenta existente: la contraseña no coincide.
+  wrongPassword: 'La contraseña no es correcta.',
   loginLink: 'Inicia sesión',
   expiredTitle: 'Invitación expirada',
   expiredMessage:
@@ -96,7 +100,9 @@ export function AcceptInvitationForm({ inviteToken }: { inviteToken: string }) {
         setInvitation(result);
       } catch (err) {
         if (cancelled) return;
-        setLoadError(err instanceof ApiError ? err.message : copy.loadError);
+        setLoadError(
+          apiErrorMessage(err, { fallback: copy.loadError, byStatus: { 404: copy.notFound } }),
+        );
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -117,7 +123,9 @@ export function AcceptInvitationForm({ inviteToken }: { inviteToken: string }) {
       setAccessToken(res.accessToken);
       router.push('/patients');
     } catch (err) {
-      setSubmitError(err instanceof ApiError ? err.message : copy.genericError);
+      setSubmitError(
+        apiErrorMessage(err, { fallback: copy.genericError, byStatus: { 401: copy.wrongPassword } }),
+      );
     } finally {
       setSubmitting(false);
     }

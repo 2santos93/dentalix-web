@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ApiError } from '@/lib/api/client';
+import { apiErrorMessage } from '@/lib/api/error-message';
 import { getDashboard, type Dashboard } from '@/lib/dashboard/dashboard-api';
 import { addOneDayIso } from '@/lib/dashboard/date-range';
 import { formatCurrency } from '@/lib/format/currency';
@@ -172,7 +173,7 @@ export function DashboardView({ token }: DashboardViewProps) {
         if (err instanceof ApiError && err.status === 403) {
           setError(copy.forbidden);
         } else {
-          setError(err instanceof ApiError ? err.message : copy.genericError);
+          setError(apiErrorMessage(err, copy.genericError));
         }
         setData(null);
       } finally {

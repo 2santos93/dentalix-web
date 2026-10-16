@@ -134,7 +134,7 @@ describe('ToothTimeline', () => {
     render(
       <ToothTimeline token="tok" patientId="p1" toothNumber="11" catalogById={catalogById} />,
     );
-    expect(await screen.findByRole('alert')).toHaveTextContent('Error del servidor');
+    expect(await screen.findByRole('alert')).toHaveTextContent('No pudimos cargar el historial del diente.');
   });
 
   it('reads as a dated clinical list: a <time> per row, hairline separation, no card per record', async () => {
