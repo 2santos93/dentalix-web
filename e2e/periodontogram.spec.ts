@@ -69,7 +69,7 @@ test('crear examen, cargar con teclado, guardar, recargar y finalizar', async ({
   const dialog = page.getByRole('dialog', { name: 'Nuevo examen periodontal' });
   await dialog.getByRole('button', { name: 'Crear examen' }).click();
   await expect(dialog).toBeHidden();
-  await expect(panel.getByText('Borrador')).toBeVisible();
+  await expect(panel.getByText('Borrador', { exact: true })).toBeVisible();
 
   // --- 2. Captura rápida ---
   const upper = panel.getByRole('table', { name: 'Arcada superior' });
