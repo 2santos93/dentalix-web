@@ -2,7 +2,6 @@ import { test, expect, type APIRequestContext } from './support/test';
 import { randomUUID } from 'node:crypto';
 import { accessTokenOf } from './support/auth';
 import { API_URL, tenantOrigin } from './support/urls';
-import { atSede, sedeDayFromToday } from './support/clock';
 
 /**
  * e2e (DX-057): recepción anula desde la CAJA un abono suyo de hoy.
@@ -64,7 +63,8 @@ async function patientWithPlan(
 }
 
 function payment(amount: number) {
-  return { amount, currency: 'COP', paidAt: atSede(sedeDayFromToday(0), '00:00').toISOString(), method: 'CASH' };
+  // Ahora mismo (DX-097): la caja corta «hoy» en la zona de la sede.
+  return { amount, currency: 'COP', paidAt: new Date().toISOString(), method: 'CASH' };
 }
 
 for (const viewport of [
