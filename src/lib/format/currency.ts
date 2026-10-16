@@ -11,9 +11,14 @@ export function formatCurrency(
   locale = 'es',
 ): string {
   try {
+    // Dos decimales fijos: los importes se guardan con céntimos, y las
+    // versiones recientes de ICU/CLDR dan 0 decimales a COP, con lo que
+    // 150.000,50 se pintaría (redondeado) como 150.001.
     return new Intl.NumberFormat(locale, {
       style: 'currency',
       currency,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
     }).format(amount);
   } catch {
     return `${currency} ${amount.toFixed(2)}`;
