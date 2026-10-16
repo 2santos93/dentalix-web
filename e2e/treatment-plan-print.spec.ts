@@ -1,6 +1,6 @@
 import { test, expect, type APIRequestContext, type Locator, type Page } from './support/test';
 import { randomUUID } from 'node:crypto';
-import { sessionCookie } from './support/auth';
+import { sessionCookie, waitForHydratedForm } from './support/auth';
 import { API_URL, tenantOrigin } from './support/urls';
 import { registerClinicViaApi } from './support/api';
 
@@ -110,6 +110,7 @@ async function seed(
 
 async function webLogin(page: Page, origin: string, email: string): Promise<void> {
   await page.goto(`${origin}/login`);
+  await waitForHydratedForm(page);
   await page.getByLabel('Correo electrónico').fill(email);
   await page.getByLabel('Contraseña', { exact: true }).fill(DEMO_PASSWORD);
   await page.getByRole('button', { name: 'Iniciar sesión' }).click();

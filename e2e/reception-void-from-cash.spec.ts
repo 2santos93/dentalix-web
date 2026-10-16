@@ -1,6 +1,6 @@
 import { test, expect, type APIRequestContext } from './support/test';
 import { randomUUID } from 'node:crypto';
-import { accessTokenOf } from './support/auth';
+import { accessTokenOf, waitForHydratedForm } from './support/auth';
 import { API_URL, tenantOrigin } from './support/urls';
 
 /**
@@ -97,6 +97,7 @@ for (const viewport of [
 
     // --- Recepción inicia sesión en la web y registra su abono de hoy.
     await page.goto(`${origin}/login`);
+    await waitForHydratedForm(page);
     await page.getByLabel('Correo electrónico').fill(RECEPTION_EMAIL);
     await page.getByLabel('Contraseña', { exact: true }).fill(DEMO_PASSWORD);
     await page.getByRole('button', { name: 'Iniciar sesión' }).click();

@@ -1,6 +1,6 @@
 import { test, expect, type APIRequestContext, type Page } from './support/test';
 import { randomUUID } from 'node:crypto';
-import { accessTokenOf, registerAndLogin } from './support/auth';
+import { accessTokenOf, registerAndLogin, waitForHydratedForm } from './support/auth';
 import { API_URL, tenantOrigin } from './support/urls';
 
 /**
@@ -142,6 +142,7 @@ for (const viewport of VIEWPORTS) {
 test('un rol que no es ADMIN no ve la auditoría (dentista de la demo)', async ({ page }) => {
   const origin = tenantOrigin(DEMO_SUBDOMAIN);
   await page.goto(`${origin}/login`);
+  await waitForHydratedForm(page);
   await page.getByLabel('Correo electrónico').fill(DENTIST_EMAIL);
   await page.getByLabel('Contraseña', { exact: true }).fill(DEMO_PASSWORD);
   await page.getByRole('button', { name: 'Iniciar sesión' }).click();

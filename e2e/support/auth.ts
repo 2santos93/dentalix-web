@@ -15,6 +15,21 @@ export async function sessionCookie(page: Page, origin: string) {
 }
 
 /**
+ * Espera a que React haya hidratado el `<form>` de la página (DX-140). Los
+ * formularios de login y registro usan inputs controlados: lo que Playwright
+ * escribe antes de la hidratación lo pisa el estado inicial (`''`) al hidratar
+ * y el envío choca con la validación nativa («Please fill out this field»).
+ * Pasaba ~1 de cada 62 tests con el servidor de producción recién arrancado.
+ * React marca cada nodo hidratado con una clave propia `__reactFiber$…`.
+ */
+export async function waitForHydratedForm(page: Page): Promise<void> {
+  await page.waitForFunction(() => {
+    const form = document.querySelector('form');
+    return !!form && Object.keys(form).some((key) => key.startsWith('__reactFiber'));
+  });
+}
+
+/**
  * Shared register+login flow for the e2e suite.
  *
  * The backend resolves the active tenant from the REQUEST HOST (see
@@ -65,6 +80,7 @@ export async function registerAndLogin(
 
   // --- Register ---
   await page.goto(`${origin}/register`);
+  await waitForHydratedForm(page);
 
   await page.getByLabel('Nombre de la clínica').fill(clinicName);
   await page.getByLabel('Subdominio').fill(subdomain);
@@ -150,6 +166,7 @@ export async function loginAs(page: Page, origin: string, email: string, passwor
 
 /** Rellena y envía el formulario de login de la página actual (ya en /login). */
 async function submitLogin(page: Page, origin: string, email: string, password: string): Promise<void> {
+  await waitForHydratedForm(page);
   await page.getByLabel('Correo electrónico').fill(email);
   await page.getByLabel('Contraseña', { exact: true }).fill(password);
 
