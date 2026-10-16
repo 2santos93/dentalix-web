@@ -25,7 +25,7 @@ import {
   PAYMENT_METHOD_OPTIONS,
 } from '@/lib/payments/payment-method';
 import { formatCurrency } from '@/lib/format/currency';
-import { formatCivilDate, formatDate } from '@/lib/format/date';
+import { formatCivilDate, formatDate, zoneCityLabel } from '@/lib/format/date';
 import { useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -100,7 +100,7 @@ const copy = {
   // la fecha de pago; cuando difieren, la fila lo dice.
   registeredToday: 'Registrado hoy',
   // DX-097: los días son los del calendario de la sede, no los del navegador.
-  periodNote: (days: string, timeZone: string) => `${days} · días en hora de la sede (${timeZone})`,
+  periodNote: (days: string, timeZone: string) => `${days} · días en hora de ${zoneCityLabel(timeZone)}`,
   periodDays: (from: string, to: string) => (from === to ? from : `del ${from} al ${to}`),
   registeredOn: (date: string) => `Registrado el ${date}`,
   empty: 'No hay abonos en este período.',
@@ -336,7 +336,7 @@ export function CashRegisterView({ token }: CashRegisterViewProps) {
         {customError ? <InlineError id={rangeErrorId}>{customError}</InlineError> : null}
 
         {range && timeZone && customError === null ? (
-          <p className="text-sm text-muted tabular-nums" data-testid="cash-period-note">
+          <p className="text-sm text-muted tabular-nums" data-testid="cash-period-note" title={timeZone}>
             {copy.periodNote(
               copy.periodDays(formatCivilDate(range.from), formatCivilDate(range.to)),
               timeZone,

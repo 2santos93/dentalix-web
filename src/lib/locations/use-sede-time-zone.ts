@@ -23,6 +23,18 @@ export function pickSedeTimeZone(locations: readonly ClinicLocation[], activeLoc
 }
 
 /**
+ * Hoy (`YYYY-MM-DD`) en la zona de la sede (DX-097): la fecha por defecto de
+ * los formularios de abono. Sin zona todavía, la zona por defecto de la sede,
+ * nunca la del navegador.
+ */
+export function sedeToday(timeZone: string | null, now: Date = new Date()): string {
+  return (
+    civilDateInZone(now, timeZone ?? DEFAULT_SEDE_TIME_ZONE) ??
+    (civilDateInZone(now, DEFAULT_SEDE_TIME_ZONE) as string)
+  );
+}
+
+/**
  * Zona IANA de la sede activa, leída de la API (nunca del navegador). `null`
  * mientras carga, para que la pantalla no consulte «hoy» con un día que luego
  * cambie. Si la lista de sedes falla, la zona por defecto: la pantalla sigue

@@ -9,7 +9,7 @@ import { presetRange } from '@/lib/payments/cash-period';
 import { useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
 import { formatCurrency } from '@/lib/format/currency';
 import { listStaff } from '@/lib/appointments/staff-api';
-import { formatTime } from '@/lib/format/date';
+import { formatTime, zoneCityLabel } from '@/lib/format/date';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge, type BadgeProps } from '@/components/ui/badge';
@@ -33,7 +33,7 @@ const copy = {
   genericError: 'No pudimos cargar el panel.',
   rangeInvalid: 'La fecha "Hasta" debe ser igual o posterior a la fecha "Desde".',
   // DX-097: los días del período son los del calendario de la sede.
-  zoneNote: (timeZone: string) => `Días en hora de la sede (${timeZone}).`,
+  zoneNote: (timeZone: string) => `Días en hora de ${zoneCityLabel(timeZone)}.`,
   incomesHeading: 'Ingresos del período',
   incomesCount: (count: number) => `${count} ${count === 1 ? 'abono' : 'abonos'}`,
   byCurrencyHeading: 'Desglose por moneda',
@@ -213,7 +213,7 @@ export function DashboardView({ token }: DashboardViewProps) {
             <CurrencySelect id="dashboard-currency" token={token} value={currency} onChange={setCurrency} />
           </FormField>
           {timeZone ? (
-            <p className="basis-full text-sm text-muted" data-testid="dashboard-zone-note">
+            <p className="basis-full text-sm text-muted" data-testid="dashboard-zone-note" title={timeZone}>
               {copy.zoneNote(timeZone)}
             </p>
           ) : null}

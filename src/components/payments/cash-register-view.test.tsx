@@ -554,7 +554,7 @@ describe('días de la sede (DX-097)', () => {
     );
     expect(mockedList).toHaveBeenCalledTimes(1);
     expect(await screen.findByTestId('cash-period-note')).toHaveTextContent(
-      '15/10/2026 · días en hora de la sede (America/Bogota)',
+      '15/10/2026 · días en hora de Bogotá',
     );
   });
 

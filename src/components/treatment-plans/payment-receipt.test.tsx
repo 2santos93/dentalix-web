@@ -11,6 +11,7 @@ const payment: Payment = {
   amount: 50000,
   currency: 'USD',
   paidAt: '2026-01-05T00:00:00.000Z',
+  paidOn: '2026-01-05',
   method: 'CASH',
   notes: 'Pago inicial',
   createdById: null,

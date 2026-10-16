@@ -444,7 +444,7 @@ describe('DashboardView · días de la sede (DX-097)', () => {
     await waitFor(() => expect(mockedGetDashboard).toHaveBeenCalledTimes(1));
     expect(mockedGetDashboard.mock.calls[0][1]).toMatchObject({ from: '2026-10-01', to: '2026-11-01' });
     expect((screen.getByLabelText('Hasta') as HTMLInputElement).value).toBe('2026-10-31');
-    expect(screen.getByTestId('dashboard-zone-note')).toHaveTextContent('Días en hora de la sede (America/Bogota).');
+    expect(screen.getByTestId('dashboard-zone-note')).toHaveTextContent('Días en hora de Bogotá.');
   });
 
   it('con la sede en Madrid, el mismo instante ya es el 1 de noviembre', async () => {
