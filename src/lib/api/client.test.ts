@@ -551,3 +551,55 @@ describe('apiFetch — sede huérfana en localStorage', () => {
     expect(getActiveLocationId()).toBeNull();
   });
 });
+
+describe('apiFetch — cuerpo de error (DX-063)', () => {
+  const realFetch = global.fetch;
+  beforeEach(() => useAuthStore.getState().clear());
+  afterEach(() => {
+    global.fetch = realFetch;
+  });
+
+  async function caught(): Promise<ApiError> {
+    try {
+      await apiFetch('/auth/x');
+    } catch (err) {
+      return err as ApiError;
+    }
+    throw new Error('apiFetch no falló');
+  }
+
+  it('guarda el array de class-validator en `messages`', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 400,
+      json: async () => ({ statusCode: 400, message: ['a debe ser texto', 'b es obligatorio'] }),
+    }) as unknown as typeof fetch;
+    const err = await caught();
+    expect(err.status).toBe(400);
+    expect(err.messages).toEqual(['a debe ser texto', 'b es obligatorio']);
+  });
+
+  it('sin cuerpo JSON no inventa «Request failed»: messages vacío', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 502,
+      json: async () => {
+        throw new SyntaxError('Unexpected token <');
+      },
+    }) as unknown as typeof fetch;
+    const err = await caught();
+    expect(err.messages).toEqual([]);
+    expect(err.message).not.toMatch(/Request failed/);
+  });
+
+  it('lee Retry-After de un 429', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 429,
+      headers: new Headers({ 'Retry-After': '42' }),
+      json: async () => ({ message: 'ThrottlerException: Too Many Requests' }),
+    }) as unknown as typeof fetch;
+    const err = await caught();
+    expect(err.retryAfterSeconds).toBe(42);
+  });
+});
