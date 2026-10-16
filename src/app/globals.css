@@ -304,3 +304,33 @@
     break-inside: avoid;
   }
 }
+
+/*
+ * Print CSS del presupuesto (DX-012, /print/patients/[id]/treatment-plans/
+ * [planId]). Mismo criterio que el consentimiento y la receta: página A4 con
+ * nombre en `html` (ninguna caja posterior abre una hoja en blanco), documento
+ * en flujo y la visibilidad reabierta frente a la regla del comprobante. Ni
+ * una fila de la tabla, ni los totales, ni el bloque de firma se parten entre
+ * dos hojas; la cabecera de la tabla se repite en cada hoja.
+ */
+@page quote {
+  size: A4;
+  margin: 14mm 14mm;
+}
+@media print {
+  html:has(.quote-print-page) {
+    page: quote;
+  }
+  .quote-print-root,
+  .quote-print-root * {
+    visibility: visible !important;
+  }
+  .quote-print-root thead {
+    display: table-header-group;
+  }
+  .quote-print-root .quote-item,
+  .quote-print-root .quote-totals,
+  .quote-print-root .quote-signature {
+    break-inside: avoid;
+  }
+}

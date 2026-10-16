@@ -144,6 +144,7 @@ const item1: TreatmentPlanItem = {
   surfaces: [],
   catalogItemId: 'cat-1',
   price: 50000,
+  discount: 0,
   status: 'PROPOSED',
   notes: null,
   createdAt: '2026-01-02T00:00:00.000Z',
@@ -158,6 +159,7 @@ const item2: TreatmentPlanItem = {
   surfaces: ['OCCLUSAL'],
   catalogItemId: 'cat-2',
   price: 80000,
+  discount: 0,
   status: 'ACCEPTED',
   notes: null,
   createdAt: '2026-01-02T00:00:00.000Z',
@@ -1084,6 +1086,91 @@ describe('TreatmentPlansTab', () => {
 
       const alert = await screen.findByText('Precio requerido');
       expect(alert.closest('[role="alert"]')).not.toBeNull();
+    });
+  });
+
+  describe('presupuesto y aceptación firmada (DX-012)', () => {
+    // Token de clínica con rol (solo se leen los claims para decidir qué pintar).
+    const dentistToken = `h.${btoa(JSON.stringify({ sub: 'u1', tenantId: 't1', role: 'DENTIST' }))}.s`;
+    const signedDetail = {
+      ...plan1Detail,
+      status: 'ACCEPTED' as const,
+      items: [{ ...item1, status: 'ACCEPTED' as const }, item2],
+      acceptance: { signerName: 'Ana García', acceptedAt: '2026-10-16T15:30:00.000Z' },
+    };
+
+    it('ofrece «Imprimir presupuesto» y «Aceptar con firma» en un plan sin firmar', async () => {
+      mockedListPlans.mockResolvedValue([plan1]);
+      mockedGetPlan.mockResolvedValue({ ...plan1Detail, acceptance: null });
+      render(<TreatmentPlansTab patientId="pat-1" token={dentistToken} />);
+      const link = await screen.findByRole('link', { name: /imprimir presupuesto/i });
+      expect(link).toHaveAttribute('href', '/print/patients/pat-1/treatment-plans/plan-1');
+      expect(screen.getByRole('button', { name: 'Aceptar con firma' })).toBeInTheDocument();
+    });
+
+    it('un plan firmado lo dice y congela sus ítems: sin «Quitar», sin «Agregar ítem», sin volver a propuesto ni a borrador', async () => {
+      mockedListPlans.mockResolvedValue([{ ...plan1, status: 'ACCEPTED' }]);
+      mockedGetPlan.mockResolvedValue(signedDetail);
+      render(<TreatmentPlansTab patientId="pat-1" token={dentistToken} />);
+
+      expect(
+        await screen.findByText('Aceptado y firmado por Ana García el 16/10/2026 15:30'),
+      ).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Aceptar con firma' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /^quitar$/i })).not.toBeInTheDocument();
+      expect(screen.queryByRole('form', { name: /agregar ítem/i })).not.toBeInTheDocument();
+      const [statusSelect] = screen.getAllByLabelText('Estado del ítem del diente 11');
+      expect(within(statusSelect).getByRole('option', { name: 'Propuesto' })).toBeDisabled();
+      expect(within(statusSelect).getByRole('option', { name: 'Realizado' })).toBeEnabled();
+      const planStatus = screen.getByLabelText(/estado del plan/i);
+      expect(within(planStatus).getByRole('option', { name: 'Borrador' })).toBeDisabled();
+    });
+
+    it('el descuento del ítem se envía al agregarlo y se muestra en la fila', async () => {
+      mockedListPlans.mockResolvedValue([plan1]);
+      mockedGetPlan.mockResolvedValue({
+        ...plan1Detail,
+        items: [{ ...item1, discount: 5000 }, item2],
+        total: plan1Detail.total - 5000,
+      });
+      mockedAddItem.mockResolvedValue({ ...item1, id: 'item-3' });
+      const user = userEvent.setup();
+      render(<TreatmentPlansTab patientId="pat-1" token="tok" />);
+
+      const table = await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+      expect(
+        within(table).getByText(`Descuento −${expectedCurrencyText(5000)}`),
+      ).toBeInTheDocument();
+
+      await user.type(screen.getByLabelText(/código fdi/i), '16');
+      await user.click(screen.getByRole('radio', { name: /resina/i }));
+      await user.type(screen.getByLabelText(/descuento/i), '2500');
+      await user.click(screen.getByRole('button', { name: /^agregar ítem$/i }));
+      await waitFor(() =>
+        expect(mockedAddItem).toHaveBeenCalledWith('tok', 'plan-1', {
+          toothNumber: '16',
+          catalogItemId: 'cat-1',
+          price: 50000,
+          discount: 2500,
+        }),
+      );
+    });
+
+    it('un descuento mayor que el precio se rechaza antes de enviar', async () => {
+      mockedListPlans.mockResolvedValue([plan1]);
+      mockedGetPlan.mockResolvedValue(plan1Detail);
+      const user = userEvent.setup();
+      render(<TreatmentPlansTab patientId="pat-1" token="tok" />);
+      await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+
+      await user.type(screen.getByLabelText(/código fdi/i), '16');
+      await user.click(screen.getByRole('radio', { name: /resina/i }));
+      await user.type(screen.getByLabelText(/descuento/i), '60000');
+      await user.click(screen.getByRole('button', { name: /^agregar ítem$/i }));
+      expect(
+        await screen.findByText('El descuento debe ser un monto válido, no mayor que el precio.'),
+      ).toBeInTheDocument();
+      expect(mockedAddItem).not.toHaveBeenCalled();
     });
   });
 });

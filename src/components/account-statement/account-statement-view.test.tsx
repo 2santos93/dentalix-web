@@ -125,6 +125,21 @@ it('muestra los planes con su saldo y señala el cancelado como fuera del saldo'
   expect(rows[1]).toHaveTextContent(/no suma al saldo/i);
 });
 
+it('cada plan enlaza a su presupuesto imprimible (DX-012: recepción lo imprime desde aquí)', async () => {
+  const statement = accountStatementFixture();
+  mockedGet.mockResolvedValue(statement);
+  render(<AccountStatementView token={tokenForRole('RECEPTION')} patientId="pat-1" />);
+
+  const table = await screen.findByRole('table', { name: /planes/i });
+  const links = within(table).getAllByRole('link', { name: /^Presupuesto · Plan del/ });
+  expect(links).toHaveLength(statement.plans.length);
+  expect(links[0]).toHaveAttribute(
+    'href',
+    `/print/patients/pat-1/treatment-plans/${statement.plans[0].id}`,
+  );
+  expect(links[0]).toHaveAttribute('target', '_blank');
+});
+
 it('ofrece imprimir en una vista aparte, en otra pestaña', async () => {
   mockedGet.mockResolvedValue(accountStatementFixture());
   render(<AccountStatementView token="tok" patientId="pat-1" />);
