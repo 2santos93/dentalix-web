@@ -1,14 +1,10 @@
-import { formatTime } from '@/lib/format/date';
+import { formatTime, formatDateLabel } from '@/lib/format/date';
 import type { Appointment } from './appointments-api';
 import type { ConfirmationAppointment } from './confirmations-api';
 
 /** "martes, 20 de octubre" — en la zona horaria local, como el resto de la agenda. */
 export function longAppointmentDay(iso: string): string {
-  return new Date(iso).toLocaleDateString('es', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'long',
-  });
+  return formatDateLabel(iso, { weekday: 'long', day: 'numeric', month: 'long' });
 }
 
 /**

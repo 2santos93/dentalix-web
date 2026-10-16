@@ -2,6 +2,7 @@
 import type { Appointment } from '@/lib/appointments/appointments-api';
 import { StatusBadge, formatTimeRange, patientLabel } from './appointment-display';
 import { SectionError } from '@/components/errors/section-error';
+import { formatDateLabel } from '@/lib/format/date';
 
 // Copy as constants (i18n-ready, es-first) — matches day-agenda.tsx's convention.
 const copy = {
@@ -32,8 +33,7 @@ function weekDates(weekStart: string): string[] {
 
 /** Header label for a day column, e.g. "lun, 09/03". */
 function dayHeaderLabel(date: string): string {
-  const d = new Date(`${date}T00:00:00`);
-  return d.toLocaleDateString('es', { weekday: 'short', day: '2-digit', month: '2-digit' });
+  return formatDateLabel(date, { weekday: 'short', day: '2-digit', month: '2-digit' });
 }
 
 interface WeekAgendaProps {

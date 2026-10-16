@@ -1,7 +1,7 @@
 'use client';
 import type { Appointment, AppointmentStatus } from '@/lib/appointments/appointments-api';
 import { monthGridDays } from '@/lib/appointments/calendar-grid';
-import { formatTime } from '@/lib/format/date';
+import { formatTime, formatDateLabel } from '@/lib/format/date';
 import { patientLabel } from './appointment-display';
 import { SectionError } from '@/components/errors/section-error';
 
@@ -61,7 +61,7 @@ function groupByDay(appointments: Appointment[]): Record<string, Appointment[]> 
 }
 
 function longDayLabel(date: string): string {
-  return new Date(`${date}T00:00:00`).toLocaleDateString('es', { day: 'numeric', month: 'long' });
+  return formatDateLabel(date, { day: 'numeric', month: 'long' });
 }
 
 /**

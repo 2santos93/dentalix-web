@@ -63,6 +63,6 @@ describe('addMonths', () => {
 
 describe('monthLabel', () => {
   it('formats month + year in the given locale', () => {
-    expect(monthLabel('2026-03-15', 'es')).toMatch(/marzo.*2026/i);
+    expect(monthLabel('2026-03-15')).toMatch(/marzo.*2026/i);
   });
 });

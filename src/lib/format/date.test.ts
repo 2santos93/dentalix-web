@@ -1,6 +1,7 @@
 import {
   formatCivilDate,
   formatDate,
+  formatDateLabel,
   formatDateTime,
   formatDateTimeInZone,
   formatTime,
@@ -96,5 +97,28 @@ describe('zonedDayStart (civil day in a zone → UTC instant)', () => {
   it('null for a malformed day', () => {
     expect(zonedDayStart('16/10/2026', 'America/Bogota')).toBeNull();
     expect(zonedDayStart('2026-02-30', 'America/Bogota')).toBeNull();
+  });
+});
+
+describe('formatDateLabel (DX-063)', () => {
+  it('un día civil YYYY-MM-DD se lee como ese día, en español', () => {
+    expect(formatDateLabel('2026-03-15', { weekday: 'long', day: 'numeric', month: 'long' })).toBe(
+      'domingo, 15 de marzo',
+    );
+    expect(formatDateLabel('2026-03-01', { month: 'long', year: 'numeric' })).toBe('marzo de 2026');
+  });
+
+  it('un instante, en la zona local', () => {
+    expect(formatDateLabel('2026-10-20T15:00:00.000Z', { weekday: 'long', day: 'numeric', month: 'long' })).toBe(
+      'martes, 20 de octubre',
+    );
+    expect(formatDateLabel(new Date(2026, 2, 9), { weekday: 'short', day: '2-digit', month: '2-digit' })).toBe(
+      'lun, 09/03',
+    );
+  });
+
+  it('valor vacío o inválido → fallback', () => {
+    expect(formatDateLabel(null, { day: 'numeric' })).toBe('—');
+    expect(formatDateLabel('no-es-fecha', { day: 'numeric' }, '')).toBe('');
   });
 });

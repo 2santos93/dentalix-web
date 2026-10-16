@@ -1,4 +1,5 @@
 import { localDayRange } from './day-range';
+import { formatDateLabel } from '@/lib/format/date';
 
 /**
  * A single cell of the month calendar grid: its local `YYYY-MM-DD` date and
@@ -72,9 +73,6 @@ export function addMonths(date: string, delta: number): string {
 }
 
 /** Human month + year label for the calendar header, e.g. "marzo 2026" (es). */
-export function monthLabel(date: string, locale = 'es'): string {
-  return new Date(`${date}T00:00:00`).toLocaleDateString(locale, {
-    month: 'long',
-    year: 'numeric',
-  });
+export function monthLabel(date: string): string {
+  return formatDateLabel(date, { month: 'long', year: 'numeric' });
 }
