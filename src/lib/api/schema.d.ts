@@ -350,6 +350,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/patients/retention/expiring": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Historias que salen de retención legal (solo ADMIN)
+         * @description DX-039. Pacientes vivos cuya HC ya no está en retención o deja de estarlo dentro de `withinDays` (NONE: 15 años, DOUBLE: 30 años desde la última atención; PERMANENT nunca sale). Orden: la que antes vence. Paginada, con tope. Solo informa: no purga nada.
+         */
+        get: operations["PatientsController_retentionExpiring"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/patients/{id}": {
         parameters: {
             query?: never;
@@ -360,10 +380,54 @@ export interface paths {
         get: operations["PatientsController_get"];
         put?: never;
         post?: never;
-        delete?: never;
+        /**
+         * Archivar paciente (borrado blando, solo ADMIN)
+         * @description DX-039. Retira al paciente de los listados (`deletedAt`); su HC se conserva siempre. Si la HC está en retención legal (15 años desde la última atención, 30 con DOUBLE, siempre con PERMANENT) responde 409 `CLINICAL_RECORD_RETENTION` con la fecha hasta la que se conserva. Un paciente sin atenciones clínicas se archiva.
+         */
+        delete: operations["PatientsController_archive"];
         options?: never;
         head?: never;
         patch: operations["PatientsController_update"];
+        trace?: never;
+    };
+    "/api/v1/patients/{id}/retention": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Cambiar la retención extendida de la HC (solo ADMIN)
+         * @description DX-039. NONE (15 años), DOUBLE (30) o PERMANENT. Motivo obligatorio: queda con el autor y la fecha en el rastro de retención del paciente; el registro de auditoría guarda quién y cuándo (sin el motivo).
+         */
+        patch: operations["PatientsController_changeRetention"];
+        trace?: never;
+    };
+    "/api/v1/patients/{id}/partial-suppression": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Supresión parcial de datos no clínicos (solo ADMIN)
+         * @description DX-039. Para un paciente cuya HC está en retención (y por eso no se puede archivar): vacía teléfono, email, dirección, notas administrativas y contacto de emergencia, y retira la autorización de marketing vigente. Conserva la HC y la identificación que exige (nombre, documento, nacimiento, sexo, residencia, estado civil, ocupación, aseguradora, médico y acudiente). Motivo obligatorio. 409 `NOT_UNDER_RETENTION` si la HC no está en retención (se archiva).
+         */
+        post: operations["PatientsController_suppress"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/catalog/items": {
@@ -1839,6 +1903,11 @@ export interface components {
             /** @description Anamnesis inicial (versión 1). Solo roles clínicos (DENTIST, ASSISTANT, ADMIN); con RECEPTION la petición se rechaza con 403. */
             medicalHistory?: components["schemas"]["SaveMedicalHistoryDto"];
         };
+        /**
+         * @description Retención extendida de la HC: NONE = 15 años desde la última atención (Res. 839/2017), DOUBLE = 30 años, PERMANENT = nunca se libera. Solo ADMIN la cambia.
+         * @enum {string}
+         */
+        RetentionExtension: "NONE" | "DOUBLE" | "PERMANENT";
         PatientDto: {
             /** Format: uuid */
             id: string;
@@ -1887,12 +1956,38 @@ export interface components {
             guardianDocNumber: string | null;
             /** Format: uuid */
             createdById: string | null;
+            /**
+             * Format: date-time
+             * @description DX-039: fecha de la última atención clínica (evolución registrada o cita atendida). La mantiene la BD y nunca retrocede.
+             */
+            lastAttentionAt: string | null;
+            /** @description Retención extendida de la HC: NONE = 15 años desde la última atención (Res. 839/2017), DOUBLE = 30 años, PERMANENT = nunca se libera. Solo ADMIN la cambia. */
+            retentionExtended: components["schemas"]["RetentionExtension"];
+            /**
+             * Format: date
+             * @description Último día (incluido) en que la HC debe conservarse. null sin atenciones clínicas o con retención PERMANENT.
+             * @example 2039-02-28
+             */
+            retentionUntil: string | null;
+            /** @description Si hoy la HC está en retención legal: archivar o borrar al paciente responde 409 CLINICAL_RECORD_RETENTION. */
+            underRetention: boolean;
+            /**
+             * Format: date-time
+             * @description DX-039: cuándo se vaciaron sus datos no clínicos (supresión parcial).
+             */
+            partiallySuppressedAt: string | null;
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
             updatedAt: string;
         };
         ListPatientsResponseDto: {
+            items: components["schemas"]["PatientDto"][];
+            total: number;
+            page: number;
+            pageSize: number;
+        };
+        ListRetentionExpiringResponseDto: {
             items: components["schemas"]["PatientDto"][];
             total: number;
             page: number;
@@ -1932,6 +2027,26 @@ export interface components {
             emergencyContactPhone?: string | null;
             guardianName?: string | null;
             guardianDocNumber?: string | null;
+        };
+        ClinicalRecordRetentionErrorDto: {
+            /** @example 409 */
+            statusCode: number;
+            /** @example CLINICAL_RECORD_RETENTION */
+            code: string;
+            /** @example La historia clínica de este paciente está en retención legal hasta el 28/02/2039 (…) */
+            message: string;
+            /** Format: date */
+            retentionUntil: string | null;
+        };
+        SetRetentionExtensionDto: {
+            /** @description Motivo (obligatorio). Queda en el rastro de retención del paciente con el autor y la fecha; no se copia al registro de auditoría. */
+            reason: string;
+            /** @description NONE = 15 años, DOUBLE = 30 años, PERMANENT = nunca se libera (p. ej. víctimas de violaciones de DD. HH./DIH). */
+            retentionExtended: components["schemas"]["RetentionExtension"];
+        };
+        PartialSuppressionDto: {
+            /** @description Motivo (obligatorio). Queda en el rastro de retención del paciente con el autor y la fecha; no se copia al registro de auditoría. */
+            reason: string;
         };
         CreateCatalogItemDto: {
             /** @description Unique code within the tenant */
@@ -4743,6 +4858,38 @@ export interface operations {
             };
         };
     };
+    PatientsController_retentionExpiring: {
+        parameters: {
+            query?: {
+                /** @description Horizonte en días: incluye las historias ya vencidas y las que vencen dentro de este plazo. */
+                withinDays?: number;
+                page?: number;
+                /** @description Tope: 50 (un valor mayor se recorta). */
+                pageSize?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ListRetentionExpiringResponseDto"];
+                };
+            };
+            /** @description Rol distinto de ADMIN */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     PatientsController_get: {
         parameters: {
             query?: never;
@@ -4760,6 +4907,42 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["PatientDto"];
+                };
+            };
+        };
+    };
+    PatientsController_archive: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Paciente archivado */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Rol distinto de ADMIN */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description HC en retención legal */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClinicalRecordRetentionErrorDto"];
                 };
             };
         };
@@ -4786,6 +4969,77 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["PatientDto"];
                 };
+            };
+        };
+    };
+    PatientsController_changeRetention: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetRetentionExtensionDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PatientDto"];
+                };
+            };
+            /** @description Rol distinto de ADMIN */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientsController_suppress: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PartialSuppressionDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PatientDto"];
+                };
+            };
+            /** @description Rol distinto de ADMIN */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La HC no está en retención */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

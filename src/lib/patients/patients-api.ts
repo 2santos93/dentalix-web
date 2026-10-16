@@ -1,4 +1,4 @@
-import { apiFetch } from '@/lib/api/client';
+import { apiFetch, apiFetchOrNull } from '@/lib/api/client';
 import type { components, paths } from '@/lib/api/schema';
 import type { ClinicalHistoryValue } from '@/lib/clinical/clinical-types';
 
@@ -69,9 +69,27 @@ export interface Patient {
   guardianName?: string | null;
   guardianDocNumber?: string | null;
   createdById: string | null;
+  // DX-039 · retención legal de la HC (Res. 839/2017). Opcionales: los
+  // fixtures anteriores no los traen; la API siempre los manda.
+  lastAttentionAt?: string | null;
+  retentionExtended?: RetentionExtension;
+  /** Último día (incluido, `YYYY-MM-DD`); null sin atenciones o PERMANENT. */
+  retentionUntil?: string | null;
+  underRetention?: boolean;
+  partiallySuppressedAt?: string | null;
   createdAt: string;
   updatedAt: string;
 }
+
+export type RetentionExtension = components['schemas']['RetentionExtension'];
+export type SetRetentionExtensionInput =
+  components['schemas']['SetRetentionExtensionDto'];
+export type PartialSuppressionInput =
+  components['schemas']['PartialSuppressionDto'];
+
+/** Mismos topes que el DTO de la API (`retention.dto.ts`). */
+export const RETENTION_REASON_MIN = 10;
+export const RETENTION_REASON_MAX = 500;
 
 export interface PatientsListResponse {
   items: Patient[];
@@ -140,6 +158,41 @@ export async function updatePatient(
 ): Promise<Patient> {
   return apiFetch<Patient>(`/patients/${id}`, {
     method: 'PATCH',
+    body: input,
+    token,
+  });
+}
+
+/**
+ * `DELETE /patients/:id` — archivar (borrado blando, solo ADMIN). Con la HC en
+ * retención legal responde 409 `CLINICAL_RECORD_RETENTION` con el mensaje en
+ * español y la fecha (DX-039).
+ */
+export async function archivePatient(token: string, id: string): Promise<void> {
+  await apiFetchOrNull<null>(`/patients/${id}`, { method: 'DELETE', token });
+}
+
+/** `PATCH /patients/:id/retention` — retención extendida (solo ADMIN). */
+export async function setRetentionExtension(
+  token: string,
+  id: string,
+  input: SetRetentionExtensionInput,
+): Promise<Patient> {
+  return apiFetch<Patient>(`/patients/${id}/retention`, {
+    method: 'PATCH',
+    body: input,
+    token,
+  });
+}
+
+/** `POST /patients/:id/partial-suppression` — supresión parcial (solo ADMIN). */
+export async function partiallySuppressPatient(
+  token: string,
+  id: string,
+  input: PartialSuppressionInput,
+): Promise<Patient> {
+  return apiFetch<Patient>(`/patients/${id}/partial-suppression`, {
+    method: 'POST',
     body: input,
     token,
   });
