@@ -1,6 +1,6 @@
-import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
+import { test, expect, type APIRequestContext } from './support/test';
 import { randomUUID } from 'node:crypto';
-import { registerAndLogin } from './support/auth';
+import { accessTokenOf, registerAndLogin, sessionCookie } from './support/auth';
 import { API_URL } from './support/urls';
 
 /**
@@ -24,12 +24,6 @@ const subdomain = `test-clinic-rx-${suffix}`;
 const email = `test.user.rx.${suffix}@example.com`;
 const receptionEmail = `test.reception.rx.${suffix}@example.com`;
 const password = 'Password123!';
-
-async function accessTokenOf(page: Page): Promise<string> {
-  const raw = await page.evaluate(() => localStorage.getItem('dentalix-auth'));
-  return (JSON.parse(raw as string) as { state?: { accessToken?: string | null } }).state
-    ?.accessToken as string;
-}
 
 function api(request: APIRequestContext, origin: string, token?: string) {
   const headers: Record<string, string> = { 'X-Tenant-Host': new URL(origin).host };
@@ -165,6 +159,13 @@ test('emitir con alerta de alergia, imprimir en A4, anular; recepción sin pesta
   await reception.getByLabel('Correo electrónico').fill(receptionEmail);
   await reception.getByLabel('Contraseña', { exact: true }).fill(password);
   await reception.getByRole('button', { name: 'Iniciar sesión' }).click();
+  // Desde DX-062 la sesión no deja nada en localStorage: el refresh vive en la
+  // cookie HttpOnly del host de la clínica.
+  await expect
+    .poll(async () => Boolean((await sessionCookie(reception, origin))?.httpOnly), {
+      timeout: 15_000,
+    })
+    .toBe(true);
   await reception.waitForURL(/\/patients$/, { timeout: 15_000 });
   await reception.goto(`${origin}/patients/${patient.id}?tab=prescriptions`);
   await expect(reception.getByRole('tab', { name: 'Datos' })).toHaveAttribute(
