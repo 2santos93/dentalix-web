@@ -8,6 +8,10 @@ import {
   type CreateAppointmentInput,
 } from '@/lib/appointments/appointments-api';
 import { listStaff, type StaffMember } from '@/lib/appointments/staff-api';
+import {
+  listAppointmentTypes,
+  type AppointmentType,
+} from '@/lib/appointments/appointment-types-api';
 import { listPatients, type Patient } from '@/lib/patients/patients-api';
 import { useDebouncedValue } from '@/lib/hooks/use-debounced-value';
 import {
@@ -50,6 +54,11 @@ const copy = {
   startTimeLabel: 'Hora de inicio',
   endTimeLabel: 'Hora de fin',
   reasonLabel: 'Motivo (opcional)',
+  typeLabel: 'Tipo de cita (opcional)',
+  typeNone: 'Sin tipo',
+  typeOption: (name: string, minutes: number) => `${name} · ${minutes} min`,
+  typeHint: 'El tipo fija la duración: la hora de fin se calcula sola.',
+  typesFieldError: 'No se pudieron cargar',
   submit: 'Agendar cita',
   submitting: 'Guardando…',
   patientsFieldError: 'No se pudieron cargar',
@@ -119,6 +128,8 @@ interface AppointmentFormProps {
   defaultStartTime?: string;
   /** Pre-rellena la hora de fin ("HH:mm"). Opcional/backward-compatible. */
   defaultEndTime?: string;
+  /** DX-121: pre-selecciona el profesional (p. ej. «Nueva cita» de su columna). */
+  defaultProviderId?: string;
 }
 
 /**
@@ -142,6 +153,7 @@ export function AppointmentForm({
   defaultDate,
   defaultStartTime,
   defaultEndTime,
+  defaultProviderId,
 }: AppointmentFormProps) {
   const [patients, setPatients] = useState<Patient[]>([]);
   const [patientsLoading, setPatientsLoading] = useState(true);
@@ -163,7 +175,14 @@ export function AppointmentForm({
   // short label (`copy.staffFieldError`), never the server's message.
   const [staffError, setStaffError] = useState(false);
   const [staffReloadKey, setStaffReloadKey] = useState(0);
-  const [providerId, setProviderId] = useState('');
+  const [providerId, setProviderId] = useState(defaultProviderId ?? '');
+
+  // DX-121: tipos de cita ACTIVOS (la API no devuelve los desactivados). Es
+  // opcional: si no cargan, se agenda igual sin tipo.
+  const [types, setTypes] = useState<AppointmentType[]>([]);
+  const [typesError, setTypesError] = useState(false);
+  const [typesReloadKey, setTypesReloadKey] = useState(0);
+  const [appointmentTypeId, setAppointmentTypeId] = useState('');
 
   const [date, setDate] = useState(defaultDate ?? '');
   const [startTime, setStartTime] = useState(defaultStartTime ?? '');
@@ -247,6 +266,45 @@ export function AppointmentForm({
     };
   }, [token, staffReloadKey]);
 
+  useEffect(() => {
+    let cancelled = false;
+    listAppointmentTypes(token)
+      .then((res) => {
+        if (cancelled) return;
+        setTypes(res);
+        setTypesError(false);
+      })
+      .catch(() => {
+        if (!cancelled) setTypesError(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token, typesReloadKey]);
+
+  const selectedType = types.find((t) => t.id === appointmentTypeId) ?? null;
+
+  /** Con tipo elegido, la hora de fin es inicio + su duración. */
+  function endFor(start: string, type: AppointmentType | null): string | null {
+    if (!type || !start) return null;
+    const [h, m] = start.split(':').map(Number);
+    const total = h * 60 + m + type.durationMinutes;
+    if (total >= 24 * 60) return null;
+    return `${String(Math.floor(total / 60)).padStart(2, '0')}:${String(total % 60).padStart(2, '0')}`;
+  }
+
+  function handleTypeChange(id: string) {
+    setAppointmentTypeId(id);
+    const end = endFor(startTime, types.find((t) => t.id === id) ?? null);
+    if (end) setEndTime(end);
+  }
+
+  function handleStartTimeChange(value: string) {
+    setStartTime(value);
+    const end = endFor(value, selectedType);
+    if (end) setEndTime(end);
+  }
+
   function resetForm() {
     setPatientId('');
     setPatientQuery('');
@@ -256,6 +314,7 @@ export function AppointmentForm({
     setStartTime('');
     setEndTime('');
     setReason('');
+    setAppointmentTypeId('');
   }
 
   function handlePatientSelect(patient: Patient) {
@@ -322,6 +381,7 @@ export function AppointmentForm({
         providerId,
         start,
         end,
+        ...(appointmentTypeId ? { appointmentTypeId } : {}),
         ...(reason.trim() ? { reason: reason.trim() } : {}),
       };
       const created = await createAppointment(token, input);
@@ -514,6 +574,37 @@ export function AppointmentForm({
         )}
       </div>
 
+      <div className="flex flex-col gap-1">
+        <label htmlFor="appointment-type" className="text-sm font-medium text-ink">
+          {copy.typeLabel}
+        </label>
+        {typesError ? (
+          <FieldError
+            label={copy.typesFieldError}
+            onRetry={() => setTypesReloadKey((k) => k + 1)}
+            className="h-10 w-full"
+          />
+        ) : (
+          <select
+            id="appointment-type"
+            value={appointmentTypeId}
+            onChange={(e) => handleTypeChange(e.target.value)}
+            aria-describedby="appointment-type-hint"
+            className="flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+          >
+            <option value="">{copy.typeNone}</option>
+            {types.map((t) => (
+              <option key={t.id} value={t.id}>
+                {copy.typeOption(t.name, t.durationMinutes)}
+              </option>
+            ))}
+          </select>
+        )}
+        <p id="appointment-type-hint" className="text-xs text-muted">
+          {copy.typeHint}
+        </p>
+      </div>
+
       <div className="grid gap-4 sm:grid-cols-3">
         <div className="flex flex-col gap-1">
           <label htmlFor="appointment-date" className="text-sm font-medium text-ink">
@@ -553,7 +644,7 @@ export function AppointmentForm({
             type="time"
             required
             value={startTime}
-            onChange={(e) => setStartTime(e.target.value)}
+            onChange={(e) => handleStartTimeChange(e.target.value)}
             className="flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors placeholder:text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-50"
           />
         </div>
