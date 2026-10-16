@@ -1,6 +1,7 @@
-import { test, expect, type APIRequestContext, type Page } from './support/test';
+import { test, expect, type APIRequestContext } from './support/test';
 import { randomUUID } from 'node:crypto';
 import { accessTokenOf, registerAndLogin } from './support/auth';
+import { expectDialogInsideViewport, expectNoHorizontalScroll } from './support/layout';
 import { API_URL } from './support/urls';
 
 /**
@@ -75,21 +76,6 @@ async function seed(
   return { patientId: patient.id, catalogLabel };
 }
 
-async function expectNoHorizontalScroll(page: Page): Promise<void> {
-  const overflow = await page.evaluate(
-    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-  );
-  expect(overflow).toBeLessThanOrEqual(0);
-}
-
-async function expectInsideViewport(page: Page, locator: ReturnType<Page['getByRole']>): Promise<void> {
-  const box = await locator.boundingBox();
-  const width = page.viewportSize()?.width ?? 0;
-  expect(box).not.toBeNull();
-  expect(box!.x).toBeGreaterThanOrEqual(0);
-  expect(box!.x + box!.width).toBeLessThanOrEqual(width);
-}
-
 for (const viewport of VIEWPORTS) {
   test(`dentición mixta, exfoliar, origen, anular y carta a una fecha (${viewport.name})`, async ({ page }) => {
     test.setTimeout(120_000);
@@ -124,7 +110,7 @@ for (const viewport of VIEWPORTS) {
     await expect(dentitionDialog).toBeVisible();
     await expect(dentitionDialog.getByRole('checkbox', { name: /^Posición 15,/ })).toBeChecked();
     await dentitionDialog.getByLabel('Motivo').selectOption('EXFOLIATION');
-    await expectInsideViewport(page, dentitionDialog);
+    await expectDialogInsideViewport(page, dentitionDialog);
     await expectNoHorizontalScroll(page);
     await dentitionDialog.getByRole('button', { name: 'Guardar dentición' }).click();
     await expect(dentitionDialog).toBeHidden({ timeout: 10_000 });
@@ -156,7 +142,7 @@ for (const viewport of VIEWPORTS) {
     await expect(voidDialog).toBeVisible();
     await voidDialog.getByRole('button', { name: 'Anular registro' }).click();
     await expect(voidDialog.getByText('Escribe el motivo de la anulación.')).toBeVisible();
-    await expectInsideViewport(page, voidDialog);
+    await expectDialogInsideViewport(page, voidDialog);
     await expectNoHorizontalScroll(page);
     await voidDialog.getByLabel('Motivo').fill(VOID_REASON);
     await voidDialog.getByRole('button', { name: 'Anular registro' }).click();
