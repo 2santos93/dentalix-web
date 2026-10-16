@@ -7,6 +7,7 @@ import {
   accountStatementPrintHref,
   getAccountStatement,
   type AccountStatement,
+  type AccountStatementMovement,
   type AccountStatementSummary,
 } from '@/lib/account-statement/account-statement-api';
 import {
@@ -15,6 +16,7 @@ import {
   methodLabel,
   planNamer,
   statementCopy,
+  voidedDetail,
 } from '@/lib/account-statement/presentation';
 import {
   INSTALLMENT_STATUS_BADGE_VARIANT,
@@ -324,6 +326,7 @@ function StatementBody({ statement }: { statement: AccountStatement }) {
                     </TableCell>
                     <TableCell className="text-muted" data-label={copy.colPlan}>
                       {planName(m.treatmentPlanId)}
+                      <VoidedDetail movement={m} />
                     </TableCell>
                     <TableCell data-label={copy.colMethod}>
                       {m.method ? (
@@ -361,6 +364,15 @@ function StatementBody({ statement }: { statement: AccountStatement }) {
       <p className="max-w-[68ch] text-xs text-muted">{statementCopy.footnote}</p>
     </div>
   );
+}
+
+/**
+ * «Anulado por X: motivo» (SEC-013) bajo el plan del movimiento: es la columna
+ * de texto, con ancho para un motivo. Nada para un abono activo.
+ */
+function VoidedDetail({ movement }: { movement: AccountStatementMovement }) {
+  const detail = voidedDetail(movement);
+  return detail ? <p className="mt-0.5 max-w-[40ch] text-xs text-muted">{detail}</p> : null;
 }
 
 function SubSection({ title, children }: { title: string; children: React.ReactNode }) {

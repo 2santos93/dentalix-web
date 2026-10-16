@@ -547,7 +547,7 @@ describe('TreatmentPlansTab', () => {
     await user.click(within(row).getByRole('button', { name: /anular/i }));
 
     const confirm = await screen.findByRole('dialog', { name: /anular este abono/i });
-    expect(confirm).toHaveTextContent(/no se borra de la base de datos/i);
+    expect(confirm).toHaveTextContent(/quién lo anuló, cuándo y por qué/i);
     await user.click(within(confirm).getByRole('button', { name: 'Cancelar' }));
 
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
@@ -675,9 +675,12 @@ describe('TreatmentPlansTab', () => {
     // La fila ya no anula directamente: abre la confirmación.
     const confirm = await screen.findByRole('dialog', { name: /anular este abono/i });
     expect(mockedVoidPayment).not.toHaveBeenCalled();
+    // paste, no type: teclear tecla a tecla roza el timeout de 5 s aquí.
+    await user.click(within(confirm).getByLabelText(/motivo de la anulación/i));
+    await user.paste('Cobro duplicado');
     await user.click(within(confirm).getByRole('button', { name: 'Anular abono' }));
 
-    await waitFor(() => expect(mockedVoidPayment).toHaveBeenCalledWith('tok', 'pay-1'));
+    await waitFor(() => expect(mockedVoidPayment).toHaveBeenCalledWith('tok', 'pay-1', 'Cobro duplicado'));
     await waitFor(() => expect(mockedGetPlanBalance).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(mockedListPayments).toHaveBeenCalledTimes(2));
     expect(await screen.findByText(/este plan todavía no tiene abonos/i)).toBeInTheDocument();
@@ -996,6 +999,9 @@ describe('TreatmentPlansTab', () => {
 
       await user.click(within(row).getByRole('button', { name: /anular/i }));
       const confirm = await screen.findByRole('dialog', { name: /anular este abono/i });
+      // paste, no type: teclear tecla a tecla roza el timeout de 5 s aquí.
+      await user.click(within(confirm).getByLabelText(/motivo de la anulación/i));
+      await user.paste('Cobro duplicado');
       await user.click(within(confirm).getByRole('button', { name: 'Anular abono' }));
 
       const toastText = await screen.findByText('No se pudo refrescar el saldo');
@@ -1025,11 +1031,40 @@ describe('TreatmentPlansTab', () => {
 
       await user.click(within(row).getByRole('button', { name: /anular/i }));
       const confirm = await screen.findByRole('dialog', { name: /anular este abono/i });
+      // paste, no type: teclear tecla a tecla roza el timeout de 5 s aquí.
+      await user.click(within(confirm).getByLabelText(/motivo de la anulación/i));
+      await user.paste('Cobro duplicado');
       await user.click(within(confirm).getByRole('button', { name: 'Anular abono' }));
 
       const alert = await screen.findByText('No se pudo anular');
       expect(alert.closest('[role="alert"]')).not.toBeNull();
       expect(screen.getByRole('dialog', { name: /anular este abono/i })).toBeInTheDocument();
+    });
+
+    it('anular un abono que ya no está activo (404 en inglés de la API) explica en español qué pasó', async () => {
+      mockedListPlans.mockResolvedValue([plan1]);
+      mockedGetPlan.mockResolvedValue(plan1Detail);
+      mockedGetPlanBalance.mockResolvedValue(balance1);
+      mockedListPayments.mockResolvedValue([payment1]);
+      mockedVoidPayment.mockRejectedValueOnce(new ApiError(404, 'Payment not found'));
+
+      const user = userEvent.setup();
+      render(<TreatmentPlansTab patientId="pat-1" token="tok" />);
+      const paymentsTable = await openPaymentsTable(user);
+      const row = within(paymentsTable)
+        .getByText(expectedCurrencyText(payment1.amount))
+        .closest('tr') as HTMLTableRowElement;
+
+      await user.click(within(row).getByRole('button', { name: /anular/i }));
+      const confirm = await screen.findByRole('dialog', { name: /anular este abono/i });
+      // paste, no type: teclear tecla a tecla roza el timeout de 5 s aquí.
+      await user.click(within(confirm).getByLabelText(/motivo de la anulación/i));
+      await user.paste('Cobro duplicado');
+      await user.click(within(confirm).getByRole('button', { name: 'Anular abono' }));
+
+      const alert = await within(confirm).findByRole('alert');
+      expect(alert).toHaveTextContent(/ya estaba anulado o ya no existe/i);
+      expect(alert).not.toHaveTextContent('Payment not found');
     });
 
     it('agregar un ítem que falla en el backend se muestra en línea junto al formulario (escalón 4: addItemError)', async () => {

@@ -2,6 +2,7 @@ import { apiFetch, apiFetchOrNull } from '@/lib/api/client';
 import type { components, paths } from '@/lib/api/schema';
 
 export type RecordPaymentInput = components['schemas']['RecordPaymentDto'];
+export type VoidPaymentInput = components['schemas']['VoidPaymentDto'];
 
 // Re-used from the generated OpenAPI schema (`RecordPaymentDto.method` carries
 // `@ApiPropertyOptional({ enum: ... })`, mirroring the backend's payment
@@ -64,16 +65,19 @@ export async function getPlanBalance(token: string, planId: string): Promise<Pla
 }
 
 /**
- * `DELETE /payments/:id` — voids the abono (`deletedAt` set on the backend,
- * see `VoidPaymentUseCase`). The route responds `200` with an EMPTY body, so
- * this uses `apiFetchOrNull` — same rationale as `removeItem` in
- * `treatment-plans-api.ts` (and the removed `voidSale` in `sales-api.ts`) —
- * instead of `apiFetch`, which would throw trying to `res.json()` an empty
- * response.
+ * `DELETE /payments/:id` — anula el abono (`deletedAt` en el backend, ver
+ * `VoidPaymentUseCase`). El motivo es obligatorio (3–300 caracteres): viaja en
+ * el cuerpo y queda guardado junto a quién y cuándo anuló (SEC-013). Recepción
+ * solo puede anular abonos suyos del mismo día; si no, 403 con un mensaje que
+ * se muestra tal cual. La ruta responde `200` con cuerpo VACÍO, así que usa
+ * `apiFetchOrNull` — mismo motivo que `removeItem` en `treatment-plans-api.ts`
+ * — en vez de `apiFetch`, que fallaría al hacer `res.json()` de una respuesta
+ * vacía.
  */
-export async function voidPayment(token: string, id: string): Promise<void> {
+export async function voidPayment(token: string, id: string, reason: string): Promise<void> {
   await apiFetchOrNull<null>(`/payments/${id}`, {
     method: 'DELETE',
+    body: { reason } satisfies VoidPaymentInput,
     token,
   });
 }

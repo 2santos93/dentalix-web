@@ -6,6 +6,8 @@ import { ArrowLeft } from 'lucide-react';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { PatientCreateWizard } from '@/components/patients/patient-create-wizard';
 import { PageHeader } from '@/components/shared/page-header';
+import { getTokenRole } from '@/lib/auth/token-role';
+import { canWriteClinicalHistory } from '@/lib/clinical/clinical-roles';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
@@ -51,7 +53,10 @@ export default function NewPatientPage() {
         <ArrowLeft className="size-4" /> {copy.backLink}
       </Link>
       <PageHeader title={copy.title} />
-      <PatientCreateWizard token={accessToken} />
+      <PatientCreateWizard
+        token={accessToken}
+        canWriteClinicalHistory={canWriteClinicalHistory(getTokenRole(accessToken))}
+      />
     </div>
   );
 }

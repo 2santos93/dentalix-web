@@ -38,6 +38,8 @@ const copy = {
   summaryAllergies: (n: number) => `Alergias registradas: ${n}`,
   summaryConditions: (n: number) => `Condiciones marcadas: ${n}`,
   summaryMedications: (n: number) => `Medicamentos registrados: ${n}`,
+  noClinicalHistoryNote:
+    'La historia clínica (antecedentes, alergias, medicamentos y hábitos) la completará el equipo clínico desde la ficha del paciente.',
   submitLabel: 'Guardar',
   genericError: 'No pudimos crear el paciente. Intenta de nuevo.',
 };
@@ -49,6 +51,9 @@ const STEPS: WizardStep[] = [
   { key: 'habitos', label: 'Hábitos' },
   { key: 'consentimiento', label: 'Consentimiento' },
 ];
+
+/** Pasos que escriben la anamnesis v1: solo para roles clínicos (SEC-005). */
+const CLINICAL_STEP_KEYS = new Set(['antecedentes', 'alergias', 'habitos']);
 
 const docTypeOptions: { value: DocType; label: string }[] = [
   { value: 'CC', label: 'Cédula de ciudadanía' },
@@ -81,12 +86,22 @@ function historyHasContent(history: ClinicalHistoryValue): boolean {
 
 interface PatientCreateWizardProps {
   token: string;
+  /**
+   * Si quien da de alta puede escribir historia clínica (`CLINICAL_ROLES`).
+   * Sin permiso (recepción) el alta no muestra los pasos de anamnesis ni
+   * envía `medicalHistory`: la API lo rechazaría con 403.
+   */
+  canWriteClinicalHistory: boolean;
 }
 
 /** Multi-step alta: datos básicos + historia clínica estructurada + consentimiento, en un solo submit. */
-export function PatientCreateWizard({ token }: PatientCreateWizardProps) {
+export function PatientCreateWizard({ token, canWriteClinicalHistory }: PatientCreateWizardProps) {
   const router = useRouter();
   const [step, setStep] = useState(0);
+  const steps = canWriteClinicalHistory
+    ? STEPS
+    : STEPS.filter((s) => !CLINICAL_STEP_KEYS.has(s.key));
+  const stepKey = steps[step]?.key;
 
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
@@ -160,7 +175,9 @@ export function PatientCreateWizard({ token }: PatientCreateWizardProps) {
         // `ClinicalHistoryValue` (patients-api.ts overrides the generated
         // field, whose nested shape Swagger can't introspect), so `history`
         // is assignable as-is — no cast.
-        ...(historyHasContent(history) ? { medicalHistory: history } : {}),
+        ...(canWriteClinicalHistory && historyHasContent(history)
+          ? { medicalHistory: history }
+          : {}),
         ...(dataConsentAccepted
           ? {
               dataConsentAccepted: true,
@@ -180,8 +197,8 @@ export function PatientCreateWizard({ token }: PatientCreateWizardProps) {
 
   return (
     <div className="flex flex-col gap-6">
-      <Wizard steps={STEPS} current={step} onStepChange={goToStep}>
-        {step === 0 && (
+      <Wizard steps={steps} current={step} onStepChange={goToStep}>
+        {stepKey === 'datos' && (
           <div className="flex flex-col gap-5">
             <div className="grid gap-5 sm:grid-cols-2">
               <FormField htmlFor="pcw-first-name" label={copy.firstNameLabel}>
@@ -313,7 +330,7 @@ export function PatientCreateWizard({ token }: PatientCreateWizardProps) {
           </div>
         )}
 
-        {step === 1 && (
+        {stepKey === 'antecedentes' && (
           <ClinicalHistoryFields
             value={history}
             onChange={setHistory}
@@ -321,7 +338,7 @@ export function PatientCreateWizard({ token }: PatientCreateWizardProps) {
           />
         )}
 
-        {step === 2 && (
+        {stepKey === 'alergias' && (
           <ClinicalHistoryFields
             value={history}
             onChange={setHistory}
@@ -331,18 +348,24 @@ export function PatientCreateWizard({ token }: PatientCreateWizardProps) {
 
         {/* Last clinical step owns the shared "Notas" field, so it appears once
             in the wizard instead of on every clinical step. */}
-        {step === 3 && (
+        {stepKey === 'habitos' && (
           <ClinicalHistoryFields value={history} onChange={setHistory} sections={['habits', 'notes']} />
         )}
 
-        {step === 4 && (
+        {stepKey === 'consentimiento' && (
           <div className="flex flex-col gap-4">
-            <div className="flex flex-col gap-1 rounded-lg border border-border p-3 text-sm text-ink">
-              <p className="t-label text-ink">{copy.summaryTitle}</p>
-              <p>{copy.summaryAllergies(history.allergies?.length ?? 0)}</p>
-              <p>{copy.summaryConditions(history.conditions?.length ?? 0)}</p>
-              <p>{copy.summaryMedications(history.medications?.length ?? 0)}</p>
-            </div>
+            {canWriteClinicalHistory ? (
+              <div className="flex flex-col gap-1 rounded-lg border border-border p-3 text-sm text-ink">
+                <p className="t-label text-ink">{copy.summaryTitle}</p>
+                <p>{copy.summaryAllergies(history.allergies?.length ?? 0)}</p>
+                <p>{copy.summaryConditions(history.conditions?.length ?? 0)}</p>
+                <p>{copy.summaryMedications(history.medications?.length ?? 0)}</p>
+              </div>
+            ) : (
+              <p className="rounded-lg border border-border p-3 text-sm text-muted">
+                {copy.noClinicalHistoryNote}
+              </p>
+            )}
             <label className="flex items-center gap-2 text-sm text-ink">
               <input
                 type="checkbox"
@@ -358,7 +381,7 @@ export function PatientCreateWizard({ token }: PatientCreateWizardProps) {
 
       <WizardNav
         current={step}
-        total={STEPS.length}
+        total={steps.length}
         onBack={() => goToStep(step - 1)}
         onNext={() => goToStep(step + 1)}
         onSubmit={handleSubmit}

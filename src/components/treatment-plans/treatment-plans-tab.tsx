@@ -57,6 +57,8 @@ import {
   PAYMENT_METHOD_OPTIONS,
 } from '@/lib/payments/payment-method';
 import { PaymentReceipt } from './payment-receipt';
+import { VoidPaymentModal } from '@/components/payments/void-payment-modal';
+import { getTokenRole } from '@/lib/auth/token-role';
 import { PaymentPlanSection } from './payment-plan-section';
 import { SectionError } from '@/components/errors/section-error';
 import { InlineError } from '@/components/errors/inline-error';
@@ -209,16 +211,13 @@ const copy = {
   paymentNotesFallback: '—',
   voidPaymentAction: 'Anular',
   voidingPayment: 'Anulando…',
-  voidConfirmTitle: '¿Anular este abono?',
-  // Mismo soft-delete que el ítem: `listPayments` filtra por `deletedAt: null`,
-  // así que el abono desaparece de la tabla. Por eso NO se promete que quede
-  // "registrado como anulado en el historial" — en pantalla no queda nada.
-  voidConfirmDescription:
-    'El abono sale de la lista y deja de contar en el saldo, que se recalcula. No se borra de la base de datos, pero ya no podrás verlo desde la aplicación. Los demás abonos y el plan no se ven afectados.',
-  voidConfirm: 'Anular abono',
   // Recibo imprimible (RECIBO-T1).
   receiptAction: 'Recibo',
   genericVoidPaymentError: 'No pudimos anular el abono. Intenta de nuevo.',
+  // 404 de DELETE /payments/:id (mensaje de la API en inglés): otra persona
+  // lo anuló antes, o ya no existe.
+  voidPaymentGoneError:
+    'Este abono ya estaba anulado o ya no existe. Cierra y recarga la lista para ver su estado.',
   emptyPaymentsTitle: 'Este plan todavía no tiene abonos.',
   emptyPaymentsDescription: 'Registra el primer abono con el formulario de arriba.',
 
@@ -1319,19 +1318,25 @@ export function TreatmentPlansTab({
     setPaymentToVoid(paymentId);
   }
 
-  async function handleVoidPayment() {
+  async function handleVoidPayment(reason: string) {
     const paymentId = paymentToVoid;
     if (!paymentId) return;
     setVoidingPaymentId(paymentId);
     setPaymentActionError(null);
     try {
-      await voidPayment(token, paymentId);
+      await voidPayment(token, paymentId, reason);
       // Se cierra antes de refrescar, como en `payment-plan-section`: el
       // diálogo solo sigue abierto si hay algo que decidir.
       setPaymentToVoid(null);
       await refreshBalanceAndPayments();
     } catch (err) {
-      setPaymentActionError(err instanceof ApiError ? err.message : copy.genericVoidPaymentError);
+      setPaymentActionError(
+        err instanceof ApiError
+          ? err.status === 404
+            ? copy.voidPaymentGoneError
+            : err.message
+          : copy.genericVoidPaymentError,
+      );
     } finally {
       setVoidingPaymentId(null);
     }
@@ -1933,17 +1938,18 @@ export function TreatmentPlansTab({
         error={removeItemError}
       />
 
-      <ConfirmDialog
+      {/* `key` por abono: cada anulación empieza con el motivo en blanco. */}
+      <VoidPaymentModal
+        key={paymentToVoid ?? 'none'}
         open={paymentToVoid !== null}
         onOpenChange={(open) => {
           if (!open) setPaymentToVoid(null);
         }}
-        title={copy.voidConfirmTitle}
-        description={copy.voidConfirmDescription}
-        confirmLabel={copy.voidConfirm}
         onConfirm={handleVoidPayment}
-        confirming={voidingPaymentId !== null && voidingPaymentId === paymentToVoid}
+        submitting={voidingPaymentId !== null && voidingPaymentId === paymentToVoid}
         error={paymentActionError}
+        // Pinta el aviso de la ventana de recepción; la regla la aplica la API.
+        restrictedToOwnToday={getTokenRole(token) !== 'ADMIN'}
       />
     </div>
   );

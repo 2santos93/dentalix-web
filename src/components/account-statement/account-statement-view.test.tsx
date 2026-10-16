@@ -59,6 +59,7 @@ it('lista movimientos con método y sede, marcando los anulados', async () => {
   expect(rows).toHaveLength(3);
   expect(rows[0]).toHaveTextContent('20/09/2026');
   expect(rows[0]).toHaveTextContent(/anulado/i);
+  expect(rows[0]).toHaveTextContent('Anulado por Rita Recepción: Cobro duplicado');
   expect(rows[0]).toHaveTextContent('Sede Norte');
   expect(rows[0]).toHaveTextContent('Tarjeta');
   expect(rows[1]).toHaveTextContent('Transferencia');
