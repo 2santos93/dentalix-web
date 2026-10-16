@@ -99,6 +99,11 @@ load_env() {
   # Topes de email en BD (DX-088): la suite reenvía una invitación al momento
   # de crearla; sin esto el enfriamiento de 60 s respondería 429.
   export MAIL_RECIPIENT_COOLDOWN_SECONDS=0
+  export RATE_LIMIT_PASSWORD_RESET_LIMIT=100000
+  # DX-010: los emails se dejan como JSON en $STATE_DIR/mail (FileMailer, solo
+  # dev/e2e) para que Playwright abra el enlace de «Restablecer contraseña».
+  export MAIL_TRANSPORT=file
+  export MAIL_FILE_DIR="$STATE_DIR/mail"
   # La web: las NEXT_PUBLIC_* se incrustan en el build y el rewrite /api/v1.
   export NEXT_PUBLIC_API_URL="$API_URL"
   # Igual que el build de ci.yml y que `next dev` sin .env (default del código).
@@ -208,6 +213,7 @@ phase_test() {
       E2E_API_URL="$API_URL" \
       E2E_DATABASE_URL="postgresql://${PG_SUPERUSER}:${PG_SUPERPASS}@${PG_HOST}:${PG_PORT}/${E2E_DB_NAME}" \
       E2E_EXPECT_PROD_CSP=1 \
+      E2E_MAIL_DIR="$MAIL_FILE_DIR" \
       npx playwright test "$@"
   ) || status=$?
   echo "Playwright terminó con código $status en $((SECONDS - start)) s"

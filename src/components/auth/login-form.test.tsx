@@ -94,4 +94,18 @@ describe('LoginForm', () => {
       errorId,
     );
   });
+
+  it('enlaza «¿Olvidaste tu contraseña?» (DX-010)', () => {
+    render(<LoginForm />);
+    expect(screen.getByRole('link', { name: '¿Olvidaste tu contraseña?' })).toHaveAttribute(
+      'href',
+      '/olvide-contrasena',
+    );
+    expect(screen.queryByRole('status')).not.toBeInTheDocument();
+  });
+
+  it('tras restablecer la contraseña muestra el aviso de éxito', () => {
+    render(<LoginForm passwordReset />);
+    expect(screen.getByRole('status')).toHaveTextContent('tu contraseña se cambió');
+  });
 });
