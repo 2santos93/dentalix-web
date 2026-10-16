@@ -100,6 +100,8 @@ export function applyKey(
 ): KeyResult | null {
   if (/^[0-9]$/.test(key)) {
     const digit = Number(key);
+    // La recesión negativa llega como mucho a -5 mm (rango de la API).
+    if (pending === '-' && digit > 5) return { value: current, advance: false, pending: '' };
     const value = pending === '-' ? -digit : pending === '+' ? 10 + digit : digit;
     return { value, advance: true, pending: '' };
   }

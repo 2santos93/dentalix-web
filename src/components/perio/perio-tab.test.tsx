@@ -90,6 +90,26 @@ describe('PerioTab', () => {
     expect(rows[2]).toHaveTextContent('18 / 4');
   });
 
+  it('compara con el FINAL anterior, saltando borradores intermedios', async () => {
+    const user = setupUser();
+    mockedList.mockResolvedValue([
+      summary('e3', '2026-10-10', 'DRAFT', 10),
+      summary('e2', '2026-09-01', 'DRAFT', 20),
+      summary('e1', '2026-04-15', 'FINAL', 62.5),
+    ]);
+    mockedGet.mockImplementation((_t, _p, id) =>
+      Promise.resolve({ ...summary(id, '2026-10-10', 'DRAFT', 10), sites: [], teeth: [] }),
+    );
+    render(<PerioTab token="tok" patientId="p1" />);
+    const table = await screen.findByRole('table', { name: /histórico/i });
+    await user.click(within(table).getByRole('button', { name: 'Abrir examen del 10/10/2026' }));
+    expect(
+      await screen.findByRole('checkbox', {
+        name: /comparar con el examen anterior \(15\/04\/2026\)/i,
+      }),
+    ).toBeInTheDocument();
+  });
+
   it('«Abrir» muestra el editor del examen', async () => {
     const user = setupUser();
     mockedList.mockResolvedValue([summary('e1', '2026-04-15', 'FINAL', 62.5)]);

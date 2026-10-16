@@ -2,6 +2,7 @@ import { render, screen, within } from '@testing-library/react';
 import { PerioExamEditor } from './perio-exam-editor';
 import {
   finalizePerioExam,
+  deletePerioExam,
   getPerioExam,
   savePerioMeasures,
   type PerioExamDetail,
@@ -14,11 +15,13 @@ jest.mock('../../lib/perio/perio-api', () => ({
   getPerioExam: jest.fn(),
   savePerioMeasures: jest.fn(),
   finalizePerioExam: jest.fn(),
+  deletePerioExam: jest.fn(),
 }));
 
 const mockedGet = getPerioExam as jest.MockedFunction<typeof getPerioExam>;
 const mockedSave = savePerioMeasures as jest.MockedFunction<typeof savePerioMeasures>;
 const mockedFinalize = finalizePerioExam as jest.MockedFunction<typeof finalizePerioExam>;
+const mockedDelete = deletePerioExam as jest.MockedFunction<typeof deletePerioExam>;
 
 const INDICES = {
   sitesExamined: 0,
@@ -71,6 +74,7 @@ function site(
 function renderEditor(previous: { id: string; examDate: string } | null = null) {
   const onChanged = jest.fn();
   const onBack = jest.fn();
+  const onDeleted = jest.fn();
   render(
     <PerioExamEditor
       token="tok"
@@ -79,9 +83,10 @@ function renderEditor(previous: { id: string; examDate: string } | null = null) 
       previous={previous}
       onBack={onBack}
       onChanged={onChanged}
+      onDeleted={onDeleted}
     />,
   );
-  return { onChanged, onBack };
+  return { onChanged, onBack, onDeleted };
 }
 
 describe('PerioExamEditor', () => {
@@ -89,6 +94,68 @@ describe('PerioExamEditor', () => {
     mockedGet.mockReset();
     mockedSave.mockReset();
     mockedFinalize.mockReset();
+    mockedDelete.mockReset();
+  });
+
+  it('mientras se guarda la rejilla queda bloqueada: lo tecleado no se pierde en silencio', async () => {
+    const user = setupUser();
+    mockedGet.mockResolvedValue(exam());
+    let resolveSave: (value: PerioExamDetail) => void = () => undefined;
+    mockedSave.mockReturnValue(
+      new Promise<PerioExamDetail>((resolve) => {
+        resolveSave = resolve;
+      }),
+    );
+    renderEditor();
+    const upper = await screen.findByRole('table', { name: 'Arcada superior' });
+    await user.click(within(upper).getByRole('textbox', { name: 'Sondaje 18 DB' }));
+    await user.keyboard('4');
+    await user.click(screen.getByRole('button', { name: 'Guardar' }));
+    // En vuelo: la celda siguiente no admite cambios.
+    const next = within(upper).getByRole('textbox', { name: 'Sondaje 17 DB' });
+    expect(next).toHaveAttribute('readonly');
+    await user.click(next);
+    await user.keyboard('7');
+    expect(next).toHaveValue('');
+    resolveSave(exam({ sites: [site(18, 'DB', 4)] }));
+    expect(await screen.findByText('Cambios guardados')).toBeInTheDocument();
+    expect(next).not.toHaveAttribute('readonly');
+    await user.click(next);
+    await user.keyboard('7');
+    expect(next).toHaveValue('7');
+  });
+
+  it('409 al finalizar (ya finalizado en otra pestaña): recarga y queda en solo lectura', async () => {
+    const user = setupUser();
+    mockedGet.mockResolvedValueOnce(exam());
+    mockedGet.mockResolvedValueOnce(
+      exam({ status: 'FINAL', finalizedAt: '2026-10-16T16:00:00.000Z' }),
+    );
+    mockedFinalize.mockRejectedValue(new ApiError(409, 'El examen está finalizado'));
+    renderEditor();
+    await user.click(await screen.findByRole('button', { name: 'Finalizar examen' }));
+    const dialog = screen.getByRole('dialog', { name: '¿Finalizar el examen?' });
+    await user.click(within(dialog).getByRole('button', { name: 'Finalizar' }));
+    expect(
+      await screen.findByText(
+        'Este examen ya se finalizó en otra sesión: ahora se muestra en solo lectura.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByText(/Examen finalizado: solo lectura/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Finalizar examen' })).not.toBeInTheDocument();
+    expect(mockedGet).toHaveBeenCalledTimes(2);
+  });
+
+  it('«Eliminar borrador» pide confirmación y borra', async () => {
+    const user = setupUser();
+    mockedGet.mockResolvedValue(exam());
+    mockedDelete.mockResolvedValue(undefined);
+    const { onDeleted } = renderEditor();
+    await user.click(await screen.findByRole('button', { name: 'Eliminar borrador' }));
+    const dialog = screen.getByRole('dialog', { name: '¿Eliminar el borrador?' });
+    await user.click(within(dialog).getByRole('button', { name: 'Eliminar' }));
+    expect(mockedDelete).toHaveBeenCalledWith('tok', 'p1', 'e1');
+    expect(onDeleted).toHaveBeenCalled();
   });
 
   it('carga con esqueleto y muestra error con reintento', async () => {
@@ -236,6 +303,7 @@ describe('PerioExamEditor', () => {
     expect(cell).toHaveValue('5');
     expect(within(upper).getByRole('button', { name: 'Omitir diente 16' })).toBeDisabled();
     expect(screen.queryByRole('button', { name: 'Finalizar examen' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Eliminar borrador' })).not.toBeInTheDocument();
     expect(screen.queryByText('Tienes cambios sin guardar.')).not.toBeInTheDocument();
   });
 

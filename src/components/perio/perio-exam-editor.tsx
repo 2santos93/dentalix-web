@@ -1,10 +1,11 @@
 'use client';
 import * as React from 'react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { ArrowLeft, CheckCircle2, Save } from 'lucide-react';
+import { ArrowLeft, CheckCircle2, Save, Trash2 } from 'lucide-react';
 import { ApiError } from '@/lib/api/client';
 import {
   PERIO_STATUS_LABELS,
+  deletePerioExam,
   finalizePerioExam,
   getPerioExam,
   savePerioMeasures,
@@ -49,6 +50,14 @@ const copy = {
   finalizeDescription:
     'Un examen finalizado no se puede modificar. Si luego hay que corregir algo, se registra un examen nuevo.',
   finalizeConfirm: 'Finalizar',
+  finalizedElsewhere:
+    'Este examen ya se finalizó en otra sesión: ahora se muestra en solo lectura.',
+  deleteDraft: 'Eliminar borrador',
+  deleteTitle: '¿Eliminar el borrador?',
+  deleteDescription:
+    'Se pierden las medidas cargadas en este borrador. Esta acción no se puede deshacer.',
+  deleteConfirm: 'Eliminar',
+  deleteError: 'No pudimos eliminar el borrador.',
   readOnly:
     'Examen finalizado: solo lectura. Para corregirlo, crea un examen nuevo desde el histórico.',
   leaveTitle: '¿Salir sin guardar?',
@@ -77,6 +86,8 @@ interface PerioExamEditorProps {
   onBack: () => void;
   /** El examen cambió (guardado o finalizado): el histórico se refresca. */
   onChanged: () => void;
+  /** El borrador se eliminó: volver al histórico. */
+  onDeleted: () => void;
 }
 
 function EditorSkeleton() {
@@ -110,6 +121,7 @@ export function PerioExamEditor({
   previous,
   onBack,
   onChanged,
+  onDeleted,
 }: PerioExamEditorProps) {
   const [exam, setExam] = useState<PerioExamDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -123,6 +135,10 @@ export function PerioExamEditor({
   const [savedNotice, setSavedNotice] = useState(false);
   const [confirmFinalize, setConfirmFinalize] = useState(false);
   const [finalizing, setFinalizing] = useState(false);
+  const [confirmDelete, setConfirmDelete] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [confirmLeave, setConfirmLeave] = useState(false);
   const [comparing, setComparing] = useState(false);
   const [previousExam, setPreviousExam] = useState<PerioExamDetail | null>(null);
@@ -130,6 +146,9 @@ export function PerioExamEditor({
 
   const dirty = dirtySites.size > 0 || dirtyTeeth.size > 0;
   const readOnly = exam?.status === 'FINAL';
+  // Mientras una escritura está en vuelo la rejilla no admite cambios: la
+  // respuesta reemplaza el borrador y lo tecleado entretanto se perdería.
+  const busy = saving || finalizing || deleting;
 
   const adopt = useCallback((detail: PerioExamDetail) => {
     setExam(detail);
@@ -213,6 +232,25 @@ export function PerioExamEditor({
     setSavedNotice(false);
   }
 
+  /**
+   * 409: otra sesión finalizó el examen. Se recarga y queda en solo lectura
+   * con el aviso (lo no guardado ya no se puede guardar en este examen).
+   */
+  async function reloadAfterConflict(): Promise<void> {
+    try {
+      adopt(await getPerioExam(token, patientId, examId));
+      setActionError(null);
+      setNotice(copy.finalizedElsewhere);
+      onChanged();
+    } catch (err) {
+      setActionError(errorMessage(err, copy.loadError));
+    }
+  }
+
+  function isConflict(err: unknown): boolean {
+    return err instanceof ApiError && err.status === 409;
+  }
+
   /** Guarda lo pendiente; `false` si falló (el error queda a la vista). */
   async function save(): Promise<boolean> {
     if (!dirty) return true;
@@ -230,7 +268,8 @@ export function PerioExamEditor({
       onChanged();
       return true;
     } catch (err) {
-      setActionError(errorMessage(err, copy.saveError));
+      if (isConflict(err)) await reloadAfterConflict();
+      else setActionError(errorMessage(err, copy.saveError));
       return false;
     } finally {
       setSaving(false);
@@ -251,10 +290,30 @@ export function PerioExamEditor({
       setConfirmFinalize(false);
       onChanged();
     } catch (err) {
-      setActionError(errorMessage(err, copy.finalizeError));
       setConfirmFinalize(false);
+      if (isConflict(err)) await reloadAfterConflict();
+      else setActionError(errorMessage(err, copy.finalizeError));
     } finally {
       setFinalizing(false);
+    }
+  }
+
+  async function removeDraft() {
+    setDeleting(true);
+    setDeleteError(null);
+    try {
+      await deletePerioExam(token, patientId, examId);
+      setConfirmDelete(false);
+      onDeleted();
+    } catch (err) {
+      if (isConflict(err)) {
+        setConfirmDelete(false);
+        await reloadAfterConflict();
+      } else {
+        setDeleteError(errorMessage(err, copy.deleteError));
+      }
+    } finally {
+      setDeleting(false);
     }
   }
 
@@ -309,7 +368,7 @@ export function PerioExamEditor({
                     variant="secondary"
                     onClick={() => void save()}
                     loading={saving}
-                    disabled={!dirty || finalizing}
+                    disabled={!dirty || finalizing || deleting}
                     className="w-full sm:w-auto"
                   >
                     <Save aria-hidden />
@@ -318,11 +377,24 @@ export function PerioExamEditor({
                   <Button
                     type="button"
                     onClick={() => setConfirmFinalize(true)}
-                    disabled={saving || finalizing}
+                    disabled={busy}
                     className="w-full sm:w-auto"
                   >
                     <CheckCircle2 aria-hidden />
                     {copy.finalize}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => {
+                      setDeleteError(null);
+                      setConfirmDelete(true);
+                    }}
+                    disabled={busy}
+                    className="w-full text-danger sm:w-auto"
+                  >
+                    <Trash2 aria-hidden />
+                    {copy.deleteDraft}
                   </Button>
                 </div>
               ) : null}
@@ -347,6 +419,11 @@ export function PerioExamEditor({
               ) : null}
             </div>
             {actionError ? <InlineError variant="summary">{actionError}</InlineError> : null}
+            {notice ? (
+              <p role="status" className="text-sm font-medium text-warning">
+                {notice}
+              </p>
+            ) : null}
 
             {previous ? (
               <label className="flex items-center gap-2 text-sm text-ink">
@@ -373,7 +450,7 @@ export function PerioExamEditor({
             <PerioChart
               arch="upper"
               draft={draft}
-              readOnly={readOnly}
+              readOnly={readOnly || busy}
               onSiteChange={changeSite}
               onToothChange={changeTooth}
               previousProbing={previousProbing}
@@ -381,7 +458,7 @@ export function PerioExamEditor({
             <PerioChart
               arch="lower"
               draft={draft}
-              readOnly={readOnly}
+              readOnly={readOnly || busy}
               onSiteChange={changeSite}
               onToothChange={changeTooth}
               previousProbing={previousProbing}
@@ -400,6 +477,16 @@ export function PerioExamEditor({
         onConfirm={() => void finalize()}
         confirming={finalizing}
         destructive={false}
+      />
+      <ConfirmDialog
+        open={confirmDelete}
+        onOpenChange={setConfirmDelete}
+        title={copy.deleteTitle}
+        description={copy.deleteDescription}
+        confirmLabel={copy.deleteConfirm}
+        onConfirm={() => void removeDraft()}
+        confirming={deleting}
+        error={deleteError}
       />
       <ConfirmDialog
         open={confirmLeave}

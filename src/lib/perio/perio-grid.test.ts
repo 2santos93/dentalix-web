@@ -82,6 +82,11 @@ describe('applyKey (captura rápida)', () => {
       pending: '',
     });
   });
+  it('«-» solo admite hasta -5 (rango de recesión): -6..-9 se ignoran', () => {
+    expect(applyKey('5', 1, '-')).toEqual({ value: -5, advance: true, pending: '' });
+    expect(applyKey('6', 1, '-')).toEqual({ value: 1, advance: false, pending: '' });
+    expect(applyKey('9', null, '-')).toEqual({ value: null, advance: false, pending: '' });
+  });
   it('«+» suma 10 al dígito siguiente (10–19 mm)', () => {
     expect(applyKey('+', null, '')).toEqual({
       value: null,

@@ -101,8 +101,10 @@ export function PerioTab({ token, patientId }: PerioTabProps) {
 
   if (openExamId) {
     const index = exams.findIndex((e) => e.id === openExamId);
-    // Recién creado y aún no recargado: el anterior es el más reciente.
-    const previous = index === -1 ? (exams[0] ?? null) : (exams[index + 1] ?? null);
+    // Se compara con el FINAL anterior (más antiguo): un borrador intermedio
+    // no es una referencia clínica. Recién creado y aún no recargado (-1): el
+    // primer FINAL de la lista.
+    const previous = exams.slice(index + 1).find((e) => e.status === 'FINAL') ?? null;
     return (
       <PerioExamEditor
         key={openExamId}
@@ -112,6 +114,10 @@ export function PerioTab({ token, patientId }: PerioTabProps) {
         previous={previous ? { id: previous.id, examDate: previous.examDate } : null}
         onBack={() => setOpenExamId(null)}
         onChanged={() => setReloadKey((k) => k + 1)}
+        onDeleted={() => {
+          setOpenExamId(null);
+          setReloadKey((k) => k + 1);
+        }}
       />
     );
   }
