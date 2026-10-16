@@ -37,7 +37,14 @@ const copy = {
   expired: (date: string) => `Retención legal vencida el ${date}`,
   none: 'Sin atenciones clínicas: sin retención legal',
   double: 'Plazo doble (30 años)',
-  hint: 'Res. 839/2017: se conserva 15 años desde la última atención. Mientras dure, el paciente no se puede archivar.',
+  // La base legal sigue al plazo vigente: con DOUBLE o PERMANENT, «15 años»
+  // contradiría la fecha del aviso.
+  hint: {
+    NONE: 'Res. 839/2017: se conserva 15 años desde la última atención. Mientras dure, el paciente no se puede archivar.',
+    DOUBLE:
+      'Plazo doble: se conserva 30 años desde la última atención. Mientras dure, el paciente no se puede archivar.',
+    PERMANENT: 'Se conserva sin fecha de fin: el paciente no se puede archivar.',
+  } satisfies Record<RetentionExtension, string>,
   suppressed: (date: string) => `Datos de contacto suprimidos el ${date}`,
   changeRetention: 'Cambiar retención',
   suppress: 'Supresión parcial',
@@ -223,7 +230,9 @@ export function PatientRetentionSection({
             <Badge variant="outline">{copy.double}</Badge>
           ) : null}
         </div>
-        {patient.underRetention ? <p className="text-sm text-muted">{copy.hint}</p> : null}
+        {patient.underRetention ? (
+          <p className="text-sm text-muted">{copy.hint[patient.retentionExtended ?? 'NONE']}</p>
+        ) : null}
         {patient.partiallySuppressedAt ? (
           <p className="text-sm text-muted tnum">
             {copy.suppressed(formatCivilDate(patient.partiallySuppressedAt))}

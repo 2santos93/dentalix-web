@@ -86,6 +86,15 @@ test('muestra el badge con la fecha hasta la que se conserva', () => {
   expect(screen.queryByRole('button', { name: /cambiar retención/i })).not.toBeInTheDocument();
 });
 
+test('plazo doble: el aviso cita 30 años, no 15', () => {
+  renderSection(patient({ retentionExtended: 'DOUBLE', retentionUntil: '2054-02-28' }), {
+    isAdmin: false,
+  });
+  expect(screen.getByText('Historia en retención legal hasta 28/02/2054')).toBeInTheDocument();
+  expect(screen.getByText(/Plazo doble: se conserva 30 años/)).toBeInTheDocument();
+  expect(screen.queryByText(/15 años/)).not.toBeInTheDocument();
+});
+
 test('retención permanente, vencida y sin atenciones', () => {
   const { unmount } = render(
     <PatientRetentionSection
@@ -97,6 +106,10 @@ test('retención permanente, vencida y sin atenciones', () => {
     />,
   );
   expect(screen.getByText('Historia en retención legal permanente')).toBeInTheDocument();
+  expect(
+    screen.getByText('Se conserva sin fecha de fin: el paciente no se puede archivar.'),
+  ).toBeInTheDocument();
+  expect(screen.queryByText(/15 años/)).not.toBeInTheDocument();
   unmount();
   renderSection(patient({ retentionUntil: '2020-01-01', underRetention: false }), {
     isAdmin: false,
