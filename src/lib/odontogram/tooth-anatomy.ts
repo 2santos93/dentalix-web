@@ -22,21 +22,33 @@ export function toothPosition(fdi: string): number {
   return Number(fdi[1]);
 }
 
+/** Dentición temporal (DX-120): cuadrantes 5-8, posiciones 1-5. */
+function isPrimary(fdi: string): boolean {
+  return toothQuadrant(fdi) > 4;
+}
+
+/** El cuadrante permanente que ocupa el diente (5→1, 6→2, 7→3, 8→4). */
+function permanentQuadrant(fdi: string): number {
+  const quadrant = toothQuadrant(fdi);
+  return quadrant > 4 ? quadrant - 4 : quadrant;
+}
+
 export function toothClass(fdi: string): ToothClass {
   const position = toothPosition(fdi);
   if (position <= 2) return 'incisor';
   if (position === 3) return 'canine';
-  if (position <= 5) return 'premolar';
+  // Los temporales 4 y 5 son los molares temporales (no hay premolares).
+  if (position <= 5) return isPrimary(fdi) ? 'molar' : 'premolar';
   return 'molar';
 }
 
 export function toothArch(fdi: string): Arch {
-  const quadrant = toothQuadrant(fdi);
+  const quadrant = permanentQuadrant(fdi);
   return quadrant === 1 || quadrant === 2 ? 'upper' : 'lower';
 }
 
 export function toothChartSide(fdi: string): ChartSide {
-  const quadrant = toothQuadrant(fdi);
+  const quadrant = permanentQuadrant(fdi);
   return quadrant === 1 || quadrant === 4 ? 'left' : 'right';
 }
 
@@ -56,8 +68,17 @@ export const TOOTH_WIDTH: Record<ToothClass, number> = {
 
 export const TOOTH_HEIGHT = 40;
 
+/** Un temporal se dibuja a esta escala de su clase: se lee más pequeño que el permanente. */
+export const PRIMARY_SCALE = 0.8;
+
 export function toothWidth(fdi: string): number {
-  return TOOTH_WIDTH[toothClass(fdi)];
+  const width = TOOTH_WIDTH[toothClass(fdi)];
+  return isPrimary(fdi) ? Math.round(width * PRIMARY_SCALE) : width;
+}
+
+/** Alto del diente: los temporales, a la misma escala que su ancho. */
+export function toothHeight(fdi: string): number {
+  return isPrimary(fdi) ? Math.round(TOOTH_HEIGHT * PRIMARY_SCALE) : TOOTH_HEIGHT;
 }
 
 /**
