@@ -1,5 +1,6 @@
-import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
+import { test, expect, type APIRequestContext, type Page } from './support/test';
 import { randomUUID } from 'node:crypto';
+import { sessionCookie } from './support/auth';
 import { API_URL, tenantOrigin } from './support/urls';
 
 /**
@@ -41,14 +42,6 @@ const suffix = rawSuffix
 const cop = new Intl.NumberFormat('es', { style: 'currency', currency: 'COP' });
 function figure(amount: number): string {
   return cop.format(amount).split(/\s/)[0];
-}
-
-async function accessTokenOf(page: Page): Promise<string> {
-  const authRaw = await page.evaluate(() => localStorage.getItem('dentalix-auth'));
-  return (
-    (JSON.parse(authRaw as string) as { state?: { accessToken?: string | null } }).state
-      ?.accessToken ?? ''
-  );
 }
 
 /** Siembra como ADMIN (el plan de tratamiento es clínico: recepción no lo crea). */
@@ -131,8 +124,10 @@ for (const viewport of [
     await page.getByLabel('Correo electrónico').fill(RECEPTION_EMAIL);
     await page.getByLabel('Contraseña', { exact: true }).fill(DEMO_PASSWORD);
     await page.getByRole('button', { name: 'Iniciar sesión' }).click();
+    // Desde DX-062 la sesión no deja nada en localStorage: el refresh vive en la
+    // cookie HttpOnly del host de la clínica.
     await expect
-      .poll(async () => Boolean(await accessTokenOf(page).catch(() => '')), { timeout: 15_000 })
+      .poll(async () => Boolean((await sessionCookie(page, origin))?.httpOnly), { timeout: 15_000 })
       .toBe(true);
     await page.waitForURL((url) => !url.pathname.endsWith('/login'), { timeout: 10_000 });
 
