@@ -1,4 +1,5 @@
 import {
+  civilDateInZone,
   formatCivilDate,
   formatDate,
   formatDateLabel,
@@ -120,5 +121,23 @@ describe('formatDateLabel (DX-063)', () => {
   it('valor vacío o inválido → fallback', () => {
     expect(formatDateLabel(null, { day: 'numeric' })).toBe('—');
     expect(formatDateLabel('no-es-fecha', { day: 'numeric' }, '')).toBe('');
+  });
+});
+
+describe('civilDateInZone (DX-097)', () => {
+  it('20:00 en Bogotá del 16 es el 16 en la sede aunque en UTC sea el 17', () => {
+    expect(civilDateInZone('2026-10-17T01:00:00.000Z', 'America/Bogota')).toBe('2026-10-16');
+    expect(civilDateInZone('2026-10-17T01:00:00.000Z', 'UTC')).toBe('2026-10-17');
+  });
+
+  it('Madrid en el cambio de hora de octubre', () => {
+    expect(civilDateInZone('2026-10-24T22:00:00.000Z', 'Europe/Madrid')).toBe('2026-10-25');
+    expect(civilDateInZone('2026-10-25T22:59:00.000Z', 'Europe/Madrid')).toBe('2026-10-25');
+    expect(civilDateInZone('2026-10-25T23:00:00.000Z', 'Europe/Madrid')).toBe('2026-10-26');
+  });
+
+  it('null con un instante o una zona inválidos', () => {
+    expect(civilDateInZone('no-es-fecha', 'America/Bogota')).toBeNull();
+    expect(civilDateInZone('2026-10-17T01:00:00.000Z', 'Mars/Olympus')).toBeNull();
   });
 });

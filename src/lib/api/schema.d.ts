@@ -2518,11 +2518,16 @@ export interface components {
             canVoid: boolean;
             /**
              * Format: date-time
-             * @description Día civil del abono (medianoche UTC del día registrado).
+             * @description Instante del pago. Un abono registrado solo con fecha (YYYY-MM-DD) se guarda al mediodía de la zona de su sede. Para mostrar el día, usar `paidOn`.
              */
             paidAt: string;
             /**
-             * @description Día civil (YYYY-MM-DD) en que se registró el abono, en la zona de su sede. Puede diferir de `paidAt` (fecha de pago antigua registrada después); la ventana de anulación de recepción mira este día.
+             * @description Día civil (YYYY-MM-DD) de `paidAt` en la zona IANA de la sede del abono (DX-097): el día de caja en que cuenta. Un abono a las 20:00 en Bogotá es de ese día aunque en UTC ya sea el siguiente.
+             * @example 2026-10-16
+             */
+            paidOn: string;
+            /**
+             * @description Día civil (YYYY-MM-DD) en que se registró el abono, en la zona de su sede. Puede diferir de `paidOn` (fecha de pago antigua registrada después); la ventana de anulación de recepción mira este día.
              * @example 2026-10-16
              */
             registeredOn: string;
@@ -2604,8 +2609,8 @@ export interface components {
              */
             currency: string;
             /**
-             * Format: date-time
-             * @description When the abono was paid. Its calendar date (UTC) is what GET .../balance uses to look up the exchange rate when this currency differs from the plan currency.
+             * @description Cuándo se pagó el abono: un instante ISO 8601 con hora (p. ej. `2026-10-17T01:00:00.000Z`, que es el 16/10 a las 20:00 en Bogotá) o solo el día civil `YYYY-MM-DD`, que se guarda al mediodía de la zona horaria de la sede del abono (DX-097). La caja y el dashboard lo cuentan en su día civil en la zona de la sede. GET .../balance busca la tasa de cambio por su fecha UTC.
+             * @example 2026-10-16
              */
             paidAt: string;
             /** @enum {string} */
@@ -2931,9 +2936,14 @@ export interface components {
             id: string;
             /**
              * Format: date-time
-             * @description Día civil del abono (medianoche UTC del día registrado).
+             * @description Instante del pago (un abono registrado solo con fecha cae al mediodía de su sede). Para mostrar el día, usar `paidOn`.
              */
             paidAt: string;
+            /**
+             * @description Día civil (YYYY-MM-DD) del pago en la zona IANA de la sede del abono (DX-097). Es el día por el que filtran `from`/`to`.
+             * @example 2026-10-16
+             */
+            paidOn: string;
             /** @example 150000 */
             amount: number;
             /** @example COP */
@@ -3211,6 +3221,11 @@ export interface components {
             address: string | null;
             country: components["schemas"]["ClinicCountry"];
             isActive: boolean;
+            /**
+             * @description Zona horaria IANA de la sede (la de su horario; sin horario, la de su país). Define sus días civiles: «hoy» en la caja y el dashboard (DX-097).
+             * @example America/Bogota
+             */
+            timeZone: string;
             /** Format: date-time */
             createdAt: string;
         };
@@ -3260,7 +3275,7 @@ export interface components {
              */
             currency: string;
             /**
-             * @description Sum of every active payment's amount in the range, each converted to `currency` using ITS OWN paidAt date (never today's rate).
+             * @description Sum of every active payment's amount in the range, each converted to `currency` using the rate of ITS OWN civil paid date in its location's time zone (never today's rate).
              * @example 1250.5
              */
             totalConverted: number;
@@ -5769,9 +5784,9 @@ export interface operations {
     PaymentsController_listCash: {
         parameters: {
             query: {
-                /** @description Primer día del período (YYYY-MM-DD), inclusive. */
+                /** @description Primer día del período (YYYY-MM-DD), inclusive, en la zona horaria de la sede de cada abono (la de su horario; con varias sedes en zonas distintas, cada una corta el día a su medianoche). */
                 from: string;
-                /** @description Último día del período (YYYY-MM-DD), inclusive. Debe ser >= from; el período no puede superar 366 días. */
+                /** @description Último día del período (YYYY-MM-DD), inclusive (hasta la medianoche del día siguiente en la zona de la sede). Debe ser >= from; el período no puede superar 366 días. */
                 to: string;
                 /** @description Solo abonos de este método. Sin él, todos los métodos. */
                 method?: "CASH" | "CARD" | "TRANSFER" | "OTHER";
@@ -5992,7 +6007,7 @@ export interface operations {
     AccountStatementController_get: {
         parameters: {
             query?: {
-                /** @description Primer día de los movimientos (YYYY-MM-DD), inclusive. */
+                /** @description Primer día de los movimientos (YYYY-MM-DD), inclusive, en la zona horaria de la sede de cada abono. */
                 from?: string;
                 /** @description Último día de los movimientos (YYYY-MM-DD), inclusive. Debe ser >= from. */
                 to?: string;
@@ -6465,9 +6480,9 @@ export interface operations {
     DashboardController_get: {
         parameters: {
             query: {
-                /** @description Inclusive period start (YYYY-MM-DD). */
+                /** @description Primer día civil del período (YYYY-MM-DD), inclusive, desde la medianoche de la zona horaria de cada sede. */
                 from: string;
-                /** @description Period end (YYYY-MM-DD). Passed through to GetPaymentsTotalsUseCase, which treats the incomes/payments range as half-open [from, to). */
+                /** @description Día civil (YYYY-MM-DD) SIGUIENTE al último del período: exclusivo ([from, to)). El corte es la medianoche de ese día en la zona horaria de cada sede. from = to da un período vacío. */
                 to: string;
                 /** @description ISO 4217 currency code every payment amount is converted into. */
                 currency: string;
