@@ -169,6 +169,17 @@ function refreshAccessToken(): Promise<string | null> {
   return refreshInFlight;
 }
 
+/**
+ * Ejecuta `fn` bajo el MISMO lock entre pestañas que el refresh. Lo usa el
+ * logout: si otra pestaña está rotando la cookie, el logout espera y revoca la
+ * cookie ya rotada; si no, la respuesta del refresh llegaría después de la del
+ * logout y dejaría viva una cookie nueva. Sin Web Locks, ejecuta `fn` sin más.
+ */
+export function withSessionLock<T>(fn: () => Promise<T>): Promise<T> {
+  const locks = typeof window === 'undefined' ? null : webLocks();
+  return locks ? (locks.request(REFRESH_LOCK, fn) as Promise<T>) : fn();
+}
+
 let bootstrapInFlight: Promise<void> | null = null;
 
 /**

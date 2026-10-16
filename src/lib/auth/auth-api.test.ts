@@ -54,4 +54,66 @@ describe('auth-api logout', () => {
     await expect(logout()).resolves.toBeUndefined();
     expect(posted).toHaveLength(1);
   });
+
+  it('avisa a las demás pestañas DESPUÉS de que la API revoque, no antes (si no, otra pestaña podría rotar la cookie en medio)', async () => {
+    let postedWhenFetched = -1;
+    global.fetch = jest.fn(async () => {
+      postedWhenFetched = posted.length;
+      return { ok: true, text: async () => '' };
+    }) as unknown as typeof fetch;
+
+    await logout();
+
+    expect(postedWhenFetched).toBe(0);
+    expect(posted).toHaveLength(1);
+  });
+
+  describe('con Web Locks', () => {
+    afterEach(() => {
+      delete (navigator as unknown as { locks?: unknown }).locks;
+    });
+
+    it('el logout espera al refresh en curso de otra pestaña (mismo lock dentalix-refresh): revoca la cookie YA rotada', async () => {
+      const events: string[] = [];
+      let release: () => void = () => {};
+      const held = new Promise<void>((resolve) => {
+        release = resolve;
+      });
+      // Un lock mínimo con exclusión real: la segunda petición espera a la primera.
+      let tail: Promise<unknown> = Promise.resolve();
+      Object.defineProperty(navigator, 'locks', {
+        configurable: true,
+        value: {
+          request: (name: string, cb: () => Promise<unknown>) => {
+            events.push(`lock:${name}`);
+            const run = tail.then(cb);
+            tail = run.catch(() => undefined);
+            return run;
+          },
+        },
+      });
+      global.fetch = jest.fn(async () => {
+        events.push('fetch:logout');
+        return { ok: true, text: async () => '' };
+      }) as unknown as typeof fetch;
+
+      // "Otra pestaña" (aquí, otra tarea) tiene el lock mientras rota la cookie.
+      const otherRefresh = navigator.locks.request('dentalix-refresh', async () => {
+        await held;
+        events.push('refresh:done');
+      });
+      const out = logout();
+      await Promise.resolve();
+      expect(events).not.toContain('fetch:logout');
+      release();
+      await Promise.all([otherRefresh, out]);
+
+      expect(events).toEqual([
+        'lock:dentalix-refresh',
+        'lock:dentalix-refresh',
+        'refresh:done',
+        'fetch:logout',
+      ]);
+    });
+  });
 });
