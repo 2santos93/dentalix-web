@@ -8,6 +8,7 @@ import {
 import { listPlans } from '@/lib/treatment-plans/treatment-plans-api';
 import { ApiError } from '@/lib/api/client';
 import { setupUser } from '@/lib/test/user';
+import { PLAN_WITHOUT_OPTIONS } from '../treatment-plans/plan-fixture';
 
 jest.mock('../../lib/consents/consents-api', () => ({
   ...jest.requireActual('../../lib/consents/consents-api'),
@@ -67,6 +68,7 @@ const plan = {
   currency: 'COP',
   notes: null,
   createdById: null,
+  ...PLAN_WITHOUT_OPTIONS,
   createdAt: '2026-09-01T00:00:00.000Z',
   updatedAt: '2026-09-01T00:00:00.000Z',
 };

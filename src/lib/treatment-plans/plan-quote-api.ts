@@ -2,6 +2,7 @@ import { apiFetch } from '@/lib/api/client';
 import type { components } from '@/lib/api/schema';
 import type { ClinicRole } from '@/lib/me/me-api';
 import type { TreatmentPlanStatus } from './treatment-plans-api';
+import { canDecidePlan } from './plan-options';
 
 // La API documenta la respuesta entera con @ApiProperty (PlanQuoteDocumentDto),
 // así que los tipos salen tal cual del contrato generado.
@@ -20,15 +21,24 @@ export function canPrintPlanQuote(role: ClinicRole | null): boolean {
   return role !== null;
 }
 
-/** Aceptar con firma sigue las reglas del plan: odontólogo, asistente y ADMIN. */
-const ACCEPT_ROLES: readonly ClinicRole[] = ['DENTIST', 'ASSISTANT', 'ADMIN'];
-
+/**
+ * Aceptar con firma lo decide quien decide el plan: odontólogo y ADMIN
+ * (DX-040). La asistente lo ve y lo imprime, pero no lo acepta en nombre del
+ * doctor.
+ */
 export function canAcceptPlan(role: ClinicRole | null): boolean {
-  return role !== null && ACCEPT_ROLES.includes(role);
+  return canDecidePlan(role);
 }
 
-/** Un plan cancelado o completado ya no se presenta para firmar (la API: 409). */
-export const SIGNABLE_PLAN_STATUSES: readonly TreatmentPlanStatus[] = ['DRAFT', 'ACCEPTED'];
+/**
+ * Se firma un borrador, un plan presentado o uno aceptado sin firma; uno
+ * rechazado, cancelado o completado, no (la API: 409).
+ */
+export const SIGNABLE_PLAN_STATUSES: readonly TreatmentPlanStatus[] = [
+  'DRAFT',
+  'PRESENTED',
+  'ACCEPTED',
+];
 
 /** ¿Se le puede ofrecer «Aceptar con firma»? Sin firmar, abierto y con ítems. */
 export function isPlanAcceptable(plan: {

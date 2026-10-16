@@ -4,6 +4,7 @@ import { PlanQuoteActions } from './plan-quote-actions';
 import { getPlanQuote } from '@/lib/treatment-plans/plan-quote-api';
 import { planQuoteFixture } from './plan-quote-fixture';
 import type { TreatmentPlan } from '@/lib/treatment-plans/treatment-plans-api';
+import { PLAN_WITHOUT_OPTIONS } from './plan-fixture';
 
 jest.mock('../../lib/treatment-plans/plan-quote-api', () => ({
   ...jest.requireActual('../../lib/treatment-plans/plan-quote-api'),
@@ -36,6 +37,7 @@ function plan(overrides: Partial<TreatmentPlan> = {}): TreatmentPlan {
     currency: 'COP',
     notes: null,
     createdById: null,
+    ...PLAN_WITHOUT_OPTIONS,
     createdAt: '2026-10-01T00:00:00.000Z',
     updatedAt: '2026-10-01T00:00:00.000Z',
     items: [item],
