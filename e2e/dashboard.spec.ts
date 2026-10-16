@@ -88,11 +88,10 @@ const itemPrice = 250;
 const paymentAmount = 250;
 
 // The income amount is asserted against a value formatted INSIDE the browser
-// (see `page.evaluate` below), not with a Node-side `Intl.NumberFormat`: COP's
-// fraction-digit default differs between Node's and Chromium's ICU builds
-// (Node → "250,00 COP", Chromium → "250 COP"), so a Node-formatted string
-// would never match the DOM. Formatting in-page uses the same engine the app
-// uses (`dashboard-view.tsx`'s `formatCurrencySafe`, es locale).
+// (see `page.evaluate` below) with the same options as the app's
+// `formatCurrency` (`src/lib/format/currency.ts`): es locale and two FIXED
+// fraction digits (DX-098). Relying on ICU's default for COP breaks on recent
+// builds, which give COP 0 decimals ("250 COP" vs the app's "250,00 COP").
 
 // Same formatter as `dashboard-view.tsx`'s `formatTime`, in the browser's
 // (the sede's) timezone — not Node's (see support/clock.ts).
@@ -251,10 +250,16 @@ test('dashboard: aggregated cards render seeded payment income, low-stock item, 
   await expect(page.getByRole('heading', { name: 'Ingresos del período' })).toBeVisible({ timeout: 10_000 });
 
   // --- "Ingresos del período": total + count ---
-  // Format the expected amount with the browser's own Intl (same ICU as the
-  // app) — a Node-side format wouldn't match COP's fraction digits.
+  // Format the expected amount with the browser's own Intl and the app's
+  // options (two fixed decimals, as `formatCurrency` since DX-098).
   const expectedIncome = await page.evaluate(
-    (amount) => new Intl.NumberFormat('es', { style: 'currency', currency: 'COP' }).format(amount),
+    (amount) =>
+      new Intl.NumberFormat('es', {
+        style: 'currency',
+        currency: 'COP',
+        minimumFractionDigits: 2,
+        maximumFractionDigits: 2,
+      }).format(amount),
     paymentAmount,
   );
   const incomesHeading = page.getByRole('heading', { name: 'Ingresos del período' });
