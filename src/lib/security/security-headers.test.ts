@@ -9,16 +9,14 @@ describe('cabeceras de seguridad de la web (DX-061)', () => {
   it('fija anti-enmarcado, nosniff, referrer y permissions restrictivas', () => {
     expect(asRecord(SECURITY_HEADERS)).toEqual({
       'X-Frame-Options': 'DENY',
-      'Content-Security-Policy': "frame-ancestors 'none'",
       'X-Content-Type-Options': 'nosniff',
       'Referrer-Policy': 'strict-origin-when-cross-origin',
       'Permissions-Policy': 'camera=(), microphone=(), geolocation=()',
     });
   });
 
-  it('la CSP es SOLO frame-ancestors (la CSP completa con nonce queda fuera)', () => {
-    const csp = asRecord(SECURITY_HEADERS)['Content-Security-Policy'];
-    expect(csp.split(';').map((d) => d.trim()).filter(Boolean)).toEqual(["frame-ancestors 'none'"]);
+  it('no fija CSP: la completa, con nonce, la pone proxy.ts en cada página (DX-062)', () => {
+    expect(asRecord(SECURITY_HEADERS)).not.toHaveProperty('Content-Security-Policy');
   });
 
   it('se aplican a todas las rutas', () => {
@@ -29,5 +27,13 @@ describe('cabeceras de seguridad de la web (DX-061)', () => {
     expect(nextConfig.poweredByHeader).toBe(false);
     expect(typeof nextConfig.headers).toBe('function');
     await expect(nextConfig.headers!()).resolves.toEqual(securityHeaderRules());
+  });
+
+  it('next.config reescribe /api/v1/* hacia la API (mismo origen para la cookie de sesión, DX-062)', async () => {
+    expect(typeof nextConfig.rewrites).toBe('function');
+    const rewrites = await nextConfig.rewrites!();
+    expect(rewrites).toEqual([
+      expect.objectContaining({ source: '/api/v1/:path*', destination: expect.stringMatching(/\/:path\*$/) }),
+    ]);
   });
 });
