@@ -47,7 +47,6 @@ const copy = {
   providerPicker: 'Profesional visible',
   appointmentsCount: (n: number) => (n === 1 ? '1 cita' : `${n} citas`),
   dragPreview: (time: string, provider: string) => `Mover a las ${time} · ${provider}`,
-  saving: 'Guardando…',
 };
 
 /** Distancia (px) que hay que mover el ratón para que un clic pase a arrastre. */

@@ -8,7 +8,7 @@ import { API_URL } from './urls';
  * Por qué hace falta: una sede nueva nace con un horario por defecto (lun–vie
  * 9–13 y 15–19, sáb 9–13, domingo cerrado). Los specs que agendan lo hacen a
  * horas relativas a `now` ("ahora + 61 min"), así que sin esto fallarían con un
- * 400 de "fuera del horario de atención" según la hora y el día en que corra la
+ * 422 de "fuera del horario de atención" según la hora y el día en que corra la
  * suite — un rojo intermitente que no dice nada del comportamiento que prueban.
  *
  * Un `PUT` con `ranges: []` es exactamente "esta sede no restringe horarios"

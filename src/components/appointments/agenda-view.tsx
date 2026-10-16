@@ -45,6 +45,7 @@ import { FormField } from '@/components/shared/form-field';
 import { FieldError } from '@/components/errors/field-error';
 import { SectionError } from '@/components/errors/section-error';
 import { notifyError } from '@/components/errors/notify';
+import { toast } from 'sonner';
 import {
   Sheet,
   SheetContent,
@@ -528,6 +529,7 @@ export function AgendaView({ token }: AgendaViewProps) {
     setMovePendingId(appointment.id);
     try {
       await updateAppointment(token, appointment.id, target);
+      toast.success(copy.moved);
       await refreshAppointmentsInPlace();
     } catch (err) {
       setAppointments((prev) =>
@@ -541,9 +543,10 @@ export function AgendaView({ token }: AgendaViewProps) {
     }
   }
 
-  /** «Mover a…» confirmado por el servidor: cierra el modal y refresca. */
+  /** «Mover a…» confirmado por el servidor: cierra el modal, lo anuncia y refresca. */
   function handleMoved() {
     setMovingAppointment(null);
+    toast.success(copy.moved);
     void refreshAppointmentsInPlace();
   }
 

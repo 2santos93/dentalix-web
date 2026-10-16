@@ -728,7 +728,12 @@ describe('AgendaView', () => {
         new ApiError(409, 'El profesional ya tiene una cita en ese horario'),
       );
       const user = userEvent.setup();
-      render(<AgendaView token={receptionToken} />);
+      render(
+        <>
+          <AgendaView token={receptionToken} />
+          <Toaster />
+        </>,
+      );
       await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
       await user.click(screen.getByRole('button', { name: /^día$/i }));
       const dateInput = screen.getByLabelText(/^fecha$/i);
@@ -755,6 +760,9 @@ describe('AgendaView', () => {
       await waitFor(() => expect(mockedListAppointments.mock.calls.length).toBeGreaterThan(calls));
       const [, second] = screen.getAllByTestId('day-column');
       expect(await within(second).findByText('María')).toBeInTheDocument();
+      // Con el modal cerrado, quien usa teclado o lector de pantalla necesita
+      // saber que el movimiento se guardó.
+      expect(await screen.findByText('Cita movida.')).toBeInTheDocument();
     });
   });
 });
