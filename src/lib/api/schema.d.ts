@@ -536,6 +536,38 @@ export interface paths {
         patch: operations["TreatmentPlansController_updateItem"];
         trace?: never;
     };
+    "/api/v1/patients/{patientId}/treatment-plans/{planId}/quote": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["PlanQuoteController_quote"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{patientId}/treatment-plans/{planId}/acceptance": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["PlanQuoteController_accept"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/staff/invitations": {
         parameters: {
             query?: never;
@@ -1922,6 +1954,8 @@ export interface components {
             /** Format: uuid */
             catalogItemId: string;
             price: number;
+            /** @description Descuento en la moneda del plan (0 si no hay) */
+            discount: number;
             /** @enum {string} */
             status: "PROPOSED" | "ACCEPTED" | "DONE";
             notes: string | null;
@@ -1929,6 +1963,11 @@ export interface components {
             createdAt: string;
             /** Format: date-time */
             updatedAt: string;
+        };
+        TreatmentPlanAcceptanceSummaryDto: {
+            signerName: string;
+            /** Format: date-time */
+            acceptedAt: string;
         };
         TreatmentPlanDto: {
             /** Format: uuid */
@@ -1952,8 +1991,10 @@ export interface components {
             /** Format: date-time */
             updatedAt: string;
             items?: components["schemas"]["TreatmentPlanItemDto"][];
-            /** @description Sum of active items price — only present on GET by id */
+            /** @description Sum of active items price minus discount — only present on GET by id */
             total?: number;
+            /** @description Aceptación firmada (DX-012); null si no se firmó. Con firma, los ítems quedan congelados (409). Solo en GET by id */
+            acceptance?: components["schemas"]["TreatmentPlanAcceptanceSummaryDto"] | null;
         };
         UpdateTreatmentPlanDto: {
             /** @enum {string} */
@@ -1977,15 +2018,112 @@ export interface components {
             catalogItemId: string;
             /** @description Explicit price (at most 2 decimal places); if omitted, falls back to the catalog item defaultPrice (400 if neither is set) */
             price?: number;
+            /** @description Descuento en la moneda del plan (máx. 2 decimales, default 0); nunca mayor que el precio (400) */
+            discount?: number;
             notes?: string;
         };
         UpdateTreatmentPlanItemDto: {
             /** @description At most 2 decimal places */
             price?: number;
+            /** @description Descuento (máx. 2 decimales); nunca mayor que el precio (400). En un plan aceptado con firma: 409 */
+            discount?: number;
             /** @enum {string} */
             status?: "PROPOSED" | "ACCEPTED" | "DONE";
             surfaces?: ("MESIAL" | "DISTAL" | "OCCLUSAL" | "VESTIBULAR" | "LINGUAL")[];
             notes?: string;
+        };
+        PlanQuoteLocationDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            address: string | null;
+        };
+        PlanQuotePatientDto: {
+            name: string;
+            /** @example CC 1020304050 */
+            document: string | null;
+        };
+        PlanQuoteItemDto: {
+            /** Format: uuid */
+            id: string;
+            /** @description Diente FDI */
+            toothNumber: string;
+            surfaces: ("MESIAL" | "DISTAL" | "OCCLUSAL" | "VESTIBULAR" | "LINGUAL")[];
+            /** @description Nombre del procedimiento (catálogo, en español) */
+            procedure: string;
+            /** @description Siempre 1: un ítem es un procedimiento sobre un diente */
+            quantity: number;
+            unitPrice: number;
+            discount: number;
+            /** @description unitPrice × quantity − discount */
+            subtotal: number;
+        };
+        PlanQuoteTotalDto: {
+            /** @example COP */
+            currency: string;
+            /** @description Σ precios */
+            gross: number;
+            /** @description Σ descuentos */
+            discount: number;
+            /** @description gross − discount */
+            net: number;
+        };
+        PlanQuoteAcceptanceDto: {
+            signerName: string;
+            /** @description data:image/png;base64,… */
+            signature: string;
+            /**
+             * Format: date-time
+             * @description Hora del servidor
+             */
+            acceptedAt: string;
+            /** @description Quien registró la firma (usuario de la clínica) */
+            acceptedByName: string;
+            /** @description SHA-256 de contentHash + firmante + firma + hora */
+            acceptanceHash: string;
+            /** @description false si la foto o la firma guardadas no coinciden con sus hashes */
+            integrityOk: boolean;
+        };
+        PlanQuoteDocumentDto: {
+            /** @enum {number} */
+            version: 1;
+            /** Format: uuid */
+            planId: string;
+            /** Format: uuid */
+            patientId: string;
+            /** @enum {string} */
+            planStatus: "DRAFT" | "ACCEPTED" | "COMPLETED" | "CANCELLED";
+            /** @example COP */
+            currency: string;
+            clinicName: string;
+            clinicLogoUrl: string | null;
+            location: components["schemas"]["PlanQuoteLocationDto"];
+            patient: components["schemas"]["PlanQuotePatientDto"];
+            /** @description Profesional que creó el plan */
+            professionalName: string | null;
+            /**
+             * @description Fecha de emisión (zona de la sede)
+             * @example 2026-10-16
+             */
+            issuedOn: string;
+            /** @example 2026-11-15 */
+            validUntil: string;
+            /** @example 30 */
+            validityDays: number;
+            items: components["schemas"]["PlanQuoteItemDto"][];
+            /** @description Una fila por moneda */
+            totals: components["schemas"]["PlanQuoteTotalDto"][];
+            /** @description SHA-256 del contenido presentado */
+            contentHash: string;
+            acceptance: components["schemas"]["PlanQuoteAcceptanceDto"] | null;
+        };
+        AcceptTreatmentPlanDto: {
+            /** @description Nombre de quien firma (el paciente o su representante) */
+            signerName: string;
+            /** @description Firma en PNG (data:image/png;base64,… o base64), máx. 200 KB. Vacía: 400. */
+            signature: string;
+            /** @description El contentHash del presupuesto que se mostró (GET …/quote). Si el presupuesto cambió desde entonces: 409. */
+            contentHash: string;
         };
         CreateInvitationDto: {
             fullName: string;
@@ -2256,7 +2394,7 @@ export interface components {
              */
             planCurrency: string;
             /**
-             * @description Sum of ACCEPTED|DONE item prices
+             * @description Sum of ACCEPTED|DONE item prices minus their discounts
              * @example 300
              */
             billable: number;
@@ -4619,6 +4757,13 @@ export interface operations {
                     "application/json": components["schemas"]["TreatmentPlanDto"];
                 };
             };
+            /** @description Plan aceptado con firma: no cambia de moneda ni vuelve a DRAFT (DX-012) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     TreatmentPlansController_addItem: {
@@ -4644,6 +4789,13 @@ export interface operations {
                     "application/json": components["schemas"]["TreatmentPlanItemDto"];
                 };
             };
+            /** @description Plan aceptado con firma: sus ítems quedan congelados (DX-012) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     TreatmentPlansController_removeItem: {
@@ -4659,6 +4811,13 @@ export interface operations {
         responses: {
             /** @description Item soft-deleted (deletedAt set) */
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Plan aceptado con firma: sus ítems quedan congelados (DX-012) */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -4688,6 +4847,103 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["TreatmentPlanItemDto"];
                 };
+            };
+            /** @description Plan aceptado con firma: sus ítems quedan congelados (DX-012); solo admite avanzar el estado (no volver a PROPOSED) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PlanQuoteController_quote: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Sede cuyos datos encabezan el presupuesto (y en la que se firma). Sin ella, la sede principal. Un plan ya aceptado muestra la sede en la que se firmó. */
+                "X-Location-Id"?: string;
+            };
+            path: {
+                patientId: string;
+                planId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanQuoteDocumentDto"];
+                };
+            };
+            /** @description Paciente o plan no encontrados en esta clínica (o el plan es de otro paciente) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PlanQuoteController_accept: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Sede cuyos datos encabezan el presupuesto (y en la que se firma). Sin ella, la sede principal. Un plan ya aceptado muestra la sede en la que se firmó. */
+                "X-Location-Id"?: string;
+            };
+            path: {
+                patientId: string;
+                planId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AcceptTreatmentPlanDto"];
+            };
+        };
+        responses: {
+            /** @description Plan aceptado: ACCEPTED, sus ítems propuestos pasan a aceptados y quedan congelados */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanQuoteDocumentDto"];
+                };
+            };
+            /** @description Sin firma, firma no PNG o de más de 200 KB, sin nombre de quien firma, o plan sin ítems */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Recepción imprime el presupuesto pero no lo acepta */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente o plan no encontrados en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ya estaba aceptado y firmado, el plan está cancelado o completado, o el presupuesto cambió desde que se mostró (contentHash) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

@@ -16,6 +16,7 @@ import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { fieldClass } from '@/lib/ui/field-class';
 import { cn } from '@/lib/utils';
+import { SURFACE_LABELS, SURFACE_ORDER } from '@/lib/odontogram/surface-labels';
 
 // Copy as constants (i18n-ready, es-first) — matches medical-history-panel.tsx convention.
 const copy = {
@@ -42,15 +43,6 @@ const copy = {
   genericSaveError: 'No pudimos guardar el registro. Intenta de nuevo.',
 };
 
-const SURFACE_LABELS: Record<ToothSurface, string> = {
-  VESTIBULAR: 'Vestibular',
-  LINGUAL: 'Lingual',
-  MESIAL: 'Mesial',
-  DISTAL: 'Distal',
-  OCCLUSAL: 'Oclusal',
-};
-
-const SURFACE_ORDER: ToothSurface[] = ['VESTIBULAR', 'MESIAL', 'OCCLUSAL', 'DISTAL', 'LINGUAL'];
 
 interface ToothRecordPanelProps {
   token: string;

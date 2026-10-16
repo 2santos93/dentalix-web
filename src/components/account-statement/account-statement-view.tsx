@@ -1,7 +1,7 @@
 'use client';
 import * as React from 'react';
 import { useEffect, useState } from 'react';
-import { CalendarClock, HandCoins, Lock, Printer, Wallet } from 'lucide-react';
+import { CalendarClock, FileText, HandCoins, Lock, Printer, Wallet } from 'lucide-react';
 import { ApiError } from '@/lib/api/client';
 import {
   accountStatementPrintHref,
@@ -23,6 +23,7 @@ import {
   INSTALLMENT_STATUS_LABELS,
 } from '@/lib/payment-plans/installment-status';
 import { PLAN_STATUS_BADGE_VARIANT, PLAN_STATUS_LABELS } from '@/lib/treatment-plans/plan-status';
+import { planQuotePrintHref } from '@/lib/treatment-plans/plan-quote-api';
 import { PAYMENT_METHOD_BADGE_VARIANT } from '@/lib/payments/payment-method';
 import { formatCurrency } from '@/lib/format/currency';
 import { formatCivilDate } from '@/lib/format/date';
@@ -79,6 +80,11 @@ const copy = {
   colBudgeted: 'Presupuestado',
   colPaid: 'Abonado',
   colBalance: 'Saldo',
+  // Presupuesto imprimible del plan (DX-012): recepción lo imprime desde aquí,
+  // sin entrar al plan de tratamiento (clínico).
+  colQuote: 'Presupuesto',
+  quoteLink: 'Presupuesto',
+  quoteLinkSuffix: (plan: string) => ` · ${plan} (se abre en otra pestaña)`,
   colDate: 'Fecha',
   colMethod: 'Método',
   colLocation: 'Sede',
@@ -317,6 +323,9 @@ function StatementBody({
                   <TableHead scope="col" className="text-right">
                     {copy.colBalance}
                   </TableHead>
+                  <TableHead scope="col">
+                    <span className="sr-only">{copy.colQuote}</span>
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -351,6 +360,18 @@ function StatementBody({
                       data-label={copy.colBalance}
                     >
                       {formatCurrency(plan.balance, plan.currency)}
+                    </TableCell>
+                    <TableCell className="text-right" data-label={copy.colQuote}>
+                      <a
+                        href={planQuotePrintHref(statement.patient.id, plan.id)}
+                        target="_blank"
+                        rel="noopener"
+                        className="inline-flex min-h-11 items-center gap-1.5 text-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary sm:min-h-0"
+                      >
+                        <FileText aria-hidden className="size-4" />
+                        {copy.quoteLink}
+                        <span className="sr-only">{copy.quoteLinkSuffix(planName(plan.id))}</span>
+                      </a>
                     </TableCell>
                   </TableRow>
                 ))}

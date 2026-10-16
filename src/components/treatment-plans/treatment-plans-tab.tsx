@@ -62,11 +62,13 @@ import { VoidPaymentModal } from '@/components/payments/void-payment-modal';
 import { voidPaymentErrorMessage } from '@/components/payments/use-void-payment';
 import { getTokenRole } from '@/lib/auth/token-role';
 import { PaymentPlanSection } from './payment-plan-section';
+import { PlanQuoteActions } from './plan-quote-actions';
 import { SectionError } from '@/components/errors/section-error';
 import { InlineError } from '@/components/errors/inline-error';
 import { notifyError } from '@/components/errors/notify';
 import { cn } from '@/lib/utils';
 import { formatCivilDate, formatDateTime } from '@/lib/format/date';
+import { SURFACE_LABELS, SURFACE_ORDER } from '@/lib/odontogram/surface-labels';
 
 // Copy as constants (i18n-ready, es-first) — matches odontogram-tab.tsx /
 // agenda-view.tsx convention until next-intl wiring lands.
@@ -149,6 +151,12 @@ const copy = {
   focusedToothRow: 'Diente en foco',
   clearFocusedTooth: 'Ver todos los dientes',
   priceLabel: 'Precio',
+  // Descuento por ítem (DX-012): sale en el presupuesto imprimible y resta del
+  // total y del saldo.
+  discountLabel: 'Descuento (opcional)',
+  discountHint: 'En la moneda del plan. Sale en el presupuesto.',
+  invalidDiscount: 'El descuento debe ser un monto válido, no mayor que el precio.',
+  itemDiscount: (amount: string) => `Descuento −${amount}`,
   surfacesLegend: 'Caras (opcional)',
   notesLabel: 'Notas',
   addItemSubmit: 'Agregar ítem',
@@ -233,15 +241,6 @@ const ITEM_STATUS_BADGE_VARIANT: Record<TreatmentPlanItemStatus, BadgeProps['var
   DONE: 'success',
 };
 
-const SURFACE_LABELS: Record<ToothSurface, string> = {
-  VESTIBULAR: 'Vestibular',
-  LINGUAL: 'Lingual',
-  MESIAL: 'Mesial',
-  DISTAL: 'Distal',
-  OCCLUSAL: 'Oclusal',
-};
-
-const SURFACE_ORDER: ToothSurface[] = ['VESTIBULAR', 'MESIAL', 'OCCLUSAL', 'DISTAL', 'LINGUAL'];
 
 function emptySurfacesState(): Record<ToothSurface, boolean> {
   return { VESTIBULAR: false, LINGUAL: false, MESIAL: false, DISTAL: false, OCCLUSAL: false };
@@ -287,6 +286,11 @@ interface ItemsTableProps {
   odontogramHref?: (toothNumber: string) => string;
   onStatusChange: (itemId: string, status: TreatmentPlanItemStatus) => void;
   onRemove: (itemId: string) => void;
+  /**
+   * Plan aceptado con firma (DX-012): sus ítems no se quitan ni vuelven a
+   * «Propuesto» (la API responde 409); el tratamiento sí avanza.
+   */
+  locked?: boolean;
 }
 
 /**
@@ -404,6 +408,7 @@ function ItemsTable({
   odontogramHref,
   onStatusChange,
   onRemove,
+  locked = false,
 }: ItemsTableProps) {
   if (items.length === 0) {
     return <EmptyState role="status" title={copy.emptyItemsTitle} description={copy.emptyItemsDescription} />;
@@ -441,7 +446,14 @@ function ItemsTable({
                   <TableCell className="font-medium tabular-nums">{item.toothNumber}</TableCell>
                   <TableCell>{procedureName(item, catalogById)}</TableCell>
                   <TableCell className="text-muted">{surfacesLabel(item)}</TableCell>
-                  <TableCell className="tabular-nums">{formatCurrency(item.price, currency)}</TableCell>
+                  <TableCell className="tabular-nums">
+                    {formatCurrency(item.price, currency)}
+                    {item.discount > 0 ? (
+                      <span className="block text-xs text-muted">
+                        {copy.itemDiscount(formatCurrency(item.discount, currency))}
+                      </span>
+                    ) : null}
+                  </TableCell>
                   <TableCell>
                     <div className="flex flex-col items-start gap-1.5">
                       <Badge variant={ITEM_STATUS_BADGE_VARIANT[item.status]}>
@@ -456,7 +468,7 @@ function ItemsTable({
                           className={cn(fieldClass, 'h-8 px-2 py-1 text-xs')}
                         >
                           {ITEM_STATUS_OPTIONS.map((status) => (
-                            <option key={status} value={status}>
+                            <option key={status} value={status} disabled={locked && status === 'PROPOSED'}>
                               {ITEM_STATUS_LABELS[status]}
                             </option>
                           ))}
@@ -475,16 +487,18 @@ function ItemsTable({
                         toque. */}
                     <div className="flex items-center gap-3">
                       <OdontogramLink toothNumber={item.toothNumber} href={odontogramHref} />
-                      {odontogramHref ? <Separator orientation="vertical" className="h-5" /> : null}
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        disabled={updating}
-                        onClick={() => onRemove(item.id)}
-                      >
-                        {updating ? copy.removing : copy.remove}
-                      </Button>
+                      {odontogramHref && !locked ? <Separator orientation="vertical" className="h-5" /> : null}
+                      {locked ? null : (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={updating}
+                          onClick={() => onRemove(item.id)}
+                        >
+                          {updating ? copy.removing : copy.remove}
+                        </Button>
+                      )}
                     </div>
                   </TableCell>
                 </TableRow>
@@ -520,6 +534,11 @@ function ItemsTable({
               <p className="mt-1 text-sm text-muted">{surfacesLabel(item)}</p>
               <p className="mt-1 font-medium text-ink tabular-nums">
                 {formatCurrency(item.price, currency)}
+                {item.discount > 0 ? (
+                  <span className="ml-2 text-xs font-normal text-muted">
+                    {copy.itemDiscount(formatCurrency(item.discount, currency))}
+                  </span>
+                ) : null}
               </p>
               <div className="mt-3 flex items-center justify-between gap-2">
                 <select
@@ -530,20 +549,22 @@ function ItemsTable({
                   className={cn(fieldClass, 'h-9 w-auto text-xs')}
                 >
                   {ITEM_STATUS_OPTIONS.map((status) => (
-                    <option key={status} value={status}>
+                    <option key={status} value={status} disabled={locked && status === 'PROPOSED'}>
                       {ITEM_STATUS_LABELS[status]}
                     </option>
                   ))}
                 </select>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  disabled={updating}
-                  onClick={() => onRemove(item.id)}
-                >
-                  {updating ? copy.removing : copy.remove}
-                </Button>
+                {locked ? null : (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    disabled={updating}
+                    onClick={() => onRemove(item.id)}
+                  >
+                    {updating ? copy.removing : copy.remove}
+                  </Button>
+                )}
               </div>
               {odontogramHref ? (
                 <p className="mt-3">
@@ -830,6 +851,7 @@ export function TreatmentPlansTab({
   const [toothNumber, setToothNumber] = useState('');
   const [catalogItemId, setCatalogItemId] = useState('');
   const [price, setPrice] = useState('');
+  const [discount, setDiscount] = useState('');
   const [surfaces, setSurfaces] = useState<Record<ToothSurface, boolean>>(emptySurfacesState);
   const [notes, setNotes] = useState('');
   const [addItemSubmitting, setAddItemSubmitting] = useState(false);
@@ -959,6 +981,7 @@ export function TreatmentPlansTab({
     setToothNumber('');
     setCatalogItemId('');
     setPrice('');
+    setDiscount('');
     setSurfaces(emptySurfacesState());
     setNotes('');
     setAddItemValidationError(null);
@@ -1371,6 +1394,15 @@ export function TreatmentPlansTab({
     }
   }
 
+  /**
+   * Tras aceptar con firma (DX-012) cambian el estado del plan (selector y
+   * lista), sus ítems (propuestos → aceptados, ya congelados) y por tanto lo
+   * facturable: se refresca todo en su sitio.
+   */
+  function handlePlanAccepted() {
+    void Promise.all([refreshPlanDetail(), refreshPlansInPlace(), refreshBalanceAndPayments()]);
+  }
+
   function handleProcedureChange(nextCatalogItemId: string) {
     setCatalogItemId(nextCatalogItemId);
     // Prefill (not lock) the price with the chosen procedure's default —
@@ -1404,6 +1436,16 @@ export function TreatmentPlansTab({
 
     const selectedSurfaces = SURFACE_ORDER.filter((s) => surfaces[s]);
     const trimmedPrice = price.trim();
+    const trimmedDiscount = discount.trim();
+    const discountValue = trimmedDiscount ? Number(trimmedDiscount) : 0;
+    if (
+      !Number.isFinite(discountValue) ||
+      discountValue < 0 ||
+      (trimmedPrice !== '' && discountValue > Number(trimmedPrice))
+    ) {
+      setAddItemValidationError(copy.invalidDiscount);
+      return;
+    }
 
     setAddItemSubmitting(true);
     try {
@@ -1412,12 +1454,14 @@ export function TreatmentPlansTab({
         catalogItemId,
         ...(selectedSurfaces.length ? { surfaces: selectedSurfaces } : {}),
         ...(trimmedPrice ? { price: Number(trimmedPrice) } : {}),
+        ...(discountValue > 0 ? { discount: discountValue } : {}),
         ...(notes.trim() ? { notes: notes.trim() } : {}),
       };
       await addItem(token, selectedPlanId, input);
       setToothNumber('');
       setCatalogItemId('');
       setPrice('');
+      setDiscount('');
       setSurfaces(emptySurfacesState());
       setNotes('');
       await refreshPlanDetail();
@@ -1447,6 +1491,8 @@ export function TreatmentPlansTab({
   }
 
   const selectedPlan = plans.find((p) => p.id === selectedPlanId) ?? null;
+  const signed = Boolean(planDetail?.acceptance);
+  const role = getTokenRole(token);
 
   return (
     <div className="flex flex-col gap-6">
@@ -1527,7 +1573,8 @@ export function TreatmentPlansTab({
                   className={cn(fieldClass, 'h-9')}
                 >
                   {PLAN_STATUS_OPTIONS.map((status) => (
-                    <option key={status} value={status}>
+                    // Firmado (DX-012): no vuelve a borrador (la API: 409).
+                    <option key={status} value={status} disabled={signed && status === 'DRAFT'}>
                       {PLAN_STATUS_LABELS[status]}
                     </option>
                   ))}
@@ -1568,6 +1615,17 @@ export function TreatmentPlansTab({
                 )}
                 {planStatusError && <InlineError>{planStatusError}</InlineError>}
                 {itemActionError && <InlineError>{itemActionError}</InlineError>}
+
+                {/* El presupuesto del plan (DX-012): imprimirlo y aceptarlo
+                    con firma. Va antes de las cifras porque es lo que se
+                    presenta al paciente. */}
+                <PlanQuoteActions
+                  token={token}
+                  patientId={patientId}
+                  plan={planDetail}
+                  role={role}
+                  onAccepted={handlePlanAccepted}
+                />
 
                 {/* UNA región de dinero, no dos racimos de tarjetas. Antes el
                     plan mostraba «Total» en su propia franja y luego tres
@@ -1616,6 +1674,7 @@ export function TreatmentPlansTab({
                   odontogramHref={odontogramHref}
                   onStatusChange={handleItemStatusChange}
                   onRemove={openRemoveConfirm}
+                  locked={signed}
                 />
 
                 <Separator />
@@ -1774,7 +1833,9 @@ export function TreatmentPlansTab({
 
                 <Separator />
 
-                {catalogItems.length === 0 ? (
+                {/* Firmado (DX-012): no se agregan ítems; `PlanQuoteActions`
+                    ya dice arriba que el plan quedó congelado. */}
+                {signed ? null : catalogItems.length === 0 ? (
                   <EmptyState
                     role="status"
                     title={copy.emptyCatalogTitle}
@@ -1829,6 +1890,17 @@ export function TreatmentPlansTab({
                           step="0.01"
                           value={price}
                           onChange={(e) => setPrice(e.target.value)}
+                        />
+                      </FormField>
+
+                      <FormField htmlFor="tp-discount" label={copy.discountLabel} hint={copy.discountHint}>
+                        <Input
+                          id="tp-discount"
+                          type="number"
+                          min={0}
+                          step="0.01"
+                          value={discount}
+                          onChange={(e) => setDiscount(e.target.value)}
                         />
                       </FormField>
 
@@ -1921,7 +1993,7 @@ export function TreatmentPlansTab({
         submitting={voidingPaymentId !== null && voidingPaymentId === paymentToVoid}
         error={paymentActionError}
         // Pinta el aviso de la ventana de recepción; la regla la aplica la API.
-        restrictedToOwnToday={getTokenRole(token) !== 'ADMIN'}
+        restrictedToOwnToday={role !== 'ADMIN'}
       />
     </div>
   );
