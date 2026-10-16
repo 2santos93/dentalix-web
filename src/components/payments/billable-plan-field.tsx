@@ -1,0 +1,123 @@
+'use client';
+import { billablePlanLabel, type BillablePlan } from '@/lib/payments/billable-plans-api';
+import { formatCurrency } from '@/lib/format/currency';
+import { FormField } from '@/components/shared/form-field';
+import { FieldError } from '@/components/errors/field-error';
+import type { BillablePlansState } from './use-billable-plans';
+
+// Copy como constantes (i18n-ready).
+export const billablePlanFieldCopy = {
+  label: 'Plan',
+  loading: 'Cargando planes…',
+  // Escalón 2 (FieldError): ≤4 palabras, el contexto lo da la etiqueta.
+  failed: 'No cargaron los planes',
+  emptyTitle: 'Este paciente no tiene planes por cobrar.',
+  emptyDescription:
+    'Se cobra contra un plan de tratamiento con procedimientos aceptados. Cuando el odontólogo lo deje aceptado, aparecerá aquí.',
+  // El saldo se repite aquí: en móvil el `<select>` recorta el nombre del plan.
+  figures: (balance: string, total: string, paid: string) =>
+    `Saldo ${balance} · Total ${total} · Abonado ${paid}`,
+  inFavor: 'a favor',
+  otherCurrencies: (list: string) => `También abonado en otra moneda: ${list}`,
+};
+
+// <select> nativo con el aspecto del átomo Input (misma cadena que el resto de
+// formularios de pagos).
+const fieldClass =
+  'flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-50';
+
+interface BillablePlanFieldProps {
+  id: string;
+  state: BillablePlansState;
+  value: string;
+  onChange: (planId: string) => void;
+  /** Motivo por el que un plan no se puede elegir aquí, o `null` si se puede. */
+  unavailableReason?: (plan: BillablePlan) => string | null;
+  disabled?: boolean;
+}
+
+/**
+ * El selector de plan de los modales de cobro del estado de cuenta (DX-067),
+ * con sus estados: cargando, fallo de la lista (escalón 2: sustituye al
+ * control, con reintento) y el selector con las cifras del plan elegido. El
+ * estado vacío lo pinta quien lo usa (`BillablePlansEmpty`), porque sin planes
+ * no tiene sentido enseñar el resto del formulario.
+ */
+export function BillablePlanField({
+  id,
+  state,
+  value,
+  onChange,
+  unavailableReason,
+  disabled,
+}: BillablePlanFieldProps) {
+  const selected = state.plans?.find((p) => p.id === value) ?? null;
+  const hintId = `${id}-hint`;
+  return (
+    <FormField htmlFor={id} label={billablePlanFieldCopy.label}>
+      {state.failed ? (
+        <FieldError label={billablePlanFieldCopy.failed} onRetry={state.retry} />
+      ) : state.plans === null ? (
+        <p
+          role="status"
+          className="flex h-10 items-center rounded-lg border border-border bg-surface-2 px-3 text-sm text-muted"
+        >
+          {billablePlanFieldCopy.loading}
+        </p>
+      ) : (
+        <>
+          <select
+            id={id}
+            value={value}
+            disabled={disabled}
+            onChange={(e) => onChange(e.target.value)}
+            aria-describedby={selected ? hintId : undefined}
+            className={fieldClass}
+          >
+            {state.plans.map((plan) => {
+              const reason = unavailableReason?.(plan) ?? null;
+              return (
+                <option key={plan.id} value={plan.id} disabled={reason !== null}>
+                  {reason ? `${billablePlanLabel(plan)} (${reason})` : billablePlanLabel(plan)}
+                </option>
+              );
+            })}
+          </select>
+          {selected ? <PlanFigures id={hintId} plan={selected} /> : null}
+        </>
+      )}
+    </FormField>
+  );
+}
+
+function PlanFigures({ id, plan }: { id: string; plan: BillablePlan }) {
+  const others = plan.paidOtherCurrencies
+    .map((o) => formatCurrency(o.amount, o.currency))
+    .join(', ');
+  return (
+    <p id={id} className="text-xs text-muted tabular-nums">
+      {billablePlanFieldCopy.figures(
+        plan.balance < 0
+          ? `${formatCurrency(-plan.balance, plan.currency)} ${billablePlanFieldCopy.inFavor}`
+          : formatCurrency(plan.balance, plan.currency),
+        formatCurrency(plan.total, plan.currency),
+        formatCurrency(plan.paid, plan.currency),
+      )}
+      {others ? (
+        <span className="block">{billablePlanFieldCopy.otherCurrencies(others)}</span>
+      ) : null}
+    </p>
+  );
+}
+
+/** Paciente sin nada que cobrar: lo dice y explica de qué depende. */
+export function BillablePlansEmpty() {
+  return (
+    <div role="status" className="rounded-lg border border-dashed border-border bg-surface px-4 py-6 text-center">
+      <p className="text-sm font-medium text-ink">{billablePlanFieldCopy.emptyTitle}</p>
+      <p className="mx-auto mt-1 max-w-sm text-sm text-muted">
+        {billablePlanFieldCopy.emptyDescription}
+      </p>
+    </div>
+  );
+}

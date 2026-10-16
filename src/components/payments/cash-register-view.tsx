@@ -6,6 +6,7 @@ import { Building2, Lock } from 'lucide-react';
 import { ApiError } from '@/lib/api/client';
 import {
   listCashPayments,
+  type CashPayment,
   type CashPaymentsResponse,
   type CashPaymentsQuery,
   type PaymentMethod,
@@ -93,6 +94,10 @@ const copy = {
   forbiddenTitle: 'Tu rol no tiene acceso a la caja.',
   forbiddenHint:
     'La caja es para administración y recepción. Pídele acceso a quien administra la clínica.',
+  // DX-067: la ventana de anulación de recepción mira el día de REGISTRO, no
+  // la fecha de pago; cuando difieren, la fila lo dice.
+  registeredToday: 'Registrado hoy',
+  registeredOn: (date: string) => `Registrado el ${date}`,
   empty: 'No hay abonos en este período.',
   emptyHint: 'Prueba con otro rango de fechas o con otro método.',
 };
@@ -166,6 +171,15 @@ export function CashRegisterView({ token }: CashRegisterViewProps) {
         };
         const res = await listCashPayments(token, params);
         if (cancelled) return;
+        // La página pedida se quedó sin filas (p. ej. se anuló la única de la
+        // última página): se pasa a la última que existe en vez de pintar un
+        // vacío con «Anterior» como única salida. Sigue «cargando» hasta que
+        // llegue esa página, así no parpadea el vacío ni la fila anulada.
+        const lastPage = Math.max(1, Math.ceil(res.total / res.pageSize));
+        if (res.items.length === 0 && page > lastPage) {
+          setPage(lastPage);
+          return;
+        }
         setData(res);
         setLoadError(null);
         setForbidden(false);
@@ -174,9 +188,8 @@ export function CashRegisterView({ token }: CashRegisterViewProps) {
         const status = err instanceof ApiError ? err.status : null;
         setForbidden(status === 403);
         setLoadError(status === 400 ? copy.badRequest : copy.genericLoadError);
-      } finally {
-        if (!cancelled) setLoading(false);
       }
+      if (!cancelled) setLoading(false);
     }
     void load();
     return () => {
@@ -361,6 +374,7 @@ export function CashRegisterView({ token }: CashRegisterViewProps) {
                       <TableRow key={payment.id}>
                         <TableCell className="tabular-nums" data-label={copy.colDate}>
                           {formatCivilDate(payment.paidAt)}
+                          <RegisteredNote payment={payment} />
                         </TableCell>
                         <TableCell data-label={copy.colPatient}>
                           <Link
@@ -447,6 +461,23 @@ export function CashRegisterView({ token }: CashRegisterViewProps) {
         subject={voiding.target ? voidPaymentSubject(voiding.target) : undefined}
       />
     </>
+  );
+}
+
+/**
+ * «Registrado hoy» / «Registrado el …» bajo la fecha de pago cuando el abono se
+ * registró otro día (DX-067). Explica por qué recepción ve «Anular» junto a un
+ * abono con fecha de pago antigua: la regla mira el día de registro en la sede,
+ * y ese día (`registeredOn`, `registeredToday`) lo calcula la API.
+ */
+function RegisteredNote({ payment }: { payment: CashPayment }) {
+  if (payment.registeredOn === payment.paidAt.slice(0, 10)) return null;
+  return (
+    <span className="block text-xs font-normal text-muted">
+      {payment.registeredToday
+        ? copy.registeredToday
+        : copy.registeredOn(formatCivilDate(`${payment.registeredOn}T00:00:00.000Z`))}
+    </span>
   );
 }
 

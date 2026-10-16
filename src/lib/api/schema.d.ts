@@ -833,6 +833,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/patients/{patientId}/billable-plans": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Planes cobrables del paciente: total, abonado y saldo, sin datos clínicos
+         * @description Planes no cancelados con algo facturable (ítems ACCEPTED|DONE), de todas las sedes, del más reciente al más antiguo. Es lo que necesita quien cobra para elegir el plan de un abono (`POST /treatment-plans/:id/payments`) o de un plan de cuotas (`POST /treatment-plans/:id/payment-plan`). No incluye ítems, dientes, procedimientos ni notas. Lista vacía si el paciente no tiene nada que cobrar.
+         */
+        get: operations["AccountStatementController_billablePlans"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/privacy-policies": {
         parameters: {
             query?: never;
@@ -2009,6 +2029,13 @@ export interface components {
              * @description Día civil del abono (medianoche UTC del día registrado).
              */
             paidAt: string;
+            /**
+             * @description Día civil (YYYY-MM-DD) en que se registró el abono, en la zona de su sede. Puede diferir de `paidAt` (fecha de pago antigua registrada después); la ventana de anulación de recepción mira este día.
+             * @example 2026-10-16
+             */
+            registeredOn: string;
+            /** @description Si `registeredOn` es hoy en la zona de la sede del abono. */
+            registeredToday: boolean;
             /** @example 150000 */
             amount: number;
             /**
@@ -2471,6 +2498,44 @@ export interface components {
             plans: components["schemas"]["AccountStatementPlanDto"][];
             movements: components["schemas"]["AccountStatementMovementDto"][];
             installments: components["schemas"]["AccountStatementInstallmentDto"][];
+        };
+        BillablePlanDto: {
+            /** Format: uuid */
+            id: string;
+            /**
+             * @description Nunca CANCELLED: un plan cancelado no se cobra.
+             * @enum {string}
+             */
+            status: "DRAFT" | "ACCEPTED" | "COMPLETED" | "CANCELLED";
+            /**
+             * @description Moneda del plan (la del saldo y la del plan de cuotas)
+             * @example COP
+             */
+            currency: string;
+            /**
+             * Format: date-time
+             * @description El plan no tiene título: se nombra por su fecha.
+             */
+            createdAt: string;
+            /**
+             * @description Facturable: Σ ítems ACCEPTED|DONE, en la moneda del plan
+             * @example 3000000
+             */
+            total: number;
+            /**
+             * @description Abonos vivos en la moneda del plan
+             * @example 1200000
+             */
+            paid: number;
+            /** @description Abonos vivos del plan hechos en otra moneda (sin convertir) */
+            paidOtherCurrencies: components["schemas"]["AccountStatementOtherCurrencyDto"][];
+            /**
+             * @description `total - paid`; negativo = a favor del paciente
+             * @example 1800000
+             */
+            balance: number;
+            /** @description Si ya tiene un plan de cuotas activo (solo se admite uno por plan: crear otro responde 409). */
+            hasActivePaymentPlan: boolean;
         };
         UserRefDto: {
             /** Format: uuid */
@@ -4823,6 +4888,48 @@ export interface operations {
                 };
             };
             /** @description patientId no es UUID, fecha inválida o from > to */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Rol sin acceso a pagos */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente no encontrado en esta clínica (inexistente o de otra clínica). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AccountStatementController_billablePlans: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BillablePlanDto"][];
+                };
+            };
+            /** @description patientId no es UUID */
             400: {
                 headers: {
                     [name: string]: unknown;
