@@ -1,4 +1,4 @@
-import { apiFetch } from '@/lib/api/client';
+import { apiFetchOrNull } from '@/lib/api/client';
 
 /**
  * Cierra la sesión en el servidor revocando el refresh token (denylist por
@@ -8,7 +8,7 @@ import { apiFetch } from '@/lib/api/client';
  */
 export async function logout(refreshToken: string): Promise<void> {
   try {
-    await apiFetch('/auth/logout', {
+    await apiFetchOrNull('/auth/logout', {
       method: 'POST',
       body: { refreshToken },
     });
