@@ -132,7 +132,7 @@ test('register a procedure on a tooth -> colored + in timeline, persists after r
   ).toBeVisible({ timeout: 10_000 });
 
   // --- Open the "Odontograma" tab ---
-  const odontogramTab = page.getByRole('tab', { name: 'Odontograma' });
+  const odontogramTab = page.getByRole('tab', { name: 'Odontograma', exact: true });
   await odontogramTab.click();
   await expect(odontogramTab).toHaveAttribute('aria-selected', 'true');
 
@@ -192,7 +192,7 @@ test('register a procedure on a tooth -> colored + in timeline, persists after r
 
   // The active tab is local component state, not persisted across a reload
   // -> the page comes back on "Datos"; reopen "Odontograma".
-  const odontogramTabAfterReload = page.getByRole('tab', { name: 'Odontograma' });
+  const odontogramTabAfterReload = page.getByRole('tab', { name: 'Odontograma', exact: true });
   await odontogramTabAfterReload.click();
   await expect(odontogramTabAfterReload).toHaveAttribute('aria-selected', 'true');
 

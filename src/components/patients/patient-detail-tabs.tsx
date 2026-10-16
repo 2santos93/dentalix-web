@@ -6,6 +6,7 @@ export type PatientDetailTabKey =
   | 'data'
   | 'clinical-history'
   | 'odontogram'
+  | 'perio'
   | 'treatment-plans'
   | 'account-statement'
   | 'consents'
@@ -34,6 +35,8 @@ interface PatientDetailTabsProps {
   dataConsentsLabel?: string;
   /** «Consentimientos» (DX-006): sin etiqueta no existe (recepción no la ve). */
   consentsLabel?: string;
+  /** «Periodontograma» (DX-007): sin etiqueta no existe (recepción no la ve). */
+  perioLabel?: string;
 }
 
 /** Left-to-right reading order of the tablist — the order the arrow keys walk. */
@@ -41,6 +44,7 @@ const TAB_ORDER: PatientDetailTabKey[] = [
   'data',
   'clinical-history',
   'odontogram',
+  'perio',
   'treatment-plans',
   'account-statement',
   'consents',
@@ -90,11 +94,13 @@ export function PatientDetailTabs({
   accountStatementLabel,
   dataConsentsLabel,
   consentsLabel,
+  perioLabel,
 }: PatientDetailTabsProps) {
   const labels: Record<PatientDetailTabKey, string | undefined> = {
     data: dataLabel,
     'clinical-history': clinicalHistoryLabel,
     odontogram: odontogramLabel,
+    perio: perioLabel,
     'treatment-plans': treatmentPlansLabel,
     'account-statement': accountStatementLabel,
     'data-consents': dataConsentsLabel,

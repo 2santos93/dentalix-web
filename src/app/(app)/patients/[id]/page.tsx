@@ -22,6 +22,7 @@ import { getTokenRole } from '@/lib/auth/token-role';
 import { patientTabAccess, resolvePatientTab } from '@/lib/patients/patient-tab-access';
 import { DataConsentsTab } from '@/components/data-consents/data-consents-tab';
 import { PatientConsentsTab } from '@/components/consents/patient-consents-tab';
+import { PerioTab } from '@/components/perio/perio-tab';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
@@ -36,6 +37,7 @@ const copy = {
   tabAccountStatement: 'Estado de cuenta',
   tabDataConsents: 'Autorizaciones',
   tabConsents: 'Consentimientos',
+  tabPerio: 'Periodontograma',
   anamnesisHeading: 'Anamnesis',
   entriesHeading: 'Evoluciones',
 };
@@ -271,6 +273,7 @@ function PatientDetailView() {
             }
             dataConsentsLabel={access['data-consents'] ? copy.tabDataConsents : undefined}
             consentsLabel={access.consents ? copy.tabConsents : undefined}
+            perioLabel={access.perio ? copy.tabPerio : undefined}
           />
 
           <TabPanel tab="data" activeTab={activeTab} register={registerPanel}>
@@ -321,6 +324,12 @@ function PatientDetailView() {
                 onToothChange={(tooth) => setParams({ tooth })}
                 planHref={(tooth) => `${pathname}?tab=treatment-plans&tooth=${tooth}`}
               />
+            </TabPanel>
+          ) : null}
+
+          {access.perio ? (
+            <TabPanel tab="perio" activeTab={activeTab} register={registerPanel}>
+              <PerioTab token={accessToken} patientId={patientId} />
             </TabPanel>
           ) : null}
 
