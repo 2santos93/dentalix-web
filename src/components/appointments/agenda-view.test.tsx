@@ -8,6 +8,8 @@ import { createAppointment, listAppointments, updateAppointment } from '@/lib/ap
 import { listStaff } from '@/lib/appointments/staff-api';
 import { listPatients } from '@/lib/patients/patients-api';
 import { createConfirmationLink } from '@/lib/appointments/confirmations-api';
+import { deleteScheduleBlock, listScheduleBlocks } from '@/lib/appointments/schedule-blocks-api';
+import { listWaitlist } from '@/lib/appointments/waitlist-api';
 
 // NOTE: jest.mock's string literal is not alias-rewritten by the SWC
 // transform (only real `import`/`require` specifiers are) — use a relative
@@ -39,6 +41,15 @@ jest.mock('../../lib/patients/patients-api', () => ({
 }));
 jest.mock('../../lib/appointments/confirmations-api', () => ({
   createConfirmationLink: jest.fn(),
+}));
+// DX-122: bloqueos y pendientes (su comportamiento propio se prueba abajo).
+jest.mock('../../lib/appointments/schedule-blocks-api', () => ({
+  ...jest.requireActual('../../lib/appointments/schedule-blocks-api'),
+  listScheduleBlocks: jest.fn().mockResolvedValue([]),
+  deleteScheduleBlock: jest.fn().mockResolvedValue(undefined),
+}));
+jest.mock('../../lib/appointments/waitlist-api', () => ({
+  listWaitlist: jest.fn().mockResolvedValue({ items: [], total: 0, page: 1, pageSize: 50 }),
 }));
 
 const mockedCreateAppointment = createAppointment as jest.MockedFunction<typeof createAppointment>;
@@ -763,6 +774,85 @@ describe('AgendaView', () => {
       // Con el modal cerrado, quien usa teclado o lector de pantalla necesita
       // saber que el movimiento se guardó.
       expect(await screen.findByText('Cita movida.')).toBeInTheDocument();
+    });
+  });
+
+  describe('bloqueos y pendientes (DX-122)', () => {
+    const mockedListBlocks = listScheduleBlocks as jest.MockedFunction<typeof listScheduleBlocks>;
+    const mockedDeleteBlock = deleteScheduleBlock as jest.MockedFunction<typeof deleteScheduleBlock>;
+    const mockedListWaitlist = listWaitlist as jest.MockedFunction<typeof listWaitlist>;
+    const tokenFor = (role: string) =>
+      `h.${btoa(JSON.stringify({ sub: 'u1', tenantId: 't1', role }))}.s`;
+    const today = (() => {
+      const d = new Date();
+      return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+    })();
+    const lunch = {
+      id: 'b-1',
+      tenantId: 't1',
+      providerId: null,
+      locationId: null,
+      start: new Date(`${today}T13:00:00`).toISOString(),
+      end: new Date(`${today}T14:00:00`).toISOString(),
+      kind: 'LUNCH' as const,
+      allowsBooking: true,
+      note: null,
+      createdById: 'u1',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    };
+
+    beforeEach(() => {
+      mockedListBlocks.mockReset().mockResolvedValue([lunch]);
+      mockedDeleteBlock.mockReset().mockResolvedValue(undefined);
+      mockedListWaitlist.mockReset().mockResolvedValue({ items: [], total: 0, page: 1, pageSize: 50 });
+      mockedListStaff.mockResolvedValue(staff);
+      mockedListAppointments.mockResolvedValue([]);
+    });
+
+    it('Día: pinta los bloqueos del día y recepción puede quitarlos con confirmación', async () => {
+      const user = userEvent.setup();
+      render(<AgendaView token={tokenFor('RECEPTION')} />);
+      await user.click(screen.getByRole('button', { name: /^día$/i }));
+
+      expect(await screen.findAllByTestId('schedule-block')).toHaveLength(2);
+      const range = mockedListBlocks.mock.calls.at(-1)![1];
+      expect(range).toEqual(localDayRange(today));
+
+      await user.click(screen.getAllByRole('button', { name: /^Quitar bloqueo: Almuerzo/ })[0]);
+      const dialog = await screen.findByRole('dialog', { name: 'Quitar el bloqueo' });
+      const calls = mockedListBlocks.mock.calls.length;
+      await user.click(within(dialog).getByRole('button', { name: 'Quitar bloqueo' }));
+      await waitFor(() => expect(mockedDeleteBlock).toHaveBeenCalledWith(tokenFor('RECEPTION'), 'b-1'));
+      await waitFor(() => expect(mockedListBlocks.mock.calls.length).toBeGreaterThan(calls));
+    });
+
+    it('«Bloquear horario» solo para quien puede bloquear (no la asistente)', async () => {
+      const { unmount } = render(<AgendaView token={tokenFor('ASSISTANT')} />);
+      await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
+      expect(screen.queryByRole('button', { name: 'Bloquear horario' })).not.toBeInTheDocument();
+      unmount();
+
+      const user = userEvent.setup();
+      render(<AgendaView token={tokenFor('RECEPTION')} />);
+      await user.click(await screen.findByRole('button', { name: 'Bloquear horario' }));
+      expect(await screen.findByRole('dialog', { name: 'Bloquear horario' })).toBeInTheDocument();
+    });
+
+    it('cancelar una cita recarga «Pendientes por agendar»', async () => {
+      const apt = appointment({ id: 'apt-c', start: new Date(`${today}T09:00:00`).toISOString(), end: new Date(`${today}T09:30:00`).toISOString() });
+      mockedListAppointments.mockResolvedValue([apt]);
+      mockedUpdateAppointment.mockResolvedValue({ ...apt, status: 'CANCELLED' });
+      const user = userEvent.setup();
+      render(<AgendaView token={tokenFor('RECEPTION')} />);
+      await user.click(screen.getByRole('button', { name: /^día$/i }));
+      await user.click(screen.getByRole('button', { name: 'Lista' }));
+      await waitFor(() => expect(mockedListWaitlist).toHaveBeenCalled());
+      const before = mockedListWaitlist.mock.calls.length;
+
+      const [select] = await screen.findAllByTestId('appointment-status-select');
+      await user.selectOptions(select, 'CANCELLED');
+      await waitFor(() => expect(mockedListWaitlist.mock.calls.length).toBeGreaterThan(before));
     });
   });
 });

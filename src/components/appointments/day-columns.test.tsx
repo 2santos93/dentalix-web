@@ -262,4 +262,51 @@ describe('DayColumns (DX-121)', () => {
       expect(onDrop).not.toHaveBeenCalled();
     });
   });
+
+  describe('bloqueos de agenda (DX-122)', () => {
+    const vacation = {
+      id: 'b-1',
+      providerId: 'prov-1',
+      locationId: null,
+      start: new Date('2031-03-01T00:00:00').toISOString(),
+      end: new Date('2031-03-08T00:00:00').toISOString(),
+      kind: 'VACATION' as const,
+      allowsBooking: false,
+      note: 'Congreso',
+    };
+    const lunch = {
+      id: 'b-2',
+      providerId: null,
+      locationId: 'loc-1',
+      start: new Date(`${DATE}T13:00:00`).toISOString(),
+      end: new Date(`${DATE}T14:00:00`).toISOString(),
+      kind: 'LUNCH' as const,
+      allowsBooking: true,
+      note: null,
+    };
+
+    it('pinta el del profesional en su columna y el de la sede en todas, con etiqueta y leyenda', () => {
+      renderColumns({ blocks: [vacation, lunch], activeLocationId: 'loc-1' });
+      const columns = screen.getAllByTestId('day-column');
+      expect(within(columns[0]).getAllByTestId('schedule-block')).toHaveLength(2);
+      expect(within(columns[1]).getAllByTestId('schedule-block')).toHaveLength(1);
+      expect(within(columns[0]).getByRole('note', { name: /^Bloqueo: Vacaciones: Congreso, / })).toBeInTheDocument();
+      expect(
+        within(columns[2]).getByRole('note', { name: 'Bloqueo: Almuerzo · toda la sede · se puede agendar, 13:00–14:00' }),
+      ).toBeInTheDocument();
+      expect(screen.getByText('Horario bloqueado (vacaciones, reunión, almuerzo…)')).toBeInTheDocument();
+    });
+
+    it('el bloqueo de otra sede no se pinta con una sede activa', () => {
+      renderColumns({ blocks: [{ ...lunch, locationId: 'loc-2' }], activeLocationId: 'loc-1' });
+      expect(screen.queryByTestId('schedule-block')).not.toBeInTheDocument();
+    });
+
+    it('con permiso, la etiqueta abre el bloqueo para quitarlo', async () => {
+      const onSelectBlock = jest.fn();
+      renderColumns({ blocks: [lunch], activeLocationId: 'loc-1', onSelectBlock });
+      await userEvent.click(screen.getAllByRole('button', { name: /^Quitar bloqueo: Almuerzo/ })[0]);
+      expect(onSelectBlock).toHaveBeenCalledWith(lunch);
+    });
+  });
 });

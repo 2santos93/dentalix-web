@@ -63,6 +63,11 @@ export interface Appointment {
   callbackRequestedAt: string | null;
   createdAt: string;
   updatedAt: string;
+  /**
+   * DX-122: solo en la respuesta de crear o mover — avisos que no impidieron la
+   * operación (p. ej. «La cita cae en un bloqueo que permite agendar…»).
+   */
+  warnings?: string[];
 }
 
 export async function createAppointment(

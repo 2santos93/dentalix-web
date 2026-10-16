@@ -16,10 +16,16 @@ import {
   patientLabel,
 } from './appointment-display';
 import { formatDateLabel } from '@/lib/format/date';
+import {
+  blockBandForDay,
+  blockLabel,
+  type ScheduleBlockLike,
+} from '@/lib/appointments/schedule-blocks';
 
 const copy = {
   heading: 'Agenda de la semana',
   createSlotLabel: (date: string, time: string) => `Crear cita ${date} ${time}`,
+  blockAria: (label: string) => `Bloqueo: ${label}`,
 };
 
 const SLOTS_PER_DAY = DAY_MINUTES / SLOT_MINUTES; // 48
@@ -60,7 +66,16 @@ interface WeekTimeGridProps {
   onSelectDay: (date: string) => void;
   onSelectSlot: (date: string, startTime: string) => void;
   onSelectAppointment: (appointment: Appointment) => void;
+  /**
+   * DX-122: bloqueos de la semana (ya filtrados por quien llama: el profesional
+   * elegido y la sede). Se pintan con trama y etiqueta, sin tapar los huecos.
+   */
+  blocks?: ScheduleBlockLike[];
+  /** Nombre del profesional de un bloqueo (para la etiqueta). */
+  providerName?: (providerId: string) => string | undefined;
 }
+
+const WHOLE_DAY = { start: 0, end: DAY_MINUTES };
 
 export function WeekTimeGrid({
   appointments,
@@ -69,6 +84,8 @@ export function WeekTimeGrid({
   onSelectDay,
   onSelectSlot,
   onSelectAppointment,
+  blocks = [],
+  providerName,
 }: WeekTimeGridProps) {
   const dates = weekDates(weekStart);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -146,6 +163,31 @@ export function WeekTimeGrid({
                 aria-label={copy.createSlotLabel(date, slotTime(i))}
               />
             ))}
+            {blocks.map((block) => {
+              const band = blockBandForDay(block, date, WHOLE_DAY);
+              if (!band) return null;
+              const label = blockLabel(
+                block,
+                block.providerId ? providerName?.(block.providerId) : undefined,
+              );
+              return (
+                <div
+                  key={block.id}
+                  data-testid="week-schedule-block"
+                  role="note"
+                  aria-label={copy.blockAria(label)}
+                  className="pointer-events-none absolute inset-x-0 overflow-hidden border-y border-dashed border-warning/50 bg-warning/10 [background-image:repeating-linear-gradient(45deg,transparent_0_7px,color-mix(in_oklab,var(--color-warning)_22%,transparent)_7px_9px)]"
+                  style={{
+                    top: (band.start / SLOT_MINUTES) * ROW_HEIGHT_PX,
+                    height: ((band.end - band.start) / SLOT_MINUTES) * ROW_HEIGHT_PX,
+                  }}
+                >
+                  <span className="m-0.5 inline-block max-w-[calc(100%-0.25rem)] truncate rounded bg-surface/90 px-1 text-[0.6875rem] font-medium text-ink">
+                    {label}
+                  </span>
+                </div>
+              );
+            })}
             {layoutLanes(
               appointments
                 .filter((a) => localDateString(a.start) === date)

@@ -19,6 +19,12 @@ import {
   type MoveTarget,
 } from '@/lib/appointments/day-grid';
 import { layoutLanes } from '@/lib/appointments/week-grid-layout';
+import {
+  blockBandForDay,
+  blockLabel,
+  blockShownInColumn,
+  type ScheduleBlockLike,
+} from '@/lib/appointments/schedule-blocks';
 import { appointmentTypeTextColor, isAppointmentTypeColor } from '@/lib/color/contrast';
 import {
   STATUS_LABELS,
@@ -47,6 +53,9 @@ const copy = {
   providerPicker: 'Profesional visible',
   appointmentsCount: (n: number) => (n === 1 ? '1 cita' : `${n} citas`),
   dragPreview: (time: string, provider: string) => `Mover a las ${time} · ${provider}`,
+  blockAria: (label: string, range: string) => `Bloqueo: ${label}, ${range}`,
+  blockLegend: 'Horario bloqueado (vacaciones, reunión, almuerzo…)',
+  blockRemove: (label: string) => `Quitar bloqueo: ${label}`,
 };
 
 /** Distancia (px) que hay que mover el ratón para que un clic pase a arrastre. */
@@ -76,6 +85,12 @@ interface DayColumnsProps {
   onNewAppointment: (providerId: string, startTime?: string) => void;
   /** Cita con un movimiento en curso (se marca `aria-busy`). */
   pendingId?: string | null;
+  /** DX-122: bloqueos de agenda del día (de profesional o de toda la sede). */
+  blocks?: ScheduleBlockLike[];
+  /** Sede activa (null = «Todas las sedes»): decide qué bloqueos se pintan. */
+  activeLocationId?: string | null;
+  /** DX-122: abrir un bloqueo (para quitarlo); sin ella la etiqueta no es un botón. */
+  onSelectBlock?: (block: ScheduleBlockLike) => void;
 }
 
 interface DragState {
@@ -120,6 +135,9 @@ export function DayColumns({
   onDrop,
   onNewAppointment,
   pendingId = null,
+  blocks = [],
+  activeLocationId = null,
+  onSelectBlock,
 }: DayColumnsProps) {
   const [activeProviderId, setActiveProviderId] = useState<string | null>(null);
   const [drag, setDrag] = useState<DragState | null>(null);
@@ -350,6 +368,9 @@ export function DayColumns({
               })),
             );
             const dragTarget = drag?.started && drag.target?.providerId === p.userId ? drag.target : null;
+            const columnBlocks = blocks.filter((block) =>
+              blockShownInColumn(block, p.userId, activeLocationId),
+            );
             return (
               <div
                 key={p.userId}
@@ -385,8 +406,53 @@ export function DayColumns({
                   />
                 ))}
 
+                {columnBlocks.map((block) => {
+                    const band = blockBandForDay(block, date, span);
+                    if (!band) return null;
+                    const label = blockLabel(block);
+                    const aria = copy.blockAria(label, `${formatMinute(band.start)}–${formatMinute(band.end)}`);
+                    return (
+                      <div
+                        key={block.id}
+                        data-testid="schedule-block"
+                        data-block-id={block.id}
+                        role="note"
+                        aria-label={aria}
+                        className={cn(
+                          'pointer-events-none absolute inset-x-0 border-y border-dashed border-warning/50 [background-image:repeating-linear-gradient(45deg,transparent_0_7px,color-mix(in_oklab,var(--color-warning)_22%,transparent)_7px_9px)]',
+                          block.allowsBooking ? 'bg-warning/5' : 'bg-warning/10',
+                        )}
+                        style={{
+                          top: offsetFromMinute(band.start, span),
+                          height: (band.end - band.start) * PX_PER_MINUTE,
+                        }}
+                      >
+                        {onSelectBlock ? (
+                          <button
+                            type="button"
+                            aria-label={copy.blockRemove(label)}
+                            onClick={() => onSelectBlock(block)}
+                            className="pointer-events-auto m-1 max-w-[calc(100%-0.5rem)] truncate rounded bg-surface/90 px-1.5 py-0.5 text-left text-xs font-medium text-ink shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                          >
+                            {label}
+                          </button>
+                        ) : (
+                          <span className="m-1 inline-block max-w-[calc(100%-0.5rem)] truncate rounded bg-surface/90 px-1.5 py-0.5 text-xs font-medium text-ink">
+                            {label}
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })}
+
                 {columnAppointments.length === 0 && (
-                  <div className="absolute inset-x-2 top-2 flex flex-col items-center gap-2 rounded-lg border border-dashed border-border bg-surface/90 px-3 py-4 text-center">
+                  <div
+                    className={cn(
+                      'absolute inset-x-2 flex flex-col items-center gap-2 rounded-lg border border-dashed border-border bg-surface/90 px-3 py-4 text-center',
+                      // Debajo de la etiqueta de un bloqueo, que va arriba a la izquierda.
+                      columnBlocks.length > 0 ? 'top-9' : 'top-2',
+                    )}
+                  >
                     <p className="text-sm text-muted">{copy.emptyColumn}</p>
                     <Button
                       type="button"
@@ -476,6 +542,16 @@ export function DayColumns({
           })}
         </div>
       </div>
+
+      {blocks.length > 0 && (
+        <p className="flex items-center gap-2 text-xs text-muted">
+          <span
+            aria-hidden
+            className="inline-block size-3 rounded-sm border border-dashed border-warning/50 bg-warning/10"
+          />
+          {copy.blockLegend}
+        </p>
+      )}
 
       {bands.length > 0 && (
         <p className="flex items-center gap-2 text-xs text-muted">

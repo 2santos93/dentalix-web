@@ -22,6 +22,14 @@ import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { AsyncSection } from '@/components/shared/async-section';
 import { InlineError } from '@/components/errors/inline-error';
 import { notifyError } from '@/components/errors/notify';
+import { ScheduleBlockDialog } from '@/components/appointments/schedule-block-dialog';
+import { getTokenRole, getTokenUserId } from '@/lib/auth/token-role';
+import {
+  blocksOwnAgendaOnly,
+  canWriteScheduleBlocks,
+} from '@/lib/appointments/schedule-blocks-api';
+import { listLocations, type ClinicLocation } from '@/lib/locations/locations-api';
+import { toast } from 'sonner';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
@@ -61,7 +69,17 @@ const copy = {
     'No se puede desactivar: es el último administrador de la clínica o es tu propia cuenta.',
   // 404 al reactivar: ya estaba activa.
   alreadyActive: 'Esta persona ya tiene el acceso activo. Recarga para ver su estado.',
+  // DX-122: bloquear su agenda (vacaciones, congreso) desde su perfil.
+  agendaTitle: 'Agenda',
+  agendaHint: 'Bloquea sus vacaciones, un congreso o una reunión: la agenda no le dará citas en ese rango.',
+  blockAgenda: 'Bloquear agenda',
+  blockCreated: 'Agenda bloqueada.',
 };
+
+function todayLocal(): string {
+  const d = new Date();
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
 
 const ROLE_OPTIONS: { value: ClinicRole; label: string }[] = [
   { value: 'ADMIN', label: 'Administrador/a' },
@@ -102,6 +120,22 @@ export function StaffMemberProfile({ token, userId }: StaffMemberProfileProps) {
 
   const [confirmingDeactivate, setConfirmingDeactivate] = useState(false);
   const [changingAccess, setChangingAccess] = useState(false);
+
+  // DX-122: el odontólogo solo bloquea su propia agenda (la API lo exige).
+  const viewerRole = getTokenRole(token);
+  const viewerId = getTokenUserId(token);
+  const canBlock =
+    canWriteScheduleBlocks(viewerRole) && (!blocksOwnAgendaOnly(viewerRole) || viewerId === userId);
+  const [blocking, setBlocking] = useState(false);
+  const [locations, setLocations] = useState<ClinicLocation[]>([]);
+
+  async function openBlockDialog() {
+    // Las sedes solo hacen falta aquí; sin ellas se bloquea en todas.
+    if (locations.length === 0) {
+      setLocations(await listLocations(token).catch(() => []));
+    }
+    setBlocking(true);
+  }
 
   useEffect(() => {
     if (!token) return;
@@ -307,6 +341,21 @@ export function StaffMemberProfile({ token, userId }: StaffMemberProfileProps) {
               </form>
             </Card>
 
+            {canBlock && member.status === 'ACTIVE' ? (
+              <Card className="flex flex-col gap-3 p-5">
+                <h3 className="text-base font-semibold text-ink">{copy.agendaTitle}</h3>
+                <p className="text-sm text-muted">{copy.agendaHint}</p>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="self-start"
+                  onClick={() => void openBlockDialog()}
+                >
+                  {copy.blockAgenda}
+                </Button>
+              </Card>
+            ) : null}
+
             <Card className="flex flex-col gap-3 p-5">
               <h3 className="text-base font-semibold text-ink">{copy.accessTitle}</h3>
               <p className="text-sm text-muted">
@@ -349,6 +398,24 @@ export function StaffMemberProfile({ token, userId }: StaffMemberProfileProps) {
         confirming={changingAccess}
         onConfirm={() => void handleDeactivate()}
       />
+
+      {blocking && member ? (
+        <ScheduleBlockDialog
+          open
+          onOpenChange={setBlocking}
+          token={token}
+          staff={[{ userId: member.userId, fullName: member.fullName, role: member.role }]}
+          locations={locations.filter((l) => l.isActive)}
+          activeLocationId={null}
+          defaultDate={todayLocal()}
+          defaultProviderId={member.userId}
+          ownProviderId={member.userId}
+          onCreated={() => {
+            setBlocking(false);
+            toast.success(copy.blockCreated);
+          }}
+        />
+      ) : null}
     </div>
   );
 }
