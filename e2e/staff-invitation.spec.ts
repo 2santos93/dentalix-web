@@ -15,6 +15,10 @@ import { registerClinicViaApi } from './support/api';
  *   3. El ADMIN la ve como «Aceptado»; el enlace ya no sirve («ya utilizada»);
  *      y la invitada puede volver a entrar con la contraseña que eligió.
  *
+ * DX-088: la invitación sale además por correo (en e2e, ConsoleMailer): la
+ * fila muestra «Correo: Enviado» y «Reenviar invitación» (con confirmación)
+ * deja inservible el enlace anterior.
+ *
  * La clínica se crea por la API (no es lo que se prueba aquí).
  */
 const PASSWORD = 'Password123!';
@@ -52,12 +56,16 @@ test('un ADMIN invita, otra sesión acepta en /invitacion/[token] y entra con su
 
   const created = page.getByRole('dialog', { name: 'Invitación creada' });
   await expect(created).toBeVisible({ timeout: 10_000 });
+  await expect(created.getByText(/le enviamos un correo con este enlace/i)).toBeVisible();
   const link = (await created.getByText(/\/invitacion\//).textContent())?.trim() ?? '';
   expect(link).toMatch(new RegExp(`^${origin}/invitacion/[^/\\s]+$`));
   await created.getByRole('button', { name: 'Listo' }).click();
-  await expect(page.getByRole('table', { name: 'Personal de la clínica' })).toContainText(
-    invitee.email,
-  );
+  const table = page.getByRole('table', { name: 'Personal de la clínica' });
+  await expect(table).toContainText(invitee.email);
+  // El despachador lo envía en segundo plano; la lista se pone al día sola.
+  await expect(
+    table.getByRole('row', { name: new RegExp(invitee.fullName) }),
+  ).toContainText('Correo: Enviado', { timeout: 15_000 });
 
   // --- 2. Otra sesión (otro contexto, sin cookies del ADMIN) acepta ---
   const inviteeContext = await browser.newContext({
@@ -105,4 +113,65 @@ test('un ADMIN invita, otra sesión acepta en /invitacion/[token] y entra con su
   });
   await expect(row).toContainText('Aceptado', { timeout: 15_000 });
   await expect(row).toContainText('Odontólogo/a');
+});
+
+test('«Reenviar invitación» pide confirmación, avisa y deja inservible el enlace anterior', async ({
+  page,
+  browser,
+  playwright,
+}) => {
+  const suffix = randomUUID().slice(0, 8);
+  const clinic = {
+    subdomain: `reenvia-${suffix}`,
+    clinicName: `Clínica Reenvía ${suffix}`,
+    fullName: 'Dueña Reenvía',
+    email: `reenvia.admin.${suffix}@example.com`,
+    password: PASSWORD,
+  };
+  const invitee = { fullName: `Asistente ${suffix}`, email: `asistente.${suffix}@example.com` };
+
+  const api = await playwright.request.newContext();
+  const { origin } = await registerClinicViaApi(api, clinic);
+  await api.dispose();
+
+  await loginAs(page, origin, clinic.email, clinic.password);
+  await page.goto(`${origin}/staff`);
+  await page.getByRole('button', { name: 'Invitar' }).click();
+  const form = page.getByRole('dialog', { name: 'Invitar a la clínica' });
+  await form.getByLabel('Nombre completo').fill(invitee.fullName);
+  await form.getByLabel('Correo electrónico').fill(invitee.email);
+  await form.getByLabel('Rol').selectOption({ label: 'Asistente' });
+  await form.getByRole('button', { name: 'Enviar invitación' }).click();
+  const created = page.getByRole('dialog', { name: 'Invitación creada' });
+  const oldLink = (await created.getByText(/\/invitacion\//).textContent())?.trim() ?? '';
+  await created.getByRole('button', { name: 'Listo' }).click();
+
+  const row = page
+    .getByRole('table', { name: 'Personal de la clínica' })
+    .getByRole('row', { name: new RegExp(invitee.fullName) });
+  await expect(row).toContainText('Correo: Enviado', { timeout: 15_000 });
+
+  // Reenviar: menú de la fila → confirmación → toast.
+  await page.getByRole('button', { name: `Acciones de ${invitee.fullName}` }).click();
+  await page.getByRole('menuitem', { name: 'Reenviar invitación' }).click();
+  const confirm = page.getByRole('dialog', { name: '¿Reenviar la invitación?' });
+  await expect(confirm).toContainText(invitee.email);
+  await expect(confirm).toContainText('El enlace anterior dejará de funcionar');
+  await confirm.getByRole('button', { name: 'Sí, reenviar' }).click();
+  await expect(page.getByText('Invitación reenviada')).toBeVisible({ timeout: 10_000 });
+  await expect(confirm).toBeHidden();
+  await expect(row).toContainText('Correo: Enviado', { timeout: 15_000 });
+
+  // El enlace anterior ya no sirve.
+  const other = await browser.newContext({ locale: 'es-CO', timezoneId: 'America/Bogota' });
+  try {
+    const visitor = await other.newPage();
+    await visitor.goto(oldLink);
+    await expect(visitor.getByRole('heading', { name: 'Invitación no encontrada' })).toBeVisible({
+      timeout: 15_000,
+    });
+    await expect(visitor.getByLabel('Contraseña', { exact: true })).toHaveCount(0);
+  } finally {
+    await other.close();
+  }
 });

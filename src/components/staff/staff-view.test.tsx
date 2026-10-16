@@ -1,8 +1,12 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import { setupUser } from '@/lib/test/user';
-import { StaffView } from './staff-view';
+import { DELIVERY_POLL_MS, StaffView } from './staff-view';
 import { listStaffDirectory, type StaffDirectoryEntry } from '@/lib/staff/staff-api';
-import { createInvitation, revokeInvitation } from '@/lib/staff/invitations-api';
+import {
+  createInvitation,
+  resendInvitation,
+  revokeInvitation,
+} from '@/lib/staff/invitations-api';
 import { ApiError } from '@/lib/api/client';
 import { Toaster } from '@/components/errors/toaster';
 
@@ -14,12 +18,14 @@ jest.mock('../../lib/staff/staff-api', () => ({
 }));
 jest.mock('../../lib/staff/invitations-api', () => ({
   createInvitation: jest.fn(),
+  resendInvitation: jest.fn(),
   revokeInvitation: jest.fn(),
 }));
 
 const mockedList = listStaffDirectory as jest.MockedFunction<typeof listStaffDirectory>;
 const mockedCreate = createInvitation as jest.MockedFunction<typeof createInvitation>;
 const mockedRevoke = revokeInvitation as jest.MockedFunction<typeof revokeInvitation>;
+const mockedResend = resendInvitation as jest.MockedFunction<typeof resendInvitation>;
 
 const miembro: StaffDirectoryEntry = {
   kind: 'MEMBER',
@@ -29,6 +35,7 @@ const miembro: StaffDirectoryEntry = {
   role: 'DENTIST',
   status: 'ACTIVE',
   expiresAt: null,
+  emailDelivery: null,
 };
 const invitacion: StaffDirectoryEntry = {
   kind: 'INVITATION',
@@ -38,6 +45,7 @@ const invitacion: StaffDirectoryEntry = {
   role: 'ASSISTANT',
   status: 'PENDING',
   expiresAt: '2026-08-08T00:00:00.000Z',
+  emailDelivery: 'SENT',
 };
 const inactivo: StaffDirectoryEntry = {
   kind: 'MEMBER',
@@ -47,6 +55,7 @@ const inactivo: StaffDirectoryEntry = {
   role: 'RECEPTION',
   status: 'INACTIVE',
   expiresAt: null,
+  emailDelivery: null,
 };
 
 function page(items: StaffDirectoryEntry[], total = items.length) {
@@ -58,6 +67,7 @@ describe('StaffView', () => {
     mockedList.mockReset();
     mockedCreate.mockReset();
     mockedRevoke.mockReset();
+    mockedResend.mockReset();
     mockedList.mockResolvedValue(page([miembro, invitacion]));
   });
 
@@ -179,37 +189,160 @@ describe('StaffView', () => {
     );
   });
 
-  it('reenviar crea otra invitación para el mismo correo y muestra el enlace nuevo', async () => {
-    mockedCreate.mockResolvedValue({
-      id: 'i2',
-      email: 'beto@clinic.com',
-      fullName: 'Beto Pendiente',
-      role: 'ASSISTANT',
-      status: 'VALID',
-      expiresAt: '2026-08-15T00:00:00.000Z',
-      token: 'token-nuevo',
-    });
+  const reenviada = {
+    id: 'i1',
+    email: 'beto@clinic.com',
+    fullName: 'Beto Pendiente',
+    role: 'ASSISTANT' as const,
+    status: 'VALID' as const,
+    expiresAt: '2026-08-15T00:00:00.000Z',
+    token: 'token-nuevo',
+    emailDelivery: 'PENDING' as const,
+  };
+
+  async function abrirReenviar(user: ReturnType<typeof setupUser>) {
+    await user.click(screen.getByRole('button', { name: /acciones de Beto/i }));
+    await user.click(
+      within(await screen.findByRole('menu')).getByRole('menuitem', {
+        name: /reenviar invitación/i,
+      }),
+    );
+    return screen.findByRole('dialog', { name: /reenviar la invitación/i });
+  }
+
+  it('cada invitación muestra el estado de su correo', async () => {
+    mockedList.mockResolvedValue(
+      page([
+        miembro,
+        invitacion,
+        { ...invitacion, id: 'i2', fullName: 'Ceci', email: 'ceci@clinic.com', emailDelivery: 'FAILED' },
+        { ...invitacion, id: 'i3', fullName: 'Dani', email: 'dani@clinic.com', emailDelivery: 'PENDING' },
+      ]),
+    );
+    render(<StaffView token="tok" />);
+    const table = await screen.findByRole('table', { name: /personal/i });
+
+    const fila = (email: string) => within(table).getByText(email).closest('tr')!;
+    expect(within(fila('beto@clinic.com')).getByText('Correo: Enviado')).toBeInTheDocument();
+    expect(within(fila('ceci@clinic.com')).getByText('Correo: Falló')).toBeInTheDocument();
+    expect(within(fila('dani@clinic.com')).getByText('Correo: Pendiente')).toBeInTheDocument();
+    // Un miembro no tiene correo de invitación que mostrar.
+    expect(within(fila('ana@clinic.com')).queryByText(/correo:/i)).not.toBeInTheDocument();
+  });
+
+  it('reenviar pide confirmación, llama al endpoint de reenvío y avisa con un toast', async () => {
+    mockedResend.mockResolvedValue(reenviada);
+    const user = setupUser();
+    render(
+      <>
+        <StaffView token="tok" />
+        <Toaster />
+      </>,
+    );
+    await screen.findByRole('table', { name: /personal/i });
+
+    const dialog = await abrirReenviar(user);
+    expect(mockedResend).not.toHaveBeenCalled();
+    expect(within(dialog).getByText(/el enlace anterior dejará de funcionar/i)).toBeInTheDocument();
+    expect(within(dialog).getByText(/beto@clinic\.com/)).toBeInTheDocument();
+    mockedList.mockClear();
+    await user.click(within(dialog).getByRole('button', { name: /sí, reenviar/i }));
+
+    await waitFor(() => expect(mockedResend).toHaveBeenCalledWith('tok', 'i1'));
+    expect(mockedCreate).not.toHaveBeenCalled();
+    expect(await screen.findByText('Invitación reenviada')).toBeInTheDocument();
+    expect(screen.getByText('Enviamos un correo nuevo a beto@clinic.com.')).toBeInTheDocument();
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    // La lista se recarga para mostrar el nuevo estado del correo.
+    await waitFor(() => expect(mockedList).toHaveBeenCalled());
+  });
+
+  it('si el correo no se pudo programar, muestra el enlace nuevo para compartirlo', async () => {
+    mockedResend.mockResolvedValue({ ...reenviada, emailDelivery: null });
     const user = setupUser();
     render(<StaffView token="tok" />);
     await screen.findByRole('table', { name: /personal/i });
 
-    await user.click(screen.getByRole('button', { name: /acciones de Beto/i }));
-    await user.click(
-      within(await screen.findByRole('menu')).getByRole('menuitem', {
-        name: /reenviar/i,
-      }),
-    );
+    const dialog = await abrirReenviar(user);
+    await user.click(within(dialog).getByRole('button', { name: /sí, reenviar/i }));
 
-    // No hay endpoint de reenvío: crear otra para el mismo correo revoca la
-    // anterior en el backend, así que solo vive un enlace por persona.
-    await waitFor(() =>
-      expect(mockedCreate).toHaveBeenCalledWith('tok', {
-        fullName: 'Beto Pendiente',
-        email: 'beto@clinic.com',
-        role: 'ASSISTANT',
+    const created = await screen.findByRole('dialog', { name: 'Invitación creada' });
+    expect(within(created).getByText(/token-nuevo/)).toBeInTheDocument();
+    expect(within(created).getByText(/no pudimos programar el correo/i)).toBeInTheDocument();
+  });
+
+  it('un fallo al reenviar cierra el diálogo y ofrece reintentar en el toast', async () => {
+    mockedResend.mockRejectedValue(
+      new ApiError(404, 'No encontramos una invitación pendiente con ese id.'),
+    );
+    const user = setupUser();
+    render(
+      <>
+        <StaffView token="tok" />
+        <Toaster />
+      </>,
+    );
+    await screen.findByRole('table', { name: /personal/i });
+
+    const dialog = await abrirReenviar(user);
+    await user.click(within(dialog).getByRole('button', { name: /sí, reenviar/i }));
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(
+      await screen.findByText('No encontramos una invitación pendiente con ese id.'),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument();
+  });
+
+  it('el botón de confirmar muestra el estado de carga mientras reenvía', async () => {
+    let resolve: (v: typeof reenviada) => void = () => undefined;
+    mockedResend.mockReturnValue(
+      new Promise((r) => {
+        resolve = r;
       }),
     );
-    expect(await screen.findByText(/token-nuevo/)).toBeInTheDocument();
+    const user = setupUser();
+    render(<StaffView token="tok" />);
+    await screen.findByRole('table', { name: /personal/i });
+
+    const dialog = await abrirReenviar(user);
+    await user.click(within(dialog).getByRole('button', { name: /sí, reenviar/i }));
+    await waitFor(() =>
+      expect(within(dialog).getByRole('button', { name: /cancelar/i })).toBeDisabled(),
+    );
+    await act(async () => {
+      resolve(reenviada);
+    });
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  });
+
+  it('con un correo pendiente vuelve a pedir la lista en silencio hasta que sale', async () => {
+    jest.useFakeTimers();
+    try {
+      const pendiente = { ...invitacion, emailDelivery: 'PENDING' as const };
+      mockedList
+        .mockResolvedValueOnce(page([pendiente]))
+        .mockResolvedValueOnce(page([invitacion]));
+      render(<StaffView token="tok" />);
+      expect(await screen.findByText('Correo: Pendiente')).toBeInTheDocument();
+      expect(mockedList).toHaveBeenCalledTimes(1);
+
+      await act(async () => {
+        jest.advanceTimersByTime(DELIVERY_POLL_MS);
+      });
+      expect(await screen.findByText('Correo: Enviado')).toBeInTheDocument();
+      expect(mockedList).toHaveBeenCalledTimes(2);
+      // Sin skeleton: la tabla siguió en pantalla durante el sondeo.
+      expect(screen.getByRole('table', { name: /personal/i })).toBeInTheDocument();
+
+      // Ya no queda nada pendiente: no hay más sondeos.
+      await act(async () => {
+        jest.advanceTimersByTime(DELIVERY_POLL_MS * 3);
+      });
+      expect(mockedList).toHaveBeenCalledTimes(2);
+    } finally {
+      jest.useRealTimers();
+    }
   });
 
   it('revocar pide confirmación antes de llamar al servidor', async () => {
