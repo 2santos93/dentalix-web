@@ -3,14 +3,31 @@ import userEvent from '@testing-library/user-event';
 import { AccountStatementView } from './account-statement-view';
 import { ApiError } from '@/lib/api/client';
 import { getAccountStatement } from '@/lib/account-statement/account-statement-api';
-import { voidPayment } from '@/lib/payments/payments-api';
+import { recordPayment, voidPayment } from '@/lib/payments/payments-api';
+import { listBillablePlans, type BillablePlan } from '@/lib/payments/billable-plans-api';
+import { createPaymentPlan } from '@/lib/payment-plans/payment-plan-api';
 import {
   accountStatementFixture,
   emptyAccountStatementFixture,
 } from '@/lib/test/account-statement';
+import { tokenForRole } from '@/lib/test/data-consents';
 
 jest.mock('../../lib/payments/payments-api', () => ({
   voidPayment: jest.fn(),
+  recordPayment: jest.fn(),
+}));
+jest.mock('../../lib/payments/billable-plans-api', () => ({
+  ...jest.requireActual('../../lib/payments/billable-plans-api'),
+  listBillablePlans: jest.fn(),
+}));
+jest.mock('../../lib/payment-plans/payment-plan-api', () => ({
+  createPaymentPlan: jest.fn(),
+}));
+jest.mock('../../lib/locations/locations-api', () => ({
+  listLocations: jest.fn().mockResolvedValue([]),
+}));
+jest.mock('../../lib/reference/currencies-api', () => ({
+  listCurrencies: jest.fn().mockResolvedValue([]),
 }));
 
 jest.mock('../../lib/account-statement/account-statement-api', () => ({
@@ -20,6 +37,9 @@ jest.mock('../../lib/account-statement/account-statement-api', () => ({
 
 const mockedGet = getAccountStatement as jest.MockedFunction<typeof getAccountStatement>;
 const mockedVoid = voidPayment as jest.MockedFunction<typeof voidPayment>;
+const mockedRecord = recordPayment as jest.MockedFunction<typeof recordPayment>;
+const mockedBillable = listBillablePlans as jest.MockedFunction<typeof listBillablePlans>;
+const mockedCreatePlan = createPaymentPlan as jest.MockedFunction<typeof createPaymentPlan>;
 
 // Normaliza los espacios duros de Intl (es: "1.800.000,00 COP" lleva U+00A0).
 function money(text: string | null | undefined): string {
@@ -29,6 +49,9 @@ function money(text: string | null | undefined): string {
 beforeEach(() => {
   mockedGet.mockReset();
   mockedVoid.mockReset();
+  mockedRecord.mockReset();
+  mockedBillable.mockReset();
+  mockedCreatePlan.mockReset();
 });
 
 it('pide el estado de cuenta del paciente y pinta el resumen por moneda', async () => {
@@ -175,5 +198,124 @@ describe('anular desde el estado de cuenta (DX-057)', () => {
     );
     await waitFor(() => expect(mockedGet).toHaveBeenCalledTimes(2));
     expect(await screen.findByText(/abono anulado/i)).toBeInTheDocument();
+  });
+});
+
+describe('cobrar desde el estado de cuenta (DX-067)', () => {
+  const RECEPTION = tokenForRole('RECEPTION');
+  const billablePlan: BillablePlan = {
+    id: 'plan-1',
+    status: 'ACCEPTED',
+    currency: 'COP',
+    createdAt: '2026-08-01T15:00:00.000Z',
+    total: 3000000,
+    paid: 1200000,
+    paidOtherCurrencies: [],
+    balance: 1800000,
+    hasActivePaymentPlan: false,
+  };
+
+  it.each(['RECEPTION', 'ADMIN'])('%s ve «Registrar abono» y «Plan de cuotas»', async (role) => {
+    mockedGet.mockResolvedValue(accountStatementFixture());
+    render(<AccountStatementView token={tokenForRole(role)} patientId="pat-1" />);
+    await screen.findByRole('region', { name: /resumen en COP/i });
+    expect(screen.getByRole('button', { name: 'Registrar abono' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Plan de cuotas' })).toBeInTheDocument();
+  });
+
+  it.each(['DENTIST', 'ASSISTANT'])('%s (sin permiso de pagos) no ve los botones de cobro', async (role) => {
+    mockedGet.mockResolvedValue(accountStatementFixture());
+    render(<AccountStatementView token={tokenForRole(role)} patientId="pat-1" />);
+    await screen.findByRole('region', { name: /resumen en COP/i });
+    expect(screen.queryByRole('button', { name: 'Registrar abono' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Plan de cuotas' })).not.toBeInTheDocument();
+  });
+
+  it('sin rol legible tampoco, ni con un 403 del estado de cuenta', async () => {
+    mockedGet.mockResolvedValue(accountStatementFixture());
+    const { unmount } = render(<AccountStatementView token="tok" patientId="pat-1" />);
+    await screen.findByRole('region', { name: /resumen en COP/i });
+    expect(screen.queryByRole('button', { name: 'Registrar abono' })).not.toBeInTheDocument();
+    unmount();
+
+    mockedGet.mockRejectedValue(new ApiError(403, 'Forbidden'));
+    render(<AccountStatementView token={RECEPTION} patientId="pat-1" />);
+    await screen.findByText(/tu rol no tiene acceso al estado de cuenta/i);
+    expect(screen.queryByRole('button', { name: 'Registrar abono' })).not.toBeInTheDocument();
+  });
+
+  it('un paciente sin movimientos también puede cobrar (el modal dice si no hay planes)', async () => {
+    mockedGet.mockResolvedValue(emptyAccountStatementFixture());
+    mockedBillable.mockResolvedValue([]);
+    const user = userEvent.setup();
+    render(<AccountStatementView token={RECEPTION} patientId="pat-1" />);
+    await screen.findByText(/sin movimientos financieros/i);
+
+    await user.click(screen.getByRole('button', { name: 'Registrar abono' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Registrar abono' });
+    expect(
+      await within(dialog).findByText('Este paciente no tiene planes por cobrar.'),
+    ).toBeInTheDocument();
+  });
+
+  it('registra un abono: cierra el modal, avisa y recarga el estado de cuenta', async () => {
+    mockedGet.mockResolvedValue(accountStatementFixture());
+    mockedBillable.mockResolvedValue([billablePlan]);
+    mockedRecord.mockResolvedValue({} as Awaited<ReturnType<typeof recordPayment>>);
+    const user = userEvent.setup();
+    render(<AccountStatementView token={RECEPTION} patientId="pat-1" />);
+    await screen.findByRole('region', { name: /resumen en COP/i });
+
+    await user.click(screen.getByRole('button', { name: 'Registrar abono' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Registrar abono' });
+    expect(mockedBillable).toHaveBeenCalledWith(RECEPTION, 'pat-1');
+    await within(dialog).findByLabelText('Plan');
+    await user.type(within(dialog).getByLabelText('Importe'), '50000');
+    await user.click(within(dialog).getByRole('button', { name: 'Registrar abono' }));
+
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(mockedRecord).toHaveBeenCalledWith(
+      RECEPTION,
+      'plan-1',
+      expect.objectContaining({ amount: 50000, currency: 'COP' }),
+      expect.any(String),
+    );
+    expect(money((await screen.findByText(/abono registrado/i)).textContent)).toMatch(
+      /50\.000,00 COP/,
+    );
+    await waitFor(() => expect(mockedGet).toHaveBeenCalledTimes(2));
+  });
+
+  it('crea un plan de cuotas eligiendo el plan; el que ya tiene uno no se puede elegir', async () => {
+    mockedGet.mockResolvedValue(accountStatementFixture());
+    mockedBillable.mockResolvedValue([
+      { ...billablePlan, id: 'plan-con-cuotas', hasActivePaymentPlan: true },
+      billablePlan,
+    ]);
+    mockedCreatePlan.mockResolvedValue({} as Awaited<ReturnType<typeof createPaymentPlan>>);
+    const user = userEvent.setup();
+    render(<AccountStatementView token={RECEPTION} patientId="pat-1" />);
+    await screen.findByRole('region', { name: /resumen en COP/i });
+
+    await user.click(screen.getByRole('button', { name: 'Plan de cuotas' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Crear plan de pagos' });
+    const select = await within(dialog).findByLabelText('Plan');
+    expect(select).toHaveValue('plan-1');
+    const taken = within(select).getAllByRole('option')[0];
+    expect(taken).toBeDisabled();
+    expect(taken).toHaveTextContent('(ya tiene plan de cuotas)');
+    expect(within(dialog).getByLabelText('Total a financiar')).toHaveValue(3000000);
+
+    await user.click(within(dialog).getByRole('button', { name: 'Crear' }));
+    await waitFor(() =>
+      expect(mockedCreatePlan).toHaveBeenCalledWith(
+        RECEPTION,
+        'plan-1',
+        expect.objectContaining({ installmentsCount: 12, totalToFinance: 3000000 }),
+      ),
+    );
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(await screen.findByText(/plan de cuotas creado/i)).toBeInTheDocument();
+    await waitFor(() => expect(mockedGet).toHaveBeenCalledTimes(2));
   });
 });

@@ -1,7 +1,7 @@
 'use client';
 import * as React from 'react';
 import { useEffect, useState } from 'react';
-import { Lock, Printer, Wallet } from 'lucide-react';
+import { CalendarClock, HandCoins, Lock, Printer, Wallet } from 'lucide-react';
 import { ApiError } from '@/lib/api/client';
 import {
   accountStatementPrintHref,
@@ -45,6 +45,9 @@ import {
   voidPaymentSubject,
   type VoidPaymentTarget,
 } from '@/components/payments/use-void-payment';
+import { RecordPaymentModal } from '@/components/payments/record-payment-modal';
+import { StatementPaymentPlanModal } from './statement-payment-plan-modal';
+import { canRecordPayments } from '@/lib/payments/billable-plans-api';
 import { getTokenRole } from '@/lib/auth/token-role';
 import { cn } from '@/lib/utils';
 
@@ -54,6 +57,8 @@ const copy = {
   description:
     'Lo presupuestado, lo abonado y lo que falta, por moneda. De toda la historia del paciente, en todas las sedes.',
   print: 'Imprimir',
+  recordPayment: 'Registrar abono',
+  paymentPlan: 'Plan de cuotas',
   printHint: '(se abre en otra pestaña)',
   summaryLabel: (currency: string) => `Resumen en ${currency}`,
   budgeted: 'Presupuestado',
@@ -98,7 +103,9 @@ interface AccountStatementViewProps {
 
 /**
  * Pestaña «Estado de cuenta» de la ficha (DX-011): cuánto debe el paciente, en
- * segundos. Patrón de carga de la app (estado local + `useEffect` +
+ * segundos. Desde DX-067 también es donde se cobra: «Registrar abono» y «Plan
+ * de cuotas» (solo PAYMENT_ROLES) eligen el plan entre los cobrables, sin
+ * pasar por el plan de tratamiento. Patrón de carga de la app (estado local + `useEffect` +
  * `AsyncSection`); el 403 va aparte, como aviso sin reintento, igual que la caja.
  *
  * «Imprimir» abre la vista imprimible en otra pestaña, fuera del shell de la
@@ -117,6 +124,22 @@ export function AccountStatementView({ token, patientId }: AccountStatementViewP
   // API para quien consulta); tras anular se recarga todo el estado de cuenta,
   // porque cambian el abonado, el saldo y las cuotas.
   const voiding = useVoidPayment(token, () => setReloadKey((k) => k + 1));
+  // Cobrar (DX-067): recepción registra abonos y planes de cuotas aquí, sin
+  // entrar al plan de tratamiento (clínico). Tras cada uno se recarga todo.
+  const canCharge = canRecordPayments(getTokenRole(token));
+  const [chargeModal, setChargeModal] = useState<'payment' | 'payment-plan' | null>(null);
+  const [chargeNotice, setChargeNotice] = useState<string | null>(null);
+
+  function openCharge(kind: 'payment' | 'payment-plan') {
+    setChargeNotice(null);
+    setChargeModal(kind);
+  }
+
+  function charged(notice: string) {
+    setChargeModal(null);
+    setChargeNotice(notice);
+    setReloadKey((k) => k + 1);
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -144,6 +167,9 @@ export function AccountStatementView({ token, patientId }: AccountStatementViewP
 
   const empty = data ? isEmptyStatement(data) : false;
   const showPrint = !loading && !error && data !== null && !empty;
+  // Cobrar no depende de que haya movimientos (un paciente nuevo con su primer
+  // plan aceptado todavía no tiene ninguno); sí de poder ver el estado.
+  const showCharge = canCharge && !forbidden;
 
   return (
     <section aria-labelledby={headingId} className="flex flex-col gap-4">
@@ -154,14 +180,35 @@ export function AccountStatementView({ token, patientId }: AccountStatementViewP
           </h2>
           <p className="mt-1 max-w-[68ch] text-sm text-muted">{copy.description}</p>
         </div>
-        {showPrint ? (
-          <Button asChild variant="secondary" className="w-full sm:w-auto">
-            <a href={accountStatementPrintHref(patientId)} target="_blank" rel="noopener">
-              <Printer aria-hidden />
-              {copy.print}
-              <span className="sr-only"> {copy.printHint}</span>
-            </a>
-          </Button>
+        {showCharge || showPrint ? (
+          <div className="flex flex-col gap-2 sm:shrink-0 sm:flex-row sm:flex-wrap sm:justify-end">
+            {showCharge ? (
+              <>
+                <Button type="button" className="w-full sm:w-auto" onClick={() => openCharge('payment')}>
+                  <HandCoins aria-hidden />
+                  {copy.recordPayment}
+                </Button>
+                <Button
+                  type="button"
+                  variant="secondary"
+                  className="w-full sm:w-auto"
+                  onClick={() => openCharge('payment-plan')}
+                >
+                  <CalendarClock aria-hidden />
+                  {copy.paymentPlan}
+                </Button>
+              </>
+            ) : null}
+            {showPrint ? (
+              <Button asChild variant="secondary" className="w-full sm:w-auto">
+                <a href={accountStatementPrintHref(patientId)} target="_blank" rel="noopener">
+                  <Printer aria-hidden />
+                  {copy.print}
+                  <span className="sr-only"> {copy.printHint}</span>
+                </a>
+              </Button>
+            ) : null}
+          </div>
         ) : null}
       </div>
 
@@ -187,11 +234,33 @@ export function AccountStatementView({ token, patientId }: AccountStatementViewP
         </AsyncSection>
       )}
 
-      {/* Aviso de la última anulación: fuera de AsyncSection para que la
-          recarga no lo borre. */}
+      {/* Avisos de la última anulación y del último cobro: fuera de
+          AsyncSection para que la recarga no los borre. */}
       <p role="status" className={voiding.notice ? 'text-sm text-success' : 'sr-only'}>
         {voiding.notice}
       </p>
+      <p role="status" className={chargeNotice ? 'text-sm text-success' : 'sr-only'}>
+        {chargeNotice}
+      </p>
+
+      {showCharge ? (
+        <>
+          <RecordPaymentModal
+            open={chargeModal === 'payment'}
+            onOpenChange={(open) => setChargeModal(open ? 'payment' : null)}
+            token={token}
+            patientId={patientId}
+            onRecorded={charged}
+          />
+          <StatementPaymentPlanModal
+            open={chargeModal === 'payment-plan'}
+            onOpenChange={(open) => setChargeModal(open ? 'payment-plan' : null)}
+            token={token}
+            patientId={patientId}
+            onCreated={charged}
+          />
+        </>
+      ) : null}
 
       {/* `key` por abono: cada anulación empieza con el motivo en blanco. */}
       <VoidPaymentModal

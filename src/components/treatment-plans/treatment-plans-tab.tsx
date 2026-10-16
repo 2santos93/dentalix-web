@@ -33,6 +33,7 @@ import type { ToothSurface } from '@/lib/odontogram/odontogram-api';
 import { getPatient } from '@/lib/patients/patients-api';
 import { listLocations, type ClinicLocation } from '@/lib/locations/locations-api';
 import { getActiveLocationId } from '@/lib/locations/location-store';
+import { paymentLocationHint } from '@/lib/payments/payment-location';
 import { fetchClinicName } from '@/lib/clinic-branding';
 import Link from 'next/link';
 import { formatCurrency } from '@/lib/format/currency';
@@ -168,18 +169,6 @@ const copy = {
    * peticiones pero el backend la ignora aquí.
    */
   paymentsScopeNote: 'El saldo suma los abonos de todas las sedes.',
-  /**
-   * Lo único de esta página donde la sede activa SÍ decide algo:
-   * `PrismaPaymentRepository.create` sella el abono con la sede del request,
-   * y esa atribución es la que después arquea la caja por sede del dashboard
-   * (`listReceivedInRange`, la única consulta de pagos que sí filtra).
-   */
-  paymentLocationHint: (name: string) => `Este abono quedará registrado en la sede ${name}.`,
-  // Sin sede activa el backend cae en la sede por defecto de la clínica
-  // (`resolveDefaultLocationId`: la primera activa). No se la nombra porque
-  // ese orden es una decisión del backend que la UI no puede garantizar.
-  paymentDefaultLocationHint:
-    'Sin una sede activa, este abono quedará registrado en la sede por defecto de la clínica.',
   loadingBalance: 'Cargando saldo…',
   // No «Intenta de nuevo.» — `SectionError` has its own retry button.
   genericBalanceError: 'No pudimos cargar el saldo.',
@@ -991,11 +980,10 @@ export function TreatmentPlansTab({
 
   const catalogById = new Map(catalogItems.map((item) => [item.id, item]));
 
-  // Misma regla que `LocationSwitcher`: con una sola sede el concepto no
-  // existe para esa clínica y hablar de sedes sería ruido. Solo con dos o más
-  // el formulario de abono dice a cuál quedará atribuido.
-  const multiLocation = locations.filter((l) => l.isActive).length >= 2;
-  const activeLocationName = locations.find((l) => l.id === activeLocationId)?.name ?? null;
+  // Lo único de esta página donde la sede activa SÍ decide algo: a qué sede
+  // queda atribuido un abono nuevo. Mismo aviso que el estado de cuenta
+  // (`paymentLocationHint`: nada con una sola sede).
+  const locationHint = paymentLocationHint(locations, activeLocationId);
 
   function refreshPlansInPlace(): Promise<void> {
     setRefreshing(true);
@@ -1687,13 +1675,7 @@ export function TreatmentPlansTab({
                             atribuye el abono se lee ANTES de escribir el
                             monto, no como una nota al pie ya con el dedo en
                             «Registrar abono». */}
-                        {multiLocation ? (
-                          <p className="t-label text-muted">
-                            {activeLocationName
-                              ? copy.paymentLocationHint(activeLocationName)
-                              : copy.paymentDefaultLocationHint}
-                          </p>
-                        ) : null}
+                        {locationHint ? <p className="t-label text-muted">{locationHint}</p> : null}
 
                         <div className="grid gap-4 sm:grid-cols-2">
                           <FormField htmlFor="tp-payment-amount" label={copy.paymentAmountLabel}>

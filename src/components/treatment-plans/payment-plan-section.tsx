@@ -1,24 +1,19 @@
 'use client';
-import * as React from 'react';
 import { useEffect, useState } from 'react';
 import { ApiError } from '@/lib/api/client';
 import {
-  createPaymentPlan,
   deletePaymentPlan,
   getPaymentPlan,
   type Installment,
   type InstallmentStatus,
   type PaymentPlan,
-  type Periodicity,
 } from '@/lib/payment-plans/payment-plan-api';
 import { Card } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
-import { FormField } from '@/components/shared/form-field';
-import { FormModal } from '@/components/shared/form-modal';
+import { CreatePaymentPlanModal } from '@/components/payment-plans/create-payment-plan-modal';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { EmptyState } from '@/components/shared/empty-state';
 import { SectionError } from '@/components/errors/section-error';
@@ -49,15 +44,6 @@ const copy = {
   nextDue: 'Próxima cuota',
   overdue: 'En mora',
   none: '—',
-  // create modal
-  createTitle: 'Crear plan de pagos',
-  installmentsCount: 'N.º de cuotas',
-  periodicity: 'Periodicidad',
-  startDate: 'Fecha de inicio',
-  downPayment: 'Pie (opcional)',
-  totalField: 'Total a financiar',
-  createSubmit: 'Crear',
-  financedPreview: (financed: string, per: string) => `Financiado: ${financed} · Cuota: ${per}`,
   // table
   colSeq: '#',
   colDue: 'Vence',
@@ -67,26 +53,6 @@ const copy = {
   downPaymentRow: 'Pie',
   tableCaption: 'Calendario de cuotas',
 };
-
-const PERIODICITY_OPTIONS: { value: Periodicity; label: string }[] = [
-  { value: 'MONTHLY', label: 'Mensual' },
-  { value: 'BIWEEKLY', label: 'Quincenal' },
-  { value: 'WEEKLY', label: 'Semanal' },
-];
-
-// Native <select>/<input> styled like the Input atom — same fieldClass string
-// and rationale as treatment-plans-tab.tsx (kept native for a11y/tests).
-const fieldClass =
-  'flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-50';
-
-function round2(n: number): number {
-  return Math.round(n * 100) / 100;
-}
-
-function todayLocalDateString(): string {
-  const d = new Date();
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
 
 interface PaymentPlanSectionProps {
   token: string;
@@ -103,13 +69,6 @@ export function PaymentPlanSection({ token, planId, planCurrency, billable, refr
   const [retryTick, setRetryTick] = useState(0);
 
   const [showCreate, setShowCreate] = useState(false);
-  const [installmentsCount, setInstallmentsCount] = useState('12');
-  const [periodicity, setPeriodicity] = useState<Periodicity>('MONTHLY');
-  const [startDate, setStartDate] = useState('');
-  const [downPayment, setDownPayment] = useState('0');
-  const [totalField, setTotalField] = useState('');
-  const [creating, setCreating] = useState(false);
-  const [createError, setCreateError] = useState<string | null>(null);
 
   const [showCancel, setShowCancel] = useState(false);
   const [cancelling, setCancelling] = useState(false);
@@ -139,59 +98,9 @@ export function PaymentPlanSection({ token, planId, planCurrency, billable, refr
     };
   }, [token, planId, refreshSignal, retryTick]);
 
-  function openCreate() {
-    setInstallmentsCount('12');
-    setPeriodicity('MONTHLY');
-    setStartDate(todayLocalDateString());
-    setDownPayment('0');
-    setTotalField(String(billable));
-    setCreateError(null);
-    setShowCreate(true);
-  }
-
   async function refetch() {
     const data = await getPaymentPlan(token, planId);
     setPlan(data);
-  }
-
-  async function handleCreate(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setCreateError(null);
-    const count = Number(installmentsCount);
-    const pie = Number(downPayment || '0');
-    const total = Number(totalField);
-    if (!Number.isInteger(count) || count < 1 || count > 600) {
-      setCreateError('El número de cuotas debe ser un entero entre 1 y 600.');
-      return;
-    }
-    if (!(total > 0)) {
-      setCreateError('El total a financiar debe ser mayor que 0.');
-      return;
-    }
-    if (pie < 0 || pie > total) {
-      setCreateError('El pie no puede ser negativo ni mayor que el total.');
-      return;
-    }
-    if (!startDate) {
-      setCreateError('La fecha de inicio es obligatoria.');
-      return;
-    }
-    setCreating(true);
-    try {
-      await createPaymentPlan(token, planId, {
-        installmentsCount: count,
-        periodicity,
-        startDate: new Date(startDate).toISOString(),
-        downPayment: pie,
-        totalToFinance: total,
-      });
-      await refetch();
-      setShowCreate(false);
-    } catch (err) {
-      setCreateError(err instanceof ApiError ? err.message : 'No pudimos crear el plan de pagos.');
-    } finally {
-      setCreating(false);
-    }
   }
 
   async function handleCancel() {
@@ -207,11 +116,6 @@ export function PaymentPlanSection({ token, planId, planCurrency, billable, refr
       setCancelling(false);
     }
   }
-
-  // Live preview of the resulting installment (client-side only; the backend is
-  // the source of truth — this is just UX).
-  const previewFinanced = round2(Math.max(Number(totalField || '0') - Number(downPayment || '0'), 0));
-  const previewPer = Number(installmentsCount) >= 1 ? round2(previewFinanced / Number(installmentsCount)) : 0;
 
   return (
     <section className="flex flex-col gap-4" aria-labelledby="payment-plan-heading">
@@ -239,7 +143,7 @@ export function PaymentPlanSection({ token, planId, planCurrency, billable, refr
       ) : !plan ? (
         <div className="flex flex-col items-start gap-3">
           <EmptyState role="status" title={copy.emptyTitle} description={copy.emptyDescription} />
-          <Button type="button" onClick={openCreate}>{copy.createCta}</Button>
+          <Button type="button" onClick={() => setShowCreate(true)}>{copy.createCta}</Button>
         </div>
       ) : (
         <>
@@ -248,43 +152,16 @@ export function PaymentPlanSection({ token, planId, planCurrency, billable, refr
         </>
       )}
 
-      <FormModal
+      <CreatePaymentPlanModal
         open={showCreate}
         onOpenChange={setShowCreate}
-        title={copy.createTitle}
-        onSubmit={handleCreate}
-        submitLabel={copy.createSubmit}
-        submitting={creating}
-        error={createError}
-        size="lg"
-      >
-        <div className="grid gap-4 sm:grid-cols-2">
-          <FormField htmlFor="pp-count" label={copy.installmentsCount}>
-            <Input id="pp-count" type="number" min={1} max={600} step="1" value={installmentsCount} onChange={(e) => setInstallmentsCount(e.target.value)} />
-          </FormField>
-          <FormField htmlFor="pp-periodicity" label={copy.periodicity}>
-            <select id="pp-periodicity" value={periodicity} onChange={(e) => setPeriodicity(e.target.value as Periodicity)} className={fieldClass}>
-              {PERIODICITY_OPTIONS.map((o) => (
-                <option key={o.value} value={o.value}>{o.label}</option>
-              ))}
-            </select>
-          </FormField>
-        </div>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <FormField htmlFor="pp-start" label={copy.startDate}>
-            <Input id="pp-start" type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} />
-          </FormField>
-          <FormField htmlFor="pp-down" label={copy.downPayment}>
-            <Input id="pp-down" type="number" min={0} step="0.01" value={downPayment} onChange={(e) => setDownPayment(e.target.value)} />
-          </FormField>
-        </div>
-        <FormField htmlFor="pp-total" label={copy.totalField}>
-          <Input id="pp-total" type="number" min={0} step="0.01" value={totalField} onChange={(e) => setTotalField(e.target.value)} />
-        </FormField>
-        <p className="text-sm text-muted">
-          {copy.financedPreview(formatCurrency(previewFinanced, planCurrency), formatCurrency(previewPer, planCurrency))}
-        </p>
-      </FormModal>
+        token={token}
+        plan={{ id: planId, currency: planCurrency, billable }}
+        onCreated={async () => {
+          await refetch();
+          setShowCreate(false);
+        }}
+      />
 
       <ConfirmDialog
         open={showCancel}
