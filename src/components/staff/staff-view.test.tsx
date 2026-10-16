@@ -328,7 +328,8 @@ describe('StaffView', () => {
     await user.click(within(dialog).getByRole('button', { name: /sí, reenviar/i }));
 
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
-    expect(await screen.findByText('Se cayó el servidor al reenviar.')).toBeInTheDocument();
+    // Un 5xx no muestra el mensaje interno del servidor (apiErrorMessage, DX-063).
+    expect(await screen.findByText('No pudimos reenviar la invitación.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument();
   });
 

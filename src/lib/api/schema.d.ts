@@ -4418,9 +4418,11 @@ export interface operations {
     PatientsController_list: {
         parameters: {
             query?: {
-                /** @description Free-text search (name or doc number) */
+                /** @description Búsqueda libre por nombre, apellido o documento (subcadena). Desde 2 caracteres no distingue tildes ni mayúsculas: "jose" encuentra "José". */
                 query?: string;
+                /** @description Tope: 5000 (un valor mayor responde 400). Para llegar más lejos, buscar. */
                 page?: number;
+                /** @description Tope: 100 (un valor mayor se recorta; la respuesta trae el pageSize aplicado) */
                 pageSize?: number;
             };
             header?: never;
@@ -6541,7 +6543,7 @@ export interface operations {
                 to: string;
                 /** @description ISO 4217 currency code every payment amount is converted into. */
                 currency: string;
-                /** @description Max number of upcoming appointments to return. */
+                /** @description Cuántas próximas citas devolver. Tope: 50 (un valor mayor responde 400). */
                 upcomingLimit?: number;
             };
             header?: never;
