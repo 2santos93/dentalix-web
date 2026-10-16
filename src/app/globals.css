@@ -125,9 +125,14 @@
     from { opacity: 0; }
     to { opacity: 1; }
   }
+  /* Solo `scale` (la propiedad individual), nunca `transform: translate(…)`:
+   * el centrado lo pone `-translate-x-1/2 -translate-y-1/2`, que en Tailwind v4
+   * es la propiedad `translate`, y se SUMA a `transform`. Repetir aquí el
+   * translate desplazaba el diálogo medio ancho y medio alto hacia arriba a la
+   * izquierda durante la animación (en 390 px, x ≈ −163; DX-140). */
   @keyframes dlg-content-in {
-    from { opacity: 0; transform: translate(-50%, -50%) scale(0.98); }
-    to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+    from { opacity: 0; scale: 0.98; }
+    to { opacity: 1; scale: 1; }
   }
   .dlg-overlay[data-state='open'] {
     animation: dlg-overlay-in 150ms ease-out;

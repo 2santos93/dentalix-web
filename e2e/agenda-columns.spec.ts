@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { addStaffViaApi, apiPost, registerClinicViaApi, type ApiSession } from './support/api';
 import { loginAs } from './support/auth';
 import { atSede, sedeDayFromToday } from './support/clock';
+import { expectDialogInsideViewport, expectNoHorizontalScroll } from './support/layout';
 import { API_URL, tenantOrigin } from './support/urls';
 
 /**
@@ -205,7 +206,7 @@ test('arrastrar con el ratón entre columnas reagenda; soltar sobre otra cita la
   );
 });
 
-test('móvil (390 px): una sola columna con selector deslizable y sin scroll horizontal de la página', async ({
+test('móvil (390 px): una sola columna con selector deslizable, «Mover a…» y tipos de cita sin salirse de la pantalla', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
@@ -219,8 +220,27 @@ test('móvil (390 px): una sola columna con selector deslizable y sin scroll hor
   await expect(page.getByTestId('day-column').filter({ visible: true })).toHaveCount(1);
   await picker.getByRole('button', { name: dentist.fullName }).click();
   await expect(column(page, dentist.fullName)).toBeVisible();
-  const overflow = await page.evaluate(
-    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
-  );
-  expect(overflow).toBeLessThanOrEqual(0);
+  await expectNoHorizontalScroll(page);
+
+  // «Mover a…» desde la tarjeta de Luis (11:00): el modal cabe en 390 px.
+  await column(page, dentist.fullName)
+    .getByRole('button', { name: /^Mover a… la cita de/ })
+    .first()
+    .click();
+  const moveDialog = page.getByRole('dialog');
+  await expect(moveDialog.getByRole('heading', { name: 'Mover a…' })).toBeVisible();
+  await expectDialogInsideViewport(page, moveDialog);
+  await expectNoHorizontalScroll(page);
+  await moveDialog.getByRole('button', { name: 'Cancelar' }).click();
+  await expect(moveDialog).toBeHidden();
+
+  // /settings/tipos-de-cita: en móvil, tarjetas en vez de tabla; y el modal «Nuevo tipo».
+  await page.goto(`${origin}/settings/tipos-de-cita`);
+  await expect(page.getByText(typeName).filter({ visible: true })).toBeVisible({ timeout: 15_000 });
+  await expectNoHorizontalScroll(page);
+  await page.getByRole('button', { name: 'Nuevo tipo' }).click();
+  const typeDialog = page.getByRole('dialog');
+  await expect(typeDialog.getByLabel('Nombre')).toBeVisible();
+  await expectDialogInsideViewport(page, typeDialog);
+  await expectNoHorizontalScroll(page);
 });

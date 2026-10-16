@@ -1,0 +1,50 @@
+import { expect, type Locator, type Page } from '@playwright/test';
+
+/** La página no se desplaza en horizontal (nada se sale por la derecha). */
+export async function expectNoHorizontalScroll(page: Page): Promise<void> {
+  const overflow = await page.evaluate(
+    () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
+  );
+  expect(overflow, 'scroll horizontal de la página').toBeLessThanOrEqual(0);
+}
+
+async function expectBoxInside(page: Page, locator: Locator, moment: string): Promise<void> {
+  const box = await locator.boundingBox();
+  const width = page.viewportSize()?.width ?? 0;
+  expect(box, `${moment}: el elemento no tiene caja`).not.toBeNull();
+  expect(box!.x, `${moment}: borde izquierdo`).toBeGreaterThanOrEqual(0);
+  expect(box!.x + box!.width, `${moment}: borde derecho`).toBeLessThanOrEqual(width);
+  // Los diálogos van centrados en horizontal (±1 px por el redondeo).
+  expect(Math.abs(box!.x + box!.width / 2 - width / 2), `${moment}: centrado`).toBeLessThanOrEqual(1);
+}
+
+/**
+ * Un diálogo abierto cabe en la pantalla y está centrado, en reposo Y en el
+ * primer fotograma de su animación de entrada (DX-140).
+ *
+ * Medir solo en reposo no basta: el `boundingBox()` de un test rápido cae a
+ * veces dentro de los 150 ms de la animación (siempre en la CI, en modo
+ * producción) y, si la animación desplaza el diálogo, el resultado depende de
+ * la velocidad de la máquina. Por eso se reinicia la animación CSS del
+ * diálogo, se congela en t = 0 y se mide; luego se termina y se mide otra vez.
+ * Sin animación (p. ej. con `prefers-reduced-motion`) las dos medidas son la
+ * de reposo.
+ */
+export async function expectDialogInsideViewport(page: Page, dialog: Locator): Promise<void> {
+  await expect(dialog).toBeVisible();
+  await dialog.evaluate((el) => {
+    const node = el as HTMLElement;
+    node.style.animation = 'none';
+    void node.offsetWidth; // fuerza el reflow para que la animación vuelva a empezar
+    node.style.animation = '';
+    for (const animation of node.getAnimations()) {
+      animation.pause();
+      animation.currentTime = 0;
+    }
+  });
+  await expectBoxInside(page, dialog, 'al empezar la animación de entrada');
+  await dialog.evaluate((el) => {
+    for (const animation of (el as HTMLElement).getAnimations()) animation.finish();
+  });
+  await expectBoxInside(page, dialog, 'en reposo');
+}
