@@ -53,6 +53,7 @@ export const AUDIT_RESOURCE_LABELS: Record<AuditResourceType, string> = {
   PAYMENT: 'Abono',
   PAYMENT_PLAN: 'Plan de cuotas',
   ACCOUNT_STATEMENT: 'Estado de cuenta',
+  CLINICAL_ENTRY_ADDENDUM: 'Adenda de evolución',
 };
 
 export const AUDIT_RESOURCE_OPTIONS = Object.keys(AUDIT_RESOURCE_LABELS) as AuditResourceType[];

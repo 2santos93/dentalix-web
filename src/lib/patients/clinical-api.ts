@@ -8,6 +8,19 @@ import type { ClinicalHistoryValue, MedicalHistory } from '@/lib/clinical/clinic
 // those fields hand-typed to their real structure.
 export type SaveMedicalHistoryInput = ClinicalHistoryValue;
 export type CreateClinicalEntryInput = components['schemas']['CreateClinicalEntryDto'];
+export type CreateClinicalEntryAddendumInput =
+  components['schemas']['CreateClinicalEntryAddendumDto'];
+
+/**
+ * Adenda (nota aclaratoria) de una evolución — DX-038. Autor (`authorId`) y
+ * fecha (`createdAt`) los pone el servidor; nunca se editan ni se borran.
+ */
+export type ClinicalEntryAddendum = components['schemas']['ClinicalEntryAddendumDto'];
+
+/** Topes del API (`CreateClinicalEntryAddendumDto`). */
+export const ADDENDUM_REASON_MIN = 10;
+export const ADDENDUM_REASON_MAX = 500;
+export const ADDENDUM_TEXT_MAX = 5000;
 
 /**
  * `GET /patients/:id/medical-history` (and `PUT`) return a plain TS
@@ -29,9 +42,9 @@ export type { MedicalHistory };
  * `MedicalHistory` above. Mirrors
  * `src/modules/clinical-entries/domain/entities/clinical-entry.entity.ts`.
  *
- * This is IMMUTABLE: once created, an entry is never updated or deleted —
- * there is no update/delete endpoint at all. A correction is always a new
- * entry.
+ * This is IMMUTABLE (DX-038): once created, an entry is never updated or
+ * deleted — the API answers 405 and the database rejects it. A correction is
+ * an addendum (`addenda`, oldest first) that leaves the original intact.
  */
 export interface ClinicalEntry {
   id: string;
@@ -42,6 +55,7 @@ export interface ClinicalEntry {
   notes: string;
   performedById: string | null;
   createdAt: string;
+  addenda: ClinicalEntryAddendum[];
 }
 
 /**
@@ -96,4 +110,17 @@ export async function createClinicalEntry(
     body: input,
     token,
   });
+}
+
+// DX-038: corrige una evolución con una adenda; el original no cambia.
+export async function createClinicalEntryAddendum(
+  token: string,
+  patientId: string,
+  entryId: string,
+  input: CreateClinicalEntryAddendumInput,
+): Promise<ClinicalEntryAddendum> {
+  return apiFetch<ClinicalEntryAddendum>(
+    `/patients/${patientId}/clinical-entries/${entryId}/addenda`,
+    { method: 'POST', body: input, token },
+  );
 }

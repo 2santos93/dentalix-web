@@ -1,14 +1,20 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ClinicalEntriesList } from './clinical-entries-list';
-import { listClinicalEntries, createClinicalEntry } from '@/lib/patients/clinical-api';
+import {
+  listClinicalEntries,
+  createClinicalEntry,
+  createClinicalEntryAddendum,
+} from '@/lib/patients/clinical-api';
 import { listStaff } from '@/lib/staff/staff-api';
 
 // NOTE: jest.mock's string literal is not alias-rewritten by the SWC
 // transform — use a relative path (same convention as the other tests).
 jest.mock('../../lib/patients/clinical-api', () => ({
+  ...jest.requireActual('../../lib/patients/clinical-api'),
   listClinicalEntries: jest.fn(),
   createClinicalEntry: jest.fn(),
+  createClinicalEntryAddendum: jest.fn(),
 }));
 // El autor de cada evolución se resuelve contra el personal de la clínica.
 jest.mock('../../lib/staff/staff-api', () => ({
@@ -17,6 +23,9 @@ jest.mock('../../lib/staff/staff-api', () => ({
 
 const mockedList = listClinicalEntries as jest.MockedFunction<typeof listClinicalEntries>;
 const mockedCreate = createClinicalEntry as jest.MockedFunction<typeof createClinicalEntry>;
+const mockedCreateAddendum = createClinicalEntryAddendum as jest.MockedFunction<
+  typeof createClinicalEntryAddendum
+>;
 const mockedListStaff = listStaff as jest.MockedFunction<typeof listStaff>;
 
 const staff = [
@@ -33,6 +42,7 @@ const entries = [
     notes: 'Todo en orden',
     performedById: 'u1',
     createdAt: '2026-02-01T00:00:00.000Z',
+    addenda: [],
   },
   {
     id: 'ce-1',
@@ -43,6 +53,7 @@ const entries = [
     notes: 'Primera visita',
     performedById: 'u1',
     createdAt: '2026-01-01T00:00:00.000Z',
+    addenda: [],
   },
 ];
 
@@ -50,6 +61,7 @@ describe('ClinicalEntriesList', () => {
   beforeEach(() => {
     mockedList.mockReset();
     mockedCreate.mockReset();
+    mockedCreateAddendum.mockReset();
     mockedListStaff.mockReset();
     mockedListStaff.mockResolvedValue(staff);
   });
@@ -155,6 +167,7 @@ describe('ClinicalEntriesList', () => {
       notes: 'Nueva evolución',
       performedById: 'u1',
       createdAt: '2026-03-01T00:00:00.000Z',
+      addenda: [],
     };
     mockedCreate.mockResolvedValue(created);
 
@@ -202,5 +215,109 @@ describe('ClinicalEntriesList', () => {
     await user.click(screen.getByRole('button', { name: /agregar/i }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Datos inválidos');
+  });
+
+  describe('adendas (DX-038)', () => {
+    const addendum = {
+      id: 'ad-1',
+      tenantId: 't1',
+      patientId: 'p1',
+      clinicalEntryId: 'ce-1',
+      reason: 'Pieza mal transcrita',
+      text: 'Es la 36, no la 46.',
+      authorId: 'u1',
+      createdAt: '2026-01-02T15:00:00.000Z',
+    };
+
+    it('no ofrece editar ni borrar una evolución', async () => {
+      mockedList.mockResolvedValue(entries);
+      render(<ClinicalEntriesList token="tok" patientId="p1" />);
+      await screen.findAllByText('Primera visita');
+      expect(screen.queryByRole('button', { name: /editar|borrar|eliminar/i })).toBeNull();
+    });
+
+    it('muestra las adendas debajo del original intacto, con motivo, autor y fecha', async () => {
+      mockedList.mockResolvedValue([entries[0], { ...entries[1], addenda: [addendum] }]);
+      render(<ClinicalEntriesList token="tok" patientId="p1" />);
+
+      const lists = await screen.findAllByRole('list', { name: /adendas de la evolución/i });
+      expect(lists).toHaveLength(2); // tabla + tarjetas
+      const first = lists[0];
+      expect(within(first).getByText('Es la 36, no la 46.')).toBeInTheDocument();
+      expect(within(first).getByText(/Pieza mal transcrita/)).toBeInTheDocument();
+      expect(within(first).getByText(/Dra\. Ana Ríos/)).toBeInTheDocument();
+      expect(screen.getAllByText('Primera visita')).toHaveLength(2);
+    });
+
+    it('valida motivo y texto en el modal sin llamar a la API', async () => {
+      mockedList.mockResolvedValue(entries);
+      const user = userEvent.setup();
+      render(<ClinicalEntriesList token="tok" patientId="p1" />);
+      const buttons = await screen.findAllByRole('button', { name: /añadir adenda a la evolución/i });
+      await user.click(buttons[0]);
+
+      const dialog = await screen.findByRole('dialog', { name: /añadir adenda/i });
+      await user.type(within(dialog).getByLabelText(/motivo de la corrección/i), 'corto');
+      await user.click(within(dialog).getByRole('button', { name: /guardar adenda/i }));
+
+      expect(await within(dialog).findByText(/al menos 10 caracteres/i)).toBeInTheDocument();
+      expect(within(dialog).getByText(/escribe el texto de la adenda/i)).toBeInTheDocument();
+      expect(within(dialog).getByLabelText(/motivo de la corrección/i)).toHaveAttribute(
+        'aria-invalid',
+        'true',
+      );
+      expect(mockedCreateAddendum).not.toHaveBeenCalled();
+    });
+
+    it('crea la adenda, cierra el modal y la muestra bajo su evolución', async () => {
+      mockedList.mockResolvedValue(entries);
+      mockedCreateAddendum.mockResolvedValue(addendum);
+      const user = userEvent.setup();
+      render(<ClinicalEntriesList token="tok" patientId="p1" />);
+      const buttons = await screen.findAllByRole('button', {
+        name: /añadir adenda a la evolución/i,
+      });
+      // ce-1 es la segunda fila de la tabla.
+      await user.click(buttons[1]);
+
+      const dialog = await screen.findByRole('dialog', { name: /añadir adenda/i });
+      await user.type(
+        within(dialog).getByLabelText(/motivo de la corrección/i),
+        '  Pieza mal transcrita ',
+      );
+      await user.type(within(dialog).getByLabelText(/texto de la adenda/i), 'Es la 36, no la 46.');
+      await user.click(within(dialog).getByRole('button', { name: /guardar adenda/i }));
+
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+      expect(mockedCreateAddendum).toHaveBeenCalledWith('tok', 'p1', 'ce-1', {
+        reason: 'Pieza mal transcrita',
+        text: 'Es la 36, no la 46.',
+      });
+      expect(await screen.findAllByText('Es la 36, no la 46.')).toHaveLength(2);
+    });
+
+    it('si la API falla, el modal sigue abierto con el error y lo escrito', async () => {
+      const { ApiError } = jest.requireActual('../../lib/api/client');
+      mockedList.mockResolvedValue(entries);
+      mockedCreateAddendum.mockRejectedValue(
+        new ApiError(404, 'Evolución no encontrada en la historia clínica de este paciente'),
+      );
+      const user = userEvent.setup();
+      render(<ClinicalEntriesList token="tok" patientId="p1" />);
+      const buttons = await screen.findAllByRole('button', {
+        name: /añadir adenda a la evolución/i,
+      });
+      await user.click(buttons[0]);
+      const dialog = await screen.findByRole('dialog', { name: /añadir adenda/i });
+      await user.type(
+        within(dialog).getByLabelText(/motivo de la corrección/i),
+        'Pieza mal transcrita',
+      );
+      await user.type(within(dialog).getByLabelText(/texto de la adenda/i), 'Texto');
+      await user.click(within(dialog).getByRole('button', { name: /guardar adenda/i }));
+
+      expect(await within(dialog).findByText(/evolución no encontrada/i)).toBeInTheDocument();
+      expect(within(dialog).getByLabelText(/texto de la adenda/i)).toHaveValue('Texto');
+    });
   });
 });
