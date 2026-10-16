@@ -586,6 +586,66 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/patients/{patientId}/tooth-records/{recordId}/void": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Anula un registro del odontograma con motivo (DX-120)
+         * @description Inserta un registro de anulación; el original no cambia. Deja de pintarse en la carta y queda tachado en el historial. Solo el autor del registro o un ADMIN.
+         */
+        post: operations["OdontogramController_void"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{patientId}/dentition": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Dentición de cada posición (DX-120)
+         * @description Último evento de cada posición o, sin eventos, la que toca por la edad (< 6 años temporal, 6-12 mixta según la tabla de erupción, > 12 permanente). No escribe nada.
+         */
+        get: operations["OdontogramController_dentition"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{patientId}/dentition-events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cambia la dentición de una o varias posiciones (DX-120)
+         * @description Un evento append-only por posición (erupción, exfoliación o cambio manual), todos en una transacción.
+         */
+        post: operations["OdontogramController_recordDentition"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/patients/{patientId}/odontogram": {
         parameters: {
             query?: never;
@@ -593,6 +653,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
+        /**
+         * Proyección del odontograma
+         * @description Registros vigentes por diente (sin los anulados). Con asOf, la carta al final de ese día: lo anulado después sigue y lo posterior no aparece.
+         */
         get: operations["OdontogramController_projection"];
         put?: never;
         post?: never;
@@ -2255,6 +2319,12 @@ export interface components {
             notes?: string;
             /** Format: uuid */
             clinicalEntryId?: string;
+            /**
+             * @description DX-120: hecho en esta clínica, ya presente al llegar el paciente u obra de otro profesional
+             * @default THIS_CLINIC
+             * @enum {string}
+             */
+            origin: "THIS_CLINIC" | "PRE_EXISTING" | "OTHER_PROVIDER";
         };
         ToothRecordDto: {
             /** Format: uuid */
@@ -2277,15 +2347,132 @@ export interface components {
             clinicalEntryId: string | null;
             /** Format: uuid */
             performedById: string | null;
+            /** @enum {string} */
+            origin: "THIS_CLINIC" | "PRE_EXISTING" | "OTHER_PROVIDER";
+            /**
+             * Format: uuid
+             * @description DX-120: si no es nulo, este registro es la ANULACIÓN del registro con ese id
+             */
+            voidsRecordId: string | null;
+            voidReason: string | null;
             /** Format: date-time */
             recordedAt: string;
             /** Format: date-time */
             createdAt: string;
         };
+        VoidToothRecordDto: {
+            /** @example Registrado en el diente equivocado */
+            reason: string;
+        };
+        DentitionEventDto: {
+            /** Format: uuid */
+            id: string;
+            /** @example 15 */
+            position: string;
+            /** @enum {string} */
+            dentition: "PERMANENT" | "PRIMARY" | "MIXED";
+            /** @enum {string} */
+            reason: "MANUAL" | "ERUPTION" | "EXFOLIATION";
+            /** Format: date-time */
+            recordedAt: string;
+            /** Format: uuid */
+            performedById: string;
+        };
+        PositionDentitionDto: {
+            /**
+             * @description Código FDI permanente
+             * @example 15
+             */
+            position: string;
+            /** @enum {string} */
+            dentition: "PERMANENT" | "PRIMARY" | "MIXED";
+            /**
+             * @description EVENT: último cambio registrado; AGE: por la edad; DEFAULT: sin fecha de nacimiento (permanente)
+             * @enum {string}
+             */
+            source: "EVENT" | "AGE" | "DEFAULT";
+            lastEvent: components["schemas"]["DentitionEventDto"] | null;
+        };
+        DentitionDto: {
+            /** @enum {string} */
+            basis: "AGE" | "DEFAULT";
+            ageYears: number | null;
+            /**
+             * @description Resumen de la carta
+             * @enum {string}
+             */
+            overall: "PERMANENT" | "PRIMARY" | "MIXED";
+            /** @example 2026-10-01 */
+            asOf: string | null;
+            positions: components["schemas"]["PositionDentitionDto"][];
+        };
+        RecordDentitionEventsDto: {
+            /**
+             * @description Posiciones por su código FDI PERMANENTE (el 55 ocupa la posición 15)
+             * @example [
+             *       "15"
+             *     ]
+             */
+            positions: string[];
+            /** @enum {string} */
+            dentition: "PERMANENT" | "PRIMARY" | "MIXED";
+            /** @enum {string} */
+            reason: "MANUAL" | "ERUPTION" | "EXFOLIATION";
+        };
         OdontogramGroupDto: {
             /** @description FDI/ISO-3950 tooth code */
             toothNumber: string;
             records: components["schemas"]["ToothRecordDto"][];
+        };
+        ToothRecordVoidDto: {
+            /**
+             * Format: uuid
+             * @description Id del registro de anulación
+             */
+            id: string;
+            reason: string;
+            /** Format: uuid */
+            performedById: string | null;
+            performedByName: string | null;
+            /** Format: date-time */
+            recordedAt: string;
+        };
+        ToothTimelineEntryDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            tenantId: string;
+            /** Format: uuid */
+            patientId: string;
+            /** @description FDI/ISO-3950 tooth code */
+            toothNumber: string;
+            surfaces: ("MESIAL" | "DISTAL" | "OCCLUSAL" | "VESTIBULAR" | "LINGUAL")[];
+            /** @enum {string} */
+            kind: "DIAGNOSIS" | "PROCEDURE";
+            /** Format: uuid */
+            catalogItemId: string | null;
+            /** @enum {string} */
+            status: "PLANNED" | "COMPLETED";
+            notes: string | null;
+            /** Format: uuid */
+            clinicalEntryId: string | null;
+            /** Format: uuid */
+            performedById: string | null;
+            /** @enum {string} */
+            origin: "THIS_CLINIC" | "PRE_EXISTING" | "OTHER_PROVIDER";
+            /**
+             * Format: uuid
+             * @description DX-120: si no es nulo, este registro es la ANULACIÓN del registro con ese id
+             */
+            voidsRecordId: string | null;
+            voidReason: string | null;
+            /** Format: date-time */
+            recordedAt: string;
+            /** Format: date-time */
+            createdAt: string;
+            performedByName: string | null;
+            /** @description Anulación del registro; null si sigue vigente */
+            void: components["schemas"]["ToothRecordVoidDto"] | null;
         };
         CreateAppointmentDto: {
             /** Format: uuid */
@@ -5510,11 +5697,167 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description DX-120: el diente no corresponde a la dentición de su posición (temporal en permanente o al revés). */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    OdontogramController_void: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+                recordId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VoidToothRecordDto"];
+            };
+        };
+        responses: {
+            /** @description La anulación creada */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ToothRecordDto"];
+                };
+            };
+            /** @description Motivo vacío o demasiado largo. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ni autor del registro ni ADMIN (o rol sin acceso clínico). */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente o registro no encontrados en esta clínica. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El registro ya está anulado. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El registro es una anulación: no se anula. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    OdontogramController_dentition: {
+        parameters: {
+            query?: {
+                /** @description DX-120: la carta tal como estaba al final de ese día (zona de la sede). Solo lectura. */
+                asOf?: string;
+            };
+            header?: never;
+            path: {
+                patientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DentitionDto"];
+                };
+            };
+            /** @description asOf inválido o futuro. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente no encontrado en esta clínica. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    OdontogramController_recordDentition: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecordDentitionEventsDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DentitionEventDto"][];
+                };
+            };
+            /** @description Posiciones, dentición o motivo inválidos. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente no encontrado en esta clínica. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Mixta o exfoliación en un molar sin temporal, o exfoliación que no deja la posición en permanente. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     OdontogramController_projection: {
         parameters: {
-            query?: never;
+            query?: {
+                /** @description DX-120: la carta tal como estaba al final de ese día (zona de la sede). Solo lectura. */
+                asOf?: string;
+            };
             header?: never;
             path: {
                 patientId: string;
@@ -5531,6 +5874,13 @@ export interface operations {
                     "application/json": components["schemas"]["OdontogramGroupDto"][];
                 };
             };
+            /** @description asOf inválido o futuro. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     OdontogramController_history: {
@@ -5545,12 +5895,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description Más reciente primero; incluye los anulados, con su anulación */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["ToothRecordDto"][];
+                    "application/json": components["schemas"]["ToothTimelineEntryDto"][];
                 };
             };
         };
