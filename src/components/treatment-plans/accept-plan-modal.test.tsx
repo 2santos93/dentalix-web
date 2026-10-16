@@ -120,6 +120,22 @@ describe('AcceptPlanModal (DX-012)', () => {
     expect(screen.getByRole('button', { name: 'Aceptar y firmar' })).toBeDisabled();
   });
 
+  it('409 porque otro ya lo firmó: cierra el modal y avisa al plan con la aceptación', async () => {
+    const user = userEvent.setup();
+    const signed = planQuoteFixture({ planStatus: 'ACCEPTED', acceptance: SIGNED_ACCEPTANCE });
+    mockedGet.mockResolvedValueOnce(planQuoteFixture()).mockResolvedValueOnce(signed);
+    mockedAccept.mockRejectedValue(
+      new ApiError(409, 'El plan ya fue aceptado y firmado: no se puede volver a firmar.'),
+    );
+    const props = renderModal();
+    await screen.findByRole('region', { name: 'Presupuesto a firmar' });
+    sign(screen.getByRole('img', { name: 'Firma del paciente' }));
+    await user.click(screen.getByRole('button', { name: 'Aceptar y firmar' }));
+
+    await waitFor(() => expect(props.onAccepted).toHaveBeenCalledWith(signed));
+    expect(props.onOpenChange).toHaveBeenCalledWith(false);
+  });
+
   it('un error genérico al firmar deja la firma y se puede reintentar', async () => {
     const user = userEvent.setup();
     mockedGet.mockResolvedValue(planQuoteFixture());

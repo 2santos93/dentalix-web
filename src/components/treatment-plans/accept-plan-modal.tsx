@@ -119,9 +119,18 @@ export function AcceptPlanModal({
       handleOpenChange(false);
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
-        // Lo firmado tiene que ser lo mostrado: se recarga y se firma de nuevo.
+        // Lo firmado tiene que ser lo mostrado: se recarga el presupuesto. Si
+        // entre medias otra persona ya lo firmó, no hay nada que firmar: se
+        // cierra y el plan se refresca con esa aceptación.
+        const fresh = await getPlanQuote(token, patientId, planId).catch(() => null);
+        if (fresh?.acceptance) {
+          onAccepted(fresh);
+          handleOpenChange(false);
+          return;
+        }
         setSignature(null);
-        setReloadKey((k) => k + 1);
+        if (fresh) setQuote(fresh);
+        else setReloadKey((k) => k + 1);
       }
       setSubmitError(err instanceof ApiError ? err.message : copy.genericError);
     } finally {
