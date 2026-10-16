@@ -142,7 +142,12 @@ export function StaffMemberProfile({ token, userId }: StaffMemberProfileProps) {
       const next = {
         ...updated,
         status: member.status,
-        professionalLicense: updated.professionalLicense ?? member.professionalLicense ?? null,
+        // `null` de la API = lo borró; solo `undefined` (respuesta sin el
+        // campo) conserva el que había.
+        professionalLicense:
+          updated.professionalLicense !== undefined
+            ? updated.professionalLicense
+            : (member.professionalLicense ?? null),
       };
       setMember(next);
       setLicense(next.professionalLicense ?? '');
