@@ -1,7 +1,7 @@
-import { test, expect, type Locator } from '@playwright/test';
+import { test, expect, type Locator } from './support/test';
 import { randomUUID } from 'node:crypto';
 import { formatCurrency } from '../src/lib/format/currency';
-import { registerAndLogin } from './support/auth';
+import { accessTokenOf, registerAndLogin } from './support/auth';
 import { API_URL } from './support/urls';
 
 /**
@@ -77,9 +77,7 @@ test('treatment plan: create -> add item -> total -> status DONE -> remove -> to
 }) => {
   const origin = await registerAndLogin(page, { subdomain, clinicName, fullName, email, password });
 
-  const authRaw = await page.evaluate(() => localStorage.getItem('dentalix-auth'));
-  const accessToken =
-    (JSON.parse(authRaw as string) as { state?: { accessToken?: string | null } }).state?.accessToken ?? '';
+  const accessToken = await accessTokenOf(page);
   expect(accessToken).toBeTruthy();
 
   // --- Seed one DentalCatalogItem via the real API (needed by the add-item

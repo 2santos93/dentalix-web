@@ -1,7 +1,7 @@
 /**
  * Lee los claims de un JWT SIN verificar la firma. Solo para decisiones de
- * cliente (qué pintar, si un token ya caducó y conviene renovarlo antes de
- * usarlo): el servidor vuelve a validar todo. `null` si no es un JWT legible.
+ * cliente (qué pintar según el rol): el servidor vuelve a validar todo.
+ * `null` si no es un JWT legible.
  */
 export function readJwtClaims(token: string | null | undefined): Record<string, unknown> | null {
   if (!token) return null;
@@ -16,15 +16,4 @@ export function readJwtClaims(token: string | null | undefined): Record<string, 
   } catch {
     return null;
   }
-}
-
-/**
- * ¿El token ya caducó (o caduca en menos de `skewMs`)? Un token sin `exp`
- * legible se da por vigente: no hay forma de saberlo, y si no lo está el
- * servidor responderá 401.
- */
-export function isJwtExpired(token: string, nowMs = Date.now(), skewMs = 10_000): boolean {
-  const exp = readJwtClaims(token)?.exp;
-  if (typeof exp !== 'number') return false;
-  return exp * 1000 <= nowMs + skewMs;
 }

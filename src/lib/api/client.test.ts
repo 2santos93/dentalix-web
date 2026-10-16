@@ -11,7 +11,7 @@
  * @jest-environment jsdom
  * @jest-environment-options {"url": "http://acme.localhost:3001"}
  */
-import { apiFetch, apiFetchOrNull, ApiError } from './client';
+import { apiFetch, apiFetchOrNull, ApiError, bootstrapSession } from './client';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import {
   getActiveLocationId,
@@ -71,11 +71,15 @@ describe('apiFetch', () => {
   });
 });
 
-describe('apiFetch — expired access token refresh', () => {
+describe('apiFetch — refresh por cookie (DX-062)', () => {
   const realFetch = global.fetch;
+  beforeEach(() => {
+    localStorage.clear();
+    useAuthStore.setState({ accessToken: null, _hasHydrated: false });
+  });
   afterEach(() => {
     global.fetch = realFetch;
-    useAuthStore.getState().clear();
+    localStorage.clear();
   });
 
   function ok(json: unknown, status = 200) {
@@ -84,19 +88,29 @@ describe('apiFetch — expired access token refresh', () => {
   function unauthorized(message = 'Invalid token') {
     return { ok: false, status: 401, json: async () => ({ message }) };
   }
+  const path = (url: string) => url.replace(/^.*\/api\/v1/, '');
 
-  it('on 401, refreshes with the stored refresh token and replays the request with the new access token', async () => {
-    useAuthStore.getState().setTokens({ accessToken: 'OLD', refreshToken: 'R' });
+  it('va al MISMO origen (/api/v1), con la cookie (same-origin) y pidiendo el modo cookie', async () => {
+    const spy = jest.fn().mockResolvedValue(ok({ ok: 1 }));
+    global.fetch = spy as unknown as typeof fetch;
 
-    const calls: Array<{ url: string; auth?: string; body?: string }> = [];
+    await apiFetch('/patients', { token: 'T' });
+
+    const [url, init] = spy.mock.calls[0];
+    expect(url).toBe('/api/v1/patients');
+    expect(init.credentials).toBe('same-origin');
+    expect(init.headers['X-Refresh-Transport']).toBe('cookie');
+  });
+
+  it('on 401, renueva con la cookie (sin refresh en el body) y repite la petición con el access nuevo', async () => {
+    useAuthStore.getState().setAccessToken('OLD');
+
+    const calls: Array<{ url: string; auth?: string; body?: unknown }> = [];
     let protectedHits = 0;
     global.fetch = jest.fn(async (url: string, init: RequestInit) => {
       const headers = init.headers as Record<string, string>;
-      calls.push({ url, auth: headers.Authorization, body: init.body as string });
-      if (url.endsWith('/auth/refresh')) {
-        return ok({ accessToken: 'NEW', refreshToken: 'R2' });
-      }
-      // First hit: expired token → 401. After refresh: succeeds.
+      calls.push({ url, auth: headers.Authorization, body: init.body });
+      if (url.endsWith('/auth/refresh')) return ok({ accessToken: 'NEW' });
       protectedHits += 1;
       return protectedHits === 1 ? unauthorized() : ok({ items: [] });
     }) as unknown as typeof fetch;
@@ -104,46 +118,35 @@ describe('apiFetch — expired access token refresh', () => {
     const out = await apiFetch<{ items: unknown[] }>('/patients', { token: 'OLD' });
 
     expect(out).toEqual({ items: [] });
-    // 3 calls: protected(401) → refresh → protected(200).
-    expect(calls.map((c) => c.url.replace(/^.*\/api\/v1/, ''))).toEqual([
-      '/patients',
-      '/auth/refresh',
-      '/patients',
-    ]);
-    // The refresh POST carried the stored refresh token.
-    expect(JSON.parse(calls[1].body!)).toEqual({ refreshToken: 'R' });
-    // The replay used the freshly-minted access token, not the stale one.
+    expect(calls.map((c) => path(c.url))).toEqual(['/patients', '/auth/refresh', '/patients']);
+    // El refresh viaja en la cookie HttpOnly: el body no lleva ningún token.
+    expect(calls[1].body).toBeUndefined();
     expect(calls[2].auth).toBe('Bearer NEW');
-    // Store was updated with the rotated pair.
     expect(useAuthStore.getState().accessToken).toBe('NEW');
-    expect(useAuthStore.getState().refreshToken).toBe('R2');
+    expect(localStorage.length).toBe(0);
   });
 
-  it('clears the session and throws when the refresh token is also dead', async () => {
-    useAuthStore.getState().setTokens({ accessToken: 'OLD', refreshToken: 'DEAD' });
-
-    global.fetch = jest.fn(async (url: string) => {
-      if (url.endsWith('/auth/refresh')) return unauthorized('Invalid refresh token');
-      return unauthorized();
-    }) as unknown as typeof fetch;
+  it('si la cookie tampoco vale (401), cierra la sesión en memoria y lanza', async () => {
+    useAuthStore.getState().setAccessToken('OLD');
+    global.fetch = jest.fn(async (url: string) =>
+      url.endsWith('/auth/refresh') ? unauthorized('Invalid refresh token') : unauthorized(),
+    ) as unknown as typeof fetch;
 
     await expect(apiFetch('/patients', { token: 'OLD' })).rejects.toBeInstanceOf(ApiError);
-    // Store cleared → the page's `accessToken` guard bounces the user to /login.
     expect(useAuthStore.getState().accessToken).toBeNull();
-    expect(useAuthStore.getState().refreshToken).toBeNull();
   });
 
   it('coalesces concurrent 401s into a single /auth/refresh (rotation-safe)', async () => {
-    useAuthStore.getState().setTokens({ accessToken: 'OLD', refreshToken: 'R' });
+    useAuthStore.getState().setAccessToken('OLD');
 
     let refreshCount = 0;
     const protectedHits: Record<string, number> = {};
     global.fetch = jest.fn(async (url: string) => {
       if (url.endsWith('/auth/refresh')) {
         refreshCount += 1;
-        return ok({ accessToken: 'NEW', refreshToken: 'R2' });
+        return ok({ accessToken: 'NEW' });
       }
-      const key = url.replace(/^.*\/api\/v1/, '');
+      const key = path(url);
       protectedHits[key] = (protectedHits[key] ?? 0) + 1;
       return protectedHits[key] === 1 ? unauthorized() : ok({ ok: 1 });
     }) as unknown as typeof fetch;
@@ -154,130 +157,8 @@ describe('apiFetch — expired access token refresh', () => {
       apiFetch('/staff', { token: 'OLD' }),
     ]);
 
-    expect(a).toEqual({ ok: 1 });
-    expect(b).toEqual({ ok: 1 });
-    expect(c).toEqual({ ok: 1 });
+    expect([a, b, c]).toEqual([{ ok: 1 }, { ok: 1 }, { ok: 1 }]);
     expect(refreshCount).toBe(1);
-  });
-
-  // El backend hace los refresh tokens de UN SOLO USO: reusar uno ya rotado
-  // es 401. Con varias pestañas abiertas, cada una tiene el par en memoria y
-  // solo comparten localStorage; si otra pestaña ya rotó, esta debe adoptar el
-  // par nuevo en vez de gastar el viejo (y cerrar la sesión de todas).
-  function writePersistedPair(accessToken: string, refreshToken: string) {
-    window.localStorage.setItem(
-      'dentalix-auth',
-      JSON.stringify({ state: { accessToken, refreshToken }, version: 0 }),
-    );
-  }
-
-  it('adopts a pair already rotated by another tab instead of reusing the stale refresh token', async () => {
-    useAuthStore.getState().setTokens({ accessToken: 'OLD', refreshToken: 'R' });
-    // Otra pestaña rotó: localStorage tiene el par nuevo, la memoria no.
-    writePersistedPair('NEW-OTHER-TAB', 'R2');
-
-    const calls: Array<{ url: string; auth?: string }> = [];
-    let protectedHits = 0;
-    global.fetch = jest.fn(async (url: string, init: RequestInit) => {
-      const headers = init.headers as Record<string, string>;
-      calls.push({ url, auth: headers.Authorization });
-      if (url.endsWith('/auth/refresh')) return unauthorized('Invalid refresh token');
-      protectedHits += 1;
-      return protectedHits === 1 ? unauthorized() : ok({ ok: 1 });
-    }) as unknown as typeof fetch;
-
-    const out = await apiFetch('/patients', { token: 'OLD' });
-
-    expect(out).toEqual({ ok: 1 });
-    expect(calls.map((c) => c.url.replace(/^.*\/api\/v1/, ''))).toEqual([
-      '/patients',
-      '/patients',
-    ]);
-    expect(calls[1].auth).toBe('Bearer NEW-OTHER-TAB');
-    expect(useAuthStore.getState().refreshToken).toBe('R2');
-  });
-
-  it('when another tab wins the refresh race, adopts its pair instead of logging out', async () => {
-    useAuthStore.getState().setTokens({ accessToken: 'OLD', refreshToken: 'R' });
-    writePersistedPair('OLD', 'R');
-
-    let protectedHits = 0;
-    const auths: Array<string | undefined> = [];
-    global.fetch = jest.fn(async (url: string, init: RequestInit) => {
-      if (url.endsWith('/auth/refresh')) {
-        // Mientras esta petición viajaba, la otra pestaña consumió `R` y
-        // guardó su par: el backend rechaza el reuso.
-        writePersistedPair('NEW-OTHER-TAB', 'R2');
-        return unauthorized('Invalid refresh token');
-      }
-      auths.push((init.headers as Record<string, string>).Authorization);
-      protectedHits += 1;
-      return protectedHits === 1 ? unauthorized() : ok({ ok: 1 });
-    }) as unknown as typeof fetch;
-
-    const out = await apiFetch('/patients', { token: 'OLD' });
-
-    expect(out).toEqual({ ok: 1 });
-    expect(auths[1]).toBe('Bearer NEW-OTHER-TAB');
-    expect(useAuthStore.getState().accessToken).toBe('NEW-OTHER-TAB');
-    expect(useAuthStore.getState().refreshToken).toBe('R2');
-  });
-
-  function jwt(claims: Record<string, unknown>): string {
-    const b64 = (o: unknown) => Buffer.from(JSON.stringify(o)).toString('base64url');
-    return `${b64({ alg: 'HS256' })}.${b64(claims)}.sig`;
-  }
-  const inSeconds = (s: number) => Math.floor(Date.now() / 1000) + s;
-
-  it('without Web Locks, waits and re-reads when the winning tab persists its pair AFTER our 401', async () => {
-    useAuthStore.getState().setTokens({ accessToken: 'OLD', refreshToken: 'R' });
-
-    let protectedHits = 0;
-    const auths: Array<string | undefined> = [];
-    global.fetch = jest.fn(async (url: string, init: RequestInit) => {
-      if (url.endsWith('/auth/refresh')) {
-        // La otra pestaña ganó en el servidor pero aún no ha guardado su par:
-        // lo guarda un poco DESPUÉS de que nos llegue el 401.
-        setTimeout(() => writePersistedPair('NEW-LATE', 'R2'), 100);
-        return unauthorized('Invalid refresh token');
-      }
-      auths.push((init.headers as Record<string, string>).Authorization);
-      protectedHits += 1;
-      return protectedHits === 1 ? unauthorized() : ok({ ok: 1 });
-    }) as unknown as typeof fetch;
-
-    const out = await apiFetch('/patients', { token: 'OLD' });
-
-    expect(out).toEqual({ ok: 1 });
-    expect(auths[1]).toBe('Bearer NEW-LATE');
-    expect(useAuthStore.getState().refreshToken).toBe('R2');
-  });
-
-  it('refreshes with the ADOPTED refresh token when the adopted access token is already expired', async () => {
-    useAuthStore.getState().setTokens({ accessToken: 'OLD', refreshToken: 'R' });
-    const expired = jwt({ sub: 'u1', exp: inSeconds(-60) });
-    writePersistedPair(expired, 'R2');
-
-    const bodies: unknown[] = [];
-    const auths: Array<string | undefined> = [];
-    let protectedHits = 0;
-    global.fetch = jest.fn(async (url: string, init: RequestInit) => {
-      if (url.endsWith('/auth/refresh')) {
-        bodies.push(JSON.parse(init.body as string));
-        return ok({ accessToken: 'NEW', refreshToken: 'R3' });
-      }
-      auths.push((init.headers as Record<string, string>).Authorization);
-      protectedHits += 1;
-      return protectedHits === 1 ? unauthorized() : ok({ ok: 1 });
-    }) as unknown as typeof fetch;
-
-    await apiFetch('/patients', { token: 'OLD' });
-
-    // Ni se reusa el refresh viejo `R` (daría 401) ni se reintenta con el
-    // access caducado: se renueva con el par que dejó la otra pestaña.
-    expect(bodies).toEqual([{ refreshToken: 'R2' }]);
-    expect(auths[1]).toBe('Bearer NEW');
-    expect(useAuthStore.getState().refreshToken).toBe('R3');
   });
 
   it.each([
@@ -287,7 +168,7 @@ describe('apiFetch — expired access token refresh', () => {
       () => Promise.resolve({ ok: false, status: 503, json: async () => ({ message: 'down' }) }),
     ],
   ])('keeps the session when the refresh fails with %s (only a 401 logs out)', async (_label, refreshResponse) => {
-    useAuthStore.getState().setTokens({ accessToken: 'OLD', refreshToken: 'R' });
+    useAuthStore.getState().setAccessToken('OLD');
     global.fetch = jest.fn(async (url: string) => {
       if (url.endsWith('/auth/refresh')) return refreshResponse();
       return unauthorized();
@@ -295,22 +176,38 @@ describe('apiFetch — expired access token refresh', () => {
 
     await expect(apiFetch('/patients', { token: 'OLD' })).rejects.toBeInstanceOf(ApiError);
     expect(useAuthStore.getState().accessToken).toBe('OLD');
-    expect(useAuthStore.getState().refreshToken).toBe('R');
+  });
+
+  // La cookie la comparten todas las pestañas del host. Sin Web Locks, dos
+  // pestañas pueden gastar la MISMA cookie a la vez: la que pierde (401) vuelve
+  // a intentarlo una vez, ya con la cookie que dejó la ganadora.
+  it('sin Web Locks, tras perder la carrera (401) reintenta una vez con la cookie ya rotada', async () => {
+    useAuthStore.getState().setAccessToken('OLD');
+    let refreshCount = 0;
+    let protectedHits = 0;
+    global.fetch = jest.fn(async (url: string) => {
+      if (url.endsWith('/auth/refresh')) {
+        refreshCount += 1;
+        return refreshCount === 1 ? unauthorized('Invalid refresh token') : ok({ accessToken: 'NEW' });
+      }
+      protectedHits += 1;
+      return protectedHits === 1 ? unauthorized() : ok({ ok: 1 });
+    }) as unknown as typeof fetch;
+
+    await expect(apiFetch('/patients', { token: 'OLD' })).resolves.toEqual({ ok: 1 });
+    expect(refreshCount).toBe(2);
+    expect(useAuthStore.getState().accessToken).toBe('NEW');
   });
 
   describe('with Web Locks', () => {
     const lockNames: string[] = [];
-    let beforeGrant: () => void = () => {};
     beforeEach(() => {
       lockNames.length = 0;
-      beforeGrant = () => {};
       Object.defineProperty(navigator, 'locks', {
         configurable: true,
         value: {
           request: async (name: string, cb: () => Promise<unknown>) => {
             lockNames.push(name);
-            // Lo que haga la pestaña que tenía el lock antes que nosotros.
-            beforeGrant();
             return cb();
           },
         },
@@ -320,56 +217,44 @@ describe('apiFetch — expired access token refresh', () => {
       delete (navigator as unknown as { locks?: unknown }).locks;
     });
 
-    it('serializes the refresh across tabs and re-reads the pair once the lock is granted', async () => {
-      useAuthStore.getState().setTokens({ accessToken: 'OLD', refreshToken: 'R' });
-      writePersistedPair('OLD', 'R');
-      // Mientras esperábamos el lock, la otra pestaña rotó y guardó su par.
-      beforeGrant = () => writePersistedPair('NEW-HOLDER', 'R2');
-
-      let refreshCount = 0;
-      const auths: Array<string | undefined> = [];
+    it('serializa el refresh entre pestañas bajo el lock dentalix-refresh', async () => {
+      useAuthStore.getState().setAccessToken('OLD');
       let protectedHits = 0;
-      global.fetch = jest.fn(async (url: string, init: RequestInit) => {
+      global.fetch = jest.fn(async (url: string) => {
+        if (url.endsWith('/auth/refresh')) return ok({ accessToken: 'NEW' });
+        protectedHits += 1;
+        return protectedHits === 1 ? unauthorized() : ok({ ok: 1 });
+      }) as unknown as typeof fetch;
+
+      await apiFetch('/patients', { token: 'OLD' });
+
+      expect(lockNames).toEqual(['dentalix-refresh']);
+      expect(useAuthStore.getState().accessToken).toBe('NEW');
+    });
+
+    it('con el lock, un 401 del refresh es definitivo: no reintenta y cierra la sesión', async () => {
+      useAuthStore.getState().setAccessToken('OLD');
+      let refreshCount = 0;
+      global.fetch = jest.fn(async (url: string) => {
         if (url.endsWith('/auth/refresh')) {
           refreshCount += 1;
           return unauthorized('Invalid refresh token');
         }
-        auths.push((init.headers as Record<string, string>).Authorization);
-        protectedHits += 1;
-        return protectedHits === 1 ? unauthorized() : ok({ ok: 1 });
+        return unauthorized();
       }) as unknown as typeof fetch;
 
-      await apiFetch('/patients', { token: 'OLD' });
-
-      expect(lockNames).toEqual(['dentalix-refresh']);
-      expect(refreshCount).toBe(0);
-      expect(auths[1]).toBe('Bearer NEW-HOLDER');
-    });
-
-    it('still rotates normally under the lock when nobody else did', async () => {
-      useAuthStore.getState().setTokens({ accessToken: 'OLD', refreshToken: 'R' });
-      let protectedHits = 0;
-      global.fetch = jest.fn(async (url: string) => {
-        if (url.endsWith('/auth/refresh')) return ok({ accessToken: 'NEW', refreshToken: 'R2' });
-        protectedHits += 1;
-        return protectedHits === 1 ? unauthorized() : ok({ ok: 1 });
-      }) as unknown as typeof fetch;
-
-      await apiFetch('/patients', { token: 'OLD' });
-
-      expect(lockNames).toEqual(['dentalix-refresh']);
-      expect(useAuthStore.getState().refreshToken).toBe('R2');
+      await expect(apiFetch('/patients', { token: 'OLD' })).rejects.toBeInstanceOf(ApiError);
+      expect(refreshCount).toBe(1);
+      expect(useAuthStore.getState().accessToken).toBeNull();
     });
   });
 
   it('does NOT refresh on a 401 from an /auth/* endpoint (wrong password is not an expired session)', async () => {
-    useAuthStore.getState().setTokens({ accessToken: 'OLD', refreshToken: 'R' });
-
     let refreshCount = 0;
     global.fetch = jest.fn(async (url: string) => {
       if (url.endsWith('/auth/refresh')) {
         refreshCount += 1;
-        return ok({ accessToken: 'NEW', refreshToken: 'R2' });
+        return ok({ accessToken: 'NEW' });
       }
       return unauthorized('Invalid credentials');
     }) as unknown as typeof fetch;
@@ -378,6 +263,116 @@ describe('apiFetch — expired access token refresh', () => {
       apiFetch('/auth/login', { method: 'POST', body: { email: 'a', password: 'b' } }),
     ).rejects.toBeInstanceOf(ApiError);
     expect(refreshCount).toBe(0);
+  });
+});
+
+describe('bootstrapSession — arranque de sesión al cargar la página (DX-062)', () => {
+  const realFetch = global.fetch;
+  beforeEach(() => {
+    localStorage.clear();
+    useAuthStore.setState({ accessToken: null, _hasHydrated: false });
+  });
+  afterEach(() => {
+    global.fetch = realFetch;
+    localStorage.clear();
+  });
+
+  function ok(json: unknown) {
+    return { ok: true, status: 201, json: async () => json };
+  }
+
+  it('con cookie válida: obtiene el access token y marca la sesión como resuelta', async () => {
+    const spy = jest.fn().mockResolvedValue(ok({ accessToken: 'A1' }));
+    global.fetch = spy as unknown as typeof fetch;
+
+    await bootstrapSession();
+
+    const [url, init] = spy.mock.calls[0];
+    expect(url).toBe('/api/v1/auth/refresh');
+    expect(init.method).toBe('POST');
+    expect(init.body).toBeUndefined();
+    expect(useAuthStore.getState()).toMatchObject({ accessToken: 'A1', _hasHydrated: true });
+  });
+
+  it('sin cookie (401): queda resuelta SIN sesión (la página manda a /login)', async () => {
+    global.fetch = jest
+      .fn()
+      .mockResolvedValue({ ok: false, status: 401, json: async () => ({ message: 'Missing refresh token' }) }) as unknown as typeof fetch;
+
+    await bootstrapSession();
+
+    expect(useAuthStore.getState()).toMatchObject({ accessToken: null, _hasHydrated: true });
+  });
+
+  it('una sola llamada aunque la pidan varios componentes a la vez, y ninguna si ya está resuelta', async () => {
+    const spy = jest.fn().mockResolvedValue(ok({ accessToken: 'A1' }));
+    global.fetch = spy as unknown as typeof fetch;
+
+    await Promise.all([bootstrapSession(), bootstrapSession(), bootstrapSession()]);
+    await bootstrapSession();
+
+    expect(spy).toHaveBeenCalledTimes(1);
+  });
+
+  it('migración: usa UNA vez el refresh antiguo de localStorage para obtener la cookie y borra el estado viejo', async () => {
+    localStorage.setItem(
+      'dentalix-auth',
+      JSON.stringify({ state: { accessToken: 'VIEJO', refreshToken: 'R-VIEJO' }, version: 0 }),
+    );
+    const spy = jest.fn().mockResolvedValue(ok({ accessToken: 'A1' }));
+    global.fetch = spy as unknown as typeof fetch;
+
+    await bootstrapSession();
+
+    const [url, init] = spy.mock.calls[0];
+    expect(url).toBe('/api/v1/auth/refresh');
+    expect(JSON.parse(init.body as string)).toEqual({ refreshToken: 'R-VIEJO' });
+    expect(init.headers['X-Refresh-Transport']).toBe('cookie');
+    expect(localStorage.getItem('dentalix-auth')).toBeNull();
+    expect(useAuthStore.getState().accessToken).toBe('A1');
+  });
+
+  it('migración con un refresh antiguo ya muerto: lo borra y prueba con la cookie', async () => {
+    localStorage.setItem(
+      'dentalix-auth',
+      JSON.stringify({ state: { accessToken: 'VIEJO', refreshToken: 'R-MUERTO' }, version: 0 }),
+    );
+    const bodies: unknown[] = [];
+    global.fetch = jest.fn(async (_url: string, init: RequestInit) => {
+      bodies.push(init.body);
+      return bodies.length === 1
+        ? { ok: false, status: 401, json: async () => ({ message: 'Invalid refresh token' }) }
+        : ok({ accessToken: 'A-COOKIE' });
+    }) as unknown as typeof fetch;
+
+    await bootstrapSession();
+
+    expect(bodies).toHaveLength(2);
+    expect(bodies[1]).toBeUndefined();
+    expect(localStorage.getItem('dentalix-auth')).toBeNull();
+    expect(useAuthStore.getState().accessToken).toBe('A-COOKIE');
+  });
+
+  it('migración: si la red falla, conserva el refresh antiguo para el siguiente intento', async () => {
+    const legacy = JSON.stringify({ state: { refreshToken: 'R-VIEJO' }, version: 0 });
+    localStorage.setItem('dentalix-auth', legacy);
+    global.fetch = jest.fn().mockRejectedValue(new TypeError('Failed to fetch')) as unknown as typeof fetch;
+
+    await bootstrapSession();
+
+    expect(localStorage.getItem('dentalix-auth')).toBe(legacy);
+    expect(useAuthStore.getState()).toMatchObject({ accessToken: null, _hasHydrated: true });
+  });
+
+  it('un estado antiguo sin refresh (o corrupto) simplemente se borra', async () => {
+    localStorage.setItem('dentalix-auth', '{no-json');
+    const spy = jest.fn().mockResolvedValue(ok({ accessToken: 'A1' }));
+    global.fetch = spy as unknown as typeof fetch;
+
+    await bootstrapSession();
+
+    expect(spy.mock.calls[0][1].body).toBeUndefined();
+    expect(localStorage.getItem('dentalix-auth')).toBeNull();
   });
 });
 
@@ -437,7 +432,7 @@ describe('apiFetch — FormData body', () => {
   // file, we plain-assign `global.fetch` to a jest.fn() that resolves a
   // minimal fetch-shaped object.
   it('sends a FormData body without JSON content-type and without stringifying', async () => {
-    useAuthStore.getState().setTokens({ accessToken: 'T', refreshToken: 'R' });
+    useAuthStore.getState().setAccessToken('T');
     const fetchMock = jest.fn().mockResolvedValue({
       ok: true,
       json: async () => ({ ok: true }),

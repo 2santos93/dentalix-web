@@ -1,11 +1,9 @@
 import { useAuthStore } from '@/lib/auth/auth-store';
-import { isJwtExpired } from '@/lib/auth/jwt-claims';
 import {
   getActiveLocationId,
   setActiveLocationId,
 } from '@/lib/locations/location-store';
-
-const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000/api/v1';
+import { apiBaseUrl } from './api-base';
 
 const REFRESH_PATH = '/auth/refresh';
 
@@ -40,105 +38,164 @@ interface ApiOptions {
 // one expires it's common for several concurrent requests to 401 together —
 // without this, each would POST /auth/refresh and, because the backend
 // ROTATES the refresh token on every call, the second refresh would race the
-// first and could run against an already-rotated token. Funnelling them
-// through one promise rotates exactly once.
+// first. Funnelling them through one promise rotates exactly once.
 let refreshInFlight: Promise<string | null> | null = null;
 
-// Nombre del Web Lock que serializa el refresh ENTRE pestañas del mismo origen.
+// Nombre del Web Lock que serializa el refresh ENTRE pestañas del mismo host.
 const REFRESH_LOCK = 'dentalix-refresh';
-// Sin Web Locks, la pestaña que nos ganó el refresh en el servidor puede
-// guardar su par un instante DESPUÉS de que nos llegue el 401: se espera esto
-// y se relee antes de dar la sesión por perdida.
+// Sin Web Locks, otra pestaña puede gastar la misma cookie a la vez: la que
+// pierde espera esto (a que la ganadora reciba la cookie nueva) y reintenta.
 const NO_LOCKS_SETTLE_MS = 300;
 
-/**
- * Re-reads the persisted pair (localStorage, shared by every tab) into the
- * in-memory store and returns it.
- */
-async function rereadPersistedPair(): Promise<{
-  accessToken: string | null;
-  refreshToken: string | null;
-}> {
-  await useAuthStore.persist.rehydrate();
-  const { accessToken, refreshToken } = useAuthStore.getState();
-  return { accessToken, refreshToken };
-}
+// Estado de sesión de antes de DX-062: el par entero en localStorage.
+const LEGACY_STORAGE_KEY = 'dentalix-auth';
 
 /**
- * The access token another tab left after rotating away from `staleRefresh`,
- * or `null` when the persisted refresh token is still the stale one.
+ * Refresh token del estado antiguo (`localStorage['dentalix-auth']`), si lo
+ * hay. Un estado sin refresh o corrupto se borra directamente.
  */
-async function adoptRotatedPair(staleRefresh: string): Promise<string | null> {
-  const { accessToken, refreshToken } = await rereadPersistedPair();
-  return accessToken && refreshToken && refreshToken !== staleRefresh ? accessToken : null;
+function legacyRefreshToken(): string | null {
+  let raw: string | null;
+  try {
+    raw = localStorage.getItem(LEGACY_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+  if (raw === null) return null;
+  try {
+    const token = (JSON.parse(raw) as { state?: { refreshToken?: unknown } }).state?.refreshToken;
+    if (typeof token === 'string' && token) return token;
+  } catch {
+    /* corrupto: se borra abajo */
+  }
+  forgetLegacyState();
+  return null;
+}
+
+function forgetLegacyState(): void {
+  try {
+    localStorage.removeItem(LEGACY_STORAGE_KEY);
+  } catch {
+    /* sin almacenamiento: nada que borrar */
+  }
 }
 
 function webLocks(): LockManager | null {
   return typeof navigator !== 'undefined' && navigator.locks ? navigator.locks : null;
 }
 
+/** `true` si el error es un 401 de la API (refresh muerto), no red ni 5xx. */
+function isUnauthorized(err: unknown): boolean {
+  return err instanceof ApiError && err.status === 401;
+}
+
 /**
- * Refresh tokens are SINGLE-USE on the backend: reusing one that was already
- * rotated is a 401. `refreshInFlight` only coalesces refreshes inside ONE tab;
- * across tabs the refresh runs under a Web Lock, so only one tab rotates at a
- * time and the next one, once it gets the lock, re-reads the persisted pair
- * and adopts it instead of spending the stale refresh token.
+ * Un `POST /auth/refresh`. Sin argumento, el refresh viaja en la cookie
+ * HttpOnly; con `legacyToken`, en el body (migración: la API lo pasa a la
+ * cookie). Resuelve al access token nuevo.
  */
-async function refreshUnderLock(staleRefresh: string, hasLocks: boolean): Promise<string | null> {
-  const { setTokens, clear } = useAuthStore.getState();
-  const { accessToken, refreshToken } = await rereadPersistedPair();
-  if (!refreshToken) return null;
-  // Another tab already rotated. Its access token is usable unless it has
-  // expired meanwhile; in that case renew with ITS refresh token below.
-  if (refreshToken !== staleRefresh && accessToken && !isJwtExpired(accessToken)) {
-    return accessToken;
+async function postRefresh(legacyToken?: string): Promise<string> {
+  // `allowRefresh: false` — never recurse: a 401 from the refresh call
+  // itself means the refresh token is dead, not that we should refresh.
+  const res = await doFetch(
+    REFRESH_PATH,
+    { method: 'POST', body: legacyToken ? { refreshToken: legacyToken } : undefined },
+    false,
+  );
+  const { accessToken } = (await res.json()) as { accessToken: string };
+  useAuthStore.getState().setAccessToken(accessToken);
+  return accessToken;
+}
+
+/**
+ * El refresh, ya dentro del lock entre pestañas. El refresh token es de UN SOLO
+ * USO y la cookie la comparten todas las pestañas del host: con el lock, cada
+ * pestaña rota a su turno con la cookie que dejó la anterior.
+ *
+ * Migración (sesiones de antes de DX-062): si queda el par antiguo en
+ * localStorage, su refresh se usa UNA vez para obtener la cookie y se borra
+ * (también si ya no vale). Solo un error de red/5xx lo conserva para otro
+ * intento. Dentro del lock, otra pestaña ya no lo encuentra.
+ */
+async function refreshUnderLock(hasLocks: boolean): Promise<string | null> {
+  const legacy = legacyRefreshToken();
+  if (legacy) {
+    try {
+      const token = await postRefresh(legacy);
+      forgetLegacyState();
+      return token;
+    } catch (err) {
+      if (!isUnauthorized(err)) return null;
+      forgetLegacyState();
+    }
   }
   try {
-    // `allowRefresh: false` — never recurse: a 401 from the refresh call
-    // itself means the refresh token is dead, not that we should refresh.
-    const res = await doFetch(REFRESH_PATH, { method: 'POST', body: { refreshToken } }, false);
-    const data = (await res.json()) as { accessToken: string; refreshToken: string };
-    setTokens(data);
-    return data.accessToken;
+    return await postRefresh();
   } catch (err) {
     // Network error or 5xx: the session is not known to be dead, so keep it
     // (the current request fails; a later one will retry the refresh).
-    if (!(err instanceof ApiError) || err.status !== 401) return null;
-    // 401: lost the race to another tab that spent the same refresh token.
-    // Adopt its pair if it is (or, without locks, soon will be) persisted.
-    const winner = await adoptRotatedPair(refreshToken);
-    if (winner) return winner;
+    if (!isUnauthorized(err)) return null;
     if (!hasLocks) {
+      // Sin lock, otra pestaña pudo gastar la misma cookie a la vez: se le da
+      // tiempo a recibir la nueva y se reintenta una vez.
       await new Promise((resolve) => setTimeout(resolve, NO_LOCKS_SETTLE_MS));
-      const lateWinner = await adoptRotatedPair(refreshToken);
-      if (lateWinner) return lateWinner;
+      try {
+        return await postRefresh();
+      } catch (retryErr) {
+        if (!isUnauthorized(retryErr)) return null;
+      }
     }
-    clear();
+    useAuthStore.getState().clear();
     return null;
   }
 }
 
 /**
- * Exchanges the stored refresh token for a fresh access+refresh pair via
- * `POST /auth/refresh`, updates the auth store, and resolves to the new
- * access token. Resolves to `null` when there is no refresh token or the
- * refresh fails; only a 401 (dead refresh token) clears the store and forces
- * re-login. Server-side (no `window`) there is no persisted store, so it's
- * always `null`.
+ * Renueva el access token con el refresh de la cookie (`POST /auth/refresh`),
+ * lo guarda en memoria y lo devuelve. `null` si no se pudo; solo un 401 (sin
+ * sesión o sesión muerta) la cierra. En el servidor (sin `window`) no hay
+ * cookie de sesión que usar: siempre `null`.
  */
 function refreshAccessToken(): Promise<string | null> {
   if (refreshInFlight) return refreshInFlight;
   refreshInFlight = (async () => {
     if (typeof window === 'undefined') return null;
-    const staleRefresh = useAuthStore.getState().refreshToken;
-    if (!staleRefresh) return null;
     const locks = webLocks();
-    if (!locks) return refreshUnderLock(staleRefresh, false);
-    return locks.request(REFRESH_LOCK, () => refreshUnderLock(staleRefresh, true));
+    if (!locks) return refreshUnderLock(false);
+    return locks.request(REFRESH_LOCK, () => refreshUnderLock(true));
   })().finally(() => {
     refreshInFlight = null;
   });
   return refreshInFlight;
+}
+
+/**
+ * Ejecuta `fn` bajo el MISMO lock entre pestañas que el refresh. Lo usa el
+ * logout: si otra pestaña está rotando la cookie, el logout espera y revoca la
+ * cookie ya rotada; si no, la respuesta del refresh llegaría después de la del
+ * logout y dejaría viva una cookie nueva. Sin Web Locks, ejecuta `fn` sin más.
+ */
+export function withSessionLock<T>(fn: () => Promise<T>): Promise<T> {
+  const locks = typeof window === 'undefined' ? null : webLocks();
+  return locks ? (locks.request(REFRESH_LOCK, fn) as Promise<T>) : fn();
+}
+
+let bootstrapInFlight: Promise<void> | null = null;
+
+/**
+ * Arranque de sesión al cargar la página (DX-062): el access token no se
+ * persiste, así que se pide uno nuevo con la cookie. Termina con la sesión
+ * resuelta (`_hasHydrated`), con o sin access token. Si ya está resuelta (p. ej.
+ * tras el login en esta misma carga) no hace nada.
+ */
+export function bootstrapSession(): Promise<void> {
+  if (useAuthStore.getState()._hasHydrated) return Promise.resolve();
+  bootstrapInFlight ??= refreshAccessToken()
+    .then(() => useAuthStore.getState().markResolved())
+    .finally(() => {
+      bootstrapInFlight = null;
+    });
+  return bootstrapInFlight;
 }
 
 async function doFetch(
@@ -163,7 +220,12 @@ async function doFetch(
   // or pass it. Server-side callers (no `window`) don't set this header; the
   // backend then falls back to `x-forwarded-host`/`Host` from the proxied
   // request, which is fine — there is no browser host to read here.
-  if (typeof window !== 'undefined') headers['X-Tenant-Host'] = window.location.host;
+  if (typeof window !== 'undefined') {
+    headers['X-Tenant-Host'] = window.location.host;
+    // Modo cookie (DX-062): los endpoints que abren o renuevan sesión dejan el
+    // refresh en la cookie HttpOnly y solo devuelven el access token.
+    headers['X-Refresh-Transport'] = 'cookie';
+  }
   // Sede activa: igual que el tenant, viaja sola en cada request en vez de
   // tener que pasarla por parámetro a cada llamada. Si no hay ninguna elegida
   // no se manda la cabecera, y el backend responde la vista CONSOLIDADA de la
@@ -171,7 +233,7 @@ async function doFetch(
   const sentLocationId = getActiveLocationId();
   if (sentLocationId) headers['X-Location-Id'] = sentLocationId;
   if (opts.headers) Object.assign(headers, opts.headers);
-  const res = await fetch(`${API}${path}`, {
+  const res = await fetch(`${apiBaseUrl()}${path}`, {
     method: opts.method ?? 'GET',
     headers,
     body:
@@ -181,6 +243,9 @@ async function doFetch(
           ? (opts.body as FormData)
           : JSON.stringify(opts.body),
     cache: 'no-store',
+    // Mismo origen (`/api/v1` del host de la clínica): así viaja la cookie de
+    // sesión, que la API acota a `/api/v1/auth`.
+    credentials: 'same-origin',
   });
   // Expired access token → transparently refresh once and replay the request
   // with the new token. Skipped for the auth endpoints themselves (a 401 from

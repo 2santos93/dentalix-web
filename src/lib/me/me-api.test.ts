@@ -9,14 +9,15 @@ describe('me-api changePassword', () => {
   });
 
   // Cambiar la contraseña cierra en el backend TODAS las sesiones previas
-  // (el refresh token guardado deja de renovar) y devuelve un par nuevo para
-  // este cliente. Si no se guarda, la sesión moriría en el próximo refresh.
-  it('stores the fresh pair returned by POST /me/password', async () => {
-    useAuthStore.getState().setTokens({ accessToken: 'OLD', refreshToken: 'R-OLD' });
+  // (el refresh de la cookie deja de renovar) y devuelve una sesión nueva para
+  // este cliente: el refresh nuevo llega en la cookie HttpOnly (DX-062) y el
+  // access token en el body, que se guarda en memoria.
+  it('stores the fresh access token returned by POST /me/password', async () => {
+    useAuthStore.getState().setAccessToken('OLD');
     const fetchMock = jest.fn().mockResolvedValue({
       ok: true,
       status: 200,
-      text: async () => JSON.stringify({ accessToken: 'NEW', refreshToken: 'R-NEW' }),
+      text: async () => JSON.stringify({ accessToken: 'NEW' }),
     });
     global.fetch = fetchMock as unknown as typeof fetch;
 
@@ -30,11 +31,10 @@ describe('me-api changePassword', () => {
       newPassword: 'NewPass2!',
     });
     expect(useAuthStore.getState().accessToken).toBe('NEW');
-    expect(useAuthStore.getState().refreshToken).toBe('R-NEW');
   });
 
   it('keeps the current session when the backend answers 204 without a body', async () => {
-    useAuthStore.getState().setTokens({ accessToken: 'OLD', refreshToken: 'R-OLD' });
+    useAuthStore.getState().setAccessToken('OLD');
     global.fetch = jest.fn().mockResolvedValue({
       ok: true,
       status: 204,
@@ -44,6 +44,5 @@ describe('me-api changePassword', () => {
     await changePassword('OLD', 'OldPass1!', 'NewPass2!');
 
     expect(useAuthStore.getState().accessToken).toBe('OLD');
-    expect(useAuthStore.getState().refreshToken).toBe('R-OLD');
   });
 });

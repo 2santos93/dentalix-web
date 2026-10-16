@@ -1,6 +1,6 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './support/test';
 import { randomUUID } from 'node:crypto';
-import { registerAndLogin } from './support/auth';
+import { accessTokenOf, registerAndLogin } from './support/auth';
 import { API_URL } from './support/urls';
 
 /**
@@ -59,9 +59,7 @@ const toothFdi = '11';
 test('register a procedure on a tooth -> colored + in timeline, persists after reload', async ({ page }) => {
   const origin = await registerAndLogin(page, { subdomain, clinicName, fullName, email, password });
 
-  const authRaw = await page.evaluate(() => localStorage.getItem('dentalix-auth'));
-  const accessToken =
-    (JSON.parse(authRaw as string) as { state?: { accessToken?: string | null } }).state?.accessToken ?? '';
+  const accessToken = await accessTokenOf(page);
   expect(accessToken).toBeTruthy();
 
   // --- Seed one DentalCatalogItem via the real API (needed by the

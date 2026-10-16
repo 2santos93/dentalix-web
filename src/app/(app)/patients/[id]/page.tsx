@@ -96,8 +96,8 @@ function TabPanel({
 /**
  * `useSearchParams` opts the subtree into client-side rendering, which Next
  * requires to sit under a Suspense boundary. The page is `'use client'` and
- * fully data-driven anyway (nothing below renders before the auth store
- * rehydrates), so the boundary costs nothing visible.
+ * fully data-driven anyway (nothing below renders before the session
+ * bootstrap resolves), so the boundary costs nothing visible.
  */
 export default function PatientDetailPage() {
   return (
@@ -183,7 +183,7 @@ function PatientDetailView() {
   }, [activeTab]);
 
   useEffect(() => {
-    // Don't decide anything until the persisted store has rehydrated —
+    // Don't decide anything until the session bootstrap has resolved —
     // accessToken is null until then, and redirecting on that would bounce
     // an already-authenticated user.
     if (!hasHydrated) return;

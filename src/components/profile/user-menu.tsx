@@ -28,17 +28,18 @@ import { cn } from '@/lib/utils';
 const LOGOUT_TIMEOUT_MS = 3000;
 
 /**
- * Revoca el refresh token en la API (`POST /auth/logout`) best-effort: resuelve
- * cuando la API responde, cuando falla o al vencer el timeout — nunca lanza. El
- * cierre local tiene que ocurrir igual en todos los casos.
+ * Revoca el refresh token de la cookie en la API (`POST /auth/logout`, que
+ * además borra la cookie) best-effort: resuelve cuando la API responde, cuando
+ * falla o al vencer el timeout — nunca lanza. El cierre local tiene que ocurrir
+ * igual en todos los casos.
  */
-async function revokeRefreshToken(refreshToken: string): Promise<void> {
+async function revokeSession(): Promise<void> {
   let timer: ReturnType<typeof setTimeout> | undefined;
   const timeout = new Promise<void>((resolve) => {
     timer = setTimeout(resolve, LOGOUT_TIMEOUT_MS);
   });
   try {
-    await Promise.race([logout(refreshToken).catch(() => undefined), timeout]);
+    await Promise.race([logout().catch(() => undefined), timeout]);
   } finally {
     clearTimeout(timer);
   }
@@ -185,9 +186,10 @@ export function UserMenu({
   async function handleLogout() {
     if (loggingOut) return;
     setLoggingOut(true);
-    const { refreshToken, clear } = useAuthStore.getState();
-    if (refreshToken) await revokeRefreshToken(refreshToken);
-    clear();
+    // La cookie es HttpOnly: desde aquí no se sabe si existe, así que siempre
+    // se pide el logout (sin cookie, la API responde 204 igual).
+    await revokeSession();
+    useAuthStore.getState().clear();
     router.push('/login');
   }
 

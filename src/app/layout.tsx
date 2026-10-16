@@ -34,6 +34,8 @@ export default async function RootLayout({
   // when middleware didn't run (e.g. unit tests, static rendering contexts).
   const tenant = h.get("x-tenant") ?? parseTenantFromHost(h.get("host"));
   const branding = await fetchBranding(tenant);
+  // Nonce de la CSP de esta petición (lo genera proxy.ts, DX-062).
+  const nonce = h.get("x-nonce") ?? undefined;
   // The tenant picks the FILL; the ink on top of it is ours to derive (see the
   // comment on the <style> below). `null` for an unparseable color — then only
   // the fill is injected, exactly as before.
@@ -72,7 +74,7 @@ export default async function RootLayout({
         )}
       </head>
       <body className="min-h-full flex flex-col bg-bg text-ink">
-        <ThemeProvider>
+        <ThemeProvider nonce={nonce}>
           {children}
           <Toaster />
         </ThemeProvider>

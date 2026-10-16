@@ -56,7 +56,7 @@ describe('inventory-api', () => {
     await listInventoryItems('tok', { query: 'guantes', page: 2, lowStockOnly: true });
 
     const [url] = spy.mock.calls[0];
-    const parsed = new URL(String(url));
+    const parsed = new URL(String(url), window.location.origin);
     expect(parsed.searchParams.get('query')).toBe('guantes');
     expect(parsed.searchParams.get('page')).toBe('2');
     expect(parsed.searchParams.get('lowStockOnly')).toBe('true');
@@ -71,7 +71,7 @@ describe('inventory-api', () => {
     await listInventoryItems('tok');
 
     const [url] = spy.mock.calls[0];
-    const parsed = new URL(String(url));
+    const parsed = new URL(String(url), window.location.origin);
     expect(parsed.searchParams.has('query')).toBe(false);
     expect(parsed.searchParams.has('lowStockOnly')).toBe(false);
   });

@@ -13,13 +13,14 @@ export interface PlatformTenant {
  * desde el apex. El cliente manda `X-Tenant-Host` con el host actual y, al no
  * haber subdominio de clínica, el backend no resuelve ningún tenant y responde
  * con un token de plataforma (solo si el usuario es superadmin; en cualquier
- * otro caso, 401 con el mismo mensaje que unas credenciales malas).
+ * otro caso, 401 con el mismo mensaje que unas credenciales malas). El refresh
+ * queda en la cookie HttpOnly del apex (DX-062).
  */
 export async function loginPlatform(
   email: string,
   password: string,
-): Promise<{ accessToken: string; refreshToken: string }> {
-  return apiFetch<{ accessToken: string; refreshToken: string }>(
+): Promise<{ accessToken: string }> {
+  return apiFetch<{ accessToken: string }>(
     '/auth/login',
     { method: 'POST', body: { email, password } },
   );

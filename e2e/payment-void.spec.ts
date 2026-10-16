@@ -1,6 +1,6 @@
-import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
+import { test, expect, type APIRequestContext } from './support/test';
 import { randomUUID } from 'node:crypto';
-import { registerAndLogin } from './support/auth';
+import { accessTokenOf, registerAndLogin } from './support/auth';
 import { API_URL } from './support/urls';
 
 /**
@@ -21,14 +21,6 @@ const suffix = rawSuffix.replace(/[^a-z0-9]/gi, '').toLowerCase();
 const password = 'Password123!';
 const adminName = 'Ada Admin';
 const REASON = 'Cobro registrado dos veces';
-
-async function accessTokenOf(page: Page): Promise<string> {
-  const authRaw = await page.evaluate(() => localStorage.getItem('dentalix-auth'));
-  return (
-    (JSON.parse(authRaw as string) as { state?: { accessToken?: string | null } }).state
-      ?.accessToken ?? ''
-  );
-}
 
 async function seed(
   request: APIRequestContext,

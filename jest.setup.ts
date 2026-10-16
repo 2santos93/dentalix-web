@@ -5,14 +5,18 @@ import '@testing-library/jest-dom';
 // without this shim any test that interacts with a toast throws
 // `setPointerCapture is not a function`. This is a stub for a missing DOM
 // API, not a timing workaround.
-if (!Element.prototype.hasPointerCapture) {
-  Element.prototype.hasPointerCapture = () => false;
-}
-if (!Element.prototype.setPointerCapture) {
-  Element.prototype.setPointerCapture = () => {};
-}
-if (!Element.prototype.releasePointerCapture) {
-  Element.prototype.releasePointerCapture = () => {};
+// Solo con DOM: los tests de servidor (`@jest-environment node`, p. ej. el de
+// `proxy.ts`) no tienen `Element`.
+if (typeof Element !== 'undefined') {
+  if (!Element.prototype.hasPointerCapture) {
+    Element.prototype.hasPointerCapture = () => false;
+  }
+  if (!Element.prototype.setPointerCapture) {
+    Element.prototype.setPointerCapture = () => {};
+  }
+  if (!Element.prototype.releasePointerCapture) {
+    Element.prototype.releasePointerCapture = () => {};
+  }
 }
 
 // jsdom no implementa ResizeObserver. `Table` lo usa para saber si su marco se

@@ -1,5 +1,6 @@
-import { test, expect, type APIRequestContext, type Page } from '@playwright/test';
+import { test, expect, type APIRequestContext } from './support/test';
 import { randomUUID } from 'node:crypto';
+import { accessTokenOf } from './support/auth';
 import { API_URL, tenantOrigin } from './support/urls';
 
 /**
@@ -31,14 +32,6 @@ const suffix = rawSuffix
   .replace(/[^a-z0-9]/gi, '')
   .toLowerCase()
   .slice(0, 8);
-
-async function accessTokenOf(page: Page): Promise<string> {
-  const authRaw = await page.evaluate(() => localStorage.getItem('dentalix-auth'));
-  return (
-    (JSON.parse(authRaw as string) as { state?: { accessToken?: string | null } }).state
-      ?.accessToken ?? ''
-  );
-}
 
 function apiAs(request: APIRequestContext, origin: string, accessToken?: string) {
   const headers: Record<string, string> = { 'X-Tenant-Host': new URL(origin).host };

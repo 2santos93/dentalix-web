@@ -1,4 +1,5 @@
 import { expect, type Page } from '@playwright/test';
+import { accessTokenOf } from './auth';
 import { API_URL } from './urls';
 
 /**
@@ -16,11 +17,8 @@ import { API_URL } from './urls';
  * tramos explícitos en vez de llamar a esto.
  */
 export async function disableBusinessHours(page: Page, origin: string): Promise<void> {
-  const authRaw = await page.evaluate(() => localStorage.getItem('dentalix-auth'));
-  const accessToken =
-    (JSON.parse(authRaw as string) as { state?: { accessToken?: string | null } })
-      .state?.accessToken ?? '';
-  expect(accessToken, 'disableBusinessHours necesita una sesión ya iniciada').toBeTruthy();
+  // Necesita una sesión ya iniciada en la página (cookie de refresh, DX-062).
+  const accessToken = await accessTokenOf(page);
 
   const res = await page.request.put(`${API_URL}/locations/schedule`, {
     headers: {

@@ -24,14 +24,14 @@ const copy = {
 
 const ERROR_ID = 'login-error';
 
+// El refresh llega en la cookie HttpOnly (DX-062): el body solo trae el access.
 interface LoginResponse {
   accessToken: string;
-  refreshToken: string;
 }
 
 export function LoginForm() {
   const router = useRouter();
-  const setTokens = useAuthStore((s) => s.setTokens);
+  const setAccessToken = useAuthStore((s) => s.setAccessToken);
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -47,7 +47,7 @@ export function LoginForm() {
         method: 'POST',
         body: { email, password },
       });
-      setTokens({ accessToken: res.accessToken, refreshToken: res.refreshToken });
+      setAccessToken(res.accessToken);
       router.push('/patients');
     } catch (err) {
       setError(err instanceof ApiError ? err.message : copy.genericError);

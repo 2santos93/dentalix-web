@@ -1,6 +1,18 @@
 import { expect, type Page } from '@playwright/test';
 import { tenantOrigin } from './urls';
 
+/** Cookie HttpOnly del refresh token (DX-062), del host de la clínica. */
+export const SESSION_COOKIE = 'dentalix_rt';
+
+/**
+ * La cookie de sesión de `origin`, tal como la guarda el navegador. Se busca
+ * para una URL de `/api/v1/auth`: la cookie solo viaja ahí (Path).
+ */
+export async function sessionCookie(page: Page, origin: string) {
+  const cookies = await page.context().cookies(`${origin}/api/v1/auth/refresh`);
+  return cookies.find((c) => c.name === SESSION_COOKIE);
+}
+
 /**
  * Shared register+login flow for the e2e suite.
  *
@@ -77,10 +89,10 @@ export async function registerAndLogin(
 
   const loginError = page.locator('p[role="alert"]');
 
-  // Real outcome: either the app navigated past /login (LoginForm pushes to
-  // /patients on success, may 404 for other reasons — that's fine), OR the
-  // auth store persisted a real accessToken to localStorage. Assert on that
-  // persisted state rather than only on navigation.
+  // Real outcome: the app navigated past /login (LoginForm pushes to /patients
+  // on success). Since DX-062 the session leaves nothing in localStorage: the
+  // access token lives in memory and the refresh token in an HttpOnly cookie,
+  // so assert on that cookie instead of on persisted state.
   await expect
     .poll(
       async () => {
@@ -88,22 +100,15 @@ export async function registerAndLogin(
           const message = await loginError.textContent();
           throw new Error(`Login failed with API error: ${message}`);
         }
-        if (!/\/login$/.test(page.url())) return true;
-
-        const raw = await page.evaluate(() => localStorage.getItem('dentalix-auth'));
-        if (!raw) return false;
-        const parsed = JSON.parse(raw) as { state?: { accessToken?: string | null } };
-        return Boolean(parsed.state?.accessToken);
+        return !/\/login$/.test(page.url());
       },
-      { timeout: 10_000, message: 'expected navigation away from /login or a persisted accessToken' },
+      { timeout: 10_000, message: 'expected navigation away from /login' },
     )
     .toBe(true);
 
-  // Final, explicit assertion on the real persisted session (not a mock).
-  const authRaw = await page.evaluate(() => localStorage.getItem('dentalix-auth'));
-  expect(authRaw).toBeTruthy();
-  const auth = JSON.parse(authRaw as string) as { state?: { accessToken?: string | null } };
-  expect(auth.state?.accessToken).toBeTruthy();
+  // Final, explicit assertion on the real session (not a mock): the HttpOnly
+  // refresh cookie of THIS clinic's host.
+  expect((await sessionCookie(page, origin))?.httpOnly).toBe(true);
 
   // LoginForm fires `router.push('/patients')` right after persisting the
   // tokens (see login-form.tsx) — that client-side navigation can still be in
@@ -112,4 +117,23 @@ export async function registerAndLogin(
   await page.waitForURL(/\/patients$/, { timeout: 5_000 }).catch(() => {});
 
   return origin;
+}
+
+/**
+ * Un access token de la sesión de la página, para sembrar datos por la API.
+ * Desde DX-062 el access vive solo en memoria y el refresh en una cookie
+ * HttpOnly, así que se pide uno nuevo con `POST /auth/refresh` DESDE la página
+ * y por su mismo origen, como hace la app: el navegador manda la cookie y el
+ * Origin, y guarda la cookie rotada, así que la página sigue con su sesión.
+ */
+export async function accessTokenOf(page: Page): Promise<string> {
+  const { status, body } = await page.evaluate(async () => {
+    const res = await fetch('/api/v1/auth/refresh', {
+      method: 'POST',
+      headers: { 'X-Tenant-Host': window.location.host },
+    });
+    return { status: res.status, body: await res.text() };
+  });
+  expect(status, `refresh por cookie falló: ${status} ${body}`).toBe(201);
+  return (JSON.parse(body) as { accessToken: string }).accessToken;
 }

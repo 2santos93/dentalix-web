@@ -1,6 +1,9 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { ApiError } from '@/lib/api/client';
+import { logout } from '@/lib/auth/auth-api';
+import { useAuthStore } from '@/lib/auth/auth-store';
+import { useSessionBootstrap } from '@/lib/auth/use-session-bootstrap';
 import {
   clinicUrl,
   listPlatformTenants,
@@ -35,13 +38,15 @@ const copy = {
   count: (n: number) => (n === 1 ? '1 clínica' : `${n} clínicas`),
 };
 
-/** Clave de sessionStorage: la sesión de plataforma NO se mezcla con la de
- * clínica (auth-store), que es por tenant y vive en otro dominio. */
-const TOKEN_KEY = 'dentalix.platformToken';
-
+/**
+ * La sesión de plataforma usa el mismo mecanismo que la de clínica (DX-062):
+ * access token en memoria y refresh en la cookie HttpOnly, que es del host del
+ * apex y por eso nunca se mezcla con la de una clínica (otro host).
+ */
 export function PlatformView() {
-  const [token, setToken] = useState<string | null>(null);
-  const [ready, setReady] = useState(false);
+  useSessionBootstrap();
+  const token = useAuthStore((s) => s.accessToken);
+  const ready = useAuthStore((s) => s._hasHydrated);
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -52,19 +57,6 @@ export function PlatformView() {
   const [loading, setLoading] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [retryTick, setRetryTick] = useState(0);
-
-  // Rehidratar la sesión de plataforma tras un refresco de página. La lectura
-  // va dentro de una función (no suelta en el cuerpo del efecto) siguiendo la
-  // convención del resto de vistas; además sessionStorage solo existe en el
-  // cliente, así que no puede leerse como estado inicial sin romper la
-  // hidratación.
-  useEffect(() => {
-    function hydrate() {
-      setToken(sessionStorage.getItem(TOKEN_KEY));
-      setReady(true);
-    }
-    hydrate();
-  }, []);
 
   useEffect(() => {
     if (!token) return;
@@ -83,8 +75,7 @@ export function PlatformView() {
         // revocaron el flag): volver al formulario en vez de dejar un error
         // muerto en pantalla.
         if (err instanceof ApiError && (err.status === 401 || err.status === 403)) {
-          sessionStorage.removeItem(TOKEN_KEY);
-          setToken(null);
+          useAuthStore.getState().clear();
           return;
         }
         setLoadError(err instanceof ApiError ? err.message : copy.loadError);
@@ -104,8 +95,7 @@ export function PlatformView() {
     setSigningIn(true);
     try {
       const { accessToken } = await loginPlatform(email.trim(), password);
-      sessionStorage.setItem(TOKEN_KEY, accessToken);
-      setToken(accessToken);
+      useAuthStore.getState().setAccessToken(accessToken);
       setPassword('');
     } catch (err) {
       setSignInError(err instanceof ApiError ? err.message : copy.invalid);
@@ -114,9 +104,9 @@ export function PlatformView() {
     }
   }
 
-  function handleSignOut() {
-    sessionStorage.removeItem(TOKEN_KEY);
-    setToken(null);
+  async function handleSignOut() {
+    await logout();
+    useAuthStore.getState().clear();
     setTenants([]);
   }
 

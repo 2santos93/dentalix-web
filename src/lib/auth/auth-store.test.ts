@@ -1,31 +1,38 @@
 import { useAuthStore } from './auth-store';
 
 describe('useAuthStore', () => {
-  beforeEach(() => useAuthStore.getState().clear());
+  beforeEach(() => {
+    localStorage.clear();
+    sessionStorage.clear();
+    useAuthStore.setState({ accessToken: null, _hasHydrated: false });
+  });
 
-  it('stores and clears tokens', () => {
-    useAuthStore.getState().setTokens({ accessToken: 'a', refreshToken: 'r' });
+  it('guarda el access token solo en memoria y marca la sesión como resuelta', () => {
+    useAuthStore.getState().setAccessToken('a');
+
     expect(useAuthStore.getState().accessToken).toBe('a');
-    useAuthStore.getState().clear();
+    expect(useAuthStore.getState()._hasHydrated).toBe(true);
+    // DX-062: nada de tokens en el almacenamiento del navegador.
+    expect(localStorage.length).toBe(0);
+    expect(sessionStorage.length).toBe(0);
+  });
+
+  it('arranca sin sesión y sin resolver hasta que el arranque de sesión termine', () => {
+    expect(useAuthStore.getState().accessToken).toBeNull();
+    expect(useAuthStore.getState()._hasHydrated).toBe(false);
+
+    useAuthStore.getState().markResolved();
+
+    expect(useAuthStore.getState()._hasHydrated).toBe(true);
     expect(useAuthStore.getState().accessToken).toBeNull();
   });
 
-  it('defaults _hasHydrated to false before rehydration', () => {
-    // Note: in this jsdom test env the store module is created fresh per test file;
-    // persist rehydration is async, so right after clear() hydration has either not
-    // run yet or has already completed — we only assert the field exists and is a
-    // boolean, matching the state-shape contract without depending on timing.
-    expect(typeof useAuthStore.getState()._hasHydrated).toBe('boolean');
-  });
-
-  it('clear() wipes the persisted localStorage key, not just the in-memory tokens', () => {
-    useAuthStore.getState().setTokens({ accessToken: 'a', refreshToken: 'r' });
-    // persist escribe la key de forma síncrona al setear estado en jsdom.
-    expect(localStorage.getItem('dentalix-auth')).not.toBeNull();
+  it('clear() olvida el access token y deja la sesión resuelta (sin sesión)', () => {
+    useAuthStore.getState().setAccessToken('a');
 
     useAuthStore.getState().clear();
 
     expect(useAuthStore.getState().accessToken).toBeNull();
-    expect(localStorage.getItem('dentalix-auth')).toBeNull();
+    expect(useAuthStore.getState()._hasHydrated).toBe(true);
   });
 });

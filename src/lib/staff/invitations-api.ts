@@ -56,15 +56,16 @@ export async function getPublicInvitation(inviteToken: string): Promise<PublicIn
 
 /**
  * `POST /public/invitations/:token/accept` — sets the invitee's password and
- * activates their staff membership, returning a fresh access/refresh pair so
- * the accept page can log them straight in. Public endpoint: no session
- * `token` is sent.
+ * activates their staff membership, opening a session so the accept page can
+ * log them straight in: the refresh token arrives in the HttpOnly session
+ * cookie (DX-062) and the access token in the body. Public endpoint: no
+ * session `token` is sent.
  */
 export async function acceptInvitation(
   inviteToken: string,
   password: string,
-): Promise<{ accessToken: string; refreshToken: string }> {
-  return apiFetch<{ accessToken: string; refreshToken: string }>(
+): Promise<{ accessToken: string }> {
+  return apiFetch<{ accessToken: string }>(
     `/public/invitations/${inviteToken}/accept`,
     {
       method: 'POST',

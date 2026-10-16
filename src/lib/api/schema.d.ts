@@ -1261,7 +1261,8 @@ export interface components {
         LoginDto: Record<string, never>;
         AuthTokensDto: {
             accessToken: string;
-            refreshToken: string;
+            /** @description Solo sin `X-Refresh-Transport: cookie` (clientes antiguos). En modo cookie el refresh viaja en la cookie HttpOnly `dentalix_rt` (Path=/api/v1/auth) y no se devuelve aquí. */
+            refreshToken?: string;
         };
         RefreshDto: Record<string, never>;
         LogoutDto: Record<string, never>;
@@ -3359,7 +3360,7 @@ export interface components {
             dispensationDate?: string;
             /** @description Indicaciones generales */
             notes?: string;
-            /** @description Registro profesional (CO) / nº de colegiado (ES) si tu perfil aún no lo tiene; queda guardado en la receta y en tu perfil de la clínica. */
+            /** @description Registro profesional (CO) / nº de colegiado (ES) si tu perfil aún no lo tiene; queda guardado en la receta y en tu perfil de la clínica. Si el perfil ya lo tiene, se ignora (lo cambia un ADMIN en Personal). */
             professionalLicense?: string;
             /** @description Confirmación explícita del profesional ante una alerta de alergia. Sin ella, una coincidencia con la anamnesis da 409. */
             allergyOverride?: boolean;

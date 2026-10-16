@@ -1,6 +1,6 @@
-import { test, expect, type Page } from '@playwright/test';
+import { test, expect, type Page } from './support/test';
 import { randomUUID } from 'node:crypto';
-import { registerAndLogin } from './support/auth';
+import { accessTokenOf, registerAndLogin } from './support/auth';
 import { disableBusinessHours } from './support/business-hours';
 import { API_URL } from './support/urls';
 
@@ -35,9 +35,7 @@ function localDay(d: Date): string {
 }
 
 async function session(page: Page): Promise<{ accessToken: string; userId: string }> {
-  const raw = await page.evaluate(() => localStorage.getItem('dentalix-auth'));
-  const accessToken =
-    (JSON.parse(raw as string) as { state?: { accessToken?: string | null } }).state?.accessToken ?? '';
+  const accessToken = await accessTokenOf(page);
   const payload = JSON.parse(Buffer.from(accessToken.split('.')[1], 'base64url').toString('utf8')) as {
     sub: string;
   };

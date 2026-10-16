@@ -18,8 +18,8 @@ jest.mock('../../lib/api/client', () => ({
   },
 }));
 jest.mock('../../lib/auth/auth-store', () => ({
-  useAuthStore: (selector: (s: { setTokens: jest.Mock }) => unknown) =>
-    selector({ setTokens: jest.fn() }),
+  useAuthStore: (selector: (s: { setAccessToken: jest.Mock }) => unknown) =>
+    selector({ setAccessToken: jest.fn() }),
 }));
 
 describe('LoginForm', () => {
@@ -38,10 +38,7 @@ describe('LoginForm', () => {
   });
 
   it('submits only email and password to /auth/login', async () => {
-    (apiFetch as jest.Mock).mockResolvedValueOnce({
-      accessToken: 'a',
-      refreshToken: 'r',
-    });
+    (apiFetch as jest.Mock).mockResolvedValueOnce({ accessToken: 'a' });
     render(<LoginForm />);
     fireEvent.change(screen.getByLabelText(/email|correo/i), {
       target: { value: 'user@example.com' },

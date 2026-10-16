@@ -2,6 +2,7 @@
 import { useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuthStore } from '@/lib/auth/auth-store';
+import { useSessionBootstrap } from '@/lib/auth/use-session-bootstrap';
 import { getTokenRole } from '@/lib/auth/token-role';
 import { canUseConsents } from '@/lib/consents/consents-api';
 import { ConsentPrintView } from '@/components/consents/consent-print-view';
@@ -13,14 +14,16 @@ const copy = {
 /**
  * Vista imprimible de un consentimiento firmado (DX-006). Fuera del grupo
  * `(app)` como la del estado de cuenta: sin raíl ni pestañas, solo el
- * documento. Comparte la sesión (localStorage) con la ficha, que la abre en
- * otra pestaña.
+ * documento. Comparte la sesión (la cookie HttpOnly del host) con la ficha,
+ * que la abre en otra pestaña.
  */
 export default function ConsentPrintPage() {
   const router = useRouter();
   const params = useParams<{ id: string; consentId: string }>();
   const accessToken = useAuthStore((s) => s.accessToken);
   const hasHydrated = useAuthStore((s) => s._hasHydrated);
+  // Pestaña nueva: la sesión se recupera de la cookie HttpOnly (DX-062).
+  useSessionBootstrap();
 
   useEffect(() => {
     if (hasHydrated && !accessToken) router.replace('/login');
