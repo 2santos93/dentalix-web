@@ -2,6 +2,7 @@
 
 import { useEffect } from 'react';
 import { ErrorFallback } from '@/components/errors/error-fallback';
+import { reportBoundaryError } from '@/components/errors/report-boundary-error';
 
 /**
  * Route-segment error boundary for the authenticated `(app)` group — per
@@ -14,9 +15,10 @@ import { ErrorFallback } from '@/components/errors/error-fallback';
  * `error.message`/`.stack` are intentionally never rendered: per the docs,
  * Server Component errors are already scrubbed to a generic message + digest
  * in production, but Client Component errors still carry the original
- * message end-to-end — so this file must not surface it itself. Only
- * `console.error` logs the real error (dev tooling / error reporting), and
- * the visible UI is the fixed, generic `ErrorFallback` copy.
+ * message end-to-end — so this file must not surface it itself. The error is
+ * logged through `reportBoundaryError` (only `name`/`digest` in production, the
+ * full error in dev — DX-061), and the visible UI is the fixed, generic
+ * `ErrorFallback` copy.
  */
 export default function AppSegmentError({
   error,
@@ -26,8 +28,7 @@ export default function AppSegmentError({
   reset: () => void;
 }) {
   useEffect(() => {
-    // Log the error to an error reporting service.
-    console.error(error);
+    reportBoundaryError(error);
   }, [error]);
 
   return <ErrorFallback onRetry={reset} />;
