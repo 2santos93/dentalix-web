@@ -1,18 +1,44 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { OdontogramChart } from '@/components/odontogram/odontogram-chart';
 import { OdontogramLegend } from '@/components/odontogram/odontogram-legend';
 import { ToothTimeline } from '@/components/odontogram/tooth-timeline';
 import { ToothRecordPanel } from '@/components/odontogram/tooth-record-panel';
-import { getOdontogram, type ToothGroup, type ToothSurface } from '@/lib/odontogram/odontogram-api';
+import { DentitionDialog } from '@/components/odontogram/dentition-dialog';
+import {
+  getDentition,
+  getOdontogram,
+  recordDentitionEvents,
+  type DentitionView,
+  type ToothGroup,
+  type ToothSurface,
+  type ToothTimelineEntry,
+} from '@/lib/odontogram/odontogram-api';
 import { projectOdontogram } from '@/lib/odontogram/projection';
-import { isPermanentFdi } from '@/lib/odontogram/fdi';
+import {
+  DENTITION_LABELS,
+  DENTITION_ORDER,
+  chartLayoutForArch,
+  isPrimaryFdi,
+  positionOfTooth,
+  presetChanges,
+  toothFitsDentition,
+  type DentitionReason,
+  type DentitionType,
+} from '@/lib/odontogram/dentition';
 import { listCatalogItems, type DentalCatalogItem } from '@/lib/odontogram/catalog-api';
+import { getTokenRole, getTokenUserId } from '@/lib/auth/token-role';
+import { formatCivilDate } from '@/lib/format/date';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { FormModal } from '@/components/shared/form-modal';
 import { SectionError } from '@/components/errors/section-error';
 import { notifyError } from '@/components/errors/notify';
+import { cn } from '@/lib/utils';
 
 // Copy as constants (i18n-ready) — matches page.tsx's convention until
 // next-intl wiring lands.
@@ -23,25 +49,40 @@ const copy = {
   odontogramRefreshError: 'No pudimos actualizar el odontograma.',
   catalogGenericError: 'No pudimos cargar el catálogo.',
   selectToothPrompt: 'Selecciona un diente para ver su historial y registrar un hallazgo o procedimiento.',
+  emptyChartPrompt:
+    'Aún no hay registros: la carta está sana. Selecciona un diente para registrar el primer hallazgo o procedimiento.',
   toothHeading: (fdi: string) => `Diente ${fdi}`,
   historyHeading: 'Historial',
-  /**
-   * Aviso de dentición temporal. Una cadena completa por rama (no concatenada)
-   * para que al traducir se pueda reordenar; los dientes van con conjunción
-   * española (`a, b y c`).
-   */
-  undrawnTeeth: (fdis: string[]) => {
-    const list =
-      fdis.length === 1
-        ? `el diente ${fdis[0]}`
-        : `los dientes ${fdis.slice(0, -1).join(', ')} y ${fdis[fdis.length - 1]}`;
-    return `Este paciente tiene registros en ${list}, de dentición temporal. El odontograma solo dibuja la dentición permanente, así que no aparecen en el mapa: consúltalos en el historial del diente o en el plan de tratamiento.`;
-  },
   viewInPlan: 'Ver en el plan',
   // El nombre accesible EMPIEZA por el texto visible (WCAG 2.5.3) y nombra el
   // diente, para que el enlace no sea un «Ver en el plan» sin destino cuando
   // se lee fuera de contexto.
   viewInPlanFor: (fdi: string) => `Ver en el plan los ítems del diente ${fdi}`,
+  // DX-120
+  dentitionSwitch: 'Dentición de la carta',
+  dentitionByAge: (age: number) => `Según la edad (${age} años)`,
+  changeDentition: 'Cambiar dentición',
+  asOfLabel: 'Ver la carta al',
+  backToToday: 'Volver a hoy',
+  asOfNotice: (date: string) =>
+    `Carta al ${date} · solo lectura. Muestra los registros y la dentición de ese día; para registrar, anular o cambiar la dentición, vuelve a hoy.`,
+  presetTitle: (label: string) => `Pasar la carta a dentición ${label.toLowerCase()}`,
+  presetDescription: (label: string, count: number) =>
+    count === 0
+      ? `La carta ya está en dentición ${label.toLowerCase()}.`
+      : `Se marcarán ${count} posiciones en dentición ${label.toLowerCase()} (cambio manual). Queda en el historial y se puede volver a cambiar.`,
+  presetMixedNote: 'Los molares no cambian: márcalos con «Cambiar dentición» al erupcionar.',
+  presetSubmit: 'Cambiar la carta',
+  presetError: 'No pudimos cambiar la dentición. Intenta de nuevo.',
+  notDrawn: (fdis: string[]) =>
+    `Con la dentición actual no se dibuja${fdis.length === 1 ? ' el diente' : 'n los dientes'} ${fdis.join(', ')}, que tiene${fdis.length === 1 ? '' : 'n'} registros. Consulta su historial:`,
+  notDrawnTooth: (fdi: string) => `Ver el historial del diente ${fdi}`,
+  doesNotFit: (fdi: string, position: string, dentition: DentitionType) =>
+    isPrimaryFdi(fdi)
+      ? `El diente ${fdi} no está en la boca según la dentición actual (posición ${position}: ${DENTITION_LABELS[dentition].toLowerCase()}). Para registrar en él, cambia la dentición de esa posición.`
+      : dentition === 'PRIMARY'
+        ? `El diente ${fdi} aún no ha erupcionado según la dentición actual. Para registrar en él, márcalo como erupcionado.`
+        : `El diente ${fdi} no está en la boca según la dentición actual.`,
 };
 
 interface OdontogramTabProps {
@@ -59,30 +100,38 @@ interface OdontogramTabProps {
   planHref?: (toothNumber: string) => string;
 }
 
+interface DentitionDialogState {
+  positions: string[];
+  dentition: DentitionType;
+  reason: DentitionReason;
+}
+
+/** Hoy (YYYY-MM-DD) en la zona del navegador, tope del selector de fecha. */
+function todayLocal(): string {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
 /**
- * Composes Task 5's `OdontogramChart` with Task 6's `ToothTimeline` +
- * `ToothRecordPanel`. Loads the odontogram + the dental catalog once, then:
+ * Composes `OdontogramChart` with `ToothTimeline` + `ToothRecordPanel`. Loads
+ * the odontogram, the patient's dentition and the dental catalog, then:
  * - clicking a tooth (or a surface) selects it, showing that tooth's
  *   timeline + record form below the chart;
- * - clicking a surface additionally pre-checks that surface in the form;
- * - a successful `addToothRecord` (inside `ToothRecordPanel`) bumps
- *   `reloadKey` (re-fetches the odontogram -> the chart recolors) and
- *   `timelineRefreshKey` (re-fetches that tooth's timeline).
+ * - a successful add or void bumps `reloadKey` (re-fetches → the chart
+ *   recolors) and `timelineRefreshKey` (re-fetches that tooth's timeline).
  *
- * Initial load vs. background refresh (review fix): the fetch effect below
- * distinguishes the very FIRST load (`!hasLoadedOnce`, full-page blocking
- * `<p role="status">`, replacing the subtree — there's nothing to preserve
- * yet) from a REFRESH triggered by `reloadKey` bumping after a save
- * (`hasLoadedOnce` already true). A refresh keeps `OdontogramChart` /
- * `ToothTimeline` / `ToothRecordPanel` MOUNTED — only a small non-blocking
- * "Actualizando…" `role="status"` shows — so the chart recolors and the
- * timeline updates in place instead of unmounting+remounting the whole
- * subtree (which used to steal focus off the just-clicked "Guardar" button
- * and defeated `timelineRefreshKey`'s refresh-without-unmount contract).
- * Likewise, a failed background refresh does NOT blank the already-loaded
- * chart/panel — it surfaces a `notifyError` toast (with its own retry
- * action) instead of the full-page `SectionError`, which is still reserved
- * for a failed FIRST load (nothing to show yet in that case).
+ * DX-120: the chart draws each position in its dentition (permanent, primary
+ * or both when mixed); «Permanente · Mixta · Temporal» switches the whole
+ * chart and «Cambiar dentición» a selection of positions. «Ver la carta al»
+ * reloads the chart AS OF that day, read-only: no form, no void, no
+ * dentition change, and a visible notice says so.
+ *
+ * Initial load vs. background refresh: the FIRST load blocks with a loading
+ * status (nothing to preserve yet); a REFRESH keeps the chart/timeline/panel
+ * MOUNTED with a small non-blocking "Actualizando…" status, and a failed
+ * refresh surfaces a `notifyError` toast instead of blanking what's on
+ * screen. `SectionError` is reserved for a failed first load.
  */
 export function OdontogramTab({
   token,
@@ -92,12 +141,21 @@ export function OdontogramTab({
   planHref,
 }: OdontogramTabProps) {
   const [toothGroups, setToothGroups] = useState<ToothGroup[]>([]);
+  const [dentition, setDentition] = useState<DentitionView | null>(null);
   const [catalogItems, setCatalogItems] = useState<DentalCatalogItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  // `asOf` es la fecha PEDIDA (el selector); `shownAsOf`, la de la carta que
+  // hay en pantalla. Solo difieren mientras carga o si la carga falla: el
+  // aviso «Carta al…» y el historial siguen a lo que se ve, nunca a lo pedido.
+  const [asOf, setAsOf] = useState<string | null>(null);
+  const [shownAsOf, setShownAsOf] = useState<string | null>(null);
+  // Al fallar un cambio de fecha el selector vuelve a la que se ve, sin
+  // recargarla (ya está en pantalla).
+  const skipNextLoad = useRef(false);
 
   // Se siembra desde la URL para que el enlace del plan abra en su diente.
   // Sólo es el valor INICIAL: a partir de ahí manda la interacción, y cada
@@ -105,8 +163,21 @@ export function OdontogramTab({
   const [selectedTooth, setSelectedTooth] = useState<string | null>(initialTooth);
   const [initialSurface, setInitialSurface] = useState<ToothSurface | null>(null);
   const [timelineRefreshKey, setTimelineRefreshKey] = useState(0);
+  const [dentitionDialog, setDentitionDialog] = useState<DentitionDialogState | null>(null);
+  const [preset, setPreset] = useState<DentitionType | null>(null);
+  const [presetSubmitting, setPresetSubmitting] = useState(false);
+  const [presetError, setPresetError] = useState<string | null>(null);
+
+  // Solo lectura en cuanto se pide una fecha y hasta que vuelve la carta de hoy.
+  const readOnly = asOf !== null || shownAsOf !== null;
+  const role = getTokenRole(token);
+  const userId = getTokenUserId(token);
 
   useEffect(() => {
+    if (skipNextLoad.current) {
+      skipNextLoad.current = false;
+      return;
+    }
     let cancelled = false;
     const isInitialLoad = !hasLoadedOnce;
 
@@ -117,23 +188,29 @@ export function OdontogramTab({
         setRefreshing(true);
       }
       try {
-        const [groups, catalog] = await Promise.all([
-          getOdontogram(token, patientId),
+        const [groups, dentitionView, catalog] = await Promise.all([
+          getOdontogram(token, patientId, asOf ?? undefined),
+          getDentition(token, patientId, asOf ?? undefined),
           listCatalogItems(token, { activeOnly: true }),
         ]);
         if (cancelled) return;
         setToothGroups(groups);
+        setDentition(dentitionView);
         setCatalogItems(catalog);
+        setShownAsOf(asOf);
         setLoadError(null);
         setHasLoadedOnce(true);
       } catch (err) {
         if (cancelled) return;
-        const message =
-          apiErrorMessage(err, `${copy.odontogramGenericError} ${copy.catalogGenericError}`);
+        const message = apiErrorMessage(err, `${copy.odontogramGenericError} ${copy.catalogGenericError}`);
         if (isInitialLoad) {
           setLoadError(message);
         } else {
           notifyError(copy.odontogramRefreshError, { onRetry: () => setReloadKey((k) => k + 1) });
+          if (asOf !== shownAsOf) {
+            skipNextLoad.current = true;
+            setAsOf(shownAsOf);
+          }
         }
       } finally {
         if (!cancelled) {
@@ -149,13 +226,15 @@ export function OdontogramTab({
     // `hasLoadedOnce` is intentionally excluded: it's read once per run (via
     // `isInitialLoad`) to tell an initial load from a background refresh,
     // and is itself flipped true by this same effect on success — including
-    // it here would re-trigger the effect the moment it flips, refetching
-    // right after the first successful load.
+    // it here would re-trigger the effect the moment it flips. Same for
+    // `shownAsOf`: it is set by this effect and only read on a failure.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token, patientId, reloadKey]);
+  }, [token, patientId, reloadKey, asOf]);
 
   const catalogById = new Map(catalogItems.map((item) => [item.id, item]));
   const states = projectOdontogram(toothGroups, catalogById);
+  const dentitionByPosition = new Map(dentition?.positions.map((p) => [p.position, p.dentition]) ?? []);
+  const dentitionOf = (position: string): DentitionType => dentitionByPosition.get(position) ?? 'PERMANENT';
 
   // The distinct catalog items actually painted on the chart (from the
   // patient's records), for the color legend — so it explains what's on
@@ -168,14 +247,18 @@ export function OdontogramTab({
   }
   const legendItems = catalogItems.filter((item) => usedCatalogIds.has(item.id));
 
-  // Dientes CON registros que la carta no puede dibujar. `OdontogramChart`
-  // sólo pinta la dentición permanente (32 piezas), pero el backend acepta
-  // temporales (51-85) y el plan de tratamiento los factura — así que un
-  // paciente pediátrico puede tener historia clínica invisible en su propio
-  // odontograma. Callarlo es peor que no dibujarlos: el silencio se lee como
-  // «este diente está sano».
-  const undrawnTeeth = [...states.values()]
-    .filter((state) => state.hasRecords && !isPermanentFdi(state.toothNumber))
+  // Dientes con registros vigentes que la dentición actual no dibuja (p. ej.
+  // el 55 ya exfoliado). Callarlo se leería como «sano»: se dice bajo la
+  // carta, con un acceso a su historial.
+  const drawnTeeth = new Set(
+    (['upper', 'lower'] as const).flatMap((arch) =>
+      chartLayoutForArch(arch, dentitionOf).columns.flatMap((c) =>
+        [c.permanent, c.primary].filter((fdi): fdi is string => fdi !== null),
+      ),
+    ),
+  );
+  const notDrawn = [...states.values()]
+    .filter((state) => state.hasRecords && !drawnTeeth.has(state.toothNumber))
     .map((state) => state.toothNumber)
     .sort();
 
@@ -194,15 +277,45 @@ export function OdontogramTab({
     onToothChange?.(fdi);
   }
 
-  function handleRecordAdded() {
-    // Refetches the odontogram (so the chart recolors with the new record)
-    // and bumps the timeline's refresh key (so it re-fetches that tooth's
-    // history) — the record itself was already POSTed by ToothRecordPanel.
-    // Both refetches happen in place — see the effect above for why the
-    // chart/timeline/panel stay mounted instead of flashing a full-page
-    // loading state.
+  function handleChartChanged() {
+    // Refetches the odontogram + dentition (so the chart redraws) and bumps
+    // the timeline's refresh key — both in place, see the effect above.
     setReloadKey((k) => k + 1);
     setTimelineRefreshKey((k) => k + 1);
+  }
+
+  function canVoid(record: ToothTimelineEntry): boolean {
+    return role === 'ADMIN' || (userId !== null && record.performedById === userId);
+  }
+
+  function openDentitionDialog(fdi: string | null) {
+    const position = fdi ? positionOfTooth(fdi) : null;
+    setDentitionDialog({
+      positions: position ? [position] : [],
+      dentition: position ? dentitionOf(position) : 'PERMANENT',
+      reason: 'MANUAL',
+    });
+  }
+
+  async function applyPreset(event: React.FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    if (!preset) return;
+    const positions = presetChanges(preset, dentitionOf);
+    if (positions.length === 0) {
+      setPreset(null);
+      return;
+    }
+    setPresetSubmitting(true);
+    setPresetError(null);
+    try {
+      await recordDentitionEvents(token, patientId, { positions, dentition: preset, reason: 'MANUAL' });
+      setPreset(null);
+      handleChartChanged();
+    } catch (err) {
+      setPresetError(apiErrorMessage(err, copy.presetError));
+    } finally {
+      setPresetSubmitting(false);
+    }
   }
 
   if (loading) {
@@ -219,18 +332,106 @@ export function OdontogramTab({
     return <SectionError description={loadError} onRetry={() => setReloadKey((k) => k + 1)} />;
   }
 
+  const overall = dentition?.overall ?? 'PERMANENT';
+  const selectedPosition = selectedTooth ? positionOfTooth(selectedTooth) : null;
+  const selectedFits =
+    selectedTooth !== null && selectedPosition !== null
+      ? toothFitsDentition(selectedTooth, dentitionOf(selectedPosition)) && drawnTeeth.has(selectedTooth)
+      : false;
+  const isEmpty = toothGroups.length === 0;
+
   return (
     <div className="flex flex-col gap-6">
-      {/* The chart and its color key read as one object: the field, then its
-          caption. The refresh notice rides on that same line so nothing shifts
-          vertically while a save settles. */}
-      <div className="flex flex-col gap-2">
+      <div className="flex flex-col gap-3">
+        {/* Barra de la carta: dentición (conmutador + cambio por posiciones)
+            a la izquierda y la fecha de la carta a la derecha. */}
+        <div className="flex flex-wrap items-end justify-between gap-x-4 gap-y-3">
+          <div className="flex flex-wrap items-end gap-3">
+            <div className="flex flex-col gap-1.5">
+              <span id="odo-dentition-switch" className="t-label text-muted">
+                {copy.dentitionSwitch}
+              </span>
+              <div
+                role="radiogroup"
+                aria-labelledby="odo-dentition-switch"
+                className="inline-flex rounded-lg border border-border bg-surface p-0.5"
+              >
+                {DENTITION_ORDER.map((option) => {
+                  const checked = overall === option;
+                  return (
+                    <button
+                      key={option}
+                      type="button"
+                      role="radio"
+                      aria-checked={checked}
+                      disabled={readOnly}
+                      onClick={() => {
+                        if (!checked) {
+                          setPresetError(null);
+                          setPreset(option);
+                        }
+                      }}
+                      className={cn(
+                        'h-9 rounded-md px-3 text-sm font-medium transition-colors',
+                        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
+                        'disabled:cursor-not-allowed disabled:opacity-60',
+                        checked ? 'bg-primary text-primary-foreground' : 'text-ink hover:bg-surface-2',
+                      )}
+                    >
+                      {DENTITION_LABELS[option]}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            {!readOnly ? (
+              <Button type="button" variant="outline" onClick={() => openDentitionDialog(selectedTooth)}>
+                {copy.changeDentition}
+              </Button>
+            ) : null}
+            {dentition?.basis === 'AGE' && dentition.ageYears !== null ? (
+              <p className="t-label pb-2.5 text-muted">{copy.dentitionByAge(dentition.ageYears)}</p>
+            ) : null}
+          </div>
+          <div className="flex flex-wrap items-end gap-2">
+            <div className="flex flex-col gap-1.5">
+              <Label htmlFor="odo-as-of">{copy.asOfLabel}</Label>
+              <Input
+                id="odo-as-of"
+                type="date"
+                max={todayLocal()}
+                value={asOf ?? ''}
+                onChange={(e) => setAsOf(e.target.value === '' ? null : e.target.value)}
+                className="w-44"
+              />
+            </div>
+            {readOnly ? (
+              <Button type="button" variant="ghost" onClick={() => setAsOf(null)}>
+                {copy.backToToday}
+              </Button>
+            ) : null}
+          </div>
+        </div>
+
+        {shownAsOf ? (
+          <p
+            role="status"
+            className="rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-ink"
+          >
+            {copy.asOfNotice(formatCivilDate(`${shownAsOf}T00:00:00.000Z`))}
+          </p>
+        ) : null}
+
+        {/* The chart and its key read as one object: the field, then its
+            caption. The refresh notice rides on that same line so nothing
+            shifts vertically while a save settles. */}
         <OdontogramChart
           states={states}
           catalogById={catalogById}
           selectedTooth={selectedTooth ?? undefined}
           onSelectTooth={handleSelectTooth}
           onSelectSurface={handleSelectSurface}
+          dentitionOf={dentitionOf}
         />
         <div className="flex items-start justify-between gap-4">
           <OdontogramLegend items={legendItems} />
@@ -241,14 +442,21 @@ export function OdontogramTab({
           )}
         </div>
 
-        {/* Se declara justo bajo la carta, no en un rincón: es una advertencia
-            sobre lo que la carta NO está diciendo, y sólo aparece cuando este
-            paciente concreto tiene registros invisibles. `role="status"`,
-            porque es una limitación conocida del dibujo, no un fallo. */}
-        {undrawnTeeth.length > 0 && (
-          <p role="status" className="text-sm text-muted">
-            {copy.undrawnTeeth(undrawnTeeth)}
-          </p>
+        {notDrawn.length > 0 && (
+          <div role="status" className="flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted">
+            <span>{copy.notDrawn(notDrawn)}</span>
+            {notDrawn.map((fdi) => (
+              <button
+                key={fdi}
+                type="button"
+                aria-label={copy.notDrawnTooth(fdi)}
+                onClick={() => handleSelectTooth(fdi)}
+                className="rounded px-1 font-medium tabular-nums text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              >
+                {fdi}
+              </button>
+            ))}
+          </div>
         )}
       </div>
 
@@ -260,9 +468,7 @@ export function OdontogramTab({
             </h2>
             {/* La otra mitad del puente. Un `<Link>` de verdad y no un botón:
                 es una ubicación, así que tiene que poder abrirse en otra
-                pestaña y copiarse como cualquier dirección. El nombre
-                accesible empieza por el texto visible y nombra el diente
-                (WCAG 2.5.3). */}
+                pestaña y copiarse como cualquier dirección. */}
             {planHref ? (
               <Link
                 href={planHref(selectedTooth)}
@@ -282,19 +488,36 @@ export function OdontogramTab({
                 toothNumber={selectedTooth}
                 catalogById={catalogById}
                 refreshKey={timelineRefreshKey}
+                canVoid={canVoid}
+                readOnly={readOnly}
+                asOf={shownAsOf}
+                onVoided={handleChartChanged}
               />
             </div>
             {/* `min-w-0` para que el formulario pueda encogerse por debajo de su
                 max-content en móvil (si no, el catálogo lo estira a ~435px). */}
-            <div className="min-w-0">
-              <ToothRecordPanel
-                token={token}
-                patientId={patientId}
-                toothNumber={selectedTooth}
-                initialSurface={initialSurface ?? undefined}
-                onRecordAdded={handleRecordAdded}
-              />
-            </div>
+            {!readOnly ? (
+              <div className="min-w-0">
+                {selectedFits ? (
+                  <ToothRecordPanel
+                    token={token}
+                    patientId={patientId}
+                    toothNumber={selectedTooth}
+                    initialSurface={initialSurface ?? undefined}
+                    onRecordAdded={handleChartChanged}
+                  />
+                ) : (
+                  <div className="flex flex-col items-start gap-3 rounded-xl border border-dashed border-border p-4 text-sm text-muted">
+                    <p role="status">
+                      {copy.doesNotFit(selectedTooth, selectedPosition ?? '', dentitionOf(selectedPosition ?? ''))}
+                    </p>
+                    <Button type="button" variant="outline" onClick={() => openDentitionDialog(selectedTooth)}>
+                      {copy.changeDentition}
+                    </Button>
+                  </div>
+                )}
+              </div>
+            ) : null}
           </div>
         </section>
       ) : (
@@ -302,9 +525,42 @@ export function OdontogramTab({
           role="status"
           className="rounded-xl border border-dashed border-border px-4 py-6 text-center text-sm text-muted"
         >
-          {copy.selectToothPrompt}
+          {isEmpty && !readOnly ? copy.emptyChartPrompt : copy.selectToothPrompt}
         </p>
       )}
+
+      {dentitionDialog ? (
+        <DentitionDialog
+          open
+          onOpenChange={(open) => {
+            if (!open) setDentitionDialog(null);
+          }}
+          token={token}
+          patientId={patientId}
+          dentitionOf={dentitionOf}
+          initialPositions={dentitionDialog.positions}
+          initialDentition={dentitionDialog.dentition}
+          initialReason={dentitionDialog.reason}
+          onChanged={handleChartChanged}
+        />
+      ) : null}
+
+      {preset ? (
+        <FormModal
+          open
+          onOpenChange={(open) => {
+            if (!open) setPreset(null);
+          }}
+          title={copy.presetTitle(DENTITION_LABELS[preset])}
+          description={copy.presetDescription(DENTITION_LABELS[preset], presetChanges(preset, dentitionOf).length)}
+          onSubmit={applyPreset}
+          submitLabel={copy.presetSubmit}
+          submitting={presetSubmitting}
+          error={presetError}
+        >
+          {preset === 'MIXED' ? <p className="text-sm text-muted">{copy.presetMixedNote}</p> : null}
+        </FormModal>
+      ) : null}
     </div>
   );
 }

@@ -1,10 +1,19 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { apiErrorMessage } from '@/lib/api/error-message';
-import { getToothTimeline, type ToothRecord, type ToothSurface } from '@/lib/odontogram/odontogram-api';
+import {
+  getToothTimeline,
+  type ToothRecord,
+  type ToothSurface,
+  type ToothTimelineEntry,
+} from '@/lib/odontogram/odontogram-api';
 import { formatDate } from '@/lib/format/date';
+import { ORIGIN_LABELS, recordOrigin } from '@/lib/odontogram/origin';
 import { SectionError } from '@/components/errors/section-error';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/utils';
+import { VoidRecordDialog } from './void-record-dialog';
 
 // Copy as constants (i18n-ready, es-first) — matches medical-history-panel.tsx convention.
 const copy = {
@@ -15,6 +24,14 @@ const copy = {
   statusCompleted: 'Completado',
   wholeTooth: 'Diente completo',
   heading: (fdi: string) => `Historial del diente ${fdi}`,
+  emptyAsOf: (date: string) => `Este diente no tenía registros al ${date}.`,
+  by: (name: string) => `por ${name}`,
+  voided: 'Anulado',
+  voidedBy: (name: string | null, date: string) =>
+    name ? `Anulado por ${name} el ${date}` : `Anulado el ${date}`,
+  voidAction: 'Anular',
+  voidActionFor: (what: string, date: string) => `Anular ${what} del ${date}`,
+  recordLabel: (what: string, date: string) => `${what} del ${date}`,
 };
 
 const SURFACE_LABELS: Record<ToothSurface, string> = {
@@ -43,6 +60,34 @@ interface ToothTimelineProps {
   catalogById?: Map<string, TimelineCatalogEntry>;
   /** Bump this to force a refetch (e.g. after a new record is added). */
   refreshKey?: number;
+  /**
+   * DX-120: si el usuario puede anular ESE registro (su autor o un ADMIN; la
+   * API lo vuelve a comprobar). Sin ella no se ofrece «Anular».
+   */
+  canVoid?: (record: ToothTimelineEntry) => boolean;
+  /** DX-120: carta a una fecha — sin acciones. */
+  readOnly?: boolean;
+  /**
+   * DX-120: carta a una fecha (YYYY-MM-DD): el historial de entonces, sin lo
+   * registrado después ni las anulaciones posteriores.
+   */
+  asOf?: string | null;
+  /** DX-120: tras anular, para que la carta deje de pintar el registro. */
+  onVoided?: () => void;
+}
+
+/** Día civil local (YYYY-MM-DD) de un instante, para compararlo con `asOf`. */
+function localDay(iso: string): string {
+  const d = new Date(iso);
+  const pad = (n: number) => String(n).padStart(2, '0');
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
+/** El historial tal como estaba al final del día `asOf`. */
+function asOfView(records: ToothTimelineEntry[], asOf: string): ToothTimelineEntry[] {
+  return records
+    .filter((r) => localDay(r.recordedAt) <= asOf)
+    .map((r) => (r.void && localDay(r.void.recordedAt) > asOf ? { ...r, void: null } : r));
 }
 
 function surfacesLabel(record: ToothRecord): string {
@@ -55,8 +100,19 @@ function surfacesLabel(record: ToothRecord): string {
  * returns them — DESC by `recordedAt` per the backend contract (see
  * `odontogram-api.ts`) — so this component does NOT re-sort.
  */
-export function ToothTimeline({ token, patientId, toothNumber, catalogById, refreshKey }: ToothTimelineProps) {
-  const [records, setRecords] = useState<ToothRecord[]>([]);
+export function ToothTimeline({
+  token,
+  patientId,
+  toothNumber,
+  catalogById,
+  refreshKey,
+  canVoid,
+  readOnly = false,
+  asOf = null,
+  onVoided,
+}: ToothTimelineProps) {
+  const [records, setRecords] = useState<ToothTimelineEntry[]>([]);
+  const [voiding, setVoiding] = useState<{ id: string; label: string } | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
@@ -95,12 +151,19 @@ export function ToothTimeline({ token, patientId, toothNumber, catalogById, refr
     return <SectionError description={loadError} onRetry={() => setReloadKey((k) => k + 1)} />;
   }
 
-  if (records.length === 0) {
+  const visible = asOf ? asOfView(records, asOf) : records;
+
+  if (visible.length === 0) {
     return (
       <p role="status" className="text-sm text-muted">
-        {copy.empty}
+        {asOf ? copy.emptyAsOf(formatDate(`${asOf}T12:00:00`)) : copy.empty}
       </p>
     );
+  }
+
+  function handleVoided() {
+    setReloadKey((k) => k + 1);
+    onVoided?.();
   }
 
   /**
@@ -109,40 +172,102 @@ export function ToothTimeline({ token, patientId, toothNumber, catalogById, refr
    * down the page — not a stack of bordered cards.
    */
   return (
-    <ol
-      aria-label={copy.heading(toothNumber)}
-      className="divide-y divide-hairline border-t border-hairline"
-    >
-      {records.map((record) => {
-        const catalogEntry = record.catalogItemId ? catalogById?.get(record.catalogItemId) : undefined;
-        return (
-          <li key={record.id} className="grid grid-cols-[5.5rem_minmax(0,1fr)] items-baseline gap-x-3 py-2.5 text-sm">
-            <time dateTime={record.recordedAt} className="tabular-nums text-xs text-muted">
-              {formatDate(record.recordedAt)}
-            </time>
-            <div className="flex flex-col gap-1">
-              <div className="flex items-center gap-2">
-                {catalogEntry && (
-                  <span
-                    aria-hidden="true"
-                    className="size-2.5 shrink-0 rounded-[3px] border border-border"
-                    style={{ backgroundColor: catalogEntry.color }}
-                  />
-                )}
-                <span className="font-medium text-ink">{catalogEntry?.labelEs ?? record.kind}</span>
-                <Badge
-                  variant={record.status === 'COMPLETED' ? 'success' : 'warning'}
-                  className="ml-auto shrink-0"
-                >
-                  {STATUS_LABELS[record.status]}
-                </Badge>
+    <>
+      <ol
+        aria-label={copy.heading(toothNumber)}
+        className="divide-y divide-hairline border-t border-hairline"
+      >
+        {visible.map((record) => {
+          const catalogEntry = record.catalogItemId ? catalogById?.get(record.catalogItemId) : undefined;
+          const label = catalogEntry?.labelEs ?? record.kind;
+          const date = formatDate(record.recordedAt);
+          const origin = recordOrigin(record);
+          const isVoided = Boolean(record.void);
+          const showVoid = !readOnly && !isVoided && (canVoid?.(record) ?? false);
+          // DX-120: lo anulado se queda, tachado, con quién lo anuló, cuándo y
+          // por qué — la historia clínica no se borra.
+          return (
+            <li
+              key={record.id}
+              data-voided={isVoided ? 'true' : undefined}
+              className="grid grid-cols-[5.5rem_minmax(0,1fr)] items-baseline gap-x-3 py-2.5 text-sm"
+            >
+              <time dateTime={record.recordedAt} className="tabular-nums text-xs text-muted">
+                {date}
+              </time>
+              <div className="flex min-w-0 flex-col gap-1">
+                <div className="flex flex-wrap items-center gap-2">
+                  {catalogEntry && (
+                    <span
+                      aria-hidden="true"
+                      className={cn(
+                        'size-2.5 shrink-0 rounded-[3px] border border-border',
+                        isVoided && 'opacity-40',
+                      )}
+                      style={{ backgroundColor: catalogEntry.color }}
+                    />
+                  )}
+                  <span className={cn('font-medium', isVoided ? 'text-muted line-through' : 'text-ink')}>
+                    {label}
+                  </span>
+                  {origin !== 'THIS_CLINIC' ? <Badge variant="outline">{ORIGIN_LABELS[origin]}</Badge> : null}
+                  <span className="ml-auto flex shrink-0 items-center gap-2">
+                    {isVoided ? (
+                      <Badge variant="danger">{copy.voided}</Badge>
+                    ) : (
+                      <Badge variant={record.status === 'COMPLETED' ? 'success' : 'warning'}>
+                        {STATUS_LABELS[record.status]}
+                      </Badge>
+                    )}
+                  </span>
+                </div>
+                <p className="text-xs text-muted">
+                  <span className={cn(isVoided && 'line-through')}>{surfacesLabel(record)}</span>
+                  {record.performedByName ? ` · ${copy.by(record.performedByName)}` : null}
+                </p>
+                {record.notes ? (
+                  <p className={cn(isVoided ? 'text-muted line-through' : 'text-ink')}>{record.notes}</p>
+                ) : null}
+                {record.void ? (
+                  <p className="text-xs text-ink">
+                    <span className="font-medium">
+                      {copy.voidedBy(record.void.performedByName, formatDate(record.void.recordedAt))}:
+                    </span>{' '}
+                    «{record.void.reason}»
+                  </p>
+                ) : null}
+                {showVoid ? (
+                  <div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="-ml-2 h-8 text-muted hover:text-danger"
+                      aria-label={copy.voidActionFor(label, date)}
+                      onClick={() => setVoiding({ id: record.id, label: copy.recordLabel(label, date) })}
+                    >
+                      {copy.voidAction}
+                    </Button>
+                  </div>
+                ) : null}
               </div>
-              <p className="text-xs text-muted">{surfacesLabel(record)}</p>
-              {record.notes ? <p className="text-ink">{record.notes}</p> : null}
-            </div>
-          </li>
-        );
-      })}
-    </ol>
+            </li>
+          );
+        })}
+      </ol>
+      {voiding ? (
+        <VoidRecordDialog
+          open
+          onOpenChange={(open) => {
+            if (!open) setVoiding(null);
+          }}
+          token={token}
+          patientId={patientId}
+          recordId={voiding.id}
+          recordLabel={voiding.label}
+          onVoided={handleVoided}
+        />
+      ) : null}
+    </>
   );
 }

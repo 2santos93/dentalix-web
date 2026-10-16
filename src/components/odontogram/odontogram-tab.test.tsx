@@ -1,9 +1,16 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { OdontogramTab } from './odontogram-tab';
 import { Toaster } from '@/components/errors/toaster';
 import { listCatalogItems } from '@/lib/odontogram/catalog-api';
-import { getOdontogram, addToothRecord, getToothTimeline } from '@/lib/odontogram/odontogram-api';
+import {
+  getOdontogram,
+  addToothRecord,
+  getToothTimeline,
+  getDentition,
+  recordDentitionEvents,
+  type DentitionView,
+} from '@/lib/odontogram/odontogram-api';
 
 // NOTE: jest.mock's string literal is not alias-rewritten by the SWC
 // transform (only real `import`/`require` specifiers are) — use a relative
@@ -18,12 +25,48 @@ jest.mock('../../lib/odontogram/odontogram-api', () => ({
   getOdontogram: jest.fn(),
   addToothRecord: jest.fn(),
   getToothTimeline: jest.fn(),
+  getDentition: jest.fn(),
+  recordDentitionEvents: jest.fn(),
+  voidToothRecord: jest.fn(),
+  VOID_REASON_MAX: 500,
 }));
 
 const mockedListCatalog = listCatalogItems as jest.MockedFunction<typeof listCatalogItems>;
 const mockedGetOdontogram = getOdontogram as jest.MockedFunction<typeof getOdontogram>;
 const mockedAddRecord = addToothRecord as jest.MockedFunction<typeof addToothRecord>;
 const mockedGetTimeline = getToothTimeline as jest.MockedFunction<typeof getToothTimeline>;
+const mockedGetDentition = getDentition as jest.MockedFunction<typeof getDentition>;
+const mockedRecordDentition = recordDentitionEvents as jest.MockedFunction<typeof recordDentitionEvents>;
+
+const POSITIONS = [1, 2, 3, 4].flatMap((q) => [1, 2, 3, 4, 5, 6, 7, 8].map((p) => `${q}${p}`));
+
+/** Dentición de la API: `of(position)` decide cada posición. */
+function dentitionView(
+  of: (position: string) => 'PERMANENT' | 'PRIMARY' | 'MIXED',
+  overall: 'PERMANENT' | 'PRIMARY' | 'MIXED' = 'PERMANENT',
+  ageYears: number | null = null,
+): DentitionView {
+  return {
+    basis: ageYears === null ? 'DEFAULT' : 'AGE',
+    ageYears,
+    overall,
+    asOf: null,
+    positions: POSITIONS.map((position) => ({
+      position,
+      dentition: of(position),
+      source: ageYears === null ? 'DEFAULT' : 'AGE',
+      lastEvent: null,
+    })),
+  };
+}
+
+const adult = dentitionView(() => 'PERMANENT');
+// Niño de 7 años: incisivos mudando, primeros molares permanentes, el resto temporal.
+const child7 = dentitionView(
+  (p) => (Number(p[1]) <= 2 ? 'MIXED' : Number(p[1]) === 6 ? 'PERMANENT' : 'PRIMARY'),
+  'MIXED',
+  7,
+);
 
 const catalog = [
   {
@@ -73,6 +116,9 @@ describe('OdontogramTab', () => {
     mockedGetOdontogram.mockReset();
     mockedAddRecord.mockReset();
     mockedGetTimeline.mockReset();
+    mockedGetDentition.mockReset();
+    mockedRecordDentition.mockReset();
+    mockedGetDentition.mockResolvedValue(adult);
   });
 
   it('shows the full-page loading status only on the initial load', () => {
@@ -82,33 +128,174 @@ describe('OdontogramTab', () => {
     expect(screen.getByRole('status')).toHaveTextContent(/cargando odontograma/i);
   });
 
-  it('declara los registros en dientes temporales, que la carta no dibuja', async () => {
-    // El backend acepta 51-85 y el plan los factura, pero `OdontogramChart`
-    // solo pinta las 32 permanentes: sin este aviso, la historia clínica de un
-    // paciente pediátrico es invisible en su propio odontograma y el silencio
-    // se lee como «sano».
+  it('dibuja la dentición mixta de un niño de 7 años y pinta un registro en el 64 (sin aviso de «no aparecen»)', async () => {
     mockedListCatalog.mockResolvedValue(catalog);
+    mockedGetDentition.mockResolvedValue(child7);
     mockedGetOdontogram.mockResolvedValue([
-      { toothNumber: '11', records: [] },
-      { toothNumber: '52', records: [{ ...createdRecord, id: 'rec-52', toothNumber: '52' }] },
-      { toothNumber: '61', records: [{ ...createdRecord, id: 'rec-61', toothNumber: '61' }] },
+      { toothNumber: '64', records: [{ ...createdRecord, id: 'rec-64', toothNumber: '64' }] },
     ]);
 
     render(<OdontogramTab token="tok" patientId="p1" />);
 
-    const notice = await screen.findByText(/dentición temporal/i);
-    expect(notice).toHaveTextContent('52');
-    expect(notice).toHaveTextContent('61');
+    const chart = await screen.findByRole('group', { name: /^Odontograma$/ });
+    expect(within(chart).getByRole('group', { name: 'Diente 64 (temporal), 1 registro, cara oclusal' })).toBeInTheDocument();
+    expect(within(chart).getByRole('group', { name: 'Diente 51 (temporal), sano' })).toBeInTheDocument();
+    expect(within(chart).getByRole('group', { name: 'Diente 11, sano' })).toBeInTheDocument();
+    expect(screen.queryByText(/no aparecen en el mapa/i)).not.toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: 'Mixta' })).toHaveAttribute('aria-checked', 'true');
+    expect(screen.getByText('Según la edad (7 años)')).toBeInTheDocument();
   });
 
-  it('no dice nada de dentición temporal cuando no hay registros invisibles', async () => {
+  it('la leyenda distingue «Hecho en la clínica», «Ya presente» y «Otro profesional»', async () => {
     mockedListCatalog.mockResolvedValue(catalog);
-    mockedGetOdontogram.mockResolvedValue(refreshedGroups);
+    mockedGetOdontogram.mockResolvedValue([]);
+    render(<OdontogramTab token="tok" patientId="p1" />);
+    const origins = await screen.findByRole('list', { name: 'Origen de los registros' });
+    expect(within(origins).getByText('Hecho en la clínica')).toBeInTheDocument();
+    expect(within(origins).getByText('Ya presente')).toBeInTheDocument();
+    expect(within(origins).getByText('Otro profesional')).toBeInTheDocument();
+  });
 
+  it('carta vacía: sana, con la indicación para empezar', async () => {
+    mockedListCatalog.mockResolvedValue(catalog);
+    mockedGetOdontogram.mockResolvedValue([]);
+    render(<OdontogramTab token="tok" patientId="p1" />);
+    expect(await screen.findByText(/aún no hay registros: la carta está sana/i)).toBeInTheDocument();
+  });
+
+  it('avisa de los registros en dientes que la dentición actual no dibuja (el 55 ya exfoliado) y lleva a su historial', async () => {
+    const user = userEvent.setup();
+    mockedListCatalog.mockResolvedValue(catalog);
+    mockedGetTimeline.mockResolvedValue([]);
+    mockedGetOdontogram.mockResolvedValue([
+      { toothNumber: '55', records: [{ ...createdRecord, id: 'rec-55', toothNumber: '55' }] },
+    ]);
     render(<OdontogramTab token="tok" patientId="p1" />);
 
-    await screen.findByRole('group', { name: /^Odontograma$/ });
-    expect(screen.queryByText(/dentición temporal/i)).not.toBeInTheDocument();
+    const notice = await screen.findByText(/no se dibuja el diente 55/i);
+    expect(notice).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Ver el historial del diente 55' }));
+    expect(await screen.findByRole('heading', { name: 'Diente 55' })).toBeInTheDocument();
+    // No se puede registrar en él sin cambiar la dentición.
+    expect(screen.queryByRole('form', { name: /registrar en el diente 55/i })).not.toBeInTheDocument();
+    expect(screen.getByText(/no está en la boca según la dentición actual/i)).toBeInTheDocument();
+  });
+
+  it('«Cambiar dentición» envía las posiciones marcadas y recarga la carta', async () => {
+    const user = userEvent.setup();
+    mockedListCatalog.mockResolvedValue(catalog);
+    mockedGetOdontogram.mockResolvedValue([]);
+    mockedGetDentition.mockResolvedValue(child7);
+    mockedRecordDentition.mockResolvedValue([]);
+    render(<OdontogramTab token="tok" patientId="p1" />);
+
+    await user.click(await screen.findByRole('button', { name: 'Cambiar dentición' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Cambiar dentición' });
+    await user.click(within(dialog).getByRole('checkbox', { name: /^Posición 15,/ }));
+    await user.selectOptions(within(dialog).getByLabelText('Motivo'), 'EXFOLIATION');
+    expect(within(dialog).getByRole('radio', { name: 'Permanente' })).toBeChecked();
+    expect(within(dialog).getByRole('radio', { name: 'Mixta' })).toBeDisabled();
+    await user.click(within(dialog).getByRole('button', { name: 'Guardar dentición' }));
+
+    expect(mockedRecordDentition).toHaveBeenCalledWith('tok', 'p1', {
+      positions: ['15'],
+      dentition: 'PERMANENT',
+      reason: 'EXFOLIATION',
+    });
+    await waitFor(() => expect(mockedGetDentition).toHaveBeenCalledTimes(2));
+  });
+
+  it('el conmutador pasa toda la carta a temporal tras confirmar', async () => {
+    const user = userEvent.setup();
+    mockedListCatalog.mockResolvedValue(catalog);
+    mockedGetOdontogram.mockResolvedValue([]);
+    mockedRecordDentition.mockResolvedValue([]);
+    render(<OdontogramTab token="tok" patientId="p1" />);
+
+    await user.click(await screen.findByRole('radio', { name: 'Temporal' }));
+    const dialog = await screen.findByRole('dialog', { name: /dentición temporal/i });
+    await user.click(within(dialog).getByRole('button', { name: 'Cambiar la carta' }));
+    expect(mockedRecordDentition).toHaveBeenCalledWith(
+      'tok',
+      'p1',
+      expect.objectContaining({ dentition: 'PRIMARY', reason: 'MANUAL' }),
+    );
+    expect(mockedRecordDentition.mock.calls[0][2].positions).toHaveLength(32);
+  });
+
+  it('«Ver la carta al» recarga a esa fecha en solo lectura, con aviso y sin acciones', async () => {
+    const user = userEvent.setup();
+    mockedListCatalog.mockResolvedValue(catalog);
+    mockedGetTimeline.mockResolvedValue([]);
+    mockedGetOdontogram.mockResolvedValue(initialGroups);
+    render(<OdontogramTab token="tok" patientId="p1" initialTooth="11" />);
+
+    await screen.findByRole('form', { name: /registrar en el diente 11/i });
+    const date = screen.getByLabelText('Ver la carta al');
+    await user.type(date, '2026-10-05');
+
+    await waitFor(() => expect(mockedGetOdontogram).toHaveBeenLastCalledWith('tok', 'p1', '2026-10-05'));
+    expect(mockedGetDentition).toHaveBeenLastCalledWith('tok', 'p1', '2026-10-05');
+    expect(await screen.findByText(/carta al 05\/10\/2026 · solo lectura/i)).toBeInTheDocument();
+    expect(screen.queryByRole('form', { name: /registrar en el diente 11/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Cambiar dentición' })).not.toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: 'Temporal' })).toBeDisabled();
+
+    await user.click(screen.getByRole('button', { name: 'Volver a hoy' }));
+    await waitFor(() => expect(mockedGetOdontogram).toHaveBeenLastCalledWith('tok', 'p1', undefined));
+  });
+
+  it('si falla la carga de la carta a una fecha, no rotula como de esa fecha la carta de hoy', async () => {
+    const { ApiError } = jest.requireActual('../../lib/api/client');
+    const user = userEvent.setup();
+    mockedListCatalog.mockResolvedValue(catalog);
+    mockedGetTimeline.mockResolvedValue([]);
+    mockedGetOdontogram.mockImplementation((_token, _patient, asOf) =>
+      asOf ? Promise.reject(new ApiError(500, 'Error del servidor')) : Promise.resolve(initialGroups),
+    );
+    render(
+      <>
+        <OdontogramTab token="tok" patientId="p1" initialTooth="11" />
+        <Toaster />
+      </>,
+    );
+
+    await screen.findByRole('form', { name: /registrar en el diente 11/i });
+    await user.type(screen.getByLabelText('Ver la carta al'), '2026-10-05');
+
+    await waitFor(() => expect(mockedGetOdontogram).toHaveBeenCalledWith('tok', 'p1', '2026-10-05'));
+    expect(await screen.findByText('No pudimos actualizar el odontograma.')).toBeInTheDocument();
+    // Lo que hay en pantalla es la carta de HOY: ni aviso de «Carta al…», ni
+    // la fecha en el selector, y se puede seguir registrando.
+    expect(screen.queryByText(/carta al 05\/10\/2026/i)).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Ver la carta al')).toHaveValue('');
+    expect(screen.getByRole('form', { name: /registrar en el diente 11/i })).toBeInTheDocument();
+  });
+
+  it('si falla la vuelta a hoy, sigue en solo lectura con el aviso de la fecha que se ve', async () => {
+    const { ApiError } = jest.requireActual('../../lib/api/client');
+    const user = userEvent.setup();
+    mockedListCatalog.mockResolvedValue(catalog);
+    mockedGetTimeline.mockResolvedValue([]);
+    mockedGetOdontogram.mockResolvedValue(initialGroups);
+    render(
+      <>
+        <OdontogramTab token="tok" patientId="p1" initialTooth="11" />
+        <Toaster />
+      </>,
+    );
+
+    await screen.findByRole('form', { name: /registrar en el diente 11/i });
+    await user.type(screen.getByLabelText('Ver la carta al'), '2026-10-05');
+    expect(await screen.findByText(/carta al 05\/10\/2026 · solo lectura/i)).toBeInTheDocument();
+
+    mockedGetOdontogram.mockRejectedValue(new ApiError(500, 'Error del servidor'));
+    await user.click(screen.getByRole('button', { name: 'Volver a hoy' }));
+
+    expect(await screen.findByText('No pudimos actualizar el odontograma.')).toBeInTheDocument();
+    expect(screen.getByText(/carta al 05\/10\/2026 · solo lectura/i)).toBeInTheDocument();
+    expect(screen.getByLabelText('Ver la carta al')).toHaveValue('2026-10-05');
+    expect(screen.queryByRole('form', { name: /registrar en el diente 11/i })).not.toBeInTheDocument();
   });
 
   it('shows an alert with a retry when the initial load fails', async () => {

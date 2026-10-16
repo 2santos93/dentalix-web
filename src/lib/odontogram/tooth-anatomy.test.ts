@@ -86,3 +86,23 @@ describe('tooth-anatomy', () => {
     });
   });
 });
+
+describe('dientes temporales (DX-120)', () => {
+  it('ubica los cuadrantes 5-8 como sus sucesores 1-4', () => {
+    expect(toothArch('55')).toBe('upper');
+    expect(toothArch('65')).toBe('upper');
+    expect(toothArch('75')).toBe('lower');
+    expect(toothArch('85')).toBe('lower');
+    expect(toothChartSide('55')).toBe('left');
+    expect(toothChartSide('85')).toBe('left');
+    expect(toothChartSide('65')).toBe('right');
+    expect(toothChartSide('75')).toBe('right');
+  });
+
+  it('los temporales 4 y 5 son molares, y más estrechos que los permanentes', () => {
+    expect(toothClass('54')).toBe('molar');
+    expect(toothClass('53')).toBe('canine');
+    expect(toothWidth('55')).toBeLessThan(toothWidth('16'));
+    expect(toothWidth('51')).toBeLessThan(toothWidth('11'));
+  });
+});
