@@ -4,7 +4,7 @@ import { getPublicInvitation, acceptInvitation } from '../../lib/staff/invitatio
 import { ApiError } from '../../lib/api/client';
 
 const push = jest.fn();
-const setTokens = jest.fn();
+const setAccessToken = jest.fn();
 jest.mock('next/navigation', () => ({ useRouter: () => ({ push }) }));
 // NOTE: jest.mock's string literal is not alias-rewritten by the SWC
 // transform, so this must use a relative path (see sibling *.test.tsx files).
@@ -24,14 +24,14 @@ jest.mock('../../lib/api/client', () => ({
   },
 }));
 jest.mock('../../lib/auth/auth-store', () => ({
-  useAuthStore: (selector: (s: { setTokens: jest.Mock }) => unknown) =>
-    selector({ setTokens }),
+  useAuthStore: (selector: (s: { setAccessToken: jest.Mock }) => unknown) =>
+    selector({ setAccessToken }),
 }));
 
 describe('AcceptInvitationForm', () => {
   beforeEach(() => {
     push.mockReset();
-    setTokens.mockReset();
+    setAccessToken.mockReset();
     (acceptInvitation as jest.Mock).mockReset();
   });
 
@@ -43,10 +43,7 @@ describe('AcceptInvitationForm', () => {
       maskedEmail: 'j***@example.com',
       userExists: false,
     });
-    (acceptInvitation as jest.Mock).mockResolvedValueOnce({
-      accessToken: 'access-1',
-      refreshToken: 'refresh-1',
-    });
+    (acceptInvitation as jest.Mock).mockResolvedValueOnce({ accessToken: 'access-1' });
 
     render(<AcceptInvitationForm inviteToken="tok-1" />);
 
@@ -61,10 +58,8 @@ describe('AcceptInvitationForm', () => {
 
     await waitFor(() => expect(acceptInvitation).toHaveBeenCalledTimes(1));
     expect(acceptInvitation).toHaveBeenCalledWith('tok-1', 'newpassword1');
-    expect(setTokens).toHaveBeenCalledWith({
-      accessToken: 'access-1',
-      refreshToken: 'refresh-1',
-    });
+    // El refresh llega en la cookie HttpOnly; aquí solo el access, en memoria.
+    expect(setAccessToken).toHaveBeenCalledWith('access-1');
     expect(push).toHaveBeenCalledWith('/patients');
   });
 
@@ -143,7 +138,7 @@ describe('AcceptInvitationForm', () => {
     fireEvent.click(screen.getByRole('button', { name: /aceptar invitación/i }));
 
     expect(await screen.findByRole('alert')).toHaveTextContent('Contraseña incorrecta');
-    expect(setTokens).not.toHaveBeenCalled();
+    expect(setAccessToken).not.toHaveBeenCalled();
     expect(push).not.toHaveBeenCalled();
   });
 });

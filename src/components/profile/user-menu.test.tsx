@@ -4,7 +4,6 @@ import { UserMenu } from './user-menu';
 const push = jest.fn();
 const clear = jest.fn();
 let mockAccessToken = 'T';
-let mockRefreshToken: string | null = 'R-123';
 jest.mock('next/navigation', () => ({ useRouter: () => ({ push, replace: push }) }));
 jest.mock('../../lib/me/me-api', () => ({ getMe: jest.fn() }));
 jest.mock('next-themes', () => ({
@@ -14,7 +13,7 @@ jest.mock('../../lib/auth/auth-store', () => ({
   useAuthStore: Object.assign(
     (selector: (s: { accessToken: string | null; clear: () => void }) => unknown) =>
       selector({ accessToken: mockAccessToken, clear }),
-    { getState: () => ({ clear, refreshToken: mockRefreshToken }) },
+    { getState: () => ({ clear }) },
   ),
 }));
 jest.mock('../../lib/auth/auth-api', () => ({ logout: jest.fn() }));
@@ -25,7 +24,6 @@ describe('UserMenu', () => {
   beforeEach(() => {
     push.mockReset();
     clear.mockReset();
-    mockRefreshToken = 'R-123';
     (logout as jest.Mock).mockReset().mockResolvedValue(undefined);
     (getMe as jest.Mock).mockResolvedValue({
       id: 'u1',
@@ -86,7 +84,7 @@ describe('UserMenu', () => {
     await clickLogout();
     await waitFor(() => expect(push).toHaveBeenCalledWith('/login'));
     expect(logout).toHaveBeenCalledTimes(1);
-    expect(logout).toHaveBeenCalledWith('R-123');
+    expect(logout).toHaveBeenCalledWith();
     expect(order).toEqual(['logout', 'clear', 'push']);
   });
 
@@ -94,26 +92,18 @@ describe('UserMenu', () => {
     (logout as jest.Mock).mockRejectedValue(new Error('network down'));
     await clickLogout();
     await waitFor(() => expect(push).toHaveBeenCalledWith('/login'));
-    expect(logout).toHaveBeenCalledWith('R-123');
+    expect(logout).toHaveBeenCalledWith();
     expect(clear).toHaveBeenCalled();
   });
 
   it('si logout no responde, limpia y redirige tras el timeout corto (DX-061)', async () => {
     (logout as jest.Mock).mockReturnValue(new Promise(() => {}));
     await clickLogout();
-    expect(logout).toHaveBeenCalledWith('R-123');
+    expect(logout).toHaveBeenCalledWith();
     expect(clear).not.toHaveBeenCalled();
     await waitFor(() => expect(push).toHaveBeenCalledWith('/login'), { timeout: 4000 });
     expect(clear).toHaveBeenCalled();
   }, 10_000);
-
-  it('sin refresh token no llama a logout y cierra la sesión local (DX-061)', async () => {
-    mockRefreshToken = null;
-    await clickLogout();
-    await waitFor(() => expect(push).toHaveBeenCalledWith('/login'));
-    expect(logout).not.toHaveBeenCalled();
-    expect(clear).toHaveBeenCalled();
-  });
 
   it('se cierra al presionar Escape', async () => {
     render(<UserMenu />);

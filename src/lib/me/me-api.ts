@@ -31,24 +31,23 @@ export function updateName(token: string, fullName: string): Promise<MyProfile> 
 /**
  * Cambiar la contraseña cierra en el backend TODAS las sesiones previas del
  * usuario (los refresh tokens anteriores, incluido el de esta pestaña, dejan
- * de renovar) y devuelve un par nuevo para este cliente, que se guarda aquí
- * para no expulsar a quien acaba de cambiarla. `apiFetchOrNull` tolera además
- * un 204 sin body (backend anterior): entonces se conserva la sesión actual.
+ * de renovar) y abre una sesión nueva para este cliente: el refresh nuevo
+ * llega en la cookie HttpOnly (DX-062) y el access token se guarda aquí, en
+ * memoria, para no expulsar a quien acaba de cambiarla. `apiFetchOrNull`
+ * tolera además un 204 sin body (backend anterior): entonces se conserva la
+ * sesión actual.
  */
 export async function changePassword(
   token: string,
   currentPassword: string,
   newPassword: string,
 ): Promise<void> {
-  const fresh = await apiFetchOrNull<{ accessToken: string; refreshToken: string }>(
-    '/me/password',
-    {
-      method: 'POST',
-      token,
-      body: { currentPassword, newPassword },
-    },
-  );
-  if (fresh) useAuthStore.getState().setTokens(fresh);
+  const fresh = await apiFetchOrNull<{ accessToken: string }>('/me/password', {
+    method: 'POST',
+    token,
+    body: { currentPassword, newPassword },
+  });
+  if (fresh) useAuthStore.getState().setAccessToken(fresh.accessToken);
 }
 
 export function uploadAvatar(token: string, file: File): Promise<{ avatarUrl: string }> {

@@ -74,7 +74,7 @@ const ERROR_ID = 'accept-invitation-error';
  */
 export function AcceptInvitationForm({ inviteToken }: { inviteToken: string }) {
   const router = useRouter();
-  const setTokens = useAuthStore((s) => s.setTokens);
+  const setAccessToken = useAuthStore((s) => s.setAccessToken);
 
   const [invitation, setInvitation] = useState<PublicInvitation | null>(null);
   const [loading, setLoading] = useState(true);
@@ -113,7 +113,8 @@ export function AcceptInvitationForm({ inviteToken }: { inviteToken: string }) {
     setSubmitting(true);
     try {
       const res = await acceptInvitation(inviteToken, password);
-      setTokens({ accessToken: res.accessToken, refreshToken: res.refreshToken });
+      // El refresh llega en la cookie HttpOnly (DX-062); el access, en memoria.
+      setAccessToken(res.accessToken);
       router.push('/patients');
     } catch (err) {
       setSubmitError(err instanceof ApiError ? err.message : copy.genericError);

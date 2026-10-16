@@ -1,4 +1,4 @@
-const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000/api/v1';
+import { API_PROXY_PATH } from '@/lib/api/api-base';
 
 /**
  * `GET /public/tenant/branding` — resolves the tenant the same way the rest
@@ -17,7 +17,8 @@ const API = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000/api/v1';
 export async function fetchClinicName(): Promise<string | null> {
   if (typeof window === 'undefined') return null;
   try {
-    const res = await fetch(`${API}/public/tenant/branding`, {
+    // Mismo origen que el resto del navegador (`/api/v1`, ver `api-base.ts`).
+    const res = await fetch(`${API_PROXY_PATH}/public/tenant/branding`, {
       headers: { 'X-Tenant-Host': window.location.host },
       cache: 'no-store',
     });

@@ -1,34 +1,27 @@
 'use client';
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
 
+/**
+ * Sesión de la pestaña, SOLO en memoria (DX-062): el access token no se guarda
+ * en localStorage ni en sessionStorage, y el refresh token vive en una cookie
+ * HttpOnly que JavaScript no puede leer. Al cargar la página la sesión se
+ * recupera con `bootstrapSession()` (`client.ts`).
+ *
+ * `_hasHydrated`: el arranque de sesión ya terminó, con o sin sesión. Hasta
+ * entonces las páginas muestran «Verificando sesión…» en vez de mandar a /login.
+ */
 interface AuthState {
   accessToken: string | null;
-  refreshToken: string | null;
   _hasHydrated: boolean;
-  setTokens: (t: { accessToken: string; refreshToken: string }) => void;
+  setAccessToken: (accessToken: string) => void;
+  markResolved: () => void;
   clear: () => void;
 }
 
-export const useAuthStore = create<AuthState>()(
-  persist(
-    (set) => ({
-      accessToken: null,
-      refreshToken: null,
-      _hasHydrated: false,
-      setTokens: (t) => set({ accessToken: t.accessToken, refreshToken: t.refreshToken }),
-      clear: () => {
-        set({ accessToken: null, refreshToken: null });
-        // Borra la key persistida por completo (no solo la nulifica), para que
-        // una rehidratación posterior no reviva una sesión fantasma.
-        useAuthStore.persist.clearStorage();
-      },
-    }),
-    {
-      name: 'dentalix-auth',
-      onRehydrateStorage: () => (state) => {
-        if (state) state._hasHydrated = true;
-      },
-    },
-  ),
-);
+export const useAuthStore = create<AuthState>()((set) => ({
+  accessToken: null,
+  _hasHydrated: false,
+  setAccessToken: (accessToken) => set({ accessToken, _hasHydrated: true }),
+  markResolved: () => set({ _hasHydrated: true }),
+  clear: () => set({ accessToken: null, _hasHydrated: true }),
+}));

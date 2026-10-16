@@ -2,6 +2,7 @@
 import { useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { useAuthStore } from '@/lib/auth/auth-store';
+import { useSessionBootstrap } from '@/lib/auth/use-session-bootstrap';
 import { getTokenRole } from '@/lib/auth/token-role';
 import { canReadAccountStatement } from '@/lib/account-statement/account-statement-api';
 import { AccountStatementPrintView } from '@/components/account-statement/account-statement-print-view';
@@ -14,17 +15,19 @@ const copy = {
  * Vista imprimible del estado de cuenta (DX-011). Vive FUERA del grupo `(app)`
  * a propósito: sin raíl, sin barra superior, sin pestañas — solo el documento,
  * que es lo que tiene que salir en el papel o en el PDF. La sesión es la misma
- * (el par de tokens vive en localStorage, compartido entre pestañas), así que
- * se abre en otra pestaña desde la ficha sin volver a iniciar sesión.
+ * (el refresh vive en la cookie HttpOnly del host, compartida entre pestañas),
+ * así que se abre en otra pestaña desde la ficha sin volver a iniciar sesión.
  */
 export default function AccountStatementPrintPage() {
   const router = useRouter();
   const params = useParams<{ id: string }>();
   const accessToken = useAuthStore((s) => s.accessToken);
   const hasHydrated = useAuthStore((s) => s._hasHydrated);
+  // Pestaña nueva: la sesión se recupera de la cookie HttpOnly (DX-062).
+  useSessionBootstrap();
 
   useEffect(() => {
-    // Como en la ficha: no se decide nada hasta rehidratar el store persistido.
+    // Como en la ficha: no se decide nada hasta resolver el arranque de sesión.
     if (hasHydrated && !accessToken) router.replace('/login');
   }, [accessToken, hasHydrated, router]);
 

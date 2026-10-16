@@ -20,7 +20,7 @@ export default function InventoryPage() {
   const hasHydrated = useAuthStore((s) => s._hasHydrated);
 
   useEffect(() => {
-    // Don't decide anything until the persisted store has rehydrated —
+    // Don't decide anything until the session bootstrap has resolved —
     // accessToken is null until then, and redirecting on that would bounce
     // an already-authenticated user. (Same guard as the Catalog page.)
     if (!hasHydrated) return;

@@ -1261,7 +1261,8 @@ export interface components {
         LoginDto: Record<string, never>;
         AuthTokensDto: {
             accessToken: string;
-            refreshToken: string;
+            /** @description Solo sin `X-Refresh-Transport: cookie` (clientes antiguos). En modo cookie el refresh viaja en la cookie HttpOnly `dentalix_rt` (Path=/api/v1/auth) y no se devuelve aquí. */
+            refreshToken?: string;
         };
         RefreshDto: Record<string, never>;
         LogoutDto: Record<string, never>;

@@ -23,6 +23,8 @@ jest.mock('../../lib/me/me-api', () => ({
 // access token. `mock` como prefijo es lo que permite usarlo dentro de
 // `jest.mock` (que se iza por encima de los imports).
 let mockAccessToken: string | null = 'T';
+jest.mock('../../lib/auth/use-session-bootstrap', () => ({ useSessionBootstrap: jest.fn() }));
+import { useSessionBootstrap } from '../../lib/auth/use-session-bootstrap';
 jest.mock('../../lib/auth/auth-store', () => ({
   useAuthStore: Object.assign(
     (selector: (s: { accessToken: string | null; clear: () => void }) => unknown) =>
@@ -65,6 +67,15 @@ describe('AppShell', () => {
     // Espera a que el resto del menú esté pintado antes de afirmar la ausencia.
     expect(await screen.findAllByRole('link', { name: /pacientes/i })).not.toHaveLength(0);
     expect(screen.queryByRole('link', { name: 'Caja' })).not.toBeInTheDocument();
+  });
+
+  it('arranca la sesión desde la cookie al montar (DX-062)', () => {
+    render(
+      <AppShell>
+        <p>contenido</p>
+      </AppShell>,
+    );
+    expect(useSessionBootstrap).toHaveBeenCalled();
   });
 
   it('sin un token legible no enseña entradas restringidas', () => {

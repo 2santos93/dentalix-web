@@ -15,6 +15,7 @@ import {
 } from 'lucide-react';
 import { UserMenu } from '@/components/profile/user-menu';
 import { useAuthStore } from '@/lib/auth/auth-store';
+import { useSessionBootstrap } from '@/lib/auth/use-session-bootstrap';
 import { getTokenRole } from '@/lib/auth/token-role';
 import type { ClinicRole } from '@/lib/me/me-api';
 import { LocationSwitcher } from '@/components/locations/location-switcher';
@@ -67,8 +68,12 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = React.useState(false);
   const accessToken = useAuthStore((s) => s.accessToken);
+  // Todas las pantallas de la app pasan por aquí: al cargar, la sesión se
+  // recupera de la cookie HttpOnly (DX-062). Las páginas esperan a que esté
+  // resuelta (`_hasHydrated`) antes de mandar a /login.
+  useSessionBootstrap();
   // El rol se resuelve en un efecto y no en el render: el token sale del store
-  // persistido, que en SSR está vacío, y leerlo durante el render haría que el
+  // en memoria, que en SSR está vacío, y leerlo durante el render haría que el
   // menú del servidor y el del primer render del cliente no coincidieran. Hasta
   // entonces (`null`) las entradas con `roles` no se pintan: mejor aparecer un
   // instante tarde que enseñarle a alguien un enlace que no puede abrir.
