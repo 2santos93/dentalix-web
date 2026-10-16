@@ -26,6 +26,7 @@ import { getPatient, type Patient } from '@/lib/patients/patients-api';
 import { fetchClinicName } from '@/lib/clinic-branding';
 import { listCurrencies } from '@/lib/reference/currencies-api';
 import { getPaymentPlan } from '@/lib/payment-plans/payment-plan-api';
+import { PLAN_WITHOUT_OPTIONS } from './plan-fixture';
 
 // NOTE: jest.mock's string literal is not alias-rewritten by the SWC
 // transform (only real `import`/`require` specifiers are) — use a relative
@@ -130,6 +131,7 @@ function plan(overrides: Partial<import('@/lib/treatment-plans/treatment-plans-a
     currency: 'USD',
     notes: null,
     createdById: null,
+    ...PLAN_WITHOUT_OPTIONS,
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
     ...overrides,
@@ -560,22 +562,22 @@ describe('TreatmentPlansTab', () => {
   it("changing the plan's status calls updatePlan then refreshes the detail (and the plan list) in place", async () => {
     mockedListPlans.mockResolvedValue([plan1]);
     mockedGetPlan.mockResolvedValue(plan1Detail);
-    mockedUpdatePlan.mockResolvedValue({ ...plan1, status: 'ACCEPTED' });
+    mockedUpdatePlan.mockResolvedValue({ ...plan1, status: 'CANCELLED' });
 
     const user = userEvent.setup();
     render(<TreatmentPlansTab patientId="pat-1" token="tok" />);
     await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
 
-    mockedGetPlan.mockResolvedValueOnce({ ...plan1Detail, status: 'ACCEPTED' });
-    mockedListPlans.mockResolvedValueOnce([{ ...plan1, status: 'ACCEPTED' }]);
+    mockedGetPlan.mockResolvedValueOnce({ ...plan1Detail, status: 'CANCELLED' });
+    mockedListPlans.mockResolvedValueOnce([{ ...plan1, status: 'CANCELLED' }]);
 
     const planStatusSelect = screen.getByLabelText<HTMLSelectElement>(/^estado del plan$/i);
-    await user.selectOptions(planStatusSelect, 'ACCEPTED');
+    await user.selectOptions(planStatusSelect, 'CANCELLED');
 
     await waitFor(() =>
-      expect(mockedUpdatePlan).toHaveBeenCalledWith('tok', 'plan-1', { status: 'ACCEPTED' }),
+      expect(mockedUpdatePlan).toHaveBeenCalledWith('tok', 'plan-1', { status: 'CANCELLED' }),
     );
-    await waitFor(() => expect(planStatusSelect.value).toBe('ACCEPTED'));
+    await waitFor(() => expect(planStatusSelect.value).toBe('CANCELLED'));
   });
 
   it('shows the balance figures (A pagar, Pagado, Saldo) formatted in the plan currency, and lists abonos in their own currency', async () => {
@@ -853,7 +855,7 @@ describe('TreatmentPlansTab', () => {
       await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
 
       const planStatusSelect = screen.getByLabelText<HTMLSelectElement>(/^estado del plan$/i);
-      await user.selectOptions(planStatusSelect, 'ACCEPTED');
+      await user.selectOptions(planStatusSelect, 'CANCELLED');
 
       const toastText = await screen.findByText('No se pudo refrescar el plan');
       expect(toastText.closest('[role="alert"]')).toBeNull();
@@ -888,7 +890,7 @@ describe('TreatmentPlansTab', () => {
       await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
 
       const planStatusSelect = screen.getByLabelText<HTMLSelectElement>(/^estado del plan$/i);
-      await user.selectOptions(planStatusSelect, 'ACCEPTED');
+      await user.selectOptions(planStatusSelect, 'CANCELLED');
 
       // Plan 1's background refresh fails — its toast appears, built with an
       // `onRetry` that only bumps `planDetailReloadKey` (see the component's
@@ -924,7 +926,7 @@ describe('TreatmentPlansTab', () => {
       await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
 
       const planStatusSelect = screen.getByLabelText<HTMLSelectElement>(/^estado del plan$/i);
-      await user.selectOptions(planStatusSelect, 'ACCEPTED');
+      await user.selectOptions(planStatusSelect, 'CANCELLED');
 
       const alert = await screen.findByText('No se pudo cambiar el estado');
       expect(alert.closest('[role="alert"]')).not.toBeNull();
@@ -1122,8 +1124,60 @@ describe('TreatmentPlansTab', () => {
       const [statusSelect] = screen.getAllByLabelText('Estado del ítem del diente 11');
       expect(within(statusSelect).getByRole('option', { name: 'Propuesto' })).toBeDisabled();
       expect(within(statusSelect).getByRole('option', { name: 'Realizado' })).toBeEnabled();
+      // Máquina de estados (DX-040): un plan aceptado solo pasa a completado o
+      // cancelado; volver a borrador ni se ofrece.
       const planStatus = screen.getByLabelText(/estado del plan/i);
-      expect(within(planStatus).getByRole('option', { name: 'Borrador' })).toBeDisabled();
+      expect(within(planStatus).queryByRole('option', { name: 'Borrador' })).not.toBeInTheDocument();
+      expect(
+        within(planStatus)
+          .getAllByRole('option')
+          .map((o) => o.textContent),
+      ).toEqual(['Aceptado', 'Completado', 'Cancelado']);
+    });
+
+    it('el selector de estado solo ofrece transiciones válidas; «Aceptado» solo a quien decide el plan (DX-040)', async () => {
+      mockedListPlans.mockResolvedValue([plan1]);
+      mockedGetPlan.mockResolvedValue(plan1Detail);
+      const assistantToken = `h.${btoa(JSON.stringify({ sub: 'u2', tenantId: 't1', role: 'ASSISTANT' }))}.s`;
+      const { unmount } = render(<TreatmentPlansTab patientId="pat-1" token={dentistToken} />);
+      const forDentist = await screen.findByLabelText(/^estado del plan$/i);
+      expect(within(forDentist).getAllByRole('option').map((o) => o.textContent)).toEqual([
+        'Borrador',
+        'Aceptado',
+        'Cancelado',
+      ]);
+      expect(screen.getByRole('button', { name: 'Presentar al paciente' })).toBeInTheDocument();
+      unmount();
+
+      render(<TreatmentPlansTab patientId="pat-1" token={assistantToken} />);
+      const forAssistant = await screen.findByLabelText(/^estado del plan$/i);
+      expect(within(forAssistant).getAllByRole('option').map((o) => o.textContent)).toEqual([
+        'Borrador',
+        'Cancelado',
+      ]);
+      expect(screen.queryByRole('button', { name: 'Presentar al paciente' })).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Crear alternativa' })).toBeInTheDocument();
+    });
+
+    it('con opciones A/B, el selector las nombra y el detalle las compara (DX-040)', async () => {
+      const optionA = { ...plan1, optionGroupId: 'plan-1', optionLabel: 'Opción A: implante', status: 'PRESENTED' as const };
+      const optionB = {
+        ...plan1,
+        id: 'plan-b',
+        optionGroupId: 'plan-1',
+        optionLabel: 'Opción B: puente',
+        status: 'PRESENTED' as const,
+      };
+      mockedListPlans.mockResolvedValue([optionA, optionB]);
+      mockedGetPlan.mockImplementation((_t, id) =>
+        Promise.resolve(id === 'plan-b' ? { ...plan1Detail, ...optionB } : { ...plan1Detail, ...optionA }),
+      );
+      render(<TreatmentPlansTab patientId="pat-1" token={dentistToken} />);
+      const select = await screen.findByLabelText<HTMLSelectElement>(/^plan$/i);
+      expect(within(select).getAllByRole('option')[1].textContent).toMatch(/Presentado · Opción B: puente$/);
+      expect(await screen.findByRole('heading', { name: 'Comparar opciones' })).toBeInTheDocument();
+      expect(await screen.findByRole('listitem', { name: 'Opción B: puente' })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Marcar rechazado' })).toBeInTheDocument();
     });
 
     it('el descuento del ítem se envía al agregarlo y se muestra en la fila', async () => {

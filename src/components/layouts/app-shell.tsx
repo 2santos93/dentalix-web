@@ -11,6 +11,7 @@ import {
   Package,
   Wallet,
   History,
+  FileClock,
   PanelLeftClose,
   PanelLeftOpen,
 } from 'lucide-react';
@@ -54,6 +55,13 @@ const NAV: NavItem[] = [
   { href: '/agenda', label: 'Agenda', icon: Calendar },
   // Dato financiero: mismos roles que PAYMENT_ROLES en la API.
   { href: '/caja', label: 'Caja', icon: Wallet, roles: ['ADMIN', 'RECEPTION'] },
+  // Presupuestos por seguir (DX-040): TREATMENT_PLAN_FOLLOW_UP_ROLES en la API.
+  {
+    href: '/presupuestos',
+    label: 'Presupuestos',
+    icon: FileClock,
+    roles: ['ADMIN', 'RECEPTION'],
+  },
   // CATALOG_READ_ROLES: recepción no registra clínico.
   {
     href: '/catalog',

@@ -63,6 +63,8 @@ import { voidPaymentErrorMessage } from '@/components/payments/use-void-payment'
 import { getTokenRole } from '@/lib/auth/token-role';
 import { PaymentPlanSection } from './payment-plan-section';
 import { PlanQuoteActions } from './plan-quote-actions';
+import { PlanOptionsPanel } from './plan-options-panel';
+import { optionGroupOf, patchableStatuses } from '@/lib/treatment-plans/plan-options';
 import { SectionError } from '@/components/errors/section-error';
 import { InlineError } from '@/components/errors/inline-error';
 import { notifyError } from '@/components/errors/notify';
@@ -98,8 +100,15 @@ const copy = {
   // same day are distinguishable in the selector (fixes the "Nuevo plan looks
   // like it did nothing" perception — every option used to read identically as
   // "Plan del <date> — Borrador").
-  planOptionLabel: (createdAt: string, status: TreatmentPlanStatus, number: number) =>
-    `Plan ${number} · ${formatDateTime(createdAt)} — ${PLAN_STATUS_LABELS[status]}`,
+  // Con alternativas (DX-040), la etiqueta de la opción va al final: dos
+  // opciones del mismo día se distinguen por ella.
+  planOptionLabel: (
+    createdAt: string,
+    status: TreatmentPlanStatus,
+    number: number,
+    optionLabel?: string | null,
+  ) =>
+    `Plan ${number} · ${formatDateTime(createdAt)} — ${PLAN_STATUS_LABELS[status]}${optionLabel ? ` · ${optionLabel}` : ''}`,
   detailHeading: 'Detalle del plan',
   planStatusLabel: 'Estado del plan',
   loadingPlanDetail: 'Cargando plan…',
@@ -222,7 +231,6 @@ const copy = {
   paymentsDisclosureMeta: (n: number) => (n === 1 ? '1 abono' : `${n} abonos`),
 };
 
-const PLAN_STATUS_OPTIONS: TreatmentPlanStatus[] = ['DRAFT', 'ACCEPTED', 'COMPLETED', 'CANCELLED'];
 const ITEM_STATUS_OPTIONS: TreatmentPlanItemStatus[] = ['PROPOSED', 'ACCEPTED', 'DONE'];
 
 const ITEM_STATUS_LABELS: Record<TreatmentPlanItemStatus, string> = {
@@ -1403,6 +1411,15 @@ export function TreatmentPlansTab({
     void Promise.all([refreshPlanDetail(), refreshPlansInPlace(), refreshBalanceAndPayments()]);
   }
 
+  /**
+   * Presentar, rechazar o crear una alternativa (DX-040) cambian el estado del
+   * plan y, con una alternativa nueva, la lista de planes: se refrescan los
+   * dos en su sitio.
+   */
+  async function handlePlanOptionsChanged(): Promise<void> {
+    await Promise.all([refreshPlanDetail(), refreshPlansInPlace()]);
+  }
+
   function handleProcedureChange(nextCatalogItemId: string) {
     setCatalogItemId(nextCatalogItemId);
     // Prefill (not lock) the price with the chosen procedure's default —
@@ -1493,6 +1510,8 @@ export function TreatmentPlansTab({
   const selectedPlan = plans.find((p) => p.id === selectedPlanId) ?? null;
   const signed = Boolean(planDetail?.acceptance);
   const role = getTokenRole(token);
+  const statusChoices = planDetail ? patchableStatuses(planDetail.status, role) : [];
+  const optionGroup = selectedPlan ? optionGroupOf(plans, selectedPlan) : [];
 
   return (
     <div className="flex flex-col gap-6">
@@ -1543,7 +1562,7 @@ export function TreatmentPlansTab({
               >
                 {plans.map((plan, index) => (
                   <option key={plan.id} value={plan.id}>
-                    {copy.planOptionLabel(plan.createdAt, plan.status, index + 1)}
+                    {copy.planOptionLabel(plan.createdAt, plan.status, index + 1, plan.optionLabel)}
                   </option>
                 ))}
               </select>
@@ -1555,26 +1574,31 @@ export function TreatmentPlansTab({
       {selectedPlanId && (
         <Card>
           <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-1">
               <CardTitle>{copy.detailHeading}</CardTitle>
               {selectedPlan && (
                 <Badge variant={PLAN_STATUS_BADGE_VARIANT[selectedPlan.status]}>
                   {PLAN_STATUS_LABELS[selectedPlan.status]}
                 </Badge>
               )}
+              {selectedPlan?.optionLabel ? (
+                <span className="text-sm font-medium text-muted">{selectedPlan.optionLabel}</span>
+              ) : null}
             </div>
             {planDetail && (
               <FormField htmlFor="tp-plan-status" label={copy.planStatusLabel} className="sm:w-56">
                 <select
                   id="tp-plan-status"
                   value={planDetail.status}
-                  disabled={updatingPlanStatus}
+                  disabled={updatingPlanStatus || statusChoices.length === 1}
                   onChange={(e) => handlePlanStatusChange(e.target.value as TreatmentPlanStatus)}
                   className={cn(fieldClass, 'h-9')}
                 >
-                  {PLAN_STATUS_OPTIONS.map((status) => (
-                    // Firmado (DX-012): no vuelve a borrador (la API: 409).
-                    <option key={status} value={status} disabled={signed && status === 'DRAFT'}>
+                  {/* Solo el estado actual y sus transiciones (máquina de
+                      estados, DX-040): presentar y rechazar tienen botón
+                      propio, y aceptar es de odontólogo y ADMIN. */}
+                  {statusChoices.map((status) => (
+                    <option key={status} value={status}>
                       {PLAN_STATUS_LABELS[status]}
                     </option>
                   ))}
@@ -1625,6 +1649,17 @@ export function TreatmentPlansTab({
                   plan={planDetail}
                   role={role}
                   onAccepted={handlePlanAccepted}
+                />
+
+                {/* La opción que se le presenta al paciente (DX-040):
+                    presentar, rechazar, crear alternativa y comparar. */}
+                <PlanOptionsPanel
+                  token={token}
+                  plan={planDetail}
+                  group={optionGroup}
+                  role={role}
+                  onChanged={handlePlanOptionsChanged}
+                  onSelectPlan={setSelectedPlanId}
                 />
 
                 {/* UNA región de dinero, no dos racimos de tarjetas. Antes el
@@ -1959,6 +1994,7 @@ export function TreatmentPlansTab({
                 selectedPlan.createdAt,
                 selectedPlan.status,
                 plans.findIndex((p) => p.id === selectedPlan.id) + 1,
+                selectedPlan.optionLabel,
               )
             : ''
         }

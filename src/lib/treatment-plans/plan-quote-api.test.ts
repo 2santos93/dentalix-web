@@ -26,16 +26,18 @@ describe('plan-quote-api (DX-012)', () => {
     expect(canPrintPlanQuote(null)).toBe(false);
   });
 
-  it('acepta con firma quien edita el plan (no recepción)', () => {
+  it('acepta con firma quien decide el plan: odontólogo y ADMIN (DX-040)', () => {
     expect(canAcceptPlan('DENTIST')).toBe(true);
-    expect(canAcceptPlan('ASSISTANT')).toBe(true);
+    expect(canAcceptPlan('ASSISTANT')).toBe(false);
     expect(canAcceptPlan('ADMIN')).toBe(true);
     expect(canAcceptPlan('RECEPTION')).toBe(false);
     expect(canAcceptPlan(null)).toBe(false);
   });
 
   it('solo se firma un plan sin firmar, abierto y con ítems', () => {
-    expect(SIGNABLE_PLAN_STATUSES).toEqual(['DRAFT', 'ACCEPTED']);
+    expect(SIGNABLE_PLAN_STATUSES).toEqual(['DRAFT', 'PRESENTED', 'ACCEPTED']);
+    expect(isPlanAcceptable({ status: 'PRESENTED', acceptance: null, items: [{}] })).toBe(true);
+    expect(isPlanAcceptable({ status: 'REJECTED', acceptance: null, items: [{}] })).toBe(false);
     expect(isPlanAcceptable({ status: 'DRAFT', acceptance: null, items: [{}] })).toBe(true);
     expect(isPlanAcceptable({ status: 'ACCEPTED', acceptance: null, items: [{}] })).toBe(true);
     expect(isPlanAcceptable({ status: 'DRAFT', acceptance: null, items: [] })).toBe(false);
