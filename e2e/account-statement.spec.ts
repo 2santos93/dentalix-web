@@ -1,6 +1,7 @@
 import { test, expect, type APIRequestContext } from '@playwright/test';
 import { randomUUID } from 'node:crypto';
 import { registerAndLogin } from './support/auth';
+import { API_URL } from './support/urls';
 
 /**
  * e2e (DX-011): abrir la ficha → pestaña «Estado de cuenta» → «Imprimir».
@@ -21,7 +22,7 @@ import { registerAndLogin } from './support/auth';
  * que mandan `X-Tenant-Host` ellas mismas (mismo patrón que
  * `treatment-plans.spec.ts`).
  */
-const API = 'http://localhost:3000/api/v1';
+const API = API_URL;
 
 const rawSuffix = process.env.E2E_RUN_SUFFIX ?? randomUUID();
 const suffix = rawSuffix.replace(/[^a-z0-9]/gi, '').toLowerCase();

@@ -2,6 +2,7 @@ import { test, expect } from '@playwright/test';
 import { randomUUID } from 'node:crypto';
 import { registerAndLogin } from './support/auth';
 import { disableBusinessHours } from './support/business-hours';
+import { API_URL } from './support/urls';
 
 /**
  * e2e: register clinic + login (owner, `DASHBOARD_ROLES` includes OWNER —
@@ -114,7 +115,7 @@ test('dashboard: aggregated cards render seeded payment income, low-stock item, 
   };
 
   // --- Seed a patient ---
-  const patientResponse = await page.request.post('http://localhost:3000/api/v1/patients', {
+  const patientResponse = await page.request.post(`${API_URL}/patients`, {
     headers: seedHeaders,
     data: {
       firstName: patientFirstName,
@@ -129,7 +130,7 @@ test('dashboard: aggregated cards render seeded payment income, low-stock item, 
 
   // --- Seed an inventory item with minStock > 0 and NO movement recorded,
   // so it resolves to `stock: 0` (below its minimum) -> low stock. ---
-  const inventoryResponse = await page.request.post('http://localhost:3000/api/v1/inventory/items', {
+  const inventoryResponse = await page.request.post(`${API_URL}/inventory/items`, {
     headers: seedHeaders,
     data: {
       name: inventoryItemName,
@@ -145,7 +146,7 @@ test('dashboard: aggregated cards render seeded payment income, low-stock item, 
   // --- Seed a treatment plan + a billable (DONE) item + an abono against
   // it, in USD, paid today — this is what "Ingresos del período" now sums
   // (PAY-T4: `/sales` is gone, incomes are sourced from payments) ---
-  const catalogResponse = await page.request.post('http://localhost:3000/api/v1/catalog/items', {
+  const catalogResponse = await page.request.post(`${API_URL}/catalog/items`, {
     headers: seedHeaders,
     data: {
       code: catalogCode,
@@ -162,7 +163,7 @@ test('dashboard: aggregated cards render seeded payment income, low-stock item, 
   const catalogItem = (await catalogResponse.json()) as { id: string };
 
   const planResponse = await page.request.post(
-    `http://localhost:3000/api/v1/patients/${patient.id}/treatment-plans`,
+    `${API_URL}/patients/${patient.id}/treatment-plans`,
     {
       headers: seedHeaders,
       data: {},
@@ -172,7 +173,7 @@ test('dashboard: aggregated cards render seeded payment income, low-stock item, 
   const plan = (await planResponse.json()) as { id: string };
 
   const itemResponse = await page.request.post(
-    `http://localhost:3000/api/v1/treatment-plans/${plan.id}/items`,
+    `${API_URL}/treatment-plans/${plan.id}/items`,
     {
       headers: seedHeaders,
       data: {
@@ -186,7 +187,7 @@ test('dashboard: aggregated cards render seeded payment income, low-stock item, 
   const planItem = (await itemResponse.json()) as { id: string };
 
   const markDoneResponse = await page.request.patch(
-    `http://localhost:3000/api/v1/treatment-plans/${plan.id}/items/${planItem.id}`,
+    `${API_URL}/treatment-plans/${plan.id}/items/${planItem.id}`,
     {
       headers: seedHeaders,
       data: { status: 'DONE' },
@@ -198,7 +199,7 @@ test('dashboard: aggregated cards render seeded payment income, low-stock item, 
   ).toBeTruthy();
 
   const paymentResponse = await page.request.post(
-    `http://localhost:3000/api/v1/treatment-plans/${plan.id}/payments`,
+    `${API_URL}/treatment-plans/${plan.id}/payments`,
     {
       headers: seedHeaders,
       data: {
@@ -213,7 +214,7 @@ test('dashboard: aggregated cards render seeded payment income, low-stock item, 
   expect(paymentResponse.ok(), `Seeding the payment failed: ${await paymentResponse.text()}`).toBeTruthy();
 
   // --- Resolve the owner's own userId (provider for the appointment) ---
-  const staffResponse = await page.request.get('http://localhost:3000/api/v1/staff', {
+  const staffResponse = await page.request.get(`${API_URL}/staff`, {
     headers: seedHeaders,
   });
   expect(staffResponse.ok(), `Listing staff failed: ${await staffResponse.text()}`).toBeTruthy();
@@ -225,7 +226,7 @@ test('dashboard: aggregated cards render seeded payment income, low-stock item, 
   // dashboard's 90-day upcoming window) ---
   const appointmentStart = new Date(Date.now() + 3 * 24 * 60 * 60 * 1000);
   const appointmentEnd = new Date(appointmentStart.getTime() + 30 * 60 * 1000);
-  const appointmentResponse = await page.request.post('http://localhost:3000/api/v1/appointments', {
+  const appointmentResponse = await page.request.post(`${API_URL}/appointments`, {
     headers: seedHeaders,
     data: {
       patientId: patient.id,
