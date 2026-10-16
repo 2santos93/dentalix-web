@@ -1,6 +1,6 @@
-import { test, expect, type APIRequestContext, type Locator, type Page } from '@playwright/test';
+import { test, expect, type APIRequestContext, type Locator, type Page } from './support/test';
 import { randomUUID } from 'node:crypto';
-import { registerAndLogin } from './support/auth';
+import { accessTokenOf, registerAndLogin } from './support/auth';
 import { API_URL } from './support/urls';
 
 /**
@@ -118,10 +118,7 @@ test('ADMIN crea la plantilla, el profesional firma y se imprime en A4', async (
     email,
     password,
   });
-  const authRaw = await page.evaluate(() => localStorage.getItem('dentalix-auth'));
-  const accessToken =
-    (JSON.parse(authRaw as string) as { state?: { accessToken?: string | null } }).state
-      ?.accessToken ?? '';
+  const accessToken = await accessTokenOf(page);
   expect(accessToken).toBeTruthy();
   patientId = await seedPatient(page.request, origin, accessToken);
 

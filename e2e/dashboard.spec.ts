@@ -1,6 +1,6 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './support/test';
 import { randomUUID } from 'node:crypto';
-import { registerAndLogin } from './support/auth';
+import { accessTokenOf, registerAndLogin } from './support/auth';
 import { disableBusinessHours } from './support/business-hours';
 import { API_URL } from './support/urls';
 
@@ -104,9 +104,7 @@ test('dashboard: aggregated cards render seeded payment income, low-stock item, 
   const origin = await registerAndLogin(page, { subdomain, clinicName, fullName, email, password });
   await disableBusinessHours(page, origin);
 
-  const authRaw = await page.evaluate(() => localStorage.getItem('dentalix-auth'));
-  const accessToken =
-    (JSON.parse(authRaw as string) as { state?: { accessToken?: string | null } }).state?.accessToken ?? '';
+  const accessToken = await accessTokenOf(page);
   expect(accessToken).toBeTruthy();
 
   const seedHeaders = {

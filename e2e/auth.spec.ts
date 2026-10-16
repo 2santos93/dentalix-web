@@ -1,6 +1,6 @@
-import { test, expect } from '@playwright/test';
+import { test, expect } from './support/test';
 import { randomUUID } from 'node:crypto';
-import { registerAndLogin } from './support/auth';
+import { accessTokenOf, registerAndLogin, sessionCookie } from './support/auth';
 
 /**
  * Smoke e2e: register -> login against the REAL backend (no mocks).
@@ -31,12 +31,11 @@ const password = 'Password123!';
 test('register creates an account, then login succeeds against the real API', async ({
   page,
 }) => {
-  await registerAndLogin(page, { subdomain, clinicName, fullName, email, password });
+  const origin = await registerAndLogin(page, { subdomain, clinicName, fullName, email, password });
 
-  // registerAndLogin already asserts the persisted session, but re-assert
-  // here explicitly since that IS this test's purpose.
-  const authRaw = await page.evaluate(() => localStorage.getItem('dentalix-auth'));
-  expect(authRaw).toBeTruthy();
-  const auth = JSON.parse(authRaw as string) as { state?: { accessToken?: string | null } };
-  expect(auth.state?.accessToken).toBeTruthy();
+  // registerAndLogin already asserts the session cookie, but re-assert here
+  // explicitly since that IS this test's purpose: the session works against
+  // the real API (the cookie yields an access token).
+  expect(await sessionCookie(page, origin)).toBeTruthy();
+  expect(await accessTokenOf(page)).toBeTruthy();
 });
