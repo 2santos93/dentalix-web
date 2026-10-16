@@ -121,7 +121,10 @@ export function RecordPaymentModal({
       setError(copy.invalidDate);
       return;
     }
-    const paidAt = new Date(form.date).toISOString();
+    // DX-097: se manda el DÍA (`YYYY-MM-DD`), no la medianoche UTC: la API lo
+    // guarda al mediodía de la sede, así cae en ese día de caja en su zona
+    // (medianoche UTC sería la tarde del día anterior en Bogotá).
+    const paidAt = form.date;
     setSubmitting(true);
     try {
       const saved = await recordPayment(

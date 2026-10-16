@@ -260,7 +260,7 @@ export function AccountStatementDocument({ statement }: AccountStatementDocument
                 <tbody>
                   {statement.movements.map((m) => (
                     <tr key={m.id} className={m.voided ? 'text-[#6b7280]' : undefined}>
-                      <Td>{formatCivilDate(m.paidAt)}</Td>
+                      <Td>{formatCivilDate(m.paidOn)}</Td>
                       <Td>
                         {planName(m.treatmentPlanId)}
                         {voidedDetail(m) ? (

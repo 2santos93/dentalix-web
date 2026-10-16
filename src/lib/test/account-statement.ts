@@ -70,7 +70,8 @@ export function accountStatementFixture(
     movements: [
       {
         id: 'pay-3',
-        paidAt: '2026-09-20T00:00:00.000Z',
+        paidAt: '2026-09-20T17:00:00.000Z',
+        paidOn: '2026-09-20',
         amount: 300000,
         currency: 'COP',
         method: 'CARD',
@@ -85,7 +86,8 @@ export function accountStatementFixture(
       },
       {
         id: 'pay-2',
-        paidAt: '2026-09-10T00:00:00.000Z',
+        paidAt: '2026-09-10T17:00:00.000Z',
+        paidOn: '2026-09-10',
         amount: 1200000,
         currency: 'COP',
         method: 'TRANSFER',
@@ -100,7 +102,8 @@ export function accountStatementFixture(
       },
       {
         id: 'pay-1',
-        paidAt: '2026-06-02T00:00:00.000Z',
+        paidAt: '2026-06-02T17:00:00.000Z',
+        paidOn: '2026-06-02',
         amount: 50,
         currency: 'USD',
         method: null,

@@ -1,6 +1,6 @@
 'use client';
 import * as React from 'react';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { Building2, Lock } from 'lucide-react';
 import { ApiError } from '@/lib/api/client';
@@ -26,6 +26,7 @@ import {
 } from '@/lib/payments/payment-method';
 import { formatCurrency } from '@/lib/format/currency';
 import { formatCivilDate, formatDate } from '@/lib/format/date';
+import { useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -98,6 +99,9 @@ const copy = {
   // DX-067: la ventana de anulación de recepción mira el día de REGISTRO, no
   // la fecha de pago; cuando difieren, la fila lo dice.
   registeredToday: 'Registrado hoy',
+  // DX-097: los días son los del calendario de la sede, no los del navegador.
+  periodNote: (days: string, timeZone: string) => `${days} · días en hora de la sede (${timeZone})`,
+  periodDays: (from: string, to: string) => (from === to ? from : `del ${from} al ${to}`),
   registeredOn: (date: string) => `Registrado el ${date}`,
   empty: 'No hay abonos en este período.',
   emptyHint: 'Prueba con otro rango de fechas o con otro método.',
@@ -137,12 +141,22 @@ interface CashRegisterViewProps {
  * al cerrar la caja.
  */
 export function CashRegisterView({ token }: CashRegisterViewProps) {
+  // DX-097: «hoy», «esta semana» y «este mes» son los de la SEDE (su zona
+  // IANA, de la API), no los del navegador. `null` mientras se resuelve: no se
+  // consulta nada hasta saber qué día es en la sede.
+  const timeZone = useSedeTimeZone(token);
   const [period, setPeriod] = useState<PeriodChoice>('today');
-  // El rango que se CONSULTA. Con un atajo se recalcula al elegirlo; en
-  // personalizado se copia de los campos solo cuando son válidos, así que un
-  // rango a medio escribir o invertido nunca sale hacia la API.
-  const [range, setRange] = useState<CashRange>(() => presetRange('today'));
-  const [customRange, setCustomRange] = useState<CashRange>(range);
+  // El rango que se CONSULTA. Con un atajo sale del día de la sede (y se
+  // recalcula si cambia la sede); en personalizado se copia de los campos solo
+  // cuando son válidos, así que un rango a medio escribir o invertido nunca
+  // sale hacia la API.
+  const presetQuery = useMemo(
+    () => (timeZone && period !== 'custom' ? presetRange(period, timeZone) : null),
+    [timeZone, period],
+  );
+  const [customQuery, setCustomQuery] = useState<CashRange | null>(null);
+  const range = period === 'custom' ? customQuery : presetQuery;
+  const [customRange, setCustomRange] = useState<CashRange>({ from: '', to: '' });
   const [method, setMethod] = useState<MethodFilter>('ALL');
   const [page, setPage] = useState(1);
   const [data, setData] = useState<CashPaymentsResponse | null>(null);
@@ -158,15 +172,19 @@ export function CashRegisterView({ token }: CashRegisterViewProps) {
   // lista abonos activos, y con ella el resumen.
   const voiding = useVoidPayment(token, () => setReloadKey((k) => k + 1));
 
+  const rangeFrom = range?.from;
+  const rangeTo = range?.to;
   useEffect(() => {
-    if (!token) return;
+    if (!token || !rangeFrom || !rangeTo) return;
+    const from = rangeFrom;
+    const to = rangeTo;
     let cancelled = false;
     async function load() {
       setLoading(true);
       try {
         const params: CashPaymentsQuery = {
-          from: range.from,
-          to: range.to,
+          from,
+          to,
           ...(method !== 'ALL' ? { method } : {}),
           page,
         };
@@ -197,17 +215,19 @@ export function CashRegisterView({ token }: CashRegisterViewProps) {
     return () => {
       cancelled = true;
     };
-  }, [token, range, method, page, reloadKey]);
+  }, [token, rangeFrom, rangeTo, method, page, reloadKey]);
 
   // Cada cambio de filtro vuelve a la página 1 en el MISMO render que el
   // filtro (React agrupa los dos `set`), así que sale una sola petición.
   function choosePeriod(next: PeriodChoice) {
     setPeriod(next);
     if (next === 'custom') {
-      setCustomRange(range);
+      // Arranca con el rango que se estaba viendo: no cambia la consulta.
+      const seed = range ?? { from: '', to: '' };
+      setCustomRange(seed);
+      setCustomQuery(range);
       return;
     }
-    setRange(presetRange(next));
     setPage(1);
   }
 
@@ -215,7 +235,7 @@ export function CashRegisterView({ token }: CashRegisterViewProps) {
     const next = { ...customRange, ...patch };
     setCustomRange(next);
     if (rangeError(next) === null) {
-      setRange(next);
+      setCustomQuery(next);
       setPage(1);
     }
   }
@@ -315,6 +335,15 @@ export function CashRegisterView({ token }: CashRegisterViewProps) {
 
         {customError ? <InlineError id={rangeErrorId}>{customError}</InlineError> : null}
 
+        {range && timeZone && customError === null ? (
+          <p className="text-sm text-muted tabular-nums" data-testid="cash-period-note">
+            {copy.periodNote(
+              copy.periodDays(formatCivilDate(range.from), formatCivilDate(range.to)),
+              timeZone,
+            )}
+          </p>
+        ) : null}
+
         {/* Aviso de la última anulación: fuera de AsyncSection para que la
             recarga no lo borre. */}
         <p role="status" className={voiding.notice ? 'text-sm text-success' : 'sr-only'}>
@@ -375,7 +404,7 @@ export function CashRegisterView({ token }: CashRegisterViewProps) {
                     {items.map((payment) => (
                       <TableRow key={payment.id}>
                         <TableCell className="tabular-nums" data-label={copy.colDate}>
-                          {formatCivilDate(payment.paidAt)}
+                          {formatCivilDate(payment.paidOn)}
                           <RegisteredNote payment={payment} />
                         </TableCell>
                         <TableCell data-label={copy.colPatient}>
@@ -418,7 +447,7 @@ export function CashRegisterView({ token }: CashRegisterViewProps) {
                                     id: payment.id,
                                     amount: payment.amount,
                                     currency: payment.currency,
-                                    paidAt: payment.paidAt,
+                                    paidOn: payment.paidOn,
                                     patientName: payment.patient.fullName,
                                   })
                                 }
@@ -473,7 +502,7 @@ export function CashRegisterView({ token }: CashRegisterViewProps) {
  * y ese día (`registeredOn`, `registeredToday`) lo calcula la API.
  */
 function RegisteredNote({ payment }: { payment: CashPayment }) {
-  if (payment.registeredOn === payment.paidAt.slice(0, 10)) return null;
+  if (payment.registeredOn === payment.paidOn) return null;
   return (
     <span className="block text-xs font-normal text-muted">
       {payment.registeredToday
