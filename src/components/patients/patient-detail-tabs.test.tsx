@@ -284,3 +284,36 @@ describe('PatientDetailTabs — pestaña opcional «Estado de cuenta»', () => {
     expect(screen.getByRole('tablist').className).toMatch(/overflow-x-auto/);
   });
 });
+
+describe('PatientDetailTabs — pestaña «Autorizaciones» (DX-037)', () => {
+  it('va al final, después de «Estado de cuenta», y selecciona data-consents', async () => {
+    const user = userEvent.setup();
+    const onTabChange = jest.fn();
+    render(
+      <PatientDetailTabs
+        activeTab="data"
+        onTabChange={onTabChange}
+        tablistLabel="Ana García"
+        dataLabel="Datos"
+        clinicalHistoryLabel="Historia clínica"
+        odontogramLabel="Odontograma"
+        treatmentPlansLabel="Plan de tratamiento"
+        accountStatementLabel="Estado de cuenta"
+        dataConsentsLabel="Autorizaciones"
+      />,
+    );
+    const tabs = screen.getAllByRole('tab');
+    expect(tabs.map((t) => t.textContent)).toEqual([
+      'Datos',
+      'Historia clínica',
+      'Odontograma',
+      'Plan de tratamiento',
+      'Estado de cuenta',
+      'Autorizaciones',
+    ]);
+    const tab = screen.getByRole('tab', { name: 'Autorizaciones' });
+    expect(tab).toHaveAttribute('aria-controls', 'tabpanel-data-consents');
+    await user.click(tab);
+    expect(onTabChange).toHaveBeenCalledWith('data-consents');
+  });
+});

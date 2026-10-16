@@ -17,6 +17,12 @@ import { InlineError } from '@/components/errors/inline-error';
 import { fieldClass } from '@/lib/ui/field-class';
 import { cn } from '@/lib/utils';
 import type { ClinicalHistoryValue } from '@/lib/clinical/clinical-types';
+import {
+  EMPTY_SELECTION,
+  decisionsFromSelection,
+  type PrivacyPolicyVersion,
+} from '@/lib/data-consents/data-consents-api';
+import { PatientConsentStep } from '@/components/data-consents/patient-consent-step';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
@@ -32,8 +38,6 @@ const copy = {
   addressLabel: 'Dirección',
   notesLabel: 'Notas',
   requiredError: 'Nombre y apellido son obligatorios para continuar.',
-  consentLabel:
-    'El paciente acepta el tratamiento de sus datos personales según la política de privacidad.',
   summaryTitle: 'Resumen de la historia clínica',
   summaryAllergies: (n: number) => `Alergias registradas: ${n}`,
   summaryConditions: (n: number) => `Condiciones marcadas: ${n}`,
@@ -49,7 +53,7 @@ const STEPS: WizardStep[] = [
   { key: 'antecedentes', label: 'Antecedentes' },
   { key: 'alergias', label: 'Alergias y medicamentos' },
   { key: 'habitos', label: 'Hábitos' },
-  { key: 'consentimiento', label: 'Consentimiento' },
+  { key: 'consentimiento', label: 'Autorización de datos' },
 ];
 
 /** Pasos que escriben la anamnesis v1: solo para roles clínicos (SEC-005). */
@@ -116,28 +120,15 @@ export function PatientCreateWizard({ token, canWriteClinicalHistory }: PatientC
 
   const [history, setHistory] = useState<ClinicalHistoryValue>({});
 
-  const [dataConsentAccepted, setDataConsentAccepted] = useState(false);
-  const [dataConsentAt, setDataConsentAt] = useState<string | undefined>(undefined);
-  const [dataConsentPolicyVersion, setDataConsentPolicyVersion] = useState<string | undefined>(
-    undefined,
-  );
+  // Autorización Ley 1581 (DX-037): ninguna casilla empieza marcada.
+  const [consentSelection, setConsentSelection] = useState(EMPTY_SELECTION);
+  const [consentPolicy, setConsentPolicy] = useState<PrivacyPolicyVersion | null>(null);
 
   const [validationError, setValidationError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
   const isBasicInfoValid = firstName.trim() !== '' && lastName.trim() !== '';
-
-  function handleConsentChange(checked: boolean) {
-    setDataConsentAccepted(checked);
-    if (checked) {
-      setDataConsentPolicyVersion('v1');
-      setDataConsentAt(new Date().toISOString());
-    } else {
-      setDataConsentPolicyVersion(undefined);
-      setDataConsentAt(undefined);
-    }
-  }
 
   function goToStep(next: number) {
     // Step 1 (Datos) is required — block moving forward off of it without
@@ -160,6 +151,9 @@ export function PatientCreateWizard({ token, canWriteClinicalHistory }: PatientC
     setError(null);
     setSubmitting(true);
     try {
+      // Solo lo marcado es una decisión; sin casillas marcadas no se registra
+      // ninguna autorización (el silencio no autoriza).
+      const decisions = decisionsFromSelection(consentSelection);
       const input: CreatePatientInput = {
         firstName: firstName.trim(),
         lastName: lastName.trim(),
@@ -178,12 +172,8 @@ export function PatientCreateWizard({ token, canWriteClinicalHistory }: PatientC
         ...(canWriteClinicalHistory && historyHasContent(history)
           ? { medicalHistory: history }
           : {}),
-        ...(dataConsentAccepted
-          ? {
-              dataConsentAccepted: true,
-              ...(dataConsentPolicyVersion ? { dataConsentPolicyVersion } : {}),
-              ...(dataConsentAt ? { dataConsentAt } : {}),
-            }
+        ...(consentPolicy && decisions.length > 0
+          ? { dataConsents: { policyVersionId: consentPolicy.id, decisions } }
           : {}),
       };
       const created = await createPatient(token, input);
@@ -366,14 +356,12 @@ export function PatientCreateWizard({ token, canWriteClinicalHistory }: PatientC
                 {copy.noClinicalHistoryNote}
               </p>
             )}
-            <label className="flex items-center gap-2 text-sm text-ink">
-              <input
-                type="checkbox"
-                checked={dataConsentAccepted}
-                onChange={(e) => handleConsentChange(e.target.checked)}
-              />
-              {copy.consentLabel}
-            </label>
+            <PatientConsentStep
+              token={token}
+              value={consentSelection}
+              onChange={setConsentSelection}
+              onPolicyChange={setConsentPolicy}
+            />
             {error ? <InlineError>{error}</InlineError> : null}
           </div>
         )}

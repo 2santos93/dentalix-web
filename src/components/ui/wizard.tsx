@@ -33,13 +33,15 @@ export function Wizard({ steps, current, onStepChange, children }: WizardProps) 
             <li
               key={step.key}
               aria-current={isActive ? 'step' : undefined}
-              className="flex flex-1 items-center gap-2"
+              // `min-w-0` + guiones: a 390px una etiqueta de una sola palabra
+              // larga («Autorización») se parte en vez de cortarse.
+              className="flex min-w-0 flex-1 items-center gap-2"
             >
               <button
                 type="button"
                 onClick={() => onStepChange(i)}
                 className={cn(
-                  'flex w-full flex-col items-start gap-1 border-b-2 pb-2 text-left text-sm font-medium transition-colors',
+                  'flex w-full flex-col items-start gap-1 border-b-2 pb-2 text-left text-sm font-medium transition-colors hyphens-auto break-words',
                   isActive && 'border-primary text-primary',
                   isDone && !isActive && 'border-border text-ink',
                   !isActive && !isDone && 'border-border text-muted',

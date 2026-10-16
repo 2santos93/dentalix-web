@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { ChevronUp, Clock, LogOut, Settings, Sun, Moon } from 'lucide-react';
+import { ChevronUp, Clock, LogOut, Settings, ShieldCheck, Sun, Moon } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { getMe, type ClinicRole } from '@/lib/me/me-api';
@@ -12,6 +12,7 @@ const copy = {
   account: 'Cuenta',
   profile: 'Mi perfil',
   businessHours: 'Horario de atención',
+  privacy: 'Privacidad de datos',
   logout: 'Cerrar sesión',
   theme: 'Cambiar tema',
 };
@@ -194,6 +195,17 @@ export function UserMenu({
       >
         <Clock className="size-4 text-muted" aria-hidden />
         {copy.businessHours}
+      </Link>
+      {/* Política de tratamiento de datos (DX-037): de la clínica, como el
+          horario; todos la leen y solo ADMIN publica. */}
+      <Link
+        href="/settings/privacidad"
+        role="menuitem"
+        onClick={() => setOpen(false)}
+        className="flex items-center gap-3 px-3 py-2 text-sm text-ink hover:bg-bg"
+      >
+        <ShieldCheck className="size-4 text-muted" aria-hidden />
+        {copy.privacy}
       </Link>
       <div className="my-1 border-t border-border" />
       <ThemeRow />

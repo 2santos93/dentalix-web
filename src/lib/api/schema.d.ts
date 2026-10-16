@@ -833,6 +833,48 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/privacy-policies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Política de tratamiento de datos vigente e historial de versiones */
+        get: operations["PrivacyPoliciesController_list"];
+        put?: never;
+        /**
+         * Publicar una nueva versión de la política (solo ADMIN)
+         * @description Crea la versión siguiente y pasa a ser la vigente. No hay borradores ni edición.
+         */
+        post: operations["PrivacyPoliciesController_publish"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{patientId}/data-consents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Autorizaciones de datos del paciente: estado vigente por scope e historial */
+        get: operations["PatientDataConsentsController_get"];
+        put?: never;
+        /**
+         * Registrar aceptaciones o revocaciones (una fila por decisión)
+         * @description Guarda versión de política, scope, canal IN_PERSON, quién lo registra, hora del servidor, IP y user-agent. Devuelve el estado resultante.
+         */
+        post: operations["PatientDataConsentsController_record"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/inventory/items": {
         parameters: {
             query?: never;
@@ -988,6 +1030,21 @@ export interface components {
         AvatarResponseDto: {
             avatarUrl: string;
         };
+        /** @enum {string} */
+        DataConsentScope: "GENERAL" | "SENSITIVE_HEALTH" | "MARKETING";
+        ConsentDecisionDto: {
+            scope: components["schemas"]["DataConsentScope"];
+            /** @description `true` = autoriza; `false` = no autoriza o revoca. */
+            granted: boolean;
+        };
+        RecordDataConsentsDto: {
+            /**
+             * Format: uuid
+             * @description Versión de la política que se le mostró al titular. Debe ser la vigente (409 si cambió).
+             */
+            policyVersionId: string;
+            decisions: components["schemas"]["ConsentDecisionDto"][];
+        };
         AllergyDto: {
             /** @example Penicilina */
             alergeno: string;
@@ -1111,9 +1168,17 @@ export interface components {
              */
             cityId?: number;
             notes?: string;
+            /** @description Autorización de datos (Ley 1581) que el paciente da en el alta: se registra en la misma transacción, con las mismas reglas que POST /patients/:id/data-consents. Sin este campo no se registra ninguna autorización. */
+            dataConsents?: components["schemas"]["RecordDataConsentsDto"];
+            /**
+             * @deprecated
+             * @description DEPRECADO (DX-037): usa `dataConsents`. Si llega sin `dataConsents`, se guarda como una autorización GENERAL de canal LEGACY (sin texto versionado). `dataConsentAt` ya no se acepta: la hora es la del servidor.
+             */
             dataConsentAccepted?: boolean;
-            /** Format: date-time */
-            dataConsentAt?: string;
+            /**
+             * @deprecated
+             * @description DEPRECADO (DX-037): etiqueta de versión que acompaña a `dataConsentAccepted`.
+             */
             dataConsentPolicyVersion?: string;
             maritalStatus?: string;
             occupation?: string;
@@ -1148,9 +1213,21 @@ export interface components {
             countryCode: string | null;
             cityId: number | null;
             notes: string | null;
+            /**
+             * @deprecated
+             * @description DEPRECADO (DX-037): resumen derivado de la última autorización GENERAL. La fuente de verdad es GET /patients/:id/data-consents.
+             */
             dataConsentAccepted: boolean;
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @deprecated
+             * @description DEPRECADO (DX-037): hora (servidor) de la última autorización GENERAL.
+             */
             dataConsentAt: string | null;
+            /**
+             * @deprecated
+             * @description DEPRECADO (DX-037): versión («v1», «v2»…) de la política de la última autorización GENERAL.
+             */
             dataConsentPolicyVersion: string | null;
             maritalStatus: string | null;
             occupation: string | null;
@@ -1224,6 +1301,7 @@ export interface components {
             labelPt?: string;
             /** @description Hex color (e.g. #1A2B3C) */
             color: string;
+            /** @description At most 2 decimal places */
             defaultPrice?: number;
             /** @default true */
             active: boolean;
@@ -1265,6 +1343,7 @@ export interface components {
             labelPt?: string;
             /** @description Hex color (e.g. #1A2B3C) */
             color?: string;
+            /** @description At most 2 decimal places */
             defaultPrice?: number;
             active?: boolean;
         };
@@ -1631,11 +1710,12 @@ export interface components {
             surfaces?: ("MESIAL" | "DISTAL" | "OCCLUSAL" | "VESTIBULAR" | "LINGUAL")[];
             /** Format: uuid */
             catalogItemId: string;
-            /** @description Explicit price; if omitted, falls back to the catalog item defaultPrice (400 if neither is set) */
+            /** @description Explicit price (at most 2 decimal places); if omitted, falls back to the catalog item defaultPrice (400 if neither is set) */
             price?: number;
             notes?: string;
         };
         UpdateTreatmentPlanItemDto: {
+            /** @description At most 2 decimal places */
             price?: number;
             /** @enum {string} */
             status?: "PROPOSED" | "ACCEPTED" | "DONE";
@@ -1844,7 +1924,7 @@ export interface components {
         };
         RecordPaymentDto: {
             /**
-             * @description Must be a finite number > 0
+             * @description Must be a finite number > 0, with at most 2 decimal places
              * @example 100
              */
             amount: number;
@@ -1935,12 +2015,12 @@ export interface components {
              */
             startDate: string;
             /**
-             * @description Pie/abono inicial esperado (>= 0)
+             * @description Pie/abono inicial esperado (>= 0, como mucho 2 decimales)
              * @example 200
              */
             downPayment?: number;
             /**
-             * @description Monto total a financiar. Default = saldo actual del plan.
+             * @description Monto total a financiar (como mucho 2 decimales). Default = saldo actual del plan.
              * @example 1200
              */
             totalToFinance?: number;
@@ -2234,6 +2314,92 @@ export interface components {
             movements: components["schemas"]["AccountStatementMovementDto"][];
             installments: components["schemas"]["AccountStatementInstallmentDto"][];
         };
+        UserRefDto: {
+            /** Format: uuid */
+            id: string;
+            /** @example Dra. Laura Gómez */
+            fullName: string;
+        };
+        PrivacyPolicyVersionDto: {
+            /** Format: uuid */
+            id: string;
+            /**
+             * @description Correlativo por clínica.
+             * @example 1
+             */
+            version: number;
+            policyText: string;
+            generalText: string;
+            sensitiveHealthText: string;
+            marketingText: string;
+            /** @description sha256 (hex) de los cuatro textos tal como se publicaron. */
+            contentHash: string;
+            /** Format: date-time */
+            publishedAt: string;
+            publishedBy: components["schemas"]["UserRefDto"];
+        };
+        PrivacyPoliciesDto: {
+            /** @description Versión vigente (la de mayor número); `null` si la clínica aún no publicó ninguna. */
+            current: components["schemas"]["PrivacyPolicyVersionDto"] | null;
+            /** @description Todas las versiones publicadas, de la más reciente a la más antigua. */
+            history: components["schemas"]["PrivacyPolicyVersionDto"][];
+        };
+        PublishPrivacyPolicyDto: {
+            /** @description Texto completo de la política (aviso de privacidad). */
+            policyText: string;
+            /** @description Texto de la casilla GENERAL (datos personales). */
+            generalText: string;
+            /** @description Texto de la casilla SENSITIVE_HEALTH. Debe decir que el titular «no está obligado» a autorizar, qué «datos sensibles» se tratan y su «finalidad» (Dec. 1377, art. 6); si falta alguna, 400. */
+            sensitiveHealthText: string;
+            /** @description Texto de la casilla MARKETING (finalidades comerciales). */
+            marketingText: string;
+        };
+        /**
+         * @description IN_PERSON = registrado en la clínica con el texto vigente. LEGACY = heredado del booleano anterior, sin texto versionado.
+         * @enum {string}
+         */
+        DataConsentChannel: "IN_PERSON" | "LEGACY";
+        PolicyVersionRefDto: {
+            /** Format: uuid */
+            id: string;
+            /** @example 1 */
+            version: number;
+        };
+        DataConsentRecordDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            patientId: string;
+            scope: components["schemas"]["DataConsentScope"];
+            granted: boolean;
+            /** @description IN_PERSON = registrado en la clínica con el texto vigente. LEGACY = heredado del booleano anterior, sin texto versionado. */
+            channel: components["schemas"]["DataConsentChannel"];
+            /** @description `null` solo en filas LEGACY. */
+            policyVersion: components["schemas"]["PolicyVersionRefDto"] | null;
+            /** @description Etiqueta de versión del registro heredado (solo LEGACY). */
+            legacyPolicyVersion: string | null;
+            /**
+             * Format: date-time
+             * @description Hora del servidor.
+             */
+            recordedAt: string;
+            /** @description `null` solo en filas LEGACY migradas. */
+            recordedBy: components["schemas"]["UserRefDto"] | null;
+            ipAddress: string | null;
+            userAgent: string | null;
+        };
+        ScopeConsentStatusDto: {
+            scope: components["schemas"]["DataConsentScope"];
+            /** @description `null` = el titular aún no ha decidido sobre este scope. */
+            granted: boolean | null;
+            latest: components["schemas"]["DataConsentRecordDto"] | null;
+        };
+        PatientDataConsentsDto: {
+            /** @description Estado vigente: un elemento por scope (GENERAL, SENSITIVE_HEALTH, MARKETING), la última fila de cada uno. */
+            current: components["schemas"]["ScopeConsentStatusDto"][];
+            /** @description Todas las filas, de la más reciente a la más antigua. */
+            history: components["schemas"]["DataConsentRecordDto"][];
+        };
         CreateInventoryItemDto: {
             /** @example Guantes de nitrilo */
             name: string;
@@ -2245,6 +2411,7 @@ export interface components {
              */
             unit: string;
             /**
+             * @description At most 3 decimal places
              * @default 0
              * @example 5
              */
@@ -2303,7 +2470,10 @@ export interface components {
             sku?: string | null;
             /** @example caja */
             unit?: string;
-            /** @example 1 */
+            /**
+             * @description At most 3 decimal places
+             * @example 1
+             */
             minStock?: number;
             notes?: string | null;
         };
@@ -2311,7 +2481,7 @@ export interface components {
             /** @enum {string} */
             type: "IN" | "OUT" | "ADJUSTMENT";
             /**
-             * @description Always > 0 for IN/OUT; may be negative (and never 0) for ADJUSTMENT.
+             * @description Always > 0 for IN/OUT; may be negative (and never 0) for ADJUSTMENT. At most 3 decimal places.
              * @example 10
              */
             quantity: number;
@@ -4209,6 +4379,143 @@ export interface operations {
             };
             /** @description Paciente no encontrado en esta clínica (inexistente o de otra clínica). */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PrivacyPoliciesController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrivacyPoliciesDto"];
+                };
+            };
+        };
+    };
+    PrivacyPoliciesController_publish: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PublishPrivacyPolicyDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrivacyPolicyVersionDto"];
+                };
+            };
+            /** @description Texto vacío o el de datos sensibles no incluye las frases obligatorias. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo ADMIN publica la política. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Otra versión se publicó a la vez; recarga y reintenta. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientDataConsentsController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PatientDataConsentsDto"];
+                };
+            };
+            /** @description Paciente no encontrado en esta clínica (inexistente o de otra clínica). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientDataConsentsController_record: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecordDataConsentsDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PatientDataConsentsDto"];
+                };
+            };
+            /** @description Sin decisiones, scope repetido o datos inválidos. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente no encontrado en esta clínica (inexistente o de otra clínica). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La clínica no tiene política publicada o `policyVersionId` no es la vigente. */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
