@@ -11,6 +11,14 @@ const nextConfig: NextConfig = {
   },
   // No anunciar el framework (`x-powered-by: Next.js`) — DX-061.
   poweredByHeader: false,
+  // La web no usa `next/image` (las imágenes son `<img>`: logos del tenant en
+  // hosts arbitrarios, data URLs de firmas). Con `unoptimized` el endpoint
+  // `/_next/image` responde 404 y no se expone el optimizador de imágenes, que
+  // acumula avisos de seguridad (RCE con AVIF, SSRF) — DX-080. Si algún día se
+  // adopta `next/image`, quitar esto y configurar `remotePatterns` al mínimo.
+  images: {
+    unoptimized: true,
+  },
   // Cabeceras de seguridad en todas las rutas (anti-clickjacking, nosniff,
   // referrer y permissions) — DX-061. Ver `security-headers.ts`.
   async headers() {
