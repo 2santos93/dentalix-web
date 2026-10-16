@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { OdontogramChart } from '@/components/odontogram/odontogram-chart';
@@ -148,7 +148,14 @@ export function OdontogramTab({
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  // `asOf` es la fecha PEDIDA (el selector); `shownAsOf`, la de la carta que
+  // hay en pantalla. Solo difieren mientras carga o si la carga falla: el
+  // aviso «Carta al…» y el historial siguen a lo que se ve, nunca a lo pedido.
   const [asOf, setAsOf] = useState<string | null>(null);
+  const [shownAsOf, setShownAsOf] = useState<string | null>(null);
+  // Al fallar un cambio de fecha el selector vuelve a la que se ve, sin
+  // recargarla (ya está en pantalla).
+  const skipNextLoad = useRef(false);
 
   // Se siembra desde la URL para que el enlace del plan abra en su diente.
   // Sólo es el valor INICIAL: a partir de ahí manda la interacción, y cada
@@ -161,11 +168,16 @@ export function OdontogramTab({
   const [presetSubmitting, setPresetSubmitting] = useState(false);
   const [presetError, setPresetError] = useState<string | null>(null);
 
-  const readOnly = asOf !== null;
+  // Solo lectura en cuanto se pide una fecha y hasta que vuelve la carta de hoy.
+  const readOnly = asOf !== null || shownAsOf !== null;
   const role = getTokenRole(token);
   const userId = getTokenUserId(token);
 
   useEffect(() => {
+    if (skipNextLoad.current) {
+      skipNextLoad.current = false;
+      return;
+    }
     let cancelled = false;
     const isInitialLoad = !hasLoadedOnce;
 
@@ -185,6 +197,7 @@ export function OdontogramTab({
         setToothGroups(groups);
         setDentition(dentitionView);
         setCatalogItems(catalog);
+        setShownAsOf(asOf);
         setLoadError(null);
         setHasLoadedOnce(true);
       } catch (err) {
@@ -194,6 +207,10 @@ export function OdontogramTab({
           setLoadError(message);
         } else {
           notifyError(copy.odontogramRefreshError, { onRetry: () => setReloadKey((k) => k + 1) });
+          if (asOf !== shownAsOf) {
+            skipNextLoad.current = true;
+            setAsOf(shownAsOf);
+          }
         }
       } finally {
         if (!cancelled) {
@@ -209,7 +226,8 @@ export function OdontogramTab({
     // `hasLoadedOnce` is intentionally excluded: it's read once per run (via
     // `isInitialLoad`) to tell an initial load from a background refresh,
     // and is itself flipped true by this same effect on success — including
-    // it here would re-trigger the effect the moment it flips.
+    // it here would re-trigger the effect the moment it flips. Same for
+    // `shownAsOf`: it is set by this effect and only read on a failure.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, patientId, reloadKey, asOf]);
 
@@ -395,12 +413,12 @@ export function OdontogramTab({
           </div>
         </div>
 
-        {readOnly && asOf ? (
+        {shownAsOf ? (
           <p
             role="status"
             className="rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-ink"
           >
-            {copy.asOfNotice(formatCivilDate(`${asOf}T00:00:00.000Z`))}
+            {copy.asOfNotice(formatCivilDate(`${shownAsOf}T00:00:00.000Z`))}
           </p>
         ) : null}
 
@@ -472,7 +490,7 @@ export function OdontogramTab({
                 refreshKey={timelineRefreshKey}
                 canVoid={canVoid}
                 readOnly={readOnly}
-                asOf={asOf}
+                asOf={shownAsOf}
                 onVoided={handleChartChanged}
               />
             </div>

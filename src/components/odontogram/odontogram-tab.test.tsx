@@ -245,6 +245,59 @@ describe('OdontogramTab', () => {
     await waitFor(() => expect(mockedGetOdontogram).toHaveBeenLastCalledWith('tok', 'p1', undefined));
   });
 
+  it('si falla la carga de la carta a una fecha, no rotula como de esa fecha la carta de hoy', async () => {
+    const { ApiError } = jest.requireActual('../../lib/api/client');
+    const user = userEvent.setup();
+    mockedListCatalog.mockResolvedValue(catalog);
+    mockedGetTimeline.mockResolvedValue([]);
+    mockedGetOdontogram.mockImplementation((_token, _patient, asOf) =>
+      asOf ? Promise.reject(new ApiError(500, 'Error del servidor')) : Promise.resolve(initialGroups),
+    );
+    render(
+      <>
+        <OdontogramTab token="tok" patientId="p1" initialTooth="11" />
+        <Toaster />
+      </>,
+    );
+
+    await screen.findByRole('form', { name: /registrar en el diente 11/i });
+    await user.type(screen.getByLabelText('Ver la carta al'), '2026-10-05');
+
+    await waitFor(() => expect(mockedGetOdontogram).toHaveBeenCalledWith('tok', 'p1', '2026-10-05'));
+    expect(await screen.findByText('No pudimos actualizar el odontograma.')).toBeInTheDocument();
+    // Lo que hay en pantalla es la carta de HOY: ni aviso de «Carta al…», ni
+    // la fecha en el selector, y se puede seguir registrando.
+    expect(screen.queryByText(/carta al 05\/10\/2026/i)).not.toBeInTheDocument();
+    expect(screen.getByLabelText('Ver la carta al')).toHaveValue('');
+    expect(screen.getByRole('form', { name: /registrar en el diente 11/i })).toBeInTheDocument();
+  });
+
+  it('si falla la vuelta a hoy, sigue en solo lectura con el aviso de la fecha que se ve', async () => {
+    const { ApiError } = jest.requireActual('../../lib/api/client');
+    const user = userEvent.setup();
+    mockedListCatalog.mockResolvedValue(catalog);
+    mockedGetTimeline.mockResolvedValue([]);
+    mockedGetOdontogram.mockResolvedValue(initialGroups);
+    render(
+      <>
+        <OdontogramTab token="tok" patientId="p1" initialTooth="11" />
+        <Toaster />
+      </>,
+    );
+
+    await screen.findByRole('form', { name: /registrar en el diente 11/i });
+    await user.type(screen.getByLabelText('Ver la carta al'), '2026-10-05');
+    expect(await screen.findByText(/carta al 05\/10\/2026 · solo lectura/i)).toBeInTheDocument();
+
+    mockedGetOdontogram.mockRejectedValue(new ApiError(500, 'Error del servidor'));
+    await user.click(screen.getByRole('button', { name: 'Volver a hoy' }));
+
+    expect(await screen.findByText('No pudimos actualizar el odontograma.')).toBeInTheDocument();
+    expect(screen.getByText(/carta al 05\/10\/2026 · solo lectura/i)).toBeInTheDocument();
+    expect(screen.getByLabelText('Ver la carta al')).toHaveValue('2026-10-05');
+    expect(screen.queryByRole('form', { name: /registrar en el diente 11/i })).not.toBeInTheDocument();
+  });
+
   it('shows an alert with a retry when the initial load fails', async () => {
     const { ApiError } = jest.requireActual('../../lib/api/client');
     mockedGetOdontogram.mockRejectedValue(new ApiError(500, 'Error del servidor'));
