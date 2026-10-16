@@ -2,25 +2,44 @@ import { defineConfig, devices } from '@playwright/test';
 import { WEB_PORT } from './e2e/support/urls';
 
 /**
- * Smoke e2e config for the register -> login flow.
+ * Suite e2e de la web contra la API y la base reales.
  *
- * IMPORTANT — this config only manages the FRONTEND dev server (`npm run dev`,
- * :3001). The backend (`:3000`) and its Docker DB (`:5442`) must already be
- * running before `npm run test:e2e`:
+ * La API (y su base) NO las arranca este config: deben estar levantadas antes
+ * (`cd ../dentalix-api && npm run start:dev`, Postgres en :5442), o se usa
+ * `scripts/e2e-ci.sh`, que hace la misma secuencia que la CI (DX-070).
  *
- *   cd ../dentalix-api && npm run start:dev
- *
- * (DB is a Docker Compose service on :5442, expected to already be up.)
+ * La web, según `E2E_WEB_SERVER`:
+ * - sin definir (local): `next dev` en WEB_PORT, reutilizando uno ya abierto;
+ * - `start`: `next start` (requiere un `next build` previo);
+ * - `none`: ya está arrancada (lo que hace `scripts/e2e-ci.sh`).
  */
+const isCI = !!process.env.CI;
+const webServerMode = process.env.E2E_WEB_SERVER ?? 'dev';
+const webServerCommand: Record<string, string> = {
+  dev: `npx next dev -p ${WEB_PORT}`,
+  start: `npx next start -p ${WEB_PORT}`,
+};
+if (webServerMode !== 'none' && !webServerCommand[webServerMode]) {
+  throw new Error(`E2E_WEB_SERVER="${webServerMode}" no es válido: usa dev, start o none.`);
+}
+
 export default defineConfig({
   testDir: './e2e',
   fullyParallel: false,
-  forbidOnly: !!process.env.CI,
-  retries: 0,
+  forbidOnly: isCI,
+  // Un reintento solo en CI, para no esconder en local un test inestable; el
+  // reporter de CI lo marca como "flaky" igualmente.
+  retries: isCI ? 1 : 0,
   workers: 1,
-  reporter: 'list',
+  reporter: isCI
+    ? [['github'], ['list'], ['html', { open: 'never', outputFolder: 'playwright-report' }]]
+    : 'list',
   use: {
     baseURL: `http://localhost:${WEB_PORT}`,
+    // La zona y el idioma de la sede, no los del runner (en GitHub, UTC y
+    // en-US): así las fechas y horas que pinta la UI no dependen de la máquina.
+    timezoneId: 'America/Bogota',
+    locale: 'es-CO',
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },
@@ -37,11 +56,14 @@ export default defineConfig({
       },
     },
   ],
-  webServer: {
-    // Puerto configurable (ver e2e/support/urls.ts); por defecto el de `npm run dev`.
-    command: `npx next dev -p ${WEB_PORT}`,
-    url: `http://localhost:${WEB_PORT}`,
-    reuseExistingServer: !process.env.CI,
-    timeout: 60_000,
-  },
+  webServer:
+    webServerMode === 'none'
+      ? undefined
+      : {
+          // Puerto configurable (ver e2e/support/urls.ts); por defecto el de `npm run dev`.
+          command: webServerCommand[webServerMode],
+          url: `http://localhost:${WEB_PORT}`,
+          reuseExistingServer: !isCI,
+          timeout: 120_000,
+        },
 });

@@ -102,6 +102,20 @@ test('recargar mantiene la sesión; cerrar sesión borra la cookie y el refresh 
     data: { refreshToken: before },
   });
   expect(reuse.status()).toBe(401);
+  // Tampoco por el camino del navegador (cookie al proxy de la web), por si
+  // alguien la hubiera copiado antes del logout (DX-070: FE-003 fue un logout
+  // que borraba la cookie pero no revocaba el refresh en la API).
+  const reuseByCookie = await page.request.post(
+    `http://localhost:${new URL(origin).port}/api/v1/auth/refresh`,
+    {
+      headers: {
+        Origin: origin,
+        'X-Tenant-Host': new URL(origin).host,
+        Cookie: `${SESSION_COOKIE}=${before}`,
+      },
+    },
+  );
+  expect(reuseByCookie.status()).toBe(401);
 
   // Y sin cookie, volver a una pantalla de la app manda a /login.
   await page.goto(`${origin}/patients`);
