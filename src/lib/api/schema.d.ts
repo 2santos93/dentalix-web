@@ -4349,6 +4349,13 @@ export interface operations {
                     "application/json": components["schemas"]["RegisterAcceptedDto"];
                 };
             };
+            /** @description Datos inválidos, o la petición no llegó por un host de Dentalix (el enlace del email solo apunta a la plataforma) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description El subdominio ya está en uso */
             409: {
                 headers: {
