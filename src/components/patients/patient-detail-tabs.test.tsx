@@ -285,6 +285,39 @@ describe('PatientDetailTabs — pestaña opcional «Estado de cuenta»', () => {
   });
 });
 
+describe('PatientDetailTabs — pestaña opcional «Consentimientos» (DX-006)', () => {
+  function renderTabs(consentsLabel?: string, onTabChange = jest.fn()) {
+    render(
+      <PatientDetailTabs
+        activeTab="data"
+        onTabChange={onTabChange}
+        tablistLabel="Ana García"
+        dataLabel="Datos"
+        clinicalHistoryLabel="Historia clínica"
+        odontogramLabel="Odontograma"
+        treatmentPlansLabel="Plan de tratamiento"
+        consentsLabel={consentsLabel}
+      />,
+    );
+    return onTabChange;
+  }
+
+  it('no aparece sin etiqueta (recepción)', () => {
+    renderTabs();
+    expect(screen.queryByRole('tab', { name: 'Consentimientos' })).not.toBeInTheDocument();
+  });
+
+  it('con etiqueta aparece al final y controla su panel', async () => {
+    const user = userEvent.setup();
+    const onTabChange = renderTabs('Consentimientos');
+    const tab = screen.getByRole('tab', { name: 'Consentimientos' });
+    expect(screen.getAllByRole('tab').at(-1)).toBe(tab);
+    expect(tab).toHaveAttribute('aria-controls', 'tabpanel-consents');
+    await user.click(tab);
+    expect(onTabChange).toHaveBeenCalledWith('consents');
+  });
+});
+
 describe('PatientDetailTabs — pestaña «Autorizaciones» (DX-037)', () => {
   it('va al final, después de «Estado de cuenta», y selecciona data-consents', async () => {
     const user = userEvent.setup();

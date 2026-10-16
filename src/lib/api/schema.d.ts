@@ -987,6 +987,86 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/consent-templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ConsentTemplatesController_list"];
+        put?: never;
+        post: operations["ConsentTemplatesController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/consent-templates/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["ConsentTemplatesController_update"];
+        trace?: never;
+    };
+    "/api/v1/patients/{patientId}/consents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["PatientConsentsController_list"];
+        put?: never;
+        post: operations["PatientConsentsController_sign"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{patientId}/consents/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["PatientConsentsController_preview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{patientId}/consents/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["PatientConsentsController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2600,6 +2680,175 @@ export interface components {
              * @example 42
              */
             patientCount: number;
+        };
+        ConsentTemplateDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            tenantId: string;
+            title: string;
+            /** @description Texto con variables {{paciente}}, {{documento}}, {{profesional}}, {{clinica}}, {{fecha}} y {{tratamiento}}. */
+            body: string;
+            active: boolean;
+            /** @description Sube en 1 con cada cambio de título o texto. El consentimiento firmado guarda la versión de la que salió. */
+            version: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        CreateConsentTemplateDto: {
+            title: string;
+            /** @description Variables admitidas: {{paciente}}, {{documento}}, {{profesional}}, {{clinica}}, {{fecha}}, {{tratamiento}}. Otra variable da 400. */
+            body: string;
+            /** @description Por defecto, true */
+            active?: boolean;
+        };
+        UpdateConsentTemplateDto: {
+            title?: string;
+            body?: string;
+            /** @description false = desactivar la plantilla */
+            active?: boolean;
+        };
+        PatientConsentSummaryDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            tenantId: string;
+            /** Format: uuid */
+            patientId: string;
+            /** Format: uuid */
+            templateId: string;
+            templateVersion: number;
+            /** Format: uuid */
+            treatmentPlanId: string | null;
+            title: string;
+            /** @enum {string} */
+            signerType: "PATIENT" | "GUARDIAN";
+            signerName: string;
+            signerDocument: string | null;
+            professionalName: string;
+            /** @description SHA-256 (hex) de texto + firmante + firmas + signedAt */
+            contentHash: string;
+            /**
+             * Format: date-time
+             * @description Hora del servidor
+             */
+            signedAt: string;
+            /** Format: uuid */
+            recordedById: string;
+        };
+        ConsentPreviewDto: {
+            /** Format: uuid */
+            templateId: string;
+            templateVersion: number;
+            title: string;
+            /** @description Texto con las variables ya resueltas */
+            body: string;
+            professionalName: string;
+        };
+        SignPatientConsentDto: {
+            /** Format: uuid */
+            templateId: string;
+            /** @description La versión de la plantilla que se mostró en la vista previa; si cambió, 409. */
+            templateVersion: number;
+            /** Format: uuid */
+            treatmentPlanId?: string;
+            /** @enum {string} */
+            signerType: "PATIENT" | "GUARDIAN";
+            /** @description Obligatorio si signerType=GUARDIAN */
+            guardianName?: string;
+            /** @description Obligatorio si signerType=GUARDIAN */
+            guardianDocument?: string;
+            /** @description PNG (data:image/png;base64,… o base64), máx. 200 KB. Del paciente o del tutor. */
+            patientSignature: string;
+            /** @description PNG (data:image/png;base64,… o base64), máx. 200 KB. */
+            professionalSignature: string;
+        };
+        PatientConsentDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            tenantId: string;
+            /** Format: uuid */
+            patientId: string;
+            /** Format: uuid */
+            templateId: string;
+            templateVersion: number;
+            /** Format: uuid */
+            treatmentPlanId: string | null;
+            title: string;
+            /** @enum {string} */
+            signerType: "PATIENT" | "GUARDIAN";
+            signerName: string;
+            signerDocument: string | null;
+            professionalName: string;
+            /** @description SHA-256 (hex) de texto + firmante + firmas + signedAt */
+            contentHash: string;
+            /**
+             * Format: date-time
+             * @description Hora del servidor
+             */
+            signedAt: string;
+            /** Format: uuid */
+            recordedById: string;
+            /** @description Texto renderizado tal como se firmó */
+            body: string;
+            /** @description data:image/png;base64,… */
+            patientSignature: string;
+            /** @description data:image/png;base64,… */
+            professionalSignature: string;
+        };
+        ConsentClinicDto: {
+            name: string;
+            logoUrl: string | null;
+        };
+        ConsentPatientDto: {
+            /** Format: uuid */
+            id: string;
+            firstName: string;
+            lastName: string;
+            /** @enum {string} */
+            docType: "CC" | "TI" | "CE" | "PASSPORT" | "OTHER";
+            docNumber: string | null;
+        };
+        PatientConsentDocumentDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            tenantId: string;
+            /** Format: uuid */
+            patientId: string;
+            /** Format: uuid */
+            templateId: string;
+            templateVersion: number;
+            /** Format: uuid */
+            treatmentPlanId: string | null;
+            title: string;
+            /** @enum {string} */
+            signerType: "PATIENT" | "GUARDIAN";
+            signerName: string;
+            signerDocument: string | null;
+            professionalName: string;
+            /** @description SHA-256 (hex) de texto + firmante + firmas + signedAt */
+            contentHash: string;
+            /**
+             * Format: date-time
+             * @description Hora del servidor
+             */
+            signedAt: string;
+            /** Format: uuid */
+            recordedById: string;
+            /** @description Texto renderizado tal como se firmó */
+            body: string;
+            /** @description data:image/png;base64,… */
+            patientSignature: string;
+            /** @description data:image/png;base64,… */
+            professionalSignature: string;
+            clinic: components["schemas"]["ConsentClinicDto"];
+            patient: components["schemas"]["ConsentPatientDto"];
+            /** @description true si el hash guardado coincide con el recalculado al leer */
+            integrityOk: boolean;
         };
     };
     responses: never;
@@ -4795,6 +5044,281 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["DashboardDto"];
                 };
+            };
+        };
+    };
+    ConsentTemplatesController_list: {
+        parameters: {
+            query?: {
+                /** @description true = solo activas; false = solo inactivas; sin él, todas */
+                active?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConsentTemplateDto"][];
+                };
+            };
+        };
+    };
+    ConsentTemplatesController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateConsentTemplateDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConsentTemplateDto"];
+                };
+            };
+            /** @description Texto vacío o variables desconocidas */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo ADMIN */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ya existe una plantilla con ese título */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ConsentTemplatesController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateConsentTemplateDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConsentTemplateDto"];
+                };
+            };
+            /** @description Solo ADMIN */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Plantilla no encontrada en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientConsentsController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PatientConsentSummaryDto"][];
+                };
+            };
+            /** @description Rol sin acceso clínico (recepción) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientConsentsController_sign: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SignPatientConsentDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PatientConsentDto"];
+                };
+            };
+            /** @description Falta una firma, no es PNG, supera 200 KB, o falta el tutor; plantilla desactivada */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Rol sin acceso clínico (recepción) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente, plantilla o plan no encontrados en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La plantilla cambió desde la vista previa (templateVersion) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientConsentsController_preview: {
+        parameters: {
+            query: {
+                templateId: string;
+                /** @description Plan del paciente que resuelve {{tratamiento}} */
+                treatmentPlanId?: string;
+            };
+            header?: never;
+            path: {
+                patientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConsentPreviewDto"];
+                };
+            };
+            /** @description Plantilla desactivada */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Rol sin acceso clínico (recepción) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente, plantilla o plan no encontrados en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientConsentsController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PatientConsentDocumentDto"];
+                };
+            };
+            /** @description Rol sin acceso clínico (recepción) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Consentimiento no encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

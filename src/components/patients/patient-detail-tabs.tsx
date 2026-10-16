@@ -8,6 +8,7 @@ export type PatientDetailTabKey =
   | 'odontogram'
   | 'treatment-plans'
   | 'account-statement'
+  | 'consents'
   | 'data-consents';
 
 interface PatientDetailTabsProps {
@@ -26,6 +27,8 @@ interface PatientDetailTabsProps {
   accountStatementLabel?: string;
   /** Etiqueta de la pestaña «Autorizaciones» (Ley 1581, DX-037). */
   dataConsentsLabel?: string;
+  /** «Consentimientos» (DX-006): sin etiqueta no existe (recepción no la ve). */
+  consentsLabel?: string;
 }
 
 /** Left-to-right reading order of the tablist — the order the arrow keys walk. */
@@ -35,6 +38,7 @@ const TAB_ORDER: PatientDetailTabKey[] = [
   'odontogram',
   'treatment-plans',
   'account-statement',
+  'consents',
   'data-consents',
 ];
 
@@ -80,6 +84,7 @@ export function PatientDetailTabs({
   treatmentPlansLabel,
   accountStatementLabel,
   dataConsentsLabel,
+  consentsLabel,
 }: PatientDetailTabsProps) {
   const labels: Record<PatientDetailTabKey, string | undefined> = {
     data: dataLabel,
@@ -88,6 +93,7 @@ export function PatientDetailTabs({
     'treatment-plans': treatmentPlansLabel,
     'account-statement': accountStatementLabel,
     'data-consents': dataConsentsLabel,
+    consents: consentsLabel,
   };
   // Las pestañas que de verdad se pintan, en orden: las flechas recorren estas.
   const tabs = TAB_ORDER.filter((tab) => labels[tab] !== undefined);
