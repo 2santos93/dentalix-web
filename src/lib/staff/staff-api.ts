@@ -1,4 +1,5 @@
 import { apiFetch, apiFetchOrNull } from '@/lib/api/client';
+import type { components } from '@/lib/api/schema';
 
 // `ClinicRole` isn't exposed as its own named schema component (it only shows
 // up inline wherever a DTO references it) — re-declare the literal union here
@@ -97,7 +98,17 @@ export interface StaffDirectoryEntry {
   status: StaffDirectoryStatus;
   /** Caducidad del enlace; `null` en los miembros. */
   expiresAt: string | null;
+  /**
+   * Estado del último email con el enlace (DX-088): `PENDING` (por enviar o
+   * saliendo), `SENT`, `FAILED`; `null` en los miembros o si nunca se encoló.
+   */
+  emailDelivery: InvitationEmailDelivery | null;
 }
+
+/** Estado del email de una invitación, tal como lo genera el contrato. */
+export type InvitationEmailDelivery = NonNullable<
+  components['schemas']['StaffDirectoryEntryDto']['emailDelivery']
+>;
 
 export interface StaffDirectoryPage {
   items: StaffDirectoryEntry[];

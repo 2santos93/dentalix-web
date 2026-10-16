@@ -15,9 +15,11 @@ export async function listInvitations(token: string): Promise<Invitation[]> {
 }
 
 /**
- * `POST /staff/invitations` — issues a new invitation and returns it together
- * with the raw `token` (only ever exposed here, at creation time) so the
- * caller can build the shareable invitation link.
+ * `POST /staff/invitations` — issues a new invitation, queues its email (sent
+ * in the background, DX-088) and returns it together with the raw `token`
+ * (only ever exposed here and on resend) so the caller can also build the
+ * shareable invitation link. `emailDelivery` is `PENDING` when the email was
+ * queued, `null` when it couldn't be.
  */
 export async function createInvitation(
   token: string,
@@ -31,13 +33,29 @@ export async function createInvitation(
 }
 
 /**
+ * `POST /staff/invitations/:id/resend` — «Reenviar invitación» (DX-088): la
+ * misma invitación con un token nuevo (el enlace anterior deja de servir), 7
+ * días más y un email nuevo. Devuelve el token nuevo (para copiar el enlace si
+ * el email no se pudo programar) y `emailDelivery`.
+ */
+export async function resendInvitation(
+  token: string,
+  id: string,
+): Promise<CreatedInvitation> {
+  return apiFetch<CreatedInvitation>(`/staff/invitations/${encodeURIComponent(id)}/resend`, {
+    method: 'POST',
+    token,
+  });
+}
+
+/**
  * `DELETE /staff/invitations/:id` — revokes a pending invitation. The
  * backend returns `204` with an EMPTY body, which `apiFetch`'s `res.json()`
  * would throw on (same situation as `deactivateStaff` in `staff-api.ts`) —
  * use `apiFetchOrNull` and discard the (always-null) result.
  */
 export async function revokeInvitation(token: string, id: string): Promise<void> {
-  await apiFetchOrNull<null>(`/staff/invitations/${id}`, {
+  await apiFetchOrNull<null>(`/staff/invitations/${encodeURIComponent(id)}`, {
     method: 'DELETE',
     token,
   });

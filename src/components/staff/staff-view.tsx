@@ -2,15 +2,19 @@
 import * as React from 'react';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { ApiError } from '@/lib/api/client';
 import { apiErrorMessage } from '@/lib/api/error-message';
+import { toast } from 'sonner';
 import {
   listStaffDirectory,
   type ClinicRole,
+  type InvitationEmailDelivery,
   type StaffDirectoryEntry,
   type StaffDirectoryStatus,
 } from '@/lib/staff/staff-api';
 import {
   createInvitation,
+  resendInvitation,
   revokeInvitation,
   type CreatedInvitation,
 } from '@/lib/staff/invitations-api';
@@ -62,7 +66,7 @@ const copy = {
   inviteToggle: 'Invitar',
   formTitle: 'Invitar a la clínica',
   formDescription:
-    'La persona recibirá un enlace para crear su propia contraseña y unirse a la clínica.',
+    'Le enviaremos un correo con un enlace para crear su contraseña y unirse a la clínica.',
   fullNameLabel: 'Nombre completo',
   emailLabel: 'Correo electrónico',
   roleLabel: 'Rol',
@@ -86,7 +90,13 @@ const copy = {
   statusActive: 'Aceptado',
   statusPending: 'Pendiente',
   statusInactive: 'Inactivo',
-  resend: 'Reenviar',
+  resend: 'Reenviar invitación',
+  resendTitle: '¿Reenviar la invitación?',
+  resendBody: (email: string) =>
+    `Enviaremos un correo nuevo a ${email}. El enlace anterior dejará de funcionar y el nuevo vale 7 días.`,
+  resendConfirmYes: 'Sí, reenviar',
+  resentToast: 'Invitación reenviada',
+  resentToastDescription: (email: string) => `Enviamos un correo nuevo a ${email}.`,
   revoke: 'Revocar',
   revokeTitle: '¿Revocar la invitación?',
   revokeBody: (email: string) => `El enlace enviado a ${email} dejará de funcionar.`,
@@ -109,7 +119,16 @@ const copy = {
   genericResendError: 'No pudimos reenviar la invitación.',
   genericRevokeError: 'No pudimos revocar la invitación.',
   inviteCreatedTitle: 'Invitación creada',
-  inviteCreatedDescription: 'Comparte este enlace con la persona invitada.',
+  inviteResentTitle: 'Invitación reenviada',
+  deliveryAnnounce: {
+    SENT: (email: string) => `Correo de invitación enviado a ${email}.`,
+    FAILED: (email: string) => `No se pudo enviar el correo de invitación a ${email}.`,
+  },
+  inviteCreatedDescription:
+    'Le enviamos un correo con este enlace. Si no le llega, puedes copiarlo y compartirlo tú.',
+  // El backend no pudo programar el correo (la invitación sí se creó).
+  inviteNotQueuedDescription:
+    'No pudimos programar el correo. Comparte este enlace con la persona invitada o reenvía la invitación más tarde.',
   copyLabel: 'Copiar',
   copiedLabel: 'Copiado',
   copyWarning: 'Cópialo ahora: por seguridad no podrás verlo de nuevo.',
@@ -150,6 +169,26 @@ const STATUS_BADGE: Record<
   INACTIVE: { label: copy.statusInactive, variant: 'secondary' },
 };
 
+// Estado del correo de una invitación (DX-088). Rojo solo si falló: es lo único
+// que pide hacer algo (reenviar); pendiente y enviado son informativos.
+const EMAIL_DELIVERY_BADGE: Record<
+  InvitationEmailDelivery,
+  { label: string; variant: 'muted' | 'danger' }
+> = {
+  SENT: { label: 'Correo: Enviado', variant: 'muted' },
+  PENDING: { label: 'Correo: Pendiente', variant: 'muted' },
+  FAILED: { label: 'Correo: Falló', variant: 'danger' },
+};
+
+/**
+ * Mientras alguna invitación de la página tiene el correo pendiente, la lista
+ * se vuelve a pedir en silencio cada pocos segundos (el despachador lo envía
+ * en segundo plano), hasta un tope: si el proveedor tarda, el estado se ve al
+ * recargar.
+ */
+export const DELIVERY_POLL_MS = 3_000;
+const DELIVERY_POLL_MAX = 5;
+
 const PAGE_SIZE = 20;
 // Lo bastante corto para no notarse al teclear, lo bastante largo para no
 // disparar una petición por tecla.
@@ -168,7 +207,8 @@ interface StaffViewProps {
  * se le cambia el nombre, el rol o el acceso; así una fila no es a la vez lista
  * y formulario, que era lo que hacía la versión anterior. Las invitaciones no
  * tienen perfil que abrir —todavía no hay persona— y por eso son las únicas con
- * acciones en la fila: reenviar y revocar.
+ * acciones en la fila: reenviar y revocar. Cada invitación muestra además el
+ * estado de su correo (DX-088).
  */
 export function StaffView({ token }: StaffViewProps) {
   const [entries, setEntries] = useState<StaffDirectoryEntry[]>([]);
@@ -202,6 +242,14 @@ export function StaffView({ token }: StaffViewProps) {
 
   const [busyId, setBusyId] = useState<string | null>(null);
   const [revokingId, setRevokingId] = useState<string | null>(null);
+  const [resendingId, setResendingId] = useState<string | null>(null);
+  // El enlace del diálogo viene de un reenvío (cambia el título).
+  const [linkFromResend, setLinkFromResend] = useState(false);
+  // Anuncio para lectores de pantalla cuando el sondeo ve salir (o fallar) un
+  // correo: el cambio de la etiqueta por sí solo no se anuncia.
+  const [deliveryAnnouncement, setDeliveryAnnouncement] = useState('');
+  // Vueltas de sondeo del estado del correo desde la última carga visible.
+  const [polls, setPolls] = useState(0);
 
   useEffect(() => {
     const debounce = setTimeout(() => setSearch(searchInput), SEARCH_DEBOUNCE_MS);
@@ -228,6 +276,8 @@ export function StaffView({ token }: StaffViewProps) {
         // asume el valor pedido.
         setPageSize(res.pageSize);
         setLoadError(null);
+        // Carga visible nueva: el sondeo del estado del correo vuelve a empezar.
+        setPolls(0);
       } catch (err) {
         if (cancelled) return;
         setLoadError(apiErrorMessage(err, copy.genericLoadError));
@@ -240,6 +290,45 @@ export function StaffView({ token }: StaffViewProps) {
       cancelled = true;
     };
   }, [token, page, search, roleFilter, statusFilter, reloadKey]);
+
+  const hasPendingEmail = entries.some((e) => e.emailDelivery === 'PENDING');
+
+  useEffect(() => {
+    if (!token || loading || !hasPendingEmail || polls >= DELIVERY_POLL_MAX) return;
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      try {
+        const res = await listStaffDirectory(token, {
+          page,
+          pageSize: PAGE_SIZE,
+          search: search || undefined,
+          role: roleFilter || undefined,
+          status: statusFilter || undefined,
+        });
+        if (cancelled) return;
+        const announcements = res.items.flatMap((next) => {
+          const before = entries.find((e) => e.id === next.id && e.kind === next.kind);
+          return before?.emailDelivery === 'PENDING' &&
+            (next.emailDelivery === 'SENT' || next.emailDelivery === 'FAILED')
+            ? [copy.deliveryAnnounce[next.emailDelivery](next.email)]
+            : [];
+        });
+        if (announcements.length > 0) setDeliveryAnnouncement(announcements.join(' '));
+        setEntries(res.items);
+        setTotal(res.total);
+      } catch {
+        // Sondeo en segundo plano: lo que hay en pantalla sigue siendo
+        // correcto (solo puede estar desactualizado), así que no se avisa;
+        // el siguiente intento o una recarga lo ponen al día.
+      } finally {
+        if (!cancelled) setPolls((n) => n + 1);
+      }
+    }, DELIVERY_POLL_MS);
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [token, loading, hasPendingEmail, polls, entries, page, search, roleFilter, statusFilter]);
 
   function refresh() {
     setReloadKey((k) => k + 1);
@@ -274,6 +363,7 @@ export function StaffView({ token }: StaffViewProps) {
     if (!next) {
       setCreateError(null);
       setCreatedInvitation(null);
+      setLinkFromResend(false);
       resetForm();
     }
   }
@@ -281,21 +371,34 @@ export function StaffView({ token }: StaffViewProps) {
   async function handleResend(entry: StaffDirectoryEntry) {
     setBusyId(entry.id);
     try {
-      // No hay endpoint de reenvío: crear otra invitación para el mismo correo
-      // revoca la anterior en el backend, así que solo vive un enlace por
-      // persona.
-      const created = await createInvitation(token, {
-        fullName: entry.fullName,
-        email: entry.email,
-        role: entry.role,
-      });
-      setCreatedInvitation(created);
-      setShowForm(true);
+      // La MISMA invitación con un token nuevo: el enlace anterior deja de
+      // servir y sale un correo nuevo (DX-088).
+      const resent = await resendInvitation(token, entry.id);
+      setResendingId(null);
+      if (resent.emailDelivery === null) {
+        // Sin correo programado, el enlace es la única vía: se muestra.
+        setLinkFromResend(true);
+        setCreatedInvitation(resent);
+        setShowForm(true);
+      } else {
+        toast.success(copy.resentToast, {
+          description: copy.resentToastDescription(entry.email),
+        });
+      }
       refresh();
     } catch (err) {
-      notifyError(apiErrorMessage(err, copy.genericResendError), {
-        onRetry: () => handleResend(entry),
-      });
+      // Igual que revocar: el diálogo se cierra para que el «Reintentar» del
+      // toast no quede inerte debajo.
+      setResendingId(null);
+      const message = apiErrorMessage(err, copy.genericResendError);
+      if (err instanceof ApiError && (err.status === 404 || err.status === 429)) {
+        // Reintentar no sirve: la invitación ya no está pendiente (se recarga
+        // la lista para que desaparezca) o hay que esperar (lo dice el mensaje).
+        notifyError(message);
+        if (err.status === 404) refresh();
+      } else {
+        notifyError(message, { onRetry: () => handleResend(entry) });
+      }
     } finally {
       setBusyId(null);
     }
@@ -323,6 +426,9 @@ export function StaffView({ token }: StaffViewProps) {
   const revokingEntry = revokingId
     ? entries.find((e) => e.id === revokingId) ?? null
     : null;
+  const resendingEntry = resendingId
+    ? entries.find((e) => e.id === resendingId) ?? null
+    : null;
 
   const inviteLink = createdInvitation
     ? `${window.location.origin}/invitacion/${createdInvitation.token}`
@@ -333,6 +439,9 @@ export function StaffView({ token }: StaffViewProps) {
   return (
     <>
       <PageHeader title={copy.title} description={copy.description} />
+      <p className="sr-only" role="status" aria-live="polite">
+        {deliveryAnnouncement}
+      </p>
 
       {/* Un solo bloque apretado (12px) para filtrar → contar → leer: los tres
           pasos son el mismo gesto. La separación grande de la página es la que
@@ -437,8 +546,14 @@ export function StaffView({ token }: StaffViewProps) {
         <Dialog open={!!createdInvitation} onOpenChange={handleCreateOpenChange}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>{copy.inviteCreatedTitle}</DialogTitle>
-              <DialogDescription>{copy.inviteCreatedDescription}</DialogDescription>
+              <DialogTitle>
+                {linkFromResend ? copy.inviteResentTitle : copy.inviteCreatedTitle}
+              </DialogTitle>
+              <DialogDescription>
+                {createdInvitation?.emailDelivery === null
+                  ? copy.inviteNotQueuedDescription
+                  : copy.inviteCreatedDescription}
+              </DialogDescription>
             </DialogHeader>
             <div className="flex flex-col gap-2 rounded-lg border border-border bg-bg px-3 py-2">
               <p className="break-all font-mono text-sm text-ink">{inviteLink}</p>
@@ -521,7 +636,14 @@ export function StaffView({ token }: StaffViewProps) {
                       <TableCell className="text-muted" data-label={copy.colEmail}>{entry.email}</TableCell>
                       <TableCell className="text-muted" data-label={copy.colRole}>{ROLE_LABEL[entry.role]}</TableCell>
                       <TableCell data-label={copy.colStatus}>
-                        <Badge variant={badge.variant}>{badge.label}</Badge>
+                        <div className="flex flex-wrap items-center gap-1.5">
+                          <Badge variant={badge.variant}>{badge.label}</Badge>
+                          {entry.kind === 'INVITATION' && entry.emailDelivery ? (
+                            <Badge variant={EMAIL_DELIVERY_BADGE[entry.emailDelivery].variant}>
+                              {EMAIL_DELIVERY_BADGE[entry.emailDelivery].label}
+                            </Badge>
+                          ) : null}
+                        </div>
                       </TableCell>
                       <TableCell className="text-right" data-label={copy.colActions}>
                         <RowActions
@@ -538,7 +660,7 @@ export function StaffView({ token }: StaffViewProps) {
                                   {
                                     label: copy.resend,
                                     icon: <Send />,
-                                    onSelect: () => void handleResend(entry),
+                                    onSelect: () => setResendingId(entry.id),
                                   },
                                   {
                                     label: copy.revoke,
@@ -568,6 +690,19 @@ export function StaffView({ token }: StaffViewProps) {
           disabled={loading}
         />
       </div>
+
+      <ConfirmDialog
+        open={resendingId !== null}
+        onOpenChange={(open) => {
+          if (!open) setResendingId(null);
+        }}
+        title={copy.resendTitle}
+        description={resendingEntry ? copy.resendBody(resendingEntry.email) : undefined}
+        confirmLabel={copy.resendConfirmYes}
+        confirming={busyId === resendingId}
+        destructive={false}
+        onConfirm={() => resendingEntry && handleResend(resendingEntry)}
+      />
 
       <ConfirmDialog
         open={revokingId !== null}

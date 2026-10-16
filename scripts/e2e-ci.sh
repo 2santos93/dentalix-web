@@ -95,6 +95,10 @@ load_env() {
   export RATE_LIMIT_INVITATION_LIMIT=100000
   export RATE_LIMIT_PASSWORD_LIMIT=100000
   export RATE_LIMIT_CONFIRMATION_LIMIT=100000
+  export RATE_LIMIT_INVITATION_EMAIL_LIMIT=100000
+  # Topes de email en BD (DX-088): la suite reenvía una invitación al momento
+  # de crearla; sin esto el enfriamiento de 60 s respondería 429.
+  export MAIL_RECIPIENT_COOLDOWN_SECONDS=0
   # La web: las NEXT_PUBLIC_* se incrustan en el build y el rewrite /api/v1.
   export NEXT_PUBLIC_API_URL="$API_URL"
   # Igual que el build de ci.yml y que `next dev` sin .env (default del código).
