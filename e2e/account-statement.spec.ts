@@ -92,7 +92,10 @@ async function seed(
     paidAt: '2026-09-02T00:00:00.000Z',
     method: 'CARD',
   });
-  const voidRes = await request.delete(`${API}/payments/${voided.id}`, { headers });
+  const voidRes = await request.delete(`${API}/payments/${voided.id}`, {
+    headers,
+    data: { reason: 'Cobro duplicado' },
+  });
   expect(voidRes.ok(), `Anular el abono falló: ${await voidRes.text()}`).toBeTruthy();
 
   return patient.id;
@@ -143,7 +146,7 @@ test('estado de cuenta: ficha → pestaña → imprimir muestra un documento lim
 
   const movements = panel.getByRole('table', { name: 'Movimientos (abonos)' });
   await expect(movements.getByRole('row')).toHaveCount(3);
-  await expect(movements).toContainText('Anulado');
+  await expect(movements).toContainText('Anulado por Test User: Cobro duplicado');
 
   // --- «Imprimir» → vista imprimible en otra pestaña ---
   const [printPage] = await Promise.all([

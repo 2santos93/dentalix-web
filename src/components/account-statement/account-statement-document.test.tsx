@@ -45,6 +45,9 @@ it('incluye resumen por moneda, planes, movimientos y cuotas — y ningún botó
 
   expect(within(screen.getByRole('table', { name: /movimientos/i })).getAllByRole('row')).toHaveLength(4);
   expect(screen.getByRole('table', { name: /movimientos/i })).toHaveTextContent(/anulado/i);
+  expect(screen.getByRole('table', { name: /movimientos/i })).toHaveTextContent(
+    'Anulado por Rita Recepción: Cobro duplicado',
+  );
   expect(within(screen.getByRole('table', { name: /cuotas/i })).getAllByRole('row')).toHaveLength(4);
   expect(screen.getByRole('table', { name: /planes/i })).toHaveTextContent(/no suma al saldo/i);
 

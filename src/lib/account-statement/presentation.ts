@@ -3,6 +3,7 @@ import { PAYMENT_METHOD_LABELS } from '@/lib/payments/payment-method';
 import type { PaymentMethod } from '@/lib/payments/payments-api';
 import type {
   AccountStatementInstallment,
+  AccountStatementMovement,
   AccountStatementPlan,
 } from './account-statement-api';
 
@@ -18,6 +19,8 @@ export const statementCopy = {
   installment: (sequence: number | null) => `Cuota ${sequence ?? ''}`.trim(),
   methodNone: 'Sin método',
   voided: 'Anulado',
+  voidedBy: (name: string) => `Anulado por ${name}`,
+  voidedByUnknownMember: 'un usuario ajeno a la clínica',
   notCounted: 'No suma al saldo',
   inFavor: 'a favor',
   noOverdue: 'Sin cuotas vencidas',
@@ -36,6 +39,22 @@ export function planNamer(plans: AccountStatementPlan[]): (id: string) => string
 
 export function methodLabel(method: PaymentMethod | null): string {
   return method ? PAYMENT_METHOD_LABELS[method] : statementCopy.methodNone;
+}
+
+/**
+ * «Anulado por X: motivo» de un abono anulado (SEC-013), o `null` si el abono
+ * está activo o es una anulación antigua sin autor guardado (esa solo lleva la
+ * marca «Anulado»). Sin nombre (el autor no es miembro de la clínica, p. ej.
+ * soporte de plataforma) se dice así en vez de inventar uno.
+ */
+export function voidedDetail(
+  movement: Pick<AccountStatementMovement, 'voided' | 'voidedBy' | 'voidReason'>,
+): string | null {
+  if (!movement.voided || !movement.voidedBy) return null;
+  const who = statementCopy.voidedBy(
+    movement.voidedBy.fullName ?? statementCopy.voidedByUnknownMember,
+  );
+  return movement.voidReason ? `${who}: ${movement.voidReason}` : who;
 }
 
 export function installmentLabel(installment: AccountStatementInstallment): string {

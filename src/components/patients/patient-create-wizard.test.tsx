@@ -25,7 +25,7 @@ describe('PatientCreateWizard', () => {
   });
 
   it('renders the wizard steps and the basic-info fields on step 1', () => {
-    render(<PatientCreateWizard token="tok" />);
+    render(<PatientCreateWizard token="tok" canWriteClinicalHistory />);
     expect(screen.getByText('Datos')).toBeInTheDocument();
     expect(screen.getByText('Antecedentes')).toBeInTheDocument();
     expect(screen.getByText('Alergias y medicamentos')).toBeInTheDocument();
@@ -37,7 +37,7 @@ describe('PatientCreateWizard', () => {
 
   it('blocks advancing past step 1 without nombre/apellido and shows a validation message', async () => {
     const user = userEvent.setup();
-    render(<PatientCreateWizard token="tok" />);
+    render(<PatientCreateWizard token="tok" canWriteClinicalHistory />);
     await user.type(screen.getByLabelText(/^nombre/i), 'Ana');
     await user.click(screen.getByRole('button', { name: /siguiente/i }));
 
@@ -67,7 +67,7 @@ describe('PatientCreateWizard', () => {
       updatedAt: '2026-01-01T00:00:00.000Z',
     });
 
-    render(<PatientCreateWizard token="tok" />);
+    render(<PatientCreateWizard token="tok" canWriteClinicalHistory />);
 
     await user.type(screen.getByLabelText(/^nombre/i), 'Ana');
     await user.type(screen.getByLabelText(/apellido/i), 'García');
@@ -98,5 +98,40 @@ describe('PatientCreateWizard', () => {
     });
     expect(input.medicalHistory?.allergies).toHaveLength(1);
     expect(typeof input.dataConsentAt).toBe('string');
+  });
+
+  // SEC-005: recepción no escribe historia clínica, así que el alta no le
+  // enseña los pasos de anamnesis ni envía `medicalHistory`.
+  describe('sin permiso de historia clínica (recepción)', () => {
+    it('no muestra los pasos de anamnesis', () => {
+      render(<PatientCreateWizard token="tok" canWriteClinicalHistory={false} />);
+      expect(screen.getByText('Datos')).toBeInTheDocument();
+      expect(screen.getByText('Consentimiento')).toBeInTheDocument();
+      expect(screen.queryByText('Antecedentes')).not.toBeInTheDocument();
+      expect(screen.queryByText('Alergias y medicamentos')).not.toBeInTheDocument();
+      expect(screen.queryByText('Hábitos')).not.toBeInTheDocument();
+    });
+
+    it('pasa de Datos a Consentimiento y crea el paciente sin medicalHistory', async () => {
+      const user = userEvent.setup();
+      mockedCreatePatient.mockResolvedValue({ id: 'p2' } as Awaited<
+        ReturnType<typeof createPatient>
+      >);
+      render(<PatientCreateWizard token="tok" canWriteClinicalHistory={false} />);
+
+      await user.type(screen.getByLabelText(/^nombre/i), 'Ana');
+      await user.type(screen.getByLabelText(/apellido/i), 'García');
+      await goToStep(user, 1); // -> Consentimiento
+
+      expect(screen.queryByText(/resumen de la historia clínica/i)).not.toBeInTheDocument();
+      expect(screen.getByText(/la completará el equipo clínico/i)).toBeInTheDocument();
+      await user.click(screen.getByRole('checkbox', { name: /tratamiento de sus datos/i }));
+      await user.click(screen.getByRole('button', { name: /guardar/i }));
+
+      expect(mockedCreatePatient).toHaveBeenCalledTimes(1);
+      const [, input] = mockedCreatePatient.mock.calls[0];
+      expect(input).toMatchObject({ firstName: 'Ana', dataConsentAccepted: true });
+      expect(input).not.toHaveProperty('medicalHistory');
+    });
   });
 });

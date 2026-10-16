@@ -547,7 +547,7 @@ describe('TreatmentPlansTab', () => {
     await user.click(within(row).getByRole('button', { name: /anular/i }));
 
     const confirm = await screen.findByRole('dialog', { name: /anular este abono/i });
-    expect(confirm).toHaveTextContent(/no se borra de la base de datos/i);
+    expect(confirm).toHaveTextContent(/quién lo anuló, cuándo y por qué/i);
     await user.click(within(confirm).getByRole('button', { name: 'Cancelar' }));
 
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
@@ -675,9 +675,10 @@ describe('TreatmentPlansTab', () => {
     // La fila ya no anula directamente: abre la confirmación.
     const confirm = await screen.findByRole('dialog', { name: /anular este abono/i });
     expect(mockedVoidPayment).not.toHaveBeenCalled();
+    await user.type(within(confirm).getByLabelText(/motivo de la anulación/i), 'Cobro duplicado');
     await user.click(within(confirm).getByRole('button', { name: 'Anular abono' }));
 
-    await waitFor(() => expect(mockedVoidPayment).toHaveBeenCalledWith('tok', 'pay-1'));
+    await waitFor(() => expect(mockedVoidPayment).toHaveBeenCalledWith('tok', 'pay-1', 'Cobro duplicado'));
     await waitFor(() => expect(mockedGetPlanBalance).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(mockedListPayments).toHaveBeenCalledTimes(2));
     expect(await screen.findByText(/este plan todavía no tiene abonos/i)).toBeInTheDocument();
@@ -996,6 +997,7 @@ describe('TreatmentPlansTab', () => {
 
       await user.click(within(row).getByRole('button', { name: /anular/i }));
       const confirm = await screen.findByRole('dialog', { name: /anular este abono/i });
+      await user.type(within(confirm).getByLabelText(/motivo de la anulación/i), 'Cobro duplicado');
       await user.click(within(confirm).getByRole('button', { name: 'Anular abono' }));
 
       const toastText = await screen.findByText('No se pudo refrescar el saldo');
@@ -1025,6 +1027,7 @@ describe('TreatmentPlansTab', () => {
 
       await user.click(within(row).getByRole('button', { name: /anular/i }));
       const confirm = await screen.findByRole('dialog', { name: /anular este abono/i });
+      await user.type(within(confirm).getByLabelText(/motivo de la anulación/i), 'Cobro duplicado');
       await user.click(within(confirm).getByRole('button', { name: 'Anular abono' }));
 
       const alert = await screen.findByText('No se pudo anular');

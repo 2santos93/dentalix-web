@@ -6,6 +6,7 @@ import {
   methodLabel,
   planNamer,
   statementCopy,
+  voidedDetail,
 } from '@/lib/account-statement/presentation';
 import { INSTALLMENT_STATUS_LABELS } from '@/lib/payment-plans/installment-status';
 import { PLAN_STATUS_LABELS } from '@/lib/treatment-plans/plan-status';
@@ -260,7 +261,12 @@ export function AccountStatementDocument({ statement }: AccountStatementDocument
                   {statement.movements.map((m) => (
                     <tr key={m.id} className={m.voided ? 'text-[#6b7280]' : undefined}>
                       <Td>{formatCivilDate(m.paidAt)}</Td>
-                      <Td>{planName(m.treatmentPlanId)}</Td>
+                      <Td>
+                        {planName(m.treatmentPlanId)}
+                        {voidedDetail(m) ? (
+                          <span className="block text-xs">{voidedDetail(m)}</span>
+                        ) : null}
+                      </Td>
                       <Td>{methodLabel(m.method)}</Td>
                       <Td>{m.location.name}</Td>
                       <Td right>

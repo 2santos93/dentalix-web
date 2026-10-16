@@ -78,6 +78,8 @@ export function accountStatementFixture(
         treatmentPlanId: 'plan-1',
         voided: true,
         voidedAt: '2026-09-21T10:00:00.000Z',
+        voidedBy: { id: 'u-recep', fullName: 'Rita Recepción' },
+        voidReason: 'Cobro duplicado',
       },
       {
         id: 'pay-2',
@@ -89,6 +91,8 @@ export function accountStatementFixture(
         treatmentPlanId: 'plan-1',
         voided: false,
         voidedAt: null,
+        voidedBy: null,
+        voidReason: null,
       },
       {
         id: 'pay-1',
@@ -100,6 +104,8 @@ export function accountStatementFixture(
         treatmentPlanId: 'plan-2',
         voided: false,
         voidedAt: null,
+        voidedBy: null,
+        voidReason: null,
       },
     ],
     installments: [

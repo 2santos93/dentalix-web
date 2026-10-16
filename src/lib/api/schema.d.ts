@@ -173,6 +173,10 @@ export interface paths {
         };
         get: operations["PatientsController_list"];
         put?: never;
+        /**
+         * Crear paciente (con anamnesis v1 opcional)
+         * @description `medicalHistory` crea la versión 1 de la historia clínica y solo lo pueden enviar los roles clínicos (DENTIST, ASSISTANT, ADMIN). RECEPTION crea el paciente sin ese campo; si lo envía, 403.
+         */
         post: operations["PatientsController_create"];
         delete?: never;
         options?: never;
@@ -783,6 +787,10 @@ export interface paths {
         get?: never;
         put?: never;
         post?: never;
+        /**
+         * Anular un abono (con motivo; queda quién y cuándo)
+         * @description Borrado lógico: el abono deja de sumar pero se conserva con `voidedById`, `voidedAt` y `voidReason`. ADMIN anula cualquier abono; RECEPTION solo los que registró ella misma el mismo día (calendario de la sede del abono).
+         */
         delete: operations["PaymentsController_remove"];
         options?: never;
         head?: never;
@@ -1117,6 +1125,7 @@ export interface components {
             emergencyContactPhone?: string;
             guardianName?: string;
             guardianDocNumber?: string;
+            /** @description Anamnesis inicial (versión 1). Solo roles clínicos (DENTIST, ASSISTANT, ADMIN); con RECEPTION la petición se rechaza con 403. */
             medicalHistory?: components["schemas"]["SaveMedicalHistoryDto"];
         };
         PatientDto: {
@@ -1905,6 +1914,13 @@ export interface components {
             /** @example 1 */
             paymentsCount: number;
         };
+        VoidPaymentDto: {
+            /**
+             * @description Motivo de la anulación (3–300 caracteres tras quitar espacios). Queda guardado junto a quién y cuándo anuló.
+             * @example Cobro duplicado: el paciente pagó una sola vez
+             */
+            reason: string;
+        };
         CreatePaymentPlanDto: {
             /**
              * @description Número de cuotas, entero >= 1 y <= 600
@@ -2151,6 +2167,15 @@ export interface components {
             /** @example Sede principal */
             name: string;
         };
+        AccountStatementVoidedByDto: {
+            /** Format: uuid */
+            id: string;
+            /**
+             * @description Nombre del usuario; `null` si no es miembro de esta clínica (p. ej. soporte de plataforma).
+             * @example Rita Recepción
+             */
+            fullName: string | null;
+        };
         AccountStatementMovementDto: {
             /** Format: uuid */
             id: string;
@@ -2172,6 +2197,10 @@ export interface components {
             voided: boolean;
             /** Format: date-time */
             voidedAt: string | null;
+            /** @description Quién anuló el abono. `null` si está activo o se anuló antes de guardarse el autor. */
+            voidedBy: components["schemas"]["AccountStatementVoidedByDto"] | null;
+            /** @description Motivo de la anulación. `null` si está activo o es una anulación antigua. */
+            voidReason: string | null;
         };
         AccountStatementInstallmentDto: {
             /** Format: uuid */
@@ -2727,6 +2756,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["PatientDto"];
                 };
+            };
+            /** @description Rol sin acceso a pacientes, o rol no clínico (RECEPTION) enviando `medicalHistory` */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -4031,10 +4067,35 @@ export interface operations {
             };
             cookie?: never;
         };
-        requestBody?: never;
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VoidPaymentDto"];
+            };
+        };
         responses: {
-            /** @description Payment voided (deletedAt set) */
+            /** @description Abono anulado (cuerpo vacío) */
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Falta `reason` o no tiene 3–300 caracteres */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Rol sin acceso a pagos, o RECEPTION anulando un abono de otro usuario o de otro día */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El abono no existe, ya está anulado o es de otra clínica */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
