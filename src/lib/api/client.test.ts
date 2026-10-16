@@ -264,6 +264,22 @@ describe('apiFetch — refresh por cookie (DX-062)', () => {
     ).rejects.toBeInstanceOf(ApiError);
     expect(refreshCount).toBe(0);
   });
+
+  it('no renueva la sesión ante un 401 de un endpoint público /public/* (contraseña errónea al aceptar una invitación, DX-029)', async () => {
+    let refreshCount = 0;
+    global.fetch = jest.fn(async (url: string) => {
+      if (url.endsWith('/auth/refresh')) {
+        refreshCount += 1;
+        return ok({ accessToken: 'NEW' });
+      }
+      return unauthorized('La contraseña no es correcta');
+    }) as unknown as typeof fetch;
+
+    await expect(
+      apiFetch('/public/invitations/abc/accept', { method: 'POST', body: { password: 'x' } }),
+    ).rejects.toBeInstanceOf(ApiError);
+    expect(refreshCount).toBe(0);
+  });
 });
 
 describe('bootstrapSession — arranque de sesión al cargar la página (DX-062)', () => {
