@@ -13,6 +13,7 @@ describe('patientTabAccess (qué pestañas de la ficha ve cada rol)', () => {
     expect(access.data).toBe(true);
     expect(access['account-statement']).toBe(true);
     expect(access['data-consents']).toBe(true);
+    expect(access['access-log']).toBe(false);
   });
 
   it.each(['DENTIST', 'ASSISTANT'] as const)(
@@ -26,6 +27,8 @@ describe('patientTabAccess (qué pestañas de la ficha ve cada rol)', () => {
       expect(access.perio).toBe(true);
       expect(access.prescriptions).toBe(true);
       expect(access['account-statement']).toBe(false);
+      // DX-009: los accesos a la ficha solo los ve ADMIN.
+      expect(access['access-log']).toBe(false);
     },
   );
 
