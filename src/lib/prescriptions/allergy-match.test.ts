@@ -16,4 +16,15 @@ describe('findAllergyMatches (web)', () => {
     expect(findAllergyMatches([''], ['Penicilina'])).toEqual([]);
     expect(findAllergyMatches(['Amoxicilina'], ['de'])).toEqual([]);
   });
+
+  it('casa miembros de la familia por sufijo, plurales y forma inglesa (igual que la API)', () => {
+    expect(findAllergyMatches(['Bencilpenicilina'], ['Penicilina'])).toHaveLength(1);
+    expect(findAllergyMatches(['Cefazolina'], ['Cefalosporinas'])).toHaveLength(1);
+    expect(findAllergyMatches(['Aceclofenaco'], ['AINE'])).toHaveLength(1);
+    expect(findAllergyMatches(['Metronidazol'], ['metronidazole'])).toHaveLength(1);
+  });
+
+  it('no confunde «sulfato» con las sulfas', () => {
+    expect(findAllergyMatches(['Sulfato ferroso'], ['Sulfas'])).toEqual([]);
+  });
 });
