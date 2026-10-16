@@ -446,6 +446,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/patients/{patientId}/clinical-entries/{entryId}/addenda": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Adendas de una evolución, en orden cronológico (DX-038) */
+        get: operations["ClinicalEntriesController_addenda"];
+        put?: never;
+        /**
+         * Añade una adenda de corrección a una evolución (DX-038)
+         * @description La evolución original no cambia. Autor y fecha los pone el servidor.
+         */
+        post: operations["ClinicalEntriesController_addAddendum"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{patientId}/clinical-entries/{entryId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /** No permitido: una evolución no se edita (DX-038) */
+        put: operations["ClinicalEntriesController_rejectPut"];
+        post?: never;
+        /** No permitido: una evolución no se borra (DX-038) */
+        delete: operations["ClinicalEntriesController_rejectDelete"];
+        options?: never;
+        head?: never;
+        /** No permitido: una evolución no se edita (DX-038) */
+        patch: operations["ClinicalEntriesController_rejectPatch"];
+        trace?: never;
+    };
     "/api/v1/patients/{patientId}/tooth-records": {
         parameters: {
             query?: never;
@@ -1452,7 +1492,7 @@ export interface components {
         /** @enum {string} */
         AuditAction: "VIEW" | "CREATE" | "UPDATE" | "DELETE" | "SIGN" | "VOID" | "LOGIN" | "LOGIN_FAILED" | "PASSWORD_RESET" | "EXPORT" | "PRINT";
         /** @enum {string} */
-        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT";
+        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM";
         /**
          * @description Rol con el que actuó (del token). `null` en un login fallido.
          * @enum {string}
@@ -1997,6 +2037,30 @@ export interface components {
             reason?: string;
             notes: string;
         };
+        ClinicalEntryAddendumDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            tenantId: string;
+            /** Format: uuid */
+            patientId: string;
+            /** Format: uuid */
+            clinicalEntryId: string;
+            /** @description Motivo de la corrección */
+            reason: string;
+            /** @description Texto aclaratorio */
+            text: string;
+            /**
+             * Format: uuid
+             * @description Autor: el usuario autenticado que la registró (servidor)
+             */
+            authorId: string;
+            /**
+             * Format: date-time
+             * @description Fecha de registro: la fija el servidor
+             */
+            createdAt: string;
+        };
         ClinicalEntryDto: {
             /** Format: uuid */
             id: string;
@@ -2010,8 +2074,19 @@ export interface components {
             notes: string;
             /** Format: uuid */
             performedById: string | null;
-            /** Format: date-time */
+            /**
+             * Format: date-time
+             * @description Fecha de registro: la fija el servidor
+             */
             createdAt: string;
+            /** @description Adendas de corrección, en orden cronológico (DX-038) */
+            addenda: components["schemas"]["ClinicalEntryAddendumDto"][];
+        };
+        CreateClinicalEntryAddendumDto: {
+            /** @description Motivo de la corrección (p. ej. «pieza dental mal transcrita») */
+            reason: string;
+            /** @description Texto aclaratorio que corrige o completa la evolución */
+            text: string;
         };
         CreateToothRecordDto: {
             /**
@@ -4915,6 +4990,138 @@ export interface operations {
             };
             /** @description Paciente no encontrado en esta clínica (inexistente o de otra clínica). */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ClinicalEntriesController_addenda: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+                entryId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClinicalEntryAddendumDto"][];
+                };
+            };
+            /** @description Paciente o evolución no encontrados en esta clínica. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ClinicalEntriesController_addAddendum: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+                entryId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateClinicalEntryAddendumDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClinicalEntryAddendumDto"];
+                };
+            };
+            /** @description Motivo o texto inválidos. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente o evolución no encontrados en esta clínica (o la evolución es de otro paciente). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ClinicalEntriesController_rejectPut: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entryId: unknown;
+                patientId: unknown;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Una evolución de la historia clínica no se puede modificar ni borrar (Res. 1995 de 1999, art. 18). Para corregirla, añade una adenda: POST /patients/{patientId}/clinical-entries/{entryId}/addenda */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ClinicalEntriesController_rejectDelete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entryId: unknown;
+                patientId: unknown;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Una evolución de la historia clínica no se puede modificar ni borrar (Res. 1995 de 1999, art. 18). Para corregirla, añade una adenda: POST /patients/{patientId}/clinical-entries/{entryId}/addenda */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ClinicalEntriesController_rejectPatch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entryId: unknown;
+                patientId: unknown;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Una evolución de la historia clínica no se puede modificar ni borrar (Res. 1995 de 1999, art. 18). Para corregirla, añade una adenda: POST /patients/{patientId}/clinical-entries/{entryId}/addenda */
+            405: {
                 headers: {
                     [name: string]: unknown;
                 };

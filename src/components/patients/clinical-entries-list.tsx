@@ -6,8 +6,10 @@ import {
   listClinicalEntries,
   createClinicalEntry,
   type ClinicalEntry,
+  type ClinicalEntryAddendum,
   type CreateClinicalEntryInput,
 } from '@/lib/patients/clinical-api';
+import { ClinicalEntryAddendumModal } from '@/components/patients/clinical-entry-addendum-modal';
 import { listStaff, type StaffMember } from '@/lib/staff/staff-api';
 import { formatCivilDate, formatDateTime } from '@/lib/format/date';
 import { AsyncSection } from '@/components/shared/async-section';
@@ -31,7 +33,6 @@ const copy = {
   colNotes: 'Notas',
   colRecord: 'Registro',
   reasonFallback: '—',
-  unknownAuthor: 'Autor no registrado',
   recordedBy: (author: string, when: string) => `${author} · ${when}`,
   recordedAt: (when: string) => when,
   formTitle: 'Agregar evolución',
@@ -45,6 +46,11 @@ const copy = {
   genericLoadError: 'No pudimos cargar las evoluciones.',
   genericCreateError: 'No pudimos agregar la evolución. Intenta de nuevo.',
   tableLabel: 'Evoluciones del paciente',
+  addAddendum: 'Añadir adenda',
+  addAddendumFor: (entryDate: string) => `Añadir adenda a la evolución del ${entryDate}`,
+  addendaLabel: (entryDate: string) => `Adendas de la evolución del ${entryDate}`,
+  addendumHeading: 'Adenda',
+  addendumReason: 'Motivo:',
 };
 
 /** Hoy en formato `yyyy-mm-dd`, para topar el `<input type="date">`. */
@@ -87,6 +93,8 @@ export function ClinicalEntriesList({ token, patientId }: ClinicalEntriesListPro
   const [submitting, setSubmitting] = useState(false);
   // Bumped by the retry action to re-run the load effect below.
   const [reloadKey, setReloadKey] = useState(0);
+  // Evolución a la que se le está añadiendo una adenda (modal abierto).
+  const [addendumFor, setAddendumFor] = useState<ClinicalEntry | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -120,7 +128,7 @@ export function ClinicalEntriesList({ token, patientId }: ClinicalEntriesListPro
         if (!cancelled) setStaff(data ?? []);
       })
       .catch(() => {
-        /* fail soft — la fila cae a «Autor no registrado» */
+        /* fail soft — la fila muestra solo la fecha de registro */
       });
     return () => {
       cancelled = true;
@@ -132,18 +140,68 @@ export function ClinicalEntriesList({ token, patientId }: ClinicalEntriesListPro
     [staff],
   );
 
-  function authorName(entry: ClinicalEntry): string {
-    if (!entry.performedById) return copy.unknownAuthor;
-    return staffById.get(entry.performedById) ?? copy.unknownAuthor;
+  /** «Dra. Ríos · 8 ago 2026 14:32», o solo la marca de tiempo si no hay autor. */
+  function recordLine(authorId: string | null, createdAt: string): string {
+    const when = formatDateTime(createdAt);
+    const author = authorId ? staffById.get(authorId) : undefined;
+    return author ? copy.recordedBy(author, when) : copy.recordedAt(when);
   }
 
-  /** «Dra. Ríos · 8 ago 2026 14:32», o solo la marca de tiempo si no hay autor. */
-  function recordLine(entry: ClinicalEntry): string {
-    const when = formatDateTime(entry.createdAt);
-    const author = authorName(entry);
-    return author === copy.unknownAuthor
-      ? copy.recordedAt(when)
-      : copy.recordedBy(author, when);
+  /** Añade la adenda recién creada al final (orden cronológico) de su evolución. */
+  function handleAddendumCreated(addendum: ClinicalEntryAddendum) {
+    setEntries((prev) =>
+      prev.map((entry) =>
+        entry.id === addendum.clinicalEntryId
+          ? { ...entry, addenda: [...entry.addenda, addendum] }
+          : entry,
+      ),
+    );
+  }
+
+  /**
+   * Adendas de una evolución, debajo del texto original (que nunca cambia),
+   * cada una con su motivo, su autor y la fecha en que la grabó el servidor.
+   */
+  function renderAddenda(entry: ClinicalEntry) {
+    if (entry.addenda.length === 0) return null;
+    return (
+      <ol
+        aria-label={copy.addendaLabel(formatCivilDate(entry.entryDate))}
+        className="mt-3 flex flex-col gap-2"
+      >
+        {entry.addenda.map((addendum) => (
+          <li
+            key={addendum.id}
+            className="rounded-md border-l-2 border-primary bg-surface-2 px-3 py-2 text-sm"
+          >
+            <p className="text-xs font-medium uppercase tracking-wide text-muted">
+              {copy.addendumHeading}
+            </p>
+            <p className="mt-1 text-ink">{addendum.text}</p>
+            <p className="mt-1 text-xs text-muted">
+              {copy.addendumReason} {addendum.reason}
+            </p>
+            <p className="mt-1 text-xs text-muted">
+              {recordLine(addendum.authorId, addendum.createdAt)}
+            </p>
+          </li>
+        ))}
+      </ol>
+    );
+  }
+
+  function renderAddButton(entry: ClinicalEntry) {
+    return (
+      <Button
+        type="button"
+        variant="secondary"
+        size="sm"
+        aria-label={copy.addAddendumFor(formatCivilDate(entry.entryDate))}
+        onClick={() => setAddendumFor(entry)}
+      >
+        {copy.addAddendum}
+      </Button>
+    );
   }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -168,7 +226,7 @@ export function ClinicalEntriesList({ token, patientId }: ClinicalEntriesListPro
       const created = await createClinicalEntry(token, patientId, input);
       // Entries are returned DESC by `entryDate` — prepend so the newest
       // stays on top without re-sorting the whole list.
-      setEntries((prev) => [created, ...prev]);
+      setEntries((prev) => [{ ...created, addenda: created.addenda ?? [] }, ...prev]);
       setEntryDate('');
       setReason('');
       setNotes('');
@@ -219,9 +277,15 @@ export function ClinicalEntriesList({ token, patientId }: ClinicalEntriesListPro
                   {formatCivilDate(entry.entryDate)}
                 </td>
                 <td className="px-4 py-3 text-ink">{entry.reason ?? copy.reasonFallback}</td>
-                <td className="px-4 py-3 text-ink">{entry.notes}</td>
+                <td className="px-4 py-3 text-ink">
+                  {entry.notes}
+                  {renderAddenda(entry)}
+                </td>
                 {/* Subordinado: es la procedencia del asiento, no su contenido. */}
-                <td className="px-4 py-3 text-muted">{recordLine(entry)}</td>
+                <td className="px-4 py-3 align-top text-muted">
+                  <p>{recordLine(entry.performedById, entry.createdAt)}</p>
+                  <div className="mt-2">{renderAddButton(entry)}</div>
+                </td>
               </tr>
             ))}
           </tbody>
@@ -239,13 +303,29 @@ export function ClinicalEntriesList({ token, patientId }: ClinicalEntriesListPro
               </p>
               <p className="mt-1 text-muted">{entry.reason ?? copy.reasonFallback}</p>
               <p className="mt-2 text-ink">{entry.notes}</p>
+              {renderAddenda(entry)}
               <p className="mt-3 border-t border-hairline pt-2 text-xs text-muted">
-                {recordLine(entry)}
+                {recordLine(entry.performedById, entry.createdAt)}
               </p>
+              <div className="mt-2">{renderAddButton(entry)}</div>
             </div>
           ))}
         </div>
       </AsyncSection>
+
+      {addendumFor ? (
+        <ClinicalEntryAddendumModal
+          open
+          onOpenChange={(open) => {
+            if (!open) setAddendumFor(null);
+          }}
+          token={token}
+          patientId={patientId}
+          entryId={addendumFor.id}
+          entryDateLabel={formatCivilDate(addendumFor.entryDate)}
+          onCreated={handleAddendumCreated}
+        />
+      ) : null}
 
       <form onSubmit={handleSubmit} aria-label={copy.formTitle} className="flex flex-col gap-4">
         <h3 className="text-base font-semibold text-ink">{copy.formTitle}</h3>
