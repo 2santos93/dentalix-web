@@ -7,8 +7,10 @@ import {
   addToothRecord,
   type AddToothRecordInput,
   type ToothRecord,
+  type ToothRecordOrigin,
   type ToothSurface,
 } from '@/lib/odontogram/odontogram-api';
+import { ORIGIN_LABELS, ORIGIN_ORDER } from '@/lib/odontogram/origin';
 import { SectionError } from '@/components/errors/section-error';
 import { InlineError } from '@/components/errors/inline-error';
 import { CatalogPicker } from '@/components/odontogram/catalog-picker';
@@ -31,6 +33,8 @@ const copy = {
   statusLabel: 'Estado',
   statusPlanned: 'Planificado',
   statusCompleted: 'Completado',
+  originLabel: 'Origen',
+  originHint: '¿Lo hizo la clínica, ya lo traía el paciente o lo hizo otro profesional?',
   submit: 'Guardar',
   submitting: 'Guardando…',
   // Nombra lo que quedó registrado en vez de un «Guardado» genérico: el
@@ -82,6 +86,7 @@ export function ToothRecordPanel({
   );
   const [notes, setNotes] = useState('');
   const [status, setStatus] = useState<'PLANNED' | 'COMPLETED'>('COMPLETED');
+  const [origin, setOrigin] = useState<ToothRecordOrigin>('THIS_CLINIC');
   const [validationError, setValidationError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -108,6 +113,7 @@ export function ToothRecordPanel({
     setCatalogItemId(null);
     setNotes('');
     setStatus('COMPLETED');
+    setOrigin('THIS_CLINIC');
     setValidationError(null);
     setSaveError(null);
     setSavedSummary(null);
@@ -154,6 +160,7 @@ export function ToothRecordPanel({
     setSurfaces(initialSurfacesState(undefined));
     setNotes('');
     setStatus('COMPLETED');
+    setOrigin('THIS_CLINIC');
   }
 
   // Tocar cualquier campo es empezar otra entrada: la confirmación anterior
@@ -201,6 +208,8 @@ export function ToothRecordPanel({
         surfaces: wholeTooth ? [] : selectedSurfaces,
         status,
         ...(notes.trim() ? { notes: notes.trim() } : {}),
+        // DX-120: solo se envía si no es el valor por defecto de la API.
+        ...(origin !== 'THIS_CLINIC' ? { origin } : {}),
       };
       const created = await addToothRecord(token, patientId, input);
       // Se construye con lo enviado (diente, ítem del catálogo, caras), no con
@@ -306,6 +315,29 @@ export function ToothRecordPanel({
           <option value="COMPLETED">{copy.statusCompleted}</option>
           <option value="PLANNED">{copy.statusPlanned}</option>
         </select>
+      </div>
+
+      <div className="flex flex-col gap-1.5">
+        <Label htmlFor="trp-origin">{copy.originLabel}</Label>
+        <select
+          id="trp-origin"
+          value={origin}
+          aria-describedby="trp-origin-hint"
+          onChange={(e) => {
+            startNewEntry();
+            setOrigin(e.target.value as ToothRecordOrigin);
+          }}
+          className={cn(fieldClass, 'h-10')}
+        >
+          {ORIGIN_ORDER.map((o) => (
+            <option key={o} value={o}>
+              {ORIGIN_LABELS[o]}
+            </option>
+          ))}
+        </select>
+        <p id="trp-origin-hint" className="text-xs text-muted">
+          {copy.originHint}
+        </p>
       </div>
 
       <div className="flex flex-col gap-1.5">

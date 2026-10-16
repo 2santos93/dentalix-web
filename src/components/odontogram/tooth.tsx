@@ -1,9 +1,11 @@
 'use client';
 
 import type { KeyboardEvent } from 'react';
-import type { ToothRecord, ToothSurface } from '@/lib/odontogram/odontogram-api';
+import type { ToothRecord, ToothRecordOrigin, ToothSurface } from '@/lib/odontogram/odontogram-api';
 import type { ToothState } from '@/lib/odontogram/projection';
-import { TOOTH_HEIGHT, toothTransform, toothWidth } from '@/lib/odontogram/tooth-anatomy';
+import { isPrimaryFdi } from '@/lib/odontogram/dentition';
+import { ORIGIN_PATTERN_ID, ORIGIN_SHORT_LABELS, recordOrigin } from '@/lib/odontogram/origin';
+import { toothHeight, toothTransform, toothWidth } from '@/lib/odontogram/tooth-anatomy';
 import { cn } from '@/lib/utils';
 
 /**
@@ -50,7 +52,9 @@ const copy = {
   allSurfaces: 'todas las caras',
   surfaceList: (surfaces: string[]) =>
     `cara${surfaces.length === 1 ? '' : 's'} ${joinEs(surfaces)}`,
-  toothLabel: (fdi: string, summary: string) => `Diente ${fdi}, ${summary}`,
+  toothLabel: (fdi: string, summary: string) =>
+    isPrimaryFdi(fdi) ? `Diente ${fdi} (temporal), ${summary}` : `Diente ${fdi}, ${summary}`,
+  unerupted: (fdi: string) => `Diente ${fdi}, sin erupcionar`,
 };
 
 /** "a, b y c" — the Spanish conjunction, with no comma before the "y". */
@@ -73,16 +77,29 @@ function toothSummary(state?: ToothState): string {
   if (!state?.hasRecords) return copy.healthy;
 
   const count = copy.withRecords(state.records.length);
-  if (state.wholeToothRecord) return `${count}, ${copy.allSurfaces}`;
+  // DX-120: lo que no se hizo en la clínica se dice también (el rayado de la
+  // carta no se ve con lector de pantalla).
+  const origins = originsSuffix(state.records);
+  if (state.wholeToothRecord) return `${count}, ${copy.allSurfaces}${origins}`;
 
   const affected = SURFACE_ORDER.filter((surface) => state.surfaceState[surface]).map(
     (surface) => SURFACE_LABELS[surface],
   );
   // Defensive: a record either lists surfaces or is whole-tooth, so this only
   // fires if the projection ever hands us a third shape — the count still reads.
-  if (affected.length === 0) return count;
+  if (affected.length === 0) return `${count}${origins}`;
 
-  return `${count}, ${copy.surfaceList(affected)}`;
+  return `${count}, ${copy.surfaceList(affected)}${origins}`;
+}
+
+/** «, ya presente» / «, otro profesional» por cada origen distinto de la clínica. */
+function originsSuffix(records: ToothRecord[]): string {
+  const external = new Set<ToothRecordOrigin>();
+  for (const record of records) {
+    const origin = recordOrigin(record);
+    if (origin !== 'THIS_CLINIC') external.add(origin);
+  }
+  return [...external].map((origin) => `, ${ORIGIN_SHORT_LABELS[origin]}`).join('');
 }
 
 function resolveRecordColor(
@@ -130,6 +147,7 @@ export function Tooth({
   onSelectSurface,
 }: ToothProps) {
   const wholeToothColor = resolveRecordColor(state?.wholeToothRecord ?? null, catalogById);
+  const wholeToothOrigin = state?.wholeToothRecord ? recordOrigin(state.wholeToothRecord) : null;
   const summary = toothSummary(state);
 
   function handleSurfaceKeyDown(event: KeyboardEvent<SVGPolygonElement>, surface: ToothSurface) {
@@ -163,7 +181,7 @@ export function Tooth({
       <svg
         viewBox="0 0 40 40"
         width={toothWidth(toothNumber)}
-        height={TOOTH_HEIGHT}
+        height={toothHeight(toothNumber)}
         preserveAspectRatio="none"
         role="group"
         aria-label={copy.toothLabel(toothNumber, summary)}
@@ -202,6 +220,25 @@ export function Tooth({
               />
             );
           })}
+          {/* DX-120: rayado encima de las caras con registros que no se
+              hicieron en la clínica («Ya presente», «Otro profesional»; ver
+              la leyenda). Sin eventos de puntero: el clic sigue llegando a la
+              cara de debajo. */}
+          {SURFACE_ORDER.map((surface) => {
+            const record = state?.surfaceState[surface] ?? null;
+            const origin = record ? recordOrigin(record) : wholeToothOrigin;
+            if (!origin || origin === 'THIS_CLINIC') return null;
+            return (
+              <polygon
+                key={`origin-${surface}`}
+                points={SURFACE_SHAPES[surface]}
+                aria-hidden="true"
+                data-origin={origin}
+                fill={`url(#${ORIGIN_PATTERN_ID[origin]})`}
+                className="pointer-events-none"
+              />
+            );
+          })}
           {/* Crown outline: the surface divisions are drawn at the muted weight
               and the perimeter one step stronger, so the mark reads as a tooth
               crown with its faces instead of a grid of equal boxes. */}
@@ -227,6 +264,78 @@ export function Tooth({
             vectorEffect="non-scaling-stroke"
           />
         )}
+      </svg>
+      {numberPlacement === 'below' && number}
+    </div>
+  );
+}
+
+interface UneruptedToothProps {
+  toothNumber: string;
+  selected?: boolean;
+  numberPlacement?: 'above' | 'below';
+  tabbable?: boolean;
+  onFocusTooth?: () => void;
+  registerRef?: (el: HTMLButtonElement | null) => void;
+  onSelectTooth: () => void;
+}
+
+/**
+ * DX-120: un molar permanente que aún no ha erupcionado (su posición está en
+ * dentición temporal y no tiene temporal). Un hueco con borde discontinuo y
+ * su número, para que la posición se pueda elegir y se lea «sin erupcionar»
+ * en vez de faltar del dibujo.
+ */
+export function UneruptedTooth({
+  toothNumber,
+  selected = false,
+  numberPlacement = 'below',
+  tabbable = false,
+  onFocusTooth,
+  registerRef,
+  onSelectTooth,
+}: UneruptedToothProps) {
+  const number = (
+    <button
+      type="button"
+      ref={registerRef}
+      tabIndex={tabbable ? 0 : -1}
+      aria-pressed={selected}
+      onClick={onSelectTooth}
+      onFocus={onFocusTooth}
+      className={cn(
+        'min-w-6 rounded px-1 text-xs font-medium tabular-nums transition-colors',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-bg',
+        selected ? 'bg-primary text-primary-foreground' : 'text-muted hover:bg-surface-2',
+      )}
+    >
+      {toothNumber}
+    </button>
+  );
+  return (
+    <div className="flex flex-col items-center gap-1">
+      {numberPlacement === 'above' && number}
+      <svg
+        viewBox="0 0 40 40"
+        width={toothWidth(toothNumber)}
+        height={toothHeight(toothNumber)}
+        preserveAspectRatio="none"
+        role="group"
+        aria-label={copy.unerupted(toothNumber)}
+        data-unerupted="true"
+        className="overflow-visible"
+      >
+        <rect
+          x={0.5}
+          y={0.5}
+          width={39}
+          height={39}
+          rx={2}
+          className={cn('fill-none', selected ? 'stroke-primary' : 'stroke-muted')}
+          strokeWidth={selected ? 2 : 1}
+          strokeDasharray="3 3"
+          vectorEffect="non-scaling-stroke"
+        />
       </svg>
       {numberPlacement === 'below' && number}
     </div>

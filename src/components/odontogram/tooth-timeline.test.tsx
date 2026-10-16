@@ -1,15 +1,19 @@
 import { render, screen, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { ToothTimeline } from './tooth-timeline';
-import { getToothTimeline } from '@/lib/odontogram/odontogram-api';
+import { getToothTimeline, voidToothRecord } from '@/lib/odontogram/odontogram-api';
 
 // NOTE: jest.mock's string literal is not alias-rewritten by the SWC
 // transform (only real `import`/`require` specifiers are) — use a relative
 // path here, matching medical-history-panel.test.tsx's convention.
 jest.mock('../../lib/odontogram/odontogram-api', () => ({
   getToothTimeline: jest.fn(),
+  voidToothRecord: jest.fn(),
+  VOID_REASON_MAX: 500,
 }));
 
 const mockedGetTimeline = getToothTimeline as jest.MockedFunction<typeof getToothTimeline>;
+const mockedVoid = voidToothRecord as jest.MockedFunction<typeof voidToothRecord>;
 
 const catalogById = new Map([
   ['cat-1', { color: '#FF0000', labelEs: 'Caries', kind: 'DIAGNOSIS' as const }],
@@ -41,6 +45,7 @@ const newer = {
 describe('ToothTimeline', () => {
   beforeEach(() => {
     mockedGetTimeline.mockReset();
+    mockedVoid.mockReset();
   });
 
   it('shows a loading state while fetching', () => {
@@ -181,5 +186,113 @@ describe('ToothTimeline', () => {
 
     const item = (await screen.findAllByRole('listitem'))[0];
     expect(within(item).getByText('Diente completo')).toBeInTheDocument();
+  });
+});
+
+describe('ToothTimeline — origen y anulación (DX-120)', () => {
+  const voided = {
+    ...older,
+    id: 'rec-v',
+    performedById: 'u-1',
+    performedByName: 'Dra. Autora',
+    void: {
+      id: 'void-1',
+      reason: 'Registrado en el diente equivocado',
+      performedById: 'u-2',
+      performedByName: 'Dr. Admin',
+      recordedAt: '2026-01-10T15:00:00.000Z',
+    },
+  };
+  const brought = { ...newer, id: 'rec-o', origin: 'PRE_EXISTING' as const, performedById: 'u-1' };
+
+  beforeEach(() => {
+    mockedGetTimeline.mockReset();
+    mockedVoid.mockReset();
+  });
+
+  it('muestra el anulado tachado, con motivo y autor, y el origen de lo que no es de la clínica', async () => {
+    mockedGetTimeline.mockResolvedValue([brought, voided]);
+    render(<ToothTimeline token="tok" patientId="p1" toothNumber="11" catalogById={catalogById} />);
+
+    const items = await screen.findAllByRole('listitem');
+    const voidedItem = items[1];
+    expect(voidedItem).toHaveAttribute('data-voided', 'true');
+    expect(within(voidedItem).getByText('Anulado')).toBeInTheDocument();
+    expect(within(voidedItem).getByText('Caries')).toHaveClass('line-through');
+    expect(voidedItem).toHaveTextContent(/Anulado por Dr\. Admin el \d{2}\/\d{2}\/2026/);
+    expect(voidedItem).toHaveTextContent('Registrado en el diente equivocado');
+    expect(within(items[0]).getByText('Ya presente')).toBeInTheDocument();
+  });
+
+  it('ofrece «Anular» solo en lo vigente que el usuario puede anular, y nunca en solo lectura', async () => {
+    mockedGetTimeline.mockResolvedValue([brought, voided]);
+    const { rerender } = render(
+      <ToothTimeline
+        token="tok"
+        patientId="p1"
+        toothNumber="11"
+        catalogById={catalogById}
+        canVoid={(r) => r.performedById === 'u-1'}
+      />,
+    );
+    expect(await screen.findAllByRole('button', { name: /^Anular/ })).toHaveLength(1);
+
+    rerender(
+      <ToothTimeline
+        token="tok"
+        patientId="p1"
+        toothNumber="11"
+        catalogById={catalogById}
+        canVoid={() => true}
+        readOnly
+      />,
+    );
+    expect(screen.queryByRole('button', { name: /^Anular/ })).not.toBeInTheDocument();
+  });
+
+  it('anular pide el motivo, lo envía y avisa para refrescar la carta', async () => {
+    const user = userEvent.setup();
+    mockedGetTimeline.mockResolvedValue([brought]);
+    mockedVoid.mockResolvedValue({ ...brought, id: 'void-2', voidsRecordId: 'rec-o' });
+    const onVoided = jest.fn();
+    render(
+      <ToothTimeline
+        token="tok"
+        patientId="p1"
+        toothNumber="11"
+        catalogById={catalogById}
+        canVoid={() => true}
+        onVoided={onVoided}
+      />,
+    );
+    await user.click(await screen.findByRole('button', { name: /^Anular/ }));
+    const dialog = await screen.findByRole('dialog', { name: 'Anular registro' });
+
+    await user.click(within(dialog).getByRole('button', { name: 'Anular registro' }));
+    expect(await within(dialog).findByText('Escribe el motivo de la anulación.')).toBeInTheDocument();
+    expect(mockedVoid).not.toHaveBeenCalled();
+
+    await user.type(within(dialog).getByLabelText('Motivo'), 'Diente equivocado');
+    await user.click(within(dialog).getByRole('button', { name: 'Anular registro' }));
+
+    expect(mockedVoid).toHaveBeenCalledWith('tok', 'p1', 'rec-o', 'Diente equivocado');
+    expect(onVoided).toHaveBeenCalled();
+  });
+
+  it('en una carta a una fecha muestra el historial de entonces', async () => {
+    mockedGetTimeline.mockResolvedValue([newer, voided]);
+    render(
+      <ToothTimeline
+        token="tok"
+        patientId="p1"
+        toothNumber="11"
+        catalogById={catalogById}
+        asOf="2026-01-05"
+      />,
+    );
+    const items = await screen.findAllByRole('listitem');
+    // `newer` es de febrero: no existía. La anulación (10 de enero) tampoco.
+    expect(items).toHaveLength(1);
+    expect(items[0]).not.toHaveAttribute('data-voided');
   });
 });

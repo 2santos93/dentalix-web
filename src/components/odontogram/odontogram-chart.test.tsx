@@ -207,3 +207,78 @@ describe('OdontogramChart', () => {
     });
   });
 });
+
+describe('OdontogramChart — dentición temporal y mixta (DX-120)', () => {
+  const mixed7 = (position: string) =>
+    // Niño de 7 años: incisivos mudando, primeros molares permanentes, el resto temporal.
+    Number(position[1]) <= 2 ? 'MIXED' : Number(position[1]) === 6 ? 'PERMANENT' : 'PRIMARY';
+
+  it('dibuja los temporales 51-85 en sus posiciones y, en mixta, los dos dientes', () => {
+    render(
+      <OdontogramChart
+        states={new Map()}
+        dentitionOf={mixed7}
+        onSelectTooth={jest.fn()}
+        onSelectSurface={jest.fn()}
+      />,
+    );
+    // Mixta: el 11 y el 51 a la vez.
+    expect(screen.getByRole('group', { name: /^Diente 11,/ })).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: 'Diente 51 (temporal), sano' })).toBeInTheDocument();
+    // Temporal: el 55, no el 15.
+    expect(screen.getByRole('group', { name: 'Diente 55 (temporal), sano' })).toBeInTheDocument();
+    expect(screen.queryByRole('group', { name: /^Diente 15,/ })).not.toBeInTheDocument();
+    // Molar sin predecesor y sin erupcionar.
+    expect(screen.getByRole('group', { name: 'Diente 17, sin erupcionar' })).toBeInTheDocument();
+    expect(screen.getByRole('group', { name: /^Diente 16,/ })).toBeInTheDocument();
+  });
+
+  it('un niño de 4 años: 20 temporales y los molares permanentes sin erupcionar', () => {
+    render(
+      <OdontogramChart
+        states={new Map()}
+        dentitionOf={() => 'PRIMARY'}
+        onSelectTooth={jest.fn()}
+        onSelectSurface={jest.fn()}
+      />,
+    );
+    expect(screen.getAllByRole('group', { name: /\(temporal\)/ })).toHaveLength(20);
+    expect(screen.getAllByRole('group', { name: /sin erupcionar/ })).toHaveLength(12);
+  });
+
+  it('las flechas bajan de la fila de permanentes a la de temporales de la misma columna', async () => {
+    const user = userEvent.setup();
+    render(
+      <OdontogramChart
+        states={new Map()}
+        dentitionOf={mixed7}
+        selectedTooth="11"
+        onSelectTooth={jest.fn()}
+        onSelectSurface={jest.fn()}
+      />,
+    );
+    await user.tab();
+    expect(screen.getByRole('button', { name: '11' })).toHaveFocus();
+    await user.keyboard('{ArrowDown}');
+    expect(screen.getByRole('button', { name: '51' })).toHaveFocus();
+    await user.keyboard('{ArrowDown}');
+    expect(screen.getByRole('button', { name: '81' })).toHaveFocus();
+    await user.keyboard('{ArrowDown}');
+    expect(screen.getByRole('button', { name: '41' })).toHaveFocus();
+  });
+
+  it('elegir un molar sin erupcionar lo selecciona', async () => {
+    const user = userEvent.setup();
+    const onSelectTooth = jest.fn();
+    render(
+      <OdontogramChart
+        states={new Map()}
+        dentitionOf={() => 'PRIMARY'}
+        onSelectTooth={onSelectTooth}
+        onSelectSurface={jest.fn()}
+      />,
+    );
+    await user.click(screen.getByRole('button', { name: '16' }));
+    expect(onSelectTooth).toHaveBeenCalledWith('16');
+  });
+});

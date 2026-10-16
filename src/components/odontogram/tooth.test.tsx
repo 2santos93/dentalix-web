@@ -256,3 +256,33 @@ describe('Tooth', () => {
     expect(screen.getByRole('button', { name: '11' })).toHaveAttribute('aria-pressed', 'true');
   });
 });
+
+describe('Tooth — origen del registro (DX-120)', () => {
+  it('raya las caras con registros de otro origen y lo dice en su nombre accesible', () => {
+    const other = record({ origin: 'OTHER_PROVIDER' });
+    const { container } = render(
+      <Tooth
+        toothNumber="64"
+        state={state({
+          toothNumber: '64',
+          records: [other],
+          surfaceState: { OCCLUSAL: other },
+        })}
+        onSelectTooth={jest.fn()}
+        onSelectSurface={jest.fn()}
+      />,
+    );
+    expect(
+      screen.getByRole('group', { name: 'Diente 64 (temporal), 1 registro, cara oclusal, otro profesional' }),
+    ).toBeInTheDocument();
+    const hatch = container.querySelector('[data-origin="OTHER_PROVIDER"]');
+    expect(hatch).toHaveAttribute('fill', 'url(#odo-origin-other-provider)');
+  });
+
+  it('lo hecho en la clínica no lleva rayado', () => {
+    const { container } = render(
+      <Tooth toothNumber="11" state={state()} onSelectTooth={jest.fn()} onSelectSurface={jest.fn()} />,
+    );
+    expect(container.querySelector('[data-origin]')).toBeNull();
+  });
+});

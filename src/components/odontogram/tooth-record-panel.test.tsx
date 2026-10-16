@@ -200,6 +200,26 @@ describe('ToothRecordPanel', () => {
     expect(onRecordAdded).toHaveBeenCalledWith(createdRecord);
   });
 
+  it('envía el origen elegido cuando no es «Hecho en la clínica» (DX-120)', async () => {
+    mockedListCatalog.mockResolvedValue(catalog);
+    mockedAddRecord.mockResolvedValue(createdRecord);
+
+    const user = userEvent.setup();
+    render(<ToothRecordPanel token="tok" patientId="p1" toothNumber="11" onRecordAdded={jest.fn()} />);
+    await screen.findByRole('radio', { name: /caries/i });
+
+    await user.click(screen.getByRole('radio', { name: /caries/i }));
+    await user.click(screen.getByRole('checkbox', { name: /oclusal/i }));
+    expect(screen.getByLabelText('Origen')).toHaveValue('THIS_CLINIC');
+    await user.selectOptions(screen.getByLabelText('Origen'), 'PRE_EXISTING');
+    await user.click(screen.getByRole('button', { name: /guardar/i }));
+
+    await waitFor(() => expect(mockedAddRecord).toHaveBeenCalledTimes(1));
+    expect(mockedAddRecord.mock.calls[0][2]).toMatchObject({ origin: 'PRE_EXISTING' });
+    // Tras guardar, vuelve al valor por defecto.
+    expect(screen.getByLabelText('Origen')).toHaveValue('THIS_CLINIC');
+  });
+
   it('submits with an empty surfaces array when "diente completo" is checked', async () => {
     mockedListCatalog.mockResolvedValue(catalog);
     mockedAddRecord.mockResolvedValue(createdRecord);
