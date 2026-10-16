@@ -16,7 +16,12 @@ import {
   type TreatmentPlanItemStatus,
   type TreatmentPlanStatus,
 } from '@/lib/treatment-plans/treatment-plans-api';
-import { PLAN_STATUS_BADGE_VARIANT, PLAN_STATUS_LABELS } from '@/lib/treatment-plans/plan-status';
+import {
+  PLAN_STATUS_BADGE_VARIANT,
+  PLAN_STATUS_LABELS,
+  isPlanBillable,
+  isPlanClosed,
+} from '@/lib/treatment-plans/plan-status';
 import {
   getPlanBalance,
   listPayments,
@@ -196,6 +201,10 @@ const copy = {
   paidLabel: 'Pagado',
   balanceLabel: 'Saldo',
   registerPayment: 'Registrar abono',
+  notBillableHint: (status: string) =>
+    `Este plan está «${status}»: no admite abonos ni planes de cuotas.`,
+  closedItemsNotice: (status: string) =>
+    `Este plan está «${status}»: sus ítems ya no se pueden añadir, cambiar ni quitar.`,
   cancelPaymentForm: 'Cancelar',
   paymentAmountLabel: 'Monto',
   paymentCurrencyLabel: 'Moneda',
@@ -292,6 +301,11 @@ interface ItemsTableProps {
    * «Propuesto» (la API responde 409); el tratamiento sí avanza.
    */
   locked?: boolean;
+  /**
+   * Plan cerrado (cancelado, rechazado o completado, DX-109): sus ítems no se
+   * tocan, ni siquiera de estado (la API responde 409).
+   */
+  closed?: boolean;
 }
 
 /**
@@ -410,6 +424,7 @@ function ItemsTable({
   onStatusChange,
   onRemove,
   locked = false,
+  closed = false,
 }: ItemsTableProps) {
   if (items.length === 0) {
     return <EmptyState role="status" title={copy.emptyItemsTitle} description={copy.emptyItemsDescription} />;
@@ -464,7 +479,7 @@ function ItemsTable({
                         <select
                           aria-label={copy.itemStatusSelectLabel(item.toothNumber)}
                           value={item.status}
-                          disabled={updating}
+                          disabled={updating || closed}
                           onChange={(e) => onStatusChange(item.id, e.target.value as TreatmentPlanItemStatus)}
                           className={cn(fieldClass, 'h-8 px-2 py-1 text-xs')}
                         >
@@ -488,8 +503,8 @@ function ItemsTable({
                         toque. */}
                     <div className="flex items-center gap-3">
                       <OdontogramLink toothNumber={item.toothNumber} href={odontogramHref} />
-                      {odontogramHref && !locked ? <Separator orientation="vertical" className="h-5" /> : null}
-                      {locked ? null : (
+                      {odontogramHref && !locked && !closed ? <Separator orientation="vertical" className="h-5" /> : null}
+                      {locked || closed ? null : (
                         <Button
                           type="button"
                           variant="outline"
@@ -545,7 +560,7 @@ function ItemsTable({
                 <select
                   aria-label={copy.itemStatusSelectLabel(item.toothNumber)}
                   value={item.status}
-                  disabled={updating}
+                  disabled={updating || closed}
                   onChange={(e) => onStatusChange(item.id, e.target.value as TreatmentPlanItemStatus)}
                   className={cn(fieldClass, 'h-9 w-auto text-xs')}
                 >
@@ -555,7 +570,7 @@ function ItemsTable({
                     </option>
                   ))}
                 </select>
-                {locked ? null : (
+                {locked || closed ? null : (
                   <Button
                     type="button"
                     variant="outline"
@@ -1505,6 +1520,9 @@ export function TreatmentPlansTab({
 
   const selectedPlan = plans.find((p) => p.id === selectedPlanId) ?? null;
   const signed = Boolean(planDetail?.acceptance);
+  // DX-109: lo mismo que la API aplica con 409, para no ofrecerlo.
+  const closed = planDetail ? isPlanClosed(planDetail.status) : false;
+  const billable = planDetail ? isPlanBillable(planDetail.status) : true;
   const role = getTokenRole(token);
   const statusChoices = planDetail ? patchableStatuses(planDetail.status, role) : [];
   const optionGroup = selectedPlan ? optionGroupOf(plans, selectedPlan) : [];
@@ -1706,6 +1724,7 @@ export function TreatmentPlansTab({
                   onStatusChange={handleItemStatusChange}
                   onRemove={openRemoveConfirm}
                   locked={signed}
+                  closed={closed}
                 />
 
                 <Separator />
@@ -1717,10 +1736,22 @@ export function TreatmentPlansTab({
                         que califica. Decirla dos veces en la misma pantalla la
                         convierte en ruido y sugiere que son dos alcances. */}
                     <h3 className="text-base font-semibold text-ink">{copy.paymentsHeading}</h3>
-                    <Button type="button" variant="outline" size="sm" onClick={openPaymentForm}>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={openPaymentForm}
+                      disabled={!billable}
+                      aria-describedby={billable ? undefined : 'plan-not-billable-hint'}
+                    >
                       {copy.registerPayment}
                     </Button>
                   </div>
+                  {!billable && planDetail && (
+                    <p id="plan-not-billable-hint" className="text-sm text-muted">
+                      {copy.notBillableHint(PLAN_STATUS_LABELS[planDetail.status])}
+                    </p>
+                  )}
 
                   {paymentsLoading && (
                     <p role="status" className="text-sm text-muted">
@@ -1856,6 +1887,7 @@ export function TreatmentPlansTab({
                         planId={selectedPlanId!}
                         planCurrency={planBalance.planCurrency}
                         billable={planBalance.billable}
+                        canCreate={billable}
                         refreshSignal={paymentPlanRefreshSignal}
                       />
                     </>
@@ -1866,7 +1898,13 @@ export function TreatmentPlansTab({
 
                 {/* Firmado (DX-012): no se agregan ítems; `PlanQuoteActions`
                     ya dice arriba que el plan quedó congelado. */}
-                {signed ? null : catalogItems.length === 0 ? (
+                {/* Cerrado (DX-109): tampoco se agregan ítems. */}
+                {closed && planDetail && !signed ? (
+                  <p role="status" className="text-sm text-muted">
+                    {copy.closedItemsNotice(PLAN_STATUS_LABELS[planDetail.status])}
+                  </p>
+                ) : null}
+                {signed || closed ? null : catalogItems.length === 0 ? (
                   <EmptyState
                     role="status"
                     title={copy.emptyCatalogTitle}

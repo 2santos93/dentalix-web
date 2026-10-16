@@ -770,6 +770,47 @@ describe('TreatmentPlansTab', () => {
 
   // Error-states ladder (Task 8): each `text-danger` site classified by what
   // the user can still do — see task-8-report.md for the full table.
+  describe('DX-109: planes no cobrables o cerrados', () => {
+    it('un plan rechazado deshabilita «Registrar abono» con el motivo, no ofrece plan de cuotas y congela los ítems', async () => {
+      const rejected = { ...plan1Detail, status: 'REJECTED' as const };
+      mockedListPlans.mockResolvedValue([{ ...plan1, status: 'REJECTED' as const }]);
+      mockedGetPlan.mockResolvedValue(rejected);
+
+      render(<TreatmentPlansTab patientId="pat-1" token="tok" />);
+      await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+
+      const payButton = await screen.findByRole('button', { name: /^registrar abono$/i });
+      expect(payButton).toBeDisabled();
+      expect(payButton).toHaveAccessibleDescription(
+        'Este plan está «Rechazado»: no admite abonos ni planes de cuotas.',
+      );
+      expect(await screen.findByText('Un plan rechazado o cancelado no se financia en cuotas.')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /crear plan de pagos/i })).not.toBeInTheDocument();
+
+      expect(
+        screen.getByText('Este plan está «Rechazado»: sus ítems ya no se pueden añadir, cambiar ni quitar.'),
+      ).toBeInTheDocument();
+      expect(screen.queryByRole('form', { name: /agregar ítem/i })).not.toBeInTheDocument();
+      for (const select of screen.getAllByLabelText(/estado del ítem/i)) {
+        expect(select).toBeDisabled();
+      }
+      expect(screen.queryByRole('button', { name: /^quitar$/i })).not.toBeInTheDocument();
+    });
+
+    it('un plan completado sigue cobrando, pero sus ítems quedan congelados', async () => {
+      const completed = { ...plan1Detail, status: 'COMPLETED' as const };
+      mockedListPlans.mockResolvedValue([{ ...plan1, status: 'COMPLETED' as const }]);
+      mockedGetPlan.mockResolvedValue(completed);
+
+      render(<TreatmentPlansTab patientId="pat-1" token="tok" />);
+      await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+
+      expect(await screen.findByRole('button', { name: /^registrar abono$/i })).toBeEnabled();
+      expect(await screen.findByRole('button', { name: /crear plan de pagos/i })).toBeInTheDocument();
+      expect(screen.queryByRole('form', { name: /agregar ítem/i })).not.toBeInTheDocument();
+    });
+  });
+
   describe('error states ladder', () => {
     it('cuando no hay planes que mostrar, usa el estado de sección con reintento (escalón 1: loadError)', async () => {
       mockedListPlans.mockRejectedValueOnce(new ApiError(500, 'Error del servidor'));
