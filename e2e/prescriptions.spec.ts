@@ -2,6 +2,7 @@ import { test, expect, type APIRequestContext } from './support/test';
 import { randomUUID } from 'node:crypto';
 import { accessTokenOf, registerAndLogin, sessionCookie } from './support/auth';
 import { API_URL } from './support/urls';
+import { invitationLinkFor } from './support/mail';
 
 /**
  * e2e (DX-013): recetas.
@@ -145,12 +146,14 @@ test('emitir con alerta de alergia, imprimir en A4, anular; recepción sin pesta
   await page.keyboard.press('Escape');
 
   // --- 5. Recepción: ni pestaña ni API ---
-  const invitation = await admin.post<{ token: string }>('/staff/invitations', {
+  await admin.post<object>('/staff/invitations', {
     fullName: 'Recepción Recetas',
     email: receptionEmail,
     role: 'RECEPTION',
   });
-  await api(page.request, origin).post(`/public/invitations/${invitation.token}/accept`, {
+  // DX-029: el enlace solo llega al correo de la invitada.
+  const inviteToken = (await invitationLinkFor(receptionEmail)).split('/').pop();
+  await api(page.request, origin).post(`/public/invitations/${inviteToken}/accept`, {
     password,
   });
   const receptionContext = await browser.newContext();
