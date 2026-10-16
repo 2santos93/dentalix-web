@@ -786,6 +786,9 @@ describe('TreatmentPlansTab', () => {
       );
       expect(await screen.findByText('Un plan rechazado o cancelado no se financia en cuotas.')).toBeInTheDocument();
       expect(screen.queryByRole('button', { name: /crear plan de pagos/i })).not.toBeInTheDocument();
+      // El vacío de abonos no invita a registrar uno.
+      expect(await screen.findByText(/este plan todavía no tiene abonos/i)).toBeInTheDocument();
+      expect(screen.queryByText(/registra el primer abono/i)).not.toBeInTheDocument();
 
       expect(
         screen.getByText('Este plan está «Rechazado»: sus ítems ya no se pueden añadir, cambiar ni quitar.'),
@@ -795,6 +798,29 @@ describe('TreatmentPlansTab', () => {
         expect(select).toBeDisabled();
       }
       expect(screen.queryByRole('button', { name: /^quitar$/i })).not.toBeInTheDocument();
+    });
+
+    it('cambiar el estado desde el selector refresca el saldo sin recargar (QA DX-109)', async () => {
+      mockedListPlans.mockResolvedValue([plan1]);
+      mockedGetPlan.mockResolvedValue(plan1Detail);
+      mockedGetPlanBalance.mockResolvedValue(balance1);
+      mockedUpdatePlan.mockResolvedValue({ ...plan1, status: 'CANCELLED' });
+
+      const user = userEvent.setup();
+      render(<TreatmentPlansTab patientId="pat-1" token="tok" />);
+      await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+      const billableCard = (await screen.findByText('A pagar')).closest('div') as HTMLElement;
+      expect(within(billableCard).getByText(expectedCurrencyText(balance1.billable))).toBeInTheDocument();
+
+      mockedGetPlan.mockResolvedValue({ ...plan1Detail, status: 'CANCELLED' });
+      mockedListPlans.mockResolvedValue([{ ...plan1, status: 'CANCELLED' }]);
+      mockedGetPlanBalance.mockResolvedValue({ ...balance1, billable: 0, balance: 0 });
+      await user.selectOptions(screen.getByLabelText(/^estado del plan$/i), 'CANCELLED');
+
+      await waitFor(() => {
+        const card = screen.getByText('A pagar').closest('div') as HTMLElement;
+        expect(within(card).getByText(expectedCurrencyText(0))).toBeInTheDocument();
+      });
     });
 
     it('un plan completado sigue cobrando, pero sus ítems quedan congelados', async () => {

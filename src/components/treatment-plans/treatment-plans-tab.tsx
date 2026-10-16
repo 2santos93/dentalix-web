@@ -614,12 +614,20 @@ interface PaymentsListProps {
   voidingPaymentId: string | null;
   onVoid: (paymentId: string) => void;
   onReceipt: (payment: Payment) => void;
+  /** Plan rechazado o cancelado (DX-109): el vacío no invita a registrar un abono. */
+  billable?: boolean;
 }
 
 /** Desktop table + mobile cards for the abonos list — same responsive split as `ItemsTable`. */
-function PaymentsList({ payments, voidingPaymentId, onVoid, onReceipt }: PaymentsListProps) {
+function PaymentsList({ payments, voidingPaymentId, onVoid, onReceipt, billable = true }: PaymentsListProps) {
   if (payments.length === 0) {
-    return <EmptyState role="status" title={copy.emptyPaymentsTitle} description={copy.emptyPaymentsDescription} />;
+    return (
+      <EmptyState
+        role="status"
+        title={copy.emptyPaymentsTitle}
+        description={billable ? copy.emptyPaymentsDescription : undefined}
+      />
+    );
   }
 
   return (
@@ -1383,8 +1391,10 @@ export function TreatmentPlansTab({
     setPlanStatusError(null);
     try {
       await updatePlan(token, selectedPlanId, { status });
-      await refreshPlanDetail();
-      await refreshPlansInPlace();
+      // Aceptar pasa los ítems propuestos a aceptados (lo facturable deja de
+      // ser 0) y cancelar anula también el plan de cuotas activo (DX-109): el
+      // saldo y el plan de pagos se refrescan con el plan, como al firmar.
+      await Promise.all([refreshPlanDetail(), refreshPlansInPlace(), refreshBalanceAndPayments()]);
     } catch (err) {
       setPlanStatusError(apiErrorMessage(err, copy.genericPlanStatusError));
     } finally {
@@ -1398,7 +1408,8 @@ export function TreatmentPlansTab({
     setItemActionError(null);
     try {
       await updateItem(token, selectedPlanId, itemId, { status });
-      await refreshPlanDetail();
+      // Propuesto ↔ aceptado cambia lo facturable: el saldo va con el ítem.
+      await Promise.all([refreshPlanDetail(), refreshBalanceAndPayments()]);
     } catch (err) {
       setItemActionError(apiErrorMessage(err, copy.genericItemUpdateError));
     } finally {
@@ -1550,15 +1561,17 @@ export function TreatmentPlansTab({
       )}
 
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between gap-3">
+        {/* A 390px la moneda y «Nuevo plan» no caben junto al título: bajan a
+            su propia fila (sin desbordar la tarjeta). */}
+        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <CardTitle>{copy.plansHeading}</CardTitle>
-          <div className="flex items-center gap-2">
+          <div className="flex w-full items-center gap-2 sm:w-auto">
             <CurrencySelect
               id="tp-new-plan-currency"
               token={token}
               value={newPlanCurrency}
               onChange={setNewPlanCurrency}
-              className="w-44"
+              className="min-w-0 flex-1 sm:w-44 sm:flex-none"
               ariaLabel={copy.newPlanCurrencyLabel}
             />
             <Button type="button" onClick={handleCreatePlan} disabled={creatingPlan}>
@@ -1892,6 +1905,7 @@ export function TreatmentPlansTab({
                           voidingPaymentId={voidingPaymentId}
                           onVoid={openVoidConfirm}
                           onReceipt={setReceiptPayment}
+                          billable={billable}
                         />
                       </Disclosure>
 
