@@ -54,4 +54,11 @@ describe('PrescriptionPrintView', () => {
     await user.click(screen.getByRole('button', { name: 'Reintentar' }));
     expect(await screen.findByRole('heading', { name: 'Fórmula médica' })).toBeInTheDocument();
   });
+
+  it('una receta de otro paciente que el de la URL no se imprime: aviso de no encontrada', async () => {
+    mockedGet.mockResolvedValue(makePrescriptionDocument({ patientId: 'otro' }));
+    render(<PrescriptionPrintView token="tok" patientId="p1" prescriptionId="rx1" />);
+    expect(await screen.findByText('No encontramos esta receta.')).toBeInTheDocument();
+    expect(window.print).not.toHaveBeenCalled();
+  });
 });

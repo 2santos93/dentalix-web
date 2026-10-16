@@ -56,6 +56,13 @@ export function PrescriptionPrintView({
       try {
         const res = await getPrescription(token, prescriptionId);
         if (cancelled) return;
+        // La URL nombra al paciente: si la receta es de otro, no se imprime
+        // bajo su ficha (el «Volver» llevaría a quien no es).
+        if (res.patientId !== patientId) {
+          setNotFound(true);
+          setError(copy.loadError);
+          return;
+        }
         setData(res);
         setError(null);
       } catch (err) {
@@ -70,7 +77,7 @@ export function PrescriptionPrintView({
     return () => {
       cancelled = true;
     };
-  }, [token, prescriptionId, reloadKey, allowed]);
+  }, [token, patientId, prescriptionId, reloadKey, allowed]);
 
   useEffect(() => {
     if (data && !printed.current) {
