@@ -42,15 +42,28 @@ interface NavItem {
   roles?: readonly ClinicRole[];
 }
 
+// Las entradas sin `roles` (Pacientes, Agenda) son de los cuatro roles. Las
+// demás copian el set de la API; antes de DX-070 Dashboard, Catálogo,
+// Inventario y Personal no lo llevaban, y recepción veía enlaces que acababan
+// en 403.
 const NAV: NavItem[] = [
-  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard },
+  // DASHBOARD_ROLES: dato financiero agregado, solo gestión.
+  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['ADMIN'] },
   { href: '/patients', label: 'Pacientes', icon: Users },
   { href: '/agenda', label: 'Agenda', icon: Calendar },
   // Dato financiero: mismos roles que PAYMENT_ROLES en la API.
   { href: '/caja', label: 'Caja', icon: Wallet, roles: ['ADMIN', 'RECEPTION'] },
-  { href: '/catalog', label: 'Catálogo', icon: ClipboardList },
-  { href: '/inventory', label: 'Inventario', icon: Package },
-  { href: '/staff', label: 'Personal', icon: UserCog },
+  // CATALOG_READ_ROLES: recepción no registra clínico.
+  {
+    href: '/catalog',
+    label: 'Catálogo',
+    icon: ClipboardList,
+    roles: ['ADMIN', 'DENTIST', 'ASSISTANT'],
+  },
+  // INVENTORY_ROLES.
+  { href: '/inventory', label: 'Inventario', icon: Package, roles: ['ADMIN', 'ASSISTANT'] },
+  // La pantalla lee `GET /staff/directory`: STAFF_WRITE_ROLES.
+  { href: '/staff', label: 'Personal', icon: UserCog, roles: ['ADMIN'] },
 ];
 
 /**

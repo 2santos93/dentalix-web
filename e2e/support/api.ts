@@ -1,0 +1,77 @@
+import { expect, type APIRequestContext } from '@playwright/test';
+import type { RegisterAndLoginParams } from './auth';
+import { API_URL, tenantOrigin } from './urls';
+
+/**
+ * Siembra por la API, sin pasar por la UI (DX-070): para preparar en un
+ * `beforeAll` lo que el test no está probando (clínica, paciente, personal).
+ *
+ * La API resuelve la clínica por el host: cada llamada lleva `X-Tenant-Host`
+ * con el host de la web de esa clínica, igual que hace el navegador.
+ */
+export interface ApiSession {
+  origin: string;
+  /** Cabeceras de una llamada autenticada en la clínica. */
+  headers: Record<string, string>;
+}
+
+/** `POST /auth/login` por la API: el par llega en el cuerpo (sin cookie). */
+export async function apiLogin(
+  request: APIRequestContext,
+  origin: string,
+  email: string,
+  password: string,
+): Promise<ApiSession> {
+  const host = new URL(origin).host;
+  const res = await request.post(`${API_URL}/auth/login`, {
+    headers: { 'X-Tenant-Host': host },
+    data: { email, password },
+  });
+  expect(res.ok(), `login por la API falló: ${await res.text()}`).toBeTruthy();
+  const { accessToken } = (await res.json()) as { accessToken: string };
+  return { origin, headers: { Authorization: `Bearer ${accessToken}`, 'X-Tenant-Host': host } };
+}
+
+/** Registra una clínica nueva por la API e inicia sesión con su dueño (ADMIN). */
+export async function registerClinicViaApi(
+  request: APIRequestContext,
+  clinic: RegisterAndLoginParams,
+): Promise<ApiSession> {
+  const res = await request.post(`${API_URL}/auth/register`, { data: clinic });
+  expect(res.ok(), `registro por la API falló: ${await res.text()}`).toBeTruthy();
+  return apiLogin(request, tenantOrigin(clinic.subdomain), clinic.email, clinic.password);
+}
+
+/** POST autenticado que debe salir bien; devuelve el cuerpo. */
+export async function apiPost<T>(
+  request: APIRequestContext,
+  session: ApiSession,
+  path: string,
+  data: object,
+): Promise<T> {
+  const res = await request.post(`${API_URL}${path}`, { headers: session.headers, data });
+  expect(res.ok(), `POST ${path} falló: ${await res.text()}`).toBeTruthy();
+  return (await res.json()) as T;
+}
+
+/**
+ * Da de alta a una persona del equipo por el camino real: el ADMIN la invita
+ * (`POST /staff/invitations`) y ella acepta con su contraseña
+ * (`POST /public/invitations/:token/accept`).
+ */
+export async function addStaffViaApi(
+  request: APIRequestContext,
+  admin: ApiSession,
+  person: { fullName: string; email: string; role: string; password: string },
+): Promise<void> {
+  const { token } = await apiPost<{ token: string }>(request, admin, '/staff/invitations', {
+    fullName: person.fullName,
+    email: person.email,
+    role: person.role,
+  });
+  const res = await request.post(`${API_URL}/public/invitations/${token}/accept`, {
+    headers: { 'X-Tenant-Host': admin.headers['X-Tenant-Host'] },
+    data: { password: person.password },
+  });
+  expect(res.ok(), `aceptar la invitación falló: ${await res.text()}`).toBeTruthy();
+}

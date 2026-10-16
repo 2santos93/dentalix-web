@@ -69,6 +69,42 @@ describe('AppShell', () => {
     expect(screen.queryByRole('link', { name: 'Caja' })).not.toBeInTheDocument();
   });
 
+  // Cada entrada copia el `@Roles(...)` del endpoint de su pantalla (DX-070):
+  // DASHBOARD_ROLES, CATALOG_READ_ROLES, INVENTORY_ROLES y STAFF_WRITE_ROLES.
+  const ROLE_NAV: Record<string, { visible: string[]; hidden: string[] }> = {
+    ADMIN: {
+      visible: ['Dashboard', 'Pacientes', 'Agenda', 'Caja', 'Catálogo', 'Inventario', 'Personal'],
+      hidden: [],
+    },
+    DENTIST: {
+      visible: ['Pacientes', 'Agenda', 'Catálogo'],
+      hidden: ['Dashboard', 'Caja', 'Inventario', 'Personal'],
+    },
+    ASSISTANT: {
+      visible: ['Pacientes', 'Agenda', 'Catálogo', 'Inventario'],
+      hidden: ['Dashboard', 'Caja', 'Personal'],
+    },
+    RECEPTION: {
+      visible: ['Pacientes', 'Agenda', 'Caja'],
+      hidden: ['Dashboard', 'Catálogo', 'Inventario', 'Personal'],
+    },
+  };
+  it.each(Object.keys(ROLE_NAV))('el menú de %s solo enseña lo que su rol puede abrir', async (role) => {
+    mockAccessToken = tokenForRole(role);
+    render(
+      <AppShell>
+        <p>contenido</p>
+      </AppShell>,
+    );
+    const { visible, hidden } = ROLE_NAV[role];
+    for (const name of visible) {
+      expect(await screen.findAllByRole('link', { name })).not.toHaveLength(0);
+    }
+    for (const name of hidden) {
+      expect(screen.queryByRole('link', { name })).not.toBeInTheDocument();
+    }
+  });
+
   it('arranca la sesión desde la cookie al montar (DX-062)', () => {
     render(
       <AppShell>
@@ -103,7 +139,8 @@ describe('AppShell', () => {
     ).toBeGreaterThanOrEqual(2);
   });
 
-  it('includes an Inventario nav link pointing to /inventory', () => {
+  it('includes an Inventario nav link pointing to /inventory', async () => {
+    mockAccessToken = tokenForRole('ADMIN');
     render(
       <AppShell>
         <p>contenido</p>
@@ -111,7 +148,7 @@ describe('AppShell', () => {
     );
     // Se renderiza en dos ubicaciones responsivas (sidebar desktop + topbar
     // móvil); ambas existen en el DOM bajo jsdom.
-    const links = screen.getAllByRole('link', { name: /inventario/i });
+    const links = await screen.findAllByRole('link', { name: /inventario/i });
     expect(links.length).toBeGreaterThanOrEqual(1);
     links.forEach((link) => {
       expect(link).toHaveAttribute('href', '/inventory');

@@ -52,3 +52,6 @@ next-env.d.ts
 .impeccable/
 .playwright-mcp/
 .impeccable-shots.mjs
+
+# e2e en modo CI (scripts/e2e-ci.sh): pids, logs, env generado y storage
+/.e2e/

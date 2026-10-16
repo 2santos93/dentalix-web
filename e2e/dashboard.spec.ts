@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { accessTokenOf, registerAndLogin } from './support/auth';
 import { disableBusinessHours } from './support/business-hours';
 import { API_URL } from './support/urls';
+import { atSede, sedeDayFromToday, sedeTime } from './support/clock';
 
 /**
  * e2e: register clinic + login (owner, `DASHBOARD_ROLES` includes OWNER —
@@ -93,10 +94,9 @@ const paymentAmount = 250;
 // would never match the DOM. Formatting in-page uses the same engine the app
 // uses (`dashboard-view.tsx`'s `formatCurrencySafe`, es locale).
 
-// Same formatter as `dashboard-view.tsx`'s `formatTime`.
-function formatTime(date: Date): string {
-  return date.toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit' });
-}
+// Same formatter as `dashboard-view.tsx`'s `formatTime`, in the browser's
+// (the sede's) timezone — not Node's (see support/clock.ts).
+const formatTime = sedeTime;
 
 test('dashboard: aggregated cards render seeded payment income, low-stock item, upcoming appointment and patient count', async ({
   page,
@@ -205,7 +205,9 @@ test('dashboard: aggregated cards render seeded payment income, low-stock item, 
         // COP so it equals the dashboard's default query currency — keeps the
         // conversion a `from === to` passthrough (offline, no exchange call).
         currency: 'COP',
-        paidAt: new Date().toISOString(),
+        // Medianoche de hoy en la sede: cae en «hoy» en la zona de la sede y
+        // en UTC (la API recorta los días civiles a medianoche UTC).
+        paidAt: atSede(sedeDayFromToday(0), '00:00').toISOString(),
       },
     },
   );

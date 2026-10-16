@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { accessTokenOf, registerAndLogin } from './support/auth';
 import { disableBusinessHours } from './support/business-hours';
 import { API_URL } from './support/urls';
+import { atSede, sedeDayFromToday } from './support/clock';
 
 /**
  * e2e DX-005 — confirmación de cita por enlace firmado, de punta a punta y sin
@@ -21,18 +22,6 @@ const subdomain = `test-confirma-${suffix}`;
 const fullName = 'Dra. Recepción Prueba';
 const email = `confirma.${suffix}@example.com`;
 const password = 'Password123!';
-
-/** Mañana a las 10:00 (hora local del navegador, que es la de la agenda). */
-function tomorrowAt(hours: number, minutes = 0): Date {
-  const d = new Date();
-  d.setDate(d.getDate() + 1);
-  d.setHours(hours, minutes, 0, 0);
-  return d;
-}
-
-function localDay(d: Date): string {
-  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-}
 
 async function session(page: Page): Promise<{ accessToken: string; userId: string }> {
   const accessToken = await accessTokenOf(page);
@@ -69,8 +58,10 @@ test('recepción genera el enlace -> el paciente confirma desde el móvil -> la 
   expect(patientRes.ok(), await patientRes.text()).toBeTruthy();
   const patientId = ((await patientRes.json()) as { id: string }).id;
 
-  const start = tomorrowAt(10);
-  const end = tomorrowAt(10, 30);
+  // Mañana a las 10:00 de la SEDE (la zona del navegador), no de Node.
+  const day = sedeDayFromToday(1);
+  const start = atSede(day, '10:00');
+  const end = atSede(day, '10:30');
   const apptRes = await page.request.post(`${API_URL}/appointments`, {
     headers: api,
     data: {
@@ -87,7 +78,7 @@ test('recepción genera el enlace -> el paciente confirma desde el móvil -> la 
   await page.goto(`${origin}/agenda`);
   await expect(page.getByRole('heading', { name: 'Agenda' })).toBeVisible();
   await page.getByRole('button', { name: 'Día', exact: true }).click();
-  await page.getByLabel('Fecha', { exact: true }).fill(localDay(start));
+  await page.getByLabel('Fecha', { exact: true }).fill(day);
 
   const row = page.locator('table tr', { hasText: `Camila Confirma${suffix}` });
   await expect(row).toBeVisible({ timeout: 10_000 });
@@ -134,7 +125,7 @@ test('recepción genera el enlace -> el paciente confirma desde el móvil -> la 
   // Abrir el enlace no confirmó nada: sigue agendada.
   await page.reload();
   await page.getByRole('button', { name: 'Día', exact: true }).click();
-  await page.getByLabel('Fecha', { exact: true }).fill(localDay(start));
+  await page.getByLabel('Fecha', { exact: true }).fill(day);
   await expect(row.getByLabel(/Estado de la cita de/)).toHaveValue('SCHEDULED', { timeout: 10_000 });
 
   // Segundo clic: confirmar.
@@ -150,7 +141,7 @@ test('recepción genera el enlace -> el paciente confirma desde el móvil -> la 
   // --- La agenda refleja la respuesta sin intervención manual ---
   await page.reload();
   await page.getByRole('button', { name: 'Día', exact: true }).click();
-  await page.getByLabel('Fecha', { exact: true }).fill(localDay(start));
+  await page.getByLabel('Fecha', { exact: true }).fill(day);
   await expect(row.getByLabel(/Estado de la cita de/)).toHaveValue('CONFIRMED', { timeout: 10_000 });
   await expect(row.getByText('Confirmación pendiente')).toHaveCount(0);
 });

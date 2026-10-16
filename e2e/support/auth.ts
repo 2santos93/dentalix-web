@@ -82,6 +82,42 @@ export async function registerAndLogin(
   // --- Login ---
   // No subdomain field here — the tenant travels via the `${subdomain}.
   // localhost:3001` host we're already on.
+  await submitLogin(page, origin, email, password);
+
+  return origin;
+}
+
+/**
+ * Un access token de la sesión de la página, para sembrar datos por la API.
+ * Desde DX-062 el access vive solo en memoria y el refresh en una cookie
+ * HttpOnly, así que se pide uno nuevo con `POST /auth/refresh` DESDE la página
+ * y por su mismo origen, como hace la app: el navegador manda la cookie y el
+ * Origin, y guarda la cookie rotada, así que la página sigue con su sesión.
+ */
+export async function accessTokenOf(page: Page): Promise<string> {
+  const { status, body } = await page.evaluate(async () => {
+    const res = await fetch('/api/v1/auth/refresh', {
+      method: 'POST',
+      headers: { 'X-Tenant-Host': window.location.host },
+    });
+    return { status: res.status, body: await res.text() };
+  });
+  expect(status, `refresh por cookie falló: ${status} ${body}`).toBe(201);
+  return (JSON.parse(body) as { accessToken: string }).accessToken;
+}
+
+/**
+ * Inicia sesión por la UI en `${origin}/login` con una cuenta que ya existe y
+ * espera a la sesión real (cookie HttpOnly del host). Sirve para el re-login
+ * tras cambiar la contraseña, para cuentas sembradas por la API, etc.
+ */
+export async function loginAs(page: Page, origin: string, email: string, password: string): Promise<void> {
+  await page.goto(`${origin}/login`);
+  await submitLogin(page, origin, email, password);
+}
+
+/** Rellena y envía el formulario de login de la página actual (ya en /login). */
+async function submitLogin(page: Page, origin: string, email: string, password: string): Promise<void> {
   await page.getByLabel('Correo electrónico').fill(email);
   await page.getByLabel('Contraseña', { exact: true }).fill(password);
 
@@ -115,25 +151,4 @@ export async function registerAndLogin(
   // flight when a caller issues its own `page.goto` right after this
   // resolves, which would abort it (net::ERR_ABORTED). Let it settle first.
   await page.waitForURL(/\/patients$/, { timeout: 5_000 }).catch(() => {});
-
-  return origin;
-}
-
-/**
- * Un access token de la sesión de la página, para sembrar datos por la API.
- * Desde DX-062 el access vive solo en memoria y el refresh en una cookie
- * HttpOnly, así que se pide uno nuevo con `POST /auth/refresh` DESDE la página
- * y por su mismo origen, como hace la app: el navegador manda la cookie y el
- * Origin, y guarda la cookie rotada, así que la página sigue con su sesión.
- */
-export async function accessTokenOf(page: Page): Promise<string> {
-  const { status, body } = await page.evaluate(async () => {
-    const res = await fetch('/api/v1/auth/refresh', {
-      method: 'POST',
-      headers: { 'X-Tenant-Host': window.location.host },
-    });
-    return { status: res.status, body: await res.text() };
-  });
-  expect(status, `refresh por cookie falló: ${status} ${body}`).toBe(201);
-  return (JSON.parse(body) as { accessToken: string }).accessToken;
 }

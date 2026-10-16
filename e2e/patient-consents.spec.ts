@@ -1,7 +1,7 @@
 import { test, expect, type APIRequestContext, type Locator, type Page } from './support/test';
 import { randomUUID } from 'node:crypto';
-import { accessTokenOf, registerAndLogin } from './support/auth';
-import { API_URL } from './support/urls';
+import { loginAs } from './support/auth';
+import { apiPost, registerClinicViaApi, type ApiSession } from './support/api';
 
 /**
  * e2e (DX-006): consentimiento informado firmado en pantalla.
@@ -16,53 +16,85 @@ import { API_URL } from './support/urls';
  *   4. A 390px el modal cabe sin desplazar la página de lado y se firma igual.
  *
  * Requiere API y web levantadas (ver playwright.config.ts y support/urls.ts).
- * La siembra (paciente + plan) va por `page.request` con `X-Tenant-Host`.
+ * La clínica, el paciente con su plan y una plantilla se siembran por la API en
+ * el `beforeAll` (DX-070), así que los dos tests son independientes: ninguno se
+ * salta si el otro falla o se corre solo.
  */
 const rawSuffix = process.env.E2E_RUN_SUFFIX ?? randomUUID();
-const suffix = rawSuffix.replace(/[^a-z0-9]/gi, '').toLowerCase();
-const clinicName = `Clinica Consentimientos ${suffix}`;
-const subdomain = `test-clinic-cons-${suffix}`;
-const email = `test.user.consent.${suffix}@example.com`;
+const runSuffix = rawSuffix.replace(/[^a-z0-9]/gi, '').toLowerCase();
 const password = 'Password123!';
 const ownerName = 'Dra Consentimientos';
 const patientFirstName = 'Lucía';
-const patientLastName = `Consentida${suffix}`;
-const templateTitle = `Exodoncia ${suffix}`;
+const TEMPLATE_BODY =
+  'Yo, {{paciente}} ({{documento}}), autorizo a {{profesional}} de {{clinica}} a realizar: {{tratamiento}}. Fecha: {{fecha}}.';
 
-async function seedPatient(
-  request: APIRequestContext,
-  origin: string,
-  accessToken: string,
-): Promise<string> {
-  const headers = {
-    Authorization: `Bearer ${accessToken}`,
-    'X-Tenant-Host': new URL(origin).host,
-  };
-  async function post<T>(path: string, data: object): Promise<T> {
-    const res = await request.post(`${API_URL}${path}`, { headers, data });
-    expect(res.ok(), `POST ${path} falló: ${await res.text()}`).toBeTruthy();
-    return (await res.json()) as T;
-  }
-  const patient = await post<{ id: string }>('/patients', {
+// Lo fija el `beforeAll` (DX-070): cada test es independiente y no se salta.
+// El sufijo lleva una parte aleatoria por worker: si un reintento de CI vuelve
+// a correr el `beforeAll`, la clínica nueva no choca con la anterior.
+let suffix: string;
+let clinicName: string;
+let email: string;
+let origin: string;
+let patientId: string;
+let patientLastName: string;
+/** Plantilla sembrada por la API, para el test que no prueba crearla. */
+let seededTemplateTitle: string;
+
+/** Paciente con un plan de tratamiento (para la variable {{tratamiento}}). */
+async function seedPatient(request: APIRequestContext, session: ApiSession): Promise<string> {
+  const patient = await apiPost<{ id: string }>(request, session, '/patients', {
     firstName: patientFirstName,
     lastName: patientLastName,
     docType: 'CC',
     docNumber: `CS${suffix}`.slice(0, 20),
     sex: 'F',
   });
-  const catalog = await post<{ id: string }>('/catalog/items', {
+  const catalog = await apiPost<{ id: string }>(request, session, '/catalog/items', {
     code: `cs-${suffix}`,
     kind: 'PROCEDURE',
     labelEs: `Exodoncia simple ${suffix}`,
     color: '#3366CC',
     defaultPrice: 100,
   });
-  const plan = await post<{ id: string }>(`/patients/${patient.id}/treatment-plans`, {
-    currency: 'USD',
+  const plan = await apiPost<{ id: string }>(
+    request,
+    session,
+    `/patients/${patient.id}/treatment-plans`,
+    { currency: 'USD' },
+  );
+  await apiPost(request, session, `/treatment-plans/${plan.id}/items`, {
+    toothNumber: '48',
+    catalogItemId: catalog.id,
   });
-  await post(`/treatment-plans/${plan.id}/items`, { toothNumber: '48', catalogItemId: catalog.id });
   return patient.id;
 }
+
+test.beforeAll(async ({ playwright }) => {
+  suffix = `${runSuffix}${randomUUID().slice(0, 6)}`;
+  clinicName = `Clinica Consentimientos ${suffix}`;
+  email = `test.user.consent.${suffix}@example.com`;
+  patientLastName = `Consentida${suffix}`;
+  seededTemplateTitle = `Endodoncia ${suffix}`;
+
+  const request = await playwright.request.newContext();
+  try {
+    const session = await registerClinicViaApi(request, {
+      subdomain: `test-clinic-cons-${suffix}`,
+      clinicName,
+      fullName: ownerName,
+      email,
+      password,
+    });
+    origin = session.origin;
+    patientId = await seedPatient(request, session);
+    await apiPost(request, session, '/consent-templates', {
+      title: seededTemplateTitle,
+      body: TEMPLATE_BODY,
+    });
+  } finally {
+    await request.dispose();
+  }
+});
 
 /** Un trazo con el ratón (Pointer Events: mismo camino que el dedo). */
 async function signOn(page: Page, canvas: Locator) {
@@ -77,7 +109,7 @@ async function signOn(page: Page, canvas: Locator) {
   await page.mouse.up();
 }
 
-async function signConsent(page: Page) {
+async function signConsent(page: Page, templateTitle: string) {
   await page.getByRole('button', { name: 'Nuevo consentimiento' }).click();
   const dialog = page.getByRole('dialog', { name: 'Nuevo consentimiento' });
   await expect(dialog).toBeVisible();
@@ -102,25 +134,12 @@ async function signConsent(page: Page) {
   await expect(dialog).toBeHidden({ timeout: 10_000 });
 }
 
-test.describe.configure({ mode: 'serial' });
-
-let origin: string;
-let patientId: string;
-
 test('ADMIN crea la plantilla, el profesional firma y se imprime en A4', async ({
   page,
   context,
 }) => {
-  origin = await registerAndLogin(page, {
-    subdomain,
-    clinicName,
-    fullName: ownerName,
-    email,
-    password,
-  });
-  const accessToken = await accessTokenOf(page);
-  expect(accessToken).toBeTruthy();
-  patientId = await seedPatient(page.request, origin, accessToken);
+  const templateTitle = `Exodoncia ${suffix}`;
+  await loginAs(page, origin, email, password);
 
   // --- 1. Plantilla desde /settings/consentimientos ---
   await page.goto(`${origin}/settings/consentimientos`);
@@ -130,7 +149,7 @@ test('ADMIN crea la plantilla, el profesional firma y se imprime en A4', async (
   await tplDialog.getByLabel('Título').fill(templateTitle);
   await tplDialog
     .getByLabel('Texto del consentimiento')
-    .fill('Yo, {{paciente}} ({{documento}}), autorizo a {{profesional}} de {{clinica}} a realizar: {{tratamiento}}. Fecha: {{fecha}}.');
+    .fill(TEMPLATE_BODY);
   await tplDialog.getByRole('button', { name: 'Crear plantilla' }).click();
   await expect(tplDialog).toBeHidden();
   await expect(page.getByRole('table', { name: 'Plantillas de consentimiento' })).toContainText(
@@ -148,7 +167,7 @@ test('ADMIN crea la plantilla, el profesional firma y se imprime en A4', async (
   await expect(panel.getByText('Este paciente no tiene consentimientos firmados.')).toBeVisible({
     timeout: 10_000,
   });
-  await signConsent(page);
+  await signConsent(page, templateTitle);
   const table = panel.getByRole('table', { name: 'Consentimientos firmados' });
   await expect(table).toContainText(templateTitle);
   await expect(table).toContainText(`${patientFirstName} ${patientLastName} (paciente)`);
@@ -178,20 +197,17 @@ test('ADMIN crea la plantilla, el profesional firma y se imprime en A4', async (
 });
 
 test('a 390px el modal cabe y se firma con el puntero', async ({ page }) => {
-  test.skip(!origin, 'depende del primer test');
   await page.setViewportSize({ width: 390, height: 844 });
-  // Misma sesión: se reutiliza la del primer test iniciando sesión de nuevo.
-  await page.goto(`${origin}/login`);
-  await page.getByLabel('Correo electrónico').fill(email);
-  await page.getByLabel('Contraseña', { exact: true }).fill(password);
-  await page.getByRole('button', { name: /iniciar sesión|entrar/i }).click();
-  await page.waitForURL(/\/(dashboard|agenda|patients)/, { timeout: 15_000 });
+  await loginAs(page, origin, email, password);
 
   await page.goto(`${origin}/patients/${patientId}?tab=consents`);
   const panel = page.locator('#tabpanel-consents');
-  await expect(panel.getByRole('list', { name: 'Consentimientos firmados' })).toBeVisible({
-    timeout: 10_000,
-  });
+  // Con o sin el consentimiento del otro test: este no depende de él.
+  const list = panel.getByRole('list', { name: 'Consentimientos firmados' });
+  await expect(
+    list.or(panel.getByText('Este paciente no tiene consentimientos firmados.')),
+  ).toBeVisible({ timeout: 10_000 });
+  const before = await list.getByRole('listitem').count();
 
   await page.getByRole('button', { name: 'Nuevo consentimiento' }).click();
   const dialog = page.getByRole('dialog', { name: 'Nuevo consentimiento' });
@@ -199,8 +215,8 @@ test('a 390px el modal cabe y se firma con el puntero', async ({ page }) => {
   expect(width).toBeLessThanOrEqual(390);
   await page.keyboard.press('Escape');
 
-  await signConsent(page);
-  await expect(panel.getByRole('list', { name: 'Consentimientos firmados' }).getByRole('listitem')).toHaveCount(2);
+  await signConsent(page, seededTemplateTitle);
+  await expect(list.getByRole('listitem')).toHaveCount(before + 1);
   const overflow = await page.evaluate(
     () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
   );
