@@ -1,10 +1,12 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { ApiError } from '@/lib/api/client';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { getDashboard, type Dashboard } from '@/lib/dashboard/dashboard-api';
 import { addOneDayIso } from '@/lib/dashboard/date-range';
+import { presetRange } from '@/lib/payments/cash-period';
+import { useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
 import { formatCurrency } from '@/lib/format/currency';
 import { listStaff } from '@/lib/appointments/staff-api';
 import { formatTime } from '@/lib/format/date';
@@ -30,6 +32,8 @@ const copy = {
   forbidden: 'No tienes acceso a este panel.',
   genericError: 'No pudimos cargar el panel.',
   rangeInvalid: 'La fecha "Hasta" debe ser igual o posterior a la fecha "Desde".',
+  // DX-097: los días del período son los del calendario de la sede.
+  zoneNote: (timeZone: string) => `Días en hora de la sede (${timeZone}).`,
   incomesHeading: 'Ingresos del período',
   incomesCount: (count: number) => `${count} ${count === 1 ? 'abono' : 'abonos'}`,
   byCurrencyHeading: 'Desglose por moneda',
@@ -69,21 +73,6 @@ const STATUS_BADGE_VARIANT: Record<AppointmentStatus, BadgeProps['variant']> = {
   NO_SHOW: 'warning',
 };
 
-function todayLocalDateString(): string {
-  const d = new Date();
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  const dd = String(d.getDate()).padStart(2, '0');
-  return `${yyyy}-${mm}-${dd}`;
-}
-
-function monthStartLocalDateString(): string {
-  const d = new Date();
-  const yyyy = d.getFullYear();
-  const mm = String(d.getMonth() + 1).padStart(2, '0');
-  return `${yyyy}-${mm}-01`;
-}
-
 interface DashboardViewProps {
   token: string;
 }
@@ -108,8 +97,20 @@ interface DashboardViewProps {
  * `validationEndAfterStart`.
  */
 export function DashboardView({ token }: DashboardViewProps) {
-  const [from, setFrom] = useState(monthStartLocalDateString);
-  const [to, setTo] = useState(todayLocalDateString);
+  // DX-097: por defecto, del 1 del mes a hoy EN LA SEDE (su zona IANA, de la
+  // API), no en el navegador. Hasta saber la zona no hay período ni consulta.
+  const timeZone = useSedeTimeZone(token);
+  const defaults = useMemo(
+    () =>
+      timeZone
+        ? { from: presetRange('month', timeZone).from, to: presetRange('today', timeZone).to }
+        : null,
+    [timeZone],
+  );
+  const [fromInput, setFrom] = useState<string | null>(null);
+  const [toInput, setTo] = useState<string | null>(null);
+  const from = fromInput ?? defaults?.from ?? '';
+  const to = toInput ?? defaults?.to ?? '';
   const [currency, setCurrency] = useState('COP');
 
   const [data, setData] = useState<Dashboard | null>(null);
@@ -146,10 +147,10 @@ export function DashboardView({ token }: DashboardViewProps) {
   // "Hasta", show a friendly message (mirrors `appointment-form.tsx`'s
   // `validationEndAfterStart`) instead of firing a request the backend would
   // just reject/return nothing useful for.
-  const rangeInvalid = from > to;
+  const rangeInvalid = from !== '' && to !== '' && from > to;
 
   useEffect(() => {
-    if (!token) return;
+    if (!token || !from || !to) return;
     // `rangeInvalid` is derived straight from `from`/`to` at render time (see
     // above), so the guard message below already renders ahead of
     // `loading`/`error`/`data` in the JSX regardless of what they hold here —
@@ -211,6 +212,11 @@ export function DashboardView({ token }: DashboardViewProps) {
           <FormField htmlFor="dashboard-currency" label={copy.currencyLabel} className="w-44">
             <CurrencySelect id="dashboard-currency" token={token} value={currency} onChange={setCurrency} />
           </FormField>
+          {timeZone ? (
+            <p className="basis-full text-sm text-muted" data-testid="dashboard-zone-note">
+              {copy.zoneNote(timeZone)}
+            </p>
+          ) : null}
         </CardContent>
       </Card>
 

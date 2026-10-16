@@ -7,6 +7,7 @@ import type { Dashboard } from '@/lib/dashboard/dashboard-api';
 import { listCurrencies } from '@/lib/reference/currencies-api';
 import { listPatients } from '@/lib/patients/patients-api';
 import { listStaff } from '@/lib/appointments/staff-api';
+import { listLocations, type ClinicLocation } from '@/lib/locations/locations-api';
 
 // NOTE: jest.mock's string literal is not alias-rewritten by the SWC
 // transform (only real `import`/`require` specifiers are) — use a relative
@@ -27,11 +28,26 @@ jest.mock('../../lib/patients/patients-api', () => ({
 jest.mock('../../lib/appointments/staff-api', () => ({
   listStaff: jest.fn(),
 }));
+// DX-097: el período por defecto sale del día de la SEDE (GET /locations).
+jest.mock('../../lib/locations/locations-api', () => ({
+  listLocations: jest.fn(),
+}));
 
 const mockedGetDashboard = getDashboard as jest.MockedFunction<typeof getDashboard>;
 const mockedListCurrencies = listCurrencies as jest.MockedFunction<typeof listCurrencies>;
 const mockedListPatients = listPatients as jest.MockedFunction<typeof listPatients>;
 const mockedListStaff = listStaff as jest.MockedFunction<typeof listStaff>;
+const mockedListLocations = listLocations as jest.MockedFunction<typeof listLocations>;
+
+const sede = (timeZone: string): ClinicLocation => ({
+  id: 'loc-1',
+  name: 'Sede principal',
+  address: null,
+  country: timeZone === 'Europe/Madrid' ? 'ES' : 'CO',
+  isActive: true,
+  timeZone,
+  createdAt: '2026-01-01T00:00:00.000Z',
+});
 
 const PATIENT_ID = 'aaaaaaaa-1111-2222-3333-444444444444';
 
@@ -166,6 +182,8 @@ describe('DashboardView', () => {
     mockedListStaff.mockReset();
     mockedListPatients.mockResolvedValue(patientsPage);
     mockedListStaff.mockResolvedValue(staff);
+    mockedListLocations.mockReset();
+    mockedListLocations.mockResolvedValue([sede('America/Bogota')]);
   });
 
   it('renders the 4 cards (incomes, low stock, upcoming appointments, patient count) with fetched data', async () => {
@@ -268,10 +286,9 @@ describe('DashboardView', () => {
     // Default "Hasta" is today, but the backend's incomes/payments-totals
     // query is half-open `[from, to)` — the component must send an exclusive
     // upper bound (today + 1 day) so today's payments aren't silently excluded.
-    const today = new Date();
-    const tomorrow = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate() + 1));
-    const expectedTomorrow = `${tomorrow.getUTCFullYear()}-${String(tomorrow.getUTCMonth() + 1).padStart(2, '0')}-${String(tomorrow.getUTCDate()).padStart(2, '0')}`;
-    expect(firstParams.to).toBe(expectedTomorrow);
+    // Reloj fijo: 15/08 a las 07:00 en Bogotá -> hoy es el 15 en la sede.
+    expect(firstParams.from).toBe('2026-08-01');
+    expect(firstParams.to).toBe('2026-08-16');
 
     mockedGetDashboard.mockClear();
     const fromInput = screen.getByLabelText('Desde');
@@ -405,3 +422,49 @@ describe('DashboardView', () => {
     expect(screen.queryByRole('link', { name: 'Bajo stock' })).not.toBeInTheDocument();
   });
 });
+
+describe('DashboardView · días de la sede (DX-097)', () => {
+  beforeEach(() => {
+    mockedGetDashboard.mockReset();
+    mockedGetDashboard.mockResolvedValue(dashboard());
+    mockedListCurrencies.mockResolvedValue([{ code: 'COP', name: 'Peso colombiano', symbol: '$' }]);
+    mockedListPatients.mockResolvedValue(patientsPage);
+    mockedListStaff.mockResolvedValue(staff);
+    mockedListLocations.mockReset();
+  });
+  afterEach(() => {
+    jest.useRealTimers();
+  });
+
+  it('el último día del mes a las 22:00 de Bogotá (01/11 03:00Z) el período por defecto es octubre hasta el 31, no noviembre', async () => {
+    jest.useFakeTimers({ now: new Date('2026-11-01T03:00:00.000Z'), advanceTimers: true });
+    mockedListLocations.mockResolvedValue([sede('America/Bogota')]);
+    render(<DashboardView token="tok" />);
+
+    await waitFor(() => expect(mockedGetDashboard).toHaveBeenCalledTimes(1));
+    expect(mockedGetDashboard.mock.calls[0][1]).toMatchObject({ from: '2026-10-01', to: '2026-11-01' });
+    expect((screen.getByLabelText('Hasta') as HTMLInputElement).value).toBe('2026-10-31');
+    expect(screen.getByTestId('dashboard-zone-note')).toHaveTextContent('Días en hora de la sede (America/Bogota).');
+  });
+
+  it('con la sede en Madrid, el mismo instante ya es el 1 de noviembre', async () => {
+    jest.useFakeTimers({ now: new Date('2026-11-01T03:00:00.000Z'), advanceTimers: true });
+    mockedListLocations.mockResolvedValue([sede('Europe/Madrid')]);
+    render(<DashboardView token="tok" />);
+
+    await waitFor(() => expect(mockedGetDashboard).toHaveBeenCalledTimes(1));
+    expect(mockedGetDashboard.mock.calls[0][1]).toMatchObject({ from: '2026-11-01', to: '2026-11-02' });
+  });
+
+  it('no pide el panel hasta saber la zona de la sede, y muestra la carga', async () => {
+    let resolve: (value: ClinicLocation[]) => void = () => {};
+    mockedListLocations.mockReturnValue(new Promise((r) => (resolve = r)));
+    render(<DashboardView token="tok" />);
+
+    expect(screen.getByRole('status', { name: /cargando panel/i })).toBeInTheDocument();
+    expect(mockedGetDashboard).not.toHaveBeenCalled();
+    resolve([sede('America/Bogota')]);
+    await waitFor(() => expect(mockedGetDashboard).toHaveBeenCalledTimes(1));
+  });
+});
+

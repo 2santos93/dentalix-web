@@ -1300,7 +1300,8 @@ export function TreatmentPlansTab({
       const input: RecordPaymentInput = {
         amount: amountNumber,
         currency: currencyValue,
-        paidAt: new Date(paymentDate).toISOString(),
+        // DX-097: el DÍA elegido; la API lo guarda al mediodía de la sede.
+        paidAt: paymentDate,
         ...(paymentMethod ? { method: paymentMethod } : {}),
         ...(paymentNotes.trim() ? { notes: paymentNotes.trim() } : {}),
       };

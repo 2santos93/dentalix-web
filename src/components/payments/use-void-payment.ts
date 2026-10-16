@@ -37,14 +37,15 @@ export interface VoidPaymentTarget {
   id: string;
   amount: number;
   currency: string;
-  paidAt: string;
+  /** Día civil del pago en la zona de su sede (`paidOn`, YYYY-MM-DD; DX-097). */
+  paidOn: string;
   patientName?: string;
 }
 
 export function voidPaymentSubject(target: VoidPaymentTarget): string {
   return [
     formatCurrency(target.amount, target.currency),
-    formatCivilDate(target.paidAt),
+    formatCivilDate(target.paidOn),
     target.patientName,
   ]
     .filter(Boolean)

@@ -647,7 +647,8 @@ describe('TreatmentPlansTab', () => {
     expect(planIdArg).toBe('plan-1');
     expect(input.amount).toBe(25000);
     expect(input.currency).toBe('COP');
-    expect(input.paidAt).toMatch(/^\d{4}-\d{2}-\d{2}T/);
+    // DX-097: el día civil, sin hora (la API lo guarda al mediodía de la sede).
+    expect(input.paidAt).toMatch(/^\d{4}-\d{2}-\d{2}$/);
     expect(input.method).toBeUndefined();
 
     await waitFor(() => expect(mockedGetPlanBalance).toHaveBeenCalledTimes(2));

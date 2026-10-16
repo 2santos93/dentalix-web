@@ -148,7 +148,7 @@ it('registra el abono contra el plan elegido, con Idempotency-Key, y avisa', asy
       {
         amount: 150000,
         currency: 'COP',
-        paidAt: '2026-10-01T00:00:00.000Z',
+        paidAt: '2026-10-01',
         method: 'TRANSFER',
       },
       expect.stringMatching(/^[0-9a-f-]{36}$/),

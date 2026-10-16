@@ -1,8 +1,10 @@
+import { DEFAULT_SEDE_TIME_ZONE, civilDateInZone } from '@/lib/format/date';
+
 /**
  * Períodos de la caja. La API recibe días civiles (`YYYY-MM-DD`, ambos
- * inclusive), igual que `paidAt` —el día en que se registró el abono—, así que
- * aquí no se habla de instantes: "hoy" es el día del reloj de quien mira la
- * caja, que es el día en que el mostrador registra los abonos.
+ * inclusive) y los corta a medianoche de la zona de CADA sede (DX-097), así
+ * que aquí tampoco se habla de instantes: "hoy" es el día civil de la SEDE —no
+ * el del navegador, que puede estar en otra zona—.
  */
 
 export type CashPreset = 'today' | 'week' | 'month';
@@ -18,39 +20,35 @@ export const MAX_RANGE_DAYS = 366;
 
 const DAY_MS = 24 * 60 * 60 * 1000;
 
-/** El día local de `date` como `YYYY-MM-DD`. */
-export function toCivilDate(date: Date): string {
-  const yyyy = date.getFullYear();
-  const mm = String(date.getMonth() + 1).padStart(2, '0');
-  const dd = String(date.getDate()).padStart(2, '0');
-  return `${yyyy}-${mm}-${dd}`;
+function pad(n: number): string {
+  return String(n).padStart(2, '0');
+}
+
+/** `Date.UTC` como `YYYY-MM-DD` (normaliza día 0, 32…). */
+function utcCivil(year: number, monthIndex: number, day: number): string {
+  const d = new Date(Date.UTC(year, monthIndex, day));
+  return `${d.getUTCFullYear()}-${pad(d.getUTCMonth() + 1)}-${pad(d.getUTCDate())}`;
 }
 
 /**
- * El rango de un atajo, relativo a `now`. La semana va de lunes a domingo —la
- * semana laboral en LATAM—, también cuando hoy es domingo.
+ * El rango de un atajo, relativo al día civil de `now` en `timeZone` (la zona
+ * de la sede). La semana va de lunes a domingo —la semana laboral en LATAM—,
+ * también cuando hoy es domingo.
  */
-export function presetRange(preset: CashPreset, now: Date = new Date()): CashRange {
-  const y = now.getFullYear();
-  const m = now.getMonth();
-  const d = now.getDate();
-  if (preset === 'today') {
-    const today = toCivilDate(now);
-    return { from: today, to: today };
-  }
+export function presetRange(preset: CashPreset, timeZone: string, now: Date = new Date()): CashRange {
+  const today = civilDateInZone(now, timeZone) ?? civilDateInZone(now, DEFAULT_SEDE_TIME_ZONE)!;
+  if (preset === 'today') return { from: today, to: today };
+  const [y, m, d] = today.split('-').map(Number);
   if (preset === 'week') {
-    // getDay(): 0 = domingo. Días desde el lunes: lunes 0 … domingo 6.
-    const sinceMonday = (now.getDay() + 6) % 7;
+    // getUTCDay(): 0 = domingo. Días desde el lunes: lunes 0 … domingo 6.
+    const sinceMonday = (new Date(Date.UTC(y, m - 1, d)).getUTCDay() + 6) % 7;
     return {
-      from: toCivilDate(new Date(y, m, d - sinceMonday)),
-      to: toCivilDate(new Date(y, m, d - sinceMonday + 6)),
+      from: utcCivil(y, m - 1, d - sinceMonday),
+      to: utcCivil(y, m - 1, d - sinceMonday + 6),
     };
   }
   // Día 0 del mes siguiente = último día de este.
-  return {
-    from: toCivilDate(new Date(y, m, 1)),
-    to: toCivilDate(new Date(y, m + 1, 0)),
-  };
+  return { from: utcCivil(y, m - 1, 1), to: utcCivil(y, m, 0) };
 }
 
 /** Rango que la API aceptará: dos días, `from <= to`, como mucho 366 días. */
