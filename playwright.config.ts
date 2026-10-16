@@ -27,7 +27,14 @@ export default defineConfig({
   projects: [
     {
       name: 'chromium',
-      use: { ...devices['Desktop Chrome'] },
+      use: {
+        ...devices['Desktop Chrome'],
+        // Chromium ya instalado en el sistema (p. ej. cuando no se puede descargar
+        // el de Playwright): PLAYWRIGHT_CHROMIUM_EXECUTABLE=/ruta/a/chrome.
+        launchOptions: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE
+          ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE }
+          : {},
+      },
     },
   ],
   webServer: {
