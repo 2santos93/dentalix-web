@@ -1,11 +1,13 @@
 'use client';
-import { useState } from 'react';
+import { useState, type FormEvent } from 'react';
 import { CheckCircle2, Loader2 } from 'lucide-react';
 import { apiFetch } from '@/lib/api/client';
 import type { components } from '@/lib/api/schema';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { clinicLoginHref } from '@/lib/tenant';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { FormField } from '@/components/shared/form-field';
 import { InlineError } from '@/components/errors/inline-error';
 
 type RegisterVerified = components['schemas']['RegisterVerifiedDto'];
@@ -13,7 +15,10 @@ type RegisterVerified = components['schemas']['RegisterVerifiedDto'];
 // Copy as constants (i18n-ready) — es first.
 const copy = {
   intro:
-    'Confirma que este correo es tuyo para crear tu clínica en Dentalix. Solo tienes que hacerlo una vez.',
+    'Confirma que este correo es tuyo para crear tu clínica en Dentalix. Por seguridad, escribe la contraseña que elegiste al registrarte.',
+  notYou: 'Si no has pedido crear una clínica en Dentalix, cierra esta página: no se creará nada.',
+  passwordLabel: 'Contraseña que elegiste al registrarte',
+  passwordRequired: 'Escribe la contraseña que elegiste al registrarte.',
   submit: 'Confirmar y crear mi clínica',
   submitting: 'Creando tu clínica…',
   doneTitle: '¡Tu clínica está lista!',
@@ -25,23 +30,31 @@ const copy = {
 const ERROR_ID = 'verify-registration-error';
 
 /**
- * DX-029: confirmar el registro desde el enlace del email. Se confirma con un
- * clic (no al cargar) para que un escáner de enlaces del correo no lo
- * consuma. Los errores (enlace usado/caducado, subdominio tomado) llegan en
+ * DX-029: confirmar el registro desde el enlace del email. Se confirma al
+ * enviar el formulario (no al cargar) para que un escáner de enlaces del
+ * correo no lo consuma, y con la contraseña del registro: así quien no pidió
+ * el alta no puede confirmarla por error en nombre de otro. Los errores
+ * (genérico de enlace/contraseña, caducado, subdominio tomado) llegan en
  * español desde la API.
  */
 export function VerifyRegistration({ verifyToken }: { verifyToken: string }) {
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loginHref, setLoginHref] = useState<string | null>(null);
+  const [password, setPassword] = useState('');
 
-  async function handleConfirm() {
+  async function handleConfirm(e: FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!password) {
+      setError(copy.passwordRequired);
+      return;
+    }
     setError(null);
     setSubmitting(true);
     try {
       const res = await apiFetch<RegisterVerified>('/auth/register/verify', {
         method: 'POST',
-        body: { token: verifyToken },
+        body: { token: verifyToken, password },
       });
       setLoginHref(clinicLoginHref(res.subdomain, window.location));
     } catch (err) {
@@ -65,21 +78,28 @@ export function VerifyRegistration({ verifyToken }: { verifyToken: string }) {
   }
 
   return (
-    <div className="flex flex-col gap-4">
+    <form onSubmit={handleConfirm} className="flex flex-col gap-4" noValidate>
       <p className="text-sm text-muted">{copy.intro}</p>
+      <FormField htmlFor="verify-registration-password" label={copy.passwordLabel}>
+        <Input
+          id="verify-registration-password"
+          name="password"
+          type="password"
+          autoComplete="current-password"
+          required
+          disabled={submitting}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={error ? ERROR_ID : undefined}
+          value={password}
+          onChange={(e) => setPassword(e.target.value)}
+        />
+      </FormField>
       {error ? (
         <InlineError id={ERROR_ID} variant="summary">
           {error}
         </InlineError>
       ) : null}
-      <Button
-        type="button"
-        size="lg"
-        className="w-full"
-        disabled={submitting}
-        aria-describedby={error ? ERROR_ID : undefined}
-        onClick={handleConfirm}
-      >
+      <Button type="submit" size="lg" className="w-full" disabled={submitting}>
         {submitting ? (
           <>
             <Loader2 className="animate-spin" /> {copy.submitting}
@@ -88,6 +108,7 @@ export function VerifyRegistration({ verifyToken }: { verifyToken: string }) {
           copy.submit
         )}
       </Button>
-    </div>
+      <p className="text-xs text-muted">{copy.notYou}</p>
+    </form>
   );
 }

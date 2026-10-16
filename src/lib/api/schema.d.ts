@@ -1654,6 +1654,8 @@ export interface components {
         VerifyRegistrationDto: {
             /** @description Token del enlace del email de verificación */
             token: string;
+            /** @description La contraseña elegida al registrarse: prueba que quien confirma es quien pidió el alta (DX-029) */
+            password: string;
         };
         RegisterVerifiedDto: {
             /** Format: uuid */
@@ -4393,7 +4395,7 @@ export interface operations {
                     "application/json": components["schemas"]["RegisterVerifiedDto"];
                 };
             };
-            /** @description Enlace inexistente o ya usado */
+            /** @description Genérico: enlace inexistente o ya usado, o contraseña distinta de la del registro */
             404: {
                 headers: {
                     [name: string]: unknown;

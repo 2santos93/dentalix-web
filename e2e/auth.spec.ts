@@ -31,7 +31,15 @@ const password = 'Password123!';
 test('register creates an account, then login succeeds against the real API', async ({
   page,
 }) => {
-  const origin = await registerAndLogin(page, { subdomain, clinicName, fullName, email, password });
+  // Confirmar el registro con una contraseña errónea falla (DX-029, R2).
+  const origin = await registerAndLogin(page, {
+    subdomain,
+    clinicName,
+    fullName,
+    email,
+    password,
+    tryWrongVerifyPassword: true,
+  });
 
   // registerAndLogin already asserts the session cookie, but re-assert here
   // explicitly since that IS this test's purpose: the session works against

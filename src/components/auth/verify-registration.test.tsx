@@ -11,7 +11,12 @@ jest.mock('../../lib/api/client', () => ({
 describe('VerifyRegistration (DX-029)', () => {
   beforeEach(() => (apiFetch as jest.Mock).mockReset());
 
-  it('no consume el enlace al cargar: confirma con un clic y ofrece iniciar sesión', async () => {
+  const fillPassword = (value: string) =>
+    fireEvent.change(screen.getByLabelText('Contraseña que elegiste al registrarte'), {
+      target: { value },
+    });
+
+  it('no consume el enlace al cargar: pide la contraseña del registro, confirma y ofrece iniciar sesión', async () => {
     (apiFetch as jest.Mock).mockResolvedValueOnce({
       tenantId: 't1',
       userId: 'u1',
@@ -19,7 +24,12 @@ describe('VerifyRegistration (DX-029)', () => {
     });
     render(<VerifyRegistration verifyToken="tok-1" />);
     expect(apiFetch).not.toHaveBeenCalled();
+    expect(screen.getByLabelText('Contraseña que elegiste al registrarte')).toHaveAttribute(
+      'autocomplete',
+      'current-password',
+    );
 
+    fillPassword('Clave-Segura-2026!');
     fireEvent.click(screen.getByRole('button', { name: 'Confirmar y crear mi clínica' }));
 
     expect(
@@ -31,8 +41,36 @@ describe('VerifyRegistration (DX-029)', () => {
     );
     expect(apiFetch).toHaveBeenCalledWith('/auth/register/verify', {
       method: 'POST',
-      body: { token: 'tok-1' },
+      body: { token: 'tok-1', password: 'Clave-Segura-2026!' },
     });
+  });
+
+  it('sin contraseña no llama a la API y lo explica', () => {
+    render(<VerifyRegistration verifyToken="tok-3" />);
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmar y crear mi clínica' }));
+    expect(apiFetch).not.toHaveBeenCalled();
+    expect(
+      screen.getByText('Escribe la contraseña que elegiste al registrarte.'),
+    ).toBeInTheDocument();
+  });
+
+  it('enlace inválido o contraseña errónea: muestra el error genérico de la API y deja reintentar', async () => {
+    (apiFetch as jest.Mock).mockRejectedValueOnce(
+      new ApiError(
+        404,
+        'No pudimos confirmar el registro: el enlace no es válido o ya se usó, o la contraseña no es la que elegiste al registrarte. Revísala o vuelve a registrarte.',
+      ),
+    );
+    render(<VerifyRegistration verifyToken="tok-4" />);
+    fillPassword('otra-clave');
+    fireEvent.click(screen.getByRole('button', { name: 'Confirmar y crear mi clínica' }));
+
+    expect(await screen.findByText(/la contraseña no es la que elegiste/)).toBeInTheDocument();
+    expect(screen.getByLabelText('Contraseña que elegiste al registrarte')).toHaveAttribute(
+      'aria-invalid',
+      'true',
+    );
+    expect(screen.getByRole('button', { name: 'Confirmar y crear mi clínica' })).toBeEnabled();
   });
 
   it('muestra en español el error de la API (enlace usado o caducado)', async () => {
@@ -40,6 +78,7 @@ describe('VerifyRegistration (DX-029)', () => {
       new ApiError(410, 'El enlace para confirmar el registro caducó (vale 24 horas).'),
     );
     render(<VerifyRegistration verifyToken="tok-2" />);
+    fillPassword('Clave-Segura-2026!');
     fireEvent.click(screen.getByRole('button', { name: 'Confirmar y crear mi clínica' }));
 
     expect(await screen.findByText(/caducó \(vale 24 horas\)/)).toBeInTheDocument();

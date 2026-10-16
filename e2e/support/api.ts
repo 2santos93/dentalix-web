@@ -49,7 +49,9 @@ export async function registerClinicViaApi(
   });
   expect(res.status(), `registro por la API falló: ${await res.text()}`).toBe(202);
   const token = await registrationTokenFor(clinic.email);
-  const verify = await request.post(`${API_URL}/auth/register/verify`, { data: { token } });
+  const verify = await request.post(`${API_URL}/auth/register/verify`, {
+    data: { token, password: clinic.password },
+  });
   expect(verify.ok(), `confirmar el registro falló: ${await verify.text()}`).toBeTruthy();
   return apiLogin(request, tenantOrigin(clinic.subdomain), clinic.email, clinic.password);
 }

@@ -38,6 +38,11 @@ export interface RegisterAndLoginParams {
   fullName: string;
   email: string;
   password: string;
+  /**
+   * Antes de confirmar el registro prueba una contraseña errónea y comprueba
+   * que la web la rechaza con el error genérico (DX-029, R2).
+   */
+  tryWrongVerifyPassword?: boolean;
 }
 
 /**
@@ -47,7 +52,14 @@ export interface RegisterAndLoginParams {
  */
 export async function registerAndLogin(
   page: Page,
-  { subdomain, clinicName, fullName, email, password }: RegisterAndLoginParams,
+  {
+    subdomain,
+    clinicName,
+    fullName,
+    email,
+    password,
+    tryWrongVerifyPassword = false,
+  }: RegisterAndLoginParams,
 ): Promise<string> {
   const origin = tenantOrigin(subdomain);
 
@@ -81,7 +93,18 @@ export async function registerAndLogin(
   // --- Confirmar desde el enlace del email ---
   const token = await registrationTokenFor(email);
   await page.goto(`${origin}/register/verificar/${token}`);
-  await page.getByRole('button', { name: 'Confirmar y crear mi clínica' }).click();
+  // DX-029 (R2): confirmar exige la contraseña elegida al registrarse.
+  const verifyPassword = page.getByLabel('Contraseña que elegiste al registrarte');
+  const confirm = page.getByRole('button', { name: 'Confirmar y crear mi clínica' });
+  if (tryWrongVerifyPassword) {
+    await verifyPassword.fill(`${password}-no`);
+    await confirm.click();
+    await expect(page.getByText(/la contraseña no es la que elegiste/)).toBeVisible({
+      timeout: 10_000,
+    });
+  }
+  await verifyPassword.fill(password);
+  await confirm.click();
   await expect(page.getByRole('heading', { name: '¡Tu clínica está lista!' })).toBeVisible({
     timeout: 15_000,
   });
