@@ -794,6 +794,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/appointment-types": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["AppointmentTypesController_list"];
+        put?: never;
+        post: operations["AppointmentTypesController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/appointment-types/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["AppointmentTypesController_remove"];
+        options?: never;
+        head?: never;
+        patch: operations["AppointmentTypesController_update"];
+        trace?: never;
+    };
     "/api/v1/appointments/{id}/confirmation-link": {
         parameters: {
             query?: never;
@@ -1640,7 +1672,7 @@ export interface components {
         /** @enum {string} */
         AuditAction: "VIEW" | "CREATE" | "UPDATE" | "DELETE" | "SIGN" | "VOID" | "LOGIN" | "LOGIN_FAILED" | "PASSWORD_RESET" | "EXPORT" | "PRINT";
         /** @enum {string} */
-        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM";
+        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT";
         /**
          * @description Rol con el que actuó (del token). `null` en un login fallido.
          * @enum {string}
@@ -1663,6 +1695,18 @@ export interface components {
              */
             fullName: string;
         };
+        AuditAppointmentSlotDto: {
+            /** Format: date-time */
+            start: string;
+            /** Format: date-time */
+            end: string;
+            /** Format: uuid */
+            providerId: string;
+        };
+        AuditAppointmentMoveDto: {
+            from: components["schemas"]["AuditAppointmentSlotDto"];
+            to: components["schemas"]["AuditAppointmentSlotDto"];
+        };
         AuditMetadataDto: {
             /** @description UPDATE: nombres de los campos enviados (nunca sus valores). */
             changedFields?: string[];
@@ -1672,6 +1716,8 @@ export interface components {
             };
             /** @example INVALID_CREDENTIALS */
             reason?: string;
+            /** @description DX-121: cita movida — hora y profesional antes y después (nunca datos del paciente). */
+            move?: components["schemas"]["AuditAppointmentMoveDto"];
         };
         AuditEventDto: {
             /** Format: uuid */
@@ -2481,16 +2527,36 @@ export interface components {
             providerId: string;
             /** Format: date-time */
             start: string;
-            /** Format: date-time */
-            end: string;
+            /**
+             * Format: date-time
+             * @description Opcional si viene `appointmentTypeId`: entonces la hora de fin es `start` + la duración del tipo (DX-121).
+             */
+            end?: string;
+            /**
+             * Format: uuid
+             * @description Tipo de cita (DX-121): de esta clínica y activo; si no, 400. Fija la duración si no viene `end`.
+             */
+            appointmentTypeId?: string;
             reason?: string;
             notes?: string;
+        };
+        AppointmentTypeSummaryDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            durationMinutes: number;
+            color: string;
         };
         AppointmentDto: {
             /** Format: uuid */
             id: string;
             /** Format: uuid */
             tenantId: string;
+            /**
+             * Format: uuid
+             * @description Sede donde ocurre la cita.
+             */
+            locationId: string;
             /** Format: uuid */
             patientId: string;
             /** @description Patient's first name, joined so a client can label the appointment without fetching the patient list. Null when the join is unavailable. */
@@ -2508,6 +2574,10 @@ export interface components {
             notes: string | null;
             /** Format: uuid */
             createdById: string | null;
+            /** Format: uuid */
+            appointmentTypeId: string | null;
+            /** @description DX-121: tipo embebido (nombre, duración, color #RRGGBB). Se mantiene aunque el tipo se desactive o retire después. */
+            appointmentType: components["schemas"]["AppointmentTypeSummaryDto"] | null;
             /**
              * Format: date-time
              * @description Cuándo se generó el enlace de confirmación vigente (DX-005). null si nunca se envió o si la cita se reagendó / cambió de estado después.
@@ -2528,6 +2598,11 @@ export interface components {
             start?: string;
             /** Format: date-time */
             end?: string;
+            /**
+             * Format: uuid
+             * @description DX-121: mover la cita a otro profesional de la clínica. Mismas reglas que reagendar: solape 409, horario de la sede 422, y anula el enlace de confirmación.
+             */
+            providerId?: string;
             /** @enum {string} */
             status?: "SCHEDULED" | "CONFIRMED" | "COMPLETED" | "CANCELLED" | "NO_SHOW";
             reason?: string;
@@ -2610,6 +2685,39 @@ export interface components {
             timezone: string;
             /** @description La semana COMPLETA. Un día sin tramos = cerrado. Lista vacía = sede sin restricción. */
             ranges: components["schemas"]["ScheduleRangeDto"][];
+        };
+        AppointmentTypeDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            tenantId: string;
+            /** @example Endodoncia */
+            name: string;
+            /** @example 90 */
+            durationMinutes: number;
+            /** @example #7C3AED */
+            color: string;
+            active: boolean;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        CreateAppointmentTypeDto: {
+            name: string;
+            durationMinutes: number;
+            /** @example #7C3AED */
+            color: string;
+            /** @description Por defecto, true */
+            active?: boolean;
+        };
+        UpdateAppointmentTypeDto: {
+            name?: string;
+            durationMinutes?: number;
+            /** @example #7C3AED */
+            color?: string;
+            /** @description Por defecto, true */
+            active?: boolean;
         };
         PublicConfirmationAppointmentDto: {
             /** @description Solo el nombre de pila. */
@@ -5912,6 +6020,10 @@ export interface operations {
                 from: string;
                 to: string;
                 providerId?: string;
+                /** @description DX-121: columnas de la vista Día. Hasta 12 ids del personal activo de la clínica (otro id da 400). Se repite el parámetro: ?providerIds=a&providerIds=b. */
+                providerIds?: string[];
+                /** @description DX-121: sede de la agenda. Si falta, la del request (X-Location-Id) o todas. */
+                locationId?: string;
             };
             header?: never;
             path?: never;
@@ -5926,6 +6038,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["AppointmentDto"][];
                 };
+            };
+            /** @description Más de 12 profesionales o alguno ajeno a la clínica */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -5949,6 +6068,27 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["AppointmentDto"];
                 };
+            };
+            /** @description Datos inválidos, cita en el pasado, sin hora de fin ni tipo, o tipo desactivado/ajeno */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solape con otra cita */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Fuera del horario de atención de la sede */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -5995,6 +6135,41 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["AppointmentDto"];
                 };
+            };
+            /** @description Datos inválidos o al pasado */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Rol sin permiso de agenda */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Cita o profesional no encontrados en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solape con otra cita del profesional o del paciente (también si otro movimiento ganó la carrera) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Fuera del horario de atención de la sede de la cita */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -6163,6 +6338,159 @@ export interface operations {
         responses: {
             /** @description Horario reemplazado */
             200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AppointmentTypesController_list: {
+        parameters: {
+            query?: {
+                /** @description true = también los desactivados (pantalla de gestión). Por defecto, solo los activos. */
+                includeInactive?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AppointmentTypeDto"][];
+                };
+            };
+        };
+    };
+    AppointmentTypesController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateAppointmentTypeDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AppointmentTypeDto"];
+                };
+            };
+            /** @description Nombre vacío, duración fuera de rango o color no #RRGGBB */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo ADMIN */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ya existe un tipo con ese nombre */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AppointmentTypesController_remove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Retirado (borrado lógico). Las citas que lo usan lo conservan. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo ADMIN */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Tipo no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AppointmentTypesController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateAppointmentTypeDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AppointmentTypeDto"];
+                };
+            };
+            /** @description Campo inválido */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo ADMIN */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Tipo no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ya existe un tipo con ese nombre */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

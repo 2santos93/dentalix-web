@@ -1,4 +1,8 @@
 import {
+  TYPE_TEXT_DARK,
+  TYPE_TEXT_LIGHT,
+  appointmentTypeTextColor,
+  isAppointmentTypeColor,
   PRIMARY_FG_DARK,
   PRIMARY_FG_LIGHT,
   contrastRatio,
@@ -82,5 +86,32 @@ describe('primaryForeground', () => {
     expect(primaryForeground('teal')).toBeNull();
     expect(primaryForeground('#12345')).toBeNull();
     expect(() => primaryForeground('#')).not.toThrow();
+  });
+});
+
+describe('appointmentTypeTextColor (DX-121)', () => {
+  it('elige texto claro sobre un fondo oscuro y oscuro sobre uno claro', () => {
+    expect(appointmentTypeTextColor('#7C3AED')).toBe(TYPE_TEXT_LIGHT);
+    expect(appointmentTypeTextColor('#FBBF24')).toBe(TYPE_TEXT_DARK);
+  });
+
+  it('el texto elegido cumple AA (4.5:1) sobre cualquier fondo #RRGGBB', () => {
+    const steps = [0x00, 0x33, 0x66, 0x80, 0x99, 0xcc, 0xff];
+    for (const r of steps) {
+      for (const g of steps) {
+        for (const b of steps) {
+          const hex = `#${[r, g, b].map((c) => c.toString(16).padStart(2, '0')).join('')}`;
+          const text = appointmentTypeTextColor(hex);
+          expect(contrastRatio(hex, text)).toBeGreaterThanOrEqual(4.5);
+        }
+      }
+    }
+  });
+
+  it('solo acepta #RRGGBB: cualquier otra cosa no es un color de tipo', () => {
+    for (const value of ['#FFF', 'red', '#7C3AED80', 'url(x)', '#7C3AED;x']) {
+      expect(isAppointmentTypeColor(value)).toBe(false);
+    }
+    expect(isAppointmentTypeColor('#7c3aed')).toBe(true);
   });
 });

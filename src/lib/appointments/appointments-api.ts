@@ -1,5 +1,7 @@
 import { apiFetch } from '@/lib/api/client';
 import type { components, paths } from '@/lib/api/schema';
+import type { ClinicRole } from '@/lib/me/me-api';
+import type { AppointmentTypeSummary } from './appointment-types-api';
 
 export type CreateAppointmentInput = components['schemas']['CreateAppointmentDto'];
 export type UpdateAppointmentInput = components['schemas']['UpdateAppointmentDto'];
@@ -25,6 +27,8 @@ export type ListAppointmentsParams = paths['/api/v1/appointments']['get']['param
 export interface Appointment {
   id: string;
   tenantId: string;
+  /** Sede donde ocurre la cita. */
+  locationId: string;
   patientId: string;
   /**
    * Patient's name, joined server-side so a row can be labeled without
@@ -43,6 +47,13 @@ export interface Appointment {
   reason: string | null;
   notes: string | null;
   createdById: string | null;
+  /** DX-121: tipo de la cita (null en las citas sin tipo). */
+  appointmentTypeId: string | null;
+  /**
+   * DX-121: el tipo embebido — nombre, duración y color `#RRGGBB` validado por
+   * la API. Se mantiene aunque el tipo se desactive o retire después.
+   */
+  appointmentType: AppointmentTypeSummary | null;
   /**
    * DX-005: cuándo se generó el enlace de confirmación vigente (ISO). `null` si
    * nunca se envió o si la cita se reagendó / cambió de estado después.
@@ -78,6 +89,9 @@ export async function listAppointments(
   search.set('from', params.from);
   search.set('to', params.to);
   if (params.providerId) search.set('providerId', params.providerId);
+  // DX-121: columnas de la vista Día; se repite el parámetro (hasta 12).
+  for (const id of params.providerIds ?? []) search.append('providerIds', id);
+  if (params.locationId) search.set('locationId', params.locationId);
 
   return apiFetch<Appointment[]>(`/appointments?${search.toString()}`, {
     token,
@@ -93,7 +107,28 @@ export async function getAppointment(
   });
 }
 
-/** `PATCH /appointments/:id` — reschedule (`start`/`end`) and/or change `status`. */
+/**
+ * Quién puede crear y mover citas: los mismos roles que la API
+ * (`APPOINTMENT_ROLES`, hoy los cuatro). Solo decide qué se PINTA (p. ej. el
+ * arrastre de la vista Día); el servidor responde 403 a cualquier otro.
+ */
+export const APPOINTMENT_ROLES: readonly ClinicRole[] = [
+  'DENTIST',
+  'ASSISTANT',
+  'RECEPTION',
+  'ADMIN',
+];
+
+/** `null` (sin sesión de clínica legible) cuenta como "sin permiso". */
+export function canMoveAppointments(role: ClinicRole | null): boolean {
+  return role !== null && APPOINTMENT_ROLES.includes(role);
+}
+
+/**
+ * `PATCH /appointments/:id` — reschedule (`start`/`end`), move to another
+ * provider (`providerId`, DX-121: 409 si choca, 422 fuera de horario) and/or
+ * change `status`.
+ */
 export async function updateAppointment(
   token: string,
   id: string,

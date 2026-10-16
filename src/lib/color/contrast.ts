@@ -115,3 +115,34 @@ export function primaryForeground(primary: string): string | null {
   }
   return best;
 }
+
+// ---------------------------------------------------------------------------
+// DX-121: texto sobre el color de un tipo de cita.
+// ---------------------------------------------------------------------------
+
+/** Texto claro sobre fondos oscuros (blanco del sistema). */
+export const TYPE_TEXT_LIGHT = '#FFFFFF';
+/** Texto oscuro sobre fondos claros (`--color-ink`). */
+export const TYPE_TEXT_DARK = '#0F172A';
+const AA_NORMAL_TEXT = 4.5;
+
+/** El único formato de color de tipo que acepta la API: `#RRGGBB`. */
+export function isAppointmentTypeColor(value: string): boolean {
+  return /^#[0-9A-Fa-f]{6}$/.test(value);
+}
+
+/**
+ * Color del texto de una tarjeta pintada con el color de su tipo: el que más
+ * contraste da entre el blanco y la tinta del sistema. Para los grises medios
+ * donde ninguno de los dos llega a AA (4.5:1), negro puro o blanco, que
+ * siempre superan 4.58:1 sobre cualquier fondo opaco.
+ */
+export function appointmentTypeTextColor(background: string): string {
+  const light = contrastRatio(background, TYPE_TEXT_LIGHT) ?? 0;
+  const dark = contrastRatio(background, TYPE_TEXT_DARK) ?? 0;
+  if (Math.max(light, dark) >= AA_NORMAL_TEXT) {
+    return dark > light ? TYPE_TEXT_DARK : TYPE_TEXT_LIGHT;
+  }
+  const black = contrastRatio(background, '#000000') ?? 0;
+  return black > light ? '#000000' : TYPE_TEXT_LIGHT;
+}
