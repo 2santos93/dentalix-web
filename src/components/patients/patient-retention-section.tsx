@@ -63,7 +63,7 @@ const copy = {
   suppressError: 'No pudimos hacer la supresión parcial.',
   archiveTitle: 'Archivar paciente',
   archiveDescription:
-    'El paciente deja de aparecer en los listados. Su historia clínica se conserva.',
+    'El paciente deja de aparecer en los listados. Su historia clínica se conserva. Si tiene citas programadas o confirmadas, cancélalas antes.',
   confirmArchive: 'Archivar',
   archiveError: 'No pudimos archivar al paciente.',
 };

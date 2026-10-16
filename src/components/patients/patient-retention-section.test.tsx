@@ -124,6 +124,21 @@ test('archivar con la HC en retención: el 409 se muestra en español en el moda
   expect(onArchived).not.toHaveBeenCalled();
 });
 
+test('archivar con citas abiertas: el 409 de la API se muestra en el modal', async () => {
+  const user = userEvent.setup();
+  const message =
+    'Este paciente tiene 1 cita programada o confirmada: cancélala o márcala como atendida o no asistida antes de archivarlo.';
+  mockedArchive.mockRejectedValue(new ApiError(409, message));
+  const { onArchived } = renderSection(
+    patient({ lastAttentionAt: null, retentionUntil: null, underRetention: false }),
+  );
+  await user.click(screen.getByRole('button', { name: /archivar paciente/i }));
+  const dialog = await screen.findByRole('dialog');
+  await user.click(within(dialog).getByRole('button', { name: 'Archivar' }));
+  expect(await within(dialog).findByText(message)).toBeInTheDocument();
+  expect(onArchived).not.toHaveBeenCalled();
+});
+
 test('archivar sin retención cierra el modal y avisa al padre', async () => {
   const user = userEvent.setup();
   mockedArchive.mockResolvedValue(undefined);

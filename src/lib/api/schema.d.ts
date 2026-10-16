@@ -382,7 +382,7 @@ export interface paths {
         post?: never;
         /**
          * Archivar paciente (borrado blando, solo ADMIN)
-         * @description DX-039. Retira al paciente de los listados (`deletedAt`); su HC se conserva siempre. Si la HC está en retención legal (15 años desde la última atención, 30 con DOUBLE, siempre con PERMANENT) responde 409 `CLINICAL_RECORD_RETENTION` con la fecha hasta la que se conserva. Un paciente sin atenciones clínicas se archiva.
+         * @description DX-039. Retira al paciente de los listados (`deletedAt`); su HC se conserva siempre. Si la HC está en retención legal (15 años desde la última atención, 30 con DOUBLE, siempre con PERMANENT) responde 409 `CLINICAL_RECORD_RETENTION` con la fecha hasta la que se conserva. Un paciente sin atenciones clínicas se archiva, salvo que tenga citas programadas o confirmadas (409 `PATIENT_HAS_PENDING_APPOINTMENTS`: hay que cancelarlas o cerrarlas antes).
          */
         delete: operations["PatientsController_archive"];
         options?: never;
@@ -4936,7 +4936,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description HC en retención legal */
+            /** @description HC en retención legal (`CLINICAL_RECORD_RETENTION`) o citas abiertas (`PATIENT_HAS_PENDING_APPOINTMENTS`, sin `retentionUntil`) */
             409: {
                 headers: {
                     [name: string]: unknown;
