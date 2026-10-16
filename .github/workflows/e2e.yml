@@ -1,0 +1,114 @@
+name: E2E
+
+# Suite Playwright de la web contra la API real (DX-070). Cada fase la corre
+# `scripts/e2e-ci.sh`, el mismo script que se usa en local para reproducir la
+# CI paso a paso (ver la cabecera del script).
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      api_ref:
+        description: Rama, tag o commit de dentalix-api contra el que probar
+        required: false
+        default: main
+
+# Un push nuevo a la misma rama/PR cancela la ejecución anterior.
+concurrency:
+  group: e2e-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  playwright:
+    name: Playwright (web + API + Postgres 16)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          # Base efímera del job: credenciales SOLO de test, sin valor fuera de él.
+          POSTGRES_USER: dentalix
+          POSTGRES_PASSWORD: dentalix
+          POSTGRES_DB: dentalix_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U dentalix -d dentalix_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      # Lo que lee scripts/e2e-ci.sh. Los JWT no van aquí: el script los genera
+      # con `openssl rand` en cada ejecución. No se usa ningún secreto del repo.
+      API_DIR: ${{ github.workspace }}/dentalix-api
+      PG_HOST: localhost
+      PG_PORT: '5432'
+      PG_SUPERUSER: dentalix
+      PG_SUPERPASS: dentalix
+      E2E_DB_NAME: dentalix_test
+      E2E_API_PORT: '3000'
+      E2E_WEB_PORT: '3001'
+      E2E_INSTALL_BROWSERS: '1'
+      NEXT_TELEMETRY_DISABLED: '1'
+    defaults:
+      run:
+        working-directory: dentalix-web
+    steps:
+      # Los dos repos, hermanos en el workspace: la API no queda dentro del
+      # árbol de la web (el `next build` no debe ver su código).
+      - uses: actions/checkout@v4
+        with:
+          path: dentalix-web
+
+      - name: Checkout de dentalix-api
+        uses: actions/checkout@v4
+        with:
+          repository: 2santos93/dentalix-api
+          ref: ${{ inputs.api_ref || 'main' }}
+          path: dentalix-api
+          persist-credentials: false
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            dentalix-web/package-lock.json
+            dentalix-api/package-lock.json
+
+      - name: Dependencias y Chromium
+        run: scripts/e2e-ci.sh setup
+
+      - name: Base de datos (rol de la app, migrate deploy y siembra)
+        run: scripts/e2e-ci.sh db
+
+      - name: API (build y start:prod)
+        run: scripts/e2e-ci.sh api
+
+      - name: Web (next build y next start)
+        run: scripts/e2e-ci.sh web
+
+      - name: Playwright
+        run: scripts/e2e-ci.sh test
+
+      - name: Parar los servidores
+        if: always()
+        run: scripts/e2e-ci.sh stop
+
+      - name: Subir informe, trazas y logs
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            dentalix-web/playwright-report/
+            dentalix-web/test-results/
+            dentalix-web/.e2e/logs/
+          include-hidden-files: true
+          if-no-files-found: ignore
+          retention-days: 14

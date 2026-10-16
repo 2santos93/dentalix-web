@@ -1,0 +1,258 @@
+#!/usr/bin/env bash
+# Suite Playwright de la web contra una API y una base reales, en modo
+# producción (`next build` + `next start`). Es la MISMA secuencia que corre
+# `.github/workflows/e2e.yml` (DX-070): el workflow llama a cada fase en su
+# propio paso y en local se corren todas con `all`.
+#
+#   scripts/e2e-ci.sh all                # todo, y para los servidores al final
+#   scripts/e2e-ci.sh setup|db|api|web|test|stop   # una fase
+#
+# Variables (todas con default para la CI; en local se cambian puertos y BD):
+#   API_DIR          checkout de dentalix-api            (../dentalix-api)
+#   PG_HOST/PG_PORT  Postgres                            (localhost/5432)
+#   PG_SUPERUSER/PG_SUPERPASS  dueño de la base (migra)  (dentalix/dentalix)
+#   E2E_DB_NAME      base desechable de la suite         (dentalix_test)
+#   E2E_API_PORT     puerto de la API                    (3000)
+#   E2E_WEB_PORT     puerto de la web                    (3001)
+#   E2E_NPM_CI       1 = `npm ci` en los dos repos       (1)
+#   E2E_INSTALL_BROWSERS  1 = `playwright install --with-deps chromium` (0)
+#   E2E_STATE_DIR    pids, logs y env generado           (.e2e)
+#   PLAYWRIGHT_CHROMIUM_EXECUTABLE  Chromium del sistema (opcional)
+#   Argumentos extra de `test`/`all` van a `playwright test`.
+#
+# Sin secretos: la base es efímera y los JWT se generan con openssl en cada
+# ejecución (se guardan en $E2E_STATE_DIR/env, 0600, que no se commitea).
+set -euo pipefail
+
+WEB_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+API_DIR="${API_DIR:-$WEB_DIR/../dentalix-api}"
+PG_HOST="${PG_HOST:-localhost}"
+PG_PORT="${PG_PORT:-5432}"
+PG_SUPERUSER="${PG_SUPERUSER:-dentalix}"
+PG_SUPERPASS="${PG_SUPERPASS:-dentalix}"
+E2E_DB_NAME="${E2E_DB_NAME:-dentalix_test}"
+E2E_API_PORT="${E2E_API_PORT:-3000}"
+E2E_WEB_PORT="${E2E_WEB_PORT:-3001}"
+E2E_NPM_CI="${E2E_NPM_CI:-1}"
+E2E_INSTALL_BROWSERS="${E2E_INSTALL_BROWSERS:-0}"
+STATE_DIR="${E2E_STATE_DIR:-$WEB_DIR/.e2e}"
+LOG_DIR="$STATE_DIR/logs"
+
+API_URL="http://localhost:${E2E_API_PORT}/api/v1"
+WEB_URL="http://localhost:${E2E_WEB_PORT}"
+# El dueño migra y siembra; la app corre con el rol sin privilegios (RLS),
+# igual que en el CI de la API y en docker-compose.
+DIRECT_URL="postgresql://${PG_SUPERUSER}:${PG_SUPERPASS}@${PG_HOST}:${PG_PORT}/${E2E_DB_NAME}?schema=public"
+DATABASE_URL="postgresql://dentalix_app:dentalix_app@${PG_HOST}:${PG_PORT}/${E2E_DB_NAME}?schema=public"
+
+mkdir -p "$LOG_DIR"
+
+group() { if [[ -n "${GITHUB_ACTIONS:-}" ]]; then echo "::group::$*"; else echo "==> $*"; fi; }
+endgroup() { if [[ -n "${GITHUB_ACTIONS:-}" ]]; then echo "::endgroup::"; fi; }
+
+psql_owner() {
+  PGPASSWORD="$PG_SUPERPASS" psql -h "$PG_HOST" -p "$PG_PORT" -U "$PG_SUPERUSER" -v ON_ERROR_STOP=1 -qtA "$@"
+}
+
+# Env de la API: se genera UNA vez por ejecución y lo leen todas las fases.
+load_env() {
+  local file="$STATE_DIR/env"
+  if [[ ! -f "$file" ]]; then
+    (
+      umask 077
+      echo "JWT_ACCESS_SECRET=$(openssl rand -hex 32)"
+      echo "JWT_REFRESH_SECRET=$(openssl rand -hex 32)"
+    ) > "$file"
+  fi
+  set -a
+  # shellcheck source=/dev/null
+  source "$file"
+  set +a
+  # No NODE_ENV=production: la API lo reserva para despliegues reales (exige
+  # https, dominios no locales y contraseñas de BD no de ejemplo, y marca la
+  # cookie como Secure). `start:prod` sí es el binario compilado de producción.
+  export PORT="$E2E_API_PORT"
+  export DATABASE_URL
+  export DIRECT_URL
+  export JWT_ACCESS_TTL=900s
+  export JWT_REFRESH_TTL=30d
+  export EXCHANGE_APP_ID=''
+  export EXCHANGE_BASE_URL=https://openexchangerates.org/api
+  export TENANT_BASE_DOMAINS=dentalix.app,localhost
+  export CORS_ORIGINS="$WEB_URL"
+  export CORS_ROOT_DOMAIN=localhost
+  export TRUST_PROXY=false
+  export STORAGE_DIR="$STATE_DIR/storage"
+  export FILES_PUBLIC_BASE_URL="${API_URL}/files"
+  export LOG_FORMAT=json
+  # La suite entera sale de una sola IP y registra/inicia sesión decenas de
+  # veces: con los límites reales acabaría en 429.
+  export RATE_LIMIT_GLOBAL_LIMIT=100000
+  export RATE_LIMIT_AUTH_LIMIT=100000
+  export RATE_LIMIT_REFRESH_LIMIT=100000
+  export RATE_LIMIT_LOGIN_LIMIT=100000
+  export RATE_LIMIT_LOGIN_ACCOUNT_LIMIT=100000
+  export RATE_LIMIT_INVITATION_LIMIT=100000
+  export RATE_LIMIT_PASSWORD_LIMIT=100000
+  export RATE_LIMIT_CONFIRMATION_LIMIT=100000
+  # La web: las NEXT_PUBLIC_* se incrustan en el build y el rewrite /api/v1.
+  export NEXT_PUBLIC_API_URL="$API_URL"
+  # Igual que el build de ci.yml y que `next dev` sin .env (default del código).
+  export NEXT_PUBLIC_ROOT_DOMAIN=dentalix.local
+  export NEXT_TELEMETRY_DISABLED=1
+}
+
+wait_for() {
+  local url="$1" name="$2" log="$3" pidfile="$4" tries="${5:-120}"
+  for ((i = 0; i < tries; i++)); do
+    if curl -fs -o /dev/null "$url"; then
+      echo "$name listo en $url"
+      return 0
+    fi
+    if ! kill -0 "$(cat "$pidfile")" 2>/dev/null; then
+      echo "$name terminó antes de estar listo. Últimas líneas de $log:" >&2
+      tail -n 50 "$log" >&2
+      return 1
+    fi
+    sleep 1
+  done
+  echo "$name no respondió en ${tries}s. Últimas líneas de $log:" >&2
+  tail -n 50 "$log" >&2
+  return 1
+}
+
+start_bg() {
+  local name="$1" dir="$2"
+  shift 2
+  local log="$LOG_DIR/$name.log" pidfile="$STATE_DIR/$name.pid"
+  if [[ -f "$pidfile" ]] && kill -0 "$(cat "$pidfile")" 2>/dev/null; then
+    echo "$name ya está corriendo (pid $(cat "$pidfile"))" >&2
+    return 1
+  fi
+  (cd "$dir" && exec "$@") > "$log" 2>&1 &
+  echo $! > "$pidfile"
+}
+
+phase_setup() {
+  if [[ "$E2E_NPM_CI" == "1" ]]; then
+    group "npm ci (API)"
+    (cd "$API_DIR" && npm ci --no-audit --no-fund)
+    endgroup
+    group "npm ci (web)"
+    (cd "$WEB_DIR" && npm ci --no-audit --no-fund)
+    endgroup
+  fi
+  if [[ "$E2E_INSTALL_BROWSERS" == "1" ]]; then
+    group "Chromium de Playwright"
+    (cd "$WEB_DIR" && npx playwright install --with-deps chromium)
+    endgroup
+  fi
+}
+
+phase_db() {
+  load_env
+  group "Base $E2E_DB_NAME: rol de la app, migraciones y siembra"
+  if [[ -z "$(psql_owner -d postgres -c "SELECT 1 FROM pg_database WHERE datname = '$E2E_DB_NAME'")" ]]; then
+    psql_owner -d postgres -c "CREATE DATABASE \"$E2E_DB_NAME\""
+  fi
+  # Los services de Actions no montan /docker-entrypoint-initdb.d: se aplica a
+  # mano el script de docker-compose. El rol es global al servidor, así que si
+  # ya existe (Postgres local compartido) solo se aplican los GRANT.
+  if [[ -z "$(psql_owner -d "$E2E_DB_NAME" -c "SELECT 1 FROM pg_roles WHERE rolname = 'dentalix_app'")" ]]; then
+    psql_owner -d "$E2E_DB_NAME" -f "$API_DIR/docker/db-init/01-app-role.sql"
+  else
+    grep -v '^CREATE ROLE' "$API_DIR/docker/db-init/01-app-role.sql" | psql_owner -d "$E2E_DB_NAME"
+  fi
+  (
+    cd "$API_DIR"
+    npx prisma generate
+    npx prisma migrate deploy
+    npx prisma db seed
+    # Clínica demo (idempotente): la usan los specs de recepción y presupuesto.
+    npm run seed:demo
+  )
+  endgroup
+}
+
+phase_api() {
+  load_env
+  group "API: build y start:prod en :$E2E_API_PORT"
+  (cd "$API_DIR" && npm run build)
+  mkdir -p "$STORAGE_DIR"
+  start_bg api "$API_DIR" npm run start:prod
+  wait_for "${API_URL}/health/ready" API "$LOG_DIR/api.log" "$STATE_DIR/api.pid"
+  endgroup
+}
+
+phase_web() {
+  load_env
+  group "Web: next build y next start en :$E2E_WEB_PORT"
+  (cd "$WEB_DIR" && ./node_modules/.bin/next build)
+  start_bg web "$WEB_DIR" ./node_modules/.bin/next start -p "$E2E_WEB_PORT"
+  wait_for "${WEB_URL}/login" Web "$LOG_DIR/web.log" "$STATE_DIR/web.pid"
+  endgroup
+}
+
+phase_test() {
+  load_env
+  group "Playwright"
+  local start=$SECONDS status=0
+  (
+    cd "$WEB_DIR"
+    E2E_WEB_SERVER=none \
+      E2E_WEB_PORT="$E2E_WEB_PORT" \
+      E2E_API_URL="$API_URL" \
+      E2E_DATABASE_URL="postgresql://${PG_SUPERUSER}:${PG_SUPERPASS}@${PG_HOST}:${PG_PORT}/${E2E_DB_NAME}" \
+      E2E_EXPECT_PROD_CSP=1 \
+      npx playwright test "$@"
+  ) || status=$?
+  echo "Playwright terminó con código $status en $((SECONDS - start)) s"
+  endgroup
+  return "$status"
+}
+
+# El pid guardado es el de `npm`/`next`: se para con todos sus descendientes.
+kill_tree() {
+  local pid="$1" child
+  for child in $(pgrep -P "$pid" 2>/dev/null); do kill_tree "$child"; done
+  kill -TERM "$pid" 2>/dev/null || true
+}
+
+phase_stop() {
+  local name pidfile
+  for name in web api; do
+    pidfile="$STATE_DIR/$name.pid"
+    if [[ -f "$pidfile" ]]; then
+      kill_tree "$(cat "$pidfile")"
+      rm -f "$pidfile"
+    fi
+  done
+  rm -f "$STATE_DIR/env"
+}
+
+cmd="${1:-all}"
+shift || true
+if [[ "$cmd" != stop && ! -f "$API_DIR/package.json" ]]; then
+  echo "No encuentro dentalix-api en $API_DIR: define API_DIR." >&2
+  exit 2
+fi
+case "$cmd" in
+  setup) phase_setup ;;
+  db) phase_db ;;
+  api) phase_api ;;
+  web) phase_web ;;
+  test) phase_test "$@" ;;
+  stop) phase_stop ;;
+  all)
+    trap phase_stop EXIT
+    phase_setup
+    phase_db
+    phase_api
+    phase_web
+    phase_test "$@"
+    ;;
+  *)
+    echo "uso: $0 [all|setup|db|api|web|test|stop] [args de playwright]" >&2
+    exit 2
+    ;;
+esac
