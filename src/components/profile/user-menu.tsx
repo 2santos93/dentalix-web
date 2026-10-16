@@ -6,7 +6,6 @@ import {
   ChevronUp,
   Clock,
   FileSignature,
-  History,
   LogOut,
   Pill,
   Settings,
@@ -21,7 +20,6 @@ import { getMe, type ClinicRole } from '@/lib/me/me-api';
 import { getTokenRole } from '@/lib/auth/token-role';
 import { canManageConsentTemplates } from '@/lib/consents/consents-api';
 import { canManagePrescriptionTemplates } from '@/lib/prescriptions/prescriptions-api';
-import { canReadAuditLog } from '@/lib/audit/audit-api';
 import { cn } from '@/lib/utils';
 
 // Tope de espera a la revocación en el servidor al cerrar sesión: la API suele
@@ -54,7 +52,6 @@ const copy = {
   privacy: 'Privacidad de datos',
   consentTemplates: 'Consentimientos',
   prescriptionSettings: 'Recetas',
-  auditLog: 'Auditoría',
   logout: 'Cerrar sesión',
   theme: 'Cambiar tema',
 };
@@ -282,18 +279,6 @@ export function UserMenu({
         >
           <Pill className="size-4 text-muted" aria-hidden />
           {copy.prescriptionSettings}
-        </Link>
-      ) : null}
-      {/* Registro de auditoría (DX-009): solo ADMIN (lleva IP y user agent). */}
-      {canReadAuditLog(getTokenRole(accessToken)) ? (
-        <Link
-          href="/settings/auditoria"
-          role="menuitem"
-          onClick={() => setOpen(false)}
-          className="flex items-center gap-3 px-3 py-2 text-sm text-ink hover:bg-bg"
-        >
-          <History className="size-4 text-muted" aria-hidden />
-          {copy.auditLog}
         </Link>
       ) : null}
       <div className="my-1 border-t border-border" />

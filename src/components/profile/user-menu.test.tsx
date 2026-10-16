@@ -149,11 +149,6 @@ describe('UserMenu — plantillas de consentimiento (DX-006)', () => {
       'href',
       '/settings/recetas',
     );
-    // DX-009: el registro de auditoría, solo ADMIN.
-    expect(screen.getByRole('menuitem', { name: 'Auditoría' })).toHaveAttribute(
-      'href',
-      '/settings/auditoria',
-    );
   });
 
   it('otro rol no lo ve', async () => {
@@ -162,6 +157,5 @@ describe('UserMenu — plantillas de consentimiento (DX-006)', () => {
     fireEvent.click(await screen.findByRole('button', { name: /ana gómez/i }));
     expect(screen.queryByRole('menuitem', { name: 'Consentimientos' })).not.toBeInTheDocument();
     expect(screen.queryByRole('menuitem', { name: 'Recetas' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('menuitem', { name: 'Auditoría' })).not.toBeInTheDocument();
   });
 });

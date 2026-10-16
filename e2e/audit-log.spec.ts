@@ -9,7 +9,7 @@ import { API_URL, tenantOrigin } from './support/urls';
  * Registra una clínica (su dueño es ADMIN) y, por la API real, crea un
  * paciente, guarda su historia clínica (con una alergia), registra una
  * evolución y lee la historia: cada paso deja un evento. Después, en la web:
- *   - «Auditoría» en el menú de cuenta abre /settings/auditoria con la tabla
+ *   - «Auditoría» en el menú principal abre /settings/auditoria con la tabla
  *     (fecha y hora, usuario, rol, acción, recurso, paciente, origen) y sin
  *     contenido clínico;
  *   - filtrar por acción deja solo esa acción; un período sin eventos muestra
@@ -29,7 +29,6 @@ const ALLERGY = 'Penicilina-E2E-DX009';
 const DEMO_SUBDOMAIN = process.env.E2E_DEMO_SUBDOMAIN ?? 'demo';
 const DEMO_PASSWORD = process.env.E2E_DEMO_PASSWORD ?? 'DemoDentalix2026!';
 const DENTIST_EMAIL = process.env.E2E_DEMO_DENTIST_EMAIL ?? 'dentista@demo.dentalix.app';
-const DENTIST_NAME = process.env.E2E_DEMO_DENTIST_NAME ?? 'Andrés Gómez Pérez';
 
 const VIEWPORTS = [
   { name: 'escritorio', width: 1440, height: 900 },
@@ -78,13 +77,6 @@ async function expectNoHorizontalScroll(page: Page): Promise<void> {
   expect(overflow).toBeLessThanOrEqual(0);
 }
 
-function accountButton(page: Page, width: number) {
-  // Escritorio: tarjeta del pie del sidebar con el nombre; móvil: avatar del topbar.
-  return width < 768
-    ? page.getByRole('button', { name: 'Cuenta' })
-    : page.getByRole('button', { name: new RegExp(adminName) });
-}
-
 for (const viewport of VIEWPORTS) {
   test(`ADMIN consulta la auditoría con filtros, vacío y la pestaña Accesos (${viewport.name})`, async ({
     page,
@@ -103,10 +95,9 @@ for (const viewport of VIEWPORTS) {
     });
     const patientId = await seed(page.request, origin, await accessTokenOf(page), lastName, tag);
 
-    // Entrada del menú de cuenta, solo para ADMIN.
+    // Entrada del menú principal (sidebar o topbar en móvil), solo para ADMIN.
     await page.goto(`${origin}/patients`);
-    await accountButton(page, viewport.width).click();
-    await page.getByRole('menuitem', { name: 'Auditoría' }).click();
+    await page.getByRole('link', { name: 'Auditoría' }).locator('visible=true').first().click();
     await expect(page).toHaveURL(/\/settings\/auditoria$/);
     await expect(page.getByRole('heading', { level: 1, name: 'Auditoría' })).toBeVisible();
 
@@ -156,9 +147,8 @@ test('un rol que no es ADMIN no ve la auditoría (dentista de la demo)', async (
   await page.getByRole('button', { name: 'Iniciar sesión' }).click();
   await page.waitForURL(/\/patients$/, { timeout: 15_000 });
 
-  await page.getByRole('button', { name: new RegExp(DENTIST_NAME) }).click();
-  await expect(page.getByRole('menuitem', { name: 'Mi perfil' })).toBeVisible();
-  await expect(page.getByRole('menuitem', { name: 'Auditoría' })).toHaveCount(0);
+  await expect(page.getByRole('link', { name: 'Pacientes' }).first()).toBeVisible();
+  await expect(page.getByRole('link', { name: 'Auditoría' })).toHaveCount(0);
 
   await page.goto(`${origin}/settings/auditoria`);
   await expect(

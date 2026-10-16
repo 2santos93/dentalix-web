@@ -10,6 +10,7 @@ import {
   ClipboardList,
   Package,
   Wallet,
+  History,
   PanelLeftClose,
   PanelLeftOpen,
 } from 'lucide-react';
@@ -64,6 +65,8 @@ const NAV: NavItem[] = [
   { href: '/inventory', label: 'Inventario', icon: Package, roles: ['ADMIN', 'ASSISTANT'] },
   // La pantalla lee `GET /staff/directory`: STAFF_WRITE_ROLES.
   { href: '/staff', label: 'Personal', icon: UserCog, roles: ['ADMIN'] },
+  // Registro de auditoría (DX-009): AUDIT_READ_ROLES, lleva IP y user agent.
+  { href: '/settings/auditoria', label: 'Auditoría', icon: History, roles: ['ADMIN'] },
 ];
 
 /**
