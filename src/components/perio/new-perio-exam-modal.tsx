@@ -1,8 +1,7 @@
 'use client';
 import * as React from 'react';
 import { useState } from 'react';
-import { ApiError } from '@/lib/api/client';
-import { createPerioExam, type PerioExamDetail } from '@/lib/perio/perio-api';
+import { createPerioExam, perioErrorMessage, type PerioExamDetail } from '@/lib/perio/perio-api';
 import { FormModal } from '@/components/shared/form-modal';
 import { FormField } from '@/components/shared/form-field';
 import { Input } from '@/components/ui/input';
@@ -70,7 +69,7 @@ export function NewPerioExamModal({
       onCreated(exam);
       onOpenChange(false);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : copy.error);
+      setError(perioErrorMessage(err, copy.error));
     } finally {
       setSubmitting(false);
     }

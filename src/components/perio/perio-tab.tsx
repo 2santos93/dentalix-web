@@ -2,12 +2,12 @@
 import * as React from 'react';
 import { useEffect, useState } from 'react';
 import { Activity, Plus } from 'lucide-react';
-import { ApiError } from '@/lib/api/client';
 import {
   PERIO_STATUS_LABELS,
   listPerioExams,
   type PerioExamDetail,
   type PerioExamSummary,
+  perioErrorMessage,
 } from '@/lib/perio/perio-api';
 import { formatCivilDate } from '@/lib/format/date';
 import { AsyncSection } from '@/components/shared/async-section';
@@ -83,7 +83,7 @@ export function PerioTab({ token, patientId }: PerioTabProps) {
         setError(null);
       } catch (err) {
         if (cancelled) return;
-        setError(err instanceof ApiError ? err.message : copy.loadError);
+        setError(perioErrorMessage(err, copy.loadError));
       } finally {
         if (!cancelled) setLoading(false);
       }

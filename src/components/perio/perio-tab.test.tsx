@@ -64,7 +64,8 @@ describe('PerioTab', () => {
     mockedList.mockRejectedValueOnce(new ApiError(500, 'Se cayó'));
     mockedList.mockResolvedValueOnce([]);
     render(<PerioTab token="tok" patientId="p1" />);
-    expect(await screen.findByRole('alert')).toHaveTextContent('Se cayó');
+    expect(await screen.findByRole('alert')).toHaveTextContent('No pudimos cargar los exámenes periodontales.');
+    expect(screen.queryByText(/Se cayó/)).not.toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: /reintentar/i }));
     expect(
       await screen.findByText('Este paciente no tiene exámenes periodontales.'),

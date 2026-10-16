@@ -1,4 +1,4 @@
-import { apiFetch, apiFetchOrNull } from '@/lib/api/client';
+import { ApiError, apiFetch, apiFetchOrNull } from '@/lib/api/client';
 import type { components } from '@/lib/api/schema';
 import type { ClinicRole } from '@/lib/me/me-api';
 
@@ -108,3 +108,15 @@ export const PERIO_STATUS_LABELS: Record<PerioExamStatus, string> = {
   DRAFT: 'Borrador',
   FINAL: 'Finalizado',
 };
+
+/**
+ * Mensaje a mostrar ante un fallo de la API de periodontograma. Solo se usa el
+ * texto del servidor en 400/409, que este módulo redacta en español (rangos,
+ * fecha, examen ya finalizado); 403, 404, 5xx y errores de red caen en el
+ * `fallback` en español en vez de «Internal server error» o «Request failed».
+ */
+export function perioErrorMessage(err: unknown, fallback: string): string {
+  return err instanceof ApiError && (err.status === 400 || err.status === 409)
+    ? err.message
+    : fallback;
+}

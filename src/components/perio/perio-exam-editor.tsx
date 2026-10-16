@@ -11,6 +11,7 @@ import {
   savePerioMeasures,
   type PerioExamDetail,
   type PerioSite,
+  perioErrorMessage,
 } from '@/lib/perio/perio-api';
 import {
   EMPTY_SITE,
@@ -105,7 +106,7 @@ function cloneDraft(draft: PerioDraft): PerioDraft {
 }
 
 function errorMessage(err: unknown, fallback: string): string {
-  return err instanceof ApiError ? err.message : fallback;
+  return perioErrorMessage(err, fallback);
 }
 
 /**
