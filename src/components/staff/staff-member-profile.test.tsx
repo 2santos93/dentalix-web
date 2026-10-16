@@ -78,6 +78,39 @@ describe('StaffMemberProfile', () => {
     );
   });
 
+  it('edita el registro profesional / nº de colegiado (DX-013) y solo manda ese campo', async () => {
+    mockedGet.mockResolvedValue({ ...activo, professionalLicense: null });
+    mockedUpdate.mockResolvedValue({ ...activo, professionalLicense: 'RM-77' });
+    const user = userEvent.setup();
+    render(<StaffMemberProfile token="tok" userId="u1" />);
+    const license = await screen.findByLabelText(/registro profesional/i);
+    expect(license).toHaveValue('');
+    await user.type(license, 'RM-77');
+    await user.click(screen.getByRole('button', { name: /guardar cambios/i }));
+    await waitFor(() =>
+      expect(mockedUpdate).toHaveBeenCalledWith('tok', 'u1', { professionalLicense: 'RM-77' }),
+    );
+    expect(await screen.findByLabelText(/registro profesional/i)).toHaveValue('RM-77');
+  });
+
+  it('borrar el registro profesional lo deja vacío (la API responde null)', async () => {
+    mockedGet.mockResolvedValue({ ...activo, professionalLicense: 'RM-77' });
+    mockedUpdate.mockResolvedValue({ ...activo, professionalLicense: null });
+    const user = userEvent.setup();
+    render(<StaffMemberProfile token="tok" userId="u1" />);
+    const license = await screen.findByLabelText(/registro profesional/i);
+    expect(license).toHaveValue('RM-77');
+    await user.clear(license);
+    await user.click(screen.getByRole('button', { name: /guardar cambios/i }));
+    await waitFor(() =>
+      expect(mockedUpdate).toHaveBeenCalledWith('tok', 'u1', { professionalLicense: '' }),
+    );
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /guardar cambios/i })).toBeDisabled(),
+    );
+    expect(screen.getByLabelText(/registro profesional/i)).toHaveValue('');
+  });
+
   it('el botón de guardar está inhabilitado si no se cambió nada', async () => {
     render(<StaffMemberProfile token="tok" userId="u1" />);
     await screen.findByText('Ana Ríos');

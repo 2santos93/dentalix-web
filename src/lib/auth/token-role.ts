@@ -23,3 +23,13 @@ export function getTokenRole(token: string | null | undefined): ClinicRole | nul
   const role = readJwtClaims(token)?.role;
   return ROLES.find((r) => r === role) ?? null;
 }
+
+/**
+ * El usuario de la sesión (`sub` del access token). Mismo alcance que
+ * `getTokenRole`: solo decide qué se PINTA (p. ej. «Anular» en las recetas que
+ * emitió uno mismo); el servidor vuelve a comprobarlo.
+ */
+export function getTokenUserId(token: string | null | undefined): string | null {
+  const sub = readJwtClaims(token)?.sub;
+  return typeof sub === 'string' && sub !== '' ? sub : null;
+}

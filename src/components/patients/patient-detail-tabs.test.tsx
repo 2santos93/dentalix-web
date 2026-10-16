@@ -389,3 +389,40 @@ describe('PatientDetailTabs — pestaña opcional «Periodontograma» (DX-007)',
     expect(onTabChange).toHaveBeenCalledWith('perio');
   });
 });
+
+describe('PatientDetailTabs — pestaña opcional «Recetas» (DX-013)', () => {
+  function renderTabs(prescriptionsLabel?: string, onTabChange = jest.fn()) {
+    render(
+      <PatientDetailTabs
+        activeTab="data"
+        onTabChange={onTabChange}
+        tablistLabel="Ana García"
+        dataLabel="Datos"
+        consentsLabel="Consentimientos"
+        prescriptionsLabel={prescriptionsLabel}
+        dataConsentsLabel="Autorizaciones"
+      />,
+    );
+    return onTabChange;
+  }
+
+  it('no aparece sin etiqueta (recepción)', () => {
+    renderTabs();
+    expect(screen.queryByRole('tab', { name: 'Recetas' })).not.toBeInTheDocument();
+  });
+
+  it('con etiqueta va después de «Consentimientos» y selecciona prescriptions', async () => {
+    const user = userEvent.setup();
+    const onTabChange = renderTabs('Recetas');
+    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual([
+      'Datos',
+      'Consentimientos',
+      'Recetas',
+      'Autorizaciones',
+    ]);
+    const tab = screen.getByRole('tab', { name: 'Recetas' });
+    expect(tab).toHaveAttribute('aria-controls', 'tabpanel-prescriptions');
+    await user.click(tab);
+    expect(onTabChange).toHaveBeenCalledWith('prescriptions');
+  });
+});

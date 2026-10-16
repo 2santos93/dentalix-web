@@ -21,6 +21,7 @@ function sede(id: string, name: string, isActive = true): ClinicLocation {
     id,
     name,
     address: null,
+    country: 'CO',
     isActive,
     createdAt: '2026-01-01T00:00:00.000Z',
   };

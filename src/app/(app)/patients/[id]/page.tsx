@@ -23,6 +23,7 @@ import { patientTabAccess, resolvePatientTab } from '@/lib/patients/patient-tab-
 import { DataConsentsTab } from '@/components/data-consents/data-consents-tab';
 import { PatientConsentsTab } from '@/components/consents/patient-consents-tab';
 import { PerioTab } from '@/components/perio/perio-tab';
+import { PatientPrescriptionsTab } from '@/components/prescriptions/patient-prescriptions-tab';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
@@ -38,6 +39,7 @@ const copy = {
   tabDataConsents: 'Autorizaciones',
   tabConsents: 'Consentimientos',
   tabPerio: 'Periodontograma',
+  tabPrescriptions: 'Recetas',
   anamnesisHeading: 'Anamnesis',
   entriesHeading: 'Evoluciones',
 };
@@ -274,6 +276,7 @@ function PatientDetailView() {
             dataConsentsLabel={access['data-consents'] ? copy.tabDataConsents : undefined}
             consentsLabel={access.consents ? copy.tabConsents : undefined}
             perioLabel={access.perio ? copy.tabPerio : undefined}
+            prescriptionsLabel={access.prescriptions ? copy.tabPrescriptions : undefined}
           />
 
           <TabPanel tab="data" activeTab={activeTab} register={registerPanel}>
@@ -366,6 +369,11 @@ function PatientDetailView() {
           {access.consents ? (
             <TabPanel tab="consents" activeTab={activeTab} register={registerPanel}>
               <PatientConsentsTab token={accessToken} patientId={patientId} />
+            </TabPanel>
+          ) : null}
+          {access.prescriptions ? (
+            <TabPanel tab="prescriptions" activeTab={activeTab} register={registerPanel}>
+              <PatientPrescriptionsTab token={accessToken} patientId={patientId} />
             </TabPanel>
           ) : null}
         </div>
