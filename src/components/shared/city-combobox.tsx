@@ -1,7 +1,13 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
 import { searchCities, type City } from '@/lib/reference/cities-api';
+import { FieldError } from '@/components/errors/field-error';
 import { cn } from '@/lib/utils';
+
+const copy = {
+  // Escalón 2 (FieldError): ≤4 palabras, el `<label>` del campo da el contexto.
+  loadError: 'Ciudades no disponibles',
+};
 
 const fieldClass =
   'flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-50';
@@ -24,6 +30,11 @@ export function CityCombobox({ id, token, countryCode, value, onChange, disabled
   const [text, setText] = useState(value?.name ?? '');
   const [results, setResults] = useState<City[]>([]);
   const [open, setOpen] = useState(false);
+  // La búsqueda falló: el control se sustituye por un FieldError (escalón 2,
+  // DX-063) en vez de quedar como «sin resultados». `attempt` relanza la
+  // búsqueda con el texto actual al reintentar.
+  const [failed, setFailed] = useState(false);
+  const [attempt, setAttempt] = useState(0);
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // When the country changes, clear this component's OWN state (text +
@@ -35,6 +46,7 @@ export function CityCombobox({ id, token, countryCode, value, onChange, disabled
     setText('');
     setResults([]);
     setOpen(false);
+    setFailed(false);
   }
 
   // Notifying the PARENT (`onChange(null)`) must NOT happen during render —
@@ -85,20 +97,36 @@ export function CityCombobox({ id, token, countryCode, value, onChange, disabled
           if (!cancelled) setResults(data);
         })
         .catch(() => {
-          if (!cancelled) setResults([]);
+          if (cancelled) return;
+          setResults([]);
+          setOpen(false);
+          setFailed(true);
         });
     }, q ? 250 : 0); // instant initial load, debounced while typing
     return () => {
       cancelled = true;
       if (debounce.current) clearTimeout(debounce.current);
     };
-  }, [token, countryCode, text]);
+  }, [token, countryCode, text, attempt]);
 
   function pick(city: City) {
     justPickedRef.current = true;
     onChange({ id: city.id, name: city.name });
     setText(city.name);
     setOpen(false);
+  }
+
+  if (failed) {
+    return (
+      <FieldError
+        label={copy.loadError}
+        onRetry={() => {
+          setFailed(false);
+          setAttempt((n) => n + 1);
+        }}
+        className="h-10 w-full"
+      />
+    );
   }
 
   return (
