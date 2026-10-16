@@ -11,7 +11,8 @@ export type PatientDetailTabKey =
   | 'account-statement'
   | 'consents'
   | 'prescriptions'
-  | 'data-consents';
+  | 'data-consents'
+  | 'access-log';
 
 interface PatientDetailTabsProps {
   activeTab: PatientDetailTabKey;
@@ -40,6 +41,8 @@ interface PatientDetailTabsProps {
   perioLabel?: string;
   /** «Recetas» (DX-013): sin etiqueta no existe (recepción no la ve). */
   prescriptionsLabel?: string;
+  /** «Accesos» (DX-009): quién vio o cambió la ficha. Solo ADMIN. */
+  accessLogLabel?: string;
 }
 
 /** Left-to-right reading order of the tablist — the order the arrow keys walk. */
@@ -53,6 +56,7 @@ const TAB_ORDER: PatientDetailTabKey[] = [
   'consents',
   'prescriptions',
   'data-consents',
+  'access-log',
 ];
 
 /**
@@ -100,6 +104,7 @@ export function PatientDetailTabs({
   consentsLabel,
   perioLabel,
   prescriptionsLabel,
+  accessLogLabel,
 }: PatientDetailTabsProps) {
   const labels: Record<PatientDetailTabKey, string | undefined> = {
     data: dataLabel,
@@ -111,6 +116,7 @@ export function PatientDetailTabs({
     'data-consents': dataConsentsLabel,
     consents: consentsLabel,
     prescriptions: prescriptionsLabel,
+    'access-log': accessLogLabel,
   };
   // Las pestañas que de verdad se pintan, en orden: las flechas recorren estas.
   const tabs = TAB_ORDER.filter((tab) => labels[tab] !== undefined);

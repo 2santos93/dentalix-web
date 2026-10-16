@@ -426,3 +426,38 @@ describe('PatientDetailTabs — pestaña opcional «Recetas» (DX-013)', () => {
     expect(onTabChange).toHaveBeenCalledWith('prescriptions');
   });
 });
+
+describe('PatientDetailTabs — pestaña opcional «Accesos» (DX-009)', () => {
+  function renderTabs(accessLogLabel?: string, onTabChange = jest.fn()) {
+    render(
+      <PatientDetailTabs
+        activeTab="data"
+        onTabChange={onTabChange}
+        tablistLabel="Ana García"
+        dataLabel="Datos"
+        dataConsentsLabel="Autorizaciones"
+        accessLogLabel={accessLogLabel}
+      />,
+    );
+    return onTabChange;
+  }
+
+  it('no aparece sin etiqueta (roles que no son ADMIN)', () => {
+    renderTabs();
+    expect(screen.queryByRole('tab', { name: 'Accesos' })).not.toBeInTheDocument();
+  });
+
+  it('con etiqueta va la última y selecciona access-log', async () => {
+    const user = userEvent.setup();
+    const onTabChange = renderTabs('Accesos');
+    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual([
+      'Datos',
+      'Autorizaciones',
+      'Accesos',
+    ]);
+    const tab = screen.getByRole('tab', { name: 'Accesos' });
+    expect(tab).toHaveAttribute('aria-controls', 'tabpanel-access-log');
+    await user.click(tab);
+    expect(onTabChange).toHaveBeenCalledWith('access-log');
+  });
+});

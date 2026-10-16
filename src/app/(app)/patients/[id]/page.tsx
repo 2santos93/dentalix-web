@@ -24,6 +24,7 @@ import { DataConsentsTab } from '@/components/data-consents/data-consents-tab';
 import { PatientConsentsTab } from '@/components/consents/patient-consents-tab';
 import { PerioTab } from '@/components/perio/perio-tab';
 import { PatientPrescriptionsTab } from '@/components/prescriptions/patient-prescriptions-tab';
+import { AuditLogView } from '@/components/audit/audit-log-view';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
@@ -40,6 +41,7 @@ const copy = {
   tabConsents: 'Consentimientos',
   tabPerio: 'Periodontograma',
   tabPrescriptions: 'Recetas',
+  tabAccessLog: 'Accesos',
   anamnesisHeading: 'Anamnesis',
   entriesHeading: 'Evoluciones',
 };
@@ -277,6 +279,7 @@ function PatientDetailView() {
             consentsLabel={access.consents ? copy.tabConsents : undefined}
             perioLabel={access.perio ? copy.tabPerio : undefined}
             prescriptionsLabel={access.prescriptions ? copy.tabPrescriptions : undefined}
+            accessLogLabel={access['access-log'] ? copy.tabAccessLog : undefined}
           />
 
           <TabPanel tab="data" activeTab={activeTab} register={registerPanel}>
@@ -374,6 +377,12 @@ function PatientDetailView() {
           {access.prescriptions ? (
             <TabPanel tab="prescriptions" activeTab={activeTab} register={registerPanel}>
               <PatientPrescriptionsTab token={accessToken} patientId={patientId} />
+            </TabPanel>
+          ) : null}
+          {/* Quién vio o cambió esta ficha (DX-009): solo ADMIN. */}
+          {access['access-log'] ? (
+            <TabPanel tab="access-log" activeTab={activeTab} register={registerPanel}>
+              <AuditLogView token={accessToken} patientId={patientId} />
             </TabPanel>
           ) : null}
         </div>

@@ -4,6 +4,7 @@ import { canReadAccountStatement } from '@/lib/account-statement/account-stateme
 import { canUseConsents } from '@/lib/consents/consents-api';
 import { canUsePerio } from '@/lib/perio/perio-api';
 import { canUsePrescriptions } from '@/lib/prescriptions/prescriptions-api';
+import { canReadAuditLog } from '@/lib/audit/audit-api';
 import {
   isPatientDetailTabKey,
   type PatientDetailTabKey,
@@ -21,6 +22,7 @@ export type PatientTabAccess = Record<PatientDetailTabKey, boolean>;
  * - Estado de cuenta: `PAYMENT_ROLES` (ADMIN y recepción).
  * - Consentimientos, periodontograma y recetas: `CLINICAL_ROLES`.
  * - Autorizaciones (Ley 1581) y Datos: los cuatro roles.
+ * - Accesos (auditoría de la ficha, DX-009): `AUDIT_READ_ROLES` (solo ADMIN).
  *
  * Solo decide qué se PINTA; el servidor vuelve a comprobar el rol. `null` (sin
  * rol de clínica legible) deja únicamente «Datos».
@@ -37,6 +39,7 @@ export function patientTabAccess(role: ClinicRole | null): PatientTabAccess {
     perio: canUsePerio(role),
     prescriptions: canUsePrescriptions(role),
     'data-consents': role !== null,
+    'access-log': canReadAuditLog(role),
   };
 }
 

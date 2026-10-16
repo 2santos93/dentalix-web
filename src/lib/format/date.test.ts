@@ -1,4 +1,11 @@
-import { formatCivilDate, formatDate, formatDateTime, formatTime } from './date';
+import {
+  formatCivilDate,
+  formatDate,
+  formatDateTime,
+  formatDateTimeInZone,
+  formatTime,
+  zonedDayStart,
+} from './date';
 
 describe('formatCivilDate (UTC — the day as picked)', () => {
   it('zero-pads day and month to dd/mm/yyyy', () => {
@@ -51,5 +58,43 @@ describe('formatDateTime (local)', () => {
   it('joins date and time', () => {
     const d = new Date(2026, 6, 3, 8, 0);
     expect(formatDateTime(d)).toBe('03/07/2026 08:00');
+  });
+});
+
+describe('formatDateTimeInZone (instant in a given IANA zone)', () => {
+  it('renders dd/mm/yyyy HH:mm in the zone, not in the browser one', () => {
+    // 2026-10-16 03:30 UTC = 15/10 22:30 in Bogotá (UTC-5) and 05:30 in Madrid (UTC+2).
+    const instant = '2026-10-16T03:30:00.000Z';
+    expect(formatDateTimeInZone(instant, 'America/Bogota')).toBe('15/10/2026 22:30');
+    expect(formatDateTimeInZone(instant, 'Europe/Madrid')).toBe('16/10/2026 05:30');
+  });
+
+  it('midnight is 00:00, never 24:00', () => {
+    expect(formatDateTimeInZone('2026-10-16T05:00:00.000Z', 'America/Bogota')).toBe(
+      '16/10/2026 00:00',
+    );
+  });
+
+  it('an unknown zone falls back to the browser zone instead of throwing', () => {
+    const d = new Date(2026, 6, 3, 8, 0);
+    expect(formatDateTimeInZone(d, 'Not/AZone')).toBe('03/07/2026 08:00');
+  });
+
+  it('falls back for invalid input', () => {
+    expect(formatDateTimeInZone(null, 'America/Bogota')).toBe('—');
+    expect(formatDateTimeInZone('nope', 'America/Bogota')).toBe('—');
+  });
+});
+
+describe('zonedDayStart (civil day in a zone → UTC instant)', () => {
+  it('midnight of the day in the zone', () => {
+    expect(zonedDayStart('2026-10-16', 'America/Bogota')).toBe('2026-10-16T05:00:00.000Z');
+    expect(zonedDayStart('2026-10-16', 'Europe/Madrid')).toBe('2026-10-15T22:00:00.000Z');
+    expect(zonedDayStart('2026-01-16', 'Europe/Madrid')).toBe('2026-01-15T23:00:00.000Z');
+  });
+
+  it('null for a malformed day', () => {
+    expect(zonedDayStart('16/10/2026', 'America/Bogota')).toBeNull();
+    expect(zonedDayStart('2026-02-30', 'America/Bogota')).toBeNull();
   });
 });

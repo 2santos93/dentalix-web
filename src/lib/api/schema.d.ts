@@ -36,6 +36,42 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/health/ready": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["HealthController_ready"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/audit-events": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Auditoría: quién vio o cambió datos clínicos y financieros
+         * @description Más reciente primero, paginado por cursor (`nextCursor`). Por defecto los últimos 30 días; el rango no puede superar 366 días y `limit` como mucho 100. Ningún evento lleva contenido clínico: solo ids, nombres de campos y códigos.
+         */
+        get: operations["AuditEventsController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/auth/register": {
         parameters: {
             query?: never;
@@ -94,6 +130,70 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["AuthController_logoutHandler"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/staff/invitations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["StaffInvitationsController_list"];
+        put?: never;
+        post: operations["StaffInvitationsController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/staff/invitations/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete: operations["StaffInvitationsController_remove"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/invitations/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["PublicInvitationsController_getByToken"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/invitations/{token}/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["PublicInvitationsController_accept"];
         delete?: never;
         options?: never;
         head?: never;
@@ -562,70 +662,6 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["PlanQuoteController_accept"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/staff/invitations": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["StaffInvitationsController_list"];
-        put?: never;
-        post: operations["StaffInvitationsController_create"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/staff/invitations/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        delete: operations["StaffInvitationsController_remove"];
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/public/invitations/{token}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["PublicInvitationsController_getByToken"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/public/invitations/{token}/accept": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post: operations["PublicInvitationsController_accept"];
         delete?: never;
         options?: never;
         head?: never;
@@ -1283,6 +1319,79 @@ export interface paths {
 export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
+        /** @enum {string} */
+        AuditAction: "VIEW" | "CREATE" | "UPDATE" | "DELETE" | "SIGN" | "VOID" | "LOGIN" | "LOGIN_FAILED" | "EXPORT" | "PRINT";
+        /** @enum {string} */
+        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT";
+        /**
+         * @description Rol con el que actuó (del token). `null` en un login fallido.
+         * @enum {string}
+         */
+        ClinicRole: "DENTIST" | "ASSISTANT" | "RECEPTION" | "ADMIN";
+        AuditActorDto: {
+            /** Format: uuid */
+            id: string;
+            /** @description `null` si el usuario ya no es resoluble en esta clínica. */
+            fullName: string | null;
+            /** @description Rol con el que actuó (del token). `null` en un login fallido. */
+            role: components["schemas"]["ClinicRole"] | null;
+        };
+        AuditPatientDto: {
+            /** Format: uuid */
+            id: string;
+            /**
+             * @description Nombre y apellido
+             * @example Ana Gómez
+             */
+            fullName: string;
+        };
+        AuditMetadataDto: {
+            /** @description UPDATE: nombres de los campos enviados (nunca sus valores). */
+            changedFields?: string[];
+            /** @description Parámetros de la ruta (ids). */
+            params?: {
+                [key: string]: string;
+            };
+            /** @example INVALID_CREDENTIALS */
+            reason?: string;
+        };
+        AuditEventDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            occurredAt: string;
+            action: components["schemas"]["AuditAction"];
+            resourceType: components["schemas"]["AuditResourceType"];
+            /** Format: uuid */
+            resourceId: string | null;
+            /**
+             * Format: uuid
+             * @description Sede activa de la petición; `null` = vista consolidada.
+             */
+            locationId: string | null;
+            /**
+             * @description Zona IANA de la sede del evento (o de la sede principal): la hora se muestra en ella.
+             * @example America/Bogota
+             */
+            timeZone: string;
+            actor: components["schemas"]["AuditActorDto"] | null;
+            patient: components["schemas"]["AuditPatientDto"] | null;
+            /** @description X-Request-Id de la petición: la enlaza con su línea de log. */
+            requestId: string | null;
+            ip: string | null;
+            userAgent: string | null;
+            metadata: components["schemas"]["AuditMetadataDto"];
+        };
+        AuditEventsPageDto: {
+            items: components["schemas"]["AuditEventDto"][];
+            /** @description Cursor de la página siguiente; `null` en la última. */
+            nextCursor: string | null;
+            /**
+             * @description Zona de la sede activa (o de la principal), para interpretar los días de los filtros.
+             * @example America/Bogota
+             */
+            timeZone: string;
+        };
         RegisterDto: Record<string, never>;
         RegisterResponseDto: {
             /** Format: uuid */
@@ -1298,6 +1407,49 @@ export interface components {
         };
         RefreshDto: Record<string, never>;
         LogoutDto: Record<string, never>;
+        CreateInvitationDto: {
+            fullName: string;
+            email: string;
+            /** @enum {string} */
+            role: "DENTIST" | "ASSISTANT" | "RECEPTION" | "ADMIN";
+        };
+        CreatedInvitationDto: {
+            /** Format: uuid */
+            id: string;
+            fullName: string;
+            email: string;
+            /** @enum {string} */
+            role: "DENTIST" | "ASSISTANT" | "RECEPTION" | "ADMIN";
+            /** Format: date-time */
+            expiresAt: string;
+            /** @enum {string} */
+            status: "VALID" | "EXPIRED" | "USED" | "REVOKED";
+            token: string;
+        };
+        InvitationDto: {
+            /** Format: uuid */
+            id: string;
+            fullName: string;
+            email: string;
+            /** @enum {string} */
+            role: "DENTIST" | "ASSISTANT" | "RECEPTION" | "ADMIN";
+            /** Format: date-time */
+            expiresAt: string;
+            /** @enum {string} */
+            status: "VALID" | "EXPIRED" | "USED" | "REVOKED";
+        };
+        PublicInvitationDto: {
+            /** @enum {string} */
+            status: "VALID" | "EXPIRED" | "USED" | "REVOKED" | "NOT_FOUND";
+            clinicName?: string;
+            /** @enum {string} */
+            role?: "DENTIST" | "ASSISTANT" | "RECEPTION" | "ADMIN";
+            maskedEmail?: string;
+            userExists?: boolean;
+        };
+        AcceptInvitationDto: {
+            password: string;
+        };
         MyProfileMembershipDto: {
             tenantId: string;
             clinicName: string;
@@ -2124,49 +2276,6 @@ export interface components {
             signature: string;
             /** @description El contentHash del presupuesto que se mostró (GET …/quote). Si el presupuesto cambió desde entonces: 409. */
             contentHash: string;
-        };
-        CreateInvitationDto: {
-            fullName: string;
-            email: string;
-            /** @enum {string} */
-            role: "DENTIST" | "ASSISTANT" | "RECEPTION" | "ADMIN";
-        };
-        CreatedInvitationDto: {
-            /** Format: uuid */
-            id: string;
-            fullName: string;
-            email: string;
-            /** @enum {string} */
-            role: "DENTIST" | "ASSISTANT" | "RECEPTION" | "ADMIN";
-            /** Format: date-time */
-            expiresAt: string;
-            /** @enum {string} */
-            status: "VALID" | "EXPIRED" | "USED" | "REVOKED";
-            token: string;
-        };
-        InvitationDto: {
-            /** Format: uuid */
-            id: string;
-            fullName: string;
-            email: string;
-            /** @enum {string} */
-            role: "DENTIST" | "ASSISTANT" | "RECEPTION" | "ADMIN";
-            /** Format: date-time */
-            expiresAt: string;
-            /** @enum {string} */
-            status: "VALID" | "EXPIRED" | "USED" | "REVOKED";
-        };
-        PublicInvitationDto: {
-            /** @enum {string} */
-            status: "VALID" | "EXPIRED" | "USED" | "REVOKED" | "NOT_FOUND";
-            clinicName?: string;
-            /** @enum {string} */
-            role?: "DENTIST" | "ASSISTANT" | "RECEPTION" | "ADMIN";
-            maskedEmail?: string;
-            userExists?: boolean;
-        };
-        AcceptInvitationDto: {
-            password: string;
         };
         CreateDomainDto: Record<string, never>;
         BrandingDto: {
@@ -3666,6 +3775,73 @@ export interface operations {
             };
         };
     };
+    HealthController_ready: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AuditEventsController_list: {
+        parameters: {
+            query?: {
+                /** @description Solo eventos de este paciente. */
+                patientId?: string;
+                /** @description Solo eventos de este usuario. */
+                actorUserId?: string;
+                action?: components["schemas"]["AuditAction"];
+                resourceType?: components["schemas"]["AuditResourceType"];
+                /** @description Desde (instante ISO 8601, incluido). Sin él: 30 días antes de `to`. */
+                from?: string;
+                /** @description Hasta (instante ISO 8601, excluido). Sin él: ahora (o 30 días después de `from`). El rango no puede superar 366 días. */
+                to?: string;
+                /** @description El `nextCursor` de la página anterior (opaco). */
+                cursor?: string;
+                limit?: number;
+            };
+            header?: {
+                /** @description Sede activa: solo fija la zona de referencia (`timeZone`). Los eventos son de toda la clínica. */
+                "X-Location-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuditEventsPageDto"];
+                };
+            };
+            /** @description Filtro inválido, from >= to, rango de más de 366 días, cursor manipulado o limit fuera de 1–100. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo ADMIN */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     AuthController_register: {
         parameters: {
             query?: never;
@@ -3770,6 +3946,127 @@ export interface operations {
         };
         responses: {
             204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    StaffInvitationsController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InvitationDto"][];
+                };
+            };
+        };
+    };
+    StaffInvitationsController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateInvitationDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreatedInvitationDto"];
+                };
+            };
+        };
+    };
+    StaffInvitationsController_remove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PublicInvitationsController_getByToken: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicInvitationDto"];
+                };
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PublicInvitationsController_accept: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AcceptInvitationDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AuthTokensDto"];
+                };
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -4940,127 +5237,6 @@ export interface operations {
             };
             /** @description Ya estaba aceptado y firmado, el plan está cancelado o completado, o el presupuesto cambió desde que se mostró (contentHash) */
             409: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    StaffInvitationsController_list: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["InvitationDto"][];
-                };
-            };
-        };
-    };
-    StaffInvitationsController_create: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreateInvitationDto"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["CreatedInvitationDto"];
-                };
-            };
-        };
-    };
-    StaffInvitationsController_remove: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            204: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    PublicInvitationsController_getByToken: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                token: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["PublicInvitationDto"];
-                };
-            };
-            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
-            429: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    PublicInvitationsController_accept: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                token: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["AcceptInvitationDto"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["AuthTokensDto"];
-                };
-            };
-            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
-            429: {
                 headers: {
                     [name: string]: unknown;
                 };
