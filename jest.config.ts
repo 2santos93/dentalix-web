@@ -14,6 +14,15 @@ process.env.TZ = 'UTC';
 const createJestConfig = nextJest({ dir: './' });
 const config: Config = {
   testEnvironment: 'jest-environment-jsdom',
+  // Presupuesto por test: 20 s en vez de los 5 s por defecto (OPS-002). Algunos
+  // tests son de CPU, no de espera: el editor periodontal pinta ~1000 controles,
+  // cada `getByRole` recorre el árbol de accesibilidad de jsdom (100–700 ms) y
+  // cada tecla re-renderiza la rejilla. Aislado el más lento tarda ~3,5 s; con la
+  // suite completa en paralelo (y en los runners de 2 vCPU de GitHub) pasaba de
+  // 5 s y fallaba con «Exceeded timeout of 5000 ms». No hay timers ni estado
+  // compartido que arreglar: el límite era demasiado justo. Un test colgado de
+  // verdad sigue fallando, a los 20 s.
+  testTimeout: 20_000,
   setupFilesAfterEnv: ['<rootDir>/jest.setup.ts'],
   // Playwright e2e specs live in ./e2e and run via `npm run test:e2e`, not jest.
   // `.claude/worktrees/` son worktrees de git ANIDADOS dentro del repo (el flujo
