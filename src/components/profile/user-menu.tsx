@@ -5,10 +5,33 @@ import { useRouter } from 'next/navigation';
 import { ChevronUp, Clock, FileSignature, LogOut, Settings, ShieldCheck, Sun, Moon } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useAuthStore } from '@/lib/auth/auth-store';
+import { logout } from '@/lib/auth/auth-api';
 import { getMe, type ClinicRole } from '@/lib/me/me-api';
 import { getTokenRole } from '@/lib/auth/token-role';
 import { canManageConsentTemplates } from '@/lib/consents/consents-api';
 import { cn } from '@/lib/utils';
+
+// Tope de espera a la revocación en el servidor al cerrar sesión: la API suele
+// responder en milisegundos; si la red está caída no se deja al usuario
+// mirando un botón muerto (DX-061).
+const LOGOUT_TIMEOUT_MS = 3000;
+
+/**
+ * Revoca el refresh token en la API (`POST /auth/logout`) best-effort: resuelve
+ * cuando la API responde, cuando falla o al vencer el timeout — nunca lanza. El
+ * cierre local tiene que ocurrir igual en todos los casos.
+ */
+async function revokeRefreshToken(refreshToken: string): Promise<void> {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<void>((resolve) => {
+    timer = setTimeout(resolve, LOGOUT_TIMEOUT_MS);
+  });
+  try {
+    await Promise.race([logout(refreshToken).catch(() => undefined), timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
 
 const copy = {
   account: 'Cuenta',
@@ -103,6 +126,7 @@ export function UserMenu({
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [role, setRole] = useState<ClinicRole | null>(null);
   const [open, setOpen] = useState(false);
+  const [loggingOut, setLoggingOut] = useState(false);
   const wrapRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -142,8 +166,16 @@ export function UserMenu({
 
   if (!accessToken) return null;
 
-  function handleLogout() {
-    useAuthStore.getState().clear();
+  // Cerrar sesión revoca primero el refresh token en la API (DX-061, FE-003):
+  // en un ordenador compartido de recepción, un refresh copiado antes del
+  // logout no debe seguir sirviendo. Solo después se limpia el store y se
+  // redirige, pase lo que pase con la llamada.
+  async function handleLogout() {
+    if (loggingOut) return;
+    setLoggingOut(true);
+    const { refreshToken, clear } = useAuthStore.getState();
+    if (refreshToken) await revokeRefreshToken(refreshToken);
+    clear();
     router.push('/login');
   }
 
@@ -230,7 +262,9 @@ export function UserMenu({
         type="button"
         role="menuitem"
         onClick={handleLogout}
-        className="flex w-full items-center gap-3 px-3 py-2 text-left text-sm font-medium text-danger hover:bg-bg"
+        disabled={loggingOut}
+        aria-busy={loggingOut}
+        className="flex w-full items-center gap-3 px-3 py-2 text-left text-sm font-medium text-danger hover:bg-bg disabled:opacity-60"
       >
         <LogOut className="size-4" aria-hidden />
         {copy.logout}
