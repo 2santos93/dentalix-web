@@ -38,3 +38,24 @@ describe('el 409 del plan de cuotas no manda a recepción a una pestaña que no 
     expect(message).not.toMatch(/cancela el actual/i);
   });
 });
+
+// DX-109: las reglas de cobro nuevas de la API llegan en español y se enseñan
+// tal cual (el texto de negocio gana al override por status, DX-063).
+describe('DX-109: mensajes de negocio de las reglas de cobro', () => {
+  const rejected = 'El plan está «Rechazado»: no admite abonos ni planes de cuotas.';
+  const keyReused =
+    'Esta clave de idempotencia ya se usó para otro abono (otro plan o datos distintos). Vuelve a registrar el abono para generar una clave nueva.';
+
+  it('409 de plan no cobrable al registrar un abono', () => {
+    expect(recordPaymentErrorMessage(new ApiError(409, rejected))).toBe(rejected);
+  });
+
+  it('422 de Idempotency-Key reutilizada', () => {
+    expect(recordPaymentErrorMessage(new ApiError(422, keyReused))).toBe(keyReused);
+  });
+
+  it('409 de plan no cobrable al crear el plan de cuotas gana al texto de «ya tiene uno activo»', () => {
+    const cancelled = 'El plan está «Cancelado»: no admite abonos ni planes de cuotas.';
+    expect(paymentPlanErrorMessage(new ApiError(409, cancelled))).toBe(cancelled);
+  });
+});

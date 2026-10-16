@@ -16,7 +16,12 @@ import {
   type TreatmentPlanItemStatus,
   type TreatmentPlanStatus,
 } from '@/lib/treatment-plans/treatment-plans-api';
-import { PLAN_STATUS_BADGE_VARIANT, PLAN_STATUS_LABELS } from '@/lib/treatment-plans/plan-status';
+import {
+  PLAN_STATUS_BADGE_VARIANT,
+  PLAN_STATUS_LABELS,
+  isPlanBillable,
+  isPlanClosed,
+} from '@/lib/treatment-plans/plan-status';
 import {
   getPlanBalance,
   listPayments,
@@ -196,6 +201,12 @@ const copy = {
   paidLabel: 'Pagado',
   balanceLabel: 'Saldo',
   registerPayment: 'Registrar abono',
+  notBillableHint: (status: string) =>
+    `Este plan está «${status}»: no admite abonos ni planes de cuotas.`,
+  closedItemsNotice: (status: string) =>
+    `Este plan está «${status}»: sus ítems ya no se pueden añadir, cambiar ni quitar.`,
+  completedItemsNotice:
+    'Este plan está «Completado»: sus ítems ya no se pueden añadir, cambiar ni quitar. Solo puedes marcar como realizado un procedimiento que quedó aceptado.',
   cancelPaymentForm: 'Cancelar',
   paymentAmountLabel: 'Monto',
   paymentCurrencyLabel: 'Moneda',
@@ -292,6 +303,16 @@ interface ItemsTableProps {
    * «Propuesto» (la API responde 409); el tratamiento sí avanza.
    */
   locked?: boolean;
+  /**
+   * Plan cerrado (cancelado, rechazado o completado, DX-109): sus ítems no se
+   * tocan, ni siquiera de estado (la API responde 409)...
+   */
+  closed?: boolean;
+  /**
+   * ...salvo en un plan completado: ahí un ítem aceptado sí se marca como
+   * realizado (y llega al odontograma).
+   */
+  markDoneOnly?: boolean;
 }
 
 /**
@@ -410,7 +431,15 @@ function ItemsTable({
   onStatusChange,
   onRemove,
   locked = false,
+  closed = false,
+  markDoneOnly = false,
 }: ItemsTableProps) {
+  // Plan cerrado: el estado no se toca, salvo en uno completado marcar como
+  // realizado lo que quedó aceptado (misma regla que la API).
+  const statusFrozen = (item: TreatmentPlanItem) =>
+    closed && !(markDoneOnly && item.status === 'ACCEPTED');
+  const optionDisabled = (item: TreatmentPlanItem, status: TreatmentPlanItemStatus) =>
+    (locked && status === 'PROPOSED') || (closed && status !== item.status && status !== 'DONE');
   if (items.length === 0) {
     return <EmptyState role="status" title={copy.emptyItemsTitle} description={copy.emptyItemsDescription} />;
   }
@@ -464,12 +493,12 @@ function ItemsTable({
                         <select
                           aria-label={copy.itemStatusSelectLabel(item.toothNumber)}
                           value={item.status}
-                          disabled={updating}
+                          disabled={updating || statusFrozen(item)}
                           onChange={(e) => onStatusChange(item.id, e.target.value as TreatmentPlanItemStatus)}
                           className={cn(fieldClass, 'h-8 px-2 py-1 text-xs')}
                         >
                           {ITEM_STATUS_OPTIONS.map((status) => (
-                            <option key={status} value={status} disabled={locked && status === 'PROPOSED'}>
+                            <option key={status} value={status} disabled={optionDisabled(item, status)}>
                               {ITEM_STATUS_LABELS[status]}
                             </option>
                           ))}
@@ -488,8 +517,8 @@ function ItemsTable({
                         toque. */}
                     <div className="flex items-center gap-3">
                       <OdontogramLink toothNumber={item.toothNumber} href={odontogramHref} />
-                      {odontogramHref && !locked ? <Separator orientation="vertical" className="h-5" /> : null}
-                      {locked ? null : (
+                      {odontogramHref && !locked && !closed ? <Separator orientation="vertical" className="h-5" /> : null}
+                      {locked || closed ? null : (
                         <Button
                           type="button"
                           variant="outline"
@@ -545,17 +574,17 @@ function ItemsTable({
                 <select
                   aria-label={copy.itemStatusSelectLabel(item.toothNumber)}
                   value={item.status}
-                  disabled={updating}
+                  disabled={updating || statusFrozen(item)}
                   onChange={(e) => onStatusChange(item.id, e.target.value as TreatmentPlanItemStatus)}
                   className={cn(fieldClass, 'h-9 w-auto text-xs')}
                 >
                   {ITEM_STATUS_OPTIONS.map((status) => (
-                    <option key={status} value={status} disabled={locked && status === 'PROPOSED'}>
+                    <option key={status} value={status} disabled={optionDisabled(item, status)}>
                       {ITEM_STATUS_LABELS[status]}
                     </option>
                   ))}
                 </select>
-                {locked ? null : (
+                {locked || closed ? null : (
                   <Button
                     type="button"
                     variant="outline"
@@ -585,12 +614,20 @@ interface PaymentsListProps {
   voidingPaymentId: string | null;
   onVoid: (paymentId: string) => void;
   onReceipt: (payment: Payment) => void;
+  /** Plan rechazado o cancelado (DX-109): el vacío no invita a registrar un abono. */
+  billable?: boolean;
 }
 
 /** Desktop table + mobile cards for the abonos list — same responsive split as `ItemsTable`. */
-function PaymentsList({ payments, voidingPaymentId, onVoid, onReceipt }: PaymentsListProps) {
+function PaymentsList({ payments, voidingPaymentId, onVoid, onReceipt, billable = true }: PaymentsListProps) {
   if (payments.length === 0) {
-    return <EmptyState role="status" title={copy.emptyPaymentsTitle} description={copy.emptyPaymentsDescription} />;
+    return (
+      <EmptyState
+        role="status"
+        title={copy.emptyPaymentsTitle}
+        description={billable ? copy.emptyPaymentsDescription : undefined}
+      />
+    );
   }
 
   return (
@@ -1354,8 +1391,10 @@ export function TreatmentPlansTab({
     setPlanStatusError(null);
     try {
       await updatePlan(token, selectedPlanId, { status });
-      await refreshPlanDetail();
-      await refreshPlansInPlace();
+      // Aceptar pasa los ítems propuestos a aceptados (lo facturable deja de
+      // ser 0) y cancelar anula también el plan de cuotas activo (DX-109): el
+      // saldo y el plan de pagos se refrescan con el plan, como al firmar.
+      await Promise.all([refreshPlanDetail(), refreshPlansInPlace(), refreshBalanceAndPayments()]);
     } catch (err) {
       setPlanStatusError(apiErrorMessage(err, copy.genericPlanStatusError));
     } finally {
@@ -1369,7 +1408,8 @@ export function TreatmentPlansTab({
     setItemActionError(null);
     try {
       await updateItem(token, selectedPlanId, itemId, { status });
-      await refreshPlanDetail();
+      // Propuesto ↔ aceptado cambia lo facturable: el saldo va con el ítem.
+      await Promise.all([refreshPlanDetail(), refreshBalanceAndPayments()]);
     } catch (err) {
       setItemActionError(apiErrorMessage(err, copy.genericItemUpdateError));
     } finally {
@@ -1505,6 +1545,9 @@ export function TreatmentPlansTab({
 
   const selectedPlan = plans.find((p) => p.id === selectedPlanId) ?? null;
   const signed = Boolean(planDetail?.acceptance);
+  // DX-109: lo mismo que la API aplica con 409, para no ofrecerlo.
+  const closed = planDetail ? isPlanClosed(planDetail.status) : false;
+  const billable = planDetail ? isPlanBillable(planDetail.status) : true;
   const role = getTokenRole(token);
   const statusChoices = planDetail ? patchableStatuses(planDetail.status, role) : [];
   const optionGroup = selectedPlan ? optionGroupOf(plans, selectedPlan) : [];
@@ -1518,15 +1561,17 @@ export function TreatmentPlansTab({
       )}
 
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between gap-3">
+        {/* A 390px la moneda y «Nuevo plan» no caben junto al título: bajan a
+            su propia fila (sin desbordar la tarjeta). */}
+        <CardHeader className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
           <CardTitle>{copy.plansHeading}</CardTitle>
-          <div className="flex items-center gap-2">
+          <div className="flex w-full items-center gap-2 sm:w-auto">
             <CurrencySelect
               id="tp-new-plan-currency"
               token={token}
               value={newPlanCurrency}
               onChange={setNewPlanCurrency}
-              className="w-44"
+              className="min-w-0 flex-1 sm:w-44 sm:flex-none"
               ariaLabel={copy.newPlanCurrencyLabel}
             />
             <Button type="button" onClick={handleCreatePlan} disabled={creatingPlan}>
@@ -1706,6 +1751,8 @@ export function TreatmentPlansTab({
                   onStatusChange={handleItemStatusChange}
                   onRemove={openRemoveConfirm}
                   locked={signed}
+                  closed={closed}
+                  markDoneOnly={planDetail?.status === 'COMPLETED'}
                 />
 
                 <Separator />
@@ -1717,10 +1764,22 @@ export function TreatmentPlansTab({
                         que califica. Decirla dos veces en la misma pantalla la
                         convierte en ruido y sugiere que son dos alcances. */}
                     <h3 className="text-base font-semibold text-ink">{copy.paymentsHeading}</h3>
-                    <Button type="button" variant="outline" size="sm" onClick={openPaymentForm}>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={openPaymentForm}
+                      disabled={!billable}
+                      aria-describedby={billable ? undefined : 'plan-not-billable-hint'}
+                    >
                       {copy.registerPayment}
                     </Button>
                   </div>
+                  {!billable && planDetail && (
+                    <p id="plan-not-billable-hint" className="text-sm text-muted">
+                      {copy.notBillableHint(PLAN_STATUS_LABELS[planDetail.status])}
+                    </p>
+                  )}
 
                   {paymentsLoading && (
                     <p role="status" className="text-sm text-muted">
@@ -1846,6 +1905,7 @@ export function TreatmentPlansTab({
                           voidingPaymentId={voidingPaymentId}
                           onVoid={openVoidConfirm}
                           onReceipt={setReceiptPayment}
+                          billable={billable}
                         />
                       </Disclosure>
 
@@ -1856,6 +1916,7 @@ export function TreatmentPlansTab({
                         planId={selectedPlanId!}
                         planCurrency={planBalance.planCurrency}
                         billable={planBalance.billable}
+                        canCreate={billable}
                         refreshSignal={paymentPlanRefreshSignal}
                       />
                     </>
@@ -1866,7 +1927,15 @@ export function TreatmentPlansTab({
 
                 {/* Firmado (DX-012): no se agregan ítems; `PlanQuoteActions`
                     ya dice arriba que el plan quedó congelado. */}
-                {signed ? null : catalogItems.length === 0 ? (
+                {/* Cerrado (DX-109): tampoco se agregan ítems. */}
+                {closed && planDetail && !signed ? (
+                  <p role="status" className="text-sm text-muted">
+                    {planDetail.status === 'COMPLETED'
+                      ? copy.completedItemsNotice
+                      : copy.closedItemsNotice(PLAN_STATUS_LABELS[planDetail.status])}
+                  </p>
+                ) : null}
+                {signed || closed ? null : catalogItems.length === 0 ? (
                   <EmptyState
                     role="status"
                     title={copy.emptyCatalogTitle}

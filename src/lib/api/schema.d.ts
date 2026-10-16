@@ -5971,7 +5971,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Transición de estado no permitida por la máquina de estados (DX-040: DRAFT → PRESENTED → ACCEPTED | REJECTED; DRAFT → ACCEPTED; ACCEPTED → COMPLETED; cualquiera salvo COMPLETED → CANCELLED); plan aceptado con firma: no cambia de moneda ni vuelve atrás (DX-012); otra opción del grupo ya aceptada */
+            /** @description Transición de estado no permitida por la máquina de estados (DX-040: DRAFT → PRESENTED → ACCEPTED | REJECTED; DRAFT → ACCEPTED; ACCEPTED → COMPLETED; cualquiera salvo COMPLETED → CANCELLED); plan aceptado con firma: no cambia de moneda ni vuelve atrás (DX-012); otra opción del grupo ya aceptada; la moneda no cambia si el plan tiene abonos vivos, un plan de cuotas activo o está cerrado (DX-109). Aceptar pasa los ítems propuestos a aceptados, igual que la aceptación firmada, y cancela el plan de cuotas activo de las hermanas que rechaza; cancelar cancela también el plan de cuotas activo */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -6048,7 +6048,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Plan REJECTED con motivo, nota y rejectedAt (servidor); las demás opciones del grupo no cambian */
+            /** @description Plan REJECTED con motivo, nota y rejectedAt (servidor); las demás opciones del grupo no cambian. Su plan de cuotas activo, si lo tiene, se cancela en la misma transacción con autor y motivo (DX-109) */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -6150,7 +6150,7 @@ export interface operations {
                     "application/json": components["schemas"]["TreatmentPlanItemDto"];
                 };
             };
-            /** @description Plan aceptado con firma: sus ítems quedan congelados (DX-012) */
+            /** @description Plan aceptado con firma: sus ítems quedan congelados (DX-012); o el plan está cancelado, rechazado o completado (DX-109) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -6177,7 +6177,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Plan aceptado con firma: sus ítems quedan congelados (DX-012) */
+            /** @description Plan aceptado con firma: sus ítems quedan congelados (DX-012); o el plan está cancelado, rechazado o completado (DX-109) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -6209,7 +6209,7 @@ export interface operations {
                     "application/json": components["schemas"]["TreatmentPlanItemDto"];
                 };
             };
-            /** @description Plan aceptado con firma: sus ítems quedan congelados (DX-012); solo admite avanzar el estado (no volver a PROPOSED) */
+            /** @description Plan aceptado con firma: sus ítems quedan congelados (DX-012); o el plan está cancelado, rechazado o completado (DX-109); firmado: solo admite avanzar el estado (no volver a PROPOSED); completado: solo admite marcar como DONE un ítem ACCEPTED sin otro cambio */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -6577,6 +6577,7 @@ export interface operations {
             };
         };
         responses: {
+            /** @description Abono registrado. Repetir la MISMA petición (mismo plan y cuerpo) con la misma Idempotency-Key devuelve el abono original. */
             201: {
                 headers: {
                     [name: string]: unknown;
@@ -6584,6 +6585,20 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["PaymentDto"];
                 };
+            };
+            /** @description El plan está rechazado o cancelado: no admite abonos (DX-109). Un plan completado sí. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La Idempotency-Key ya se usó con otro plan u otro cuerpo (DX-109): genera una clave nueva. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -6598,6 +6613,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description Saldo del plan. Un plan rechazado o cancelado tiene `billable` 0 (misma regla que el estado de cuenta, DX-109); sus abonos siguen en `paid`. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -6696,6 +6712,13 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["PaymentPlanDto"];
                 };
+            };
+            /** @description El plan ya tiene un plan de cuotas activo, o está rechazado o cancelado y no se financia (DX-109). */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

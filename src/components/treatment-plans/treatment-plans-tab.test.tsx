@@ -770,6 +770,103 @@ describe('TreatmentPlansTab', () => {
 
   // Error-states ladder (Task 8): each `text-danger` site classified by what
   // the user can still do — see task-8-report.md for the full table.
+  describe('DX-109: planes no cobrables o cerrados', () => {
+    it('un plan rechazado deshabilita «Registrar abono» con el motivo, no ofrece plan de cuotas y congela los ítems', async () => {
+      const rejected = { ...plan1Detail, status: 'REJECTED' as const };
+      mockedListPlans.mockResolvedValue([{ ...plan1, status: 'REJECTED' as const }]);
+      mockedGetPlan.mockResolvedValue(rejected);
+
+      render(<TreatmentPlansTab patientId="pat-1" token="tok" />);
+      await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+
+      const payButton = await screen.findByRole('button', { name: /^registrar abono$/i });
+      expect(payButton).toBeDisabled();
+      expect(payButton).toHaveAccessibleDescription(
+        'Este plan está «Rechazado»: no admite abonos ni planes de cuotas.',
+      );
+      expect(await screen.findByText('Un plan rechazado o cancelado no se financia en cuotas.')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /crear plan de pagos/i })).not.toBeInTheDocument();
+      // El vacío de abonos no invita a registrar uno.
+      expect(await screen.findByText(/este plan todavía no tiene abonos/i)).toBeInTheDocument();
+      expect(screen.queryByText(/registra el primer abono/i)).not.toBeInTheDocument();
+
+      expect(
+        screen.getByText('Este plan está «Rechazado»: sus ítems ya no se pueden añadir, cambiar ni quitar.'),
+      ).toBeInTheDocument();
+      expect(screen.queryByRole('form', { name: /agregar ítem/i })).not.toBeInTheDocument();
+      for (const select of screen.getAllByLabelText(/estado del ítem/i)) {
+        expect(select).toBeDisabled();
+      }
+      expect(screen.queryByRole('button', { name: /^quitar$/i })).not.toBeInTheDocument();
+    });
+
+    it('cambiar el estado desde el selector refresca el saldo sin recargar (QA DX-109)', async () => {
+      mockedListPlans.mockResolvedValue([plan1]);
+      mockedGetPlan.mockResolvedValue(plan1Detail);
+      mockedGetPlanBalance.mockResolvedValue(balance1);
+      mockedUpdatePlan.mockResolvedValue({ ...plan1, status: 'CANCELLED' });
+
+      const user = userEvent.setup();
+      render(<TreatmentPlansTab patientId="pat-1" token="tok" />);
+      await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+      const billableCard = (await screen.findByText('A pagar')).closest('div') as HTMLElement;
+      expect(within(billableCard).getByText(expectedCurrencyText(balance1.billable))).toBeInTheDocument();
+
+      mockedGetPlan.mockResolvedValue({ ...plan1Detail, status: 'CANCELLED' });
+      mockedListPlans.mockResolvedValue([{ ...plan1, status: 'CANCELLED' }]);
+      mockedGetPlanBalance.mockResolvedValue({ ...balance1, billable: 0, balance: 0 });
+      await user.selectOptions(screen.getByLabelText(/^estado del plan$/i), 'CANCELLED');
+
+      await waitFor(() => {
+        const card = screen.getByText('A pagar').closest('div') as HTMLElement;
+        expect(within(card).getByText(expectedCurrencyText(0))).toBeInTheDocument();
+      });
+    });
+
+    it('un plan completado sigue cobrando, pero sus ítems quedan congelados', async () => {
+      const completed = { ...plan1Detail, status: 'COMPLETED' as const };
+      mockedListPlans.mockResolvedValue([{ ...plan1, status: 'COMPLETED' as const }]);
+      mockedGetPlan.mockResolvedValue(completed);
+
+      render(<TreatmentPlansTab patientId="pat-1" token="tok" />);
+      await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+
+      expect(await screen.findByRole('button', { name: /^registrar abono$/i })).toBeEnabled();
+      expect(await screen.findByRole('button', { name: /crear plan de pagos/i })).toBeInTheDocument();
+      expect(screen.queryByRole('form', { name: /agregar ítem/i })).not.toBeInTheDocument();
+    });
+
+    it('en un plan completado, un ítem aceptado se puede marcar como realizado (y nada más)', async () => {
+      const completed = { ...plan1Detail, status: 'COMPLETED' as const };
+      mockedListPlans.mockResolvedValue([{ ...plan1, status: 'COMPLETED' as const }]);
+      mockedGetPlan.mockResolvedValue(completed);
+      mockedUpdateItem.mockResolvedValue({ ...item2, status: 'DONE' });
+
+      const user = userEvent.setup();
+      render(<TreatmentPlansTab patientId="pat-1" token="tok" />);
+      const table = await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+
+      expect(
+        screen.getByText(
+          'Este plan está «Completado»: sus ítems ya no se pueden añadir, cambiar ni quitar. Solo puedes marcar como realizado un procedimiento que quedó aceptado.',
+        ),
+      ).toBeInTheDocument();
+      // Propuesto: congelado. Aceptado: solo puede pasar a realizado.
+      expect(within(table).getByRole('combobox', { name: /estado del ítem del diente 11/i })).toBeDisabled();
+      const accepted = within(table).getByRole<HTMLSelectElement>('combobox', {
+        name: /estado del ítem del diente 26/i,
+      });
+      expect(accepted).toBeEnabled();
+      expect(within(accepted).getByRole<HTMLOptionElement>('option', { name: 'Propuesto' }).disabled).toBe(true);
+      expect(within(accepted).getByRole<HTMLOptionElement>('option', { name: 'Realizado' }).disabled).toBe(false);
+
+      await user.selectOptions(accepted, 'DONE');
+      await waitFor(() =>
+        expect(mockedUpdateItem).toHaveBeenCalledWith('tok', 'plan-1', 'item-2', { status: 'DONE' }),
+      );
+    });
+  });
+
   describe('error states ladder', () => {
     it('cuando no hay planes que mostrar, usa el estado de sección con reintento (escalón 1: loadError)', async () => {
       mockedListPlans.mockRejectedValueOnce(new ApiError(500, 'Error del servidor'));

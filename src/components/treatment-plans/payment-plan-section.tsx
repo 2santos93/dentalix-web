@@ -32,6 +32,7 @@ const copy = {
   createCta: 'Crear plan de pagos',
   emptyTitle: 'Sin plan de pagos',
   emptyDescription: 'Financia este tratamiento en cuotas: define el pie, el número de cuotas y la periodicidad.',
+  notBillableDescription: 'Un plan rechazado o cancelado no se financia en cuotas.',
   // No «Intenta de nuevo.» — `SectionError` has its own retry button.
   loadError: 'No pudimos cargar el plan de pagos.',
   cancelPlan: 'Cancelar plan',
@@ -60,9 +61,21 @@ interface PaymentPlanSectionProps {
   planCurrency: string;
   billable: number;
   refreshSignal: number;
+  /**
+   * ¿Se puede crear un plan de cuotas? No en un plan rechazado o cancelado
+   * (DX-109: la API responde 409). Por defecto, sí.
+   */
+  canCreate?: boolean;
 }
 
-export function PaymentPlanSection({ token, planId, planCurrency, billable, refreshSignal }: PaymentPlanSectionProps) {
+export function PaymentPlanSection({
+  token,
+  planId,
+  planCurrency,
+  billable,
+  refreshSignal,
+  canCreate = true,
+}: PaymentPlanSectionProps) {
   const [plan, setPlan] = useState<PaymentPlan | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -142,8 +155,12 @@ export function PaymentPlanSection({ token, planId, planCurrency, billable, refr
         />
       ) : !plan ? (
         <div className="flex flex-col items-start gap-3">
-          <EmptyState role="status" title={copy.emptyTitle} description={copy.emptyDescription} />
-          <Button type="button" onClick={() => setShowCreate(true)}>{copy.createCta}</Button>
+          <EmptyState
+            role="status"
+            title={copy.emptyTitle}
+            description={canCreate ? copy.emptyDescription : copy.notBillableDescription}
+          />
+          {canCreate && <Button type="button" onClick={() => setShowCreate(true)}>{copy.createCta}</Button>}
         </div>
       ) : (
         <>
