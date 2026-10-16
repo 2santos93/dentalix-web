@@ -1521,6 +1521,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/platform/jobs/failed": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Cola de fallidos: trabajos que agotaron sus intentos
+         * @description Los más recientes primero. Cada trabajo se reintenta con backoff exponencial hasta su maxAttempts y luego queda FAILED. Solo superadmin de plataforma.
+         */
+        get: operations["PlatformJobsController_failed"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/dashboard": {
         parameters: {
             query?: never;
@@ -2956,6 +2976,11 @@ export interface components {
             patientFirstName: string | null;
             patientLastName: string | null;
         };
+        AffectedAppointmentsPageDto: {
+            items: components["schemas"]["AffectedAppointmentDto"][];
+            /** @description Total de citas afectadas (puede ser mayor que items). */
+            total: number;
+        };
         CreateScheduleBlockDto: {
             /**
              * Format: uuid
@@ -4271,6 +4296,42 @@ export interface components {
             subdomain: string;
             /** Format: date-time */
             createdAt: string;
+        };
+        FailedJobDto: {
+            /** Format: uuid */
+            id: string;
+            /**
+             * @description Handler (`modulo.trabajo`)
+             * @example exchange.prefetch-rates
+             */
+            name: string;
+            /**
+             * Format: uuid
+             * @description Clínica bajo la que corría; null = plataforma
+             */
+            tenantId: string | null;
+            /**
+             * @description Solo ids y valores técnicos, nunca datos del paciente
+             * @example {
+             *       "appointmentId": "6f0c2b9e-8a4d-4c1e-9f0a-1b2c3d4e5f60"
+             *     }
+             */
+            payload: {
+                [key: string]: unknown;
+            };
+            /** @example 5 */
+            attempts: number;
+            /** @example 5 */
+            maxAttempts: number;
+            /**
+             * @description Tipo y código del último error; nunca su mensaje
+             * @example Error ETIMEDOUT
+             */
+            lastError: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            finishedAt: string | null;
         };
         DashboardPeriodDto: {
             /** Format: date-time */
@@ -6958,14 +7019,14 @@ export interface operations {
                     "application/json": components["schemas"]["ScheduleBlockDto"][];
                 };
             };
-            /** @description Rango vacío o de más de 92 días, o profesional ajeno */
+            /** @description Rango vacío o de más de 92 días */
             400: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description Sede de otra clínica */
+            /** @description Sede o profesional de otra clínica */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -7039,13 +7100,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Citas vivas (programadas o confirmadas) que quedarían dentro de un bloqueo con ese alcance y rango. No se tocan. */
+            /** @description Citas vivas (programadas o confirmadas) que quedarían dentro de un bloqueo con ese alcance y rango: las primeras 50 por hora y el total. No se tocan. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AffectedAppointmentDto"][];
+                    "application/json": components["schemas"]["AffectedAppointmentsPageDto"];
                 };
             };
             /** @description Sin sede ni profesional, o rango inválido */
@@ -8811,6 +8872,41 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["PlatformTenantDto"][];
                 };
+            };
+        };
+    };
+    PlatformJobsController_failed: {
+        parameters: {
+            query?: {
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FailedJobDto"][];
+                };
+            };
+            /** @description Sin sesión */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No es un token de plataforma de un superadmin */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
