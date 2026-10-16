@@ -36,6 +36,8 @@ interface VoidPaymentModalProps {
   error: string | null;
   /** Recepción: solo puede anular abonos suyos del día (lo decide la API). */
   restrictedToOwnToday: boolean;
+  /** Qué abono se anula, p. ej. «12.345 COP · 16/10/2026 · Ana Gómez». */
+  subject?: string;
 }
 
 /**
@@ -50,6 +52,7 @@ export function VoidPaymentModal({
   submitting,
   error,
   restrictedToOwnToday,
+  subject,
 }: VoidPaymentModalProps) {
   const fieldId = useId();
   const hintId = `${fieldId}-hint`;
@@ -80,6 +83,11 @@ export function VoidPaymentModal({
       error={error}
       destructive
     >
+      {subject ? (
+        <p className="rounded-lg bg-surface-2 px-3 py-2 text-sm font-medium text-ink tabular-nums">
+          {subject}
+        </p>
+      ) : null}
       <div className="flex flex-col gap-1.5">
         <Label htmlFor={fieldId}>{copy.reasonLabel}</Label>
         <textarea

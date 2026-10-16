@@ -1934,6 +1934,13 @@ export interface components {
             /** Format: uuid */
             id: string;
             /**
+             * Format: uuid
+             * @description Quién registró el abono; `null` en abonos antiguos sin autor.
+             */
+            createdById: string | null;
+            /** @description Si quien consulta puede anular este abono: ADMIN siempre; RECEPTION solo los que registró ella el mismo día (calendario de la sede del abono). Solo orienta a la interfaz: `DELETE /payments/:id` vuelve a aplicar la regla. */
+            canVoid: boolean;
+            /**
              * Format: date-time
              * @description Día civil del abono (medianoche UTC del día registrado).
              */
@@ -2353,6 +2360,13 @@ export interface components {
             location: components["schemas"]["AccountStatementLocationRefDto"];
             /** Format: uuid */
             treatmentPlanId: string;
+            /**
+             * Format: uuid
+             * @description Quién registró el abono; `null` en abonos antiguos sin autor.
+             */
+            createdById: string | null;
+            /** @description Si quien consulta puede anular este abono: ADMIN cualquiera activo; RECEPTION solo los suyos registrados el mismo día (calendario de la sede del abono). `false` si ya está anulado. Solo orienta a la interfaz: `DELETE /payments/:id` vuelve a aplicar la regla. */
+            canVoid: boolean;
             /** @description Abono anulado: se lista pero no suma. */
             voided: boolean;
             /** Format: date-time */

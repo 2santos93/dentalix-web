@@ -58,6 +58,7 @@ import {
 } from '@/lib/payments/payment-method';
 import { PaymentReceipt } from './payment-receipt';
 import { VoidPaymentModal } from '@/components/payments/void-payment-modal';
+import { voidPaymentErrorMessage } from '@/components/payments/use-void-payment';
 import { getTokenRole } from '@/lib/auth/token-role';
 import { PaymentPlanSection } from './payment-plan-section';
 import { SectionError } from '@/components/errors/section-error';
@@ -213,11 +214,6 @@ const copy = {
   voidingPayment: 'Anulando…',
   // Recibo imprimible (RECIBO-T1).
   receiptAction: 'Recibo',
-  genericVoidPaymentError: 'No pudimos anular el abono. Intenta de nuevo.',
-  // 404 de DELETE /payments/:id (mensaje de la API en inglés): otra persona
-  // lo anuló antes, o ya no existe.
-  voidPaymentGoneError:
-    'Este abono ya estaba anulado o ya no existe. Cierra y recarga la lista para ver su estado.',
   emptyPaymentsTitle: 'Este plan todavía no tiene abonos.',
   emptyPaymentsDescription: 'Registra el primer abono con el formulario de arriba.',
 
@@ -1330,13 +1326,7 @@ export function TreatmentPlansTab({
       setPaymentToVoid(null);
       await refreshBalanceAndPayments();
     } catch (err) {
-      setPaymentActionError(
-        err instanceof ApiError
-          ? err.status === 404
-            ? copy.voidPaymentGoneError
-            : err.message
-          : copy.genericVoidPaymentError,
-      );
+      setPaymentActionError(voidPaymentErrorMessage(err));
     } finally {
       setVoidingPaymentId(null);
     }

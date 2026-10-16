@@ -1036,7 +1036,9 @@ describe('TreatmentPlansTab', () => {
       await user.paste('Cobro duplicado');
       await user.click(within(confirm).getByRole('button', { name: 'Anular abono' }));
 
-      const alert = await screen.findByText('No se pudo anular');
+      // Un 500 no enseña el texto del servidor (puede venir en inglés): la
+      // copia genérica en español (DX-057).
+      const alert = await screen.findByText('No pudimos anular el abono. Intenta de nuevo.');
       expect(alert.closest('[role="alert"]')).not.toBeNull();
       expect(screen.getByRole('dialog', { name: /anular este abono/i })).toBeInTheDocument();
     });

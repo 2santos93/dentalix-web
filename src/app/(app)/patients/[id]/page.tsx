@@ -9,7 +9,6 @@ import { ClinicalEntriesList } from '@/components/patients/clinical-entries-list
 import { ClinicalAlertBanner } from '@/components/patients/clinical-alert-banner';
 import {
   PatientDetailTabs,
-  isPatientDetailTabKey,
   type PatientDetailTabKey,
 } from '@/components/patients/patient-detail-tabs';
 import { PatientDataPanel } from '@/components/patients/patient-data-panel';
@@ -20,9 +19,8 @@ import { TreatmentPlansTab } from '@/components/treatment-plans/treatment-plans-
 import { SectionError } from '@/components/errors/section-error';
 import { AccountStatementView } from '@/components/account-statement/account-statement-view';
 import { getTokenRole } from '@/lib/auth/token-role';
-import { canReadAccountStatement } from '@/lib/account-statement/account-statement-api';
+import { patientTabAccess, resolvePatientTab } from '@/lib/patients/patient-tab-access';
 import { DataConsentsTab } from '@/components/data-consents/data-consents-tab';
-import { canUseConsents } from '@/lib/consents/consents-api';
 import { PatientConsentsTab } from '@/components/consents/patient-consents-tab';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
@@ -126,19 +124,13 @@ function PatientDetailView() {
   // Atrás vuelve a la pestaña anterior en vez de salir del paciente, y
   // recargar el móvil devuelve al usuario donde estaba. Un valor desconocido o
   // ausente cae en «Datos» sin romper nada.
-  // Quién ve «Estado de cuenta»: ACCOUNT_STATEMENT_ROLES (= PAYMENT_ROLES).
-  const canSeeAccountStatement = canReadAccountStatement(getTokenRole(accessToken));
-  // Quién ve «Consentimientos»: CONSENT_ROLES (= CLINICAL_ROLES, sin recepción).
-  const canSeeConsents = canUseConsents(getTokenRole(accessToken));
-  const requestedTab = searchParams.get('tab');
-  // Un `?tab=account-statement` (o `consents`) en manos de un rol sin acceso
-  // (enlace compartido) cae en «Datos», igual que cualquier valor desconocido.
-  const activeTab: PatientDetailTabKey =
-    isPatientDetailTabKey(requestedTab) &&
-    (requestedTab !== 'account-statement' || canSeeAccountStatement) &&
-    (requestedTab !== 'consents' || canSeeConsents)
-      ? requestedTab
-      : 'data';
+  // Qué pestañas ve el rol: las que la API le deja leer (DX-057). Recepción no
+  // ve las clínicas (historia, odontograma, plan de tratamiento ni
+  // consentimientos), que le responderían 403; DENTIST/ASSISTANT no ven el
+  // estado de cuenta. Un `?tab=` sin acceso (enlace compartido) cae en «Datos»,
+  // igual que cualquier valor desconocido.
+  const access = patientTabAccess(getTokenRole(accessToken));
+  const activeTab = resolvePatientTab(searchParams.get('tab'), access);
   // El diente en foco también viaja en la URL: es el puente entre el
   // odontograma (diente seleccionado) y el plan de tratamiento (ítems de ese
   // diente resaltados). Solo se valida contra el formato FDI en cada consumidor.
@@ -158,7 +150,9 @@ function PatientDetailView() {
         else params.set(key, value);
       }
       const query = params.toString();
-      router.replace(query ? `${pathname}?${query}` : pathname, { scroll: false });
+      router.replace(query ? `${pathname}?${query}` : pathname, {
+        scroll: false,
+      });
     },
     [pathname, router, searchParams],
   );
@@ -258,19 +252,25 @@ function PatientDetailView() {
         />
       ) : patient ? (
         <div className="flex flex-col gap-4">
-          <ClinicalAlertBanner token={accessToken} patientId={patientId} />
+          {/* Las alertas salen de la anamnesis (dato clínico): sin acceso, la
+              API responde 403 y el banner solo diría que no pudo comprobarlas. */}
+          {access['clinical-history'] ? (
+            <ClinicalAlertBanner token={accessToken} patientId={patientId} />
+          ) : null}
 
           <PatientDetailTabs
             activeTab={activeTab}
             onTabChange={(tab) => setParams({ tab })}
             tablistLabel={fullName(patient)}
             dataLabel={copy.tabData}
-            clinicalHistoryLabel={copy.tabClinicalHistory}
-            odontogramLabel={copy.tabOdontogram}
-            treatmentPlansLabel={copy.tabTreatmentPlans}
-            accountStatementLabel={canSeeAccountStatement ? copy.tabAccountStatement : undefined}
-            dataConsentsLabel={copy.tabDataConsents}
-            consentsLabel={canSeeConsents ? copy.tabConsents : undefined}
+            clinicalHistoryLabel={access['clinical-history'] ? copy.tabClinicalHistory : undefined}
+            odontogramLabel={access.odontogram ? copy.tabOdontogram : undefined}
+            treatmentPlansLabel={access['treatment-plans'] ? copy.tabTreatmentPlans : undefined}
+            accountStatementLabel={
+              access['account-statement'] ? copy.tabAccountStatement : undefined
+            }
+            dataConsentsLabel={access['data-consents'] ? copy.tabDataConsents : undefined}
+            consentsLabel={access.consents ? copy.tabConsents : undefined}
           />
 
           <TabPanel tab="data" activeTab={activeTab} register={registerPanel}>
@@ -285,68 +285,76 @@ function PatientDetailView() {
             onSaved={(updated) => setPatient(updated)}
           />
 
-          <TabPanel
-            tab="clinical-history"
-            activeTab={activeTab}
-            register={registerPanel}
-            className="flex flex-col gap-8"
-          >
-            <section className="flex flex-col gap-3">
-              <h2 className="text-lg font-semibold text-ink">{copy.anamnesisHeading}</h2>
-              <MedicalHistoryPanel token={accessToken} patientId={patientId} />
-            </section>
-            <section className="flex flex-col gap-3">
-              <h2 className="text-lg font-semibold text-ink">{copy.entriesHeading}</h2>
-              <ClinicalEntriesList token={accessToken} patientId={patientId} />
-            </section>
-          </TabPanel>
+          {access['clinical-history'] ? (
+            <TabPanel
+              tab="clinical-history"
+              activeTab={activeTab}
+              register={registerPanel}
+              className="flex flex-col gap-8"
+            >
+              <section className="flex flex-col gap-3">
+                <h2 className="text-lg font-semibold text-ink">{copy.anamnesisHeading}</h2>
+                <MedicalHistoryPanel token={accessToken} patientId={patientId} />
+              </section>
+              <section className="flex flex-col gap-3">
+                <h2 className="text-lg font-semibold text-ink">{copy.entriesHeading}</h2>
+                <ClinicalEntriesList token={accessToken} patientId={patientId} />
+              </section>
+            </TabPanel>
+          ) : null}
 
-          <TabPanel
-            tab="odontogram"
-            activeTab={activeTab}
-            register={registerPanel}
-            className="flex flex-col gap-4"
-          >
-            {/* El diente seleccionado se siembra desde `?tooth=` (así funciona
+          {access.odontogram ? (
+            <TabPanel
+              tab="odontogram"
+              activeTab={activeTab}
+              register={registerPanel}
+              className="flex flex-col gap-4"
+            >
+              {/* El diente seleccionado se siembra desde `?tooth=` (así funciona
                 «Ver en el odontograma» desde el plan) y se devuelve a la URL en
                 cada selección, para que recargar o compartir el enlace vuelva
                 al mismo diente. */}
-            <OdontogramTab
-              token={accessToken}
-              patientId={patientId}
-              initialTooth={focusedTooth}
-              onToothChange={(tooth) => setParams({ tooth })}
-              planHref={(tooth) => `${pathname}?tab=treatment-plans&tooth=${tooth}`}
-            />
-          </TabPanel>
+              <OdontogramTab
+                token={accessToken}
+                patientId={patientId}
+                initialTooth={focusedTooth}
+                onToothChange={(tooth) => setParams({ tooth })}
+                planHref={(tooth) => `${pathname}?tab=treatment-plans&tooth=${tooth}`}
+              />
+            </TabPanel>
+          ) : null}
 
-          <TabPanel
-            tab="treatment-plans"
-            activeTab={activeTab}
-            register={registerPanel}
-            className="flex flex-col gap-4"
-          >
-            {/* Mismo puente en sentido contrario: el diente de `?tooth=` llega
+          {access['treatment-plans'] ? (
+            <TabPanel
+              tab="treatment-plans"
+              activeTab={activeTab}
+              register={registerPanel}
+              className="flex flex-col gap-4"
+            >
+              {/* Mismo puente en sentido contrario: el diente de `?tooth=` llega
                 resaltado en la tabla de ítems y presembrado en «Agregar ítem»,
                 y cada fila puede volver al odontograma con ese diente. */}
-            <TreatmentPlansTab
-              token={accessToken}
-              patientId={patientId}
-              focusedTooth={focusedTooth}
-              odontogramHref={(tooth) => `${pathname}?tab=odontogram&tooth=${tooth}`}
-            />
-          </TabPanel>
+              <TreatmentPlansTab
+                token={accessToken}
+                patientId={patientId}
+                focusedTooth={focusedTooth}
+                odontogramHref={(tooth) => `${pathname}?tab=odontogram&tooth=${tooth}`}
+              />
+            </TabPanel>
+          ) : null}
 
-          {canSeeAccountStatement ? (
+          {access['account-statement'] ? (
             <TabPanel tab="account-statement" activeTab={activeTab} register={registerPanel}>
               <AccountStatementView token={accessToken} patientId={patientId} />
             </TabPanel>
           ) : null}
 
-          <TabPanel tab="data-consents" activeTab={activeTab} register={registerPanel}>
-            <DataConsentsTab token={accessToken} patientId={patientId} />
-          </TabPanel>
-          {canSeeConsents ? (
+          {access['data-consents'] ? (
+            <TabPanel tab="data-consents" activeTab={activeTab} register={registerPanel}>
+              <DataConsentsTab token={accessToken} patientId={patientId} />
+            </TabPanel>
+          ) : null}
+          {access.consents ? (
             <TabPanel tab="consents" activeTab={activeTab} register={registerPanel}>
               <PatientConsentsTab token={accessToken} patientId={patientId} />
             </TabPanel>

@@ -41,6 +41,10 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { Button } from '@/components/ui/button';
+import { VoidPaymentModal } from '@/components/payments/void-payment-modal';
+import { useVoidPayment, voidPaymentSubject } from '@/components/payments/use-void-payment';
+import { getTokenRole } from '@/lib/auth/token-role';
 import { cn } from '@/lib/utils';
 
 // Copy como constantes (i18n-ready), igual que el resto de vistas.
@@ -77,6 +81,9 @@ const copy = {
   colMethod: 'Método',
   colLocation: 'Sede',
   colAmount: 'Monto',
+  colActions: 'Acciones',
+  voidAction: 'Anular',
+  voidActionLabel: (patient: string) => `Anular abono de ${patient}`,
   planLabel: (createdAt: string) => `Plan del ${formatDate(createdAt)}`,
   // Sin "Intenta de nuevo." — alimenta AsyncSection -> SectionError, que trae su propio botón.
   genericLoadError: 'No pudimos cargar la caja.',
@@ -140,6 +147,10 @@ export function CashRegisterView({ token }: CashRegisterViewProps) {
   const [forbidden, setForbidden] = useState(false);
   const rangeErrorId = React.useId();
   const [reloadKey, setReloadKey] = useState(0);
+  // Anular (DX-057): «Anular» solo sale en las filas con `canVoid` (lo calcula
+  // la API para quien consulta); tras anular se recarga la caja, que solo
+  // lista abonos activos, y con ella el resumen.
+  const voiding = useVoidPayment(token, () => setReloadKey((k) => k + 1));
 
   useEffect(() => {
     if (!token) return;
@@ -201,6 +212,8 @@ export function CashRegisterView({ token }: CashRegisterViewProps) {
 
   const customError = period === 'custom' ? rangeError(customRange) : null;
   const items = data?.items ?? [];
+  // La columna «Acciones» solo existe si alguna fila es anulable por quien mira.
+  const anyVoidable = items.some((payment) => payment.canVoid);
   // Con el rango escrito inválido, lo último cargado es de OTRO rango: no se
   // pinta (ni conteo, ni resumen, ni tabla, ni páginas) para que nadie lo lea
   // como la respuesta a las fechas que tiene delante.
@@ -287,6 +300,12 @@ export function CashRegisterView({ token }: CashRegisterViewProps) {
 
         {customError ? <InlineError id={rangeErrorId}>{customError}</InlineError> : null}
 
+        {/* Aviso de la última anulación: fuera de AsyncSection para que la
+            recarga no lo borre. */}
+        <p role="status" className={voiding.notice ? 'text-sm text-success' : 'sr-only'}>
+          {voiding.notice}
+        </p>
+
         {forbidden && customError === null ? (
           <EmptyState
             role="status"
@@ -330,6 +349,11 @@ export function CashRegisterView({ token }: CashRegisterViewProps) {
                       <TableHead scope="col" className="text-right">
                         {copy.colAmount}
                       </TableHead>
+                      {anyVoidable ? (
+                        <TableHead scope="col">
+                          <span className="sr-only">{copy.colActions}</span>
+                        </TableHead>
+                      ) : null}
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -365,6 +389,29 @@ export function CashRegisterView({ token }: CashRegisterViewProps) {
                         >
                           {formatCurrency(payment.amount, payment.currency)}
                         </TableCell>
+                        {anyVoidable ? (
+                          <TableCell className="text-right" data-label={copy.colActions}>
+                            {payment.canVoid ? (
+                              <Button
+                                type="button"
+                                variant="outline"
+                                size="sm"
+                                aria-label={copy.voidActionLabel(payment.patient.fullName)}
+                                onClick={() =>
+                                  voiding.request({
+                                    id: payment.id,
+                                    amount: payment.amount,
+                                    currency: payment.currency,
+                                    paidAt: payment.paidAt,
+                                    patientName: payment.patient.fullName,
+                                  })
+                                }
+                              >
+                                {copy.voidAction}
+                              </Button>
+                            ) : null}
+                          </TableCell>
+                        ) : null}
                       </TableRow>
                     ))}
                   </TableBody>
@@ -384,6 +431,21 @@ export function CashRegisterView({ token }: CashRegisterViewProps) {
           </>
         ) : null}
       </div>
+
+      {/* `key` por abono: cada anulación empieza con el motivo en blanco. */}
+      <VoidPaymentModal
+        key={voiding.target?.id ?? 'none'}
+        open={voiding.target !== null}
+        onOpenChange={(open) => {
+          if (!open) voiding.close();
+        }}
+        onConfirm={(reason) => void voiding.confirm(reason)}
+        submitting={voiding.submitting}
+        error={voiding.error}
+        // Pinta el aviso de la ventana de recepción; la regla la aplica la API.
+        restrictedToOwnToday={getTokenRole(token) !== 'ADMIN'}
+        subject={voiding.target ? voidPaymentSubject(voiding.target) : undefined}
+      />
     </>
   );
 }

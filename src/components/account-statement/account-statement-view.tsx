@@ -39,6 +39,13 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { VoidPaymentModal } from '@/components/payments/void-payment-modal';
+import {
+  useVoidPayment,
+  voidPaymentSubject,
+  type VoidPaymentTarget,
+} from '@/components/payments/use-void-payment';
+import { getTokenRole } from '@/lib/auth/token-role';
 import { cn } from '@/lib/utils';
 
 // Copy como constantes (i18n-ready), igual que el resto de vistas.
@@ -71,6 +78,9 @@ const copy = {
   colMethod: 'Método',
   colLocation: 'Sede',
   colAmount: 'Monto',
+  colActions: 'Acciones',
+  voidAction: 'Anular',
+  voidActionLabel: (amount: string, date: string) => `Anular abono de ${amount} del ${date}`,
   colDue: 'Vencimiento',
   colInstallment: 'Cuota',
   colOutstanding: 'Pendiente',
@@ -103,6 +113,10 @@ export function AccountStatementView({ token, patientId }: AccountStatementViewP
   const [forbidden, setForbidden] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const headingId = React.useId();
+  // Anular (DX-057): «Anular» solo en movimientos con `canVoid` (lo calcula la
+  // API para quien consulta); tras anular se recarga todo el estado de cuenta,
+  // porque cambian el abonado, el saldo y las cuotas.
+  const voiding = useVoidPayment(token, () => setReloadKey((k) => k + 1));
 
   useEffect(() => {
     let cancelled = false;
@@ -169,15 +183,44 @@ export function AccountStatementView({ token, patientId }: AccountStatementViewP
           emptyIcon={<Wallet aria-hidden />}
           skeleton={<TableSkeleton rows={3} />}
         >
-          {data ? <StatementBody statement={data} /> : null}
+          {data ? <StatementBody statement={data} onVoid={voiding.request} /> : null}
         </AsyncSection>
       )}
+
+      {/* Aviso de la última anulación: fuera de AsyncSection para que la
+          recarga no lo borre. */}
+      <p role="status" className={voiding.notice ? 'text-sm text-success' : 'sr-only'}>
+        {voiding.notice}
+      </p>
+
+      {/* `key` por abono: cada anulación empieza con el motivo en blanco. */}
+      <VoidPaymentModal
+        key={voiding.target?.id ?? 'none'}
+        open={voiding.target !== null}
+        onOpenChange={(open) => {
+          if (!open) voiding.close();
+        }}
+        onConfirm={(reason) => void voiding.confirm(reason)}
+        submitting={voiding.submitting}
+        error={voiding.error}
+        // Pinta el aviso de la ventana de recepción; la regla la aplica la API.
+        restrictedToOwnToday={getTokenRole(token) !== 'ADMIN'}
+        subject={voiding.target ? voidPaymentSubject(voiding.target) : undefined}
+      />
     </section>
   );
 }
 
-function StatementBody({ statement }: { statement: AccountStatement }) {
+function StatementBody({
+  statement,
+  onVoid,
+}: {
+  statement: AccountStatement;
+  onVoid: (target: VoidPaymentTarget) => void;
+}) {
   const planName = planNamer(statement.plans);
+  // La columna de acciones solo existe si hay algo que anular.
+  const anyVoidable = statement.movements.some((m) => m.canVoid);
   return (
     <div className="flex flex-col gap-8">
       {statement.summary.length > 0 ? (
@@ -316,6 +359,11 @@ function StatementBody({ statement }: { statement: AccountStatement }) {
                   <TableHead scope="col" className="text-right">
                     {copy.colAmount}
                   </TableHead>
+                  {anyVoidable ? (
+                    <TableHead scope="col">
+                      <span className="sr-only">{copy.colActions}</span>
+                    </TableHead>
+                  ) : null}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -351,6 +399,31 @@ function StatementBody({ statement }: { statement: AccountStatement }) {
                         </span>
                       </span>
                     </TableCell>
+                    {anyVoidable ? (
+                      <TableCell className="text-right" data-label={copy.colActions}>
+                        {m.canVoid ? (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            aria-label={copy.voidActionLabel(
+                              formatCurrency(m.amount, m.currency),
+                              formatCivilDate(m.paidAt),
+                            )}
+                            onClick={() =>
+                              onVoid({
+                                id: m.id,
+                                amount: m.amount,
+                                currency: m.currency,
+                                paidAt: m.paidAt,
+                              })
+                            }
+                          >
+                            {copy.voidAction}
+                          </Button>
+                        ) : null}
+                      </TableCell>
+                    ) : null}
                   </TableRow>
                 ))}
               </TableBody>

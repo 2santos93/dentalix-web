@@ -3,10 +3,15 @@ import userEvent from '@testing-library/user-event';
 import { AccountStatementView } from './account-statement-view';
 import { ApiError } from '@/lib/api/client';
 import { getAccountStatement } from '@/lib/account-statement/account-statement-api';
+import { voidPayment } from '@/lib/payments/payments-api';
 import {
   accountStatementFixture,
   emptyAccountStatementFixture,
 } from '@/lib/test/account-statement';
+
+jest.mock('../../lib/payments/payments-api', () => ({
+  voidPayment: jest.fn(),
+}));
 
 jest.mock('../../lib/account-statement/account-statement-api', () => ({
   ...jest.requireActual('../../lib/account-statement/account-statement-api'),
@@ -14,6 +19,7 @@ jest.mock('../../lib/account-statement/account-statement-api', () => ({
 }));
 
 const mockedGet = getAccountStatement as jest.MockedFunction<typeof getAccountStatement>;
+const mockedVoid = voidPayment as jest.MockedFunction<typeof voidPayment>;
 
 // Normaliza los espacios duros de Intl (es: "1.800.000,00 COP" lleva U+00A0).
 function money(text: string | null | undefined): string {
@@ -22,6 +28,7 @@ function money(text: string | null | undefined): string {
 
 beforeEach(() => {
   mockedGet.mockReset();
+  mockedVoid.mockReset();
 });
 
 it('pide el estado de cuenta del paciente y pinta el resumen por moneda', async () => {
@@ -133,4 +140,40 @@ it('un 403 explica que el rol no tiene acceso, sin reintento', async () => {
   expect(await screen.findByText(/tu rol no tiene acceso al estado de cuenta/i)).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: /reintentar/i })).not.toBeInTheDocument();
   await waitFor(() => expect(mockedGet).toHaveBeenCalledTimes(1));
+});
+
+describe('anular desde el estado de cuenta (DX-057)', () => {
+  it('enseña «Anular» solo en movimientos con canVoid (nunca en uno ya anulado)', async () => {
+    mockedGet.mockResolvedValue(accountStatementFixture());
+    render(<AccountStatementView token="tok" patientId="pat-1" />);
+
+    const table = await screen.findByRole('table', { name: /movimientos/i });
+    const buttons = within(table).getAllByRole('button', {
+      name: /anular abono/i,
+    });
+    expect(buttons).toHaveLength(1);
+    expect(buttons[0].closest('tr')).toHaveTextContent('10/09/2026');
+  });
+
+  it('anula con motivo y recarga el estado de cuenta', async () => {
+    const user = userEvent.setup();
+    mockedGet.mockResolvedValue(accountStatementFixture());
+    mockedVoid.mockResolvedValue(undefined);
+    render(<AccountStatementView token="tok" patientId="pat-1" />);
+
+    const table = await screen.findByRole('table', { name: /movimientos/i });
+    await user.click(within(table).getByRole('button', { name: /anular abono/i }));
+    const dialog = await screen.findByRole('dialog', {
+      name: /anular este abono/i,
+    });
+    await user.click(within(dialog).getByLabelText(/motivo/i));
+    await user.paste('Monto equivocado');
+    await user.click(within(dialog).getByRole('button', { name: /anular abono/i }));
+
+    await waitFor(() =>
+      expect(mockedVoid).toHaveBeenCalledWith('tok', 'pay-2', 'Monto equivocado'),
+    );
+    await waitFor(() => expect(mockedGet).toHaveBeenCalledTimes(2));
+    expect(await screen.findByText(/abono anulado/i)).toBeInTheDocument();
+  });
 });
