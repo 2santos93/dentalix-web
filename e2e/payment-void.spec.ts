@@ -87,7 +87,7 @@ for (const viewport of [
     await expect(panel.getByRole('heading', { name: 'Detalle del plan' })).toBeVisible({
       timeout: 15_000,
     });
-    await panel.getByRole('button', { name: /Abonos registrados/ }).click();
+    await panel.getByRole('button', { name: /^Abonos y saldo\s+\d+ abonos?$/ }).click();
     await panel.getByRole('button', { name: 'Anular' }).locator('visible=true').first().click();
 
     const dialog = page.getByRole('dialog', { name: '¿Anular este abono?' });
