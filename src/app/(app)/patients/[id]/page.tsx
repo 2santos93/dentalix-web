@@ -21,6 +21,7 @@ import { SectionError } from '@/components/errors/section-error';
 import { AccountStatementView } from '@/components/account-statement/account-statement-view';
 import { getTokenRole } from '@/lib/auth/token-role';
 import { canReadAccountStatement } from '@/lib/account-statement/account-statement-api';
+import { DataConsentsTab } from '@/components/data-consents/data-consents-tab';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
@@ -33,6 +34,7 @@ const copy = {
   tabOdontogram: 'Odontograma',
   tabTreatmentPlans: 'Plan de tratamiento',
   tabAccountStatement: 'Estado de cuenta',
+  tabDataConsents: 'Autorizaciones',
   anamnesisHeading: 'Anamnesis',
   entriesHeading: 'Evoluciones',
 };
@@ -261,6 +263,7 @@ function PatientDetailView() {
             odontogramLabel={copy.tabOdontogram}
             treatmentPlansLabel={copy.tabTreatmentPlans}
             accountStatementLabel={canSeeAccountStatement ? copy.tabAccountStatement : undefined}
+            dataConsentsLabel={copy.tabDataConsents}
           />
 
           <TabPanel tab="data" activeTab={activeTab} register={registerPanel}>
@@ -332,6 +335,10 @@ function PatientDetailView() {
               <AccountStatementView token={accessToken} patientId={patientId} />
             </TabPanel>
           ) : null}
+
+          <TabPanel tab="data-consents" activeTab={activeTab} register={registerPanel}>
+            <DataConsentsTab token={accessToken} patientId={patientId} />
+          </TabPanel>
         </div>
       ) : null}
     </div>
