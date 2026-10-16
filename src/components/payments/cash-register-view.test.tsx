@@ -23,6 +23,8 @@ const anaCash: CashPayment = {
   createdById: 'u-recep',
   canVoid: true,
   paidAt: '2026-10-15T00:00:00.000Z',
+  registeredOn: '2026-10-15',
+  registeredToday: true,
   amount: 150000.5,
   currency: 'COP',
   method: 'CASH',
@@ -390,5 +392,105 @@ describe('anular desde la caja (DX-057)', () => {
       await within(dialog).findByText(/ya estaba anulado o ya no existe/i),
     ).toBeInTheDocument();
     expect(dialog).not.toHaveTextContent(/payment not found/i);
+  });
+});
+
+describe('tras anular, la caja no se queda en una página vacía (DX-067)', () => {
+  const REASON = 'Cobro registrado dos veces';
+
+  it('anular la única fila de la última página vuelve a la página anterior', async () => {
+    const user = userEvent.setup();
+    const lastRow: CashPayment = { ...anaCash, id: 'pay-21', patient: { id: 'pat-9', fullName: 'Zoe Última' } };
+    mockedList.mockImplementation((_token, params) => {
+      if (params.page === 2) {
+        // Tras anular, la página 2 ya no tiene filas: el total bajó a 20.
+        return Promise.resolve(
+          mockedVoid.mock.calls.length > 0
+            ? response({ items: [], total: 20, page: 2 })
+            : response({ items: [lastRow], total: 21, page: 2 }),
+        );
+      }
+      return Promise.resolve(
+        response({ items: [anaCash, betoCard], total: mockedVoid.mock.calls.length > 0 ? 20 : 21, page: 1 }),
+      );
+    });
+    mockedVoid.mockResolvedValue(undefined);
+    render(<CashRegisterView token="tok" />);
+
+    await user.click(await screen.findByRole('button', { name: /siguiente/i }));
+    await user.click(await screen.findByRole('button', { name: /anular abono de zoe última/i }));
+    const dialog = await screen.findByRole('dialog', { name: /anular este abono/i });
+    await user.click(within(dialog).getByLabelText(/motivo/i));
+    await user.paste(REASON);
+    await user.click(within(dialog).getByRole('button', { name: /anular abono/i }));
+
+    await waitFor(() => expect(mockedVoid).toHaveBeenCalledWith('tok', 'pay-21', REASON));
+    // Vuelve a pedir la página 1 y pinta sus filas, no el vacío de la 2.
+    await waitFor(() =>
+      expect(mockedList).toHaveBeenLastCalledWith('tok', expect.objectContaining({ page: 1 })),
+    );
+    const table = await screen.findByRole('table', { name: /abonos/i });
+    expect(within(table).getByRole('row', { name: /ana gómez/i })).toBeInTheDocument();
+    expect(screen.queryByText(/no hay abonos en este período/i)).not.toBeInTheDocument();
+    expect(screen.getByText(/abono anulado/i)).toBeInTheDocument();
+  });
+
+  it('si la página sigue teniendo filas, se queda en ella', async () => {
+    const user = userEvent.setup();
+    mockedList.mockImplementation((_token, params) =>
+      Promise.resolve(
+        params.page === 2
+          ? response({ items: [betoCard], total: 22, page: 2 })
+          : response({ items: [anaCash], total: 22, page: 1 }),
+      ),
+    );
+    render(<CashRegisterView token="tok" />);
+    await user.click(await screen.findByRole('button', { name: /siguiente/i }));
+    await waitFor(() =>
+      expect(mockedList).toHaveBeenLastCalledWith('tok', expect.objectContaining({ page: 2 })),
+    );
+    const table = await screen.findByRole('table', { name: /abonos/i });
+    expect(within(table).getByRole('row', { name: /beto ruiz/i })).toBeInTheDocument();
+    expect(mockedList).toHaveBeenCalledTimes(2);
+  });
+
+  it('una página vacía con total 0 no rebota: es el estado vacío', async () => {
+    mockedList.mockResolvedValue(
+      response({ items: [], total: 0, summary: { count: 0, byCurrency: [], byMethod: [] } }),
+    );
+    render(<CashRegisterView token="tok" />);
+    expect(await screen.findByText(/no hay abonos en este período/i)).toBeInTheDocument();
+    expect(mockedList).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe('fecha de pago vs. fecha de registro (DX-067)', () => {
+  it('dice «Registrado hoy» cuando el abono con fecha antigua se registró hoy', async () => {
+    mockedList.mockResolvedValue(
+      response({
+        items: [
+          { ...anaCash, paidAt: '2026-10-01T00:00:00.000Z', registeredOn: '2026-10-16', registeredToday: true },
+          { ...betoCard, paidAt: '2026-10-01T00:00:00.000Z', registeredOn: '2026-10-12', registeredToday: false },
+        ],
+      }),
+    );
+    render(<CashRegisterView token="tok" />);
+    const table = await screen.findByRole('table', { name: /abonos/i });
+
+    const ana = within(table).getByRole('row', { name: /ana gómez/i });
+    expect(within(ana).getByText('01/10/2026')).toBeInTheDocument();
+    expect(within(ana).getByText('Registrado hoy')).toBeInTheDocument();
+    // «Anular» sigue: la ventana mira el registro, y ahora se lee por qué.
+    expect(within(ana).getByRole('button', { name: /anular/i })).toBeInTheDocument();
+
+    const beto = within(table).getByRole('row', { name: /beto ruiz/i });
+    expect(within(beto).getByText('Registrado el 12/10/2026')).toBeInTheDocument();
+  });
+
+  it('no dice nada cuando la fecha de pago es la de registro', async () => {
+    mockedList.mockResolvedValue(response({ items: [anaCash] }));
+    render(<CashRegisterView token="tok" />);
+    const table = await screen.findByRole('table', { name: /abonos/i });
+    expect(within(table).queryByText(/registrado/i)).not.toBeInTheDocument();
   });
 });
