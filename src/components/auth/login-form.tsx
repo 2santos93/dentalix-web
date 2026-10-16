@@ -1,8 +1,9 @@
 'use client';
 import * as React from 'react';
 import { useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Eye, EyeOff, Loader2 } from 'lucide-react';
+import { CheckCircle2, Eye, EyeOff, Loader2 } from 'lucide-react';
 import { apiFetch } from '@/lib/api/client';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { useAuthStore } from '@/lib/auth/auth-store';
@@ -10,6 +11,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { FormField } from '@/components/shared/form-field';
 import { InlineError } from '@/components/errors/inline-error';
+import { FORGOT_PASSWORD_PATH } from '@/lib/auth/password-reset-api';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
@@ -23,6 +25,9 @@ const copy = {
   genericError: 'No pudimos iniciar sesión. Intenta de nuevo.',
   // 401 del login: credenciales, no sesión caducada (la API dice «Invalid credentials»).
   invalidCredentials: 'Correo o contraseña incorrectos.',
+  forgotPassword: '¿Olvidaste tu contraseña?',
+  passwordResetDone:
+    'Listo: tu contraseña se cambió y cerramos la sesión en todos los dispositivos. Inicia sesión con la nueva.',
 };
 
 const ERROR_ID = 'login-error';
@@ -32,7 +37,11 @@ interface LoginResponse {
   accessToken: string;
 }
 
-export function LoginForm() {
+/**
+ * `passwordReset`: se llega desde «Restablecer contraseña» (DX-010) y se
+ * muestra el aviso de éxito.
+ */
+export function LoginForm({ passwordReset = false }: { passwordReset?: boolean } = {}) {
   const router = useRouter();
   const setAccessToken = useAuthStore((s) => s.setAccessToken);
   const [email, setEmail] = useState('');
@@ -67,6 +76,15 @@ export function LoginForm() {
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4">
+      {passwordReset ? (
+        <p
+          role="status"
+          className="flex items-start gap-1.5 rounded-lg border border-success/30 bg-success/10 px-3 py-2 text-sm font-medium text-success"
+        >
+          <CheckCircle2 className="mt-0.5 size-4 shrink-0" aria-hidden />
+          <span>{copy.passwordResetDone}</span>
+        </p>
+      ) : null}
       <FormField htmlFor="login-email" label={copy.emailLabel}>
         <Input
           id="login-email"
@@ -109,6 +127,12 @@ export function LoginForm() {
           </button>
         </div>
       </FormField>
+      <Link
+        href={FORGOT_PASSWORD_PATH}
+        className="-mt-2 self-end text-sm font-medium text-primary hover:underline"
+      >
+        {copy.forgotPassword}
+      </Link>
 
       {error ? (
         <InlineError id={ERROR_ID} variant="summary">

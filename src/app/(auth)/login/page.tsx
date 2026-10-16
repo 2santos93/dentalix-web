@@ -5,6 +5,7 @@ import { SplitAuthLayout } from '@/components/layouts/split-auth-layout';
 import { randomHeroImage } from '@/lib/auth/hero-images';
 import { fetchBranding } from '@/lib/branding';
 import { parseTenantFromHost } from '@/lib/tenant';
+import { PASSWORD_RESET_DONE_PARAM } from '@/lib/auth/password-reset-api';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
@@ -16,7 +17,13 @@ const copy = {
   heroCaption: 'Tu clínica, siempre al día',
 };
 
-export default async function LoginPage() {
+// `searchParams` is a Promise in this Next version (see AGENTS.md).
+export default async function LoginPage({
+  searchParams,
+}: {
+  searchParams: Promise<Record<string, string | string[] | undefined>>;
+}) {
+  const passwordReset = (await searchParams)[PASSWORD_RESET_DONE_PARAM] === '1';
   const h = await headers();
   const tenant = h.get('x-tenant') ?? parseTenantFromHost(h.get('host'));
   const branding = await fetchBranding(tenant);
@@ -37,7 +44,7 @@ export default async function LoginPage() {
         </>
       }
     >
-      <LoginForm />
+      <LoginForm passwordReset={passwordReset} />
     </SplitAuthLayout>
   );
 }
