@@ -34,6 +34,10 @@ jobs:
           cache: npm
 
       - run: npm ci
+      # Avisos de seguridad en dependencias de producción (DX-080): falla con
+      # cualquier aviso alto o crítico.
+      - name: Auditar dependencias de producción
+        run: npm audit --omit=dev --audit-level=high
       # `npm run lint` es `eslint` a secas (sin --fix): sirve tal cual en CI.
       - run: npm run lint
       - run: npx tsc --noEmit

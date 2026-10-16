@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { configure, render, screen, within } from '@testing-library/react';
 import { PerioExamEditor } from './perio-exam-editor';
 import {
   finalizePerioExam,
@@ -17,6 +17,13 @@ jest.mock('../../lib/perio/perio-api', () => ({
   finalizePerioExam: jest.fn(),
   deletePerioExam: jest.fn(),
 }));
+
+// La rejilla tiene ~1000 controles: una sola consulta `findByRole` sobre ella
+// cuesta ~0,8 s en jsdom, casi el 1 s por defecto de los `findBy*`. Con la CPU
+// compartida (suite completa, CI de 2 vCPU) se pasaría sin que nada vaya mal.
+// 5 s explícitos en este fichero (OPS-002); `configure` sólo afecta a este
+// fichero, que tiene su propia instancia de Testing Library.
+configure({ asyncUtilTimeout: 5_000 });
 
 const mockedGet = getPerioExam as jest.MockedFunction<typeof getPerioExam>;
 const mockedSave = savePerioMeasures as jest.MockedFunction<typeof savePerioMeasures>;
