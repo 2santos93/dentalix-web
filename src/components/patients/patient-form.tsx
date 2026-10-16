@@ -3,7 +3,7 @@ import * as React from 'react';
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
-import { ApiError } from '@/lib/api/client';
+import { apiErrorMessage } from '@/lib/api/error-message';
 import {
   createPatient,
   type CreatePatientInput,
@@ -133,7 +133,7 @@ export function PatientForm({ token, onCreated, initialDocNumber }: PatientFormP
         router.push('/patients');
       }
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : copy.genericError);
+      setError(apiErrorMessage(err, copy.genericError));
     } finally {
       setSubmitting(false);
     }

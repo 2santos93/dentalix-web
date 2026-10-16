@@ -11,15 +11,24 @@ describe('perioErrorMessage (QA DX-007: nada de errores crudos en inglés)', () 
     );
   });
 
-  it.each([403, 404, 500, 503])('cae en el texto propio con %i', (status) => {
+  it.each([500, 503])('cae en el texto propio con %i', (status) => {
     expect(
       perioErrorMessage(new ApiError(status, 'Internal server error'), 'No se pudo cargar'),
     ).toBe('No se pudo cargar');
   });
 
-  it('cae en el texto propio con un error de red', () => {
-    expect(perioErrorMessage(new TypeError('Failed to fetch'), 'No se pudo cargar')).toBe(
-      'No se pudo cargar',
+  it.each([
+    [403, 'Insufficient role', /no tienes permiso/i],
+    [404, 'Patient not found', /no encontramos/i],
+  ])('un %i técnico se dice en español con el helper común (DX-063)', (status, raw, expected) => {
+    const text = perioErrorMessage(new ApiError(status, raw), 'No se pudo cargar');
+    expect(text).toMatch(expected);
+    expect(text).not.toContain(raw);
+  });
+
+  it('un error de red dice que no hay conexión, en español', () => {
+    expect(perioErrorMessage(new TypeError('Failed to fetch'), 'No se pudo cargar')).toMatch(
+      /no hay conexión/i,
     );
   });
 });

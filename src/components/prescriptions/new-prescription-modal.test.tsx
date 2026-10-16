@@ -292,7 +292,7 @@ describe('NewPrescriptionModal', () => {
     const user = setupUser();
     mockedIssuer.mockRejectedValueOnce(new ApiError(500, 'Caída')).mockResolvedValueOnce(makeIssuer());
     renderModal();
-    expect(await screen.findByText('Caída')).toBeInTheDocument();
+    expect(await screen.findByText('No pudimos preparar la receta.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Emitir receta' })).toBeDisabled();
     await user.click(screen.getByRole('button', { name: 'Reintentar' }));
     expect(await screen.findByText(/Se emite desde/)).toBeInTheDocument();

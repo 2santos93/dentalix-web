@@ -172,6 +172,30 @@ it('si la carga falla, muestra el error de sección y reintenta al pulsar el bot
   expect(mockedList).toHaveBeenCalledTimes(2);
 });
 
+// DX-063: un 500 no llega como «Internal server error», y un fallo de red dice
+// que no hay conexión; los dos con reintento.
+it('un 500 al cargar muestra texto en español con reintento', async () => {
+  mockedList
+    .mockRejectedValueOnce(new ApiError(500, 'Internal server error'))
+    .mockResolvedValueOnce(response());
+  const user = userEvent.setup();
+  render(<CashRegisterView token="tok" />);
+
+  const alert = await screen.findByRole('alert');
+  expect(alert).toHaveTextContent('No pudimos cargar la caja.');
+  expect(alert).not.toHaveTextContent(/internal server error/i);
+  await user.click(within(alert).getByRole('button', { name: /reintentar/i }));
+  expect(await screen.findByRole('table', { name: /abonos/i })).toBeInTheDocument();
+});
+
+it('sin conexión lo dice, con reintento', async () => {
+  mockedList.mockRejectedValueOnce(new TypeError('Failed to fetch')).mockResolvedValueOnce(response());
+  render(<CashRegisterView token="tok" />);
+  const alert = await screen.findByRole('alert');
+  expect(alert).toHaveTextContent(/no hay conexión con el servidor/i);
+  expect(within(alert).getByRole('button', { name: /reintentar/i })).toBeInTheDocument();
+});
+
 it('un 403 es un aviso de acceso, sin botón de reintentar (reintentar no cambia el rol)', async () => {
   mockedList.mockRejectedValue(new ApiError(403, 'Forbidden resource'));
   render(<CashRegisterView token="tok" />);

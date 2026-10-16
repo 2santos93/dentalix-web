@@ -1,7 +1,7 @@
 'use client';
 import * as React from 'react';
 import { useEffect, useRef, useState } from 'react';
-import { ApiError } from '@/lib/api/client';
+import { apiErrorMessage } from '@/lib/api/error-message';
 import {
   listInventoryItems,
   createInventoryItem,
@@ -298,7 +298,7 @@ export function InventoryView({ token }: InventoryViewProps) {
         setLoadError(null);
       } catch (err) {
         if (cancelled) return;
-        setLoadError(err instanceof ApiError ? err.message : copy.genericLoadError);
+        setLoadError(apiErrorMessage(err, copy.genericLoadError));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -324,7 +324,7 @@ export function InventoryView({ token }: InventoryViewProps) {
         setLoadError(null);
       })
       .catch((err) => {
-        setLoadError(err instanceof ApiError ? err.message : copy.genericLoadError);
+        setLoadError(apiErrorMessage(err, copy.genericLoadError));
       });
   }
 
@@ -404,13 +404,10 @@ export function InventoryView({ token }: InventoryViewProps) {
       setEditingItem(null);
       await refreshInPlace();
     } catch (err) {
-      // Surfaces the backend's error (e.g. validation) verbatim.
+      // El texto del servidor solo si ya viene en español (p. ej. el 409 de
+      // nombre repetido); si no, el genérico de la pantalla.
       setFormError(
-        err instanceof ApiError
-          ? err.message
-          : editingItem
-            ? copy.genericEditError
-            : copy.genericCreateError,
+        apiErrorMessage(err, editingItem ? copy.genericEditError : copy.genericCreateError),
       );
     } finally {
       setSaving(false);
@@ -448,8 +445,8 @@ export function InventoryView({ token }: InventoryViewProps) {
       await refreshInPlace();
     } catch (err) {
       // Movements have `onDelete: Restrict` at the DB level, so the backend
-      // can reject the delete — surfaced verbatim here.
-      setDeleteError(err instanceof ApiError ? err.message : copy.genericDeleteError);
+      // can reject the delete; its Spanish message is kept by apiErrorMessage.
+      setDeleteError(apiErrorMessage(err, copy.genericDeleteError));
     } finally {
       setUpdatingId(null);
     }
@@ -506,9 +503,9 @@ export function InventoryView({ token }: InventoryViewProps) {
       // re-enabling" pattern as `treatment-plans-tab.tsx`).
       await refreshInPlace();
     } catch (err) {
-      // Surfaces the backend's error (e.g. stock insuficiente en una salida)
-      // verbatim.
-      setMovementError(err instanceof ApiError ? err.message : copy.genericMovementError);
+      // El mensaje del servidor en español (p. ej. stock insuficiente en una
+      // salida) se conserva; el técnico se sustituye (apiErrorMessage).
+      setMovementError(apiErrorMessage(err, copy.genericMovementError));
     } finally {
       setMovementSubmitting(false);
     }
@@ -525,7 +522,7 @@ export function InventoryView({ token }: InventoryViewProps) {
         setHistoryError(null);
       })
       .catch((err) => {
-        setHistoryError(err instanceof ApiError ? err.message : copy.genericHistoryError);
+        setHistoryError(apiErrorMessage(err, copy.genericHistoryError));
       })
       .finally(() => setHistoryLoading(false));
   }

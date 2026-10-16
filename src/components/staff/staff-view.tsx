@@ -2,7 +2,7 @@
 import * as React from 'react';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ApiError } from '@/lib/api/client';
+import { apiErrorMessage } from '@/lib/api/error-message';
 import {
   listStaffDirectory,
   type ClinicRole,
@@ -102,6 +102,8 @@ const copy = {
   noMatchesHint: 'Prueba con otra búsqueda o quita los filtros.',
   genericLoadError: 'No pudimos cargar el personal. Intenta de nuevo.',
   genericCreateError: 'No pudimos crear la invitación. Intenta de nuevo.',
+  // 409 «Email already an active member».
+  alreadyMember: 'Esa persona ya es miembro activo de la clínica.',
   // Escalón 3 (segundo plano): sin "Intenta de nuevo." — el toast trae acción.
   genericResendError: 'No pudimos reenviar la invitación.',
   genericRevokeError: 'No pudimos revocar la invitación.',
@@ -227,7 +229,7 @@ export function StaffView({ token }: StaffViewProps) {
         setLoadError(null);
       } catch (err) {
         if (cancelled) return;
-        setLoadError(err instanceof ApiError ? err.message : copy.genericLoadError);
+        setLoadError(apiErrorMessage(err, copy.genericLoadError));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -258,7 +260,9 @@ export function StaffView({ token }: StaffViewProps) {
       resetForm();
       refresh();
     } catch (err) {
-      setCreateError(err instanceof ApiError ? err.message : copy.genericCreateError);
+      setCreateError(
+        apiErrorMessage(err, { fallback: copy.genericCreateError, byStatus: { 409: copy.alreadyMember } }),
+      );
     } finally {
       setCreating(false);
     }
@@ -288,7 +292,7 @@ export function StaffView({ token }: StaffViewProps) {
       setShowForm(true);
       refresh();
     } catch (err) {
-      notifyError(err instanceof ApiError ? err.message : copy.genericResendError, {
+      notifyError(apiErrorMessage(err, copy.genericResendError), {
         onRetry: () => handleResend(entry),
       });
     } finally {
@@ -307,7 +311,7 @@ export function StaffView({ token }: StaffViewProps) {
       // marca inerte todo lo de fuera (incluido el toast), y un "Reintentar"
       // visible pero no clicable incumple el contrato del escalón 3.
       setRevokingId(null);
-      notifyError(err instanceof ApiError ? err.message : copy.genericRevokeError, {
+      notifyError(apiErrorMessage(err, copy.genericRevokeError), {
         onRetry: () => handleRevoke(id),
       });
     } finally {

@@ -3,7 +3,7 @@ import * as React from 'react';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft } from 'lucide-react';
-import { ApiError } from '@/lib/api/client';
+import { apiErrorMessage } from '@/lib/api/error-message';
 import {
   getStaffMember,
   updateStaff,
@@ -54,6 +54,13 @@ const copy = {
   // Escalón 3 (segundo plano): sin "Intenta de nuevo." — el toast trae acción.
   genericDeactivateError: 'No pudimos desactivar el acceso.',
   genericReactivateError: 'No pudimos reactivar el acceso.',
+  // 409 de la API, en inglés («Cannot demote the last admin», «You cannot
+  // deactivate yourself», «Cannot deactivate the last admin»).
+  lastAdminRole: 'No puedes quitar el rol de administrador al último administrador de la clínica.',
+  cannotDeactivate:
+    'No se puede desactivar: es el último administrador de la clínica o es tu propia cuenta.',
+  // 404 al reactivar: ya estaba activa.
+  alreadyActive: 'Esta persona ya tiene el acceso activo. Recarga para ver su estado.',
 };
 
 const ROLE_OPTIONS: { value: ClinicRole; label: string }[] = [
@@ -111,7 +118,7 @@ export function StaffMemberProfile({ token, userId }: StaffMemberProfileProps) {
         setLoadError(null);
       } catch (err) {
         if (cancelled) return;
-        setLoadError(err instanceof ApiError ? err.message : copy.genericLoadError);
+        setLoadError(apiErrorMessage(err, copy.genericLoadError));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -152,7 +159,9 @@ export function StaffMemberProfile({ token, userId }: StaffMemberProfileProps) {
       setMember(next);
       setLicense(next.professionalLicense ?? '');
     } catch (err) {
-      setSaveError(err instanceof ApiError ? err.message : copy.genericSaveError);
+      setSaveError(
+        apiErrorMessage(err, { fallback: copy.genericSaveError, byStatus: { 409: copy.lastAdminRole } }),
+      );
     } finally {
       setSaving(false);
     }
@@ -168,9 +177,13 @@ export function StaffMemberProfile({ token, userId }: StaffMemberProfileProps) {
       // Se cierra el diálogo también al fallar: mientras esté abierto, Radix
       // deja inerte todo lo de fuera, incluido el toast con el reintento.
       setConfirmingDeactivate(false);
-      notifyError(err instanceof ApiError ? err.message : copy.genericDeactivateError, {
-        onRetry: () => handleDeactivate(),
-      });
+      notifyError(
+        apiErrorMessage(err, {
+          fallback: copy.genericDeactivateError,
+          byStatus: { 409: copy.cannotDeactivate },
+        }),
+        { onRetry: () => handleDeactivate() },
+      );
     } finally {
       setChangingAccess(false);
     }
@@ -182,9 +195,13 @@ export function StaffMemberProfile({ token, userId }: StaffMemberProfileProps) {
       await reactivateStaff(token, userId);
       setReloadKey((k) => k + 1);
     } catch (err) {
-      notifyError(err instanceof ApiError ? err.message : copy.genericReactivateError, {
-        onRetry: () => handleReactivate(),
-      });
+      notifyError(
+        apiErrorMessage(err, {
+          fallback: copy.genericReactivateError,
+          byStatus: { 404: copy.alreadyActive },
+        }),
+        { onRetry: () => handleReactivate() },
+      );
     } finally {
       setChangingAccess(false);
     }

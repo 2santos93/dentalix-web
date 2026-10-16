@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { ApiError } from '@/lib/api/client';
+import { apiErrorMessage } from '@/lib/api/error-message';
 import { logout } from '@/lib/auth/auth-api';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { useSessionBootstrap } from '@/lib/auth/use-session-bootstrap';
@@ -78,7 +79,7 @@ export function PlatformView() {
           useAuthStore.getState().clear();
           return;
         }
-        setLoadError(err instanceof ApiError ? err.message : copy.loadError);
+        setLoadError(apiErrorMessage(err, copy.loadError));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -98,7 +99,7 @@ export function PlatformView() {
       useAuthStore.getState().setAccessToken(accessToken);
       setPassword('');
     } catch (err) {
-      setSignInError(err instanceof ApiError ? err.message : copy.invalid);
+      setSignInError(apiErrorMessage(err, { fallback: copy.invalid, byStatus: { 401: copy.invalid } }));
     } finally {
       setSigningIn(false);
     }

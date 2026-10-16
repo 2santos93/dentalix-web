@@ -86,7 +86,7 @@ describe('ToothRecordPanel', () => {
 
     const user = userEvent.setup();
     render(<ToothRecordPanel token="tok" patientId="p1" toothNumber="11" onRecordAdded={jest.fn()} />);
-    expect(await screen.findByRole('alert')).toHaveTextContent('Error del servidor');
+    expect(await screen.findByRole('alert')).toHaveTextContent('No pudimos cargar el catálogo.');
 
     await user.click(screen.getByRole('button', { name: /reintentar/i }));
     expect(await screen.findByRole('radio', { name: /caries/i })).toBeInTheDocument();

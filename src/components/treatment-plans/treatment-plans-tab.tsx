@@ -1,7 +1,7 @@
 'use client';
 import * as React from 'react';
 import { useEffect, useRef, useState } from 'react';
-import { ApiError } from '@/lib/api/client';
+import { apiErrorMessage } from '@/lib/api/error-message';
 import {
   addItem,
   createPlan,
@@ -890,7 +890,7 @@ export function TreatmentPlansTab({
         setHasLoadedOnce(true);
       } catch (err) {
         if (cancelled) return;
-        const message = err instanceof ApiError ? err.message : copy.genericLoadError;
+        const message = apiErrorMessage(err, copy.genericLoadError);
         if (isInitialLoad) {
           setLoadError(message);
         } else {
@@ -1030,7 +1030,7 @@ export function TreatmentPlansTab({
         // ref-based guard was tried first but writing `ref.current` during
         // render trips this project's `react-hooks/refs` lint (Fix round 1;
         // see the plan doc's "Global Constraints" for the accepted forms).
-        notifyError(err instanceof ApiError ? err.message : copy.genericRefreshError, {
+        notifyError(apiErrorMessage(err, copy.genericRefreshError), {
           onRetry: () => setReloadKey((k) => k + 1),
         });
       })
@@ -1076,7 +1076,7 @@ export function TreatmentPlansTab({
       setSelectedPlanId(created.id);
       setPlanCreated(true);
     } catch (err) {
-      setCreatePlanError(err instanceof ApiError ? err.message : copy.genericCreatePlanError);
+      setCreatePlanError(apiErrorMessage(err, copy.genericCreatePlanError));
     } finally {
       setCreatingPlan(false);
     }
@@ -1114,7 +1114,7 @@ export function TreatmentPlansTab({
         setPlanDetailError(null);
       } catch (err) {
         if (cancelled) return;
-        const message = err instanceof ApiError ? err.message : copy.genericPlanDetailError;
+        const message = apiErrorMessage(err, copy.genericPlanDetailError);
         if (isInitialLoad) {
           setPlanDetailError(message);
         } else {
@@ -1164,7 +1164,7 @@ export function TreatmentPlansTab({
         // ref-based guard was tried first but writing `ref.current` during
         // render trips this project's `react-hooks/refs` lint (Fix round 1;
         // see the plan doc's "Global Constraints" for the accepted forms).
-        notifyError(err instanceof ApiError ? err.message : copy.genericPlanDetailRefreshError, {
+        notifyError(apiErrorMessage(err, copy.genericPlanDetailRefreshError), {
           onRetry: () => setPlanDetailReloadKey((k) => k + 1),
         });
       })
@@ -1202,7 +1202,7 @@ export function TreatmentPlansTab({
         setPaymentsError(null);
       } catch (err) {
         if (cancelled) return;
-        const message = err instanceof ApiError ? err.message : copy.genericBalanceError;
+        const message = apiErrorMessage(err, copy.genericBalanceError);
         if (isInitialLoad) {
           setPaymentsError(message);
         } else {
@@ -1253,7 +1253,7 @@ export function TreatmentPlansTab({
         // `ref.current` during render trips this project's `react-hooks/refs`
         // lint (Fix round 1; see the plan doc's "Global Constraints" for the
         // accepted forms).
-        notifyError(err instanceof ApiError ? err.message : copy.genericBalanceRefreshError, {
+        notifyError(apiErrorMessage(err, copy.genericBalanceRefreshError), {
           onRetry: () => setPaymentsReloadKey((k) => k + 1),
         });
       })
@@ -1320,8 +1320,8 @@ export function TreatmentPlansTab({
     } catch (err) {
       // Key intentionally NOT rotated here: a retry of this same click must
       // reuse it so the backend dedups instead of double-charging.
-      // Surfaces the backend's 400 (invalid amount/currency) verbatim.
-      setAddPaymentError(err instanceof ApiError ? err.message : copy.genericAddPaymentError);
+      // Un 400 técnico (importe/moneda) se dice en español (apiErrorMessage).
+      setAddPaymentError(apiErrorMessage(err, copy.genericAddPaymentError));
     } finally {
       setAddPaymentSubmitting(false);
     }
@@ -1360,7 +1360,7 @@ export function TreatmentPlansTab({
       await refreshPlanDetail();
       await refreshPlansInPlace();
     } catch (err) {
-      setPlanStatusError(err instanceof ApiError ? err.message : copy.genericPlanStatusError);
+      setPlanStatusError(apiErrorMessage(err, copy.genericPlanStatusError));
     } finally {
       setUpdatingPlanStatus(false);
     }
@@ -1374,7 +1374,7 @@ export function TreatmentPlansTab({
       await updateItem(token, selectedPlanId, itemId, { status });
       await refreshPlanDetail();
     } catch (err) {
-      setItemActionError(err instanceof ApiError ? err.message : copy.genericItemUpdateError);
+      setItemActionError(apiErrorMessage(err, copy.genericItemUpdateError));
     } finally {
       setUpdatingItemId(null);
     }
@@ -1396,7 +1396,7 @@ export function TreatmentPlansTab({
       setItemToRemove(null);
       await refreshPlanDetail();
     } catch (err) {
-      setRemoveItemError(err instanceof ApiError ? err.message : copy.genericRemoveItemError);
+      setRemoveItemError(apiErrorMessage(err, copy.genericRemoveItemError));
     } finally {
       setUpdatingItemId(null);
     }
@@ -1483,10 +1483,9 @@ export function TreatmentPlansTab({
       setNotes('');
       await refreshPlanDetail();
     } catch (err) {
-      // Surfaces the backend's 400 (invalid FDI / price required when the
-      // catalog item has no defaultPrice) verbatim — `ApiError.message` is
-      // the backend's validation message.
-      setAddItemError(err instanceof ApiError ? err.message : copy.genericAddItemError);
+      // Un 400 (FDI inválido / precio obligatorio si el ítem del catálogo no
+      // tiene defaultPrice) llega en inglés: apiErrorMessage lo dice en español.
+      setAddItemError(apiErrorMessage(err, copy.genericAddItemError));
     } finally {
       setAddItemSubmitting(false);
     }

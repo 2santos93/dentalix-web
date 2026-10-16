@@ -1,7 +1,7 @@
 'use client';
 import * as React from 'react';
 import { useEffect, useRef, useState } from 'react';
-import { ApiError } from '@/lib/api/client';
+import { apiErrorMessage } from '@/lib/api/error-message';
 import {
   getMe,
   updateName,
@@ -101,7 +101,7 @@ export function ProfileView({ token }: ProfileViewProps) {
       setProfile(updated);
       setName(updated.fullName);
     } catch (err) {
-      setNameError(err instanceof ApiError ? err.message : copy.saveError);
+      setNameError(apiErrorMessage(err, copy.saveError));
     } finally {
       setSavingName(false);
     }
@@ -116,7 +116,7 @@ export function ProfileView({ token }: ProfileViewProps) {
       await uploadAvatar(token, file);
       setReloadKey((k) => k + 1);
     } catch (err) {
-      setAvatarError(err instanceof ApiError ? err.message : copy.avatarError);
+      setAvatarError(apiErrorMessage(err, copy.avatarError));
     } finally {
       setAvatarBusy(false);
       if (fileRef.current) fileRef.current.value = '';
@@ -130,7 +130,7 @@ export function ProfileView({ token }: ProfileViewProps) {
       await removeAvatar(token);
       setReloadKey((k) => k + 1);
     } catch (err) {
-      setAvatarError(err instanceof ApiError ? err.message : copy.avatarError);
+      setAvatarError(apiErrorMessage(err, copy.avatarError));
     } finally {
       setAvatarBusy(false);
     }

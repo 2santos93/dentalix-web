@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ApiError } from '@/lib/api/client';
+import { apiErrorMessage } from '@/lib/api/error-message';
 import { OdontogramChart } from '@/components/odontogram/odontogram-chart';
 import { OdontogramLegend } from '@/components/odontogram/odontogram-legend';
 import { ToothTimeline } from '@/components/odontogram/tooth-timeline';
@@ -129,7 +129,7 @@ export function OdontogramTab({
       } catch (err) {
         if (cancelled) return;
         const message =
-          err instanceof ApiError ? err.message : `${copy.odontogramGenericError} ${copy.catalogGenericError}`;
+          apiErrorMessage(err, `${copy.odontogramGenericError} ${copy.catalogGenericError}`);
         if (isInitialLoad) {
           setLoadError(message);
         } else {

@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ExternalLink } from 'lucide-react';
 import { ApiError } from '@/lib/api/client';
+import { apiErrorMessage } from '@/lib/api/error-message';
 import {
   acceptPlan,
   getPlanQuote,
@@ -132,7 +133,7 @@ export function AcceptPlanModal({
         if (fresh) setQuote(fresh);
         else setReloadKey((k) => k + 1);
       }
-      setSubmitError(err instanceof ApiError ? err.message : copy.genericError);
+      setSubmitError(apiErrorMessage(err, copy.genericError));
     } finally {
       setSubmitting(false);
     }

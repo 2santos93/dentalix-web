@@ -7,15 +7,8 @@ jest.mock('next/navigation', () => ({ useRouter: () => ({ push: jest.fn() }) }))
 // transform, so this must use a relative path (see sibling *.test.tsx files).
 jest.mock('../../lib/api/client', () => ({
   apiFetch: jest.fn(),
-  ApiError: class ApiError extends Error {
-    constructor(
-      public readonly status: number,
-      message: string,
-    ) {
-      super(message);
-      this.name = 'ApiError';
-    }
-  },
+  // La clase real: `apiErrorMessage` la reconoce con `instanceof`.
+  ApiError: jest.requireActual('../../lib/api/api-error').ApiError,
 }));
 
 function fillRequiredFields() {

@@ -1,7 +1,7 @@
 'use client';
 import * as React from 'react';
 import { useId, useState } from 'react';
-import { ApiError } from '@/lib/api/client';
+import { apiErrorMessage } from '@/lib/api/error-message';
 import { createPlanAlternative } from '@/lib/treatment-plans/plan-options-api';
 import type { TreatmentPlan } from '@/lib/treatment-plans/treatment-plans-api';
 import { FormModal } from '@/components/shared/form-modal';
@@ -59,7 +59,7 @@ export function CreateAlternativeModal({
       );
       onCreated(created);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : copy.genericError);
+      setError(apiErrorMessage(err, copy.genericError));
     } finally {
       setSubmitting(false);
     }

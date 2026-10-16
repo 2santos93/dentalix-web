@@ -1,7 +1,7 @@
 'use client';
 import * as React from 'react';
 import { useEffect, useState } from 'react';
-import { ApiError } from '@/lib/api/client';
+import { apiErrorMessage } from '@/lib/api/error-message';
 import { listLocations, type ClinicLocation } from '@/lib/locations/locations-api';
 import {
   COUNTRY_LABELS,
@@ -49,7 +49,7 @@ export function LocationCountrySettings({ token }: LocationCountrySettingsProps)
         setError(null);
       } catch (err) {
         if (cancelled) return;
-        setError(err instanceof ApiError ? err.message : copy.loadError);
+        setError(apiErrorMessage(err, copy.loadError));
       } finally {
         if (!cancelled) setLoading(false);
       }

@@ -1,7 +1,7 @@
 'use client';
 import * as React from 'react';
 import { useRef, useState } from 'react';
-import { ApiError } from '@/lib/api/client';
+import { apiErrorMessage } from '@/lib/api/error-message';
 import {
   CONSENT_VARIABLES,
   createConsentTemplate,
@@ -104,7 +104,7 @@ export function ConsentTemplateFormModal({
       onOpenChange(false);
       onSaved(saved);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : copy.genericError);
+      setError(apiErrorMessage(err, copy.genericError));
     } finally {
       setSubmitting(false);
     }

@@ -2,6 +2,7 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import { setupUser } from '@/lib/test/user';
 import { PatientsView } from './patients-view';
 import { listPatients, type Patient } from '@/lib/patients/patients-api';
+import { ApiError } from '@/lib/api/client';
 
 // NOTE: jest.mock's string literal is not alias-rewritten by the SWC transform
 // (only real `import`/`require` specifiers are) — relative path here, matching
@@ -95,5 +96,28 @@ describe('PatientsView', () => {
     await user.click(retry);
 
     expect(await screen.findByText('1 paciente')).toBeInTheDocument();
+  });
+
+  // DX-063: un 500 no llega a la recepción como «Internal server error».
+  it('un 500 al cargar muestra texto en español con reintento', async () => {
+    const user = setupUser();
+    mockedList
+      .mockRejectedValueOnce(new ApiError(500, 'Internal server error'))
+      .mockResolvedValueOnce(page([maria]));
+    render(<PatientsView token="tok" />);
+
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('No pudimos cargar los pacientes.');
+    expect(alert).not.toHaveTextContent(/internal server error/i);
+    await user.click(within(alert).getByRole('button', { name: /reintentar/i }));
+    expect(await screen.findByText('1 paciente')).toBeInTheDocument();
+  });
+
+  it('un 403 técnico («Insufficient role») se dice en español', async () => {
+    mockedList.mockRejectedValueOnce(new ApiError(403, 'Insufficient role'));
+    render(<PatientsView token="tok" />);
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent(/no tienes permiso/i);
+    expect(alert).not.toHaveTextContent(/insufficient role/i);
   });
 });

@@ -2,7 +2,7 @@
 import * as React from 'react';
 import { useEffect, useState } from 'react';
 import { FileSignature, Plus, Printer } from 'lucide-react';
-import { ApiError } from '@/lib/api/client';
+import { apiErrorMessage } from '@/lib/api/error-message';
 import {
   SIGNER_TYPE_LABELS,
   consentPrintHref,
@@ -77,7 +77,7 @@ export function PatientConsentsTab({ token, patientId }: PatientConsentsTabProps
         setError(null);
       } catch (err) {
         if (cancelled) return;
-        setError(err instanceof ApiError ? err.message : copy.loadError);
+        setError(apiErrorMessage(err, copy.loadError));
       } finally {
         if (!cancelled) setLoading(false);
       }

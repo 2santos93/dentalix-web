@@ -2,7 +2,7 @@
 import * as React from 'react';
 import { useEffect, useState } from 'react';
 import { FileText, Lock, Plus } from 'lucide-react';
-import { ApiError } from '@/lib/api/client';
+import { apiErrorMessage } from '@/lib/api/error-message';
 import {
   deletePrescriptionTemplate,
   listPrescriptionTemplates,
@@ -74,7 +74,7 @@ export function PrescriptionTemplatesManager({ token, allowed }: PrescriptionTem
         setError(null);
       } catch (err) {
         if (cancelled) return;
-        setError(err instanceof ApiError ? err.message : copy.loadError);
+        setError(apiErrorMessage(err, copy.loadError));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -121,7 +121,7 @@ export function PrescriptionTemplatesManager({ token, allowed }: PrescriptionTem
       // El diálogo deja inerte lo de fuera: se cierra y se recarga la lista,
       // que sigue siendo la verdad (escalón 1 si la recarga también falla).
       setRemoving(null);
-      setError(err instanceof ApiError ? err.message : copy.removeError);
+      setError(apiErrorMessage(err, copy.removeError));
     } finally {
       setRemovingBusy(false);
     }

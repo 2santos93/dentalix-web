@@ -1,7 +1,7 @@
 'use client';
 import * as React from 'react';
 import { useId, useState } from 'react';
-import { ApiError } from '@/lib/api/client';
+import { apiErrorMessage } from '@/lib/api/error-message';
 import { rejectPlan } from '@/lib/treatment-plans/plan-options-api';
 import {
   REJECTION_REASON_LABELS,
@@ -81,7 +81,7 @@ export function RejectPlanModal({
       });
       onRejected(rejected);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : copy.genericError);
+      setError(apiErrorMessage(err, copy.genericError));
     } finally {
       setSubmitting(false);
     }

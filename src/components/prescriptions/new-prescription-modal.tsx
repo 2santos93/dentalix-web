@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { Plus } from 'lucide-react';
 import { ApiError } from '@/lib/api/client';
+import { apiErrorMessage } from '@/lib/api/error-message';
 import {
   COUNTRY_LABELS,
   getPrescriptionIssuer,
@@ -133,7 +134,7 @@ export function NewPrescriptionModal({
         setIssuerError(null);
       })
       .catch((err: unknown) => {
-        if (!cancelled) setIssuerError(err instanceof ApiError ? err.message : copy.issuerError);
+        if (!cancelled) setIssuerError(apiErrorMessage(err, copy.issuerError));
       });
     return () => {
       cancelled = true;
@@ -278,9 +279,9 @@ export function NewPrescriptionModal({
       if (err instanceof ApiError && err.status === 409) {
         // La API detectó una alergia que aquí no se vio (p. ej. la anamnesis
         // no cargó): mismo bloque de confirmación, con su mensaje.
-        setServerAllergy(err.message);
+        setServerAllergy(apiErrorMessage(err, copy.genericError));
       } else {
-        setError(err instanceof ApiError ? err.message : copy.genericError);
+        setError(apiErrorMessage(err, copy.genericError));
       }
     } finally {
       setSubmitting(false);

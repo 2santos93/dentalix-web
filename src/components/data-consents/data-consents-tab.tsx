@@ -2,7 +2,7 @@
 import * as React from 'react';
 import { useEffect, useState } from 'react';
 import { ShieldCheck } from 'lucide-react';
-import { ApiError } from '@/lib/api/client';
+import { apiErrorMessage } from '@/lib/api/error-message';
 import {
   EMPTY_SELECTION,
   SCOPE_LABELS,
@@ -87,8 +87,9 @@ interface LoadedState {
 }
 
 function errorMessage(err: unknown, fallback: string): string {
-  // 409 (política cambiada / sin publicar) y 400 traen un mensaje para la persona.
-  return err instanceof ApiError && err.status < 500 ? err.message : fallback;
+  // 409 (política cambiada / sin publicar) y 400 traen un mensaje para la persona
+  // en español: `apiErrorMessage` lo conserva y sustituye el resto.
+  return apiErrorMessage(err, fallback);
 }
 
 /**

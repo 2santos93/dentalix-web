@@ -56,7 +56,7 @@ describe('PatientPrescriptionsTab', () => {
     mockedList.mockRejectedValueOnce(new ApiError(500, 'Se cayó'));
     mockedList.mockResolvedValueOnce([makePrescription()]);
     render(<PatientPrescriptionsTab token={DENTIST} patientId="p1" />);
-    expect(await screen.findByRole('alert')).toHaveTextContent('Se cayó');
+    expect(await screen.findByRole('alert')).toHaveTextContent('No pudimos cargar las recetas.');
     await user.click(screen.getByRole('button', { name: 'Reintentar' }));
     expect(await screen.findByRole('table', { name: 'Recetas del paciente' })).toBeInTheDocument();
   });

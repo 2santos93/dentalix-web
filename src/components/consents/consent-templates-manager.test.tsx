@@ -60,7 +60,7 @@ describe('ConsentTemplatesManager', () => {
     mockedList.mockRejectedValueOnce(new ApiError(500, 'Caído'));
     mockedList.mockResolvedValueOnce([]);
     render(<ConsentTemplatesManager token="tok" allowed />);
-    expect(await screen.findByRole('alert')).toHaveTextContent('Caído');
+    expect(await screen.findByRole('alert')).toHaveTextContent('No pudimos cargar las plantillas.');
     await user.click(screen.getByRole('button', { name: 'Reintentar' }));
     expect(await screen.findByText(/todavía no hay plantillas/i)).toBeInTheDocument();
   });

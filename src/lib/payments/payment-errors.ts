@@ -1,4 +1,4 @@
-import { ApiError } from '@/lib/api/client';
+import { apiErrorMessage } from '@/lib/api/error-message';
 
 // Copy como constantes (i18n-ready). La API responde estos errores en inglés
 // («amount must be…», «Insufficient role», «already has an active payment
@@ -19,36 +19,23 @@ const copy = {
   paymentPlanGeneric: 'No pudimos crear el plan de cuotas. Intenta de nuevo.',
 };
 
-function statusOf(err: unknown): number | null {
-  return err instanceof ApiError ? err.status : null;
-}
-
 /** El texto a enseñar cuando falla `POST /treatment-plans/:id/payments`. */
 export function recordPaymentErrorMessage(err: unknown): string {
-  switch (statusOf(err)) {
-    case 400:
-      return copy.recordBadRequest;
-    case 403:
-      return copy.recordForbidden;
-    case 404:
-      return copy.planGone;
-    default:
-      return copy.recordGeneric;
-  }
+  return apiErrorMessage(err, {
+    fallback: copy.recordGeneric,
+    byStatus: { 400: copy.recordBadRequest, 403: copy.recordForbidden, 404: copy.planGone },
+  });
 }
 
 /** El texto a enseñar cuando falla `POST /treatment-plans/:id/payment-plan`. */
 export function paymentPlanErrorMessage(err: unknown): string {
-  switch (statusOf(err)) {
-    case 409:
-      return copy.paymentPlanConflict;
-    case 400:
-      return copy.paymentPlanBadRequest;
-    case 403:
-      return copy.paymentPlanForbidden;
-    case 404:
-      return copy.planGone;
-    default:
-      return copy.paymentPlanGeneric;
-  }
+  return apiErrorMessage(err, {
+    fallback: copy.paymentPlanGeneric,
+    byStatus: {
+      409: copy.paymentPlanConflict,
+      400: copy.paymentPlanBadRequest,
+      403: copy.paymentPlanForbidden,
+      404: copy.planGone,
+    },
+  });
 }

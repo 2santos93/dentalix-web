@@ -13,15 +13,8 @@ jest.mock('../../lib/staff/invitations-api', () => ({
   acceptInvitation: jest.fn(),
 }));
 jest.mock('../../lib/api/client', () => ({
-  ApiError: class ApiError extends Error {
-    constructor(
-      public readonly status: number,
-      message: string,
-    ) {
-      super(message);
-      this.name = 'ApiError';
-    }
-  },
+  // La clase real: `apiErrorMessage` la reconoce con `instanceof`.
+  ApiError: jest.requireActual('../../lib/api/api-error').ApiError,
 }));
 jest.mock('../../lib/auth/auth-store', () => ({
   useAuthStore: (selector: (s: { setAccessToken: jest.Mock }) => unknown) =>
@@ -108,7 +101,7 @@ describe('AcceptInvitationForm', () => {
 
     render(<AcceptInvitationForm inviteToken="tok-5" />);
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('Fallo el servidor.');
+    expect(await screen.findByRole('alert')).toHaveTextContent('No pudimos verificar la invitación.');
     fireEvent.click(screen.getByRole('button', { name: /reintentar/i }));
 
     // The load error must clear and the actual content take its place — not

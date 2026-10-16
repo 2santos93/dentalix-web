@@ -1,7 +1,7 @@
 'use client';
 import * as React from 'react';
 import { useState } from 'react';
-import { ApiError } from '@/lib/api/client';
+import { apiErrorMessage } from '@/lib/api/error-message';
 import { voidPrescription, type Prescription } from '@/lib/prescriptions/prescriptions-api';
 import { FormModal } from '@/components/shared/form-modal';
 import { FormField } from '@/components/shared/form-field';
@@ -48,7 +48,7 @@ export function VoidPrescriptionModal({
       onOpenChange(false);
       onVoided(voided);
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : copy.genericError);
+      setError(apiErrorMessage(err, copy.genericError));
     } finally {
       setSubmitting(false);
     }

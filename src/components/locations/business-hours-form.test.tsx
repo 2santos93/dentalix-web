@@ -39,7 +39,7 @@ describe('BusinessHoursForm', () => {
     render(<BusinessHoursForm token="tok" />);
 
     // `AsyncSection` -> `SectionError`, que renderiza `role="alert"`.
-    expect(await screen.findByRole('alert')).toHaveTextContent('Error del servidor');
+    expect(await screen.findByRole('alert')).toHaveTextContent('No pudimos cargar el horario.');
     // El formulario no está: la sección no tiene nada que mostrar.
     expect(screen.queryByRole('form', { name: 'Guardar horario' })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument();

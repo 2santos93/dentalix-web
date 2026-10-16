@@ -469,7 +469,7 @@ describe('AgendaView', () => {
     await user.click(screen.getByRole('button', { name: /^semana$/i }));
 
     const alert = await screen.findByRole('alert');
-    expect(alert).toHaveTextContent('Error del servidor');
+    expect(alert).toHaveTextContent('No pudimos cargar la agenda.');
     // `SectionError` renders its own retry button next to the message — no
     // naked red text with nothing to press.
     const retryButton = within(alert).getByRole('button', { name: /reintentar/i });
@@ -489,7 +489,7 @@ describe('AgendaView', () => {
     render(<AgendaView token="tok" />);
 
     const alert = await screen.findByRole('alert');
-    expect(alert).toHaveTextContent('Error del servidor');
+    expect(alert).toHaveTextContent('No pudimos cargar la agenda.');
     const retryButton = within(alert).getByRole('button', { name: /reintentar/i });
 
     mockedListAppointments.mockResolvedValueOnce([]);

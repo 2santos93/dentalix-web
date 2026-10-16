@@ -256,14 +256,14 @@ describe('StaffView', () => {
     // El diálogo tiene que cerrarse: mientras está abierto deja inerte el
     // toast, y un "Reintentar" que no se puede pulsar incumple el escalón 3.
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
-    expect(await screen.findByText(/se cayó el servidor/i)).toBeInTheDocument();
+    expect(await screen.findByText('No pudimos revocar la invitación.')).toBeInTheDocument();
   });
 
   it('un error de carga se muestra en la sección', async () => {
     mockedList.mockRejectedValue(new ApiError(500, 'No se pudo listar'));
     render(<StaffView token="tok" />);
 
-    expect(await screen.findByText(/no se pudo listar/i)).toBeInTheDocument();
+    expect(await screen.findByText('No pudimos cargar el personal. Intenta de nuevo.')).toBeInTheDocument();
   });
 });
 

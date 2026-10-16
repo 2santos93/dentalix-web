@@ -3,7 +3,8 @@ import * as React from 'react';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
-import { apiFetch, ApiError } from '@/lib/api/client';
+import { apiFetch } from '@/lib/api/client';
+import { apiErrorMessage } from '@/lib/api/error-message';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -20,6 +21,8 @@ const copy = {
   submit: 'Iniciar sesión',
   submitting: 'Iniciando…',
   genericError: 'No pudimos iniciar sesión. Intenta de nuevo.',
+  // 401 del login: credenciales, no sesión caducada (la API dice «Invalid credentials»).
+  invalidCredentials: 'Correo o contraseña incorrectos.',
 };
 
 const ERROR_ID = 'login-error';
@@ -50,7 +53,12 @@ export function LoginForm() {
       setAccessToken(res.accessToken);
       router.push('/patients');
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : copy.genericError);
+      setError(
+        apiErrorMessage(err, {
+          fallback: copy.genericError,
+          byStatus: { 401: copy.invalidCredentials },
+        }),
+      );
     } finally {
       setSubmitting(false);
     }

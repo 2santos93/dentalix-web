@@ -2,7 +2,7 @@
 import * as React from 'react';
 import { useState } from 'react';
 import { CopyPlus, Presentation, XCircle } from 'lucide-react';
-import { ApiError } from '@/lib/api/client';
+import { apiErrorMessage } from '@/lib/api/error-message';
 import type { ClinicRole } from '@/lib/me/me-api';
 import type { TreatmentPlan } from '@/lib/treatment-plans/treatment-plans-api';
 import { presentPlan } from '@/lib/treatment-plans/plan-options-api';
@@ -75,7 +75,7 @@ export function PlanOptionsPanel({
       await presentPlan(token, plan.id);
       await onChanged();
     } catch (err) {
-      setPresentError(err instanceof ApiError ? err.message : copy.presentError);
+      setPresentError(apiErrorMessage(err, copy.presentError));
     } finally {
       setPresenting(false);
     }

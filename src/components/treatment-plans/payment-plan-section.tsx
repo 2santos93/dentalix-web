@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { ApiError } from '@/lib/api/client';
+import { apiErrorMessage } from '@/lib/api/error-message';
 import {
   deletePaymentPlan,
   getPaymentPlan,
@@ -87,7 +87,7 @@ export function PaymentPlanSection({ token, planId, planCurrency, billable, refr
           setLoadError(null);
         }
       } catch (err) {
-        if (!cancelled) setLoadError(err instanceof ApiError ? err.message : copy.loadError);
+        if (!cancelled) setLoadError(apiErrorMessage(err, copy.loadError));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -111,7 +111,7 @@ export function PaymentPlanSection({ token, planId, planCurrency, billable, refr
       setShowCancel(false);
       await refetch();
     } catch (err) {
-      setCancelError(err instanceof ApiError ? err.message : 'No pudimos cancelar el plan de pagos.');
+      setCancelError(apiErrorMessage(err, 'No pudimos cancelar el plan de pagos.'));
     } finally {
       setCancelling(false);
     }

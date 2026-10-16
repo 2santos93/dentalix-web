@@ -49,7 +49,7 @@ describe('PrescriptionTemplatesManager', () => {
     const user = setupUser();
     mockedList.mockRejectedValueOnce(new ApiError(500, 'Caída')).mockResolvedValueOnce([]);
     render(<PrescriptionTemplatesManager token="tok" allowed />);
-    expect(await screen.findByRole('alert')).toHaveTextContent('Caída');
+    expect(await screen.findByRole('alert')).toHaveTextContent('No pudimos cargar las plantillas.');
     await user.click(screen.getByRole('button', { name: 'Reintentar' }));
     expect(await screen.findByText('Todavía no hay plantillas de receta.')).toBeInTheDocument();
   });

@@ -3,7 +3,8 @@ import * as React from 'react';
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Eye, EyeOff, Loader2 } from 'lucide-react';
-import { apiFetch, ApiError } from '@/lib/api/client';
+import { apiFetch } from '@/lib/api/client';
+import { apiErrorMessage } from '@/lib/api/error-message';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { FormField } from '@/components/shared/form-field';
@@ -22,6 +23,8 @@ const copy = {
   submit: 'Crear cuenta',
   submitting: 'Creando cuenta…',
   genericError: 'No pudimos crear la cuenta. Intenta de nuevo.',
+  // 409 de POST /auth/register («Subdomain or email already in use»).
+  taken: 'Ese subdominio o ese correo ya están en uso. Prueba con otro.',
 };
 
 const ERROR_ID = 'register-error';
@@ -53,7 +56,9 @@ export function RegisterForm({ tenant }: { tenant: string | null }) {
       });
       router.push('/login');
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : copy.genericError);
+      setError(
+        apiErrorMessage(err, { fallback: copy.genericError, byStatus: { 409: copy.taken } }),
+      );
     } finally {
       setSubmitting(false);
     }

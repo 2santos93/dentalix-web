@@ -2,7 +2,7 @@
 import * as React from 'react';
 import { useState } from 'react';
 import { Check, FileText, X } from 'lucide-react';
-import { ApiError } from '@/lib/api/client';
+import { apiErrorMessage } from '@/lib/api/error-message';
 import {
   CONSENT_SCOPES,
   SCOPE_LABELS,
@@ -110,7 +110,7 @@ export function PrivacyPolicySettings({ token }: { token: string }) {
       setOpen(false);
       reload();
     } catch (err) {
-      setError(err instanceof ApiError && err.status < 500 ? err.message : copy.genericError);
+      setError(apiErrorMessage(err, copy.genericError));
     } finally {
       setSubmitting(false);
     }

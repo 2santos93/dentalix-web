@@ -1,7 +1,7 @@
 'use client';
 import * as React from 'react';
 import { useEffect, useState } from 'react';
-import { ApiError } from '@/lib/api/client';
+import { apiErrorMessage } from '@/lib/api/error-message';
 import {
   createAppointment,
   type Appointment,
@@ -328,7 +328,7 @@ export function AppointmentForm({
       resetForm();
       onCreated(created);
     } catch (err) {
-      setSaveError(err instanceof ApiError ? err.message : copy.genericSaveError);
+      setSaveError(apiErrorMessage(err, copy.genericSaveError));
     } finally {
       setSubmitting(false);
     }

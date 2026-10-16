@@ -2,7 +2,7 @@
 import { Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/lib/auth/auth-store';
-import { ApiError } from '@/lib/api/client';
+import { apiErrorMessage } from '@/lib/api/error-message';
 import { getPatient, type Patient } from '@/lib/patients/patients-api';
 import { MedicalHistoryPanel } from '@/components/patients/medical-history-panel';
 import { ClinicalEntriesList } from '@/components/patients/clinical-entries-list';
@@ -32,6 +32,7 @@ const copy = {
   checkingSession: 'Verificando sesión…',
   loading: 'Cargando paciente…',
   genericError: 'No pudimos cargar el paciente.',
+  notFound: 'No se encontró el paciente: puede que se haya eliminado o que el enlace sea incorrecto.',
   tabData: 'Datos',
   tabClinicalHistory: 'Historia clínica',
   tabOdontogram: 'Odontograma',
@@ -205,7 +206,9 @@ function PatientDetailView() {
         setError(null);
       } catch (err) {
         if (cancelled) return;
-        setError(err instanceof ApiError ? err.message : copy.genericError);
+        setError(
+          apiErrorMessage(err, { fallback: copy.genericError, byStatus: { 404: copy.notFound } }),
+        );
       } finally {
         if (!cancelled) setLoading(false);
       }

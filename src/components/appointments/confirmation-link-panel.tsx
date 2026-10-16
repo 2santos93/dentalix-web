@@ -1,7 +1,7 @@
 'use client';
 import { useId, useRef, useState } from 'react';
 import { Check, Copy, MessageCircle, Send } from 'lucide-react';
-import { ApiError } from '@/lib/api/client';
+import { apiErrorMessage } from '@/lib/api/error-message';
 import type { Appointment, AppointmentStatus } from '@/lib/appointments/appointments-api';
 import {
   createConfirmationLink,
@@ -82,7 +82,7 @@ export function ConfirmationLinkPanel({ token, appointment, onLinkCreated }: Con
       setLink(created);
       onLinkCreated?.();
     } catch (err) {
-      setError(err instanceof ApiError ? err.message : copy.genericError);
+      setError(apiErrorMessage(err, copy.genericError));
     } finally {
       setGenerating(false);
     }

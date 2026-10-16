@@ -8,15 +8,8 @@ jest.mock('../../lib/appointments/confirmations-api', () => ({
   createConfirmationLink: jest.fn(),
 }));
 jest.mock('../../lib/api/client', () => ({
-  ApiError: class ApiError extends Error {
-    constructor(
-      public readonly status: number,
-      message: string,
-    ) {
-      super(message);
-      this.name = 'ApiError';
-    }
-  },
+  // La clase real: `apiErrorMessage` la reconoce con `instanceof`.
+  ApiError: jest.requireActual('../../lib/api/api-error').ApiError,
 }));
 
 const create = createConfirmationLink as jest.Mock;

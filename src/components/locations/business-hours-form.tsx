@@ -2,7 +2,7 @@
 import * as React from 'react';
 import { useEffect, useState } from 'react';
 import { Plus, Trash2 } from 'lucide-react';
-import { ApiError } from '@/lib/api/client';
+import { apiErrorMessage } from '@/lib/api/error-message';
 import {
   getLocationSchedule,
   replaceLocationSchedule,
@@ -114,7 +114,7 @@ export function BusinessHoursForm({ token }: BusinessHoursFormProps) {
         setLoadError(null);
       } catch (err) {
         if (cancelled) return;
-        setLoadError(err instanceof ApiError ? err.message : copy.genericLoadError);
+        setLoadError(apiErrorMessage(err, copy.genericLoadError));
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -197,7 +197,7 @@ export function BusinessHoursForm({ token }: BusinessHoursFormProps) {
       setHadSchedule(updated.ranges.length > 0);
       setSaved(true);
     } catch (err) {
-      setSaveError(err instanceof ApiError ? err.message : copy.genericSaveError);
+      setSaveError(apiErrorMessage(err, copy.genericSaveError));
     } finally {
       setSaving(false);
     }
