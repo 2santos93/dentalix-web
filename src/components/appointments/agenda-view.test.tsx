@@ -23,6 +23,9 @@ jest.mock('../../lib/appointments/appointments-api', () => ({
 jest.mock('../../lib/appointments/appointment-types-api', () => ({
   listAppointmentTypes: jest.fn().mockResolvedValue([]),
 }));
+jest.mock('../../lib/locations/locations-api', () => ({
+  listLocations: jest.fn().mockResolvedValue([{ id: 'loc-1', name: 'Sede principal' }]),
+}));
 // Sede sin horario configurado: nada sombreado, nada bloqueado.
 jest.mock('../../lib/locations/schedule-api', () => ({
   ...jest.requireActual('../../lib/locations/schedule-api'),

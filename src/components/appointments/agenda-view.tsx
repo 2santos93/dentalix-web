@@ -9,6 +9,8 @@ import {
   type AppointmentStatus,
 } from '@/lib/appointments/appointments-api';
 import { getLocationSchedule, type BusinessHours } from '@/lib/locations/schedule-api';
+import { getActiveLocationId } from '@/lib/locations/location-store';
+import { listLocations } from '@/lib/locations/locations-api';
 import { getTokenRole } from '@/lib/auth/token-role';
 import type { MoveTarget } from '@/lib/appointments/day-grid';
 import { listStaff, type StaffMember } from '@/lib/appointments/staff-api';
@@ -367,14 +369,21 @@ export function AgendaView({ token }: AgendaViewProps) {
     };
   }, [token, staffReloadKey]);
 
+  // Con una sede activa, su horario. En «Todas las sedes» se mezclan citas de
+  // sedes con horarios distintos: solo se sombrea si la clínica tiene UNA sede
+  // (si no, el sombreado de una sede mentiría sobre las demás).
   useEffect(() => {
     if (!token) return;
     let cancelled = false;
-    getLocationSchedule(token)
-      .then((h) => {
-        if (!cancelled) setHours(h);
-      })
-      .catch(() => {});
+    async function load() {
+      if (getActiveLocationId() === null) {
+        const locations = await listLocations(token);
+        if (locations.length !== 1) return;
+      }
+      const h = await getLocationSchedule(token);
+      if (!cancelled) setHours(h);
+    }
+    load().catch(() => {});
     return () => {
       cancelled = true;
     };

@@ -118,6 +118,9 @@ for (const browserClock of ['23:30', '06:00']) {
     // así que hay que pasar a "Día" para que se renderice `DayAgenda` — es la vista
     // cuyo estado vacío y cuya tabla asevera este spec.
     await page.getByRole('button', { name: 'Día', exact: true }).click();
+    // DX-121: el Día abre en columnas por profesional; este spec prueba la
+    // presentación en «Lista» (la tabla con el estado editable por fila).
+    await page.getByRole('button', { name: 'Lista', exact: true }).click();
     // La agenda abre en el "hoy" del navegador; se salta al día ancla.
     await page.getByLabel('Fecha', { exact: true }).fill(anchorDay);
 
@@ -193,6 +196,7 @@ for (const browserClock of ['23:30', '06:00']) {
     // `viewMode` no se persiste: el reload vuelve a la vista MES por defecto, y
     // el día vuelve a ser el "hoy" del navegador.
     await page.getByRole('button', { name: 'Día', exact: true }).click();
+    await page.getByRole('button', { name: 'Lista', exact: true }).click();
     await page.getByLabel('Fecha', { exact: true }).fill(anchorDay);
 
     const appointmentRowAfterReload = page.locator('table tr', { hasText: appointmentReason });

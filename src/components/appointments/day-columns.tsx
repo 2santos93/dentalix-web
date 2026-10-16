@@ -175,7 +175,12 @@ export function DayColumns({
       if (e.pointerId !== current.pointerId) return;
       setDrag(null);
       if (!current.started) return;
+      // El `click` que sigue a soltar llega en esta misma tanda de eventos; si
+      // cae fuera de la tarjeta, el indicador se limpia solo después.
       suppressClick.current = true;
+      setTimeout(() => {
+        suppressClick.current = false;
+      }, 0);
       const target = current.target;
       if (!target) return;
       const a = current.appointment;
