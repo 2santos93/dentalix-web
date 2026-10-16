@@ -1,6 +1,8 @@
-import { test, expect } from '@playwright/test';
+import { test, expect, type Locator } from '@playwright/test';
 import { randomUUID } from 'node:crypto';
+import { formatCurrency } from '../src/lib/format/currency';
 import { registerAndLogin } from './support/auth';
+import { API_URL } from './support/urls';
 
 /**
  * e2e: register clinic + login, seed one `DentalCatalogItem` (PROCEDURE, with
@@ -22,6 +24,7 @@ import { registerAndLogin } from './support/auth';
  * Requires both servers up:
  *   - backend  http://localhost:3000  (dentalix-api, `npm run start:dev`, Docker DB on :5442)
  *   - frontend http://localhost:3001  (dentalix-web, managed by Playwright's `webServer`)
+ * (both overridable with E2E_API_URL / E2E_WEB_PORT, see `./support/urls`).
  *
  * Auth: the backend resolves the tenant from the REQUEST HOST, so the whole
  * flow runs on `http://${subdomain}.localhost:3001` (see `./support/auth`),
@@ -62,13 +65,12 @@ const defaultPrice = 45_000;
 const tooth1 = '11';
 const tooth2 = '21';
 
-// Same formatter as `treatment-plans-tab.tsx`'s `formatCurrency` (v1: fixed
-// `es`/`USD`) — reused here instead of hardcoding formatted strings so the
-// assertions stay correct if the underlying ICU data changes.
-const currencyFormatter = new Intl.NumberFormat('es', { style: 'currency', currency: 'USD' });
-function formatCurrency(amount: number): string {
-  return currencyFormatter.format(amount);
-}
+// El plan nace en la moneda por defecto del backend (`TreatmentPlan.currency`
+// = "USD") y la UI formatea con el MISMO helper que se importa aquí
+// (`src/lib/format/currency.ts`, locale `es`), así las aserciones no dependen
+// de cómo el ICU de turno pinte el símbolo o los separadores.
+const planCurrency = 'USD';
+const money = (amount: number): string => formatCurrency(amount, planCurrency);
 
 test('treatment plan: create -> add item -> total -> status DONE -> remove -> total drops -> persists on reload', async ({
   page,
@@ -82,7 +84,7 @@ test('treatment plan: create -> add item -> total -> status DONE -> remove -> to
 
   // --- Seed one DentalCatalogItem via the real API (needed by the add-item
   // form's procedure select, and to prefill the price) ---
-  const seedResponse = await page.request.post('http://localhost:3000/api/v1/catalog/items', {
+  const seedResponse = await page.request.post(`${API_URL}/catalog/items`, {
     headers: {
       Authorization: `Bearer ${accessToken}`,
       'X-Tenant-Host': new URL(origin).host,
@@ -169,18 +171,40 @@ test('treatment plan: create -> add item -> total -> status DONE -> remove -> to
   // Brand-new plan -> no items yet.
   await expect(tabPanel.getByText('Este plan todavía no tiene ítems.')).toBeVisible({ timeout: 10_000 });
 
-  const totalValue = () => tabPanel.getByText('Total', { exact: true }).locator('xpath=following-sibling::span[1]');
-  await expect(totalValue()).toHaveText(formatCurrency(0));
+  // Resumen de dinero del plan (`PlanMoneySummary`): un `<dl>` con pares
+  // `<dt>`/`<dd>` (roles `term`/`definition`). Se busca el par cuyo término es
+  // exactamente «Total» — no «Total a financiar» del plan de pagos — y se lee
+  // su definición, sin depender del orden de las cifras ni de clases CSS.
+  const totalValueIn = (scope: Locator) =>
+    scope
+      .locator('dl > div')
+      .filter({ has: page.getByRole('term').getByText('Total', { exact: true }) })
+      .getByRole('definition');
+  const totalValue = () => totalValueIn(tabPanel);
+  await expect(totalValue()).toHaveText(money(0));
 
   // --- Add the first item (tooth 11), picking the seeded procedure ---
   const addItemForm = tabPanel.getByRole('form', { name: 'Agregar ítem' });
   await expect(addItemForm).toBeVisible({ timeout: 10_000 });
 
-  await addItemForm.getByLabel('Diente (FDI)').fill(tooth1);
-  await addItemForm.getByLabel('Procedimiento').selectOption({ label: catalogLabel });
+  // El diente se elige en `ToothPicker` (mapa del odontograma + campo de texto
+  // «Código FDI» como segunda vía) y el procedimiento en `CatalogPicker` (un
+  // filtro sobre una lista de radios dentro del `fieldset` «Procedimiento»).
+  // Se usa el campo de texto y el filtro: son la vía accesible por teclado y no
+  // dependen de la geometría del mapa ni de cuántos ítems traiga el catálogo.
+  const toothInput = addItemForm.getByRole('textbox', { name: 'Código FDI' });
+  const procedureGroup = addItemForm.getByRole('group', { name: 'Procedimiento' });
+  const pickProcedure = async () => {
+    await procedureGroup.getByRole('searchbox', { name: 'Buscar en el catálogo' }).fill(catalogLabel);
+    await procedureGroup.getByRole('radio', { name: catalogLabel }).check();
+  };
+
+  await toothInput.fill(tooth1);
+  await expect(addItemForm.getByText(`Diente ${tooth1} seleccionado.`)).toBeVisible();
+  await pickProcedure();
 
   // Price prefills from the catalog item's `defaultPrice` (still editable).
-  const priceInput = addItemForm.getByLabel('Precio');
+  const priceInput = addItemForm.getByRole('spinbutton', { name: 'Precio' });
   await expect(priceInput).toHaveValue(String(defaultPrice));
 
   const addItemError = addItemForm.locator('p[role="alert"]');
@@ -196,12 +220,12 @@ test('treatment plan: create -> add item -> total -> status DONE -> remove -> to
       throw new Error(`Adding the treatment plan item failed. API error: ${message}`);
     });
   await expect(itemRow(tooth1)).toContainText(catalogLabel);
-  await expect(itemRow(tooth1)).toContainText(formatCurrency(defaultPrice));
+  await expect(itemRow(tooth1)).toContainText(money(defaultPrice));
   // Default item status is PROPOSED ("Propuesto").
   await expect(itemRow(tooth1)).toContainText('Propuesto');
 
   // --- The plan's total now reflects the single item's price ---
-  await expect(totalValue()).toHaveText(formatCurrency(defaultPrice));
+  await expect(totalValue()).toHaveText(money(defaultPrice));
 
   // --- Change item 1's status: PROPOSED -> DONE ("Realizado") ---
   const itemStatusSelect = (tooth: string) => itemRow(tooth).getByLabel(`Estado del ítem del diente ${tooth}`);
@@ -210,21 +234,28 @@ test('treatment plan: create -> add item -> total -> status DONE -> remove -> to
   await expect(itemStatusSelect(tooth1)).toHaveValue('DONE');
 
   // --- Add a second item (tooth 21), same seeded procedure ---
-  await addItemForm.getByLabel('Diente (FDI)').fill(tooth2);
-  await addItemForm.getByLabel('Procedimiento').selectOption({ label: catalogLabel });
+  await toothInput.fill(tooth2);
+  await expect(addItemForm.getByText(`Diente ${tooth2} seleccionado.`)).toBeVisible();
+  await pickProcedure();
   await expect(priceInput).toHaveValue(String(defaultPrice));
   await addItemForm.getByRole('button', { name: 'Agregar ítem' }).click();
 
   await expect(itemRow(tooth2)).toBeVisible({ timeout: 10_000 });
-  await expect(itemRow(tooth2)).toContainText(formatCurrency(defaultPrice));
+  await expect(itemRow(tooth2)).toContainText(money(defaultPrice));
 
   // --- Total is now the sum of both items ---
-  await expect(totalValue()).toHaveText(formatCurrency(defaultPrice * 2));
+  await expect(totalValue()).toHaveText(money(defaultPrice * 2));
 
   // --- Remove item 2 ("Quitar") -> it disappears and the total drops back ---
+  // Quitar es irreversible desde la app, así que pide confirmación en un
+  // `ConfirmDialog` antes de borrar.
   await itemRow(tooth2).getByRole('button', { name: 'Quitar' }).click();
+  const removeDialog = page.getByRole('dialog', { name: '¿Quitar este ítem del plan?' });
+  await expect(removeDialog).toBeVisible();
+  await removeDialog.getByRole('button', { name: 'Quitar ítem' }).click();
+  await expect(removeDialog).toBeHidden();
   await expect(itemRow(tooth2)).toHaveCount(0, { timeout: 10_000 });
-  await expect(totalValue()).toHaveText(formatCurrency(defaultPrice));
+  await expect(totalValue()).toHaveText(money(defaultPrice));
 
   // Item 1 (with its DONE status) is still there.
   await expect(itemRow(tooth1)).toBeVisible();
@@ -259,13 +290,10 @@ test('treatment plan: create -> add item -> total -> status DONE -> remove -> to
 
   await expect(itemRowAfterReload(tooth1)).toBeVisible({ timeout: 10_000 });
   await expect(itemRowAfterReload(tooth1)).toContainText(catalogLabel);
-  await expect(itemRowAfterReload(tooth1)).toContainText(formatCurrency(defaultPrice));
+  await expect(itemRowAfterReload(tooth1)).toContainText(money(defaultPrice));
   await expect(itemRowAfterReload(tooth1)).toContainText('Realizado');
 
   await expect(itemRowAfterReload(tooth2)).toHaveCount(0);
 
-  const totalValueAfterReload = tabPanelAfterReload
-    .getByText('Total', { exact: true })
-    .locator('xpath=following-sibling::span[1]');
-  await expect(totalValueAfterReload).toHaveText(formatCurrency(defaultPrice));
+  await expect(totalValueIn(tabPanelAfterReload)).toHaveText(money(defaultPrice));
 });

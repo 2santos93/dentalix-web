@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test';
 import { randomUUID } from 'node:crypto';
 import { registerAndLogin } from './support/auth';
+import { API_URL } from './support/urls';
 
 /**
  * e2e: register clinic + login, seed one `DentalCatalogItem` via the API
@@ -70,7 +71,7 @@ test('register a procedure on a tooth -> colored + in timeline, persists after r
   // origin — see `./support/auth`) for the backend's host-based tenant
   // resolution to pick up this clinic instead of failing with "No tenant in
   // context".
-  const seedResponse = await page.request.post('http://localhost:3000/api/v1/catalog/items', {
+  const seedResponse = await page.request.post(`${API_URL}/catalog/items`, {
     headers: {
       Authorization: `Bearer ${accessToken}`,
       'X-Tenant-Host': new URL(origin).host,
