@@ -2,6 +2,7 @@
 import * as React from 'react';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { ApiError } from '@/lib/api/client';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { toast } from 'sonner';
 import {
@@ -118,12 +119,16 @@ const copy = {
   genericResendError: 'No pudimos reenviar la invitación.',
   genericRevokeError: 'No pudimos revocar la invitación.',
   inviteCreatedTitle: 'Invitación creada',
+  inviteResentTitle: 'Invitación reenviada',
+  deliveryAnnounce: {
+    SENT: (email: string) => `Correo de invitación enviado a ${email}.`,
+    FAILED: (email: string) => `No se pudo enviar el correo de invitación a ${email}.`,
+  },
   inviteCreatedDescription:
     'Le enviamos un correo con este enlace. Si no le llega, puedes copiarlo y compartirlo tú.',
   // El backend no pudo programar el correo (la invitación sí se creó).
   inviteNotQueuedDescription:
     'No pudimos programar el correo. Comparte este enlace con la persona invitada o reenvía la invitación más tarde.',
-  emailDeliveryLabel: 'Envío del correo',
   copyLabel: 'Copiar',
   copiedLabel: 'Copiado',
   copyWarning: 'Cópialo ahora: por seguridad no podrás verlo de nuevo.',
@@ -238,6 +243,11 @@ export function StaffView({ token }: StaffViewProps) {
   const [busyId, setBusyId] = useState<string | null>(null);
   const [revokingId, setRevokingId] = useState<string | null>(null);
   const [resendingId, setResendingId] = useState<string | null>(null);
+  // El enlace del diálogo viene de un reenvío (cambia el título).
+  const [linkFromResend, setLinkFromResend] = useState(false);
+  // Anuncio para lectores de pantalla cuando el sondeo ve salir (o fallar) un
+  // correo: el cambio de la etiqueta por sí solo no se anuncia.
+  const [deliveryAnnouncement, setDeliveryAnnouncement] = useState('');
   // Vueltas de sondeo del estado del correo desde la última carga visible.
   const [polls, setPolls] = useState(0);
 
@@ -296,6 +306,14 @@ export function StaffView({ token }: StaffViewProps) {
           status: statusFilter || undefined,
         });
         if (cancelled) return;
+        const announcements = res.items.flatMap((next) => {
+          const before = entries.find((e) => e.id === next.id && e.kind === next.kind);
+          return before?.emailDelivery === 'PENDING' &&
+            (next.emailDelivery === 'SENT' || next.emailDelivery === 'FAILED')
+            ? [copy.deliveryAnnounce[next.emailDelivery](next.email)]
+            : [];
+        });
+        if (announcements.length > 0) setDeliveryAnnouncement(announcements.join(' '));
         setEntries(res.items);
         setTotal(res.total);
       } catch {
@@ -310,7 +328,7 @@ export function StaffView({ token }: StaffViewProps) {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [token, loading, hasPendingEmail, polls, page, search, roleFilter, statusFilter]);
+  }, [token, loading, hasPendingEmail, polls, entries, page, search, roleFilter, statusFilter]);
 
   function refresh() {
     setReloadKey((k) => k + 1);
@@ -345,6 +363,7 @@ export function StaffView({ token }: StaffViewProps) {
     if (!next) {
       setCreateError(null);
       setCreatedInvitation(null);
+      setLinkFromResend(false);
       resetForm();
     }
   }
@@ -358,6 +377,7 @@ export function StaffView({ token }: StaffViewProps) {
       setResendingId(null);
       if (resent.emailDelivery === null) {
         // Sin correo programado, el enlace es la única vía: se muestra.
+        setLinkFromResend(true);
         setCreatedInvitation(resent);
         setShowForm(true);
       } else {
@@ -370,9 +390,15 @@ export function StaffView({ token }: StaffViewProps) {
       // Igual que revocar: el diálogo se cierra para que el «Reintentar» del
       // toast no quede inerte debajo.
       setResendingId(null);
-      notifyError(apiErrorMessage(err, copy.genericResendError), {
-        onRetry: () => handleResend(entry),
-      });
+      const message = apiErrorMessage(err, copy.genericResendError);
+      if (err instanceof ApiError && (err.status === 404 || err.status === 429)) {
+        // Reintentar no sirve: la invitación ya no está pendiente (se recarga
+        // la lista para que desaparezca) o hay que esperar (lo dice el mensaje).
+        notifyError(message);
+        if (err.status === 404) refresh();
+      } else {
+        notifyError(message, { onRetry: () => handleResend(entry) });
+      }
     } finally {
       setBusyId(null);
     }
@@ -413,6 +439,9 @@ export function StaffView({ token }: StaffViewProps) {
   return (
     <>
       <PageHeader title={copy.title} description={copy.description} />
+      <p className="sr-only" role="status" aria-live="polite">
+        {deliveryAnnouncement}
+      </p>
 
       {/* Un solo bloque apretado (12px) para filtrar → contar → leer: los tres
           pasos son el mismo gesto. La separación grande de la página es la que
@@ -517,7 +546,9 @@ export function StaffView({ token }: StaffViewProps) {
         <Dialog open={!!createdInvitation} onOpenChange={handleCreateOpenChange}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>{copy.inviteCreatedTitle}</DialogTitle>
+              <DialogTitle>
+                {linkFromResend ? copy.inviteResentTitle : copy.inviteCreatedTitle}
+              </DialogTitle>
               <DialogDescription>
                 {createdInvitation?.emailDelivery === null
                   ? copy.inviteNotQueuedDescription
@@ -608,10 +639,7 @@ export function StaffView({ token }: StaffViewProps) {
                         <div className="flex flex-wrap items-center gap-1.5">
                           <Badge variant={badge.variant}>{badge.label}</Badge>
                           {entry.kind === 'INVITATION' && entry.emailDelivery ? (
-                            <Badge
-                              variant={EMAIL_DELIVERY_BADGE[entry.emailDelivery].variant}
-                              title={copy.emailDeliveryLabel}
-                            >
+                            <Badge variant={EMAIL_DELIVERY_BADGE[entry.emailDelivery].variant}>
                               {EMAIL_DELIVERY_BADGE[entry.emailDelivery].label}
                             </Badge>
                           ) : null}

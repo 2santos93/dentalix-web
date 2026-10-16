@@ -42,7 +42,7 @@ export async function resendInvitation(
   token: string,
   id: string,
 ): Promise<CreatedInvitation> {
-  return apiFetch<CreatedInvitation>(`/staff/invitations/${id}/resend`, {
+  return apiFetch<CreatedInvitation>(`/staff/invitations/${encodeURIComponent(id)}/resend`, {
     method: 'POST',
     token,
   });
@@ -55,7 +55,7 @@ export async function resendInvitation(
  * use `apiFetchOrNull` and discard the (always-null) result.
  */
 export async function revokeInvitation(token: string, id: string): Promise<void> {
-  await apiFetchOrNull<null>(`/staff/invitations/${id}`, {
+  await apiFetchOrNull<null>(`/staff/invitations/${encodeURIComponent(id)}`, {
     method: 'DELETE',
     token,
   });

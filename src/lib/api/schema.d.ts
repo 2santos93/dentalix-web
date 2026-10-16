@@ -4165,6 +4165,13 @@ export interface operations {
                     "application/json": components["schemas"]["CreatedInvitationDto"];
                 };
             };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     StaffInvitationsController_resend: {
@@ -4188,6 +4195,13 @@ export interface operations {
             };
             /** @description No hay una invitación pendiente con ese id en esta clínica */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };

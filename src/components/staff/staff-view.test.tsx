@@ -266,15 +266,55 @@ describe('StaffView', () => {
     const dialog = await abrirReenviar(user);
     await user.click(within(dialog).getByRole('button', { name: /sí, reenviar/i }));
 
-    const created = await screen.findByRole('dialog', { name: 'Invitación creada' });
+    const created = await screen.findByRole('dialog', { name: 'Invitación reenviada' });
     expect(within(created).getByText(/token-nuevo/)).toBeInTheDocument();
     expect(within(created).getByText(/no pudimos programar el correo/i)).toBeInTheDocument();
   });
 
-  it('un fallo al reenviar cierra el diálogo y ofrece reintentar en el toast', async () => {
+  it('un 404 al reenviar avisa sin «Reintentar» (no serviría) y recarga la lista', async () => {
     mockedResend.mockRejectedValue(
       new ApiError(404, 'No encontramos una invitación pendiente con ese id.'),
     );
+    const user = setupUser();
+    render(
+      <>
+        <StaffView token="tok" />
+        <Toaster />
+      </>,
+    );
+    await screen.findByRole('table', { name: /personal/i });
+    mockedList.mockClear();
+
+    const dialog = await abrirReenviar(user);
+    await user.click(within(dialog).getByRole('button', { name: /sí, reenviar/i }));
+
+    expect(
+      await screen.findByText('No encontramos una invitación pendiente con ese id.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Reintentar' })).not.toBeInTheDocument();
+    await waitFor(() => expect(mockedList).toHaveBeenCalled());
+  });
+
+  it('un 429 (tope de envíos) muestra el mensaje de la API sin «Reintentar»', async () => {
+    mockedResend.mockRejectedValue(
+      new ApiError(429, 'Ya enviamos un correo a esta persona hace un momento. Espera 42 segundos antes de volver a enviarlo.'),
+    );
+    const user = setupUser();
+    render(
+      <>
+        <StaffView token="tok" />
+        <Toaster />
+      </>,
+    );
+    await screen.findByRole('table', { name: /personal/i });
+    const dialog = await abrirReenviar(user);
+    await user.click(within(dialog).getByRole('button', { name: /sí, reenviar/i }));
+    expect(await screen.findByText(/espera 42 segundos/i)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Reintentar' })).not.toBeInTheDocument();
+  });
+
+  it('un fallo al reenviar cierra el diálogo y ofrece reintentar en el toast', async () => {
+    mockedResend.mockRejectedValue(new ApiError(500, 'Se cayó el servidor al reenviar.'));
     const user = setupUser();
     render(
       <>
@@ -288,9 +328,7 @@ describe('StaffView', () => {
     await user.click(within(dialog).getByRole('button', { name: /sí, reenviar/i }));
 
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
-    expect(
-      await screen.findByText('No encontramos una invitación pendiente con ese id.'),
-    ).toBeInTheDocument();
+    expect(await screen.findByText('Se cayó el servidor al reenviar.')).toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument();
   });
 
@@ -332,6 +370,10 @@ describe('StaffView', () => {
       });
       expect(await screen.findByText('Correo: Enviado')).toBeInTheDocument();
       expect(mockedList).toHaveBeenCalledTimes(2);
+      // Se anuncia a los lectores de pantalla (región aria-live).
+      expect(
+        screen.getByText('Correo de invitación enviado a beto@clinic.com.'),
+      ).toHaveAttribute('aria-live', 'polite');
       // Sin skeleton: la tabla siguió en pantalla durante el sondeo.
       expect(screen.getByRole('table', { name: /personal/i })).toBeInTheDocument();
 
