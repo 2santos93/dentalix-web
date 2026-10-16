@@ -572,6 +572,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/treatment-plans/pending-follow-up": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["PlanFollowUpController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/patients/{patientId}/treatment-plans": {
         parameters: {
             query?: never;
@@ -602,6 +618,54 @@ export interface paths {
         options?: never;
         head?: never;
         patch: operations["TreatmentPlansController_update"];
+        trace?: never;
+    };
+    "/api/v1/treatment-plans/{id}/present": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["TreatmentPlansController_present"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/treatment-plans/{id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["TreatmentPlansController_reject"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/treatment-plans/{id}/alternatives": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["TreatmentPlansController_createAlternative"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/treatment-plans/{id}/items": {
@@ -2086,6 +2150,45 @@ export interface components {
             /** @enum {string} */
             action: "confirm" | "cancel" | "call_me";
         };
+        PendingFollowUpItemDto: {
+            /** Format: uuid */
+            planId: string;
+            /** Format: uuid */
+            patientId: string;
+            /** @example Ana Pérez */
+            patientName: string;
+            /** @example +57 300 123 4567 */
+            patientPhone: string | null;
+            /**
+             * @description Teléfono en E.164 sin "+", listo para https://wa.me/<número>; null si no hay uno utilizable
+             * @example 573001234567
+             */
+            patientWhatsApp: string | null;
+            /** Format: uuid */
+            optionGroupId: string | null;
+            /** @example Opción A: implante */
+            optionLabel: string | null;
+            /** Format: date-time */
+            presentedAt: string;
+            /** Format: uuid */
+            presentedLocationId: string;
+            /** @description Días completos desde la presentación */
+            daysSincePresented: number;
+            /**
+             * @description Moneda del plan (ISO 4217)
+             * @example COP
+             */
+            currency: string;
+            /** @description Σ (precio − descuento) de los ítems vivos, en `currency` */
+            total: number;
+            itemCount: number;
+        };
+        PendingFollowUpPageDto: {
+            items: components["schemas"]["PendingFollowUpItemDto"][];
+            total: number;
+            page: number;
+            pageSize: number;
+        };
         CreateTreatmentPlanDto: {
             /**
              * @description ISO 4217 (default USD)
@@ -2094,6 +2197,8 @@ export interface components {
             currency?: string;
             notes?: string;
         };
+        /** @enum {string} */
+        TreatmentPlanRejectionReason: "PRICE" | "FEAR" | "SECOND_OPINION" | "OTHER_OPTION_ACCEPTED" | "OTHER";
         TreatmentPlanItemDto: {
             /** Format: uuid */
             id: string;
@@ -2129,7 +2234,7 @@ export interface components {
             /** Format: uuid */
             patientId: string;
             /** @enum {string} */
-            status: "DRAFT" | "ACCEPTED" | "COMPLETED" | "CANCELLED";
+            status: "DRAFT" | "PRESENTED" | "ACCEPTED" | "REJECTED" | "COMPLETED" | "CANCELLED";
             /**
              * @description ISO 4217 (default USD)
              * @example USD
@@ -2138,6 +2243,24 @@ export interface components {
             notes: string | null;
             /** Format: uuid */
             createdById: string | null;
+            /**
+             * Format: uuid
+             * @description Grupo de opciones A/B (DX-040): id del plan que abrió el grupo; null = plan suelto
+             */
+            optionGroupId: string | null;
+            /** @example Opción A: implante */
+            optionLabel: string | null;
+            /** Format: date-time */
+            presentedAt: string | null;
+            /**
+             * Format: uuid
+             * @description Sede donde se presentó (la del request o la principal)
+             */
+            presentedLocationId: string | null;
+            /** Format: date-time */
+            rejectedAt: string | null;
+            rejectionReason: components["schemas"]["TreatmentPlanRejectionReason"] | null;
+            rejectionNote: string | null;
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
@@ -2149,14 +2272,35 @@ export interface components {
             acceptance?: components["schemas"]["TreatmentPlanAcceptanceSummaryDto"] | null;
         };
         UpdateTreatmentPlanDto: {
-            /** @enum {string} */
-            status?: "DRAFT" | "ACCEPTED" | "COMPLETED" | "CANCELLED";
+            /**
+             * @description Sigue la máquina de estados (DX-040; 409 si la transición no existe). PRESENTED y REJECTED tienen su propia acción (400 aquí); ACCEPTED solo DENTIST y ADMIN (403)
+             * @enum {string}
+             */
+            status?: "DRAFT" | "PRESENTED" | "ACCEPTED" | "REJECTED" | "COMPLETED" | "CANCELLED";
             /**
              * @description ISO 4217
              * @example USD
              */
             currency?: string;
             notes?: string;
+            /**
+             * @description Etiqueta de la opción (DX-040); vacía la quita
+             * @example Opción A: implante
+             */
+            optionLabel?: string;
+        };
+        RejectTreatmentPlanDto: {
+            /** @description Motivo del catálogo. OTHER_OPTION_ACCEPTED lo pone el sistema al aceptar otra opción del grupo (400 si lo envía el cliente); OTHER exige `note` */
+            reason: components["schemas"]["TreatmentPlanRejectionReason"];
+            /** @example Prefiere esperar a la prima de diciembre */
+            note?: string;
+        };
+        CreatePlanAlternativeDto: {
+            /**
+             * @description Por defecto, la letra siguiente del grupo («Opción B»…)
+             * @example Opción B: puente
+             */
+            optionLabel?: string;
         };
         AddTreatmentPlanItemDto: {
             /**
@@ -2244,7 +2388,7 @@ export interface components {
             /** Format: uuid */
             patientId: string;
             /** @enum {string} */
-            planStatus: "DRAFT" | "ACCEPTED" | "COMPLETED" | "CANCELLED";
+            planStatus: "DRAFT" | "PRESENTED" | "ACCEPTED" | "REJECTED" | "COMPLETED" | "CANCELLED";
             /** @example COP */
             currency: string;
             clinicName: string;
@@ -2355,7 +2499,7 @@ export interface components {
             /** Format: uuid */
             id: string;
             /** @enum {string} */
-            status: "DRAFT" | "ACCEPTED" | "COMPLETED" | "CANCELLED";
+            status: "DRAFT" | "PRESENTED" | "ACCEPTED" | "REJECTED" | "COMPLETED" | "CANCELLED";
             /**
              * Format: date-time
              * @description El plan no tiene título: la web lo nombra por su fecha de creación.
@@ -2742,7 +2886,7 @@ export interface components {
             /** Format: uuid */
             id: string;
             /** @enum {string} */
-            status: "DRAFT" | "ACCEPTED" | "COMPLETED" | "CANCELLED";
+            status: "DRAFT" | "PRESENTED" | "ACCEPTED" | "REJECTED" | "COMPLETED" | "CANCELLED";
             /** @example COP */
             currency: string;
             /**
@@ -2854,7 +2998,7 @@ export interface components {
              * @description Nunca CANCELLED ni REJECTED: un plan cancelado o rechazado no se cobra.
              * @enum {string}
              */
-            status: "DRAFT" | "ACCEPTED" | "COMPLETED" | "CANCELLED";
+            status: "DRAFT" | "PRESENTED" | "ACCEPTED" | "REJECTED" | "COMPLETED" | "CANCELLED";
             /**
              * @description Moneda del plan (la del saldo y la del plan de cuotas)
              * @example COP
@@ -4957,6 +5101,35 @@ export interface operations {
             };
         };
     };
+    PlanFollowUpController_list: {
+        parameters: {
+            query?: {
+                /** @description Presentados hace MÁS de N días */
+                olderThanDays?: number;
+                page?: number;
+                /** @description Tope: 100 (un valor mayor se recorta) */
+                pageSize?: number;
+            };
+            header?: {
+                /** @description Solo los presentados en esta sede; sin ella, toda la clínica (vista consolidada) */
+                "X-Location-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Planes PRESENTED hace más de `olderThanDays` días (7 por defecto) cuyo paciente no tiene cita futura agendada o confirmada, de los más antiguos a los más nuevos, con monto y moneda del plan */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PendingFollowUpPageDto"];
+                };
+            };
+        };
+    };
     TreatmentPlansController_list: {
         parameters: {
             query?: never;
@@ -5054,7 +5227,168 @@ export interface operations {
                     "application/json": components["schemas"]["TreatmentPlanDto"];
                 };
             };
-            /** @description Plan aceptado con firma: no cambia de moneda ni vuelve a DRAFT (DX-012) */
+            /** @description Moneda desconocida, o status PRESENTED/REJECTED (tienen su propia acción) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description status ACCEPTED: solo DENTIST y ADMIN (la asistente no acepta en nombre del doctor) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Transición de estado no permitida por la máquina de estados (DX-040: DRAFT → PRESENTED → ACCEPTED | REJECTED; DRAFT → ACCEPTED; ACCEPTED → COMPLETED; cualquiera salvo COMPLETED → CANCELLED); plan aceptado con firma: no cambia de moneda ni vuelve atrás (DX-012); otra opción del grupo ya aceptada */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    TreatmentPlansController_present: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Sede donde se presenta; sin ella, la principal. La lista de presupuestos por seguir filtra por esta sede */
+                "X-Location-Id"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Plan PRESENTED, con presentedAt (servidor) y la sede */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TreatmentPlanDto"];
+                };
+            };
+            /** @description El plan no tiene ítems */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo DENTIST y ADMIN presentan */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Plan no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Transición de estado no permitida por la máquina de estados (DX-040: DRAFT → PRESENTED → ACCEPTED | REJECTED; DRAFT → ACCEPTED; ACCEPTED → COMPLETED; cualquiera salvo COMPLETED → CANCELLED): solo se presenta un borrador */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    TreatmentPlansController_reject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RejectTreatmentPlanDto"];
+            };
+        };
+        responses: {
+            /** @description Plan REJECTED con motivo, nota y rejectedAt (servidor); las demás opciones del grupo no cambian */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TreatmentPlanDto"];
+                };
+            };
+            /** @description Sin motivo, motivo fuera del catálogo, OTHER_OPTION_ACCEPTED (lo pone el sistema) u OTHER sin nota */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description DENTIST, ADMIN y RECEPTION rechazan; la asistente no */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Plan no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Transición de estado no permitida por la máquina de estados (DX-040: DRAFT → PRESENTED → ACCEPTED | REJECTED; DRAFT → ACCEPTED; ACCEPTED → COMPLETED; cualquiera salvo COMPLETED → CANCELLED): solo se rechaza un plan presentado */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    TreatmentPlansController_createAlternative: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreatePlanAlternativeDto"];
+            };
+        };
+        responses: {
+            /** @description Alternativa nueva en DRAFT: mismo paciente y moneda, copia de los ítems vivos, en el grupo del plan de origen (que, si era suelto, pasa a «Opción A») */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TreatmentPlanDto"];
+                };
+            };
+            /** @description Plan no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Una opción del grupo ya está aceptada o completada */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -5205,7 +5539,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Plan aceptado: ACCEPTED, sus ítems propuestos pasan a aceptados y quedan congelados */
+            /** @description Plan aceptado: ACCEPTED, sus ítems propuestos pasan a aceptados y quedan congelados; las demás opciones abiertas de su grupo pasan a REJECTED (otra opción aceptada) en la misma transacción */
             201: {
                 headers: {
                     [name: string]: unknown;
@@ -5221,7 +5555,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Recepción imprime el presupuesto pero no lo acepta */
+            /** @description Solo odontólogo y ADMIN aceptan (DX-040): la asistente lo ve pero no lo acepta; recepción imprime el presupuesto pero no lo acepta */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -5235,7 +5569,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Ya estaba aceptado y firmado, el plan está cancelado o completado, o el presupuesto cambió desde que se mostró (contentHash) */
+            /** @description Ya estaba aceptado y firmado, el plan está rechazado, cancelado o completado, otra opción de su grupo ya está aceptada, o el presupuesto cambió desde que se mostró (contentHash) */
             409: {
                 headers: {
                     [name: string]: unknown;
