@@ -109,7 +109,7 @@ for (const viewport of [
 
       failing = false;
       await retry.click();
-      await expect(screen.loaded(page)).toBeVisible();
+      await expect(screen.loaded(page).first()).toBeVisible();
       await expect(alert).toHaveCount(0);
       await page.unroute(matcher, handler);
 
