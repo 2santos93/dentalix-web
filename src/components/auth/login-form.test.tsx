@@ -294,6 +294,19 @@ describe('LoginForm', () => {
       expect(screen.queryByLabelText(/código de verificación/i)).not.toBeInTheDocument();
     });
 
+    it('MFA recién activado (espera de seguridad) lo explica sin pedir código', async () => {
+      (apiFetch as jest.Mock).mockRejectedValueOnce(
+        new ApiError(401, 'x', { code: 'MFA_COOLDOWN' }),
+      );
+      render(<LoginForm />);
+      fillCredentials();
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        /activaste la verificación en dos pasos hace poco/i,
+      );
+      expect(screen.getByRole('alert')).toHaveTextContent(/si no la activaste tú/i);
+      expect(screen.queryByLabelText(/código de verificación/i)).not.toBeInTheDocument();
+    });
+
     it('sin MFA enrolado explica que hay que activarlo en el área de plataforma', async () => {
       (apiFetch as jest.Mock).mockRejectedValueOnce(
         new ApiError(401, 'x', { code: 'MFA_NOT_ENROLLED' }),

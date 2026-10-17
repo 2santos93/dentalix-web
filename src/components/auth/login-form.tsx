@@ -13,7 +13,7 @@ import { FormField } from '@/components/shared/form-field';
 import { InlineError } from '@/components/errors/inline-error';
 import { FORGOT_PASSWORD_PATH } from '@/lib/auth/password-reset-api';
 import { loginLockedMessage, waitClock } from '@/lib/auth/login-lockout';
-import { BREAK_GLASS_REQUIRED, MFA_NOT_ENROLLED } from '@/lib/auth/break-glass';
+import { BREAK_GLASS_REQUIRED, MFA_COOLDOWN, MFA_NOT_ENROLLED } from '@/lib/auth/break-glass';
 import { BreakGlassStep } from './break-glass-step';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
@@ -37,6 +37,8 @@ const copy = {
   // SEC-008: acceso de soporte de un superadmin sin membresía.
   mfaNotEnrolled:
     'Para entrar a una clínica como soporte, primero activa la verificación en dos pasos en el área de plataforma de Dentalix. Intenta de nuevo cuando esté activa.',
+  mfaCooldown:
+    'Activaste la verificación en dos pasos hace poco: por seguridad, el acceso de soporte a las clínicas aún no está disponible (lo verás en el área de plataforma). Si no la activaste tú, avisa al equipo de seguridad de Dentalix.',
   badCode:
     'El código no es correcto o ya se usó. Espera al siguiente código de la app e intenta de nuevo.',
 };
@@ -138,6 +140,11 @@ export function LoginForm({ passwordReset = false }: { passwordReset?: boolean }
       if (err instanceof ApiError && err.code === MFA_NOT_ENROLLED) {
         setBreakGlassStep(false);
         setError(copy.mfaNotEnrolled);
+        return;
+      }
+      if (err instanceof ApiError && err.code === MFA_COOLDOWN) {
+        setBreakGlassStep(false);
+        setError(copy.mfaCooldown);
         return;
       }
       setError(

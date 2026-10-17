@@ -30,12 +30,16 @@ beforeEach(() => {
 
 describe('PlatformMfaCard (SEC-008)', () => {
   it('sin MFA: explica que es obligatorio y lo activa en dos pasos dentro de un modal', async () => {
-    mockedGet.mockResolvedValueOnce({ enabled: false, enabledAt: null });
+    mockedGet.mockResolvedValueOnce({ enabled: false, enabledAt: null, breakGlassAvailableAt: null });
     mockedStart.mockResolvedValueOnce({
       secret: SECRET,
       otpauthUri: `otpauth://totp/Dentalix:a%40b.c?secret=${SECRET}&issuer=Dentalix`,
     });
-    mockedConfirm.mockResolvedValueOnce({ enabled: true, enabledAt: '2026-10-17T12:00:00.000Z' });
+    mockedConfirm.mockResolvedValueOnce({
+      enabled: true,
+      enabledAt: '2026-10-17T12:00:00.000Z',
+      breakGlassAvailableAt: '2999-10-18T12:00:00.000Z',
+    });
     render(<PlatformMfaCard token="pt" />);
 
     expect(await screen.findByText(/obligatoria para entrar como soporte/i)).toBeInTheDocument();
@@ -53,12 +57,14 @@ describe('PlatformMfaCard (SEC-008)', () => {
 
     expect(mockedConfirm).toHaveBeenCalledWith('pt', '123456');
     expect(await screen.findByText('Verificación en dos pasos activada.')).toBeInTheDocument();
+    // Riesgo de transición: espera de seguridad antes del primer acceso de soporte.
+    expect(screen.getByText(/podrás usarla para entrar como soporte desde el 18\/10\/2999/i)).toBeInTheDocument();
     expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Activar' })).not.toBeInTheDocument();
   });
 
   it('un código erróneo deja el modal abierto con el error en español', async () => {
-    mockedGet.mockResolvedValueOnce({ enabled: false, enabledAt: null });
+    mockedGet.mockResolvedValueOnce({ enabled: false, enabledAt: null, breakGlassAvailableAt: null });
     mockedStart.mockResolvedValueOnce({ secret: SECRET, otpauthUri: 'otpauth://totp/x' });
     mockedConfirm.mockRejectedValueOnce(
       new ApiError(400, 'El código no es correcto. Revisa la hora del móvil y usa el código vigente de la app.'),
@@ -74,7 +80,7 @@ describe('PlatformMfaCard (SEC-008)', () => {
   });
 
   it('valida 6 dígitos antes de llamar a la API', async () => {
-    mockedGet.mockResolvedValueOnce({ enabled: false, enabledAt: null });
+    mockedGet.mockResolvedValueOnce({ enabled: false, enabledAt: null, breakGlassAvailableAt: null });
     mockedStart.mockResolvedValueOnce({ secret: SECRET, otpauthUri: 'otpauth://totp/x' });
     render(<PlatformMfaCard token="pt" />);
     await userEvent.click(await screen.findByRole('button', { name: 'Activar' }));
@@ -86,7 +92,7 @@ describe('PlatformMfaCard (SEC-008)', () => {
   });
 
   it('con MFA activo muestra desde cuándo y no ofrece activarlo', async () => {
-    mockedGet.mockResolvedValueOnce({ enabled: true, enabledAt: '2026-10-01T12:00:00.000Z' });
+    mockedGet.mockResolvedValueOnce({ enabled: true, enabledAt: '2026-10-01T12:00:00.000Z', breakGlassAvailableAt: '2026-10-02T12:00:00.000Z' });
     render(<PlatformMfaCard token="pt" />);
     expect(await screen.findByText(/activa desde el/i)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Activar' })).not.toBeInTheDocument();
@@ -95,7 +101,7 @@ describe('PlatformMfaCard (SEC-008)', () => {
   it('si no carga el estado: error de sección con «Reintentar»', async () => {
     mockedGet
       .mockRejectedValueOnce(new ApiError(500, 'boom'))
-      .mockResolvedValueOnce({ enabled: true, enabledAt: '2026-10-01T12:00:00.000Z' });
+      .mockResolvedValueOnce({ enabled: true, enabledAt: '2026-10-01T12:00:00.000Z', breakGlassAvailableAt: '2026-10-02T12:00:00.000Z' });
     render(<PlatformMfaCard token="pt" />);
     await userEvent.click(await screen.findByRole('button', { name: /reintentar/i }));
     expect(await screen.findByText(/activa desde el/i)).toBeInTheDocument();

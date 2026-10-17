@@ -8,6 +8,8 @@ export const BREAK_GLASS_REASON_MAX = 500;
 /** Códigos con los que la API pide el paso siguiente del login. */
 export const BREAK_GLASS_REQUIRED = 'BREAK_GLASS_REQUIRED';
 export const MFA_NOT_ENROLLED = 'MFA_NOT_ENROLLED';
+/** MFA recién activado: espera de seguridad antes del primer acceso de soporte. */
+export const MFA_COOLDOWN = 'MFA_COOLDOWN';
 
 /**
  * Código TOTP tal como lo teclea la persona («123 456», «123-456») → los 6

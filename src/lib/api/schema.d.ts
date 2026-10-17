@@ -5696,6 +5696,11 @@ export interface components {
             enabled: boolean;
             /** Format: date-time */
             enabledAt: string | null;
+            /**
+             * Format: date-time
+             * @description SEC-008: desde cuándo sirve para el acceso de soporte (alta + espera de seguridad, BREAK_GLASS_MFA_COOLDOWN_MINUTES). null sin MFA.
+             */
+            breakGlassAvailableAt: string | null;
         };
         PlatformMfaEnrollmentDto: {
             /**
@@ -6881,7 +6886,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Credenciales inválidas (mismo error exista o no el email). Solo tras una contraseña correcta de superadmin sin membresía: `code: "MFA_NOT_ENROLLED"` (debe activar el MFA en plataforma) o `code: "BREAK_GLASS_REQUIRED"` (faltan código y motivo). */
+            /** @description Credenciales inválidas (mismo error exista o no el email). Solo tras una contraseña correcta de superadmin sin membresía: `code: "MFA_NOT_ENROLLED"` (debe activar el MFA en plataforma), `code: "MFA_COOLDOWN"` (MFA recién activado: espera de seguridad hasta `availableAt`) o `code: "BREAK_GLASS_REQUIRED"` (faltan código y motivo). */
             401: {
                 headers: {
                     [name: string]: unknown;
@@ -6891,7 +6896,7 @@ export interface operations {
             /**
              * @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera.
              *
-             *     Demasiados intentos fallidos de esta cuenta o desde esta IP, o avalancha de peticiones. `Retry-After` lleva los segundos de espera; el mensaje es el mismo exista o no el email.
+             *     Demasiados intentos fallidos de esta cuenta, desde esta IP o del código MFA de un superadmin, o avalancha de peticiones. `Retry-After` lleva los segundos de espera; el mensaje es el mismo exista o no el email.
              */
             429: {
                 headers: {

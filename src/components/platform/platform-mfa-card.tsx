@@ -3,7 +3,7 @@ import * as React from 'react';
 import { useEffect, useState } from 'react';
 import { CheckCircle2, ShieldCheck } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/error-message';
-import { formatDate } from '@/lib/format/date';
+import { formatDate, formatDateTime } from '@/lib/format/date';
 import { normalizeTotpCode } from '@/lib/auth/break-glass';
 import {
   confirmPlatformMfa,
@@ -27,6 +27,10 @@ const copy = {
   offDescription:
     'Obligatoria para entrar como soporte a una clínica. Sin ella, el acceso a las clínicas queda bloqueado.',
   onDescription: (date: string) => `Activa desde el ${date}. Se pide en cada acceso de soporte a una clínica.`,
+  // Espera de seguridad tras el alta (SEC-008): quien robe la contraseña no
+  // puede enrolar y entrar a una clínica en el acto.
+  pendingCooldown: (when: string) =>
+    `Por seguridad, podrás usarla para entrar como soporte desde el ${when}. Si no la activaste tú, avisa al equipo de seguridad de Dentalix.`,
   activate: 'Activar',
   starting: 'Preparando…',
   loadError: 'No pudimos saber si tienes la verificación en dos pasos activa.',
@@ -116,6 +120,13 @@ export function PlatformMfaCard({ token }: { token: string }) {
               ? copy.onDescription(formatDate(status.enabledAt))
               : copy.offDescription}
           </p>
+          {status.enabled &&
+          status.breakGlassAvailableAt &&
+          new Date(status.breakGlassAvailableAt).getTime() > Date.now() ? (
+            <p className="mt-1 text-sm text-warning">
+              {copy.pendingCooldown(formatDateTime(status.breakGlassAvailableAt))}
+            </p>
+          ) : null}
           {justEnabled ? (
             <p role="status" className="mt-2 flex items-center gap-1.5 text-sm font-medium text-success">
               <CheckCircle2 className="size-4" aria-hidden /> {copy.done}

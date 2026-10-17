@@ -12,7 +12,8 @@ import { WEB_PORT, tenantOrigin } from './support/urls';
  *
  * 1. El superadmin activa la verificación en dos pasos en el área de
  *    plataforma (apex, /admin): el test hace de app de autenticación con la
- *    clave que enseña el modal.
+ *    clave que enseña el modal. Recién activada, el acceso de soporte espera
+ *    el periodo de seguridad (el test lo adelanta en la BD).
  * 2. En el login de una clínica de la que NO es miembro, tras la contraseña la
  *    web pide el código y el motivo; entra a la clínica.
  * 3. El ADMIN de la clínica ve el acceso en Ajustes → «Accesos de soporte»
@@ -73,6 +74,8 @@ test('el superadmin enrola el MFA, entra a una clínica con código y motivo, y 
   await dialog.getByLabel('Código de la app').fill(totpNow(secret));
   await dialog.getByRole('button', { name: 'Activar' }).click();
   await expect(page.getByText('Verificación en dos pasos activada.')).toBeVisible();
+  // Espera de seguridad tras el alta (riesgo de transición).
+  await expect(page.getByText(/podrás usarla para entrar como soporte desde el/i)).toBeVisible();
 
   // --- 2. Login de soporte en la clínica ----------------------------------
   const origin = tenantOrigin(target.subdomain);
@@ -80,6 +83,19 @@ test('el superadmin enrola el MFA, entra a una clínica con código y motivo, y 
   await waitForHydratedForm(page);
   await page.getByLabel('Correo electrónico').fill(home.email);
   await page.getByLabel('Contraseña', { exact: true }).fill(PASSWORD);
+  await page.getByRole('button', { name: 'Iniciar sesión' }).click();
+  // Recién activado: aún en la espera de seguridad.
+  await expect(page.locator('p[role="alert"]')).toContainText(
+    'Activaste la verificación en dos pasos hace poco',
+  );
+  // Lo que haría el reloj: la espera ya pasó.
+  execFileSync('psql', [
+    databaseUrl as string,
+    '-v',
+    'ON_ERROR_STOP=1',
+    '-c',
+    `UPDATE users SET "mfaEnabledAt" = now() - interval '2 days' WHERE email = '${home.email}'`,
+  ]);
   await page.getByRole('button', { name: 'Iniciar sesión' }).click();
 
   const code = page.getByLabel('Código de verificación');
