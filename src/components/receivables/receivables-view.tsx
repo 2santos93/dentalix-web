@@ -222,56 +222,59 @@ export function ReceivablesView({ token }: { token: string }) {
       />
 
       <div className="flex flex-col gap-3">
-        <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
-          <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
-            <select
-              aria-label={receivablesCopy.ageLabel}
-              value={ageFilter}
-              onChange={(e) => {
-                setAgeFilter(e.target.value);
-                setPage(1);
-              }}
-              className={cn(toolbarFieldClass, 'sm:w-52')}
-            >
-              {AGE_FILTERS.map((f) => (
-                <option key={f.value} value={f.value}>
-                  {f.label}
-                </option>
-              ))}
-            </select>
-            <Input
-              type="text"
-              inputMode="decimal"
-              aria-label={receivablesCopy.minBalanceLabel}
-              placeholder={receivablesCopy.minBalancePlaceholder}
-              value={minBalanceText}
-              onChange={(e) => setMinBalanceText(e.target.value)}
-              className="tabular-nums sm:w-40"
-            />
-            <select
-              aria-label={receivablesCopy.currencyLabel}
-              value={currency}
-              onChange={(e) => {
-                setCurrency(e.target.value);
-                setPage(1);
-              }}
-              className={cn(toolbarFieldClass, 'sm:w-48')}
-            >
-              <option value="ALL">{receivablesCopy.currencyAll}</option>
-              {knownCurrencies.map((code) => (
-                <option key={code} value={code}>
-                  {code}
-                </option>
-              ))}
-            </select>
+        {/* Sin acceso (403) no hay filas que filtrar ni exportar: solo el aviso. */}
+        {!forbidden ? (
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between sm:gap-4">
+            <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+              <select
+                aria-label={receivablesCopy.ageLabel}
+                value={ageFilter}
+                onChange={(e) => {
+                  setAgeFilter(e.target.value);
+                  setPage(1);
+                }}
+                className={cn(toolbarFieldClass, 'sm:w-52')}
+              >
+                {AGE_FILTERS.map((f) => (
+                  <option key={f.value} value={f.value}>
+                    {f.label}
+                  </option>
+                ))}
+              </select>
+              <Input
+                type="text"
+                inputMode="decimal"
+                aria-label={receivablesCopy.minBalanceLabel}
+                placeholder={receivablesCopy.minBalancePlaceholder}
+                value={minBalanceText}
+                onChange={(e) => setMinBalanceText(e.target.value)}
+                className="tabular-nums sm:w-40"
+              />
+              <select
+                aria-label={receivablesCopy.currencyLabel}
+                value={currency}
+                onChange={(e) => {
+                  setCurrency(e.target.value);
+                  setPage(1);
+                }}
+                className={cn(toolbarFieldClass, 'sm:w-48')}
+              >
+                <option value="ALL">{receivablesCopy.currencyAll}</option>
+                {knownCurrencies.map((code) => (
+                  <option key={code} value={code}>
+                    {code}
+                  </option>
+                ))}
+              </select>
+            </div>
+            {isAdmin ? (
+              <Button type="button" onClick={() => void exportCsv()} disabled={exporting || loading} className="shrink-0">
+                <Download aria-hidden />
+                {exporting ? receivablesCopy.exporting : receivablesCopy.export}
+              </Button>
+            ) : null}
           </div>
-          {isAdmin && !forbidden ? (
-            <Button type="button" onClick={() => void exportCsv()} disabled={exporting || loading} className="shrink-0">
-              <Download aria-hidden />
-              {exporting ? receivablesCopy.exporting : receivablesCopy.export}
-            </Button>
-          ) : null}
-        </div>
+        ) : null}
 
         <p role="status" className={notice ? 'text-sm text-success' : 'sr-only'}>
           {notice}

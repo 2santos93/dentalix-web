@@ -177,6 +177,10 @@ describe('ReceivablesView (DX-145)', () => {
     expect(await screen.findByText('Tu rol no tiene acceso a la cartera.')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Reintentar' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Exportar CSV' })).not.toBeInTheDocument();
+    // Sin filtros que no llevan a nada: el rol no puede ver ninguna fila.
+    expect(screen.queryByRole('combobox', { name: 'Antigüedad' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('textbox', { name: 'Saldo mínimo' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: 'Moneda' })).not.toBeInTheDocument();
   });
 
   it('«Exportar CSV» solo para ADMIN, con los filtros activos', async () => {
