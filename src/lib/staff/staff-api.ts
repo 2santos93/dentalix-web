@@ -148,6 +148,11 @@ export interface StaffMemberDetail extends StaffMember {
   status: 'ACTIVE' | 'INACTIVE';
   /** Registro profesional (CO) / nº de colegiado (ES) que exige la receta (DX-013). */
   professionalLicense?: string | null;
+  /**
+   * DX-048: hasta cuándo no puede iniciar sesión por intentos fallidos (ISO);
+   * `null` = sin bloqueo.
+   */
+  loginBlockedUntil: components['schemas']['StaffMemberDetailDto']['loginBlockedUntil'];
 }
 
 /**
@@ -168,6 +173,17 @@ export async function reactivateStaff(
   userId: string,
 ): Promise<StaffMember> {
   return apiFetch<StaffMember>(`/staff/${userId}/reactivate`, {
+    method: 'POST',
+    token,
+  });
+}
+
+/**
+ * `POST /staff/:userId/login-unlock` (DX-048, solo ADMIN) — quita la espera
+ * por intentos fallidos y los fallos acumulados. 204 sin cuerpo; idempotente.
+ */
+export async function unlockStaffLogin(token: string, userId: string): Promise<void> {
+  await apiFetchOrNull<null>(`/staff/${userId}/login-unlock`, {
     method: 'POST',
     token,
   });

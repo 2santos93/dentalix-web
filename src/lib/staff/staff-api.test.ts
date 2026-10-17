@@ -6,7 +6,7 @@
  * indirectly through their component tests), so this follows `client.test.ts`'s
  * fetch-mocking convention instead.
  */
-import { listStaff, updateStaff, deactivateStaff } from './staff-api';
+import { listStaff, updateStaff, deactivateStaff, unlockStaffLogin } from './staff-api';
 import { ApiError } from '@/lib/api/client';
 
 describe('staff-api', () => {
@@ -65,5 +65,17 @@ describe('staff-api', () => {
     await expect(deactivateStaff('tok', 'u1')).rejects.toThrow(
       'No puedes desactivar al último administrador.',
     );
+  });
+
+  it('unlockStaffLogin (DX-048): POST /staff/:userId/login-unlock, tolerando el 204 sin cuerpo', async () => {
+    const spy = jest.fn().mockResolvedValue({ ok: true, text: async () => '' });
+    global.fetch = spy as unknown as typeof fetch;
+
+    await expect(unlockStaffLogin('tok', 'u1')).resolves.toBeUndefined();
+
+    const [url, init] = spy.mock.calls[0];
+    expect(String(url)).toMatch(/\/staff\/u1\/login-unlock$/);
+    expect(init.method).toBe('POST');
+    expect(init.headers.Authorization).toBe('Bearer tok');
   });
 });

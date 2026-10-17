@@ -2,13 +2,14 @@
 import * as React from 'react';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, LockKeyhole } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import {
   getStaffMember,
   updateStaff,
   deactivateStaff,
   reactivateStaff,
+  unlockStaffLogin,
   type ClinicRole,
   type StaffMemberDetail,
   type UpdateStaffInput,
@@ -74,7 +75,23 @@ const copy = {
   agendaHint: 'Bloquea sus vacaciones, un congreso o una reunión: la agenda no le dará citas en ese rango.',
   blockAgenda: 'Bloquear agenda',
   blockCreated: 'Agenda bloqueada.',
+  // DX-048: bloqueo del inicio de sesión por intentos fallidos.
+  loginBlocked: (minutes: number) =>
+    `Inicio de sesión bloqueado por intentos fallidos. Puede volver a intentarlo en ${minutes} min, o puedes desbloquearlo ahora.`,
+  unlockLogin: 'Desbloquear inicio de sesión',
+  unlockTitle: 'Desbloquear inicio de sesión',
+  unlockBody: (name: string) =>
+    `${name} podrá volver a iniciar sesión ahora mismo y se borrarán sus intentos fallidos. Hazlo solo si confirmaste que fue esta persona quien se equivocó.`,
+  unlockConfirmYes: 'Sí, desbloquear',
+  genericUnlockError: 'No pudimos desbloquear el inicio de sesión.',
 };
+
+/** Minutos que faltan (hacia arriba) hasta `until`, o `null` si ya pasó. */
+function minutesLeft(until: string | null): number | null {
+  if (!until) return null;
+  const ms = Date.parse(until) - Date.now();
+  return Number.isNaN(ms) || ms <= 0 ? null : Math.ceil(ms / 60_000);
+}
 
 function todayLocal(): string {
   const d = new Date();
@@ -120,6 +137,8 @@ export function StaffMemberProfile({ token, userId }: StaffMemberProfileProps) {
 
   const [confirmingDeactivate, setConfirmingDeactivate] = useState(false);
   const [changingAccess, setChangingAccess] = useState(false);
+  const [confirmingUnlock, setConfirmingUnlock] = useState(false);
+  const [unlocking, setUnlocking] = useState(false);
 
   // DX-122: el odontólogo solo bloquea su propia agenda (la API lo exige).
   const viewerRole = getTokenRole(token);
@@ -183,6 +202,7 @@ export function StaffMemberProfile({ token, userId }: StaffMemberProfileProps) {
       const next = {
         ...updated,
         status: member.status,
+        loginBlockedUntil: member.loginBlockedUntil,
         // `null` de la API = lo borró; solo `undefined` (respuesta sin el
         // campo) conserva el que había.
         professionalLicense:
@@ -240,6 +260,25 @@ export function StaffMemberProfile({ token, userId }: StaffMemberProfileProps) {
       setChangingAccess(false);
     }
   }
+
+  async function handleUnlock() {
+    setUnlocking(true);
+    try {
+      await unlockStaffLogin(token, userId);
+      setConfirmingUnlock(false);
+      setReloadKey((k) => k + 1);
+    } catch (err) {
+      // Como al desactivar: el diálogo abierto dejaría inerte el toast.
+      setConfirmingUnlock(false);
+      notifyError(apiErrorMessage(err, { fallback: copy.genericUnlockError }), {
+        onRetry: () => handleUnlock(),
+      });
+    } finally {
+      setUnlocking(false);
+    }
+  }
+
+  const blockedMinutes = member ? minutesLeft(member.loginBlockedUntil) : null;
 
   const isUnchanged =
     !!member &&
@@ -386,6 +425,23 @@ export function StaffMemberProfile({ token, userId }: StaffMemberProfileProps) {
                   {copy.reactivate}
                 </Button>
               )}
+              {blockedMinutes !== null ? (
+                <div className="mt-1 flex flex-col gap-3 border-t border-hairline pt-4">
+                  <p className="flex items-start gap-1.5 text-sm text-warning">
+                    <LockKeyhole className="mt-0.5 size-4 shrink-0" aria-hidden />
+                    <span>{copy.loginBlocked(blockedMinutes)}</span>
+                  </p>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="self-start"
+                    disabled={unlocking}
+                    onClick={() => setConfirmingUnlock(true)}
+                  >
+                    {copy.unlockLogin}
+                  </Button>
+                </div>
+              ) : null}
             </Card>
           </div>
         )}
@@ -418,6 +474,16 @@ export function StaffMemberProfile({ token, userId }: StaffMemberProfileProps) {
           }}
         />
       ) : null}
+      <ConfirmDialog
+        open={confirmingUnlock}
+        onOpenChange={setConfirmingUnlock}
+        title={copy.unlockTitle}
+        description={member ? copy.unlockBody(member.fullName) : undefined}
+        confirmLabel={copy.unlockConfirmYes}
+        confirming={unlocking}
+        destructive={false}
+        onConfirm={() => void handleUnlock()}
+      />
     </div>
   );
 }

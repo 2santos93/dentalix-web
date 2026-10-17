@@ -6,6 +6,7 @@ import {
   updateStaff,
   deactivateStaff,
   reactivateStaff,
+  unlockStaffLogin,
 } from '@/lib/staff/staff-api';
 import { ApiError } from '@/lib/api/client';
 import { Toaster } from '@/components/errors/toaster';
@@ -18,6 +19,7 @@ jest.mock('../../lib/staff/staff-api', () => ({
   updateStaff: jest.fn(),
   deactivateStaff: jest.fn(),
   reactivateStaff: jest.fn(),
+  unlockStaffLogin: jest.fn(),
 }));
 
 jest.mock('../../lib/locations/locations-api', () => ({
@@ -28,6 +30,7 @@ const mockedGet = getStaffMember as jest.MockedFunction<typeof getStaffMember>;
 const mockedUpdate = updateStaff as jest.MockedFunction<typeof updateStaff>;
 const mockedDeactivate = deactivateStaff as jest.MockedFunction<typeof deactivateStaff>;
 const mockedReactivate = reactivateStaff as jest.MockedFunction<typeof reactivateStaff>;
+const mockedUnlock = unlockStaffLogin as jest.MockedFunction<typeof unlockStaffLogin>;
 
 const activo = {
   userId: 'u1',
@@ -35,6 +38,7 @@ const activo = {
   email: 'ana@clinic.com',
   role: 'DENTIST' as const,
   status: 'ACTIVE' as const,
+  loginBlockedUntil: null,
 };
 
 describe('StaffMemberProfile', () => {
@@ -43,6 +47,7 @@ describe('StaffMemberProfile', () => {
     mockedUpdate.mockReset();
     mockedDeactivate.mockReset();
     mockedReactivate.mockReset();
+    mockedUnlock.mockReset();
     mockedGet.mockResolvedValue(activo);
   });
 
@@ -228,5 +233,65 @@ describe('StaffMemberProfile', () => {
     render(<StaffMemberProfile token={admin} userId="u1" />);
     await screen.findByText('Ana Ríos');
     expect(screen.queryByRole('button', { name: 'Bloquear agenda' })).not.toBeInTheDocument();
+  });
+
+  describe('inicio de sesión bloqueado (DX-048)', () => {
+    const bloqueada = {
+      ...activo,
+      loginBlockedUntil: new Date(Date.now() + 4 * 60_000).toISOString(),
+    };
+
+    it('sin bloqueo no ofrece desbloquear', async () => {
+      render(<StaffMemberProfile token="tok" userId="u1" />);
+      await screen.findByText('Ana Ríos');
+      expect(
+        screen.queryByRole('button', { name: /desbloquear inicio de sesión/i }),
+      ).not.toBeInTheDocument();
+    });
+
+    it('bloqueada: lo explica y desbloquea tras confirmar; luego recarga el perfil', async () => {
+      mockedGet.mockResolvedValueOnce(bloqueada).mockResolvedValueOnce(activo);
+      mockedUnlock.mockResolvedValue(undefined);
+      const user = userEvent.setup();
+      render(<StaffMemberProfile token="tok" userId="u1" />);
+
+      expect(
+        await screen.findByText(/inicio de sesión bloqueado por intentos fallidos/i),
+      ).toBeInTheDocument();
+      expect(screen.getByText(/puede volver a intentarlo en 4 min/i)).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: /desbloquear inicio de sesión/i }));
+
+      const dialog = await screen.findByRole('dialog');
+      expect(within(dialog).getByText(/Ana Ríos podrá volver a iniciar sesión/i)).toBeInTheDocument();
+      expect(mockedUnlock).not.toHaveBeenCalled();
+      await user.click(within(dialog).getByRole('button', { name: /sí, desbloquear/i }));
+
+      await waitFor(() => expect(mockedUnlock).toHaveBeenCalledWith('tok', 'u1'));
+      await waitFor(() =>
+        expect(
+          screen.queryByRole('button', { name: /desbloquear inicio de sesión/i }),
+        ).not.toBeInTheDocument(),
+      );
+      expect(mockedGet).toHaveBeenCalledTimes(2);
+    });
+
+    it('si falla, avisa con un toast que permite reintentar', async () => {
+      mockedGet.mockResolvedValue(bloqueada);
+      mockedUnlock.mockRejectedValueOnce(new ApiError(500, 'boom'));
+      const user = userEvent.setup();
+      render(
+        <>
+          <StaffMemberProfile token="tok" userId="u1" />
+          <Toaster />
+        </>,
+      );
+      await user.click(
+        await screen.findByRole('button', { name: /desbloquear inicio de sesión/i }),
+      );
+      const dialog = await screen.findByRole('dialog');
+      await user.click(within(dialog).getByRole('button', { name: /sí, desbloquear/i }));
+      expect(await screen.findByText(/no pudimos desbloquear el inicio de sesión/i)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /reintentar/i })).toBeInTheDocument();
+    });
   });
 });

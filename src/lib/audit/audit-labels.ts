@@ -59,6 +59,8 @@ export const AUDIT_RESOURCE_LABELS: Record<AuditResourceType, string> = {
   // DX-122: bloqueos de agenda y «Pendientes por agendar».
   SCHEDULE_BLOCK: 'Bloqueo de agenda',
   WAITLIST_ENTRY: 'Pendiente por agendar',
+  // DX-048: un ADMIN desbloquea el inicio de sesión de un miembro.
+  STAFF_MEMBER: 'Miembro del personal',
 };
 
 export const AUDIT_RESOURCE_OPTIONS = Object.keys(AUDIT_RESOURCE_LABELS) as AuditResourceType[];
