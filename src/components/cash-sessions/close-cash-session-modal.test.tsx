@@ -10,6 +10,12 @@ jest.mock('../../lib/cash-sessions/cash-sessions-api', () => ({
   closeCashSession: jest.fn(),
 }));
 const mockedClose = closeCashSession as jest.MockedFunction<typeof closeCashSession>;
+jest.mock('../../lib/reference/currencies-api', () => ({
+  listCurrencies: jest.fn().mockResolvedValue([
+    { code: 'COP', name: 'Peso colombiano', symbol: '$' },
+    { code: 'USD', name: 'Dólar estadounidense', symbol: 'US$' },
+  ]),
+}));
 
 function renderModal(session = cashSessionFixture(), onClosed = jest.fn()) {
   render(
@@ -81,6 +87,72 @@ describe('CloseCashSessionModal (DX-027)', () => {
     await user.click(screen.getByRole('button', { name: 'Cerrar caja' }));
     expect(await screen.findByText(/El arqueo no cuadra/)).toBeInTheDocument();
     expect(screen.getByLabelText('Motivo, si el arqueo no cuadra')).toBeInTheDocument();
+  });
+
+  it('si la API dice que no cuadra (entró un abono después de abrir el modal), deja escribir el motivo y reenviar', async () => {
+    const user = userEvent.setup();
+    mockedClose.mockRejectedValueOnce(
+      new ApiError(400, 'El arqueo no cuadra: explica el motivo de la diferencia antes de cerrar.'),
+    );
+    renderModal();
+    await user.type(screen.getByLabelText('Contado en efectivo (COP)'), '80000');
+    await user.type(screen.getByLabelText('Contado en tarjeta (COP)'), '25000');
+    expect(screen.queryByLabelText('Motivo de la diferencia')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Cerrar caja' }));
+    expect(await screen.findByText(/El arqueo no cuadra/)).toBeInTheDocument();
+
+    mockedClose.mockResolvedValue(closedCashSessionFixture());
+    await user.type(screen.getByLabelText('Motivo de la diferencia'), 'Entró un abono al final');
+    await user.click(screen.getByRole('button', { name: 'Cerrar caja' }));
+    await waitFor(() =>
+      expect(mockedClose).toHaveBeenLastCalledWith(
+        'tok',
+        'cs-1',
+        expect.objectContaining({ differenceReason: 'Entró un abono al final' }),
+      ),
+    );
+  });
+
+  it('arqueo ciego: también cuenta las monedas de los ajustes y deja añadir otra moneda cobrada', async () => {
+    const user = userEvent.setup();
+    mockedClose.mockResolvedValue(closedCashSessionFixture());
+    renderModal(
+      cashSessionFixture({
+        blindHidden: true,
+        expected: null,
+        payments: null,
+        adjustments: [
+          {
+            id: 'adj-1',
+            kind: 'CORRECTION',
+            currency: 'EUR',
+            method: 'CASH',
+            amount: -5,
+            reason: 'Billete falso',
+            createdAt: '2026-10-17T15:00:00.000Z',
+            createdBy: { id: 'u-admin', fullName: 'Admin' },
+            sessionId: 'cs-1',
+            payment: null,
+            originalSession: null,
+          },
+        ],
+      }),
+    );
+    expect(screen.getByLabelText('Contado en efectivo (EUR)')).toBeInTheDocument();
+    expect(screen.queryByLabelText('Contado en efectivo (USD)')).not.toBeInTheDocument();
+
+    await screen.findByRole('option', { name: /Dólar/ });
+    await user.selectOptions(screen.getByLabelText('Otra moneda para contar'), 'USD');
+    await user.click(screen.getByRole('button', { name: 'Contar esta moneda' }));
+    await user.type(screen.getByLabelText('Contado en efectivo (USD)'), '30');
+    await user.click(screen.getByRole('button', { name: 'Cerrar caja' }));
+    await waitFor(() =>
+      expect(mockedClose).toHaveBeenCalledWith(
+        'tok',
+        'cs-1',
+        expect.objectContaining({ counts: [{ currency: 'USD', method: 'CASH', counted: 30 }] }),
+      ),
+    );
   });
 
   it('un importe que no se entiende no sale hacia la API', async () => {

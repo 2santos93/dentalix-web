@@ -19,7 +19,10 @@ import {
 } from '@/lib/cash-sessions/arqueo';
 import { PAYMENT_METHOD_LABELS } from '@/lib/payments/payment-method';
 import { formatCurrency } from '@/lib/format/currency';
+import { ApiError } from '@/lib/api/client';
 import { FormModal } from '@/components/shared/form-modal';
+import { CurrencySelect } from '@/components/shared/currency-select';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { InlineError } from '@/components/errors/inline-error';
@@ -43,6 +46,8 @@ const copy = {
   reasonHint: `Entre ${CASH_REASON_MIN} y ${CASH_DIFFERENCE_REASON_MAX} caracteres. Queda en el cierre.`,
   reasonRequired: `El arqueo no cuadra: explica el motivo (al menos ${CASH_REASON_MIN} caracteres).`,
   invalidCounts: 'Hay importes que no se entienden: usa números con como mucho 2 decimales.',
+  otherCurrency: 'Otra moneda para contar',
+  addCurrency: 'Contar esta moneda',
   notes: 'Notas del cierre (opcional)',
   submit: 'Cerrar caja',
   genericError: 'No pudimos cerrar la caja. Intenta de nuevo.',
@@ -75,21 +80,32 @@ export function CloseCashSessionModal({
 }: CloseCashSessionModalProps) {
   const baseId = useId();
   const blind = session.blindHidden;
+  // Con arqueo ciego no se sabe qué monedas se cobraron: las del fondo, la de
+  // la sede y las de los ajustes que entraron en la caja (esos sí se ven), y
+  // quien cuenta puede añadir otra que tenga en el cajón.
   const initialRows = useMemo(
     () =>
       countRows(blind ? null : session.expected, [
         ...session.floats.map((f) => f.currency),
+        ...session.adjustments.map((a) => a.currency),
         defaultCurrency,
       ]),
-    [blind, session.expected, session.floats, defaultCurrency],
+    [blind, session.expected, session.floats, session.adjustments, defaultCurrency],
   );
   const [rows, setRows] = useState<CountRow[]>(initialRows);
+  const [extraCurrency, setExtraCurrency] = useState(defaultCurrency);
+  // La API recalcula el esperado con la caja bloqueada: si entró un abono
+  // después de abrir este modal, puede no cuadrar aunque aquí sí. Su 400 abre
+  // el campo del motivo para poder reenviar.
+  const [askedReason, setAskedReason] = useState(false);
   const [reason, setReason] = useState('');
   const [notes, setNotes] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const differs = !blind && hasDifference(rows);
+  const showReason = blind || differs || askedReason;
+  const counting = new Set(rows.map((row) => row.currency));
   const reasonId = `${baseId}-reason`;
 
   function patch(index: number, counted: string) {
@@ -104,7 +120,7 @@ export function CloseCashSessionModal({
       return;
     }
     const trimmed = reason.trim();
-    if (differs && trimmed.length < CASH_REASON_MIN) {
+    if ((differs || askedReason) && trimmed.length < CASH_REASON_MIN) {
       setFormError(copy.reasonRequired);
       return;
     }
@@ -118,6 +134,7 @@ export function CloseCashSessionModal({
       });
       onClosed(closed);
     } catch (err) {
+      if (err instanceof ApiError && err.status === 400) setAskedReason(true);
       setError(apiErrorMessage(err, copy.genericError));
     } finally {
       setSubmitting(false);
@@ -186,9 +203,31 @@ export function CloseCashSessionModal({
             );
           })}
         </ul>
+        {blind ? (
+          <div className="mt-3 flex items-end gap-2">
+            <div className="w-44 shrink-0">
+              <CurrencySelect
+                id={`${baseId}-extra-currency`}
+                token={token}
+                value={extraCurrency}
+                onChange={setExtraCurrency}
+                disabled={submitting}
+                ariaLabel={copy.otherCurrency}
+              />
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={submitting || counting.has(extraCurrency)}
+              onClick={() => setRows((current) => [...current, ...countRows(null, [extraCurrency])])}
+            >
+              {copy.addCurrency}
+            </Button>
+          </div>
+        ) : null}
       </fieldset>
 
-      {blind || differs ? (
+      {showReason ? (
         <div className="flex flex-col gap-1.5">
           <Label htmlFor={reasonId}>{blind ? copy.blindReason : copy.reason}</Label>
           <textarea
