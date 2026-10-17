@@ -1797,6 +1797,54 @@ export interface paths {
         patch: operations["PrescriptionTemplatesController_update"];
         trace?: never;
     };
+    "/api/v1/reminder-settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ReminderSettingsController_findAll"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reminder-settings/{locationId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put: operations["ReminderSettingsController_replace"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/appointments/{id}/reminders": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["AppointmentRemindersController_find"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -4965,6 +5013,90 @@ export interface components {
             name?: string;
             notes?: string;
             items?: components["schemas"]["PrescriptionItemInputDto"][];
+        };
+        LocationReminderSettingsDto: {
+            /** Format: uuid */
+            locationId: string;
+            /** @example Sede principal */
+            locationName: string;
+            /** @description Por defecto, false (sede sin configurar) */
+            enabled: boolean;
+            /**
+             * @description Horas antes del inicio en que sale cada email, de mayor a menor (máx. 3, 1..168)
+             * @example [
+             *       48,
+             *       2
+             *     ]
+             */
+            leadHours: number[];
+            /**
+             * Format: date-time
+             * @description null = la sede nunca se configuró
+             */
+            updatedAt: string | null;
+        };
+        UpdateReminderSettingsDto: {
+            /** @description Activar o desactivar los recordatorios de la sede */
+            enabled: boolean;
+            /**
+             * @description Horas antes (enteros 1..168, sin repetir). Activo exige al menos una.
+             * @example [
+             *       48,
+             *       2
+             *     ]
+             */
+            leadHours: number[];
+        };
+        /**
+         * @description SENT: dejado en el outbox de email (sentAt). SKIPPED: omitido (skipReason). SENDING: entregándose. PENDING: saldrá en dueAt. MISSED: su hora pasó sin enviarse (la cita se agendó después).
+         * @enum {string}
+         */
+        AppointmentReminderState: "SENT" | "SKIPPED" | "SENDING" | "PENDING" | "MISSED";
+        /**
+         * @description NO_EMAIL sin email · CANCELLED/COMPLETED/NO_SHOW estado de la cita · RESCHEDULED a otra hora · DELETED retirada · DISABLED la sede los desactivó · TOO_LATE la cita ya había empezado
+         * @enum {string}
+         */
+        AppointmentReminderSkipReason: "NO_EMAIL" | "CANCELLED" | "COMPLETED" | "NO_SHOW" | "RESCHEDULED" | "DELETED" | "DISABLED" | "TOO_LATE";
+        /**
+         * @description Entrega del email por el proveedor (solo si se envió)
+         * @enum {string}
+         */
+        ReminderEmailDelivery: "PENDING" | "SENT" | "FAILED";
+        AppointmentReminderItemDto: {
+            /** @example 48 */
+            leadHours: number;
+            /**
+             * Format: date-time
+             * @description Hora de inicio de la cita para la que es este recordatorio
+             */
+            appointmentStart: string;
+            /**
+             * Format: date-time
+             * @description Inicio menos la antelación
+             */
+            dueAt: string;
+            /** @description SENT: dejado en el outbox de email (sentAt). SKIPPED: omitido (skipReason). SENDING: entregándose. PENDING: saldrá en dueAt. MISSED: su hora pasó sin enviarse (la cita se agendó después). */
+            state: components["schemas"]["AppointmentReminderState"];
+            /** Format: date-time */
+            sentAt: string | null;
+            /** @description NO_EMAIL sin email · CANCELLED/COMPLETED/NO_SHOW estado de la cita · RESCHEDULED a otra hora · DELETED retirada · DISABLED la sede los desactivó · TOO_LATE la cita ya había empezado */
+            skipReason: components["schemas"]["AppointmentReminderSkipReason"] | null;
+            /** @description Entrega del email por el proveedor (solo si se envió) */
+            emailDelivery: components["schemas"]["ReminderEmailDelivery"] | null;
+            /** @description false = de una hora de inicio anterior (la cita se reprogramó) */
+            current: boolean;
+        };
+        AppointmentRemindersDto: {
+            /** @description Recordatorios activos en la sede de la cita */
+            enabled: boolean;
+            /**
+             * @example [
+             *       48,
+             *       2
+             *     ]
+             */
+            leadHours: number[];
+            items: components["schemas"]["AppointmentReminderItemDto"][];
         };
     };
     responses: never;
@@ -9824,6 +9956,106 @@ export interface operations {
             };
             /** @description Ya existe una plantilla con ese nombre */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ReminderSettingsController_findAll: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocationReminderSettingsDto"][];
+                };
+            };
+            /** @description Solo un administrador puede ver y cambiar los recordatorios. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ReminderSettingsController_replace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                locationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateReminderSettingsDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocationReminderSettingsDto"];
+                };
+            };
+            /** @description Antelaciones inválidas (mensaje en español) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo un administrador puede ver y cambiar los recordatorios. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sede no encontrada en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AppointmentRemindersController_find: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AppointmentRemindersDto"];
+                };
+            };
+            /** @description Cita no encontrada en esta clínica */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
