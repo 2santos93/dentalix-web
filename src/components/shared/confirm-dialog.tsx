@@ -26,6 +26,12 @@ interface ConfirmDialogProps {
   destructive?: boolean;
   /** Optional error, e.g. the action failed server-side. */
   error?: string | null;
+  /**
+   * Al cerrar. Por defecto el foco vuelve a lo que lo tenía al abrir; si eso
+   * ya no existe (p. ej. la fila que se acaba de quitar), quien llama lo
+   * coloca aquí con `event.preventDefault()` para que no caiga en <body>.
+   */
+  onCloseAutoFocus?: (event: Event) => void;
 }
 
 /**
@@ -43,10 +49,11 @@ export function ConfirmDialog({
   confirming = false,
   destructive = true,
   error,
+  onCloseAutoFocus,
 }: ConfirmDialogProps) {
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-md">
+      <DialogContent className="max-w-md" onCloseAutoFocus={onCloseAutoFocus}>
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           {description ? <DialogDescription>{description}</DialogDescription> : null}

@@ -259,4 +259,32 @@ describe('PatientResponsiblePartiesSection (DX-203)', () => {
     await waitFor(() => expect(mockedRemove).toHaveBeenCalledWith('tok', 'son', 'r1'));
     expect(await screen.findByText('Sin responsable registrado')).toBeInTheDocument();
   });
+
+  it('al quitar, el foco no se pierde en <body>: pasa a «Añadir responsable» (WCAG 2.4.3)', async () => {
+    mockedGet.mockResolvedValueOnce(data({ parties: [motherParty] }));
+    mockedGet.mockResolvedValueOnce(data());
+    mockedRemove.mockResolvedValue(undefined);
+    renderSection();
+    const user = setupUser();
+    await user.click(await screen.findByRole('button', { name: 'Quitar a Claudia Navarro' }));
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: 'Quitar' }));
+    await screen.findByText('Sin responsable registrado');
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: 'Añadir responsable' })).toHaveFocus(),
+    );
+  });
+
+  it('al cancelar el quitar, el foco vuelve a su botón «Quitar»', async () => {
+    mockedGet.mockResolvedValueOnce(data({ parties: [motherParty] }));
+    renderSection();
+    const user = setupUser();
+    const remove = await screen.findByRole('button', { name: 'Quitar a Claudia Navarro' });
+    await user.click(remove);
+    const dialog = await screen.findByRole('dialog');
+    await user.click(within(dialog).getByRole('button', { name: 'Cancelar' }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    await waitFor(() => expect(remove).toHaveFocus());
+  });
 });

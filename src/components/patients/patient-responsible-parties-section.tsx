@@ -1,6 +1,6 @@
 'use client';
 import * as React from 'react';
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import Link from 'next/link';
 import { UserPlus, Users } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/error-message';
@@ -92,6 +92,10 @@ export function PatientResponsiblePartiesSection({
   const [removeBusy, setRemoveBusy] = useState(false);
   const [removeError, setRemoveError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  // Tras quitar, su botón «Quitar» ya no existe: el foco pasa a «Añadir
+  // responsable» en vez de perderse en <body> (WCAG 2.4.3).
+  const addButtonRef = useRef<HTMLButtonElement>(null);
+  const removedRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -117,6 +121,7 @@ export function PatientResponsiblePartiesSection({
     setRemoveError(null);
     try {
       await removeResponsibleParty(token, patientId, removing.id);
+      removedRef.current = true;
       setRemoving(null);
       setNotice(copy.removed);
       reload();
@@ -276,6 +281,7 @@ export function PatientResponsiblePartiesSection({
         </h3>
         {data ? (
           <Button
+            ref={addButtonRef}
             type="button"
             variant="secondary"
             size="sm"
@@ -319,6 +325,12 @@ export function PatientResponsiblePartiesSection({
         onConfirm={() => void confirmRemove()}
         confirming={removeBusy}
         error={removeError}
+        onCloseAutoFocus={(event) => {
+          if (!removedRef.current) return;
+          removedRef.current = false;
+          event.preventDefault();
+          addButtonRef.current?.focus();
+        }}
       />
     </section>
   );
