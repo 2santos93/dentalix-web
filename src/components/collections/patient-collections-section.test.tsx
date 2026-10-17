@@ -70,4 +70,39 @@ describe('PatientCollectionsSection (DX-150)', () => {
     expect(screen.getByTestId('promise-row').textContent?.replace(/\s/g, ' ')).toMatch(/Abonado: .*120\.000/);
     expect(screen.queryByRole('button', { name: 'Compromiso de pago' })).toBeNull();
   });
+
+  it('revisión: mientras carga (o si falla) no ofrece un compromiso que podría chocar con uno abierto', async () => {
+    let resolve: (v: { notes: []; promises: [] }) => void = () => {};
+    mockedGet.mockReturnValue(new Promise((r) => (resolve = r)));
+    render(<PatientCollectionsSection token="tok" patient={patient} />);
+    expect(screen.getByRole('button', { name: 'Registrar gestión' })).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Compromiso de pago' })).toBeNull();
+    resolve({ notes: [], promises: [] });
+    expect(await screen.findByRole('button', { name: 'Compromiso de pago' })).toBeInTheDocument();
+  });
+
+  it('revisión: con compromisos y sin gestiones, lo dice en vez de pintar una lista vacía', async () => {
+    mockedGet.mockResolvedValue({
+      notes: [],
+      promises: [
+        {
+          id: 'pp1',
+          patientId: 'pat-1',
+          locationId: 'loc-1',
+          amount: 200000,
+          currency: 'COP',
+          dueDate: '2026-11-15',
+          status: 'KEPT',
+          createdBy: { id: 'u1', fullName: 'Rita' },
+          createdAt: '2026-10-16T15:00:00.000Z',
+          settledAt: '2026-10-17T15:00:00.000Z',
+          covered: 200000,
+        },
+      ],
+    });
+    render(<PatientCollectionsSection token="tok" patient={patient} />);
+    expect(await screen.findByText('Cumplido')).toBeInTheDocument();
+    expect(screen.getByText('Sin gestiones.')).toBeInTheDocument();
+    expect(screen.queryAllByRole('list')).toHaveLength(1);
+  });
 });

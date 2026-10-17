@@ -33,6 +33,7 @@ export const collectionsCopy = {
   emptyTitle: 'Sin gestiones de cobro',
   emptyHint: 'Registra cada llamada, mensaje o conversación sobre el pago para que el equipo sepa qué se habló.',
   noPromises: 'Sin compromisos de pago.',
+  noNotes: 'Sin gestiones.',
   by: (name: string | null) => (name ? `por ${name}` : 'por un miembro que ya no está en la clínica'),
   promiseLine: (amount: string, day: string) => `${amount} para el ${day}`,
   covered: (amount: string) => `Abonado: ${amount}`,
@@ -86,6 +87,8 @@ export function PatientCollectionsSection({
   const notes = data?.notes ?? [];
   const promises = data?.promises ?? [];
   const hasOpenPromise = promises.some((p) => p.status === 'OPEN');
+  // Solo con la lista cargada: antes no se sabe si ya hay uno abierto (409).
+  const canPromise = data !== null && !error && !hasOpenPromise;
   const currencies = [...new Set([...debtCurrencies, ...promises.map((p) => p.currency)])];
 
   return (
@@ -102,12 +105,12 @@ export function PatientCollectionsSection({
             <NotebookPen aria-hidden />
             {collectionsCopy.registerNote}
           </Button>
-          {hasOpenPromise ? null : (
+          {canPromise ? (
             <Button type="button" variant="outline" onClick={() => setDialog('promise')} className="max-sm:h-11">
               <HandCoins aria-hidden />
               {collectionsCopy.promise}
             </Button>
-          )}
+          ) : null}
         </div>
       </div>
 
@@ -150,19 +153,23 @@ export function PatientCollectionsSection({
           </div>
           <div className="min-w-0">
             <h3 className="t-label mb-2 text-muted">{collectionsCopy.notesHeading}</h3>
-            <ul className="flex flex-col divide-y divide-hairline rounded-xl border border-border bg-surface">
-              {notes.map((n) => (
-                <li key={n.id} className="flex min-w-0 flex-col gap-1 px-4 py-3 text-sm" data-testid="note-row">
-                  <span className="font-medium text-ink">
-                    {CHANNEL_LABELS[n.channel]} · {OUTCOME_LABELS[n.outcome]}
-                  </span>
-                  {n.text ? <p className="whitespace-pre-line break-words text-ink">{n.text}</p> : null}
-                  <span className="text-xs text-muted tabular-nums">
-                    {formatDateTime(n.createdAt)} {collectionsCopy.by(n.author.fullName)}
-                  </span>
-                </li>
-              ))}
-            </ul>
+            {notes.length === 0 ? (
+              <p className="text-sm text-muted">{collectionsCopy.noNotes}</p>
+            ) : (
+              <ul className="flex flex-col divide-y divide-hairline rounded-xl border border-border bg-surface">
+                {notes.map((n) => (
+                  <li key={n.id} className="flex min-w-0 flex-col gap-1 px-4 py-3 text-sm" data-testid="note-row">
+                    <span className="font-medium text-ink">
+                      {CHANNEL_LABELS[n.channel]} · {OUTCOME_LABELS[n.outcome]}
+                    </span>
+                    {n.text ? <p className="whitespace-pre-line break-words text-ink">{n.text}</p> : null}
+                    <span className="text-xs text-muted tabular-nums">
+                      {formatDateTime(n.createdAt)} {collectionsCopy.by(n.author.fullName)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         </div>
       </AsyncSection>
