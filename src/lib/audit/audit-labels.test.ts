@@ -7,6 +7,7 @@ import {
   communicationDetail,
   implantSearchDetail,
   isPatientOptOut,
+  staffLoginDetail,
 } from './audit-labels';
 
 describe('etiquetas de auditoría', () => {
@@ -66,5 +67,16 @@ describe('implantSearchDetail (DX-191)', () => {
       'REF 021.5310 · 1 fila',
     );
     expect(implantSearchDetail({})).toBeNull();
+  });
+
+  // DX-213: el desbloqueo del login y su rechazo son los dos `Modificación`
+  // de un miembro: sin el motivo, un rechazo se leería como un desbloqueo.
+  it('distingue el desbloqueo del login de su rechazo', () => {
+    expect(staffLoginDetail({ reason: 'LOGIN_UNLOCKED' })).toBe('Desbloqueo del inicio de sesión');
+    expect(staffLoginDetail({ reason: 'LOGIN_UNLOCK_REFUSED' })).toBe(
+      'Desbloqueo del inicio de sesión rechazado (sin cambios)',
+    );
+    expect(staffLoginDetail({ reason: 'REMINDER_OPT_OUT' })).toBeNull();
+    expect(staffLoginDetail({})).toBeNull();
   });
 });

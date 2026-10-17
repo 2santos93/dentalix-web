@@ -84,7 +84,7 @@ export async function addStaffViaApi(
     email: person.email,
     role: person.role,
   });
-  const token = (await invitationLinkFor(person.email)).split('/').pop()!;
+  const token = (await invitationLinkFor(person.email, admin.origin)).split('/').pop()!;
   const res = await request.post(`${API_URL}/public/invitations/${token}/accept`, {
     headers: { 'X-Tenant-Host': admin.headers['X-Tenant-Host'] },
     data: { password: person.password },

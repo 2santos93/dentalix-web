@@ -18,6 +18,7 @@ describe('isHumanSpanish — heurística de idioma', () => {
     'Moneda desconocida: XYZ',
     'La receta ya está anulada',
     'Zona horaria inválida: Mars/Base',
+    'Esta cuenta da acceso a otra clínica: pide a la persona que espere unos minutos o que restablezca su contraseña',
   ])('reconoce como español: %s', (msg) => {
     expect(isHumanSpanish(msg)).toBe(true);
   });

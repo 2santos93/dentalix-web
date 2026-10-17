@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, LockKeyhole } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/error-message';
+import { ApiError } from '@/lib/api/api-error';
 import {
   getStaffMember,
   updateStaff,
@@ -84,6 +85,8 @@ const copy = {
     `${name} podrá volver a iniciar sesión ahora mismo y se borrarán sus intentos fallidos. Hazlo solo si confirmaste que fue esta persona quien se equivocó.`,
   unlockConfirmYes: 'Sí, desbloquear',
   genericUnlockError: 'No pudimos desbloquear el inicio de sesión.',
+  // DX-213: 404 al desbloquear = lo desactivaron entre la carga y el clic.
+  unlockNotActive: 'Esta persona ya no tiene el acceso activo. Actualizamos su perfil.',
 };
 
 /** Minutos que faltan (hacia arriba) hasta `until`, o `null` si ya pasó. */
@@ -139,6 +142,9 @@ export function StaffMemberProfile({ token, userId }: StaffMemberProfileProps) {
   const [changingAccess, setChangingAccess] = useState(false);
   const [confirmingUnlock, setConfirmingUnlock] = useState(false);
   const [unlocking, setUnlocking] = useState(false);
+  // DX-213: el 409 de la API («Esta cuenta da acceso a otra clínica…») no es
+  // un fallo que se arregle reintentando: se queda junto al botón, tal cual.
+  const [unlockRefused, setUnlockRefused] = useState<string | null>(null);
 
   // DX-122: el odontólogo solo bloquea su propia agenda (la API lo exige).
   const viewerRole = getTokenRole(token);
@@ -168,6 +174,7 @@ export function StaffMemberProfile({ token, userId }: StaffMemberProfileProps) {
         setFullName(data.fullName);
         setRole(data.role);
         setLicense(data.professionalLicense ?? '');
+        setUnlockRefused(null);
         setLoadError(null);
       } catch (err) {
         if (cancelled) return;
@@ -263,6 +270,7 @@ export function StaffMemberProfile({ token, userId }: StaffMemberProfileProps) {
 
   async function handleUnlock() {
     setUnlocking(true);
+    setUnlockRefused(null);
     try {
       await unlockStaffLogin(token, userId);
       setConfirmingUnlock(false);
@@ -270,15 +278,27 @@ export function StaffMemberProfile({ token, userId }: StaffMemberProfileProps) {
     } catch (err) {
       // Como al desactivar: el diálogo abierto dejaría inerte el toast.
       setConfirmingUnlock(false);
-      notifyError(apiErrorMessage(err, { fallback: copy.genericUnlockError }), {
-        onRetry: () => handleUnlock(),
-      });
+      if (err instanceof ApiError && err.status === 409) {
+        setUnlockRefused(apiErrorMessage(err, copy.genericUnlockError));
+      } else if (err instanceof ApiError && err.status === 404) {
+        // Ya no es un miembro activo: recargar muestra su estado real (y quita
+        // el botón); reintentar daría otra vez 404.
+        notifyError(copy.unlockNotActive);
+        setReloadKey((k) => k + 1);
+      } else {
+        notifyError(apiErrorMessage(err, { fallback: copy.genericUnlockError }), {
+          onRetry: () => handleUnlock(),
+        });
+      }
     } finally {
       setUnlocking(false);
     }
   }
 
-  const blockedMinutes = member ? minutesLeft(member.loginBlockedUntil) : null;
+  // DX-213: a un desactivado no se le ofrece desbloquear (la API ya manda
+  // `loginBlockedUntil: null`; esto lo mantiene si una respuesta vieja lo trae).
+  const blockedMinutes =
+    member && member.status === 'ACTIVE' ? minutesLeft(member.loginBlockedUntil) : null;
 
   const isUnchanged =
     !!member &&
@@ -440,6 +460,7 @@ export function StaffMemberProfile({ token, userId }: StaffMemberProfileProps) {
                   >
                     {copy.unlockLogin}
                   </Button>
+                  {unlockRefused ? <InlineError>{unlockRefused}</InlineError> : null}
                 </div>
               ) : null}
             </Card>

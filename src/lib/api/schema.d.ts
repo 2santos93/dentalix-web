@@ -949,7 +949,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
-        /** Desbloquea el inicio de sesión de un miembro (borra la espera y los intentos fallidos) */
+        /**
+         * Desbloquea el inicio de sesión de un miembro (borra la espera y los intentos fallidos)
+         * @description Solo para miembros activos de esta clínica cuya cuenta no da acceso a ninguna otra: el bloqueo es por cuenta, no por clínica. Un rechazo queda auditado (LOGIN_UNLOCK_REFUSED) sin tocar el contador.
+         */
         post: operations["StaffController_unlockLoginHandler"];
         delete?: never;
         options?: never;
@@ -3902,7 +3905,7 @@ export interface components {
             status: "ACTIVE" | "INACTIVE";
             /**
              * Format: date-time
-             * @description DX-048: hasta cuándo no puede iniciar sesión por intentos fallidos (null = sin bloqueo). Se quita con POST /staff/:userId/login-unlock.
+             * @description DX-048: hasta cuándo no puede iniciar sesión por intentos fallidos (null = sin bloqueo). Siempre null para un miembro desactivado (DX-213). Se quita con POST /staff/:userId/login-unlock.
              */
             loginBlockedUntil: string | null;
         };
@@ -8909,8 +8912,15 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description No es miembro de esta clínica */
+            /** @description No es miembro de esta clínica o su membresía está desactivada; el contador no cambia */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La cuenta da acceso a otra clínica (sin decir cuál ni cuántas); el contador no cambia. Mensaje: «Esta cuenta da acceso a otra clínica: pide a la persona que espere unos minutos o que restablezca su contraseña» */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

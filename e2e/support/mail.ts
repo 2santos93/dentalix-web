@@ -26,7 +26,11 @@ export async function linkFromMail(to: string, pattern: RegExp): Promise<string>
       async () => {
         const files = (await readdir(MAIL_DIR!).catch(() => [] as string[])).sort().reverse();
         for (const file of files) {
-          const email = JSON.parse(await readFile(join(MAIL_DIR!, file), 'utf8')) as SavedEmail;
+          // El FileMailer puede estar escribiéndolo: a medias, se relee en la siguiente vuelta.
+          const email = await readFile(join(MAIL_DIR!, file), 'utf8')
+            .then((raw) => JSON.parse(raw) as SavedEmail)
+            .catch(() => null);
+          if (!email) continue;
           const match = email.to === to ? pattern.exec(email.text) : null;
           if (match) {
             found = match[1] ?? match[0];
@@ -46,7 +50,15 @@ export function registrationTokenFor(to: string): Promise<string> {
   return linkFromMail(to, /\/register\/verificar\/([A-Za-z0-9_-]{43})/);
 }
 
-/** Enlace completo `<origen>/invitacion/<token>` del último email de invitación a `to`. */
-export function invitationLinkFor(to: string): Promise<string> {
-  return linkFromMail(to, /(https?:\/\/\S+\/invitacion\/[0-9a-f]{64})/);
+/**
+ * Enlace completo `<origen>/invitacion/<token>` del último email de invitación a `to`.
+ *
+ * Con `origin` solo vale el enlace de ESA clínica: la API escribe el email
+ * después de responder al `POST /staff/invitations`, así que si la misma
+ * persona ya tenía la invitación de otra clínica en el buzón, sin filtrar se
+ * leería ese enlace viejo (ya aceptado → 404) en vez de esperar al nuevo.
+ */
+export function invitationLinkFor(to: string, origin?: string): Promise<string> {
+  const prefix = origin ? origin.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') : 'https?:\\/\\/\\S+';
+  return linkFromMail(to, new RegExp(`(${prefix}\\/invitacion\\/[0-9a-f]{64})`));
 }
