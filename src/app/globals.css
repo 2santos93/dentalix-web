@@ -182,57 +182,56 @@
 }
 
 /*
- * Print CSS for the payment receipt (RECIBO-T1, docs/plans/2026-07-26-
- * payment-receipt.md). "Visibility" technique (not `display`) so the
- * receipt's own internal layout/spacing survives the print — only the
- * `.receipt-print-root` subtree (the receipt Dialog's content) stays
- * visible, everything else in the page (app shell, sidebar, other dialogs)
- * is hidden. `.receipt-print-hide` additionally removes the receipt's own
- * "Imprimir"/"Cerrar" action buttons from the printed page.
+ * Base de la impresión: al imprimir se oculta TODA la página ("visibility",
+ * no "display", para que el documento conserve su maquetación) y cada vista
+ * imprimible reabre solo su documento (`.statement-print-root`,
+ * `.receipt-print-root`...). Así nada del shell, de otros diálogos ni de los
+ * toasts sale en el papel.
  */
 @media print {
   body * {
     visibility: hidden !important;
   }
+}
+
+/*
+ * Print CSS del recibo de caja (DX-136, /print/payments/[paymentId]/receipt).
+ * Dos páginas CON NOMBRE en `html` (ninguna caja posterior abre una hoja en
+ * blanco, como en el consentimiento): A4 por defecto y la tirilla de 80 mm de
+ * las impresoras térmicas (`?formato=80mm`; el alto lo recorta la impresora).
+ * El documento queda en flujo y con su propia maquetación.
+ */
+@page receipt-a4 {
+  size: A4;
+  margin: 16mm;
+}
+@page receipt-roll {
+  size: 80mm 297mm;
+  margin: 4mm;
+}
+@media print {
+  html:has(.receipt-print-page[data-format='a4']) {
+    page: receipt-a4;
+  }
+  html:has(.receipt-print-page[data-format='80mm']) {
+    page: receipt-roll;
+  }
   .receipt-print-root,
   .receipt-print-root * {
     visibility: visible !important;
-  }
-  .receipt-print-root {
-    position: fixed;
-    inset: 0;
-    /* DialogContent centers on screen with translate(-50%,-50%); with inset:0
-       + width:auto that centering would shove the full-viewport box off-page,
-       clipping the printed receipt. Neutralize it (both the Tailwind v4
-       `translate` property and any `transform`). */
-    transform: none;
-    translate: none;
-    margin: 0;
-    padding: 24px;
-    background: #ffffff;
-    color: #111827;
-    box-shadow: none;
-    border: 0;
-    max-height: none;
-    overflow: visible;
-    width: auto;
-  }
-  .receipt-print-hide {
-    display: none !important;
   }
 }
 
 /*
  * Print CSS del estado de cuenta (DX-011). La vista imprimible
  * (/print/patients/[id]/account-statement) ya no tiene shell; aquí solo se
- * reabre la visibilidad que la regla del comprobante (`body * { visibility:
- * hidden }`, arriba) apaga para toda la página. A diferencia del comprobante,
- * el documento queda EN FLUJO (sin `position: fixed`): un estado de cuenta
- * largo ocupa varias hojas y un elemento fijo se recortaría a la primera.
+ * reabre la visibilidad que la base de impresión (`body * { visibility:
+ * hidden }`, arriba) apaga para toda la página. El documento queda EN FLUJO:
+ * un estado de cuenta largo ocupa varias hojas.
  * La barra de acciones se oculta con `print:hidden` en el propio componente.
  */
 /* Página CON NOMBRE: un `@page` anónimo cambiaría también el tamaño y los
- * márgenes del comprobante de abono (y de cualquier otra impresión de la app).
+ * márgenes del recibo de caja (y de cualquier otra impresión de la app).
  * Solo el documento del estado de cuenta pide A4. */
 @page statement {
   size: A4;
@@ -261,7 +260,7 @@
  * Print CSS del consentimiento firmado (DX-006, /print/patients/[id]/consents/
  * [consentId]). Mismo criterio que el estado de cuenta: página A4 con nombre
  * (no toca otras impresiones), documento en flujo y la visibilidad reabierta
- * frente a la regla del comprobante. El bloque de firmas no se parte entre
+ * frente a la base de impresión. El bloque de firmas no se parte entre
  * dos hojas.
  */
 @page consent {
@@ -289,7 +288,7 @@
  * Print CSS de la receta (DX-013, /print/patients/[id]/prescriptions/
  * [prescriptionId]). Mismo criterio que el consentimiento: página A4 con
  * nombre en `html` (ninguna caja posterior abre una hoja en blanco), documento
- * en flujo y la visibilidad reabierta frente a la regla del comprobante. Ni
+ * en flujo y la visibilidad reabierta frente a la base de impresión. Ni
  * un medicamento ni el bloque de firma se parten entre dos hojas.
  */
 @page prescription {
@@ -314,7 +313,7 @@
  * Print CSS del presupuesto (DX-012, /print/patients/[id]/treatment-plans/
  * [planId]). Mismo criterio que el consentimiento y la receta: página A4 con
  * nombre en `html` (ninguna caja posterior abre una hoja en blanco), documento
- * en flujo y la visibilidad reabierta frente a la regla del comprobante. Ni
+ * en flujo y la visibilidad reabierta frente a la base de impresión. Ni
  * una fila de la tabla, ni los totales, ni el bloque de firma se parten entre
  * dos hojas; la cabecera de la tabla se repite en cada hoja.
  */

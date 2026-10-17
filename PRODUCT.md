@@ -78,7 +78,9 @@ branding (color + logo). Diferenciadores del producto:
 - Navegación por secciones: Dashboard, Pacientes (lista + detalle con **cuatro** tabs: Datos ·
   Historia clínica · Odontograma · Plan de tratamiento), Agenda, Personal, Inventario, Catálogo,
   Ajustes (Mi perfil · Horarios por sede). Los pagos viven dentro del tab de plan de tratamiento
-  (`payment-plan-section`, `payment-receipt`), no en un tab propio.
+  (`payment-plan-section`), no en un tab propio. El recibo de caja numerado por sede (DX-136,
+  `payments/payment-receipt-dialog`; vista imprimible `/print/payments/[id]/receipt` en A4 o
+  tirilla de 80 mm) se abre desde el plan, el estado de cuenta y la caja.
 - Datos sensibles de salud: la historia clínica es documento médico-legal; hay auditoría de
   accesos e inmutabilidad (una corrección es una entrada nueva, no una edición).
 

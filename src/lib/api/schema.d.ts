@@ -1395,6 +1395,63 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/payments/{id}/receipt": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Ver el recibo de caja de un abono */
+        get: operations["PaymentReceiptsController_view"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/payments/{id}/receipt/print": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reimprimir el recibo (lo deja en la auditoría y lo devuelve)
+         * @description Devuelve el MISMO recibo que GET (su foto al emitirlo); la vista imprimible lo pide por aquí para que cada impresión quede registrada.
+         */
+        post: operations["PaymentReceiptsController_print"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/payments/{id}/receipt/email": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Enviar el recibo por email al paciente
+         * @description Encola el email (outbox, DX-088) con el MISMO recibo al email de la ficha del paciente, con el documento enmascarado.
+         */
+        post: operations["PaymentReceiptsController_email"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/treatment-plans/{id}/payment-plan": {
         parameters: {
             query?: never;
@@ -1926,9 +1983,9 @@ export type webhooks = Record<string, never>;
 export interface components {
     schemas: {
         /** @enum {string} */
-        AuditAction: "VIEW" | "CREATE" | "UPDATE" | "DELETE" | "SIGN" | "VOID" | "LOGIN" | "LOGIN_FAILED" | "PASSWORD_RESET" | "EXPORT" | "PRINT";
+        AuditAction: "VIEW" | "CREATE" | "UPDATE" | "DELETE" | "SIGN" | "VOID" | "LOGIN" | "LOGIN_FAILED" | "PASSWORD_RESET" | "EXPORT" | "PRINT" | "SEND";
         /** @enum {string} */
-        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "TENANT_DOMAIN";
+        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "TENANT_DOMAIN";
         /**
          * @description Rol con el que actuó (del token). `null` en un login fallido.
          * @enum {string}
@@ -3908,6 +3965,11 @@ export interface components {
             createdAt: string;
             /** Format: date-time */
             updatedAt: string;
+            /**
+             * @description Número del recibo de caja (DX-136): serie de la sede y consecutivo. null en los abonos anteriores a la numeración («sin serie»; su recibo conserva la referencia antigua REC-xxxxxxxx).
+             * @example NOR-000123
+             */
+            receiptNumber: string | null;
         };
         PlanBalanceDto: {
             /**
@@ -3939,6 +4001,123 @@ export interface components {
              * @example Cobro duplicado: el paciente pagó una sola vez
              */
             reason: string;
+        };
+        ReceiptClinicDto: {
+            /** @example Clínica Demo */
+            name: string;
+            /** @description Razón social (DX-019). */
+            legalName: string | null;
+            /** @description NIT/NIF (DX-019). */
+            taxId: string | null;
+            address: string | null;
+        };
+        ReceiptLocationDto: {
+            /** Format: uuid */
+            id: string;
+            /** @example Sede Norte */
+            name: string;
+            address: string | null;
+        };
+        ReceiptPatientDto: {
+            /** Format: uuid */
+            id: string;
+            /** @example Carolina Duque */
+            fullName: string;
+            /** @enum {string} */
+            docType: "CC" | "TI" | "CE" | "PASSPORT" | "OTHER";
+            /**
+             * @description Documento enmascarado: nunca se guarda ni se sirve en claro.
+             * @example ******5678
+             */
+            docNumberMasked: string | null;
+        };
+        ReceiptPaymentDto: {
+            /** Format: uuid */
+            id: string;
+            /** @example 150000 */
+            amount: number;
+            /** @example COP */
+            currency: string;
+            /** @enum {string|null} */
+            method: "CASH" | "CARD" | "TRANSFER" | "OTHER" | null;
+            /** Format: date-time */
+            paidAt: string;
+            /**
+             * @description Día civil en la sede.
+             * @example 2026-10-17
+             */
+            paidOn: string;
+        };
+        ReceiptPlanDto: {
+            /** Format: uuid */
+            id: string;
+            /** @example Opción A: implante */
+            optionLabel: string | null;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        ReceiptPlanBalanceDto: {
+            /** @example COP */
+            currency: string;
+            /** @example 900000 */
+            billable: number;
+            /** @example 450000 */
+            paid: number;
+            /** @example 450000 */
+            balance: number;
+        };
+        ReceiptCashierDto: {
+            /** Format: uuid */
+            id: string;
+            /** @example Recepción Demo */
+            fullName: string;
+        };
+        ReceiptSnapshotDto: {
+            /** @enum {number} */
+            version: 1;
+            clinic: components["schemas"]["ReceiptClinicDto"];
+            location: components["schemas"]["ReceiptLocationDto"];
+            /** @description Falta la razón social o el NIT/NIF: el recibo dice «Datos fiscales pendientes». */
+            fiscalDataPending: boolean;
+            patient: components["schemas"]["ReceiptPatientDto"];
+            payment: components["schemas"]["ReceiptPaymentDto"];
+            plan: components["schemas"]["ReceiptPlanDto"];
+            /** @description Saldo del plan tras el abono (moneda del plan); null si no se pudo calcular. */
+            planBalance: components["schemas"]["ReceiptPlanBalanceDto"] | null;
+            /** @description Quién cobró. */
+            cashier: components["schemas"]["ReceiptCashierDto"] | null;
+            /** @example Este documento no es factura */
+            legalNotice: string;
+        };
+        PaymentReceiptDto: {
+            /** Format: uuid */
+            paymentId: string;
+            /**
+             * @description Número del recibo, o la referencia antigua REC-xxxxxxxx si es «sin serie».
+             * @example NOR-000123
+             */
+            reference: string;
+            /** @example NOR */
+            seriesPrefix: string | null;
+            /** @example 123 */
+            number: number | null;
+            /** @description Abono anterior a la numeración consecutiva («sin serie»). */
+            legacy: boolean;
+            /** Format: date-time */
+            issuedAt: string;
+            voided: boolean;
+            /** Format: date-time */
+            voidedAt: string | null;
+            voidReason: string | null;
+            /** @description Foto inmutable al emitir (en los «sin serie», los datos de hoy). */
+            snapshot: components["schemas"]["ReceiptSnapshotDto"];
+        };
+        SendPaymentReceiptResponseDto: {
+            /**
+             * @description Destino enmascarado.
+             * @example an***@example.com
+             */
+            sentTo: string;
         };
         CreatePaymentPlanDto: {
             /**
@@ -8818,7 +8997,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Abono registrado. Repetir la MISMA petición (mismo plan y cuerpo) con la misma Idempotency-Key devuelve el abono original. */
+            /** @description Abono registrado, con su recibo de caja numerado (`receiptNumber`, DX-136). Repetir la MISMA petición (mismo plan y cuerpo) con la misma Idempotency-Key devuelve el abono original. */
             201: {
                 headers: {
                     [name: string]: unknown;
@@ -8903,6 +9082,125 @@ export interface operations {
             };
             /** @description El abono no existe, ya está anulado o es de otra clínica */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PaymentReceiptsController_view: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentReceiptDto"];
+                };
+            };
+            /** @description Rol sin acceso a pagos (403 en español) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El abono no existe o es de otra clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PaymentReceiptsController_print: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentReceiptDto"];
+                };
+            };
+            /** @description Rol sin acceso a pagos (403 en español) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El abono no existe o es de otra clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PaymentReceiptsController_email: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            202: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SendPaymentReceiptResponseDto"];
+                };
+            };
+            /** @description Rol sin acceso a pagos (403 en español) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El abono no existe o es de otra clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El paciente no tiene email */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Topes de envío de la clínica */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };

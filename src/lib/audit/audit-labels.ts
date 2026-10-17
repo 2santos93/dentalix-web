@@ -16,6 +16,8 @@ export const AUDIT_ACTION_LABELS: Record<AuditAction, string> = {
   PASSWORD_RESET: 'Contraseña restablecida',
   EXPORT: 'Exportación',
   PRINT: 'Impresión',
+  // DX-136: enviar el recibo de caja por email.
+  SEND: 'Envío por email',
 };
 
 export const AUDIT_ACTION_OPTIONS = Object.keys(AUDIT_ACTION_LABELS) as AuditAction[];
@@ -36,6 +38,7 @@ export const AUDIT_ACTION_VARIANT: Record<AuditAction, NonNullable<BadgeProps['v
   PASSWORD_RESET: 'warning',
   EXPORT: 'muted',
   PRINT: 'muted',
+  SEND: 'muted',
 };
 
 export const AUDIT_RESOURCE_LABELS: Record<AuditResourceType, string> = {
@@ -61,6 +64,8 @@ export const AUDIT_RESOURCE_LABELS: Record<AuditResourceType, string> = {
   WAITLIST_ENTRY: 'Pendiente por agendar',
   // DX-048: un ADMIN desbloquea el inicio de sesión de un miembro.
   STAFF_MEMBER: 'Miembro del personal',
+  // DX-136: recibo de caja de un abono (ver, reimprimir, enviar).
+  PAYMENT_RECEIPT: 'Recibo de caja',
   // SEC-009: un ADMIN verifica o elimina un dominio personalizado.
   TENANT_DOMAIN: 'Dominio personalizado',
 };

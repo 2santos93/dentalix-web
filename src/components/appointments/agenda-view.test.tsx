@@ -141,6 +141,18 @@ const FUTURE_DATE = (() => {
   return `${d.getFullYear()}-${mm}-${dd}`;
 })();
 
+// Solo se falsea `Date`: los temporizadores siguen reales para que RTL y
+// userEvent esperen como siempre.
+const fakeDateOnly = (now: Date) =>
+  jest.useFakeTimers({
+    now,
+    doNotFake: [
+      'hrtime', 'nextTick', 'performance', 'queueMicrotask', 'requestAnimationFrame',
+      'cancelAnimationFrame', 'requestIdleCallback', 'cancelIdleCallback', 'setImmediate',
+      'clearImmediate', 'setInterval', 'clearInterval', 'setTimeout', 'clearTimeout',
+    ],
+  });
+
 describe('AgendaView', () => {
   beforeEach(() => {
     mockedCreateAppointment.mockReset();
@@ -798,8 +810,11 @@ describe('AgendaView', () => {
     const mockedListWaitlist = listWaitlist as jest.MockedFunction<typeof listWaitlist>;
     const tokenFor = (role: string) =>
       `h.${btoa(JSON.stringify({ sub: 'u1', tenantId: 't1', role }))}.s`;
+    // TST-020: «hoy» fijo. Con el reloj real, una corrida que cruza las 00:00
+    // calculaba `today` un día y pintaba la agenda al siguiente.
+    const FIXED_NOW = new Date(2026, 5, 15, 12, 0, 0);
     const today = (() => {
-      const d = new Date();
+      const d = FIXED_NOW;
       return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     })();
     const lunch = {
@@ -816,6 +831,13 @@ describe('AgendaView', () => {
       createdAt: '2026-01-01T00:00:00.000Z',
       updatedAt: '2026-01-01T00:00:00.000Z',
     };
+
+    beforeEach(() => {
+      fakeDateOnly(FIXED_NOW);
+    });
+    afterEach(() => {
+      jest.useRealTimers();
+    });
 
     beforeEach(() => {
       mockedListBlocks.mockReset().mockResolvedValue([lunch]);

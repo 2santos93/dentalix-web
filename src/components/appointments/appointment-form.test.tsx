@@ -179,6 +179,18 @@ async function fillValidForm(user: ReturnType<typeof userEvent.setup>) {
   await user.type(screen.getByLabelText(/hora de fin/i), '09:30');
 }
 
+// Solo se falsea `Date`: los temporizadores siguen reales para que RTL y
+// userEvent esperen como siempre.
+const fakeDateOnly = (now: Date) =>
+  jest.useFakeTimers({
+    now,
+    doNotFake: [
+      'hrtime', 'nextTick', 'performance', 'queueMicrotask', 'requestAnimationFrame',
+      'cancelAnimationFrame', 'requestIdleCallback', 'cancelIdleCallback', 'setImmediate',
+      'clearImmediate', 'setInterval', 'clearInterval', 'setTimeout', 'clearTimeout',
+    ],
+  });
+
 describe('AppointmentForm', () => {
   beforeEach(() => {
     mockedCreateAppointment.mockReset();
@@ -402,6 +414,15 @@ describe('AppointmentForm', () => {
   });
 
   describe('no agendar en el pasado', () => {
+    // TST-020: reloj fijo a mediodía; con el real, «hace 5 min» caía en el día
+    // anterior si la corrida empezaba justo después de las 00:00.
+    beforeEach(() => {
+      fakeDateOnly(new Date(2026, 5, 15, 12, 0, 0));
+    });
+    afterEach(() => {
+      jest.useRealTimers();
+    });
+
     it('el date picker no ofrece días anteriores a hoy (min = hoy local)', async () => {
       await renderFormAndWaitForLoad();
       const today = new Date();
