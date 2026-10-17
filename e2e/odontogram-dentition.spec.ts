@@ -155,8 +155,11 @@ for (const viewport of VIEWPORTS) {
     await expect(voidedItem).toContainText(VOID_REASON);
     await expect(chart.getByRole('group', { name: 'Diente 64 (temporal), sano' })).toBeVisible({ timeout: 10_000 });
 
-    // --- La carta de ayer: solo lectura, sin el 64 y con el 55 en la boca ---
-    await page.getByLabel('Ver la carta al').fill(day(-1));
+    // --- La carta de anteayer: solo lectura, sin el 64 y con el 55 en la boca ---
+    // Dos días y no uno: `day()` usa el día del navegador (UTC en CI) y la
+    // carta el de la sede; entre las 00:00 y las 05:00 UTC «ayer» en UTC
+    // todavía es hoy en Bogotá y la carta ya incluiría la exfoliación.
+    await page.getByLabel('Ver la carta al').fill(day(-2));
     await expect(page.getByText(/· solo lectura/)).toBeVisible({ timeout: 10_000 });
     await expect(chart.getByRole('group', { name: 'Diente 55 (temporal), sano' })).toBeVisible({ timeout: 10_000 });
     await expect(page.getByRole('button', { name: 'Cambiar dentición' })).toHaveCount(0);

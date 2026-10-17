@@ -93,8 +93,8 @@ function AppointmentSummary({ appointment }: { appointment: ConfirmationAppointm
           <Icon aria-hidden className="mt-0.5 size-5 shrink-0 text-muted" />
           <div className="min-w-0">
             <dt className="text-xs font-medium tracking-wide text-muted">{label}</dt>
-            <dd className="font-medium tabular-nums text-ink first-letter:uppercase">{value}</dd>
-            {sub && <dd className="text-sm text-muted">{sub}</dd>}
+            <dd className="break-words font-medium tabular-nums text-ink first-letter:uppercase">{value}</dd>
+            {sub && <dd className="break-words text-sm text-muted">{sub}</dd>}
           </div>
         </div>
       ))}
@@ -216,7 +216,7 @@ export function PublicConfirmationView({ confirmationToken }: { confirmationToke
                   className="size-10 shrink-0 rounded-lg object-contain"
                 />
               )}
-              <h1 className="text-xl font-semibold tracking-tight text-ink">
+              <h1 className="min-w-0 break-words text-xl font-semibold tracking-tight text-ink">
                 {clinic?.name ?? copy.fallbackClinic}
               </h1>
             </header>
