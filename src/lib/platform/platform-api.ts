@@ -1,4 +1,8 @@
 import { apiFetch } from '@/lib/api/client';
+import type { components } from '@/lib/api/schema';
+
+export type PlatformMfaStatus = components['schemas']['PlatformMfaStatusDto'];
+export type PlatformMfaEnrollment = components['schemas']['PlatformMfaEnrollmentDto'];
 
 /** Una clínica tal como la lista el área de plataforma. */
 export interface PlatformTenant {
@@ -42,4 +46,32 @@ export function clinicUrl(subdomain: string): string {
   if (typeof window === 'undefined') return `https://${subdomain}`;
   const { protocol, host } = window.location;
   return `${protocol}//${subdomain}.${host}`;
+}
+
+/** `GET /platform/mfa` — si el superadmin ya tiene la verificación en dos pasos (SEC-008). */
+export async function getPlatformMfa(token: string): Promise<PlatformMfaStatus> {
+  return apiFetch<PlatformMfaStatus>('/platform/mfa', { token });
+}
+
+/**
+ * `POST /platform/mfa/enrollment` — genera un secreto nuevo (pendiente hasta
+ * confirmarlo). El secreto solo viaja en esta respuesta: no se guarda en el
+ * navegador.
+ */
+export async function startPlatformMfaEnrollment(token: string): Promise<PlatformMfaEnrollment> {
+  return apiFetch<PlatformMfaEnrollment>('/platform/mfa/enrollment', { method: 'POST', token });
+}
+
+/** `POST /platform/mfa/enrollment/confirm` — activa el MFA con un código de la app. */
+export async function confirmPlatformMfa(token: string, code: string): Promise<PlatformMfaStatus> {
+  return apiFetch<PlatformMfaStatus>('/platform/mfa/enrollment/confirm', {
+    method: 'POST',
+    token,
+    body: { code },
+  });
+}
+
+/** El secreto en grupos de 4 para teclearlo sin perderse («ABCD EFGH …»). */
+export function groupSecret(secret: string): string {
+  return secret.replace(/(.{4})/g, '$1 ').trim();
 }

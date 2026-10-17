@@ -16,6 +16,7 @@ import {
   BellRing,
   NotebookPen,
   Globe,
+  LifeBuoy,
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useAuthStore } from '@/lib/auth/auth-store';
@@ -28,6 +29,7 @@ import { canManageAppointmentTypes } from '@/lib/appointments/appointment-types-
 import { canManageNoteTemplates } from '@/lib/clinical-notes/note-templates-api';
 import { canManageReminders } from '@/lib/reminders/reminders-api';
 import { canManageDomains } from '@/lib/domains/domains-api';
+import { canReadSupportAccesses } from '@/lib/support-accesses/support-accesses-api';
 import { cn } from '@/lib/utils';
 
 // Tope de espera a la revocación en el servidor al cerrar sesión: la API suele
@@ -64,6 +66,7 @@ const copy = {
   noteTemplates: 'Plantillas de evolución',
   reminders: 'Recordatorios',
   domains: 'Dominios propios',
+  supportAccesses: 'Accesos de soporte',
   logout: 'Cerrar sesión',
   theme: 'Cambiar tema',
 };
@@ -339,6 +342,18 @@ export function UserMenu({
         >
           <Globe className="size-4 text-muted" aria-hidden />
           {copy.domains}
+        </Link>
+      ) : null}
+      {/* Accesos de soporte de Dentalix a la clínica (SEC-008): solo ADMIN. */}
+      {canReadSupportAccesses(getTokenRole(accessToken)) ? (
+        <Link
+          href="/settings/accesos-de-soporte"
+          role="menuitem"
+          onClick={() => setOpen(false)}
+          className="flex items-center gap-3 px-3 py-2 text-sm text-ink hover:bg-bg"
+        >
+          <LifeBuoy className="size-4 text-muted" aria-hidden />
+          {copy.supportAccesses}
         </Link>
       ) : null}
       <div className="my-1 border-t border-border" />

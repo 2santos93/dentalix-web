@@ -115,6 +115,10 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /**
+         * Inicia sesión en la clínica del host (o en plataforma desde el apex)
+         * @description SEC-008: un superadmin SIN membresía en la clínica solo entra como acceso de soporte (break-glass): necesita el MFA enrolado (`/platform/mfa`), `mfaCode` y `breakGlassReason`. Recibe solo un access token ADMIN de vida corta (`breakGlass: true`, `expiresAt`), sin refresh, y el acceso queda en `GET /support-accesses` de la clínica.
+         */
         post: operations["AuthController_loginHandler"];
         delete?: never;
         options?: never;
@@ -1756,6 +1760,77 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/platform/mfa": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Estado de la verificación en dos pasos del superadmin */
+        get: operations["PlatformMfaController_status"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/mfa/enrollment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Inicia el alta del MFA: genera un secreto (pendiente hasta confirmarlo) y devuelve el otpauth URI */
+        post: operations["PlatformMfaController_start"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/mfa/enrollment/confirm": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Confirma el alta con un código de la app y activa el MFA */
+        post: operations["PlatformMfaController_confirm"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/support-accesses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Accesos de soporte de Dentalix a la clínica (más reciente primero)
+         * @description Cada vez que un superadmin entra a la clínica sin ser miembro (con MFA y motivo) queda aquí: quién, motivo, IP, navegador, cuándo y hasta cuándo valía. Paginado por cursor (`nextCursor`).
+         */
+        get: operations["SupportAccessesController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/dashboard": {
         parameters: {
             query?: never;
@@ -2207,11 +2282,29 @@ export interface components {
             /** @description Subdominio de la clínica recién creada */
             subdomain: string;
         };
-        LoginDto: Record<string, never>;
+        LoginDto: {
+            /** @example ana@clinica.com */
+            email: string;
+            password: string;
+            /**
+             * @description SEC-008: código TOTP de 6 dígitos. Solo para el acceso de soporte (break-glass) de un superadmin a una clínica en la que no es miembro; en cualquier otro login se ignora.
+             * @example 123456
+             */
+            mfaCode?: string;
+            /** @description SEC-008: motivo del acceso de soporte (10–500 caracteres). La clínica lo ve en «Accesos de soporte». */
+            breakGlassReason?: string;
+        };
         AuthTokensDto: {
             accessToken: string;
-            /** @description Solo sin `X-Refresh-Transport: cookie` (clientes antiguos). En modo cookie el refresh viaja en la cookie HttpOnly `dentalix_rt` (Path=/api/v1/auth) y no se devuelve aquí. */
+            /** @description Solo sin `X-Refresh-Transport: cookie` (clientes antiguos). En modo cookie el refresh viaja en la cookie HttpOnly `dentalix_rt` (Path=/api/v1/auth) y no se devuelve aquí. Nunca en un acceso break-glass. */
             refreshToken?: string;
+            /** @description SEC-008: `true` en el acceso de soporte de un superadmin a una clínica sin membresía. El token no se puede renovar: al caducar hay que volver a entrar. */
+            breakGlass?: boolean;
+            /**
+             * Format: date-time
+             * @description SEC-008: caducidad del token break-glass (ISO 8601).
+             */
+            expiresAt?: string;
         };
         RefreshDto: Record<string, never>;
         LogoutDto: Record<string, never>;
@@ -5140,6 +5233,50 @@ export interface components {
             /** Format: date-time */
             finishedAt: string | null;
         };
+        PlatformMfaStatusDto: {
+            enabled: boolean;
+            /** Format: date-time */
+            enabledAt: string | null;
+        };
+        PlatformMfaEnrollmentDto: {
+            /**
+             * @description Secreto TOTP en base32 para teclearlo en la app de autenticación. Solo se muestra en esta respuesta.
+             * @example JBSWY3DPEHPK3PXPJBSWY3DPEHPK3PXP
+             */
+            secret: string;
+            /** @example otpauth://totp/Dentalix:soporte%40dentalix.app?secret=JBSWY3DPEHPK3PXP&issuer=Dentalix&algorithm=SHA1&digits=6&period=30 */
+            otpauthUri: string;
+        };
+        ConfirmPlatformMfaDto: {
+            /**
+             * @description Código de 6 dígitos de la app
+             * @example 123456
+             */
+            code: string;
+        };
+        SupportAccessDto: {
+            /** Format: uuid */
+            id: string;
+            /** @example Soporte Dentalix */
+            userFullName: string;
+            /** @example soporte@dentalix.app */
+            userEmail: string;
+            /** @example Ticket #4521: no cuadra la caja */
+            reason: string;
+            ip: string | null;
+            userAgent: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /**
+             * Format: date-time
+             * @description Hasta cuándo valía el acceso (el token no se puede renovar)
+             */
+            expiresAt: string;
+        };
+        SupportAccessesPageDto: {
+            items: components["schemas"]["SupportAccessDto"][];
+            nextCursor: string | null;
+        };
         DashboardPeriodDto: {
             /** Format: date-time */
             from: string;
@@ -6110,7 +6247,14 @@ export interface operations {
                     "application/json": components["schemas"]["AuthTokensDto"];
                 };
             };
-            /** @description Credenciales inválidas (mismo error exista o no el email) */
+            /** @description `mfaCode` no es de 6 dígitos o `breakGlassReason` no tiene 10–500 caracteres */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Credenciales inválidas (mismo error exista o no el email). Solo tras una contraseña correcta de superadmin sin membresía: `code: "MFA_NOT_ENROLLED"` (debe activar el MFA en plataforma) o `code: "BREAK_GLASS_REQUIRED"` (faltan código y motivo). */
             401: {
                 headers: {
                     [name: string]: unknown;
@@ -10388,6 +10532,132 @@ export interface operations {
                 content?: never;
             };
             /** @description No es un token de plataforma de un superadmin */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PlatformMfaController_status: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformMfaStatusDto"];
+                };
+            };
+        };
+    };
+    PlatformMfaController_start: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformMfaEnrollmentDto"];
+                };
+            };
+            /** @description El MFA ya está activo */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PlatformMfaController_confirm: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ConfirmPlatformMfaDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlatformMfaStatusDto"];
+                };
+            };
+            /** @description Código inválido o sin alta pendiente */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El MFA ya está activo */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    SupportAccessesController_list: {
+        parameters: {
+            query?: {
+                limit?: number;
+                /** @description `nextCursor` de la página anterior */
+                cursor?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SupportAccessesPageDto"];
+                };
+            };
+            /** @description Cursor manipulado o limit fuera de 1–100 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo ADMIN */
             403: {
                 headers: {
                     [name: string]: unknown;

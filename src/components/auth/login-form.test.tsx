@@ -193,4 +193,117 @@ describe('LoginForm', () => {
       );
     });
   });
+
+  describe('acceso de soporte del superadmin (SEC-008)', () => {
+    function fillCredentials() {
+      fireEvent.change(screen.getByLabelText(/correo/i), {
+        target: { value: 'soporte@dentalix.app' },
+      });
+      fireEvent.change(screen.getByLabelText(/^contraseña/i), {
+        target: { value: 'clave-larga' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: /iniciar sesión/i }));
+    }
+
+    beforeEach(() => {
+      (apiFetch as jest.Mock).mockReset();
+    });
+
+    it('si la API pide MFA y motivo, muestra el paso extra y reenvía con código y motivo', async () => {
+      (apiFetch as jest.Mock)
+        .mockRejectedValueOnce(
+          new ApiError(401, 'Acceso de soporte…', { code: 'BREAK_GLASS_REQUIRED' }),
+        )
+        .mockResolvedValueOnce({ accessToken: 'bg', breakGlass: true, expiresAt: '2026-10-17T12:30:00.000Z' });
+      render(<LoginForm />);
+      fillCredentials();
+
+      const code = await screen.findByLabelText(/código de verificación/i);
+      expect(screen.getByText(/la clínica verá este acceso/i)).toBeInTheDocument();
+      // El paso de credenciales ya no se ve (se conservan en memoria).
+      expect(screen.queryByLabelText(/^contraseña/i)).not.toBeInTheDocument();
+      expect(code).toHaveFocus();
+
+      fireEvent.change(code, { target: { value: '123 456' } });
+      fireEvent.change(screen.getByLabelText(/motivo del acceso/i), {
+        target: { value: 'Ticket 42: no cuadra la caja' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: /entrar como soporte/i }));
+
+      await waitFor(() => expect(apiFetch).toHaveBeenCalledTimes(2));
+      expect(apiFetch).toHaveBeenLastCalledWith('/auth/login', {
+        method: 'POST',
+        body: {
+          email: 'soporte@dentalix.app',
+          password: 'clave-larga',
+          mfaCode: '123456',
+          breakGlassReason: 'Ticket 42: no cuadra la caja',
+        },
+      });
+    });
+
+    it('valida en el cliente: 6 dígitos y motivo de al menos 10 caracteres', async () => {
+      (apiFetch as jest.Mock).mockRejectedValueOnce(
+        new ApiError(401, 'x', { code: 'BREAK_GLASS_REQUIRED' }),
+      );
+      render(<LoginForm />);
+      fillCredentials();
+      await screen.findByLabelText(/código de verificación/i);
+
+      fireEvent.change(screen.getByLabelText(/código de verificación/i), {
+        target: { value: '12' },
+      });
+      fireEvent.change(screen.getByLabelText(/motivo del acceso/i), {
+        target: { value: 'corto' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: /entrar como soporte/i }));
+
+      expect(await screen.findByText('El código tiene 6 dígitos.')).toBeInTheDocument();
+      expect(screen.getByText(/al menos 10 caracteres/i)).toBeInTheDocument();
+      expect(apiFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it('un código erróneo o reutilizado se explica sin salir del paso', async () => {
+      (apiFetch as jest.Mock)
+        .mockRejectedValueOnce(new ApiError(401, 'x', { code: 'BREAK_GLASS_REQUIRED' }))
+        .mockRejectedValueOnce(new ApiError(401, 'Invalid credentials'));
+      render(<LoginForm />);
+      fillCredentials();
+      fireEvent.change(await screen.findByLabelText(/código de verificación/i), {
+        target: { value: '123456' },
+      });
+      fireEvent.change(screen.getByLabelText(/motivo del acceso/i), {
+        target: { value: 'Ticket 42: no cuadra la caja' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: /entrar como soporte/i }));
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        /código no es correcto o ya se usó/i,
+      );
+      expect(screen.getByLabelText(/código de verificación/i)).toBeInTheDocument();
+    });
+
+    it('«Volver» regresa al paso de credenciales', async () => {
+      (apiFetch as jest.Mock).mockRejectedValueOnce(
+        new ApiError(401, 'x', { code: 'BREAK_GLASS_REQUIRED' }),
+      );
+      render(<LoginForm />);
+      fillCredentials();
+      fireEvent.click(await screen.findByRole('button', { name: /volver/i }));
+      expect(screen.getByLabelText(/^contraseña/i)).toBeInTheDocument();
+      expect(screen.queryByLabelText(/código de verificación/i)).not.toBeInTheDocument();
+    });
+
+    it('sin MFA enrolado explica que hay que activarlo en el área de plataforma', async () => {
+      (apiFetch as jest.Mock).mockRejectedValueOnce(
+        new ApiError(401, 'x', { code: 'MFA_NOT_ENROLLED' }),
+      );
+      render(<LoginForm />);
+      fillCredentials();
+      expect(await screen.findByRole('alert')).toHaveTextContent(
+        /activa la verificación en dos pasos en el área de plataforma/i,
+      );
+      expect(screen.queryByLabelText(/código de verificación/i)).not.toBeInTheDocument();
+    });
+  });
 });

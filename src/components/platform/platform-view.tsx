@@ -20,10 +20,13 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { SectionError } from '@/components/errors/section-error';
 import { InlineError } from '@/components/errors/inline-error';
 import { ArrowUpRight, LogOut } from 'lucide-react';
+import { PlatformMfaCard } from './platform-mfa-card';
 
 const copy = {
   title: 'Plataforma',
   subtitle: 'Todas las clínicas de Dentalix.',
+  enterHint:
+    'Entrar a una clínica es un acceso de soporte: pide el código de tu app y un motivo, dura poco y la clínica lo ve.',
   signInTitle: 'Acceso de plataforma',
   signInSubtitle: 'Solo para administradores de Dentalix.',
   email: 'Email',
@@ -167,6 +170,10 @@ export function PlatformView() {
         </Button>
       </div>
 
+      {/* SEC-008: sin MFA no hay acceso de soporte a las clínicas. */}
+      <PlatformMfaCard token={token} />
+      <p className="text-sm text-muted">{copy.enterHint}</p>
+
       {loading ? (
         <div className="flex flex-col gap-2">
           {Array.from({ length: 3 }).map((_, i) => (
@@ -198,7 +205,8 @@ export function PlatformView() {
                 </div>
                 {/* Enlace normal (no fetch): se entra a la clínica por su propio
                     host y allí se inicia sesión; el backend reconoce al
-                    superadmin sin membresía y le da acceso de ADMIN. */}
+                    superadmin sin membresía y le pide código TOTP y motivo
+                    (acceso de soporte de SEC-008, sin refresh). */}
                 <Button asChild variant="outline" size="sm">
                   <a href={clinicUrl(t.subdomain)}>
                     {copy.enter} <ArrowUpRight />
