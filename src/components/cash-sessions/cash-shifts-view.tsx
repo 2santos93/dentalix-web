@@ -59,7 +59,7 @@ const copy = {
   noSession: 'No tienes la caja abierta en esta sede.',
   noSessionHint: 'Ábrela con el fondo con el que empiezas: los abonos que registres entran en ella.',
   requireOpen: 'Esta clínica exige caja abierta para cobrar en efectivo.',
-  blindNote: 'Arqueo ciego: verás lo esperado al cerrar.',
+  blindNote: 'Arqueo ciego: cuenta antes de ver lo esperado; lo verás cuando cierres la caja.',
   openedAt: (when: string) => `Abierta el ${when}`,
   float: 'Fondo',
   expectedTitle: 'Esperado hasta ahora',

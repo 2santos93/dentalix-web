@@ -42,7 +42,7 @@ const copy = {
   colDifference: 'Diferencia',
   notCounted: 'Sin contar',
   noLines: 'Sin movimientos en este turno.',
-  blind: 'Arqueo ciego: lo esperado y los cobros del turno se ven al cerrar.',
+  blind: 'Arqueo ciego: lo esperado y los cobros del turno se ven cuando la caja está cerrada.',
   differenceReason: 'Motivo de la diferencia',
   squared: 'El arqueo cuadra.',
   closingNotes: 'Notas del cierre',
