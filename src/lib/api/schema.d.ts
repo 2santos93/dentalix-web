@@ -794,6 +794,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/staff/{userId}/login-unlock": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Desbloquea el inicio de sesión de un miembro (borra la espera y los intentos fallidos) */
+        post: operations["StaffController_unlockLoginHandler"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/locations/schedule": {
         parameters: {
             query?: never;
@@ -1852,7 +1869,7 @@ export interface components {
         /** @enum {string} */
         AuditAction: "VIEW" | "CREATE" | "UPDATE" | "DELETE" | "SIGN" | "VOID" | "LOGIN" | "LOGIN_FAILED" | "PASSWORD_RESET" | "EXPORT" | "PRINT";
         /** @enum {string} */
-        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY";
+        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER";
         /**
          * @description Rol con el que actuó (del token). `null` en un login fallido.
          * @enum {string}
@@ -2909,6 +2926,11 @@ export interface components {
             role: "DENTIST" | "ASSISTANT" | "RECEPTION" | "ADMIN";
             /** @enum {string} */
             status: "ACTIVE" | "INACTIVE";
+            /**
+             * Format: date-time
+             * @description DX-048: hasta cuándo no puede iniciar sesión por intentos fallidos (null = sin bloqueo). Se quita con POST /staff/:userId/login-unlock.
+             */
+            loginBlockedUntil: string | null;
         };
         UpdateStaffDto: {
             fullName?: string;
@@ -5324,9 +5346,22 @@ export interface operations {
                     "application/json": components["schemas"]["AuthTokensDto"];
                 };
             };
-            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            /** @description Credenciales inválidas (mismo error exista o no el email) */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /**
+             * @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera.
+             *
+             *     Demasiados intentos fallidos de esta cuenta o desde esta IP, o avalancha de peticiones. `Retry-After` lleva los segundos de espera; el mensaje es el mismo exista o no el email.
+             */
             429: {
                 headers: {
+                    /** @description Segundos que faltan para poder reintentar */
+                    "Retry-After"?: number;
                     [name: string]: unknown;
                 };
                 content?: never;
@@ -6931,6 +6966,40 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["StaffMemberDto"];
                 };
+            };
+        };
+    };
+    StaffController_unlockLoginHandler: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Desbloqueado (o no estaba bloqueado) */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo ADMIN */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No es miembro de esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
