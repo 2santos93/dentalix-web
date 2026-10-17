@@ -16,7 +16,7 @@ permissions:
 jobs:
   checks:
     name: Lint, tipos, tests y build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     env:
       NEXT_TELEMETRY_DISABLED: '1'
