@@ -17,6 +17,9 @@ describe('etiquetas de auditoría', () => {
     expect(AUDIT_ACTION_LABELS.LOGIN_FAILED).toBe('Inicio de sesión fallido');
     expect(AUDIT_ACTION_LABELS.PASSWORD_RESET).toBe('Contraseña restablecida');
     expect(AUDIT_RESOURCE_LABELS.MEDICAL_HISTORY).toBe('Historia clínica');
+    // DX-136: ver, reimprimir y enviar el recibo de caja.
+    expect(AUDIT_ACTION_LABELS.SEND).toBe('Envío por email');
+    expect(AUDIT_RESOURCE_LABELS.PAYMENT_RECEIPT).toBe('Recibo de caja');
   });
 
   it('las opciones no repiten valores', () => {

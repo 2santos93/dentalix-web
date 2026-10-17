@@ -35,11 +35,9 @@ import {
 import { listCatalogItems, type DentalCatalogItem } from '@/lib/odontogram/catalog-api';
 import { isFdiToothNumber } from '@/lib/odontogram/fdi';
 import type { ToothSurface } from '@/lib/odontogram/odontogram-api';
-import { getPatient } from '@/lib/patients/patients-api';
 import { listLocations, type ClinicLocation } from '@/lib/locations/locations-api';
 import { getActiveLocationId } from '@/lib/locations/location-store';
 import { paymentLocationHint } from '@/lib/payments/payment-location';
-import { fetchClinicName } from '@/lib/clinic-branding';
 import Link from 'next/link';
 import { formatCurrency } from '@/lib/format/currency';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -62,7 +60,7 @@ import {
   PAYMENT_METHOD_LABELS,
   PAYMENT_METHOD_OPTIONS,
 } from '@/lib/payments/payment-method';
-import { PaymentReceipt } from './payment-receipt';
+import { PaymentReceiptDialog } from '@/components/payments/payment-receipt-dialog';
 import { VoidPaymentModal } from '@/components/payments/void-payment-modal';
 import { voidPaymentErrorMessage } from '@/components/payments/use-void-payment';
 import { getTokenRole } from '@/lib/auth/token-role';
@@ -230,8 +228,12 @@ const copy = {
   paymentNotesFallback: '—',
   voidPaymentAction: 'Anular',
   voidingPayment: 'Anulando…',
-  // Recibo imprimible (RECIBO-T1).
+  // Recibo de caja numerado (DX-136).
   receiptAction: 'Recibo',
+  colPaymentReceipt: 'N.º de recibo',
+  paymentReceiptLegacy: 'Sin serie',
+  paymentReceiptMobile: (receiptNumber: string | null) =>
+    `Recibo ${receiptNumber ?? 'sin serie'}`,
   emptyPaymentsTitle: 'Este plan todavía no tiene abonos.',
   emptyPaymentsDescription: 'Registra el primer abono con el formulario de arriba.',
 
@@ -613,7 +615,8 @@ interface PaymentsListProps {
   payments: Payment[];
   voidingPaymentId: string | null;
   onVoid: (paymentId: string) => void;
-  onReceipt: (payment: Payment) => void;
+  /** Abre el recibo de caja del abono (DX-136). */
+  onReceipt: (paymentId: string) => void;
   /** Plan rechazado o cancelado (DX-109): el vacío no invita a registrar un abono. */
   billable?: boolean;
 }
@@ -639,6 +642,7 @@ function PaymentsList({ payments, voidingPaymentId, onVoid, onReceipt, billable 
           <TableHeader>
             <TableRow className="hover:bg-transparent">
               <TableHead>{copy.colPaymentDate}</TableHead>
+              <TableHead>{copy.colPaymentReceipt}</TableHead>
               <TableHead>{copy.colPaymentAmount}</TableHead>
               <TableHead>{copy.colPaymentMethod}</TableHead>
               <TableHead>{copy.colPaymentNotes}</TableHead>
@@ -651,6 +655,11 @@ function PaymentsList({ payments, voidingPaymentId, onVoid, onReceipt, billable 
               return (
                 <TableRow key={payment.id}>
                   <TableCell>{formatCivilDate(payment.paidOn)}</TableCell>
+                  <TableCell className="tabular-nums">
+                    {payment.receiptNumber ?? (
+                      <span className="text-muted">{copy.paymentReceiptLegacy}</span>
+                    )}
+                  </TableCell>
                   <TableCell className="font-medium">
                     {formatCurrency(payment.amount, payment.currency)}
                   </TableCell>
@@ -670,7 +679,7 @@ function PaymentsList({ payments, voidingPaymentId, onVoid, onReceipt, billable 
                         Separador vertical + hueco mayor para que el destructivo
                         no comparta zona de toque con el inocuo. */}
                     <div className="flex items-center gap-3">
-                      <Button type="button" variant="outline" size="sm" onClick={() => onReceipt(payment)}>
+                      <Button type="button" variant="outline" size="sm" onClick={() => onReceipt(payment.id)}>
                         {copy.receiptAction}
                       </Button>
                       <Separator orientation="vertical" className="h-5" />
@@ -712,12 +721,15 @@ function PaymentsList({ payments, voidingPaymentId, onVoid, onReceipt, billable 
               <p className="mt-2 font-medium text-ink tabular-nums">
                 {formatCurrency(payment.amount, payment.currency)}
               </p>
+              <p className="mt-1 text-sm text-muted tabular-nums">
+                {copy.paymentReceiptMobile(payment.receiptNumber)}
+              </p>
               <p className="mt-1 text-sm text-muted">{payment.notes ?? copy.paymentNotesFallback}</p>
               {/* Mismo aislamiento del destructivo que en la tabla de
                   escritorio — en móvil el riesgo de mal toque es mayor, no
                   menor. */}
               <div className="mt-3 flex items-center gap-3">
-                <Button type="button" variant="outline" size="sm" onClick={() => onReceipt(payment)}>
+                <Button type="button" variant="outline" size="sm" onClick={() => onReceipt(payment.id)}>
                   {copy.receiptAction}
                 </Button>
                 <Separator orientation="vertical" className="h-5" />
@@ -872,17 +884,14 @@ export function TreatmentPlansTab({
   // refetches and recomputes installment coverage.
   const [paymentPlanRefreshSignal, setPaymentPlanRefreshSignal] = useState(0);
 
-  // Receipt (RECIBO-T1): `receiptPayment` doubles as the printable receipt
-  // dialog's target abono AND its open flag (`PaymentReceipt` treats
-  // `payment !== null` as "open"). `patientName`/`clinicName` are fetched
-  // ONCE per patient (not per row/receipt-open) — see the effect below.
-  const [receiptPayment, setReceiptPayment] = useState<Payment | null>(null);
-  const [patientName, setPatientName] = useState<string | null>(null);
-  const [clinicName, setClinicName] = useState<string | null>(null);
+  // Recibo de caja (DX-136): el id del abono es a la vez el destino del
+  // diálogo y su bandera de apertura. El diálogo pide el recibo a la API (su
+  // foto inmutable), así que aquí no hace falta nada más del paciente.
+  const [receiptPaymentId, setReceiptPaymentId] = useState<string | null>(null);
 
   // Sedes de la clínica + sede activa, solo para decir a qué sede quedará
-  // atribuido un abono nuevo. Se piden una vez, junto al nombre del paciente
-  // y el de la clínica, y fallan en silencio: si no se sabe la sede, la
+  // atribuido un abono nuevo. Se piden una vez y fallan en silencio: si no
+  // se sabe la sede, la
   // línea no aparece — nunca bloquea ni rompe el formulario.
   const [locations, setLocations] = useState<ClinicLocation[]>([]);
   const [activeLocationId, setActiveLocationId] = useState<string | null>(null);
@@ -950,28 +959,8 @@ export function TreatmentPlansTab({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [token, patientId, reloadKey]);
 
-  // Patient name + clinic name (RECIBO-T1): fetched ONCE per patient — the
-  // receipt is the only consumer, and neither value changes while this tab
-  // is mounted, so there is no "refresh in place" concern like `planDetail`/
-  // `planBalance` above. Both fail soft (no loading/error UI): a failure
-  // here only degrades the receipt's header (name/clinic fallback), it must
-  // never block or error out the rest of the tab.
   useEffect(() => {
     let cancelled = false;
-    getPatient(token, patientId)
-      .then((data) => {
-        if (!cancelled) setPatientName(`${data.firstName} ${data.lastName}`.trim());
-      })
-      .catch(() => {
-        /* fail soft — the receipt shows a fallback for a missing patientName */
-      });
-    fetchClinicName()
-      .then((name) => {
-        if (!cancelled) setClinicName(name);
-      })
-      .catch(() => {
-        /* fail soft — fetchClinicName already resolves null on failure, this is just a safety net */
-      });
     // La sede activa vive en localStorage, que solo existe en el cliente: se
     // lee en el efecto, no como estado inicial, para no romper la hidratación
     // (mismo criterio que `LocationSwitcher`). Cambiar de sede fuerza un
@@ -1904,7 +1893,7 @@ export function TreatmentPlansTab({
                           payments={payments}
                           voidingPaymentId={voidingPaymentId}
                           onVoid={openVoidConfirm}
-                          onReceipt={setReceiptPayment}
+                          onReceipt={setReceiptPaymentId}
                           billable={billable}
                         />
                       </Disclosure>
@@ -2050,23 +2039,11 @@ export function TreatmentPlansTab({
         </Card>
       )}
 
-      <PaymentReceipt
-        payment={receiptPayment}
-        planBalance={planBalance}
-        planLabel={
-          selectedPlan
-            ? copy.planOptionLabel(
-                selectedPlan.createdAt,
-                selectedPlan.status,
-                plans.findIndex((p) => p.id === selectedPlan.id) + 1,
-                selectedPlan.optionLabel,
-              )
-            : ''
-        }
-        patientName={patientName}
-        clinicName={clinicName}
+      <PaymentReceiptDialog
+        token={token}
+        paymentId={receiptPaymentId}
         onOpenChange={(open) => {
-          if (!open) setReceiptPayment(null);
+          if (!open) setReceiptPaymentId(null);
         }}
       />
 

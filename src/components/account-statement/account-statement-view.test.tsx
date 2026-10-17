@@ -6,6 +6,8 @@ import { getAccountStatement } from '@/lib/account-statement/account-statement-a
 import { recordPayment, voidPayment } from '@/lib/payments/payments-api';
 import { listBillablePlans, type BillablePlan } from '@/lib/payments/billable-plans-api';
 import { createPaymentPlan } from '@/lib/payment-plans/payment-plan-api';
+import { getPaymentReceipt } from '@/lib/payments/payment-receipts-api';
+import { paymentReceiptFixture } from '@/lib/test/payment-receipt';
 import {
   accountStatementFixture,
   emptyAccountStatementFixture,
@@ -30,6 +32,10 @@ jest.mock('../../lib/reference/currencies-api', () => ({
   listCurrencies: jest.fn().mockResolvedValue([]),
 }));
 
+jest.mock('../../lib/payments/payment-receipts-api', () => ({
+  ...jest.requireActual('../../lib/payments/payment-receipts-api'),
+  getPaymentReceipt: jest.fn(),
+}));
 jest.mock('../../lib/account-statement/account-statement-api', () => ({
   ...jest.requireActual('../../lib/account-statement/account-statement-api'),
   getAccountStatement: jest.fn(),
@@ -180,6 +186,30 @@ it('un 403 explica que el rol no tiene acceso, sin reintento', async () => {
   await waitFor(() => expect(mockedGet).toHaveBeenCalledTimes(1));
 });
 
+it('cada movimiento, también el anulado, abre su recibo de caja (DX-136)', async () => {
+  const user = userEvent.setup();
+  mockedGet.mockResolvedValue(accountStatementFixture());
+  const mockedReceipt = getPaymentReceipt as jest.MockedFunction<typeof getPaymentReceipt>;
+  mockedReceipt.mockResolvedValue(
+    paymentReceiptFixture({
+      paymentId: 'pay-3',
+      voided: true,
+      voidedAt: '2026-09-21T10:00:00.000Z',
+      voidReason: 'Cobro duplicado',
+    }),
+  );
+  render(<AccountStatementView token="tok" patientId="pat-1" />);
+
+  const table = await screen.findByRole('table', { name: /movimientos/i });
+  expect(within(table).getAllByRole('button', { name: /recibo del abono/i })).toHaveLength(3);
+  const voidedRow = within(table).getAllByRole('row')[1];
+  await user.click(within(voidedRow).getByRole('button', { name: /recibo del abono/i }));
+
+  const dialog = await screen.findByRole('dialog', { name: /recibo de caja/i });
+  expect(await within(dialog).findByTestId('receipt-voided')).toHaveTextContent('ANULADO');
+  expect(mockedReceipt).toHaveBeenCalledWith('tok', 'pay-3');
+});
+
 describe('anular desde el estado de cuenta (DX-057)', () => {
   it('enseña «Anular» solo en movimientos con canVoid (nunca en uno ya anulado)', async () => {
     mockedGet.mockResolvedValue(accountStatementFixture());
@@ -290,6 +320,7 @@ describe('cobrar desde el estado de cuenta (DX-067)', () => {
       createdById: 'u-recep',
       createdAt: '2026-10-16T12:00:00.000Z',
       updatedAt: '2026-10-16T12:00:00.000Z',
+      receiptNumber: 'PRI-000007',
     });
     const user = userEvent.setup();
     render(<AccountStatementView token={RECEPTION} patientId="pat-1" />);
