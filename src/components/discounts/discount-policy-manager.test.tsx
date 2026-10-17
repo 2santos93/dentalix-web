@@ -40,6 +40,20 @@ describe('DiscountPolicyManager (DX-204)', () => {
     expect(screen.getByText('Valores por defecto')).toBeInTheDocument();
   });
 
+  it('la marca «Valores por defecto» no va dentro de un <p> (HTML válido, sin error de hidratación)', async () => {
+    mockedGet.mockResolvedValue(DEFAULT);
+    const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {});
+    try {
+      render(<DiscountPolicyManager token="tok" allowed />);
+      const badge = await screen.findByText('Valores por defecto');
+      expect(badge.closest('p')).toBeNull();
+      const nesting = consoleError.mock.calls.filter((args) => String(args[0]).includes('cannot be a descendant of'));
+      expect(nesting).toHaveLength(0);
+    } finally {
+      consoleError.mockRestore();
+    }
+  });
+
   it('edita los topes en un modal, valida 0..100 y guarda', async () => {
     mockedGet.mockResolvedValue(DEFAULT);
     mockedUpdate.mockResolvedValue({

@@ -157,9 +157,9 @@ export function DiscountPolicyManager({ token, allowed }: DiscountPolicyManagerP
             </ul>
 
             {policy.isDefault ? (
-              <p>
+              <div>
                 <Badge variant="muted">{policyManagerCopy.defaults}</Badge>
-              </p>
+              </div>
             ) : null}
             <Link
               href="/caja/descuentos"
