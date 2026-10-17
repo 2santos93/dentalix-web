@@ -99,9 +99,7 @@ test('save anamnesis + add evolution via the UI -> both persist through the back
   await clinicalHistoryTab.click();
   await expect(clinicalHistoryTab).toHaveAttribute('aria-selected', 'true');
 
-  // Scope form interactions to each section — both "Anamnesis" and
-  // "Evoluciones" render a field labeled "Notas", so an unscoped
-  // `getByLabel('Notas')` would be ambiguous (strict-mode violation).
+  // Scope form interactions to each section so lookups stay unambiguous.
   const anamnesisSection = page.locator('section', { hasText: 'Anamnesis' });
   const evolutionsSection = page.locator('section', { hasText: 'Evoluciones' });
 
@@ -140,10 +138,14 @@ test('save anamnesis + add evolution via the UI -> both persist through the back
   await expect(anamnesisSection.getByText('Versión 1')).toBeVisible();
 
   // --- Add a clinical evolution ---
-  await evolutionsSection.getByLabel('Notas').fill(evolutionNotes);
+  // DX-170: el formulario vive en el modal «Nueva evolución» (sin plantilla:
+  // texto libre).
+  await evolutionsSection.getByRole('button', { name: 'Nueva evolución' }).click();
+  const evolutionDialog = page.getByRole('dialog', { name: 'Nueva evolución' });
+  await evolutionDialog.getByLabel('Texto de la evolución').fill(evolutionNotes);
 
-  const evolutionCreateError = evolutionsSection.locator('p[role="alert"]');
-  await evolutionsSection.getByRole('button', { name: 'Agregar evolución' }).click();
+  const evolutionCreateError = evolutionDialog.locator('[role="alert"]');
+  await evolutionDialog.getByRole('button', { name: 'Guardar evolución' }).click();
 
   // Scoped to the desktop `table` — the mobile card list is CSS-hidden but
   // still present in the DOM at the default Desktop Chrome viewport and

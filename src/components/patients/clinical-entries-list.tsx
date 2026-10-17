@@ -1,24 +1,20 @@
 'use client';
 import * as React from 'react';
 import { useEffect, useMemo, useState } from 'react';
+import { Plus } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import {
   listClinicalEntries,
-  createClinicalEntry,
   type ClinicalEntry,
   type ClinicalEntryAddendum,
-  type CreateClinicalEntryInput,
 } from '@/lib/patients/clinical-api';
 import { ClinicalEntryAddendumModal } from '@/components/patients/clinical-entry-addendum-modal';
+import { NewEvolutionModal } from '@/components/clinical-notes/new-evolution-modal';
+import { appointmentLine } from '@/lib/clinical-notes/appointment-line';
 import { listStaff, type StaffMember } from '@/lib/staff/staff-api';
 import { formatCivilDate, formatDateTime } from '@/lib/format/date';
 import { AsyncSection } from '@/components/shared/async-section';
-import { FormField } from '@/components/shared/form-field';
-import { InlineError } from '@/components/errors/inline-error';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { fieldClass } from '@/lib/ui/field-class';
-import { cn } from '@/lib/utils';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
@@ -35,16 +31,8 @@ const copy = {
   reasonFallback: '—',
   recordedBy: (author: string, when: string) => `${author} · ${when}`,
   recordedAt: (when: string) => when,
-  formTitle: 'Agregar evolución',
-  entryDateLabel: 'Fecha de atención',
-  entryDateHint: 'Si la dejas vacía se usa hoy. No puede ser una fecha futura.',
-  reasonLabel: 'Motivo',
-  notesLabel: 'Notas',
-  submit: 'Agregar evolución',
-  submitting: 'Guardando…',
-  futureDateError: 'La fecha de atención no puede ser futura.',
+  newEntry: 'Nueva evolución',
   genericLoadError: 'No pudimos cargar las evoluciones.',
-  genericCreateError: 'No pudimos agregar la evolución. Intenta de nuevo.',
   tableLabel: 'Evoluciones del paciente',
   addAddendum: 'Añadir adenda',
   addAddendumFor: (entryDate: string) => `Añadir adenda a la evolución del ${entryDate}`,
@@ -52,14 +40,6 @@ const copy = {
   addendumHeading: 'Adenda',
   addendumReason: 'Motivo:',
 };
-
-/** Hoy en formato `yyyy-mm-dd`, para topar el `<input type="date">`. */
-function todayISO(): string {
-  const now = new Date();
-  const month = `${now.getMonth() + 1}`.padStart(2, '0');
-  const day = `${now.getDate()}`.padStart(2, '0');
-  return `${now.getFullYear()}-${month}-${day}`;
-}
 
 interface ClinicalEntriesListProps {
   token: string;
@@ -79,18 +59,19 @@ interface ClinicalEntriesListProps {
  * El nombre del autor se resuelve contra el personal de la clínica; si esa
  * lista falla, la fila sigue mostrando su marca de tiempo (fail soft: nunca se
  * oculta el registro por no poder nombrar a quien lo hizo).
+ *
+ * DX-170: «Nueva evolución» abre un modal con plantillas y preguntas; una
+ * evolución ligada a una cita dice de qué visita es («Cita del dd/mm · Dra.
+ * X»).
  */
 export function ClinicalEntriesList({ token, patientId }: ClinicalEntriesListProps) {
   const [entries, setEntries] = useState<ClinicalEntry[]>([]);
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [entryDate, setEntryDate] = useState('');
-  const [reason, setReason] = useState('');
-  const [notes, setNotes] = useState('');
-  const [createError, setCreateError] = useState<string | null>(null);
-  const [validationError, setValidationError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
+  // Modal «Nueva evolución»; `newKey` lo monta limpio en cada apertura.
+  const [newOpen, setNewOpen] = useState(false);
+  const [newKey, setNewKey] = useState(0);
   // Bumped by the retry action to re-run the load effect below.
   const [reloadKey, setReloadKey] = useState(0);
   // Evolución a la que se le está añadiendo una adenda (modal abierto).
@@ -204,41 +185,41 @@ export function ClinicalEntriesList({ token, patientId }: ClinicalEntriesListPro
     );
   }
 
-  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    setCreateError(null);
-    setValidationError(null);
+  /** La nueva va arriba: la lista llega por `entryDate` DESC. */
+  function handleCreated(created: ClinicalEntry) {
+    setEntries((prev) =>
+      [created, ...prev].sort(
+        (a, b) => new Date(b.entryDate).getTime() - new Date(a.entryDate).getTime(),
+      ),
+    );
+  }
 
-    // Una atención no puede haber ocurrido mañana. El `max` del input lo
-    // bloquea en el navegador; esto cubre el teclado y el pegado.
-    if (entryDate && entryDate > todayISO()) {
-      setValidationError(copy.futureDateError);
-      return;
-    }
-
-    setSubmitting(true);
-    try {
-      const input: CreateClinicalEntryInput = {
-        notes: notes.trim(),
-        ...(entryDate ? { entryDate: new Date(entryDate).toISOString() } : {}),
-        ...(reason.trim() ? { reason: reason.trim() } : {}),
-      };
-      const created = await createClinicalEntry(token, patientId, input);
-      // Entries are returned DESC by `entryDate` — prepend so the newest
-      // stays on top without re-sorting the whole list.
-      setEntries((prev) => [{ ...created, addenda: created.addenda ?? [] }, ...prev]);
-      setEntryDate('');
-      setReason('');
-      setNotes('');
-    } catch (err) {
-      setCreateError(apiErrorMessage(err, copy.genericCreateError));
-    } finally {
-      setSubmitting(false);
-    }
+  /** «Cita del 17/10 · Dra. Ríos» bajo la fecha, si la evolución tiene cita. */
+  function renderAppointment(entry: ClinicalEntry) {
+    if (!entry.appointment) return null;
+    return (
+      <p className="mt-1 text-xs tabular-nums text-muted">
+        {appointmentLine(entry.appointment.start, entry.appointment.providerName)}
+      </p>
+    );
   }
 
   return (
-    <div className="flex flex-col gap-6">
+    <div className="flex flex-col gap-3">
+      <div className="flex justify-end">
+        <Button
+          type="button"
+          className="w-full sm:w-auto"
+          onClick={() => {
+            setNewKey((k) => k + 1);
+            setNewOpen(true);
+          }}
+        >
+          <Plus aria-hidden />
+          {copy.newEntry}
+        </Button>
+      </div>
+
       <AsyncSection
         loading={loading}
         error={loadError}
@@ -273,11 +254,12 @@ export function ClinicalEntriesList({ token, patientId }: ClinicalEntriesListPro
           <tbody>
             {entries.map((entry) => (
               <tr key={entry.id} className="border-b border-border last:border-0">
-                <td className="px-4 py-3 text-ink tabular-nums">
+                <td className="px-4 py-3 align-top text-ink tabular-nums">
                   {formatCivilDate(entry.entryDate)}
+                  {renderAppointment(entry)}
                 </td>
                 <td className="px-4 py-3 text-ink">{entry.reason ?? copy.reasonFallback}</td>
-                <td className="px-4 py-3 text-ink">
+                <td className="whitespace-pre-line px-4 py-3 text-ink">
                   {entry.notes}
                   {renderAddenda(entry)}
                 </td>
@@ -301,8 +283,9 @@ export function ClinicalEntriesList({ token, patientId }: ClinicalEntriesListPro
               <p className="font-medium tabular-nums text-ink">
                 {formatCivilDate(entry.entryDate)}
               </p>
+              {renderAppointment(entry)}
               <p className="mt-1 text-muted">{entry.reason ?? copy.reasonFallback}</p>
-              <p className="mt-2 text-ink">{entry.notes}</p>
+              <p className="mt-2 whitespace-pre-line break-words text-ink">{entry.notes}</p>
               {renderAddenda(entry)}
               <p className="mt-3 border-t border-hairline pt-2 text-xs text-muted">
                 {recordLine(entry.performedById, entry.createdAt)}
@@ -327,54 +310,14 @@ export function ClinicalEntriesList({ token, patientId }: ClinicalEntriesListPro
         />
       ) : null}
 
-      <form onSubmit={handleSubmit} aria-label={copy.formTitle} className="flex flex-col gap-4">
-        <h3 className="text-base font-semibold text-ink">{copy.formTitle}</h3>
-
-        <div className="grid gap-4 sm:grid-cols-2">
-          <FormField
-            htmlFor="ce-entry-date"
-            label={copy.entryDateLabel}
-            hint={copy.entryDateHint}
-            error={validationError}
-          >
-            <Input
-              id="ce-entry-date"
-              name="entryDate"
-              type="date"
-              max={todayISO()}
-              value={entryDate}
-              onChange={(e) => setEntryDate(e.target.value)}
-            />
-          </FormField>
-          <FormField htmlFor="ce-reason" label={copy.reasonLabel}>
-            <Input
-              id="ce-reason"
-              name="reason"
-              type="text"
-              value={reason}
-              onChange={(e) => setReason(e.target.value)}
-            />
-          </FormField>
-        </div>
-
-        <FormField htmlFor="ce-notes" label={copy.notesLabel}>
-          <textarea
-            id="ce-notes"
-            name="notes"
-            rows={3}
-            required
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
-            className={cn(fieldClass, 'h-auto')}
-          />
-        </FormField>
-
-        {createError && <InlineError>{createError}</InlineError>}
-
-        <Button type="submit" disabled={submitting} className="self-start">
-          {submitting ? copy.submitting : copy.submit}
-        </Button>
-      </form>
+      <NewEvolutionModal
+        key={newKey}
+        open={newOpen}
+        onOpenChange={setNewOpen}
+        token={token}
+        patientId={patientId}
+        onCreated={handleCreated}
+      />
     </div>
   );
 }

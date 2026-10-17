@@ -66,6 +66,8 @@ export const AUDIT_RESOURCE_LABELS: Record<AuditResourceType, string> = {
   STAFF_MEMBER: 'Miembro del personal',
   // DX-136: recibo de caja de un abono (ver, reimprimir, enviar).
   PAYMENT_RECEIPT: 'Recibo de caja',
+  // DX-170: plantillas de evolución (crear, editar, desactivar, ejemplos).
+  CLINICAL_NOTE_TEMPLATE: 'Plantilla de evolución',
 };
 
 export const AUDIT_RESOURCE_OPTIONS = Object.keys(AUDIT_RESOURCE_LABELS) as AuditResourceType[];

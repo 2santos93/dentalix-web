@@ -14,6 +14,7 @@ import {
   Moon,
   CalendarClock,
   BellRing,
+  NotebookPen,
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useAuthStore } from '@/lib/auth/auth-store';
@@ -23,6 +24,7 @@ import { getTokenRole } from '@/lib/auth/token-role';
 import { canManageConsentTemplates } from '@/lib/consents/consents-api';
 import { canManagePrescriptionTemplates } from '@/lib/prescriptions/prescriptions-api';
 import { canManageAppointmentTypes } from '@/lib/appointments/appointment-types-api';
+import { canManageNoteTemplates } from '@/lib/clinical-notes/note-templates-api';
 import { canManageReminders } from '@/lib/reminders/reminders-api';
 import { cn } from '@/lib/utils';
 
@@ -57,6 +59,7 @@ const copy = {
   consentTemplates: 'Consentimientos',
   prescriptionSettings: 'Recetas',
   appointmentTypes: 'Tipos de cita',
+  noteTemplates: 'Plantillas de evolución',
   reminders: 'Recordatorios',
   logout: 'Cerrar sesión',
   theme: 'Cambiar tema',
@@ -285,6 +288,18 @@ export function UserMenu({
         >
           <CalendarClock className="size-4 text-muted" aria-hidden />
           {copy.appointmentTypes}
+        </Link>
+      ) : null}
+      {/* Plantillas de evolución con preguntas (DX-170): solo ADMIN. */}
+      {canManageNoteTemplates(getTokenRole(accessToken)) ? (
+        <Link
+          href="/settings/plantillas-de-evolucion"
+          role="menuitem"
+          onClick={() => setOpen(false)}
+          className="flex items-center gap-3 px-3 py-2 text-sm text-ink hover:bg-bg"
+        >
+          <NotebookPen className="size-4 text-muted" aria-hidden />
+          {copy.noteTemplates}
         </Link>
       ) : null}
       {/* Recordatorios por email de cada sede (DX-026): solo ADMIN. */}
