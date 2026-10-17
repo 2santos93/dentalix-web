@@ -8,6 +8,7 @@ import { createAppointment, listAppointments, updateAppointment } from '@/lib/ap
 import { listStaff } from '@/lib/appointments/staff-api';
 import { listPatients } from '@/lib/patients/patients-api';
 import { createConfirmationLink } from '@/lib/appointments/confirmations-api';
+import { getAppointmentReminders } from '@/lib/reminders/reminders-api';
 import { deleteScheduleBlock, listScheduleBlocks } from '@/lib/appointments/schedule-blocks-api';
 import { listWaitlist } from '@/lib/appointments/waitlist-api';
 
@@ -41,6 +42,10 @@ jest.mock('../../lib/patients/patients-api', () => ({
 }));
 jest.mock('../../lib/appointments/confirmations-api', () => ({
   createConfirmationLink: jest.fn(),
+}));
+jest.mock('../../lib/reminders/reminders-api', () => ({
+  ...jest.requireActual('../../lib/reminders/reminders-api'),
+  getAppointmentReminders: jest.fn(),
 }));
 // DX-122: bloqueos y pendientes (su comportamiento propio se prueba abajo).
 jest.mock('../../lib/appointments/schedule-blocks-api', () => ({
@@ -144,6 +149,11 @@ describe('AgendaView', () => {
     mockedListStaff.mockReset();
     mockedListPatients.mockReset();
     mockedListPatients.mockResolvedValue(patientsPage);
+    (getAppointmentReminders as jest.Mock).mockResolvedValue({
+      enabled: true,
+      leadHours: [48, 2],
+      items: [],
+    });
   });
 
   it('cuando falla la carga de profesionales, el filtro se sustituye por el error en su sitio', async () => {
@@ -694,6 +704,11 @@ describe('AgendaView', () => {
     );
     // El enlace sigue a la vista tras el refresh (el panel no se remonta).
     expect(screen.getByLabelText('Enlace de confirmación')).toBeInTheDocument();
+    // DX-026: el mismo detalle enseña el estado de sus recordatorios.
+    expect(getAppointmentReminders).toHaveBeenCalledWith('tok', 'apt-c');
+    expect(
+      screen.getByRole('heading', { name: 'Recordatorios por email' }),
+    ).toBeInTheDocument();
   });
 
   // DX-121: vista Día en columnas por profesional.

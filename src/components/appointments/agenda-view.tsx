@@ -39,6 +39,7 @@ import { WeekTimeGrid } from '@/components/appointments/week-time-grid';
 import { MonthAgenda } from '@/components/appointments/month-agenda';
 import { AppointmentForm } from '@/components/appointments/appointment-form';
 import { ConfirmationLinkPanel } from '@/components/appointments/confirmation-link-panel';
+import { AppointmentRemindersPanel } from '@/components/reminders/appointment-reminders-panel';
 import { ScheduleBlockDialog } from '@/components/appointments/schedule-block-dialog';
 import {
   WaitlistPanel,
@@ -1140,6 +1141,13 @@ export function AgendaView({ token }: AgendaViewProps) {
                   token={token}
                   appointment={liveDetailAppointment}
                   onLinkCreated={() => void refreshAppointmentsInPlace()}
+                />
+                {/* DX-026: se relee al reprogramar o cambiar el estado (la API
+                    recalcula los pendientes con la hora y el estado vigentes). */}
+                <AppointmentRemindersPanel
+                  key={`${liveDetailAppointment.id}-${liveDetailAppointment.start}-${liveDetailAppointment.status}`}
+                  token={token}
+                  appointmentId={liveDetailAppointment.id}
                 />
               </SheetBody>
             </SheetContent>
