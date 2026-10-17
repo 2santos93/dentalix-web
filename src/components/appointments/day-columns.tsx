@@ -28,8 +28,8 @@ import {
   type ScheduleBlockLike,
 } from '@/lib/appointments/schedule-blocks';
 import { appointmentTypeTextColor, isAppointmentTypeColor } from '@/lib/color/contrast';
-import { freeGaps, gapForCancelled } from '@/lib/appointments/opening-candidates';
-import { WantsEarlierChip } from '@/components/appointments/wants-earlier-chip';
+import { freeGaps } from '@/lib/appointments/opening-candidates';
+import { WANTS_EARLIER_LABEL, WantsEarlierChip } from '@/components/appointments/wants-earlier-chip';
 import {
   STATUS_LABELS,
   formatTimeRange,
@@ -539,6 +539,7 @@ export function DayColumns({
                   const range = formatTimeRange(a.start, a.end);
                   const dragging = drag?.started && drag.appointment.id === a.id;
                   const inactive = a.status === 'CANCELLED' || a.status === 'NO_SHOW';
+                  const wantsEarlier = a.wantsEarlier && !inactive;
                   return (
                     <div
                       key={a.id}
@@ -563,21 +564,33 @@ export function DayColumns({
                     >
                       <button
                         type="button"
-                        aria-label={[copy.detailFor(range, patient, p.fullName), overdueChipText(a.balance)]
+                        aria-label={[
+                          copy.detailFor(range, patient, p.fullName),
+                          overdueChipText(a.balance),
+                          wantsEarlier ? WANTS_EARLIER_LABEL : null,
+                        ]
                           .filter(Boolean)
                           .join(' · ')}
                         onClick={() => handleCardClick(a)}
                         className="flex h-full w-full flex-col items-start gap-0.5 px-2 py-1 pr-8 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
                       >
-                        <span className="text-xs font-medium tabular-nums">{range}</span>
-                        <span className={cn('truncate text-sm font-semibold', inactive && 'line-through')}>
+                        {/* La hora y el nombre no se encogen: en una cita corta
+                            lo que no cabe (estado, chips) lo recorta la tarjeta,
+                            nunca el nombre. El chip DX-210 va en la fila de la
+                            hora para seguir viéndose en las citas de 30 min. */}
+                        <span className="flex w-full min-w-0 shrink-0 items-center gap-1.5">
+                          <span className="shrink-0 text-xs font-medium tabular-nums">{range}</span>
+                          <WantsEarlierChip wantsEarlier={wantsEarlier} className="min-w-0 py-0" />
+                        </span>
+                        <span
+                          className={cn('w-full shrink-0 truncate text-sm font-semibold', inactive && 'line-through')}
+                        >
                           {patient}
                         </span>
-                        <span className="truncate text-xs">
+                        <span className="w-full truncate text-xs">
                           {[a.appointmentType?.name, STATUS_LABELS[a.status]].filter(Boolean).join(' · ')}
                         </span>
                         <OverdueChip balance={a.balance} compact />
-                        <WantsEarlierChip wantsEarlier={a.wantsEarlier && !inactive} />
                       </button>
                       {fills && a.status === 'CANCELLED' && new Date(a.end) > now ? (
                         <button
@@ -586,7 +599,12 @@ export function DayColumns({
                           data-testid="fill-cancelled"
                           aria-label={copy.fillCancelledFor(range, patient)}
                           title={copy.fillCancelled}
-                          onClick={() => onFillOpening?.(p.userId, gapForCancelled(a, gaps), a.locationId)}
+                          onClick={() =>
+                            // La hora de la cita, como el detalle y el aviso
+                            // «Cita cancelada.»; el hueco libre más largo que
+                            // la rodea tiene su propio botón.
+                            onFillOpening?.(p.userId, { start: a.start, end: a.end }, a.locationId)
+                          }
                           className="absolute right-1 top-1 flex size-7 items-center justify-center rounded-md bg-surface text-primary shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
                         >
                           <UserPlus className="size-4" aria-hidden />

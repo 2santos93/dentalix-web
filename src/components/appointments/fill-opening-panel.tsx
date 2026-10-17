@@ -375,6 +375,10 @@ function CandidateRow({
 }: CandidateRowProps) {
   const name = fullName(c);
   const capReached = c.offersToday >= cap;
+  // Una llamada nueva no cabe con el tope (p. ej. otro la anotó mientras el
+  // panel estaba abierto: 409): sus resultados se cierran. Anotar la respuesta
+  // a una oferta ya hecha no cuenta para el tope.
+  const shownOutcome = outcomeMode === 'PHONE' && capReached ? null : outcomeMode;
   const what = c.appointmentType?.name ?? c.reason;
   const canWhatsApp = !c.whatsappBlocked && c.whatsappPhone !== null;
   const waHref = c.whatsappPhone
@@ -453,7 +457,7 @@ function CandidateRow({
               size="sm"
               variant="secondary"
               aria-label={fillOpeningCopy.calledFor(name)}
-              aria-expanded={outcomeMode === 'PHONE'}
+              aria-expanded={shownOutcome === 'PHONE'}
               aria-controls={outcomeGroupId}
               disabled={busy || capReached}
               onClick={() => onToggleOutcome('PHONE')}
@@ -466,7 +470,7 @@ function CandidateRow({
                 size="sm"
                 variant="secondary"
                 aria-label={fillOpeningCopy.answerFor(name)}
-                aria-expanded={outcomeMode === 'ANSWER'}
+                aria-expanded={shownOutcome === 'ANSWER'}
                 aria-controls={outcomeGroupId}
                 disabled={busy}
                 onClick={() => onToggleOutcome('ANSWER')}
@@ -486,7 +490,7 @@ function CandidateRow({
             </Button>
           </div>
           {capReached ? <p className="text-xs text-muted">{fillOpeningCopy.capReached}</p> : null}
-          {outcomeMode ? (
+          {shownOutcome ? (
             <div
               id={outcomeGroupId}
               role="group"
@@ -500,7 +504,7 @@ function CandidateRow({
                   size="sm"
                   variant="outline"
                   disabled={busy}
-                  onClick={() => onOutcome(outcomeMode, outcome)}
+                  onClick={() => onOutcome(shownOutcome, outcome)}
                 >
                   {fillOpeningCopy.outcomes[outcome]}
                 </Button>

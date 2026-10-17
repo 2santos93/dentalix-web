@@ -203,22 +203,3 @@ export function freeGaps({
   }
   return gaps;
 }
-
-/**
- * El hueco que deja una cita cancelada: el hueco libre que la contiene (puede
- * ser más largo, si lo de alrededor también está libre) o, si no hay (fuera de
- * horario o ya pasado), la propia hora de la cita.
- */
-export function gapForCancelled(
-  appointment: Pick<Appointment, 'start' | 'end'>,
-  gaps: FreeGap[],
-): { start: string; end: string } {
-  const start = new Date(appointment.start).getTime();
-  const end = new Date(appointment.end).getTime();
-  const containing = gaps.find(
-    (g) => new Date(g.start).getTime() <= start && new Date(g.end).getTime() >= end,
-  );
-  return containing
-    ? { start: containing.start, end: containing.end }
-    : { start: appointment.start, end: appointment.end };
-}

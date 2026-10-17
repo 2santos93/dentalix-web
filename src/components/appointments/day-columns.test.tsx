@@ -369,7 +369,7 @@ describe('«Ocupar este hueco» (DX-210)', () => {
     expect(screen.queryByTestId('free-gap')).not.toBeInTheDocument();
   });
 
-  it('una cita recién cancelada ofrece «Ocupar este hueco» con el hueco que la contiene', async () => {
+  it('una cita recién cancelada ofrece «Ocupar este hueco» con SU hora, como el detalle', async () => {
     const onFillOpening = jest.fn();
     const cancelled = appointment({
       id: 'apt-c',
@@ -392,7 +392,7 @@ describe('«Ocupar este hueco» (DX-210)', () => {
       'prov-1',
       {
         start: new Date(`${DATE}T10:00:00`).toISOString(),
-        end: new Date(`${DATE}T13:00:00`).toISOString(),
+        end: new Date(`${DATE}T10:30:00`).toISOString(),
       },
       'loc-1',
     );
@@ -401,5 +401,23 @@ describe('«Ocupar este hueco» (DX-210)', () => {
   it('la tarjeta lleva el chip «Adelantar si hay hueco»', () => {
     renderColumns({ appointments: [{ ...endo, wantsEarlier: true }] });
     expect(screen.getByTestId('wants-earlier-chip')).toHaveTextContent('Adelantar si hay hueco');
+  });
+
+  it('el chip va en la línea de la hora y el nombre no se encoge: en una cita corta se siguen leyendo', () => {
+    renderColumns({ appointments: [{ ...endo, wantsEarlier: true }] });
+    const card = screen.getByRole('button', { name: /^Detalle de la cita de / });
+    const chip = within(card).getByTestId('wants-earlier-chip');
+    const time = within(card).getByText(/^\d{2}:\d{2}–\d{2}:\d{2}$/);
+    // Misma fila que la hora: no añade altura a la tarjeta de 30 min.
+    expect(time.parentElement).toContainElement(chip);
+    expect(time.parentElement).toHaveClass('shrink-0');
+    expect(within(card).getByText('María López')).toHaveClass('shrink-0');
+  });
+
+  it('el nombre accesible de la tarjeta dice «Adelantar si hay hueco» (el aria-label tapa el chip)', () => {
+    renderColumns({ appointments: [{ ...endo, wantsEarlier: true }] });
+    expect(
+      screen.getByRole('button', { name: /^Detalle de la cita de .* · Adelantar si hay hueco$/ }),
+    ).toBeInTheDocument();
   });
 });

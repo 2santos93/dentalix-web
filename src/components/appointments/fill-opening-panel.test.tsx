@@ -273,6 +273,22 @@ describe('«Ocupar este hueco» (DX-210)', () => {
     expect(toast.success).toHaveBeenCalledWith('Oferta a Berta Gil registrada.');
   });
 
+  it('«Llamé» que llega tarde al tope (409): avisa en español y cierra los resultados', async () => {
+    mockedList
+      .mockResolvedValueOnce(view([berta]))
+      .mockResolvedValue(view([{ ...berta, offersToday: 2, offeredForSlot: true }]));
+    mockedOffer.mockRejectedValue(new ApiError(409, 'Ya se le ofrecieron 2 huecos hoy'));
+    renderPanel();
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Anotar la llamada a Berta Gil' }),
+    );
+    const group = screen.getByRole('group', { name: '¿Qué respondió Berta Gil?' });
+    await userEvent.click(within(group).getByRole('button', { name: 'No contestó' }));
+    await screen.findByText('Ya alcanzó el tope de ofertas de hoy');
+    expect(toast.error).toHaveBeenCalledWith('Ya se le ofrecieron 2 huecos hoy', expect.anything());
+    expect(screen.queryByRole('group', { name: '¿Qué respondió Berta Gil?' })).not.toBeInTheDocument();
+  });
+
   it('con el tope de ofertas del día no se puede volver a ofrecer', async () => {
     mockedList.mockResolvedValue(view([{ ...ana, offersToday: 2, offeredForSlot: true }]));
     renderPanel();

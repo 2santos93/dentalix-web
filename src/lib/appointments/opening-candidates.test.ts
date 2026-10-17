@@ -2,7 +2,6 @@ import {
   canOfferOpenings,
   canSeeOpeningCandidates,
   freeGaps,
-  gapForCancelled,
   offerMessage,
 } from './opening-candidates';
 import type { BusinessHours } from '@/lib/locations/schedule-api';
@@ -111,17 +110,5 @@ describe('freeGaps', () => {
 
   it('sin horario configurado no propone huecos', () => {
     expect(freeGaps({ ...base, hours: null, appointments: [] })).toEqual([]);
-  });
-
-  it('el hueco de una cancelada es el libre que la contiene, o su propia hora', () => {
-    const gaps = freeGaps({ ...base, appointments: [] });
-    expect(gapForCancelled({ start: at('10:00'), end: at('10:30') }, gaps)).toEqual({
-      start: at('09:00'),
-      end: at('13:00'),
-    });
-    expect(gapForCancelled({ start: at('20:00'), end: at('20:30') }, gaps)).toEqual({
-      start: at('20:00'),
-      end: at('20:30'),
-    });
   });
 });
