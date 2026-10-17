@@ -5,7 +5,7 @@ import { FileText, HandCoins, MessageCircle, NotebookPen, Phone } from 'lucide-r
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { formatCurrency } from '@/lib/format/currency';
-import { formatCivilDate } from '@/lib/format/date';
+import { formatCivilDate, formatDate } from '@/lib/format/date';
 import {
   BUCKET_LABELS,
   BUCKET_ORDER,
@@ -229,7 +229,7 @@ export function CollectionCell({ row }: { row: AgingRow }) {
             {CHANNEL_LABELS[lastNote.channel]} · {OUTCOME_LABELS[lastNote.outcome]}
           </span>
           <span className="block text-xs text-muted tabular-nums">
-            {formatCivilDate(lastNote.createdAt.slice(0, 10))}
+            {formatDate(lastNote.createdAt)}
           </span>
         </span>
       ) : null}
