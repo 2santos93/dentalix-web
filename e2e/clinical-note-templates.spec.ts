@@ -13,8 +13,10 @@ import { API_URL } from './support/urls';
  *   1. Ajustes → Plantillas de evolución: estado vacío «Aún no hay
  *      plantillas»; crea «Resina» con una pregunta ONE (superficie), una
  *      MULTI (material) y una TEXT (observaciones).
- *   2. Agenda → detalle de una cita atendida → «Registrar evolución»: elige
- *      «Resina», contesta y guarda; la evolución queda ligada a la cita.
+ *   2. Agenda → detalle de una cita de HOY → «Registrar evolución»: elige
+ *      «Resina», contesta y guarda; la evolución queda ligada a la cita. (La
+ *      API no deja agendar en el pasado ni ligar una evolución a una cita de un
+ *      día futuro: la cita va hoy, en la próxima media hora libre.)
  *   3. Ficha → Historia clínica: la evolución lleva el texto con las
  *      respuestas y «Cita del dd/mm · <profesional>»; desde «Nueva evolución»
  *      usa la plantilla con una pregunta omitida («[sin respuesta]»).
@@ -33,11 +35,26 @@ const VIEWPORTS = [
 
 const RESIN_BODY = 'Resina en superficie {{Superficie}} con {{Material}}. Observaciones: {{Observaciones}}.';
 
-/** Mañana a las 10:00 en Bogotá (UTC-5), como instante ISO y día local. */
-function tomorrowAtTen(): { start: string; end: string; day: string } {
-  const bogotaNow = new Date(Date.now() - 5 * 3600_000);
-  const day = new Date(bogotaNow.getTime() + 24 * 3600_000).toISOString().slice(0, 10);
-  return { start: `${day}T15:00:00.000Z`, end: `${day}T15:30:00.000Z`, day };
+const HALF_HOUR = 30 * 60_000;
+const BOGOTA_OFFSET = 5 * 3600_000;
+
+/**
+ * Cita de 30 min HOY en Bogotá (UTC-5, sin horario de verano), en la primera
+ * media hora en punto que empiece dentro de al menos 15 min. `null` si ya no
+ * cabe hoy (desde las 22:45 de Bogotá, más o menos).
+ */
+function laterToday(): { start: string; end: string; day: string; label: string } | null {
+  const start = Math.ceil((Date.now() + 15 * 60_000) / HALF_HOUR) * HALF_HOUR;
+  const end = start + HALF_HOUR;
+  const wall = (ms: number) => new Date(ms - BOGOTA_OFFSET).toISOString();
+  const day = wall(Date.now()).slice(0, 10);
+  if (wall(end).slice(0, 10) !== day) return null;
+  return {
+    start: new Date(start).toISOString(),
+    end: new Date(end).toISOString(),
+    day,
+    label: `${wall(start).slice(11, 16)}–${wall(end).slice(11, 16)}`,
+  };
 }
 
 async function api(page: Page, origin: string) {
@@ -107,20 +124,21 @@ for (const viewport of VIEWPORTS) {
       sex: 'F',
     });
     const me = await call<{ id: string }>('get', '/me');
-    const slot = tomorrowAtTen();
-    const appointment = await call<{ id: string }>('post', '/appointments', {
+    const slot = laterToday();
+    test.skip(slot === null, 'Cerca de medianoche en Bogotá ya no cabe una cita hoy');
+    if (!slot) return;
+    await call<{ id: string }>('post', '/appointments', {
       patientId: patient.id,
       providerId: me.id,
       start: slot.start,
       end: slot.end,
     });
-    await call('patch', `/appointments/${appointment.id}`, { status: 'COMPLETED' });
 
     await page.goto(`${origin}/agenda`);
     await page.getByRole('button', { name: /^Día$/ }).click();
     await page.getByLabel('Fecha', { exact: true }).fill(slot.day);
     await page
-      .getByRole('button', { name: /Detalle de la cita de 10:00–10:30/ })
+      .getByRole('button', { name: new RegExp(`Detalle de la cita de ${slot.label}`) })
       .locator('visible=true')
       .first()
       .click();

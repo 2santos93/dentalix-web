@@ -135,6 +135,29 @@ describe('NoteTemplatesManager (DX-170)', () => {
     expect(await screen.findByText('1 plantilla')).toBeInTheDocument();
   });
 
+  it('al quitar la opción que era el valor por defecto, no la manda como defecto («Ninguno»)', async () => {
+    mockedList.mockResolvedValue([resinTemplate]);
+    mockedUpdate.mockResolvedValue(resinTemplate);
+    const user = userEvent.setup();
+    renderManager();
+    await user.click((await screen.findAllByRole('button', { name: 'Editar «Resina»' }))[0]);
+    const dialog = await screen.findByRole('dialog', { name: /editar plantilla de evolución/i });
+    const p2 = within(dialog).getByRole('listitem', { name: 'Pregunta 2' });
+    const options = within(p2).getByLabelText('Opciones');
+    await user.clear(options);
+    await user.type(options, 'Ionómero{Enter}Adhesivo universal');
+    expect(within(p2).getByLabelText('Valor por defecto')).toHaveValue('');
+    await user.click(within(dialog).getByRole('button', { name: 'Guardar cambios' }));
+    await waitFor(() => expect(mockedUpdate).toHaveBeenCalledTimes(1));
+    const [, , input] = mockedUpdate.mock.calls[0];
+    expect(input.prompts?.[1]).toEqual({
+      label: 'Material',
+      type: 'MULTI',
+      options: ['Ionómero', 'Adhesivo universal'],
+      defaultValue: null,
+    });
+  });
+
   it('muestra el 400 de la API en español sin cerrar el modal', async () => {
     const { ApiError } = jest.requireActual('../../lib/api/client');
     mockedList.mockResolvedValue([]);

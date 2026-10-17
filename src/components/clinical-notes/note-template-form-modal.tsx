@@ -143,12 +143,19 @@ export function NoteTemplateFormModal({
     setBody((prev) => (prev === '' || /\s$/.test(prev) ? `${prev}${marker}` : `${prev} ${marker}`));
   }
 
-  const payloadPrompts = prompts.map((p) => ({
-    label: p.label.trim(),
-    type: p.type,
-    options: p.type === 'TEXT' ? [] : optionList(p.options),
-    defaultValue: p.defaultValue.trim() === '' ? null : p.defaultValue.trim(),
-  }));
+  const payloadPrompts = prompts.map((p) => {
+    const options = p.type === 'TEXT' ? [] : optionList(p.options);
+    const defaultValue = p.defaultValue.trim();
+    // En ONE/MULTI el defecto es una de las opciones: si se quitó la opción,
+    // el selector ya muestra «Ninguno» y eso es lo que se manda.
+    const valid = defaultValue !== '' && (p.type === 'TEXT' || options.includes(defaultValue));
+    return {
+      label: p.label.trim(),
+      type: p.type,
+      options,
+      defaultValue: valid ? defaultValue : null,
+    };
+  });
   const previewPrompts = payloadPrompts.map((p, i) => ({ ...p, id: String(i) }));
   const preview = composeNote(
     body,

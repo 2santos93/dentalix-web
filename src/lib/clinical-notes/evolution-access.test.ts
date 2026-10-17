@@ -24,6 +24,12 @@ describe('canRegisterEvolution (DX-170)', () => {
     expect(canRegisterEvolution('DENTIST', { start: todayAt(9), status: 'NO_SHOW' }, today)).toBe(false);
   });
 
+  it('no en una cita de un día futuro aunque esté marcada atendida (la API responde 400)', () => {
+    const tomorrow = new Date(2026, 9, 18, 9).toISOString();
+    expect(canRegisterEvolution('DENTIST', { start: tomorrow, status: 'COMPLETED' }, today)).toBe(false);
+    expect(canRegisterEvolution('DENTIST', { start: tomorrow, status: 'SCHEDULED' }, today)).toBe(false);
+  });
+
   it('localDayOf usa el día local', () => {
     expect(localDayOf(todayAt(23))).toBe(today);
   });

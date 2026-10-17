@@ -138,6 +138,39 @@ describe('NewEvolutionModal (DX-170)', () => {
     );
   });
 
+  it('sin plantillas activas lo dice en vez de «ninguna coincide»', async () => {
+    mockedList.mockResolvedValue([]);
+    renderModal();
+    expect(
+      await screen.findByText(/la clínica aún no tiene plantillas activas/i),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/ninguna plantilla coincide/i)).toBeNull();
+  });
+
+  it('con el teclado las flechas recorren las plantillas sin plegar el selector', async () => {
+    const user = userEvent.setup();
+    renderModal();
+    const none = await screen.findByRole('radio', { name: /sin plantilla/i });
+    none.focus();
+    await user.keyboard('{ArrowDown}');
+    // Las flechas eligen (radio nativo), pero la lista sigue abierta para
+    // poder seguir bajando; las preguntas ya se ven.
+    expect(screen.getByRole('radio', { name: /profilaxis|resina/i, checked: true })).toHaveFocus();
+    await user.keyboard('{ArrowDown}');
+    expect(screen.getAllByRole('radio', { name: /profilaxis|resina/i })).toHaveLength(2);
+    expect(screen.queryByRole('button', { name: /cambiar la plantilla/i })).toBeNull();
+  });
+
+  it('al elegir con el ratón se pliega y el foco pasa a «Cambiar»; «Cambiar» lo devuelve a la lista', async () => {
+    const user = userEvent.setup();
+    renderModal();
+    await pickResin(user);
+    const change = screen.getByRole('button', { name: /cambiar la plantilla «resina»/i });
+    expect(change).toHaveFocus();
+    await user.click(change);
+    expect(screen.getByRole('radio', { name: /resina/i })).toHaveFocus();
+  });
+
   it('desde la cita: la liga, dice de qué cita es y usa su día como fecha de atención', async () => {
     const user = userEvent.setup();
     const start = new Date(2026, 9, 7, 9, 30).toISOString();

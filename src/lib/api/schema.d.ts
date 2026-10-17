@@ -2671,7 +2671,7 @@ export interface components {
             notes?: string;
             /**
              * Format: uuid
-             * @description DX-170: cita en la que se documenta. Tiene que ser de esta clínica (404) y de este paciente (400).
+             * @description DX-170: cita en la que se documenta. Tiene que ser de esta clínica (404), de este paciente (400) y no de un día futuro en la zona de su sede (400).
              */
             appointmentId?: string;
             /**
@@ -6771,7 +6771,7 @@ export interface operations {
                     "application/json": components["schemas"]["ClinicalEntryDto"];
                 };
             };
-            /** @description Texto vacío, respuesta inválida, plantilla desactivada, cita de otro paciente o cita cancelada / no-show. */
+            /** @description Texto vacío, respuesta inválida, plantilla desactivada, cita de otro paciente, cita cancelada / no-show o cita de un día futuro. */
             400: {
                 headers: {
                     [name: string]: unknown;

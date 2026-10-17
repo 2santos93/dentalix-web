@@ -1,6 +1,6 @@
 'use client';
 import * as React from 'react';
-import { useId, useMemo, useState } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 import { Search } from 'lucide-react';
 import type { NoteTemplate } from '@/lib/clinical-notes/note-templates-api';
 import { Input } from '@/components/ui/input';
@@ -14,6 +14,7 @@ export const templatePickerCopy = {
   none: 'Sin plantilla (texto libre)',
   noFolder: 'Sin carpeta',
   noResults: (q: string) => `Ninguna plantilla coincide con «${q}».`,
+  noTemplates: 'La clínica aún no tiene plantillas activas: escribe la evolución a mano.',
   change: 'Cambiar',
   changeFor: (name: string) => `Cambiar la plantilla «${name}»`,
   questions: (n: number) => (n === 1 ? '1 pregunta' : `${n} preguntas`),
@@ -38,8 +39,10 @@ interface TemplatePickerProps {
  * Selector de plantilla con búsqueda (DX-170). Lista las plantillas activas
  * agrupadas por carpeta, filtradas por nombre o carpeta (sin tildes ni
  * mayúsculas). Es un grupo de radios: navegable con flechas, sin lógica de
- * combobox a medida, y a 390 px se lee como una lista. Con una plantilla
- * elegida se pliega a su nombre y un «Cambiar».
+ * combobox a medida, y a 390 px se lee como una lista. Elegida con el ratón o
+ * el dedo, se pliega a su nombre y un «Cambiar» (que recibe el foco). Con el
+ * teclado NO se pliega: las flechas de un grupo de radios eligen a cada paso,
+ * y plegarlo dejaría al usuario sin poder seguir bajando ni con el foco.
  */
 export function TemplatePicker({ templates, value, onChange }: TemplatePickerProps) {
   const [query, setQuery] = useState('');
@@ -47,6 +50,28 @@ export function TemplatePicker({ templates, value, onChange }: TemplatePickerPro
   const searchId = useId();
   const groupName = useId();
   const selected = templates.find((t) => t.id === value) ?? null;
+  // La elección viene de un puntero (ratón/dedo), no de las flechas.
+  const [byPointer, setByPointer] = useState(false);
+  // Plegar/desplegar a mano mueve el foco a lo que queda en pantalla (el
+  // control que lo tenía desaparece). `null` en el primer render: no se roba
+  // el foco al abrir el modal.
+  const [moved, setMoved] = useState<{ expanded: boolean } | null>(null);
+  const changeRef = useRef<HTMLButtonElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (moved === null) return;
+    if (moved.expanded) {
+      listRef.current?.querySelector<HTMLInputElement>('input[type="radio"]:checked')?.focus();
+    } else {
+      changeRef.current?.focus();
+    }
+  }, [moved]);
+
+  function setExpandedAndFocus(next: boolean) {
+    setExpanded(next);
+    setMoved({ expanded: next });
+  }
 
   const groups = useMemo(() => {
     const q = normalize(query.trim());
@@ -63,7 +88,8 @@ export function TemplatePicker({ templates, value, onChange }: TemplatePickerPro
 
   function pick(id: string | null) {
     onChange(id);
-    if (id !== null) setExpanded(false);
+    setByPointer(false);
+    if (id !== null && byPointer) setExpandedAndFocus(false);
   }
 
   if (selected && !expanded) {
@@ -81,8 +107,9 @@ export function TemplatePicker({ templates, value, onChange }: TemplatePickerPro
             type="button"
             variant="secondary"
             size="sm"
+            ref={changeRef}
             aria-label={copy.changeFor(selected.name)}
-            onClick={() => setExpanded(true)}
+            onClick={() => setExpandedAndFocus(true)}
           >
             {copy.change}
           </Button>
@@ -111,7 +138,12 @@ export function TemplatePicker({ templates, value, onChange }: TemplatePickerPro
           className="pl-9"
         />
       </div>
-      <div className="max-h-60 overflow-y-auto rounded-lg border border-border bg-surface">
+      <div
+        ref={listRef}
+        onPointerDown={() => setByPointer(true)}
+        onKeyDown={() => setByPointer(false)}
+        className="max-h-60 overflow-y-auto rounded-lg border border-border bg-surface"
+      >
         <TemplateOption
           name={groupName}
           checked={value === null}
@@ -120,7 +152,7 @@ export function TemplatePicker({ templates, value, onChange }: TemplatePickerPro
         />
         {groups.length === 0 ? (
           <p role="status" className="px-3 py-3 text-sm text-muted">
-            {copy.noResults(query.trim())}
+            {templates.length === 0 ? copy.noTemplates : copy.noResults(query.trim())}
           </p>
         ) : (
           groups.map(([folder, items]) => (
