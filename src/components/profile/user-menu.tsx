@@ -13,6 +13,7 @@ import {
   Sun,
   Moon,
   CalendarClock,
+  BellRing,
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useAuthStore } from '@/lib/auth/auth-store';
@@ -22,6 +23,7 @@ import { getTokenRole } from '@/lib/auth/token-role';
 import { canManageConsentTemplates } from '@/lib/consents/consents-api';
 import { canManagePrescriptionTemplates } from '@/lib/prescriptions/prescriptions-api';
 import { canManageAppointmentTypes } from '@/lib/appointments/appointment-types-api';
+import { canManageReminders } from '@/lib/reminders/reminders-api';
 import { cn } from '@/lib/utils';
 
 // Tope de espera a la revocación en el servidor al cerrar sesión: la API suele
@@ -55,6 +57,7 @@ const copy = {
   consentTemplates: 'Consentimientos',
   prescriptionSettings: 'Recetas',
   appointmentTypes: 'Tipos de cita',
+  reminders: 'Recordatorios',
   logout: 'Cerrar sesión',
   theme: 'Cambiar tema',
 };
@@ -282,6 +285,18 @@ export function UserMenu({
         >
           <CalendarClock className="size-4 text-muted" aria-hidden />
           {copy.appointmentTypes}
+        </Link>
+      ) : null}
+      {/* Recordatorios por email de cada sede (DX-026): solo ADMIN. */}
+      {canManageReminders(getTokenRole(accessToken)) ? (
+        <Link
+          href="/settings/recordatorios"
+          role="menuitem"
+          onClick={() => setOpen(false)}
+          className="flex items-center gap-3 px-3 py-2 text-sm text-ink hover:bg-bg"
+        >
+          <BellRing className="size-4 text-muted" aria-hidden />
+          {copy.reminders}
         </Link>
       ) : null}
       {/* Plantillas de receta y país de las sedes (DX-013): solo ADMIN. */}

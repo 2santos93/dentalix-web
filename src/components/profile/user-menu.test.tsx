@@ -149,13 +149,19 @@ describe('UserMenu — plantillas de consentimiento (DX-006)', () => {
       'href',
       '/settings/recetas',
     );
+    // DX-026: recordatorios por email de cada sede.
+    expect(screen.getByRole('menuitem', { name: 'Recordatorios' })).toHaveAttribute(
+      'href',
+      '/settings/recordatorios',
+    );
   });
 
-  it('otro rol no lo ve', async () => {
-    mockAccessToken = tokenForRole('DENTIST');
+  it.each(['DENTIST', 'ASSISTANT', 'RECEPTION'])('%s no lo ve', async (role) => {
+    mockAccessToken = tokenForRole(role);
     render(<UserMenu />);
     fireEvent.click(await screen.findByRole('button', { name: /ana gómez/i }));
     expect(screen.queryByRole('menuitem', { name: 'Consentimientos' })).not.toBeInTheDocument();
     expect(screen.queryByRole('menuitem', { name: 'Recetas' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'Recordatorios' })).not.toBeInTheDocument();
   });
 });
