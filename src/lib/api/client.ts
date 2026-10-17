@@ -322,6 +322,16 @@ export async function apiFetch<T>(path: string, opts: ApiOptions = {}): Promise<
 }
 
 /**
+ * Como `apiFetch`, pero devuelve el cuerpo como TEXTO: para las descargas que
+ * no son JSON (el CSV de la cartera, DX-145). Mismos refresh, cabeceras y
+ * errores (`ApiError` con el mensaje en español de la API).
+ */
+export async function apiFetchText(path: string, opts: ApiOptions = {}): Promise<string> {
+  const res = await doFetch(path, opts);
+  return res.text();
+}
+
+/**
  * Same as `apiFetch`, but tolerates a `200` response with an EMPTY body
  * (content-length 0) by returning `null` instead of throwing — `res.json()`
  * throws on an empty string, which is exactly what
