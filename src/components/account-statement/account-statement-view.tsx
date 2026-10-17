@@ -41,6 +41,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { VoidPaymentModal } from '@/components/payments/void-payment-modal';
+import { PaymentReceiptDialog } from '@/components/payments/payment-receipt-dialog';
 import {
   useVoidPayment,
   voidPaymentSubject,
@@ -92,6 +93,9 @@ const copy = {
   colActions: 'Acciones',
   voidAction: 'Anular',
   voidActionLabel: (amount: string, date: string) => `Anular abono de ${amount} del ${date}`,
+  receiptAction: 'Recibo',
+  receiptActionLabel: (amount: string, date: string) =>
+    `Recibo del abono de ${amount} del ${date}`,
   colDue: 'Vencimiento',
   colInstallment: 'Cuota',
   colOutstanding: 'Pendiente',
@@ -135,6 +139,9 @@ export function AccountStatementView({ token, patientId }: AccountStatementViewP
   const canCharge = canRecordPayments(getTokenRole(token));
   const [chargeModal, setChargeModal] = useState<'payment' | 'payment-plan' | null>(null);
   const [chargeNotice, setChargeNotice] = useState<string | null>(null);
+  // Recibo de caja (DX-136) de cualquier movimiento, también de los anulados
+  // (sale marcado «ANULADO»).
+  const [receiptPaymentId, setReceiptPaymentId] = useState<string | null>(null);
 
   function openCharge(kind: 'payment' | 'payment-plan') {
     setChargeNotice(null);
@@ -236,7 +243,13 @@ export function AccountStatementView({ token, patientId }: AccountStatementViewP
           emptyIcon={<Wallet aria-hidden />}
           skeleton={<TableSkeleton rows={3} />}
         >
-          {data ? <StatementBody statement={data} onVoid={voiding.request} /> : null}
+          {data ? (
+            <StatementBody
+              statement={data}
+              onVoid={voiding.request}
+              onReceipt={setReceiptPaymentId}
+            />
+          ) : null}
         </AsyncSection>
       )}
 
@@ -268,6 +281,14 @@ export function AccountStatementView({ token, patientId }: AccountStatementViewP
         </>
       ) : null}
 
+      <PaymentReceiptDialog
+        token={token}
+        paymentId={receiptPaymentId}
+        onOpenChange={(open) => {
+          if (!open) setReceiptPaymentId(null);
+        }}
+      />
+
       {/* `key` por abono: cada anulación empieza con el motivo en blanco. */}
       <VoidPaymentModal
         key={voiding.target?.id ?? 'none'}
@@ -289,13 +310,14 @@ export function AccountStatementView({ token, patientId }: AccountStatementViewP
 function StatementBody({
   statement,
   onVoid,
+  onReceipt,
 }: {
   statement: AccountStatement;
   onVoid: (target: VoidPaymentTarget) => void;
+  /** Abre el recibo de caja del abono (DX-136). */
+  onReceipt: (paymentId: string) => void;
 }) {
   const planName = planNamer(statement.plans);
-  // La columna de acciones solo existe si hay algo que anular.
-  const anyVoidable = statement.movements.some((m) => m.canVoid);
   return (
     <div className="flex flex-col gap-8">
       {statement.summary.length > 0 ? (
@@ -449,11 +471,9 @@ function StatementBody({
                   <TableHead scope="col" className="text-right">
                     {copy.colAmount}
                   </TableHead>
-                  {anyVoidable ? (
-                    <TableHead scope="col">
-                      <span className="sr-only">{copy.colActions}</span>
-                    </TableHead>
-                  ) : null}
+                  <TableHead scope="col">
+                    <span className="sr-only">{copy.colActions}</span>
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -489,8 +509,20 @@ function StatementBody({
                         </span>
                       </span>
                     </TableCell>
-                    {anyVoidable ? (
-                      <TableCell className="text-right" data-label={copy.colActions}>
+                    <TableCell className="text-right" data-label={copy.colActions}>
+                      <span className="inline-flex flex-wrap items-center justify-end gap-3">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          aria-label={copy.receiptActionLabel(
+                            formatCurrency(m.amount, m.currency),
+                            formatCivilDate(m.paidOn),
+                          )}
+                          onClick={() => onReceipt(m.id)}
+                        >
+                          {copy.receiptAction}
+                        </Button>
                         {m.canVoid ? (
                           <Button
                             type="button"
@@ -512,8 +544,8 @@ function StatementBody({
                             {copy.voidAction}
                           </Button>
                         ) : null}
-                      </TableCell>
-                    ) : null}
+                      </span>
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>

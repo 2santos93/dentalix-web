@@ -46,6 +46,7 @@ import {
 } from '@/components/ui/table';
 import { Button } from '@/components/ui/button';
 import { VoidPaymentModal } from '@/components/payments/void-payment-modal';
+import { PaymentReceiptDialog } from '@/components/payments/payment-receipt-dialog';
 import { useVoidPayment, voidPaymentSubject } from '@/components/payments/use-void-payment';
 import { getTokenRole } from '@/lib/auth/token-role';
 import { cn } from '@/lib/utils';
@@ -87,6 +88,8 @@ const copy = {
   colActions: 'Acciones',
   voidAction: 'Anular',
   voidActionLabel: (patient: string) => `Anular abono de ${patient}`,
+  receiptAction: 'Recibo',
+  receiptActionLabel: (patient: string) => `Recibo del abono de ${patient}`,
   planLabel: (createdAt: string) => `Plan del ${formatDate(createdAt)}`,
   // Sin "Intenta de nuevo." — alimenta AsyncSection -> SectionError, que trae su propio botón.
   genericLoadError: 'No pudimos cargar la caja.',
@@ -171,6 +174,8 @@ export function CashRegisterView({ token }: CashRegisterViewProps) {
   // la API para quien consulta); tras anular se recarga la caja, que solo
   // lista abonos activos, y con ella el resumen.
   const voiding = useVoidPayment(token, () => setReloadKey((k) => k + 1));
+  // Recibo de caja (DX-136): ver, reimprimir o enviar el de cualquier fila.
+  const [receiptPaymentId, setReceiptPaymentId] = useState<string | null>(null);
 
   const rangeFrom = range?.from;
   const rangeTo = range?.to;
@@ -247,8 +252,6 @@ export function CashRegisterView({ token }: CashRegisterViewProps) {
 
   const customError = period === 'custom' ? rangeError(customRange) : null;
   const items = data?.items ?? [];
-  // La columna «Acciones» solo existe si alguna fila es anulable por quien mira.
-  const anyVoidable = items.some((payment) => payment.canVoid);
   // Con el rango escrito inválido, lo último cargado es de OTRO rango: no se
   // pinta (ni conteo, ni resumen, ni tabla, ni páginas) para que nadie lo lea
   // como la respuesta a las fechas que tiene delante.
@@ -393,11 +396,9 @@ export function CashRegisterView({ token }: CashRegisterViewProps) {
                       <TableHead scope="col" className="text-right">
                         {copy.colAmount}
                       </TableHead>
-                      {anyVoidable ? (
-                        <TableHead scope="col">
-                          <span className="sr-only">{copy.colActions}</span>
-                        </TableHead>
-                      ) : null}
+                      <TableHead scope="col">
+                        <span className="sr-only">{copy.colActions}</span>
+                      </TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -434,8 +435,17 @@ export function CashRegisterView({ token }: CashRegisterViewProps) {
                         >
                           {formatCurrency(payment.amount, payment.currency)}
                         </TableCell>
-                        {anyVoidable ? (
-                          <TableCell className="text-right" data-label={copy.colActions}>
+                        <TableCell className="text-right" data-label={copy.colActions}>
+                          <span className="inline-flex flex-wrap items-center justify-end gap-3">
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              aria-label={copy.receiptActionLabel(payment.patient.fullName)}
+                              onClick={() => setReceiptPaymentId(payment.id)}
+                            >
+                              {copy.receiptAction}
+                            </Button>
                             {payment.canVoid ? (
                               <Button
                                 type="button"
@@ -455,8 +465,8 @@ export function CashRegisterView({ token }: CashRegisterViewProps) {
                                 {copy.voidAction}
                               </Button>
                             ) : null}
-                          </TableCell>
-                        ) : null}
+                          </span>
+                        </TableCell>
                       </TableRow>
                     ))}
                   </TableBody>
@@ -476,6 +486,14 @@ export function CashRegisterView({ token }: CashRegisterViewProps) {
           </>
         ) : null}
       </div>
+
+      <PaymentReceiptDialog
+        token={token}
+        paymentId={receiptPaymentId}
+        onOpenChange={(open) => {
+          if (!open) setReceiptPaymentId(null);
+        }}
+      />
 
       {/* `key` por abono: cada anulación empieza con el motivo en blanco. */}
       <VoidPaymentModal

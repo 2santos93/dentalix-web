@@ -10,6 +10,13 @@ import {
 } from '@/lib/payments/payments-api';
 import { presetRange as presetRangeIn } from '@/lib/payments/cash-period';
 import { listLocations } from '@/lib/locations/locations-api';
+import { getPaymentReceipt } from '@/lib/payments/payment-receipts-api';
+import { paymentReceiptFixture } from '@/lib/test/payment-receipt';
+
+jest.mock('../../lib/payments/payment-receipts-api', () => ({
+  ...jest.requireActual('../../lib/payments/payment-receipts-api'),
+  getPaymentReceipt: jest.fn(),
+}));
 
 // DX-097: los atajos salen del día de la SEDE (su zona, de GET /locations).
 jest.mock('../../lib/locations/locations-api', () => ({ listLocations: jest.fn() }));
@@ -365,6 +372,25 @@ it('pagina: "Siguiente" pide la página 2 con los mismos filtros', async () => {
       page: 2,
     }),
   );
+});
+
+it('cada fila abre el recibo de caja de su abono (DX-136)', async () => {
+  const user = userEvent.setup();
+  mockedList.mockResolvedValue(response());
+  const mockedReceipt = getPaymentReceipt as jest.MockedFunction<typeof getPaymentReceipt>;
+  mockedReceipt.mockResolvedValue(paymentReceiptFixture({ paymentId: 'pay-1', reference: 'PRI-000009' }));
+  render(<CashRegisterView token="tok" />);
+
+  const table = await screen.findByRole('table', { name: /abonos/i });
+  const beto = within(table).getByRole('row', { name: /beto ruiz/i });
+  // También en las filas que no se pueden anular.
+  expect(within(beto).getByRole('button', { name: /recibo del abono de beto ruiz/i })).toBeInTheDocument();
+  const ana = within(table).getByRole('row', { name: /ana gómez/i });
+  await user.click(within(ana).getByRole('button', { name: /recibo del abono de ana gómez/i }));
+
+  const dialog = await screen.findByRole('dialog', { name: /recibo de caja/i });
+  expect(await within(dialog).findByTestId('receipt-document')).toHaveTextContent('N.º PRI-000009');
+  expect(mockedReceipt).toHaveBeenCalledWith('tok', 'pay-1');
 });
 
 describe('anular desde la caja (DX-057)', () => {
