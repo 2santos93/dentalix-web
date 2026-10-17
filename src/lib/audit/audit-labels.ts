@@ -124,6 +124,20 @@ export function isPatientOptOut(metadata: AuditMetadata): boolean {
   return metadata.reason === 'REMINDER_OPT_OUT';
 }
 
+const STAFF_LOGIN_REASONS: Record<string, string> = {
+  LOGIN_UNLOCKED: 'Desbloqueo del inicio de sesión',
+  LOGIN_UNLOCK_REFUSED: 'Desbloqueo del inicio de sesión rechazado (sin cambios)',
+};
+
+/**
+ * DX-048 / DX-213: el desbloqueo del login de un miembro y su rechazo se
+ * auditan los dos como `Modificación` del miembro; el motivo los distingue.
+ * null si el evento no es de desbloqueo.
+ */
+export function staffLoginDetail(metadata: AuditMetadata): string | null {
+  return (metadata.reason && STAFF_LOGIN_REASONS[metadata.reason]) ?? null;
+}
+
 /**
  * DX-191: la búsqueda de implantes por lote/REF (y su CSV) dice qué se buscó y
  * cuántas filas salieron: «Lote LOT-1 · 2 filas». null si no es una búsqueda.

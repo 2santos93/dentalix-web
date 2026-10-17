@@ -121,6 +121,40 @@ describe('AuditLogView', () => {
     ).toBeInTheDocument();
   });
 
+  // DX-213: un desbloqueo rechazado no se confunde con uno hecho.
+  it('distingue el desbloqueo del login de su rechazo', async () => {
+    const admin = { id: 'u-admin', fullName: 'Ana Admin', role: 'ADMIN' as const };
+    mockedList.mockResolvedValue(
+      page({
+        items: [
+          {
+            ...view,
+            id: 'ev-5',
+            action: 'UPDATE',
+            resourceType: 'STAFF_MEMBER',
+            actor: admin,
+            metadata: { reason: 'LOGIN_UNLOCKED' },
+          },
+          {
+            ...view,
+            id: 'ev-6',
+            action: 'UPDATE',
+            resourceType: 'STAFF_MEMBER',
+            actor: admin,
+            metadata: { reason: 'LOGIN_UNLOCK_REFUSED' },
+          },
+        ],
+      }),
+    );
+    render(<AuditLogView token="tok" />);
+    const table = await screen.findByRole('table', { name: 'Registro de auditoría' });
+    const [, unlocked, refused] = within(table).getAllByRole('row');
+    expect(within(unlocked).getByText('Desbloqueo del inicio de sesión')).toBeInTheDocument();
+    expect(
+      within(refused).getByText('Desbloqueo del inicio de sesión rechazado (sin cambios)'),
+    ).toBeInTheDocument();
+  });
+
   it('vacío: lo dice y sugiere cambiar los filtros', async () => {
     mockedList.mockResolvedValue(page({ items: [] }));
     render(<AuditLogView token="tok" />);
