@@ -1993,7 +1993,16 @@ export interface components {
              */
             timeZone: string;
         };
-        RegisterDto: Record<string, never>;
+        RegisterDto: {
+            clinicName: string;
+            /** @example sonrisa */
+            subdomain: string;
+            /** Format: email */
+            email: string;
+            /** Format: password */
+            password: string;
+            fullName: string;
+        };
         RegisterAcceptedDto: {
             /** @example Te enviamos un correo para confirmar el registro. Abre el enlace para activar tu clínica. */
             message: string;
@@ -2088,7 +2097,7 @@ export interface components {
             /** @enum {string} */
             role?: "DENTIST" | "ASSISTANT" | "RECEPTION" | "ADMIN";
             maskedEmail?: string;
-            /** @description true = el email ya tiene una cuenta verificada: pide la contraseña actual. false = pide crear una contraseña (cuenta nueva, o cuenta sin verificar que se reclama). El token solo llega por email a la persona invitada. */
+            /** @description true = el email ya tiene una cuenta verificada, o una sin verificar con acceso a otra clínica o a la plataforma (no se puede reclamar, DX-143): pide la contraseña actual. false = pide crear una contraseña (cuenta nueva, o cuenta sin verificar que se reclama). El token solo llega por email a la persona invitada. */
             requiresCurrentPassword?: boolean;
         };
         AcceptInvitationDto: {
