@@ -471,6 +471,66 @@ export interface paths {
         patch: operations["PatientCommunicationController_update"];
         trace?: never;
     };
+    "/api/v1/patients/{id}/collection-notes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Registrar una gestión de cobro (append-only)
+         * @description Canal, resultado y una nota corta (≤ 280, sin datos clínicos). No se edita ni se borra: una corrección es otra nota.
+         */
+        post: operations["CollectionsController_note"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{id}/payment-promises": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Registrar un compromiso de pago
+         * @description Importe, moneda y día en la zona de la sede. Uno abierto por paciente. Pasa a KEPT al cubrirse con abonos registrados desde el compromiso y fechados hasta su día, y a BROKEN el día siguiente si no.
+         */
+        post: operations["CollectionsController_promise"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{id}/collections": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Cobranza del paciente: gestiones y compromisos
+         * @description Más recientes primero, con lo cubierto de cada compromiso.
+         */
+        get: operations["CollectionsController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/catalog/items": {
         parameters: {
             query?: never;
@@ -1599,7 +1659,7 @@ export interface paths {
         };
         /**
          * Cartera por antigüedad: deudores de la sede con tramos 0–30/31–60/61–90/>90 por moneda
-         * @description El saldo de cada paciente es el de su estado de cuenta (mismo cálculo), repartido por antigüedad: cada cuota desde su vencimiento; el saldo sin cuotas desde la aceptación (o presentación, o creación) del plan, con `ageApproximate`. Días civiles de la zona de la sede. Por moneda, sin convertir; el saldo a favor va aparte. Sin datos clínicos.
+         * @description El saldo de cada paciente es el de su estado de cuenta (mismo cálculo), repartido por antigüedad: cada cuota desde su vencimiento; el saldo sin cuotas desde la aceptación (o presentación, o creación) del plan, con `ageApproximate`. Días civiles de la zona de la sede. Por moneda, sin convertir; el saldo a favor va aparte. Sin datos clínicos. DX-150: cada fila trae su última gestión de cobro y su último compromiso de pago; filtros `providerId` y `hasPromise`.
          */
         get: operations["ReceivablesController_list"];
         put?: never;
@@ -2217,7 +2277,7 @@ export interface components {
         /** @enum {string} */
         AuditAction: "VIEW" | "CREATE" | "UPDATE" | "DELETE" | "SIGN" | "VOID" | "LOGIN" | "LOGIN_FAILED" | "PASSWORD_RESET" | "EXPORT" | "PRINT" | "SEND";
         /** @enum {string} */
-        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN";
+        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE";
         /**
          * @description Rol con el que actuó (del token). `null` en un login fallido.
          * @enum {string}
@@ -2256,7 +2316,7 @@ export interface components {
          * @description DX-128: de dónde salió un cambio de canal, opt-in o baja de recordatorios (en persona, enlace, mensaje del paciente o anotado por el personal).
          * @enum {string}
          */
-        AuditOrigin: "IN_PERSON" | "LINK" | "MESSAGE" | "STAFF";
+        AuditOrigin: "IN_PERSON" | "LINK" | "MESSAGE" | "STAFF" | "JOB";
         AuditSearchDto: {
             /** @example LOT-AB12 */
             lot?: string;
@@ -2728,6 +2788,106 @@ export interface components {
             page: number;
             pageSize: number;
         };
+        OverdueAmountDto: {
+            /** @example COP */
+            currency: string;
+            /** @description Lo exigible vencido, sin lo que está por vencer */
+            amount: number;
+        };
+        OverdueBalanceDto: {
+            hasOverdue: boolean;
+            /** @description Días de la deuda vencida más antigua (zona de la sede) */
+            overdueDays: number | null;
+            /** @description Solo para ADMIN y RECEPTION, y solo con saldo vencido. DENTIST y ASSISTANT no lo reciben. */
+            amounts?: components["schemas"]["OverdueAmountDto"][];
+        };
+        PatientDetailDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            tenantId: string;
+            firstName: string;
+            lastName: string;
+            /** @enum {string} */
+            docType: "CC" | "TI" | "CE" | "PASSPORT" | "OTHER";
+            docNumber: string | null;
+            /** Format: date-time */
+            birthDate: string | null;
+            /** @enum {string} */
+            sex: "M" | "F" | "OTHER" | "UNSPECIFIED";
+            phone: string | null;
+            email: string | null;
+            address: string | null;
+            countryCode: string | null;
+            cityId: number | null;
+            notes: string | null;
+            /**
+             * @deprecated
+             * @description DEPRECADO (DX-037): resumen derivado de la última autorización GENERAL. La fuente de verdad es GET /patients/:id/data-consents.
+             */
+            dataConsentAccepted: boolean;
+            /**
+             * Format: date-time
+             * @deprecated
+             * @description DEPRECADO (DX-037): hora (servidor) de la última autorización GENERAL.
+             */
+            dataConsentAt: string | null;
+            /**
+             * @deprecated
+             * @description DEPRECADO (DX-037): versión («v1», «v2»…) de la política de la última autorización GENERAL.
+             */
+            dataConsentPolicyVersion: string | null;
+            maritalStatus: string | null;
+            occupation: string | null;
+            insurerEps: string | null;
+            physicianName: string | null;
+            physicianPhone: string | null;
+            emergencyContactName: string | null;
+            emergencyContactRelationship: string | null;
+            emergencyContactPhone: string | null;
+            guardianName: string | null;
+            guardianDocNumber: string | null;
+            /** Format: uuid */
+            createdById: string | null;
+            /**
+             * Format: date-time
+             * @description DX-039: fecha de la última atención clínica (evolución registrada o cita atendida). La mantiene la BD y nunca retrocede.
+             */
+            lastAttentionAt: string | null;
+            /** @description Retención extendida de la HC: NONE = 15 años desde la última atención (Res. 839/2017), DOUBLE = 30 años, PERMANENT = nunca se libera. Solo ADMIN la cambia. */
+            retentionExtended: components["schemas"]["RetentionExtension"];
+            /**
+             * Format: date
+             * @description Último día (incluido) en que la HC debe conservarse. null sin atenciones clínicas o con retención PERMANENT.
+             * @example 2039-02-28
+             */
+            retentionUntil: string | null;
+            /** @description Si hoy la HC está en retención legal: archivar o borrar al paciente responde 409 CLINICAL_RECORD_RETENTION. */
+            underRetention: boolean;
+            /**
+             * Format: date-time
+             * @description DX-039: cuándo se vaciaron sus datos no clínicos (supresión parcial).
+             */
+            partiallySuppressedAt: string | null;
+            /** @description DX-128: canal de los avisos automáticos (EMAIL, WHATSAPP o NONE). Detalle en GET /patients/:id/communication. */
+            contactChannel: components["schemas"]["ContactChannel"];
+            /** Format: date-time */
+            whatsappOptInAt: string | null;
+            whatsappOptInSource: components["schemas"]["WhatsappOptInSource"] | null;
+            /** Format: uuid */
+            whatsappOptInById: string | null;
+            /**
+             * Format: date-time
+             * @description DX-128: baja de los recordatorios automáticos.
+             */
+            reminderOptOutAt: string | null;
+            reminderOptOutSource: components["schemas"]["ReminderOptOutSource"] | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            balance: components["schemas"]["OverdueBalanceDto"];
+        };
         UpdatePatientDto: {
             firstName?: string;
             lastName?: string;
@@ -2856,6 +3016,96 @@ export interface components {
             whatsappOptInSource?: components["schemas"]["WhatsappOptInSource"];
             /** @description true anota la baja de los recordatorios a petición del paciente (origen STAFF); false la quita y los reactiva. */
             reminderOptOut?: boolean;
+        };
+        /**
+         * @description Llamada, enlace de WhatsApp, email o en persona
+         * @enum {string}
+         */
+        CollectionChannel: "CALL" | "WHATSAPP_LINK" | "EMAIL" | "IN_PERSON";
+        /**
+         * @description No contesta, promete pago, pagará en la cita, disputa o número erróneo
+         * @enum {string}
+         */
+        CollectionOutcome: "NO_ANSWER" | "PROMISED_PAYMENT" | "WILL_PAY_AT_APPOINTMENT" | "DISPUTE" | "WRONG_NUMBER";
+        CreateCollectionNoteDto: {
+            /** @description Llamada, enlace de WhatsApp, email o en persona */
+            channel: components["schemas"]["CollectionChannel"];
+            /** @description No contesta, promete pago, pagará en la cita, disputa o número erróneo */
+            outcome: components["schemas"]["CollectionOutcome"];
+            /** @description Nota administrativa (sin datos clínicos). No se edita ni se borra: una corrección es otra nota. */
+            text?: string | null;
+        };
+        StaffRefDto: {
+            /** Format: uuid */
+            id: string;
+            fullName: string | null;
+        };
+        CollectionNoteDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            patientId: string;
+            /** Format: uuid */
+            locationId: string | null;
+            channel: components["schemas"]["CollectionChannel"];
+            outcome: components["schemas"]["CollectionOutcome"];
+            text: string | null;
+            author: components["schemas"]["StaffRefDto"];
+            /** Format: date-time */
+            createdAt: string;
+        };
+        CreatePaymentPromiseDto: {
+            /** @example 200000 */
+            amount: number;
+            /**
+             * @description ISO 4217
+             * @example COP
+             */
+            currency: string;
+            /**
+             * @description Día del compromiso (AAAA-MM-DD) en la zona de la sede: desde hoy hasta un año
+             * @example 2026-11-15
+             */
+            dueDate: string;
+            /**
+             * Format: uuid
+             * @description Sede del compromiso (su zona decide los días). Sin él, la de la cabecera X-Location-Id; sin ninguna, la de la deuda o la principal.
+             */
+            locationId?: string;
+        };
+        /**
+         * @description OPEN (abierto) → KEPT (cumplido) | BROKEN (incumplido, el día siguiente a dueDate en la zona de la sede)
+         * @enum {string}
+         */
+        PaymentPromiseStatus: "OPEN" | "KEPT" | "BROKEN";
+        PaymentPromiseDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            patientId: string;
+            /** Format: uuid */
+            locationId: string;
+            amount: number;
+            /** @example COP */
+            currency: string;
+            /**
+             * @description Día civil de la sede
+             * @example 2026-11-15
+             */
+            dueDate: string;
+            /** @description OPEN (abierto) → KEPT (cumplido) | BROKEN (incumplido, el día siguiente a dueDate en la zona de la sede) */
+            status: components["schemas"]["PaymentPromiseStatus"];
+            createdBy: components["schemas"]["StaffRefDto"];
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            settledAt: string | null;
+            /** @description Abonado en la moneda del compromiso desde que se hizo y hasta su día */
+            covered: number;
+        };
+        PatientCollectionsDto: {
+            notes: components["schemas"]["CollectionNoteDto"][];
+            promises: components["schemas"]["PaymentPromiseDto"][];
         };
         CreateCatalogItemDto: {
             /** @description Unique code within the tenant */
@@ -3375,6 +3625,73 @@ export interface components {
             updatedAt: string;
             warnings: string[];
         };
+        AppointmentListItemDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            tenantId: string;
+            /**
+             * Format: uuid
+             * @description Sede donde ocurre la cita.
+             */
+            locationId: string;
+            /** Format: uuid */
+            patientId: string;
+            /** @description Patient's first name, joined so a client can label the appointment without fetching the patient list. Null when the join is unavailable. */
+            patientFirstName: string | null;
+            patientLastName: string | null;
+            /** Format: uuid */
+            providerId: string;
+            /** Format: date-time */
+            start: string;
+            /** Format: date-time */
+            end: string;
+            /** @enum {string} */
+            status: "SCHEDULED" | "CONFIRMED" | "COMPLETED" | "CANCELLED" | "NO_SHOW";
+            reason: string | null;
+            notes: string | null;
+            /** Format: uuid */
+            createdById: string | null;
+            /** Format: uuid */
+            appointmentTypeId: string | null;
+            /** @description DX-121: tipo embebido (nombre, duración, color #RRGGBB). Se mantiene aunque el tipo se desactive o retire después. */
+            appointmentType: components["schemas"]["AppointmentTypeSummaryDto"] | null;
+            /**
+             * Format: date-time
+             * @description Cuándo se generó el enlace de confirmación vigente (DX-005). null si nunca se envió o si la cita se reagendó / cambió de estado después.
+             */
+            confirmationSentAt: string | null;
+            /**
+             * Format: date-time
+             * @description El paciente pidió que lo llamen desde el enlace de confirmación (la cita sigue SCHEDULED).
+             */
+            callbackRequestedAt: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            balance: components["schemas"]["OverdueBalanceDto"];
+        };
+        OpeningDto: {
+            /**
+             * Format: date-time
+             * @description Inicio del hueco (múltiplo de 5 min, nunca en el pasado).
+             */
+            start: string;
+            /**
+             * Format: date-time
+             * @description Fin del hueco (cabe al menos la duración pedida).
+             */
+            end: string;
+        };
+        OpeningsDto: {
+            /** @example America/Bogota */
+            timeZone: string;
+            durationMinutes: number;
+            openings: components["schemas"]["OpeningDto"][];
+            /** @description Había más de 200 huecos: acota el rango. */
+            truncated: boolean;
+        };
         AppointmentDto: {
             /** Format: uuid */
             id: string;
@@ -3420,26 +3737,6 @@ export interface components {
             createdAt: string;
             /** Format: date-time */
             updatedAt: string;
-        };
-        OpeningDto: {
-            /**
-             * Format: date-time
-             * @description Inicio del hueco (múltiplo de 5 min, nunca en el pasado).
-             */
-            start: string;
-            /**
-             * Format: date-time
-             * @description Fin del hueco (cabe al menos la duración pedida).
-             */
-            end: string;
-        };
-        OpeningsDto: {
-            /** @example America/Bogota */
-            timeZone: string;
-            durationMinutes: number;
-            openings: components["schemas"]["OpeningDto"][];
-            /** @description Había más de 200 huecos: acota el rango. */
-            truncated: boolean;
         };
         UpdateAppointmentDto: {
             /** Format: date-time */
@@ -5016,6 +5313,25 @@ export interface components {
             /** @example COP */
             currency: string;
         };
+        AgingLastNoteDto: {
+            channel: components["schemas"]["CollectionChannel"];
+            outcome: components["schemas"]["CollectionOutcome"];
+            /** Format: date-time */
+            createdAt: string;
+        };
+        AgingPromiseDto: {
+            /** Format: uuid */
+            id: string;
+            amount: number;
+            /** @example COP */
+            currency: string;
+            /**
+             * @description Día civil de la sede
+             * @example 2026-11-15
+             */
+            dueDate: string;
+            status: components["schemas"]["PaymentPromiseStatus"];
+        };
         AgingRowDto: {
             patient: components["schemas"]["AgingPatientDto"];
             /**
@@ -5031,6 +5347,10 @@ export interface components {
             lastPayment: components["schemas"]["AgingLastPaymentDto"] | null;
             /** @description La próxima cuota por vencer, de cualquier moneda */
             nextInstallment: components["schemas"]["AgingRowNextInstallmentDto"] | null;
+            /** @description DX-150: última gestión de cobro (el texto, en la ficha) */
+            lastNote: components["schemas"]["AgingLastNoteDto"] | null;
+            /** @description DX-150: último compromiso de pago; el vigente si está OPEN, o cómo terminó (KEPT/BROKEN) */
+            promise: components["schemas"]["AgingPromiseDto"] | null;
         };
         AgingTotalDto: {
             /** @example COP */
@@ -6982,12 +7302,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description La ficha con `balance` (DX-150): marca «Saldo vencido» y días para todos los roles; el importe, solo ADMIN y RECEPTION. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PatientDto"];
+                    "application/json": components["schemas"]["PatientDetailDto"];
                 };
             };
         };
@@ -7190,6 +7511,146 @@ export interface operations {
                 content?: never;
             };
             /** @description Paciente no encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    CollectionsController_note: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Sede activa: queda en la nota y es la sede del compromiso. */
+                "X-Location-Id"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateCollectionNoteDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CollectionNoteDto"];
+                };
+            };
+            /** @description Canal o resultado inválidos, o nota de más de 280 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Tu rol no gestiona la cobranza: es para administración y recepción. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente de otra clínica o inexistente */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    CollectionsController_promise: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Sede activa: queda en la nota y es la sede del compromiso. */
+                "X-Location-Id"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreatePaymentPromiseDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentPromiseDto"];
+                };
+            };
+            /** @description Importe, moneda, fecha (pasada o a más de un año) o sede inválidos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Tu rol no gestiona la cobranza: es para administración y recepción. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente de otra clínica o inexistente */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El paciente ya tiene un compromiso de pago abierto: se cierra solo al cumplirse o al vencer. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    CollectionsController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PatientCollectionsDto"];
+                };
+            };
+            /** @description Tu rol no gestiona la cobranza: es para administración y recepción. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente de otra clínica o inexistente */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -7953,12 +8414,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description Cada cita con `balance` (DX-150): marca «Saldo vencido» de su paciente, calculada para todo el lote en un número fijo de consultas (sin N+1). El importe, solo ADMIN y RECEPTION. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AppointmentDto"][];
+                    "application/json": components["schemas"]["AppointmentListItemDto"][];
                 };
             };
             /** @description Más de 12 profesionales o alguno ajeno a la clínica */
@@ -10268,6 +10730,10 @@ export interface operations {
                 minBalance?: number;
                 /** @description Días mínimos de la deuda vencida más antigua (91 = «más de 90 días») */
                 minAgeDays?: number;
+                /** @description DX-150: solo los pacientes cuya última cita atendida fue con este profesional */
+                providerId?: string;
+                /** @description DX-150: true = solo con compromiso de pago abierto; false = solo sin él */
+                hasPromise?: boolean;
                 page?: number;
                 /** @description Tope: 100 (un valor mayor se recorta) */
                 pageSize?: number;
@@ -10316,6 +10782,10 @@ export interface operations {
                 minBalance?: number;
                 /** @description Días mínimos de la deuda vencida más antigua (91 = «más de 90 días») */
                 minAgeDays?: number;
+                /** @description DX-150: solo los pacientes cuya última cita atendida fue con este profesional */
+                providerId?: string;
+                /** @description DX-150: true = solo con compromiso de pago abierto; false = solo sin él */
+                hasPromise?: boolean;
             };
             header?: {
                 /** @description Sede activa. El parámetro `locationId` manda sobre ella; sin ninguno, toda la clínica. */
