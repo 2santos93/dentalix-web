@@ -167,7 +167,8 @@ export function LoginForm({ passwordReset = false }: { passwordReset?: boolean }
     return (
       <div className="flex flex-col gap-4">
         <BreakGlassStep
-          submitting={submitting || locked}
+          submitting={submitting}
+          locked={locked}
           error={error}
           onSubmit={(input) => void login(input)}
           onBack={() => {

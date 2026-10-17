@@ -283,6 +283,30 @@ describe('LoginForm', () => {
       expect(screen.getByLabelText(/código de verificación/i)).toBeInTheDocument();
     });
 
+    it('en espera por demasiados intentos (429) el botón no dice «Entrando…» y «Volver» sigue activo', async () => {
+      (apiFetch as jest.Mock)
+        .mockRejectedValueOnce(new ApiError(401, 'x', { code: 'BREAK_GLASS_REQUIRED' }))
+        .mockRejectedValueOnce(new ApiError(429, 'Demasiados intentos.', { retryAfterSeconds: 60 }));
+      render(<LoginForm />);
+      fillCredentials();
+      fireEvent.change(await screen.findByLabelText(/código de verificación/i), {
+        target: { value: '123456' },
+      });
+      fireEvent.change(screen.getByLabelText(/motivo del acceso/i), {
+        target: { value: 'Ticket 42: no cuadra la caja' },
+      });
+      fireEvent.click(screen.getByRole('button', { name: /entrar como soporte/i }));
+
+      expect(
+        await screen.findByText('Demasiados intentos. Vuelve a intentarlo en 1 min.'),
+      ).toBeInTheDocument();
+      const submit = screen.getByRole('button', { name: /entrar como soporte/i });
+      expect(submit).toBeDisabled();
+      expect(screen.queryByText('Entrando…')).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /volver/i })).toBeEnabled();
+      expect(apiFetch).toHaveBeenCalledTimes(2);
+    });
+
     it('«Volver» regresa al paso de credenciales', async () => {
       (apiFetch as jest.Mock).mockRejectedValueOnce(
         new ApiError(401, 'x', { code: 'BREAK_GLASS_REQUIRED' }),

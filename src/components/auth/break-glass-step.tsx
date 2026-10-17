@@ -33,6 +33,11 @@ const textareaClass =
 
 interface BreakGlassStepProps {
   submitting: boolean;
+  /**
+   * En espera por demasiados intentos (429): el envío se bloquea, pero el botón
+   * no dice «Entrando…» (no hay nada en curso) y «Volver» sigue disponible.
+   */
+  locked?: boolean;
   /** Error del último intento (código erróneo, bloqueo…), ya en español. */
   error: string | null;
   onSubmit: (input: { mfaCode: string; reason: string }) => void;
@@ -45,7 +50,13 @@ interface BreakGlassStepProps {
  * motivo del acceso. La validación del cliente evita idas y vueltas; la que
  * manda es la de la API.
  */
-export function BreakGlassStep({ submitting, error, onSubmit, onBack }: BreakGlassStepProps) {
+export function BreakGlassStep({
+  submitting,
+  locked = false,
+  error,
+  onSubmit,
+  onBack,
+}: BreakGlassStepProps) {
   const [code, setCode] = useState('');
   const [reason, setReason] = useState('');
   const [touched, setTouched] = useState(false);
@@ -63,6 +74,7 @@ export function BreakGlassStep({ submitting, error, onSubmit, onBack }: BreakGla
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setTouched(true);
+    if (submitting || locked) return;
     if (!normalized || reason.trim().length < BREAK_GLASS_REASON_MIN) return;
     onSubmit({ mfaCode: normalized, reason: reason.trim() });
   }
@@ -126,7 +138,7 @@ export function BreakGlassStep({ submitting, error, onSubmit, onBack }: BreakGla
         <Button type="button" variant="ghost" onClick={onBack} disabled={submitting}>
           <ArrowLeft /> {copy.back}
         </Button>
-        <Button type="submit" size="lg" disabled={submitting} className="sm:min-w-48">
+        <Button type="submit" size="lg" disabled={submitting || locked} className="sm:min-w-48">
           {submitting ? (
             <>
               <Loader2 className="animate-spin" /> {copy.submitting}
