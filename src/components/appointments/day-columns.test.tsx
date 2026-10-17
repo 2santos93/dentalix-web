@@ -53,6 +53,7 @@ function appointment(overrides: Partial<Appointment> & { id: string }): Appointm
     appointmentType: { id: 'type-1', name: 'Endodoncia', durationMinutes: 90, color: '#7C3AED' },
     confirmationSentAt: null,
     callbackRequestedAt: null,
+    wantsEarlier: false,
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
     ...overrides,
@@ -329,5 +330,76 @@ describe('DayColumns · chip «Saldo vencido» (DX-150)', () => {
     expect(chips).toHaveLength(1);
     expect(chips[0]).toHaveTextContent('Saldo vencido · 40 días');
     expect(screen.getByRole('button', { name: /Saldo vencido · 40 días$/ })).toBeInTheDocument();
+  });
+});
+
+describe('«Ocupar este hueco» (DX-210)', () => {
+  const BEFORE = new Date(`${DATE}T06:00:00`);
+
+  it('cada hueco libre de la columna es un botón que abre el panel con su franja', async () => {
+    const onFillOpening = jest.fn();
+    renderColumns({ onFillOpening, now: BEFORE, appointments: [endo] });
+    const gap = screen.getByRole('button', {
+      name: 'Ocupar el hueco libre de 10:30–13:00 · Dra. Ana Ríos',
+    });
+    await userEvent.click(gap);
+    expect(onFillOpening).toHaveBeenCalledWith('prov-1', {
+      start: new Date(`${DATE}T10:30:00`).toISOString(),
+      end: new Date(`${DATE}T13:00:00`).toISOString(),
+    });
+    // Teclado: el hueco se alcanza con Tab y se abre con Enter.
+    onFillOpening.mockClear();
+    gap.focus();
+    await userEvent.keyboard('{Enter}');
+    expect(onFillOpening).toHaveBeenCalledTimes(1);
+  });
+
+  it('el odontólogo solo ve los huecos de su columna; sin la acción no se pintan', () => {
+    renderColumns({
+      onFillOpening: jest.fn(),
+      canFillOpening: (id) => id === 'prov-2',
+      now: BEFORE,
+    });
+    const gaps = screen.getAllByTestId('free-gap');
+    expect(gaps.every((g) => g.getAttribute('aria-label')?.includes('Dr. Luis Gómez'))).toBe(true);
+  });
+
+  it('sin onFillOpening no hay huecos', () => {
+    renderColumns({ now: BEFORE });
+    expect(screen.queryByTestId('free-gap')).not.toBeInTheDocument();
+  });
+
+  it('una cita recién cancelada ofrece «Ocupar este hueco» con el hueco que la contiene', async () => {
+    const onFillOpening = jest.fn();
+    const cancelled = appointment({
+      id: 'apt-c',
+      status: 'CANCELLED',
+      start: new Date(`${DATE}T10:00:00`).toISOString(),
+      end: new Date(`${DATE}T10:30:00`).toISOString(),
+    });
+    const before = appointment({
+      id: 'apt-b',
+      start: new Date(`${DATE}T09:00:00`).toISOString(),
+      end: new Date(`${DATE}T10:00:00`).toISOString(),
+    });
+    renderColumns({ onFillOpening, now: BEFORE, appointments: [before, cancelled] });
+    await userEvent.click(
+      screen.getByRole('button', {
+        name: 'Ocupar el hueco de la cita cancelada de 10:00–10:30 · María López',
+      }),
+    );
+    expect(onFillOpening).toHaveBeenCalledWith(
+      'prov-1',
+      {
+        start: new Date(`${DATE}T10:00:00`).toISOString(),
+        end: new Date(`${DATE}T13:00:00`).toISOString(),
+      },
+      'loc-1',
+    );
+  });
+
+  it('la tarjeta lleva el chip «Adelantar si hay hueco»', () => {
+    renderColumns({ appointments: [{ ...endo, wantsEarlier: true }] });
+    expect(screen.getByTestId('wants-earlier-chip')).toHaveTextContent('Adelantar si hay hueco');
   });
 });

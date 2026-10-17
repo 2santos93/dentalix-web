@@ -34,6 +34,7 @@ function appointment(overrides: Partial<Appointment> = {}): Appointment {
     appointmentType: null,
     confirmationSentAt: null,
     callbackRequestedAt: null,
+    wantsEarlier: false,
     createdAt: '2026-10-01T00:00:00.000Z',
     updatedAt: '2026-10-01T00:00:00.000Z',
     ...overrides,

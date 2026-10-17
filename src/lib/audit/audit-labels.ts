@@ -77,6 +77,8 @@ export const AUDIT_RESOURCE_LABELS: Record<AuditResourceType, string> = {
   PAYMENT_PROMISE: 'Compromiso de pago',
   // DX-204: topes de descuento por rol y umbral del motivo.
   DISCOUNT_POLICY: 'Política de descuentos',
+  // DX-210: oferta de un hueco libre a un candidato.
+  WAITLIST_OFFER: 'Oferta de hueco',
 };
 
 export const AUDIT_RESOURCE_OPTIONS = Object.keys(AUDIT_RESOURCE_LABELS) as AuditResourceType[];

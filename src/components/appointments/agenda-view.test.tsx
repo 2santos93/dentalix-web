@@ -118,6 +118,7 @@ function appointment(overrides: Partial<import('@/lib/appointments/appointments-
     appointmentType: null,
     confirmationSentAt: null,
     callbackRequestedAt: null,
+    wantsEarlier: false,
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
     ...overrides,

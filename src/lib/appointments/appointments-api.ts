@@ -62,6 +62,11 @@ export interface Appointment {
   confirmationSentAt: string | null;
   /** DX-005: el paciente pidió que lo llamen desde el enlace (ISO); la cita sigue SCHEDULED. */
   callbackRequestedAt: string | null;
+  /**
+   * DX-210: «Adelantar si hay hueco» — sale como candidata en «Ocupar este
+   * hueco» y se apaga al adelantarla.
+   */
+  wantsEarlier: boolean;
   createdAt: string;
   updatedAt: string;
   /**

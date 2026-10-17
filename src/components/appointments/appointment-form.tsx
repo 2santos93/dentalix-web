@@ -7,6 +7,8 @@ import {
   type Appointment,
   type CreateAppointmentInput,
 } from '@/lib/appointments/appointments-api';
+import { getTokenRole } from '@/lib/auth/token-role';
+import { canChangeWantsEarlier } from '@/lib/appointments/wants-earlier';
 import { listStaff, type StaffMember } from '@/lib/appointments/staff-api';
 import {
   listAppointmentTypes,
@@ -36,6 +38,9 @@ import { InlineError } from '@/components/errors/inline-error';
 // Copy as constants (i18n-ready, es-first) — matches patient-form.tsx /
 // tooth-record-panel.tsx convention until next-intl wiring lands.
 const copy = {
+  wantsEarlierLabel: 'Adelantar si hay hueco',
+  wantsEarlierHint:
+    'El paciente quiere venir antes: saldrá como candidato cuando se libere un hueco en un día anterior.',
   patientLabel: 'Paciente',
   patientSearchPlaceholder: 'Buscar por documento o nombre…',
   patientSearchHint: 'Escribe el documento o el nombre del paciente.',
@@ -188,6 +193,9 @@ export function AppointmentForm({
   const [startTime, setStartTime] = useState(defaultStartTime ?? '');
   const [endTime, setEndTime] = useState(defaultEndTime ?? '');
   const [reason, setReason] = useState('');
+  // DX-210: «Adelantar si hay hueco» (recepción, odontología y ADMIN).
+  const [wantsEarlier, setWantsEarlier] = useState(false);
+  const canMarkWantsEarlier = canChangeWantsEarlier(getTokenRole(token));
 
   // Horario de atención de la sede activa: `null` = sin configurar => sin
   // restricción (misma semántica que el backend).
@@ -314,6 +322,7 @@ export function AppointmentForm({
     setStartTime('');
     setEndTime('');
     setReason('');
+    setWantsEarlier(false);
     setAppointmentTypeId('');
   }
 
@@ -383,6 +392,7 @@ export function AppointmentForm({
         end,
         ...(appointmentTypeId ? { appointmentTypeId } : {}),
         ...(reason.trim() ? { reason: reason.trim() } : {}),
+        ...(wantsEarlier ? { wantsEarlier: true } : {}),
       };
       const created = await createAppointment(token, input);
       resetForm();
@@ -675,6 +685,27 @@ export function AppointmentForm({
           className="flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors placeholder:text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-50"
         />
       </div>
+
+      {canMarkWantsEarlier ? (
+        <div className="flex items-start gap-3">
+          <input
+            id="appointment-wants-earlier"
+            type="checkbox"
+            checked={wantsEarlier}
+            onChange={(e) => setWantsEarlier(e.target.checked)}
+            aria-describedby="appointment-wants-earlier-hint"
+            className="mt-0.5 size-5 shrink-0 accent-[var(--color-primary)]"
+          />
+          <div className="flex flex-col gap-0.5">
+            <label htmlFor="appointment-wants-earlier" className="text-sm font-medium text-ink">
+              {copy.wantsEarlierLabel}
+            </label>
+            <p id="appointment-wants-earlier-hint" className="text-xs text-muted">
+              {copy.wantsEarlierHint}
+            </p>
+          </div>
+        </div>
+      ) : null}
 
       {validationError && <InlineError>{validationError}</InlineError>}
       {saveError && <InlineError>{saveError}</InlineError>}
