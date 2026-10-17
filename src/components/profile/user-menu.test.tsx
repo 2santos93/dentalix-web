@@ -164,6 +164,11 @@ describe('UserMenu — plantillas de consentimiento (DX-006)', () => {
       'href',
       '/settings/dominios',
     );
+    // SEC-008: accesos de soporte (break-glass) de Dentalix a la clínica.
+    expect(screen.getByRole('menuitem', { name: 'Accesos de soporte' })).toHaveAttribute(
+      'href',
+      '/settings/accesos-de-soporte',
+    );
   });
 
   it.each(['DENTIST', 'ASSISTANT', 'RECEPTION'])('%s no lo ve', async (role) => {
@@ -175,5 +180,6 @@ describe('UserMenu — plantillas de consentimiento (DX-006)', () => {
     expect(screen.queryByRole('menuitem', { name: 'Recordatorios' })).not.toBeInTheDocument();
     expect(screen.queryByRole('menuitem', { name: 'Dominios propios' })).not.toBeInTheDocument();
     expect(screen.queryByRole('menuitem', { name: 'Implantes' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'Accesos de soporte' })).not.toBeInTheDocument();
   });
 });

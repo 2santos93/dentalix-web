@@ -69,6 +69,27 @@ describe('apiFetch', () => {
     useAuthStore.getState().clear();
     await expect(apiFetch('/x')).rejects.toBeInstanceOf(ApiError);
   });
+
+  it('SEC-008: expone el `code` estable del cuerpo del error (o null)', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 401,
+      headers: { get: () => null },
+      json: async () => ({ statusCode: 401, code: 'BREAK_GLASS_REQUIRED', message: 'x' }),
+    }) as unknown as typeof fetch;
+    const err = await apiFetch('/auth/login', { method: 'POST', body: {} }).catch((e: unknown) => e);
+    expect(err).toBeInstanceOf(ApiError);
+    expect((err as ApiError).code).toBe('BREAK_GLASS_REQUIRED');
+
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 401,
+      headers: { get: () => null },
+      json: async () => ({ message: 'Invalid credentials' }),
+    }) as unknown as typeof fetch;
+    const plain = await apiFetch('/auth/login', { method: 'POST', body: {} }).catch((e: unknown) => e);
+    expect((plain as ApiError).code).toBeNull();
+  });
 });
 
 describe('apiFetch — refresh por cookie (DX-062)', () => {

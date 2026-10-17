@@ -15,16 +15,27 @@ export class ApiError extends Error {
   public readonly messages: readonly string[];
   /** Segundos de `Retry-After` en un 429/503, si el servidor lo mandó. */
   public readonly retryAfterSeconds: number | null;
+  /**
+   * Código estable del servidor cuando lo hay (p. ej. `BREAK_GLASS_REQUIRED`
+   * en el login de soporte, SEC-008). Sirve para decidir el PASO siguiente,
+   * nunca como texto de pantalla.
+   */
+  public readonly code: string | null;
 
   constructor(
     public readonly status: number,
     message: string,
-    details: { messages?: readonly string[]; retryAfterSeconds?: number | null } = {},
+    details: {
+      messages?: readonly string[];
+      retryAfterSeconds?: number | null;
+      code?: string | null;
+    } = {},
   ) {
     super(message);
     this.name = 'ApiError';
     this.messages = details.messages ?? (message ? [message] : []);
     this.retryAfterSeconds = details.retryAfterSeconds ?? null;
+    this.code = details.code ?? null;
   }
 }
 

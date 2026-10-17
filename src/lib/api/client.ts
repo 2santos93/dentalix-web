@@ -279,11 +279,13 @@ async function doFetch(
     // `messages`; qué se enseña lo decide `apiErrorMessage()`. Sin cuerpo JSON
     // (proxy caído, HTML), `message` queda en `HTTP <status>`, solo para logs.
     let messages: string[] = [];
+    let code: string | null = null;
     try {
-      const data = (await res.json()) as { message?: unknown };
+      const data = (await res.json()) as { message?: unknown; code?: unknown };
       const raw = data?.message;
       if (typeof raw === 'string' && raw) messages = [raw];
       else if (Array.isArray(raw)) messages = raw.filter((m): m is string => typeof m === 'string');
+      if (typeof data?.code === 'string' && data.code) code = data.code;
     } catch {
       /* sin cuerpo JSON */
     }
@@ -311,6 +313,7 @@ async function doFetch(
     throw new ApiError(res.status, message, {
       messages,
       retryAfterSeconds: parseRetryAfter(res.headers?.get('Retry-After') ?? null),
+      code,
     });
   }
   return res;
