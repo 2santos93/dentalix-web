@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { test, expect, type Page } from './support/test';
+import type { APIRequestContext } from '@playwright/test';
 import { addStaffViaApi, apiPost, registerClinicViaApi, type ApiSession } from './support/api';
 import { loginAs } from './support/auth';
 import { atSede, sedeDayFromToday } from './support/clock';
@@ -13,8 +14,11 @@ import { API_URL, tenantOrigin } from './support/urls';
  * cabecera de la ficha: con importe para recepción, solo la marca para el
  * odontólogo.
  *
- * Una clínica nueva por corrida con un deudor cuyo plan de cuotas venció hace
- * más de un año y una cita suya mañana, en una sede sin restricción de horario.
+ * Una clínica nueva por corrida con dos deudores cuyos planes de cuotas
+ * vencieron hace más de un año (uno por viewport, porque cada paciente admite
+ * un solo compromiso abierto) y una cita del primero mañana, en una sede sin
+ * restricción de horario. El abono por el importe del compromiso lo da por
+ * cumplido en la ficha y en la Cartera.
  */
 const suffix = (process.env.E2E_RUN_SUFFIX ?? randomUUID()).replace(/[^a-z0-9]/gi, '').toLowerCase();
 const subdomain = `cobranza-${suffix}`.slice(0, 40);
@@ -25,6 +29,8 @@ const reception = { fullName: 'Rita Mostrador', email: `rita.cob.${suffix}@examp
 const dentist = { fullName: 'Luis Sillón', email: `luis.cob.${suffix}@example.com` };
 const lastName = `Cobro${suffix}`.slice(0, 30);
 const fullName = `Debora ${lastName}`;
+const mobileLastName = `Movil${suffix}`.slice(0, 30);
+const mobileFullName = `Mateo ${mobileLastName}`;
 const day = sedeDayFromToday(1);
 
 let session: ApiSession;
@@ -48,23 +54,44 @@ test.beforeAll(async ({ request }) => {
   });
   expect(schedule.ok()).toBeTruthy();
 
-  ({ id: patientId } = await apiPost<{ id: string }>(request, session, '/patients', {
-    firstName: 'Debora',
-    lastName,
+  patientId = await seedDebtor(request, { firstName: 'Debora', lastName, doc: `CB${suffix}`, tag: 'a' });
+  await seedDebtor(request, { firstName: 'Mateo', lastName: mobileLastName, doc: `MV${suffix}`, tag: 'b' });
+  const staff = await request.get(`${API_URL}/staff`, { headers: session.headers });
+  const members = (await staff.json()) as { userId: string; fullName: string }[];
+  const dentistId = members.find((m) => m.fullName === dentist.fullName)!.userId;
+  await apiPost(request, session, '/appointments', {
+    patientId,
+    providerId: dentistId,
+    start: atSede(day, '10:00').toISOString(),
+    end: atSede(day, '11:00').toISOString(),
+  });
+});
+
+/**
+ * Un paciente con un plan de 400.000 COP en dos cuotas mensuales desde hace
+ * 400 días: saldo vencido de más de 90 días.
+ */
+async function seedDebtor(
+  request: APIRequestContext,
+  p: { firstName: string; lastName: string; doc: string; tag: string },
+): Promise<string> {
+  const { id } = await apiPost<{ id: string }>(request, session, '/patients', {
+    firstName: p.firstName,
+    lastName: p.lastName,
     docType: 'CC',
-    docNumber: `CB${suffix}`.slice(0, 20),
+    docNumber: p.doc.slice(0, 20),
     sex: 'F',
     phone: '300 555 0177',
     countryCode: 'CO',
-  }));
+  });
   const catalog = await apiPost<{ id: string }>(request, session, '/catalog/items', {
-    code: `cobro-${suffix}`.slice(0, 30),
+    code: `cobro-${p.tag}-${suffix}`.slice(0, 30),
     kind: 'PROCEDURE',
-    labelEs: `Corona ${suffix.slice(0, 6)}`,
+    labelEs: `Corona ${p.tag} ${suffix.slice(0, 6)}`,
     color: '#3366CC',
     defaultPrice: 400000,
   });
-  const plan = await apiPost<{ id: string }>(request, session, `/patients/${patientId}/treatment-plans`, {
+  const plan = await apiPost<{ id: string }>(request, session, `/patients/${id}/treatment-plans`, {
     currency: 'COP',
   });
   const item = await apiPost<{ id: string }>(request, session, `/treatment-plans/${plan.id}/items`, {
@@ -76,22 +103,13 @@ test.beforeAll(async ({ request }) => {
     data: { status: 'ACCEPTED' },
   });
   expect(accept.ok(), await accept.text()).toBeTruthy();
-  // Dos cuotas mensuales desde hace 400 días: saldo vencido de más de 90 días.
   await apiPost<object>(request, session, `/treatment-plans/${plan.id}/payment-plan`, {
     installmentsCount: 2,
     periodicity: 'MONTHLY',
     startDate: `${sedeDayFromToday(-400)}T00:00:00.000Z`,
   });
-  const staff = await request.get(`${API_URL}/staff`, { headers: session.headers });
-  const members = (await staff.json()) as { userId: string; fullName: string }[];
-  const dentistId = members.find((m) => m.fullName === dentist.fullName)!.userId;
-  await apiPost(request, session, '/appointments', {
-    patientId,
-    providerId: dentistId,
-    start: atSede(day, '10:00').toISOString(),
-    end: atSede(day, '11:00').toISOString(),
-  });
-});
+  return id;
+}
 
 async function openCartera(page: Page): Promise<void> {
   await loginAs(page, origin, reception.email, password);
@@ -138,19 +156,39 @@ test('recepción registra una gestión y un compromiso desde la Cartera (1440 px
   await expectNoHorizontalScroll(page);
 });
 
-test('a 390 px la gestión se registra desde la tarjeta, con el modal dentro de la pantalla', async ({ page }) => {
+test('a 390 px la gestión y el compromiso se registran desde la tarjeta, con los modales dentro de la pantalla', async ({
+  page,
+}) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await openCartera(page);
-  const card = page.getByRole('article', { name: fullName });
+  const card = page.getByRole('article', { name: mobileFullName });
   await expect(card).toBeVisible({ timeout: 15_000 });
-  await card.getByRole('button', { name: `Registrar gestión de cobro con ${fullName}` }).click();
+  await card.getByRole('button', { name: `Registrar gestión de cobro con ${mobileFullName}` }).click();
   const dialog = page.getByRole('dialog', { name: 'Registrar gestión' });
   await expectDialogInsideViewport(page, dialog);
+  await expect(dialog.getByText(/No escribas datos clínicos/)).toBeVisible();
   await dialog.getByLabel('Canal').selectOption('WHATSAPP_LINK');
   await dialog.getByLabel('Resultado').selectOption('NO_ANSWER');
+  // Más de 280 caracteres: no se envía y lo dice en español.
+  await dialog.getByLabel('Nota (opcional)').fill('x'.repeat(281));
+  await dialog.getByRole('button', { name: 'Guardar gestión' }).click();
+  await expect(dialog.getByText('La nota admite hasta 280 caracteres.')).toBeVisible();
+  await dialog.getByLabel('Nota (opcional)').fill('');
   await dialog.getByRole('button', { name: 'Guardar gestión' }).click();
   await expect(dialog).toBeHidden();
   await expect(card.getByText('WhatsApp · No contesta')).toBeVisible({ timeout: 15_000 });
+
+  await card.getByRole('button', { name: `Compromiso de pago de ${mobileFullName}` }).click();
+  const promiseDialog = page.getByRole('dialog', { name: 'Compromiso de pago' });
+  await expectDialogInsideViewport(page, promiseDialog);
+  await promiseDialog.getByRole('button', { name: 'Guardar compromiso' }).click();
+  await expect(promiseDialog.getByText('Escribe un importe mayor que 0.')).toBeVisible();
+  await promiseDialog.getByLabel('Importe').fill('150000');
+  await promiseDialog.getByLabel('Pagará hasta el').fill(sedeDayFromToday(10));
+  await promiseDialog.getByRole('button', { name: 'Guardar compromiso' }).click();
+  await expect(promiseDialog).toBeHidden();
+  await expect(card.getByTestId('promise-status').getByText('Abierto')).toBeVisible({ timeout: 15_000 });
+  await expect(card.getByRole('button', { name: `Compromiso de pago de ${mobileFullName}` })).toHaveCount(0);
   await expectNoHorizontalScroll(page);
 });
 
@@ -165,6 +203,23 @@ test('la ficha muestra el bloque «Cobranza» y el chip con importe para recepci
   await expect(block.getByRole('heading', { name: 'Cobranza' })).toBeVisible();
   await expect(block.getByText('Paga la próxima semana')).toBeVisible();
   await expect(block.getByTestId('promise-row').getByText('Abierto')).toBeVisible();
+
+  // Un abono por el importe del compromiso (200.000) lo da por cumplido, sin
+  // recargar la ficha, y la Cartera lo muestra.
+  const panel = page.locator('#tabpanel-account-statement');
+  await panel.getByRole('button', { name: 'Registrar abono' }).click();
+  const payment = page.getByRole('dialog', { name: 'Registrar abono' });
+  await expect(payment.getByLabel('Plan')).toBeVisible({ timeout: 10_000 });
+  await payment.getByLabel('Importe').fill('200000');
+  await payment.getByLabel('Método').selectOption('CASH');
+  await payment.getByRole('button', { name: 'Registrar abono' }).click();
+  await expect(payment).toBeHidden({ timeout: 10_000 });
+  await expect(block.getByTestId('promise-row').getByText('Cumplido')).toBeVisible({ timeout: 15_000 });
+  await expect(block.getByRole('button', { name: 'Compromiso de pago' })).toBeVisible();
+
+  await page.goto(`${origin}/caja/cartera`);
+  const row = page.getByRole('row', { name: new RegExp(fullName) });
+  await expect(row.getByTestId('promise-status').getByText('Cumplido')).toBeVisible({ timeout: 15_000 });
 });
 
 test('agenda: el odontólogo ve «Saldo vencido» sin importe en la tarjeta de la cita (1440 y 390 px)', async ({
@@ -176,7 +231,11 @@ test('agenda: el odontólogo ve «Saldo vencido» sin importe en la tarjeta de l
     await page.goto(`${origin}/agenda`);
     await page.getByRole('button', { name: 'Día', exact: true }).click();
     await page.getByLabel('Fecha', { exact: true }).fill(day);
-    const chip = page.getByTestId('overdue-chip').first();
+    if (width === 390) {
+      // En móvil se ve una columna (la del primer profesional): se elige la suya.
+      await page.getByRole('group', { name: 'Profesional visible' }).getByRole('button', { name: dentist.fullName }).click();
+    }
+    const chip = page.getByTestId('overdue-chip').filter({ visible: true }).first();
     await expect(chip).toBeVisible({ timeout: 15_000 });
     await expect(chip).toHaveText(/^Saldo vencido · \d+ días$/);
     await expectNoHorizontalScroll(page);
@@ -196,4 +255,10 @@ test('agenda: recepción ve el importe vencido en el chip', async ({ page }) => 
   const chip = page.getByTestId('overdue-chip').first();
   await expect(chip).toBeVisible({ timeout: 15_000 });
   await expect(chip).toContainText(/Saldo vencido · \d+ días · .*\d/);
+
+  // Vista Semana: el chip compacto en la tarjeta de la cita.
+  await page.getByRole('button', { name: 'Semana', exact: true }).click();
+  const weekChip = page.getByTestId('overdue-chip').filter({ visible: true }).first();
+  await expect(weekChip).toBeVisible({ timeout: 15_000 });
+  await expect(weekChip).toContainText(/Saldo vencido · \d+ días · .*\d/);
 });
