@@ -154,6 +154,11 @@ describe('UserMenu — plantillas de consentimiento (DX-006)', () => {
       'href',
       '/settings/recordatorios',
     );
+    // SEC-009: dominios propios (añadir, verificar, eliminar).
+    expect(screen.getByRole('menuitem', { name: 'Dominios propios' })).toHaveAttribute(
+      'href',
+      '/settings/dominios',
+    );
   });
 
   it.each(['DENTIST', 'ASSISTANT', 'RECEPTION'])('%s no lo ve', async (role) => {
@@ -163,5 +168,6 @@ describe('UserMenu — plantillas de consentimiento (DX-006)', () => {
     expect(screen.queryByRole('menuitem', { name: 'Consentimientos' })).not.toBeInTheDocument();
     expect(screen.queryByRole('menuitem', { name: 'Recetas' })).not.toBeInTheDocument();
     expect(screen.queryByRole('menuitem', { name: 'Recordatorios' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'Dominios propios' })).not.toBeInTheDocument();
   });
 });
