@@ -15,6 +15,7 @@ import {
   CalendarClock,
   BellRing,
   NotebookPen,
+  Globe,
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useAuthStore } from '@/lib/auth/auth-store';
@@ -26,6 +27,7 @@ import { canManagePrescriptionTemplates } from '@/lib/prescriptions/prescription
 import { canManageAppointmentTypes } from '@/lib/appointments/appointment-types-api';
 import { canManageNoteTemplates } from '@/lib/clinical-notes/note-templates-api';
 import { canManageReminders } from '@/lib/reminders/reminders-api';
+import { canManageDomains } from '@/lib/domains/domains-api';
 import { cn } from '@/lib/utils';
 
 // Tope de espera a la revocación en el servidor al cerrar sesión: la API suele
@@ -61,6 +63,7 @@ const copy = {
   appointmentTypes: 'Tipos de cita',
   noteTemplates: 'Plantillas de evolución',
   reminders: 'Recordatorios',
+  domains: 'Dominios propios',
   logout: 'Cerrar sesión',
   theme: 'Cambiar tema',
 };
@@ -324,6 +327,18 @@ export function UserMenu({
         >
           <Pill className="size-4 text-muted" aria-hidden />
           {copy.prescriptionSettings}
+        </Link>
+      ) : null}
+      {/* Dominios propios de la clínica (SEC-009): solo ADMIN. */}
+      {canManageDomains(getTokenRole(accessToken)) ? (
+        <Link
+          href="/settings/dominios"
+          role="menuitem"
+          onClick={() => setOpen(false)}
+          className="flex items-center gap-3 px-3 py-2 text-sm text-ink hover:bg-bg"
+        >
+          <Globe className="size-4 text-muted" aria-hidden />
+          {copy.domains}
         </Link>
       ) : null}
       <div className="my-1 border-t border-border" />

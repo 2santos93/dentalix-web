@@ -68,6 +68,8 @@ export const AUDIT_RESOURCE_LABELS: Record<AuditResourceType, string> = {
   PAYMENT_RECEIPT: 'Recibo de caja',
   // DX-170: plantillas de evolución (crear, editar, desactivar, ejemplos).
   CLINICAL_NOTE_TEMPLATE: 'Plantilla de evolución',
+  // SEC-009: un ADMIN verifica o elimina un dominio personalizado.
+  TENANT_DOMAIN: 'Dominio personalizado',
 };
 
 export const AUDIT_RESOURCE_OPTIONS = Object.keys(AUDIT_RESOURCE_LABELS) as AuditResourceType[];
