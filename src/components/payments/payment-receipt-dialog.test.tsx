@@ -67,7 +67,7 @@ it('un 403 se muestra como aviso de acceso, sin reintento', async () => {
 
 it('enviar por email avisa del destino enmascarado', async () => {
   mockedGet.mockResolvedValue(paymentReceiptFixture());
-  mockedSend.mockResolvedValue({ sentTo: 'ca***@example.com' });
+  mockedSend.mockResolvedValue({ sentTo: 'ca***@example.com', sentToResponsible: false });
   render(<PaymentReceiptDialog token="tok" paymentId="pay-1" onOpenChange={() => undefined} />);
 
   await screen.findByTestId('receipt-document');

@@ -59,6 +59,8 @@ const copy = {
   description:
     'Lo presupuestado, lo abonado y lo que falta, por moneda. De toda la historia del paciente, en todas las sedes.',
   print: 'Imprimir',
+  // DX-203: un menor o un paciente sin email.
+  addressee: (name: string) => `Sale a nombre de su responsable: ${name}.`,
   recordPayment: 'Registrar abono',
   paymentPlan: 'Plan de cuotas',
   printHint: '(se abre en otra pestaña)',
@@ -202,6 +204,11 @@ export function AccountStatementView({ token, patientId, onChanged }: AccountSta
             {copy.title}
           </h2>
           <p className="mt-1 max-w-[68ch] text-sm text-muted">{copy.description}</p>
+          {data?.addressee?.kind === 'RESPONSIBLE' ? (
+            <p className="mt-1 text-sm text-ink" data-testid="statement-addressee">
+              {copy.addressee(data.addressee.name)}
+            </p>
+          ) : null}
         </div>
         {showCharge || showPrint ? (
           <div className="flex flex-col gap-2 sm:shrink-0 sm:flex-row sm:flex-wrap sm:justify-end">

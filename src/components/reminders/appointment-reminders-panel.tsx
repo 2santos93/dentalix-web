@@ -29,6 +29,8 @@ const copy = {
   missed: 'No enviado',
   missedHint: 'La cita se agendó después de esa hora.',
   previous: 'Para la hora anterior de la cita',
+  // DX-203: un menor o un paciente sin email lo recibe su responsable.
+  toResponsible: 'Recordatorio enviado al responsable',
   delivery: {
     PENDING: 'Entregándose al correo del paciente',
     SENT: 'Entregado al proveedor de correo',
@@ -152,6 +154,9 @@ export function AppointmentRemindersPanel({ token, appointmentId }: AppointmentR
                   </Badge>
                   <span className="text-sm tabular-nums text-ink">{leadHoursLabel(item.leadHours)}</span>
                 </div>
+                {item.state === 'SENT' && item.sentToResponsible && (
+                  <p className="text-xs text-ink">{copy.toResponsible}</p>
+                )}
                 {extra && <p className="text-xs tabular-nums text-muted">{extra}</p>}
                 {!item.current && <p className="text-xs text-muted">{copy.previous}</p>}
               </li>

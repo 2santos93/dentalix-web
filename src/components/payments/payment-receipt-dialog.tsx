@@ -39,6 +39,8 @@ const copy = {
   send: 'Enviar por email',
   sending: 'Enviando…',
   sent: (to: string) => `Recibo enviado a ${to}.`,
+  // DX-203: un menor o un paciente sin email: a su responsable.
+  sentToResponsible: (to: string) => `Recibo enviado al responsable del paciente (${to}).`,
   sendError: 'No pudimos enviar el recibo.',
 };
 
@@ -108,8 +110,8 @@ function ReceiptBody({
   async function send() {
     setSending(true);
     try {
-      const { sentTo } = await sendPaymentReceipt(token, paymentId);
-      toast.success(copy.sent(sentTo));
+      const { sentTo, sentToResponsible } = await sendPaymentReceipt(token, paymentId);
+      toast.success(sentToResponsible ? copy.sentToResponsible(sentTo) : copy.sent(sentTo));
     } catch (err) {
       // Escalón 3: el recibo sigue en pantalla y correcto; el aviso trae
       // reintento (cierra sobre el propio abono, que es lo que se reintenta).
