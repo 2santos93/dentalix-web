@@ -51,11 +51,14 @@ export function PatientCollectionsSection({
   token,
   patient,
   debtCurrencies = [],
+  refreshKey = 0,
 }: {
   token: string;
   patient: { id: string; fullName: string };
   /** Monedas con saldo vencido (de la cabecera): las que propone el compromiso. */
   debtCurrencies?: string[];
+  /** Cambia cuando se registra o anula un abono en la ficha: se vuelve a leer (un abono puede cumplir el compromiso). */
+  refreshKey?: number;
 }) {
   const [data, setData] = useState<PatientCollections | null>(null);
   const [loading, setLoading] = useState(true);
@@ -82,7 +85,7 @@ export function PatientCollectionsSection({
     return () => {
       cancelled = true;
     };
-  }, [token, patient.id, reloadKey]);
+  }, [token, patient.id, reloadKey, refreshKey]);
 
   const notes = data?.notes ?? [];
   const promises = data?.promises ?? [];

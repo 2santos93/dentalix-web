@@ -109,6 +109,12 @@ const copy = {
 interface AccountStatementViewProps {
   token: string;
   patientId: string;
+  /**
+   * Tras registrar o anular un abono, o crear un plan de cuotas: lo que en la
+   * ficha depende del saldo (la marca de la cabecera y el bloque «Cobranza»,
+   * cuyo compromiso un abono puede dar por cumplido, DX-150) se vuelve a leer.
+   */
+  onChanged?: () => void;
 }
 
 /**
@@ -123,7 +129,7 @@ interface AccountStatementViewProps {
  * «Guardar como PDF». Imprimir esta misma pantalla arrastraría el raíl, las
  * pestañas y los controles.
  */
-export function AccountStatementView({ token, patientId }: AccountStatementViewProps) {
+export function AccountStatementView({ token, patientId, onChanged }: AccountStatementViewProps) {
   const [data, setData] = useState<AccountStatement | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -133,7 +139,10 @@ export function AccountStatementView({ token, patientId }: AccountStatementViewP
   // Anular (DX-057): «Anular» solo en movimientos con `canVoid` (lo calcula la
   // API para quien consulta); tras anular se recarga todo el estado de cuenta,
   // porque cambian el abonado, el saldo y las cuotas.
-  const voiding = useVoidPayment(token, () => setReloadKey((k) => k + 1));
+  const voiding = useVoidPayment(token, () => {
+    setReloadKey((k) => k + 1);
+    onChanged?.();
+  });
   // Cobrar (DX-067): recepción registra abonos y planes de cuotas aquí, sin
   // entrar al plan de tratamiento (clínico). Tras cada uno se recarga todo.
   const canCharge = canRecordPayments(getTokenRole(token));
@@ -152,6 +161,7 @@ export function AccountStatementView({ token, patientId }: AccountStatementViewP
     setChargeModal(null);
     setChargeNotice(notice);
     setReloadKey((k) => k + 1);
+    onChanged?.();
   }
 
   useEffect(() => {

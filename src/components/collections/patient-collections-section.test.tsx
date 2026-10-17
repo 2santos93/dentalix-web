@@ -24,6 +24,16 @@ describe('PatientCollectionsSection (DX-150)', () => {
     expect(screen.getByRole('button', { name: 'Compromiso de pago' })).toBeInTheDocument();
   });
 
+  it('vuelve a leer la cobranza cuando la ficha registra un abono (refreshKey)', async () => {
+    mockedGet.mockResolvedValue({ notes: [], promises: [] });
+    const { rerender } = render(<PatientCollectionsSection token="tok" patient={patient} refreshKey={0} />);
+    expect(await screen.findByText('Sin gestiones de cobro')).toBeInTheDocument();
+    expect(mockedGet).toHaveBeenCalledTimes(1);
+    rerender(<PatientCollectionsSection token="tok" patient={patient} refreshKey={1} />);
+    expect(await screen.findByText('Sin gestiones de cobro')).toBeInTheDocument();
+    expect(mockedGet).toHaveBeenCalledTimes(2);
+  });
+
   it('error con «Reintentar» que vuelve a cargar', async () => {
     mockedGet.mockRejectedValueOnce(new ApiError(500, 'boom'));
     mockedGet.mockResolvedValueOnce({ notes: [], promises: [] });
