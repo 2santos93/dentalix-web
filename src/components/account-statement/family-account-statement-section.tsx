@@ -12,7 +12,6 @@ import { statementCopy } from '@/lib/account-statement/presentation';
 import { RELATIONSHIP_LABELS } from '@/lib/patients/responsible-parties-api';
 import { formatCurrency } from '@/lib/format/currency';
 import { Button } from '@/components/ui/button';
-import { Skeleton } from '@/components/ui/skeleton';
 import { SectionError } from '@/components/errors/section-error';
 import { familyStatementCopy } from './family-account-statement-document';
 
@@ -62,8 +61,11 @@ export function FamilyAccountStatementSection({
     };
   }, [token, patientId, reloadKey, refreshKey]);
 
-  // Sin dependientes no hay nada familiar que mostrar.
+  // Sin dependientes no hay nada familiar que mostrar. Mientras carga tampoco
+  // se pinta el bloque: casi ningún paciente es pagador de otros, y el título
+  // y la descripción afirmarían que este lo es.
   if (data && data.members.length < 2) return null;
+  if (!data && !error) return <span role="status" aria-label={copy.loading} className="sr-only" />;
 
   return (
     <section aria-labelledby={headingId} className="flex flex-col gap-3" data-testid="family-statement">
@@ -84,19 +86,15 @@ export function FamilyAccountStatementSection({
           </Button>
         ) : null}
       </div>
-      {error ? (
+      {error || !data ? (
         <SectionError
-          description={error}
+          description={error ?? copy.loadError}
           onRetry={() => {
             setError(null);
             setData(null);
             setReloadKey((k) => k + 1);
           }}
         />
-      ) : !data ? (
-        <div role="status" aria-label={copy.loading}>
-          <Skeleton className="h-24 w-full" />
-        </div>
       ) : (
         <div className="flex flex-col gap-3">
           <ul className="flex flex-col divide-y divide-hairline rounded-xl border border-border bg-surface">
@@ -112,7 +110,7 @@ export function FamilyAccountStatementSection({
                   </span>
                   <span className="text-sm text-muted">
                     {' '}
-                    · {m.self || !m.relationship ? copy.self : RELATIONSHIP_LABELS[m.relationship]}
+                    · {m.self || !m.relationship ? copy.self : copy.payerAs(RELATIONSHIP_LABELS[m.relationship])}
                   </span>
                 </span>
                 <span className="flex flex-col text-sm tabular-nums text-ink sm:items-end">

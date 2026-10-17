@@ -53,8 +53,8 @@ describe('Estado de cuenta familiar (DX-203)', () => {
     const members = await screen.findAllByTestId('family-member');
     expect(members.map((m) => m.textContent)).toEqual([
       expect.stringContaining('Marta Gil · Titular'),
-      expect.stringContaining('Iván Gil · Madre'),
-      expect.stringContaining('Lucía Gil · Madre'),
+      expect.stringContaining('Iván Gil · Pagador: madre'),
+      expect.stringContaining('Lucía Gil · Pagador: madre'),
     ]);
     expect(within(members[0]).getByText('Sin saldos')).toBeInTheDocument();
     expect(screen.getByTestId('family-total').textContent).toMatch(/1\.000\.000,25/);
@@ -62,6 +62,19 @@ describe('Estado de cuenta familiar (DX-203)', () => {
       'href',
       '/print/patients/mother/family-account-statement',
     );
+  });
+
+  it('mientras carga no afirma que el paciente sea pagador de nadie', () => {
+    mockedGet.mockReturnValue(new Promise(() => {}));
+    render(<FamilyAccountStatementSection token="tok" patientId="mother" />);
+    expect(screen.queryByText(/pagador principal de otros pacientes/)).not.toBeInTheDocument();
+    expect(screen.queryByRole('heading', { name: 'Estado de cuenta familiar' })).not.toBeInTheDocument();
+  });
+
+  it('el documento nombra el parentesco del pagador, no el del dependiente', () => {
+    render(<FamilyAccountStatementDocument statement={family} />);
+    const rows = screen.getAllByTestId('family-member-row');
+    expect(rows[1].textContent).toContain('Pagador: madre');
   });
 
   it('sin dependientes no se muestra', async () => {

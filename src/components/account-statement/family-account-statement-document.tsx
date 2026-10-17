@@ -25,6 +25,8 @@ export const familyStatementCopy = {
   colBalance: 'Saldo',
   colOverdue: 'Vencido',
   self: 'Titular',
+  /** El parentesco guardado es el del PAGADOR respecto del dependiente. */
+  payerAs: (label: string) => `Pagador: ${label.toLowerCase()}`,
   noBalance: 'Sin saldos',
   empty: 'Ningún paciente de este pagador tiene saldos.',
   footnote:
@@ -133,7 +135,7 @@ export function FamilyAccountStatementDocument({
                       <span className="block text-xs text-[#4b5563]">
                         {member.self || !member.relationship
                           ? copy.self
-                          : RELATIONSHIP_LABELS[member.relationship]}
+                          : copy.payerAs(RELATIONSHIP_LABELS[member.relationship])}
                       </span>
                     </>
                   ) : null}
