@@ -157,3 +157,23 @@ test('el ADMIN exporta la cartera filtrada en CSV, con la marca de fecha aproxim
   expect(csv).toContain(`"${fullName}"`);
   await expect(page.getByText('Cartera exportada.')).toBeVisible();
 });
+
+test('a 390 px los importes de cada tarjeta no se salen de ella (deudas de millones)', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await loginAs(page, origin, RECEPTION, DEMO_PASSWORD);
+  await page.evaluate(() => window.localStorage.removeItem('dentalix.activeLocationId'));
+  await page.goto(`${origin}/caja/cartera`);
+  // La demo tiene deudores de más de un millón con varios tramos (p. ej. 1.535.000 COP).
+  await expect(page.getByRole('article').first()).toBeVisible({ timeout: 15_000 });
+  const overflowing = await page.getByRole('article').evaluateAll((cards) =>
+    cards.flatMap((card) => {
+      const right = card.getBoundingClientRect().right;
+      const worst = Math.max(
+        ...[...card.querySelectorAll('*')].map((el) => el.getBoundingClientRect().right),
+      );
+      return worst > right ? [`${card.querySelector('h3')?.textContent}: ${Math.round(worst - right)} px`] : [];
+    }),
+  );
+  expect(overflowing, 'contenido fuera de la tarjeta').toEqual([]);
+  await expectNoHorizontalScroll(page);
+});

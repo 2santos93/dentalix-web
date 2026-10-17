@@ -39,9 +39,11 @@ export function DebtorCard({ row, clinicName }: { row: AgingRow; clinicName: str
         <AgeCell row={row} />
       </header>
 
-      <div className="flex min-w-0 items-start justify-between gap-4 border-t border-hairline pt-3">
+      {/* Total arriba y tramos debajo, a lo ancho: lado a lado, con importes
+          de millones y «Más de 90 días», no caben en 390 px. */}
+      <div className="flex min-w-0 flex-col gap-2 border-t border-hairline pt-3">
         <DebtCell currencies={row.currencies} />
-        <BucketList currencies={row.currencies} className="min-w-0 flex-1" />
+        <BucketList currencies={row.currencies} className="min-w-0" />
       </div>
 
       <dl className="grid grid-cols-2 gap-3 border-t border-hairline pt-3 text-sm">
