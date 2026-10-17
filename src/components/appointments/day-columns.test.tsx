@@ -316,3 +316,18 @@ describe('DayColumns (DX-121)', () => {
     });
   });
 });
+
+describe('DayColumns · chip «Saldo vencido» (DX-150)', () => {
+  it('la tarjeta lleva la marca y la anuncia en su nombre accesible; sin saldo vencido, nada', () => {
+    renderColumns({
+      appointments: [
+        { ...endo, balance: { hasOverdue: true, overdueDays: 40 } },
+        { ...light, balance: { hasOverdue: false, overdueDays: null } },
+      ],
+    });
+    const chips = screen.getAllByTestId('overdue-chip');
+    expect(chips).toHaveLength(1);
+    expect(chips[0]).toHaveTextContent('Saldo vencido · 40 días');
+    expect(screen.getByRole('button', { name: /Saldo vencido · 40 días$/ })).toBeInTheDocument();
+  });
+});

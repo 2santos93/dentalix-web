@@ -1,4 +1,5 @@
 'use client';
+import { OverdueChip } from '@/components/collections/overdue-chip';
 import { CalendarDays, ChevronDown, ChevronRight } from 'lucide-react';
 import type { Appointment, AppointmentStatus } from '@/lib/appointments/appointments-api';
 import {
@@ -255,6 +256,7 @@ export function DayAgenda({
                     <span className="flex flex-wrap items-center gap-2">
                       {patientLabel(appointment, patientNames)}
                       <ConfirmationBadge appointment={appointment} />
+                      <OverdueChip balance={appointment.balance} />
                     </span>
                   </td>
                   <td className="px-4 py-3 text-muted">
@@ -311,6 +313,7 @@ export function DayAgenda({
               </p>
               <p className="mt-0.5 text-muted">{appointment.reason ?? copy.reasonFallback}</p>
               <ConfirmationBadge appointment={appointment} className="mt-2" />
+              <OverdueChip balance={appointment.balance} className="mt-2" />
               {(onStatusChange || onSelectAppointment) && (
                 <div className="mt-3 flex items-center justify-between gap-2">
                   {onStatusChange ? (

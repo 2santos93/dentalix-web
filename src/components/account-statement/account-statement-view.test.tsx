@@ -323,7 +323,8 @@ describe('cobrar desde el estado de cuenta (DX-067)', () => {
       receiptNumber: 'PRI-000007',
     });
     const user = userEvent.setup();
-    render(<AccountStatementView token={RECEPTION} patientId="pat-1" />);
+    const onChanged = jest.fn();
+    render(<AccountStatementView token={RECEPTION} patientId="pat-1" onChanged={onChanged} />);
     await screen.findByRole('region', { name: /resumen en COP/i });
 
     await user.click(screen.getByRole('button', { name: 'Registrar abono' }));
@@ -344,6 +345,8 @@ describe('cobrar desde el estado de cuenta (DX-067)', () => {
       /50\.000,00 COP/,
     );
     await waitFor(() => expect(mockedGet).toHaveBeenCalledTimes(2));
+    // DX-150: avisa a la ficha para releer la marca de saldo y la cobranza.
+    expect(onChanged).toHaveBeenCalledTimes(1);
   });
 
   it('crea un plan de cuotas eligiendo el plan; el que ya tiene uno no se puede elegir', async () => {

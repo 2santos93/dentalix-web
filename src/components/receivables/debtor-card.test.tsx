@@ -25,6 +25,8 @@ function row(overrides: Partial<AgingRow> = {}): AgingRow {
     ],
     lastPayment: null,
     nextInstallment: { dueDate: '2026-11-07T00:00:00.000Z', amount: 100000, currency: 'COP' },
+    lastNote: null,
+    promise: null,
     ...overrides,
   };
 }
@@ -70,5 +72,20 @@ describe('DebtorCard (tarjeta móvil, DX-145)', () => {
     expect(within(card).queryByRole('link', { name: /WhatsApp/ })).not.toBeInTheDocument();
     expect(within(card).getByText('Sin teléfono')).toBeInTheDocument();
     expect(within(card).getByText('Fecha aproximada')).toBeInTheDocument();
+  });
+});
+
+describe('DebtorCard · gestión de cobro (DX-150, revisión)', () => {
+  it('la fecha de la última gestión es el día LOCAL del instante, no los 10 primeros caracteres del texto', () => {
+    // 23:00 del 15/10 en Bogotá = 04:00 UTC del 16/10 (jest corre en UTC).
+    render(
+      <DebtorCard
+        row={row({ lastNote: { channel: 'CALL', outcome: 'NO_ANSWER', createdAt: '2026-10-15T23:00:00.000-05:00' } })}
+        clinicName="Clínica Demo"
+      />,
+    );
+    const card = screen.getByRole('article', { name: 'Jorge Ramírez' });
+    expect(within(card).getByText('16/10/2026')).toBeInTheDocument();
+    expect(within(card).queryByText('15/10/2026')).not.toBeInTheDocument();
   });
 });

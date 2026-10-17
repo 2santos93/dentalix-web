@@ -21,6 +21,8 @@ import { OdontogramTab } from '@/components/odontogram/odontogram-tab';
 import { TreatmentPlansTab } from '@/components/treatment-plans/treatment-plans-tab';
 import { SectionError } from '@/components/errors/section-error';
 import { AccountStatementView } from '@/components/account-statement/account-statement-view';
+import { PatientCollectionsSection } from '@/components/collections/patient-collections-section';
+import { canManageCollections } from '@/lib/collections/presentation';
 import { getTokenRole } from '@/lib/auth/token-role';
 import { patientTabAccess, resolvePatientTab } from '@/lib/patients/patient-tab-access';
 import { DataConsentsTab } from '@/components/data-consents/data-consents-tab';
@@ -129,6 +131,18 @@ function PatientDetailView() {
   const [error, setError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
   const [editing, setEditing] = useState(false);
+  // DX-150: un abono (o su anulación) cambia el saldo vencido de la cabecera y
+  // puede cumplir el compromiso del bloque «Cobranza»: los dos se releen.
+  const [moneyVersion, setMoneyVersion] = useState(0);
+  const onMoneyChanged = useCallback(() => {
+    setMoneyVersion((v) => v + 1);
+    if (!accessToken) return;
+    getPatient(accessToken, patientId)
+      .then((fresh) => setPatient((prev) => (prev ? { ...prev, balance: fresh.balance } : prev)))
+      .catch(() => {
+        /* la cabecera conserva la marca leída; se corrige al recargar */
+      });
+  }, [accessToken, patientId]);
   const panels = useRef(new Map<PatientDetailTabKey, HTMLDivElement>());
   const firstRender = useRef(true);
 
@@ -328,7 +342,8 @@ function PatientDetailView() {
             patient={patient}
             token={accessToken}
             onOpenChange={setEditing}
-            onSaved={(updated) => setPatient(updated)}
+            // PATCH no trae la marca de saldo (DX-150): se conserva la leída.
+            onSaved={(updated) => setPatient((prev) => ({ ...updated, balance: prev?.balance }))}
           />
 
           {access['clinical-history'] ? (
@@ -410,7 +425,18 @@ function PatientDetailView() {
 
           {access['account-statement'] ? (
             <TabPanel tab="account-statement" activeTab={activeTab} register={registerPanel}>
-              <AccountStatementView token={accessToken} patientId={patientId} />
+              <div className="flex flex-col gap-8">
+                <AccountStatementView token={accessToken} patientId={patientId} onChanged={onMoneyChanged} />
+                {/* DX-150: bloque «Cobranza» (ADMIN y RECEPTION). */}
+                {canManageCollections(getTokenRole(accessToken)) && patient ? (
+                  <PatientCollectionsSection
+                    token={accessToken}
+                    patient={{ id: patient.id, fullName: fullName(patient) }}
+                    debtCurrencies={(patient.balance?.amounts ?? []).map((a) => a.currency)}
+                    refreshKey={moneyVersion}
+                  />
+                ) : null}
+              </div>
             </TabPanel>
           ) : null}
 

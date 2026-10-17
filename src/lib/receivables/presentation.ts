@@ -86,3 +86,16 @@ export function telHref(phone: string): string {
 export function csvFileName(asOf: string): string {
   return `cartera-${asOf}.csv`;
 }
+
+export interface PromiseFilter {
+  value: string;
+  label: string;
+  hasPromise?: boolean;
+}
+
+/** DX-150: filtro por compromiso de pago abierto (`hasPromise` de la API). */
+export const PROMISE_FILTERS: readonly PromiseFilter[] = [
+  { value: 'all', label: 'Con y sin compromiso' },
+  { value: 'yes', label: 'Con compromiso abierto', hasPromise: true },
+  { value: 'no', label: 'Sin compromiso abierto', hasPromise: false },
+];

@@ -158,3 +158,26 @@ it('DX-122: con «Todos» el bloqueo de un profesional no tapa el día, pero se 
   expect(chips).toHaveLength(2);
   for (const chip of chips) expect(chip).toHaveTextContent('Vacaciones · Dra. Ana Ríos');
 });
+
+it('DX-150: la tarjeta lleva el chip «Saldo vencido» (también en su nombre accesible); sin saldo vencido, nada', () => {
+  render(
+    <WeekTimeGrid
+      appointments={[
+        appointment({ id: 'a1', balance: { hasOverdue: true, overdueDays: 40 } }),
+        appointment({
+          id: 'a2',
+          start: '2026-03-10T09:00:00.000Z',
+          end: '2026-03-10T09:30:00.000Z',
+          balance: { hasOverdue: false, overdueDays: null },
+        }),
+      ]}
+      weekStart={WEEK_START}
+      onSelectDay={noop} onSelectSlot={noop} onSelectAppointment={noop}
+    />,
+  );
+  const chips = screen.getAllByTestId('overdue-chip');
+  expect(chips).toHaveLength(1);
+  expect(chips[0]).toHaveTextContent('Saldo vencido · 40 días');
+  const cards = screen.getAllByTestId('week-grid-appointment');
+  expect(cards[0]).toHaveAccessibleName(/Saldo vencido · 40 días/);
+});
