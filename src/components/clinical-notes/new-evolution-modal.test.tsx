@@ -171,7 +171,7 @@ describe('NewEvolutionModal (DX-170)', () => {
     expect(screen.getByRole('radio', { name: /resina/i })).toHaveFocus();
   });
 
-  it('desde la cita: la liga, dice de qué cita es y usa su día como fecha de atención', async () => {
+  it('desde la cita: la liga y dice de qué cita es; la fecha de atención la pone la API (día de la cita en la zona de su sede)', async () => {
     const user = userEvent.setup();
     const start = new Date(2026, 9, 7, 9, 30).toISOString();
     renderModal({ appointment: { id: 'apt-1', start, providerName: 'Dra. Ríos' } });
@@ -187,7 +187,6 @@ describe('NewEvolutionModal (DX-170)', () => {
       expect(mockedCreate).toHaveBeenCalledWith('tok', 'p1', {
         notes: 'Control sin novedad',
         appointmentId: 'apt-1',
-        entryDate: new Date('2026-10-07').toISOString(),
       }),
     );
   });

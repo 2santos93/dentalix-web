@@ -2663,7 +2663,7 @@ export interface components {
         CreateClinicalEntryDto: {
             /**
              * Format: date-time
-             * @description Fecha de atención. Si falta: la de la cita ligada o, sin cita, ahora.
+             * @description Fecha de atención (fecha civil). Si falta: el día de la cita ligada en la zona de su sede o, sin cita, ahora.
              */
             entryDate?: string;
             reason?: string;

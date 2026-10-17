@@ -83,8 +83,9 @@ function todayISO(): string {
  * se puede editar antes de guardar. Lo que se guarda es TEXTO (`notes`):
  * editar o desactivar la plantilla después no cambia la evolución (DX-038).
  *
- * Desde la cita, la evolución queda ligada a ella y su fecha de atención es
- * la del día de la cita. El padre lo monta con una `key` por apertura.
+ * Desde la cita, la evolución queda ligada a ella y la API pone como fecha de
+ * atención el día de la cita en la zona de su sede. El padre lo monta con una
+ * `key` por apertura.
  */
 export function NewEvolutionModal({
   open,
@@ -158,11 +159,9 @@ export function NewEvolutionModal({
       setNotesError(copy.notesRequired);
       return;
     }
-    // Con cita, la fecha de atención es el DÍA de la cita (fecha civil, como
-    // la que se elige a mano), no su instante en UTC.
-    const civilDay = appointment
-      ? localDay(new Date(appointment.start))
-      : entryDate;
+    // Con cita no se manda fecha: la API usa el DÍA de la cita en la zona de
+    // su sede (fecha civil, como la que se elige a mano), no el del navegador.
+    const civilDay = appointment ? '' : entryDate;
     const input: CreateClinicalEntryInput = {
       notes: text,
       ...(civilDay ? { entryDate: new Date(civilDay).toISOString() } : {}),
