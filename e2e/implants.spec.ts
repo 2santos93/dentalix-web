@@ -131,7 +131,7 @@ test('registrar desde el odontograma, imprimir la tarjeta y buscar por lote (144
     lot: LOT,
   });
   await page.goto(`${origin}/settings/implantes`);
-  await page.getByLabel('Lote').fill(LOT);
+  await page.getByRole('textbox', { name: 'Lote', exact: true }).fill(LOT);
   await page.getByRole('button', { name: 'Buscar' }).click();
   await expect(page.getByTestId('implant-lot-row')).toHaveCount(2, { timeout: 15_000 });
   await expect(page.getByText('2 implantes encontrados')).toBeVisible();

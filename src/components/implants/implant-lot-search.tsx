@@ -219,7 +219,7 @@ export function ImplantLotSearch({ token, allowed }: { token: string; allowed: b
               <li
                 key={m.implantId}
                 data-testid="implant-lot-row"
-                className="flex flex-col gap-1 rounded-lg border border-border bg-surface p-4 text-sm text-ink sm:grid sm:grid-cols-[minmax(0,2fr)_auto_minmax(0,2fr)_minmax(0,1fr)] sm:items-start sm:gap-4"
+                className="flex flex-col gap-1 rounded-lg border border-border bg-surface p-4 text-sm text-ink [overflow-wrap:anywhere] sm:grid sm:grid-cols-[minmax(0,2fr)_auto_minmax(0,2fr)_minmax(0,1fr)] sm:items-start sm:gap-4"
               >
                 <div className="flex min-w-0 flex-col">
                   <Link

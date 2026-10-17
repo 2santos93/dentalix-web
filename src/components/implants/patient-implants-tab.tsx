@@ -149,7 +149,7 @@ export function PatientImplantsTab({
       <li
         key={implant.id}
         data-status={voided ? 'VOIDED' : 'ACTIVE'}
-        className="flex flex-col gap-3 border-b border-hairline px-4 py-3 last:border-0 sm:flex-row sm:items-start sm:justify-between"
+        className="flex flex-col gap-3 border-b border-hairline px-4 py-3 [overflow-wrap:anywhere] last:border-0 sm:flex-row sm:items-start sm:justify-between"
       >
         <div className="flex min-w-0 flex-col gap-1">
           <div className="flex flex-wrap items-center gap-2">

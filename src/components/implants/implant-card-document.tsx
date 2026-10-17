@@ -42,7 +42,7 @@ const copy = {
 export function ImplantCardDocument({ card }: { card: ImplantCard }) {
   const location = card.locations[0];
   return (
-    <article className="implant-card-print-root flex flex-col gap-5 bg-white p-6 text-ink sm:p-8 print:p-0">
+    <article className="implant-card-print-root flex min-w-0 flex-col gap-5 bg-white p-6 text-ink sm:p-8 print:p-0">
       <header className="flex flex-col gap-1 border-b border-border pb-3">
         <h1 className="text-xl font-semibold">{copy.title}</h1>
         <p className="text-xs text-muted">{copy.legalBasis}</p>
@@ -53,7 +53,7 @@ export function ImplantCardDocument({ card }: { card: ImplantCard }) {
           <h2 id="implant-card-patient" className="t-label text-muted">
             {copy.patientHeading}
           </h2>
-          <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
+          <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-sm [overflow-wrap:anywhere]">
             <dt className="text-muted">{copy.name}</dt>
             <dd className="font-medium">{card.patientName}</dd>
             <dt className="text-muted">{copy.document}</dt>
@@ -71,7 +71,7 @@ export function ImplantCardDocument({ card }: { card: ImplantCard }) {
           <h2 id="implant-card-center" className="t-label text-muted">
             {copy.centerHeading}
           </h2>
-          <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
+          <dl className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-1 text-sm [overflow-wrap:anywhere]">
             <dt className="text-muted">{copy.clinic}</dt>
             <dd className="font-medium">{card.clinicName}</dd>
             {location ? (
@@ -119,7 +119,7 @@ export function ImplantCardDocument({ card }: { card: ImplantCard }) {
                 </div>
                 <dl
                   className={
-                    'grid grid-cols-[auto_1fr] gap-x-3 gap-y-0.5 sm:grid-cols-[auto_1fr_auto_1fr] print:grid-cols-[auto_1fr_auto_1fr]' +
+                    'grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-0.5 [overflow-wrap:anywhere] sm:grid-cols-[auto_minmax(0,1fr)_auto_minmax(0,1fr)] print:grid-cols-[auto_minmax(0,1fr)_auto_minmax(0,1fr)]' +
                     (item.voided ? ' text-muted line-through' : '')
                   }
                 >
