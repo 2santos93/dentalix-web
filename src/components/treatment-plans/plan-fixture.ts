@@ -11,3 +11,12 @@ export const PLAN_WITHOUT_OPTIONS = {
   rejectionReason: null,
   rejectionNote: null,
 } as const;
+
+/** Campos de descuento (DX-204) de un ítem sin descuento, para los tests. */
+export const ITEM_WITHOUT_DISCOUNT = {
+  discountReason: null,
+  discountReasonNote: null,
+  discountById: null,
+  discountAt: null,
+  discountLocationId: null,
+} as const;

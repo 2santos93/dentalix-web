@@ -1,0 +1,161 @@
+import { render, screen, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
+import { DiscountReportView } from './discount-report-view';
+import {
+  downloadDiscountReportCsv,
+  getDiscountReport,
+  type DiscountReport,
+  type DiscountReportItem,
+} from '@/lib/discounts/discounts-api';
+import { getTokenRole } from '@/lib/auth/token-role';
+import { ApiError } from '@/lib/api/client';
+
+jest.mock('../../lib/discounts/discounts-api', () => ({
+  getDiscountReport: jest.fn(),
+  downloadDiscountReportCsv: jest.fn(),
+}));
+jest.mock('../../lib/auth/token-role', () => ({ getTokenRole: jest.fn() }));
+jest.mock('../errors/notify', () => ({ notifyError: jest.fn() }));
+jest.mock('../../lib/locations/use-sede-time-zone', () => ({
+  useSedeTimeZone: () => 'America/Bogota',
+  sedeToday: () => '2026-10-17',
+}));
+jest.mock('../../lib/appointments/staff-api', () => ({
+  listStaff: jest.fn().mockResolvedValue([
+    { userId: 'dr-1', fullName: 'Dra. Ríos', role: 'DENTIST' },
+    { userId: 'adm-1', fullName: 'Dr. Owner', role: 'ADMIN' },
+  ]),
+}));
+
+const mockedReport = getDiscountReport as jest.MockedFunction<typeof getDiscountReport>;
+const mockedCsv = downloadDiscountReportCsv as jest.MockedFunction<typeof downloadDiscountReportCsv>;
+const mockedRole = getTokenRole as jest.MockedFunction<typeof getTokenRole>;
+
+function row(overrides: Partial<DiscountReportItem> = {}): DiscountReportItem {
+  return {
+    itemId: 'item-1',
+    planId: 'plan-1',
+    planStatus: 'PRESENTED',
+    planOptionLabel: null,
+    planCreatedAt: '2026-10-01T15:00:00.000Z',
+    planCreatedOn: '2026-10-01',
+    patientId: 'pat-1',
+    patientName: 'Ana Pérez',
+    toothNumber: '36',
+    procedure: 'Corona libre de metal',
+    currency: 'COP',
+    price: 1200000,
+    discount: 180000,
+    percent: 15,
+    reason: 'PROMOTION',
+    reasonNote: 'Campaña de octubre',
+    discountById: 'adm-1',
+    discountByName: 'Dr. Owner',
+    discountAt: '2026-10-10T15:00:00.000Z',
+    discountOn: '2026-10-10',
+    locationId: 'loc-1',
+    locationName: 'Sede principal',
+    ...overrides,
+  };
+}
+
+function report(items: DiscountReportItem[], overrides: Partial<DiscountReport> = {}): DiscountReport {
+  return {
+    from: '2026-10-01',
+    to: '2026-10-17',
+    scope: { location: { id: 'loc-1', name: 'Sede principal' } },
+    totals: items.length
+      ? [{ currency: 'COP', items: items.length, gross: 1200000, discount: 180000, percentOfGross: 15 }]
+      : [],
+    items,
+    total: items.length,
+    page: 1,
+    pageSize: 50,
+    ...overrides,
+  };
+}
+
+describe('DiscountReportView (DX-204)', () => {
+  beforeEach(() => {
+    mockedReport.mockReset();
+    mockedCsv.mockReset();
+    mockedRole.mockReturnValue('ADMIN');
+  });
+
+  it('pide el mes en curso hasta hoy y muestra total, % sobre el bruto y el detalle', async () => {
+    mockedReport.mockResolvedValue(report([row()]));
+    render(<DiscountReportView token="tok" />);
+    await waitFor(() =>
+      expect(mockedReport).toHaveBeenCalledWith('tok', { from: '2026-10-01', to: '2026-10-17', page: 1 }),
+    );
+    const summary = await screen.findByTestId('discount-total-COP');
+    expect(within(summary).getByText('15 %')).toBeInTheDocument();
+    expect(within(summary).getByText(/180\.000,00/)).toBeInTheDocument();
+    expect(screen.getByText('Descuentos dados en Sede principal')).toBeInTheDocument();
+    const tableRow = screen.getByTestId('discount-row');
+    expect(within(tableRow).getByText('Ana Pérez')).toBeInTheDocument();
+    expect(within(tableRow).getByText('Promoción o campaña')).toBeInTheDocument();
+    expect(within(tableRow).getByText('Campaña de octubre')).toBeInTheDocument();
+    expect(within(tableRow).getByText('Dr. Owner')).toBeInTheDocument();
+  });
+
+  it('en móvil, cada descuento es una tarjeta (lista apilada)', async () => {
+    mockedReport.mockResolvedValue(report([row(), row({ itemId: 'item-2', reason: null, reasonNote: null })]));
+    render(<DiscountReportView token="tok" />);
+    const list = await screen.findByRole('list', { name: 'Descuentos' });
+    expect(within(list).getAllByTestId('discount-card')).toHaveLength(2);
+    expect(within(list).getByText('Sin motivo')).toBeInTheDocument();
+  });
+
+  it('estado de carga, luego vacío', async () => {
+    let resolve: (value: DiscountReport) => void = () => {};
+    mockedReport.mockReturnValue(new Promise((r) => (resolve = r)));
+    render(<DiscountReportView token="tok" />);
+    expect(screen.getAllByRole('status').length).toBeGreaterThan(0);
+    resolve(report([]));
+    expect(await screen.findByText('No hubo descuentos en este periodo')).toBeInTheDocument();
+  });
+
+  it('error con reintento', async () => {
+    mockedReport.mockRejectedValueOnce(new Error('boom')).mockResolvedValueOnce(report([row()]));
+    render(<DiscountReportView token="tok" />);
+    expect(await screen.findByText('No pudimos cargar el informe de descuentos.')).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: /reintentar/i }));
+    expect(await screen.findByTestId('discount-row')).toBeInTheDocument();
+  });
+
+  it('un rol sin acceso ve el aviso, sin filtros ni exportar', async () => {
+    mockedRole.mockReturnValue('DENTIST');
+    mockedReport.mockRejectedValue(new ApiError(403, 'Solo la administración ve el informe de descuentos.'));
+    render(<DiscountReportView token="tok" />);
+    expect(await screen.findByText('Tu rol no tiene acceso al informe de descuentos.')).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Exportar CSV' })).not.toBeInTheDocument();
+  });
+
+  it('filtra por quién lo dio y exporta con los mismos filtros', async () => {
+    mockedReport.mockResolvedValue(report([row()]));
+    mockedCsv.mockResolvedValue('﻿Fecha\r\n');
+    const createObjectURL = jest.fn(() => 'blob:x');
+    Object.assign(URL, { createObjectURL, revokeObjectURL: jest.fn() });
+    render(<DiscountReportView token="tok" />);
+    await screen.findByTestId('discount-row');
+    await userEvent.selectOptions(await screen.findByLabelText('Quién lo dio'), 'dr-1');
+    await waitFor(() =>
+      expect(mockedReport).toHaveBeenLastCalledWith('tok', {
+        from: '2026-10-01',
+        to: '2026-10-17',
+        professionalId: 'dr-1',
+        page: 1,
+      }),
+    );
+    await userEvent.click(screen.getByRole('button', { name: 'Exportar CSV' }));
+    await waitFor(() =>
+      expect(mockedCsv).toHaveBeenCalledWith('tok', {
+        from: '2026-10-01',
+        to: '2026-10-17',
+        professionalId: 'dr-1',
+      }),
+    );
+    expect(await screen.findByText('Informe exportado.')).toBeInTheDocument();
+  });
+});
