@@ -160,6 +160,10 @@ const copy = {
    */
   viewInOdontogram: 'Ver en el odontograma',
   viewInOdontogramFor: (tooth: string) => `Ver en el odontograma el diente ${tooth}`,
+  // DX-191: acceso directo al formulario «Registrar implante» con el ítem y el
+  // diente puestos.
+  registerImplant: 'Registrar implante',
+  registerImplantFor: (tooth: string) => `Registrar implante en el diente ${tooth}`,
   focusedToothNotice: (tooth: string) => `Diente ${tooth}: sus ítems aparecen resaltados abajo.`,
   focusedToothRow: 'Diente en foco',
   clearFocusedTooth: 'Ver todos los dientes',
@@ -287,6 +291,12 @@ interface TreatmentPlansTabProps {
   focusedTooth?: string | null;
   /** Builds the href of the odontogram tab focused on `toothNumber`. */
   odontogramHref?: (toothNumber: string) => string;
+  /**
+   * DX-191: href de «Registrar implante» para un ítem (sección «Implantes» con
+   * el formulario abierto, el diente y el ítem puestos). Sin él (rol que no
+   * registra implantes) no se pinta.
+   */
+  implantHref?: (item: TreatmentPlanItem) => string;
 }
 
 interface ItemsTableProps {
@@ -298,6 +308,7 @@ interface ItemsTableProps {
   /** FDI code whose rows are marked as the ones the user arrived looking for. */
   focusedTooth?: string | null;
   odontogramHref?: (toothNumber: string) => string;
+  implantHref?: (item: TreatmentPlanItem) => string;
   onStatusChange: (itemId: string, status: TreatmentPlanItemStatus) => void;
   onRemove: (itemId: string) => void;
   /**
@@ -340,6 +351,29 @@ function OdontogramLink({
       className="text-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
     >
       {copy.viewInOdontogram}
+    </Link>
+  );
+}
+
+/**
+ * DX-191: «Registrar implante» desde el ítem del plan que se ejecuta. Un
+ * `<Link>` por la misma razón que `OdontogramLink`; el nombre accesible empieza
+ * por el texto visible y lleva el diente (WCAG 2.5.3).
+ */
+function RegisterImplantLink({
+  item,
+  href,
+}: {
+  item: TreatmentPlanItem;
+  href: (item: TreatmentPlanItem) => string;
+}) {
+  return (
+    <Link
+      href={href(item)}
+      aria-label={copy.registerImplantFor(item.toothNumber)}
+      className="text-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+    >
+      {copy.registerImplant}
     </Link>
   );
 }
@@ -430,12 +464,19 @@ function ItemsTable({
   updatingItemId,
   focusedTooth,
   odontogramHref,
+  implantHref,
   onStatusChange,
   onRemove,
   locked = false,
   closed = false,
   markDoneOnly = false,
 }: ItemsTableProps) {
+  // DX-191: el implante se registra al ejecutar un ítem aceptado (o ya
+  // realizado); no en uno solo propuesto ni en un plan cancelado o rechazado.
+  const implantLinkFor = (item: TreatmentPlanItem) =>
+    implantHref && (item.status === 'ACCEPTED' || item.status === 'DONE') && (!closed || markDoneOnly)
+      ? implantHref
+      : undefined;
   // Plan cerrado: el estado no se toca, salvo en uno completado marcar como
   // realizado lo que quedó aceptado (misma regla que la API).
   const statusFrozen = (item: TreatmentPlanItem) =>
@@ -466,6 +507,7 @@ function ItemsTable({
             {items.map((item) => {
               const updating = updatingItemId === item.id;
               const focused = focusedTooth === item.toothNumber;
+              const implantLink = implantLinkFor(item);
               return (
                 <TableRow
                   key={item.id}
@@ -517,8 +559,9 @@ function ItemsTable({
                     {/* Mismo aislamiento que en la tabla de abonos: el enlace
                         inocuo y el botón destructivo no comparten zona de
                         toque. */}
-                    <div className="flex items-center gap-3">
+                    <div className="flex flex-wrap items-center gap-3">
                       <OdontogramLink toothNumber={item.toothNumber} href={odontogramHref} />
+                      {implantLink ? <RegisterImplantLink item={item} href={implantLink} /> : null}
                       {odontogramHref && !locked && !closed ? <Separator orientation="vertical" className="h-5" /> : null}
                       {locked || closed ? null : (
                         <Button
@@ -548,6 +591,7 @@ function ItemsTable({
         {items.map((item) => {
           const updating = updatingItemId === item.id;
           const focused = focusedTooth === item.toothNumber;
+          const implantLink = implantLinkFor(item);
           return (
             <li
               key={item.id}
@@ -598,9 +642,10 @@ function ItemsTable({
                   </Button>
                 )}
               </div>
-              {odontogramHref ? (
-                <p className="mt-3">
+              {odontogramHref || implantLink ? (
+                <p className="mt-3 flex flex-wrap gap-x-4 gap-y-2">
                   <OdontogramLink toothNumber={item.toothNumber} href={odontogramHref} />
+                  {implantLink ? <RegisterImplantLink item={item} href={implantLink} /> : null}
                 </p>
               ) : null}
             </li>
@@ -795,6 +840,7 @@ export function TreatmentPlansTab({
   // «focusedTooth» ya es el nombre de la prop que baja a `ItemsTable`.
   focusedTooth: focusedToothOnPlan = null,
   odontogramHref,
+  implantHref,
 }: TreatmentPlansTabProps) {
   // DX-097: la fecha por defecto del abono es hoy en la zona de la sede.
   const sedeTimeZone = useSedeTimeZone(token);
@@ -1737,6 +1783,7 @@ export function TreatmentPlansTab({
                   updatingItemId={updatingItemId}
                   focusedTooth={focusedToothOnPlan}
                   odontogramHref={odontogramHref}
+                  implantHref={implantHref}
                   onStatusChange={handleItemStatusChange}
                   onRemove={openRemoveConfirm}
                   locked={signed}

@@ -310,6 +310,45 @@
 }
 
 /*
+ * Print CSS de la tarjeta de implante (DX-191, /print/patients/[id]/
+ * implant-card). Página con nombre en `html` (ninguna caja posterior abre una
+ * hoja en blanco) y SIN `size`: sale en el papel de la impresora, A4 o carta;
+ * el documento mide como mucho 180 mm, que caben en los dos. Ningún
+ * componente se parte entre dos hojas.
+ */
+@page implant-card {
+  margin: 14mm;
+}
+/*
+ * La tarjeta es papel: hoja blanca con tinta clara SIEMPRE, también con el tema
+ * oscuro (si no, `text-ink`/`text-muted` toman los tokens oscuros —tinta casi
+ * blanca— sobre el `bg-white` de la hoja: ilegible en pantalla y en blanco al
+ * imprimir). Se fijan aquí los tokens del tema claro para su subárbol.
+ */
+.implant-card-print-root {
+  color-scheme: light;
+  --color-surface: #FFFFFF;
+  --color-surface-2: #F1F5F9;
+  --color-ink: #0F172A;
+  --color-muted: #64748B;
+  --color-border: #E2E8F0;
+  --color-hairline: #EEF2F7;
+  --color-danger: #BE123C;
+}
+@media print {
+  html:has(.implant-card-print-page) {
+    page: implant-card;
+  }
+  .implant-card-print-root,
+  .implant-card-print-root * {
+    visibility: visible !important;
+  }
+  .implant-card-print-root .implant-card-item {
+    break-inside: avoid;
+  }
+}
+
+/*
  * Print CSS del presupuesto (DX-012, /print/patients/[id]/treatment-plans/
  * [planId]). Mismo criterio que el consentimiento y la receta: página A4 con
  * nombre en `html` (ninguna caja posterior abre una hoja en blanco), documento

@@ -324,6 +324,45 @@ describe('TreatmentPlansTab', () => {
     expect(screen.getByText(expectedCurrencyText(expectedTotal))).toBeInTheDocument();
   });
 
+  it('DX-191: «Registrar implante» en los ítems aceptados o realizados lleva a Implantes con el ítem y el diente', async () => {
+    mockedListPlans.mockResolvedValue([plan1]);
+    const done = { ...item2, id: 'item-3', toothNumber: '36', status: 'DONE' as const };
+    mockedGetPlan.mockResolvedValue({ ...plan1, items: [item1, item2, done], total: 0 });
+
+    render(
+      <TreatmentPlansTab
+        patientId="pat-1"
+        token="tok"
+        implantHref={(item) => `/patients/pat-1?tab=implants&registerTooth=${item.toothNumber}&planItem=${item.id}`}
+      />,
+    );
+
+    const table = await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+    const links = within(table).getAllByRole('link', { name: /^registrar implante/i });
+    expect(links.map((l) => l.getAttribute('href'))).toEqual([
+      '/patients/pat-1?tab=implants&registerTooth=26&planItem=item-2',
+      '/patients/pat-1?tab=implants&registerTooth=36&planItem=item-3',
+    ]);
+    expect(links[0]).toHaveAccessibleName('Registrar implante en el diente 26');
+    // Un ítem solo propuesto (11) aún no se ejecuta: sin acceso directo.
+    expect(
+      within(table).queryByRole('link', { name: /registrar implante en el diente 11/i }),
+    ).not.toBeInTheDocument();
+    // La lista móvil ofrece el mismo acceso.
+    const mobile = screen.getAllByRole('link', { name: /registrar implante en el diente 36/i });
+    expect(mobile).toHaveLength(2);
+  });
+
+  it('DX-191: sin `implantHref` (rol que no registra) no hay «Registrar implante»', async () => {
+    mockedListPlans.mockResolvedValue([plan1]);
+    mockedGetPlan.mockResolvedValue(plan1Detail);
+
+    render(<TreatmentPlansTab patientId="pat-1" token="tok" />);
+
+    await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+    expect(screen.queryByRole('link', { name: /registrar implante/i })).not.toBeInTheDocument();
+  });
+
   it("falls back to the raw catalogItemId when the item's procedure isn't in the catalog map", async () => {
     mockedListPlans.mockResolvedValue([plan1]);
     const orphanItem = { ...item1, id: 'item-orphan', catalogItemId: 'cat-missing' };

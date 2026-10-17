@@ -58,6 +58,8 @@ const copy = {
   // diente, para que el enlace no sea un «Ver en el plan» sin destino cuando
   // se lee fuera de contexto.
   viewInPlanFor: (fdi: string) => `Ver en el plan los ítems del diente ${fdi}`,
+  registerImplant: 'Registrar implante',
+  registerImplantFor: (fdi: string) => `Registrar implante en el diente ${fdi}`,
   // DX-120
   dentitionSwitch: 'Dentición de la carta',
   dentitionByAge: (age: number) => `Según la edad (${age} años)`,
@@ -98,6 +100,11 @@ interface OdontogramTabProps {
   onToothChange?: (toothNumber: string | null) => void;
   /** Construye el href del tab de plan enfocado en `toothNumber` (la otra mitad del puente). */
   planHref?: (toothNumber: string) => string;
+  /**
+   * DX-191: href de «Registrar implante» con el diente puesto (abre la sección
+   * «Implantes» con el formulario). Sin él (rol que no registra) no se pinta.
+   */
+  implantHref?: (toothNumber: string) => string;
 }
 
 interface DentitionDialogState {
@@ -139,6 +146,7 @@ export function OdontogramTab({
   initialTooth = null,
   onToothChange,
   planHref,
+  implantHref,
 }: OdontogramTabProps) {
   const [toothGroups, setToothGroups] = useState<ToothGroup[]>([]);
   const [dentition, setDentition] = useState<DentitionView | null>(null);
@@ -469,15 +477,26 @@ export function OdontogramTab({
             {/* La otra mitad del puente. Un `<Link>` de verdad y no un botón:
                 es una ubicación, así que tiene que poder abrirse en otra
                 pestaña y copiarse como cualquier dirección. */}
-            {planHref ? (
-              <Link
-                href={planHref(selectedTooth)}
-                aria-label={copy.viewInPlanFor(selectedTooth)}
-                className="text-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
-              >
-                {copy.viewInPlan}
-              </Link>
-            ) : null}
+            <div className="flex flex-wrap gap-x-4 gap-y-1">
+              {planHref ? (
+                <Link
+                  href={planHref(selectedTooth)}
+                  aria-label={copy.viewInPlanFor(selectedTooth)}
+                  className="text-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+                >
+                  {copy.viewInPlan}
+                </Link>
+              ) : null}
+              {implantHref && !readOnly ? (
+                <Link
+                  href={implantHref(selectedTooth)}
+                  aria-label={copy.registerImplantFor(selectedTooth)}
+                  className="text-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+                >
+                  {copy.registerImplant}
+                </Link>
+              ) : null}
+            </div>
           </div>
           <div className="grid min-w-0 items-start gap-6 lg:grid-cols-2">
             <div className="flex min-w-0 flex-col gap-2">

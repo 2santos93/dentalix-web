@@ -20,6 +20,7 @@ import {
   AUDIT_RESOURCE_OPTIONS,
   actorRoleLabel,
   communicationDetail,
+  implantSearchDetail,
   isPatientOptOut,
 } from '@/lib/audit/audit-labels';
 import { listStaff, type StaffMember } from '@/lib/staff/staff-api';
@@ -410,7 +411,7 @@ export function AuditLogView({ token, patientId, onClearPatient }: AuditLogViewP
 }
 
 function AuditRow({ event, showPatient }: { event: AuditEvent; showPatient: boolean }) {
-  const detail = communicationDetail(event.metadata);
+  const detail = communicationDetail(event.metadata) ?? implantSearchDetail(event.metadata);
   return (
     <TableRow>
       <TableCell className="whitespace-nowrap tabular-nums" data-label={copy.colWhen}>

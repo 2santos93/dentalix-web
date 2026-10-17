@@ -14,6 +14,8 @@ describe('patientTabAccess (qué pestañas de la ficha ve cada rol)', () => {
     expect(access['account-statement']).toBe(true);
     expect(access['data-consents']).toBe(true);
     expect(access['access-log']).toBe(false);
+    // DX-191: ve los implantes e imprime la tarjeta (la entrega en el mostrador).
+    expect(access.implants).toBe(true);
   });
 
   it.each(['DENTIST', 'ASSISTANT'] as const)(

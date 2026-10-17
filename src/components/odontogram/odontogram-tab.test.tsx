@@ -223,6 +223,32 @@ describe('OdontogramTab', () => {
     expect(mockedRecordDentition.mock.calls[0][2].positions).toHaveLength(32);
   });
 
+  it('DX-191: «Registrar implante» lleva a la sección de implantes con el diente puesto', async () => {
+    mockedListCatalog.mockResolvedValue(catalog);
+    mockedGetTimeline.mockResolvedValue([]);
+    mockedGetOdontogram.mockResolvedValue(initialGroups);
+    render(
+      <OdontogramTab
+        token="tok"
+        patientId="p1"
+        initialTooth="36"
+        implantHref={(tooth) => `/patients/p1?tab=implants&registerTooth=${tooth}`}
+      />,
+    );
+    expect(
+      await screen.findByRole('link', { name: 'Registrar implante en el diente 36' }),
+    ).toHaveAttribute('href', '/patients/p1?tab=implants&registerTooth=36');
+  });
+
+  it('DX-191: sin `implantHref` (rol que no registra) no hay acceso directo', async () => {
+    mockedListCatalog.mockResolvedValue(catalog);
+    mockedGetTimeline.mockResolvedValue([]);
+    mockedGetOdontogram.mockResolvedValue(initialGroups);
+    render(<OdontogramTab token="tok" patientId="p1" initialTooth="36" />);
+    await screen.findByRole('form', { name: /registrar en el diente 36/i });
+    expect(screen.queryByRole('link', { name: /registrar implante/i })).not.toBeInTheDocument();
+  });
+
   it('«Ver la carta al» recarga a esa fecha en solo lectura, con aviso y sin acciones', async () => {
     const user = userEvent.setup();
     mockedListCatalog.mockResolvedValue(catalog);
