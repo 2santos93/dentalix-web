@@ -58,7 +58,7 @@ type RequiredTextKey = 'firstName' | 'lastName';
 type NullableTextKey =
   | 'docNumber' | 'birthDate' | 'phone' | 'email' | 'address' | 'notes'
   | 'emergencyContactName' | 'emergencyContactRelationship'
-  | 'emergencyContactPhone' | 'guardianName' | 'guardianDocNumber'
+  | 'emergencyContactPhone'
   | 'insurerEps' | 'occupation' | 'maritalStatus' | 'physicianName'
   | 'physicianPhone';
 
@@ -104,8 +104,6 @@ const GROUPS: { title: string; fields: TextFieldSpec[] }[] = [
       { key: 'emergencyContactName', label: 'Contacto de emergencia' },
       { key: 'emergencyContactRelationship', label: 'Parentesco' },
       { key: 'emergencyContactPhone', label: 'Teléfono de emergencia', type: 'tel' },
-      { key: 'guardianName', label: 'Acudiente' },
-      { key: 'guardianDocNumber', label: 'Documento del acudiente' },
     ],
   },
   {

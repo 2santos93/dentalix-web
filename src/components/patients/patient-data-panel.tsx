@@ -22,8 +22,6 @@ const copy = {
   emergencyContact: 'Contacto de emergencia',
   relationship: 'Parentesco',
   emergencyPhone: 'Teléfono de emergencia',
-  guardian: 'Acudiente',
-  guardianDoc: 'Documento del acudiente',
   insurer: 'Aseguradora / EPS',
   occupation: 'Ocupación',
   maritalStatus: 'Estado civil',
@@ -119,8 +117,7 @@ export function PatientDataPanel({ patient }: PatientDataPanelProps) {
             { label: copy.emergencyContact, value: patient.emergencyContactName ?? null },
             { label: copy.relationship, value: patient.emergencyContactRelationship ?? null },
             { label: copy.emergencyPhone, value: patient.emergencyContactPhone ?? null },
-            { label: copy.guardian, value: patient.guardianName ?? null },
-            { label: copy.guardianDoc, value: patient.guardianDocNumber ?? null },
+            // DX-203: el acudiente vive en «Responsable y familia».
           ]}
         />
         <Block

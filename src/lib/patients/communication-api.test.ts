@@ -72,7 +72,13 @@ describe('communication-api (DX-128)', () => {
         recordedBy: { id: 'u1', fullName: 'Rosa' },
       },
       reminderOptOut: { at: '2026-10-17T11:00:00.000Z', source: 'STAFF' },
-      recipient: { kind: 'PATIENT', name: 'Ana', minor: false },
+      recipient: {
+        kind: 'PATIENT',
+        name: 'Ana',
+        email: null,
+        minor: false,
+        responsiblePartyId: null,
+      },
     };
     expect(withCommunication(patient, saved)).toEqual({
       ...patient,
