@@ -16,6 +16,12 @@ import { listPlans, type TreatmentPlan } from '@/lib/treatment-plans/treatment-p
 import { PLAN_STATUS_LABELS } from '@/lib/treatment-plans/plan-status';
 import { formatCivilDate } from '@/lib/format/date';
 import {
+  consentGuardian,
+  getPatientResponsibles,
+  partyDocument,
+  type PatientResponsibles,
+} from '@/lib/patients/responsible-parties-api';
+import {
   Dialog,
   DialogClose,
   DialogContent,
@@ -71,7 +77,20 @@ const copy = {
   next: 'Continuar',
   sign: 'Firmar',
   genericSignError: 'No pudimos guardar el consentimiento. Intenta de nuevo.',
+  // DX-203: el tutor sale del responsable del paciente.
+  prefilled: (name: string) => `Datos de ${name}, su responsable en la ficha. Corrígelos si firma otra persona.`,
+  minorWarning: (age: number) =>
+    `El paciente es menor de ${age} años: lo habitual es que firme su responsable.`,
 };
+
+type GuardianPrefill = { name: string; document: string };
+
+/** Nombre y documento del responsable que firmaría como tutor, o null. */
+function guardianPrefill(data: PatientResponsibles | null): GuardianPrefill | null {
+  const party = data ? consentGuardian(data.parties) : null;
+  if (!party) return null;
+  return { name: party.fullName, document: partyDocument(party) ?? '' };
+}
 
 type Step = 0 | 1 | 2;
 
@@ -127,6 +146,33 @@ export function NewConsentModal({
   const [professionalSignature, setProfessionalSignature] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [responsibles, setResponsibles] = useState<PatientResponsibles | null>(null);
+  const prefill = guardianPrefill(responsibles);
+  const minor = responsibles?.minor ?? false;
+
+  // DX-203: responsables del paciente para precargar al tutor. Sin ellos (o si
+  // falla), el formulario sigue igual: se escribe a mano.
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    getPatientResponsibles(token, patientId)
+      .then((data) => {
+        if (cancelled) return;
+        setResponsibles(data);
+        const guardian = guardianPrefill(data);
+        if (data.minor) setSignerType('GUARDIAN');
+        if (guardian) {
+          setGuardianName((v) => v || guardian.name);
+          setGuardianDocument((v) => v || guardian.document);
+        }
+      })
+      .catch(() => {
+        /* sin precarga: se escribe a mano */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [open, token, patientId]);
 
   useEffect(() => {
     if (!open) return;
@@ -387,6 +433,10 @@ export function NewConsentModal({
                           // Quien firma cambió: la firma ya trazada era de otra persona.
                           setSignerType(value);
                           setPatientSignature(null);
+                          if (value === 'GUARDIAN' && prefill) {
+                            setGuardianName((v) => v || prefill.name);
+                            setGuardianDocument((v) => v || prefill.document);
+                          }
                         }}
                         className="size-4 accent-[var(--color-primary)]"
                       />
@@ -395,6 +445,14 @@ export function NewConsentModal({
                   ))}
                 </div>
               </fieldset>
+              {minor && signerType === 'PATIENT' && responsibles ? (
+                <p role="status" className="rounded-lg bg-warning/10 px-3 py-2 text-sm text-warning">
+                  {copy.minorWarning(responsibles.majorityAge)}
+                </p>
+              ) : null}
+              {signerType === 'GUARDIAN' && prefill && guardianName === prefill.name ? (
+                <p className="text-xs text-muted">{copy.prefilled(prefill.name)}</p>
+              ) : null}
               {signerType === 'GUARDIAN' ? (
                 <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
                   <FormField htmlFor="guardian-name" label={copy.guardianName}>
