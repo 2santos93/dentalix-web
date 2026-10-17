@@ -1377,7 +1377,7 @@ export interface paths {
         };
         /**
          * Informe de descuentos por periodo, sede y profesional
-         * @description Ítems vivos (no retirados, de planes vivos) con descuento > 0, fechados por su descuento (antes de DX-204, por su alta) en días civiles de la zona de su sede. La sede es la del descuento (antes de DX-204, la de presentación del plan). Los totales cuadran con la suma de `discount` de esos ítems; el bruto es la suma de su precio. Por moneda, sin convertir.
+         * @description Ítems vivos (no retirados, de planes vivos y no anulados: ni rechazados ni cancelados) con descuento > 0, fechados por su descuento (antes de DX-204, por su alta) en días civiles de la zona de su sede. La sede es la del descuento (antes de DX-204, la de presentación del plan). Los totales cuadran con la suma de `discount` de esos ítems; el bruto es la suma de su precio. Por moneda, sin convertir.
          */
         get: operations["DiscountReportController_list"];
         put?: never;
@@ -1397,7 +1397,7 @@ export interface paths {
         };
         /**
          * Informe de descuentos en CSV (mismos filtros, sin paginar)
-         * @description Ítems vivos (no retirados, de planes vivos) con descuento > 0, fechados por su descuento (antes de DX-204, por su alta) en días civiles de la zona de su sede. La sede es la del descuento (antes de DX-204, la de presentación del plan). Los totales cuadran con la suma de `discount` de esos ítems; el bruto es la suma de su precio. Por moneda, sin convertir. UTF-8 con BOM; celdas protegidas contra fórmulas.
+         * @description Ítems vivos (no retirados, de planes vivos y no anulados: ni rechazados ni cancelados) con descuento > 0, fechados por su descuento (antes de DX-204, por su alta) en días civiles de la zona de su sede. La sede es la del descuento (antes de DX-204, la de presentación del plan). Los totales cuadran con la suma de `discount` de esos ítems; el bruto es la suma de su precio. Por moneda, sin convertir. UTF-8 con BOM; celdas protegidas contra fórmulas.
          */
         get: operations["DiscountReportController_csv"];
         put?: never;
