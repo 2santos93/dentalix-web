@@ -2,8 +2,9 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AppShell } from './app-shell';
 
+let mockPathname = '/patients';
 jest.mock('next/navigation', () => ({
-  usePathname: () => '/patients',
+  usePathname: () => mockPathname,
   useRouter: () => ({ push: jest.fn(), replace: jest.fn() }),
 }));
 jest.mock('next-themes', () => ({
@@ -71,7 +72,8 @@ describe('AppShell', () => {
 
   // Cada entrada copia el `@Roles(...)` del endpoint de su pantalla (DX-070):
   // DASHBOARD_ROLES, CATALOG_READ_ROLES, INVENTORY_ROLES, STAFF_WRITE_ROLES,
-  // AUDIT_READ_ROLES (DX-009) y TREATMENT_PLAN_FOLLOW_UP_ROLES (Presupuestos, DX-040).
+  // AUDIT_READ_ROLES (DX-009), TREATMENT_PLAN_FOLLOW_UP_ROLES (Presupuestos, DX-040)
+  // y RECEIVABLES_ROLES (Cartera, DX-145).
   const ROLE_NAV: Record<string, { visible: string[]; hidden: string[] }> = {
     ADMIN: {
       visible: [
@@ -79,6 +81,7 @@ describe('AppShell', () => {
         'Pacientes',
         'Agenda',
         'Caja',
+        'Cartera',
         'Presupuestos',
         'Catálogo',
         'Inventario',
@@ -89,14 +92,14 @@ describe('AppShell', () => {
     },
     DENTIST: {
       visible: ['Pacientes', 'Agenda', 'Catálogo'],
-      hidden: ['Dashboard', 'Caja', 'Presupuestos', 'Inventario', 'Personal', 'Auditoría'],
+      hidden: ['Dashboard', 'Caja', 'Cartera', 'Presupuestos', 'Inventario', 'Personal', 'Auditoría'],
     },
     ASSISTANT: {
       visible: ['Pacientes', 'Agenda', 'Catálogo', 'Inventario'],
-      hidden: ['Dashboard', 'Caja', 'Presupuestos', 'Personal', 'Auditoría'],
+      hidden: ['Dashboard', 'Caja', 'Cartera', 'Presupuestos', 'Personal', 'Auditoría'],
     },
     RECEPTION: {
-      visible: ['Pacientes', 'Agenda', 'Caja', 'Presupuestos'],
+      visible: ['Pacientes', 'Agenda', 'Caja', 'Cartera', 'Presupuestos'],
       hidden: ['Dashboard', 'Catálogo', 'Inventario', 'Personal', 'Auditoría'],
     },
   };
@@ -113,6 +116,28 @@ describe('AppShell', () => {
     }
     for (const name of hidden) {
       expect(screen.queryByRole('link', { name })).not.toBeInTheDocument();
+    }
+  });
+
+  it('en /caja/cartera solo «Cartera» está activa, no también «Caja» (DX-145)', async () => {
+    mockAccessToken = tokenForRole('RECEPTION');
+    mockPathname = '/caja/cartera';
+    try {
+      render(
+        <AppShell>
+          <p>contenido</p>
+        </AppShell>,
+      );
+      const cartera = await screen.findAllByRole('link', { name: 'Cartera' });
+      cartera.forEach((link) => {
+        expect(link).toHaveAttribute('href', '/caja/cartera');
+        expect(link).toHaveAttribute('aria-current', 'page');
+      });
+      screen.getAllByRole('link', { name: 'Caja' }).forEach((link) => {
+        expect(link).not.toHaveAttribute('aria-current');
+      });
+    } finally {
+      mockPathname = '/patients';
     }
   });
 

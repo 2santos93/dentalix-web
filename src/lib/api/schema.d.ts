@@ -1432,6 +1432,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/receivables/aging": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Cartera por antigüedad: deudores de la sede con tramos 0–30/31–60/61–90/>90 por moneda
+         * @description El saldo de cada paciente es el de su estado de cuenta (mismo cálculo), repartido por antigüedad: cada cuota desde su vencimiento; el saldo sin cuotas desde la aceptación (o presentación, o creación) del plan, con `ageApproximate`. Días civiles de la zona de la sede. Por moneda, sin convertir; el saldo a favor va aparte. Sin datos clínicos.
+         */
+        get: operations["ReceivablesController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/receivables/aging.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Cartera por antigüedad en CSV (mismos filtros, sin paginar)
+         * @description Una línea por paciente y moneda, UTF-8 con BOM. La columna «Fecha aproximada» marca la deuda que envejece desde la fecha del plan. Solo ADMIN; cada descarga deja un evento EXPORT en la auditoría.
+         */
+        get: operations["ReceivablesController_csv"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/privacy-policies": {
         parameters: {
             query?: never;
@@ -1953,7 +1993,16 @@ export interface components {
              */
             timeZone: string;
         };
-        RegisterDto: Record<string, never>;
+        RegisterDto: {
+            clinicName: string;
+            /** @example sonrisa */
+            subdomain: string;
+            /** Format: email */
+            email: string;
+            /** Format: password */
+            password: string;
+            fullName: string;
+        };
         RegisterAcceptedDto: {
             /** @example Te enviamos un correo para confirmar el registro. Abre el enlace para activar tu clínica. */
             message: string;
@@ -2048,7 +2097,7 @@ export interface components {
             /** @enum {string} */
             role?: "DENTIST" | "ASSISTANT" | "RECEPTION" | "ADMIN";
             maskedEmail?: string;
-            /** @description true = el email ya tiene una cuenta verificada: pide la contraseña actual. false = pide crear una contraseña (cuenta nueva, o cuenta sin verificar que se reclama). El token solo llega por email a la persona invitada. */
+            /** @description true = el email ya tiene una cuenta verificada, o una sin verificar con acceso a otra clínica o a la plataforma (no se puede reclamar, DX-143): pide la contraseña actual. false = pide crear una contraseña (cuenta nueva, o cuenta sin verificar que se reclama). El token solo llega por email a la persona invitada. */
             requiresCurrentPassword?: boolean;
         };
         AcceptInvitationDto: {
@@ -4180,6 +4229,122 @@ export interface components {
             balance: number;
             /** @description Si ya tiene un plan de cuotas activo (solo se admite uno por plan: crear otro responde 409). */
             hasActivePaymentPlan: boolean;
+        };
+        AgingScopeLocationDto: {
+            /** Format: uuid */
+            id: string;
+            /** @example Sede Norte */
+            name: string;
+        };
+        AgingScopeDto: {
+            /** @description La sede aplicada; null = toda la clínica */
+            location: components["schemas"]["AgingScopeLocationDto"] | null;
+        };
+        AgingPatientDto: {
+            /** Format: uuid */
+            id: string;
+            /** @example Ana Pérez */
+            fullName: string;
+            /** @example +57 300 123 4567 */
+            phone: string | null;
+            /**
+             * @description Teléfono en E.164 sin "+", listo para https://wa.me/<número>; null si no hay uno utilizable
+             * @example 573001234567
+             */
+            whatsApp: string | null;
+        };
+        AgingBucketsDto: {
+            /** @description Cuotas de un plan de pagos que todavía no vencen */
+            current: number;
+            /** @description Exigible hace 0 a 30 días */
+            days0to30: number;
+            /** @description Exigible hace 31 a 60 días */
+            days31to60: number;
+            /** @description Exigible hace 61 a 90 días */
+            days61to90: number;
+            /** @description Exigible hace más de 90 días */
+            over90: number;
+        };
+        AgingNextInstallmentDto: {
+            /** Format: date-time */
+            dueDate: string;
+            /** @description Lo que falta por cubrir de esa cuota */
+            amount: number;
+        };
+        AgingCurrencyDto: {
+            /** @example COP */
+            currency: string;
+            /** @description Saldo neto = debt − credit: el mismo `balance` del estado de cuenta */
+            balance: number;
+            /** @description Lo que se debe: Σ de los tramos */
+            debt: number;
+            /** @description Saldo a favor (abonos de más o en otra moneda). Nunca se resta de los tramos */
+            credit: number;
+            buckets: components["schemas"]["AgingBucketsDto"];
+            /** @description Días de la deuda exigible más antigua; null si nada vence */
+            oldestAgeDays: number | null;
+            /** @description Parte de la deuda envejece desde la fecha del plan (aceptación, presentación o creación), no desde un vencimiento: «fecha aproximada» */
+            ageApproximate: boolean;
+            nextInstallment: components["schemas"]["AgingNextInstallmentDto"] | null;
+        };
+        AgingLastPaymentDto: {
+            /**
+             * @description Día civil del abono en la zona de su sede
+             * @example 2026-09-30
+             */
+            paidOn: string;
+            amount: number;
+            /** @example COP */
+            currency: string;
+        };
+        AgingRowNextInstallmentDto: {
+            /** Format: date-time */
+            dueDate: string;
+            /** @description Lo que falta por cubrir de esa cuota */
+            amount: number;
+            /** @example COP */
+            currency: string;
+        };
+        AgingRowDto: {
+            patient: components["schemas"]["AgingPatientDto"];
+            /**
+             * Format: uuid
+             * @description Sede de la deuda: la de la última cita atendida; sin citas atendidas, la del último abono; sin abonos, la de la última presentación de un plan; null si no hay ninguna
+             */
+            locationId: string | null;
+            /** @description Máximo de `oldestAgeDays` de sus monedas */
+            oldestAgeDays: number | null;
+            ageApproximate: boolean;
+            /** @description Una entrada por moneda con deuda o saldo a favor */
+            currencies: components["schemas"]["AgingCurrencyDto"][];
+            lastPayment: components["schemas"]["AgingLastPaymentDto"] | null;
+            /** @description La próxima cuota por vencer, de cualquier moneda */
+            nextInstallment: components["schemas"]["AgingRowNextInstallmentDto"] | null;
+        };
+        AgingTotalDto: {
+            /** @example COP */
+            currency: string;
+            /** @description Deudores con esta moneda */
+            patients: number;
+            balance: number;
+            debt: number;
+            credit: number;
+            buckets: components["schemas"]["AgingBucketsDto"];
+        };
+        ReceivablesAgingPageDto: {
+            /**
+             * @description «Hoy» en la zona de la sede del alcance
+             * @example 2026-10-17
+             */
+            asOf: string;
+            scope: components["schemas"]["AgingScopeDto"];
+            /** @description Deudores (algo que deber en alguna moneda), de la deuda vencida más antigua a la más reciente */
+            items: components["schemas"]["AgingRowDto"][];
+            total: number;
+            page: number;
+            pageSize: number;
+            /** @description Por moneda, de TODAS las filas filtradas (no solo la página) */
+            totals: components["schemas"]["AgingTotalDto"][];
         };
         UserRefDto: {
             /** Format: uuid */
@@ -8752,6 +8917,100 @@ export interface operations {
             };
             /** @description Paciente no encontrado en esta clínica (inexistente o de otra clínica). */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ReceivablesController_list: {
+        parameters: {
+            query?: {
+                /** @description Sede de la deuda. Sin él, la de la cabecera X-Location-Id; sin ninguna, toda la clínica. */
+                locationId?: string;
+                /** @description Solo esta moneda (ISO 4217), sin convertir */
+                currency?: string;
+                /** @description Deuda mínima del paciente en alguna moneda (en `currency`, si se da) */
+                minBalance?: number;
+                /** @description Días mínimos de la deuda vencida más antigua (91 = «más de 90 días») */
+                minAgeDays?: number;
+                page?: number;
+                /** @description Tope: 100 (un valor mayor se recorta) */
+                pageSize?: number;
+            };
+            header?: {
+                /** @description Sede activa. El parámetro `locationId` manda sobre ella; sin ninguno, toda la clínica. */
+                "X-Location-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReceivablesAgingPageDto"];
+                };
+            };
+            /** @description Filtro inválido o sede que no es de esta clínica */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Tu rol no tiene acceso a la cartera: es para administración y recepción. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ReceivablesController_csv: {
+        parameters: {
+            query?: {
+                /** @description Sede de la deuda. Sin él, la de la cabecera X-Location-Id; sin ninguna, toda la clínica. */
+                locationId?: string;
+                /** @description Solo esta moneda (ISO 4217), sin convertir */
+                currency?: string;
+                /** @description Deuda mínima del paciente en alguna moneda (en `currency`, si se da) */
+                minBalance?: number;
+                /** @description Días mínimos de la deuda vencida más antigua (91 = «más de 90 días») */
+                minAgeDays?: number;
+            };
+            header?: {
+                /** @description Sede activa. El parámetro `locationId` manda sobre ella; sin ninguno, toda la clínica. */
+                "X-Location-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Fichero CSV */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
+                };
+            };
+            /** @description Filtro inválido o sede que no es de esta clínica */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo la administración puede exportar la cartera. */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

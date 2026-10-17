@@ -11,7 +11,7 @@
  * @jest-environment jsdom
  * @jest-environment-options {"url": "http://acme.localhost:3001"}
  */
-import { apiFetch, apiFetchOrNull, ApiError, bootstrapSession, NetworkError } from './client';
+import { apiFetch, apiFetchOrNull, apiFetchText, ApiError, bootstrapSession, NetworkError } from './client';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import {
   getActiveLocationId,
@@ -433,6 +433,33 @@ describe('apiFetchOrNull', () => {
       json: async () => ({ message: 'not found' }),
     }) as unknown as typeof fetch;
     await expect(apiFetchOrNull('/patients/1/medical-history')).rejects.toBeInstanceOf(ApiError);
+  });
+});
+
+describe('apiFetchText (DX-145)', () => {
+  const realFetch = global.fetch;
+  afterEach(() => {
+    global.fetch = realFetch;
+  });
+
+  it('devuelve el cuerpo como texto (un CSV)', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: true,
+      text: async () => '\uFEFFPaciente,Moneda\r\n',
+    }) as unknown as typeof fetch;
+    await expect(apiFetchText('/receivables/aging.csv')).resolves.toBe('\uFEFFPaciente,Moneda\r\n');
+  });
+
+  it('un 403 sigue siendo ApiError con el mensaje de la API', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 403,
+      json: async () => ({ message: 'Solo la administración puede exportar la cartera.' }),
+    }) as unknown as typeof fetch;
+    await expect(apiFetchText('/receivables/aging.csv')).rejects.toMatchObject({
+      status: 403,
+      message: 'Solo la administración puede exportar la cartera.',
+    });
   });
 });
 

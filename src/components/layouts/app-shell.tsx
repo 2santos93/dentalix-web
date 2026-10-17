@@ -10,6 +10,7 @@ import {
   ClipboardList,
   Package,
   Wallet,
+  HandCoins,
   History,
   FileClock,
   PanelLeftClose,
@@ -55,6 +56,9 @@ const NAV: NavItem[] = [
   { href: '/agenda', label: 'Agenda', icon: Calendar },
   // Dato financiero: mismos roles que PAYMENT_ROLES en la API.
   { href: '/caja', label: 'Caja', icon: Wallet, roles: ['ADMIN', 'RECEPTION'] },
+  // Cartera por antigüedad (DX-145): RECEIVABLES_ROLES en la API. Vive bajo
+  // /caja (es el mismo dato de cobro), pero con su propia entrada.
+  { href: '/caja/cartera', label: 'Cartera', icon: HandCoins, roles: ['ADMIN', 'RECEPTION'] },
   // Presupuestos por seguir (DX-040): TREATMENT_PLAN_FOLLOW_UP_ROLES en la API.
   {
     href: '/presupuestos',
@@ -109,8 +113,13 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     hydrate();
   }, [accessToken]);
   const nav = NAV.filter((item) => !item.roles || (role !== null && item.roles.includes(role)));
-  const isActive = (href: string) =>
-    pathname === href || pathname.startsWith(`${href}/`);
+  // Activa la entrada MÁS específica que case: en /caja/cartera es «Cartera»,
+  // no también «Caja».
+  const activeHref = nav
+    .map((item) => item.href)
+    .filter((href) => pathname === href || pathname.startsWith(`${href}/`))
+    .sort((a, b) => b.length - a.length)[0];
+  const isActive = (href: string) => href === activeHref;
 
   // Rehidratar la preferencia: localStorage no existe en SSR, así que no puede
   // ser el estado inicial sin romper la hidratación — el primer render en
