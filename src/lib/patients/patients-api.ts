@@ -1,6 +1,7 @@
 import { apiFetch, apiFetchOrNull } from '@/lib/api/client';
 import type { components, paths } from '@/lib/api/schema';
 import type { ClinicalHistoryValue } from '@/lib/clinical/clinical-types';
+import type { OverdueBalance } from '@/lib/collections/collections-api';
 
 /**
  * The generated `CreatePatientDto.medicalHistory` collapses its nested
@@ -38,6 +39,11 @@ export type UpdatePatientInput = components['schemas']['UpdatePatientDto'];
  * those change.
  */
 export interface Patient {
+  /**
+   * DX-150: solo en `GET /patients/:id` — marca «Saldo vencido» de la cabecera.
+   * `amounts` solo llega a ADMIN y RECEPTION.
+   */
+  balance?: OverdueBalance;
   id: string;
   tenantId: string;
   firstName: string;

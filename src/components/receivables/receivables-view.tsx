@@ -13,7 +13,11 @@ import {
   type ReceivablesAgingPage,
   type ReceivablesFilters,
 } from '@/lib/receivables/receivables-api';
-import { AGE_FILTERS, csvFileName } from '@/lib/receivables/presentation';
+import { AGE_FILTERS, PROMISE_FILTERS, csvFileName } from '@/lib/receivables/presentation';
+import type { AgingRow } from '@/lib/receivables/receivables-api';
+import { listStaff, type StaffMember } from '@/lib/appointments/staff-api';
+import { CollectionNoteDialog } from '@/components/collections/collection-note-dialog';
+import { PaymentPromiseDialog } from '@/components/collections/payment-promise-dialog';
 import { notifyError } from '@/components/errors/notify';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -30,6 +34,8 @@ import {
   AgeCell,
   BucketList,
   bucketLineCount,
+  CollectionActions,
+  CollectionCell,
   DebtCell,
   DebtorActions,
   LastPayment,
@@ -73,7 +79,16 @@ export const receivablesCopy = {
   emptyClinic: 'No hay saldos vencidos en la clínica',
   emptyHint: 'Cuando un paciente deba algo, aparecerá aquí con su antigüedad. Prueba también con otros filtros.',
   asOf: (day: string) => `Antigüedad contada al ${day}, en días del calendario de la sede.`,
+  // DX-150: cobranza.
+  promiseLabel: 'Compromiso',
+  providerLabel: 'Profesional',
+  providerAll: 'Todos los profesionales',
+  colCollection: 'Gestión',
+  noteSaved: (name: string) => `Gestión registrada para ${name}.`,
+  promiseSaved: (name: string) => `Compromiso de pago registrado para ${name}.`,
 };
+
+type CollectionDialog = { kind: 'note' | 'promise'; row: AgingRow } | null;
 
 const MIN_BALANCE_DEBOUNCE_MS = 400;
 
@@ -116,13 +131,21 @@ export function ReceivablesView({ token }: { token: string }) {
   const [clinicName, setClinicName] = useState<string | null>(null);
   const [exporting, setExporting] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  // DX-150: filtros de cobranza y los modales de gestión y compromiso.
+  const [promiseFilter, setPromiseFilter] = useState<string>('all');
+  const [providerId, setProviderId] = useState<string>('ALL');
+  const [providers, setProviders] = useState<StaffMember[]>([]);
+  const [dialog, setDialog] = useState<CollectionDialog>(null);
 
   const age = AGE_FILTERS.find((f) => f.value === ageFilter);
   const minAgeDays = age?.minAgeDays;
+  const hasPromise = PROMISE_FILTERS.find((f) => f.value === promiseFilter)?.hasPromise;
   const filters: ReceivablesFilters = {
     ...(currency !== 'ALL' ? { currency } : {}),
     ...(minBalance !== undefined ? { minBalance } : {}),
     ...(minAgeDays !== undefined ? { minAgeDays } : {}),
+    ...(providerId !== 'ALL' ? { providerId } : {}),
+    ...(hasPromise !== undefined ? { hasPromise } : {}),
   };
   const filterKey = JSON.stringify(filters);
 
@@ -175,6 +198,22 @@ export function ReceivablesView({ token }: { token: string }) {
       cancelled = true;
     };
   }, []);
+
+  // Profesionales para el filtro: si falla, el filtro no se ofrece.
+  useEffect(() => {
+    if (!token) return;
+    let cancelled = false;
+    listStaff(token)
+      .then((staff) => {
+        if (!cancelled) setProviders(staff.filter((m) => m.role === 'DENTIST' || m.role === 'ADMIN'));
+      })
+      .catch(() => {
+        /* sin lista, sin filtro por profesional */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
 
   // El saldo mínimo se aplica al dejar de teclear, no en cada tecla.
   useEffect(() => {
@@ -266,6 +305,39 @@ export function ReceivablesView({ token }: { token: string }) {
                   </option>
                 ))}
               </select>
+              <select
+                aria-label={receivablesCopy.promiseLabel}
+                value={promiseFilter}
+                onChange={(e) => {
+                  setPromiseFilter(e.target.value);
+                  setPage(1);
+                }}
+                className={cn(toolbarFieldClass, 'sm:w-56')}
+              >
+                {PROMISE_FILTERS.map((f) => (
+                  <option key={f.value} value={f.value}>
+                    {f.label}
+                  </option>
+                ))}
+              </select>
+              {providers.length > 0 ? (
+                <select
+                  aria-label={receivablesCopy.providerLabel}
+                  value={providerId}
+                  onChange={(e) => {
+                    setProviderId(e.target.value);
+                    setPage(1);
+                  }}
+                  className={cn(toolbarFieldClass, 'sm:w-56')}
+                >
+                  <option value="ALL">{receivablesCopy.providerAll}</option>
+                  {providers.map((m) => (
+                    <option key={m.userId} value={m.userId}>
+                      {m.fullName}
+                    </option>
+                  ))}
+                </select>
+              ) : null}
             </div>
             {isAdmin ? (
               <Button type="button" onClick={() => void exportCsv()} disabled={exporting || loading} className="shrink-0">
@@ -328,6 +400,7 @@ export function ReceivablesView({ token }: { token: string }) {
                       </TableHead>
                       <TableHead scope="col">{receivablesCopy.colLastPayment}</TableHead>
                       <TableHead scope="col">{receivablesCopy.colNext}</TableHead>
+                      <TableHead scope="col">{receivablesCopy.colCollection}</TableHead>
                       <TableHead scope="col">
                         <span className="sr-only">{receivablesCopy.colActions}</span>
                       </TableHead>
@@ -364,8 +437,18 @@ export function ReceivablesView({ token }: { token: string }) {
                         <TableCell data-label={receivablesCopy.colNext}>
                           <NextInstallment row={row} />
                         </TableCell>
+                        <TableCell data-label={receivablesCopy.colCollection}>
+                          <CollectionCell row={row} />
+                        </TableCell>
                         <TableCell data-label={receivablesCopy.colActions}>
-                          <DebtorActions row={row} clinicName={clinicName} />
+                          <div className="flex flex-col items-end gap-2">
+                            <DebtorActions row={row} clinicName={clinicName} />
+                            <CollectionActions
+                              row={row}
+                              onNote={(r) => setDialog({ kind: 'note', row: r })}
+                              onPromise={(r) => setDialog({ kind: 'promise', row: r })}
+                            />
+                          </div>
                         </TableCell>
                       </TableRow>
                     ))}
@@ -377,7 +460,12 @@ export function ReceivablesView({ token }: { token: string }) {
               <ul aria-label={receivablesCopy.listLabel} className="flex flex-col gap-3 sm:hidden">
                 {items.map((row) => (
                   <li key={row.patient.id}>
-                    <DebtorCard row={row} clinicName={clinicName} />
+                    <DebtorCard
+                      row={row}
+                      clinicName={clinicName}
+                      onNote={(r) => setDialog({ kind: 'note', row: r })}
+                      onPromise={(r) => setDialog({ kind: 'promise', row: r })}
+                    />
                   </li>
                 ))}
               </ul>
@@ -395,6 +483,36 @@ export function ReceivablesView({ token }: { token: string }) {
           </>
         )}
       </div>
+
+      {dialog ? (
+        <>
+          <CollectionNoteDialog
+            open={dialog.kind === 'note'}
+            onOpenChange={(open) => {
+              if (!open) setDialog(null);
+            }}
+            token={token}
+            patient={dialog.row.patient}
+            onSaved={() => {
+              setNotice(receivablesCopy.noteSaved(dialog.row.patient.fullName));
+              setReloadKey((k) => k + 1);
+            }}
+          />
+          <PaymentPromiseDialog
+            open={dialog.kind === 'promise'}
+            onOpenChange={(open) => {
+              if (!open) setDialog(null);
+            }}
+            token={token}
+            patient={dialog.row.patient}
+            currencies={dialog.row.currencies.filter((c) => c.debt > 0).map((c) => c.currency)}
+            onSaved={() => {
+              setNotice(receivablesCopy.promiseSaved(dialog.row.patient.fullName));
+              setReloadKey((k) => k + 1);
+            }}
+          />
+        </>
+      ) : null}
     </>
   );
 }

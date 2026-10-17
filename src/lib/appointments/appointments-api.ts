@@ -2,6 +2,7 @@ import { apiFetch } from '@/lib/api/client';
 import type { components, paths } from '@/lib/api/schema';
 import type { ClinicRole } from '@/lib/me/me-api';
 import type { AppointmentTypeSummary } from './appointment-types-api';
+import type { OverdueBalance } from '@/lib/collections/collections-api';
 
 export type CreateAppointmentInput = components['schemas']['CreateAppointmentDto'];
 export type UpdateAppointmentInput = components['schemas']['UpdateAppointmentDto'];
@@ -63,6 +64,11 @@ export interface Appointment {
   callbackRequestedAt: string | null;
   createdAt: string;
   updatedAt: string;
+  /**
+   * DX-150: solo en `GET /appointments` (la agenda) — marca «Saldo vencido» del
+   * paciente. `amounts` solo llega a ADMIN y RECEPTION.
+   */
+  balance?: OverdueBalance;
   /**
    * DX-122: solo en la respuesta de crear o mover — avisos que no impidieron la
    * operación (p. ej. «La cita cae en un bloqueo que permite agendar…»).

@@ -19,6 +19,16 @@ jest.mock('../../lib/receivables/receivables-api', () => ({
 jest.mock('../../lib/clinic-branding', () => ({ fetchClinicName: jest.fn() }));
 jest.mock('../../lib/auth/token-role', () => ({ getTokenRole: jest.fn() }));
 jest.mock('../errors/notify', () => ({ notifyError: jest.fn() }));
+jest.mock('../../lib/appointments/staff-api', () => ({
+  listStaff: jest.fn().mockResolvedValue([
+    { userId: 'dr-1', fullName: 'Dra. Ríos', role: 'DENTIST' },
+    { userId: 'rec-1', fullName: 'Rita', role: 'RECEPTION' },
+  ]),
+}));
+jest.mock('../../lib/collections/collections-api', () => ({
+  createCollectionNote: jest.fn().mockResolvedValue({ id: 'n1' }),
+  createPaymentPromise: jest.fn(),
+}));
 
 const mockedAging = getReceivablesAging as jest.MockedFunction<typeof getReceivablesAging>;
 const mockedCsv = downloadReceivablesCsv as jest.MockedFunction<typeof downloadReceivablesCsv>;
@@ -48,6 +58,8 @@ function row(overrides: Partial<AgingRow> = {}): AgingRow {
     ],
     lastPayment: { paidOn: '2026-09-30', amount: 50000, currency: 'COP' },
     nextInstallment: null,
+    lastNote: null,
+    promise: null,
     ...overrides,
   };
 }
@@ -218,5 +230,68 @@ describe('ReceivablesView (DX-145)', () => {
     await waitFor(() => expect(mockedNotify).toHaveBeenCalled());
     expect(mockedNotify.mock.calls[0][1]?.onRetry).toEqual(expect.any(Function));
     expect(screen.getByRole('table')).toBeInTheDocument();
+  });
+
+  describe('cobranza (DX-150)', () => {
+    it('la fila muestra la última gestión y el compromiso con su estado', async () => {
+      mockedAging.mockResolvedValue(
+        page([
+          row({
+            lastNote: { channel: 'CALL', outcome: 'PROMISED_PAYMENT', createdAt: '2026-10-16T15:00:00.000Z' },
+            promise: { id: 'pp1', amount: 200000, currency: 'COP', dueDate: '2026-11-15', status: 'KEPT' },
+          }),
+        ]),
+      );
+      render(<ReceivablesView token="tok" />);
+      const table = await screen.findByRole('table');
+      const tableRow = within(table).getByRole('row', { name: /Ana Pérez/ });
+      expect(within(tableRow).getByText('Llamada · Promete pago')).toBeInTheDocument();
+      expect(within(tableRow).getByText('Cumplido')).toBeInTheDocument();
+      expect(money(tableRow.textContent)).toContain('para el 15/11/2026');
+    });
+
+    it('«Gestión» abre el modal «Registrar gestión» y al guardar recarga la cartera', async () => {
+      mockedAging.mockResolvedValue(page([row()]));
+      render(<ReceivablesView token="tok" />);
+      const table = await screen.findByRole('table');
+      await userEvent.click(
+        within(table).getByRole('button', { name: 'Registrar gestión de cobro con Ana Pérez' }),
+      );
+      const dialog = await screen.findByRole('dialog', { name: 'Registrar gestión' });
+      await userEvent.selectOptions(within(dialog).getByLabelText('Canal'), 'CALL');
+      await userEvent.selectOptions(within(dialog).getByLabelText('Resultado'), 'NO_ANSWER');
+      await userEvent.click(within(dialog).getByRole('button', { name: 'Guardar gestión' }));
+      expect(await screen.findByText('Gestión registrada para Ana Pérez.')).toBeInTheDocument();
+      await waitFor(() => expect(mockedAging).toHaveBeenCalledTimes(2));
+    });
+
+    it('con un compromiso abierto no ofrece otro', async () => {
+      mockedAging.mockResolvedValue(
+        page([row({ promise: { id: 'pp1', amount: 1, currency: 'COP', dueDate: '2026-11-15', status: 'OPEN' } })]),
+      );
+      render(<ReceivablesView token="tok" />);
+      const table = await screen.findByRole('table');
+      expect(within(table).queryByRole('button', { name: 'Compromiso de pago de Ana Pérez' })).toBeNull();
+      expect(within(table).getByText('Abierto')).toBeInTheDocument();
+    });
+
+    it('filtra por compromiso abierto y por profesional', async () => {
+      mockedAging.mockResolvedValue(page([row()]));
+      render(<ReceivablesView token="tok" />);
+      await screen.findByRole('table');
+      await userEvent.selectOptions(screen.getByLabelText('Compromiso'), 'yes');
+      await waitFor(() =>
+        expect(mockedAging).toHaveBeenLastCalledWith('tok', expect.objectContaining({ hasPromise: true })),
+      );
+      const provider = await screen.findByLabelText('Profesional');
+      expect(within(provider).queryByText('Rita')).toBeNull();
+      await userEvent.selectOptions(provider, 'dr-1');
+      await waitFor(() =>
+        expect(mockedAging).toHaveBeenLastCalledWith(
+          'tok',
+          expect.objectContaining({ providerId: 'dr-1', hasPromise: true }),
+        ),
+      );
+    });
   });
 });

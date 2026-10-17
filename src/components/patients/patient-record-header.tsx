@@ -6,6 +6,7 @@ import { DOC_TYPE_SHORT } from '@/lib/patients/doc-type';
 import { ageFrom } from '@/lib/patients/age';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/shared/page-header';
+import { OverdueChip } from '@/components/collections/overdue-chip';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands. Cada entrada es una cadena COMPLETA: las que
@@ -122,6 +123,13 @@ export function PatientRecordHeader({ patient, loading, onEdit }: PatientRecordH
               <Building2 aria-hidden className="size-3.5 shrink-0" />
               {copy.recordScope}
             </p>
+            {/* DX-150: «Saldo vencido · N días» (con importe solo para ADMIN y
+                RECEPTION: la API ya lo omite para los demás roles). */}
+            {patient?.balance?.hasOverdue ? (
+              <div>
+                <OverdueChip balance={patient.balance} />
+              </div>
+            ) : null}
           </div>
         }
         actions={

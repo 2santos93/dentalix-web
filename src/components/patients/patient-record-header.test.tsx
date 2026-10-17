@@ -125,3 +125,39 @@ describe('PatientRecordHeader', () => {
     );
   });
 });
+
+describe('PatientRecordHeader · saldo vencido (DX-150)', () => {
+  it('muestra el chip con el importe que manda la API (ADMIN/RECEPTION)', () => {
+    render(
+      <PatientRecordHeader
+        patient={patient({
+          balance: { hasOverdue: true, overdueDays: 75, amounts: [{ currency: 'COP', amount: 300000 }] },
+        })}
+        loading={false}
+        onEdit={() => {}}
+      />,
+    );
+    expect(screen.getByTestId('overdue-chip').textContent?.replace(/\s/g, ' ')).toMatch(
+      /^Saldo vencido · 75 días · .*300\.000/,
+    );
+  });
+
+  it('sin importe para DENTIST/ASSISTANT y sin chip si no hay saldo vencido', () => {
+    const { rerender } = render(
+      <PatientRecordHeader
+        patient={patient({ balance: { hasOverdue: true, overdueDays: 5 } })}
+        loading={false}
+        onEdit={() => {}}
+      />,
+    );
+    expect(screen.getByTestId('overdue-chip')).toHaveTextContent(/^Saldo vencido · 5 días$/);
+    rerender(
+      <PatientRecordHeader
+        patient={patient({ balance: { hasOverdue: false, overdueDays: null } })}
+        loading={false}
+        onEdit={() => {}}
+      />,
+    );
+    expect(screen.queryByTestId('overdue-chip')).toBeNull();
+  });
+});

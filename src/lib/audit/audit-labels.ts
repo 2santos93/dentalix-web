@@ -72,6 +72,9 @@ export const AUDIT_RESOURCE_LABELS: Record<AuditResourceType, string> = {
   TENANT_DOMAIN: 'Dominio personalizado',
   // DX-191: registro de implantes, tarjeta y búsqueda por lote.
   PATIENT_IMPLANT: 'Implante',
+  // DX-150: cobranza (gestión de cobro y compromiso de pago).
+  COLLECTION_NOTE: 'Gestión de cobro',
+  PAYMENT_PROMISE: 'Compromiso de pago',
 };
 
 export const AUDIT_RESOURCE_OPTIONS = Object.keys(AUDIT_RESOURCE_LABELS) as AuditResourceType[];
@@ -101,6 +104,8 @@ const ORIGIN_LABELS: Record<AuditOrigin, string> = {
   LINK: 'con el enlace del email',
   MESSAGE: 'respondiendo al mensaje',
   STAFF: 'anotado por el personal',
+  // DX-150: el barrido de cobranza cierra compromisos sin usuario.
+  JOB: 'proceso automático',
 };
 
 /**

@@ -5,6 +5,8 @@ import type { AgingRow } from '@/lib/receivables/receivables-api';
 import {
   AgeCell,
   BucketList,
+  CollectionActions,
+  CollectionCell,
   DebtCell,
   DebtorActions,
   LastPayment,
@@ -19,7 +21,18 @@ import {
  * botones —«Llamar», «WhatsApp», «Estado de cuenta»— abajo, a 44px y a lo ancho
  * de la tarjeta: al alcance del pulgar y sin scroll lateral.
  */
-export function DebtorCard({ row, clinicName }: { row: AgingRow; clinicName: string | null }) {
+export function DebtorCard({
+  row,
+  clinicName,
+  onNote,
+  onPromise,
+}: {
+  row: AgingRow;
+  clinicName: string | null;
+  /** DX-150: abre «Registrar gestión» / «Compromiso de pago». */
+  onNote?: (row: AgingRow) => void;
+  onPromise?: (row: AgingRow) => void;
+}) {
   const nameId = React.useId();
   return (
     <article
@@ -61,7 +74,13 @@ export function DebtorCard({ row, clinicName }: { row: AgingRow; clinicName: str
         </div>
       </dl>
 
+      <div className="min-w-0 border-t border-hairline pt-3">
+        <p className="t-label text-muted">{debtorCopy.collection}</p>
+        <CollectionCell row={row} />
+      </div>
+
       <DebtorActions row={row} clinicName={clinicName} stretch />
+      {onNote && onPromise ? <CollectionActions row={row} onNote={onNote} onPromise={onPromise} stretch /> : null}
     </article>
   );
 }

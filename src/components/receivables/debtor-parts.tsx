@@ -1,7 +1,7 @@
 'use client';
 import * as React from 'react';
 import Link from 'next/link';
-import { FileText, MessageCircle, Phone } from 'lucide-react';
+import { FileText, HandCoins, MessageCircle, NotebookPen, Phone } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { formatCurrency } from '@/lib/format/currency';
@@ -15,6 +15,12 @@ import {
 } from '@/lib/receivables/presentation';
 import type { AgingCurrency, AgingRow } from '@/lib/receivables/receivables-api';
 import { cn } from '@/lib/utils';
+import {
+  CHANNEL_LABELS,
+  OUTCOME_LABELS,
+  PROMISE_STATUS_BADGE,
+  PROMISE_STATUS_LABELS,
+} from '@/lib/collections/presentation';
 
 export const debtorCopy = {
   days: (n: number) => (n === 1 ? '1 día' : `${n} días`),
@@ -35,6 +41,15 @@ export const debtorCopy = {
   noWhatsApp: 'El teléfono no sirve para WhatsApp',
   statement: 'Estado de cuenta',
   statementLabel: (name: string) => `Estado de cuenta de ${name}`,
+  // DX-150: cobranza.
+  collection: 'Gestión',
+  noCollection: 'Sin gestiones',
+  registerNote: 'Registrar gestión',
+  registerNoteLabel: (name: string) => `Registrar gestión de cobro con ${name}`,
+  promise: 'Compromiso de pago',
+  promiseShort: 'Compromiso',
+  promiseLabel: (name: string) => `Compromiso de pago de ${name}`,
+  promiseLine: (amount: string, day: string) => `${amount} para el ${day}`,
 };
 
 export function statementHref(patientId: string): string {
@@ -195,6 +210,87 @@ export function DebtorActions({
       {patient.phone && !whatsapp ? (
         <span className={cn('text-xs text-muted', stretch && 'w-full')}>{debtorCopy.noWhatsApp}</span>
       ) : null}
+    </div>
+  );
+}
+
+/**
+ * DX-150: la última gestión (canal · resultado, fecha) y el último compromiso
+ * de pago con su estado (Abierto, Cumplido o Incumplido).
+ */
+export function CollectionCell({ row }: { row: AgingRow }) {
+  const { lastNote, promise } = row;
+  if (!lastNote && !promise) return <span className="text-muted">{debtorCopy.noCollection}</span>;
+  return (
+    <div className="flex min-w-0 flex-col gap-1 text-sm">
+      {lastNote ? (
+        <span className="min-w-0">
+          <span className="text-ink">
+            {CHANNEL_LABELS[lastNote.channel]} · {OUTCOME_LABELS[lastNote.outcome]}
+          </span>
+          <span className="block text-xs text-muted tabular-nums">
+            {formatCivilDate(lastNote.createdAt.slice(0, 10))}
+          </span>
+        </span>
+      ) : null}
+      {promise ? (
+        <span className="flex min-w-0 flex-wrap items-center gap-1.5" data-testid="promise-status">
+          <Badge variant={PROMISE_STATUS_BADGE[promise.status]} className="whitespace-nowrap">
+            {PROMISE_STATUS_LABELS[promise.status]}
+          </Badge>
+          <span className="text-xs text-muted tabular-nums">
+            {debtorCopy.promiseLine(formatCurrency(promise.amount, promise.currency), formatCivilDate(promise.dueDate))}
+          </span>
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+/**
+ * DX-150: «Registrar gestión» y «Compromiso de pago». Sin compromiso nuevo
+ * mientras haya uno abierto (la API respondería 409).
+ */
+export function CollectionActions({
+  row,
+  onNote,
+  onPromise,
+  stretch = false,
+}: {
+  row: AgingRow;
+  onNote: (row: AgingRow) => void;
+  onPromise: (row: AgingRow) => void;
+  stretch?: boolean;
+}) {
+  const name = row.patient.fullName;
+  const button = stretch ? 'h-11 flex-1' : undefined;
+  const openPromise = row.promise?.status === 'OPEN';
+  return (
+    <div className={cn('flex items-center gap-2', stretch ? 'flex-wrap' : 'flex-nowrap justify-end')}>
+      <Button
+        type="button"
+        variant="outline"
+        size="sm"
+        className={button}
+        onClick={() => onNote(row)}
+        aria-label={debtorCopy.registerNoteLabel(name)}
+      >
+        <NotebookPen aria-hidden />
+        {stretch ? debtorCopy.registerNote : debtorCopy.collection}
+      </Button>
+      {openPromise ? null : (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className={button}
+          onClick={() => onPromise(row)}
+          aria-label={debtorCopy.promiseLabel(name)}
+        >
+          <HandCoins aria-hidden />
+          {stretch ? debtorCopy.promise : debtorCopy.promiseShort}
+        </Button>
+      )}
     </div>
   );
 }
