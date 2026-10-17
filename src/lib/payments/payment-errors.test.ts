@@ -58,4 +58,10 @@ describe('DX-109: mensajes de negocio de las reglas de cobro', () => {
     const cancelled = 'El plan está «Cancelado»: no admite abonos ni planes de cuotas.';
     expect(paymentPlanErrorMessage(new ApiError(409, cancelled))).toBe(cancelled);
   });
+
+  it('409 de «exigir caja abierta» al cobrar en efectivo sin caja (DX-027)', () => {
+    const required =
+      'Esta clínica exige caja abierta para cobrar en efectivo: abre tu caja en esta sede antes de registrar el abono.';
+    expect(recordPaymentErrorMessage(new ApiError(409, required))).toBe(required);
+  });
 });

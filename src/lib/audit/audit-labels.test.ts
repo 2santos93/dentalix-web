@@ -8,6 +8,7 @@ import {
   implantSearchDetail,
   isPatientOptOut,
   staffLoginDetail,
+  cashSessionDetail,
 } from './audit-labels';
 
 describe('etiquetas de auditoría', () => {
@@ -78,5 +79,13 @@ describe('implantSearchDetail (DX-191)', () => {
     );
     expect(staffLoginDetail({ reason: 'REMINDER_OPT_OUT' })).toBeNull();
     expect(staffLoginDetail({})).toBeNull();
+  });
+});
+
+describe('cashSessionDetail (DX-027)', () => {
+  it('nombra cierre, reapertura y ajuste; null fuera de la caja', () => {
+    expect(cashSessionDetail({ reason: 'CASH_SESSION_CLOSED' })).toBe('Cierre de caja');
+    expect(cashSessionDetail({ reason: 'CASH_SESSION_REOPENED' })).toBe('Reapertura de caja');
+    expect(cashSessionDetail({ reason: 'LOGIN_UNLOCKED' })).toBeNull();
   });
 });

@@ -1841,6 +1841,164 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/cash-sessions/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Ajustes de caja de la clínica */
+        get: operations["CashSessionsController_settings"];
+        /**
+         * Cambiar los ajustes de caja de la clínica (solo ADMIN)
+         * @description «Exigir caja abierta» y «arqueo ciego». Por defecto los dos desactivados: el comportamiento de antes de la caja por turno.
+         */
+        put: operations["CashSessionsController_saveSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cash-sessions/current": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Mi caja abierta en la sede (o null) y los ajustes de caja */
+        get: operations["CashSessionsController_current"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cash-sessions/open": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Abrir mi caja en la sede con el fondo inicial por moneda
+         * @description Una caja abierta por usuario y sede. Los ajustes pendientes de la sede (anulaciones o abonos tardíos de quien no tenía caja) entran en esta.
+         */
+        post: operations["CashSessionsController_open"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cash-sessions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Turnos de caja (ADMIN: todos; RECEPTION: los suyos)
+         * @description Más recientes primero; filtros por sede, días de apertura y estado.
+         */
+        get: operations["CashSessionsController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cash-sessions/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Una caja: fondo, abonos, anulados, ajustes, arqueo y cierres
+         * @description Con «arqueo ciego» y la caja abierta, quien no es ADMIN recibe `expected` y `payments` a null.
+         */
+        get: operations["CashSessionsController_detail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cash-sessions/{id}/close": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cerrar la caja con el arqueo por moneda y método
+         * @description Calcula el esperado (fondo + abonos del turno + ajustes) y guarda contado y diferencia. Una diferencia distinta de 0 exige motivo. El cierre es inmutable y deja la fecha de bloqueo sugerida (DX-091).
+         */
+        post: operations["CashSessionsController_close"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cash-sessions/{id}/reopen": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reabrir un cierre (solo ADMIN, con motivo)
+         * @description El cierre anterior se conserva intacto; el siguiente cierre es una vuelta nueva.
+         */
+        post: operations["CashSessionsController_reopen"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cash-sessions/{id}/adjustments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Corregir un cierre con un ajuste (solo ADMIN, con motivo)
+         * @description El cierre no cambia: el ajuste cuenta en tu caja abierta en esa sede o, si no tienes, en la siguiente que se abra allí.
+         */
+        post: operations["CashSessionsController_adjust"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/privacy-policies": {
         parameters: {
             query?: never;
@@ -2499,7 +2657,7 @@ export interface components {
         /** @enum {string} */
         AuditAction: "VIEW" | "CREATE" | "UPDATE" | "DELETE" | "SIGN" | "VOID" | "LOGIN" | "LOGIN_FAILED" | "PASSWORD_RESET" | "EXPORT" | "PRINT" | "SEND";
         /** @enum {string} */
-        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER";
+        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION";
         /**
          * @description Rol con el que actuó (del token). `null` en un login fallido.
          * @enum {string}
@@ -5983,6 +6141,303 @@ export interface components {
             pageSize: number;
             /** @description Por moneda, de TODAS las filas filtradas (no solo la página) */
             totals: components["schemas"]["AgingTotalDto"][];
+        };
+        CashSettingsDto: {
+            /** @description «Exigir caja abierta»: sin caja abierta en la sede no se registra un abono en efectivo (409). */
+            requireOpenSession: boolean;
+            /** @description «Arqueo ciego»: quien cierra cuenta antes de ver el esperado; ADMIN lo ve siempre. */
+            blindClose: boolean;
+        };
+        /** @enum {string} */
+        CashSessionStatus: "OPEN" | "CLOSED";
+        CashStaffRefDto: {
+            /** Format: uuid */
+            id: string;
+            fullName: string | null;
+        };
+        CashMoneyDto: {
+            /** @example COP */
+            currency: string;
+            amount: number;
+        };
+        /** @enum {string} */
+        PaymentMethod: "CASH" | "CARD" | "TRANSFER" | "OTHER";
+        CashExpectedLineDto: {
+            /** @example COP */
+            currency: string;
+            method: components["schemas"]["PaymentMethod"];
+            /** @description Fondo inicial (solo efectivo) */
+            opening: number;
+            /** @description Abonos del turno que cuentan */
+            payments: number;
+            paymentsCount: number;
+            /** @description Ajustes que entraron en esta caja (con signo) */
+            adjustments: number;
+            /** @description opening + payments + adjustments */
+            expected: number;
+        };
+        CashSessionPaymentDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            paidAt: string;
+            /**
+             * @description Día civil en la sede
+             * @example 2026-10-17
+             */
+            paidOn: string;
+            amount: number;
+            /** @example COP */
+            currency: string;
+            method: components["schemas"]["PaymentMethod"] | null;
+            /** @example PRI-000012 */
+            receiptNumber: string | null;
+            patient: components["schemas"]["CashPatientRefDto"];
+            createdBy: components["schemas"]["CashStaffRefDto"] | null;
+        };
+        CashVoidedPaymentDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            paidAt: string;
+            /**
+             * @description Día civil en la sede
+             * @example 2026-10-17
+             */
+            paidOn: string;
+            amount: number;
+            /** @example COP */
+            currency: string;
+            method: components["schemas"]["PaymentMethod"] | null;
+            /** @example PRI-000012 */
+            receiptNumber: string | null;
+            patient: components["schemas"]["CashPatientRefDto"];
+            createdBy: components["schemas"]["CashStaffRefDto"] | null;
+            /** Format: date-time */
+            voidedAt: string | null;
+            voidedBy: components["schemas"]["CashStaffRefDto"] | null;
+            voidReason: string | null;
+            /** @description Anulado con la caja ya cerrada: sigue contando aquí y la anulación es un ajuste en otra caja. */
+            bookedAsAdjustment: boolean;
+        };
+        /**
+         * @description VOID: anulación de un abono de una caja cerrada. LATE_PAYMENT: abono con fecha de un día ya cerrado. CORRECTION: corrección de un ADMIN.
+         * @enum {string}
+         */
+        CashAdjustmentKind: "VOID" | "LATE_PAYMENT" | "CORRECTION";
+        CashAdjustmentPaymentDto: {
+            /** Format: uuid */
+            id: string;
+            patient: components["schemas"]["CashPatientRefDto"];
+            /** @example 2026-10-16 */
+            paidOn: string;
+            receiptNumber: string | null;
+        };
+        CashSessionRefDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            openedAt: string;
+            openedBy: components["schemas"]["CashStaffRefDto"];
+        };
+        CashAdjustmentDto: {
+            /** Format: uuid */
+            id: string;
+            /** @description VOID: anulación de un abono de una caja cerrada. LATE_PAYMENT: abono con fecha de un día ya cerrado. CORRECTION: corrección de un ADMIN. */
+            kind: components["schemas"]["CashAdjustmentKind"];
+            /** @example COP */
+            currency: string;
+            method: components["schemas"]["PaymentMethod"];
+            /** @description Con signo */
+            amount: number;
+            reason: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            createdBy: components["schemas"]["CashStaffRefDto"];
+            /**
+             * Format: uuid
+             * @description Caja donde cuenta; null = pendiente de la siguiente que se abra en la sede
+             */
+            sessionId: string | null;
+            payment: components["schemas"]["CashAdjustmentPaymentDto"] | null;
+            /** @description La caja cerrada de la que viene (enlace al original) */
+            originalSession: components["schemas"]["CashSessionRefDto"] | null;
+        };
+        CashClosingLineDto: {
+            /** @example COP */
+            currency: string;
+            method: components["schemas"]["PaymentMethod"];
+            opening: number;
+            expected: number;
+            counted: number;
+            /** @description counted − expected */
+            difference: number;
+        };
+        CashClosingDto: {
+            /** Format: uuid */
+            id: string;
+            /** @description 1 el primero; 2, 3… tras cada reapertura */
+            sequence: number;
+            /** Format: date-time */
+            closedAt: string;
+            closedBy: components["schemas"]["CashStaffRefDto"];
+            blind: boolean;
+            hasDifference: boolean;
+            differenceReason: string | null;
+            notes: string | null;
+            /**
+             * @description Fecha de bloqueo contable sugerida para la sede (día civil del cierre, DX-091). No bloquea nada todavía.
+             * @example 2026-10-17
+             */
+            suggestedLockDate: string;
+            lines: components["schemas"]["CashClosingLineDto"][];
+        };
+        CashReopeningDto: {
+            /** Format: uuid */
+            id: string;
+            sequence: number;
+            /** Format: date-time */
+            reopenedAt: string;
+            reopenedBy: components["schemas"]["CashStaffRefDto"];
+            reason: string;
+        };
+        CashSessionCapabilitiesDto: {
+            close: boolean;
+            reopen: boolean;
+            adjust: boolean;
+        };
+        CashSessionDetailDto: {
+            /** Format: uuid */
+            id: string;
+            status: components["schemas"]["CashSessionStatus"];
+            location: components["schemas"]["CashLocationRefDto"];
+            openedBy: components["schemas"]["CashStaffRefDto"];
+            /** Format: date-time */
+            openedAt: string;
+            /**
+             * @description Día civil de la apertura en la sede
+             * @example 2026-10-17
+             */
+            openedOn: string;
+            /** Format: date-time */
+            closedAt: string | null;
+            closedBy: components["schemas"]["CashStaffRefDto"] | null;
+            reopenCount: number;
+            /** @description Fondo inicial por moneda */
+            floats: components["schemas"]["CashMoneyDto"][];
+            /** @description Diferencia por moneda del último cierre (vacía si está abierta) */
+            differences: components["schemas"]["CashMoneyDto"][];
+            notes: string | null;
+            /** @example America/Bogota */
+            timeZone: string;
+            /** @description Arqueo ciego para quien consulta: `expected` y `payments` vienen a null hasta cerrar. */
+            blindHidden: boolean;
+            expected: components["schemas"]["CashExpectedLineDto"][] | null;
+            payments: components["schemas"]["CashSessionPaymentDto"][] | null;
+            /** @description Anulados (DX-049): no cuentan en el esperado salvo si se anularon con la caja cerrada */
+            voidedPayments: components["schemas"]["CashVoidedPaymentDto"][];
+            /** @description Ajustes que cuentan en esta caja */
+            adjustments: components["schemas"]["CashAdjustmentDto"][];
+            /** @description Ajustes nacidos de esta caja ya cerrada, que cuentan en otra */
+            laterAdjustments: components["schemas"]["CashAdjustmentDto"][];
+            /** @description Cierre vigente */
+            closing: components["schemas"]["CashClosingDto"] | null;
+            /** @description Todos los cierres, del último al primero */
+            closings: components["schemas"]["CashClosingDto"][];
+            reopenings: components["schemas"]["CashReopeningDto"][];
+            can: components["schemas"]["CashSessionCapabilitiesDto"];
+        };
+        CurrentCashSessionDto: {
+            /**
+             * Format: uuid
+             * @description Sede consultada
+             */
+            locationId: string;
+            settings: components["schemas"]["CashSettingsDto"];
+            /** @description La caja abierta de quien consulta en la sede, o null */
+            session: components["schemas"]["CashSessionDetailDto"] | null;
+        };
+        CashFloatInputDto: {
+            /**
+             * @description ISO 4217
+             * @example COP
+             */
+            currency: string;
+            /** @example 100000 */
+            amount: number;
+        };
+        OpenCashSessionDto: {
+            /**
+             * Format: uuid
+             * @description Sede de la caja. Sin él, la de la cabecera X-Location-Id; sin ninguna, la principal.
+             */
+            locationId?: string;
+            /** @description Fondo inicial (en efectivo) por moneda. Vacío = sin fondo. Una vez por moneda. */
+            floats: components["schemas"]["CashFloatInputDto"][];
+            notes?: string | null;
+        };
+        CashSessionSummaryDto: {
+            /** Format: uuid */
+            id: string;
+            status: components["schemas"]["CashSessionStatus"];
+            location: components["schemas"]["CashLocationRefDto"];
+            openedBy: components["schemas"]["CashStaffRefDto"];
+            /** Format: date-time */
+            openedAt: string;
+            /**
+             * @description Día civil de la apertura en la sede
+             * @example 2026-10-17
+             */
+            openedOn: string;
+            /** Format: date-time */
+            closedAt: string | null;
+            closedBy: components["schemas"]["CashStaffRefDto"] | null;
+            reopenCount: number;
+            /** @description Fondo inicial por moneda */
+            floats: components["schemas"]["CashMoneyDto"][];
+            /** @description Diferencia por moneda del último cierre (vacía si está abierta) */
+            differences: components["schemas"]["CashMoneyDto"][];
+        };
+        CashSessionPageDto: {
+            items: components["schemas"]["CashSessionSummaryDto"][];
+            total: number;
+            page: number;
+            pageSize: number;
+        };
+        CashCountInputDto: {
+            /**
+             * @description ISO 4217
+             * @example COP
+             */
+            currency: string;
+            method: components["schemas"]["PaymentMethod"];
+            /** @example 350000 */
+            counted: number;
+        };
+        CloseCashSessionDto: {
+            /** @description Lo contado por moneda y método. Un par esperado que no venga cuenta como 0. */
+            counts: components["schemas"]["CashCountInputDto"][];
+            /** @description Obligatorio si el arqueo no cuadra (diferencia distinta de 0). */
+            differenceReason?: string | null;
+            notes?: string | null;
+        };
+        ReopenCashSessionDto: {
+            /** @example Faltó registrar un abono con tarjeta */
+            reason: string;
+        };
+        CreateCashAdjustmentDto: {
+            /**
+             * @description ISO 4217
+             * @example COP
+             */
+            currency: string;
+            method: components["schemas"]["PaymentMethod"];
+            /**
+             * @description Con signo: positivo suma al esperado, negativo resta. Nunca 0.
+             * @example -20000
+             */
+            amount: number;
+            reason: string;
         };
         UserRefDto: {
             /** Format: uuid */
@@ -11944,6 +12399,381 @@ export interface operations {
             };
             /** @description Solo la administración puede exportar la cartera. */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    CashSessionsController_settings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CashSettingsDto"];
+                };
+            };
+            /** @description Tu rol no tiene acceso a la caja: es para administración y recepción. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    CashSessionsController_saveSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CashSettingsDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CashSettingsDto"];
+                };
+            };
+            /** @description Solo un administrador puede reabrir o corregir un cierre de caja y cambiar los ajustes de caja. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    CashSessionsController_current: {
+        parameters: {
+            query?: {
+                /** @description Sede. Sin él, la de X-Location-Id; sin ninguna, la principal. */
+                locationId?: string;
+            };
+            header?: {
+                /** @description Sede activa. Sin cabecera (ni locationId): la principal o, en la lista, todas. */
+                "X-Location-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CurrentCashSessionDto"];
+                };
+            };
+            /** @description Sede ajena a la clínica */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Tu rol no tiene acceso a la caja: es para administración y recepción. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    CashSessionsController_open: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Sede activa. Sin cabecera (ni locationId): la principal o, en la lista, todas. */
+                "X-Location-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["OpenCashSessionDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CashSessionDetailDto"];
+                };
+            };
+            /** @description Sede ajena, moneda desconocida o repetida, importe inválido */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Tu rol no tiene acceso a la caja: es para administración y recepción. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ya tienes una caja abierta en esta sede: ciérrala antes de abrir otra. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    CashSessionsController_list: {
+        parameters: {
+            query?: {
+                /** @description Solo esta sede. Sin él, la de X-Location-Id; sin ninguna, todas. */
+                locationId?: string;
+                /** @description Primer día de apertura (YYYY-MM-DD), en la zona de cada sede. */
+                from?: string;
+                /** @description Último día de apertura (YYYY-MM-DD), inclusive. Como mucho 366 días. */
+                to?: string;
+                status?: components["schemas"]["CashSessionStatus"];
+                page?: number;
+                pageSize?: number;
+            };
+            header?: {
+                /** @description Sede activa. Sin cabecera (ni locationId): la principal o, en la lista, todas. */
+                "X-Location-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CashSessionPageDto"];
+                };
+            };
+            /** @description Período o sede inválidos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Tu rol no tiene acceso a la caja: es para administración y recepción. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    CashSessionsController_detail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CashSessionDetailDto"];
+                };
+            };
+            /** @description Tu rol no tiene acceso a la caja: es para administración y recepción. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No existe, es de otra clínica o (RECEPTION) es de otro usuario */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    CashSessionsController_close: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CloseCashSessionDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CashSessionDetailDto"];
+                };
+            };
+            /** @description El arqueo no cuadra: explica el motivo de la diferencia antes de cerrar. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Tu rol no tiene acceso a la caja: es para administración y recepción. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No existe, es de otra clínica o (RECEPTION) es de otro usuario */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Esta caja ya está cerrada: un cierre no se edita. Para corregirlo, un administrador puede reabrirla o registrar un ajuste. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    CashSessionsController_reopen: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReopenCashSessionDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CashSessionDetailDto"];
+                };
+            };
+            /** @description Solo un administrador puede reabrir o corregir un cierre de caja y cambiar los ajustes de caja. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No existe o es de otra clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La caja no está cerrada: mientras está abierta, el arqueo del cierre lo recoge todo. O quien la abrió ya tiene otra abierta en la sede. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    CashSessionsController_adjust: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateCashAdjustmentDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CashAdjustmentDto"];
+                };
+            };
+            /** @description Importe 0, moneda o motivo inválidos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo un administrador puede reabrir o corregir un cierre de caja y cambiar los ajustes de caja. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No existe o es de otra clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La caja no está cerrada: mientras está abierta, el arqueo del cierre lo recoge todo. */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
