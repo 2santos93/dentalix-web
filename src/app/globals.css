@@ -389,6 +389,7 @@
  */
 .cash-report-print-root {
   color-scheme: light;
+  --color-bg: #F7F9FC;
   --color-surface: #FFFFFF;
   --color-surface-2: #F1F5F9;
   --color-ink: #0F172A;
@@ -397,6 +398,7 @@
   --color-hairline: #EEF2F7;
   --color-danger: #BE123C;
   --color-warning: #B45309;
+  --color-success: #15803D;
 }
 @page cash-report {
   size: A4;

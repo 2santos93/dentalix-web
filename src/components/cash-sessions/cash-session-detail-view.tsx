@@ -135,7 +135,7 @@ export function CashSessionDetailView({ token, sessionId }: CashSessionDetailVie
         title={copy.title}
         description={copy.description(session.location.name, session.openedBy.fullName ?? '—')}
         actions={
-          <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:justify-end">
+          <div className="flex flex-col gap-2 max-sm:[&>*]:w-full sm:flex-row sm:flex-wrap sm:justify-end">
             {session.can.close ? (
               <Button type="button" onClick={() => openModal('close')}>
                 {copy.close}

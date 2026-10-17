@@ -141,7 +141,9 @@ export function CloseCashSessionModal({
         <ul className="divide-y divide-hairline rounded-lg border border-border">
           {rows.map((row, index) => {
             const method = PAYMENT_METHOD_LABELS[row.method];
-            const diff = rowDifference(row);
+            // La diferencia se enseña cuando hay algo escrito: un «−80.000» antes
+            // de contar asusta y no dice nada (al enviar, lo vacío cuenta 0).
+            const diff = row.counted.trim() === '' ? null : rowDifference(row);
             const inputId = `${baseId}-count-${index}`;
             return (
               <li
@@ -156,7 +158,7 @@ export function CloseCashSessionModal({
                     </p>
                   ) : null}
                 </div>
-                <div className="flex items-center gap-3 sm:justify-end">
+                <div className="flex min-w-0 items-center gap-3 sm:justify-end">
                   <Input
                     id={inputId}
                     aria-label={copy.countedLabel(method, row.currency)}
@@ -165,13 +167,13 @@ export function CloseCashSessionModal({
                     value={row.counted}
                     disabled={submitting}
                     onChange={(e) => patch(index, e.target.value)}
-                    className="w-full tabular-nums sm:w-40"
+                    className="min-w-0 flex-1 tabular-nums sm:w-40 sm:flex-none"
                   />
                   {diff !== null ? (
                     <span
                       data-testid="row-difference"
                       className={cn(
-                        'w-28 shrink-0 text-right text-sm font-medium tabular-nums',
+                        'shrink-0 whitespace-nowrap text-right text-sm font-medium tabular-nums sm:min-w-28',
                         diff === 0 ? 'text-success' : 'text-danger',
                       )}
                     >
