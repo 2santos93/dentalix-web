@@ -4,6 +4,8 @@ import {
   AUDIT_RESOURCE_LABELS,
   AUDIT_RESOURCE_OPTIONS,
   actorRoleLabel,
+  communicationDetail,
+  isPatientOptOut,
 } from './audit-labels';
 
 describe('etiquetas de auditoría', () => {
@@ -30,5 +32,28 @@ describe('etiquetas de auditoría', () => {
   it('rol del actor', () => {
     expect(actorRoleLabel('RECEPTION')).toBe('Recepción');
     expect(actorRoleLabel(null)).toBe('Sin sesión');
+  });
+
+  // DX-128: cambios de comunicación y baja de recordatorios.
+  it('describe el cambio de comunicación con su origen', () => {
+    expect(
+      communicationDetail({ reason: 'COMMUNICATION_PREFERENCES_CHANGED', origin: 'IN_PERSON' }),
+    ).toBe('Comunicaciones · en persona');
+    expect(communicationDetail({ reason: 'REMINDER_OPT_OUT', origin: 'LINK' })).toBe(
+      'Baja de recordatorios · con el enlace del email',
+    );
+    expect(communicationDetail({ reason: 'REMINDER_OPT_OUT', origin: 'MESSAGE' })).toBe(
+      'Baja de recordatorios · respondiendo al mensaje',
+    );
+    expect(communicationDetail({ reason: 'COMMUNICATION_PREFERENCES_CHANGED', origin: 'STAFF' })).toBe(
+      'Comunicaciones · anotado por el personal',
+    );
+    expect(communicationDetail({ reason: 'PARTIAL_SUPPRESSION' })).toBeNull();
+    expect(communicationDetail({})).toBeNull();
+  });
+
+  it('reconoce la baja que hizo el propio paciente', () => {
+    expect(isPatientOptOut({ reason: 'REMINDER_OPT_OUT', origin: 'LINK' })).toBe(true);
+    expect(isPatientOptOut({ reason: 'COMMUNICATION_PREFERENCES_CHANGED' })).toBe(false);
   });
 });

@@ -77,11 +77,21 @@ export interface Patient {
   retentionUntil?: string | null;
   underRetention?: boolean;
   partiallySuppressedAt?: string | null;
+  // DX-128 · canal de los recordatorios, opt-in de WhatsApp y baja. El bloque
+  // «Comunicaciones» los lee de `GET /patients/:id/communication`; aquí van
+  // por ser parte de la ficha. Opcionales: los fixtures anteriores no los traen.
+  contactChannel?: ContactChannel;
+  whatsappOptInAt?: string | null;
+  whatsappOptInSource?: components['schemas']['WhatsappOptInSource'] | null;
+  whatsappOptInById?: string | null;
+  reminderOptOutAt?: string | null;
+  reminderOptOutSource?: components['schemas']['ReminderOptOutSource'] | null;
   createdAt: string;
   updatedAt: string;
 }
 
 export type RetentionExtension = components['schemas']['RetentionExtension'];
+export type ContactChannel = components['schemas']['ContactChannel'];
 export type SetRetentionExtensionInput =
   components['schemas']['SetRetentionExtensionDto'];
 export type PartialSuppressionInput =

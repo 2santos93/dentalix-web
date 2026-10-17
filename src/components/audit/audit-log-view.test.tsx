@@ -85,6 +85,42 @@ describe('AuditLogView', () => {
     expect(mockedList).toHaveBeenCalledWith('tok', { limit: 50 });
   });
 
+  // DX-128: cambios de comunicación con su origen; la baja por enlace no
+  // tiene usuario: la hizo el propio paciente.
+  it('muestra el origen de los cambios de comunicación y al paciente como autor de su baja', async () => {
+    mockedList.mockResolvedValue(
+      page({
+        items: [
+          {
+            ...view,
+            id: 'ev-3',
+            action: 'UPDATE',
+            resourceType: 'PATIENT',
+            actor: { id: 'u-rec', fullName: 'Rosa Recepción', role: 'RECEPTION' },
+            metadata: { reason: 'COMMUNICATION_PREFERENCES_CHANGED', origin: 'IN_PERSON' },
+          },
+          {
+            ...view,
+            id: 'ev-4',
+            action: 'UPDATE',
+            resourceType: 'PATIENT',
+            actor: null,
+            ip: null,
+            metadata: { reason: 'REMINDER_OPT_OUT', origin: 'LINK' },
+          },
+        ],
+      }),
+    );
+    render(<AuditLogView token="tok" />);
+    const table = await screen.findByRole('table', { name: 'Registro de auditoría' });
+    const [, staff, patient] = within(table).getAllByRole('row');
+    expect(within(staff).getByText('Comunicaciones · en persona')).toBeInTheDocument();
+    expect(within(patient).getByText('El propio paciente')).toBeInTheDocument();
+    expect(
+      within(patient).getByText('Baja de recordatorios · con el enlace del email'),
+    ).toBeInTheDocument();
+  });
+
   it('vacío: lo dice y sugiere cambiar los filtros', async () => {
     mockedList.mockResolvedValue(page({ items: [] }));
     render(<AuditLogView token="tok" />);

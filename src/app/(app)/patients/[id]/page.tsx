@@ -15,6 +15,8 @@ import { PatientDataPanel } from '@/components/patients/patient-data-panel';
 import { PatientEditModal } from '@/components/patients/patient-edit-modal';
 import { PatientRecordHeader } from '@/components/patients/patient-record-header';
 import { PatientRetentionSection } from '@/components/patients/patient-retention-section';
+import { PatientCommunicationSection } from '@/components/patients/patient-communication-section';
+import { canEditCommunication, withCommunication } from '@/lib/patients/communication-api';
 import { OdontogramTab } from '@/components/odontogram/odontogram-tab';
 import { TreatmentPlansTab } from '@/components/treatment-plans/treatment-plans-tab';
 import { SectionError } from '@/components/errors/section-error';
@@ -295,8 +297,26 @@ function PatientDetailView() {
             accessLogLabel={access['access-log'] ? copy.tabAccessLog : undefined}
           />
 
-          <TabPanel tab="data" activeTab={activeTab} register={registerPanel}>
+          <TabPanel
+            tab="data"
+            activeTab={activeTab}
+            register={registerPanel}
+            className="flex flex-col gap-4"
+          >
             <PatientDataPanel patient={patient} />
+            {/* DX-128: canal de los recordatorios, móvil, opt-in y baja. Lo ven
+                todos; lo cambian recepción y ADMIN. */}
+            <PatientCommunicationSection
+              // Se relee si la ficha cambia (p. ej. el teléfono en «Editar»).
+              key={patient.updatedAt}
+              token={accessToken}
+              patientId={patientId}
+              canEdit={canEditCommunication(getTokenRole(accessToken))}
+              // Sin tocar `updatedAt`: la sección no se vuelve a montar.
+              onChanged={(c) =>
+                setPatient((prev) => (prev ? withCommunication(prev, c) : prev))
+              }
+            />
           </TabPanel>
 
           <PatientEditModal

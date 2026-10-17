@@ -5,6 +5,7 @@ import { formatDate, formatTime } from '@/lib/format/date';
 import {
   getAppointmentReminders,
   leadHoursLabel,
+  PATIENT_BLOCKER_LABELS,
   SKIP_REASON_LABELS,
   type AppointmentReminderItem,
   type AppointmentReminders,
@@ -126,34 +127,39 @@ export function AppointmentRemindersPanel({ token, appointmentId }: AppointmentR
         </div>
       );
     }
+    // DX-128: con baja o con otro canal no queda nada por salir por email.
+    const blocker = data.patientBlocker ? PATIENT_BLOCKER_LABELS[data.patientBlocker] : null;
     if (data.items.length === 0) {
       return (
         <p role="status" className="text-sm text-muted">
-          {data.enabled ? copy.none : copy.disabled}
+          {data.enabled ? (blocker ?? copy.none) : copy.disabled}
         </p>
       );
     }
     return (
-      <ul aria-label={copy.listLabel} className="flex flex-col divide-y divide-hairline">
-        {data.items.map((item) => {
-          const extra = detail(item);
-          return (
-            <li
-              key={`${item.appointmentStart}-${item.leadHours}`}
-              className="flex flex-col gap-1 py-2 first:pt-0 last:pb-0"
-            >
-              <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
-                <Badge variant={item.emailDelivery === 'FAILED' ? 'danger' : BADGE[item.state]}>
-                  {stateLabel(item)}
-                </Badge>
-                <span className="text-sm tabular-nums text-ink">{leadHoursLabel(item.leadHours)}</span>
-              </div>
-              {extra && <p className="text-xs tabular-nums text-muted">{extra}</p>}
-              {!item.current && <p className="text-xs text-muted">{copy.previous}</p>}
-            </li>
-          );
-        })}
-      </ul>
+      <>
+        <ul aria-label={copy.listLabel} className="flex flex-col divide-y divide-hairline">
+          {data.items.map((item) => {
+            const extra = detail(item);
+            return (
+              <li
+                key={`${item.appointmentStart}-${item.leadHours}`}
+                className="flex flex-col gap-1 py-2 first:pt-0 last:pb-0"
+              >
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <Badge variant={item.emailDelivery === 'FAILED' ? 'danger' : BADGE[item.state]}>
+                    {stateLabel(item)}
+                  </Badge>
+                  <span className="text-sm tabular-nums text-ink">{leadHoursLabel(item.leadHours)}</span>
+                </div>
+                {extra && <p className="text-xs tabular-nums text-muted">{extra}</p>}
+                {!item.current && <p className="text-xs text-muted">{copy.previous}</p>}
+              </li>
+            );
+          })}
+        </ul>
+        {blocker && <p className="text-xs text-muted">{blocker}</p>}
+      </>
     );
   }
 

@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState, type CSSProperties } from 'react';
+import { useEffect, useState } from 'react';
 import { CalendarCheck, CalendarX, Clock, LinkIcon, MapPin, Phone, UserRound } from 'lucide-react';
 import { ApiError } from '@/lib/api/client';
 import {
@@ -11,7 +11,7 @@ import {
 } from '@/lib/appointments/confirmations-api';
 import { longAppointmentDay } from '@/lib/appointments/confirmation-message';
 import { formatTimeRange } from '@/components/appointments/appointment-display';
-import { primaryForeground } from '@/lib/color/contrast';
+import { PublicNotice as Notice, publicBrandStyle } from '@/components/shared/public-page';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { SectionError } from '@/components/errors/section-error';
@@ -47,19 +47,6 @@ const copy = {
     'No encontramos este enlace. Revisa que esté completo o pide a la clínica que te lo envíe de nuevo.',
   fallbackClinic: 'Tu clínica',
 };
-
-const HEX = /^#[0-9a-fA-F]{3,8}$/;
-
-/** El color de la clínica para este bloque (white-label), o nada si no es un hex válido. */
-function brandStyle(clinic: PublicConfirmation['clinic']): CSSProperties | undefined {
-  const color = clinic?.primaryColor;
-  if (!color || !HEX.test(color)) return undefined;
-  const fg = primaryForeground(color);
-  return {
-    '--color-primary': color,
-    ...(fg ? { '--color-primary-fg': fg } : {}),
-  } as CSSProperties;
-}
 
 type LoadState =
   | { kind: 'loading' }
@@ -99,29 +86,6 @@ function AppointmentSummary({ appointment }: { appointment: ConfirmationAppointm
         </div>
       ))}
     </dl>
-  );
-}
-
-function Notice({
-  icon: Icon,
-  title,
-  message,
-}: {
-  icon: typeof CalendarX;
-  title: string;
-  message: string;
-}) {
-  return (
-    <div className="flex flex-col items-center gap-2 rounded-xl border border-border bg-surface px-6 py-12 text-center">
-      <span
-        aria-hidden
-        className="mb-1 flex size-10 items-center justify-center rounded-full bg-surface-2 text-muted"
-      >
-        <Icon className="size-5" />
-      </span>
-      <h2 className="text-lg font-semibold text-ink">{title}</h2>
-      <p className="max-w-sm text-sm text-muted">{message}</p>
-    </div>
   );
 }
 
@@ -178,7 +142,7 @@ export function PublicConfirmationView({ confirmationToken }: { confirmationToke
   const clinic = state.kind === 'ready' ? state.data.clinic : null;
 
   return (
-    <div style={brandStyle(clinic)} className="flex min-h-dvh flex-col bg-bg">
+    <div style={publicBrandStyle(clinic)} className="flex min-h-dvh flex-col bg-bg">
       <main className="mx-auto flex w-full max-w-md flex-1 flex-col gap-6 px-4 py-8">
         {state.kind === 'loading' && (
           <div role="status" className="flex flex-col gap-4">
