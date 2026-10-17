@@ -61,6 +61,8 @@ export const AUDIT_RESOURCE_LABELS: Record<AuditResourceType, string> = {
   WAITLIST_ENTRY: 'Pendiente por agendar',
   // DX-048: un ADMIN desbloquea el inicio de sesión de un miembro.
   STAFF_MEMBER: 'Miembro del personal',
+  // SEC-009: un ADMIN verifica o elimina un dominio personalizado.
+  TENANT_DOMAIN: 'Dominio personalizado',
 };
 
 export const AUDIT_RESOURCE_OPTIONS = Object.keys(AUDIT_RESOURCE_LABELS) as AuditResourceType[];

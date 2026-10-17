@@ -1188,6 +1188,7 @@ export interface paths {
         };
         get: operations["DomainsController_list"];
         put?: never;
+        /** Registra un dominio propio en PENDING y devuelve el TXT a publicar (72 h para verificarlo) */
         post: operations["DomainsController_create"];
         delete?: never;
         options?: never;
@@ -1204,8 +1205,26 @@ export interface paths {
         };
         get?: never;
         put?: never;
+        /** Comprueba el TXT de un dominio PENDING o DISABLED; si está, pasa a VERIFIED */
         post: operations["DomainsController_verify"];
         delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/domains/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Elimina un dominio de la clínica en cualquier estado: deja de enrutar y libera el host */
+        delete: operations["DomainsController_remove"];
         options?: never;
         head?: never;
         patch?: never;
@@ -1909,7 +1928,7 @@ export interface components {
         /** @enum {string} */
         AuditAction: "VIEW" | "CREATE" | "UPDATE" | "DELETE" | "SIGN" | "VOID" | "LOGIN" | "LOGIN_FAILED" | "PASSWORD_RESET" | "EXPORT" | "PRINT";
         /** @enum {string} */
-        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER";
+        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "TENANT_DOMAIN";
         /**
          * @description Rol con el que actuó (del token). `null` en un login fallido.
          * @enum {string}
@@ -3607,7 +3626,61 @@ export interface components {
             /** @description El contentHash del presupuesto que se mostró (GET …/quote). Si el presupuesto cambió desde entonces: 409. */
             contentHash: string;
         };
-        CreateDomainDto: Record<string, never>;
+        CreateDomainDto: {
+            /**
+             * @description Dominio propio de la clínica (no un subdominio de la plataforma).
+             * @example citas.miclinica.com
+             */
+            host: string;
+        };
+        /**
+         * @description PENDING: falta publicar o comprobar el TXT (72 h desde el alta). EXPIRED: el PENDING caducó o lo verificó otra cuenta; no se puede verificar, solo eliminar. VERIFIED: enruta. DISABLED: estuvo verificado pero la re-verificación periódica dejó de encontrar el TXT; no enruta y se puede volver a verificar.
+         * @enum {string}
+         */
+        TenantDomainState: "PENDING" | "EXPIRED" | "VERIFIED" | "DISABLED";
+        TenantDomainDto: {
+            /** Format: uuid */
+            id: string;
+            /** @example citas.miclinica.com */
+            host: string;
+            /** @description PENDING: falta publicar o comprobar el TXT (72 h desde el alta). EXPIRED: el PENDING caducó o lo verificó otra cuenta; no se puede verificar, solo eliminar. VERIFIED: enruta. DISABLED: estuvo verificado pero la re-verificación periódica dejó de encontrar el TXT; no enruta y se puede volver a verificar. */
+            status: components["schemas"]["TenantDomainState"];
+            /** @description Valor del registro TXT de verificación. */
+            verifyToken: string;
+            /** Format: date-time */
+            verifiedAt: string | null;
+            /**
+             * Format: date-time
+             * @description Hasta cuándo se puede verificar un PENDING. null si ya se verificó.
+             */
+            expiresAt: string | null;
+            /**
+             * Format: date-time
+             * @description Última re-verificación periódica.
+             */
+            lastCheckedAt: string | null;
+            /** @description Re-verificaciones fallidas seguidas (se reinicia al encontrar el TXT). */
+            failedChecks: number;
+            /** Format: date-time */
+            disabledAt: string | null;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        DomainDnsRecordDto: {
+            /** @example _dentalix-verify.citas.miclinica.com */
+            name: string;
+            /** @enum {string} */
+            type: "TXT";
+            value: string;
+        };
+        RegisterDomainResponseDto: {
+            domain: components["schemas"]["TenantDomainDto"];
+            dns: components["schemas"]["DomainDnsRecordDto"];
+        };
+        VerifyDomainResponseDto: {
+            /** @description PENDING: falta publicar o comprobar el TXT (72 h desde el alta). EXPIRED: el PENDING caducó o lo verificó otra cuenta; no se puede verificar, solo eliminar. VERIFIED: enruta. DISABLED: estuvo verificado pero la re-verificación periódica dejó de encontrar el TXT; no enruta y se puede volver a verificar. */
+            status: components["schemas"]["TenantDomainState"];
+        };
         BrandingDto: {
             name: string;
             primaryColor: string;
@@ -8414,7 +8487,9 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
-                content?: never;
+                content: {
+                    "application/json": components["schemas"]["TenantDomainDto"][];
+                };
             };
         };
     };
@@ -8435,6 +8510,22 @@ export interface operations {
                 headers: {
                     [name: string]: unknown;
                 };
+                content: {
+                    "application/json": components["schemas"]["RegisterDomainResponseDto"];
+                };
+            };
+            /** @description No es un dominio personalizado válido */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ya está registrado (vivo) en esta clínica, o verificado por otra cuenta */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
                 content?: never;
             };
         };
@@ -8451,6 +8542,63 @@ export interface operations {
         requestBody?: never;
         responses: {
             201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["VerifyDomainResponseDto"];
+                };
+            };
+            /** @description No es un dominio de esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Otra cuenta lo verificó antes */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El PENDING caducó (72 h) o lo verificó otra cuenta */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    DomainsController_remove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Eliminado */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El id no es un UUID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No es un dominio de esta clínica */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
