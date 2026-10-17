@@ -90,8 +90,11 @@ load_env() {
   export RATE_LIMIT_GLOBAL_LIMIT=100000
   export RATE_LIMIT_AUTH_LIMIT=100000
   export RATE_LIMIT_REFRESH_LIMIT=100000
-  export RATE_LIMIT_LOGIN_LIMIT=100000
-  export RATE_LIMIT_LOGIN_ACCOUNT_LIMIT=100000
+  export RATE_LIMIT_LOGIN_BURST_LIMIT=100000
+  # DX-048: el bloqueo por fallos de la CUENTA se deja con sus valores reales
+  # (e2e/login-lockout.spec.ts lo prueba con emails propios); el de la IP se
+  # sube porque toda la suite sale de una IP y varios specs fallan a propósito.
+  export LOGIN_IP_FAILURE_LIMIT=100000
   export RATE_LIMIT_INVITATION_LIMIT=100000
   export RATE_LIMIT_PASSWORD_LIMIT=100000
   export RATE_LIMIT_CONFIRMATION_LIMIT=100000
