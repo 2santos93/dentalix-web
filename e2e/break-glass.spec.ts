@@ -74,8 +74,13 @@ test('el superadmin enrola el MFA, entra a una clínica con código y motivo, y 
   await dialog.getByLabel('Código de la app').fill(totpNow(secret));
   await dialog.getByRole('button', { name: 'Activar' }).click();
   await expect(page.getByText('Verificación en dos pasos activada.')).toBeVisible();
-  // Espera de seguridad tras el alta (riesgo de transición).
-  await expect(page.getByText(/podrás usarla para entrar como soporte desde el/i)).toBeVisible();
+  // Espera de seguridad tras el alta (riesgo de transición). La tarjeta la
+  // pinta con el mismo estado que el aviso de «activada», así que basta mirar
+  // ahora. Con `BREAK_GLASS_MFA_COOLDOWN_MINUTES=0` en la API (local) no hay
+  // espera y el login va directo al paso del código.
+  const inCooldown = await page
+    .getByText(/podrás usarla para entrar como soporte desde el/i)
+    .isVisible();
 
   // --- 2. Login de soporte en la clínica ----------------------------------
   const origin = tenantOrigin(target.subdomain);
@@ -84,19 +89,21 @@ test('el superadmin enrola el MFA, entra a una clínica con código y motivo, y 
   await page.getByLabel('Correo electrónico').fill(home.email);
   await page.getByLabel('Contraseña', { exact: true }).fill(PASSWORD);
   await page.getByRole('button', { name: 'Iniciar sesión' }).click();
-  // Recién activado: aún en la espera de seguridad.
-  await expect(page.locator('p[role="alert"]')).toContainText(
-    'Activaste la verificación en dos pasos hace poco',
-  );
-  // Lo que haría el reloj: la espera ya pasó.
-  execFileSync('psql', [
-    databaseUrl as string,
-    '-v',
-    'ON_ERROR_STOP=1',
-    '-c',
-    `UPDATE users SET "mfaEnabledAt" = now() - interval '2 days' WHERE email = '${home.email}'`,
-  ]);
-  await page.getByRole('button', { name: 'Iniciar sesión' }).click();
+  if (inCooldown) {
+    // Recién activado: aún en la espera de seguridad.
+    await expect(page.locator('p[role="alert"]')).toContainText(
+      'Activaste la verificación en dos pasos hace poco',
+    );
+    // Lo que haría el reloj: la espera ya pasó.
+    execFileSync('psql', [
+      databaseUrl as string,
+      '-v',
+      'ON_ERROR_STOP=1',
+      '-c',
+      `UPDATE users SET "mfaEnabledAt" = now() - interval '2 days' WHERE email = '${home.email}'`,
+    ]);
+    await page.getByRole('button', { name: 'Iniciar sesión' }).click();
+  }
 
   const code = page.getByLabel('Código de verificación');
   await expect(code).toBeVisible();
