@@ -13,6 +13,8 @@ import { FormField } from '@/components/shared/form-field';
 import { InlineError } from '@/components/errors/inline-error';
 import { FORGOT_PASSWORD_PATH } from '@/lib/auth/password-reset-api';
 import { loginLockedMessage, waitClock } from '@/lib/auth/login-lockout';
+import { BREAK_GLASS_REQUIRED, MFA_NOT_ENROLLED } from '@/lib/auth/break-glass';
+import { BreakGlassStep } from './break-glass-step';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
@@ -32,14 +34,27 @@ const copy = {
   // DX-048: fin de la espera tras demasiados intentos.
   lockEnded: 'Ya puedes volver a intentarlo.',
   lockClockLabel: 'Tiempo restante',
+  // SEC-008: acceso de soporte de un superadmin sin membresía.
+  mfaNotEnrolled:
+    'Para entrar a una clínica como soporte, primero activa la verificación en dos pasos en el área de plataforma de Dentalix. Intenta de nuevo cuando esté activa.',
+  badCode:
+    'El código no es correcto o ya se usó. Espera al siguiente código de la app e intenta de nuevo.',
 };
 
 const ERROR_ID = 'login-error';
 const LOCK_ID = 'login-lock';
 
 // El refresh llega en la cookie HttpOnly (DX-062): el body solo trae el access.
+// En un acceso de soporte (SEC-008) no hay refresh: `breakGlass` y `expiresAt`.
 interface LoginResponse {
   accessToken: string;
+  breakGlass?: boolean;
+  expiresAt?: string;
+}
+
+interface BreakGlassInput {
+  mfaCode: string;
+  reason: string;
 }
 
 /**
@@ -58,6 +73,8 @@ export function LoginForm({ passwordReset = false }: { passwordReset?: boolean }
   const [lockedUntil, setLockedUntil] = useState<number | null>(null);
   const [now, setNow] = useState(() => Date.now());
   const [lockEnded, setLockEnded] = useState(false);
+  // SEC-008: la API pidió código TOTP y motivo (superadmin sin membresía).
+  const [breakGlassStep, setBreakGlassStep] = useState(false);
 
   const remaining =
     lockedUntil === null ? 0 : Math.max(0, Math.ceil((lockedUntil - now) / 1000));
@@ -78,6 +95,14 @@ export function LoginForm({ passwordReset = false }: { passwordReset?: boolean }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    await login();
+  }
+
+  /**
+   * `POST /auth/login`. Con `breakGlass` añade el código y el motivo del paso
+   * de soporte (SEC-008); el email y la contraseña son los del primer paso.
+   */
+  async function login(breakGlass?: BreakGlassInput) {
     if (locked) return;
     setError(null);
     setLockEnded(false);
@@ -85,7 +110,14 @@ export function LoginForm({ passwordReset = false }: { passwordReset?: boolean }
     try {
       const res = await apiFetch<LoginResponse>('/auth/login', {
         method: 'POST',
-        body: { email, password },
+        body: breakGlass
+          ? {
+              email,
+              password,
+              mfaCode: breakGlass.mfaCode,
+              breakGlassReason: breakGlass.reason,
+            }
+          : { email, password },
       });
       setAccessToken(res.accessToken);
       router.push('/patients');
@@ -98,16 +130,51 @@ export function LoginForm({ passwordReset = false }: { passwordReset?: boolean }
         setLockedUntil(t + err.retryAfterSeconds * 1000);
         return;
       }
+      // SEC-008: solo llegan tras una contraseña correcta de superadmin.
+      if (err instanceof ApiError && err.code === BREAK_GLASS_REQUIRED) {
+        setBreakGlassStep(true);
+        return;
+      }
+      if (err instanceof ApiError && err.code === MFA_NOT_ENROLLED) {
+        setBreakGlassStep(false);
+        setError(copy.mfaNotEnrolled);
+        return;
+      }
       setError(
         apiErrorMessage(err, {
           fallback: copy.genericError,
           // 403 («Origin not allowed»): no hay administrador a quien pedir acceso.
-          byStatus: { 401: copy.invalidCredentials, 403: copy.genericError },
+          // En el paso de soporte, un 401 es el código (la contraseña ya valió).
+          byStatus: {
+            401: breakGlass ? copy.badCode : copy.invalidCredentials,
+            403: copy.genericError,
+          },
         }),
       );
     } finally {
       setSubmitting(false);
     }
+  }
+
+  if (breakGlassStep) {
+    return (
+      <div className="flex flex-col gap-4">
+        <BreakGlassStep
+          submitting={submitting || locked}
+          error={error}
+          onSubmit={(input) => void login(input)}
+          onBack={() => {
+            setBreakGlassStep(false);
+            setError(null);
+          }}
+        />
+        <div aria-live="polite" aria-atomic="true">
+          {locked ? (
+            <p className="text-sm font-medium text-warning">{loginLockedMessage(remaining)}</p>
+          ) : null}
+        </div>
+      </div>
+    );
   }
 
   const describedBy = error ? ERROR_ID : locked ? LOCK_ID : undefined;
