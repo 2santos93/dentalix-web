@@ -1,4 +1,4 @@
-import type { AuditAction, AuditResourceType } from './audit-api';
+import type { AuditAction, AuditEvent, AuditResourceType } from './audit-api';
 import type { ClinicRole } from '@/lib/me/me-api';
 import type { BadgeProps } from '@/components/ui/badge';
 
@@ -80,4 +80,35 @@ const ROLE_LABELS: Record<ClinicRole, string> = {
 /** Rol con el que actuó; un login fallido no tiene sesión. */
 export function actorRoleLabel(role: ClinicRole | null): string {
   return role ? ROLE_LABELS[role] : 'Sin sesión';
+}
+
+type AuditMetadata = AuditEvent['metadata'];
+type AuditOrigin = NonNullable<AuditMetadata['origin']>;
+
+const COMMUNICATION_REASONS: Record<string, string> = {
+  COMMUNICATION_PREFERENCES_CHANGED: 'Comunicaciones',
+  REMINDER_OPT_OUT: 'Baja de recordatorios',
+};
+
+const ORIGIN_LABELS: Record<AuditOrigin, string> = {
+  IN_PERSON: 'en persona',
+  LINK: 'con el enlace del email',
+  MESSAGE: 'respondiendo al mensaje',
+  STAFF: 'anotado por el personal',
+};
+
+/**
+ * DX-128: qué cambió en las comunicaciones del paciente y de dónde salió
+ * («Comunicaciones · en persona», «Baja de recordatorios · con el enlace del
+ * email»), o null si el evento no es de comunicaciones.
+ */
+export function communicationDetail(metadata: AuditMetadata): string | null {
+  const what = metadata.reason ? COMMUNICATION_REASONS[metadata.reason] : undefined;
+  if (!what) return null;
+  return metadata.origin ? `${what} · ${ORIGIN_LABELS[metadata.origin]}` : what;
+}
+
+/** DX-128: la baja la hizo el propio paciente (el evento no tiene usuario). */
+export function isPatientOptOut(metadata: AuditMetadata): boolean {
+  return metadata.reason === 'REMINDER_OPT_OUT';
 }

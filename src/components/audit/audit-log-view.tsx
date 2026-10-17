@@ -19,6 +19,8 @@ import {
   AUDIT_RESOURCE_LABELS,
   AUDIT_RESOURCE_OPTIONS,
   actorRoleLabel,
+  communicationDetail,
+  isPatientOptOut,
 } from '@/lib/audit/audit-labels';
 import { listStaff, type StaffMember } from '@/lib/staff/staff-api';
 import { formatDateTimeInZone, zonedDayStart } from '@/lib/format/date';
@@ -70,6 +72,8 @@ const copy = {
   colPatient: 'Paciente',
   colOrigin: 'Origen',
   unknownActor: 'Usuario no identificado',
+  // DX-128: la baja de recordatorios por enlace o mensaje la hace el paciente.
+  patientActor: 'El propio paciente',
   formerMember: 'Usuario retirado',
   noIp: 'Sin IP',
   // Sin "Intenta de nuevo.": alimenta AsyncSection -> SectionError, que trae su botón.
@@ -406,6 +410,7 @@ export function AuditLogView({ token, patientId, onClearPatient }: AuditLogViewP
 }
 
 function AuditRow({ event, showPatient }: { event: AuditEvent; showPatient: boolean }) {
+  const detail = communicationDetail(event.metadata);
   return (
     <TableRow>
       <TableCell className="whitespace-nowrap tabular-nums" data-label={copy.colWhen}>
@@ -413,7 +418,11 @@ function AuditRow({ event, showPatient }: { event: AuditEvent; showPatient: bool
       </TableCell>
       <TableCell data-label={copy.colActor}>
         <span className="block font-medium text-ink">
-          {event.actor ? (event.actor.fullName ?? copy.formerMember) : copy.unknownActor}
+          {event.actor
+            ? (event.actor.fullName ?? copy.formerMember)
+            : isPatientOptOut(event.metadata)
+              ? copy.patientActor
+              : copy.unknownActor}
         </span>
         <span className="block text-xs text-muted">
           {actorRoleLabel(event.actor?.role ?? null)}
@@ -426,6 +435,7 @@ function AuditRow({ event, showPatient }: { event: AuditEvent; showPatient: bool
       </TableCell>
       <TableCell data-label={copy.colResource}>
         {AUDIT_RESOURCE_LABELS[event.resourceType]}
+        {detail ? <span className="block text-xs text-muted">{detail}</span> : null}
       </TableCell>
       {showPatient ? (
         <TableCell data-label={copy.colPatient}>
