@@ -319,6 +319,22 @@
 @page implant-card {
   margin: 14mm;
 }
+/*
+ * La tarjeta es papel: hoja blanca con tinta clara SIEMPRE, también con el tema
+ * oscuro (si no, `text-ink`/`text-muted` toman los tokens oscuros —tinta casi
+ * blanca— sobre el `bg-white` de la hoja: ilegible en pantalla y en blanco al
+ * imprimir). Se fijan aquí los tokens del tema claro para su subárbol.
+ */
+.implant-card-print-root {
+  color-scheme: light;
+  --color-surface: #FFFFFF;
+  --color-surface-2: #F1F5F9;
+  --color-ink: #0F172A;
+  --color-muted: #64748B;
+  --color-border: #E2E8F0;
+  --color-hairline: #EEF2F7;
+  --color-danger: #BE123C;
+}
 @media print {
   html:has(.implant-card-print-page) {
     page: implant-card;
