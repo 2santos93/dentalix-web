@@ -8,6 +8,8 @@ export type AgingRow = components['schemas']['AgingRowDto'];
 export type AgingCurrency = components['schemas']['AgingCurrencyDto'];
 export type AgingTotal = components['schemas']['AgingTotalDto'];
 export type AgingBuckets = components['schemas']['AgingBucketsDto'];
+export type AgingLastNote = components['schemas']['AgingLastNoteDto'];
+export type AgingPromise = components['schemas']['AgingPromiseDto'];
 
 /**
  * Filtros de la lista y del CSV. La sede NO va aquí: el cliente manda la sede
@@ -17,6 +19,10 @@ export interface ReceivablesFilters {
   currency?: string;
   minBalance?: number;
   minAgeDays?: number;
+  /** DX-150: profesional de la última cita atendida. */
+  providerId?: string;
+  /** DX-150: con (true) o sin (false) compromiso de pago abierto. */
+  hasPromise?: boolean;
 }
 
 export interface ReceivablesQuery extends ReceivablesFilters {
@@ -29,6 +35,8 @@ function searchOf(query: ReceivablesQuery): string {
   if (query.currency) search.set('currency', query.currency);
   if (query.minBalance !== undefined) search.set('minBalance', String(query.minBalance));
   if (query.minAgeDays !== undefined) search.set('minAgeDays', String(query.minAgeDays));
+  if (query.providerId) search.set('providerId', query.providerId);
+  if (query.hasPromise !== undefined) search.set('hasPromise', String(query.hasPromise));
   if (query.page) search.set('page', String(query.page));
   if (query.pageSize) search.set('pageSize', String(query.pageSize));
   const text = search.toString();
@@ -45,8 +53,8 @@ export function getReceivablesAging(
 
 /** `GET /receivables/aging.csv` — mismo filtro, sin paginar. Solo ADMIN (auditado). */
 export function downloadReceivablesCsv(token: string, filters: ReceivablesFilters = {}): Promise<string> {
-  const { currency, minBalance, minAgeDays } = filters;
-  return apiFetchText(`/receivables/aging.csv${searchOf({ currency, minBalance, minAgeDays })}`, {
+  const { currency, minBalance, minAgeDays, providerId, hasPromise } = filters;
+  return apiFetchText(`/receivables/aging.csv${searchOf({ currency, minBalance, minAgeDays, providerId, hasPromise })}`, {
     token,
   });
 }

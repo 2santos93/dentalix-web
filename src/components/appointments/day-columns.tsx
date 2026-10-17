@@ -1,4 +1,6 @@
 'use client';
+import { OverdueChip } from '@/components/collections/overdue-chip';
+import { overdueChipText } from '@/lib/collections/presentation';
 import * as React from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { CalendarPlus, MoveRight } from 'lucide-react';
@@ -499,7 +501,9 @@ export function DayColumns({
                     >
                       <button
                         type="button"
-                        aria-label={copy.detailFor(range, patient, p.fullName)}
+                        aria-label={[copy.detailFor(range, patient, p.fullName), overdueChipText(a.balance)]
+                          .filter(Boolean)
+                          .join(' · ')}
                         onClick={() => handleCardClick(a)}
                         className="flex h-full w-full flex-col items-start gap-0.5 px-2 py-1 pr-8 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
                       >
@@ -510,6 +514,7 @@ export function DayColumns({
                         <span className="truncate text-xs">
                           {[a.appointmentType?.name, STATUS_LABELS[a.status]].filter(Boolean).join(' · ')}
                         </span>
+                        <OverdueChip balance={a.balance} compact />
                       </button>
                       {canMove && (
                         <button

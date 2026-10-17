@@ -21,6 +21,8 @@ import { OdontogramTab } from '@/components/odontogram/odontogram-tab';
 import { TreatmentPlansTab } from '@/components/treatment-plans/treatment-plans-tab';
 import { SectionError } from '@/components/errors/section-error';
 import { AccountStatementView } from '@/components/account-statement/account-statement-view';
+import { PatientCollectionsSection } from '@/components/collections/patient-collections-section';
+import { canManageCollections } from '@/lib/collections/presentation';
 import { getTokenRole } from '@/lib/auth/token-role';
 import { patientTabAccess, resolvePatientTab } from '@/lib/patients/patient-tab-access';
 import { DataConsentsTab } from '@/components/data-consents/data-consents-tab';
@@ -324,7 +326,8 @@ function PatientDetailView() {
             patient={patient}
             token={accessToken}
             onOpenChange={setEditing}
-            onSaved={(updated) => setPatient(updated)}
+            // PATCH no trae la marca de saldo (DX-150): se conserva la leída.
+            onSaved={(updated) => setPatient((prev) => ({ ...updated, balance: prev?.balance }))}
           />
 
           {access['clinical-history'] ? (
@@ -393,7 +396,17 @@ function PatientDetailView() {
 
           {access['account-statement'] ? (
             <TabPanel tab="account-statement" activeTab={activeTab} register={registerPanel}>
-              <AccountStatementView token={accessToken} patientId={patientId} />
+              <div className="flex flex-col gap-8">
+                <AccountStatementView token={accessToken} patientId={patientId} />
+                {/* DX-150: bloque «Cobranza» (ADMIN y RECEPTION). */}
+                {canManageCollections(getTokenRole(accessToken)) && patient ? (
+                  <PatientCollectionsSection
+                    token={accessToken}
+                    patient={{ id: patient.id, fullName: fullName(patient) }}
+                    debtCurrencies={(patient.balance?.amounts ?? []).map((a) => a.currency)}
+                  />
+                ) : null}
+              </div>
             </TabPanel>
           ) : null}
 
