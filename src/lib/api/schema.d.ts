@@ -5053,7 +5053,7 @@ export interface components {
          */
         AppointmentReminderState: "SENT" | "SKIPPED" | "SENDING" | "PENDING" | "MISSED";
         /**
-         * @description NO_EMAIL sin email · CANCELLED/COMPLETED/NO_SHOW estado de la cita · RESCHEDULED a otra hora · DELETED retirada · DISABLED la sede los desactivó · TOO_LATE la cita ya había empezado
+         * @description NO_EMAIL sin email · CANCELLED/COMPLETED/NO_SHOW estado de la cita · RESCHEDULED a otra hora · DELETED retirada · DISABLED la sede los desactivó · TOO_LATE fuera de plazo (la cita ya había empezado o su hora pasó hace más de 1 h)
          * @enum {string}
          */
         AppointmentReminderSkipReason: "NO_EMAIL" | "CANCELLED" | "COMPLETED" | "NO_SHOW" | "RESCHEDULED" | "DELETED" | "DISABLED" | "TOO_LATE";
@@ -5079,7 +5079,7 @@ export interface components {
             state: components["schemas"]["AppointmentReminderState"];
             /** Format: date-time */
             sentAt: string | null;
-            /** @description NO_EMAIL sin email · CANCELLED/COMPLETED/NO_SHOW estado de la cita · RESCHEDULED a otra hora · DELETED retirada · DISABLED la sede los desactivó · TOO_LATE la cita ya había empezado */
+            /** @description NO_EMAIL sin email · CANCELLED/COMPLETED/NO_SHOW estado de la cita · RESCHEDULED a otra hora · DELETED retirada · DISABLED la sede los desactivó · TOO_LATE fuera de plazo (la cita ya había empezado o su hora pasó hace más de 1 h) */
             skipReason: components["schemas"]["AppointmentReminderSkipReason"] | null;
             /** @description Entrega del email por el proveedor (solo si se envió) */
             emailDelivery: components["schemas"]["ReminderEmailDelivery"] | null;
