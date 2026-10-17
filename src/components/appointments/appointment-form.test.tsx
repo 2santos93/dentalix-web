@@ -137,6 +137,7 @@ const createdAppointment = {
   appointmentType: null,
   confirmationSentAt: null,
   callbackRequestedAt: null,
+  wantsEarlier: false,
   createdAt: '2026-07-01T00:00:00.000Z',
   updatedAt: '2026-07-01T00:00:00.000Z',
 };
@@ -647,5 +648,29 @@ describe('AppointmentForm', () => {
       expect(screen.getByLabelText(/^paciente$/i)).toBeInTheDocument();
       expect(screen.queryByText('Sofía Ramírez')).not.toBeInTheDocument();
     });
+  });
+});
+
+describe('«Adelantar si hay hueco» (DX-210)', () => {
+  const tokenFor = (role: string) =>
+    `h.${Buffer.from(JSON.stringify({ sub: 'u1', role })).toString('base64url')}.s`;
+
+  it('recepción la marca y viaja en la cita nueva', async () => {
+    const user = userEvent.setup();
+    mockedCreateAppointment.mockResolvedValue(createdAppointment);
+    render(<AppointmentForm token={tokenFor('RECEPTION')} onCreated={jest.fn()} />);
+    await screen.findByRole('option', { name: /dra\. ana ríos/i });
+    await waitFor(() => expect(mockedListPatients).toHaveBeenCalled());
+    await fillValidForm(user);
+    await user.click(screen.getByRole('checkbox', { name: 'Adelantar si hay hueco' }));
+    await user.click(screen.getByRole('button', { name: /agendar|guardar/i }));
+    await waitFor(() => expect(mockedCreateAppointment).toHaveBeenCalled());
+    expect(mockedCreateAppointment.mock.calls[0][1]).toMatchObject({ wantsEarlier: true });
+  });
+
+  it('la asistente no ve la casilla', async () => {
+    render(<AppointmentForm token={tokenFor('ASSISTANT')} onCreated={jest.fn()} />);
+    await screen.findByRole('option', { name: /dra\. ana ríos/i });
+    expect(screen.queryByRole('checkbox', { name: 'Adelantar si hay hueco' })).not.toBeInTheDocument();
   });
 });

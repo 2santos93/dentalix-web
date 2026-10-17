@@ -876,6 +876,22 @@ export interface paths {
         patch: operations["AppointmentsController_update"];
         trace?: never;
     };
+    "/api/v1/appointments/{id}/opening": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["AppointmentsController_moveToOpening"];
+        trace?: never;
+    };
     "/api/v1/staff": {
         parameters: {
             query?: never;
@@ -1134,6 +1150,54 @@ export interface paths {
         options?: never;
         head?: never;
         patch?: never;
+        trace?: never;
+    };
+    "/api/v1/appointments/openings/{locationId}/candidates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["OpeningCandidatesController_candidates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/appointments/openings/{locationId}/offers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["OpeningCandidatesController_offer"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/appointments/openings/offers/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["OpeningCandidatesController_outcome"];
         trace?: never;
     };
     "/api/v1/appointments/{id}/confirmation-link": {
@@ -2435,7 +2499,7 @@ export interface components {
         /** @enum {string} */
         AuditAction: "VIEW" | "CREATE" | "UPDATE" | "DELETE" | "SIGN" | "VOID" | "LOGIN" | "LOGIN_FAILED" | "PASSWORD_RESET" | "EXPORT" | "PRINT" | "SEND";
         /** @enum {string} */
-        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY";
+        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER";
         /**
          * @description Rol con el que actuó (del token). `null` en un login fallido.
          * @enum {string}
@@ -3746,6 +3810,8 @@ export interface components {
             appointmentTypeId?: string;
             reason?: string;
             notes?: string;
+            /** @description DX-210: «Adelantar si hay hueco». La cita sale como candidata para los huecos libres de días anteriores de su sede y profesional. Solo RECEPTION, DENTIST y ADMIN (403 para ASSISTANT); queda auditado. */
+            wantsEarlier?: boolean;
         };
         AppointmentTypeSummaryDto: {
             /** Format: uuid */
@@ -3795,6 +3861,8 @@ export interface components {
              * @description El paciente pidió que lo llamen desde el enlace de confirmación (la cita sigue SCHEDULED).
              */
             callbackRequestedAt: string | null;
+            /** @description DX-210: «Adelantar si hay hueco». Se apaga al moverla a un hueco libre. */
+            wantsEarlier: boolean;
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
@@ -3842,6 +3910,8 @@ export interface components {
              * @description El paciente pidió que lo llamen desde el enlace de confirmación (la cita sigue SCHEDULED).
              */
             callbackRequestedAt: string | null;
+            /** @description DX-210: «Adelantar si hay hueco». Se apaga al moverla a un hueco libre. */
+            wantsEarlier: boolean;
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
@@ -3909,6 +3979,8 @@ export interface components {
              * @description El paciente pidió que lo llamen desde el enlace de confirmación (la cita sigue SCHEDULED).
              */
             callbackRequestedAt: string | null;
+            /** @description DX-210: «Adelantar si hay hueco». Se apaga al moverla a un hueco libre. */
+            wantsEarlier: boolean;
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
@@ -3928,6 +4000,22 @@ export interface components {
             status?: "SCHEDULED" | "CONFIRMED" | "COMPLETED" | "CANCELLED" | "NO_SHOW";
             reason?: string;
             notes?: string;
+            /** @description DX-210: «Adelantar si hay hueco». La cita sale como candidata para los huecos libres de días anteriores de su sede y profesional. Solo RECEPTION, DENTIST y ADMIN (403 para ASSISTANT); queda auditado. */
+            wantsEarlier?: boolean;
+        };
+        MoveToOpeningDto: {
+            /** Format: date-time */
+            start: string;
+            /**
+             * Format: date-time
+             * @description Si falta: `start` + la duración actual de la cita.
+             */
+            end?: string;
+            /**
+             * Format: uuid
+             * @description Profesional del hueco; si falta, el de la cita.
+             */
+            providerId?: string;
         };
         StaffMemberDto: {
             /** Format: uuid */
@@ -4293,6 +4381,186 @@ export interface components {
             appointmentTypeId?: string;
             reason?: string;
             notes?: string;
+        };
+        /**
+         * @description Por qué no se le escribe por WhatsApp: baja de los avisos, canal «Ninguno» o sin el permiso de WhatsApp (fecha y origen) de DX-128. null si se le puede escribir.
+         * @enum {string}
+         */
+        WhatsappOfferBlock: "OPTED_OUT" | "CHANNEL_NONE" | "NO_OPT_IN";
+        /** @enum {string} */
+        AppointmentStatus: "SCHEDULED" | "CONFIRMED" | "COMPLETED" | "CANCELLED" | "NO_SHOW";
+        CandidateAppointmentDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            start: string;
+            /** Format: date-time */
+            end: string;
+            /** Format: uuid */
+            providerId: string;
+            status: components["schemas"]["AppointmentStatus"];
+        };
+        OpeningCandidateDto: {
+            /**
+             * @description `WAITLIST`: pendiente por agendar (DX-122). `APPOINTMENT`: cita futura marcada «Adelantar si hay hueco».
+             * @enum {string}
+             */
+            kind: "WAITLIST" | "APPOINTMENT";
+            /** Format: uuid */
+            patientId: string;
+            patientFirstName: string;
+            patientLastName: string;
+            /** @description Teléfono tal como está guardado (para «Llamar»). */
+            phone: string | null;
+            /** @description Móvil en E.164 sin "+", listo para https://wa.me/<número>. null si no hay un móvil válido o el paciente no recibe WhatsApp. */
+            whatsappPhone: string | null;
+            /** @description DX-128: el paciente se dio de baja de los avisos, eligió «Ninguno» o no dio el permiso de WhatsApp. No se le escribe: se le llama. */
+            whatsappBlocked: boolean;
+            /** @description Por qué no se le escribe por WhatsApp: baja de los avisos, canal «Ninguno» o sin el permiso de WhatsApp (fecha y origen) de DX-128. null si se le puede escribir. */
+            whatsappBlockedReason: components["schemas"]["WhatsappOfferBlock"] | null;
+            /** Format: uuid */
+            waitlistEntryId: string | null;
+            /** Format: uuid */
+            appointmentId: string | null;
+            priority: components["schemas"]["WaitlistPriority"];
+            durationMinutes: number;
+            appointmentType: components["schemas"]["AppointmentTypeSummaryDto"] | null;
+            /** @description Motivo de la cita o nota del pendiente. */
+            reason: string | null;
+            preferredWindow: string | null;
+            /** Format: uuid */
+            providerId: string | null;
+            /** @description La cita que se adelantaría (solo `APPOINTMENT`). */
+            currentAppointment: components["schemas"]["CandidateAppointmentDto"] | null;
+            /** Format: date-time */
+            waitingSince: string;
+            /** @description Ofertas de hoy (zona de la sede) al paciente. */
+            offersToday: number;
+            /** @description Ya se le ofreció este hueco («aviso enviado»). */
+            offeredForSlot: boolean;
+            /**
+             * Format: uuid
+             * @description La última oferta de ESTE hueco aún sin respuesta (p. ej. el WhatsApp enviado): su id para anotar la respuesta con `PATCH /appointments/openings/offers/:id`.
+             */
+            pendingOfferId: string | null;
+        };
+        OpeningCandidatesDto: {
+            /** Format: uuid */
+            locationId: string;
+            /** Format: uuid */
+            providerId: string | null;
+            /** Format: date-time */
+            start: string;
+            /** Format: date-time */
+            end: string;
+            /** @example America/Bogota */
+            timeZone: string;
+            /** @description Tope de ofertas por paciente y día. */
+            offerCap: number;
+            items: components["schemas"]["OpeningCandidateDto"][];
+            /** @description Había más de 50 candidatos. */
+            truncated: boolean;
+        };
+        /**
+         * @description `WA_ME`: la web abre wa.me con el mensaje (sin datos clínicos). `PHONE`: «Llamé».
+         * @enum {string}
+         */
+        WaitlistOfferChannel: "WA_ME" | "PHONE";
+        /**
+         * @description Solo con `PHONE`: lo que respondió. Por WhatsApp nace PENDING.
+         * @enum {string}
+         */
+        WaitlistOfferOutcome: "PENDING" | "ACCEPTED" | "DECLINED" | "NO_ANSWER";
+        CreateWaitlistOfferDto: {
+            /** Format: date-time */
+            slotStart: string;
+            /** Format: date-time */
+            slotEnd: string;
+            /** Format: uuid */
+            providerId: string;
+            /** Format: uuid */
+            patientId: string;
+            /** Format: uuid */
+            waitlistEntryId?: string;
+            /** Format: uuid */
+            appointmentId?: string;
+            /** @description `WA_ME`: la web abre wa.me con el mensaje (sin datos clínicos). `PHONE`: «Llamé». */
+            channel: components["schemas"]["WaitlistOfferChannel"];
+            /** @description Solo con `PHONE`: lo que respondió. Por WhatsApp nace PENDING. */
+            outcome?: components["schemas"]["WaitlistOfferOutcome"];
+        };
+        CreatedWaitlistOfferDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            locationId: string;
+            /** Format: date-time */
+            slotStart: string;
+            /** Format: date-time */
+            slotEnd: string;
+            /** Format: uuid */
+            providerId: string;
+            /** Format: uuid */
+            patientId: string;
+            /** Format: uuid */
+            waitlistEntryId: string | null;
+            /** Format: uuid */
+            appointmentId: string | null;
+            channel: components["schemas"]["WaitlistOfferChannel"];
+            outcome: components["schemas"]["WaitlistOfferOutcome"];
+            /**
+             * @description Día civil de la oferta en la zona de la sede.
+             * @example 2026-10-20
+             */
+            offerDay: string;
+            /** Format: uuid */
+            createdById: string;
+            /** Format: uuid */
+            outcomeById: string | null;
+            /** Format: date-time */
+            outcomeAt: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** @description Ofertas de hoy al paciente, con esta. */
+            offersToday: number;
+            offerCap: number;
+        };
+        RecordWaitlistOfferOutcomeDto: {
+            /** @enum {string} */
+            outcome: "ACCEPTED" | "DECLINED" | "NO_ANSWER";
+        };
+        WaitlistOfferDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            locationId: string;
+            /** Format: date-time */
+            slotStart: string;
+            /** Format: date-time */
+            slotEnd: string;
+            /** Format: uuid */
+            providerId: string;
+            /** Format: uuid */
+            patientId: string;
+            /** Format: uuid */
+            waitlistEntryId: string | null;
+            /** Format: uuid */
+            appointmentId: string | null;
+            channel: components["schemas"]["WaitlistOfferChannel"];
+            outcome: components["schemas"]["WaitlistOfferOutcome"];
+            /**
+             * @description Día civil de la oferta en la zona de la sede.
+             * @example 2026-10-20
+             */
+            offerDay: string;
+            /** Format: uuid */
+            createdById: string;
+            /** Format: uuid */
+            outcomeById: string | null;
+            /** Format: date-time */
+            outcomeAt: string | null;
+            /** Format: date-time */
+            createdAt: string;
         };
         PublicConfirmationAppointmentDto: {
             /** @description Solo el nombre de pila. */
@@ -8856,6 +9124,13 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description DX-210: `wantsEarlier` solo lo marcan RECEPTION, DENTIST y ADMIN */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description Solape con otra cita, o el horario está bloqueado para ese profesional o la sede (DX-122) */
             409: {
                 headers: {
@@ -8983,6 +9258,67 @@ export interface operations {
                 content?: never;
             };
             /** @description Solape con otra cita del profesional o del paciente (también si otro movimiento ganó la carrera), o el nuevo horario está bloqueado (DX-122) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Fuera del horario de atención de la sede de la cita */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AppointmentsController_moveToOpening: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["MoveToOpeningDto"];
+            };
+        };
+        responses: {
+            /** @description DX-210 «Asignar» desde «Ocupar este hueco»: adelanta una cita marcada «Adelantar si hay hueco» al hueco libre con las reglas de un reagendado (pasado, horario, bloqueos, solape del profesional y del paciente) y le quita la marca en la misma transacción. Su hora original queda libre. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AppointmentWriteDto"];
+                };
+            };
+            /** @description Datos inválidos o hueco en el pasado */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo RECEPTION y ADMIN asignan huecos */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Cita o profesional no encontrados en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La cita ya no está marcada (otra persona la movió), el hueco no es anterior a la cita, o ya está ocupado o bloqueado */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -9811,6 +10147,156 @@ export interface operations {
             };
             /** @description Fuera del horario de la sede de la entrada */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    OpeningCandidatesController_candidates: {
+        parameters: {
+            query: {
+                start: string;
+                /** @description Fin del hueco: posterior a `start`, como mucho 8 h. */
+                end: string;
+                /** @description Profesional del hueco (la columna). Obligatorio para DENTIST, y tiene que ser él mismo. */
+                providerId?: string;
+            };
+            header?: never;
+            path: {
+                locationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Pendientes OPEN de la sede que caben en el hueco y citas futuras (de un día posterior) marcadas «Adelantar si hay hueco», del profesional del hueco si se indica. Orden: URGENT, resto de pendientes, citas (la más lejana primero) y, a igualdad, la más antigua. Tope de 50. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["OpeningCandidatesDto"];
+                };
+            };
+            /** @description Hueco al revés, de más de 8 h o ya pasado */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description ASSISTANT, o DENTIST pidiendo una columna que no es la suya (o ninguna) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sede o profesional de otra clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    OpeningCandidatesController_offer: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                locationId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateWaitlistOfferDto"];
+            };
+        };
+        responses: {
+            /** @description «Ofrecer por WhatsApp» o «Llamé»: registra la oferta (auditada) y el paciente queda «ofrecido» para el hueco. */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CreatedWaitlistOfferDto"];
+                };
+            };
+            /** @description Hueco inválido o pasado, pendiente y cita a la vez, o resultado en una oferta por WhatsApp */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo RECEPTION y ADMIN */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sede, profesional, paciente, pendiente o cita ajenos */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Tope de ofertas del día («Ya se le ofrecieron 2 huecos hoy»), por WhatsApp a un paciente con baja, canal «Ninguno» o sin el permiso de WhatsApp (DX-128), o pendiente/cita que ya no está vigente */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    OpeningCandidatesController_outcome: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecordWaitlistOfferOutcomeDto"];
+            };
+        };
+        responses: {
+            /** @description Anota la respuesta del paciente a una oferta pendiente. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["WaitlistOfferDto"];
+                };
+            };
+            /** @description Solo RECEPTION y ADMIN */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Oferta no encontrada en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La oferta ya tenía resultado */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

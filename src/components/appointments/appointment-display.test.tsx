@@ -26,6 +26,7 @@ const appointment: Appointment = {
   appointmentType: null,
   confirmationSentAt: null,
   callbackRequestedAt: null,
+  wantsEarlier: false,
   createdAt: '2026-07-01T00:00:00.000Z',
   updatedAt: '2026-07-01T00:00:00.000Z',
 };

@@ -3,7 +3,7 @@ import { OverdueChip } from '@/components/collections/overdue-chip';
 import { overdueChipText } from '@/lib/collections/presentation';
 import * as React from 'react';
 import { useEffect, useRef, useState } from 'react';
-import { CalendarPlus, MoveRight } from 'lucide-react';
+import { CalendarPlus, MoveRight, UserPlus } from 'lucide-react';
 import type { Appointment } from '@/lib/appointments/appointments-api';
 import type { StaffMember } from '@/lib/appointments/staff-api';
 import type { BusinessHours } from '@/lib/locations/schedule-api';
@@ -28,6 +28,8 @@ import {
   type ScheduleBlockLike,
 } from '@/lib/appointments/schedule-blocks';
 import { appointmentTypeTextColor, isAppointmentTypeColor } from '@/lib/color/contrast';
+import { freeGaps } from '@/lib/appointments/opening-candidates';
+import { WANTS_EARLIER_LABEL, WantsEarlierChip } from '@/components/appointments/wants-earlier-chip';
 import {
   STATUS_LABELS,
   formatTimeRange,
@@ -58,6 +60,12 @@ const copy = {
   blockAria: (label: string, range: string) => `Bloqueo: ${label}, ${range}`,
   blockLegend: 'Horario bloqueado (vacaciones, reunión, almuerzo…)',
   blockRemove: (label: string) => `Quitar bloqueo: ${label}`,
+  freeGap: 'Hueco libre',
+  freeGapFor: (range: string, provider: string) =>
+    `Ocupar el hueco libre de ${range} · ${provider}`,
+  fillCancelledFor: (range: string, patient: string) =>
+    `Ocupar el hueco de la cita cancelada de ${range} · ${patient}`,
+  fillCancelled: 'Ocupar este hueco',
 };
 
 /** Distancia (px) que hay que mover el ratón para que un clic pase a arrastre. */
@@ -95,6 +103,20 @@ interface DayColumnsProps {
   onSelectBlock?: (block: ScheduleBlockLike) => void;
   /** Qué bloqueos puede quitar quien mira (el odontólogo, solo los suyos). */
   canSelectBlock?: (block: ScheduleBlockLike) => boolean;
+  /**
+   * DX-210 «Ocupar este hueco»: un hueco libre o una cita recién cancelada de
+   * la columna. Sin ella no se pintan los huecos.
+   */
+  onFillOpening?: (
+    providerId: string,
+    slot: { start: string; end: string },
+    /** La sede de la cita cancelada (un hueco libre es de la sede activa). */
+    locationId?: string,
+  ) => void;
+  /** En qué columnas puede mirarlo quien mira (el odontólogo, solo la suya). */
+  canFillOpening?: (providerId: string) => boolean;
+  /** «Ahora» para no proponer huecos pasados (los tests lo fijan). */
+  now?: Date;
 }
 
 interface DragState {
@@ -143,7 +165,12 @@ export function DayColumns({
   activeLocationId = null,
   onSelectBlock,
   canSelectBlock = () => true,
+  onFillOpening,
+  canFillOpening = () => true,
+  now: nowProp,
 }: DayColumnsProps) {
+  const [mountedAt] = useState(() => new Date());
+  const now = nowProp ?? mountedAt;
   const [activeProviderId, setActiveProviderId] = useState<string | null>(null);
   const [drag, setDrag] = useState<DragState | null>(null);
   const columnRefs = useRef(new Map<string, HTMLDivElement>());
@@ -376,6 +403,18 @@ export function DayColumns({
             const columnBlocks = blocks.filter((block) =>
               blockShownInColumn(block, p.userId, activeLocationId),
             );
+            const fills = onFillOpening !== undefined && canFillOpening(p.userId);
+            const gaps = fills
+              ? freeGaps({
+                  date,
+                  hours,
+                  appointments: columnAppointments,
+                  blocks: columnBlocks,
+                  providerId: p.userId,
+                  activeLocationId,
+                  now,
+                })
+              : [];
             return (
               <div
                 key={p.userId}
@@ -450,6 +489,29 @@ export function DayColumns({
                     );
                   })}
 
+                {gaps.map((gap) => {
+                  const range = `${formatMinute(gap.startMinute)}–${formatMinute(gap.endMinute)}`;
+                  const top = offsetFromMinute(gap.startMinute, span);
+                  const height = (gap.endMinute - gap.startMinute) * PX_PER_MINUTE;
+                  return (
+                    <button
+                      key={gap.start}
+                      type="button"
+                      data-testid="free-gap"
+                      aria-label={copy.freeGapFor(range, p.fullName)}
+                      onClick={() => onFillOpening?.(p.userId, { start: gap.start, end: gap.end })}
+                      className="absolute inset-x-1 z-[1] flex h-6 items-center justify-center gap-1 rounded-md border border-dashed border-border bg-surface/80 px-2 text-xs font-medium text-muted transition-colors hover:border-primary hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                      // Centrado en el hueco: no tapa «Sin citas hoy» de arriba.
+                      style={{ top: top + Math.max(0, (height - 24) / 2) }}
+                    >
+                      <UserPlus className="size-3.5 shrink-0" aria-hidden />
+                      <span className="truncate tabular-nums">
+                        {copy.freeGap} · {range}
+                      </span>
+                    </button>
+                  );
+                })}
+
                 {columnAppointments.length === 0 && (
                   <div
                     className={cn(
@@ -477,6 +539,7 @@ export function DayColumns({
                   const range = formatTimeRange(a.start, a.end);
                   const dragging = drag?.started && drag.appointment.id === a.id;
                   const inactive = a.status === 'CANCELLED' || a.status === 'NO_SHOW';
+                  const wantsEarlier = a.wantsEarlier && !inactive;
                   return (
                     <div
                       key={a.id}
@@ -501,22 +564,52 @@ export function DayColumns({
                     >
                       <button
                         type="button"
-                        aria-label={[copy.detailFor(range, patient, p.fullName), overdueChipText(a.balance)]
+                        aria-label={[
+                          copy.detailFor(range, patient, p.fullName),
+                          overdueChipText(a.balance),
+                          wantsEarlier ? WANTS_EARLIER_LABEL : null,
+                        ]
                           .filter(Boolean)
                           .join(' · ')}
                         onClick={() => handleCardClick(a)}
                         className="flex h-full w-full flex-col items-start gap-0.5 px-2 py-1 pr-8 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
                       >
-                        <span className="text-xs font-medium tabular-nums">{range}</span>
-                        <span className={cn('truncate text-sm font-semibold', inactive && 'line-through')}>
+                        {/* La hora y el nombre no se encogen: en una cita corta
+                            lo que no cabe (estado, chips) lo recorta la tarjeta,
+                            nunca el nombre. El chip DX-210 va en la fila de la
+                            hora para seguir viéndose en las citas de 30 min. */}
+                        <span className="flex w-full min-w-0 shrink-0 items-center gap-1.5">
+                          <span className="shrink-0 text-xs font-medium tabular-nums">{range}</span>
+                          <WantsEarlierChip wantsEarlier={wantsEarlier} className="min-w-0 py-0" />
+                        </span>
+                        <span
+                          className={cn('w-full shrink-0 truncate text-sm font-semibold', inactive && 'line-through')}
+                        >
                           {patient}
                         </span>
-                        <span className="truncate text-xs">
+                        <span className="w-full truncate text-xs">
                           {[a.appointmentType?.name, STATUS_LABELS[a.status]].filter(Boolean).join(' · ')}
                         </span>
                         <OverdueChip balance={a.balance} compact />
                       </button>
-                      {canMove && (
+                      {fills && a.status === 'CANCELLED' && new Date(a.end) > now ? (
+                        <button
+                          type="button"
+                          data-no-drag
+                          data-testid="fill-cancelled"
+                          aria-label={copy.fillCancelledFor(range, patient)}
+                          title={copy.fillCancelled}
+                          onClick={() =>
+                            // La hora de la cita, como el detalle y el aviso
+                            // «Cita cancelada.»; el hueco libre más largo que
+                            // la rodea tiene su propio botón.
+                            onFillOpening?.(p.userId, { start: a.start, end: a.end }, a.locationId)
+                          }
+                          className="absolute right-1 top-1 flex size-7 items-center justify-center rounded-md bg-surface text-primary shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                        >
+                          <UserPlus className="size-4" aria-hidden />
+                        </button>
+                      ) : canMove && (
                         <button
                           type="button"
                           data-no-drag

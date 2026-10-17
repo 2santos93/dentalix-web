@@ -49,6 +49,14 @@ import {
   waitlistCopy,
 } from '@/components/appointments/waitlist-panel';
 import { useWaitlist } from '@/components/appointments/use-waitlist';
+import { FillOpeningPanel } from '@/components/appointments/fill-opening-panel';
+import { WANTS_EARLIER_LABEL } from '@/components/appointments/wants-earlier-chip';
+import { canChangeWantsEarlier } from '@/lib/appointments/wants-earlier';
+import {
+  canOfferOpenings,
+  canSeeOpeningCandidates,
+  type OpeningSlot,
+} from '@/lib/appointments/opening-candidates';
 import { useMediaQuery } from '@/lib/hooks/use-media-query';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import {
@@ -130,6 +138,12 @@ const copy = {
   dayList: 'Lista',
   genericMoveError: 'No pudimos mover la cita.',
   moved: 'Cita movida.',
+  // DX-210: «Ocupar este hueco» tras cancelar.
+  cancelled: 'Cita cancelada.',
+  fillOpening: 'Ocupar este hueco',
+  filled: 'La agenda ya muestra al paciente en el hueco.',
+  wantsEarlierHint: 'Saldrá como candidato cuando se libere un hueco en un día anterior.',
+  wantsEarlierError: 'No pudimos cambiar «Adelantar si hay hueco».',
   selectProviderPrompt: 'Selecciona un profesional para ver su agenda.',
   statusLabel: 'Estado',
   // DX-122: bloqueos de agenda y pendientes por agendar.
@@ -370,6 +384,8 @@ export function AgendaView({ token }: AgendaViewProps) {
   const wide = useMediaQuery('(min-width: 1400px)');
   const waitlistCount = waitlist.loading || waitlist.error ? null : waitlist.total;
   const [waitlistOpen, setWaitlistOpen] = useState(false);
+  // DX-210: el hueco libre (o la cita recién cancelada) a ocupar.
+  const [fillSlot, setFillSlot] = useState<OpeningSlot | null>(null);
   // Whether the day panel (right drawer / bottom sheet) is open — opened by
   // clicking a day in the month calendar; shows that day's appointments
   // without pushing the calendar or scrolling the page.
@@ -591,6 +607,32 @@ export function AgendaView({ token }: AgendaViewProps) {
     void refreshAppointmentsInPlace();
   }
 
+  /**
+   * DX-210: abre «Ocupar este hueco». La sede es la de la cita cancelada o,
+   * para un hueco libre, la sede activa. En «Todas las sedes» solo hay huecos
+   * libres si la clínica tiene UNA sede (sin ella no hay horario con el que
+   * calcularlos): esa. Nunca una sede cualquiera de la lista; sin sede cierta
+   * no se abre (hay que elegir la sede arriba).
+   */
+  function openFillOpening(
+    slotProviderId: string,
+    slot: { start: string; end: string },
+    locationId?: string,
+  ) {
+    const location =
+      locationId ?? activeLocationId ?? (locations.length === 1 ? locations[0].id : null);
+    if (!location) return;
+    setDetailAppointment(null);
+    setFillSlot({ locationId: location, providerId: slotProviderId, ...slot });
+  }
+
+  function handleOpeningFilled() {
+    setFillSlot(null);
+    toast.success(copy.filled);
+    setWaitlistReloadKey((k) => k + 1);
+    void refreshAppointmentsInPlace();
+  }
+
   function refreshAppointmentsInPlace(): Promise<void> {
     if (!token) return Promise.resolve();
     setAppointmentsRefreshing(true);
@@ -748,8 +790,28 @@ export function AgendaView({ token }: AgendaViewProps) {
   async function handleStatusChange(id: string, status: AppointmentStatus) {
     if (!token) return;
     setUpdatingId(id);
+    const before = appointments.find((a) => a.id === id);
     try {
       await updateAppointment(token, id, { status });
+      // DX-210: la cita recién cancelada deja un hueco: se ofrece ocuparlo.
+      if (
+        status === 'CANCELLED' &&
+        before &&
+        new Date(before.end).getTime() > Date.now() &&
+        canSeeOpeningCandidates(role, getTokenUserId(token), before.providerId)
+      ) {
+        toast.success(copy.cancelled, {
+          action: {
+            label: copy.fillOpening,
+            onClick: () =>
+              openFillOpening(
+                before.providerId,
+                { start: before.start, end: before.end },
+                before.locationId,
+              ),
+          },
+        });
+      }
       // DX-122: cancelar o no-show deja al paciente en «Pendientes por
       // agendar», y reactivar la cita lo saca (revisión H1): se recarga siempre.
       setWaitlistReloadKey((k) => k + 1);
@@ -757,6 +819,22 @@ export function AgendaView({ token }: AgendaViewProps) {
     } catch (err) {
       notifyError(apiErrorMessage(err, copy.genericStatusChangeError), {
         onRetry: () => handleStatusChange(id, status),
+      });
+    } finally {
+      setUpdatingId(null);
+    }
+  }
+
+  /** DX-210: marcar o desmarcar «Adelantar si hay hueco» desde el detalle. */
+  async function handleWantsEarlierChange(id: string, wantsEarlier: boolean) {
+    if (!token) return;
+    setUpdatingId(id);
+    try {
+      await updateAppointment(token, id, { wantsEarlier });
+      await refreshAppointmentsInPlace();
+    } catch (err) {
+      notifyError(apiErrorMessage(err, copy.wantsEarlierError), {
+        onRetry: () => handleWantsEarlierChange(id, wantsEarlier),
       });
     } finally {
       setUpdatingId(null);
@@ -1016,6 +1094,9 @@ export function AgendaView({ token }: AgendaViewProps) {
                 }
                 // El odontólogo solo quita los suyos (la API daría 403).
                 canSelectBlock={(block) => !ownBlocksOnly || block.providerId === userId}
+                // DX-210: «Ocupar este hueco» (el odontólogo, solo su columna).
+                onFillOpening={openFillOpening}
+                canFillOpening={(pid) => canSeeOpeningCandidates(role, userId, pid)}
               />
             )}
           </div>
@@ -1141,6 +1222,49 @@ export function AgendaView({ token }: AgendaViewProps) {
                     ))}
                   </select>
                 </FormField>
+                {canChangeWantsEarlier(role) &&
+                (liveDetailAppointment.status === 'SCHEDULED' ||
+                  liveDetailAppointment.status === 'CONFIRMED') ? (
+                  <div className="flex items-start gap-3">
+                    <input
+                      id="detail-wants-earlier"
+                      type="checkbox"
+                      checked={liveDetailAppointment.wantsEarlier}
+                      disabled={updatingId === liveDetailAppointment.id}
+                      onChange={(e) =>
+                        void handleWantsEarlierChange(liveDetailAppointment.id, e.target.checked)
+                      }
+                      aria-describedby="detail-wants-earlier-hint"
+                      className="mt-0.5 size-5 shrink-0 accent-[var(--color-primary)]"
+                    />
+                    <div className="flex flex-col gap-0.5">
+                      <label htmlFor="detail-wants-earlier" className="text-sm font-medium text-ink">
+                        {WANTS_EARLIER_LABEL}
+                      </label>
+                      <p id="detail-wants-earlier-hint" className="text-xs text-muted">
+                        {copy.wantsEarlierHint}
+                      </p>
+                    </div>
+                  </div>
+                ) : null}
+                {liveDetailAppointment.status === 'CANCELLED' &&
+                new Date(liveDetailAppointment.end).getTime() > Date.now() &&
+                canSeeOpeningCandidates(role, userId, liveDetailAppointment.providerId) ? (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="w-full sm:w-auto sm:self-start"
+                    onClick={() =>
+                      openFillOpening(
+                        liveDetailAppointment.providerId,
+                        { start: liveDetailAppointment.start, end: liveDetailAppointment.end },
+                        liveDetailAppointment.locationId,
+                      )
+                    }
+                  >
+                    {copy.fillOpening}
+                  </Button>
+                ) : null}
                 {/* DX-170: la evolución queda ligada a esta cita. Se cierra el
                     panel antes de abrir el modal: dos capas modales a la vez
                     se pelean el foco. Recepción no lo ve (la API da 403). */}
@@ -1211,6 +1335,26 @@ export function AgendaView({ token }: AgendaViewProps) {
           </SheetContent>
         </Sheet>
       )}
+
+      {fillSlot ? (
+        <FillOpeningPanel
+          open
+          onOpenChange={(open) => {
+            if (!open) setFillSlot(null);
+          }}
+          token={token}
+          slot={fillSlot}
+          providerName={staffName(fillSlot.providerId) ?? ''}
+          locationName={locations.find((l) => l.id === fillSlot.locationId)?.name ?? ''}
+          canAct={canOfferOpenings(role)}
+          onAssigned={handleOpeningFilled}
+          onAgendaStale={() => void refreshAppointmentsInPlace()}
+          onShowWaitlist={() => {
+            setFillSlot(null);
+            if (!wide) setWaitlistOpen(true);
+          }}
+        />
+      ) : null}
 
       {evolutionFor ? (
         <NewEvolutionModal
