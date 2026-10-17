@@ -4,7 +4,7 @@ import { PlanQuoteActions } from './plan-quote-actions';
 import { getPlanQuote } from '@/lib/treatment-plans/plan-quote-api';
 import { planQuoteFixture } from './plan-quote-fixture';
 import type { TreatmentPlan } from '@/lib/treatment-plans/treatment-plans-api';
-import { PLAN_WITHOUT_OPTIONS } from './plan-fixture';
+import { ITEM_WITHOUT_DISCOUNT, PLAN_WITHOUT_OPTIONS } from './plan-fixture';
 
 jest.mock('../../lib/treatment-plans/plan-quote-api', () => ({
   ...jest.requireActual('../../lib/treatment-plans/plan-quote-api'),
@@ -22,6 +22,7 @@ const item = {
   catalogItemId: 'c1',
   price: 100,
   discount: 0,
+  ...ITEM_WITHOUT_DISCOUNT,
   status: 'PROPOSED' as const,
   notes: null,
   createdAt: '2026-10-01T00:00:00.000Z',

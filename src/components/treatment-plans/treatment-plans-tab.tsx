@@ -75,6 +75,24 @@ import { cn } from '@/lib/utils';
 import { formatCivilDate, formatDateTime } from '@/lib/format/date';
 import { sedeToday, useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
 import { SURFACE_LABELS, SURFACE_ORDER } from '@/lib/odontogram/surface-labels';
+import { getDiscountPolicy } from '@/lib/discounts/discounts-api';
+import {
+  DISCOUNT_REASON_LABELS,
+  capFor,
+  exceedsCap,
+  needsReason,
+  roleCapMessage,
+  type DiscountReasonCode,
+  type DiscountRules,
+} from '@/lib/discounts/discount-rules';
+import {
+  DiscountReasonFields,
+  EMPTY_REASON,
+  reasonPayload,
+  validateDiscountReason,
+  type DiscountReasonValue,
+} from '@/components/discounts/discount-reason-fields';
+import { BulkDiscountModal } from '@/components/discounts/bulk-discount-modal';
 
 // Copy as constants (i18n-ready, es-first) — matches odontogram-tab.tsx /
 // agenda-view.tsx convention until next-intl wiring lands.
@@ -174,6 +192,17 @@ const copy = {
   discountHint: 'En la moneda del plan. Sale en el presupuesto.',
   invalidDiscount: 'El descuento debe ser un monto válido, no mayor que el precio.',
   itemDiscount: (amount: string) => `Descuento −${amount}`,
+  // DX-204: motivo del descuento y «Descuento %» sobre varios ítems.
+  itemDiscountReason: (reason: string) => `Motivo: ${reason}`,
+  selectItem: (tooth: string) => `Seleccionar el ítem del diente ${tooth}`,
+  selectAll: 'Seleccionar todos',
+  clearSelection: 'Quitar selección',
+  selectedCount: (n: number) =>
+    n === 0 ? 'Selecciona ítems para descontar' : n === 1 ? '1 ítem seleccionado' : `${n} ítems seleccionados`,
+  bulkDiscount: 'Descuento %',
+  bulkDiscountApplied: (n: number) =>
+    n === 1 ? 'Descuento aplicado a 1 ítem.' : `Descuento aplicado a ${n} ítems.`,
+  acceptedDiscountNotice: 'El presupuesto está aceptado: sus descuentos ya no se pueden cambiar.',
   surfacesLegend: 'Caras (opcional)',
   notesLabel: 'Notas',
   addItemSubmit: 'Agregar ítem',
@@ -326,6 +355,46 @@ interface ItemsTableProps {
    * realizado (y llega al odontograma).
    */
   markDoneOnly?: boolean;
+  /**
+   * DX-204: ítems marcados para «Descuento %». Sin ella (plan aceptado,
+   * firmado o cerrado: no se vuelve a descontar) no hay casillas.
+   */
+  selection?: {
+    selectedIds: ReadonlySet<string>;
+    onToggle: (itemId: string, checked: boolean) => void;
+  };
+}
+
+/** Línea del descuento de un ítem: importe y, si lo tiene, su motivo. */
+function ItemDiscountLine({ item, currency }: { item: TreatmentPlanItem; currency: string }) {
+  if (item.discount <= 0) return null;
+  const reason = item.discountReason as DiscountReasonCode | null;
+  return (
+    <span className="block text-xs font-normal text-muted">
+      {copy.itemDiscount(formatCurrency(item.discount, currency))}
+      {reason ? (
+        <span className="block">{copy.itemDiscountReason(DISCOUNT_REASON_LABELS[reason])}</span>
+      ) : null}
+    </span>
+  );
+}
+
+function ItemSelectBox({
+  item,
+  selection,
+}: {
+  item: TreatmentPlanItem;
+  selection: NonNullable<ItemsTableProps['selection']>;
+}) {
+  return (
+    <input
+      type="checkbox"
+      aria-label={copy.selectItem(item.toothNumber)}
+      checked={selection.selectedIds.has(item.id)}
+      onChange={(e) => selection.onToggle(item.id, e.target.checked)}
+      className="size-5 shrink-0 accent-[var(--color-primary)]"
+    />
+  );
 }
 
 /**
@@ -470,6 +539,7 @@ function ItemsTable({
   locked = false,
   closed = false,
   markDoneOnly = false,
+  selection,
 }: ItemsTableProps) {
   // DX-191: el implante se registra al ejecutar un ítem aceptado (o ya
   // realizado); no en uno solo propuesto ni en un plan cancelado o rechazado.
@@ -495,6 +565,11 @@ function ItemsTable({
           <caption className="sr-only">{copy.itemsTableCaption}</caption>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
+              {selection ? (
+                <TableHead>
+                  <span className="sr-only">{copy.bulkDiscount}</span>
+                </TableHead>
+              ) : null}
               <TableHead>{copy.colTooth}</TableHead>
               <TableHead>{copy.colProcedure}</TableHead>
               <TableHead>{copy.colSurfaces}</TableHead>
@@ -517,16 +592,17 @@ function ItemsTable({
                   aria-current={focused ? true : undefined}
                   className={cn(focused && 'bg-surface-2')}
                 >
+                  {selection ? (
+                    <TableCell className="w-10">
+                      <ItemSelectBox item={item} selection={selection} />
+                    </TableCell>
+                  ) : null}
                   <TableCell className="font-medium tabular-nums">{item.toothNumber}</TableCell>
                   <TableCell>{procedureName(item, catalogById)}</TableCell>
                   <TableCell className="text-muted">{surfacesLabel(item)}</TableCell>
                   <TableCell className="tabular-nums">
                     {formatCurrency(item.price, currency)}
-                    {item.discount > 0 ? (
-                      <span className="block text-xs text-muted">
-                        {copy.itemDiscount(formatCurrency(item.discount, currency))}
-                      </span>
-                    ) : null}
+                    <ItemDiscountLine item={item} currency={currency} />
                   </TableCell>
                   <TableCell>
                     <div className="flex flex-col items-start gap-1.5">
@@ -599,7 +675,8 @@ function ItemsTable({
               className={cn('p-4', focused && 'bg-surface-2')}
             >
               <div className="flex items-center justify-between gap-2">
-                <span className="font-medium text-ink tabular-nums">
+                <span className="flex items-center gap-3 font-medium text-ink tabular-nums">
+                  {selection ? <ItemSelectBox item={item} selection={selection} /> : null}
                   {copy.colTooth} {item.toothNumber}
                 </span>
                 <Badge variant={ITEM_STATUS_BADGE_VARIANT[item.status]}>
@@ -610,11 +687,7 @@ function ItemsTable({
               <p className="mt-1 text-sm text-muted">{surfacesLabel(item)}</p>
               <p className="mt-1 font-medium text-ink tabular-nums">
                 {formatCurrency(item.price, currency)}
-                {item.discount > 0 ? (
-                  <span className="ml-2 text-xs font-normal text-muted">
-                    {copy.itemDiscount(formatCurrency(item.discount, currency))}
-                  </span>
-                ) : null}
+                <ItemDiscountLine item={item} currency={currency} />
               </p>
               <div className="mt-3 flex items-center justify-between gap-2">
                 <select
@@ -949,9 +1022,43 @@ export function TreatmentPlansTab({
   const [discount, setDiscount] = useState('');
   const [surfaces, setSurfaces] = useState<Record<ToothSurface, boolean>>(emptySurfacesState);
   const [notes, setNotes] = useState('');
+  // DX-204: motivo del descuento del ítem nuevo, política de la clínica (para
+  // avisar antes; la API la aplica) y la selección de «Descuento %».
+  const [addReason, setAddReason] = useState<DiscountReasonValue>(EMPTY_REASON);
+  const [addReasonErrors, setAddReasonErrors] = useState<{ reason?: string; note?: string } | null>(null);
+  const [discountRules, setDiscountRules] = useState<DiscountRules | null>(null);
+  const [selectedItemIds, setSelectedItemIds] = useState<ReadonlySet<string>>(() => new Set());
+  const [bulkOpen, setBulkOpen] = useState(false);
+  const [bulkKey, setBulkKey] = useState(0);
+  const [bulkNotice, setBulkNotice] = useState<string | null>(null);
   const [addItemSubmitting, setAddItemSubmitting] = useState(false);
   const [addItemValidationError, setAddItemValidationError] = useState<string | null>(null);
   const [addItemError, setAddItemError] = useState<string | null>(null);
+
+  // Política de descuentos (DX-204): solo para avisar del tope y del motivo
+  // antes de enviar. Si no carga, el formulario no avisa y la API sigue
+  // aplicándola (sus 403/422 llegan en español).
+  useEffect(() => {
+    let cancelled = false;
+    getDiscountPolicy(token)
+      .then((policy) => {
+        if (!cancelled) setDiscountRules(policy);
+      })
+      .catch(() => {
+        /* sin política, sin aviso previo: decide la API */
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
+
+  // Otra selección de plan, otra selección de ítems.
+  const [selectionPlanId, setSelectionPlanId] = useState(selectedPlanId);
+  if (selectionPlanId !== selectedPlanId) {
+    setSelectionPlanId(selectedPlanId);
+    setSelectedItemIds(new Set());
+    setBulkNotice(null);
+  }
 
   // Plans + catalog: initial load vs. background refresh, same
   // isInitialLoad/hasLoadedOnce shape as `OdontogramTab`.
@@ -1535,6 +1642,26 @@ export function TreatmentPlansTab({
       setAddItemValidationError(copy.invalidDiscount);
       return;
     }
+    // DX-204: tope del rol y motivo por encima del umbral, avisados aquí; la
+    // API los vuelve a aplicar.
+    setAddReasonErrors(null);
+    const effectivePrice = trimmedPrice ? Number(trimmedPrice) : (catalogById.get(catalogItemId)?.defaultPrice ?? null);
+    if (
+      discountRules &&
+      role &&
+      effectivePrice !== null &&
+      exceedsCap(discountRules, role, effectivePrice, discountValue)
+    ) {
+      setAddItemValidationError(roleCapMessage(capFor(discountRules, role)));
+      return;
+    }
+    const reasonRequired =
+      discountRules !== null && effectivePrice !== null && needsReason(discountRules, effectivePrice, discountValue);
+    const reasonProblems = discountValue > 0 ? validateDiscountReason(addReason, reasonRequired) : null;
+    if (reasonProblems) {
+      setAddReasonErrors(reasonProblems);
+      return;
+    }
 
     setAddItemSubmitting(true);
     try {
@@ -1543,7 +1670,7 @@ export function TreatmentPlansTab({
         catalogItemId,
         ...(selectedSurfaces.length ? { surfaces: selectedSurfaces } : {}),
         ...(trimmedPrice ? { price: Number(trimmedPrice) } : {}),
-        ...(discountValue > 0 ? { discount: discountValue } : {}),
+        ...(discountValue > 0 ? { discount: discountValue, ...reasonPayload(addReason) } : {}),
         ...(notes.trim() ? { notes: notes.trim() } : {}),
       };
       await addItem(token, selectedPlanId, input);
@@ -1551,6 +1678,7 @@ export function TreatmentPlansTab({
       setCatalogItemId('');
       setPrice('');
       setDiscount('');
+      setAddReason(EMPTY_REASON);
       setSurfaces(emptySurfacesState());
       setNotes('');
       await refreshPlanDetail();
@@ -1584,6 +1712,16 @@ export function TreatmentPlansTab({
   const closed = planDetail ? isPlanClosed(planDetail.status) : false;
   const billable = planDetail ? isPlanBillable(planDetail.status) : true;
   const role = getTokenRole(token);
+  // DX-204: un presupuesto aceptado (firmado o no) o cerrado no se vuelve a
+  // descontar.
+  const discountable = Boolean(planDetail) && !signed && !closed && planDetail?.status !== 'ACCEPTED';
+  const addDiscountValue = Number(discount.trim() || '0');
+  const addPrice = price.trim() ? Number(price.trim()) : (catalogById.get(catalogItemId)?.defaultPrice ?? null);
+  const addReasonRequired =
+    discountRules !== null &&
+    addPrice !== null &&
+    Number.isFinite(addDiscountValue) &&
+    needsReason(discountRules, addPrice, addDiscountValue);
   const statusChoices = planDetail ? patchableStatuses(planDetail.status, role) : [];
   const optionGroup = selectedPlan ? optionGroupOf(plans, selectedPlan) : [];
 
@@ -1776,6 +1914,49 @@ export function TreatmentPlansTab({
                   </div>
                 )}
 
+                {discountable && (planDetail.items ?? []).length > 0 ? (
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                    <p className="text-sm text-muted tabular-nums">{copy.selectedCount(selectedItemIds.size)}</p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() =>
+                          setSelectedItemIds(
+                            selectedItemIds.size === (planDetail.items ?? []).length
+                              ? new Set()
+                              : new Set((planDetail.items ?? []).map((i) => i.id)),
+                          )
+                        }
+                      >
+                        {selectedItemIds.size === (planDetail.items ?? []).length ? copy.clearSelection : copy.selectAll}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={selectedItemIds.size === 0 || discountRules === null}
+                        onClick={() => {
+                          setBulkNotice(null);
+                          setBulkKey((k) => k + 1);
+                          setBulkOpen(true);
+                        }}
+                      >
+                        {copy.bulkDiscount}
+                      </Button>
+                    </div>
+                  </div>
+                ) : null}
+                {planDetail.status === 'ACCEPTED' && !signed ? (
+                  <p role="status" className="text-sm text-muted">
+                    {copy.acceptedDiscountNotice}
+                  </p>
+                ) : null}
+                <p role="status" className={bulkNotice ? 'text-sm text-success' : 'sr-only'}>
+                  {bulkNotice}
+                </p>
+
                 <ItemsTable
                   items={planDetail.items ?? []}
                   catalogById={catalogById}
@@ -1789,6 +1970,20 @@ export function TreatmentPlansTab({
                   locked={signed}
                   closed={closed}
                   markDoneOnly={planDetail?.status === 'COMPLETED'}
+                  selection={
+                    discountable
+                      ? {
+                          selectedIds: selectedItemIds,
+                          onToggle: (itemId, checked) =>
+                            setSelectedItemIds((prev) => {
+                              const next = new Set(prev);
+                              if (checked) next.add(itemId);
+                              else next.delete(itemId);
+                              return next;
+                            }),
+                        }
+                      : undefined
+                  }
                 />
 
                 <Separator />
@@ -2040,6 +2235,17 @@ export function TreatmentPlansTab({
                         />
                       </FormField>
 
+                      {addDiscountValue > 0 ? (
+                        <DiscountReasonFields
+                          idPrefix="tp-discount"
+                          value={addReason}
+                          onChange={setAddReason}
+                          required={addReasonRequired}
+                          thresholdPercent={discountRules?.reasonRequiredAbovePercent ?? null}
+                          errors={addReasonErrors}
+                        />
+                      ) : null}
+
                       <fieldset className="flex flex-col gap-2">
                         <legend className="text-sm font-medium text-ink">{copy.surfacesLegend}</legend>
                         <div className="flex flex-wrap gap-3">
@@ -2085,6 +2291,26 @@ export function TreatmentPlansTab({
           </CardContent>
         </Card>
       )}
+
+      {planDetail && discountRules ? (
+        <BulkDiscountModal
+          key={bulkKey}
+          open={bulkOpen}
+          onOpenChange={setBulkOpen}
+          token={token}
+          planId={planDetail.id}
+          currency={planDetail.currency}
+          items={(planDetail.items ?? []).filter((i) => selectedItemIds.has(i.id))}
+          procedureOf={(item) => procedureName(item, catalogById)}
+          rules={discountRules}
+          role={role}
+          onApplied={(updated) => {
+            setSelectedItemIds(new Set());
+            setBulkNotice(copy.bulkDiscountApplied(updated.length));
+            void refreshPlanDetail();
+          }}
+        />
+      ) : null}
 
       <PaymentReceiptDialog
         token={token}

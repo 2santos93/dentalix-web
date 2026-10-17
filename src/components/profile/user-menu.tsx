@@ -14,6 +14,7 @@ import {
   Moon,
   CalendarClock,
   BellRing,
+  BadgePercent,
   NotebookPen,
   Globe,
   ScanBarcode,
@@ -29,6 +30,7 @@ import { canManagePrescriptionTemplates } from '@/lib/prescriptions/prescription
 import { canManageAppointmentTypes } from '@/lib/appointments/appointment-types-api';
 import { canManageNoteTemplates } from '@/lib/clinical-notes/note-templates-api';
 import { canManageReminders } from '@/lib/reminders/reminders-api';
+import { canManageDiscounts } from '@/lib/discounts/discounts-api';
 import { canManageDomains } from '@/lib/domains/domains-api';
 import { canSearchImplantLots } from '@/lib/implants/implants-api';
 import { canReadSupportAccesses } from '@/lib/support-accesses/support-accesses-api';
@@ -68,6 +70,7 @@ const copy = {
   appointmentTypes: 'Tipos de cita',
   noteTemplates: 'Plantillas de evolución',
   reminders: 'Recordatorios',
+  discounts: 'Descuentos',
   domains: 'Dominios propios',
   supportAccesses: 'Accesos de soporte',
   logout: 'Cerrar sesión',
@@ -321,6 +324,18 @@ export function UserMenu({
         >
           <BellRing className="size-4 text-muted" aria-hidden />
           {copy.reminders}
+        </Link>
+      ) : null}
+      {/* Topes de descuento por rol y motivo (DX-204): solo ADMIN. */}
+      {canManageDiscounts(getTokenRole(accessToken)) ? (
+        <Link
+          href="/settings/descuentos"
+          role="menuitem"
+          onClick={() => setOpen(false)}
+          className="flex items-center gap-3 px-3 py-2 text-sm text-ink hover:bg-bg"
+        >
+          <BadgePercent className="size-4 text-muted" aria-hidden />
+          {copy.discounts}
         </Link>
       ) : null}
       {/* Plantillas de receta y país de las sedes (DX-013): solo ADMIN. */}

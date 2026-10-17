@@ -26,7 +26,8 @@ import { getPaymentReceipt } from '@/lib/payments/payment-receipts-api';
 import { paymentReceiptFixture } from '@/lib/test/payment-receipt';
 import { listCurrencies } from '@/lib/reference/currencies-api';
 import { getPaymentPlan } from '@/lib/payment-plans/payment-plan-api';
-import { PLAN_WITHOUT_OPTIONS } from './plan-fixture';
+import { ITEM_WITHOUT_DISCOUNT, PLAN_WITHOUT_OPTIONS } from './plan-fixture';
+import { applyBulkDiscount, getDiscountPolicy } from '@/lib/discounts/discounts-api';
 
 // NOTE: jest.mock's string literal is not alias-rewritten by the SWC
 // transform (only real `import`/`require` specifiers are) — use a relative
@@ -40,6 +41,12 @@ jest.mock('../../lib/treatment-plans/treatment-plans-api', () => ({
   addItem: jest.fn(),
   updateItem: jest.fn(),
   removeItem: jest.fn(),
+}));
+// DX-204: la política de descuentos. Por defecto no carga (como si fallara):
+// el formulario no avisa y decide la API; los tests de descuento la resuelven.
+jest.mock('../../lib/discounts/discounts-api', () => ({
+  getDiscountPolicy: jest.fn(),
+  applyBulkDiscount: jest.fn(),
 }));
 jest.mock('../../lib/payments/payments-api', () => ({
   getPlanBalance: jest.fn(),
@@ -86,6 +93,17 @@ const mockedVoidPayment = voidPayment as jest.MockedFunction<typeof voidPayment>
 const mockedGetReceipt = getPaymentReceipt as jest.MockedFunction<typeof getPaymentReceipt>;
 const mockedListCurrencies = listCurrencies as jest.MockedFunction<typeof listCurrencies>;
 const mockedGetPaymentPlan = getPaymentPlan as jest.MockedFunction<typeof getPaymentPlan>;
+const mockedGetDiscountPolicy = getDiscountPolicy as jest.MockedFunction<typeof getDiscountPolicy>;
+const mockedApplyBulkDiscount = applyBulkDiscount as jest.MockedFunction<typeof applyBulkDiscount>;
+const DISCOUNT_POLICY = {
+  maxPercentByRole: { ADMIN: 100, DENTIST: 10, ASSISTANT: 0, RECEPTION: 0 },
+  reasonRequiredAbovePercent: 10,
+  isDefault: true,
+  updatedAt: null,
+  updatedById: null,
+};
+const discountDentistToken = `h.${btoa(JSON.stringify({ sub: 'u1', tenantId: 't1', role: 'DENTIST' }))}.s`;
+const discountAdminToken = `h.${btoa(JSON.stringify({ sub: 'u2', tenantId: 't1', role: 'ADMIN' }))}.s`;
 
 const catalog = [
   {
@@ -144,6 +162,7 @@ const item1: TreatmentPlanItem = {
   catalogItemId: 'cat-1',
   price: 50000,
   discount: 0,
+  ...ITEM_WITHOUT_DISCOUNT,
   status: 'PROPOSED',
   notes: null,
   createdAt: '2026-01-02T00:00:00.000Z',
@@ -159,6 +178,7 @@ const item2: TreatmentPlanItem = {
   catalogItemId: 'cat-2',
   price: 80000,
   discount: 0,
+  ...ITEM_WITHOUT_DISCOUNT,
   status: 'ACCEPTED',
   notes: null,
   createdAt: '2026-01-02T00:00:00.000Z',
@@ -252,6 +272,9 @@ describe('TreatmentPlansTab', () => {
     mockedRemoveItem.mockReset();
     mockedListCatalogItems.mockReset();
     mockedListCatalogItems.mockResolvedValue(catalog);
+    mockedGetDiscountPolicy.mockReset();
+    mockedGetDiscountPolicy.mockRejectedValue(new Error('sin política en este test'));
+    mockedApplyBulkDiscount.mockReset();
     mockedGetPlanBalance.mockReset();
     mockedListPayments.mockReset();
     mockedRecordPayment.mockReset();
@@ -1334,6 +1357,110 @@ describe('TreatmentPlansTab', () => {
         await screen.findByText('El descuento debe ser un monto válido, no mayor que el precio.'),
       ).toBeInTheDocument();
       expect(mockedAddItem).not.toHaveBeenCalled();
+    });
+  });
+  describe('tope de descuento por rol y «Descuento %» (DX-204)', () => {
+    beforeEach(() => {
+      mockedGetPlanBalance.mockResolvedValue(emptyBalance());
+      mockedListPayments.mockResolvedValue([]);
+      mockedGetPaymentPlan.mockResolvedValue(null);
+      mockedListCurrencies.mockResolvedValue([]);
+      mockedGetDiscountPolicy.mockResolvedValue(DISCOUNT_POLICY);
+    });
+
+    it('un DENTIST no puede agregar un 15 %: aviso en español y no se envía', async () => {
+      mockedListPlans.mockResolvedValue([plan1]);
+      mockedGetPlan.mockResolvedValue(plan1Detail);
+      const user = userEvent.setup();
+      render(<TreatmentPlansTab patientId="pat-1" token={discountDentistToken} />);
+      await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+      await waitFor(() => expect(mockedGetDiscountPolicy).toHaveBeenCalled());
+
+      await user.type(screen.getByLabelText(/código fdi/i), '16');
+      await user.click(screen.getByRole('radio', { name: /resina/i }));
+      await user.type(screen.getByLabelText(/^descuento/i), '7500');
+      await user.click(screen.getByRole('button', { name: /^agregar ítem$/i }));
+      expect(
+        await screen.findByText('Tu rol permite hasta un 10 % de descuento por ítem.'),
+      ).toBeInTheDocument();
+      expect(mockedAddItem).not.toHaveBeenCalled();
+    });
+
+    it('por encima del umbral el formulario exige el motivo y lo envía', async () => {
+      mockedListPlans.mockResolvedValue([plan1]);
+      mockedGetPlan.mockResolvedValue(plan1Detail);
+      mockedAddItem.mockResolvedValue({ ...item1, id: 'item-3' });
+      const user = userEvent.setup();
+      render(<TreatmentPlansTab patientId="pat-1" token={discountAdminToken} />);
+      await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+      await waitFor(() => expect(mockedGetDiscountPolicy).toHaveBeenCalled());
+
+      await user.type(screen.getByLabelText(/código fdi/i), '16');
+      await user.click(screen.getByRole('radio', { name: /resina/i }));
+      await user.type(screen.getByLabelText(/^descuento/i), '10000');
+      expect(screen.getByText('Por encima del 10 % el motivo es obligatorio.')).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: /^agregar ítem$/i }));
+      expect(await screen.findByText('Elige el motivo del descuento.')).toBeInTheDocument();
+      expect(mockedAddItem).not.toHaveBeenCalled();
+
+      await user.selectOptions(screen.getByLabelText('Motivo del descuento'), 'LOYALTY');
+      await user.type(screen.getByLabelText('Nota del motivo (opcional)'), 'Viene hace 10 años');
+      await user.click(screen.getByRole('button', { name: /^agregar ítem$/i }));
+      await waitFor(() =>
+        expect(mockedAddItem).toHaveBeenCalledWith(discountAdminToken, 'plan-1', {
+          toothNumber: '16',
+          catalogItemId: 'cat-1',
+          price: 50000,
+          discount: 10000,
+          discountReason: 'LOYALTY',
+          discountReasonNote: 'Viene hace 10 años',
+        }),
+      );
+    });
+
+    it('«Descuento %» sobre los ítems seleccionados aplica y refresca el plan', async () => {
+      mockedListPlans.mockResolvedValue([plan1]);
+      mockedGetPlan.mockResolvedValue(plan1Detail);
+      mockedApplyBulkDiscount.mockResolvedValue([
+        { ...item1, discount: 2500 },
+        { ...item2, discount: 4000 },
+      ]);
+      const user = userEvent.setup();
+      render(<TreatmentPlansTab patientId="pat-1" token={discountDentistToken} />);
+      const table = await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+      await waitFor(() => expect(mockedGetDiscountPolicy).toHaveBeenCalled());
+
+      const bulk = screen.getByRole('button', { name: 'Descuento %' });
+      expect(bulk).toBeDisabled();
+      await user.click(within(table).getByRole('checkbox', { name: 'Seleccionar el ítem del diente 11' }));
+      await user.click(within(table).getByRole('checkbox', { name: 'Seleccionar el ítem del diente 26' }));
+      expect(screen.getByText('2 ítems seleccionados')).toBeInTheDocument();
+      await user.click(bulk);
+
+      const dialog = await screen.findByRole('dialog');
+      await user.type(within(dialog).getByLabelText('Porcentaje de descuento'), '5');
+      await user.click(within(dialog).getByRole('button', { name: 'Aplicar descuento' }));
+      await waitFor(() =>
+        expect(mockedApplyBulkDiscount).toHaveBeenCalledWith(discountDentistToken, 'plan-1', {
+          itemIds: ['item-1', 'item-2'],
+          percent: 5,
+        }),
+      );
+      expect(await screen.findByText('Descuento aplicado a 2 ítems.')).toBeInTheDocument();
+      await waitFor(() => expect(mockedGetPlan.mock.calls.length).toBeGreaterThan(1));
+    });
+
+    it('un presupuesto aceptado no ofrece casillas ni «Descuento %»', async () => {
+      const accepted = { ...plan1Detail, status: 'ACCEPTED' as const };
+      mockedListPlans.mockResolvedValue([{ ...plan1, status: 'ACCEPTED' as const }]);
+      mockedGetPlan.mockResolvedValue(accepted);
+      render(<TreatmentPlansTab patientId="pat-1" token={discountAdminToken} />);
+      const table = await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+      expect(within(table).queryByRole('checkbox')).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Descuento %' })).not.toBeInTheDocument();
+      expect(
+        screen.getByText('El presupuesto está aceptado: sus descuentos ya no se pueden cambiar.'),
+      ).toBeInTheDocument();
     });
   });
 });

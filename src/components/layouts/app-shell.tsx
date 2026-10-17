@@ -11,6 +11,7 @@ import {
   Package,
   Wallet,
   HandCoins,
+  BadgePercent,
   History,
   FileClock,
   PanelLeftClose,
@@ -59,6 +60,9 @@ const NAV: NavItem[] = [
   // Cartera por antigüedad (DX-145): RECEIVABLES_ROLES en la API. Vive bajo
   // /caja (es el mismo dato de cobro), pero con su propia entrada.
   { href: '/caja/cartera', label: 'Cartera', icon: HandCoins, roles: ['ADMIN', 'RECEPTION'] },
+  // Informe de descuentos (DX-204): DISCOUNT_REPORT_ROLES en la API. Junto a
+  // la cartera, bajo /caja.
+  { href: '/caja/descuentos', label: 'Descuentos', icon: BadgePercent, roles: ['ADMIN'] },
   // Presupuestos por seguir (DX-040): TREATMENT_PLAN_FOLLOW_UP_ROLES en la API.
   {
     href: '/presupuestos',

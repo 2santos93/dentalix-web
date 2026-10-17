@@ -1280,6 +1280,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/treatment-plans/{id}/items/bulk-discount": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["TreatmentPlansController_bulkDiscount"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/treatment-plans/{id}/items/{itemId}": {
         parameters: {
             query?: never;
@@ -1322,6 +1338,70 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["PlanQuoteController_accept"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/discount-policy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Política de descuentos vigente de la clínica
+         * @description Sin cambios guardados, la de por defecto (ADMIN 100 %, DENTIST 10 %, el resto 0 %; motivo obligatorio por encima del 10 %) con isDefault.
+         */
+        get: operations["DiscountPolicyController_get"];
+        /**
+         * Cambiar la política de descuentos (solo ADMIN)
+         * @description Reemplaza los topes de los cuatro roles y el umbral del motivo. Se aplica a los descuentos que se den a partir de ahora; los ya dados no cambian.
+         */
+        put: operations["DiscountPolicyController_update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/discounts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Informe de descuentos por periodo, sede y profesional
+         * @description Ítems vivos (no retirados, de planes vivos) con descuento > 0, fechados por su descuento (antes de DX-204, por su alta) en días civiles de la zona de su sede. La sede es la del descuento (antes de DX-204, la de presentación del plan). Los totales cuadran con la suma de `discount` de esos ítems; el bruto es la suma de su precio. Por moneda, sin convertir.
+         */
+        get: operations["DiscountReportController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/discounts.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Informe de descuentos en CSV (mismos filtros, sin paginar)
+         * @description Ítems vivos (no retirados, de planes vivos) con descuento > 0, fechados por su descuento (antes de DX-204, por su alta) en días civiles de la zona de su sede. La sede es la del descuento (antes de DX-204, la de presentación del plan). Los totales cuadran con la suma de `discount` de esos ítems; el bruto es la suma de su precio. Por moneda, sin convertir. UTF-8 con BOM; celdas protegidas contra fórmulas.
+         */
+        get: operations["DiscountReportController_csv"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -2355,7 +2435,7 @@ export interface components {
         /** @enum {string} */
         AuditAction: "VIEW" | "CREATE" | "UPDATE" | "DELETE" | "SIGN" | "VOID" | "LOGIN" | "LOGIN_FAILED" | "PASSWORD_RESET" | "EXPORT" | "PRINT" | "SEND";
         /** @enum {string} */
-        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE";
+        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY";
         /**
          * @description Rol con el que actuó (del token). `null` en un login fallido.
          * @enum {string}
@@ -4327,6 +4407,27 @@ export interface components {
             price: number;
             /** @description Descuento en la moneda del plan (0 si no hay) */
             discount: number;
+            /**
+             * @description DX-204: motivo del descuento vigente
+             * @enum {string|null}
+             */
+            discountReason: "LOYALTY" | "FAMILY_OR_STAFF" | "PROMOTION" | "FINANCIAL_HARDSHIP" | "SERVICE_RECOVERY" | "OTHER" | null;
+            discountReasonNote: string | null;
+            /**
+             * Format: uuid
+             * @description DX-204: quién dio el descuento vigente (null sin descuento o anterior a DX-204)
+             */
+            discountById: string | null;
+            /**
+             * Format: date-time
+             * @description DX-204: cuándo (hora del servidor)
+             */
+            discountAt: string | null;
+            /**
+             * Format: uuid
+             * @description DX-204: sede donde se dio (la activa o la principal)
+             */
+            discountLocationId: string | null;
             /** @enum {string} */
             status: "PROPOSED" | "ACCEPTED" | "DONE";
             notes: string | null;
@@ -4418,6 +4519,13 @@ export interface components {
         };
         AddTreatmentPlanItemDto: {
             /**
+             * @description DX-204: motivo del descuento (catálogo corto). Obligatorio por encima del umbral de la política (422 si falta); OTHER exige nota
+             * @enum {string}
+             */
+            discountReason?: "LOYALTY" | "FAMILY_OR_STAFF" | "PROMOTION" | "FINANCIAL_HARDSHIP" | "SERVICE_RECOVERY" | "OTHER";
+            /** @description DX-204: nota del motivo (hasta 200 caracteres; obligatoria con OTHER). No sale en la auditoría */
+            discountReasonNote?: string;
+            /**
              * @description FDI/ISO-3950 tooth code: permanent 11-18/21-28/31-38/41-48, primary 51-55/61-65/71-75/81-85
              * @example 11
              */
@@ -4428,14 +4536,37 @@ export interface components {
             catalogItemId: string;
             /** @description Explicit price (at most 2 decimal places); if omitted, falls back to the catalog item defaultPrice (400 if neither is set) */
             price?: number;
-            /** @description Descuento en la moneda del plan (máx. 2 decimales, default 0); nunca mayor que el precio (400) */
+            /** @description Descuento en la moneda del plan (máx. 2 decimales, default 0); nunca mayor que el precio (400). DX-204: por encima del tope del rol, 403; en un plan aceptado, 409 */
             discount?: number;
             notes?: string;
         };
+        ApplyBulkDiscountDto: {
+            /**
+             * @description DX-204: motivo del descuento (catálogo corto). Obligatorio por encima del umbral de la política (422 si falta); OTHER exige nota
+             * @enum {string}
+             */
+            discountReason?: "LOYALTY" | "FAMILY_OR_STAFF" | "PROMOTION" | "FINANCIAL_HARDSHIP" | "SERVICE_RECOVERY" | "OTHER";
+            /** @description DX-204: nota del motivo (hasta 200 caracteres; obligatoria con OTHER). No sale en la auditoría */
+            discountReasonNote?: string;
+            /** @description Ítems vivos de ESTE plan (404 si alguno no lo es: nada cambia) */
+            itemIds: string[];
+            /**
+             * @description % del precio de cada ítem (hasta 2 decimales; 0 quita el descuento). Por encima del tope del rol: 403
+             * @example 7.5
+             */
+            percent: number;
+        };
         UpdateTreatmentPlanItemDto: {
+            /**
+             * @description DX-204: motivo del descuento (catálogo corto). Obligatorio por encima del umbral de la política (422 si falta); OTHER exige nota
+             * @enum {string}
+             */
+            discountReason?: "LOYALTY" | "FAMILY_OR_STAFF" | "PROMOTION" | "FINANCIAL_HARDSHIP" | "SERVICE_RECOVERY" | "OTHER";
+            /** @description DX-204: nota del motivo (hasta 200 caracteres; obligatoria con OTHER). No sale en la auditoría */
+            discountReasonNote?: string;
             /** @description At most 2 decimal places */
             price?: number;
-            /** @description Descuento (máx. 2 decimales); nunca mayor que el precio (400). En un plan aceptado con firma: 409 */
+            /** @description Descuento (máx. 2 decimales); nunca mayor que el precio (400). DX-204: por encima del tope del rol de quien lo cambia, 403; en un plan aceptado (con o sin firma): 409 */
             discount?: number;
             /** @enum {string} */
             status?: "PROPOSED" | "ACCEPTED" | "DONE";
@@ -4534,6 +4665,118 @@ export interface components {
             signature: string;
             /** @description El contentHash del presupuesto que se mostró (GET …/quote). Si el presupuesto cambió desde entonces: 409. */
             contentHash: string;
+        };
+        DiscountMaxPercentByRoleDto: {
+            /** @description Administración (por defecto 100) */
+            ADMIN: number;
+            /** @description Odontólogo (por defecto 10) */
+            DENTIST: number;
+            /** @description Asistente (por defecto 0) */
+            ASSISTANT: number;
+            /** @description Recepción (por defecto 0; hoy no edita ítems de plan) */
+            RECEPTION: number;
+        };
+        DiscountPolicyDto: {
+            maxPercentByRole: components["schemas"]["DiscountMaxPercentByRoleDto"];
+            reasonRequiredAbovePercent: number;
+            /** @description true = la clínica nunca la cambió (valores por defecto) */
+            isDefault: boolean;
+            /** Format: date-time */
+            updatedAt: string | null;
+            /** Format: uuid */
+            updatedById: string | null;
+        };
+        UpdateDiscountPolicyDto: {
+            maxPercentByRole: components["schemas"]["DiscountMaxPercentByRoleDto"];
+            /** @description Por ENCIMA de este % (estrictamente) el motivo del descuento es obligatorio (por defecto 10) */
+            reasonRequiredAbovePercent: number;
+        };
+        DiscountReportLocationDto: {
+            /** Format: uuid */
+            id: string;
+            /** @example Sede Norte */
+            name: string;
+        };
+        DiscountReportScopeDto: {
+            /** @description Sede del filtro (parámetro o cabecera); null = toda la clínica */
+            location: components["schemas"]["DiscountReportLocationDto"] | null;
+        };
+        DiscountReportTotalDto: {
+            /** @example COP */
+            currency: string;
+            /** @description Ítems con descuento en esta moneda */
+            items: number;
+            /** @description Bruto: suma del precio de esos mismos ítems */
+            gross: number;
+            /** @description Suma de su descuento */
+            discount: number;
+            /** @description Descuento sobre el bruto, en % (2 decimales) */
+            percentOfGross: number;
+        };
+        DiscountReportItemDto: {
+            /** Format: uuid */
+            itemId: string;
+            /** Format: uuid */
+            planId: string;
+            /** @enum {string} */
+            planStatus: "DRAFT" | "PRESENTED" | "ACCEPTED" | "REJECTED" | "COMPLETED" | "CANCELLED";
+            planOptionLabel: string | null;
+            /** Format: date-time */
+            planCreatedAt: string;
+            /**
+             * @description Día civil de alta del plan
+             * @example 2026-10-01
+             */
+            planCreatedOn: string;
+            /** Format: uuid */
+            patientId: string;
+            patientName: string;
+            toothNumber: string;
+            /** @description Procedimiento del catálogo */
+            procedure: string;
+            /** @example COP */
+            currency: string;
+            price: number;
+            discount: number;
+            /** @description % del descuento sobre el precio (2 decimales) */
+            percent: number;
+            /** @enum {string|null} */
+            reason: "LOYALTY" | "FAMILY_OR_STAFF" | "PROMOTION" | "FINANCIAL_HARDSHIP" | "SERVICE_RECOVERY" | "OTHER" | null;
+            reasonNote: string | null;
+            /**
+             * Format: uuid
+             * @description null en los descuentos anteriores a DX-204
+             */
+            discountById: string | null;
+            discountByName: string | null;
+            /**
+             * Format: date-time
+             * @description Hora del descuento (antes de DX-204, la de alta del ítem)
+             */
+            discountAt: string;
+            /**
+             * @description Día civil del descuento en la zona de su sede
+             * @example 2026-10-02
+             */
+            discountOn: string;
+            /** Format: uuid */
+            locationId: string | null;
+            locationName: string | null;
+        };
+        DiscountReportDto: {
+            /** @example 2026-10-01 */
+            from: string;
+            /** @example 2026-10-31 */
+            to: string;
+            scope: components["schemas"]["DiscountReportScopeDto"];
+            /** @description Por moneda, sin convertir */
+            totals: components["schemas"]["DiscountReportTotalDto"][];
+            /** @description Página de ítems, más recientes primero */
+            items: components["schemas"]["DiscountReportItemDto"][];
+            /** @description Ítems del periodo (todas las páginas) */
+            total: number;
+            page: number;
+            pageSize: number;
         };
         CreateDomainDto: {
             /**
@@ -10003,8 +10246,79 @@ export interface operations {
                     "application/json": components["schemas"]["TreatmentPlanItemDto"];
                 };
             };
-            /** @description Plan aceptado con firma: sus ítems quedan congelados (DX-012); o el plan está cancelado, rechazado o completado (DX-109) */
+            /** @description DX-204: el descuento supera el tope del rol de quien lo da («Tu rol permite hasta un X % de descuento por ítem.») */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Plan aceptado con firma: sus ítems quedan congelados (DX-012); o el plan está cancelado, rechazado o completado (DX-109); o el descuento cambia en un plan ya aceptado (DX-204) */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description DX-204: por encima del umbral de la política falta el motivo, o «Otro» sin nota, o nota sin motivo */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    TreatmentPlansController_bulkDiscount: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Sede donde se da el descuento; sin ella, la principal */
+                "X-Location-Id"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ApplyBulkDiscountDto"];
+            };
+        };
+        responses: {
+            /** @description Los ítems con su descuento nuevo: el % de su precio redondeado a la unidad de la moneda del plan (COP sin decimales, EUR a céntimos), nunca por encima del tope del rol ítem a ítem */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["TreatmentPlanItemDto"][];
+                };
+            };
+            /** @description DX-204: el descuento supera el tope del rol de quien lo da («Tu rol permite hasta un X % de descuento por ítem.») */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Plan, o algún ítem, inexistente o de otro plan: nada cambia */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Plan aceptado con firma: sus ítems quedan congelados (DX-012); o el plan está cancelado, rechazado o completado (DX-109); o el descuento cambia en un plan ya aceptado (DX-204) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description DX-204: por encima del umbral de la política falta el motivo, o «Otro» sin nota, o nota sin motivo */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -10062,8 +10376,22 @@ export interface operations {
                     "application/json": components["schemas"]["TreatmentPlanItemDto"];
                 };
             };
-            /** @description Plan aceptado con firma: sus ítems quedan congelados (DX-012); o el plan está cancelado, rechazado o completado (DX-109); firmado: solo admite avanzar el estado (no volver a PROPOSED); completado: solo admite marcar como DONE un ítem ACCEPTED sin otro cambio */
+            /** @description DX-204: el descuento supera el tope del rol de quien lo da («Tu rol permite hasta un X % de descuento por ítem.») */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Plan aceptado con firma: sus ítems quedan congelados (DX-012); o el plan está cancelado, rechazado o completado (DX-109); o el descuento cambia en un plan ya aceptado (DX-204); firmado: solo admite avanzar el estado (no volver a PROPOSED); completado: solo admite marcar como DONE un ítem ACCEPTED sin otro cambio */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description DX-204: por encima del umbral de la política falta el motivo, o «Otro» sin nota, o nota sin motivo */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -10154,6 +10482,163 @@ export interface operations {
             };
             /** @description Ya estaba aceptado y firmado, el plan está rechazado, cancelado o completado, otra opción de su grupo ya está aceptada, o el presupuesto cambió desde que se mostró (contentHash) */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    DiscountPolicyController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscountPolicyDto"];
+                };
+            };
+            /** @description Tu rol no edita planes de tratamiento: no necesita la política de descuentos. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    DiscountPolicyController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateDiscountPolicyDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscountPolicyDto"];
+                };
+            };
+            /** @description Porcentaje fuera de 0..100 o no entero */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo la administración cambia la política de descuentos. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    DiscountReportController_list: {
+        parameters: {
+            query: {
+                /** @description Primer día del periodo (AAAA-MM-DD, en la zona de cada sede). Como mucho 366 días. */
+                from: string;
+                /** @description Último día (inclusive) */
+                to: string;
+                /** @description Sede del descuento. Sin él, la de la cabecera X-Location-Id; sin ninguna, toda la clínica. */
+                locationId?: string;
+                /** @description Solo los descuentos que dio este miembro del equipo */
+                professionalId?: string;
+                page?: number;
+                /** @description Tope: 200 (un valor mayor se recorta) */
+                pageSize?: number;
+            };
+            header?: {
+                /** @description Sede activa. El parámetro `locationId` manda sobre ella; sin ninguno, toda la clínica. */
+                "X-Location-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DiscountReportDto"];
+                };
+            };
+            /** @description Periodo inválido o de más de 366 días, o sede que no es de esta clínica */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo la administración ve el informe de descuentos. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    DiscountReportController_csv: {
+        parameters: {
+            query: {
+                /** @description Primer día del periodo (AAAA-MM-DD, en la zona de cada sede). Como mucho 366 días. */
+                from: string;
+                /** @description Último día (inclusive) */
+                to: string;
+                /** @description Sede del descuento. Sin él, la de la cabecera X-Location-Id; sin ninguna, toda la clínica. */
+                locationId?: string;
+                /** @description Solo los descuentos que dio este miembro del equipo */
+                professionalId?: string;
+            };
+            header?: {
+                /** @description Sede activa. El parámetro `locationId` manda sobre ella; sin ninguno, toda la clínica. */
+                "X-Location-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Fichero CSV */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
+                };
+            };
+            /** @description Periodo inválido o de más de 366 días, o sede que no es de esta clínica */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo la administración ve el informe de descuentos. */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
