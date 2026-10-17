@@ -4382,6 +4382,11 @@ export interface components {
             reason?: string;
             notes?: string;
         };
+        /**
+         * @description Por qué no se le escribe por WhatsApp: baja de los avisos, canal «Ninguno» o sin el permiso de WhatsApp (fecha y origen) de DX-128. null si se le puede escribir.
+         * @enum {string}
+         */
+        WhatsappOfferBlock: "OPTED_OUT" | "CHANNEL_NONE" | "NO_OPT_IN";
         /** @enum {string} */
         AppointmentStatus: "SCHEDULED" | "CONFIRMED" | "COMPLETED" | "CANCELLED" | "NO_SHOW";
         CandidateAppointmentDto: {
@@ -4409,8 +4414,10 @@ export interface components {
             phone: string | null;
             /** @description Móvil en E.164 sin "+", listo para https://wa.me/<número>. null si no hay un móvil válido o el paciente no recibe WhatsApp. */
             whatsappPhone: string | null;
-            /** @description DX-128: el paciente se dio de baja de los avisos o eligió «Ninguno». No se le escribe: se le llama. */
+            /** @description DX-128: el paciente se dio de baja de los avisos, eligió «Ninguno» o no dio el permiso de WhatsApp. No se le escribe: se le llama. */
             whatsappBlocked: boolean;
+            /** @description Por qué no se le escribe por WhatsApp: baja de los avisos, canal «Ninguno» o sin el permiso de WhatsApp (fecha y origen) de DX-128. null si se le puede escribir. */
+            whatsappBlockedReason: components["schemas"]["WhatsappOfferBlock"] | null;
             /** Format: uuid */
             waitlistEntryId: string | null;
             /** Format: uuid */
@@ -4431,6 +4438,11 @@ export interface components {
             offersToday: number;
             /** @description Ya se le ofreció este hueco («aviso enviado»). */
             offeredForSlot: boolean;
+            /**
+             * Format: uuid
+             * @description La última oferta de ESTE hueco aún sin respuesta (p. ej. el WhatsApp enviado): su id para anotar la respuesta con `PATCH /appointments/openings/offers/:id`.
+             */
+            pendingOfferId: string | null;
         };
         OpeningCandidatesDto: {
             /** Format: uuid */
@@ -9306,7 +9318,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description La cita ya no está marcada (otra persona la movió), el hueco ya está ocupado o bloqueado */
+            /** @description La cita ya no está marcada (otra persona la movió), el hueco no es anterior a la cita, o ya está ocupado o bloqueado */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -10236,7 +10248,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Tope de ofertas del día («Ya se le ofrecieron 2 huecos hoy»), paciente sin WhatsApp (DX-128) o pendiente/cita que ya no está vigente */
+            /** @description Tope de ofertas del día («Ya se le ofrecieron 2 huecos hoy»), por WhatsApp a un paciente con baja, canal «Ninguno» o sin el permiso de WhatsApp (DX-128), o pendiente/cita que ya no está vigente */
             409: {
                 headers: {
                     [name: string]: unknown;

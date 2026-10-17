@@ -7,6 +7,7 @@ import {
   createWaitlistOffer,
   listOpeningCandidates,
   moveAppointmentToOpening,
+  recordOfferOutcome,
   type OpeningCandidate,
   type OpeningCandidates,
   type OpeningSlot,
@@ -20,6 +21,7 @@ jest.mock('../../lib/appointments/opening-candidates', () => {
     listOpeningCandidates: jest.fn(),
     createWaitlistOffer: jest.fn(),
     moveAppointmentToOpening: jest.fn(),
+    recordOfferOutcome: jest.fn(),
   };
 });
 jest.mock('../../lib/appointments/waitlist-api', () => ({
@@ -31,6 +33,7 @@ jest.mock('sonner', () => ({
 const mockedList = listOpeningCandidates as jest.MockedFunction<typeof listOpeningCandidates>;
 const mockedOffer = createWaitlistOffer as jest.MockedFunction<typeof createWaitlistOffer>;
 const mockedMove = moveAppointmentToOpening as jest.MockedFunction<typeof moveAppointmentToOpening>;
+const mockedOutcome = recordOfferOutcome as jest.MockedFunction<typeof recordOfferOutcome>;
 const mockedSchedule = scheduleFromWaitlist as jest.MockedFunction<typeof scheduleFromWaitlist>;
 
 const SLOT: OpeningSlot = {
@@ -48,6 +51,7 @@ function candidate(over: Partial<OpeningCandidate> & { patientId: string }): Ope
     phone: '3101234567',
     whatsappPhone: '573101234567',
     whatsappBlocked: false,
+    whatsappBlockedReason: null,
     waitlistEntryId: `wl-${over.patientId}`,
     appointmentId: null,
     priority: 'NORMAL',
@@ -60,6 +64,7 @@ function candidate(over: Partial<OpeningCandidate> & { patientId: string }): Ope
     waitingSince: '2031-02-01T00:00:00.000Z',
     offersToday: 0,
     offeredForSlot: false,
+    pendingOfferId: null,
     ...over,
   };
 }
@@ -83,6 +88,7 @@ const berta = candidate({
   patientFirstName: 'Berta',
   patientLastName: 'Gil',
   whatsappBlocked: true,
+  whatsappBlockedReason: 'OPTED_OUT',
   whatsappPhone: null,
 });
 const elena = candidate({
@@ -143,12 +149,32 @@ describe('«Ocupar este hueco» (DX-210)', () => {
     expect(mockedList).toHaveBeenCalledWith('tok', SLOT);
   });
 
-  it('«Ofrecer por WhatsApp» abre wa.me sin datos clínicos y registra la oferta', async () => {
+  /** Ventana que abre el clic (en blanco hasta que la oferta queda registrada). */
+  function fakeWindow() {
+    const win = { opener: {} as unknown, location: { href: '' }, close: jest.fn() };
+    const open = jest.spyOn(window, 'open').mockReturnValue(win as unknown as Window);
+    return { win, open };
+  }
+
+  it('«Ofrecer por WhatsApp» registra la oferta PRIMERO y luego abre wa.me sin datos clínicos', async () => {
+    const { win, open } = fakeWindow();
     mockedList.mockResolvedValue(view([ana]));
-    mockedOffer.mockResolvedValue({} as never);
+    let hrefWhenRecorded: string | null = null;
+    mockedOffer.mockImplementation(() => {
+      hrefWhenRecorded = win.location.href;
+      return Promise.resolve({} as never);
+    });
     renderPanel();
-    const link = await screen.findByRole('link', { name: 'Ofrecer el hueco por WhatsApp a Ana Ríos' });
-    const href = link.getAttribute('href') ?? '';
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Ofrecer el hueco por WhatsApp a Ana Ríos' }),
+    );
+    // La ventana se abre en el mismo clic (sin bloqueador de ventanas) pero vacía.
+    expect(open).toHaveBeenCalledWith('', '_blank');
+    await waitFor(() => expect(win.location.href).not.toBe(''));
+    expect(mockedOffer).toHaveBeenCalledWith('tok', SLOT, ana, { channel: 'WA_ME' });
+    expect(hrefWhenRecorded).toBe('');
+    expect(win.opener).toBeNull();
+    const href = win.location.href;
     expect(href.startsWith('https://wa.me/573101234567?text=')).toBe(true);
     const text = decodeURIComponent(href.split('text=')[1]);
     expect(text).toContain('Hola Ana');
@@ -156,17 +182,72 @@ describe('«Ocupar este hueco» (DX-210)', () => {
     expect(text).toContain('Sede Norte');
     expect(text).toContain('Dra. Pérez');
     expect(text).not.toContain('Endodoncia');
-    await userEvent.click(link);
-    await waitFor(() =>
-      expect(mockedOffer).toHaveBeenCalledWith('tok', SLOT, ana, { channel: 'WA_ME' }),
+    open.mockRestore();
+  });
+
+  it('si no se pudo registrar la oferta (p. ej. el tope), no se abre WhatsApp', async () => {
+    const { win, open } = fakeWindow();
+    mockedList.mockResolvedValue(view([ana]));
+    mockedOffer.mockRejectedValue(new ApiError(409, 'Ya se le ofrecieron 2 huecos hoy'));
+    renderPanel();
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Ofrecer el hueco por WhatsApp a Ana Ríos' }),
     );
+    await waitFor(() => expect(win.close).toHaveBeenCalled());
+    expect(win.location.href).toBe('');
+    expect(toast.error).toHaveBeenCalledWith('Ya se le ofrecieron 2 huecos hoy', expect.anything());
+    open.mockRestore();
+  });
+
+  it('con el bloqueador de ventanas: registra y deja «Abrir WhatsApp» en el aviso', async () => {
+    const open = jest.spyOn(window, 'open').mockReturnValue(null);
+    mockedList.mockResolvedValue(view([ana]));
+    mockedOffer.mockResolvedValue({} as never);
+    renderPanel();
+    await userEvent.click(
+      await screen.findByRole('button', { name: 'Ofrecer el hueco por WhatsApp a Ana Ríos' }),
+    );
+    await waitFor(() =>
+      expect(toast.success).toHaveBeenCalledWith('Oferta a Ana Ríos registrada.', {
+        action: { label: 'Abrir WhatsApp', onClick: expect.any(Function) },
+      }),
+    );
+    open.mockRestore();
+  });
+
+  it('una oferta sin respuesta del hueco: «Anotar respuesta» con teclado la cierra', async () => {
+    mockedList.mockResolvedValue(
+      view([{ ...ana, offersToday: 1, offeredForSlot: true, pendingOfferId: 'of-1' }]),
+    );
+    mockedOutcome.mockResolvedValue();
+    renderPanel();
+    const answer = await screen.findByRole('button', { name: 'Anotar la respuesta de Ana Ríos' });
+    answer.focus();
+    await userEvent.keyboard('{Enter}');
+    const group = screen.getByRole('group', { name: '¿Qué respondió Ana Ríos?' });
+    await userEvent.click(within(group).getByRole('button', { name: 'Aceptó' }));
+    await waitFor(() => expect(mockedOutcome).toHaveBeenCalledWith('tok', 'of-1', 'ACCEPTED'));
+    expect(mockedOffer).not.toHaveBeenCalled();
+    expect(toast.success).toHaveBeenCalledWith('Respuesta de Ana Ríos anotada.');
+    await waitFor(() => expect(mockedList).toHaveBeenCalledTimes(2));
+  });
+
+  it('sin permiso de WhatsApp (DX-128) lo dice y ofrece «Llamar»', async () => {
+    mockedList.mockResolvedValue(
+      view([{ ...ana, whatsappBlocked: true, whatsappBlockedReason: 'NO_OPT_IN', whatsappPhone: null }]),
+    );
+    renderPanel();
+    await screen.findByText('Ana Ríos');
+    expect(screen.queryByRole('button', { name: /WhatsApp/ })).not.toBeInTheDocument();
+    expect(screen.getByText('Sin permiso de WhatsApp: llámalo')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Llamar a Ana Ríos al 3101234567' })).toBeInTheDocument();
   });
 
   it('con baja de WhatsApp (DX-128) no hay botón de WhatsApp: se ofrece «Llamar»', async () => {
     mockedList.mockResolvedValue(view([berta]));
     renderPanel();
     await screen.findByText('Berta Gil');
-    expect(screen.queryByRole('link', { name: /WhatsApp/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /WhatsApp/ })).not.toBeInTheDocument();
     expect(screen.getByRole('link', { name: 'Llamar a Berta Gil al 3101234567' })).toHaveAttribute(
       'href',
       'tel:3101234567',
@@ -196,7 +277,7 @@ describe('«Ocupar este hueco» (DX-210)', () => {
     mockedList.mockResolvedValue(view([{ ...ana, offersToday: 2, offeredForSlot: true }]));
     renderPanel();
     await screen.findByText('Aviso enviado');
-    expect(screen.queryByRole('link', { name: /WhatsApp/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /WhatsApp/ })).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Anotar la llamada a Ana Ríos' })).toBeDisabled();
     expect(screen.getByText('Ya alcanzó el tope de ofertas de hoy')).toBeInTheDocument();
   });
@@ -250,6 +331,7 @@ describe('«Ocupar este hueco» (DX-210)', () => {
     renderPanel({ canAct: false });
     await screen.findByText('Ana Ríos');
     expect(screen.queryByRole('button', { name: /Asignar/ })).not.toBeInTheDocument();
-    expect(screen.queryByRole('link', { name: /WhatsApp/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /WhatsApp/ })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /Anotar/ })).not.toBeInTheDocument();
   });
 });

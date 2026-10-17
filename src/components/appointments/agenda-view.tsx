@@ -609,14 +609,18 @@ export function AgendaView({ token }: AgendaViewProps) {
 
   /**
    * DX-210: abre «Ocupar este hueco». La sede es la de la cita cancelada o,
-   * para un hueco libre, la sede activa (en «Todas las sedes», la primera).
+   * para un hueco libre, la sede activa. En «Todas las sedes» solo hay huecos
+   * libres si la clínica tiene UNA sede (sin ella no hay horario con el que
+   * calcularlos): esa. Nunca una sede cualquiera de la lista; sin sede cierta
+   * no se abre (hay que elegir la sede arriba).
    */
   function openFillOpening(
     slotProviderId: string,
     slot: { start: string; end: string },
     locationId?: string,
   ) {
-    const location = locationId ?? activeLocationId ?? locations[0]?.id;
+    const location =
+      locationId ?? activeLocationId ?? (locations.length === 1 ? locations[0].id : null);
     if (!location) return;
     setDetailAppointment(null);
     setFillSlot({ locationId: location, providerId: slotProviderId, ...slot });

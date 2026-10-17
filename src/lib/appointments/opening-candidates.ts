@@ -60,6 +60,19 @@ export async function createWaitlistOffer(
   });
 }
 
+/** Respuesta del paciente a una oferta pendiente (p. ej. contestó el WhatsApp). */
+export async function recordOfferOutcome(
+  token: string,
+  offerId: string,
+  outcome: OfferOutcome,
+): Promise<void> {
+  await apiFetch(`/appointments/openings/offers/${offerId}`, {
+    method: 'PATCH',
+    token,
+    body: { outcome },
+  });
+}
+
 /** «Asignar» una cita marcada «Adelantar si hay hueco»: `PATCH /appointments/:id/opening`. */
 export async function moveAppointmentToOpening(
   token: string,

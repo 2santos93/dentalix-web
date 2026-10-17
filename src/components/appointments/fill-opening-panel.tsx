@@ -2,7 +2,7 @@
 import * as React from 'react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
-import { CalendarCheck, MessageCircle, Phone, PhoneCall } from 'lucide-react';
+import { CalendarCheck, MessageCircle, MessageCircleReply, Phone, PhoneCall } from 'lucide-react';
 import { ApiError } from '@/lib/api/client';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { whatsAppUrl } from '@/lib/appointments/confirmation-message';
@@ -11,6 +11,7 @@ import {
   listOpeningCandidates,
   moveAppointmentToOpening,
   offerMessage,
+  recordOfferOutcome,
   type OfferOutcome,
   type OpeningCandidate,
   type OpeningCandidates,
@@ -34,7 +35,6 @@ import {
   SheetHeader,
   SheetTitle,
 } from '@/components/ui/sheet';
-import { cn } from '@/lib/utils';
 
 // Copy as constants (i18n-ready, es-first).
 export const fillOpeningCopy = {
@@ -60,11 +60,17 @@ export const fillOpeningCopy = {
   whatsapp: 'Ofrecer por WhatsApp',
   whatsappFor: (name: string) => `Ofrecer el hueco por WhatsApp a ${name}`,
   whatsappBlocked: 'No recibe WhatsApp: llámalo',
+  whatsappNoOptIn: 'Sin permiso de WhatsApp: llámalo',
+  openWhatsApp: 'Abrir WhatsApp',
   call: 'Llamar',
   callFor: (name: string, phone: string) => `Llamar a ${name} al ${phone}`,
   called: 'Llamé',
   calledFor: (name: string) => `Anotar la llamada a ${name}`,
   outcomeLegend: (name: string) => `¿Qué respondió ${name}?`,
+  answer: 'Anotar respuesta',
+  answerFor: (name: string) => `Anotar la respuesta de ${name}`,
+  answerRecorded: (name: string) => `Respuesta de ${name} anotada.`,
+  answerError: 'No pudimos anotar la respuesta. Intenta de nuevo.',
   outcomes: {
     ACCEPTED: 'Aceptó',
     DECLINED: 'No aceptó',
@@ -132,7 +138,9 @@ export function FillOpeningPanel({
   // Candidatos que ya no sirven aquí (el hueco lo ocupó otro al asignarlos).
   const [gone, setGone] = useState<string[]>([]);
   const [busyKey, setBusyKey] = useState<string | null>(null);
-  const [calling, setCalling] = useState<string | null>(null);
+  // El grupo de resultados abierto: «Llamé» (oferta nueva por teléfono) o
+  // «Anotar respuesta» (a la oferta pendiente de este hueco, p. ej. el WhatsApp).
+  const [outcomeFor, setOutcomeFor] = useState<{ key: string; mode: OutcomeMode } | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -160,17 +168,63 @@ export function FillOpeningPanel({
   const items = (data?.items ?? []).filter((c) => !gone.includes(keyOf(c)));
   const cap = data?.offerCap ?? 2;
 
-  async function recordOffer(
-    c: OpeningCandidate,
-    offer: { channel: 'WA_ME' } | { channel: 'PHONE'; outcome: OfferOutcome },
-  ) {
+  async function recordCall(c: OpeningCandidate, outcome: OfferOutcome) {
     setBusyKey(keyOf(c));
     try {
-      await createWaitlistOffer(token, slot, c, offer);
+      await createWaitlistOffer(token, slot, c, { channel: 'PHONE', outcome });
       toast.success(fillOpeningCopy.offerRecorded(fullName(c)));
-      setCalling(null);
+      setOutcomeFor(null);
     } catch (err) {
       notifyError(apiErrorMessage(err, fillOpeningCopy.offerError));
+    } finally {
+      setBusyKey(null);
+      reload();
+    }
+  }
+
+  /**
+   * «Ofrecer por WhatsApp»: la oferta se registra ANTES de abrir WhatsApp (el
+   * tope del día y el permiso de DX-128 los decide la API; si dice que no, no
+   * se escribe). La pestaña se abre en el mismo clic, en blanco, para que el
+   * bloqueador de ventanas no la frene, y se carga `wa.me` al registrarse. Si
+   * el navegador la bloqueó igualmente, el aviso trae «Abrir WhatsApp».
+   */
+  async function offerByWhatsApp(c: OpeningCandidate, href: string) {
+    const win = window.open('', '_blank');
+    if (win) win.opener = null;
+    setBusyKey(keyOf(c));
+    try {
+      await createWaitlistOffer(token, slot, c, { channel: 'WA_ME' });
+      if (win) {
+        win.location.href = href;
+        toast.success(fillOpeningCopy.offerRecorded(fullName(c)));
+      } else {
+        toast.success(fillOpeningCopy.offerRecorded(fullName(c)), {
+          action: {
+            label: fillOpeningCopy.openWhatsApp,
+            onClick: () => window.open(href, '_blank', 'noopener,noreferrer'),
+          },
+        });
+      }
+    } catch (err) {
+      win?.close();
+      notifyError(apiErrorMessage(err, fillOpeningCopy.offerError));
+    } finally {
+      setBusyKey(null);
+      reload();
+    }
+  }
+
+  /** «Anotar respuesta» a la oferta pendiente del hueco (contestó el WhatsApp). */
+  async function answer(c: OpeningCandidate, outcome: OfferOutcome) {
+    if (!c.pendingOfferId) return;
+    setBusyKey(keyOf(c));
+    try {
+      await recordOfferOutcome(token, c.pendingOfferId, outcome);
+      toast.success(fillOpeningCopy.answerRecorded(fullName(c)));
+      setOutcomeFor(null);
+    } catch (err) {
+      notifyError(apiErrorMessage(err, fillOpeningCopy.answerError));
     } finally {
       setBusyKey(null);
       reload();
@@ -266,11 +320,16 @@ export function FillOpeningPanel({
                     locationName={locationName}
                     canAct={canAct}
                     busy={busyKey === keyOf(c)}
-                    calling={calling === keyOf(c)}
-                    onToggleCalling={() =>
-                      setCalling((prev) => (prev === keyOf(c) ? null : keyOf(c)))
+                    outcomeMode={outcomeFor?.key === keyOf(c) ? outcomeFor.mode : null}
+                    onToggleOutcome={(mode) =>
+                      setOutcomeFor((prev) =>
+                        prev?.key === keyOf(c) && prev.mode === mode ? null : { key: keyOf(c), mode },
+                      )
                     }
-                    onOffer={(offer) => void recordOffer(c, offer)}
+                    onWhatsApp={(href) => void offerByWhatsApp(c, href)}
+                    onOutcome={(mode, outcome) =>
+                      void (mode === 'ANSWER' ? answer(c, outcome) : recordCall(c, outcome))
+                    }
                     onAssign={() => void assign(c)}
                   />
                 ))}
@@ -283,6 +342,8 @@ export function FillOpeningPanel({
   );
 }
 
+type OutcomeMode = 'PHONE' | 'ANSWER';
+
 interface CandidateRowProps {
   candidate: OpeningCandidate;
   cap: number;
@@ -291,9 +352,10 @@ interface CandidateRowProps {
   locationName: string;
   canAct: boolean;
   busy: boolean;
-  calling: boolean;
-  onToggleCalling: () => void;
-  onOffer: (offer: { channel: 'WA_ME' } | { channel: 'PHONE'; outcome: OfferOutcome }) => void;
+  outcomeMode: OutcomeMode | null;
+  onToggleOutcome: (mode: OutcomeMode) => void;
+  onWhatsApp: (href: string) => void;
+  onOutcome: (mode: OutcomeMode, outcome: OfferOutcome) => void;
   onAssign: () => void;
 }
 
@@ -305,9 +367,10 @@ function CandidateRow({
   locationName,
   canAct,
   busy,
-  calling,
-  onToggleCalling,
-  onOffer,
+  outcomeMode,
+  onToggleOutcome,
+  onWhatsApp,
+  onOutcome,
   onAssign,
 }: CandidateRowProps) {
   const name = fullName(c);
@@ -348,27 +411,33 @@ function CandidateRow({
           </p>
         ) : null}
         {c.preferredWindow ? <p>{fillOpeningCopy.prefers(c.preferredWindow)}</p> : null}
-        <p className="flex flex-wrap items-center gap-2 tabular-nums">
-          {fillOpeningCopy.offersToday(c.offersToday, cap)}
+        <div className="flex flex-wrap items-center gap-2 tabular-nums">
+          <span>{fillOpeningCopy.offersToday(c.offersToday, cap)}</span>
           {c.offeredForSlot ? <Badge variant="warning">{fillOpeningCopy.offered}</Badge> : null}
-        </p>
-        {c.whatsappBlocked ? <p className="text-warning">{fillOpeningCopy.whatsappBlocked}</p> : null}
+        </div>
+        {c.whatsappBlocked ? (
+          <p className="text-warning">
+            {c.whatsappBlockedReason === 'NO_OPT_IN'
+              ? fillOpeningCopy.whatsappNoOptIn
+              : fillOpeningCopy.whatsappBlocked}
+          </p>
+        ) : null}
       </div>
 
       {canAct ? (
         <div className="flex flex-col gap-2">
           <div className="flex flex-wrap gap-2">
             {canWhatsApp && waHref && !capReached ? (
-              <a
-                href={waHref}
-                target="_blank"
-                rel="noopener noreferrer"
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
                 aria-label={fillOpeningCopy.whatsappFor(name)}
-                onClick={() => onOffer({ channel: 'WA_ME' })}
-                className={cn(buttonVariants({ variant: 'secondary', size: 'sm' }), busy && 'pointer-events-none opacity-50')}
+                disabled={busy}
+                onClick={() => onWhatsApp(waHref)}
               >
                 <MessageCircle aria-hidden /> {fillOpeningCopy.whatsapp}
-              </a>
+              </Button>
             ) : null}
             {!canWhatsApp && c.phone ? (
               <a
@@ -384,13 +453,27 @@ function CandidateRow({
               size="sm"
               variant="secondary"
               aria-label={fillOpeningCopy.calledFor(name)}
-              aria-expanded={calling}
+              aria-expanded={outcomeMode === 'PHONE'}
               aria-controls={outcomeGroupId}
               disabled={busy || capReached}
-              onClick={onToggleCalling}
+              onClick={() => onToggleOutcome('PHONE')}
             >
               <PhoneCall aria-hidden /> {fillOpeningCopy.called}
             </Button>
+            {c.pendingOfferId ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                aria-label={fillOpeningCopy.answerFor(name)}
+                aria-expanded={outcomeMode === 'ANSWER'}
+                aria-controls={outcomeGroupId}
+                disabled={busy}
+                onClick={() => onToggleOutcome('ANSWER')}
+              >
+                <MessageCircleReply aria-hidden /> {fillOpeningCopy.answer}
+              </Button>
+            ) : null}
             <Button
               type="button"
               size="sm"
@@ -403,7 +486,7 @@ function CandidateRow({
             </Button>
           </div>
           {capReached ? <p className="text-xs text-muted">{fillOpeningCopy.capReached}</p> : null}
-          {calling ? (
+          {outcomeMode ? (
             <div
               id={outcomeGroupId}
               role="group"
@@ -417,7 +500,7 @@ function CandidateRow({
                   size="sm"
                   variant="outline"
                   disabled={busy}
-                  onClick={() => onOffer({ channel: 'PHONE', outcome })}
+                  onClick={() => onOutcome(outcomeMode, outcome)}
                 >
                   {fillOpeningCopy.outcomes[outcome]}
                 </Button>

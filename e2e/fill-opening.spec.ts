@@ -92,6 +92,12 @@ test.beforeAll(async ({ request }) => {
     start: atSede(SLOT_DAY, '10:00').toISOString(),
     end: atSede(SLOT_DAY, '10:30').toISOString(),
   });
+  // DX-128: Ana dio en persona el permiso de WhatsApp; Berta no (se la llama).
+  const optIn = await request.patch(`${API_URL}/patients/${ana}/communication`, {
+    headers: session.headers,
+    data: { whatsappOptIn: true, whatsappOptInSource: 'IN_PERSON' },
+  });
+  expect(optIn.ok()).toBeTruthy();
   await apiPost(request, session, '/waitlist', { patientId: berta, durationMinutes: 30 });
   await apiPost(request, session, '/waitlist', {
     patientId: ana,
@@ -143,9 +149,15 @@ test('1440 px: cancelar una cita → «Ocupar este hueco» → «Asignar» → l
   await expect(rows.nth(1)).toContainText(`Berta ${last}`);
   await expect(rows.nth(2)).toContainText(`Elena ${last}`);
   await expect(rows.nth(2)).toContainText('Cita actual');
-  // WhatsApp sin datos clínicos: nombre de pila, fecha, hora, sede y profesional.
-  const wa = rows.nth(0).getByRole('link', { name: `Ofrecer el hueco por WhatsApp a Ana ${last}` });
-  await expect(wa).toHaveAttribute('href', /^https:\/\/wa\.me\/573101234567\?text=Hola%20Ana/);
+  // WhatsApp solo con el permiso de DX-128 (el texto sin datos clínicos lo
+  // fija el jest del panel); sin él, «Llamar».
+  await expect(
+    rows.nth(0).getByRole('button', { name: `Ofrecer el hueco por WhatsApp a Ana ${last}` }),
+  ).toBeVisible();
+  await expect(rows.nth(1).getByText('Sin permiso de WhatsApp: llámalo')).toBeVisible();
+  await expect(
+    rows.nth(1).getByRole('link', { name: new RegExp(`^Llamar a Berta ${last} al `) }),
+  ).toBeVisible();
 
   await rows.nth(0).getByRole('button', { name: `Asignar el hueco a Ana ${last}` }).click();
   await expect(panel).toBeHidden({ timeout: 10_000 });

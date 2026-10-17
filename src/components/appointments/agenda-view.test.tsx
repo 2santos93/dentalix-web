@@ -10,7 +10,10 @@ import { listPatients } from '@/lib/patients/patients-api';
 import { createConfirmationLink } from '@/lib/appointments/confirmations-api';
 import { getAppointmentReminders } from '@/lib/reminders/reminders-api';
 import { deleteScheduleBlock, listScheduleBlocks } from '@/lib/appointments/schedule-blocks-api';
-import { listWaitlist } from '@/lib/appointments/waitlist-api';
+import { listWaitlist, scheduleFromWaitlist } from '@/lib/appointments/waitlist-api';
+import { listLocations } from '@/lib/locations/locations-api';
+import { getLocationSchedule } from '@/lib/locations/schedule-api';
+import { listOpeningCandidates } from '@/lib/appointments/opening-candidates';
 
 // NOTE: jest.mock's string literal is not alias-rewritten by the SWC
 // transform (only real `import`/`require` specifiers are) — use a relative
@@ -59,6 +62,12 @@ jest.mock('../../lib/clinical-notes/note-templates-api', () => ({
 }));
 jest.mock('../../lib/appointments/waitlist-api', () => ({
   listWaitlist: jest.fn().mockResolvedValue({ items: [], total: 0, page: 1, pageSize: 50 }),
+  scheduleFromWaitlist: jest.fn(),
+}));
+// DX-210: «Ocupar este hueco» (el panel se prueba aparte; aquí, el cableado).
+jest.mock('../../lib/appointments/opening-candidates', () => ({
+  ...jest.requireActual('../../lib/appointments/opening-candidates'),
+  listOpeningCandidates: jest.fn(),
 }));
 
 const mockedCreateAppointment = createAppointment as jest.MockedFunction<typeof createAppointment>;
@@ -934,6 +943,168 @@ describe('AgendaView', () => {
     it('RECEPTION no ve el botón', async () => {
       await openDetail(tokenFor('RECEPTION'));
       expect(screen.queryByRole('button', { name: 'Registrar evolución' })).toBeNull();
+    });
+  });
+  // DX-210: cableado de «Ocupar este hueco» en la vista Día.
+  describe('«Ocupar este hueco» (DX-210)', () => {
+    const mockedListLocations = listLocations as jest.MockedFunction<typeof listLocations>;
+    const mockedSchedule = getLocationSchedule as jest.MockedFunction<typeof getLocationSchedule>;
+    const mockedCandidates = listOpeningCandidates as jest.MockedFunction<typeof listOpeningCandidates>;
+    const mockedScheduleFromWaitlist = scheduleFromWaitlist as jest.MockedFunction<
+      typeof scheduleFromWaitlist
+    >;
+    const tokenFor = (role: string, sub = 'u1') =>
+      `h.${btoa(JSON.stringify({ sub, tenantId: 't1', role }))}.s`;
+    // Lunes 15/06/2026 a mediodía (hora local): la tarde queda libre.
+    const FIXED_NOW = new Date(2026, 5, 15, 12, 0, 0);
+    const today = '2026-06-15';
+    const hours = {
+      timezone: 'America/Bogota',
+      ranges: [{ weekday: FIXED_NOW.getDay(), startMinute: 14 * 60, endMinute: 18 * 60 }],
+    };
+    const sedes = [
+      { id: 'loc-1', name: 'Sede principal', isActive: true },
+      { id: 'loc-2', name: 'Sede Norte', isActive: true },
+    ];
+    const candidate = {
+      kind: 'WAITLIST' as const,
+      patientId: 'pat-9',
+      patientFirstName: 'Ana',
+      patientLastName: 'Ríos',
+      phone: null,
+      whatsappPhone: null,
+      whatsappBlocked: true,
+      whatsappBlockedReason: 'NO_OPT_IN' as const,
+      waitlistEntryId: 'wl-9',
+      appointmentId: null,
+      priority: 'URGENT' as const,
+      durationMinutes: 30,
+      appointmentType: null,
+      reason: null,
+      preferredWindow: null,
+      providerId: null,
+      currentAppointment: null,
+      waitingSince: '2026-06-01T00:00:00.000Z',
+      offersToday: 0,
+      offeredForSlot: false,
+      pendingOfferId: null,
+    };
+
+    beforeEach(() => {
+      fakeDateOnly(FIXED_NOW);
+      mockedListStaff.mockResolvedValue(staff);
+      mockedListAppointments.mockResolvedValue([]);
+      mockedCandidates.mockReset();
+    });
+    afterEach(() => {
+      jest.useRealTimers();
+      window.localStorage.clear();
+      mockedListLocations.mockResolvedValue([{ id: 'loc-1', name: 'Sede principal' }] as never);
+      mockedSchedule.mockResolvedValue(null);
+    });
+
+    it('un hueco libre de la columna abre el panel con la sede activa y su profesional; «Asignar» refresca la agenda', async () => {
+      window.localStorage.setItem('dentalix.activeLocationId', 'loc-2');
+      mockedListLocations.mockResolvedValue(sedes as never);
+      mockedSchedule.mockResolvedValue(hours);
+      mockedCandidates.mockImplementation((_t, slot) =>
+        Promise.resolve({
+          ...slot,
+          timeZone: 'America/Bogota',
+          offerCap: 2,
+          items: [candidate],
+          truncated: false,
+        }),
+      );
+      mockedScheduleFromWaitlist.mockResolvedValue({
+        ...appointment({ id: 'apt-new', start: new Date(`${today}T14:00:00`).toISOString() }),
+        warnings: [],
+      } as never);
+      const user = userEvent.setup();
+      render(
+        <>
+          <AgendaView token={tokenFor('RECEPTION')} />
+          <Toaster />
+        </>,
+      );
+      await user.click(screen.getByRole('button', { name: /^día$/i }));
+      const [gap] = await screen.findAllByRole('button', {
+        name: /^Ocupar el hueco libre de 14:00–18:00 · Dra\. Ana Ríos$/,
+      });
+      await user.click(gap);
+
+      const panel = await screen.findByTestId('fill-opening-panel');
+      expect(within(panel).getByText(/Sede Norte/)).toBeInTheDocument();
+      expect(mockedCandidates).toHaveBeenCalledWith(tokenFor('RECEPTION'), {
+        locationId: 'loc-2',
+        providerId: 'staff-1',
+        start: new Date(`${today}T14:00:00`).toISOString(),
+        end: new Date(`${today}T18:00:00`).toISOString(),
+      });
+
+      const calls = mockedListAppointments.mock.calls.length;
+      await user.click(await within(panel).findByRole('button', { name: 'Asignar el hueco a Ana Ríos' }));
+      await waitFor(() =>
+        expect(mockedScheduleFromWaitlist).toHaveBeenCalledWith(tokenFor('RECEPTION'), 'wl-9', {
+          providerId: 'staff-1',
+          start: new Date(`${today}T14:00:00`).toISOString(),
+        }),
+      );
+      await waitFor(() => expect(screen.queryByTestId('fill-opening-panel')).not.toBeInTheDocument());
+      await waitFor(() => expect(mockedListAppointments.mock.calls.length).toBeGreaterThan(calls));
+      expect(await screen.findByText('La agenda ya muestra al paciente en el hueco.')).toBeInTheDocument();
+    });
+
+    it('«Todas las sedes» con varias sedes: sin huecos libres inventados; la cita cancelada usa SU sede', async () => {
+      mockedListLocations.mockResolvedValue(sedes as never);
+      mockedSchedule.mockResolvedValue(hours);
+      mockedCandidates.mockResolvedValue({
+        locationId: 'loc-2',
+        providerId: 'staff-1',
+        start: '',
+        end: '',
+        timeZone: 'America/Bogota',
+        offerCap: 2,
+        items: [],
+        truncated: false,
+      });
+      mockedListAppointments.mockResolvedValue([
+        appointment({
+          id: 'apt-x',
+          patientFirstName: 'María',
+          status: 'CANCELLED',
+          locationId: 'loc-2',
+          start: new Date(`${today}T15:00:00`).toISOString(),
+          end: new Date(`${today}T15:30:00`).toISOString(),
+        }),
+      ]);
+      const user = userEvent.setup();
+      render(<AgendaView token={tokenFor('RECEPTION')} />);
+      await user.click(screen.getByRole('button', { name: /^día$/i }));
+      const fill = await screen.findByTestId('fill-cancelled');
+      expect(screen.queryAllByTestId('free-gap')).toHaveLength(0);
+      await user.click(fill);
+      await waitFor(() =>
+        expect(mockedCandidates).toHaveBeenCalledWith(
+          tokenFor('RECEPTION'),
+          expect.objectContaining({ locationId: 'loc-2', providerId: 'staff-1' }),
+        ),
+      );
+    });
+
+    it('el odontólogo solo tiene «Ocupar» en su columna; la asistente, en ninguna', async () => {
+      mockedSchedule.mockResolvedValue(hours);
+      const user = userEvent.setup();
+      const { unmount } = render(<AgendaView token={tokenFor('DENTIST', 'staff-2')} />);
+      await user.click(screen.getByRole('button', { name: /^día$/i }));
+      const gaps = await screen.findAllByTestId('free-gap');
+      expect(gaps.every((g) => /Dr\. Luis Gómez$/.test(g.getAttribute('aria-label') ?? ''))).toBe(true);
+      unmount();
+
+      render(<AgendaView token={tokenFor('ASSISTANT')} />);
+      await user.click(screen.getByRole('button', { name: /^día$/i }));
+      await screen.findAllByTestId('day-column');
+      expect(screen.queryAllByTestId('free-gap')).toHaveLength(0);
     });
   });
 });
