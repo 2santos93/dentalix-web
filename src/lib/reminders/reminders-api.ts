@@ -58,7 +58,8 @@ export const SKIP_REASON_LABELS: Record<ReminderSkipReason, string> = {
   RESCHEDULED: 'reprogramada',
   DELETED: 'cita eliminada',
   DISABLED: 'recordatorios desactivados',
-  TOO_LATE: 'la cita ya había empezado',
+  // La cita ya empezó, o el envío iba a salir más de 1 h tarde (worker caído).
+  TOO_LATE: 'fuera de plazo',
 };
 
 /** «2 h», «1 día», «2 días»: días si la antelación es en días enteros. */

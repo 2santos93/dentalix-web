@@ -8,6 +8,7 @@ import {
   getAppointmentReminders,
   leadHoursLabel,
   leadListLabel,
+  SKIP_REASON_LABELS,
   listReminderSettings,
   updateReminderSettings,
 } from './reminders-api';
@@ -75,5 +76,11 @@ describe('reminders-api', () => {
     expect(leadListLabel([48, 2])).toBe('2 días y 2 h antes');
     expect(leadListLabel([72, 24, 2])).toBe('3 días, 1 día y 2 h antes');
     expect(leadListLabel([])).toBe('Sin antelaciones');
+  });
+
+  it('TOO_LATE no culpa a la hora de la cita: también es un envío atrasado', () => {
+    // La API omite con TOO_LATE si la cita empezó o si el trabajo corrió más
+    // de 1 h tarde (worker caído): «la cita ya había empezado» no es cierto.
+    expect(SKIP_REASON_LABELS.TOO_LATE).toBe('fuera de plazo');
   });
 });
