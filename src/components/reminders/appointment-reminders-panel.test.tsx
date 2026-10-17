@@ -35,6 +35,7 @@ describe('AppointmentRemindersPanel (DX-026)', () => {
     mockedGet.mockResolvedValue({
       enabled: true,
       leadHours: [48, 2],
+      patientBlocker: null,
       items: [
         item({
           state: 'SENT',
@@ -71,6 +72,7 @@ describe('AppointmentRemindersPanel (DX-026)', () => {
     mockedGet.mockResolvedValue({
       enabled: true,
       leadHours: [48, 2],
+      patientBlocker: null,
       items: [
         item({ state: 'MISSED' }),
         item({ leadHours: 2, state: 'SKIPPED', skipReason: 'NO_EMAIL' }),
@@ -91,14 +93,14 @@ describe('AppointmentRemindersPanel (DX-026)', () => {
   });
 
   it('vacío: sede sin recordatorios, o nada por salir', async () => {
-    mockedGet.mockResolvedValueOnce({ enabled: false, leadHours: [], items: [] });
+    mockedGet.mockResolvedValueOnce({ enabled: false, leadHours: [], patientBlocker: null, items: [] });
     const { unmount } = render(<AppointmentRemindersPanel token="tok" appointmentId="a-1" />);
     expect(
       await screen.findByText('La sede de esta cita no tiene recordatorios automáticos.'),
     ).toBeInTheDocument();
     unmount();
 
-    mockedGet.mockResolvedValueOnce({ enabled: true, leadHours: [2], items: [] });
+    mockedGet.mockResolvedValueOnce({ enabled: true, leadHours: [2], patientBlocker: null, items: [] });
     render(<AppointmentRemindersPanel token="tok" appointmentId="a-2" />);
     expect(await screen.findByText('Esta cita no tiene recordatorios por salir.')).toBeInTheDocument();
   });
@@ -107,12 +109,60 @@ describe('AppointmentRemindersPanel (DX-026)', () => {
     const user = setupUser();
     mockedGet
       .mockRejectedValueOnce(new ApiError(500, 'Caído'))
-      .mockResolvedValueOnce({ enabled: true, leadHours: [2], items: [item({ leadHours: 2 })] });
+      .mockResolvedValueOnce({
+        enabled: true,
+        leadHours: [2],
+        patientBlocker: null,
+        items: [item({ leadHours: 2 })],
+      });
     render(<AppointmentRemindersPanel token="tok" appointmentId="a-1" />);
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent('No pudimos cargar los recordatorios de la cita.');
     await user.click(within(alert).getByRole('button', { name: /reintentar/i }));
     expect(await screen.findByRole('list', { name: 'Recordatorios de la cita' })).toBeInTheDocument();
     expect(mockedGet).toHaveBeenCalledTimes(2);
+  });
+
+  // DX-128: la preferencia del paciente explica por qué no hay nada por salir.
+  it.each([
+    ['OPTED_OUT', 'El paciente se dio de baja de los recordatorios automáticos.'],
+    ['CHANNEL_NONE', 'El paciente no quiere avisos automáticos (canal: ninguno).'],
+    [
+      'CHANNEL_WHATSAPP',
+      'El canal del paciente es WhatsApp: no recibe el email automático. Usa «Abrir WhatsApp» para escribirle.',
+    ],
+  ] as const)('con %s lo dice en vez de «sin recordatorios por salir»', async (blocker, text) => {
+    mockedGet.mockResolvedValue({ enabled: true, leadHours: [2], patientBlocker: blocker, items: [] });
+    render(<AppointmentRemindersPanel token="tok" appointmentId="a-1" />);
+    expect(await screen.findByText(text)).toHaveAttribute('role', 'status');
+    expect(screen.queryByText('Esta cita no tiene recordatorios por salir.')).not.toBeInTheDocument();
+  });
+
+  it('lo ya enviado se sigue viendo, con el aviso de la baja debajo', async () => {
+    mockedGet.mockResolvedValue({
+      enabled: true,
+      leadHours: [48, 2],
+      patientBlocker: 'OPTED_OUT',
+      items: [item({ state: 'SENT', sentAt: '2026-10-14T14:00:00.000Z' })],
+    });
+    render(<AppointmentRemindersPanel token="tok" appointmentId="a-1" />);
+    expect(await screen.findByRole('list', { name: 'Recordatorios de la cita' })).toBeInTheDocument();
+    expect(screen.getByText('El paciente se dio de baja de los recordatorios automáticos.')).toBeInTheDocument();
+  });
+
+  it('nombra los motivos de omisión nuevos', async () => {
+    mockedGet.mockResolvedValue({
+      enabled: true,
+      leadHours: [48, 2],
+      patientBlocker: null,
+      items: [
+        item({ state: 'SKIPPED', skipReason: 'OPTED_OUT' }),
+        item({ leadHours: 2, state: 'SKIPPED', skipReason: 'CHANNEL_WHATSAPP' }),
+      ],
+    });
+    render(<AppointmentRemindersPanel token="tok" appointmentId="a-1" />);
+    const list = await screen.findByRole('list', { name: 'Recordatorios de la cita' });
+    expect(list).toHaveTextContent('Omitido: el paciente se dio de baja');
+    expect(list).toHaveTextContent('Omitido: su canal es WhatsApp');
   });
 });

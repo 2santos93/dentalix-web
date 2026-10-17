@@ -9,6 +9,7 @@ export type UpdateReminderSettingsInput = components['schemas']['UpdateReminderS
 export type AppointmentReminders = components['schemas']['AppointmentRemindersDto'];
 export type AppointmentReminderItem = components['schemas']['AppointmentReminderItemDto'];
 export type ReminderSkipReason = NonNullable<AppointmentReminderItem['skipReason']>;
+export type PatientReminderBlocker = NonNullable<AppointmentReminders['patientBlocker']>;
 
 /** Límites de la API (y del CHECK de la tabla). */
 export const MAX_REMINDER_LEADS = 3;
@@ -60,6 +61,18 @@ export const SKIP_REASON_LABELS: Record<ReminderSkipReason, string> = {
   DISABLED: 'recordatorios desactivados',
   // La cita ya empezó, o el envío iba a salir más de 1 h tarde (worker caído).
   TOO_LATE: 'fuera de plazo',
+  // DX-128: la preferencia del paciente cambió después de encolarse.
+  OPTED_OUT: 'el paciente se dio de baja',
+  CHANNEL_NONE: 'el paciente no quiere avisos',
+  CHANNEL_WHATSAPP: 'su canal es WhatsApp',
+};
+
+/** DX-128: por qué este paciente no recibe el email automático. */
+export const PATIENT_BLOCKER_LABELS: Record<PatientReminderBlocker, string> = {
+  OPTED_OUT: 'El paciente se dio de baja de los recordatorios automáticos.',
+  CHANNEL_NONE: 'El paciente no quiere avisos automáticos (canal: ninguno).',
+  CHANNEL_WHATSAPP:
+    'El canal del paciente es WhatsApp: no recibe el email automático. Usa «Abrir WhatsApp» para escribirle.',
 };
 
 /** «2 h», «1 día», «2 días»: días si la antelación es en días enteros. */
