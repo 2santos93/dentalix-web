@@ -450,6 +450,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/patients/{id}/communication": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Comunicaciones del paciente (DX-128) */
+        get: operations["PatientCommunicationController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Cambiar canal, móvil, opt-in de WhatsApp o baja (DX-128)
+         * @description Solo recepción y ADMIN. El móvil se normaliza a E.164 con el país de la sede. WHATSAPP exige un móvil válido (400 `WHATSAPP_REQUIRES_VALID_MOBILE`). Queda en la auditoría con el autor, los campos y el origen.
+         */
+        patch: operations["PatientCommunicationController_update"];
+        trace?: never;
+    };
     "/api/v1/catalog/items": {
         parameters: {
             query?: never;
@@ -1959,6 +1980,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/public/reminder-opt-outs/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Ver el enlace de baja de los recordatorios */
+        get: operations["PublicReminderOptOutsController_get"];
+        put?: never;
+        /**
+         * Darse de baja de los recordatorios (idempotente)
+         * @description Registra la baja del paciente (`reminderOptOutAt`, origen LINK) y la audita sin actor. Repetirlo responde lo mismo sin escribir.
+         */
+        post: operations["PublicReminderOptOutsController_confirm"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
 }
 export type webhooks = Record<string, never>;
 export interface components {
@@ -2001,6 +2043,11 @@ export interface components {
             from: components["schemas"]["AuditAppointmentSlotDto"];
             to: components["schemas"]["AuditAppointmentSlotDto"];
         };
+        /**
+         * @description DX-128: de dónde salió un cambio de canal, opt-in o baja de recordatorios (en persona, enlace, mensaje del paciente o anotado por el personal).
+         * @enum {string}
+         */
+        AuditOrigin: "IN_PERSON" | "LINK" | "MESSAGE" | "STAFF";
         AuditMetadataDto: {
             /** @description UPDATE: nombres de los campos enviados (nunca sus valores). */
             changedFields?: string[];
@@ -2012,6 +2059,8 @@ export interface components {
             reason?: string;
             /** @description DX-121: cita movida — hora y profesional antes y después (nunca datos del paciente). */
             move?: components["schemas"]["AuditAppointmentMoveDto"];
+            /** @description DX-128: de dónde salió un cambio de canal, opt-in o baja de recordatorios (en persona, enlace, mensaje del paciente o anotado por el personal). */
+            origin?: components["schemas"]["AuditOrigin"];
         };
         AuditEventDto: {
             /** Format: uuid */
@@ -2353,6 +2402,15 @@ export interface components {
          * @enum {string}
          */
         RetentionExtension: "NONE" | "DOUBLE" | "PERMANENT";
+        /**
+         * @description DX-128: canal de los avisos automáticos (EMAIL, WHATSAPP o NONE). Detalle en GET /patients/:id/communication.
+         * @enum {string}
+         */
+        ContactChannel: "EMAIL" | "WHATSAPP" | "NONE";
+        /** @enum {string} */
+        WhatsappOptInSource: "IN_PERSON" | "LINK" | "MESSAGE";
+        /** @enum {string} */
+        ReminderOptOutSource: "LINK" | "MESSAGE" | "STAFF";
         PatientDto: {
             /** Format: uuid */
             id: string;
@@ -2421,6 +2479,19 @@ export interface components {
              * @description DX-039: cuándo se vaciaron sus datos no clínicos (supresión parcial).
              */
             partiallySuppressedAt: string | null;
+            /** @description DX-128: canal de los avisos automáticos (EMAIL, WHATSAPP o NONE). Detalle en GET /patients/:id/communication. */
+            contactChannel: components["schemas"]["ContactChannel"];
+            /** Format: date-time */
+            whatsappOptInAt: string | null;
+            whatsappOptInSource: components["schemas"]["WhatsappOptInSource"] | null;
+            /** Format: uuid */
+            whatsappOptInById: string | null;
+            /**
+             * Format: date-time
+             * @description DX-128: baja de los recordatorios automáticos.
+             */
+            reminderOptOutAt: string | null;
+            reminderOptOutSource: components["schemas"]["ReminderOptOutSource"] | null;
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
@@ -2492,6 +2563,65 @@ export interface components {
         PartialSuppressionDto: {
             /** @description Motivo (obligatorio). Queda en el rastro de retención del paciente con el autor y la fecha; no se copia al registro de auditoría. */
             reason: string;
+        };
+        /**
+         * @description MISSING: sin móvil. INVALID: no es un móvil válido para el país de la sede (no puede ser canal WhatsApp).
+         * @enum {string}
+         */
+        MobileStatus: "MISSING" | "VALID" | "INVALID";
+        CommunicationActorDto: {
+            /** Format: uuid */
+            id: string;
+            /** @description null si ya no es miembro de la clínica. */
+            fullName: string | null;
+        };
+        WhatsappOptInDto: {
+            /** Format: date-time */
+            at: string;
+            source: components["schemas"]["WhatsappOptInSource"];
+            /** @description Quién lo registró en la clínica; null si lo dio el propio paciente. */
+            recordedBy: components["schemas"]["CommunicationActorDto"] | null;
+        };
+        ReminderOptOutDto: {
+            /** Format: date-time */
+            at: string;
+            /** @description LINK: enlace del email. MESSAGE: respondió «BAJA» al mensaje. STAFF: lo anotó recepción. */
+            source: components["schemas"]["ReminderOptOutSource"];
+        };
+        PatientCommunicationDto: {
+            /** Format: uuid */
+            patientId: string;
+            /** @description Canal de los avisos automáticos (recordatorios). NONE: ninguno. No es el consentimiento de marketing (DX-037). */
+            contactChannel: components["schemas"]["ContactChannel"];
+            /** @description Canal con el que nacen los pacientes de la clínica. */
+            clinicDefaultChannel: components["schemas"]["ContactChannel"];
+            /** @description Tal como está guardado. */
+            phone: string | null;
+            /**
+             * @description E.164, solo si es un móvil válido.
+             * @example +573101234567
+             */
+            phoneE164: string | null;
+            /** @description MISSING: sin móvil. INVALID: no es un móvil válido para el país de la sede (no puede ser canal WhatsApp). */
+            phoneStatus: components["schemas"]["MobileStatus"];
+            /**
+             * @description País con el que se valida un número sin indicativo: el de la sede activa o la principal.
+             * @example CO
+             */
+            phoneCountry: string | null;
+            email: string | null;
+            whatsappOptIn: components["schemas"]["WhatsappOptInDto"] | null;
+            reminderOptOut: components["schemas"]["ReminderOptOutDto"] | null;
+        };
+        UpdatePatientCommunicationDto: {
+            contactChannel?: components["schemas"]["ContactChannel"];
+            /** @description Móvil. Se guarda en E.164 si es válido para el país de la sede; null o vacío lo borra. */
+            phone?: string | null;
+            /** @description true registra el opt-in de WhatsApp (exige `whatsappOptInSource` y un móvil válido); false lo retira. */
+            whatsappOptIn?: boolean;
+            whatsappOptInSource?: components["schemas"]["WhatsappOptInSource"];
+            /** @description true anota la baja de los recordatorios a petición del paciente (origen STAFF); false la quita y los reactiva. */
+            reminderOptOut?: boolean;
         };
         CreateCatalogItemDto: {
             /** @description Unique code within the tenant */
@@ -5414,15 +5544,20 @@ export interface components {
             leadHours: number[];
         };
         /**
+         * @description DX-128: por qué el paciente no recibe el email automático (se dio de baja, o su canal es NONE o WHATSAPP). Con él no hay recordatorios pendientes.
+         * @enum {string}
+         */
+        PatientReminderBlocker: "OPTED_OUT" | "CHANNEL_NONE" | "CHANNEL_WHATSAPP";
+        /**
          * @description SENT: dejado en el outbox de email (sentAt). SKIPPED: omitido (skipReason). SENDING: entregándose. PENDING: saldrá en dueAt. MISSED: su hora pasó sin enviarse (la cita se agendó después).
          * @enum {string}
          */
         AppointmentReminderState: "SENT" | "SKIPPED" | "SENDING" | "PENDING" | "MISSED";
         /**
-         * @description NO_EMAIL sin email · CANCELLED/COMPLETED/NO_SHOW estado de la cita · RESCHEDULED a otra hora · DELETED retirada · DISABLED la sede los desactivó · TOO_LATE fuera de plazo (la cita ya había empezado o su hora pasó hace más de 1 h)
+         * @description NO_EMAIL sin email · OPTED_OUT el paciente se dio de baja · CHANNEL_NONE / CHANNEL_WHATSAPP su canal no es el email (DX-128) · CANCELLED/COMPLETED/NO_SHOW estado de la cita · RESCHEDULED a otra hora · DELETED retirada · DISABLED la sede los desactivó · TOO_LATE fuera de plazo (la cita ya había empezado o su hora pasó hace más de 1 h)
          * @enum {string}
          */
-        AppointmentReminderSkipReason: "NO_EMAIL" | "CANCELLED" | "COMPLETED" | "NO_SHOW" | "RESCHEDULED" | "DELETED" | "DISABLED" | "TOO_LATE";
+        AppointmentReminderSkipReason: "NO_EMAIL" | "CANCELLED" | "COMPLETED" | "NO_SHOW" | "RESCHEDULED" | "DELETED" | "DISABLED" | "TOO_LATE" | "OPTED_OUT" | "CHANNEL_NONE" | "CHANNEL_WHATSAPP";
         /**
          * @description Entrega del email por el proveedor (solo si se envió)
          * @enum {string}
@@ -5445,7 +5580,7 @@ export interface components {
             state: components["schemas"]["AppointmentReminderState"];
             /** Format: date-time */
             sentAt: string | null;
-            /** @description NO_EMAIL sin email · CANCELLED/COMPLETED/NO_SHOW estado de la cita · RESCHEDULED a otra hora · DELETED retirada · DISABLED la sede los desactivó · TOO_LATE fuera de plazo (la cita ya había empezado o su hora pasó hace más de 1 h) */
+            /** @description NO_EMAIL sin email · OPTED_OUT el paciente se dio de baja · CHANNEL_NONE / CHANNEL_WHATSAPP su canal no es el email (DX-128) · CANCELLED/COMPLETED/NO_SHOW estado de la cita · RESCHEDULED a otra hora · DELETED retirada · DISABLED la sede los desactivó · TOO_LATE fuera de plazo (la cita ya había empezado o su hora pasó hace más de 1 h) */
             skipReason: components["schemas"]["AppointmentReminderSkipReason"] | null;
             /** @description Entrega del email por el proveedor (solo si se envió) */
             emailDelivery: components["schemas"]["ReminderEmailDelivery"] | null;
@@ -5462,7 +5597,29 @@ export interface components {
              *     ]
              */
             leadHours: number[];
+            /** @description DX-128: por qué el paciente no recibe el email automático (se dio de baja, o su canal es NONE o WHATSAPP). Con él no hay recordatorios pendientes. */
+            patientBlocker: components["schemas"]["PatientReminderBlocker"] | null;
             items: components["schemas"]["AppointmentReminderItemDto"][];
+        };
+        /**
+         * @description ACTIVE: el paciente sigue recibiendo recordatorios (puede darse de baja). OPTED_OUT: ya no los recibe (ver `optedOutAt`).
+         * @enum {string}
+         */
+        PublicReminderOptOutStatus: "ACTIVE" | "OPTED_OUT";
+        PublicReminderOptOutClinicDto: {
+            name: string;
+            /** @example #0E7490 */
+            primaryColor: string;
+            logoUrl: string | null;
+        };
+        PublicReminderOptOutDto: {
+            /** @description ACTIVE: el paciente sigue recibiendo recordatorios (puede darse de baja). OPTED_OUT: ya no los recibe (ver `optedOutAt`). */
+            status: components["schemas"]["PublicReminderOptOutStatus"];
+            /** @description Solo el nombre de pila. */
+            patientFirstName: string | null;
+            /** Format: date-time */
+            optedOutAt: string | null;
+            clinic: components["schemas"]["PublicReminderOptOutClinicDto"] | null;
         };
     };
     responses: never;
@@ -6390,6 +6547,80 @@ export interface operations {
             };
             /** @description La HC no está en retención */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientCommunicationController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PatientCommunicationDto"];
+                };
+            };
+            /** @description Paciente no encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientCommunicationController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdatePatientCommunicationDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PatientCommunicationDto"];
+                };
+            };
+            /** @description Validación (mensaje en español) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo recepción o un administrador pueden cambiar el canal de comunicación del paciente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente no encontrado */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -10682,6 +10913,76 @@ export interface operations {
             };
             /** @description Cita no encontrada en esta clínica */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PublicReminderOptOutsController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicReminderOptOutDto"];
+                };
+            };
+            /** @description Token desconocido o de otra clínica. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PublicReminderOptOutsController_confirm: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicReminderOptOutDto"];
+                };
+            };
+            /** @description Token desconocido o de otra clínica. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
