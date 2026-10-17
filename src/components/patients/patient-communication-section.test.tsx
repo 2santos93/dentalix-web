@@ -34,12 +34,20 @@ function comms(over: Partial<PatientCommunication> = {}): PatientCommunication {
     email: 'ana@example.com',
     whatsappOptIn: null,
     reminderOptOut: null,
+    recipient: { kind: 'PATIENT', name: 'Ana', minor: false },
     ...over,
   };
 }
 
-function renderSection(canEdit = true) {
-  return render(<PatientCommunicationSection token="tok" patientId="p1" canEdit={canEdit} />);
+function renderSection(canEdit = true, onChanged?: (c: PatientCommunication) => void) {
+  return render(
+    <PatientCommunicationSection
+      token="tok"
+      patientId="p1"
+      canEdit={canEdit}
+      onChanged={onChanged}
+    />,
+  );
 }
 
 describe('PatientCommunicationSection (DX-128)', () => {
@@ -189,5 +197,48 @@ describe('PatientCommunicationSection (DX-128)', () => {
     expect(
       await screen.findByText(/Dado de baja el 17\/10\/2026, anotada por la clínica/),
     ).toBeInTheDocument();
+  });
+
+  it('avisa a la ficha del cambio guardado (el teléfono de «Datos» no se queda viejo)', async () => {
+    mockedGet.mockResolvedValue(comms({ phone: null, phoneE164: null, phoneStatus: 'MISSING' }));
+    const saved = comms({ phone: '+573101234567' });
+    mockedUpdate.mockResolvedValue(saved);
+    const onChanged = jest.fn();
+    const user = setupUser();
+    renderSection(true, onChanged);
+    await user.click(await screen.findByRole('button', { name: 'Editar comunicaciones' }));
+    const dialog = await screen.findByRole('dialog');
+    await user.type(within(dialog).getByLabelText('Móvil'), '310 123 4567');
+    await user.click(within(dialog).getByRole('button', { name: 'Guardar' }));
+    await waitFor(() => expect(onChanged).toHaveBeenCalledWith(saved));
+    expect(onChanged).toHaveBeenCalledTimes(1);
+  });
+
+  it('un adulto no muestra destinatario; un menor, que los avisos van a su tutor', async () => {
+    mockedGet.mockResolvedValueOnce(comms());
+    const { unmount } = renderSection();
+    expect(await screen.findByText('+57 310 123 4567')).toBeInTheDocument();
+    expect(screen.queryByText('Destinatario de los avisos')).not.toBeInTheDocument();
+    unmount();
+
+    mockedGet.mockResolvedValueOnce(
+      comms({ recipient: { kind: 'GUARDIAN', name: 'Claudia', minor: true } }),
+    );
+    renderSection();
+    expect(await screen.findByText('Destinatario de los avisos')).toBeInTheDocument();
+    expect(screen.getByText('Destinatario de los avisos').nextSibling).toHaveTextContent(
+      'Su tutor/a, Claudia (menor de edad)',
+    );
+  });
+
+  it('un menor sin tutor ni contacto lo advierte', async () => {
+    mockedGet.mockResolvedValue(
+      comms({ recipient: { kind: 'PATIENT', name: 'Mateo', minor: true } }),
+    );
+    renderSection();
+    expect(await screen.findByText('Destinatario de los avisos')).toBeInTheDocument();
+    expect(screen.getByText('Destinatario de los avisos').nextSibling).toHaveTextContent(
+      'El paciente: es menor de edad y no tiene tutor ni contacto registrado',
+    );
   });
 });

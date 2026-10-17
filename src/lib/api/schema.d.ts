@@ -2588,6 +2588,19 @@ export interface components {
             /** @description LINK: enlace del email. MESSAGE: respondió «BAJA» al mensaje. STAFF: lo anotó recepción. */
             source: components["schemas"]["ReminderOptOutSource"];
         };
+        /**
+         * @description PATIENT: el propio paciente. Un menor: GUARDIAN (su tutor) o, sin tutor, CONTACT (su contacto principal).
+         * @enum {string}
+         */
+        CommunicationRecipientKind: "PATIENT" | "GUARDIAN" | "CONTACT";
+        CommunicationRecipientDto: {
+            /** @description PATIENT: el propio paciente. Un menor: GUARDIAN (su tutor) o, sin tutor, CONTACT (su contacto principal). */
+            kind: components["schemas"]["CommunicationRecipientKind"];
+            /** @description Nombre de pila de a quien se dirigen los avisos. */
+            name: string | null;
+            /** @description Menor de edad (menos de 18 años). */
+            minor: boolean;
+        };
         PatientCommunicationDto: {
             /** Format: uuid */
             patientId: string;
@@ -2612,6 +2625,8 @@ export interface components {
             email: string | null;
             whatsappOptIn: components["schemas"]["WhatsappOptInDto"] | null;
             reminderOptOut: components["schemas"]["ReminderOptOutDto"] | null;
+            /** @description A quién se dirigen los avisos (como Dentrix Ascend: un menor, a su tutor o contacto principal). Usan el correo y el móvil de la ficha. */
+            recipient: components["schemas"]["CommunicationRecipientDto"];
         };
         UpdatePatientCommunicationDto: {
             contactChannel?: components["schemas"]["ContactChannel"];

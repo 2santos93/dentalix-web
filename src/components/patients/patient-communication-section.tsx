@@ -65,7 +65,20 @@ const copy = {
   optOutLabel: 'Dado de baja de los recordatorios automáticos',
   optOutHint: 'Márcalo si el paciente pidió no recibir más recordatorios; desmárcalo para reactivarlos.',
   saveError: 'No pudimos guardar las comunicaciones.',
+  // Para un menor, los avisos se dirigen a su tutor o contacto principal.
+  recipient: 'Destinatario de los avisos',
+  recipientGuardian: (name: string | null) =>
+    `Su tutor/a${name ? `, ${name}` : ''} (menor de edad)`,
+  recipientContact: (name: string | null) =>
+    `Su contacto principal${name ? `, ${name}` : ''} (menor de edad)`,
+  recipientMinorAlone: 'El paciente: es menor de edad y no tiene tutor ni contacto registrado',
 };
+
+function recipientLabel(recipient: PatientCommunication['recipient']): string {
+  if (recipient.kind === 'GUARDIAN') return copy.recipientGuardian(recipient.name);
+  if (recipient.kind === 'CONTACT') return copy.recipientContact(recipient.name);
+  return copy.recipientMinorAlone;
+}
 
 const CHANNELS: ContactChannel[] = ['EMAIL', 'WHATSAPP', 'NONE'];
 const SOURCES: WhatsappOptInSource[] = ['IN_PERSON', 'LINK', 'MESSAGE'];
@@ -115,6 +128,11 @@ interface PatientCommunicationSectionProps {
   patientId: string;
   /** Recepción y ADMIN; el profesional lo ve en solo lectura (la API también lo exige). */
   canEdit: boolean;
+  /**
+   * Tras guardar: la ficha actualiza su copia del paciente (el teléfono que
+   * muestra «Datos» y el que siembra «Editar» salen de ahí).
+   */
+  onChanged?: (communication: PatientCommunication) => void;
 }
 
 /**
@@ -127,6 +145,7 @@ export function PatientCommunicationSection({
   token,
   patientId,
   canEdit,
+  onChanged,
 }: PatientCommunicationSectionProps) {
   const ids = useId();
   const [data, setData] = useState<PatientCommunication | null>(null);
@@ -178,8 +197,10 @@ export function PatientCommunicationSection({
     setSaving(true);
     setSaveError(null);
     try {
-      setData(await updatePatientCommunication(token, patientId, input));
+      const saved = await updatePatientCommunication(token, patientId, input);
+      setData(saved);
       setDraft(null);
+      onChanged?.(saved);
     } catch (err) {
       setSaveError(apiErrorMessage(err, { fallback: copy.saveError }));
     } finally {
@@ -266,6 +287,9 @@ export function PatientCommunicationSection({
               <span className="text-muted">{copy.noOptIn}</span>
             )}
           </Row>
+          {data.recipient.minor ? (
+            <Row label={copy.recipient}>{recipientLabel(data.recipient)}</Row>
+          ) : null}
           <Row label={copy.reminders}>
             {optOut ? (
               <Badge variant="warning" className="whitespace-normal tabular-nums">

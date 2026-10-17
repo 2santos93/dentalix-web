@@ -4,7 +4,10 @@ import {
   getPatientCommunication,
   phoneCountryName,
   updatePatientCommunication,
+  withCommunication,
+  type PatientCommunication,
 } from './communication-api';
+import type { Patient } from './patients-api';
 import { apiFetch } from '../api/client';
 
 jest.mock('../api/client', () => ({ apiFetch: jest.fn() }));
@@ -50,5 +53,36 @@ describe('communication-api (DX-128)', () => {
     expect(phoneCountryName('ES')).toBe('España');
     expect(phoneCountryName('MX')).toBe('MX');
     expect(phoneCountryName(null)).toBeNull();
+  });
+
+  it('lleva a la ficha lo que cambió el bloque, sin tocar el resto', () => {
+    const patient = { id: 'p1', firstName: 'Ana', phone: null, email: 'a@x.co' } as unknown as Patient;
+    const saved: PatientCommunication = {
+      patientId: 'p1',
+      contactChannel: 'WHATSAPP',
+      clinicDefaultChannel: 'EMAIL',
+      phone: '+573101234567',
+      phoneE164: '+573101234567',
+      phoneStatus: 'VALID',
+      phoneCountry: 'CO',
+      email: 'a@x.co',
+      whatsappOptIn: {
+        at: '2026-10-17T10:00:00.000Z',
+        source: 'IN_PERSON',
+        recordedBy: { id: 'u1', fullName: 'Rosa' },
+      },
+      reminderOptOut: { at: '2026-10-17T11:00:00.000Z', source: 'STAFF' },
+      recipient: { kind: 'PATIENT', name: 'Ana', minor: false },
+    };
+    expect(withCommunication(patient, saved)).toEqual({
+      ...patient,
+      phone: '+573101234567',
+      contactChannel: 'WHATSAPP',
+      whatsappOptInAt: '2026-10-17T10:00:00.000Z',
+      whatsappOptInSource: 'IN_PERSON',
+      whatsappOptInById: 'u1',
+      reminderOptOutAt: '2026-10-17T11:00:00.000Z',
+      reminderOptOutSource: 'STAFF',
+    });
   });
 });

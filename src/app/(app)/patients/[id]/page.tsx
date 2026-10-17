@@ -16,7 +16,7 @@ import { PatientEditModal } from '@/components/patients/patient-edit-modal';
 import { PatientRecordHeader } from '@/components/patients/patient-record-header';
 import { PatientRetentionSection } from '@/components/patients/patient-retention-section';
 import { PatientCommunicationSection } from '@/components/patients/patient-communication-section';
-import { canEditCommunication } from '@/lib/patients/communication-api';
+import { canEditCommunication, withCommunication } from '@/lib/patients/communication-api';
 import { OdontogramTab } from '@/components/odontogram/odontogram-tab';
 import { TreatmentPlansTab } from '@/components/treatment-plans/treatment-plans-tab';
 import { SectionError } from '@/components/errors/section-error';
@@ -312,6 +312,10 @@ function PatientDetailView() {
               token={accessToken}
               patientId={patientId}
               canEdit={canEditCommunication(getTokenRole(accessToken))}
+              // Sin tocar `updatedAt`: la sección no se vuelve a montar.
+              onChanged={(c) =>
+                setPatient((prev) => (prev ? withCommunication(prev, c) : prev))
+              }
             />
           </TabPanel>
 

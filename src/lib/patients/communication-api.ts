@@ -1,6 +1,7 @@
 import { apiFetch } from '@/lib/api/client';
 import type { components } from '@/lib/api/schema';
 import type { ClinicRole } from '@/lib/me/me-api';
+import type { Patient } from './patients-api';
 
 // DX-128: la API documenta el bloque con @ApiProperty, así que los tipos salen
 // tal cual del contrato generado.
@@ -75,4 +76,21 @@ export function formatE164(e164: string): string {
   const es = /^\+34(\d{3})(\d{2})(\d{2})(\d{2})$/.exec(e164);
   if (es) return `+34 ${es[1]} ${es[2]} ${es[3]} ${es[4]}`;
   return e164;
+}
+
+/**
+ * La ficha con lo que acaba de guardar el bloque «Comunicaciones»: el teléfono
+ * (que «Datos» muestra y «Editar» siembra) y la preferencia. El resto, igual.
+ */
+export function withCommunication(patient: Patient, c: PatientCommunication): Patient {
+  return {
+    ...patient,
+    phone: c.phone,
+    contactChannel: c.contactChannel,
+    whatsappOptInAt: c.whatsappOptIn?.at ?? null,
+    whatsappOptInSource: c.whatsappOptIn?.source ?? null,
+    whatsappOptInById: c.whatsappOptIn?.recordedBy?.id ?? null,
+    reminderOptOutAt: c.reminderOptOut?.at ?? null,
+    reminderOptOutSource: c.reminderOptOut?.source ?? null,
+  };
 }
