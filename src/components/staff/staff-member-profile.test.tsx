@@ -293,5 +293,95 @@ describe('StaffMemberProfile', () => {
       expect(await screen.findByText(/no pudimos desbloquear el inicio de sesión/i)).toBeInTheDocument();
       expect(screen.getByRole('button', { name: /reintentar/i })).toBeInTheDocument();
     });
+
+    it('DX-213: un perfil desactivado no ofrece desbloquear aunque llegue una espera', async () => {
+      mockedGet.mockResolvedValue({ ...bloqueada, status: 'INACTIVE' as const });
+      render(<StaffMemberProfile token="tok" userId="u1" />);
+      await screen.findByText('Ana Ríos');
+      expect(screen.getByText('Inactivo')).toBeInTheDocument();
+      expect(
+        screen.queryByText(/inicio de sesión bloqueado por intentos fallidos/i),
+      ).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole('button', { name: /desbloquear inicio de sesión/i }),
+      ).not.toBeInTheDocument();
+    });
+
+    it('DX-213: con un 409 (la cuenta da acceso a otra clínica) muestra el mensaje tal cual junto al botón, sin toast de reintento', async () => {
+      const OTRA =
+        'Esta cuenta da acceso a otra clínica: pide a la persona que espere unos minutos o que restablezca su contraseña';
+      mockedGet.mockResolvedValue(bloqueada);
+      mockedUnlock.mockRejectedValueOnce(new ApiError(409, OTRA));
+      const user = userEvent.setup();
+      render(
+        <>
+          <StaffMemberProfile token="tok" userId="u1" />
+          <Toaster />
+        </>,
+      );
+      await user.click(
+        await screen.findByRole('button', { name: /desbloquear inicio de sesión/i }),
+      );
+      const dialog = await screen.findByRole('dialog');
+      await user.click(within(dialog).getByRole('button', { name: /sí, desbloquear/i }));
+
+      const alert = await screen.findByRole('alert');
+      expect(alert).toHaveTextContent(OTRA);
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+      // La pantalla sigue entera: datos, espera y el resto del bloque Acceso.
+      expect(screen.getByLabelText(/nombre completo/i)).toHaveValue('Ana Ríos');
+      expect(screen.getByText(/inicio de sesión bloqueado por intentos fallidos/i)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: /desactivar acceso/i })).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /reintentar/i })).not.toBeInTheDocument();
+      // No recarga: el contador no cambió.
+      expect(mockedGet).toHaveBeenCalledTimes(1);
+    });
+
+    it('DX-213: el aviso del 409 desaparece al volver a intentarlo', async () => {
+      mockedGet.mockResolvedValueOnce(bloqueada).mockResolvedValueOnce(activo);
+      mockedUnlock
+        .mockRejectedValueOnce(new ApiError(409, 'Esta cuenta da acceso a otra clínica: pide a la persona que espere unos minutos o que restablezca su contraseña'))
+        .mockResolvedValueOnce(undefined);
+      const user = userEvent.setup();
+      render(<StaffMemberProfile token="tok" userId="u1" />);
+      for (let i = 0; i < 2; i++) {
+        await user.click(
+          await screen.findByRole('button', { name: /desbloquear inicio de sesión/i }),
+        );
+        const dialog = await screen.findByRole('dialog');
+        await user.click(within(dialog).getByRole('button', { name: /sí, desbloquear/i }));
+        await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+      }
+      await waitFor(() =>
+        expect(screen.queryByText(/da acceso a otra clínica/i)).not.toBeInTheDocument(),
+      );
+    });
+
+    it('DX-213: con un 404 (lo desactivaron mientras tanto) avisa y recarga el perfil', async () => {
+      mockedGet
+        .mockResolvedValueOnce(bloqueada)
+        .mockResolvedValueOnce({ ...activo, status: 'INACTIVE' as const });
+      mockedUnlock.mockRejectedValueOnce(new ApiError(404, 'Staff member not found'));
+      const user = userEvent.setup();
+      render(
+        <>
+          <StaffMemberProfile token="tok" userId="u1" />
+          <Toaster />
+        </>,
+      );
+      await user.click(
+        await screen.findByRole('button', { name: /desbloquear inicio de sesión/i }),
+      );
+      const dialog = await screen.findByRole('dialog');
+      await user.click(within(dialog).getByRole('button', { name: /sí, desbloquear/i }));
+      expect(
+        await screen.findByText(/esta persona ya no tiene el acceso activo/i),
+      ).toBeInTheDocument();
+      expect(await screen.findByText('Inactivo')).toBeInTheDocument();
+      expect(mockedGet).toHaveBeenCalledTimes(2);
+      expect(
+        screen.queryByRole('button', { name: /desbloquear inicio de sesión/i }),
+      ).not.toBeInTheDocument();
+    });
   });
 });

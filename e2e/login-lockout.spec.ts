@@ -145,3 +145,133 @@ test.describe('login: demasiados intentos fallidos', () => {
     expect(after.status()).toBe(201);
   });
 });
+
+/**
+ * DX-213 (SEC-038): el contador es por CUENTA. El ADMIN de la clínica A no
+ * puede borrarlo si la cuenta da acceso a otra clínica (409, el mensaje sale
+ * tal cual junto al botón) ni ofrece desbloquear a quien está desactivado en
+ * A (la API manda `loginBlockedUntil: null`). A 390 y 1440 px, claro y oscuro.
+ */
+test.describe('desbloqueo del login: cuentas con acceso a otra clínica', () => {
+  const suffix = randomUUID().slice(0, 8);
+  const OTHER_CLINIC =
+    'Esta cuenta da acceso a otra clínica: pide a la persona que espere unos minutos o que restablezca su contraseña';
+  const clinicA = {
+    subdomain: `desbloqueo-a-${suffix}`,
+    clinicName: `Clínica Desbloqueo A ${suffix}`,
+    fullName: 'Dueña A',
+    email: `desbloqueo-a.${suffix}@example.com`,
+    password: PASSWORD,
+  };
+  const clinicB = {
+    subdomain: `desbloqueo-b-${suffix}`,
+    clinicName: `Clínica Desbloqueo B ${suffix}`,
+    fullName: 'Dueño B',
+    email: `desbloqueo-b.${suffix}@example.com`,
+    password: PASSWORD,
+  };
+  const compartida = {
+    fullName: 'Doctora Compartida',
+    email: `compartida.${suffix}@example.com`,
+    role: 'DENTIST',
+    password: PASSWORD,
+  };
+  const desactivada = {
+    fullName: 'Doctora Desactivada',
+    email: `desactivada.${suffix}@example.com`,
+    role: 'DENTIST',
+    password: PASSWORD,
+  };
+  let originA = '';
+  let originB = '';
+  const ids: Record<string, string> = {};
+
+  test.beforeAll(async ({ playwright }) => {
+    const api = await playwright.request.newContext();
+    const adminA = await registerClinicViaApi(api, clinicA);
+    const adminB = await registerClinicViaApi(api, clinicB);
+    originA = adminA.origin;
+    originB = adminB.origin;
+    for (const person of [compartida, desactivada]) {
+      await addStaffViaApi(api, adminA, person);
+      await addStaffViaApi(api, adminB, person);
+    }
+    const staff = await api.get(`${API_URL}/staff`, { headers: adminA.headers });
+    const members = (await staff.json()) as { userId: string; email: string }[];
+    for (const person of [compartida, desactivada]) {
+      ids[person.email] = members.find((m) => m.email === person.email)!.userId;
+    }
+    const res = await api.delete(`${API_URL}/staff/${ids[desactivada.email]}`, {
+      headers: adminA.headers,
+    });
+    expect(res.status()).toBe(204);
+    await api.dispose();
+  });
+
+  async function lock(request: APIRequestContext, email: string, origin: string) {
+    const host = new URL(origin).host;
+    for (let i = 0; i < 6; i++) {
+      await request.post(`${API_URL}/auth/login`, {
+        headers: { 'X-Tenant-Host': host },
+        data: { email, password: WRONG },
+      });
+    }
+    const blocked = await request.post(`${API_URL}/auth/login`, {
+      headers: { 'X-Tenant-Host': host },
+      data: { email, password: PASSWORD },
+    });
+    expect(blocked.status()).toBe(429);
+  }
+
+  async function openProfile(page: Page, person: { email: string; fullName: string }) {
+    await page.goto(`${originA}/staff/${ids[person.email]}`);
+    await expect(page.getByRole('heading', { name: person.fullName })).toBeVisible({
+      timeout: 15_000,
+    });
+  }
+
+  for (const viewport of [
+    { width: 390, height: 844, scheme: 'light' as const },
+    { width: 1440, height: 900, scheme: 'dark' as const },
+  ]) {
+    test(`${viewport.width} px (${viewport.scheme}): con acceso a otra clínica muestra el 409 tal cual y la cuenta sigue en espera`, async ({
+      page,
+      request,
+    }) => {
+      await page.setViewportSize({ width: viewport.width, height: viewport.height });
+      await page.emulateMedia({ colorScheme: viewport.scheme });
+      await lock(request, compartida.email, originA);
+
+      await loginAs(page, originA, clinicA.email, PASSWORD);
+      await openProfile(page, compartida);
+      await expect(page.getByText(/Inicio de sesión bloqueado por intentos fallidos/)).toBeVisible();
+      await page.getByRole('button', { name: 'Desbloquear inicio de sesión' }).click();
+      await page.getByRole('dialog').getByRole('button', { name: 'Sí, desbloquear' }).click();
+
+      await expect(page.getByRole('alert').filter({ hasText: OTHER_CLINIC })).toBeVisible();
+      await expect(page.getByRole('dialog')).toBeHidden();
+      // La pantalla sigue entera.
+      await expect(page.getByLabel('Nombre completo')).toHaveValue(compartida.fullName);
+      await expect(page.getByText(/Inicio de sesión bloqueado por intentos fallidos/)).toBeVisible();
+      await expectNoHorizontalScroll(page);
+
+      // El contador no se tocó: sigue esperando también en la otra clínica.
+      const still = await request.post(`${API_URL}/auth/login`, {
+        headers: { 'X-Tenant-Host': new URL(originB).host },
+        data: { email: compartida.email, password: PASSWORD },
+      });
+      expect(still.status()).toBe(429);
+    });
+  }
+
+  test('un perfil desactivado no muestra la espera ni ofrece desbloquear', async ({ page, request }) => {
+    // Sigue activa en B: allí falla y queda en espera.
+    await lock(request, desactivada.email, originB);
+
+    await loginAs(page, originA, clinicA.email, PASSWORD);
+    await openProfile(page, desactivada);
+    await expect(page.getByText('Inactivo')).toBeVisible();
+    await expect(page.getByText(/Inicio de sesión bloqueado por intentos fallidos/)).toBeHidden();
+    await expect(page.getByRole('button', { name: 'Desbloquear inicio de sesión' })).toBeHidden();
+  });
+});
