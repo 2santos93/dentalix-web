@@ -396,6 +396,14 @@ function PatientDetailView() {
                 patientId={patientId}
                 focusedTooth={focusedTooth}
                 odontogramHref={(tooth) => `${pathname}?tab=odontogram&tooth=${tooth}`}
+                // DX-191: desde el ítem que se ejecuta, «Registrar implante»
+                // con el diente y el ítem del plan puestos.
+                implantHref={
+                  access.implants && canRegisterImplants(getTokenRole(accessToken))
+                    ? (item) =>
+                        `${pathname}?tab=implants&registerTooth=${item.toothNumber}&planItem=${item.id}`
+                    : undefined
+                }
               />
             </TabPanel>
           ) : null}

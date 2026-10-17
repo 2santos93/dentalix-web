@@ -125,6 +125,46 @@ describe('PatientImplantsTab (DX-191)', () => {
     expect(consumed).toHaveBeenCalled();
   });
 
+  it('acceso directo del ítem del plan: registra contra ese ítem con su diente', async () => {
+    const user = setupUser();
+    mockedList.mockResolvedValue([]);
+    mockedRegister.mockResolvedValue(makeImplant({ id: 'nuevo', treatmentPlanItemId: 'item-9' }));
+    render(
+      <PatientImplantsTab
+        token={DENTIST}
+        patientId="p1"
+        registerTooth="36"
+        registerPlanItemId="item-9"
+      />,
+    );
+    const dialog = await screen.findByRole('dialog', { name: 'Registrar implante' });
+    expect(within(dialog).getByLabelText('Diente (FDI)')).toHaveValue('36');
+    expect(within(dialog).getByText(/ítem del plan desde el que lo abriste/i)).toBeInTheDocument();
+    await user.type(within(dialog).getByLabelText('Fabricante'), 'Straumann');
+    await user.type(within(dialog).getByLabelText('Referencia (REF)'), '021.5310');
+    await user.type(within(dialog).getByLabelText('Lote'), 'LOT-AB12');
+    await user.click(within(dialog).getByRole('button', { name: 'Registrar implante' }));
+    expect(mockedRegister).toHaveBeenCalledWith(
+      DENTIST,
+      'p1',
+      expect.objectContaining({ toothNumber: '36', treatmentPlanItemId: 'item-9' }),
+    );
+  });
+
+  it('una medida que no es un número no se descarta en silencio: avisa y no envía', async () => {
+    const user = setupUser();
+    mockedList.mockResolvedValue([]);
+    render(<PatientImplantsTab token={DENTIST} patientId="p1" registerTooth="36" />);
+    const dialog = await screen.findByRole('dialog', { name: 'Registrar implante' });
+    await user.type(within(dialog).getByLabelText('Fabricante'), 'Straumann');
+    await user.type(within(dialog).getByLabelText('Referencia (REF)'), '021.5310');
+    await user.type(within(dialog).getByLabelText('Lote'), 'LOT-AB12');
+    await user.type(within(dialog).getByLabelText('Diámetro (mm)'), '4.1 mm');
+    await user.click(within(dialog).getByRole('button', { name: 'Registrar implante' }));
+    expect(await within(dialog).findByText(/diámetro y la longitud se escriben en mm/i)).toBeInTheDocument();
+    expect(mockedRegister).not.toHaveBeenCalled();
+  });
+
   it('el 400 de la API (en español) se enseña en el formulario', async () => {
     const user = setupUser();
     mockedList.mockResolvedValue([]);

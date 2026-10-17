@@ -37,6 +37,7 @@ const copy = {
   submit: 'Registrar implante',
   genericError: 'No pudimos registrar el implante. Intenta de nuevo.',
   requiredMissing: 'Completa diente, fabricante, referencia y lote.',
+  invalidSize: 'El diámetro y la longitud se escriben en mm, solo con números (por ejemplo 4,1).',
 };
 
 interface RegisterImplantModalProps {
@@ -58,11 +59,12 @@ function todayLocal(): string {
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 
-function numberOrUndefined(text: string): number | undefined {
+/** Vacío → `undefined`; texto que no es un número → `null` (no se envía). */
+function parseMm(text: string): number | undefined | null {
   const normalized = text.trim().replace(',', '.');
   if (normalized === '') return undefined;
   const value = Number(normalized);
-  return Number.isFinite(value) ? value : undefined;
+  return Number.isFinite(value) ? value : null;
 }
 
 function textOrUndefined(text: string): string | undefined {
@@ -131,6 +133,14 @@ export function RegisterImplantModal({
       setError(copy.requiredMissing);
       return;
     }
+    // Una medida mal escrita no se descarta en silencio: es la ficha del
+    // implante que se busca cuando el fabricante retira un lote.
+    const diameterMm = parseMm(diameter);
+    const lengthMm = parseMm(length);
+    if (diameterMm === null || lengthMm === null) {
+      setError(copy.invalidSize);
+      return;
+    }
     setSubmitting(true);
     setError(null);
     try {
@@ -142,8 +152,8 @@ export function RegisterImplantModal({
         reference: reference.trim(),
         lot: lot.trim(),
         udi: textOrUndefined(udi),
-        diameterMm: numberOrUndefined(diameter),
-        lengthMm: numberOrUndefined(length),
+        diameterMm,
+        lengthMm,
         sanitaryRegistration: textOrUndefined(sanitaryRegistration),
         notes: textOrUndefined(notes),
         placedOn,

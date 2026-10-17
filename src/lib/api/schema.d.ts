@@ -2094,7 +2094,7 @@ export interface paths {
         };
         /**
          * ¿Quién recibió este lote / esta referencia?
-         * @description Coincidencia exacta sin distinguir mayúsculas; con lote y REF, ambos. Incluye anulados (marcados). Solo ADMIN; queda auditada con el lote buscado y el nº de filas.
+         * @description Coincidencia exacta sin distinguir mayúsculas; con lote y REF, ambos. Siempre en toda la clínica (X-Location-Id no la acota). Incluye anulados (marcados). Solo ADMIN; queda auditada con el lote buscado y el nº de filas.
          */
         get: operations["ImplantsController_search"];
         put?: never;
@@ -11657,7 +11657,7 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description Sede activa. Sin ella, la sede principal (alta) o toda la clínica (búsqueda). */
+                /** @description Sede activa. Sin ella, la sede principal. */
                 "X-Location-Id"?: string;
             };
             path: {
@@ -11810,10 +11810,7 @@ export interface operations {
                 lot?: string;
                 reference?: string;
             };
-            header?: {
-                /** @description Sede activa. Sin ella, la sede principal (alta) o toda la clínica (búsqueda). */
-                "X-Location-Id"?: string;
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };
@@ -11849,10 +11846,7 @@ export interface operations {
                 lot?: string;
                 reference?: string;
             };
-            header?: {
-                /** @description Sede activa. Sin ella, la sede principal (alta) o toda la clínica (búsqueda). */
-                "X-Location-Id"?: string;
-            };
+            header?: never;
             path?: never;
             cookie?: never;
         };

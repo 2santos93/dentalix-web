@@ -25,7 +25,7 @@ import { Input } from '@/components/ui/input';
 const copy = {
   heading: '¿Quién recibió este lote?',
   support:
-    'Busca por lote o por referencia (REF) cuando un fabricante retira un producto: salen los pacientes de la clínica que lo recibieron, con fecha, diente y profesional. La búsqueda y la exportación quedan en el registro de accesos.',
+    'Busca por lote o por referencia (REF) cuando un fabricante retira un producto: salen los pacientes de la clínica que lo recibieron, en todas las sedes, con fecha, diente, profesional y sede. La búsqueda y la exportación quedan en el registro de accesos.',
   lot: 'Lote',
   reference: 'Referencia (REF)',
   search: 'Buscar',
@@ -68,7 +68,8 @@ function saveCsv(text: string, fileName: string): void {
 
 /**
  * Ajustes → Implantes (DX-191): búsqueda por lote/REF y su CSV, solo ADMIN.
- * La sede activa (X-Location-Id) acota la búsqueda; sin sede, toda la clínica.
+ * Siempre en toda la clínica (la API no la acota a la sede activa): una
+ * retirada de lote no puede dejar fuera a un paciente operado en otra sede.
  */
 export function ImplantLotSearch({ token, allowed }: { token: string; allowed: boolean }) {
   const [lot, setLot] = useState('');
