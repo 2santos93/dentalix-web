@@ -53,6 +53,10 @@ jest.mock('../../lib/appointments/schedule-blocks-api', () => ({
   listScheduleBlocks: jest.fn().mockResolvedValue([]),
   deleteScheduleBlock: jest.fn().mockResolvedValue(undefined),
 }));
+// DX-170: «Registrar evolución» abre el modal, que pide las plantillas.
+jest.mock('../../lib/clinical-notes/note-templates-api', () => ({
+  listNoteTemplates: jest.fn().mockResolvedValue([]),
+}));
 jest.mock('../../lib/appointments/waitlist-api', () => ({
   listWaitlist: jest.fn().mockResolvedValue({ items: [], total: 0, page: 1, pageSize: 50 }),
 }));
@@ -890,6 +894,45 @@ describe('AgendaView', () => {
       const [select] = await screen.findAllByTestId('appointment-status-select');
       await user.selectOptions(select, 'CANCELLED');
       await waitFor(() => expect(mockedListWaitlist.mock.calls.length).toBeGreaterThan(before));
+    });
+  });
+  // DX-170: la evolución se registra desde la tarjeta de la cita.
+  describe('«Registrar evolución» (DX-170)', () => {
+    const tokenFor = (role: string) =>
+      `h.${btoa(JSON.stringify({ sub: 'staff-1', tenantId: 't1', role }))}.s`;
+    const completed = appointment({
+      id: 'apt-done',
+      status: 'COMPLETED',
+      patientFirstName: 'María',
+      patientLastName: 'López',
+    });
+
+    async function openDetail(token: string) {
+      mockedListStaff.mockResolvedValue(staff);
+      mockedListAppointments.mockResolvedValue([completed]);
+      const user = userEvent.setup();
+      render(<AgendaView token={token} />);
+      await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
+      const dateInput = screen.getByLabelText<HTMLInputElement>(/^fecha$/i);
+      await user.clear(dateInput);
+      await user.type(dateInput, '2026-03-11');
+      await user.click(screen.getByRole('button', { name: /^semana$/i }));
+      await screen.findByLabelText(/agenda de la semana/i);
+      await user.click(screen.getByTestId('week-grid-appointment'));
+      await screen.findByLabelText(/^estado$/i);
+      return user;
+    }
+
+    it('DENTIST lo ve en una cita atendida y abre el formulario ligado a la cita', async () => {
+      const user = await openDetail(tokenFor('DENTIST'));
+      await user.click(screen.getByRole('button', { name: 'Registrar evolución' }));
+      const dialog = await screen.findByRole('dialog', { name: 'Registrar evolución' });
+      expect(within(dialog).getByText(/^Cita del \d{2}\/\d{2} · Dra\. Ana Ríos$/)).toBeInTheDocument();
+    });
+
+    it('RECEPTION no ve el botón', async () => {
+      await openDetail(tokenFor('RECEPTION'));
+      expect(screen.queryByRole('button', { name: 'Registrar evolución' })).toBeNull();
     });
   });
 });

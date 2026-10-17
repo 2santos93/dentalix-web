@@ -40,6 +40,8 @@ import { MonthAgenda } from '@/components/appointments/month-agenda';
 import { AppointmentForm } from '@/components/appointments/appointment-form';
 import { ConfirmationLinkPanel } from '@/components/appointments/confirmation-link-panel';
 import { AppointmentRemindersPanel } from '@/components/reminders/appointment-reminders-panel';
+import { NewEvolutionModal } from '@/components/clinical-notes/new-evolution-modal';
+import { canRegisterEvolution } from '@/lib/clinical-notes/evolution-access';
 import { ScheduleBlockDialog } from '@/components/appointments/schedule-block-dialog';
 import {
   WaitlistPanel,
@@ -54,7 +56,7 @@ import {
   formatTimeRange,
   patientLabel,
 } from '@/components/appointments/appointment-display';
-import { Plus, ChevronLeft, ChevronRight, CalendarOff, ListTodo } from 'lucide-react';
+import { Plus, ChevronLeft, ChevronRight, CalendarOff, ListTodo, NotebookPen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -83,6 +85,9 @@ import { formatDateLabel } from '@/lib/format/date';
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
 const copy = {
+  // DX-170: evolución ligada a la cita, desde su tarjeta.
+  registerEvolution: 'Registrar evolución',
+  evolutionSaved: (patient: string) => `Evolución registrada en la ficha de ${patient}.`,
   newAppointment: 'Nueva cita',
   newAppointmentForDay: 'Nueva cita este día',
   newAppointmentDesc: 'Agenda una cita para un paciente con su profesional, fecha y horario.',
@@ -394,6 +399,8 @@ export function AgendaView({ token }: AgendaViewProps) {
   // enlace) is open — set by `WeekTimeGrid`'s `onSelectAppointment` and by the
   // "Detalle" button of `DayAgenda` rows (Día view and the month's day panel).
   const [detailAppointment, setDetailAppointment] = useState<Appointment | null>(null);
+  // DX-170: la cita cuya evolución se está registrando (modal abierto).
+  const [evolutionFor, setEvolutionFor] = useState<Appointment | null>(null);
 
   // Provider filter defaults to '' = "Todos los profesionales" (the month
   // calendar shows the whole clinic; `listAppointments` omits `providerId`
@@ -1134,6 +1141,22 @@ export function AgendaView({ token }: AgendaViewProps) {
                     ))}
                   </select>
                 </FormField>
+                {/* DX-170: la evolución queda ligada a esta cita. Se cierra el
+                    panel antes de abrir el modal: dos capas modales a la vez
+                    se pelean el foco. Recepción no lo ve (la API da 403). */}
+                {canRegisterEvolution(role, liveDetailAppointment, today) ? (
+                  <Button
+                    type="button"
+                    className="w-full sm:w-auto sm:self-start"
+                    onClick={() => {
+                      setEvolutionFor(liveDetailAppointment);
+                      setDetailAppointment(null);
+                    }}
+                  >
+                    <NotebookPen aria-hidden />
+                    {copy.registerEvolution}
+                  </Button>
+                ) : null}
                 {/* `key`: el enlace generado vive solo en este panel (el backend
                     guarda únicamente su hash); al cambiar de cita se descarta. */}
                 <ConfirmationLinkPanel
@@ -1188,6 +1211,24 @@ export function AgendaView({ token }: AgendaViewProps) {
           </SheetContent>
         </Sheet>
       )}
+
+      {evolutionFor ? (
+        <NewEvolutionModal
+          key={evolutionFor.id}
+          open
+          onOpenChange={(open) => {
+            if (!open) setEvolutionFor(null);
+          }}
+          token={token}
+          patientId={evolutionFor.patientId}
+          appointment={{
+            id: evolutionFor.id,
+            start: evolutionFor.start,
+            providerName: staffName(evolutionFor.providerId),
+          }}
+          onCreated={() => toast.success(copy.evolutionSaved(patientLabel(evolutionFor)))}
+        />
+      ) : null}
 
       {showBlockDialog ? (
         <ScheduleBlockDialog

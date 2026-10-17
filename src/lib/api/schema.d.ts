@@ -544,6 +544,10 @@ export interface paths {
         };
         get: operations["ClinicalEntriesController_list"];
         put?: never;
+        /**
+         * Registra una evolución (inalterable, DX-038)
+         * @description DX-170: con `templateId`, el texto compuesto se guarda en `notes` (enviado ya revisado, o compuesto por el servidor con `answers`). Con `appointmentId`, la evolución queda ligada a la cita.
+         */
         post: operations["ClinicalEntriesController_create"];
         delete?: never;
         options?: never;
@@ -589,6 +593,63 @@ export interface paths {
         head?: never;
         /** No permitido: una evolución no se edita (DX-038) */
         patch: operations["ClinicalEntriesController_rejectPatch"];
+        trace?: never;
+    };
+    "/api/v1/clinical-note-templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Plantillas de evolución de la clínica, con sus preguntas */
+        get: operations["ClinicalNoteTemplatesController_list"];
+        put?: never;
+        post: operations["ClinicalNoteTemplatesController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/clinical-note-templates/samples": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cargar plantillas de ejemplo
+         * @description Crea las 6 plantillas de ejemplo que la clínica aún no tiene (por nombre) y devuelve las creadas. Repetirlo no duplica nada.
+         */
+        post: operations["ClinicalNoteTemplatesController_samples"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/clinical-note-templates/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Editar o desactivar una plantilla
+         * @description Las evoluciones ya guardadas no cambian: llevan su texto compuesto. `prompts`, si viene, sustituye todas las preguntas.
+         */
+        patch: operations["ClinicalNoteTemplatesController_update"];
         trace?: never;
     };
     "/api/v1/patients/{patientId}/tooth-records": {
@@ -2008,7 +2069,7 @@ export interface components {
         /** @enum {string} */
         AuditAction: "VIEW" | "CREATE" | "UPDATE" | "DELETE" | "SIGN" | "VOID" | "LOGIN" | "LOGIN_FAILED" | "PASSWORD_RESET" | "EXPORT" | "PRINT" | "SEND";
         /** @enum {string} */
-        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT";
+        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "CLINICAL_NOTE_TEMPLATE";
         /**
          * @description Rol con el que actuó (del token). `null` en un login fallido.
          * @enum {string}
@@ -2733,14 +2794,48 @@ export interface components {
             /** Format: date-time */
             createdAt: string;
         };
+        ClinicalEntryAnswerDto: {
+            /**
+             * Format: uuid
+             * @description Pregunta de la plantilla
+             */
+            promptId: string;
+            /** @description ONE: una opción; MULTI: varias opciones; TEXT: un texto. Vacío = sin respuesta. */
+            values?: string[];
+            /** @description «Omitir»: el hueco queda marcado «[sin respuesta]» */
+            skipped?: boolean;
+        };
         CreateClinicalEntryDto: {
             /**
              * Format: date-time
-             * @description Defaults to now when omitted
+             * @description Fecha de atención (fecha civil). Si falta: el día de la cita ligada en la zona de su sede o, sin cita, ahora.
              */
             entryDate?: string;
             reason?: string;
-            notes: string;
+            /** @description Texto final de la evolución. Obligatorio sin plantilla; con plantilla, el texto compuesto ya revisado (y quizá editado). Si falta, el servidor lo compone con `answers`. */
+            notes?: string;
+            /**
+             * Format: uuid
+             * @description DX-170: cita en la que se documenta. Tiene que ser de esta clínica (404), de este paciente (400) y no de un día futuro en la zona de su sede (400).
+             */
+            appointmentId?: string;
+            /**
+             * Format: uuid
+             * @description DX-170: plantilla de evolución de la clínica, activa.
+             */
+            templateId?: string;
+            /** @description DX-170: respuestas a las preguntas de la plantilla, para que el servidor componga el texto (sin `notes`). Una pregunta sin respuesta toma su valor por defecto. */
+            answers?: components["schemas"]["ClinicalEntryAnswerDto"][];
+        };
+        ClinicalEntryAppointmentDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            start: string;
+            /** Format: uuid */
+            providerId: string;
+            /** @description Nombre del profesional de la cita (null si ya no es de la clínica) */
+            providerName: string | null;
         };
         ClinicalEntryAddendumDto: {
             /** Format: uuid */
@@ -2780,6 +2875,17 @@ export interface components {
             /** Format: uuid */
             performedById: string | null;
             /**
+             * Format: uuid
+             * @description DX-170: cita ligada (null en las evoluciones sueltas)
+             */
+            appointmentId: string | null;
+            /**
+             * Format: uuid
+             * @description DX-170: plantilla con la que se redactó (solo procedencia; el texto está en notes)
+             */
+            templateId: string | null;
+            appointment: components["schemas"]["ClinicalEntryAppointmentDto"] | null;
+            /**
              * Format: date-time
              * @description Fecha de registro: la fija el servidor
              */
@@ -2792,6 +2898,75 @@ export interface components {
             reason: string;
             /** @description Texto aclaratorio que corrige o completa la evolución */
             text: string;
+        };
+        /** @enum {string} */
+        ClinicalNotePromptType: "ONE" | "MULTI" | "TEXT";
+        ClinicalNoteTemplatePromptDto: {
+            /** Format: uuid */
+            id: string;
+            /**
+             * @description Etiqueta; también es el marcador del texto: {{Etiqueta}}
+             * @example Superficie
+             */
+            label: string;
+            type: components["schemas"]["ClinicalNotePromptType"];
+            /**
+             * @example [
+             *       "O",
+             *       "M",
+             *       "D",
+             *       "V",
+             *       "L"
+             *     ]
+             */
+            options: string[];
+            defaultValue: string | null;
+            position: number;
+        };
+        ClinicalNoteTemplateDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            tenantId: string;
+            /** @example Resina */
+            name: string;
+            /** @example Operatoria */
+            category: string | null;
+            /** @example Resina en superficie {{Superficie}} con {{Material}}. */
+            body: string;
+            active: boolean;
+            prompts: components["schemas"]["ClinicalNoteTemplatePromptDto"][];
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        NotePromptInputDto: {
+            label: string;
+            type: components["schemas"]["ClinicalNotePromptType"];
+            /** @description Obligatorias (1 a 20) en ONE y MULTI; vacías en TEXT */
+            options?: string[];
+            /** @description En ONE y MULTI, una de las opciones */
+            defaultValue?: string | null;
+        };
+        CreateClinicalNoteTemplateDto: {
+            name: string;
+            /** @description Carpeta del selector (p. ej. «Operatoria») */
+            category?: string | null;
+            /** @description Texto fijo con marcadores {{Etiqueta}}; cada marcador necesita una pregunta con esa etiqueta y cada pregunta su marcador */
+            body: string;
+            prompts: components["schemas"]["NotePromptInputDto"][];
+            /** @description Por defecto, true */
+            active?: boolean;
+        };
+        UpdateClinicalNoteTemplateDto: {
+            name?: string;
+            category?: string | null;
+            body?: string;
+            /** @description Si viene, sustituye todas las preguntas */
+            prompts?: components["schemas"]["NotePromptInputDto"][];
+            /** @description false = desactivarla (sale del selector) */
+            active?: boolean;
         };
         CreateToothRecordDto: {
             /**
@@ -6842,7 +7017,14 @@ export interface operations {
                     "application/json": components["schemas"]["ClinicalEntryDto"];
                 };
             };
-            /** @description Paciente no encontrado en esta clínica (inexistente o de otra clínica). */
+            /** @description Texto vacío, respuesta inválida, plantilla desactivada, cita de otro paciente, cita cancelada / no-show o cita de un día futuro. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente, cita o plantilla no encontrados en esta clínica (inexistentes o de otra clínica). */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -6976,6 +7158,158 @@ export interface operations {
         responses: {
             /** @description Una evolución de la historia clínica no se puede modificar ni borrar (Res. 1995 de 1999, art. 18). Para corregirla, añade una adenda: POST /patients/{patientId}/clinical-entries/{entryId}/addenda */
             405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ClinicalNoteTemplatesController_list: {
+        parameters: {
+            query?: {
+                /** @description true = también las desactivadas (Ajustes). Por defecto, solo las activas. */
+                includeInactive?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClinicalNoteTemplateDto"][];
+                };
+            };
+            /** @description Recepción no documenta evoluciones */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ClinicalNoteTemplatesController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateClinicalNoteTemplateDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClinicalNoteTemplateDto"];
+                };
+            };
+            /** @description Marcador sin pregunta, pregunta sin marcador, ONE/MULTI sin opciones u otro campo inválido (mensaje en español) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo ADMIN */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ya existe una plantilla con ese nombre */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ClinicalNoteTemplatesController_samples: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClinicalNoteTemplateDto"][];
+                };
+            };
+            /** @description Solo ADMIN */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ClinicalNoteTemplatesController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateClinicalNoteTemplateDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ClinicalNoteTemplateDto"];
+                };
+            };
+            /** @description Plantilla resultante inválida */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo ADMIN */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Plantilla no encontrada en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ya existe una plantilla con ese nombre */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -20,6 +20,10 @@ jest.mock('../../lib/patients/clinical-api', () => ({
 jest.mock('../../lib/staff/staff-api', () => ({
   listStaff: jest.fn(),
 }));
+// DX-170: el modal «Nueva evolución» pide las plantillas al abrirse.
+jest.mock('../../lib/clinical-notes/note-templates-api', () => ({
+  listNoteTemplates: jest.fn().mockResolvedValue([]),
+}));
 
 const mockedList = listClinicalEntries as jest.MockedFunction<typeof listClinicalEntries>;
 const mockedCreate = createClinicalEntry as jest.MockedFunction<typeof createClinicalEntry>;
@@ -112,18 +116,25 @@ describe('ClinicalEntriesList', () => {
     expect(within(table).getByRole('columnheader', { name: /^registro$/i })).toBeInTheDocument();
   });
 
+  /** Abre «Nueva evolución» (DX-170: el formulario vive en un modal). */
+  async function openNewEntry(user: ReturnType<typeof userEvent.setup>) {
+    await user.click(screen.getByRole('button', { name: /nueva evolución/i }));
+    return screen.findByRole('dialog', { name: /nueva evolución/i });
+  }
+
   it('no acepta una atención en el futuro', async () => {
     mockedList.mockResolvedValue([]);
     const user = userEvent.setup();
     render(<ClinicalEntriesList token="tok" patientId="p1" />);
     await screen.findByText(/no hay evoluciones/i);
+    const dialog = await openNewEntry(user);
 
-    const date = screen.getByLabelText(/fecha de atención/i);
+    const date = within(dialog).getByLabelText(/fecha de atención/i);
     // El `max` del input lo bloquea en el navegador; el guard cubre teclado y
     // pegado, así que se comprueba que el atributo existe.
     expect(date).toHaveAttribute('max');
 
-    await user.type(screen.getByLabelText(/^notas$/i), 'algo');
+    await user.type(within(dialog).getByLabelText(/texto de la evolución/i), 'algo');
     expect(mockedCreate).not.toHaveBeenCalled();
   });
 
@@ -145,18 +156,20 @@ describe('ClinicalEntriesList', () => {
     expect(screen.getAllByText('Primera visita')).toHaveLength(2);
   });
 
-  it('renders the add-entry form with accessible labels', async () => {
+  it('«Nueva evolución» abre el formulario en un modal con sus etiquetas', async () => {
     mockedList.mockResolvedValue([]);
+    const user = userEvent.setup();
     render(<ClinicalEntriesList token="tok" patientId="p1" />);
-
     await screen.findByText(/no hay evoluciones/i);
-    expect(screen.getByLabelText(/fecha/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/motivo/i)).toBeInTheDocument();
-    expect(screen.getByLabelText(/notas/i)).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: /agregar/i })).toBeInTheDocument();
+    const dialog = await openNewEntry(user);
+
+    expect(within(dialog).getByLabelText(/fecha de atención/i)).toBeInTheDocument();
+    expect(within(dialog).getByLabelText(/motivo/i)).toBeInTheDocument();
+    expect(within(dialog).getByLabelText(/texto de la evolución/i)).toBeInTheDocument();
+    expect(within(dialog).getByRole('button', { name: /guardar evolución/i })).toBeInTheDocument();
   });
 
-  it('submits the form calling createClinicalEntry and shows the new entry', async () => {
+  it('guarda con createClinicalEntry, cierra el modal y muestra la nueva evolución', async () => {
     mockedList.mockResolvedValue([]);
     const created = {
       id: 'ce-3',
@@ -164,7 +177,7 @@ describe('ClinicalEntriesList', () => {
       patientId: 'p1',
       entryDate: '2026-03-01T00:00:00.000Z',
       reason: null,
-      notes: 'Nueva evolución',
+      notes: 'Nueva evolución registrada',
       performedById: 'u1',
       createdAt: '2026-03-01T00:00:00.000Z',
       addenda: [],
@@ -174,25 +187,47 @@ describe('ClinicalEntriesList', () => {
     const user = userEvent.setup();
     render(<ClinicalEntriesList token="tok" patientId="p1" />);
     await screen.findByText(/no hay evoluciones/i);
+    const dialog = await openNewEntry(user);
 
-    await user.type(screen.getByLabelText(/notas/i), 'Nueva evolución');
-    await user.click(screen.getByRole('button', { name: /agregar/i }));
+    await user.type(within(dialog).getByLabelText(/texto de la evolución/i), 'Nueva evolución registrada');
+    await user.click(within(dialog).getByRole('button', { name: /guardar evolución/i }));
 
     await waitFor(() => expect(mockedCreate).toHaveBeenCalledTimes(1));
     expect(mockedCreate).toHaveBeenCalledWith(
       'tok',
       'p1',
-      expect.objectContaining({ notes: 'Nueva evolución' }),
+      expect.objectContaining({ notes: 'Nueva evolución registrada' }),
     );
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     // Rendered twice — desktop table + mobile cards.
-    expect(await screen.findAllByText('Nueva evolución')).toHaveLength(2);
+    expect(await screen.findAllByText('Nueva evolución registrada')).toHaveLength(2);
   });
 
-  it('requires the notes field to submit', async () => {
+  it('sin texto no guarda y lo dice junto al campo', async () => {
     mockedList.mockResolvedValue([]);
+    const user = userEvent.setup();
     render(<ClinicalEntriesList token="tok" patientId="p1" />);
     await screen.findByText(/no hay evoluciones/i);
-    expect(screen.getByLabelText(/notas/i)).toBeRequired();
+    const dialog = await openNewEntry(user);
+    await user.click(within(dialog).getByRole('button', { name: /guardar evolución/i }));
+    expect(await within(dialog).findByText(/escribe el texto de la evolución/i)).toBeInTheDocument();
+    expect(mockedCreate).not.toHaveBeenCalled();
+  });
+
+  it('DX-170: una evolución ligada a una cita dice de qué cita es y con quién', async () => {
+    const start = new Date(2026, 1, 1, 9, 30).toISOString();
+    mockedList.mockResolvedValue([
+      {
+        ...entries[0],
+        appointmentId: 'apt-1',
+        templateId: 'tpl-1',
+        appointment: { id: 'apt-1', start, providerId: 'u1', providerName: 'Dra. Ana Ríos' },
+      },
+      entries[1],
+    ]);
+    render(<ClinicalEntriesList token="tok" patientId="p1" />);
+    // Tabla + tarjeta; la evolución suelta no lleva la línea.
+    expect(await screen.findAllByText('Cita del 01/02 · Dra. Ana Ríos')).toHaveLength(2);
   });
 
   it('shows an alert with the API error message when loading fails', async () => {
@@ -206,15 +241,16 @@ describe('ClinicalEntriesList', () => {
   it('shows an alert with the API error message when creating fails', async () => {
     mockedList.mockResolvedValue([]);
     const { ApiError } = jest.requireActual('../../lib/api/client');
-    mockedCreate.mockRejectedValue(new ApiError(400, 'Datos inválidos'));
+    mockedCreate.mockRejectedValue(new ApiError(400, 'La cita no es de este paciente'));
 
     const user = userEvent.setup();
     render(<ClinicalEntriesList token="tok" patientId="p1" />);
     await screen.findByText(/no hay evoluciones/i);
-    await user.type(screen.getByLabelText(/notas/i), 'x');
-    await user.click(screen.getByRole('button', { name: /agregar/i }));
+    const dialog = await openNewEntry(user);
+    await user.type(within(dialog).getByLabelText(/texto de la evolución/i), 'x');
+    await user.click(within(dialog).getByRole('button', { name: /guardar evolución/i }));
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('Datos inválidos');
+    expect(await within(dialog).findByRole('alert')).toHaveTextContent('La cita no es de este paciente');
   });
 
   describe('adendas (DX-038)', () => {

@@ -54,9 +54,17 @@ export interface ClinicalEntry {
   reason: string | null;
   notes: string;
   performedById: string | null;
+  /** DX-170: cita en la que se documentó (null en las evoluciones sueltas). */
+  appointmentId?: string | null;
+  /** DX-170: plantilla con la que se redactó (solo procedencia). */
+  templateId?: string | null;
+  /** DX-170: la cita ligada, para «Cita del dd/mm · Dra. X». */
+  appointment?: ClinicalEntryAppointment | null;
   createdAt: string;
   addenda: ClinicalEntryAddendum[];
 }
+
+export type ClinicalEntryAppointment = components['schemas']['ClinicalEntryAppointmentDto'];
 
 /**
  * Returns the latest anamnesis version, or `null` when the patient doesn't
