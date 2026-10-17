@@ -204,8 +204,8 @@ export function CloseCashSessionModal({
           })}
         </ul>
         {blind ? (
-          <div className="mt-3 flex items-end gap-2">
-            <div className="w-44 shrink-0">
+          <div className="mt-3 flex flex-col gap-2 sm:flex-row sm:items-end">
+            <div className="w-full sm:w-44 sm:shrink-0">
               <CurrencySelect
                 id={`${baseId}-extra-currency`}
                 token={token}
