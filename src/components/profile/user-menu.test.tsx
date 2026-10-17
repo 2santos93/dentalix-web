@@ -154,6 +154,11 @@ describe('UserMenu — plantillas de consentimiento (DX-006)', () => {
       'href',
       '/settings/recordatorios',
     );
+    // DX-191: búsqueda de implantes por lote.
+    expect(screen.getByRole('menuitem', { name: 'Implantes' })).toHaveAttribute(
+      'href',
+      '/settings/implantes',
+    );
     // SEC-009: dominios propios (añadir, verificar, eliminar).
     expect(screen.getByRole('menuitem', { name: 'Dominios propios' })).toHaveAttribute(
       'href',
@@ -169,5 +174,6 @@ describe('UserMenu — plantillas de consentimiento (DX-006)', () => {
     expect(screen.queryByRole('menuitem', { name: 'Recetas' })).not.toBeInTheDocument();
     expect(screen.queryByRole('menuitem', { name: 'Recordatorios' })).not.toBeInTheDocument();
     expect(screen.queryByRole('menuitem', { name: 'Dominios propios' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'Implantes' })).not.toBeInTheDocument();
   });
 });

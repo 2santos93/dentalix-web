@@ -5,6 +5,7 @@ import {
   AUDIT_RESOURCE_OPTIONS,
   actorRoleLabel,
   communicationDetail,
+  implantSearchDetail,
   isPatientOptOut,
 } from './audit-labels';
 
@@ -55,5 +56,15 @@ describe('etiquetas de auditoría', () => {
   it('reconoce la baja que hizo el propio paciente', () => {
     expect(isPatientOptOut({ reason: 'REMINDER_OPT_OUT', origin: 'LINK' })).toBe(true);
     expect(isPatientOptOut({ reason: 'COMMUNICATION_PREFERENCES_CHANGED' })).toBe(false);
+  });
+});
+
+describe('implantSearchDetail (DX-191)', () => {
+  it('resume lo buscado y las filas', () => {
+    expect(implantSearchDetail({ search: { lot: 'LOT-1', rows: 2 } })).toBe('Lote LOT-1 · 2 filas');
+    expect(implantSearchDetail({ search: { reference: '021.5310', rows: 1 } })).toBe(
+      'REF 021.5310 · 1 fila',
+    );
+    expect(implantSearchDetail({})).toBeNull();
   });
 });

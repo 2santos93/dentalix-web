@@ -27,6 +27,8 @@ import { DataConsentsTab } from '@/components/data-consents/data-consents-tab';
 import { PatientConsentsTab } from '@/components/consents/patient-consents-tab';
 import { PerioTab } from '@/components/perio/perio-tab';
 import { PatientPrescriptionsTab } from '@/components/prescriptions/patient-prescriptions-tab';
+import { PatientImplantsTab } from '@/components/implants/patient-implants-tab';
+import { canRegisterImplants } from '@/lib/implants/implants-api';
 import { AuditLogView } from '@/components/audit/audit-log-view';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
@@ -45,6 +47,7 @@ const copy = {
   tabConsents: 'Consentimientos',
   tabPerio: 'Periodontograma',
   tabPrescriptions: 'Recetas',
+  tabImplants: 'Implantes',
   tabAccessLog: 'Accesos',
   anamnesisHeading: 'Anamnesis',
   entriesHeading: 'Evoluciones',
@@ -294,6 +297,7 @@ function PatientDetailView() {
             consentsLabel={access.consents ? copy.tabConsents : undefined}
             perioLabel={access.perio ? copy.tabPerio : undefined}
             prescriptionsLabel={access.prescriptions ? copy.tabPrescriptions : undefined}
+            implantsLabel={access.implants ? copy.tabImplants : undefined}
             accessLogLabel={access['access-log'] ? copy.tabAccessLog : undefined}
           />
 
@@ -362,6 +366,11 @@ function PatientDetailView() {
                 initialTooth={focusedTooth}
                 onToothChange={(tooth) => setParams({ tooth })}
                 planHref={(tooth) => `${pathname}?tab=treatment-plans&tooth=${tooth}`}
+                implantHref={
+                  canRegisterImplants(getTokenRole(accessToken))
+                    ? (tooth) => `${pathname}?tab=implants&registerTooth=${tooth}`
+                    : undefined
+                }
               />
             </TabPanel>
           ) : null}
@@ -410,6 +419,21 @@ function PatientDetailView() {
           {access.prescriptions ? (
             <TabPanel tab="prescriptions" activeTab={activeTab} register={registerPanel}>
               <PatientPrescriptionsTab token={accessToken} patientId={patientId} />
+            </TabPanel>
+          ) : null}
+          {/* DX-191: implantes por diente y tarjeta imprimible. `registerTooth`
+              (y `planItem`) llegan del acceso directo del odontograma o del
+              plan y abren «Registrar implante» con el diente puesto; al cerrar
+              el formulario se limpian de la URL. */}
+          {access.implants ? (
+            <TabPanel tab="implants" activeTab={activeTab} register={registerPanel}>
+              <PatientImplantsTab
+                token={accessToken}
+                patientId={patientId}
+                registerTooth={searchParams.get('registerTooth')}
+                registerPlanItemId={searchParams.get('planItem')}
+                onShortcutConsumed={() => setParams({ registerTooth: null, planItem: null })}
+              />
             </TabPanel>
           ) : null}
           {/* Quién vio o cambió esta ficha (DX-009): solo ADMIN. */}

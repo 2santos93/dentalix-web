@@ -16,6 +16,7 @@ import {
   BellRing,
   NotebookPen,
   Globe,
+  ScanBarcode,
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useAuthStore } from '@/lib/auth/auth-store';
@@ -28,6 +29,7 @@ import { canManageAppointmentTypes } from '@/lib/appointments/appointment-types-
 import { canManageNoteTemplates } from '@/lib/clinical-notes/note-templates-api';
 import { canManageReminders } from '@/lib/reminders/reminders-api';
 import { canManageDomains } from '@/lib/domains/domains-api';
+import { canSearchImplantLots } from '@/lib/implants/implants-api';
 import { cn } from '@/lib/utils';
 
 // Tope de espera a la revocación en el servidor al cerrar sesión: la API suele
@@ -60,6 +62,7 @@ const copy = {
   privacy: 'Privacidad de datos',
   consentTemplates: 'Consentimientos',
   prescriptionSettings: 'Recetas',
+  implantSettings: 'Implantes',
   appointmentTypes: 'Tipos de cita',
   noteTemplates: 'Plantillas de evolución',
   reminders: 'Recordatorios',
@@ -327,6 +330,18 @@ export function UserMenu({
         >
           <Pill className="size-4 text-muted" aria-hidden />
           {copy.prescriptionSettings}
+        </Link>
+      ) : null}
+      {/* Búsqueda de implantes por lote y CSV (DX-191): solo ADMIN. */}
+      {canSearchImplantLots(getTokenRole(accessToken)) ? (
+        <Link
+          href="/settings/implantes"
+          role="menuitem"
+          onClick={() => setOpen(false)}
+          className="flex items-center gap-3 px-3 py-2 text-sm text-ink hover:bg-bg"
+        >
+          <ScanBarcode className="size-4 text-muted" aria-hidden />
+          {copy.implantSettings}
         </Link>
       ) : null}
       {/* Dominios propios de la clínica (SEC-009): solo ADMIN. */}

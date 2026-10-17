@@ -70,6 +70,8 @@ export const AUDIT_RESOURCE_LABELS: Record<AuditResourceType, string> = {
   CLINICAL_NOTE_TEMPLATE: 'Plantilla de evolución',
   // SEC-009: un ADMIN verifica o elimina un dominio personalizado.
   TENANT_DOMAIN: 'Dominio personalizado',
+  // DX-191: registro de implantes, tarjeta y búsqueda por lote.
+  PATIENT_IMPLANT: 'Implante',
 };
 
 export const AUDIT_RESOURCE_OPTIONS = Object.keys(AUDIT_RESOURCE_LABELS) as AuditResourceType[];
@@ -115,4 +117,19 @@ export function communicationDetail(metadata: AuditMetadata): string | null {
 /** DX-128: la baja la hizo el propio paciente (el evento no tiene usuario). */
 export function isPatientOptOut(metadata: AuditMetadata): boolean {
   return metadata.reason === 'REMINDER_OPT_OUT';
+}
+
+/**
+ * DX-191: la búsqueda de implantes por lote/REF (y su CSV) dice qué se buscó y
+ * cuántas filas salieron: «Lote LOT-1 · 2 filas». null si no es una búsqueda.
+ */
+export function implantSearchDetail(metadata: AuditMetadata): string | null {
+  const search = metadata.search;
+  if (!search) return null;
+  const terms = [
+    search.lot ? `Lote ${search.lot}` : null,
+    search.reference ? `REF ${search.reference}` : null,
+  ].filter((t): t is string => t !== null);
+  const rows = search.rows === 1 ? '1 fila' : `${search.rows} filas`;
+  return [...terms, rows].join(' · ');
 }

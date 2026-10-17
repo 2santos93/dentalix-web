@@ -2012,6 +2012,135 @@ export interface paths {
         patch: operations["PrescriptionTemplatesController_update"];
         trace?: never;
     };
+    "/api/v1/patients/{patientId}/implants": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["PatientImplantsController_list"];
+        put?: never;
+        post: operations["PatientImplantsController_register"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{patientId}/implant-card": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Tarjeta de implante de la intervención de un día
+         * @description Identidad del paciente, centro, fecha, profesional(es) y cada componente colocado ese día (los anulados, marcados). Sin diagnóstico ni notas.
+         */
+        get: operations["PatientImplantsController_card"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{patientId}/implant-card/print": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Imprimir/entregar la tarjeta: registra la fecha de entrega
+         * @description La primera impresión registra la entrega en los implantes vivos del día; una reimpresión no la cambia. Devuelve la tarjeta.
+         */
+        post: operations["PatientImplantsController_print"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/implants/catalog": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Fabricantes y sistemas ya usados por la clínica (autocompletar) */
+        get: operations["ImplantsController_catalog"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/implants/search": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * ¿Quién recibió este lote / esta referencia?
+         * @description Coincidencia exacta sin distinguir mayúsculas; con lote y REF, ambos. Incluye anulados (marcados). Solo ADMIN; queda auditada con el lote buscado y el nº de filas.
+         */
+        get: operations["ImplantsController_search"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/implants/search.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * La misma búsqueda por lote/REF en CSV
+         * @description UTF-8 con BOM. Solo ADMIN; cada descarga deja un evento EXPORT con el lote buscado y el nº de filas.
+         */
+        get: operations["ImplantsController_csv"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/implants/{id}/void": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["ImplantsController_void"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/reminder-settings": {
         parameters: {
             query?: never;
@@ -2088,7 +2217,7 @@ export interface components {
         /** @enum {string} */
         AuditAction: "VIEW" | "CREATE" | "UPDATE" | "DELETE" | "SIGN" | "VOID" | "LOGIN" | "LOGIN_FAILED" | "PASSWORD_RESET" | "EXPORT" | "PRINT" | "SEND";
         /** @enum {string} */
-        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "CLINICAL_NOTE_TEMPLATE" | "TENANT_DOMAIN";
+        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN";
         /**
          * @description Rol con el que actuó (del token). `null` en un login fallido.
          * @enum {string}
@@ -2128,6 +2257,14 @@ export interface components {
          * @enum {string}
          */
         AuditOrigin: "IN_PERSON" | "LINK" | "MESSAGE" | "STAFF";
+        AuditSearchDto: {
+            /** @example LOT-AB12 */
+            lot?: string;
+            /** @example 021.5310 */
+            reference?: string;
+            /** @example 2 */
+            rows: number;
+        };
         AuditMetadataDto: {
             /** @description UPDATE: nombres de los campos enviados (nunca sus valores). */
             changedFields?: string[];
@@ -2141,6 +2278,8 @@ export interface components {
             move?: components["schemas"]["AuditAppointmentMoveDto"];
             /** @description DX-128: de dónde salió un cambio de canal, opt-in o baja de recordatorios (en persona, enlace, mensaje del paciente o anotado por el personal). */
             origin?: components["schemas"]["AuditOrigin"];
+            /** @description DX-191: búsqueda de implantes por lote/REF — lo buscado y cuántas filas salieron. */
+            search?: components["schemas"]["AuditSearchDto"];
         };
         AuditEventDto: {
             /** Format: uuid */
@@ -5772,6 +5911,174 @@ export interface components {
             name?: string;
             notes?: string;
             items?: components["schemas"]["PrescriptionItemInputDto"][];
+        };
+        PatientImplantDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            patientId: string;
+            /** Format: uuid */
+            locationId: string;
+            locationName: string;
+            /** Format: uuid */
+            professionalId: string;
+            professionalName: string;
+            /** Format: date */
+            placedOn: string;
+            toothNumber: string;
+            /** Format: uuid */
+            treatmentPlanItemId: string | null;
+            /** @enum {string} */
+            kind: "IMPLANT" | "ABUTMENT" | "GRAFT" | "MEMBRANE" | "OTHER";
+            manufacturer: string;
+            system: string | null;
+            reference: string;
+            lot: string;
+            udi: string | null;
+            diameterMm: number | null;
+            lengthMm: number | null;
+            sanitaryRegistration: string | null;
+            notes: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            voidedAt: string | null;
+            /** Format: uuid */
+            voidedById: string | null;
+            voidedByName: string | null;
+            voidReason: string | null;
+            /** Format: date-time */
+            cardDeliveredAt: string | null;
+        };
+        RegisterImplantDto: {
+            /**
+             * @description Diente FDI: permanentes 11-18/21-28/31-38/41-48 o temporales 51-55/61-65/71-75/81-85
+             * @example 36
+             */
+            toothNumber: string;
+            /** @enum {string} */
+            kind: "IMPLANT" | "ABUTMENT" | "GRAFT" | "MEMBRANE" | "OTHER";
+            /** @example Straumann */
+            manufacturer: string;
+            /**
+             * @description Marca o sistema
+             * @example BLT
+             */
+            system?: string;
+            /**
+             * @description Referencia (REF)
+             * @example 021.5310
+             */
+            reference: string;
+            /** @example LOT-AB12 */
+            lot: string;
+            /** @description UDI (DI + PI) del envase */
+            udi?: string;
+            /**
+             * @description Diámetro en mm
+             * @example 4.1
+             */
+            diameterMm?: number;
+            /**
+             * @description Longitud en mm
+             * @example 10
+             */
+            lengthMm?: number;
+            /** @description Registro sanitario INVIMA (CO) o marcado CE (ES) */
+            sanitaryRegistration?: string;
+            notes?: string;
+            /**
+             * Format: date
+             * @description Día de la colocación. Por defecto hoy en la zona de la sede; nunca futuro.
+             * @example 2026-10-17
+             */
+            placedOn?: string;
+            /**
+             * Format: uuid
+             * @description Ítem del plan de tratamiento del paciente que se ejecuta
+             */
+            treatmentPlanItemId?: string;
+        };
+        ImplantCardLocationDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            address: string | null;
+        };
+        ImplantCardItemDto: {
+            /** Format: uuid */
+            id: string;
+            toothNumber: string;
+            /** @enum {string} */
+            kind: "IMPLANT" | "ABUTMENT" | "GRAFT" | "MEMBRANE" | "OTHER";
+            kindLabel: string;
+            manufacturer: string;
+            system: string | null;
+            reference: string;
+            lot: string;
+            udi: string | null;
+            diameterMm: number | null;
+            lengthMm: number | null;
+            sanitaryRegistration: string | null;
+            voided: boolean;
+            /** Format: date-time */
+            voidedAt: string | null;
+            /** Format: date-time */
+            cardDeliveredAt: string | null;
+        };
+        ImplantCardDto: {
+            /** Format: uuid */
+            patientId: string;
+            patientName: string;
+            patientDocument: string | null;
+            /** Format: date */
+            patientBirthDate: string | null;
+            clinicName: string;
+            locations: components["schemas"]["ImplantCardLocationDto"][];
+            /** Format: date */
+            placedOn: string;
+            professionals: string[];
+            items: components["schemas"]["ImplantCardItemDto"][];
+            /**
+             * Format: date-time
+             * @description Primera entrega registrada de la tarjeta
+             */
+            deliveredAt: string | null;
+        };
+        PrintImplantCardDto: {
+            /**
+             * Format: date
+             * @example 2026-10-17
+             */
+            date: string;
+        };
+        ImplantCatalogEntryDto: {
+            manufacturer: string;
+            systems: string[];
+        };
+        ImplantLotMatchDto: {
+            /** Format: uuid */
+            implantId: string;
+            /** Format: uuid */
+            patientId: string;
+            patientName: string;
+            patientDocument: string | null;
+            phone: string | null;
+            /** Format: date */
+            placedOn: string;
+            toothNumber: string;
+            /** @enum {string} */
+            kind: "IMPLANT" | "ABUTMENT" | "GRAFT" | "MEMBRANE" | "OTHER";
+            manufacturer: string;
+            system: string | null;
+            reference: string;
+            lot: string;
+            professionalName: string;
+            locationName: string;
+            voided: boolean;
+        };
+        VoidImplantDto: {
+            reason: string;
         };
         LocationReminderSettingsDto: {
             /** Format: uuid */
@@ -11309,6 +11616,318 @@ export interface operations {
                 content?: never;
             };
             /** @description Ya existe una plantilla con ese nombre */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientImplantsController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Más reciente primero; incluye anulados */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PatientImplantDto"][];
+                };
+            };
+            /** @description Paciente no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientImplantsController_register: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Sede activa. Sin ella, la sede principal (alta) o toda la clínica (búsqueda). */
+                "X-Location-Id"?: string;
+            };
+            path: {
+                patientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RegisterImplantDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PatientImplantDto"];
+                };
+            };
+            /** @description Falta fabricante, referencia o lote, diente FDI inválido, medidas fuera de rango, fecha futura o ítem del plan de otro paciente (mensaje en español) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo el odontólogo o la administración registran y anulan implantes. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientImplantsController_card: {
+        parameters: {
+            query: {
+                date: string;
+            };
+            header?: never;
+            path: {
+                patientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImplantCardDto"];
+                };
+            };
+            /** @description Falta el día o no es AAAA-MM-DD */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente ajeno o sin implantes registrados ese día */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientImplantsController_print: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PrintImplantCardDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImplantCardDto"];
+                };
+            };
+            /** @description Falta el día o no es AAAA-MM-DD */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente ajeno o sin implantes registrados ese día */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ImplantsController_catalog: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImplantCatalogEntryDto"][];
+                };
+            };
+            /** @description Solo el odontólogo o la administración registran y anulan implantes. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ImplantsController_search: {
+        parameters: {
+            query?: {
+                lot?: string;
+                reference?: string;
+            };
+            header?: {
+                /** @description Sede activa. Sin ella, la sede principal (alta) o toda la clínica (búsqueda). */
+                "X-Location-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ImplantLotMatchDto"][];
+                };
+            };
+            /** @description Sin lote ni referencia */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo la administración puede buscar implantes por lote y exportarlos. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ImplantsController_csv: {
+        parameters: {
+            query?: {
+                lot?: string;
+                reference?: string;
+            };
+            header?: {
+                /** @description Sede activa. Sin ella, la sede principal (alta) o toda la clínica (búsqueda). */
+                "X-Location-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Fichero CSV */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
+                };
+            };
+            /** @description Sin lote ni referencia */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo la administración puede buscar implantes por lote y exportarlos. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ImplantsController_void: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VoidImplantDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PatientImplantDto"];
+                };
+            };
+            /** @description Motivo vacío o demasiado corto */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo quien lo registró o un ADMIN (y nunca asistente ni recepción) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Implante no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El implante ya está anulado */
             409: {
                 headers: {
                     [name: string]: unknown;
