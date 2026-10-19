@@ -4,8 +4,11 @@ import { useEffect, useState } from 'react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import {
   listCatalogDirectory,
+  listCatalogItems,
   createCatalogItem,
   updateCatalogItem,
+  canEditCatalog,
+  CUPS_PATTERN,
   type DentalCatalogItem,
   type CreateCatalogItemInput,
   type UpdateCatalogItemInput,
@@ -34,6 +37,7 @@ import { ClinicWideNote } from '@/components/locations/clinic-wide-note';
 import { cn } from '@/lib/utils';
 import { formatAmount, formatCurrency } from '@/lib/format/currency';
 import { useClinicCurrency } from '@/lib/locations/clinic-currency';
+import { getTokenRole } from '@/lib/auth/token-role';
 import {
   Table,
   TableBody,
@@ -90,6 +94,13 @@ const copy = {
   colorHint: 'Se usa para distinguirlo en el odontograma.',
   categoryLabel: 'Categoría',
   categoryHint: 'Opcional (ej. Preventiva, Restauradora, Endodoncia).',
+  // DX-212: código CUPS que piden el RDA y el RIPS en Colombia.
+  cupsLabel: 'Código CUPS',
+  cupsHint: '6 caracteres alfanuméricos (ej. 890203). Lo piden el RDA y el RIPS en Colombia.',
+  cupsReadOnly: 'Solo un administrador puede cambiarlo.',
+  cupsInvalid: 'El código CUPS debe tener 6 caracteres alfanuméricos (ej. 890203).',
+  colCups: 'CUPS',
+  cupsFallback: '—',
   submit: 'Crear',
   editSubmit: 'Guardar',
   retry: 'Reintentar',
@@ -175,6 +186,11 @@ const SEARCH_DEBOUNCE_MS = 300;
 
 interface CatalogViewProps {
   token: string;
+  /**
+   * DX-212: ítem a abrir en edición al llegar (`/catalog?item=<id>`, el enlace
+   * «Completar» del chip RDA cuando falta su CUPS).
+   */
+  initialItemId?: string | null;
 }
 
 /**
@@ -189,8 +205,11 @@ interface CatalogViewProps {
  * deactivating it (`{ active: false }`) — it disappears from the pickers but the
  * history in `ToothRecord` / plan items that reference it is preserved.
  */
-export function CatalogView({ token }: CatalogViewProps) {
+export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
   const currency = useClinicCurrency(token);
+  // DX-212: el CUPS (como el resto del catálogo) solo lo edita ADMIN; para los
+  // demás el campo es de solo lectura.
+  const canEdit = canEditCatalog(getTokenRole(token));
   const [items, setItems] = useState<DentalCatalogItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -207,6 +226,8 @@ export function CatalogView({ token }: CatalogViewProps) {
   const [price, setPrice] = useState('');
   const [color, setColor] = useState(DEFAULT_COLOR);
   const [category, setCategory] = useState('');
+  const [cups, setCups] = useState('');
+  const [cupsError, setCupsError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -341,6 +362,8 @@ export function CatalogView({ token }: CatalogViewProps) {
     setPrice('');
     setColor(DEFAULT_COLOR);
     setCategory('');
+    setCups('');
+    setCupsError(null);
   }
 
   function openCreate() {
@@ -357,10 +380,33 @@ export function CatalogView({ token }: CatalogViewProps) {
     setPrice(item.defaultPrice == null ? '' : String(item.defaultPrice));
     setColor(item.color);
     setCategory(item.category ?? '');
+    setCups(item.cupsCode ?? '');
+    setCupsError(null);
     setEditingItem(item);
     setFormError(null);
     setShowForm(true);
   }
+
+  // DX-212: `/catalog?item=<id>` abre ese ítem en edición una vez cargado.
+  const [openedInitial, setOpenedInitial] = useState(false);
+  useEffect(() => {
+    if (!initialItemId || openedInitial || !token) return;
+    let cancelled = false;
+    listCatalogItems(token)
+      .then((all) => {
+        if (cancelled) return;
+        setOpenedInitial(true);
+        const item = all.find((i) => i.id === initialItemId);
+        if (item) openEdit(item);
+      })
+      .catch(() => {
+        // Sin el ítem, la pantalla sigue igual: el usuario lo busca a mano.
+        if (!cancelled) setOpenedInitial(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [initialItemId, openedInitial, token]);
 
   // Builds the shared payload from the current form fields. Empty optional
   // fields are omitted (so a blank price/category doesn't send anything) — a
@@ -369,6 +415,7 @@ export function CatalogView({ token }: CatalogViewProps) {
   function buildPayload(): CreateCatalogItemInput {
     const trimmedPrice = price.trim();
     const trimmedCategory = category.trim();
+    const trimmedCups = cups.trim().toUpperCase();
     return {
       code: code.trim(),
       kind,
@@ -376,21 +423,29 @@ export function CatalogView({ token }: CatalogViewProps) {
       color,
       ...(trimmedPrice ? { defaultPrice: Number(trimmedPrice) } : {}),
       ...(trimmedCategory ? { category: trimmedCategory } : {}),
+      ...(canEdit && trimmedCups ? { cupsCode: trimmedCups } : {}),
     };
   }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setFormError(null);
+    setCupsError(null);
+    const trimmedCups = cups.trim().toUpperCase();
+    if (canEdit && trimmedCups && !CUPS_PATTERN.test(trimmedCups)) {
+      setCupsError(copy.cupsInvalid);
+      return;
+    }
     setSaving(true);
     try {
       const payload = buildPayload();
       if (editingItem) {
-        await updateCatalogItem(
-          token,
-          editingItem.id,
-          payload as UpdateCatalogItemInput,
-        );
+        // Editar con el campo vacío QUITA el CUPS (la API acepta null).
+        const patch: UpdateCatalogItemInput = {
+          ...payload,
+          ...(canEdit && !trimmedCups && editingItem.cupsCode ? { cupsCode: null } : {}),
+        };
+        await updateCatalogItem(token, editingItem.id, patch);
       } else {
         await createCatalogItem(token, payload);
       }
@@ -580,6 +635,30 @@ export function CatalogView({ token }: CatalogViewProps) {
               />
             </FormField>
             <FormField
+              htmlFor="catalog-cups"
+              label={copy.cupsLabel}
+              hint={canEdit ? copy.cupsHint : copy.cupsReadOnly}
+              error={cupsError}
+            >
+              <Input
+                id="catalog-cups"
+                type="text"
+                inputMode="text"
+                autoComplete="off"
+                maxLength={6}
+                readOnly={!canEdit}
+                aria-readonly={!canEdit || undefined}
+                aria-invalid={cupsError ? true : undefined}
+                aria-describedby={cupsError ? 'catalog-cups-error' : undefined}
+                value={cups}
+                onChange={(e) => setCups(e.target.value.toUpperCase())}
+                className={cn('uppercase tabular-nums', !canEdit && 'bg-surface-2 text-muted')}
+              />
+            </FormField>
+          </div>
+
+          <div className="grid gap-4 sm:grid-cols-2">
+            <FormField
               htmlFor="catalog-color"
               label={copy.colorLabel}
               hint={copy.colorHint}
@@ -636,6 +715,7 @@ export function CatalogView({ token }: CatalogViewProps) {
                   <TableHead>{copy.colName}</TableHead>
                   <TableHead>{copy.colKind}</TableHead>
                   <TableHead>{copy.colCode}</TableHead>
+                  <TableHead>{copy.colCups}</TableHead>
                   <TableHead className="text-right">{copy.colPrice}</TableHead>
                   <TableHead>{copy.colStatus}</TableHead>
                   <TableHead className="w-px text-right">
@@ -668,6 +748,9 @@ export function CatalogView({ token }: CatalogViewProps) {
                     </TableCell>
                     <TableCell className="text-muted tabular-nums" data-label={copy.colCode}>
                       {item.code}
+                    </TableCell>
+                    <TableCell className="tabular-nums" data-label={copy.colCups}>
+                      {item.cupsCode ?? <span className="text-muted">{copy.cupsFallback}</span>}
                     </TableCell>
                     <TableCell className="text-right tabular-nums" data-label={copy.colPrice}>
                       {formatPrice(item.defaultPrice, currency)}

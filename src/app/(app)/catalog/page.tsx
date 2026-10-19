@@ -1,6 +1,6 @@
 'use client';
-import { useEffect } from 'react';
-import { useRouter } from 'next/navigation';
+import { Suspense, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { CatalogView } from '@/components/catalog/catalog-view';
 
@@ -10,8 +10,21 @@ const copy = {
   checkingSession: 'Verificando sesión…',
 };
 
+/**
+ * `useSearchParams` (DX-212: `?item=<id>` abre ese ítem en edición) exige un
+ * límite de Suspense, como en la ficha del paciente.
+ */
 export default function CatalogPage() {
+  return (
+    <Suspense fallback={null}>
+      <CatalogPageView />
+    </Suspense>
+  );
+}
+
+function CatalogPageView() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const accessToken = useAuthStore((s) => s.accessToken);
   const hasHydrated = useAuthStore((s) => s._hasHydrated);
 
@@ -38,6 +51,6 @@ export default function CatalogPage() {
   }
 
   return (
-    <CatalogView token={accessToken} />
+    <CatalogView token={accessToken} initialItemId={searchParams.get('item')} />
   );
 }

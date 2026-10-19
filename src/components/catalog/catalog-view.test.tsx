@@ -4,6 +4,7 @@ import { setupUser } from '@/lib/test/user';
 import { CatalogView } from './catalog-view';
 import {
   listCatalogDirectory,
+  listCatalogItems,
   createCatalogItem,
   updateCatalogItem,
   type DentalCatalogItem,
@@ -12,12 +13,15 @@ import { Toaster } from '@/components/errors/toaster';
 import { setActiveLocationId } from '@/lib/locations/location-store';
 import { listLocations, type ClinicLocation } from '@/lib/locations/locations-api';
 import { ApiError } from '@/lib/api/client';
+import { tokenFor } from '@/lib/test/prescriptions';
 
 // NOTE: jest.mock's string literal is not alias-rewritten by the SWC transform
 // (only real import/require specifiers are) — use a relative path here, same
 // convention as staff-view.test.tsx / agenda-view.test.tsx.
 jest.mock('../../lib/odontogram/catalog-api', () => ({
+  ...jest.requireActual('../../lib/odontogram/catalog-api'),
   listCatalogDirectory: jest.fn(),
+  listCatalogItems: jest.fn(),
   createCatalogItem: jest.fn(),
   updateCatalogItem: jest.fn(),
 }));
@@ -543,3 +547,58 @@ describe('CatalogView', () => {
     expect(await screen.findByRole('table', { name: /catálogo/i })).toBeInTheDocument();
   });
 });
+
+describe('CatalogView · código CUPS (DX-212)', () => {
+  const admin = tokenFor('ADMIN', 'u-admin');
+  const dentist = tokenFor('DENTIST');
+  const withCups: DentalCatalogItem = { ...item1, cupsCode: '997002' };
+
+  beforeEach(() => {
+    mockedList.mockReset().mockResolvedValue(page([withCups, { ...item1, id: 'c2', code: 'RES', labelEs: 'Resina', cupsCode: null }]));
+    mockedUpdate.mockReset().mockResolvedValue(withCups);
+    mockedLocations.mockReset().mockResolvedValue(clinicIn('CO'));
+    (listCatalogItems as jest.Mock).mockReset().mockResolvedValue([withCups]);
+    window.localStorage.clear();
+  });
+
+  it('muestra la columna CUPS («—» si no tiene)', async () => {
+    render(<CatalogView token={admin} />);
+    const table = await screen.findByRole('table', { name: /catálogo/i });
+    expect(within(table).getByRole('columnheader', { name: 'CUPS' })).toBeInTheDocument();
+    expect(within(table).getByText('997002')).toBeInTheDocument();
+    expect(within(table).getByText('—')).toBeInTheDocument();
+  });
+
+  it('ADMIN cambia el CUPS (en mayúsculas) y vacío lo quita', async () => {
+    const user = setupUser();
+    render(<CatalogView token={admin} initialItemId="c1" />);
+    const field = await screen.findByLabelText('Código CUPS');
+    expect(field).toHaveValue('997002');
+    await user.clear(field);
+    await user.click(screen.getByRole('button', { name: 'Guardar' }));
+    await waitFor(() =>
+      expect(mockedUpdate).toHaveBeenCalledWith(admin, 'c1', expect.objectContaining({ cupsCode: null })),
+    );
+  });
+
+  it('formato inválido: error en el campo y no se envía', async () => {
+    const user = setupUser();
+    render(<CatalogView token={admin} initialItemId="c1" />);
+    const field = await screen.findByLabelText('Código CUPS');
+    await user.clear(field);
+    await user.type(field, '89-20');
+    await user.click(screen.getByRole('button', { name: 'Guardar' }));
+    expect(
+      await screen.findByText('El código CUPS debe tener 6 caracteres alfanuméricos (ej. 890203).'),
+    ).toBeInTheDocument();
+    expect(mockedUpdate).not.toHaveBeenCalled();
+  });
+
+  it('DENTIST lo ve de solo lectura', async () => {
+    render(<CatalogView token={dentist} initialItemId="c1" />);
+    const field = await screen.findByLabelText('Código CUPS');
+    expect(field).toHaveAttribute('readonly');
+    expect(screen.getByText('Solo un administrador puede cambiarlo.')).toBeInTheDocument();
+  });
+});
+
