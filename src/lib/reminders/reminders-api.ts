@@ -65,6 +65,8 @@ export const SKIP_REASON_LABELS: Record<ReminderSkipReason, string> = {
   OPTED_OUT: 'el paciente se dio de baja',
   CHANNEL_NONE: 'el paciente no quiere avisos',
   CHANNEL_WHATSAPP: 'su canal es WhatsApp',
+  // DX-200: el paciente ya estaba en la clínica.
+  IN_CLINIC: 'el paciente ya llegó',
 };
 
 /** DX-128: por qué este paciente no recibe el email automático. */

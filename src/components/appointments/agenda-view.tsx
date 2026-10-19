@@ -64,7 +64,18 @@ import {
   formatTimeRange,
   patientLabel,
 } from '@/components/appointments/appointment-display';
-import { Plus, ChevronLeft, ChevronRight, CalendarOff, ListTodo, NotebookPen } from 'lucide-react';
+import { Plus, ChevronLeft, ChevronRight, CalendarOff, ListTodo, NotebookPen, Armchair } from 'lucide-react';
+import { InClinicPanel, inClinicCopy } from '@/components/appointments/in-clinic-panel';
+import {
+  PatientFlowActions,
+  usePatientFlow,
+} from '@/components/appointments/patient-flow-actions';
+import { useInClinic } from '@/components/appointments/use-in-clinic';
+import {
+  inClinicCount,
+  notifyInClinicChanged,
+  statusOptionsFor,
+} from '@/lib/appointments/patient-flow';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -159,20 +170,16 @@ const copy = {
   waitlistButton: 'Pendientes',
   waitlistButtonCount: (n: number) => `Pendientes por agendar: ${n}`,
   waitlistSheetDescription: 'Pacientes que cancelaron o no vinieron, para volver a darles cita.',
+  // DX-200: panel «En clínica».
+  inClinicButton: 'En clínica',
+  inClinicButtonCount: (n: number) => `En clínica: ${n}`,
+  inClinicSheetDescription: 'Quién espera, quién está en el sillón y quién está listo para cobrar en la sede.',
 };
 
 /** Avisos de la API al crear o mover (p. ej. un bloqueo de almuerzo que deja agendar). */
 function announceWarnings(appointment: Appointment | null | undefined) {
   for (const warning of appointment?.warnings ?? []) toast.warning(warning);
 }
-
-const STATUS_OPTIONS: AppointmentStatus[] = [
-  'SCHEDULED',
-  'CONFIRMED',
-  'COMPLETED',
-  'CANCELLED',
-  'NO_SHOW',
-];
 
 // Native <select> styled to match the Input atom (kept native for a11y/tests).
 const fieldClass =
@@ -384,6 +391,12 @@ export function AgendaView({ token }: AgendaViewProps) {
   const wide = useMediaQuery('(min-width: 1400px)');
   const waitlistCount = waitlist.loading || waitlist.error ? null : waitlist.total;
   const [waitlistOpen, setWaitlistOpen] = useState(false);
+  // DX-200: panel «En clínica» (lateral desde 1400 px; si no, en un cajón).
+  // Se relee al cambiar un estado en la agenda, además de su sondeo.
+  const [inClinicReloadKey, setInClinicReloadKey] = useState(0);
+  const inClinic = useInClinic(token, { reloadKey: inClinicReloadKey });
+  const [inClinicOpen, setInClinicOpen] = useState(false);
+  const inClinicTotal = inClinic.view ? inClinicCount(inClinic.view) : null;
   // DX-210: el hueco libre (o la cita recién cancelada) a ocupar.
   const [fillSlot, setFillSlot] = useState<OpeningSlot | null>(null);
   // Whether the day panel (right drawer / bottom sheet) is open — opened by
@@ -669,6 +682,28 @@ export function AgendaView({ token }: AgendaViewProps) {
     refreshAppointmentsInPlaceRef.current = refreshAppointmentsInPlace;
   });
 
+  // DX-200: un paso del flujo (desde la tarjeta, el detalle o el panel)
+  // refresca la agenda y el panel; por la ref, con los filtros vigentes.
+  const flow = usePatientFlow(token, () => {
+    setInClinicReloadKey((k) => k + 1);
+    void refreshAppointmentsInPlaceRef.current();
+  });
+
+  /** Botones rápidos del flujo de una cita de la agenda (DX-200). */
+  function renderFlowActions(appointment: Appointment, className = 'mt-2') {
+    return (
+      <PatientFlowActions
+        appointmentId={appointment.id}
+        status={appointment.status}
+        role={role}
+        isToday={localDayKeyOf(appointment.start) === today}
+        patientName={patientLabel(appointment)}
+        runner={flow}
+        className={className}
+      />
+    );
+  }
+
   function handleAppointmentCreated(created?: Appointment) {
     setShowForm(false);
     setSlotPrefill(null);
@@ -815,6 +850,9 @@ export function AgendaView({ token }: AgendaViewProps) {
       // DX-122: cancelar o no-show deja al paciente en «Pendientes por
       // agendar», y reactivar la cita lo saca (revisión H1): se recarga siempre.
       setWaitlistReloadKey((k) => k + 1);
+      // DX-200: completar o cancelar a alguien en la clínica lo saca del panel.
+      setInClinicReloadKey((k) => k + 1);
+      notifyInClinicChanged();
       await refreshAppointmentsInPlace();
     } catch (err) {
       notifyError(apiErrorMessage(err, copy.genericStatusChangeError), {
@@ -924,6 +962,24 @@ export function AgendaView({ token }: AgendaViewProps) {
             )}
           </div>
           <div className="flex flex-wrap items-center gap-2">
+            {/* DX-200: «En clínica», en un cajón sin panel lateral. */}
+            {!wide ? (
+              <Button
+                type="button"
+                variant="secondary"
+                aria-label={
+                  inClinicTotal === null ? copy.inClinicButton : copy.inClinicButtonCount(inClinicTotal)
+                }
+                onClick={() => setInClinicOpen(true)}
+              >
+                <Armchair aria-hidden /> {copy.inClinicButton}
+                {inClinicTotal ? (
+                  <span className="rounded-full bg-primary/10 px-1.5 text-xs font-semibold tabular-nums text-primary">
+                    {inClinicTotal}
+                  </span>
+                ) : null}
+              </Button>
+            ) : null}
             {/* DX-122: en pantallas sin panel lateral, los pendientes van en un cajón. */}
             {!wide ? (
             <Button
@@ -1062,6 +1118,7 @@ export function AgendaView({ token }: AgendaViewProps) {
                 onStatusChange={handleStatusChange}
                 updatingId={updatingId}
                 onSelectAppointment={openAppointmentDetail}
+                renderActions={renderFlowActions}
               />
             ) : !staffLoading && !staffError && columnProviders.length === 0 ? (
               <p role="status" className="rounded-lg border border-dashed border-border bg-surface px-4 py-8 text-center text-sm text-muted">
@@ -1162,6 +1219,7 @@ export function AgendaView({ token }: AgendaViewProps) {
                 onStatusChange={handleStatusChange}
                 updatingId={updatingId}
                 onSelectAppointment={openAppointmentDetail}
+                renderActions={renderFlowActions}
               />
             </SheetBody>
             <SheetFooter>
@@ -1215,13 +1273,14 @@ export function AgendaView({ token }: AgendaViewProps) {
                       );
                     }}
                   >
-                    {STATUS_OPTIONS.map((s) => (
+                    {statusOptionsFor(liveDetailAppointment.status).map((s) => (
                       <option key={s} value={s}>
                         {STATUS_LABELS[s]}
                       </option>
                     ))}
                   </select>
                 </FormField>
+                {renderFlowActions(liveDetailAppointment, '')}
                 {canChangeWantsEarlier(role) &&
                 (liveDetailAppointment.status === 'SCHEDULED' ||
                   liveDetailAppointment.status === 'CONFIRMED') ? (
@@ -1305,9 +1364,10 @@ export function AgendaView({ token }: AgendaViewProps) {
       {/* DX-122: panel lateral fijo junto a la agenda (≥ 1400 px: a 1440 deja sitio a la tabla del día). */}
       {wide ? (
         <aside
-          aria-label={waitlistCopy.title}
-          className="sticky top-0 max-h-[calc(100dvh-4rem)] overflow-y-auto"
+          aria-label={`${inClinicCopy.title} · ${waitlistCopy.title}`}
+          className="sticky top-0 flex max-h-[calc(100dvh-4rem)] flex-col gap-8 overflow-y-auto"
         >
+          <InClinicPanel state={inClinic} role={role} runner={flow} />
           <WaitlistPanel
             token={token}
             staff={staff}
@@ -1335,6 +1395,19 @@ export function AgendaView({ token }: AgendaViewProps) {
           </SheetContent>
         </Sheet>
       )}
+      {!wide ? (
+        <Sheet open={inClinicOpen} onOpenChange={setInClinicOpen}>
+          <SheetContent className="top-0 h-dvh max-h-none rounded-none border-t-0 sm:w-[26rem]">
+            <SheetHeader className="sr-only">
+              <SheetTitle>{inClinicCopy.title}</SheetTitle>
+              <SheetDescription>{copy.inClinicSheetDescription}</SheetDescription>
+            </SheetHeader>
+            <SheetBody className="pt-14">
+              <InClinicPanel state={inClinic} role={role} runner={flow} />
+            </SheetBody>
+          </SheetContent>
+        </Sheet>
+      ) : null}
 
       {fillSlot ? (
         <FillOpeningPanel

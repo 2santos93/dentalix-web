@@ -919,6 +919,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/appointments/in-clinic": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["AppointmentsController_inClinic"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/appointments/{id}": {
         parameters: {
             query?: never;
@@ -933,6 +949,22 @@ export interface paths {
         options?: never;
         head?: never;
         patch: operations["AppointmentsController_update"];
+        trace?: never;
+    };
+    "/api/v1/appointments/{id}/undo-arrival": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["AppointmentsController_undoArrival"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/appointments/{id}/opening": {
@@ -2831,6 +2863,12 @@ export interface components {
             from: components["schemas"]["AuditAppointmentSlotDto"];
             to: components["schemas"]["AuditAppointmentSlotDto"];
         };
+        AuditStatusChangeDto: {
+            /** @example CONFIRMED */
+            from: string;
+            /** @example ARRIVED */
+            to: string;
+        };
         /**
          * @description DX-128: de dónde salió un cambio de canal, opt-in o baja de recordatorios (en persona, enlace, mensaje del paciente o anotado por el personal).
          * @enum {string}
@@ -2844,12 +2882,6 @@ export interface components {
             /** @example 2 */
             rows: number;
         };
-        AuditStatusChangeDto: {
-            /** @example KEPT */
-            from: string;
-            /** @example OPEN */
-            to: string;
-        };
         AuditMetadataDto: {
             /** @description UPDATE: nombres de los campos enviados (nunca sus valores). */
             changedFields?: string[];
@@ -2861,6 +2893,8 @@ export interface components {
             reason?: string;
             /** @description DX-121: cita movida — hora y profesional antes y después (nunca datos del paciente). */
             move?: components["schemas"]["AuditAppointmentMoveDto"];
+            /** @description DX-200: paso del flujo en la clínica (`reason` PATIENT_FLOW o ARRIVAL_UNDONE): estado de la cita antes y después. */
+            status?: components["schemas"]["AuditStatusChangeDto"];
             /** @description DX-128: de dónde salió un cambio de canal, opt-in o baja de recordatorios (en persona, enlace, mensaje del paciente o anotado por el personal). */
             origin?: components["schemas"]["AuditOrigin"];
             /** @description DX-191: búsqueda de implantes por lote/REF — lo buscado y cuántas filas salieron. */
@@ -4353,7 +4387,7 @@ export interface components {
             /** Format: date-time */
             end: string;
             /** @enum {string} */
-            status: "SCHEDULED" | "CONFIRMED" | "COMPLETED" | "CANCELLED" | "NO_SHOW";
+            status: "SCHEDULED" | "CONFIRMED" | "COMPLETED" | "CANCELLED" | "NO_SHOW" | "ARRIVED" | "IN_CHAIR" | "READY_FOR_CHECKOUT";
             reason: string | null;
             notes: string | null;
             /** Format: uuid */
@@ -4374,6 +4408,21 @@ export interface components {
             callbackRequestedAt: string | null;
             /** @description DX-210: «Adelantar si hay hueco». Se apaga al moverla a un hueco libre. */
             wantsEarlier: boolean;
+            /**
+             * Format: date-time
+             * @description DX-200: cuándo recepción marcó «Llegó» (reloj del servidor). null en las citas antiguas o si se deshizo la llegada.
+             */
+            arrivedAt: string | null;
+            /**
+             * Format: date-time
+             * @description DX-200: cuándo pasó al sillón.
+             */
+            seatedAt: string | null;
+            /**
+             * Format: date-time
+             * @description DX-200: cuándo quedó listo para cobrar.
+             */
+            readyForCheckoutAt: string | null;
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
@@ -4402,7 +4451,7 @@ export interface components {
             /** Format: date-time */
             end: string;
             /** @enum {string} */
-            status: "SCHEDULED" | "CONFIRMED" | "COMPLETED" | "CANCELLED" | "NO_SHOW";
+            status: "SCHEDULED" | "CONFIRMED" | "COMPLETED" | "CANCELLED" | "NO_SHOW" | "ARRIVED" | "IN_CHAIR" | "READY_FOR_CHECKOUT";
             reason: string | null;
             notes: string | null;
             /** Format: uuid */
@@ -4423,6 +4472,21 @@ export interface components {
             callbackRequestedAt: string | null;
             /** @description DX-210: «Adelantar si hay hueco». Se apaga al moverla a un hueco libre. */
             wantsEarlier: boolean;
+            /**
+             * Format: date-time
+             * @description DX-200: cuándo recepción marcó «Llegó» (reloj del servidor). null en las citas antiguas o si se deshizo la llegada.
+             */
+            arrivedAt: string | null;
+            /**
+             * Format: date-time
+             * @description DX-200: cuándo pasó al sillón.
+             */
+            seatedAt: string | null;
+            /**
+             * Format: date-time
+             * @description DX-200: cuándo quedó listo para cobrar.
+             */
+            readyForCheckoutAt: string | null;
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
@@ -4449,6 +4513,62 @@ export interface components {
             /** @description Había más de 200 huecos: acota el rango. */
             truncated: boolean;
         };
+        InClinicItemDto: {
+            /** Format: uuid */
+            appointmentId: string;
+            /** Format: uuid */
+            patientId: string;
+            patientFirstName: string | null;
+            patientLastName: string | null;
+            /** Format: uuid */
+            providerId: string;
+            providerName: string | null;
+            /** Format: date-time */
+            start: string;
+            /** Format: date-time */
+            end: string;
+            /** @enum {string} */
+            status: "ARRIVED" | "IN_CHAIR" | "READY_FOR_CHECKOUT";
+            /** Format: date-time */
+            arrivedAt: string | null;
+            /** Format: date-time */
+            seatedAt: string | null;
+            /** Format: date-time */
+            readyForCheckoutAt: string | null;
+            /** @description Minutos (enteros, reloj del servidor) en el grupo actual: esperando desde la llegada, en el sillón desde que se sentó, o por cobrar desde que quedó listo. */
+            minutesInStatus: number;
+            /** @description Minutos que esperó desde la llegada hasta el sillón (o que lleva esperando). */
+            waitedMinutes: number;
+            /**
+             * @description Puntualidad de la llegada: ON_TIME (verde) a la hora o antes; LATE (naranja) hasta 5 min tarde; VERY_LATE (rojo) después.
+             * @enum {string}
+             */
+            punctuality: "ON_TIME" | "LATE" | "VERY_LATE";
+        };
+        InClinicViewDto: {
+            /** @example 2026-10-19 */
+            date: string;
+            /** Format: uuid */
+            locationId: string;
+            /** @example America/Bogota */
+            timeZone: string;
+            /**
+             * Format: date-time
+             * @description Reloj del servidor con el que se calcularon los minutos.
+             */
+            now: string;
+            /**
+             * @description MINE: un DENTIST ve solo a sus pacientes («Te esperan»); LOCATION: toda la sede.
+             * @enum {string}
+             */
+            scope: "MINE" | "LOCATION";
+            /** @description En espera (ARRIVED), quien más lleva esperando primero. */
+            waiting: components["schemas"]["InClinicItemDto"][];
+            /** @description En sillón (IN_CHAIR). */
+            inChair: components["schemas"]["InClinicItemDto"][];
+            /** @description Listo para cobrar (READY_FOR_CHECKOUT). */
+            readyForCheckout: components["schemas"]["InClinicItemDto"][];
+        };
         AppointmentDto: {
             /** Format: uuid */
             id: string;
@@ -4471,7 +4591,7 @@ export interface components {
             /** Format: date-time */
             end: string;
             /** @enum {string} */
-            status: "SCHEDULED" | "CONFIRMED" | "COMPLETED" | "CANCELLED" | "NO_SHOW";
+            status: "SCHEDULED" | "CONFIRMED" | "COMPLETED" | "CANCELLED" | "NO_SHOW" | "ARRIVED" | "IN_CHAIR" | "READY_FOR_CHECKOUT";
             reason: string | null;
             notes: string | null;
             /** Format: uuid */
@@ -4492,6 +4612,21 @@ export interface components {
             callbackRequestedAt: string | null;
             /** @description DX-210: «Adelantar si hay hueco». Se apaga al moverla a un hueco libre. */
             wantsEarlier: boolean;
+            /**
+             * Format: date-time
+             * @description DX-200: cuándo recepción marcó «Llegó» (reloj del servidor). null en las citas antiguas o si se deshizo la llegada.
+             */
+            arrivedAt: string | null;
+            /**
+             * Format: date-time
+             * @description DX-200: cuándo pasó al sillón.
+             */
+            seatedAt: string | null;
+            /**
+             * Format: date-time
+             * @description DX-200: cuándo quedó listo para cobrar.
+             */
+            readyForCheckoutAt: string | null;
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
@@ -4507,8 +4642,11 @@ export interface components {
              * @description DX-121: mover la cita a otro profesional de la clínica. Mismas reglas que reagendar: solape 409, horario de la sede 422, y anula el enlace de confirmación.
              */
             providerId?: string;
-            /** @enum {string} */
-            status?: "SCHEDULED" | "CONFIRMED" | "COMPLETED" | "CANCELLED" | "NO_SHOW";
+            /**
+             * @description DX-200: flujo en la clínica sin saltos (409 si no): ARRIVED desde SCHEDULED/CONFIRMED y solo el día de la cita (RECEPTION, ASSISTANT, ADMIN; fija `arrivedAt`); IN_CHAIR desde ARRIVED y READY_FOR_CHECKOUT desde IN_CHAIR (DENTIST, ASSISTANT, ADMIN; fijan `seatedAt` / `readyForCheckoutAt`); la salida a COMPLETED (o CANCELLED si se fue sin pasar al sillón) desde el flujo, RECEPTION, ASSISTANT, ADMIN. Nunca NO_SHOW desde el flujo; para volver a agendada, `POST /appointments/:id/undo-arrival`. Las horas las pone el servidor. Rol sin permiso: 403.
+             * @enum {string}
+             */
+            status?: "SCHEDULED" | "CONFIRMED" | "COMPLETED" | "CANCELLED" | "NO_SHOW" | "ARRIVED" | "IN_CHAIR" | "READY_FOR_CHECKOUT";
             reason?: string;
             notes?: string;
             /** @description DX-210: «Adelantar si hay hueco». La cita sale como candidata para los huecos libres de días anteriores de su sede y profesional. Solo RECEPTION, DENTIST y ADMIN (403 para ASSISTANT); queda auditado. */
@@ -4698,7 +4836,7 @@ export interface components {
             /** Format: date-time */
             end: string;
             /** @enum {string} */
-            status: "SCHEDULED" | "CONFIRMED" | "COMPLETED" | "CANCELLED" | "NO_SHOW";
+            status: "SCHEDULED" | "CONFIRMED" | "COMPLETED" | "CANCELLED" | "NO_SHOW" | "ARRIVED" | "IN_CHAIR" | "READY_FOR_CHECKOUT";
             patientFirstName: string | null;
             patientLastName: string | null;
         };
@@ -4793,7 +4931,7 @@ export interface components {
              * @description CANCELLED o NO_SHOW al crearse.
              * @enum {string}
              */
-            status: "SCHEDULED" | "CONFIRMED" | "COMPLETED" | "CANCELLED" | "NO_SHOW";
+            status: "SCHEDULED" | "CONFIRMED" | "COMPLETED" | "CANCELLED" | "NO_SHOW" | "ARRIVED" | "IN_CHAIR" | "READY_FOR_CHECKOUT";
         };
         /** @enum {string} */
         WaitlistPriority: "NORMAL" | "URGENT";
@@ -4904,7 +5042,7 @@ export interface components {
          */
         WhatsappOfferBlock: "OPTED_OUT" | "CHANNEL_NONE" | "NO_OPT_IN";
         /** @enum {string} */
-        AppointmentStatus: "SCHEDULED" | "CONFIRMED" | "COMPLETED" | "CANCELLED" | "NO_SHOW";
+        AppointmentStatus: "SCHEDULED" | "CONFIRMED" | "COMPLETED" | "CANCELLED" | "NO_SHOW" | "ARRIVED" | "IN_CHAIR" | "READY_FOR_CHECKOUT";
         CandidateAppointmentDto: {
             /** Format: uuid */
             id: string;
@@ -7314,7 +7452,7 @@ export interface components {
             /** Format: date-time */
             end: string;
             /** @enum {string} */
-            status: "SCHEDULED" | "CONFIRMED" | "COMPLETED" | "CANCELLED" | "NO_SHOW";
+            status: "SCHEDULED" | "CONFIRMED" | "COMPLETED" | "CANCELLED" | "NO_SHOW" | "ARRIVED" | "IN_CHAIR" | "READY_FOR_CHECKOUT";
         };
         DashboardDto: {
             period: components["schemas"]["DashboardPeriodDto"];
@@ -8093,10 +8231,10 @@ export interface components {
          */
         AppointmentReminderState: "SENT" | "SKIPPED" | "SENDING" | "PENDING" | "MISSED";
         /**
-         * @description NO_EMAIL sin email · OPTED_OUT el paciente se dio de baja · CHANNEL_NONE / CHANNEL_WHATSAPP su canal no es el email (DX-128) · CANCELLED/COMPLETED/NO_SHOW estado de la cita · RESCHEDULED a otra hora · DELETED retirada · DISABLED la sede los desactivó · TOO_LATE fuera de plazo (la cita ya había empezado o su hora pasó hace más de 1 h)
+         * @description NO_EMAIL sin email · OPTED_OUT el paciente se dio de baja · CHANNEL_NONE / CHANNEL_WHATSAPP su canal no es el email (DX-128) · CANCELLED/COMPLETED/NO_SHOW estado de la cita · IN_CLINIC el paciente ya llegó (DX-200) · RESCHEDULED a otra hora · DELETED retirada · DISABLED la sede los desactivó · TOO_LATE fuera de plazo (la cita ya había empezado o su hora pasó hace más de 1 h)
          * @enum {string}
          */
-        AppointmentReminderSkipReason: "NO_EMAIL" | "CANCELLED" | "COMPLETED" | "NO_SHOW" | "RESCHEDULED" | "DELETED" | "DISABLED" | "TOO_LATE" | "OPTED_OUT" | "CHANNEL_NONE" | "CHANNEL_WHATSAPP";
+        AppointmentReminderSkipReason: "NO_EMAIL" | "CANCELLED" | "COMPLETED" | "NO_SHOW" | "RESCHEDULED" | "DELETED" | "DISABLED" | "TOO_LATE" | "OPTED_OUT" | "CHANNEL_NONE" | "CHANNEL_WHATSAPP" | "IN_CLINIC";
         /**
          * @description Entrega del email por el proveedor (solo si se envió)
          * @enum {string}
@@ -8119,7 +8257,7 @@ export interface components {
             state: components["schemas"]["AppointmentReminderState"];
             /** Format: date-time */
             sentAt: string | null;
-            /** @description NO_EMAIL sin email · OPTED_OUT el paciente se dio de baja · CHANNEL_NONE / CHANNEL_WHATSAPP su canal no es el email (DX-128) · CANCELLED/COMPLETED/NO_SHOW estado de la cita · RESCHEDULED a otra hora · DELETED retirada · DISABLED la sede los desactivó · TOO_LATE fuera de plazo (la cita ya había empezado o su hora pasó hace más de 1 h) */
+            /** @description NO_EMAIL sin email · OPTED_OUT el paciente se dio de baja · CHANNEL_NONE / CHANNEL_WHATSAPP su canal no es el email (DX-128) · CANCELLED/COMPLETED/NO_SHOW estado de la cita · IN_CLINIC el paciente ya llegó (DX-200) · RESCHEDULED a otra hora · DELETED retirada · DISABLED la sede los desactivó · TOO_LATE fuera de plazo (la cita ya había empezado o su hora pasó hace más de 1 h) */
             skipReason: components["schemas"]["AppointmentReminderSkipReason"] | null;
             /** @description Entrega del email por el proveedor (solo si se envió) */
             emailDelivery: components["schemas"]["ReminderEmailDelivery"] | null;
@@ -10371,6 +10509,36 @@ export interface operations {
             };
         };
     };
+    AppointmentsController_inClinic: {
+        parameters: {
+            query?: {
+                /** @description Día civil (zona de la sede). Por defecto, hoy en la sede con el reloj del servidor. */
+                date?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description DX-200 panel «En clínica» de la sede del request (X-Location-Id): en espera, en sillón y listo para cobrar de un día civil en la zona de la sede, con los minutos calculados con el reloj del servidor y la puntualidad de la llegada. Solo nombre y horas (nada clínico). DENTIST: solo sus pacientes («Te esperan»); RECEPTION, ASSISTANT y ADMIN: toda la sede. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["InClinicViewDto"];
+                };
+            };
+            /** @description Sin sede (X-Location-Id), sede de otra clínica o fecha inválida */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     AppointmentsController_get: {
         parameters: {
             query?: never;
@@ -10422,7 +10590,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Rol sin permiso de agenda */
+            /** @description Rol sin permiso de agenda, o sin permiso para ese paso del flujo en la clínica (DX-200) */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -10436,7 +10604,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Solape con otra cita del profesional o del paciente (también si otro movimiento ganó la carrera), o el nuevo horario está bloqueado (DX-122) */
+            /** @description Solape con otra cita del profesional o del paciente (también si otro movimiento ganó la carrera), el nuevo horario está bloqueado (DX-122), o un salto imposible del flujo en la clínica o la cita cambió mientras tanto (DX-200) */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -10445,6 +10613,49 @@ export interface operations {
             };
             /** @description Fuera del horario de atención de la sede de la cita */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AppointmentsController_undoArrival: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description DX-200 «Deshacer llegada»: el paciente marcado «Llegó» por error vuelve al estado que tenía (SCHEDULED o CONFIRMED) y se borra `arrivedAt`. Solo desde ARRIVED (antes de pasar al sillón); queda en auditoría (`ARRIVAL_UNDONE`). */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AppointmentWriteDto"];
+                };
+            };
+            /** @description Solo RECEPTION, ASSISTANT y ADMIN */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Cita no encontrada en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La cita no está en espera (ya pasó al sillón, o nunca llegó), o cambió mientras tanto */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -24,6 +24,7 @@ import {
   isPatientOptOut,
   staffLoginDetail,
   cashSessionDetail,
+  patientFlowDetail,
 } from '@/lib/audit/audit-labels';
 import { listStaff, type StaffMember } from '@/lib/staff/staff-api';
 import { formatDateTimeInZone, zonedDayStart } from '@/lib/format/date';
@@ -417,7 +418,8 @@ function AuditRow({ event, showPatient }: { event: AuditEvent; showPatient: bool
     communicationDetail(event.metadata) ??
     implantSearchDetail(event.metadata) ??
     staffLoginDetail(event.metadata) ??
-    cashSessionDetail(event.metadata);
+    cashSessionDetail(event.metadata) ??
+    patientFlowDetail(event.metadata);
   return (
     <TableRow>
       <TableCell className="whitespace-nowrap tabular-nums" data-label={copy.colWhen}>

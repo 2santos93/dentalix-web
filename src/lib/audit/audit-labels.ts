@@ -173,3 +173,34 @@ export function implantSearchDetail(metadata: AuditMetadata): string | null {
   const rows = search.rows === 1 ? '1 fila' : `${search.rows} filas`;
   return [...terms, rows].join(' · ');
 }
+
+/** DX-200: etiqueta de un estado de la cita en el registro de auditoría. */
+const APPOINTMENT_STATUS_LABELS: Record<string, string> = {
+  SCHEDULED: 'Agendada',
+  CONFIRMED: 'Confirmada',
+  COMPLETED: 'Completada',
+  CANCELLED: 'Cancelada',
+  NO_SHOW: 'No asistió',
+  ARRIVED: 'En espera',
+  IN_CHAIR: 'En sillón',
+  READY_FOR_CHECKOUT: 'Listo para cobrar',
+};
+
+const PATIENT_FLOW_REASONS: Record<string, string> = {
+  PATIENT_FLOW: 'Flujo en la clínica',
+  ARRIVAL_UNDONE: 'Deshacer llegada',
+};
+
+/**
+ * DX-200: un paso del flujo del paciente en la clínica, con el estado antes y
+ * después («Flujo en la clínica · Confirmada → En espera»). null si no lo es.
+ */
+export function patientFlowDetail(metadata: AuditMetadata): string | null {
+  const what = metadata.reason ? PATIENT_FLOW_REASONS[metadata.reason] : undefined;
+  if (!what) return null;
+  const status = metadata.status;
+  if (!status) return what;
+  const label = (code: string) => APPOINTMENT_STATUS_LABELS[code] ?? code;
+  return `${what} · ${label(status.from)} → ${label(status.to)}`;
+}
+

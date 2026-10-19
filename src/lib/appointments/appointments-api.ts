@@ -67,6 +67,14 @@ export interface Appointment {
    * hueco» y se apaga al adelantarla.
    */
   wantsEarlier: boolean;
+  /**
+   * DX-200: horas del flujo en la clínica (ISO, reloj del servidor): llegó, en
+   * sillón, listo para cobrar. `null` en las citas antiguas o sin ese paso.
+   * Opcionales aquí solo para no obligar a los dobles de los tests a llevarlas.
+   */
+  arrivedAt?: string | null;
+  seatedAt?: string | null;
+  readyForCheckoutAt?: string | null;
   createdAt: string;
   updatedAt: string;
   /**

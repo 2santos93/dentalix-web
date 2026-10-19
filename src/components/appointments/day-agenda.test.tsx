@@ -272,4 +272,23 @@ describe('DayAgenda', () => {
       expect(screen.queryByRole('button', { name: /detalle/i })).not.toBeInTheDocument();
     });
   });
+
+  it('DX-200: en el flujo el selector solo ofrece su estado y la salida, y la fila lleva sus botones', () => {
+    const arrived: Appointment = { ...later, status: 'ARRIVED', arrivedAt: '2026-07-23T13:55:00.000Z' };
+    render(
+      <DayAgenda
+        appointments={[arrived]}
+        loading={false}
+        onStatusChange={jest.fn()}
+        renderActions={(a) => <button type="button">{`Acción ${a.id}`}</button>}
+      />,
+    );
+    const [select] = screen.getAllByTestId('appointment-status-select');
+    expect(within(select).getAllByRole('option').map((o) => o.textContent)).toEqual([
+      'En espera',
+      'Completada',
+      'Cancelada',
+    ]);
+    expect(screen.getAllByRole('button', { name: 'Acción apt-2' }).length).toBeGreaterThan(0);
+  });
 });
