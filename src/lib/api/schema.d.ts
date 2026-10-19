@@ -2882,12 +2882,6 @@ export interface components {
             /** @example 2 */
             rows: number;
         };
-        AuditStatusChangeDto: {
-            /** @example KEPT */
-            from: string;
-            /** @example OPEN */
-            to: string;
-        };
         AuditMetadataDto: {
             /** @description UPDATE: nombres de los campos enviados (nunca sus valores). */
             changedFields?: string[];
