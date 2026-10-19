@@ -1759,7 +1759,7 @@ export interface paths {
         post?: never;
         /**
          * Anular un abono (con motivo; queda quién y cuándo)
-         * @description Borrado lógico: el abono deja de sumar pero se conserva con `voidedById`, `voidedAt` y `voidReason`. ADMIN anula cualquier abono; RECEPTION solo los que registró ella misma el mismo día (calendario de la sede del abono).
+         * @description Borrado lógico: el abono deja de sumar pero se conserva con `voidedById`, `voidedAt` y `voidReason`. ADMIN anula cualquier abono; RECEPTION solo los que registró ella misma el mismo día (calendario de la sede del abono). Si el abono cumplía el último compromiso de pago del paciente en su moneda y ya no queda cubierto, el compromiso vuelve a OPEN (o BROKEN si su día ya pasó en la zona de su sede), en la misma transacción y auditado (DX-215).
          */
         delete: operations["PaymentsController_remove"];
         options?: never;
@@ -2844,6 +2844,12 @@ export interface components {
             /** @example 2 */
             rows: number;
         };
+        AuditStatusChangeDto: {
+            /** @example KEPT */
+            from: string;
+            /** @example OPEN */
+            to: string;
+        };
         AuditMetadataDto: {
             /** @description UPDATE: nombres de los campos enviados (nunca sus valores). */
             changedFields?: string[];
@@ -2859,6 +2865,8 @@ export interface components {
             origin?: components["schemas"]["AuditOrigin"];
             /** @description DX-191: búsqueda de implantes por lote/REF — lo buscado y cuántas filas salieron. */
             search?: components["schemas"]["AuditSearchDto"];
+            /** @description DX-215: estado antes y después (p. ej. un compromiso de pago cumplido que vuelve a abierto al anular su abono). Solo códigos. */
+            statusChange?: components["schemas"]["AuditStatusChangeDto"];
         };
         AuditEventDto: {
             /** Format: uuid */
@@ -3764,6 +3772,11 @@ export interface components {
             createdAt: string;
             /** Format: date-time */
             settledAt: string | null;
+            /**
+             * Format: date-time
+             * @description DX-215: última vez que el compromiso, ya cumplido, se reabrió (a abierto o incumplido) porque se anuló el abono que lo cumplía. null si nunca.
+             */
+            reopenedAt: string | null;
             /** @description Abonado en la moneda del compromiso desde que se hizo y hasta su día */
             covered: number;
         };
@@ -6505,6 +6518,11 @@ export interface components {
              */
             dueDate: string;
             status: components["schemas"]["PaymentPromiseStatus"];
+            /**
+             * Format: date-time
+             * @description DX-215: última vez que el compromiso, ya cumplido, se reabrió porque se anuló el abono que lo cumplía. null si nunca.
+             */
+            reopenedAt: string | null;
         };
         AgingRowDto: {
             patient: components["schemas"]["AgingPatientDto"];
