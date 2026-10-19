@@ -15,6 +15,10 @@ export const STATUS_LABELS: Record<AppointmentStatus, string> = {
   COMPLETED: 'Completada',
   CANCELLED: 'Cancelada',
   NO_SHOW: 'No asistió',
+  // DX-200: el paciente en la clínica.
+  ARRIVED: 'En espera',
+  IN_CHAIR: 'En sillón',
+  READY_FOR_CHECKOUT: 'Listo para cobrar',
 };
 
 // One semantic-token class per status — never a raw color utility
@@ -28,6 +32,11 @@ export const STATUS_BADGE_CLASSES: Record<AppointmentStatus, string> = {
   COMPLETED: 'border-success bg-success/10 text-success',
   CANCELLED: 'border-danger bg-danger/10 text-danger',
   NO_SHOW: 'border-warning bg-warning/10 text-warning',
+  // DX-200: en la clínica. En espera, tinta (está aquí, nada clínico aún); en
+  // el sillón, el acento; listo para cobrar, el éxito sin relleno (casi hecho).
+  ARRIVED: 'border-ink/40 bg-surface-2 text-ink',
+  IN_CHAIR: 'border-primary bg-primary/15 text-primary',
+  READY_FOR_CHECKOUT: 'border-success bg-surface text-success',
 };
 
 /** e.g. "09:00–09:30", 24h times in the user's local timezone. */

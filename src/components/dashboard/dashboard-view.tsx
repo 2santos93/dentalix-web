@@ -55,7 +55,11 @@ const copy = {
     COMPLETED: 'Completada',
     CANCELLED: 'Cancelada',
     NO_SHOW: 'No asistió',
-  } as Record<Dashboard['upcomingAppointments'][number]['status'], string>,
+    // DX-200: en la clínica, «en curso».
+    ARRIVED: 'En espera',
+    IN_CHAIR: 'En sillón',
+    READY_FOR_CHECKOUT: 'Listo para cobrar',
+  } satisfies Record<Dashboard['upcomingAppointments'][number]['status'], string>,
 };
 
 type AppointmentStatus = Dashboard['upcomingAppointments'][number]['status'];
@@ -71,6 +75,9 @@ const STATUS_BADGE_VARIANT: Record<AppointmentStatus, BadgeProps['variant']> = {
   COMPLETED: 'success',
   CANCELLED: 'danger',
   NO_SHOW: 'warning',
+  ARRIVED: 'outline',
+  IN_CHAIR: 'default',
+  READY_FOR_CHECKOUT: 'success',
 };
 
 interface DashboardViewProps {

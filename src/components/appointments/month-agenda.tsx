@@ -25,6 +25,9 @@ const STATUS_DOT: Record<AppointmentStatus, string> = {
   COMPLETED: 'bg-success',
   CANCELLED: 'bg-danger',
   NO_SHOW: 'bg-warning',
+  ARRIVED: 'bg-ink',
+  IN_CHAIR: 'bg-primary',
+  READY_FOR_CHECKOUT: 'bg-success',
 };
 
 interface MonthAgendaProps {

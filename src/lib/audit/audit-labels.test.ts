@@ -9,6 +9,7 @@ import {
   isPatientOptOut,
   staffLoginDetail,
   cashSessionDetail,
+  patientFlowDetail,
 } from './audit-labels';
 
 describe('etiquetas de auditoría', () => {
@@ -87,5 +88,15 @@ describe('cashSessionDetail (DX-027)', () => {
     expect(cashSessionDetail({ reason: 'CASH_SESSION_CLOSED' })).toBe('Cierre de caja');
     expect(cashSessionDetail({ reason: 'CASH_SESSION_REOPENED' })).toBe('Reapertura de caja');
     expect(cashSessionDetail({ reason: 'LOGIN_UNLOCKED' })).toBeNull();
+  });
+
+  it('DX-200: un paso del flujo en la clínica dice el estado antes y después', () => {
+    expect(
+      patientFlowDetail({ reason: 'PATIENT_FLOW', status: { from: 'CONFIRMED', to: 'ARRIVED' } }),
+    ).toBe('Flujo en la clínica · Confirmada → En espera');
+    expect(
+      patientFlowDetail({ reason: 'ARRIVAL_UNDONE', status: { from: 'ARRIVED', to: 'SCHEDULED' } }),
+    ).toBe('Deshacer llegada · En espera → Agendada');
+    expect(patientFlowDetail({ reason: 'APPOINTMENT_MOVED' })).toBeNull();
   });
 });
