@@ -15,8 +15,12 @@ jest.mock('../../lib/postop/postop-api', () => ({
   createPostOpTemplate: jest.fn(),
   updatePostOpTemplate: jest.fn(),
 }));
-jest.mock('../../lib/odontogram/catalog-api', () => ({ listCatalogItems: jest.fn() }));
+jest.mock('../../lib/odontogram/catalog-api', () => ({
+  ...jest.requireActual('../../lib/odontogram/catalog-api'),
+  listCatalogItems: jest.fn(),
+}));
 jest.mock('../../lib/appointments/appointment-types-api', () => ({
+  ...jest.requireActual('../../lib/appointments/appointment-types-api'),
   listAppointmentTypes: jest.fn(),
 }));
 
@@ -211,6 +215,20 @@ describe('PostOpTemplateFormModal', () => {
     await user.click(retry);
     expect(await within(dialog).findByRole('checkbox', { name: /exodoncia simple/i })).toBeInTheDocument();
     expect(mockedCatalog).toHaveBeenCalledTimes(2);
+  });
+
+  it('Enter en el filtro de procedimientos no envía el formulario', async () => {
+    const user = setupUser();
+    mockedCreate.mockResolvedValue(exo);
+    const { onOpenChange, dialog } = renderModal();
+    await user.type(within(dialog).getByLabelText('Código'), 'EXO');
+    await user.type(within(dialog).getByLabelText('Título'), 'X');
+    await user.type(within(dialog).getByLabelText('Indicaciones'), 'Texto');
+    const filter = await within(dialog).findByRole('searchbox', { name: /buscar procedimiento/i });
+    await user.type(filter, 'exo{Enter}');
+    expect(mockedCreate).not.toHaveBeenCalled();
+    expect(onOpenChange).not.toHaveBeenCalled();
+    expect(within(dialog).getAllByRole('checkbox', { name: /exodoncia simple/i })).toHaveLength(1);
   });
 
   it('muestra el error de la API dentro del modal', async () => {

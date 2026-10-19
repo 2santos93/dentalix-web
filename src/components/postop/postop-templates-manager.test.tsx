@@ -20,11 +20,18 @@ jest.mock('../../lib/postop/postop-api', () => ({
   updatePostOpTemplate: jest.fn(),
   loadSamplePostOpTemplates: jest.fn(),
 }));
-jest.mock('../../lib/odontogram/catalog-api', () => ({ listCatalogItems: jest.fn() }));
+jest.mock('../../lib/odontogram/catalog-api', () => ({
+  ...jest.requireActual('../../lib/odontogram/catalog-api'),
+  listCatalogItems: jest.fn(),
+}));
 jest.mock('../../lib/appointments/appointment-types-api', () => ({
+  ...jest.requireActual('../../lib/appointments/appointment-types-api'),
   listAppointmentTypes: jest.fn(),
 }));
-jest.mock('../errors/notify', () => ({ notifyError: jest.fn() }));
+jest.mock('../errors/notify', () => ({
+  ...jest.requireActual('../errors/notify'),
+  notifyError: jest.fn(),
+}));
 
 const mockedList = listPostOpTemplates as jest.MockedFunction<typeof listPostOpTemplates>;
 const mockedUpdate = updatePostOpTemplate as jest.MockedFunction<typeof updatePostOpTemplate>;

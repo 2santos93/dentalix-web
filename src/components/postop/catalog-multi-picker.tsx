@@ -77,6 +77,11 @@ export function CatalogMultiPicker({
               type="search"
               value={query}
               onChange={(e) => setQuery(e.target.value)}
+              // El selector vive dentro del <form> de la plantilla: Enter aquí
+              // filtra, no envía (ni crea ni guarda a medio elegir).
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') e.preventDefault();
+              }}
               placeholder={filterPlaceholder}
               className="min-w-0 flex-1"
             />

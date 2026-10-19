@@ -271,7 +271,7 @@ export function PostOpTemplateFormModal({
               type="button"
               title={v.label}
               onClick={() => insertVariable(v.key)}
-              className="min-h-9 rounded-md border border-border bg-surface px-2.5 font-mono text-xs text-ink hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              className="min-h-9 max-md:min-h-11 rounded-md border border-border bg-surface px-2.5 font-mono text-xs text-ink hover:bg-surface-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             >
               {`{{${v.key}}}`}
               <span className="sr-only"> · {v.label}</span>
