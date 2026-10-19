@@ -698,6 +698,26 @@ export interface paths {
         patch: operations["ClinicalEntriesController_rejectPatch"];
         trace?: never;
     };
+    "/api/v1/clinical-entries/{id}/rda-readiness": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Datos del RDA que faltan en la atención de una evolución
+         * @description Comprueba documento del paciente, diagnóstico principal CIE-10, CUPS de los procedimientos realizados ese día (odontograma), REPS de la sede (la de la cita o, sin cita, la principal) y registro profesional del autor. El NIT de la clínica sale en `pending` hasta DX-019. Sede fuera de Colombia: `notApplicable: true`.
+         */
+        get: operations["ClinicalEntryRdaController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/clinical-note-templates": {
         parameters: {
             query?: never;
@@ -1650,6 +1670,26 @@ export interface paths {
             cookie?: never;
         };
         get: operations["ReferenceController_cities"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reference/icd10": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Busca códigos CIE-10 (K00–K14 y Z01.2) por código o texto
+         * @description Como máximo 20 resultados; primero los que empiezan por lo buscado.
+         */
+        get: operations["ReferenceController_icd10"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2756,7 +2796,7 @@ export interface components {
         /** @enum {string} */
         AuditAction: "VIEW" | "CREATE" | "UPDATE" | "DELETE" | "SIGN" | "VOID" | "LOGIN" | "LOGIN_FAILED" | "PASSWORD_RESET" | "EXPORT" | "PRINT" | "SEND";
         /** @enum {string} */
-        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION";
+        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION";
         /**
          * @description Rol con el que actuó (del token). `null` en un login fallido.
          * @enum {string}
@@ -3747,6 +3787,11 @@ export interface components {
             color: string;
             /** @description At most 2 decimal places */
             defaultPrice?: number;
+            /**
+             * @description DX-212: código CUPS del procedimiento, 6 caracteres alfanuméricos (400 con el formato esperado si no). Vacío o null lo quita. Solo ADMIN.
+             * @example 890203
+             */
+            cupsCode?: string | null;
             /** @default true */
             active: boolean;
         };
@@ -3764,6 +3809,8 @@ export interface components {
             labelPt: string | null;
             color: string;
             defaultPrice: number | null;
+            /** @description DX-212: código CUPS (6 alfanuméricos) o null. */
+            cupsCode: string | null;
             active: boolean;
             /** Format: date-time */
             createdAt: string;
@@ -3789,6 +3836,11 @@ export interface components {
             color?: string;
             /** @description At most 2 decimal places */
             defaultPrice?: number;
+            /**
+             * @description DX-212: código CUPS del procedimiento, 6 caracteres alfanuméricos (400 con el formato esperado si no). Vacío o null lo quita. Solo ADMIN.
+             * @example 890203
+             */
+            cupsCode?: string | null;
             active?: boolean;
         };
         SafetyFlagsDto: {
@@ -3837,6 +3889,21 @@ export interface components {
             /** @description «Omitir»: el hueco queda marcado «[sin respuesta]» */
             skipped?: boolean;
         };
+        /** @enum {string} */
+        ClinicalDiagnosisKind: "PRINCIPAL" | "RELACIONADO";
+        ClinicalEntryDiagnosisInputDto: {
+            /**
+             * @description Código CIE-10 (con o sin punto). Tiene que existir en GET /reference/icd10; si no, 400 «Código CIE-10 no válido».
+             * @example K02.1
+             */
+            icd10Code: string;
+            kind: components["schemas"]["ClinicalDiagnosisKind"];
+            /**
+             * @description Diente FDI (opcional).
+             * @example 36
+             */
+            toothFdi?: string | null;
+        };
         CreateClinicalEntryDto: {
             /**
              * Format: date-time
@@ -3858,6 +3925,8 @@ export interface components {
             templateId?: string;
             /** @description DX-170: respuestas a las preguntas de la plantilla, para que el servidor componga el texto (sin `notes`). Una pregunta sin respuesta toma su valor por defecto. */
             answers?: components["schemas"]["ClinicalEntryAnswerDto"][];
+            /** @description DX-212: diagnósticos CIE-10, guardados en la misma transacción e inalterables. Como máximo 1 PRINCIPAL y 3 RELACIONADO (400 en español si no); los relacionados exigen el principal. Opcional: sin diagnóstico la evolución se guarda igual. */
+            diagnoses?: components["schemas"]["ClinicalEntryDiagnosisInputDto"][];
         };
         ClinicalEntryAppointmentDto: {
             /** Format: uuid */
@@ -3893,6 +3962,19 @@ export interface components {
              */
             createdAt: string;
         };
+        ClinicalEntryDiagnosisDto: {
+            /** Format: uuid */
+            id: string;
+            /** @example K02.1 */
+            icd10Code: string;
+            /** @example Caries de la dentina */
+            labelEs: string;
+            kind: components["schemas"]["ClinicalDiagnosisKind"];
+            /** @example 36 */
+            toothFdi: string | null;
+            /** @description 0 = principal; 1..3 = relacionados */
+            position: number;
+        };
         ClinicalEntryDto: {
             /** Format: uuid */
             id: string;
@@ -3924,12 +4006,44 @@ export interface components {
             createdAt: string;
             /** @description Adendas de corrección, en orden cronológico (DX-038) */
             addenda: components["schemas"]["ClinicalEntryAddendumDto"][];
+            /** @description DX-212: diagnósticos CIE-10, el principal primero (vacío en las evoluciones sin diagnóstico) */
+            diagnoses: components["schemas"]["ClinicalEntryDiagnosisDto"][];
         };
         CreateClinicalEntryAddendumDto: {
             /** @description Motivo de la corrección (p. ej. «pieza dental mal transcrita») */
             reason: string;
             /** @description Texto aclaratorio que corrige o completa la evolución */
             text: string;
+        };
+        /** @enum {string} */
+        RdaMissingCode: "PATIENT_DOCUMENT" | "PRINCIPAL_DIAGNOSIS" | "PROCEDURE_CUPS" | "LOCATION_REPS" | "AUTHOR_LICENSE";
+        RdaMissingItemDto: {
+            code: components["schemas"]["RdaMissingCode"];
+            /** @example Código CUPS de «Profilaxis» */
+            label: string;
+            /**
+             * Format: uuid
+             * @description Dónde completarlo: paciente (PATIENT_DOCUMENT), ítem del catálogo (PROCEDURE_CUPS), sede (LOCATION_REPS) o usuario autor (AUTHOR_LICENSE); null si no aplica.
+             */
+            resourceId: string | null;
+        };
+        /** @enum {string} */
+        RdaPendingCode: "CLINIC_TAX_ID";
+        RdaPendingItemDto: {
+            code: components["schemas"]["RdaPendingCode"];
+            /** @example NIT de la clínica */
+            label: string;
+            /** @example pendiente de DX-019 */
+            reason: string;
+        };
+        RdaReadinessDto: {
+            /** @description true en una sede fuera de Colombia: el RDA no aplica (ready=false, listas vacías). */
+            notApplicable: boolean;
+            /** @description Sin faltantes (los pendientes no cuentan). */
+            ready: boolean;
+            missing: components["schemas"]["RdaMissingItemDto"][];
+            /** @description Datos que aún no existen en Dentalix y no bloquean. */
+            pending: components["schemas"]["RdaPendingItemDto"][];
         };
         /** @enum {string} */
         ClinicalNotePromptType: "ONE" | "MULTI" | "TEXT";
@@ -4623,6 +4737,8 @@ export interface components {
             name: string;
             address: string | null;
             country: components["schemas"]["ClinicCountry"];
+            /** @description DX-212: código de habilitación REPS (12 dígitos) o null. */
+            repsHabilitationCode: string | null;
             isActive: boolean;
             /**
              * @description Zona horaria IANA de la sede (la de su horario; sin horario, la de su país). Define sus días civiles: «hoy» en la caja y el dashboard (DX-097).
@@ -4645,6 +4761,11 @@ export interface components {
             address?: string;
             /** @description País de la sede: decide los campos legales obligatorios de la receta (CO o ES). Por defecto CO. */
             country?: components["schemas"]["ClinicCountry"];
+            /**
+             * @description DX-212: código de habilitación REPS de la sede (Colombia), 12 dígitos (400 con el formato esperado si no). Vacío o null lo quita. Solo ADMIN; queda auditado.
+             * @example 110010123401
+             */
+            repsHabilitationCode?: string | null;
             /** @description Desactivar una sede la oculta para operar; no se puede desactivar la última activa. */
             isActive?: boolean;
         };
@@ -5540,6 +5661,12 @@ export interface components {
             name: string;
             /** @example Bogota D.C. */
             region: string | null;
+        };
+        Icd10CodeDto: {
+            /** @example K02.1 */
+            code: string;
+            /** @example Caries de la dentina */
+            labelEs: string;
         };
         CashLocationRefDto: {
             /** Format: uuid */
@@ -9517,7 +9644,7 @@ export interface operations {
                     "application/json": components["schemas"]["ClinicalEntryDto"];
                 };
             };
-            /** @description Texto vacío, respuesta inválida, plantilla desactivada, cita de otro paciente, cita cancelada / no-show o cita de un día futuro. */
+            /** @description Texto vacío, respuesta inválida, plantilla desactivada, cita de otro paciente, cita cancelada / no-show, cita de un día futuro o diagnósticos inválidos (DX-212: código CIE-10 inexistente, segundo principal, más de 3 relacionados, diente no FDI). */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -9658,6 +9785,34 @@ export interface operations {
         responses: {
             /** @description Una evolución de la historia clínica no se puede modificar ni borrar (Res. 1995 de 1999, art. 18). Para corregirla, añade una adenda: POST /patients/{patientId}/clinical-entries/{entryId}/addenda */
             405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ClinicalEntryRdaController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RdaReadinessDto"];
+                };
+            };
+            /** @description Evolución inexistente o de otra clínica. */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -12387,6 +12542,28 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["CityDto"][];
+                };
+            };
+        };
+    };
+    ReferenceController_icd10: {
+        parameters: {
+            query?: {
+                /** @description Código (con o sin punto: «K02.1», «k021», «K02») o texto («caries»), sin distinguir tildes ni mayúsculas. Vacío: los primeros por código. */
+                q?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["Icd10CodeDto"][];
                 };
             };
         };

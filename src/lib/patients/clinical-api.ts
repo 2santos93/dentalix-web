@@ -62,9 +62,25 @@ export interface ClinicalEntry {
   appointment?: ClinicalEntryAppointment | null;
   createdAt: string;
   addenda: ClinicalEntryAddendum[];
+  /**
+   * DX-212: diagnósticos CIE-10, el principal primero. Inalterables como la
+   * evolución. Vacío (o ausente en respuestas antiguas) = sin diagnóstico.
+   */
+  diagnoses?: ClinicalEntryDiagnosis[];
 }
 
 export type ClinicalEntryAppointment = components['schemas']['ClinicalEntryAppointmentDto'];
+export type ClinicalEntryDiagnosis = components['schemas']['ClinicalEntryDiagnosisDto'];
+export type ClinicalEntryDiagnosisInput =
+  components['schemas']['ClinicalEntryDiagnosisInputDto'];
+export type DiagnosisKind = components['schemas']['ClinicalDiagnosisKind'];
+
+/** DX-212: lo que falta para el Resumen Digital de Atención (solo sedes CO). */
+export type RdaReadiness = components['schemas']['RdaReadinessDto'];
+export type RdaMissingItem = components['schemas']['RdaMissingItemDto'];
+
+/** Topes del RDA/RIPS que repite la API: 1 principal y hasta 3 relacionados. */
+export const MAX_RELATED_DIAGNOSES = 3;
 
 /**
  * Returns the latest anamnesis version, or `null` when the patient doesn't
@@ -130,5 +146,16 @@ export async function createClinicalEntryAddendum(
   return apiFetch<ClinicalEntryAddendum>(
     `/patients/${patientId}/clinical-entries/${entryId}/addenda`,
     { method: 'POST', body: input, token },
+  );
+}
+
+/**
+ * DX-212: `GET /clinical-entries/:id/rda-readiness`. Solo comprueba datos;
+ * nada sale de Dentalix. Recepción no tiene acceso (403), como a la historia.
+ */
+export async function getRdaReadiness(token: string, entryId: string): Promise<RdaReadiness> {
+  return apiFetch<RdaReadiness>(
+    `/clinical-entries/${encodeURIComponent(entryId)}/rda-readiness`,
+    { token },
   );
 }
