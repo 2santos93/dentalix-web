@@ -20,6 +20,7 @@ import {
   Globe,
   ScanBarcode,
   LifeBuoy,
+  Building2,
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useAuthStore } from '@/lib/auth/auth-store';
@@ -65,6 +66,8 @@ const copy = {
   account: 'Cuenta',
   profile: 'Mi perfil',
   businessHours: 'Horario de atención',
+  // DX-212: datos legales de las sedes (código REPS).
+  locations: 'Sedes',
   privacy: 'Privacidad de datos',
   consentTemplates: 'Consentimientos',
   prescriptionSettings: 'Recetas',
@@ -268,6 +271,17 @@ export function UserMenu({
       >
         <Clock className="size-4 text-muted" aria-hidden />
         {copy.businessHours}
+      </Link>
+      {/* Sedes (DX-212): el código REPS de cada sede. Lo leen todos (el chip
+          «RDA» de la ficha enlaza aquí); solo ADMIN lo cambia. */}
+      <Link
+        href="/settings/sedes"
+        role="menuitem"
+        onClick={() => setOpen(false)}
+        className="flex items-center gap-3 px-3 py-2 text-sm text-ink hover:bg-bg"
+      >
+        <Building2 className="size-4 text-muted" aria-hidden />
+        {copy.locations}
       </Link>
       {/* Política de tratamiento de datos (DX-037): de la clínica, como el
           horario; todos la leen y solo ADMIN publica. */}
