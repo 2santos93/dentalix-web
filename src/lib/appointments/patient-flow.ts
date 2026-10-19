@@ -22,6 +22,25 @@ export function isInClinic(status: AppointmentStatus): boolean {
 /** Cada cuánto se refresca el panel (DX-200: sondeo de 30–60 s, sin WebSocket). */
 export const IN_CLINIC_POLL_MS = 45_000;
 
+const IN_CLINIC_CHANGED = 'dentalix:in-clinic-changed';
+
+/**
+ * Aviso de esta pestaña: una cita entró, cambió o salió del flujo. Lo escucha
+ * el contador «Te esperan N» de la cabecera, que si no esperaría al siguiente
+ * sondeo (hasta 45 s) para dejar de contar a quien ya pasó al sillón.
+ */
+export function notifyInClinicChanged(): void {
+  if (typeof window === 'undefined') return;
+  window.dispatchEvent(new CustomEvent(IN_CLINIC_CHANGED));
+}
+
+/** Suscripción a {@link notifyInClinicChanged}; devuelve la baja. */
+export function onInClinicChanged(listener: () => void): () => void {
+  if (typeof window === 'undefined') return () => {};
+  window.addEventListener(IN_CLINIC_CHANGED, listener);
+  return () => window.removeEventListener(IN_CLINIC_CHANGED, listener);
+}
+
 export type FlowAction = 'ARRIVE' | 'SEAT' | 'READY' | 'CHECKOUT' | 'UNDO_ARRIVAL';
 
 export const FLOW_ACTION_LABELS: Record<FlowAction, string> = {

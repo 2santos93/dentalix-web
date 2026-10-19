@@ -71,7 +71,11 @@ import {
   usePatientFlow,
 } from '@/components/appointments/patient-flow-actions';
 import { useInClinic } from '@/components/appointments/use-in-clinic';
-import { inClinicCount, statusOptionsFor } from '@/lib/appointments/patient-flow';
+import {
+  inClinicCount,
+  notifyInClinicChanged,
+  statusOptionsFor,
+} from '@/lib/appointments/patient-flow';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -848,6 +852,7 @@ export function AgendaView({ token }: AgendaViewProps) {
       setWaitlistReloadKey((k) => k + 1);
       // DX-200: completar o cancelar a alguien en la clínica lo saca del panel.
       setInClinicReloadKey((k) => k + 1);
+      notifyInClinicChanged();
       await refreshAppointmentsInPlace();
     } catch (err) {
       notifyError(apiErrorMessage(err, copy.genericStatusChangeError), {

@@ -269,4 +269,25 @@ describe('InClinicPanel (DX-200)', () => {
     rerender(<PatientFlowActions {...props} status="ARRIVED" />);
     expect(screen.getByRole('button', { name: 'Deshacer llegada' })).toHaveFocus();
   });
+
+  it('el contador de la cabecera (followChanges) relee en cuanto se da un paso en la pestaña, sin esperar al sondeo', async () => {
+    mockedGet
+      .mockResolvedValueOnce(view({ scope: 'MINE', waiting: [item({ appointmentId: 'a1' })] }))
+      .mockResolvedValueOnce(view({ scope: 'MINE', waiting: [item({ appointmentId: 'a1' })] }))
+      .mockResolvedValue(view({ scope: 'MINE', inChair: [item({ appointmentId: 'a1', status: 'IN_CHAIR' })] }));
+    mockedUpdate.mockResolvedValue({} as never);
+    function Counter() {
+      const { view: v } = useInClinic('T', { silent: true, followChanges: true });
+      return <p data-testid="counter">{v ? v.waiting.length : '-'}</p>;
+    }
+    render(
+      <>
+        <Counter />
+        <Harness role="DENTIST" />
+      </>,
+    );
+    await waitFor(() => expect(screen.getByTestId('counter')).toHaveTextContent('1'));
+    await userEvent.click(await screen.findByRole('button', { name: 'En sillón' }));
+    await waitFor(() => expect(screen.getByTestId('counter')).toHaveTextContent('0'));
+  });
 });

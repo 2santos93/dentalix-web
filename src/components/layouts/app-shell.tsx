@@ -121,7 +121,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const nav = NAV.filter((item) => !item.roles || (role !== null && item.roles.includes(role)));
   // DX-200: «Te esperan N» del odontólogo — sus pacientes en espera en la sede
   // activa, con el mismo sondeo que el panel «En clínica». Sin sede, nada.
-  const inClinic = useInClinic(accessToken, { enabled: role === 'DENTIST', silent: true });
+  const inClinic = useInClinic(accessToken, {
+    enabled: role === 'DENTIST',
+    silent: true,
+    followChanges: true,
+  });
   const waitingForYou =
     role === 'DENTIST' && inClinic.view?.scope === 'MINE' ? inClinic.view.waiting.length : 0;
   /** Nombre accesible de una entrada: la Agenda dice además quién espera. */

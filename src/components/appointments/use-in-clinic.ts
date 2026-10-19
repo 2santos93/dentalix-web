@@ -3,7 +3,12 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { getActiveLocationId, onLocationChange } from '@/lib/locations/location-store';
 import { listLocations } from '@/lib/locations/locations-api';
-import { IN_CLINIC_POLL_MS, getInClinic, type InClinicView } from '@/lib/appointments/patient-flow';
+import {
+  IN_CLINIC_POLL_MS,
+  getInClinic,
+  onInClinicChanged,
+  type InClinicView,
+} from '@/lib/appointments/patient-flow';
 import { notifyError } from '@/components/errors/notify';
 
 export const IN_CLINIC_LOAD_ERROR = 'No pudimos cargar quién está en la clínica.';
@@ -28,6 +33,12 @@ interface UseInClinicOptions {
   enabled?: boolean;
   /** Sin avisos si falla un refresco en segundo plano (el contador de la cabecera). */
   silent?: boolean;
+  /**
+   * Recarga al momento cuando un paso del flujo cambia algo en esta pestaña
+   * (`notifyInClinicChanged`): el contador de la cabecera, que no recibe el
+   * `reloadKey` de la agenda.
+   */
+  followChanges?: boolean;
 }
 
 /** La sede del panel: la activa; sin ninguna, la única sede activa de la clínica. */
@@ -46,7 +57,7 @@ async function panelLocation(token: string, active: string | null): Promise<stri
  */
 export function useInClinic(
   token: string | null,
-  { reloadKey = 0, enabled = true, silent = false }: UseInClinicOptions = {},
+  { reloadKey = 0, enabled = true, silent = false, followChanges = false }: UseInClinicOptions = {},
 ): InClinicState {
   const [activeLocationId, setActiveLocationId] = useState(getActiveLocationId);
   // Todo lo cargado va con la sede activa con la que se pidió: al cambiar de
@@ -62,6 +73,11 @@ export function useInClinic(
   useEffect(() => onLocationChange(() => setActiveLocationId(getActiveLocationId())), []);
 
   const reload = useCallback(() => setLocalReload((k) => k + 1), []);
+
+  useEffect(() => {
+    if (!followChanges || !enabled) return;
+    return onInClinicChanged(reload);
+  }, [followChanges, enabled, reload]);
 
   useEffect(() => {
     if (!token || !enabled) return;

@@ -8,6 +8,7 @@ import {
   FLOW_ACTION_LABELS,
   FLOW_ACTION_STATUS,
   flowActions,
+  notifyInClinicChanged,
   undoArrival,
   type FlowAction,
 } from '@/lib/appointments/patient-flow';
@@ -69,6 +70,7 @@ export function usePatientFlow(token: string, onChanged: () => void): PatientFlo
     } finally {
       setPendingId(null);
       onChanged();
+      notifyInClinicChanged();
     }
   }
 
