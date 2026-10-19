@@ -5,6 +5,7 @@ import { useAuthStore } from '@/lib/auth/auth-store';
 import { getTokenRole } from '@/lib/auth/token-role';
 import { PageHeader } from '@/components/shared/page-header';
 import { LocationRepsSettings } from '@/components/locations/location-reps-settings';
+import { LocationPhoneSettings } from '@/components/locations/location-phone-settings';
 
 const copy = {
   title: 'Sedes',
@@ -40,6 +41,10 @@ export default function LocationSettingsPage() {
     <>
       <PageHeader title={copy.title} description={copy.description} />
       <LocationRepsSettings
+        token={accessToken}
+        canEdit={getTokenRole(accessToken) === 'ADMIN'}
+      />
+      <LocationPhoneSettings
         token={accessToken}
         canEdit={getTokenRole(accessToken) === 'ADMIN'}
       />
