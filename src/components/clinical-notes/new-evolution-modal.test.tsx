@@ -4,6 +4,7 @@ import { NewEvolutionModal } from './new-evolution-modal';
 import { listNoteTemplates } from '@/lib/clinical-notes/note-templates-api';
 import { createClinicalEntry } from '@/lib/patients/clinical-api';
 import { prophylaxisTemplate, resinTemplate } from './fixtures';
+import { searchIcd10 } from '@/lib/reference/icd10-api';
 
 jest.mock('../../lib/clinical-notes/note-templates-api', () => ({
   ...jest.requireActual('../../lib/clinical-notes/note-templates-api'),
@@ -13,6 +14,9 @@ jest.mock('../../lib/patients/clinical-api', () => ({
   ...jest.requireActual('../../lib/patients/clinical-api'),
   createClinicalEntry: jest.fn(),
 }));
+
+jest.mock('../../lib/reference/icd10-api', () => ({ searchIcd10: jest.fn() }));
+const mockedIcd10 = searchIcd10 as jest.MockedFunction<typeof searchIcd10>;
 
 const mockedList = listNoteTemplates as jest.MockedFunction<typeof listNoteTemplates>;
 const mockedCreate = createClinicalEntry as jest.MockedFunction<typeof createClinicalEntry>;
@@ -221,3 +225,73 @@ describe('NewEvolutionModal (DX-170)', () => {
     expect(onOpenChange).not.toHaveBeenCalledWith(false);
   });
 });
+
+describe('NewEvolutionModal · diagnósticos CIE-10 (DX-212)', () => {
+  beforeEach(() => {
+    mockedList.mockReset().mockResolvedValue([]);
+    mockedCreate.mockReset().mockResolvedValue(created);
+    mockedIcd10.mockReset().mockImplementation((_token, q) =>
+      Promise.resolve(
+        q.toLowerCase().startsWith('k05')
+          ? [{ code: 'K05.1', labelEs: 'Gingivitis crónica' }]
+          : [{ code: 'K02.1', labelEs: 'Caries de la dentina' }],
+      ),
+    );
+  });
+
+  it('guarda el principal y un relacionado en el 36 junto con la evolución', async () => {
+    const user = userEvent.setup();
+    renderModal();
+    await user.type(screen.getByRole('textbox', { name: 'Texto de la evolución' }), 'Resina en 36');
+    await user.type(
+      screen.getByRole('combobox', { name: 'Diagnóstico principal (CIE-10)' }),
+      'caries',
+    );
+    await user.click(await screen.findByRole('option', { name: /K02\.1/ }));
+    await user.click(screen.getByRole('button', { name: /añadir relacionado/i }));
+    await user.type(screen.getByRole('combobox', { name: 'Diagnóstico relacionado 1' }), 'K05');
+    await user.click(await screen.findByRole('option', { name: /K05\.1/ }));
+    await user.type(
+      screen.getByRole('textbox', { name: /Diente \(FDI\) · Diagnóstico relacionado 1/ }),
+      '36',
+    );
+    await user.click(screen.getByRole('button', { name: 'Guardar evolución' }));
+    await waitFor(() => expect(mockedCreate).toHaveBeenCalled());
+    expect(mockedCreate.mock.calls[0][2]).toMatchObject({
+      notes: 'Resina en 36',
+      diagnoses: [
+        { icd10Code: 'K02.1', kind: 'PRINCIPAL' },
+        { icd10Code: 'K05.1', kind: 'RELACIONADO', toothFdi: '36' },
+      ],
+    });
+  });
+
+  it('sin diagnóstico avisa pero deja guardar (sin el campo)', async () => {
+    const user = userEvent.setup();
+    renderModal();
+    expect(screen.getByText(/RDA: faltan datos/)).toBeInTheDocument();
+    await user.type(screen.getByRole('textbox', { name: 'Texto de la evolución' }), 'Control');
+    await user.click(screen.getByRole('button', { name: 'Guardar evolución' }));
+    await waitFor(() => expect(mockedCreate).toHaveBeenCalled());
+    expect(mockedCreate.mock.calls[0][2]).not.toHaveProperty('diagnoses');
+  });
+
+  it('un diente que no es FDI no se envía', async () => {
+    const user = userEvent.setup();
+    renderModal();
+    await user.type(screen.getByRole('textbox', { name: 'Texto de la evolución' }), 'x');
+    await user.type(
+      screen.getByRole('combobox', { name: 'Diagnóstico principal (CIE-10)' }),
+      'caries',
+    );
+    await user.click(await screen.findByRole('option', { name: /K02\.1/ }));
+    await user.type(
+      screen.getByRole('textbox', { name: /Diente \(FDI\) · Diagnóstico principal/ }),
+      '19',
+    );
+    await user.click(screen.getByRole('button', { name: 'Guardar evolución' }));
+    expect(await screen.findByText('El diente «19» no es un número FDI válido.')).toBeInTheDocument();
+    expect(mockedCreate).not.toHaveBeenCalled();
+  });
+});
+
