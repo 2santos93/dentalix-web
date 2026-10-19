@@ -15,6 +15,7 @@ import {
   CalendarClock,
   BellRing,
   BadgePercent,
+  Wallet,
   NotebookPen,
   Globe,
   ScanBarcode,
@@ -31,6 +32,7 @@ import { canManageAppointmentTypes } from '@/lib/appointments/appointment-types-
 import { canManageNoteTemplates } from '@/lib/clinical-notes/note-templates-api';
 import { canManageReminders } from '@/lib/reminders/reminders-api';
 import { canManageDiscounts } from '@/lib/discounts/discounts-api';
+import { canManageCashSessions } from '@/lib/cash-sessions/cash-sessions-api';
 import { canManageDomains } from '@/lib/domains/domains-api';
 import { canSearchImplantLots } from '@/lib/implants/implants-api';
 import { canReadSupportAccesses } from '@/lib/support-accesses/support-accesses-api';
@@ -71,6 +73,7 @@ const copy = {
   noteTemplates: 'Plantillas de evolución',
   reminders: 'Recordatorios',
   discounts: 'Descuentos',
+  cashSettings: 'Caja',
   domains: 'Dominios propios',
   supportAccesses: 'Accesos de soporte',
   logout: 'Cerrar sesión',
@@ -336,6 +339,18 @@ export function UserMenu({
         >
           <BadgePercent className="size-4 text-muted" aria-hidden />
           {copy.discounts}
+        </Link>
+      ) : null}
+      {/* Ajustes de caja de la clínica (DX-027): solo ADMIN. */}
+      {canManageCashSessions(getTokenRole(accessToken)) ? (
+        <Link
+          href="/settings/caja"
+          role="menuitem"
+          onClick={() => setOpen(false)}
+          className="flex items-center gap-3 px-3 py-2 text-sm text-ink hover:bg-bg"
+        >
+          <Wallet className="size-4 text-muted" aria-hidden />
+          {copy.cashSettings}
         </Link>
       ) : null}
       {/* Plantillas de receta y país de las sedes (DX-013): solo ADMIN. */}

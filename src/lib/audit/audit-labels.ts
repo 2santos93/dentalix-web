@@ -79,6 +79,7 @@ export const AUDIT_RESOURCE_LABELS: Record<AuditResourceType, string> = {
   DISCOUNT_POLICY: 'Política de descuentos',
   // DX-210: oferta de un hueco libre a un candidato.
   WAITLIST_OFFER: 'Oferta de hueco',
+  CASH_SESSION: 'Caja por turno',
 };
 
 export const AUDIT_RESOURCE_OPTIONS = Object.keys(AUDIT_RESOURCE_LABELS) as AuditResourceType[];
@@ -140,6 +141,19 @@ const STAFF_LOGIN_REASONS: Record<string, string> = {
  */
 export function staffLoginDetail(metadata: AuditMetadata): string | null {
   return (metadata.reason && STAFF_LOGIN_REASONS[metadata.reason]) ?? null;
+}
+
+const CASH_SESSION_REASONS: Record<string, string> = {
+  CASH_SESSION_CLOSED: 'Cierre de caja',
+  CASH_SESSION_REOPENED: 'Reapertura de caja',
+  CASH_SESSION_ADJUSTMENT: 'Ajuste de un cierre',
+  CASH_SESSION_CURRENT: 'Caja abierta propia',
+  CASH_SETTINGS: 'Ajustes de caja',
+};
+
+/** DX-027: qué se hizo con la caja por turno, o null si no es de caja. */
+export function cashSessionDetail(metadata: AuditMetadata): string | null {
+  return (metadata.reason && CASH_SESSION_REASONS[metadata.reason]) ?? null;
 }
 
 /**
