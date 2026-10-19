@@ -2184,6 +2184,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/platform/jobs/stats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Estado de la cola: profundidad, retraso, workers vivos y tareas
+         * @description PENDING vencidos y su retraso (ahora − min(runAt)), RUNNING, FAILED en 24 h, workers con latido de menos de 60 s y, por tarea programada, lastRunAt/nextRunAt y si va con retraso (más de 2 periodos). Solo contadores, ids y fechas. Solo superadmin de plataforma.
+         */
+        get: operations["PlatformJobsController_stats"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/jobs/{id}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reencola un trabajo FAILED (attempts = 0, ya)
+         * @description Una sola vez: si ya no está FAILED (otro reintento lo reencoló) da 409. Conserva su idempotencyKey, así que no crea un trabajo duplicado. Queda en platform_audit_events (JOB_RETRIED) sin el payload. Solo superadmin de plataforma.
+         */
+        post: operations["PlatformJobsController_retry"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/platform/mfa": {
         parameters: {
             query?: never;
@@ -6892,6 +6932,117 @@ export interface components {
             createdAt: string;
             /** Format: date-time */
             finishedAt: string | null;
+        };
+        JobsQueueStatsDto: {
+            /**
+             * @description PENDING cuya hora ya llegó: esperan a un worker
+             * @example 3
+             */
+            pendingDue: number;
+            /**
+             * @description PENDING programados para más adelante
+             * @example 120
+             */
+            pendingScheduled: number;
+            /**
+             * @description Retraso: ahora − min(runAt) de los PENDING vencidos, en ms (0 si no hay)
+             * @example 4200
+             */
+            lagMs: number;
+            /** Format: date-time */
+            oldestDueRunAt: string | null;
+            /** @example 1 */
+            running: number;
+            /**
+             * @description RUNNING con el arriendo vencido (worker caído o sin latido)
+             * @example 0
+             */
+            runningExpired: number;
+            /**
+             * @description FAILED en las últimas 24 h
+             * @example 0
+             */
+            failedLast24h: number;
+        };
+        JobWorkerDto: {
+            /** @example worker-7d9f:1:0a1b2c3d */
+            id: string;
+            /** @enum {string} */
+            role: "worker" | "all";
+            /** @example a1b2c3d */
+            version: string | null;
+            /** Format: date-time */
+            startedAt: string;
+            /** Format: date-time */
+            lastBeatAt: string;
+            /** @description Latió hace menos de 60 s */
+            alive: boolean;
+        };
+        JobsWorkersStatsDto: {
+            /**
+             * @description Workers con latido de menos de 60 s
+             * @example 1
+             */
+            alive: number;
+            /** Format: date-time */
+            lastBeatAt: string | null;
+            /** @description Los 50 de latido más reciente (7 días de historia) */
+            recent: components["schemas"]["JobWorkerDto"][];
+        };
+        JobScheduleStatusDto: {
+            /** @example reminders.plan.every-5-min */
+            name: string;
+            /**
+             * @description Cron de 5 campos, UTC
+             * @example *\/5 * * * *
+             */
+            cron: string;
+            /** Format: date-time */
+            lastRunAt: string | null;
+            /**
+             * Format: date-time
+             * @description null: ningún worker la ha sincronizado aún
+             */
+            nextRunAt: string | null;
+            /**
+             * @description Periodo del cron, en ms
+             * @example 300000
+             */
+            periodMs: number;
+            /**
+             * @description ahora − nextRunAt si ya pasó, en ms
+             * @example 0
+             */
+            delayMs: number;
+            /** @description Con retraso: más de 2 periodos sin correr, o nunca sincronizada */
+            overdue: boolean;
+        };
+        JobsStatsDto: {
+            /**
+             * Format: date-time
+             * @description Hora de la base a la que se tomó
+             */
+            generatedAt: string;
+            queue: components["schemas"]["JobsQueueStatsDto"];
+            workers: components["schemas"]["JobsWorkersStatsDto"];
+            schedules: components["schemas"]["JobScheduleStatusDto"][];
+        };
+        RetriedJobDto: {
+            /** Format: uuid */
+            id: string;
+            /** @example reminders.send */
+            name: string;
+            /** Format: uuid */
+            tenantId: string | null;
+            /** @enum {string} */
+            state: "PENDING";
+            /** @example 0 */
+            attempts: number;
+            /**
+             * @description Intentos que llevaba al fallar
+             * @example 5
+             */
+            previousAttempts: number;
         };
         PlatformMfaStatusDto: {
             enabled: boolean;
@@ -13558,6 +13709,95 @@ export interface operations {
             };
             /** @description No es un token de plataforma de un superadmin */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PlatformJobsController_stats: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobsStatsDto"];
+                };
+            };
+            /** @description Sin sesión */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No es un token de plataforma de un superadmin */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PlatformJobsController_retry: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetriedJobDto"];
+                };
+            };
+            /** @description El id no es un UUID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sin sesión */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No es un token de plataforma de un superadmin */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No existe (o ya se purgó) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No está FAILED: ya se reencoló o nunca falló */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
