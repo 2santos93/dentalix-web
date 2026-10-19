@@ -24,6 +24,7 @@ const item = (over: Partial<AppointmentReminderItem>): AppointmentReminderItem =
   sentAt: null,
   skipReason: null,
   emailDelivery: null,
+  sentToResponsible: false,
   current: true,
   ...over,
 });
@@ -164,5 +165,23 @@ describe('AppointmentRemindersPanel (DX-026)', () => {
     const list = await screen.findByRole('list', { name: 'Recordatorios de la cita' });
     expect(list).toHaveTextContent('Omitido: el paciente se dio de baja');
     expect(list).toHaveTextContent('Omitido: su canal es WhatsApp');
+  });
+
+  it('DX-203: el que salió al responsable lo dice', async () => {
+    mockedGet.mockResolvedValue({
+      enabled: true,
+      leadHours: [48],
+      patientBlocker: null,
+      items: [
+        item({
+          state: 'SENT',
+          sentAt: '2026-10-14T14:00:00.000Z',
+          emailDelivery: 'SENT',
+          sentToResponsible: true,
+        }),
+      ],
+    });
+    render(<AppointmentRemindersPanel token="tok" appointmentId="appt-1" />);
+    expect(await screen.findByText('Recordatorio enviado al responsable')).toBeInTheDocument();
   });
 });

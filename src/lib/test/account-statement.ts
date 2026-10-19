@@ -17,6 +17,7 @@ export function accountStatementFixture(
       docType: 'CC',
       docNumber: '1020304050',
     },
+    addressee: { kind: 'PATIENT', name: 'Ana Gómez', email: null },
     range: { from: null, to: null },
     summary: [
       {

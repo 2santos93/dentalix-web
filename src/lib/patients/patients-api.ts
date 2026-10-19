@@ -72,7 +72,9 @@ export interface Patient {
   emergencyContactName?: string | null;
   emergencyContactRelationship?: string | null;
   emergencyContactPhone?: string | null;
+  /** DEPRECADO (DX-203), solo lectura: el acudiente es un responsable. */
   guardianName?: string | null;
+  /** DEPRECADO (DX-203), solo lectura. */
   guardianDocNumber?: string | null;
   createdById: string | null;
   // DX-039 · retención legal de la HC (Res. 839/2017). Opcionales: los

@@ -34,7 +34,13 @@ function comms(over: Partial<PatientCommunication> = {}): PatientCommunication {
     email: 'ana@example.com',
     whatsappOptIn: null,
     reminderOptOut: null,
-    recipient: { kind: 'PATIENT', name: 'Ana', minor: false },
+    recipient: {
+      kind: 'PATIENT',
+      name: 'Ana',
+      email: 'ana@example.com',
+      minor: false,
+      responsiblePartyId: null,
+    },
     ...over,
   };
 }
@@ -214,7 +220,7 @@ describe('PatientCommunicationSection (DX-128)', () => {
     expect(onChanged).toHaveBeenCalledTimes(1);
   });
 
-  it('un adulto no muestra destinatario; un menor, que los avisos van a su tutor', async () => {
+  it('un adulto no muestra destinatario; un menor, que los avisos van a su responsable (DX-203)', async () => {
     mockedGet.mockResolvedValueOnce(comms());
     const { unmount } = renderSection();
     expect(await screen.findByText('+57 310 123 4567')).toBeInTheDocument();
@@ -222,23 +228,39 @@ describe('PatientCommunicationSection (DX-128)', () => {
     unmount();
 
     mockedGet.mockResolvedValueOnce(
-      comms({ recipient: { kind: 'GUARDIAN', name: 'Claudia', minor: true } }),
+      comms({
+        recipient: {
+          kind: 'RESPONSIBLE',
+          name: 'Claudia',
+          email: 'claudia@example.com',
+          minor: true,
+          responsiblePartyId: 'r1',
+        },
+      }),
     );
     renderSection();
     expect(await screen.findByText('Destinatario de los avisos')).toBeInTheDocument();
     expect(screen.getByText('Destinatario de los avisos').nextSibling).toHaveTextContent(
-      'Su tutor/a, Claudia (menor de edad)',
+      'Su responsable, Claudia (claudia@example.com) · menor de edad',
     );
   });
 
   it('un menor sin tutor ni contacto lo advierte', async () => {
     mockedGet.mockResolvedValue(
-      comms({ recipient: { kind: 'PATIENT', name: 'Mateo', minor: true } }),
+      comms({
+        recipient: {
+          kind: 'PATIENT',
+          name: 'Mateo',
+          email: null,
+          minor: true,
+          responsiblePartyId: null,
+        },
+      }),
     );
     renderSection();
     expect(await screen.findByText('Destinatario de los avisos')).toBeInTheDocument();
     expect(screen.getByText('Destinatario de los avisos').nextSibling).toHaveTextContent(
-      'El paciente: es menor de edad y no tiene tutor ni contacto registrado',
+      'El paciente: es menor de edad y no tiene responsable ni contacto registrado',
     );
   });
 });

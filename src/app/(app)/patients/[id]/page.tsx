@@ -16,12 +16,14 @@ import { PatientEditModal } from '@/components/patients/patient-edit-modal';
 import { PatientRecordHeader } from '@/components/patients/patient-record-header';
 import { PatientRetentionSection } from '@/components/patients/patient-retention-section';
 import { PatientCommunicationSection } from '@/components/patients/patient-communication-section';
+import { PatientResponsiblePartiesSection } from '@/components/patients/patient-responsible-parties-section';
 import { canEditCommunication, withCommunication } from '@/lib/patients/communication-api';
 import { OdontogramTab } from '@/components/odontogram/odontogram-tab';
 import { TreatmentPlansTab } from '@/components/treatment-plans/treatment-plans-tab';
 import { SectionError } from '@/components/errors/section-error';
 import { AccountStatementView } from '@/components/account-statement/account-statement-view';
 import { PatientCollectionsSection } from '@/components/collections/patient-collections-section';
+import { FamilyAccountStatementSection } from '@/components/account-statement/family-account-statement-section';
 import { canManageCollections } from '@/lib/collections/presentation';
 import { getTokenRole } from '@/lib/auth/token-role';
 import { patientTabAccess, resolvePatientTab } from '@/lib/patients/patient-tab-access';
@@ -335,6 +337,13 @@ function PatientDetailView() {
                 setPatient((prev) => (prev ? withCommunication(prev, c) : prev))
               }
             />
+            {/* DX-203: quién paga y quién recibe los avisos, y de quién es
+                responsable. Lo gestionan los 4 roles. */}
+            <PatientResponsiblePartiesSection
+              key={`responsibles-${patientId}`}
+              token={accessToken}
+              patientId={patientId}
+            />
           </TabPanel>
 
           <PatientEditModal
@@ -427,6 +436,12 @@ function PatientDetailView() {
             <TabPanel tab="account-statement" activeTab={activeTab} register={registerPanel}>
               <div className="flex flex-col gap-8">
                 <AccountStatementView token={accessToken} patientId={patientId} onChanged={onMoneyChanged} />
+                {/* DX-203: si es pagador principal de otros pacientes. */}
+                <FamilyAccountStatementSection
+                  token={accessToken}
+                  patientId={patientId}
+                  refreshKey={moneyVersion}
+                />
                 {/* DX-150: bloque «Cobranza» (ADMIN y RECEPTION). */}
                 {canManageCollections(getTokenRole(accessToken)) && patient ? (
                   <PatientCollectionsSection

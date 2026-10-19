@@ -20,6 +20,9 @@ const copy = {
   patient: 'Paciente',
   document: 'Documento',
   documentValue: (type: string, number: string | null) => (number ? `${type} ${number}` : '—'),
+  // DX-203: el de un menor o un paciente sin email, a nombre del responsable.
+  addressee: 'A nombre de',
+  addresseeValue: (name: string) => `${name} (responsable)`,
   summaryHeading: 'Resumen',
   summaryTable: 'Resumen por moneda',
   plansHeading: 'Planes',
@@ -118,6 +121,14 @@ export function AccountStatementDocument({ statement }: AccountStatementDocument
             {copy.documentValue(DOC_TYPE_SHORT[patient.docType], patient.docNumber)}
           </dd>
         </div>
+        {statement.addressee?.kind === 'RESPONSIBLE' ? (
+          <div data-testid="statement-addressee">
+            <dt className="text-xs font-medium uppercase tracking-wide text-[#6b7280]">
+              {copy.addressee}
+            </dt>
+            <dd className="font-medium">{copy.addresseeValue(statement.addressee.name)}</dd>
+          </div>
+        ) : null}
       </dl>
 
       {isEmptyStatement(statement) ? (
@@ -299,7 +310,7 @@ export function AccountStatementDocument({ statement }: AccountStatementDocument
   );
 }
 
-function DocSection({ title, children }: { title: string; children: React.ReactNode }) {
+export function DocSection({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <section className="mt-6">
       <h2 className="mb-2 text-sm font-semibold uppercase tracking-wide">{title}</h2>
@@ -308,7 +319,7 @@ function DocSection({ title, children }: { title: string; children: React.ReactN
   );
 }
 
-function DocTable({ label, children }: { label: string; children: React.ReactNode }) {
+export function DocTable({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="overflow-x-auto print:overflow-visible">
       <table aria-label={label} className="w-full border-collapse text-sm">
@@ -318,7 +329,7 @@ function DocTable({ label, children }: { label: string; children: React.ReactNod
   );
 }
 
-function Th({
+export function Th({
   children,
   right = false,
   scope = 'col',
@@ -339,7 +350,7 @@ function Th({
   );
 }
 
-function Td({
+export function Td({
   children,
   right = false,
   strong = false,

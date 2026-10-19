@@ -9,6 +9,9 @@ export type AccountStatementSummary = components['schemas']['AccountStatementCur
 export type AccountStatementPlan = components['schemas']['AccountStatementPlanDto'];
 export type AccountStatementMovement = components['schemas']['AccountStatementMovementDto'];
 export type AccountStatementInstallment = components['schemas']['AccountStatementInstallmentDto'];
+export type FamilyAccountStatement = components['schemas']['FamilyAccountStatementDto'];
+export type FamilyStatementMember = components['schemas']['FamilyStatementMemberDto'];
+export type FamilyCurrencyAmounts = components['schemas']['FamilyCurrencyAmountsDto'];
 
 /**
  * Quién ve el estado de cuenta: los mismos roles que la API deja leer pagos
@@ -53,4 +56,24 @@ export async function getAccountStatement(
 /** Ruta de la vista imprimible (fuera del shell: sin menús ni botones de la app). */
 export function accountStatementPrintHref(patientId: string): string {
   return `/print/patients/${encodeURIComponent(patientId)}/account-statement`;
+}
+
+/**
+ * `GET /patients/:id/family-account-statement` (DX-203): el del pagador y el
+ * de cada paciente del que es pagador principal, con el total. Solo importes
+ * y nombres. Mismos roles que el individual.
+ */
+export async function getFamilyAccountStatement(
+  token: string,
+  patientId: string,
+): Promise<FamilyAccountStatement> {
+  return apiFetch<FamilyAccountStatement>(
+    `/patients/${encodeURIComponent(patientId)}/family-account-statement`,
+    { token },
+  );
+}
+
+/** Vista imprimible del estado de cuenta familiar. */
+export function familyAccountStatementPrintHref(patientId: string): string {
+  return `/print/patients/${encodeURIComponent(patientId)}/family-account-statement`;
 }

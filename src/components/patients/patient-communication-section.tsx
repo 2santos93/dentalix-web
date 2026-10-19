@@ -65,16 +65,22 @@ const copy = {
   optOutLabel: 'Dado de baja de los recordatorios automáticos',
   optOutHint: 'Márcalo si el paciente pidió no recibir más recordatorios; desmárcalo para reactivarlos.',
   saveError: 'No pudimos guardar las comunicaciones.',
-  // Para un menor, los avisos se dirigen a su tutor o contacto principal.
+  // DX-203: un menor o un paciente sin email, a su responsable.
   recipient: 'Destinatario de los avisos',
+  recipientResponsible: (name: string | null, email: string | null, minor: boolean) =>
+    `Su responsable${name ? `, ${name}` : ''}${email ? ` (${email})` : ''}${minor ? ' · menor de edad' : ' · sin email propio'}`,
   recipientGuardian: (name: string | null) =>
-    `Su tutor/a${name ? `, ${name}` : ''} (menor de edad)`,
+    `Al correo de la ficha, saludando a su responsable${name ? ` ${name}` : ''} (menor de edad; el responsable no tiene email)`,
   recipientContact: (name: string | null) =>
     `Su contacto principal${name ? `, ${name}` : ''} (menor de edad)`,
-  recipientMinorAlone: 'El paciente: es menor de edad y no tiene tutor ni contacto registrado',
+  recipientMinorAlone:
+    'El paciente: es menor de edad y no tiene responsable ni contacto registrado',
 };
 
 function recipientLabel(recipient: PatientCommunication['recipient']): string {
+  if (recipient.kind === 'RESPONSIBLE') {
+    return copy.recipientResponsible(recipient.name, recipient.email, recipient.minor);
+  }
   if (recipient.kind === 'GUARDIAN') return copy.recipientGuardian(recipient.name);
   if (recipient.kind === 'CONTACT') return copy.recipientContact(recipient.name);
   return copy.recipientMinorAlone;
@@ -287,7 +293,7 @@ export function PatientCommunicationSection({
               <span className="text-muted">{copy.noOptIn}</span>
             )}
           </Row>
-          {data.recipient.minor ? (
+          {data.recipient.minor || data.recipient.kind === 'RESPONSIBLE' ? (
             <Row label={copy.recipient}>{recipientLabel(data.recipient)}</Row>
           ) : null}
           <Row label={copy.reminders}>

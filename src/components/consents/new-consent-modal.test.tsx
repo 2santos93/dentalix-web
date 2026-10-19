@@ -6,6 +6,10 @@ import {
   signPatientConsent,
 } from '@/lib/consents/consents-api';
 import { listPlans } from '@/lib/treatment-plans/treatment-plans-api';
+import {
+  getPatientResponsibles,
+  type PatientResponsibles,
+} from '@/lib/patients/responsible-parties-api';
 import { ApiError } from '@/lib/api/client';
 import { setupUser } from '@/lib/test/user';
 import { PLAN_WITHOUT_OPTIONS } from '../treatment-plans/plan-fixture';
@@ -19,11 +23,55 @@ jest.mock('../../lib/consents/consents-api', () => ({
 jest.mock('../../lib/treatment-plans/treatment-plans-api', () => ({
   listPlans: jest.fn(),
 }));
+jest.mock('../../lib/patients/responsible-parties-api', () => ({
+  ...jest.requireActual('../../lib/patients/responsible-parties-api'),
+  getPatientResponsibles: jest.fn(),
+}));
 
 const mockedTemplates = listConsentTemplates as jest.MockedFunction<typeof listConsentTemplates>;
 const mockedPreview = previewPatientConsent as jest.MockedFunction<typeof previewPatientConsent>;
 const mockedSign = signPatientConsent as jest.MockedFunction<typeof signPatientConsent>;
 const mockedPlans = listPlans as jest.MockedFunction<typeof listPlans>;
+const mockedResponsibles = getPatientResponsibles as jest.MockedFunction<
+  typeof getPatientResponsibles
+>;
+
+function responsibles(over: Partial<PatientResponsibles> = {}): PatientResponsibles {
+  return {
+    patientId: 'p1',
+    minor: false,
+    majorityAge: 18,
+    country: 'CO',
+    parties: [],
+    responsibleFor: [],
+    noticeRecipient: {
+      kind: 'PATIENT',
+      name: 'Ana',
+      email: null,
+      minor: false,
+      responsiblePartyId: null,
+    },
+    ...over,
+  };
+}
+
+const mother = {
+  id: 'r1',
+  patientId: 'p1',
+  kind: 'CONTACT' as const,
+  responsiblePatient: null,
+  fullName: 'Claudia Navarro',
+  docType: 'CC' as const,
+  docNumber: '52987654',
+  email: 'claudia@example.com',
+  phone: null,
+  relationship: 'MOTHER' as const,
+  isPayer: true,
+  receivesNotices: true,
+  migratedFromGuardian: false,
+  createdAt: '2026-10-01T00:00:00.000Z',
+  updatedAt: '2026-10-01T00:00:00.000Z',
+};
 
 beforeAll(() => {
   jest.spyOn(HTMLCanvasElement.prototype, 'getContext').mockImplementation(
@@ -110,6 +158,53 @@ describe('NewConsentModal', () => {
     mockedPlans.mockResolvedValue([plan, { ...plan, id: 'plan-x', status: 'CANCELLED' }]);
     mockedPreview.mockResolvedValue(preview);
     mockedSign.mockResolvedValue({ id: 'c1' } as never);
+    mockedResponsibles.mockResolvedValue(responsibles());
+  });
+
+  it('DX-203: un menor viene con el firmante tutor precargado desde su responsable', async () => {
+    const user = setupUser();
+    mockedResponsibles.mockResolvedValue(responsibles({ minor: true, parties: [mother] }));
+    renderModal();
+    await goToSignatures(user);
+    expect(screen.getByRole('radio', { name: /tutor/i })).toBeChecked();
+    expect(screen.getByLabelText('Nombre del tutor')).toHaveValue('Claudia Navarro');
+    expect(screen.getByLabelText('Documento del tutor')).toHaveValue('CC 52987654');
+    expect(screen.getByText(/su responsable en la ficha/)).toBeInTheDocument();
+
+    sign(screen.getByRole('img', { name: 'Firma del tutor' }));
+    sign(screen.getByRole('img', { name: /firma del profesional/i }));
+    await user.click(screen.getByRole('button', { name: 'Firmar' }));
+    expect(mockedSign).toHaveBeenCalledWith(
+      'tok',
+      'p1',
+      expect.objectContaining({
+        signerType: 'GUARDIAN',
+        guardianName: 'Claudia Navarro',
+        guardianDocument: 'CC 52987654',
+      }),
+    );
+  });
+
+  it('DX-203: si es menor y se elige al paciente, avisa', async () => {
+    const user = setupUser();
+    mockedResponsibles.mockResolvedValue(responsibles({ minor: true, parties: [mother] }));
+    renderModal();
+    await goToSignatures(user);
+    await user.click(screen.getByRole('radio', { name: 'El paciente' }));
+    expect(
+      screen.getByText('El paciente es menor de 18 años: lo habitual es que firme su responsable.'),
+    ).toBeInTheDocument();
+  });
+
+  it('DX-203: un adulto firma él mismo; al elegir tutor se precarga el responsable', async () => {
+    const user = setupUser();
+    mockedResponsibles.mockResolvedValue(responsibles({ parties: [mother] }));
+    renderModal();
+    await goToSignatures(user);
+    expect(screen.getByRole('radio', { name: 'El paciente' })).toBeChecked();
+    expect(screen.queryByText(/lo habitual es que firme/)).not.toBeInTheDocument();
+    await user.click(screen.getByRole('radio', { name: /tutor/i }));
+    expect(screen.getByLabelText('Nombre del tutor')).toHaveValue('Claudia Navarro');
   });
 
   it('firma en tres pasos: plantilla → vista previa resuelta → firmas', async () => {

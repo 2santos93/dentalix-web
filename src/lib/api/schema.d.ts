@@ -475,6 +475,45 @@ export interface paths {
         patch: operations["PatientCommunicationController_update"];
         trace?: never;
     };
+    "/api/v1/patients/{patientId}/responsible-parties": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Responsables del paciente y de quién es responsable (DX-203) */
+        get: operations["PatientResponsiblePartiesController_list"];
+        put?: never;
+        /**
+         * Vincular un responsable: un paciente de la clínica o un contacto
+         * @description `responsiblePatientId` (404 si no es de esta clínica) o `fullName` con los datos del contacto. Un solo pagador principal (422) y el mismo paciente una sola vez (409).
+         */
+        post: operations["PatientResponsiblePartiesController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{patientId}/responsible-parties/{partyId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Quitar un responsable (DX-203) */
+        delete: operations["PatientResponsiblePartiesController_remove"];
+        options?: never;
+        head?: never;
+        /** Editar un responsable (DX-203) */
+        patch: operations["PatientResponsiblePartiesController_update"];
+        trace?: never;
+    };
     "/api/v1/patients/{id}/collection-notes": {
         parameters: {
             query?: never;
@@ -1736,7 +1775,7 @@ export interface paths {
         put?: never;
         /**
          * Enviar el recibo por email al paciente
-         * @description Encola el email (outbox, DX-088) con el MISMO recibo al email de la ficha del paciente, con el documento enmascarado.
+         * @description Encola el email (outbox, DX-088) con el MISMO recibo al email de la ficha del paciente, con el documento enmascarado. DX-203: el de un menor o de un paciente sin email va al responsable que recibe avisos (`sentToResponsible`).
          */
         post: operations["PaymentReceiptsController_email"];
         delete?: never;
@@ -1773,6 +1812,26 @@ export interface paths {
          * @description Totales de toda la historia del paciente (todas las sedes). `from`/`to` acotan solo la lista de movimientos. Sin datos clínicos.
          */
         get: operations["AccountStatementController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{patientId}/family-account-statement": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Estado de cuenta familiar del pagador: su saldo y el de los pacientes de los que es pagador principal
+         * @description Solo lectura (no hay abono familiar). Subtotal por paciente y moneda, del mismo cálculo que el estado de cuenta individual, y el total al céntimo. Solo importes y nombres: nada clínico ni documentos de los otros miembros.
+         */
+        get: operations["AccountStatementController_familyStatement"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2119,6 +2178,46 @@ export interface paths {
         get: operations["PlatformJobsController_failed"];
         put?: never;
         post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/jobs/stats": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Estado de la cola: profundidad, retraso, workers vivos y tareas
+         * @description PENDING vencidos y su retraso (ahora − min(runAt)), RUNNING, FAILED en 24 h, workers con latido de menos de 60 s y, por tarea programada, lastRunAt/nextRunAt y si va con retraso (más de 2 periodos). Solo contadores, ids y fechas. Solo superadmin de plataforma.
+         */
+        get: operations["PlatformJobsController_stats"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/platform/jobs/{id}/retry": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Reencola un trabajo FAILED (attempts = 0, ya)
+         * @description Una sola vez: si ya no está FAILED (otro reintento lo reencoló) da 409. Conserva su idempotencyKey, así que no crea un trabajo duplicado. Queda en platform_audit_events (JOB_RETRIED) sin el payload. Solo superadmin de plataforma.
+         */
+        post: operations["PlatformJobsController_retry"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3069,8 +3168,6 @@ export interface components {
             emergencyContactName?: string;
             emergencyContactRelationship?: string;
             emergencyContactPhone?: string;
-            guardianName?: string;
-            guardianDocNumber?: string;
             /** @description Anamnesis inicial (versión 1). Solo roles clínicos (DENTIST, ASSISTANT, ADMIN); con RECEPTION la petición se rechaza con 403. */
             medicalHistory?: components["schemas"]["SaveMedicalHistoryDto"];
         };
@@ -3132,7 +3229,15 @@ export interface components {
             emergencyContactName: string | null;
             emergencyContactRelationship: string | null;
             emergencyContactPhone: string | null;
+            /**
+             * @deprecated
+             * @description DEPRECADO (DX-203), solo lectura: el acudiente es ahora un responsable (`GET /patients/:id/responsible-parties`). La migración lo copió allí.
+             */
             guardianName: string | null;
+            /**
+             * @deprecated
+             * @description DEPRECADO (DX-203), solo lectura. Ver `guardianName`.
+             */
             guardianDocNumber: string | null;
             /** Format: uuid */
             createdById: string | null;
@@ -3243,7 +3348,15 @@ export interface components {
             emergencyContactName: string | null;
             emergencyContactRelationship: string | null;
             emergencyContactPhone: string | null;
+            /**
+             * @deprecated
+             * @description DEPRECADO (DX-203), solo lectura: el acudiente es ahora un responsable (`GET /patients/:id/responsible-parties`). La migración lo copió allí.
+             */
             guardianName: string | null;
+            /**
+             * @deprecated
+             * @description DEPRECADO (DX-203), solo lectura. Ver `guardianName`.
+             */
             guardianDocNumber: string | null;
             /** Format: uuid */
             createdById: string | null;
@@ -3318,8 +3431,6 @@ export interface components {
             emergencyContactName?: string | null;
             emergencyContactRelationship?: string | null;
             emergencyContactPhone?: string | null;
-            guardianName?: string | null;
-            guardianDocNumber?: string | null;
         };
         ClinicalRecordRetentionErrorDto: {
             /** @example 409 */
@@ -3366,17 +3477,24 @@ export interface components {
             source: components["schemas"]["ReminderOptOutSource"];
         };
         /**
-         * @description PATIENT: el propio paciente. Un menor: GUARDIAN (su tutor) o, sin tutor, CONTACT (su contacto principal).
+         * @description PATIENT: el propio paciente. RESPONSIBLE (DX-203): un menor (CO < 18, ES < 16) o un paciente sin email; los avisos van al email de su responsable que recibe avisos (primero el pagador). GUARDIAN: menor cuyo responsable no tiene email; va al email de la ficha saludándolo. CONTACT: menor sin responsables; se saluda a su contacto principal.
          * @enum {string}
          */
-        CommunicationRecipientKind: "PATIENT" | "GUARDIAN" | "CONTACT";
+        CommunicationRecipientKind: "PATIENT" | "RESPONSIBLE" | "GUARDIAN" | "CONTACT";
         CommunicationRecipientDto: {
-            /** @description PATIENT: el propio paciente. Un menor: GUARDIAN (su tutor) o, sin tutor, CONTACT (su contacto principal). */
+            /** @description PATIENT: el propio paciente. RESPONSIBLE (DX-203): un menor (CO < 18, ES < 16) o un paciente sin email; los avisos van al email de su responsable que recibe avisos (primero el pagador). GUARDIAN: menor cuyo responsable no tiene email; va al email de la ficha saludándolo. CONTACT: menor sin responsables; se saluda a su contacto principal. */
             kind: components["schemas"]["CommunicationRecipientKind"];
             /** @description Nombre de pila de a quien se dirigen los avisos. */
             name: string | null;
-            /** @description Menor de edad (menos de 18 años). */
+            /** @description Email al que salen los avisos; null = no hay a quién. */
+            email: string | null;
+            /** @description Menor según el país de la sede (CO: menos de 18; ES: menos de 16). */
             minor: boolean;
+            /**
+             * Format: uuid
+             * @description Responsable que recibe los avisos (RESPONSIBLE y GUARDIAN).
+             */
+            responsiblePartyId: string | null;
         };
         PatientCommunicationDto: {
             /** Format: uuid */
@@ -3414,6 +3532,114 @@ export interface components {
             whatsappOptInSource?: components["schemas"]["WhatsappOptInSource"];
             /** @description true anota la baja de los recordatorios a petición del paciente (origen STAFF); false la quita y los reactiva. */
             reminderOptOut?: boolean;
+        };
+        /** @enum {string} */
+        ClinicCountry: "CO" | "ES";
+        /**
+         * @description PATIENT: otro paciente de la clínica (sus datos salen de su ficha). CONTACT: contacto sin ficha.
+         * @enum {string}
+         */
+        ResponsiblePartyKind: "PATIENT" | "CONTACT";
+        /** @enum {string} */
+        DocType: "CC" | "TI" | "CE" | "PASSPORT" | "OTHER";
+        ResponsiblePatientSummaryDto: {
+            /** Format: uuid */
+            id: string;
+            firstName: string;
+            lastName: string;
+            docType: components["schemas"]["DocType"];
+            docNumber: string | null;
+            email: string | null;
+            phone: string | null;
+        };
+        /** @enum {string} */
+        ResponsibleRelationship: "MOTHER" | "FATHER" | "LEGAL_GUARDIAN" | "GRANDPARENT" | "SIBLING" | "SPOUSE" | "CHILD" | "OTHER";
+        ResponsiblePartyDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            patientId: string;
+            /** @description PATIENT: otro paciente de la clínica (sus datos salen de su ficha). CONTACT: contacto sin ficha. */
+            kind: components["schemas"]["ResponsiblePartyKind"];
+            responsiblePatient: components["schemas"]["ResponsiblePatientSummaryDto"] | null;
+            fullName: string;
+            docType: components["schemas"]["DocType"] | null;
+            docNumber: string | null;
+            email: string | null;
+            phone: string | null;
+            relationship: components["schemas"]["ResponsibleRelationship"];
+            isPayer: boolean;
+            receivesNotices: boolean;
+            /** @description Copiado del acudiente antiguo de la ficha (guardianName, DEPRECADO). */
+            migratedFromGuardian: boolean;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        ResponsibleForPatientDto: {
+            /** Format: uuid */
+            id: string;
+            firstName: string;
+            lastName: string;
+        };
+        ResponsibleForDto: {
+            /**
+             * Format: uuid
+             * @description Id del vínculo
+             */
+            id: string;
+            patient: components["schemas"]["ResponsibleForPatientDto"];
+            relationship: components["schemas"]["ResponsibleRelationship"];
+            isPayer: boolean;
+            receivesNotices: boolean;
+        };
+        PatientResponsiblesDto: {
+            /** Format: uuid */
+            patientId: string;
+            /** @description Menor según el país de la sede activa o principal, en su día civil (CO < 18, ES < 16). */
+            minor: boolean;
+            /** @example 18 */
+            majorityAge: number;
+            country: components["schemas"]["ClinicCountry"];
+            parties: components["schemas"]["ResponsiblePartyDto"][];
+            /** @description «Responsable de: …»: los pacientes de los que es responsable. */
+            responsibleFor: components["schemas"]["ResponsibleForDto"][];
+            /** @description A quién van hoy sus avisos. */
+            noticeRecipient: components["schemas"]["CommunicationRecipientDto"];
+        };
+        CreateResponsiblePartyDto: {
+            fullName?: string;
+            docType?: components["schemas"]["DocType"] | null;
+            docNumber?: string | null;
+            email?: string | null;
+            phone?: string | null;
+            /**
+             * Format: uuid
+             * @description Paciente de ESTA clínica que es el responsable (404 si no). Sin él, `fullName` es obligatorio.
+             */
+            responsiblePatientId?: string;
+            relationship: components["schemas"]["ResponsibleRelationship"];
+            /**
+             * @description Pagador principal: como mucho uno por paciente (422 si ya hay otro).
+             * @default false
+             */
+            isPayer: boolean;
+            /**
+             * @description Recibe los avisos de un menor o de un paciente sin email (recordatorio, recibo, estado de cuenta).
+             * @default true
+             */
+            receivesNotices: boolean;
+        };
+        UpdateResponsiblePartyDto: {
+            fullName?: string;
+            docType?: components["schemas"]["DocType"] | null;
+            docNumber?: string | null;
+            email?: string | null;
+            phone?: string | null;
+            relationship?: components["schemas"]["ResponsibleRelationship"];
+            isPayer?: boolean;
+            receivesNotices?: boolean;
         };
         /**
          * @description Llamada, enlace de WhatsApp, email o en persona
@@ -4391,8 +4617,6 @@ export interface components {
             /** @description Igual que al crear, si el rango cambia. */
             confirmAffected?: boolean;
         };
-        /** @enum {string} */
-        ClinicCountry: "CO" | "ES";
         LocationDto: {
             /** Format: uuid */
             id: string;
@@ -5639,6 +5863,8 @@ export interface components {
              * @example an***@example.com
              */
             sentTo: string;
+            /** @description DX-203: salió al email del responsable (un menor o un paciente sin email). */
+            sentToResponsible: boolean;
         };
         CreatePaymentPlanDto: {
             /**
@@ -5795,6 +6021,18 @@ export interface components {
             /** @enum {string} */
             docType: "CC" | "TI" | "CE" | "PASSPORT" | "OTHER";
             docNumber: string | null;
+        };
+        /**
+         * @description RESPONSIBLE: un menor (CO < 18, ES < 16) o un paciente sin email; sale a nombre de su responsable que recibe avisos (primero el pagador principal).
+         * @enum {string}
+         */
+        StatementAddresseeKind: "PATIENT" | "RESPONSIBLE";
+        AccountStatementAddresseeDto: {
+            /** @description RESPONSIBLE: un menor (CO < 18, ES < 16) o un paciente sin email; sale a nombre de su responsable que recibe avisos (primero el pagador principal). */
+            kind: components["schemas"]["StatementAddresseeKind"];
+            /** @description Nombre completo */
+            name: string;
+            email: string | null;
         };
         AccountStatementRangeDto: {
             /** @example 2026-01-01 */
@@ -5959,11 +6197,45 @@ export interface components {
             issuedAt: string;
             clinic: components["schemas"]["AccountStatementClinicDto"];
             patient: components["schemas"]["AccountStatementPatientDto"];
+            addressee: components["schemas"]["AccountStatementAddresseeDto"];
             range: components["schemas"]["AccountStatementRangeDto"];
             summary: components["schemas"]["AccountStatementCurrencySummaryDto"][];
             plans: components["schemas"]["AccountStatementPlanDto"][];
             movements: components["schemas"]["AccountStatementMovementDto"][];
             installments: components["schemas"]["AccountStatementInstallmentDto"][];
+        };
+        FamilyMemberPatientDto: {
+            /** Format: uuid */
+            id: string;
+            firstName: string;
+            lastName: string;
+        };
+        FamilyCurrencyAmountsDto: {
+            /** @example COP */
+            currency: string;
+            /** @description Igual que `summary[].budgeted` individual */
+            budgeted: number;
+            paid: number;
+            balance: number;
+            overdueAmount: number;
+        };
+        FamilyStatementMemberDto: {
+            patient: components["schemas"]["FamilyMemberPatientDto"];
+            /** @description Parentesco del pagador con el paciente; null = el propio pagador. */
+            relationship: components["schemas"]["ResponsibleRelationship"] | null;
+            /** @description Es el propio pagador */
+            self: boolean;
+            /** @description Subtotal del paciente: su estado de cuenta individual. */
+            summary: components["schemas"]["FamilyCurrencyAmountsDto"][];
+        };
+        FamilyAccountStatementDto: {
+            /** Format: date-time */
+            issuedAt: string;
+            clinic: components["schemas"]["AccountStatementClinicDto"];
+            payer: components["schemas"]["FamilyMemberPatientDto"];
+            members: components["schemas"]["FamilyStatementMemberDto"][];
+            /** @description Suma de los subtotales por moneda, al céntimo. */
+            totals: components["schemas"]["FamilyCurrencyAmountsDto"][];
         };
         BillablePlanDto: {
             /** Format: uuid */
@@ -6660,6 +6932,117 @@ export interface components {
             createdAt: string;
             /** Format: date-time */
             finishedAt: string | null;
+        };
+        JobsQueueStatsDto: {
+            /**
+             * @description PENDING cuya hora ya llegó: esperan a un worker
+             * @example 3
+             */
+            pendingDue: number;
+            /**
+             * @description PENDING programados para más adelante
+             * @example 120
+             */
+            pendingScheduled: number;
+            /**
+             * @description Retraso: ahora − min(runAt) de los PENDING vencidos, en ms (0 si no hay)
+             * @example 4200
+             */
+            lagMs: number;
+            /** Format: date-time */
+            oldestDueRunAt: string | null;
+            /** @example 1 */
+            running: number;
+            /**
+             * @description RUNNING con el arriendo vencido (worker caído o sin latido)
+             * @example 0
+             */
+            runningExpired: number;
+            /**
+             * @description FAILED en las últimas 24 h
+             * @example 0
+             */
+            failedLast24h: number;
+        };
+        JobWorkerDto: {
+            /** @example worker-7d9f:1:0a1b2c3d */
+            id: string;
+            /** @enum {string} */
+            role: "worker" | "all";
+            /** @example a1b2c3d */
+            version: string | null;
+            /** Format: date-time */
+            startedAt: string;
+            /** Format: date-time */
+            lastBeatAt: string;
+            /** @description Latió hace menos de 60 s */
+            alive: boolean;
+        };
+        JobsWorkersStatsDto: {
+            /**
+             * @description Workers con latido de menos de 60 s
+             * @example 1
+             */
+            alive: number;
+            /** Format: date-time */
+            lastBeatAt: string | null;
+            /** @description Los 50 de latido más reciente (7 días de historia) */
+            recent: components["schemas"]["JobWorkerDto"][];
+        };
+        JobScheduleStatusDto: {
+            /** @example reminders.plan.every-5-min */
+            name: string;
+            /**
+             * @description Cron de 5 campos, UTC
+             * @example *\/5 * * * *
+             */
+            cron: string;
+            /** Format: date-time */
+            lastRunAt: string | null;
+            /**
+             * Format: date-time
+             * @description null: ningún worker la ha sincronizado aún
+             */
+            nextRunAt: string | null;
+            /**
+             * @description Periodo del cron, en ms
+             * @example 300000
+             */
+            periodMs: number;
+            /**
+             * @description ahora − nextRunAt si ya pasó, en ms
+             * @example 0
+             */
+            delayMs: number;
+            /** @description Con retraso: más de 2 periodos sin correr, o nunca sincronizada */
+            overdue: boolean;
+        };
+        JobsStatsDto: {
+            /**
+             * Format: date-time
+             * @description Hora de la base a la que se tomó
+             */
+            generatedAt: string;
+            queue: components["schemas"]["JobsQueueStatsDto"];
+            workers: components["schemas"]["JobsWorkersStatsDto"];
+            schedules: components["schemas"]["JobScheduleStatusDto"][];
+        };
+        RetriedJobDto: {
+            /** Format: uuid */
+            id: string;
+            /** @example reminders.send */
+            name: string;
+            /** Format: uuid */
+            tenantId: string | null;
+            /** @enum {string} */
+            state: "PENDING";
+            /** @example 0 */
+            attempts: number;
+            /**
+             * @description Intentos que llevaba al fallar
+             * @example 5
+             */
+            previousAttempts: number;
         };
         PlatformMfaStatusDto: {
             enabled: boolean;
@@ -7585,6 +7968,8 @@ export interface components {
             skipReason: components["schemas"]["AppointmentReminderSkipReason"] | null;
             /** @description Entrega del email por el proveedor (solo si se envió) */
             emailDelivery: components["schemas"]["ReminderEmailDelivery"] | null;
+            /** @description DX-203: salió al email del responsable del paciente (un menor o un paciente sin email): «Recordatorio enviado al responsable». */
+            sentToResponsible: boolean;
             /** @description false = de una hora de inicio anterior (la cita se reprogramó) */
             current: boolean;
         };
@@ -8630,6 +9015,162 @@ export interface operations {
             };
             /** @description Paciente no encontrado */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientResponsiblePartiesController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PatientResponsiblesDto"];
+                };
+            };
+            /** @description Paciente no encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientResponsiblePartiesController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateResponsiblePartyDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponsiblePartyDto"];
+                };
+            };
+            /** @description Validación (mensaje en español) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente o paciente responsable no encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ese paciente ya es su responsable */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ya tiene pagador principal o el máximo de responsables */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientResponsiblePartiesController_remove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+                partyId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Quitado */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente o responsable no encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientResponsiblePartiesController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+                partyId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateResponsiblePartyDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ResponsiblePartyDto"];
+                };
+            };
+            /** @description Validación (mensaje en español) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente o responsable no encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ya tiene pagador principal */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -12126,7 +12667,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description El paciente no tiene email */
+            /** @description Ni el paciente ni un responsable que recibe avisos tienen email */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -12254,6 +12795,48 @@ export interface operations {
                 content?: never;
             };
             /** @description Paciente no encontrado en esta clínica (inexistente o de otra clínica). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AccountStatementController_familyStatement: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["FamilyAccountStatementDto"];
+                };
+            };
+            /** @description patientId no es UUID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Rol sin acceso a pagos */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente no encontrado en esta clínica. */
             404: {
                 headers: {
                     [name: string]: unknown;
@@ -13126,6 +13709,95 @@ export interface operations {
             };
             /** @description No es un token de plataforma de un superadmin */
             403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PlatformJobsController_stats: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["JobsStatsDto"];
+                };
+            };
+            /** @description Sin sesión */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No es un token de plataforma de un superadmin */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PlatformJobsController_retry: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RetriedJobDto"];
+                };
+            };
+            /** @description El id no es un UUID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sin sesión */
+            401: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No es un token de plataforma de un superadmin */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No existe (o ya se purgó) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No está FAILED: ya se reencoló o nunca falló */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
