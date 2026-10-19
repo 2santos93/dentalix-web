@@ -50,6 +50,8 @@ export const debtorCopy = {
   promiseShort: 'Compromiso',
   promiseLabel: (name: string) => `Compromiso de pago de ${name}`,
   promiseLine: (amount: string, day: string) => `${amount} para el ${day}`,
+  // DX-215: estaba cumplido y se anuló el abono que lo cumplía.
+  promiseReopened: 'Reabierto: se anuló el abono',
 };
 
 export function statementHref(patientId: string): string {
@@ -216,7 +218,8 @@ export function DebtorActions({
 
 /**
  * DX-150: la última gestión (canal · resultado, fecha) y el último compromiso
- * de pago con su estado (Abierto, Cumplido o Incumplido).
+ * de pago con su estado (Abierto, Cumplido o Incumplido). DX-215: si estaba
+ * cumplido y se anuló el abono que lo cumplía, lo dice.
  */
 export function CollectionCell({ row }: { row: AgingRow }) {
   const { lastNote, promise } = row;
@@ -241,6 +244,10 @@ export function CollectionCell({ row }: { row: AgingRow }) {
           <span className="text-xs text-muted tabular-nums">
             {debtorCopy.promiseLine(formatCurrency(promise.amount, promise.currency), formatCivilDate(promise.dueDate))}
           </span>
+          {/* Si se volvió a cumplir con otro abono, ya no aplica. */}
+          {promise.reopenedAt && promise.status !== 'KEPT' ? (
+            <span className="basis-full text-xs text-warning">{debtorCopy.promiseReopened}</span>
+          ) : null}
         </span>
       ) : null}
     </div>

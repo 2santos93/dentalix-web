@@ -16,7 +16,7 @@ export const VOID_REASON_MAX = 300;
 const copy = {
   title: '¿Anular este abono?',
   description:
-    'El abono sale de la lista y deja de contar en el saldo, que se recalcula. Queda registrado quién lo anuló, cuándo y por qué, y se ve en el estado de cuenta.',
+    'El abono sale de la lista y deja de contar en el saldo, que se recalcula. Queda registrado quién lo anuló, cuándo y por qué, y se ve en el estado de cuenta. Si con él se cumplía un compromiso de pago, el compromiso vuelve a abierto (o a incumplido, si ya pasó su fecha).',
   restrictedHint:
     'Desde recepción puedes anular solo los que registraste tú hoy; para los demás, pide a un administrador.',
   reasonLabel: 'Motivo de la anulación',

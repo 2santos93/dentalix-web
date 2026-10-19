@@ -27,6 +27,13 @@ describe('VoidPaymentModal', () => {
     expect(screen.getByLabelText(/motivo de la anulación/i)).toHaveAttribute('maxLength', '300');
   });
 
+  it('DX-215: avisa de que un compromiso de pago cumplido con este abono se reabre', () => {
+    setup();
+    expect(screen.getByRole('dialog', { name: /anular este abono/i })).toHaveTextContent(
+      /compromiso de pago.*vuelve a abierto.*incumplido/i,
+    );
+  });
+
   it('sin motivo (o solo espacios / menos de 3 caracteres) no envía y explica el error junto al campo', async () => {
     const { onConfirm, user } = setup();
 
