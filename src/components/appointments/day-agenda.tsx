@@ -1,4 +1,5 @@
 'use client';
+import type { ReactNode } from 'react';
 import { OverdueChip } from '@/components/collections/overdue-chip';
 import { CalendarDays, ChevronDown, ChevronRight } from 'lucide-react';
 import type { Appointment, AppointmentStatus } from '@/lib/appointments/appointments-api';
@@ -11,6 +12,7 @@ import {
 } from './appointment-display';
 import { Skeleton } from '@/components/ui/skeleton';
 import { SectionError } from '@/components/errors/section-error';
+import { statusOptionsFor } from '@/lib/appointments/patient-flow';
 
 // Copy as constants (i18n-ready, es-first) — matches patients-table.tsx /
 // clinical-entries-list.tsx convention until next-intl wiring lands.
@@ -31,6 +33,9 @@ const copy = {
     COMPLETED: 'Completada',
     CANCELLED: 'Cancelada',
     NO_SHOW: 'No asistió',
+    ARRIVED: 'En espera',
+    IN_CHAIR: 'En sillón',
+    READY_FOR_CHECKOUT: 'Listo para cobrar',
   } satisfies Record<AppointmentStatus, string>,
   /** `aria-label` for the status <select>, filled in with the row's time range — e.g. "Estado de la cita de 09:00–09:30". */
   statusSelectLabel: (timeRange: string) => `Estado de la cita de ${timeRange}`,
@@ -40,15 +45,6 @@ const copy = {
   detailLabel: (timeRange: string) => `Detalle de la cita de ${timeRange}`,
 };
 
-// Fixed display order for the status <select> options — same 5 values as
-// `STATUS_BADGE_CLASSES`, order matches the natural appointment lifecycle.
-const STATUS_OPTIONS: AppointmentStatus[] = [
-  'SCHEDULED',
-  'CONFIRMED',
-  'COMPLETED',
-  'CANCELLED',
-  'NO_SHOW',
-];
 
 interface DayAgendaProps {
   /** Appointments to render — any order; this component sorts by `start` ASC. */
@@ -78,6 +74,11 @@ interface DayAgendaProps {
    * la cita (donde vive, p. ej., "Enviar confirmación" — DX-005).
    */
   onSelectAppointment?: (appointment: Appointment) => void;
+  /**
+   * DX-200: botones rápidos del flujo en la clínica (Llegó, En sillón…) de cada
+   * fila; nada si no devuelve nada.
+   */
+  renderActions?: (appointment: Appointment) => ReactNode;
 }
 
 function DetailButton({
@@ -130,7 +131,7 @@ function StatusSelect({ appointment, timeRange, onStatusChange, updating }: Stat
           onChange={(e) => onStatusChange(appointment.id, e.target.value as AppointmentStatus)}
           className={`cursor-pointer appearance-none rounded-full border py-1 pl-3 pr-7 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface disabled:cursor-not-allowed disabled:opacity-60 ${STATUS_BADGE_CLASSES[appointment.status]}`}
         >
-          {STATUS_OPTIONS.map((status) => (
+          {statusOptionsFor(appointment.status).map((status) => (
             <option key={status} value={status} className="bg-surface font-normal text-ink">
               {copy.statusLabels[status]}
             </option>
@@ -167,6 +168,7 @@ export function DayAgenda({
   onStatusChange,
   updatingId,
   onSelectAppointment,
+  renderActions,
 }: DayAgendaProps) {
   if (loading) {
     return (
@@ -258,6 +260,7 @@ export function DayAgenda({
                       <ConfirmationBadge appointment={appointment} />
                       <OverdueChip balance={appointment.balance} />
                     </span>
+                    {renderActions?.(appointment)}
                   </td>
                   <td className="px-4 py-3 text-muted">
                     {appointment.reason ?? copy.reasonFallback}
@@ -314,6 +317,7 @@ export function DayAgenda({
               <p className="mt-0.5 text-muted">{appointment.reason ?? copy.reasonFallback}</p>
               <ConfirmationBadge appointment={appointment} className="mt-2" />
               <OverdueChip balance={appointment.balance} className="mt-2" />
+              {renderActions?.(appointment)}
               {(onStatusChange || onSelectAppointment) && (
                 <div className="mt-3 flex items-center justify-between gap-2">
                   {onStatusChange ? (
