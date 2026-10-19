@@ -9,6 +9,8 @@ import {
   type ClinicalEntryAddendum,
 } from '@/lib/patients/clinical-api';
 import { ClinicalEntryAddendumModal } from '@/components/patients/clinical-entry-addendum-modal';
+import { RdaReadinessChip } from '@/components/patients/rda-readiness-chip';
+import { useRdaReadiness } from '@/lib/rda/use-rda-readiness';
 import { NewEvolutionModal } from '@/components/clinical-notes/new-evolution-modal';
 import { appointmentLine } from '@/lib/clinical-notes/appointment-line';
 import { listStaff, type StaffMember } from '@/lib/staff/staff-api';
@@ -39,6 +41,11 @@ const copy = {
   addendaLabel: (entryDate: string) => `Adendas de la evolución del ${entryDate}`,
   addendumHeading: 'Adenda',
   addendumReason: 'Motivo:',
+  // DX-212: diagnósticos CIE-10 guardados con la evolución.
+  diagnosesLabel: (entryDate: string) => `Diagnósticos de la evolución del ${entryDate}`,
+  principal: 'Principal',
+  related: 'Relacionado',
+  tooth: (fdi: string) => `diente ${fdi}`,
 };
 
 interface ClinicalEntriesListProps {
@@ -115,6 +122,20 @@ export function ClinicalEntriesList({ token, patientId }: ClinicalEntriesListPro
       cancelled = true;
     };
   }, [token]);
+
+  // DX-212: una comprobación RDA por evolución, compartida por tabla y tarjetas.
+  const entryIds = useMemo(() => entries.map((e) => e.id), [entries]);
+  const rda = useRdaReadiness(token, entryIds);
+
+  function renderRda(entry: ClinicalEntry) {
+    return (
+      <RdaReadinessChip
+        patientId={patientId}
+        state={rda.stateOf(entry.id)}
+        onRetry={() => rda.retry(entry.id)}
+      />
+    );
+  }
 
   const staffById = useMemo(
     () => new Map(staff.map((member) => [member.userId, member.fullName])),
@@ -194,6 +215,34 @@ export function ClinicalEntriesList({ token, patientId }: ClinicalEntriesListPro
     );
   }
 
+  /**
+   * DX-212: diagnósticos CIE-10 con código y texto (el principal primero).
+   * Inalterables como la evolución: no hay acción para cambiarlos.
+   */
+  function renderDiagnoses(entry: ClinicalEntry) {
+    const diagnoses = entry.diagnoses ?? [];
+    if (diagnoses.length === 0) return null;
+    return (
+      <ul
+        aria-label={copy.diagnosesLabel(formatCivilDate(entry.entryDate))}
+        className="mt-2 flex flex-col gap-1"
+      >
+        {diagnoses.map((d) => (
+          <li key={d.id} className="flex flex-wrap items-baseline gap-x-2 text-sm">
+            <span className="text-xs font-medium text-muted">
+              {d.kind === 'PRINCIPAL' ? copy.principal : copy.related}
+            </span>
+            <span className="font-medium tabular-nums text-ink">{d.icd10Code}</span>
+            <span className="text-ink">{d.labelEs}</span>
+            {d.toothFdi ? (
+              <span className="text-xs tabular-nums text-muted">{copy.tooth(d.toothFdi)}</span>
+            ) : null}
+          </li>
+        ))}
+      </ul>
+    );
+  }
+
   /** «Cita del 17/10 · Dra. Ríos» bajo la fecha, si la evolución tiene cita. */
   function renderAppointment(entry: ClinicalEntry) {
     if (!entry.appointment) return null;
@@ -261,11 +310,15 @@ export function ClinicalEntriesList({ token, patientId }: ClinicalEntriesListPro
                 <td className="px-4 py-3 text-ink">{entry.reason ?? copy.reasonFallback}</td>
                 <td className="whitespace-pre-line px-4 py-3 text-ink">
                   {entry.notes}
+                  {renderDiagnoses(entry)}
                   {renderAddenda(entry)}
                 </td>
                 {/* Subordinado: es la procedencia del asiento, no su contenido. */}
                 <td className="px-4 py-3 align-top text-muted">
                   <p>{recordLine(entry.performedById, entry.createdAt)}</p>
+                  <div className="mt-2">
+                    {renderRda(entry)}
+                  </div>
                   <div className="mt-2">{renderAddButton(entry)}</div>
                 </td>
               </tr>
@@ -286,11 +339,15 @@ export function ClinicalEntriesList({ token, patientId }: ClinicalEntriesListPro
               {renderAppointment(entry)}
               <p className="mt-1 text-muted">{entry.reason ?? copy.reasonFallback}</p>
               <p className="mt-2 whitespace-pre-line break-words text-ink">{entry.notes}</p>
+              {renderDiagnoses(entry)}
               {renderAddenda(entry)}
               <p className="mt-3 border-t border-hairline pt-2 text-xs text-muted">
                 {recordLine(entry.performedById, entry.createdAt)}
               </p>
-              <div className="mt-2">{renderAddButton(entry)}</div>
+              <div className="mt-2 flex flex-col items-start gap-2">
+                {renderRda(entry)}
+                {renderAddButton(entry)}
+              </div>
             </div>
           ))}
         </div>
