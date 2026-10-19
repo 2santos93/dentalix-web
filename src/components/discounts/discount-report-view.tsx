@@ -64,6 +64,7 @@ export const discountReportCopy = {
   planOf: (day: string, label: string | null) => `Plan del ${day}${label ? ` · ${label}` : ''}`,
   tooth: (tooth: string, procedure: string) => `Diente ${tooth} · ${procedure}`,
   ofPrice: (price: string, percent: string) => `${percent} de ${price}`,
+  priceReduced: (price: string) => `Precio rebajado a ${price} (bajo el de catálogo)`,
   noReason: 'Sin motivo',
   unknownAuthor: 'Sin registrar',
   // Sin «Intenta de nuevo.»: AsyncSection → SectionError trae «Reintentar».
@@ -140,6 +141,10 @@ function DiscountSummary({ totals }: { totals: DiscountReportTotal[] }) {
   );
 }
 
+/**
+ * Importe descontado (SEC-041: rebaja de precio frente al catálogo + descuento)
+ * y su % sobre el precio de referencia (el de catálogo si se rebajó).
+ */
 function AmountCell({ item }: { item: DiscountReportItem }) {
   return (
     <>
@@ -147,8 +152,16 @@ function AmountCell({ item }: { item: DiscountReportItem }) {
         −{formatCurrency(item.discount, item.currency)}
       </span>
       <span className="block text-xs tabular-nums text-muted">
-        {discountReportCopy.ofPrice(formatCurrency(item.price, item.currency), discountReportCopy.percent(item.percent))}
+        {discountReportCopy.ofPrice(
+          formatCurrency(item.price + item.priceReduction, item.currency),
+          discountReportCopy.percent(item.percent),
+        )}
       </span>
+      {item.priceReduction > 0 ? (
+        <span className="block text-xs tabular-nums text-muted">
+          {discountReportCopy.priceReduced(formatCurrency(item.price, item.currency))}
+        </span>
+      ) : null}
     </>
   );
 }

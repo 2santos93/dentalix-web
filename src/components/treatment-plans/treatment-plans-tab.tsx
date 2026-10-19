@@ -78,9 +78,12 @@ import { SURFACE_LABELS, SURFACE_ORDER } from '@/lib/odontogram/surface-labels';
 import { getDiscountPolicy } from '@/lib/discounts/discounts-api';
 import {
   DISCOUNT_REASON_LABELS,
+  PRICE_BELOW_CATALOG_NOTICE,
   capFor,
+  effectiveDiscount,
   exceedsCap,
   needsReason,
+  priceBelowCatalogCapMessage,
   roleCapMessage,
   type DiscountReasonCode,
   type DiscountRules,
@@ -192,6 +195,10 @@ const copy = {
   discountHint: 'En la moneda del plan. Sale en el presupuesto.',
   invalidDiscount: 'El descuento debe ser un monto válido, no mayor que el precio.',
   itemDiscount: (amount: string) => `Descuento −${amount}`,
+  // SEC-041: el precio por debajo del de catálogo cuenta como descuento.
+  itemPriceReduction: (amount: string, catalog: string) => `Rebaja −${amount} (catálogo ${catalog})`,
+  priceBelowCatalogDetail: (reduction: string, catalog: string) =>
+    `Rebaja de ${reduction} sobre ${catalog}. Se compara con el tope de tu rol y sale en el informe de descuentos.`,
   // DX-204: motivo del descuento y «Descuento %» sobre varios ítems.
   itemDiscountReason: (reason: string) => `Motivo: ${reason}`,
   selectItem: (tooth: string) => `Seleccionar el ítem del diente ${tooth}`,
@@ -367,11 +374,20 @@ interface ItemsTableProps {
 
 /** Línea del descuento de un ítem: importe y, si lo tiene, su motivo. */
 function ItemDiscountLine({ item, currency }: { item: TreatmentPlanItem; currency: string }) {
-  if (item.discount <= 0) return null;
+  const { priceReduction } = effectiveDiscount(item.catalogPrice, item.price, item.discount);
+  if (item.discount <= 0 && priceReduction <= 0) return null;
   const reason = item.discountReason as DiscountReasonCode | null;
   return (
     <span className="block text-xs font-normal text-muted">
-      {copy.itemDiscount(formatCurrency(item.discount, currency))}
+      {priceReduction > 0 && item.catalogPrice !== null ? (
+        <span className="block">
+          {copy.itemPriceReduction(
+            formatCurrency(priceReduction, currency),
+            formatCurrency(item.catalogPrice, currency),
+          )}
+        </span>
+      ) : null}
+      {item.discount > 0 ? <span className="block">{copy.itemDiscount(formatCurrency(item.discount, currency))}</span> : null}
       {reason ? (
         <span className="block">{copy.itemDiscountReason(DISCOUNT_REASON_LABELS[reason])}</span>
       ) : null}
@@ -1643,21 +1659,26 @@ export function TreatmentPlansTab({
       return;
     }
     // DX-204: tope del rol y motivo por encima del umbral, avisados aquí; la
-    // API los vuelve a aplicar.
+    // API los vuelve a aplicar. SEC-041: sobre el descuento EFECTIVO, que
+    // suma la rebaja del precio frente al de catálogo.
     setAddReasonErrors(null);
-    const effectivePrice = trimmedPrice ? Number(trimmedPrice) : (catalogById.get(catalogItemId)?.defaultPrice ?? null);
-    if (
-      discountRules &&
-      role &&
-      effectivePrice !== null &&
-      exceedsCap(discountRules, role, effectivePrice, discountValue)
-    ) {
-      setAddItemValidationError(roleCapMessage(capFor(discountRules, role)));
+    const catalogPrice = catalogById.get(catalogItemId)?.defaultPrice ?? null;
+    const effectivePrice = trimmedPrice ? Number(trimmedPrice) : catalogPrice;
+    const effective =
+      effectivePrice !== null && Number.isFinite(effectivePrice)
+        ? effectiveDiscount(catalogPrice, effectivePrice, discountValue)
+        : null;
+    if (discountRules && role && effective && exceedsCap(discountRules, role, effective.listPrice, effective.total)) {
+      const cap = capFor(discountRules, role);
+      setAddItemValidationError(
+        effective.priceReduction > 0 ? priceBelowCatalogCapMessage(cap) : roleCapMessage(cap),
+      );
       return;
     }
+    const discounted = (effective?.total ?? discountValue) > 0;
     const reasonRequired =
-      discountRules !== null && effectivePrice !== null && needsReason(discountRules, effectivePrice, discountValue);
-    const reasonProblems = discountValue > 0 ? validateDiscountReason(addReason, reasonRequired) : null;
+      discountRules !== null && effective !== null && needsReason(discountRules, effective.listPrice, effective.total);
+    const reasonProblems = discounted ? validateDiscountReason(addReason, reasonRequired) : null;
     if (reasonProblems) {
       setAddReasonErrors(reasonProblems);
       return;
@@ -1670,7 +1691,8 @@ export function TreatmentPlansTab({
         catalogItemId,
         ...(selectedSurfaces.length ? { surfaces: selectedSurfaces } : {}),
         ...(trimmedPrice ? { price: Number(trimmedPrice) } : {}),
-        ...(discountValue > 0 ? { discount: discountValue, ...reasonPayload(addReason) } : {}),
+        ...(discountValue > 0 ? { discount: discountValue } : {}),
+        ...(discounted ? reasonPayload(addReason) : {}),
         ...(notes.trim() ? { notes: notes.trim() } : {}),
       };
       await addItem(token, selectedPlanId, input);
@@ -1716,12 +1738,19 @@ export function TreatmentPlansTab({
   // descontar.
   const discountable = Boolean(planDetail) && !signed && !closed && planDetail?.status !== 'ACCEPTED';
   const addDiscountValue = Number(discount.trim() || '0');
-  const addPrice = price.trim() ? Number(price.trim()) : (catalogById.get(catalogItemId)?.defaultPrice ?? null);
+  const addCatalogPrice = catalogById.get(catalogItemId)?.defaultPrice ?? null;
+  const addPrice = price.trim() ? Number(price.trim()) : addCatalogPrice;
+  // SEC-041: descuento efectivo = rebaja frente al catálogo + descuento.
+  const addEffective =
+    addPrice !== null && Number.isFinite(addPrice) && Number.isFinite(addDiscountValue)
+      ? effectiveDiscount(addCatalogPrice, addPrice, addDiscountValue)
+      : null;
+  const addBelowCatalog = addEffective !== null && addEffective.priceReduction > 0;
+  const addDiscounted = addEffective ? addEffective.total > 0 : addDiscountValue > 0;
   const addReasonRequired =
     discountRules !== null &&
-    addPrice !== null &&
-    Number.isFinite(addDiscountValue) &&
-    needsReason(discountRules, addPrice, addDiscountValue);
+    addEffective !== null &&
+    needsReason(discountRules, addEffective.listPrice, addEffective.total);
   const statusChoices = planDetail ? patchableStatuses(planDetail.status, role) : [];
   const optionGroup = selectedPlan ? optionGroupOf(plans, selectedPlan) : [];
 
@@ -2221,7 +2250,23 @@ export function TreatmentPlansTab({
                           step="0.01"
                           value={price}
                           onChange={(e) => setPrice(e.target.value)}
+                          aria-describedby={addBelowCatalog ? 'tp-price-below-catalog' : undefined}
                         />
+                        {/* SEC-041: aviso, no bloqueo; la API decide con el
+                            tope del rol. */}
+                        <p id="tp-price-below-catalog" role="status" className="text-xs text-warning">
+                          {addBelowCatalog && addEffective && addCatalogPrice !== null && selectedPlan ? (
+                            <>
+                              <span className="block font-medium">{PRICE_BELOW_CATALOG_NOTICE}</span>
+                              <span className="block">
+                                {copy.priceBelowCatalogDetail(
+                                  formatCurrency(addEffective.priceReduction, selectedPlan.currency),
+                                  formatCurrency(addCatalogPrice, selectedPlan.currency),
+                                )}
+                              </span>
+                            </>
+                          ) : null}
+                        </p>
                       </FormField>
 
                       <FormField htmlFor="tp-discount" label={copy.discountLabel} hint={copy.discountHint}>
@@ -2235,7 +2280,7 @@ export function TreatmentPlansTab({
                         />
                       </FormField>
 
-                      {addDiscountValue > 0 ? (
+                      {addDiscounted ? (
                         <DiscountReasonFields
                           idPrefix="tp-discount"
                           value={addReason}
