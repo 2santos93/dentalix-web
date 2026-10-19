@@ -377,3 +377,46 @@
     break-inside: avoid;
   }
 }
+
+/*
+ * Print CSS del informe de cierre de caja (DX-027, /print/cash-sessions/[id]).
+ * Mismo criterio que el presupuesto: página A4 con nombre en `html` (ninguna
+ * caja posterior abre una hoja en blanco), documento en flujo y la visibilidad
+ * reabierta frente a la base de impresión. Ni una fila, ni las firmas se
+ * parten entre dos hojas; la cabecera de cada tabla se repite. El informe es
+ * papel: tokens del tema claro también con el tema oscuro, como la tarjeta de
+ * implante.
+ */
+.cash-report-print-root {
+  color-scheme: light;
+  --color-bg: #F7F9FC;
+  --color-surface: #FFFFFF;
+  --color-surface-2: #F1F5F9;
+  --color-ink: #0F172A;
+  --color-muted: #64748B;
+  --color-border: #E2E8F0;
+  --color-hairline: #EEF2F7;
+  --color-danger: #BE123C;
+  --color-warning: #B45309;
+  --color-success: #15803D;
+}
+@page cash-report {
+  size: A4;
+  margin: 14mm 14mm;
+}
+@media print {
+  html:has(.cash-report-print-page) {
+    page: cash-report;
+  }
+  .cash-report-print-root,
+  .cash-report-print-root * {
+    visibility: visible !important;
+  }
+  .cash-report-print-root thead {
+    display: table-header-group;
+  }
+  .cash-report-print-root .cash-report-row,
+  .cash-report-print-root .cash-report-signatures {
+    break-inside: avoid;
+  }
+}

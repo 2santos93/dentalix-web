@@ -125,8 +125,16 @@ function rangeError(range: CashRange): string | null {
   return range.from > range.to ? copy.invalidRangeOrder : copy.invalidRangeLength;
 }
 
+/** Las pestañas de la Caja (DX-027), bajo la cabecera, y el panel que rotulan. */
+export interface CashViewTabs {
+  nav: React.ReactNode;
+  panelId: string;
+  tabId: string;
+}
+
 interface CashRegisterViewProps {
   token: string;
+  tabs?: CashViewTabs;
 }
 
 /**
@@ -143,7 +151,7 @@ interface CashRegisterViewProps {
  * página visible) y sin convertir: un total por moneda, que es lo que se cuenta
  * al cerrar la caja.
  */
-export function CashRegisterView({ token }: CashRegisterViewProps) {
+export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
   // DX-097: «hoy», «esta semana» y «este mes» son los de la SEDE (su zona
   // IANA, de la API), no los del navegador. `null` mientras se resuelve: no se
   // consulta nada hasta saber qué día es en la sede.
@@ -265,9 +273,14 @@ export function CashRegisterView({ token }: CashRegisterViewProps) {
         meta={data ? <ScopeMarker location={data.scope.location} /> : null}
       />
 
+      {tabs?.nav}
+
       {/* Un solo bloque apretado (12px) para filtrar → contar → leer, como en
           las demás listas. */}
-      <div className="flex flex-col gap-3">
+      <div
+        className="flex flex-col gap-3"
+        {...(tabs ? { role: 'tabpanel', id: tabs.panelId, 'aria-labelledby': tabs.tabId } : {})}
+      >
         <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
           <div
             role="group"
