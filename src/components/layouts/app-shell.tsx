@@ -28,6 +28,8 @@ import {
   setSidebarCollapsed,
 } from '@/lib/ui/sidebar-store';
 import { cn } from '@/lib/utils';
+import { useInClinic } from '@/components/appointments/use-in-clinic';
+import { waitingForYouLabel } from '@/lib/appointments/patient-flow';
 
 const copy = {
   collapse: 'Colapsar menú',
@@ -117,6 +119,14 @@ export function AppShell({ children }: { children: React.ReactNode }) {
     hydrate();
   }, [accessToken]);
   const nav = NAV.filter((item) => !item.roles || (role !== null && item.roles.includes(role)));
+  // DX-200: «Te esperan N» del odontólogo — sus pacientes en espera en la sede
+  // activa, con el mismo sondeo que el panel «En clínica». Sin sede, nada.
+  const inClinic = useInClinic(accessToken, { enabled: role === 'DENTIST', silent: true });
+  const waitingForYou =
+    role === 'DENTIST' && inClinic.view?.scope === 'MINE' ? inClinic.view.waiting.length : 0;
+  /** Nombre accesible de una entrada: la Agenda dice además quién espera. */
+  const navLabel = (href: string, label: string) =>
+    href === '/agenda' && waitingForYou > 0 ? `${label} · ${waitingForYouLabel(waitingForYou)}` : label;
   // Activa la entrada MÁS específica que case: en /caja/cartera es «Cartera»,
   // no también «Caja».
   const activeHref = nav
@@ -219,10 +229,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               aria-current={isActive(href) ? 'page' : undefined}
               // En rail el texto no está, así que el nombre accesible tiene que
               // venir del aria-label; el title lo hace visible al hover.
-              aria-label={collapsed ? label : undefined}
-              title={collapsed ? label : undefined}
+              aria-label={collapsed || (href === '/agenda' && waitingForYou > 0) ? navLabel(href, label) : undefined}
+              title={collapsed ? navLabel(href, label) : undefined}
               className={cn(
-                'flex items-center rounded-lg text-sm font-medium transition-colors',
+                'relative flex items-center rounded-lg text-sm font-medium transition-colors',
                 collapsed ? 'h-10 justify-center' : 'gap-3 px-3 py-2',
                 isActive(href)
                   ? 'bg-primary/10 text-primary'
@@ -231,6 +241,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             >
               <Icon className="size-4 shrink-0" />
               {!collapsed && label}
+              {href === '/agenda' && waitingForYou > 0 ? (
+                <WaitingForYouCount count={waitingForYou} variant={collapsed ? 'rail' : 'full'} />
+              ) : null}
             </Link>
           ))}
         </nav>
@@ -266,6 +279,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
                 key={href}
                 href={href}
                 aria-current={isActive(href) ? 'page' : undefined}
+                aria-label={href === '/agenda' && waitingForYou > 0 ? navLabel(href, label) : undefined}
                 className={cn(
                   'flex h-11 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-sm font-medium transition-colors',
                   isActive(href)
@@ -275,6 +289,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               >
                 <Icon className="size-4 shrink-0" />
                 <span>{label}</span>
+                {href === '/agenda' && waitingForYou > 0 ? (
+                  <WaitingForYouCount count={waitingForYou} variant="inline" />
+                ) : null}
               </Link>
             ))}
           </nav>
@@ -297,5 +314,33 @@ export function AppShell({ children }: { children: React.ReactNode }) {
         </main>
       </div>
     </div>
+  );
+}
+
+/**
+ * DX-200: contador «Te esperan N» del odontólogo en la navegación. Tinte de
+ * peligro (no relleno): avisa, no es una acción destructiva. En el rail y en
+ * el móvil, solo el número (el nombre accesible del enlace lo dice entero).
+ */
+function WaitingForYouCount({
+  count,
+  variant,
+}: {
+  count: number;
+  variant: 'full' | 'rail' | 'inline';
+}) {
+  return (
+    <span
+      aria-hidden
+      data-testid="waiting-for-you-count"
+      className={cn(
+        'inline-flex items-center justify-center rounded-full border border-danger/40 bg-danger/10 text-xs font-semibold tabular-nums text-danger',
+        variant === 'full' && 'ml-auto px-2 py-0.5',
+        variant === 'rail' && 'absolute -right-1 -top-1 min-w-5 px-1',
+        variant === 'inline' && 'min-w-5 px-1.5',
+      )}
+    >
+      {variant === 'full' ? `Te esperan ${count}` : count}
+    </span>
   );
 }

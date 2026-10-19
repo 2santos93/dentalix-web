@@ -1,11 +1,16 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AppShell } from './app-shell';
+import { getInClinic } from '@/lib/appointments/patient-flow';
 
 let mockPathname = '/patients';
 jest.mock('next/navigation', () => ({
   usePathname: () => mockPathname,
   useRouter: () => ({ push: jest.fn(), replace: jest.fn() }),
+}));
+jest.mock('../../lib/appointments/patient-flow', () => ({
+  ...jest.requireActual('../../lib/appointments/patient-flow'),
+  getInClinic: jest.fn(),
 }));
 jest.mock('next-themes', () => ({
   useTheme: () => ({ resolvedTheme: 'light', setTheme: jest.fn() }),
@@ -230,5 +235,39 @@ describe('AppShell', () => {
     );
     const sidebar = within(document.querySelector('aside') as HTMLElement);
     expect(sidebar.queryByText('Dentalix')).not.toBeInTheDocument();
+  });
+
+  it('DX-200: al odontólogo la Agenda le dice cuántos pacientes suyos esperan', async () => {
+    window.localStorage.setItem('dentalix.activeLocationId', 'loc-1');
+    mockAccessToken = tokenForRole('DENTIST');
+    const waiting = [{ appointmentId: 'a1' }, { appointmentId: 'a2' }];
+    (getInClinic as jest.Mock).mockResolvedValue({
+      scope: 'MINE',
+      waiting,
+      inChair: [],
+      readyForCheckout: [],
+    });
+    render(
+      <AppShell>
+        <p>contenido</p>
+      </AppShell>,
+    );
+    const links = await screen.findAllByRole('link', { name: 'Agenda · Te esperan 2 pacientes' });
+    expect(links.length).toBeGreaterThan(0);
+    expect(screen.getByText('Te esperan 2')).toBeInTheDocument();
+  });
+
+  it('DX-200: recepción no ve el contador ni se pide el panel', async () => {
+    window.localStorage.setItem('dentalix.activeLocationId', 'loc-1');
+    mockAccessToken = tokenForRole('RECEPTION');
+    (getInClinic as jest.Mock).mockClear();
+    render(
+      <AppShell>
+        <p>contenido</p>
+      </AppShell>,
+    );
+    await screen.findAllByRole('link', { name: 'Caja' });
+    expect(screen.queryByTestId('waiting-for-you-count')).not.toBeInTheDocument();
+    expect(getInClinic).not.toHaveBeenCalled();
   });
 });
