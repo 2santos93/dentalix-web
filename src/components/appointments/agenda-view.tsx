@@ -40,6 +40,8 @@ import { MonthAgenda } from '@/components/appointments/month-agenda';
 import { AppointmentForm } from '@/components/appointments/appointment-form';
 import { ConfirmationLinkPanel } from '@/components/appointments/confirmation-link-panel';
 import { AppointmentRemindersPanel } from '@/components/reminders/appointment-reminders-panel';
+import { AppointmentPostOpPanel } from '@/components/postop/appointment-postop-panel';
+import { canDeliverPostOp } from '@/lib/postop/postop-api';
 import { NewEvolutionModal } from '@/components/clinical-notes/new-evolution-modal';
 import { canRegisterEvolution } from '@/lib/clinical-notes/evolution-access';
 import { ScheduleBlockDialog } from '@/components/appointments/schedule-block-dialog';
@@ -1348,6 +1350,14 @@ export function AgendaView({ token }: AgendaViewProps) {
                   appointment={liveDetailAppointment}
                   onLinkCreated={() => void refreshAppointmentsInPlace()}
                 />
+                {/* DX-222: indicaciones postoperatorias de la cita (propuesta y entrega). */}
+                {canDeliverPostOp(role) ? (
+                  <AppointmentPostOpPanel
+                    key={liveDetailAppointment.id}
+                    token={token}
+                    appointmentId={liveDetailAppointment.id}
+                  />
+                ) : null}
                 {/* DX-026: se relee al reprogramar o cambiar el estado (la API
                     recalcula los pendientes con la hora y el estado vigentes). */}
                 <AppointmentRemindersPanel
