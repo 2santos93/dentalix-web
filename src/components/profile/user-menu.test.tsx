@@ -169,6 +169,11 @@ describe('UserMenu — plantillas de consentimiento (DX-006)', () => {
       'href',
       '/settings/accesos-de-soporte',
     );
+    // DX-222: plantillas de indicaciones postoperatorias.
+    expect(screen.getByRole('menuitem', { name: 'Indicaciones postoperatorias' })).toHaveAttribute(
+      'href',
+      '/settings/indicaciones',
+    );
   });
 
   it.each(['DENTIST', 'ASSISTANT', 'RECEPTION'])('%s no lo ve', async (role) => {
@@ -181,5 +186,8 @@ describe('UserMenu — plantillas de consentimiento (DX-006)', () => {
     expect(screen.queryByRole('menuitem', { name: 'Dominios propios' })).not.toBeInTheDocument();
     expect(screen.queryByRole('menuitem', { name: 'Implantes' })).not.toBeInTheDocument();
     expect(screen.queryByRole('menuitem', { name: 'Accesos de soporte' })).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole('menuitem', { name: 'Indicaciones postoperatorias' }),
+    ).not.toBeInTheDocument();
   });
 });

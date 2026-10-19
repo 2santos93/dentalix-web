@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import {
   ChevronUp,
+  ClipboardList,
   Clock,
   FileSignature,
   LogOut,
@@ -31,6 +32,7 @@ import { canManageConsentTemplates } from '@/lib/consents/consents-api';
 import { canManagePrescriptionTemplates } from '@/lib/prescriptions/prescriptions-api';
 import { canManageAppointmentTypes } from '@/lib/appointments/appointment-types-api';
 import { canManageNoteTemplates } from '@/lib/clinical-notes/note-templates-api';
+import { canManagePostOpTemplates } from '@/lib/postop/postop-api';
 import { canManageReminders } from '@/lib/reminders/reminders-api';
 import { canManageDiscounts } from '@/lib/discounts/discounts-api';
 import { canManageCashSessions } from '@/lib/cash-sessions/cash-sessions-api';
@@ -74,6 +76,7 @@ const copy = {
   implantSettings: 'Implantes',
   appointmentTypes: 'Tipos de cita',
   noteTemplates: 'Plantillas de evolución',
+  postOpTemplates: 'Indicaciones postoperatorias',
   reminders: 'Recordatorios',
   discounts: 'Descuentos',
   cashSettings: 'Caja',
@@ -329,6 +332,18 @@ export function UserMenu({
         >
           <NotebookPen className="size-4 text-muted" aria-hidden />
           {copy.noteTemplates}
+        </Link>
+      ) : null}
+      {/* Plantillas de indicaciones postoperatorias (DX-222): solo ADMIN. */}
+      {canManagePostOpTemplates(getTokenRole(accessToken)) ? (
+        <Link
+          href="/settings/indicaciones"
+          role="menuitem"
+          onClick={() => setOpen(false)}
+          className="flex items-center gap-3 px-3 py-2 text-sm text-ink hover:bg-bg"
+        >
+          <ClipboardList className="size-4 text-muted" aria-hidden />
+          {copy.postOpTemplates}
         </Link>
       ) : null}
       {/* Recordatorios por email de cada sede (DX-026): solo ADMIN. */}
