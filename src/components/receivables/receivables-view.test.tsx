@@ -272,6 +272,28 @@ describe('ReceivablesView (DX-145)', () => {
       expect(within(tableRow).getByText('Reabierto: se anuló el abono')).toBeInTheDocument();
     });
 
+    it('DX-215: reabierto y cumplido de nuevo: no dice «Reabierto» junto a «Cumplido»', async () => {
+      mockedAging.mockResolvedValue(
+        page([
+          row({
+            promise: {
+              id: 'pp1',
+              amount: 200000,
+              currency: 'COP',
+              dueDate: '2026-11-15',
+              status: 'KEPT',
+              reopenedAt: '2026-10-17T15:00:00.000Z',
+            },
+          }),
+        ]),
+      );
+      render(<ReceivablesView token="tok" />);
+      const table = await screen.findByRole('table');
+      const tableRow = within(table).getByRole('row', { name: /Ana Pérez/ });
+      expect(within(tableRow).getByText('Cumplido')).toBeInTheDocument();
+      expect(within(tableRow).queryByText('Reabierto: se anuló el abono')).toBeNull();
+    });
+
     it('«Gestión» abre el modal «Registrar gestión» y al guardar recarga la cartera', async () => {
       mockedAging.mockResolvedValue(page([row()]));
       render(<ReceivablesView token="tok" />);

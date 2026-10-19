@@ -152,6 +152,17 @@ describe('PatientCollectionsSection (DX-150)', () => {
       expect(screen.getByRole('button', { name: 'Compromiso de pago' })).toBeInTheDocument();
     });
 
+    it('reabierto y cumplido de nuevo con otro abono: no dice «Reabierto» junto a «Cumplido»', async () => {
+      mockedGet.mockResolvedValue({
+        notes: [],
+        promises: [{ ...reopened('OPEN'), status: 'KEPT', settledAt: '2026-10-18T15:00:00.000Z', covered: 200000 }],
+      });
+      render(<PatientCollectionsSection token="tok" patient={patient} />);
+      const row = await screen.findByTestId('promise-row');
+      expect(within(row).getByText('Cumplido')).toBeInTheDocument();
+      expect(within(row).queryByText(/se anuló el abono/)).toBeNull();
+    });
+
     it('al anular un abono en la ficha (refreshKey) relee y pasa de Cumplido a Abierto', async () => {
       mockedGet.mockResolvedValueOnce({
         notes: [],

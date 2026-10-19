@@ -244,7 +244,8 @@ export function CollectionCell({ row }: { row: AgingRow }) {
           <span className="text-xs text-muted tabular-nums">
             {debtorCopy.promiseLine(formatCurrency(promise.amount, promise.currency), formatCivilDate(promise.dueDate))}
           </span>
-          {promise.reopenedAt ? (
+          {/* Si se volvió a cumplir con otro abono, ya no aplica. */}
+          {promise.reopenedAt && promise.status !== 'KEPT' ? (
             <span className="basis-full text-xs text-warning">{debtorCopy.promiseReopened}</span>
           ) : null}
         </span>

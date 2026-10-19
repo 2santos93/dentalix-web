@@ -151,7 +151,8 @@ export function PatientCollectionsSection({
                       {collectionsCopy.covered(formatCurrency(p.covered, p.currency))} ·{' '}
                       {formatDateTime(p.createdAt)} {collectionsCopy.by(p.createdBy.fullName)}
                     </span>
-                    {p.reopenedAt ? (
+                    {/* Si se volvió a cumplir con otro abono, ya no aplica. */}
+                    {p.reopenedAt && p.status !== 'KEPT' ? (
                       <span className="text-xs text-warning tabular-nums">
                         {collectionsCopy.reopened(formatDateTime(p.reopenedAt))}
                       </span>
