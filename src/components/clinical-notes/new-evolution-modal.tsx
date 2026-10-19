@@ -24,6 +24,12 @@ import { fieldClass } from '@/lib/ui/field-class';
 import { cn } from '@/lib/utils';
 import { TemplatePicker } from './template-picker';
 import { TemplatePrompts } from './template-prompts';
+import { DiagnosesFields } from './diagnoses-fields';
+import {
+  diagnosesPayload,
+  emptyDiagnosesDraft,
+  type DiagnosesDraft,
+} from '@/lib/rda/diagnoses-draft';
 
 export const newEvolutionCopy = {
   title: 'Nueva evolución',
@@ -106,6 +112,9 @@ export function NewEvolutionModal({
   const [manualNotes, setManualNotes] = useState<string | null>(null);
   const [notesError, setNotesError] = useState<string | null>(null);
   const [dateError, setDateError] = useState<string | null>(null);
+  // DX-212: diagnósticos CIE-10 (opcionales), guardados con la evolución.
+  const [diagnoses, setDiagnoses] = useState<DiagnosesDraft>(emptyDiagnosesDraft);
+  const [diagnosesError, setDiagnosesError] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -150,6 +159,7 @@ export function NewEvolutionModal({
     setError(null);
     setNotesError(null);
     setDateError(null);
+    setDiagnosesError(null);
     if (!appointment && entryDate && entryDate > todayISO()) {
       setDateError(copy.futureDate);
       return;
@@ -157,6 +167,11 @@ export function NewEvolutionModal({
     const text = notes.trim();
     if (text === '') {
       setNotesError(copy.notesRequired);
+      return;
+    }
+    const dx = diagnosesPayload(diagnoses);
+    if ('error' in dx) {
+      setDiagnosesError(dx.error);
       return;
     }
     // Con cita no se manda fecha: la API usa el DÍA de la cita en la zona de
@@ -168,6 +183,7 @@ export function NewEvolutionModal({
       ...(reason.trim() ? { reason: reason.trim() } : {}),
       ...(template ? { templateId: template.id } : {}),
       ...(appointment ? { appointmentId: appointment.id } : {}),
+      ...(dx.diagnoses.length > 0 ? { diagnoses: dx.diagnoses } : {}),
     };
     setSubmitting(true);
     try {
@@ -266,6 +282,16 @@ export function NewEvolutionModal({
           className={cn(fieldClass, 'h-auto min-h-24 whitespace-pre-wrap break-words')}
         />
       </FormField>
+      <DiagnosesFields
+        token={token}
+        value={diagnoses}
+        onChange={(next) => {
+          setDiagnoses(next);
+          setDiagnosesError(null);
+        }}
+        error={diagnosesError}
+      />
+
       {template && manualNotes !== null ? (
         <div className="-mt-2 flex flex-col items-start gap-1 text-xs text-muted">
           <p>{copy.editedByHand}</p>
