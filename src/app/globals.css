@@ -285,6 +285,26 @@
 }
 
 /*
+ * Print CSS de las indicaciones entregadas (DX-222, /print/patients/[id]/
+ * indicaciones/[deliveryId]). Mismo criterio que el consentimiento: página A4
+ * con nombre en `html` (ninguna caja posterior abre una hoja en blanco),
+ * documento en flujo y la visibilidad reabierta frente a la base de impresión.
+ */
+@page postop {
+  size: A4;
+  margin: 18mm 16mm;
+}
+@media print {
+  html:has(.postop-print-page) {
+    page: postop;
+  }
+  .postop-print-root,
+  .postop-print-root * {
+    visibility: visible !important;
+  }
+}
+
+/*
  * Print CSS de la receta (DX-013, /print/patients/[id]/prescriptions/
  * [prescriptionId]). Mismo criterio que el consentimiento: página A4 con
  * nombre en `html` (ninguna caja posterior abre una hoja en blanco), documento

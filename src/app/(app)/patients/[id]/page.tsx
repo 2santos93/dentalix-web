@@ -6,6 +6,7 @@ import { apiErrorMessage } from '@/lib/api/error-message';
 import { getPatient, type Patient } from '@/lib/patients/patients-api';
 import { MedicalHistoryPanel } from '@/components/patients/medical-history-panel';
 import { ClinicalEntriesList } from '@/components/patients/clinical-entries-list';
+import { PatientPostOpDeliveries } from '@/components/postop/patient-postop-deliveries';
 import { ClinicalAlertBanner } from '@/components/patients/clinical-alert-banner';
 import {
   PatientDetailTabs,
@@ -55,6 +56,7 @@ const copy = {
   tabAccessLog: 'Accesos',
   anamnesisHeading: 'Anamnesis',
   entriesHeading: 'Evoluciones',
+  postOpHeading: 'Indicaciones entregadas',
 };
 
 function fullName(patient: Patient): string {
@@ -369,6 +371,10 @@ function PatientDetailView() {
               <section className="flex flex-col gap-3">
                 <h2 className="text-lg font-semibold text-ink">{copy.entriesHeading}</h2>
                 <ClinicalEntriesList token={accessToken} patientId={patientId} />
+              </section>
+              <section className="flex flex-col gap-3">
+                <h2 className="text-lg font-semibold text-ink">{copy.postOpHeading}</h2>
+                <PatientPostOpDeliveries token={accessToken} patientId={patientId} />
               </section>
             </TabPanel>
           ) : null}
