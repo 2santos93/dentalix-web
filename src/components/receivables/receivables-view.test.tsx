@@ -238,7 +238,7 @@ describe('ReceivablesView (DX-145)', () => {
         page([
           row({
             lastNote: { channel: 'CALL', outcome: 'PROMISED_PAYMENT', createdAt: '2026-10-16T15:00:00.000Z' },
-            promise: { id: 'pp1', amount: 200000, currency: 'COP', dueDate: '2026-11-15', status: 'KEPT' },
+            promise: { id: 'pp1', amount: 200000, currency: 'COP', dueDate: '2026-11-15', status: 'KEPT', reopenedAt: null },
           }),
         ]),
       );
@@ -248,6 +248,28 @@ describe('ReceivablesView (DX-145)', () => {
       expect(within(tableRow).getByText('Llamada · Promete pago')).toBeInTheDocument();
       expect(within(tableRow).getByText('Cumplido')).toBeInTheDocument();
       expect(money(tableRow.textContent)).toContain('para el 15/11/2026');
+    });
+
+    it('DX-215: un compromiso reabierto al anular su abono sale Abierto y con el motivo', async () => {
+      mockedAging.mockResolvedValue(
+        page([
+          row({
+            promise: {
+              id: 'pp1',
+              amount: 200000,
+              currency: 'COP',
+              dueDate: '2026-11-15',
+              status: 'OPEN',
+              reopenedAt: '2026-10-17T15:00:00.000Z',
+            },
+          }),
+        ]),
+      );
+      render(<ReceivablesView token="tok" />);
+      const table = await screen.findByRole('table');
+      const tableRow = within(table).getByRole('row', { name: /Ana Pérez/ });
+      expect(within(tableRow).getByText('Abierto')).toBeInTheDocument();
+      expect(within(tableRow).getByText('Reabierto: se anuló el abono')).toBeInTheDocument();
     });
 
     it('«Gestión» abre el modal «Registrar gestión» y al guardar recarga la cartera', async () => {
@@ -267,7 +289,7 @@ describe('ReceivablesView (DX-145)', () => {
 
     it('con un compromiso abierto no ofrece otro', async () => {
       mockedAging.mockResolvedValue(
-        page([row({ promise: { id: 'pp1', amount: 1, currency: 'COP', dueDate: '2026-11-15', status: 'OPEN' } })]),
+        page([row({ promise: { id: 'pp1', amount: 1, currency: 'COP', dueDate: '2026-11-15', status: 'OPEN', reopenedAt: null } })]),
       );
       render(<ReceivablesView token="tok" />);
       const table = await screen.findByRole('table');

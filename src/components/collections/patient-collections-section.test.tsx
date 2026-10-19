@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { PatientCollectionsSection } from './patient-collections-section';
 import { getPatientCollections } from '@/lib/collections/collections-api';
@@ -69,6 +69,7 @@ describe('PatientCollectionsSection (DX-150)', () => {
           createdBy: { id: 'u1', fullName: 'Rita' },
           createdAt: '2026-10-16T15:00:00.000Z',
           settledAt: null,
+          reopenedAt: null,
           covered: 120000,
         },
       ],
@@ -106,6 +107,7 @@ describe('PatientCollectionsSection (DX-150)', () => {
           createdBy: { id: 'u1', fullName: 'Rita' },
           createdAt: '2026-10-16T15:00:00.000Z',
           settledAt: '2026-10-17T15:00:00.000Z',
+          reopenedAt: null,
           covered: 200000,
         },
       ],
@@ -114,5 +116,54 @@ describe('PatientCollectionsSection (DX-150)', () => {
     expect(await screen.findByText('Cumplido')).toBeInTheDocument();
     expect(screen.getByText('Sin gestiones.')).toBeInTheDocument();
     expect(screen.queryAllByRole('list')).toHaveLength(1);
+  });
+  describe('compromiso reabierto al anular su abono (DX-215)', () => {
+    const reopened = (status: 'OPEN' | 'BROKEN') => ({
+      id: 'pp1',
+      patientId: 'pat-1',
+      locationId: 'loc-1',
+      amount: 200000,
+      currency: 'COP',
+      dueDate: '2026-11-15',
+      status,
+      createdBy: { id: 'u1', fullName: 'Rita' },
+      createdAt: '2026-10-16T15:00:00.000Z',
+      settledAt: status === 'OPEN' ? null : '2026-11-16T05:30:00.000Z',
+      reopenedAt: '2026-10-17T15:00:00.000Z',
+      covered: 0,
+    });
+
+    it('vuelve a ABIERTO: lo dice, explica por qué y no ofrece otro compromiso', async () => {
+      mockedGet.mockResolvedValue({ notes: [], promises: [reopened('OPEN')] });
+      render(<PatientCollectionsSection token="tok" patient={patient} />);
+      const row = await screen.findByTestId('promise-row');
+      expect(within(row).getByText('Abierto')).toBeInTheDocument();
+      expect(within(row).getByText(/Reabierto el .*: se anuló el abono que lo cumplía\./)).toBeInTheDocument();
+      expect(row.textContent?.replace(/\s/g, ' ')).toMatch(/Abonado: .*0/);
+      expect(screen.queryByRole('button', { name: 'Compromiso de pago' })).toBeNull();
+    });
+
+    it('pasa a INCUMPLIDO después de la fecha, con la misma explicación', async () => {
+      mockedGet.mockResolvedValue({ notes: [], promises: [reopened('BROKEN')] });
+      render(<PatientCollectionsSection token="tok" patient={patient} />);
+      const row = await screen.findByTestId('promise-row');
+      expect(within(row).getByText('Incumplido')).toBeInTheDocument();
+      expect(within(row).getByText(/se anuló el abono que lo cumplía/)).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Compromiso de pago' })).toBeInTheDocument();
+    });
+
+    it('al anular un abono en la ficha (refreshKey) relee y pasa de Cumplido a Abierto', async () => {
+      mockedGet.mockResolvedValueOnce({
+        notes: [],
+        promises: [{ ...reopened('OPEN'), status: 'KEPT', settledAt: '2026-10-16T16:00:00.000Z', reopenedAt: null, covered: 200000 }],
+      });
+      mockedGet.mockResolvedValueOnce({ notes: [], promises: [reopened('OPEN')] });
+      const { rerender } = render(<PatientCollectionsSection token="tok" patient={patient} refreshKey={0} />);
+      expect(await screen.findByText('Cumplido')).toBeInTheDocument();
+      expect(screen.queryByText(/se anuló el abono/)).toBeNull();
+      rerender(<PatientCollectionsSection token="tok" patient={patient} refreshKey={1} />);
+      expect(await screen.findByText('Abierto')).toBeInTheDocument();
+      expect(screen.getByText(/se anuló el abono que lo cumplía/)).toBeInTheDocument();
+    });
   });
 });

@@ -18,7 +18,7 @@ import { API_URL, tenantOrigin } from './support/urls';
  * vencieron hace más de un año (uno por viewport, porque cada paciente admite
  * un solo compromiso abierto) y una cita del primero mañana, en una sede sin
  * restricción de horario. El abono por el importe del compromiso lo da por
- * cumplido en la ficha y en la Cartera.
+ * cumplido en la ficha y en la Cartera; anularlo lo vuelve a abrir (DX-215).
  */
 const suffix = (process.env.E2E_RUN_SUFFIX ?? randomUUID()).replace(/[^a-z0-9]/gi, '').toLowerCase();
 const subdomain = `cobranza-${suffix}`.slice(0, 40);
@@ -220,6 +220,37 @@ test('la ficha muestra el bloque «Cobranza» y el chip con importe para recepci
   await page.goto(`${origin}/caja/cartera`);
   const row = page.getByRole('row', { name: new RegExp(fullName) });
   await expect(row.getByTestId('promise-status').getByText('Cumplido')).toBeVisible({ timeout: 15_000 });
+});
+
+test('DX-215: anular el abono que cumplió el compromiso lo vuelve a «Abierto» en la ficha y en la Cartera', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await loginAs(page, origin, reception.email, password);
+  await page.goto(`${origin}/patients/${patientId}?tab=account-statement`);
+  const block = page.getByTestId('patient-collections');
+  await expect(block.getByTestId('promise-row').getByText('Cumplido')).toBeVisible({ timeout: 15_000 });
+
+  // Recepción anula su abono de hoy desde el estado de cuenta.
+  const panel = page.locator('#tabpanel-account-statement');
+  await panel.getByRole('button', { name: /^Anular abono de .*200\.000/ }).click();
+  const dialog = page.getByRole('dialog', { name: '¿Anular este abono?' });
+  await expect(dialog.getByText(/el compromiso vuelve a abierto/)).toBeVisible();
+  await dialog.getByLabel('Motivo de la anulación').fill('Cobro duplicado por error');
+  await dialog.getByRole('button', { name: 'Anular abono' }).click();
+  await expect(dialog).toBeHidden({ timeout: 10_000 });
+
+  const promiseRow = block.getByTestId('promise-row');
+  await expect(promiseRow.getByText('Abierto', { exact: true })).toBeVisible({ timeout: 15_000 });
+  await expect(promiseRow.getByText(/se anuló el abono que lo cumplía/)).toBeVisible();
+  await expect(block.getByRole('button', { name: 'Compromiso de pago' })).toHaveCount(0);
+
+  await page.goto(`${origin}/caja/cartera`);
+  const row = page.getByRole('row', { name: new RegExp(fullName) });
+  await expect(row.getByTestId('promise-status').getByText('Abierto', { exact: true })).toBeVisible({
+    timeout: 15_000,
+  });
+  await expect(row.getByText('Reabierto: se anuló el abono')).toBeVisible();
 });
 
 test('agenda: el odontólogo ve «Saldo vencido» sin importe en la tarjeta de la cita (1440 y 390 px)', async ({

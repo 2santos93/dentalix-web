@@ -37,6 +37,8 @@ export const collectionsCopy = {
   by: (name: string | null) => (name ? `por ${name}` : 'por un miembro que ya no está en la clínica'),
   promiseLine: (amount: string, day: string) => `${amount} para el ${day}`,
   covered: (amount: string) => `Abonado: ${amount}`,
+  // DX-215: estaba cumplido y se anuló el abono que lo cumplía.
+  reopened: (when: string) => `Reabierto el ${when}: se anuló el abono que lo cumplía.`,
   noteSaved: 'Gestión registrada.',
   promiseSaved: 'Compromiso de pago registrado.',
 };
@@ -149,6 +151,11 @@ export function PatientCollectionsSection({
                       {collectionsCopy.covered(formatCurrency(p.covered, p.currency))} ·{' '}
                       {formatDateTime(p.createdAt)} {collectionsCopy.by(p.createdBy.fullName)}
                     </span>
+                    {p.reopenedAt ? (
+                      <span className="text-xs text-warning tabular-nums">
+                        {collectionsCopy.reopened(formatDateTime(p.reopenedAt))}
+                      </span>
+                    ) : null}
                   </li>
                 ))}
               </ul>
