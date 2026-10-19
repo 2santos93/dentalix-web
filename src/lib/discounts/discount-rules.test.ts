@@ -69,6 +69,10 @@ describe('descuento efectivo: precio por debajo del de catálogo (SEC-041)', () 
     expect(effectiveDiscount(null, 1, 0)).toEqual({ listPrice: 1, priceReduction: 0, total: 0 });
   });
 
+  it('sin `catalogPrice` en la respuesta (API anterior a SEC-041) es un ítem libre, no rompe', () => {
+    expect(effectiveDiscount(undefined, 900, 100)).toEqual({ listPrice: 900, priceReduction: 0, total: 100 });
+  });
+
   it('en céntimos exactos', () => {
     expect(effectiveDiscount(0.3, 0.1, 0.1)).toEqual({ listPrice: 0.3, priceReduction: 0.2, total: 0.3 });
   });

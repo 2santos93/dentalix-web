@@ -70,9 +70,15 @@ export interface EffectiveDiscount {
  * catálogo) solo cuenta su descuento; subir el precio no resta. En céntimos
  * enteros, como la API (`effective-discount.ts`).
  */
-export function effectiveDiscount(catalogPrice: number | null, price: number, discount: number): EffectiveDiscount {
+export function effectiveDiscount(
+  catalogPrice: number | null | undefined,
+  price: number,
+  discount: number,
+): EffectiveDiscount {
   const priceCents = cents(price);
-  const catalogCents = catalogPrice === null ? null : cents(catalogPrice);
+  // `undefined`: respuesta de una API anterior a SEC-041 (despliegue
+  // escalonado); se trata como ítem libre en vez de romper la pestaña.
+  const catalogCents = catalogPrice == null ? null : cents(catalogPrice);
   const reduction = catalogCents !== null && catalogCents > priceCents ? catalogCents - priceCents : BigInt(0);
   return {
     listPrice: Number(priceCents + reduction) / 100,
