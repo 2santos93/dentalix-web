@@ -52,7 +52,6 @@ export function Icd10Combobox({ id, token, value, onChange, describedBy }: Icd10
   // así reintentar el mismo texto vuelve a lanzarla.
   const [request, setRequest] = useState<{ q: string } | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const changeRef = useRef<HTMLButtonElement>(null);
   // Tras «Cambiar» o «Reintentar» el control que tenía el foco desaparece: el
   // foco pasa al campo nuevo. Lo marca un handler; lo consume un efecto.
   const focusInputRef = useRef(false);
@@ -139,7 +138,6 @@ export function Icd10Combobox({ id, token, value, onChange, describedBy }: Icd10
           <span className="text-ink">{value.labelEs}</span>
         </span>
         <Button
-          ref={changeRef}
           id={id}
           type="button"
           variant="secondary"
