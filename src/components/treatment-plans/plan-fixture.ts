@@ -12,8 +12,12 @@ export const PLAN_WITHOUT_OPTIONS = {
   rejectionNote: null,
 } as const;
 
-/** Campos de descuento (DX-204) de un ítem sin descuento, para los tests. */
+/**
+ * Campos de descuento (DX-204) de un ítem sin descuento, para los tests. Sin
+ * precio de catálogo (SEC-041): un ítem libre, su precio no es una rebaja.
+ */
 export const ITEM_WITHOUT_DISCOUNT = {
+  catalogPrice: null,
   discountReason: null,
   discountReasonNote: null,
   discountById: null,

@@ -7,6 +7,9 @@ import {
   exceedsCap,
   needsReason,
   roleCapMessage,
+  PRICE_BELOW_CATALOG_NOTICE,
+  effectiveDiscount,
+  priceBelowCatalogCapMessage,
   type DiscountRules,
 } from './discount-rules';
 
@@ -49,5 +52,41 @@ describe('reglas de descuento (DX-204)', () => {
     expect(discountPercent(3, 1)).toBe(33.33);
     expect(discountPercent(0, 0)).toBe(0);
     expect(DISCOUNT_REASON_OPTIONS).toContain('OTHER');
+  });
+});
+
+describe('descuento efectivo: precio por debajo del de catálogo (SEC-041)', () => {
+  it('rebaja + descuento sobre el precio de catálogo; subir el precio no resta', () => {
+    expect(effectiveDiscount(1_000_000, 900_000, 50_000)).toEqual({
+      listPrice: 1_000_000,
+      priceReduction: 100_000,
+      total: 150_000,
+    });
+    expect(effectiveDiscount(1000, 1200, 0)).toEqual({ listPrice: 1200, priceReduction: 0, total: 0 });
+  });
+
+  it('un ítem libre (sin precio de catálogo) solo cuenta su descuento', () => {
+    expect(effectiveDiscount(null, 1, 0)).toEqual({ listPrice: 1, priceReduction: 0, total: 0 });
+  });
+
+  it('en céntimos exactos', () => {
+    expect(effectiveDiscount(0.3, 0.1, 0.1)).toEqual({ listPrice: 0.3, priceReduction: 0.2, total: 0.3 });
+  });
+
+  it('con el tope y el umbral de DX-204, sobre el precio de referencia', () => {
+    const half = effectiveDiscount(1_000_000, 500_000, 0);
+    expect(exceedsCap(RULES, 'DENTIST', half.listPrice, half.total)).toBe(true);
+    const ninetyFive = effectiveDiscount(1_000_000, 950_000, 0);
+    expect(exceedsCap(RULES, 'DENTIST', ninetyFive.listPrice, ninetyFive.total)).toBe(false);
+    expect(needsReason(RULES, ninetyFive.listPrice, ninetyFive.total)).toBe(false);
+    const eighty = effectiveDiscount(1_000_000, 800_000, 0);
+    expect(needsReason(RULES, eighty.listPrice, eighty.total)).toBe(true);
+  });
+
+  it('mensajes iguales a los de la API', () => {
+    expect(PRICE_BELOW_CATALOG_NOTICE).toBe('Precio por debajo del de catálogo: cuenta como descuento.');
+    expect(priceBelowCatalogCapMessage(10)).toBe(
+      'Precio por debajo del de catálogo: cuenta como descuento. Tu rol permite hasta un 10 % de descuento por ítem.',
+    );
   });
 });

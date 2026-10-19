@@ -44,7 +44,10 @@ function row(overrides: Partial<DiscountReportItem> = {}): DiscountReportItem {
     toothNumber: '36',
     procedure: 'Corona libre de metal',
     currency: 'COP',
+    catalogPrice: null,
     price: 1200000,
+    priceReduction: 0,
+    itemDiscount: 180000,
     discount: 180000,
     percent: 15,
     reason: 'PROMOTION',
@@ -97,6 +100,26 @@ describe('DiscountReportView (DX-204)', () => {
     expect(within(tableRow).getByText('Promoción o campaña')).toBeInTheDocument();
     expect(within(tableRow).getByText('Campaña de octubre')).toBeInTheDocument();
     expect(within(tableRow).getByText('Dr. Owner')).toBeInTheDocument();
+  });
+
+  it('una rebaja de precio frente al catálogo sale con su importe y el % sobre el de catálogo (SEC-041)', async () => {
+    mockedReport.mockResolvedValue(
+      report([
+        row({
+          catalogPrice: 1000000,
+          price: 800000,
+          priceReduction: 200000,
+          itemDiscount: 0,
+          discount: 200000,
+          percent: 20,
+        }),
+      ]),
+    );
+    render(<DiscountReportView token="tok" />);
+    const tableRow = await screen.findByTestId('discount-row');
+    expect(within(tableRow).getByText(/−200\.000,00/)).toBeInTheDocument();
+    expect(within(tableRow).getByText(/20 % de 1\.000\.000,00/)).toBeInTheDocument();
+    expect(within(tableRow).getByText(/Precio rebajado a 800\.000,00/)).toBeInTheDocument();
   });
 
   it('en móvil, cada descuento es una tarjeta (lista apilada)', async () => {

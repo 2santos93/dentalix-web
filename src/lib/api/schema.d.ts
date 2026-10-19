@@ -5175,6 +5175,8 @@ export interface components {
             surfaces: ("MESIAL" | "DISTAL" | "OCCLUSAL" | "VESTIBULAR" | "LINGUAL")[];
             /** Format: uuid */
             catalogItemId: string;
+            /** @description SEC-041: precio de catálogo al dar de alta el ítem (null = ítem libre). Un precio por debajo cuenta como descuento: tope del rol, motivo e informe de descuentos. */
+            catalogPrice: number | null;
             price: number;
             /** @description Descuento en la moneda del plan (0 si no hay) */
             discount: number;
@@ -5186,7 +5188,7 @@ export interface components {
             discountReasonNote: string | null;
             /**
              * Format: uuid
-             * @description DX-204: quién dio el descuento vigente (null sin descuento o anterior a DX-204)
+             * @description DX-204: quién dio el descuento vigente, incluida la rebaja de precio frente al catálogo (SEC-041); null sin descuento o anterior a DX-204
              */
             discountById: string | null;
             /**
@@ -5305,7 +5307,7 @@ export interface components {
             surfaces?: ("MESIAL" | "DISTAL" | "OCCLUSAL" | "VESTIBULAR" | "LINGUAL")[];
             /** Format: uuid */
             catalogItemId: string;
-            /** @description Explicit price (at most 2 decimal places); if omitted, falls back to the catalog item defaultPrice (400 if neither is set) */
+            /** @description Explicit price (at most 2 decimal places); if omitted, falls back to the catalog item defaultPrice (400 if neither is set). SEC-041: un precio por debajo del de catálogo cuenta como descuento (tope del rol y motivo de la política) */
             price?: number;
             /** @description Descuento en la moneda del plan (máx. 2 decimales, default 0); nunca mayor que el precio (400). DX-204: por encima del tope del rol, 403; en un plan aceptado, 409 */
             discount?: number;
@@ -5335,7 +5337,7 @@ export interface components {
             discountReason?: "LOYALTY" | "FAMILY_OR_STAFF" | "PROMOTION" | "FINANCIAL_HARDSHIP" | "SERVICE_RECOVERY" | "OTHER";
             /** @description DX-204: nota del motivo (hasta 200 caracteres; obligatoria con OTHER). No sale en la auditoría */
             discountReasonNote?: string;
-            /** @description At most 2 decimal places */
+            /** @description At most 2 decimal places. SEC-041: bajarlo por debajo del precio de catálogo del ítem cuenta como descuento (tope del rol y motivo); subirlo es libre */
             price?: number;
             /** @description Descuento (máx. 2 decimales); nunca mayor que el precio (400). DX-204: por encima del tope del rol de quien lo cambia, 403; en un plan aceptado (con o sin firma): 409 */
             discount?: number;
@@ -5477,9 +5479,9 @@ export interface components {
             currency: string;
             /** @description Ítems con descuento en esta moneda */
             items: number;
-            /** @description Bruto: suma del precio de esos mismos ítems */
+            /** @description Bruto: suma del precio de referencia de esos mismos ítems (el de catálogo si el precio se rebajó; si no, el precio) */
             gross: number;
-            /** @description Suma de su descuento */
+            /** @description Suma de su descuento efectivo: rebajas de precio frente al catálogo + descuentos (SEC-041) */
             discount: number;
             /** @description Descuento sobre el bruto, en % (2 decimales) */
             percentOfGross: number;
@@ -5507,9 +5509,17 @@ export interface components {
             procedure: string;
             /** @example COP */
             currency: string;
+            /** @description SEC-041: precio de catálogo al dar de alta el ítem (null = ítem libre) */
+            catalogPrice: number | null;
+            /** @description Precio pactado del ítem */
             price: number;
+            /** @description SEC-041: rebaja del precio frente al de catálogo (0 si no la hay) */
+            priceReduction: number;
+            /** @description Descuento del ítem (campo `discount`) */
+            itemDiscount: number;
+            /** @description Descuento total: rebaja de precio + descuento del ítem */
             discount: number;
-            /** @description % del descuento sobre el precio (2 decimales) */
+            /** @description % del descuento total sobre el precio de referencia (el de catálogo si se rebajó), 2 decimales */
             percent: number;
             /** @enum {string|null} */
             reason: "LOYALTY" | "FAMILY_OR_STAFF" | "PROMOTION" | "FINANCIAL_HARDSHIP" | "SERVICE_RECOVERY" | "OTHER" | null;
@@ -11883,21 +11893,21 @@ export interface operations {
                     "application/json": components["schemas"]["TreatmentPlanItemDto"];
                 };
             };
-            /** @description DX-204: el descuento supera el tope del rol de quien lo da («Tu rol permite hasta un X % de descuento por ítem.») */
+            /** @description DX-204: el descuento EFECTIVO (SEC-041: rebaja del precio frente al de catálogo + descuento) supera el tope del rol de quien lo da («Tu rol permite hasta un X % de descuento por ítem.»; con rebaja de precio, precedido de «Precio por debajo del de catálogo: cuenta como descuento.»). Subir el precio es libre */
             403: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description Plan aceptado con firma: sus ítems quedan congelados (DX-012); o el plan está cancelado, rechazado o completado (DX-109); o el descuento cambia en un plan ya aceptado (DX-204) */
+            /** @description Plan aceptado con firma: sus ítems quedan congelados (DX-012); o el plan está cancelado, rechazado o completado (DX-109); o el descuento (también una rebaja del precio frente al de catálogo) cambia en un plan ya aceptado (DX-204, SEC-041). El estado del plan se comprueba con su fila bloqueada, dentro de la transacción (BE-036) */
             409: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description DX-204: por encima del umbral de la política falta el motivo, o «Otro» sin nota, o nota sin motivo */
+            /** @description DX-204: por encima del umbral de la política falta el motivo (con rebaja de precio: «… Indica el motivo del descuento.»), o «Otro» sin nota, o nota sin motivo */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -11933,7 +11943,7 @@ export interface operations {
                     "application/json": components["schemas"]["TreatmentPlanItemDto"][];
                 };
             };
-            /** @description DX-204: el descuento supera el tope del rol de quien lo da («Tu rol permite hasta un X % de descuento por ítem.») */
+            /** @description DX-204: el descuento EFECTIVO (SEC-041: rebaja del precio frente al de catálogo + descuento) supera el tope del rol de quien lo da («Tu rol permite hasta un X % de descuento por ítem.»; con rebaja de precio, precedido de «Precio por debajo del de catálogo: cuenta como descuento.»). Subir el precio es libre */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -11947,14 +11957,14 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Plan aceptado con firma: sus ítems quedan congelados (DX-012); o el plan está cancelado, rechazado o completado (DX-109); o el descuento cambia en un plan ya aceptado (DX-204) */
+            /** @description Plan aceptado con firma: sus ítems quedan congelados (DX-012); o el plan está cancelado, rechazado o completado (DX-109); o el descuento (también una rebaja del precio frente al de catálogo) cambia en un plan ya aceptado (DX-204, SEC-041). El estado del plan se comprueba con su fila bloqueada, dentro de la transacción (BE-036) */
             409: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description DX-204: por encima del umbral de la política falta el motivo, o «Otro» sin nota, o nota sin motivo */
+            /** @description DX-204: por encima del umbral de la política falta el motivo (con rebaja de precio: «… Indica el motivo del descuento.»), o «Otro» sin nota, o nota sin motivo */
             422: {
                 headers: {
                     [name: string]: unknown;
@@ -12013,21 +12023,21 @@ export interface operations {
                     "application/json": components["schemas"]["TreatmentPlanItemDto"];
                 };
             };
-            /** @description DX-204: el descuento supera el tope del rol de quien lo da («Tu rol permite hasta un X % de descuento por ítem.») */
+            /** @description DX-204: el descuento EFECTIVO (SEC-041: rebaja del precio frente al de catálogo + descuento) supera el tope del rol de quien lo da («Tu rol permite hasta un X % de descuento por ítem.»; con rebaja de precio, precedido de «Precio por debajo del de catálogo: cuenta como descuento.»). Subir el precio es libre */
             403: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description Plan aceptado con firma: sus ítems quedan congelados (DX-012); o el plan está cancelado, rechazado o completado (DX-109); o el descuento cambia en un plan ya aceptado (DX-204); firmado: solo admite avanzar el estado (no volver a PROPOSED); completado: solo admite marcar como DONE un ítem ACCEPTED sin otro cambio */
+            /** @description Plan aceptado con firma: sus ítems quedan congelados (DX-012); o el plan está cancelado, rechazado o completado (DX-109); o el descuento (también una rebaja del precio frente al de catálogo) cambia en un plan ya aceptado (DX-204, SEC-041). El estado del plan se comprueba con su fila bloqueada, dentro de la transacción (BE-036); firmado: solo admite avanzar el estado (no volver a PROPOSED); completado: solo admite marcar como DONE un ítem ACCEPTED sin otro cambio */
             409: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description DX-204: por encima del umbral de la política falta el motivo, o «Otro» sin nota, o nota sin motivo */
+            /** @description DX-204: por encima del umbral de la política falta el motivo (con rebaja de precio: «… Indica el motivo del descuento.»), o «Otro» sin nota, o nota sin motivo */
             422: {
                 headers: {
                     [name: string]: unknown;

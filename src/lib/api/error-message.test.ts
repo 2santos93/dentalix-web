@@ -19,6 +19,9 @@ describe('isHumanSpanish — heurística de idioma', () => {
     'La receta ya está anulada',
     'Zona horaria inválida: Mars/Base',
     'Esta cuenta da acceso a otra clínica: pide a la persona que espere unos minutos o que restablezca su contraseña',
+    // SEC-041: precio por debajo del de catálogo (403 y 422 de los ítems del plan).
+    'Precio por debajo del de catálogo: cuenta como descuento. Tu rol permite hasta un 10 % de descuento por ítem.',
+    'Precio por debajo del de catálogo: cuenta como descuento y supera el 10 %. Indica el motivo del descuento.',
   ])('reconoce como español: %s', (msg) => {
     expect(isHumanSpanish(msg)).toBe(true);
   });

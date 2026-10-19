@@ -48,6 +48,39 @@ function cents(amount: number): bigint {
   return BigInt(Math.round(amount * 100));
 }
 
+/** Aviso del formulario del ítem y prefijo de los errores de la API (SEC-041). */
+export const PRICE_BELOW_CATALOG_NOTICE = 'Precio por debajo del de catálogo: cuenta como descuento.';
+
+export function priceBelowCatalogCapMessage(maxPercent: number): string {
+  return `${PRICE_BELOW_CATALOG_NOTICE} ${roleCapMessage(maxPercent)}`;
+}
+
+export interface EffectiveDiscount {
+  /** Precio de referencia del %: el de catálogo si se rebajó; si no, el precio. */
+  listPrice: number;
+  /** Rebaja del precio frente al de catálogo (0 si no la hay). */
+  priceReduction: number;
+  /** Rebaja de precio + descuento del ítem. */
+  total: number;
+}
+
+/**
+ * Descuento EFECTIVO de un ítem (SEC-041): `max(0, catálogo − precio) +
+ * descuento`, sobre el precio de referencia. Un ítem libre (sin precio de
+ * catálogo) solo cuenta su descuento; subir el precio no resta. En céntimos
+ * enteros, como la API (`effective-discount.ts`).
+ */
+export function effectiveDiscount(catalogPrice: number | null, price: number, discount: number): EffectiveDiscount {
+  const priceCents = cents(price);
+  const catalogCents = catalogPrice === null ? null : cents(catalogPrice);
+  const reduction = catalogCents !== null && catalogCents > priceCents ? catalogCents - priceCents : BigInt(0);
+  return {
+    listPrice: Number(priceCents + reduction) / 100,
+    priceReduction: Number(reduction) / 100,
+    total: Number(reduction + cents(discount)) / 100,
+  };
+}
+
 function basisPoints(percent: number): bigint {
   return BigInt(Math.round(percent * 100));
 }

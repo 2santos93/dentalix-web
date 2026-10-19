@@ -1450,6 +1450,117 @@ describe('TreatmentPlansTab', () => {
       await waitFor(() => expect(mockedGetPlan.mock.calls.length).toBeGreaterThan(1));
     });
 
+    // SEC-041: un precio por debajo del de catálogo cuenta como descuento.
+    describe('precio por debajo del de catálogo (SEC-041)', () => {
+      async function openForm(token: string) {
+        mockedListPlans.mockResolvedValue([plan1]);
+        mockedGetPlan.mockResolvedValue(plan1Detail);
+        const user = userEvent.setup();
+        render(<TreatmentPlansTab patientId="pat-1" token={token} />);
+        await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+        await waitFor(() => expect(mockedGetDiscountPolicy).toHaveBeenCalled());
+        await user.type(screen.getByLabelText(/código fdi/i), '16');
+        // Resina: 50.000 de catálogo, que rellena el precio.
+        await user.click(screen.getByRole('radio', { name: /resina/i }));
+        return user;
+      }
+
+      async function typePrice(user: ReturnType<typeof userEvent.setup>, price: string) {
+        const field = screen.getByLabelText('Precio', { exact: true });
+        await user.clear(field);
+        await user.type(field, price);
+      }
+
+      it('avisa bajo el precio y, por encima del umbral, exige el motivo y lo envía sin descuento', async () => {
+        mockedAddItem.mockResolvedValue({ ...item1, id: 'item-3' });
+        const user = await openForm(discountAdminToken);
+        expect(
+          screen.queryByText('Precio por debajo del de catálogo: cuenta como descuento.'),
+        ).not.toBeInTheDocument();
+
+        await typePrice(user, '40000');
+        expect(screen.getByText('Precio por debajo del de catálogo: cuenta como descuento.')).toBeInTheDocument();
+        expect(screen.getByText(/Rebaja de 10\.000,00 .* sobre 50\.000,00/)).toBeInTheDocument();
+        // 20 % > 10 %: el motivo es obligatorio aunque no haya descuento.
+        expect(screen.getByText('Por encima del 10 % el motivo es obligatorio.')).toBeInTheDocument();
+        await user.click(screen.getByRole('button', { name: /^agregar ítem$/i }));
+        expect(await screen.findByText('Elige el motivo del descuento.')).toBeInTheDocument();
+        expect(mockedAddItem).not.toHaveBeenCalled();
+
+        await user.selectOptions(screen.getByLabelText('Motivo del descuento'), 'PROMOTION');
+        await user.click(screen.getByRole('button', { name: /^agregar ítem$/i }));
+        await waitFor(() =>
+          expect(mockedAddItem).toHaveBeenCalledWith(discountAdminToken, 'plan-1', {
+            toothNumber: '16',
+            catalogItemId: 'cat-1',
+            price: 40000,
+            discountReason: 'PROMOTION',
+          }),
+        );
+      });
+
+      it('un DENTIST no puede bajar más de su 10 %: aviso en español y no se envía', async () => {
+        const user = await openForm(discountDentistToken);
+        await typePrice(user, '40000');
+        await user.click(screen.getByRole('button', { name: /^agregar ítem$/i }));
+        expect(
+          await screen.findByText(
+            'Precio por debajo del de catálogo: cuenta como descuento. Tu rol permite hasta un 10 % de descuento por ítem.',
+          ),
+        ).toBeInTheDocument();
+        expect(mockedAddItem).not.toHaveBeenCalled();
+      });
+
+      it('dentro del tope avisa pero el motivo es opcional; subir el precio no avisa', async () => {
+        mockedAddItem.mockResolvedValue({ ...item1, id: 'item-3' });
+        const user = await openForm(discountDentistToken);
+        await typePrice(user, '60000');
+        expect(
+          screen.queryByText('Precio por debajo del de catálogo: cuenta como descuento.'),
+        ).not.toBeInTheDocument();
+        expect(screen.queryByLabelText(/motivo del descuento/i)).not.toBeInTheDocument();
+
+        await typePrice(user, '47500');
+        expect(screen.getByText('Precio por debajo del de catálogo: cuenta como descuento.')).toBeInTheDocument();
+        expect(screen.getByLabelText('Motivo del descuento (opcional)')).toBeInTheDocument();
+        await user.click(screen.getByRole('button', { name: /^agregar ítem$/i }));
+        await waitFor(() =>
+          expect(mockedAddItem).toHaveBeenCalledWith(discountDentistToken, 'plan-1', {
+            toothNumber: '16',
+            catalogItemId: 'cat-1',
+            price: 47500,
+          }),
+        );
+      });
+
+      it('el 403 de la API se enseña en español, con su texto', async () => {
+        mockedAddItem.mockRejectedValueOnce(
+          new ApiError(
+            403,
+            'Precio por debajo del de catálogo: cuenta como descuento. Tu rol permite hasta un 0 % de descuento por ítem.',
+          ),
+        );
+        const user = await openForm(discountAdminToken);
+        await typePrice(user, '49000');
+        await user.click(screen.getByRole('button', { name: /^agregar ítem$/i }));
+        expect(
+          await screen.findByText(
+            'Precio por debajo del de catálogo: cuenta como descuento. Tu rol permite hasta un 0 % de descuento por ítem.',
+          ),
+        ).toBeInTheDocument();
+      });
+
+      it('el ítem con el precio rebajado muestra el de catálogo y la rebaja', async () => {
+        const reduced = { ...item1, catalogPrice: 60000, discountReason: 'LOYALTY' as const };
+        mockedListPlans.mockResolvedValue([plan1]);
+        mockedGetPlan.mockResolvedValue({ ...plan1Detail, items: [reduced, item2] });
+        render(<TreatmentPlansTab patientId="pat-1" token={discountAdminToken} />);
+        const table = await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+        expect(within(table).getByText(/Rebaja −10\.000,00 .* \(catálogo 60\.000,00/)).toBeInTheDocument();
+        expect(within(table).getByText('Motivo: Paciente frecuente')).toBeInTheDocument();
+      });
+    });
+
     it('un presupuesto aceptado no ofrece casillas ni «Descuento %»', async () => {
       const accepted = { ...plan1Detail, status: 'ACCEPTED' as const };
       mockedListPlans.mockResolvedValue([{ ...plan1, status: 'ACCEPTED' as const }]);
