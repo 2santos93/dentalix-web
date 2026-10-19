@@ -95,9 +95,15 @@ export function InClinicPanel({
         >
           {mine ? inClinicCopy.titleMine : inClinicCopy.title}
         </h2>
-        {total !== null ? (
-          <span className="text-xs font-medium tabular-nums text-muted">{inClinicCopy.count(total)}</span>
-        ) : null}
+        {/* Región viva siempre montada: el sondeo anuncia el total cuando cambia. */}
+        <span
+          data-testid="in-clinic-count"
+          aria-live="polite"
+          aria-atomic="true"
+          className="text-xs font-medium tabular-nums text-muted"
+        >
+          {total !== null ? inClinicCopy.count(total) : ''}
+        </span>
       </header>
 
       {noLocation ? (

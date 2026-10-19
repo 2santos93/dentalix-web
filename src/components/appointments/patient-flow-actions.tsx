@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { Armchair, CircleCheck, DoorOpen, Undo2, Wallet } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/error-message';
@@ -101,10 +101,25 @@ export function PatientFlowActions({
   className,
 }: PatientFlowActionsProps) {
   const actions = flowActions(status, role, isToday);
+  const groupRef = useRef<HTMLDivElement>(null);
+  // Se pulsó un paso aquí: al cambiar los botones (el pulsado desaparece) el
+  // foco iría al <body>; se lleva al primer botón del grupo (WCAG 2.4.3).
+  const clicked = useRef(false);
+  const actionsKey = actions.join(',');
+  useEffect(() => {
+    if (!clicked.current) return;
+    const group = groupRef.current;
+    const active = document.activeElement;
+    if (group && (active === null || active === document.body || !active.isConnected)) {
+      group.querySelector<HTMLButtonElement>('button')?.focus();
+      clicked.current = false;
+    }
+  }, [actionsKey]);
   if (actions.length === 0) return null;
   const pending = runner.pendingId === appointmentId;
   return (
     <div
+      ref={groupRef}
       role="group"
       aria-label={patientFlowCopy.actionsFor(patientName)}
       className={cn('flex flex-wrap items-center gap-2', className)}
@@ -118,7 +133,10 @@ export function PatientFlowActions({
             size="sm"
             variant={action === 'UNDO_ARRIVAL' ? 'ghost' : 'secondary'}
             loading={pending}
-            onClick={() => void runner.run(appointmentId, action, patientName)}
+            onClick={() => {
+              clicked.current = true;
+              void runner.run(appointmentId, action, patientName);
+            }}
             data-flow-action={action}
             className="h-11 sm:h-9"
           >

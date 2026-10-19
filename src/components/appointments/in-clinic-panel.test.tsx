@@ -1,8 +1,8 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { toast } from 'sonner';
 import { InClinicPanel } from './in-clinic-panel';
-import { usePatientFlow } from './patient-flow-actions';
+import { PatientFlowActions, usePatientFlow } from './patient-flow-actions';
 import { useInClinic, type InClinicState } from './use-in-clinic';
 import { getInClinic, undoArrival, type InClinicItem, type InClinicView } from '@/lib/appointments/patient-flow';
 import { updateAppointment } from '@/lib/appointments/appointments-api';
@@ -210,5 +210,63 @@ describe('InClinicPanel (DX-200)', () => {
     for (const button of await screen.findAllByRole('button', { name: /En sillón|Deshacer llegada/ })) {
       expect(button.className).toMatch(/\bh-11\b/);
     }
+  });
+  it('el total del panel se anuncia en una región viva (aria-live polite)', () => {
+    const { rerender } = render(
+      <InClinicPanel state={staticState({ view: view() })} role="ADMIN" runner={noRunner} />,
+    );
+    const live = screen.getByTestId('in-clinic-count');
+    expect(live).toHaveAttribute('aria-live', 'polite');
+    rerender(
+      <InClinicPanel
+        state={staticState({ view: view({ waiting: [item({ appointmentId: 'a1' })] }) })}
+        role="ADMIN"
+        runner={noRunner}
+      />,
+    );
+    expect(screen.getByTestId('in-clinic-count')).toHaveTextContent('1 paciente');
+  });
+
+  it('sondea cada 45 s; un refresco fallido conserva los datos y al desmontar no queda intervalo', async () => {
+    jest.useFakeTimers();
+    try {
+      mockedGet
+        .mockResolvedValueOnce(view({ waiting: [item({ appointmentId: 'a1' })] }))
+        .mockRejectedValueOnce(new Error('caído'));
+      const { unmount } = render(<Harness role="ADMIN" />);
+      await act(async () => {
+        await Promise.resolve();
+      });
+      expect(await screen.findAllByTestId('in-clinic-item')).toHaveLength(1);
+      expect(mockedGet).toHaveBeenCalledTimes(1);
+      await act(async () => {
+        jest.advanceTimersByTime(45_000);
+      });
+      expect(mockedGet).toHaveBeenCalledTimes(2);
+      // El refresco falló: los datos siguen y avisa en segundo plano.
+      expect(screen.getAllByTestId('in-clinic-item')).toHaveLength(1);
+      expect(toast.error).toHaveBeenCalledWith(
+        'No pudimos actualizar el panel «En clínica».',
+        expect.anything(),
+      );
+      unmount();
+      await act(async () => {
+        jest.advanceTimersByTime(5 * 45_000);
+      });
+      expect(mockedGet).toHaveBeenCalledTimes(2);
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('tras dar un paso el foco no se pierde: pasa al botón siguiente del grupo', async () => {
+    const runner = { pendingId: null, run: jest.fn().mockResolvedValue(undefined) };
+    const props = { appointmentId: 'a1', role: 'RECEPTION' as const, isToday: true, patientName: 'Ana', runner };
+    const { rerender } = render(<PatientFlowActions {...props} status="SCHEDULED" />);
+    const arrive = screen.getByRole('button', { name: 'Llegó' });
+    await userEvent.click(arrive);
+    expect(arrive).toHaveFocus();
+    rerender(<PatientFlowActions {...props} status="ARRIVED" />);
+    expect(screen.getByRole('button', { name: 'Deshacer llegada' })).toHaveFocus();
   });
 });
