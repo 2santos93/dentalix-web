@@ -59,11 +59,21 @@ describe('parseMoneyInput (DX-241)', () => {
     expect(parseMoneyInput(text, 'USD')).toMatchObject({ ok: false, reason: 'ambiguous' });
   });
 
-  it.each(['abc', '-150', '$-150', '150$5', '1e5', '15O'])('«%s» no es un importe', (text) => {
+  it.each(['abc', '150$5', '1e5', '15O', '-abc', '1-50'])('«%s» no es un importe', (text) => {
     expect(parseMoneyInput(text, 'USD')).toEqual({
       ok: false,
       reason: 'invalid',
       message: moneyInputCopy.invalid,
+    });
+  });
+
+  // Revisión DX-241 (2.ª pasada): en el ajuste de caja es natural teclear
+  // «-50»; el campo pide el importe sin signo y lo dice (el signo va aparte).
+  it.each(['-150', '−150,50', '- 50', '$-150', '-$150', '+150'])('«%s» lleva signo: se pide sin él', (text) => {
+    expect(parseMoneyInput(text, 'USD')).toEqual({
+      ok: false,
+      reason: 'invalid',
+      message: moneyInputCopy.signed,
     });
   });
 

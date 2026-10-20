@@ -37,6 +37,7 @@ export const moneyInputCopy = {
   ambiguous: (text: string) =>
     `No sabemos leer «${text}»: separa los miles en grupos de 3 (1.500.000) y los decimales con 1 o 2 cifras (150,50).`,
   tooLarge: 'El importe es demasiado grande: como mucho 9.999.999.999,99.',
+  signed: 'Escribe el importe sin signo: solo cifras, con punto o coma para los decimales.',
   maxDecimals: (max: number) =>
     max === 0 ? 'Escribe un número sin decimales.' : `Admite hasta ${max} decimales.`,
   /** La vista previa bajo el campo: lo que se va a guardar, ya formateado. */
@@ -48,6 +49,8 @@ export type DecimalParseResult =
   | { ok: false; reason: 'empty' | 'invalid' | 'ambiguous' | 'decimals' | 'tooLarge'; message: string };
 
 const SEPARATORS = /[., ]/;
+/** Un signo delante («-50», «− 50», «+50»): el importe se escribe sin él. */
+const LEADING_SIGN = /^[-\u2212+]\s*/;
 const DIGITS = /^\d+$/;
 
 /** La parte entera, con o sin miles: `null` si los grupos no son de 3. */
@@ -128,6 +131,9 @@ export function parseDecimalInput(raw: string, maxDecimals: number): DecimalPars
   // («150.000,00 COP» lleva U+00A0) cuentan como espacio.
   const text = normalizeSpaces(raw);
   if (text === '') return { ok: false, reason: 'empty', message: moneyInputCopy.empty };
+  if (LEADING_SIGN.test(text) && parseDecimalInput(text.replace(LEADING_SIGN, ''), maxDecimals).ok) {
+    return { ok: false, reason: 'invalid', message: moneyInputCopy.signed };
+  }
   if (!/^[\d., ]+$/.test(text)) return { ok: false, reason: 'invalid', message: moneyInputCopy.invalid };
   const ambiguous = { ok: false as const, reason: 'ambiguous' as const, message: moneyInputCopy.ambiguous(text) };
 
@@ -149,6 +155,11 @@ export function parseDecimalInput(raw: string, maxDecimals: number): DecimalPars
  * Ver la regla en la cabecera del fichero.
  */
 export function parseMoneyInput(text: string, currency: string): DecimalParseResult {
+  // «-$150»: el signo va antes que el símbolo («$-150» lo ve parseDecimalInput).
+  const normalized = normalizeSpaces(text);
+  if (LEADING_SIGN.test(normalized) && parseMoneyInput(normalized.replace(LEADING_SIGN, ''), currency).ok) {
+    return { ok: false, reason: 'invalid', message: moneyInputCopy.signed };
+  }
   const result = parseDecimalInput(stripCurrency(text, currency), MONEY_DECIMALS);
   if (result.ok && result.value > MONEY_INPUT_MAX) {
     return { ok: false, reason: 'tooLarge', message: moneyInputCopy.tooLarge };

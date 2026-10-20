@@ -10,6 +10,7 @@ import { recordPayment } from '@/lib/payments/payments-api';
 import { listBillablePlans, type BillablePlan } from '@/lib/payments/billable-plans-api';
 import { addCashAdjustment, closeCashSession, openCashSession } from '@/lib/cash-sessions/cash-sessions-api';
 import { cashSessionFixture } from '@/lib/test/cash-session';
+import { moneyInputCopy } from '@/lib/format/money';
 
 /*
  * DX-241: el mismo texto da el mismo importe en los cinco formularios de
@@ -217,6 +218,21 @@ describe.each(formNames)('%s (DX-241)', (name) => {
     const describedBy = (input.getAttribute('aria-describedby') ?? '').split(' ');
     const messages = describedBy.map((id) => document.getElementById(id)?.textContent ?? '').join(' ');
     expect(messages).toMatch(/No sabemos leer «1\.50\.0»/);
+    expect(form.sent()).toBeUndefined();
+  });
+
+  // Revisión DX-241 (2.ª pasada): «-50» (natural en un ajuste que resta) no
+  // se envía y el campo pide el importe sin signo.
+  it('un importe con signo no llega a la API y el campo pide escribirlo sin él', async () => {
+    const user = userEvent.setup();
+    const input = await form.render('USD', 50);
+    await user.type(input, '-50');
+    await form.fillRest?.(user);
+    await user.click(screen.getByRole('button', { name: form.submit }));
+    await waitFor(() => expect(input).toHaveAttribute('aria-invalid', 'true'));
+    const describedBy = (input.getAttribute('aria-describedby') ?? '').split(' ');
+    const messages = describedBy.map((id) => document.getElementById(id)?.textContent ?? '').join(' ');
+    expect(messages).toContain(moneyInputCopy.signed);
     expect(form.sent()).toBeUndefined();
   });
 
