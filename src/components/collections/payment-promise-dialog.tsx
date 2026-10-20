@@ -7,6 +7,8 @@ import { todayLocal } from '@/lib/collections/presentation';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { FormModal } from '@/components/shared/form-modal';
 import { Input } from '@/components/ui/input';
+import { MoneyInput } from '@/components/shared/money-input';
+import { parseMoneyInput } from '@/lib/format/money';
 import { toolbarFieldClass } from '@/components/shared/list-toolbar';
 import { CurrencySelect } from '@/components/shared/currency-select';
 
@@ -19,19 +21,11 @@ export const promiseDialogCopy = {
   dueDate: 'Pagará hasta el',
   submit: 'Guardar compromiso',
   amountRequired: 'Escribe un importe mayor que 0.',
-  amountInvalid: 'El importe admite hasta 2 decimales.',
   dueDateRequired: 'Elige la fecha del compromiso.',
   currencyRequired: 'Elige la moneda.',
   dueDatePast: 'La fecha no puede ser anterior a hoy.',
   saveError: 'No pudimos guardar el compromiso. Intenta de nuevo.',
 };
-
-function parseAmount(text: string): number | null {
-  const normalized = text.replace(/\./g, '').replace(',', '.').trim();
-  if (!/^\d+(\.\d{1,2})?$/.test(normalized)) return null;
-  const value = Number(normalized);
-  return Number.isFinite(value) ? value : null;
-}
 
 interface PaymentPromiseDialogProps {
   open: boolean;
@@ -81,10 +75,12 @@ export function PaymentPromiseDialog({
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     const next: typeof errors = {};
-    const amount = parseAmount(amountText);
-    if (amountText.trim() === '') next.amount = promiseDialogCopy.amountRequired;
-    else if (amount === null) next.amount = promiseDialogCopy.amountInvalid;
-    else if (amount <= 0) next.amount = promiseDialogCopy.amountRequired;
+    // DX-241: la misma lectura que el resto de campos de dinero («150.50» USD
+    // es 150,5, no 15 050), con los decimales de la moneda elegida.
+    const parsed = parseMoneyInput(amountText, currency);
+    const amount = parsed.ok ? parsed.value : null;
+    if (!parsed.ok) next.amount = parsed.reason === 'empty' ? promiseDialogCopy.amountRequired : parsed.message;
+    else if (parsed.value <= 0) next.amount = promiseDialogCopy.amountRequired;
     if (!currency) next.currency = promiseDialogCopy.currencyRequired;
     if (!dueDate) next.dueDate = promiseDialogCopy.dueDateRequired;
     else if (dueDate < today) next.dueDate = promiseDialogCopy.dueDatePast;
@@ -116,16 +112,17 @@ export function PaymentPromiseDialog({
     >
       <div className="grid gap-4 sm:grid-cols-[1fr_8rem]">
         <FormField htmlFor="pp-amount" label={promiseDialogCopy.amount} error={errors.amount}>
-          <Input
+          <MoneyInput
             id="pp-amount"
-            type="text"
-            inputMode="decimal"
-            autoComplete="off"
+            currency={currency}
+            requirePositive
             value={amountText}
-            onChange={(e) => setAmountText(e.target.value)}
+            onValueChange={(text) => {
+              setAmountText(text);
+              if (errors.amount) setErrors((prev) => ({ ...prev, amount: undefined }));
+            }}
             aria-invalid={errors.amount ? true : undefined}
             aria-describedby={errors.amount ? fieldErrorId('pp-amount') : undefined}
-            className="tabular-nums"
           />
         </FormField>
         <FormField htmlFor="pp-currency" label={promiseDialogCopy.currency} error={errors.currency}>

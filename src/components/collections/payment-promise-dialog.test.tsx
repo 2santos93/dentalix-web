@@ -43,10 +43,45 @@ describe('PaymentPromiseDialog (DX-150)', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Guardar compromiso' }));
     expect(await screen.findByText('Escribe un importe mayor que 0.')).toBeInTheDocument();
     expect(screen.getByText('Elige la fecha del compromiso.')).toBeInTheDocument();
-    await userEvent.type(screen.getByLabelText('Importe'), '12,345');
-    await userEvent.click(screen.getByRole('button', { name: 'Guardar compromiso' }));
-    expect(await screen.findByText('El importe admite hasta 2 decimales.')).toBeInTheDocument();
     expect(mockedCreate).not.toHaveBeenCalled();
+  });
+
+  it('DX-241: «150.50» en USD se guarda como 150,5 (no 15 050)', async () => {
+    mockedCreate.mockResolvedValue({ id: 'pp1' } as never);
+    setup();
+    const due = inDays(3);
+    await userEvent.type(screen.getByLabelText('Importe'), '150.50');
+    await userEvent.selectOptions(screen.getByLabelText('Moneda'), 'USD');
+    await userEvent.type(screen.getByLabelText('Pagará hasta el'), due);
+    expect(await screen.findByText(/^Se guardará: 150,50\sUS\$$/)).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Guardar compromiso' }));
+    await waitFor(() =>
+      expect(mockedCreate).toHaveBeenCalledWith('tok', 'pat-1', { amount: 150.5, currency: 'USD', dueDate: due }),
+    );
+  });
+
+  it('DX-241: un importe ambiguo bloquea el envío con el motivo junto al campo', async () => {
+    setup();
+    await userEvent.type(screen.getByLabelText('Importe'), '1.50.0');
+    await userEvent.type(screen.getByLabelText('Pagará hasta el'), inDays(1));
+    await userEvent.click(screen.getByRole('button', { name: 'Guardar compromiso' }));
+    const input = screen.getByLabelText('Importe');
+    expect(input).toHaveAttribute('aria-invalid', 'true');
+    const error = document.getElementById('pp-amount-error');
+    expect(error).toHaveTextContent('No sabemos leer «1.50.0»');
+    expect(input.getAttribute('aria-describedby')).toContain('pp-amount-error');
+    expect(mockedCreate).not.toHaveBeenCalled();
+  });
+
+  it('DX-241: COP admite céntimos como la API («150.000,50» → 150000,5)', async () => {
+    mockedCreate.mockResolvedValue({ id: 'pp1' } as never);
+    setup();
+    await userEvent.type(screen.getByLabelText('Importe'), '150.000,50');
+    await userEvent.type(screen.getByLabelText('Pagará hasta el'), inDays(1));
+    await userEvent.click(screen.getByRole('button', { name: 'Guardar compromiso' }));
+    await waitFor(() =>
+      expect(mockedCreate).toHaveBeenCalledWith('tok', 'pat-1', expect.objectContaining({ amount: 150000.5, currency: 'COP' })),
+    );
   });
 
   it('no admite una fecha pasada', async () => {

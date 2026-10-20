@@ -47,7 +47,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
-import { FormField } from '@/components/shared/form-field';
+import { FormField, fieldErrorId } from '@/components/shared/form-field';
+import { MoneyInput } from '@/components/shared/money-input';
+import { parseMoneyInput } from '@/lib/format/money';
 import { FormModal } from '@/components/shared/form-modal';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { EmptyState } from '@/components/shared/empty-state';
@@ -194,6 +196,8 @@ const copy = {
   discountLabel: 'Descuento (opcional)',
   discountHint: 'En la moneda del plan. Sale en el presupuesto.',
   invalidDiscount: 'El descuento debe ser un monto válido, no mayor que el precio.',
+  unreadablePrice: (reason: string) => `El precio no se entiende. ${reason}`,
+  unreadableDiscount: (reason: string) => `El descuento no se entiende. ${reason}`,
   itemDiscount: (amount: string) => `Descuento −${amount}`,
   // SEC-041: el precio por debajo del de catálogo cuenta como descuento.
   itemPriceReduction: (amount: string, catalog: string) => `Rebaja −${amount} (catálogo ${catalog})`,
@@ -254,7 +258,7 @@ const copy = {
   paymentNotesLabel: 'Notas',
   addPaymentSubmit: 'Registrar abono',
   addPaymentSubmitting: 'Registrando…',
-  invalidPaymentAmount: 'Ingresa un monto válido mayor a 0.',
+  invalidPaymentAmount: 'Escribe un importe mayor que 0.',
   invalidPaymentCurrency: 'Ingresa una moneda válida.',
   invalidPaymentDate: 'Ingresa una fecha válida.',
   genericAddPaymentError: 'No pudimos registrar el abono. Intenta de nuevo.',
@@ -303,6 +307,21 @@ const ITEM_STATUS_BADGE_VARIANT: Record<TreatmentPlanItemStatus, BadgeProps['var
   DONE: 'success',
 };
 
+/**
+ * Un importe opcional de un campo de dinero (DX-241): `undefined` si está
+ * vacío, `null` si no se entiende, o el número leído con la regla común.
+ */
+function optionalAmount(text: string, currency: string): number | undefined | null {
+  if (text.trim() === '') return undefined;
+  const parsed = parseMoneyInput(text, currency);
+  return parsed.ok ? parsed.value : null;
+}
+
+/** El motivo por el que no se entiende un importe escrito. */
+function unreadableReason(text: string, currency: string): string {
+  const parsed = parseMoneyInput(text, currency);
+  return parsed.ok ? '' : parsed.message;
+}
 
 function emptySurfacesState(): Record<ToothSurface, boolean> {
   return { VESTIBULAR: false, LINGUAL: false, MESIAL: false, DISTAL: false, OCCLUSAL: false };
@@ -1007,6 +1026,8 @@ export function TreatmentPlansTab({
   const [paymentNotes, setPaymentNotes] = useState('');
   const [addPaymentSubmitting, setAddPaymentSubmitting] = useState(false);
   const [addPaymentValidationError, setAddPaymentValidationError] = useState<string | null>(null);
+  // DX-241: el motivo de un monto que no vale va junto al campo (escalón 4).
+  const [paymentAmountError, setPaymentAmountError] = useState<string | null>(null);
   const [addPaymentError, setAddPaymentError] = useState<string | null>(null);
 
   const [voidingPaymentId, setVoidingPaymentId] = useState<string | null>(null);
@@ -1049,6 +1070,8 @@ export function TreatmentPlansTab({
   const [bulkNotice, setBulkNotice] = useState<string | null>(null);
   const [addItemSubmitting, setAddItemSubmitting] = useState(false);
   const [addItemValidationError, setAddItemValidationError] = useState<string | null>(null);
+  // DX-241: precio y descuento que no valen, junto a su campo (escalón 4).
+  const [itemAmountErrors, setItemAmountErrors] = useState<{ price?: string; discount?: string }>({});
   const [addItemError, setAddItemError] = useState<string | null>(null);
 
   // Política de descuentos (DX-204): solo para avisar del tope y del motivo
@@ -1183,6 +1206,7 @@ export function TreatmentPlansTab({
     setSurfaces(emptySurfacesState());
     setNotes('');
     setAddItemValidationError(null);
+    setItemAmountErrors({});
     setAddItemError(null);
     // Balance/abonos (PAY-T4) — same rationale: a different plan is a
     // genuinely different resource, and an in-progress abono form must not
@@ -1196,6 +1220,7 @@ export function TreatmentPlansTab({
     setPaymentMethod('');
     setPaymentNotes('');
     setAddPaymentValidationError(null);
+    setPaymentAmountError(null);
     setAddPaymentError(null);
   }
 
@@ -1464,6 +1489,7 @@ export function TreatmentPlansTab({
     setPaymentMethod('');
     setPaymentNotes('');
     setAddPaymentValidationError(null);
+    setPaymentAmountError(null);
     setAddPaymentError(null);
     setShowPaymentForm(true);
   }
@@ -1471,20 +1497,26 @@ export function TreatmentPlansTab({
   async function handleAddPayment(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setAddPaymentValidationError(null);
+    setPaymentAmountError(null);
     setAddPaymentError(null);
 
     if (!selectedPlanId) return;
 
-    const amountNumber = Number(paymentAmount.trim());
-    if (!paymentAmount.trim() || !Number.isFinite(amountNumber) || amountNumber <= 0) {
-      setAddPaymentValidationError(copy.invalidPaymentAmount);
-      return;
-    }
     const currencyValue = paymentCurrency.trim().toUpperCase();
     if (!currencyValue) {
       setAddPaymentValidationError(copy.invalidPaymentCurrency);
       return;
     }
+    // DX-241: la lectura común de los campos de dinero, con los decimales de
+    // la moneda del abono.
+    const parsedAmount = parseMoneyInput(paymentAmount, currencyValue);
+    if (!parsedAmount.ok || parsedAmount.value <= 0) {
+      setPaymentAmountError(
+        parsedAmount.ok || parsedAmount.reason === 'empty' ? copy.invalidPaymentAmount : parsedAmount.message,
+      );
+      return;
+    }
+    const amountNumber = parsedAmount.value;
     if (!paymentDate) {
       setAddPaymentValidationError(copy.invalidPaymentDate);
       return;
@@ -1636,6 +1668,7 @@ export function TreatmentPlansTab({
   async function handleAddItem(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setAddItemValidationError(null);
+    setItemAmountErrors({});
     setAddItemError(null);
 
     if (!selectedPlanId) return;
@@ -1651,15 +1684,20 @@ export function TreatmentPlansTab({
     }
 
     const selectedSurfaces = SURFACE_ORDER.filter((s) => surfaces[s]);
-    const trimmedPrice = price.trim();
-    const trimmedDiscount = discount.trim();
-    const discountValue = trimmedDiscount ? Number(trimmedDiscount) : 0;
-    if (
-      !Number.isFinite(discountValue) ||
-      discountValue < 0 ||
-      (trimmedPrice !== '' && discountValue > Number(trimmedPrice))
-    ) {
-      setAddItemValidationError(copy.invalidDiscount);
+    const itemCurrency = planDetail?.currency ?? '';
+    const priceInput = optionalAmount(price, itemCurrency);
+    const discountInput = optionalAmount(discount, itemCurrency);
+    // Lo que no se entiende dice por qué (la regla común de los importes).
+    if (priceInput === null || discountInput === null) {
+      setItemAmountErrors({
+        price: priceInput === null ? copy.unreadablePrice(unreadableReason(price, itemCurrency)) : undefined,
+        discount: discountInput === null ? copy.unreadableDiscount(unreadableReason(discount, itemCurrency)) : undefined,
+      });
+      return;
+    }
+    const discountValue = discountInput ?? 0;
+    if (priceInput !== undefined && discountValue > priceInput) {
+      setItemAmountErrors({ discount: copy.invalidDiscount });
       return;
     }
     // DX-204: tope del rol y motivo por encima del umbral, avisados aquí; la
@@ -1667,11 +1705,9 @@ export function TreatmentPlansTab({
     // suma la rebaja del precio frente al de catálogo.
     setAddReasonErrors(null);
     const catalogPrice = catalogById.get(catalogItemId)?.defaultPrice ?? null;
-    const effectivePrice = trimmedPrice ? Number(trimmedPrice) : catalogPrice;
+    const effectivePrice = priceInput ?? catalogPrice;
     const effective =
-      effectivePrice !== null && Number.isFinite(effectivePrice)
-        ? effectiveDiscount(catalogPrice, effectivePrice, discountValue)
-        : null;
+      effectivePrice !== null ? effectiveDiscount(catalogPrice, effectivePrice, discountValue) : null;
     if (discountRules && role && effective && exceedsCap(discountRules, role, effective.listPrice, effective.total)) {
       const cap = capFor(discountRules, role);
       setAddItemValidationError(
@@ -1694,7 +1730,7 @@ export function TreatmentPlansTab({
         toothNumber: tooth,
         catalogItemId,
         ...(selectedSurfaces.length ? { surfaces: selectedSurfaces } : {}),
-        ...(trimmedPrice ? { price: Number(trimmedPrice) } : {}),
+        ...(priceInput !== undefined ? { price: priceInput } : {}),
         ...(discountValue > 0 ? { discount: discountValue } : {}),
         ...(discounted ? reasonPayload(addReason) : {}),
         ...(notes.trim() ? { notes: notes.trim() } : {}),
@@ -1741,12 +1777,16 @@ export function TreatmentPlansTab({
   // DX-204: un presupuesto aceptado (firmado o no) o cerrado no se vuelve a
   // descontar.
   const discountable = Boolean(planDetail) && !signed && !closed && planDetail?.status !== 'ACCEPTED';
-  const addDiscountValue = Number(discount.trim() || '0');
+  const addCurrency = planDetail?.currency ?? '';
+  const addDiscountInput = optionalAmount(discount, addCurrency);
+  const addPriceInput = optionalAmount(price, addCurrency);
+  const addDiscountValue = addDiscountInput ?? 0;
   const addCatalogPrice = catalogById.get(catalogItemId)?.defaultPrice ?? null;
-  const addPrice = price.trim() ? Number(price.trim()) : addCatalogPrice;
-  // SEC-041: descuento efectivo = rebaja frente al catálogo + descuento.
+  const addPrice = addPriceInput ?? addCatalogPrice;
+  // SEC-041: descuento efectivo = rebaja frente al catálogo + descuento. Con
+  // un precio o descuento que no se entiende no hay aviso (el envío lo para).
   const addEffective =
-    addPrice !== null && Number.isFinite(addPrice) && Number.isFinite(addDiscountValue)
+    addPrice !== null && addDiscountInput !== null && addPriceInput !== null
       ? effectiveDiscount(addCatalogPrice, addPrice, addDiscountValue)
       : null;
   const addBelowCatalog = addEffective !== null && addEffective.priceReduction > 0;
@@ -2091,14 +2131,18 @@ export function TreatmentPlansTab({
                         {locationHint ? <p className="t-label text-muted">{locationHint}</p> : null}
 
                         <div className="grid gap-4 sm:grid-cols-2">
-                          <FormField htmlFor="tp-payment-amount" label={copy.paymentAmountLabel}>
-                            <Input
+                          <FormField htmlFor="tp-payment-amount" label={copy.paymentAmountLabel} error={paymentAmountError}>
+                            <MoneyInput
                               id="tp-payment-amount"
-                              type="number"
-                              min={0}
-                              step="0.01"
+                              currency={paymentCurrency}
+                              requirePositive
                               value={paymentAmount}
-                              onChange={(e) => setPaymentAmount(e.target.value)}
+                              onValueChange={(text) => {
+                                setPaymentAmount(text);
+                                setPaymentAmountError(null);
+                              }}
+                              aria-invalid={paymentAmountError ? true : undefined}
+                              aria-describedby={paymentAmountError ? fieldErrorId('tp-payment-amount') : undefined}
                             />
                           </FormField>
 
@@ -2246,15 +2290,24 @@ export function TreatmentPlansTab({
                     />
 
                     <div className="grid gap-4 sm:grid-cols-2">
-                      <FormField htmlFor="tp-price" label={copy.priceLabel}>
-                        <Input
+                      <FormField htmlFor="tp-price" label={copy.priceLabel} error={itemAmountErrors.price}>
+                        <MoneyInput
                           id="tp-price"
-                          type="number"
-                          min={0}
-                          step="0.01"
+                          currency={addCurrency}
                           value={price}
-                          onChange={(e) => setPrice(e.target.value)}
-                          aria-describedby={addBelowCatalog ? 'tp-price-below-catalog' : undefined}
+                          onValueChange={(text) => {
+                            setPrice(text);
+                            setItemAmountErrors((errors) => ({ ...errors, price: undefined }));
+                          }}
+                          aria-invalid={itemAmountErrors.price ? true : undefined}
+                          aria-describedby={
+                            [
+                              itemAmountErrors.price ? fieldErrorId('tp-price') : null,
+                              addBelowCatalog ? 'tp-price-below-catalog' : null,
+                            ]
+                              .filter(Boolean)
+                              .join(' ') || undefined
+                          }
                         />
                         {/* SEC-041: aviso, no bloqueo; la API decide con el
                             tope del rol. */}
@@ -2273,14 +2326,22 @@ export function TreatmentPlansTab({
                         </p>
                       </FormField>
 
-                      <FormField htmlFor="tp-discount" label={copy.discountLabel} hint={copy.discountHint}>
-                        <Input
+                      <FormField
+                        htmlFor="tp-discount"
+                        label={copy.discountLabel}
+                        hint={copy.discountHint}
+                        error={itemAmountErrors.discount}
+                      >
+                        <MoneyInput
                           id="tp-discount"
-                          type="number"
-                          min={0}
-                          step="0.01"
+                          currency={addCurrency}
                           value={discount}
-                          onChange={(e) => setDiscount(e.target.value)}
+                          onValueChange={(text) => {
+                            setDiscount(text);
+                            setItemAmountErrors((errors) => ({ ...errors, discount: undefined }));
+                          }}
+                          aria-invalid={itemAmountErrors.discount ? true : undefined}
+                          aria-describedby={itemAmountErrors.discount ? fieldErrorId('tp-discount') : undefined}
                         />
                       </FormField>
 
