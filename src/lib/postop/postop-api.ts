@@ -32,7 +32,7 @@ export const POSTOP_VARIABLES = [
 ] as const;
 
 const KNOWN: ReadonlySet<string> = new Set(POSTOP_VARIABLES.map((v) => v.key));
-const VARIABLE_PATTERN = /\{\{\s*([A-Za-z_]+)\s*\}\}/g;
+const VARIABLE_PATTERN = /\{\{\s*([A-Za-z0-9_]+)\s*\}\}/g;
 
 /** Mismo criterio que la API (render-instructions.ts): sin distinguir mayúsculas. */
 export function unknownVariables(body: string): string[] {

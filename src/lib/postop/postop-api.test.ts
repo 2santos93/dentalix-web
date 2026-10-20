@@ -144,5 +144,6 @@ describe('postop-api', () => {
       'bar',
     ]);
     expect(unknownVariables('sin variables')).toEqual([]);
+    expect(unknownVariables('{{paciente2}} {{paciente}}')).toEqual(['paciente2']);
   });
 });

@@ -35,6 +35,7 @@ export function PostOpDocument({ delivery }: PostOpDocumentProps) {
           <img
             src={clinic.logoUrl}
             alt={clinic.name}
+            referrerPolicy="no-referrer"
             className="h-12 w-auto max-w-[160px] object-contain"
           />
         ) : null}

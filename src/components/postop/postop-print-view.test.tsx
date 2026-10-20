@@ -48,6 +48,10 @@ describe('PostOpDocument', () => {
       'src',
       'https://cdn.example.com/logo.png',
     );
+    expect(within(header).getByRole('img', { name: 'Clínica Sonrisas' })).toHaveAttribute(
+      'referrerpolicy',
+      'no-referrer',
+    );
     expect(within(header).getByText('Clínica Sonrisas')).toBeInTheDocument();
     expect(within(header).getByText(/Sede Norte/)).toBeInTheDocument();
     expect(within(header).getByText(/601 555 0000/)).toBeInTheDocument();
