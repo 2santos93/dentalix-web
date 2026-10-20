@@ -59,7 +59,7 @@ describe('UserMenu', () => {
     );
     // Única entrada a la pantalla de horarios: sin esto la ruta existe pero no
     // se puede llegar a ella desde la app.
-    expect(screen.getByRole('menuitem', { name: /horario de atención/i })).toHaveAttribute(
+    expect(screen.getByRole('menuitem', { name: /^horarios$/i })).toHaveAttribute(
       'href',
       '/settings/horarios',
     );
