@@ -209,4 +209,21 @@ describe('ScheduleBlockDialog (DX-122)', () => {
     expect(screen.getByLabelText('Sede')).toHaveValue('');
     expect(screen.queryByText(/acotado a sedes/)).not.toBeInTheDocument();
   });
+
+  it('miembro acotado sin sedes disponibles: avisa, deshabilita y no pide nada (DX-089)', async () => {
+    renderDialog({ token: tokenWithLoc(['loc-1']), locations: [], activeLocationId: null });
+    expect(screen.getByText('No tienes ninguna sede disponible para el bloqueo.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Bloquear' })).toBeDisabled();
+    expect(mockedAffected).not.toHaveBeenCalled();
+    expect(mockedCreate).not.toHaveBeenCalled();
+  });
+
+  it('miembro acotado con sede activa obsoleta: envía la primera permitida (DX-089)', async () => {
+    const token = tokenWithLoc(['loc-1']);
+    const onCreated = renderDialog({ token, activeLocationId: 'loc-borrada' });
+    expect(screen.getByLabelText('Sede')).toHaveValue('loc-1');
+    await userEvent.click(screen.getByRole('button', { name: 'Bloquear' }));
+    await waitFor(() => expect(onCreated).toHaveBeenCalledWith(created));
+    expect(mockedCreate).toHaveBeenCalledWith(token, expect.objectContaining({ locationId: 'loc-1' }));
+  });
 });

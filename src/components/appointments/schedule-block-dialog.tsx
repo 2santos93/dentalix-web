@@ -35,6 +35,7 @@ const copy = {
   provider: 'Profesional',
   location: 'Sede',
   allLocations: 'Todas las sedes',
+  noLocations: 'No tienes ninguna sede disponible para el bloqueo.',
   restrictedHint: 'Como tu acceso está acotado a sedes, el bloqueo debe tener sede.',
   kind: 'Motivo',
   wholeDays: 'Días completos',
@@ -128,7 +129,9 @@ export function ScheduleBlockDialog({
   // Un miembro acotado a sedes no puede bloquear «todas»: la API responde 403.
   const restricted = getTokenAllowedLocationIds(token) !== null;
   const [providerLocationId, setProviderLocationId] = useState(
-    restricted ? (activeLocationId ?? locations[0]?.id ?? '') : '',
+    restricted
+      ? (locations.find((l) => l.id === activeLocationId)?.id ?? locations[0]?.id ?? '')
+      : '',
   );
   const [kind, setKind] = useState<ScheduleBlockKind>('VACATION');
   const [wholeDays, setWholeDays] = useState(true);
@@ -169,7 +172,10 @@ export function ScheduleBlockDialog({
       scope === 'provider'
         ? { providerId, locationId: providerLocationId || undefined }
         : { locationId };
-    if (!r || (scope === 'provider' ? !providerId : !locationId)) {
+    if (
+      !r ||
+      (scope === 'provider' ? !providerId || (restricted && !providerLocationId) : !locationId)
+    ) {
       setError(copy.missing);
       return;
     }
@@ -206,6 +212,7 @@ export function ScheduleBlockDialog({
   const affectedList = affected?.items ?? [];
   const affectedTotal = affected?.total ?? 0;
   const confirming = affectedTotal > 0;
+  const noLocations = restricted && locations.length === 0;
 
   return (
     <FormModal
@@ -216,7 +223,8 @@ export function ScheduleBlockDialog({
       onSubmit={handleSubmit}
       submitLabel={confirming ? copy.confirmSubmit : copy.submit}
       submitting={submitting}
-      error={error}
+      submitDisabled={noLocations}
+      error={error ?? (noLocations ? copy.noLocations : null)}
       size="lg"
     >
       {confirming ? (
