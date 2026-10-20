@@ -169,6 +169,26 @@ describe('AppointmentPostOpPanel', () => {
     );
   });
 
+  it('email registrado pero no encolado: avisa y ofrece las otras vías, y refresca', async () => {
+    mockedGet.mockResolvedValue(suggestions());
+    mockedDeliver.mockResolvedValueOnce(
+      created({
+        delivery: deliverySummary({ channel: 'EMAIL' }),
+        sentTo: 'a***@correo.com',
+        emailQueued: false,
+      }),
+    );
+    renderPanel();
+    await userEvent.click(await screen.findByRole('button', { name: 'Enviar por email' }));
+    await waitFor(() =>
+      expect(toast.warning).toHaveBeenCalledWith(
+        'La entrega quedó registrada, pero el email no se pudo encolar. Comparte el enlace o usa WhatsApp.',
+      ),
+    );
+    expect(toast.success).not.toHaveBeenCalled();
+    await waitFor(() => expect(mockedGet).toHaveBeenCalledTimes(2));
+  });
+
   it('«Abrir WhatsApp» registra la entrega PRIMERO y abre wa.me con el texto de la API', async () => {
     const { win, open } = fakeWindow();
     mockedGet.mockResolvedValue(suggestions());

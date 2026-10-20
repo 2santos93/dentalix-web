@@ -37,6 +37,8 @@ const copy = {
   emailSent: (to: string) => `Indicaciones enviadas a ${to}.`,
   emailSentToResponsible: (to: string) =>
     `Indicaciones enviadas al responsable del paciente (${to}).`,
+  emailNotQueued:
+    'La entrega quedó registrada, pero el email no se pudo encolar. Comparte el enlace o usa WhatsApp.',
   printed: 'Entrega registrada: la vista para imprimir se abrió en otra pestaña.',
   printBlocked: 'Entrega registrada. El navegador bloqueó la pestaña para imprimir.',
   openPrint: 'Abrir para imprimir',
@@ -125,7 +127,10 @@ export function AppointmentPostOpPanel({ token, appointmentId }: AppointmentPost
     setBusy(channel);
     try {
       const result = await deliverPostOp(token, appointmentId, { templateId, channel });
-      if (channel === 'EMAIL') {
+      if (channel === 'EMAIL' && !result.emailQueued) {
+        // La API registró la entrega pero el email no entró en la cola.
+        toast.warning(copy.emailNotQueued);
+      } else if (channel === 'EMAIL') {
         const to = result.sentTo ?? '';
         toast.success(
           result.sentToResponsible ? copy.emailSentToResponsible(to) : copy.emailSent(to),
