@@ -2361,6 +2361,7 @@ export function TreatmentPlansTab({
                           aria-describedby={
                             [
                               itemAmountErrors.price ? fieldErrorId('tp-price') : null,
+                              quoteReady && priceQuote.status === 'ready' ? 'tp-price-source' : null,
                               addBelowCatalog ? 'tp-price-below-catalog' : null,
                             ]
                               .filter(Boolean)
@@ -2375,7 +2376,7 @@ export function TreatmentPlansTab({
                         ) : priceQuote.status === 'error' ? (
                           <FieldError label={copy.priceQuoteError} onRetry={priceQuote.retry} />
                         ) : quoteReady && selectedPlan ? (
-                          <PriceQuoteLine quote={quoteReady} currency={selectedPlan.currency} />
+                          <PriceQuoteLine id="tp-price-source" quote={quoteReady} currency={addCurrency} />
                         ) : null}
                         {/* SEC-041: aviso, no bloqueo; la API decide con el
                             tope del rol. */}
@@ -2398,6 +2399,7 @@ export function TreatmentPlansTab({
                         htmlFor="tp-discount"
                         label={copy.discountLabel}
                         hint={addNoDiscount ? NO_DISCOUNT_ALLOWED_NOTICE : copy.discountHint}
+                        hintId="tp-discount-hint"
                         error={itemAmountErrors.discount}
                       >
                         <MoneyInput
@@ -2410,7 +2412,14 @@ export function TreatmentPlansTab({
                             setItemAmountErrors((errors) => ({ ...errors, discount: undefined }));
                           }}
                           aria-invalid={itemAmountErrors.discount ? true : undefined}
-                          aria-describedby={itemAmountErrors.discount ? fieldErrorId('tp-discount') : undefined}
+                          aria-describedby={
+                            [
+                              itemAmountErrors.discount ? fieldErrorId('tp-discount') : null,
+                              addNoDiscount && !itemAmountErrors.discount ? 'tp-discount-hint' : null,
+                            ]
+                              .filter(Boolean)
+                              .join(' ') || undefined
+                          }
                         />
                       </FormField>
 

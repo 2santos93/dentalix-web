@@ -1726,6 +1726,16 @@ describe('TreatmentPlansTab', () => {
       expect(await screen.findByText(/Convenio · Seguros Sol · precio de lista 50\.000,00/)).toBeInTheDocument();
     });
 
+    it('la línea de origen queda atada al campo de precio (aria-describedby)', async () => {
+      mockedGetPriceQuote.mockResolvedValue(agreementQuote());
+      const user = await openForm();
+      await user.click(screen.getByRole('radio', { name: /resina/i }));
+      const line = await screen.findByText(/Convenio · Seguros Sol · precio de lista/);
+      const price = screen.getByLabelText(/^precio$/i);
+      expect(line.id).toBeTruthy();
+      expect(price.getAttribute('aria-describedby')?.split(' ')).toContain(line.id);
+    });
+
     it('mientras llega el precio el campo está en espera y no se puede agregar', async () => {
       let resolve!: (q: PriceQuote) => void;
       mockedGetPriceQuote.mockReturnValue(new Promise<PriceQuote>((r) => (resolve = r)));
@@ -1833,8 +1843,11 @@ describe('TreatmentPlansTab', () => {
       const price = screen.getByLabelText<HTMLInputElement>(/^precio$/i);
       await waitFor(() => expect(price.value).toBe('40000'));
 
-      expect(screen.getByLabelText(/^descuento/i)).toBeDisabled();
-      expect(screen.getByText('Esta prestación no admite descuentos.')).toBeInTheDocument();
+      const discount = screen.getByLabelText(/^descuento/i);
+      expect(discount).toBeDisabled();
+      const hint = screen.getByText('Esta prestación no admite descuentos.');
+      expect(hint.id).toBeTruthy();
+      expect(discount.getAttribute('aria-describedby')?.split(' ')).toContain(hint.id);
 
       await user.clear(price);
       await user.type(price, '35000');
@@ -1873,6 +1886,24 @@ describe('TreatmentPlansTab', () => {
       render(<TreatmentPlansTab patientId="pat-1" token="tok" />);
       const table = await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
       expect(within(table).getByText(/Convenio Seguros Sol · precio de lista 50\.000,00/)).toBeInTheDocument();
+    });
+
+    it('un ítem con convenio y descuento muestra la línea del convenio Y la del descuento', async () => {
+      const both = {
+        ...item1,
+        catalogPrice: 40000,
+        basePrice: 50000,
+        discount: 2000,
+        priceSource: 'AGREEMENT_PERCENT' as const,
+        agreementId: 'ag-1',
+        agreementName: 'Seguros Sol',
+      };
+      mockedListPlans.mockResolvedValue([plan1]);
+      mockedGetPlan.mockResolvedValue({ ...plan1Detail, items: [both, item2] });
+      render(<TreatmentPlansTab patientId="pat-1" token="tok" />);
+      const table = await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+      expect(within(table).getByText(/Convenio Seguros Sol · precio de lista 50\.000,00/)).toBeInTheDocument();
+      expect(within(table).getByText(/Descuento −2000,00/)).toBeInTheDocument();
     });
 
     it('el ítem con lista de precios de la sede lo dice solo si el precio de lista difiere', async () => {

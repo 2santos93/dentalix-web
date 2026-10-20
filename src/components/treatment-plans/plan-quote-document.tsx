@@ -173,16 +173,16 @@ export function PlanQuoteDocument({ quote }: PlanQuoteDocumentProps) {
                 </td>
               </tr>
             ) : (
-              quote.items.map((item) => (
+              quote.items.map((item) => {
+                const listLine = listPriceOf(item, currency);
+                return (
                 <tr key={item.id} className="quote-item border-b border-[#e5e7eb] align-top">
                   <td className="py-2 pr-3 font-medium tabular-nums">{item.toothNumber}</td>
                   <td className="py-2 pr-3">
                     <span className="block">{item.procedure}</span>
                     <span className="block text-xs text-[#4b5563]">{surfacesOf(item)}</span>
-                    {listPriceOf(item, currency) ? (
-                      <span className="block text-xs text-[#4b5563] tabular-nums">
-                        {listPriceOf(item, currency)}
-                      </span>
+                    {listLine ? (
+                      <span className="block text-xs text-[#4b5563] tabular-nums">{listLine}</span>
                     ) : null}
                   </td>
                   <td className="py-2 pr-3 text-right tabular-nums">{item.quantity}</td>
@@ -192,7 +192,8 @@ export function PlanQuoteDocument({ quote }: PlanQuoteDocumentProps) {
                     {money(item.subtotal, currency)}
                   </td>
                 </tr>
-              ))
+                );
+              })
             )}
           </tbody>
         </table>
@@ -202,7 +203,9 @@ export function PlanQuoteDocument({ quote }: PlanQuoteDocumentProps) {
           {quote.items.length === 0 ? (
             <li className="py-6 text-center text-sm text-[#4b5563]">{copy.emptyItems}</li>
           ) : (
-            quote.items.map((item) => (
+            quote.items.map((item) => {
+              const listLine = listPriceOf(item, currency);
+              return (
               <li key={item.id} className="py-3 text-sm">
                 <div className="flex items-baseline justify-between gap-3">
                   <span className="font-medium">{item.procedure}</span>
@@ -216,11 +219,10 @@ export function PlanQuoteDocument({ quote }: PlanQuoteDocumentProps) {
                   {copy.colPrice} {money(item.unitPrice, currency)}
                   {item.discount > 0 ? ` · ${copy.colDiscount} ${discount(item.discount, currency)}` : ''}
                 </p>
-                {listPriceOf(item, currency) ? (
-                  <p className="mt-0.5 text-xs text-[#4b5563] tabular-nums">{listPriceOf(item, currency)}</p>
-                ) : null}
+                {listLine ? <p className="mt-0.5 text-xs text-[#4b5563] tabular-nums">{listLine}</p> : null}
               </li>
-            ))
+              );
+            })
           )}
         </ul>
 
