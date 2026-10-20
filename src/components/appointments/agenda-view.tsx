@@ -211,12 +211,19 @@ type DayLayout = 'columns' | 'list';
  * Columnas por defecto: quienes atienden pacientes (odontólogos y
  * administración, que en la clínica suele ser el titular), hasta 12. Si no hay
  * ninguno, el personal entero. Recepción y asistentes se añaden con el selector.
+ *
+ * DX-089: con una sede activa, solo los clínicos que trabajan en ella
+ * (`locationIds` nulo = todas las sedes). Si ninguno, se cae a la regla de
+ * siempre para no dejar la vista vacía.
  */
-function defaultColumnIds(staff: StaffMember[]): string[] {
+function defaultColumnIds(staff: StaffMember[], activeLocationId: string | null): string[] {
   const clinicians = staff.filter((s) => s.role === 'DENTIST' || s.role === 'ADMIN');
-  return (clinicians.length > 0 ? clinicians : staff)
-    .slice(0, MAX_PROVIDER_COLUMNS)
-    .map((s) => s.userId);
+  const inLocation =
+    activeLocationId === null
+      ? []
+      : clinicians.filter((s) => !s.locationIds || s.locationIds.includes(activeLocationId));
+  const pool = inLocation.length > 0 ? inLocation : clinicians.length > 0 ? clinicians : staff;
+  return pool.slice(0, MAX_PROVIDER_COLUMNS).map((s) => s.userId);
 }
 
 const VIEW_MODES: ViewMode[] = ['month', 'day', 'week'];
@@ -504,7 +511,7 @@ export function AgendaView({ token }: AgendaViewProps) {
 
   // Columnas visibles: la selección del usuario (solo ids que siguen en el
   // personal) o la de por defecto.
-  const columnIds = (pickedColumnIds ?? defaultColumnIds(staff)).filter((id) =>
+  const columnIds = (pickedColumnIds ?? defaultColumnIds(staff, activeLocationId)).filter((id) =>
     staff.some((s) => s.userId === id),
   );
   const columnProviders = columnIds

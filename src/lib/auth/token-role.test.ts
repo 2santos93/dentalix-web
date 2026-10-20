@@ -1,4 +1,4 @@
-import { getTokenRole, getTokenUserId } from './token-role';
+import { getTokenAllowedLocationIds, getTokenRole, getTokenUserId } from './token-role';
 
 function tokenWith(claims: unknown): string {
   const b64url = (value: string) =>
@@ -38,5 +38,31 @@ describe('getTokenUserId', () => {
     expect(getTokenUserId(tokenWith({ sub: 'u1', role: 'DENTIST' }))).toBe('u1');
     expect(getTokenUserId(tokenWith({ role: 'DENTIST' }))).toBeNull();
     expect(getTokenUserId(null)).toBeNull();
+  });
+});
+
+describe('getTokenAllowedLocationIds (DX-089)', () => {
+  it('sin claim `loc` el miembro tiene todas las sedes (null)', () => {
+    expect(getTokenAllowedLocationIds(tokenWith({ sub: 'u1', role: 'ADMIN' }))).toBeNull();
+  });
+
+  it('con `loc` devuelve la lista de sedes permitidas', () => {
+    expect(
+      getTokenAllowedLocationIds(tokenWith({ sub: 'u1', role: 'RECEPTION', loc: ['s1', 's2'] })),
+    ).toEqual(['s1', 's2']);
+  });
+
+  it('`loc: []` significa ninguna sede, no todas', () => {
+    expect(getTokenAllowedLocationIds(tokenWith({ role: 'DENTIST', loc: [] }))).toEqual([]);
+  });
+
+  it('descarta entradas que no son texto y trata un `loc` que no es lista como ausente', () => {
+    expect(getTokenAllowedLocationIds(tokenWith({ loc: ['s1', 7, '', null] }))).toEqual(['s1']);
+    expect(getTokenAllowedLocationIds(tokenWith({ loc: 's1' }))).toBeNull();
+  });
+
+  it('sin token legible devuelve null', () => {
+    expect(getTokenAllowedLocationIds(null)).toBeNull();
+    expect(getTokenAllowedLocationIds('basura')).toBeNull();
   });
 });

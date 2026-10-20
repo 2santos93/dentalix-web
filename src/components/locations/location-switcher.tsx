@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { useAuthStore } from '@/lib/auth/auth-store';
+import { getTokenAllowedLocationIds } from '@/lib/auth/token-role';
 import { listLocations, type ClinicLocation } from '@/lib/locations/locations-api';
 import {
   getActiveLocationId,
@@ -12,6 +13,9 @@ import { ChevronDown, MapPin } from 'lucide-react';
 const copy = {
   label: 'Sede',
   all: 'Todas las sedes',
+  // DX-089: un miembro acotado a varias sedes ve la vista conjunta de LAS SUYAS,
+  // no la de la clínica entera.
+  mine: 'Mis sedes',
 };
 
 // `appearance-none` + chevron propio: el select nativo pinta su flecha con el
@@ -34,6 +38,11 @@ const fieldClass =
  * - `variant="rail"`: botón cuadrado de icono para el sidebar colapsado.
  * - `variant="inline"`: compacto, para el topbar móvil (donde no hay sidebar).
  *
+ * Con sedes acotadas (claim `loc` del token, DX-089) solo se ofrecen las
+ * permitidas y nunca «Todas las sedes»: con varias, la opción vacía pasa a ser
+ * «Mis sedes» (la API responde sobre las suyas); con una sola, queda elegida y
+ * sin opción vacía.
+ *
  * Cambiar de sede recarga la vista actual (`router.refresh()` no basta: los
  * datos los piden componentes cliente con useEffect, no el servidor), así que
  * se fuerza un reload — es una acción deliberada y poco frecuente.
@@ -46,6 +55,11 @@ export function LocationSwitcher({
   const token = useAuthStore((s) => s.accessToken);
   const [locations, setLocations] = useState<ClinicLocation[]>([]);
   const [active, setActive] = useState<string | null>(null);
+  // `null` = sin restricción. Se lee del token: cambia justo al renovarlo, que
+  // es cuando la API empieza a aplicar un cambio de sedes.
+  const allowed = getTokenAllowedLocationIds(token);
+  const restricted = allowed !== null;
+  const allowedKey = allowed?.join(',') ?? null;
 
   // Rehidratar la sede elegida: localStorage solo existe en el cliente, así
   // que no puede leerse como estado inicial sin romper la hidratación. La
@@ -64,7 +78,13 @@ export function LocationSwitcher({
       try {
         const data = await listLocations(activeToken);
         if (cancelled) return;
-        const usables = data.filter((l) => l.isActive);
+        // La API ya filtra `GET /locations` para un miembro acotado; filtrar
+        // también aquí por el claim evita ofrecer una sede que daría 403 si
+        // las dos fuentes no van a la par (p. ej. lista cacheada).
+        const permitidas = allowedKey === null ? null : allowedKey.split(',');
+        const usables = data.filter(
+          (l) => l.isActive && (permitidas === null || permitidas.includes(l.id)),
+        );
         setLocations(usables);
 
         // Reconciliar la sede guardada contra las que existen DE VERDAD.
@@ -78,7 +98,20 @@ export function LocationSwitcher({
         // por qué. Soltarla aquí devuelve al usuario a la vista consolidada,
         // que es el comportamiento por defecto y siempre es válido.
         const guardada = getActiveLocationId();
-        if (guardada && !usables.some((l) => l.id === guardada)) {
+        const guardadaValida = guardada !== null && usables.some((l) => l.id === guardada);
+        if (permitidas !== null && usables.length > 0) {
+          // Acotado: una sede no permitida no se suelta a «todas» (no existe
+          // para él) sino a la primera de las suyas; y con una sola, esa queda
+          // siempre elegida.
+          const siguiente =
+            usables.length === 1
+              ? usables[0].id
+              : guardada === null || guardadaValida
+                ? guardada
+                : usables[0].id;
+          if (siguiente !== guardada) setActiveLocationId(siguiente);
+          setActive(siguiente);
+        } else if (guardada && !guardadaValida) {
           setActiveLocationId(null);
           setActive(null);
         }
@@ -96,7 +129,7 @@ export function LocationSwitcher({
     return () => {
       cancelled = true;
     };
-  }, [token]);
+  }, [token, allowedKey]);
 
   // Sin ninguna sede sí se esconde: un selector vacío no ofrece nada. Con una
   // o más, se muestra (ver la nota de arriba).
@@ -111,9 +144,12 @@ export function LocationSwitcher({
     window.location.reload();
   }
 
+  // Acotado a una sola sede: no hay vista conjunta que ofrecer.
+  const emptyLabel = restricted ? (locations.length > 1 ? copy.mine : null) : copy.all;
+
   const options = (
     <>
-      <option value="">{copy.all}</option>
+      {emptyLabel && <option value="">{emptyLabel}</option>}
       {locations.map((l) => (
         <option key={l.id} value={l.id}>
           {l.name}
@@ -123,7 +159,7 @@ export function LocationSwitcher({
   );
 
   if (variant === 'rail') {
-    const activeName = locations.find((l) => l.id === active)?.name ?? copy.all;
+    const activeName = locations.find((l) => l.id === active)?.name ?? emptyLabel ?? copy.all;
     return (
       <label
         title={`${copy.label}: ${activeName}`}

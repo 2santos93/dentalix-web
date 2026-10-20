@@ -3,7 +3,7 @@ import { setActiveLocationId } from '@/lib/locations/location-store';
 import {
   apiErrorFromBody,
   buildRequestHeaders,
-  isUnknownLocationError,
+  isStaleLocationError,
   NetworkError,
   refreshAccessToken,
 } from './client';
@@ -84,7 +84,7 @@ export async function uploadWithProgress<T>(
   let body = parseJson(res.text);
   if (res.status < 200 || res.status >= 300) {
     const error = apiErrorFromBody(res.status, body, res.retryAfter);
-    if (!res.sentLocationId || !isUnknownLocationError(error)) throw error;
+    if (!isStaleLocationError(error, res.sentLocationId, token)) throw error;
     setActiveLocationId(null);
     opts.onProgress?.(0);
     res = await send(path, formData, opts, token);

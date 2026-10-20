@@ -235,6 +235,31 @@ describe('CatalogView', () => {
     expect(await screen.findByText('Profilaxis dental')).toBeInTheDocument();
   });
 
+  // Revisión DX-241: un precio de catálogo en COP con céntimos (la API lo
+  // guarda en Decimal(12,2)) se edita sin tocar el precio y se guarda tal cual.
+  it('DX-241: editar un ítem con precio en COP con céntimos guarda sin tocar el precio', async () => {
+    const withCents = { ...item1, defaultPrice: 150000.5 };
+    mockedList.mockResolvedValueOnce(page([withCents]));
+    mockedUpdate.mockResolvedValue({ ...withCents, labelEs: 'Profilaxis dental' });
+    mockedList.mockResolvedValueOnce(page([{ ...withCents, labelEs: 'Profilaxis dental' }]));
+
+    const user = setupUser();
+    render(<CatalogView token="tok" />);
+    await screen.findByRole('table', { name: /catálogo/i });
+    await waitFor(() => expect(screen.getByText('150.000,50 COP')).toBeInTheDocument());
+
+    const menu = await openRowMenu(user, /acciones de profilaxis/i);
+    await user.click(within(menu).getByRole('menuitem', { name: /editar/i }));
+    const nameInput = screen.getByLabelText(/^nombre$/i);
+    await user.clear(nameInput);
+    await user.type(nameInput, 'Profilaxis dental');
+    await user.click(screen.getByRole('button', { name: /^guardar$/i }));
+
+    await waitFor(() =>
+      expect(mockedUpdate).toHaveBeenCalledWith('tok', 'c1', expect.objectContaining({ defaultPrice: 150000.5 })),
+    );
+  });
+
   it('«Desactivar» hace PATCH { active: false } y la fila pasa a ofrecer «Activar»', async () => {
     mockedList.mockResolvedValueOnce(page([item1]));
     mockedUpdate.mockResolvedValue({ ...item1, active: false });

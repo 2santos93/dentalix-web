@@ -11,9 +11,10 @@ import {
 import type { PaymentMethod } from '@/lib/payments/payments-api';
 import { PAYMENT_METHOD_LABELS, PAYMENT_METHOD_OPTIONS } from '@/lib/payments/payment-method';
 import { FormModal } from '@/components/shared/form-modal';
-import { FormField } from '@/components/shared/form-field';
+import { FormField, fieldErrorId } from '@/components/shared/form-field';
+import { MoneyInput } from '@/components/shared/money-input';
+import { parseMoneyInput } from '@/lib/format/money';
 import { CurrencySelect } from '@/components/shared/currency-select';
-import { Input } from '@/components/ui/input';
 import { InlineError } from '@/components/errors/inline-error';
 import { fieldClass } from '@/lib/ui/field-class';
 
@@ -29,7 +30,7 @@ const copy = {
   method: 'Método',
   reason: 'Motivo',
   reasonHint: `Entre ${CASH_REASON_MIN} y ${CASH_REASON_MAX} caracteres.`,
-  invalidAmount: 'Escribe un importe mayor que 0, con como mucho 2 decimales.',
+  invalidAmount: 'Escribe un importe mayor que 0.',
   tooShort: `Escribe el motivo (al menos ${CASH_REASON_MIN} caracteres).`,
   submit: 'Registrar ajuste',
   genericError: 'No pudimos registrar el ajuste. Intenta de nuevo.',
@@ -60,17 +61,19 @@ export function CashAdjustmentModal({
   const [method, setMethod] = useState<PaymentMethod>('CASH');
   const [reason, setReason] = useState('');
   const [validation, setValidation] = useState<string | null>(null);
+  const [amountError, setAmountError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    const text = amount.trim().replace(',', '.');
-    const value = /^\d+(\.\d{1,2})?$/.test(text) ? Number(text) : 0;
-    if (value <= 0) {
-      setValidation(copy.invalidAmount);
+    // DX-241: la lectura común de los campos de dinero; el signo lo da el tipo.
+    const parsed = parseMoneyInput(amount, currency);
+    if (!parsed.ok || parsed.value <= 0) {
+      setAmountError(parsed.ok || parsed.reason === 'empty' ? copy.invalidAmount : parsed.message);
       return;
     }
+    const value = parsed.value;
     if (reason.trim().length < CASH_REASON_MIN) {
       setValidation(copy.tooShort);
       return;
@@ -109,7 +112,7 @@ export function CashAdjustmentModal({
           id={`${id}-sign`}
           value={sign}
           disabled={submitting}
-          onChange={(e) => setSign(Number(e.target.value) === 1 ? 1 : -1)}
+          onChange={(e) => setSign(e.target.value === '1' ? 1 : -1)}
           className={`${fieldClass} h-10`}
         >
           <option value={-1}>{copy.subtract}</option>
@@ -117,17 +120,19 @@ export function CashAdjustmentModal({
         </select>
       </FormField>
       <div className="grid gap-3 sm:grid-cols-3">
-        <FormField htmlFor={`${id}-amount`} label={copy.amount}>
-          <Input
+        <FormField htmlFor={`${id}-amount`} label={copy.amount} error={amountError}>
+          <MoneyInput
             id={`${id}-amount`}
-            inputMode="decimal"
+            currency={currency}
+            requirePositive
             value={amount}
             disabled={submitting}
-            onChange={(e) => {
-              setAmount(e.target.value);
-              setValidation(null);
+            onValueChange={(text) => {
+              setAmount(text);
+              setAmountError(null);
             }}
-            className="tabular-nums"
+            aria-invalid={amountError ? true : undefined}
+            aria-describedby={amountError ? fieldErrorId(`${id}-amount`) : undefined}
           />
         </FormField>
         <FormField htmlFor={`${id}-currency`} label={copy.currency}>

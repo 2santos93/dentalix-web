@@ -37,8 +37,8 @@ it('propone 12 cuotas mensuales desde hoy, sin pie y el total facturable del pla
   const dialog = screen.getByRole('dialog', { name: 'Crear plan de pagos' });
   expect(within(dialog).getByLabelText('N.º de cuotas')).toHaveValue(12);
   expect(within(dialog).getByLabelText('Periodicidad')).toHaveValue('MONTHLY');
-  expect(within(dialog).getByLabelText('Pie (opcional)')).toHaveValue(0);
-  expect(within(dialog).getByLabelText('Total a financiar')).toHaveValue(1200000);
+  expect(within(dialog).getByLabelText('Pie (opcional)')).toHaveValue('0');
+  expect(within(dialog).getByLabelText('Total a financiar')).toHaveValue('1200000');
   expect((within(dialog).getByLabelText('Fecha de inicio') as HTMLInputElement).value).toMatch(
     /^\d{4}-\d{2}-\d{2}$/,
   );
@@ -85,6 +85,55 @@ it('valida en español antes de llamar a la API', async () => {
   expect(mockedCreate).not.toHaveBeenCalled();
 });
 
+it('DX-241: pie y total con miles se leen como en el resto de la app', async () => {
+  const user = userEvent.setup();
+  mockedCreate.mockResolvedValue({} as Awaited<ReturnType<typeof createPaymentPlan>>);
+  renderModal();
+  const dialog = screen.getByRole('dialog');
+  await user.clear(within(dialog).getByLabelText('Pie (opcional)'));
+  await user.type(within(dialog).getByLabelText('Pie (opcional)'), '200.000');
+  await user.clear(within(dialog).getByLabelText('Total a financiar'));
+  await user.type(within(dialog).getByLabelText('Total a financiar'), '1.400.000');
+  expect(dialog.textContent?.replace(/\s/g, ' ')).toContain('Financiado: 1.200.000,00 COP · Cuota: 100.000,00 COP');
+  await user.click(within(dialog).getByRole('button', { name: 'Crear' }));
+  await waitFor(() =>
+    expect(mockedCreate).toHaveBeenCalledWith(
+      'tok',
+      'plan-1',
+      expect.objectContaining({ downPayment: 200000, totalToFinance: 1400000 }),
+    ),
+  );
+});
+
+it('DX-241: un total ambiguo no se envía y el motivo sale junto al campo', async () => {
+  const user = userEvent.setup();
+  renderModal();
+  const dialog = screen.getByRole('dialog');
+  const total = within(dialog).getByLabelText('Total a financiar');
+  await user.clear(total);
+  await user.type(total, '1.20.000');
+  await user.click(within(dialog).getByRole('button', { name: 'Crear' }));
+  expect(total).toHaveAttribute('aria-invalid', 'true');
+  expect(document.getElementById('pp-total-error')).toHaveTextContent('No sabemos leer «1.20.000»');
+  expect(mockedCreate).not.toHaveBeenCalled();
+});
+
+it('DX-241: un facturable en COP con céntimos se propone y se envía sin tocarlo', async () => {
+  const user = userEvent.setup();
+  mockedCreate.mockResolvedValue({} as Awaited<ReturnType<typeof createPaymentPlan>>);
+  renderModal({ plan: { id: 'plan-1', currency: 'COP', billable: 175000.5 } });
+  const dialog = screen.getByRole('dialog');
+  expect(within(dialog).getByLabelText('Total a financiar')).toHaveValue('175000,5');
+  await user.click(within(dialog).getByRole('button', { name: 'Crear' }));
+  await waitFor(() =>
+    expect(mockedCreate).toHaveBeenCalledWith(
+      'tok',
+      'plan-1',
+      expect.objectContaining({ downPayment: 0, totalToFinance: 175000.5 }),
+    ),
+  );
+});
+
 it('un 409 se explica en español y el modal sigue abierto', async () => {
   const user = userEvent.setup();
   mockedCreate.mockRejectedValue(
@@ -112,7 +161,7 @@ it('al cambiar de plan, el total vuelve al facturable del plan nuevo', () => {
       onCreated={onCreated}
     />,
   );
-  expect(screen.getByLabelText('Total a financiar')).toHaveValue(900);
+  expect(screen.getByLabelText('Total a financiar')).toHaveValue('900');
 });
 
 it('sin plan elegido no deja crear y pinta lo que se le pase encima de los campos', () => {

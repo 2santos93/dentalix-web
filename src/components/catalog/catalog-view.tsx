@@ -18,7 +18,9 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
-import { FormField } from '@/components/shared/form-field';
+import { FormField, fieldErrorId } from '@/components/shared/form-field';
+import { MoneyInput } from '@/components/shared/money-input';
+import { moneyInputText, parseMoneyInput } from '@/lib/format/money';
 import { FormModal } from '@/components/shared/form-modal';
 import {
   AsyncSection,
@@ -228,6 +230,7 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
   const [category, setCategory] = useState('');
   const [cups, setCups] = useState('');
   const [cupsError, setCupsError] = useState<string | null>(null);
+  const [priceError, setPriceError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
 
@@ -364,6 +367,7 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
     setCategory('');
     setCups('');
     setCupsError(null);
+    setPriceError(null);
   }
 
   function openCreate() {
@@ -377,7 +381,7 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
     setName(item.labelEs);
     setKind(item.kind);
     setCode(item.code);
-    setPrice(item.defaultPrice == null ? '' : String(item.defaultPrice));
+    setPrice(item.defaultPrice == null ? '' : moneyInputText(item.defaultPrice));
     setColor(item.color);
     setCategory(item.category ?? '');
     setCups(item.cupsCode ?? '');
@@ -412,8 +416,7 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
   // fields are omitted (so a blank price/category doesn't send anything) — a
   // known v1 limitation for edit: you can't clear an existing price/category
   // from the UI (the backend partial DTO rejects null for those).
-  function buildPayload(): CreateCatalogItemInput {
-    const trimmedPrice = price.trim();
+  function buildPayload(defaultPrice: number | undefined): CreateCatalogItemInput {
     const trimmedCategory = category.trim();
     const trimmedCups = cups.trim().toUpperCase();
     return {
@@ -421,7 +424,7 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
       kind,
       labelEs: name.trim(),
       color,
-      ...(trimmedPrice ? { defaultPrice: Number(trimmedPrice) } : {}),
+      ...(defaultPrice !== undefined ? { defaultPrice } : {}),
       ...(trimmedCategory ? { category: trimmedCategory } : {}),
       ...(canEdit && trimmedCups ? { cupsCode: trimmedCups } : {}),
     };
@@ -431,6 +434,14 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
     e.preventDefault();
     setFormError(null);
     setCupsError(null);
+    setPriceError(null);
+    // DX-241: la lectura común de los campos de dinero, en la moneda de la
+    // clínica (la de los precios del catálogo).
+    const parsedPrice = price.trim() === '' ? null : parseMoneyInput(price, currency ?? '');
+    if (parsedPrice && !parsedPrice.ok) {
+      setPriceError(parsedPrice.message);
+      return;
+    }
     const trimmedCups = cups.trim().toUpperCase();
     if (canEdit && trimmedCups && !CUPS_PATTERN.test(trimmedCups)) {
       setCupsError(copy.cupsInvalid);
@@ -438,7 +449,7 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
     }
     setSaving(true);
     try {
-      const payload = buildPayload();
+      const payload = buildPayload(parsedPrice?.ok ? parsedPrice.value : undefined);
       if (editingItem) {
         // Editar con el campo vacío QUITA el CUPS (la API acepta null).
         const patch: UpdateCatalogItemInput = {
@@ -609,14 +620,18 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
               htmlFor="catalog-price"
               label={copy.priceLabel}
               hint={copy.priceHint}
+              error={priceError}
             >
-              <Input
+              <MoneyInput
                 id="catalog-price"
-                type="number"
-                min={0}
-                step="0.01"
+                currency={currency ?? ''}
                 value={price}
-                onChange={(e) => setPrice(e.target.value)}
+                onValueChange={(text) => {
+                  setPrice(text);
+                  setPriceError(null);
+                }}
+                aria-invalid={priceError ? true : undefined}
+                aria-describedby={priceError ? fieldErrorId('catalog-price') : undefined}
               />
             </FormField>
           </div>

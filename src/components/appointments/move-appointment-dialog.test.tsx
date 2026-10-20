@@ -15,8 +15,8 @@ const FUTURE = (() => {
 })();
 
 const providers = [
-  { userId: 'prov-1', fullName: 'Dra. Ana Ríos', role: 'DENTIST' as const },
-  { userId: 'prov-2', fullName: 'Dr. Luis Gómez', role: 'DENTIST' as const },
+  { userId: 'prov-1', fullName: 'Dra. Ana Ríos', role: 'DENTIST' as const, locationIds: null },
+  { userId: 'prov-2', fullName: 'Dr. Luis Gómez', role: 'DENTIST' as const, locationIds: null },
 ];
 
 const appointment: Appointment = {

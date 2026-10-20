@@ -27,8 +27,8 @@ const mockedOpenings = findOpenings as jest.MockedFunction<typeof findOpenings>;
 const mockedSchedule = scheduleFromWaitlist as jest.MockedFunction<typeof scheduleFromWaitlist>;
 
 const staff = [
-  { userId: 'rec-1', fullName: 'Laura Recepción', role: 'RECEPTION' as const },
-  { userId: 'prov-1', fullName: 'Dra. Ana Ríos', role: 'DENTIST' as const },
+  { userId: 'rec-1', fullName: 'Laura Recepción', role: 'RECEPTION' as const, locationIds: null },
+  { userId: 'prov-1', fullName: 'Dra. Ana Ríos', role: 'DENTIST' as const, locationIds: null },
 ];
 
 function entry(overrides: Partial<WaitlistEntry> & { id: string }): WaitlistEntry {

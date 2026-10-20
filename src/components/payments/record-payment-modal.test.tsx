@@ -208,7 +208,7 @@ it('valida el importe en español sin llamar a la API', async () => {
 
   await user.click(within(dialog).getByRole('button', { name: 'Registrar abono' }));
   expect(await within(dialog).findByRole('alert')).toHaveTextContent(
-    'Ingresa un importe mayor que 0.',
+    'Escribe un importe mayor que 0.',
   );
   expect(mockedRecord).not.toHaveBeenCalled();
 });

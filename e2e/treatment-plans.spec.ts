@@ -202,7 +202,8 @@ test('treatment plan: create -> add item -> total -> status DONE -> remove -> to
   await pickProcedure();
 
   // Price prefills from the catalog item's `defaultPrice` (still editable).
-  const priceInput = addItemForm.getByRole('spinbutton', { name: 'Precio' });
+  // DX-241: campo de dinero de texto (<MoneyInput>), ya no type=number.
+  const priceInput = addItemForm.getByRole('textbox', { name: 'Precio' });
   await expect(priceInput).toHaveValue(String(defaultPrice));
 
   const addItemError = addItemForm.locator('p[role="alert"]');

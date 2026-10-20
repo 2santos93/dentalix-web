@@ -170,6 +170,21 @@ it('marca el alcance de sede: "Todas las sedes" sin sede activa, el nombre con u
   expect(await screen.findByText(/caja de sede norte/i)).toBeInTheDocument();
 });
 
+const restrictedToken = (loc: string[]): string => {
+  const b64url = (value: string) =>
+    btoa(value).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  return `${b64url('{"alg":"HS256"}')}.${b64url(
+    JSON.stringify({ sub: 'u1', role: 'RECEPTION', loc }),
+  )}.firma`;
+};
+
+it('un miembro acotado a sedes sin sede activa ve «Mis sedes» (DX-089)', async () => {
+  mockedList.mockResolvedValueOnce(response());
+  render(<CashRegisterView token={restrictedToken(['loc-1'])} />);
+  expect(await screen.findByText('Mis sedes')).toBeInTheDocument();
+  expect(screen.queryByText('Todas las sedes')).not.toBeInTheDocument();
+});
+
 it('muestra el estado vacío cuando el período no tiene abonos', async () => {
   mockedList.mockResolvedValue(
     response({

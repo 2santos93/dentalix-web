@@ -1,4 +1,5 @@
 import { useAuthStore } from '@/lib/auth/auth-store';
+import { getTokenAllowedLocationIds } from '@/lib/auth/token-role';
 import {
   getActiveLocationId,
   setActiveLocationId,
@@ -18,13 +19,34 @@ const REFRESH_PATH = '/auth/refresh';
 // autocurarse (los tests de `client.test.ts` lo fijan por si acaso).
 const UNKNOWN_LOCATION = 'unknown location';
 
+// DX-089: código estable del 403 con el que la API rechaza una sede que el
+// miembro ya no puede usar (un ADMIN le acotó las sedes y su sesión se renovó).
+const LOCATION_NOT_ALLOWED = 'LOCATION_NOT_ALLOWED';
+
 /**
- * `true` si la API rechazó la sede enviada en `X-Location-Id` por no ser del
- * tenant (sede borrada, desactivada o de un reseed). Lo comparten `doFetch` y la
- * subida con progreso (`upload.ts`) para autocurarse igual.
+ * `true` si la API rechazó la sede enviada en `X-Location-Id` y conviene
+ * soltarla y reintentar sin cabecera: o no es del tenant (400 «unknown
+ * location»: sede borrada, desactivada o de un reseed), o existe pero ya no
+ * está entre las permitidas del miembro (DX-089, 403 LOCATION_NOT_ALLOWED).
+ *
+ * OJO con el 403: la API lanza ese mismo código al tocar un RECURSO de otra
+ * sede (abrir una cita de l3 con l1 activa); ahí la sede activa es válida y no
+ * se suelta. Solo es la cabecera cuando la sede enviada queda fuera del claim
+ * `loc` del token con el que se hizo la petición.
+ *
+ * Lo comparten `doFetch` y la subida con progreso (`upload.ts`) para
+ * autocurarse igual.
  */
-export function isUnknownLocationError(error: ApiError): boolean {
-  return error.status === 400 && error.message.toLowerCase().includes(UNKNOWN_LOCATION);
+export function isStaleLocationError(
+  error: ApiError,
+  sentLocationId: string | null,
+  token: string | null | undefined,
+): boolean {
+  if (!sentLocationId) return false;
+  if (error.status === 400 && error.message.toLowerCase().includes(UNKNOWN_LOCATION)) return true;
+  if (error.status !== 403 || error.code !== LOCATION_NOT_ALLOWED) return false;
+  const allowedBySentToken = getTokenAllowedLocationIds(token);
+  return allowedBySentToken !== null && !allowedBySentToken.includes(sentLocationId);
 }
 
 interface ApiOptions {
@@ -350,7 +372,11 @@ async function doFetch(
     // pantallas que piden datos sin él. Se suelta la sede y se reintenta UNA
     // vez (`allowLocationReset: false`), ya sin la cabecera: eso devuelve la
     // vista consolidada, que es el comportamiento por defecto y siempre vale.
-    if (allowLocationReset && sentLocationId && isUnknownLocationError(error)) {
+    //
+    // Lo mismo con una sede que existe pero ya no es del miembro (DX-089, 403
+    // LOCATION_NOT_ALLOWED): sin cabecera, la API responde sobre sus sedes
+    // permitidas, que siempre vale. Ver `isStaleLocationError`.
+    if (allowLocationReset && isStaleLocationError(error, sentLocationId, opts.token)) {
       setActiveLocationId(null);
       return doFetch(path, opts, allowRefresh, false);
     }

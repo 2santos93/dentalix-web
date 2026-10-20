@@ -10,6 +10,7 @@ import {
   type CashSessionDetail,
 } from '@/lib/cash-sessions/cash-sessions-api';
 import {
+  countedError,
   countRows,
   countsPayload,
   hasDifference,
@@ -23,7 +24,7 @@ import { ApiError } from '@/lib/api/client';
 import { FormModal } from '@/components/shared/form-modal';
 import { CurrencySelect } from '@/components/shared/currency-select';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
+import { MoneyInput } from '@/components/shared/money-input';
 import { Label } from '@/components/ui/label';
 import { InlineError } from '@/components/errors/inline-error';
 import { fieldClass } from '@/lib/ui/field-class';
@@ -45,7 +46,7 @@ const copy = {
   blindReason: 'Motivo, si el arqueo no cuadra',
   reasonHint: `Entre ${CASH_REASON_MIN} y ${CASH_DIFFERENCE_REASON_MAX} caracteres. Queda en el cierre.`,
   reasonRequired: `El arqueo no cuadra: explica el motivo (al menos ${CASH_REASON_MIN} caracteres).`,
-  invalidCounts: 'Hay importes que no se entienden: usa números con como mucho 2 decimales.',
+  invalidCounts: 'Hay importes que no se entienden: revisa los marcados.',
   otherCurrency: 'Otra moneda para contar',
   addCurrency: 'Contar esta moneda',
   notes: 'Notas del cierre (opcional)',
@@ -101,6 +102,9 @@ export function CloseCashSessionModal({
   const [reason, setReason] = useState('');
   const [notes, setNotes] = useState('');
   const [formError, setFormError] = useState<string | null>(null);
+  // Filas marcadas al intentar cerrar con un importe que no se entiende: su
+  // motivo sale junto al campo hasta que se vuelve a escribir en él.
+  const [flagged, setFlagged] = useState<ReadonlySet<number>>(new Set());
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const differs = !blind && hasDifference(rows);
@@ -110,12 +114,20 @@ export function CloseCashSessionModal({
 
   function patch(index: number, counted: string) {
     setRows((current) => current.map((row, i) => (i === index ? { ...row, counted } : row)));
+    setFlagged((current) => {
+      if (!current.has(index)) return current;
+      const next = new Set(current);
+      next.delete(index);
+      return next;
+    });
     setFormError(null);
   }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (invalidRows(rows).length > 0) {
+    const invalid = invalidRows(rows);
+    if (invalid.length > 0) {
+      setFlagged(new Set(invalid.map((row) => rows.indexOf(row))));
       setFormError(copy.invalidCounts);
       return;
     }
@@ -162,10 +174,12 @@ export function CloseCashSessionModal({
             // de contar asusta y no dice nada (al enviar, lo vacío cuenta 0).
             const diff = row.counted.trim() === '' ? null : rowDifference(row);
             const inputId = `${baseId}-count-${index}`;
+            const rowError = flagged.has(index) ? countedError(row) : null;
+            const errorId = `${inputId}-error`;
             return (
               <li
                 key={`${row.currency}-${row.method}`}
-                className="flex flex-col gap-2 px-3 py-3 sm:flex-row sm:items-center sm:justify-between"
+                className="flex flex-col gap-2 px-3 py-3 sm:flex-row sm:flex-wrap sm:items-start sm:justify-between"
               >
                 <div className="min-w-0">
                   <p className="font-medium text-ink">{copy.rowLabel(method, row.currency)}</p>
@@ -175,22 +189,24 @@ export function CloseCashSessionModal({
                     </p>
                   ) : null}
                 </div>
-                <div className="flex min-w-0 items-center gap-3 sm:justify-end">
-                  <Input
+                <div className="flex min-w-0 items-start gap-3 sm:justify-end">
+                  <MoneyInput
                     id={inputId}
                     aria-label={copy.countedLabel(method, row.currency)}
-                    inputMode="decimal"
+                    currency={row.currency}
                     placeholder="0"
                     value={row.counted}
                     disabled={submitting}
-                    onChange={(e) => patch(index, e.target.value)}
-                    className="min-w-0 flex-1 tabular-nums sm:w-40 sm:flex-none"
+                    onValueChange={(text) => patch(index, text)}
+                    aria-invalid={rowError ? true : undefined}
+                    aria-describedby={rowError ? errorId : undefined}
+                    containerClassName="flex-1 sm:w-40 sm:flex-none"
                   />
                   {diff !== null ? (
                     <span
                       data-testid="row-difference"
                       className={cn(
-                        'shrink-0 whitespace-nowrap text-right text-sm font-medium tabular-nums sm:min-w-28',
+                        'flex h-10 shrink-0 items-center justify-end whitespace-nowrap text-sm font-medium tabular-nums sm:min-w-28',
                         diff === 0 ? 'text-success' : 'text-danger',
                       )}
                     >
@@ -199,6 +215,11 @@ export function CloseCashSessionModal({
                     </span>
                   ) : null}
                 </div>
+                {rowError ? (
+                  <InlineError id={errorId} className="text-xs sm:basis-full">
+                    {rowError}
+                  </InlineError>
+                ) : null}
               </li>
             );
           })}

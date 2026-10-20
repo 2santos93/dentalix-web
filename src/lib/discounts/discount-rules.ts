@@ -121,6 +121,12 @@ export function discountPercent(price: number, discount: number): number {
   return Math.round((discount / price) * 10000) / 100;
 }
 
+/**
+ * Unidad a la que se redondea un descuento en bloque: la misma lista que usa
+ * la API en `discount-policy.ts` (COP sin decimales, EUR a céntimos). Es solo
+ * para el redondeo del descuento: los campos de importe admiten 2 decimales en
+ * cualquier moneda, como la API (DX-241).
+ */
 const ZERO_DECIMAL_CURRENCIES = new Set(['COP', 'CLP', 'JPY', 'KRW', 'PYG']);
 
 export function currencyDecimals(currency: string): 0 | 2 {

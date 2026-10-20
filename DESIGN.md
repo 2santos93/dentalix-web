@@ -240,6 +240,40 @@ inputs, small cards), **12px** (lg — cards and panels), pill for status chips 
 - **Error:** danger border + a message that names the problem and the fix.
 - **Disabled:** reduced opacity, no pointer.
 
+### Money Fields
+Every amount a person types goes through `<MoneyInput>` (`src/components/shared/money-input.tsx`)
+and is read with `parseMoneyInput(text, currency)` (`src/lib/format/money.ts`). No screen
+parses an amount its own way: no component (or page) calls `Number(…)`/`parseFloat(…)`/
+`parseInt(…)` on a money field's text, keeps a `parseAmount`-style parser of its own, or
+renders a money field as `type="number"` — a jest guard (`money-guard.test.ts`) fails CI
+if one does.
+
+**The Amount Rule.** The same keystrokes mean the same amount everywhere, on a Spanish or
+an English keyboard:
+- The **last** separator (`.` or `,`) followed by 1–2 digits is the decimal: `150.50` and
+  `150,50` are both 150,50.
+- Thousands use `.`, `,` or a space, always in groups of 3 and with one separator:
+  `150.000`, `1,500.25`, `1 500 000,25`.
+- Anything else (`1.50.0`, `1.500,000`, a trailing separator) is **ambiguous**: the form
+  does not submit and the field says why, in Spanish, next to it (rung 4, `InlineError`
+  via `FormField`, with `aria-invalid` + `aria-describedby`). Asking beats storing 100×.
+- Up to 2 decimals in **every** currency, COP and CLP included: the API and the database
+  store every amount with cents (`Decimal(…, 2)`), so a COP price or balance with cents
+  that pre-fills a field saves untouched. The server stays the authority on amounts.
+- An amount pasted as the app paints it (`1.500.000,50 US$`, `150.000,00 COP`, `150,50 €`,
+  Intl's hard spaces included) reads the same; another currency's code does not.
+- Above the API's cap (9.999.999.999,99) the field says so instead of sending it.
+- Text input with `inputMode="decimal"`, never `type="number"` (it silently drops a
+  Spanish keyboard's comma).
+
+**The Preview Rule.** Under every amount field the interpreted value reads
+«Se guardará: 150,50 US$», formatted with `formatCurrency`. It is an `aria-live="polite"`
+line the input points at with `aria-describedby`, and it updates once the person stops
+typing (500 ms), so a screen reader announces it once — not per keystroke. While the form
+shows that field's error, the preview stays silent so the message is not read twice.
+A filter (e.g. Cartera's minimum balance) uses the same parser but no preview: nothing
+is saved.
+
 ### Cards / Containers
 - **Corner:** 12px. **Background:** surface. **Border:** 1px border token. **Shadow:** none at rest.
 - **Padding:** 24px (16px on mobile). No nested cards; use hairline sections inside instead.

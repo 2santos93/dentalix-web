@@ -1067,6 +1067,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/staff/{userId}/locations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["StaffController_locations"];
+        /**
+         * Restringe un miembro a unas sedes ([] = todas)
+         * @description Solo miembros activos que no sean ADMIN. Toma efecto en la siguiente renovación de su sesión.
+         */
+        put: operations["StaffController_replaceLocations"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/locations/schedule": {
         parameters: {
             query?: never;
@@ -4927,6 +4947,8 @@ export interface components {
             role: "DENTIST" | "ASSISTANT" | "RECEPTION" | "ADMIN";
             /** @description Registro profesional / nº de colegiado (DX-013). Solo en el perfil y en la respuesta del PATCH. */
             professionalLicense?: string | null;
+            /** @description Sedes activas en las que puede trabajar (DX-089). null = todas (sin restricción). Solo en GET /staff y en el perfil. */
+            locationIds?: string[] | null;
         };
         StaffDirectoryEntryDto: {
             /**
@@ -4972,6 +4994,8 @@ export interface components {
             role: "DENTIST" | "ASSISTANT" | "RECEPTION" | "ADMIN";
             /** @enum {string} */
             status: "ACTIVE" | "INACTIVE";
+            /** @description Sedes activas en las que puede trabajar (DX-089). null = todas (sin restricción) */
+            locationIds: string[] | null;
             /**
              * Format: date-time
              * @description DX-048: hasta cuándo no puede iniciar sesión por intentos fallidos (null = sin bloqueo). Siempre null para un miembro desactivado (DX-213). Se quita con POST /staff/:userId/login-unlock.
@@ -4984,6 +5008,16 @@ export interface components {
             role?: "DENTIST" | "ASSISTANT" | "RECEPTION" | "ADMIN";
             /** @description Registro profesional (CO: RETHUS / tarjeta profesional) o nº de colegiado (ES). Cadena vacía lo borra. Lo exige la receta (DX-013). */
             professionalLicense?: string;
+        };
+        StaffLocationsDto: {
+            /** @description true = sin restricción: trabaja en todas las sedes (siempre en un ADMIN) y `locationIds` va vacío */
+            all: boolean;
+            /** @description Sedes activas en las que puede trabajar. Con `all: false` y vacío, sus sedes ya no están activas */
+            locationIds: string[];
+        };
+        ReplaceStaffLocationsDto: {
+            /** @description Sedes activas de esta clínica. [] = todas. Los duplicados se ignoran */
+            locationIds: string[];
         };
         ScheduleRangeDto: {
             /** @description 0=domingo .. 6=sábado */
@@ -11432,6 +11466,80 @@ export interface operations {
                 content?: never;
             };
             /** @description La cuenta da acceso a otra clínica (sin decir cuál ni cuántas); el contador no cambia. Mensaje: «Esta cuenta da acceso a otra clínica: pide a la persona que espere unos minutos o que restablezca su contraseña» */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    StaffController_locations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StaffLocationsDto"];
+                };
+            };
+            /** @description Miembro no encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    StaffController_replaceLocations: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                userId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReplaceStaffLocationsDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["StaffLocationsDto"];
+                };
+            };
+            /** @description Alguna sede no existe en esta clínica (o está inactiva) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Miembro no encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El ADMIN siempre tiene todas las sedes y no se puede restringir. */
             409: {
                 headers: {
                     [name: string]: unknown;

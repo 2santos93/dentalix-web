@@ -76,7 +76,7 @@ const patientsPage = {
   pageSize: 100,
 };
 
-const staff = [{ userId: 'staff-1', fullName: 'Dra. Ana Ríos', role: 'DENTIST' as const }];
+const staff = [{ userId: 'staff-1', fullName: 'Dra. Ana Ríos', role: 'DENTIST' as const, locationIds: null }];
 
 
 // El componente arranca con Desde = inicio del MES ACTUAL y Hasta = HOY

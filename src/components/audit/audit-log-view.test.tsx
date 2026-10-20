@@ -56,8 +56,8 @@ beforeEach(() => {
   mockedList.mockReset();
   mockedStaff.mockReset();
   mockedStaff.mockResolvedValue([
-    { userId: 'u-dent', fullName: 'Dra. Laura Gómez', email: 'l@x.co', role: 'DENTIST' },
-    { userId: 'u-rec', fullName: 'Rosa Recepción', email: 'r@x.co', role: 'RECEPTION' },
+    { userId: 'u-dent', fullName: 'Dra. Laura Gómez', email: 'l@x.co', role: 'DENTIST', locationIds: null },
+    { userId: 'u-rec', fullName: 'Rosa Recepción', email: 'r@x.co', role: 'RECEPTION', locationIds: null },
   ]);
 });
 
@@ -268,7 +268,7 @@ describe('AuditLogView', () => {
     mockedStaff
       .mockRejectedValueOnce(new Error('red'))
       .mockResolvedValueOnce([
-        { userId: 'u-rec', fullName: 'Rosa Recepción', email: 'r@x.co', role: 'RECEPTION' },
+        { userId: 'u-rec', fullName: 'Rosa Recepción', email: 'r@x.co', role: 'RECEPTION', locationIds: null },
       ]);
     render(<AuditLogView token="tok" />);
     const status = await screen.findByText('Usuarios no disponibles');

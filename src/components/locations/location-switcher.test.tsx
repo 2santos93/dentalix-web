@@ -144,4 +144,65 @@ describe('LocationSwitcher', () => {
       expect(getActiveLocationId()).toBe('l1');
     });
   });
+
+  // DX-089: un miembro con sedes acotadas (claim `loc` del token) solo ve las
+  // suyas y nunca «Todas las sedes»: la API rechazaría con 403 cualquier otra.
+  describe('miembro con sedes acotadas (claim `loc`)', () => {
+    function tokenWithLoc(loc: string[]): string {
+      const b64url = (value: string) =>
+        btoa(value).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+      return `${b64url('{"alg":"HS256"}')}.${b64url(
+        JSON.stringify({ sub: 'u1', role: 'RECEPTION', loc }),
+      )}.firma`;
+    }
+
+    it('con varias permitidas ofrece «Mis sedes» y solo esas, sin «Todas las sedes»', async () => {
+      useAuthStore.setState({ accessToken: tokenWithLoc(['l1', 'l2']) });
+      // Aunque la API ya filtra, el selector también filtra por el claim.
+      mockedList.mockResolvedValue([
+        sede('l1', 'Sede principal'),
+        sede('l2', 'Sede norte'),
+        sede('l3', 'Sede sur'),
+      ]);
+
+      render(<LocationSwitcher />);
+
+      const select = (await screen.findByLabelText('Sede')) as HTMLSelectElement;
+      expect(screen.getByRole('option', { name: 'Mis sedes' })).toHaveValue('');
+      expect(screen.getByRole('option', { name: 'Sede norte' })).toBeInTheDocument();
+      expect(screen.queryByRole('option', { name: 'Sede sur' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('option', { name: 'Todas las sedes' })).not.toBeInTheDocument();
+      expect(select.value).toBe('');
+      expect(getActiveLocationId()).toBeNull();
+    });
+
+    it('con UNA permitida la deja elegida y guardada, sin opción vacía', async () => {
+      useAuthStore.setState({ accessToken: tokenWithLoc(['l2']) });
+      mockedList.mockResolvedValue([sede('l2', 'Sede norte')]);
+
+      render(<LocationSwitcher />);
+
+      const select = (await screen.findByLabelText('Sede')) as HTMLSelectElement;
+      await waitFor(() => expect(select.value).toBe('l2'));
+      expect(screen.getAllByRole('option')).toHaveLength(1);
+      expect(screen.queryByRole('option', { name: 'Mis sedes' })).not.toBeInTheDocument();
+      expect(getActiveLocationId()).toBe('l2');
+    });
+
+    it('si la guardada ya no está permitida la cambia por la primera permitida', async () => {
+      setActiveLocationId('l3');
+      useAuthStore.setState({ accessToken: tokenWithLoc(['l1', 'l2']) });
+      mockedList.mockResolvedValue([
+        sede('l1', 'Sede principal'),
+        sede('l2', 'Sede norte'),
+        sede('l3', 'Sede sur'),
+      ]);
+
+      render(<LocationSwitcher />);
+
+      const select = (await screen.findByLabelText('Sede')) as HTMLSelectElement;
+      await waitFor(() => expect(getActiveLocationId()).toBe('l1'));
+      expect(select.value).toBe('l1');
+    });
+  });
 });

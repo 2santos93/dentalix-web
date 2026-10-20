@@ -8,7 +8,9 @@ import { statementCopy } from '@/lib/account-statement/presentation';
 import { formatCurrency } from '@/lib/format/currency';
 import { formatCivilDate } from '@/lib/format/date';
 import { Input } from '@/components/ui/input';
-import { FormField } from '@/components/shared/form-field';
+import { FormField, fieldErrorId } from '@/components/shared/form-field';
+import { MoneyInput } from '@/components/shared/money-input';
+import { parseMoneyInput } from '@/lib/format/money';
 import { FormModal } from '@/components/shared/form-modal';
 import { CurrencySelect } from '@/components/shared/currency-select';
 import { BillablePlanField, BillablePlansEmpty } from './billable-plan-field';
@@ -26,7 +28,7 @@ const copy = {
   method: 'Método',
   methodNone: 'Sin especificar',
   date: 'Fecha de pago',
-  invalidAmount: 'Ingresa un importe mayor que 0.',
+  invalidAmount: 'Escribe un importe mayor que 0.',
   invalidDate: 'Elige la fecha de pago.',
   recorded: (amount: string, date: string, plan: string) =>
     `Abono registrado: ${amount} · ${date} · ${plan}.`,
@@ -86,6 +88,7 @@ export function RecordPaymentModal({
   const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [amountError, setAmountError] = useState<string | null>(null);
 
   // Si la persona aún no tocó la fecha, sigue a «hoy» de la sede cuando llega
   // su zona (DX-097).
@@ -105,6 +108,7 @@ export function RecordPaymentModal({
       setDateTouched(false);
       setIdempotencyKey(crypto.randomUUID());
       setError(null);
+      setAmountError(null);
     }
   }
 
@@ -121,11 +125,15 @@ export function RecordPaymentModal({
     e.preventDefault();
     if (!plan) return;
     setError(null);
-    const amount = Number(form.amount.trim());
-    if (!form.amount.trim() || !Number.isFinite(amount) || amount <= 0) {
-      setError(copy.invalidAmount);
+    // DX-241: la lectura común de los campos de dinero, con los decimales de
+    // la moneda del abono. El motivo va junto al campo.
+    const parsed = parseMoneyInput(form.amount, currency);
+    if (!parsed.ok || parsed.value <= 0) {
+      setAmountError(parsed.ok || parsed.reason === 'empty' ? copy.invalidAmount : parsed.message);
       return;
     }
+    setAmountError(null);
+    const amount = parsed.value;
     if (!form.date) {
       setError(copy.invalidDate);
       return;
@@ -202,16 +210,18 @@ export function RecordPaymentModal({
           {plan ? (
             <>
               <div className="grid gap-4 sm:grid-cols-2">
-                <FormField htmlFor="rp-amount" label={copy.amount}>
-                  <Input
+                <FormField htmlFor="rp-amount" label={copy.amount} error={amountError}>
+                  <MoneyInput
                     id="rp-amount"
-                    type="number"
-                    inputMode="decimal"
-                    min={0}
-                    step="0.01"
+                    currency={currency}
+                    requirePositive
                     value={form.amount}
-                    onChange={(e) => patch({ amount: e.target.value })}
-                    className="tabular-nums"
+                    onValueChange={(amount) => {
+                      patch({ amount });
+                      setAmountError(null);
+                    }}
+                    aria-invalid={amountError ? true : undefined}
+                    aria-describedby={amountError ? fieldErrorId('rp-amount') : undefined}
                   />
                 </FormField>
                 <FormField htmlFor="rp-currency" label={copy.currency}>

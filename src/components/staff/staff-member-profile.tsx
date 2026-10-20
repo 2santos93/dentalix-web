@@ -25,6 +25,7 @@ import { AsyncSection } from '@/components/shared/async-section';
 import { InlineError } from '@/components/errors/inline-error';
 import { notifyError } from '@/components/errors/notify';
 import { ScheduleBlockDialog } from '@/components/appointments/schedule-block-dialog';
+import { StaffLocationsCard } from '@/components/staff/staff-locations-card';
 import { getTokenRole, getTokenUserId } from '@/lib/auth/token-role';
 import {
   blocksOwnAgendaOnly,
@@ -210,6 +211,8 @@ export function StaffMemberProfile({ token, userId }: StaffMemberProfileProps) {
         ...updated,
         status: member.status,
         loginBlockedUntil: member.loginBlockedUntil,
+        // El `PATCH` no devuelve las sedes (no las cambia): se conservan.
+        locationIds: member.locationIds,
         // `null` de la API = lo borró; solo `undefined` (respuesta sin el
         // campo) conserva el que había.
         professionalLicense:
@@ -417,6 +420,11 @@ export function StaffMemberProfile({ token, userId }: StaffMemberProfileProps) {
               </Card>
             ) : null}
 
+            {/* DX-089: sedes del miembro; la API solo deja verlas y cambiarlas al ADMIN. */}
+            {viewerRole === 'ADMIN' ? (
+              <StaffLocationsCard token={token} userId={userId} memberRole={member.role} />
+            ) : null}
+
             <Card className="flex flex-col gap-3 p-5">
               <h3 className="text-base font-semibold text-ink">{copy.accessTitle}</h3>
               <p className="text-sm text-muted">
@@ -483,7 +491,14 @@ export function StaffMemberProfile({ token, userId }: StaffMemberProfileProps) {
           open
           onOpenChange={setBlocking}
           token={token}
-          staff={[{ userId: member.userId, fullName: member.fullName, role: member.role }]}
+          staff={[
+            {
+              userId: member.userId,
+              fullName: member.fullName,
+              role: member.role,
+              locationIds: member.locationIds,
+            },
+          ]}
           locations={locations.filter((l) => l.isActive)}
           activeLocationId={null}
           defaultDate={todayLocal()}
