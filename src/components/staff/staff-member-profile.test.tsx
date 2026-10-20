@@ -40,6 +40,7 @@ const activo = {
   email: 'ana@clinic.com',
   role: 'DENTIST' as const,
   status: 'ACTIVE' as const,
+  locationIds: null,
   loginBlockedUntil: null,
 };
 

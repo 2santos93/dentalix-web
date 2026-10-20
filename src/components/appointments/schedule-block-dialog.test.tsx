@@ -17,8 +17,8 @@ const mockedAffected = listAffectedAppointments as jest.MockedFunction<typeof li
 
 const DAY = '2031-03-04';
 const staff = [
-  { userId: 'prov-1', fullName: 'Dra. Ana Ríos', role: 'DENTIST' as const },
-  { userId: 'prov-2', fullName: 'Dr. Luis Gómez', role: 'DENTIST' as const },
+  { userId: 'prov-1', fullName: 'Dra. Ana Ríos', role: 'DENTIST' as const, locationIds: null },
+  { userId: 'prov-2', fullName: 'Dr. Luis Gómez', role: 'DENTIST' as const, locationIds: null },
 ];
 const locations = [
   { id: 'loc-1', name: 'Sede principal', address: null, country: 'CO' as const, isActive: true, timeZone: 'America/Bogota', createdAt: '' },

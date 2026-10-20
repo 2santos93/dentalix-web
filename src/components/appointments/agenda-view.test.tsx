@@ -95,8 +95,8 @@ const mockedCreateConfirmationLink = createConfirmationLink as jest.MockedFuncti
 >;
 
 const staff = [
-  { userId: 'staff-1', fullName: 'Dra. Ana Ríos', role: 'DENTIST' as const },
-  { userId: 'staff-2', fullName: 'Dr. Luis Gómez', role: 'DENTIST' as const },
+  { userId: 'staff-1', fullName: 'Dra. Ana Ríos', role: 'DENTIST' as const, locationIds: null },
+  { userId: 'staff-2', fullName: 'Dr. Luis Gómez', role: 'DENTIST' as const, locationIds: null },
 ];
 
 const patientsPage = {
@@ -795,7 +795,7 @@ describe('AgendaView', () => {
     const receptionToken = `h.${btoa(JSON.stringify({ sub: 'u1', tenantId: 't1', role: 'RECEPTION' }))}.s`;
     const team = [
       ...staff,
-      { userId: 'staff-3', fullName: 'Rita Recepción', role: 'RECEPTION' as const },
+      { userId: 'staff-3', fullName: 'Rita Recepción', role: 'RECEPTION' as const, locationIds: null },
     ];
 
     it('por defecto, una columna por odontólogo/administración y pide sus citas con providerIds', async () => {

@@ -33,7 +33,7 @@ const mockedCreateAddendum = createClinicalEntryAddendum as jest.MockedFunction<
 const mockedListStaff = listStaff as jest.MockedFunction<typeof listStaff>;
 
 const staff = [
-  { userId: 'u1', fullName: 'Dra. Ana Ríos', email: 'ana@demo.com', role: 'DENTIST' as const },
+  { userId: 'u1', fullName: 'Dra. Ana Ríos', email: 'ana@demo.com', role: 'DENTIST' as const, locationIds: null },
 ];
 
 const entries = [

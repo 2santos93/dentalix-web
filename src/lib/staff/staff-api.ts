@@ -7,32 +7,17 @@ import type { components } from '@/lib/api/schema';
 // `src/lib/appointments/staff-api.ts`. Keep in sync if it changes.
 export type ClinicRole = 'DENTIST' | 'ASSISTANT' | 'RECEPTION' | 'ADMIN';
 
+type StaffMemberDto = components['schemas']['StaffMemberDto'];
+
 /**
- * `GET /staff` (and the `PATCH` response below) return the plain TS
- * `StaffMember` interface on the backend
- * (`src/modules/staff/domain/entities/staff-member.entity.ts`), not a class
- * decorated with `@ApiProperty()` — same situation as `Appointment`/`Patient`
- * — so the generated `schema.d.ts` has no body shape for these routes
- * (`content?: never`). Hand-written to mirror that entity — keep in sync if
- * it changes.
- *
- * Unlike `src/lib/appointments/staff-api.ts`'s `StaffMember` (which only
- * needs `userId`/`fullName`/`role` for the agenda's provider selector), this
- * module's staff-management screen also lists/edits `email`, so it's added
- * here.
+ * Fila de `GET /staff` (`StaffMemberDto`). El DTO marca `locationIds` como
+ * opcional porque el `PATCH` no lo devuelve, pero `GET /staff` lo manda
+ * siempre (DX-089): `null` = todas las sedes (y siempre `null` en un ADMIN).
+ * `professionalLicense` solo llega en el perfil y en el `PATCH`.
  */
-export interface StaffMember {
-  userId: string;
-  fullName: string;
-  email: string;
-  role: ClinicRole;
-  /**
-   * DX-089: sedes en las que trabaja; `null` = todas (y siempre `null` en un
-   * ADMIN). Opcional solo por las respuestas que no lo traen (`PATCH`).
-   */
-  // TODO(DX-089 T7): sustituir por components['schemas'][…] tras npm run codegen
-  locationIds?: string[] | null;
-}
+export type StaffMember = Omit<StaffMemberDto, 'professionalLicense' | 'locationIds'> & {
+  locationIds: string[] | null;
+};
 
 export interface UpdateStaffInput {
   fullName?: string;
@@ -55,8 +40,8 @@ export async function updateStaff(
   token: string,
   userId: string,
   patch: UpdateStaffInput,
-): Promise<StaffMember & { professionalLicense?: string | null }> {
-  return apiFetch<StaffMember & { professionalLicense?: string | null }>(`/staff/${userId}`, {
+): Promise<StaffMemberDto> {
+  return apiFetch<StaffMemberDto>(`/staff/${userId}`, {
     method: 'PATCH',
     body: patch,
     token,
@@ -199,12 +184,8 @@ export async function unlockStaffLogin(token: string, userId: string): Promise<v
 // Sedes permitidas del miembro (DX-089, solo ADMIN)
 // ---------------------------------------------------------------------------
 
-// TODO(DX-089 T7): sustituir por components['schemas'][…] tras npm run codegen
 /** `all: true` = todas las sedes (entonces `locationIds` llega vacío). */
-export interface StaffLocations {
-  all: boolean;
-  locationIds: string[];
-}
+export type StaffLocations = components['schemas']['StaffLocationsDto'];
 
 /** `GET /staff/:userId/locations` — sedes en las que puede trabajar el miembro. */
 export async function getStaffLocations(token: string, userId: string): Promise<StaffLocations> {

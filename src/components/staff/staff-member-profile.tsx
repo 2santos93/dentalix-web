@@ -211,6 +211,8 @@ export function StaffMemberProfile({ token, userId }: StaffMemberProfileProps) {
         ...updated,
         status: member.status,
         loginBlockedUntil: member.loginBlockedUntil,
+        // El `PATCH` no devuelve las sedes (no las cambia): se conservan.
+        locationIds: member.locationIds,
         // `null` de la API = lo borró; solo `undefined` (respuesta sin el
         // campo) conserva el que había.
         professionalLicense:
@@ -489,7 +491,14 @@ export function StaffMemberProfile({ token, userId }: StaffMemberProfileProps) {
           open
           onOpenChange={setBlocking}
           token={token}
-          staff={[{ userId: member.userId, fullName: member.fullName, role: member.role }]}
+          staff={[
+            {
+              userId: member.userId,
+              fullName: member.fullName,
+              role: member.role,
+              locationIds: member.locationIds,
+            },
+          ]}
           locations={locations.filter((l) => l.isActive)}
           activeLocationId={null}
           defaultDate={todayLocal()}

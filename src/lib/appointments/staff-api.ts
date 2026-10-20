@@ -1,4 +1,5 @@
 import { apiFetch } from '@/lib/api/client';
+import type { components } from '@/lib/api/schema';
 
 // `ClinicRole` isn't exposed as its own named schema component (it only shows
 // up inline wherever a DTO references it) — re-declare the literal union here
@@ -6,22 +7,16 @@ import { apiFetch } from '@/lib/api/client';
 // changes.
 export type ClinicRole = 'DENTIST' | 'ASSISTANT' | 'RECEPTION' | 'ADMIN';
 
+type StaffMemberDto = components['schemas']['StaffMemberDto'];
+
 /**
- * `GET /staff` returns the plain TS `StaffMember` interface on the backend
- * (`src/modules/staff/domain/entities/staff-member.entity.ts`), not a class
- * decorated with `@ApiProperty()` — same situation as `Appointment`/`Patient`
- * — so the generated `schema.d.ts` has no body shape for this route
- * (`content?: never`). Hand-written to mirror that entity — keep in sync if
- * it changes.
+ * Fila de `GET /staff` (`StaffMemberDto`) con lo que usa la agenda. El DTO
+ * marca `locationIds` como opcional porque el `PATCH` no lo devuelve, pero
+ * `GET /staff` lo manda siempre (DX-089): `null` = todas las sedes.
  */
-export interface StaffMember {
-  userId: string;
-  fullName: string;
-  role: ClinicRole;
-  /** DX-089: sedes en las que trabaja; `null` (o ausente) = todas. */
-  // TODO(DX-089 T7): sustituir por components['schemas'][…] tras npm run codegen
-  locationIds?: string[] | null;
-}
+export type StaffMember = Pick<StaffMemberDto, 'userId' | 'fullName' | 'role'> & {
+  locationIds: string[] | null;
+};
 
 export async function listStaff(token: string): Promise<StaffMember[]> {
   return apiFetch<StaffMember[]>('/staff', {
