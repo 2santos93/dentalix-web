@@ -69,7 +69,7 @@ async function revokeSession(): Promise<void> {
 const copy = {
   account: 'Cuenta',
   profile: 'Mi perfil',
-  businessHours: 'Horario de atención',
+  businessHours: 'Horarios',
   // DX-212: datos legales de las sedes (código REPS).
   locations: 'Sedes',
   privacy: 'Privacidad de datos',
