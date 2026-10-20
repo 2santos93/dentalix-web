@@ -312,6 +312,46 @@ describe('PatientDocumentsTab (DX-151)', () => {
     expect(mockedUpload).toHaveBeenCalledTimes(3);
   });
 
+  it('el «Reintentar» del toast usa la fila actual: si se cambió la categoría tras el fallo, se envía la nueva', async () => {
+    const user = setupUser();
+    mockedUpload.mockRejectedValueOnce(new ApiError(500, 'Fallo'));
+    render(<PatientDocumentsTab token={DENTIST} patientId="p1" />);
+    await screen.findByText('Sin documentos');
+    dropFiles([pdf('rx.pdf')]);
+    const row = await screen.findByRole('listitem', { name: 'rx.pdf' });
+    await user.click(within(row).getByRole('button', { name: 'Subir rx.pdf' }));
+    expect(await within(row).findByText('Error')).toBeInTheDocument();
+    const { onRetry } = mockedNotify.mock.calls[0][1] as { onRetry: () => void };
+
+    await user.selectOptions(within(row).getByLabelText('Categoría'), 'XRAY');
+    mockedUpload.mockResolvedValueOnce(makeDocument({ id: 'rx', originalName: 'rx.pdf', category: 'XRAY' }));
+    await act(async () => onRetry());
+    expect(mockedUpload).toHaveBeenLastCalledWith(
+      DENTIST,
+      'p1',
+      expect.objectContaining({ category: 'XRAY' }),
+      expect.anything(),
+    );
+    expect(await within(row).findByText('Subido')).toBeInTheDocument();
+  });
+
+  it('el «Reintentar» del toast no sube una fila que ya se quitó de la cola', async () => {
+    const user = setupUser();
+    mockedUpload.mockRejectedValueOnce(new ApiError(500, 'Fallo'));
+    render(<PatientDocumentsTab token={DENTIST} patientId="p1" />);
+    await screen.findByText('Sin documentos');
+    dropFiles([pdf('rx.pdf')]);
+    const row = await screen.findByRole('listitem', { name: 'rx.pdf' });
+    await user.click(within(row).getByRole('button', { name: 'Subir rx.pdf' }));
+    expect(await within(row).findByText('Error')).toBeInTheDocument();
+    const { onRetry } = mockedNotify.mock.calls[0][1] as { onRetry: () => void };
+
+    await user.click(within(row).getByRole('button', { name: /^Quitar/ }));
+    expect(screen.queryByRole('listitem', { name: 'rx.pdf' })).not.toBeInTheDocument();
+    await act(async () => onRetry());
+    expect(mockedUpload).toHaveBeenCalledTimes(1);
+  });
+
   it('HEIC: se convierte a JPG antes de subir; si falla, el error en español', async () => {
     mockedHeic.mockResolvedValueOnce(new File(['jpg'], 'IMG_1.jpg', { type: 'image/jpeg' }));
     mockedHeic.mockRejectedValueOnce(new HeicConversionError(new Error('libheif')));

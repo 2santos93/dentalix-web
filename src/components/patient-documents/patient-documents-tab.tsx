@@ -190,6 +190,12 @@ export function PatientDocumentsTab({
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
   const [queue, setQueue] = useState<QueueItem[]>([]);
+  // La cola vigente para el «Reintentar» del toast, que se ejecuta después de
+  // que la persona haya podido editar (o quitar) la fila.
+  const queueRef = useRef<QueueItem[]>(queue);
+  useEffect(() => {
+    queueRef.current = queue;
+  }, [queue]);
   const [dragging, setDragging] = useState(false);
   const [viewing, setViewing] = useState<PatientDocument | null>(null);
   const [voiding, setVoiding] = useState<PatientDocument | null>(null);
@@ -317,7 +323,14 @@ export function PatientDocumentsTab({
       updateItem(item.key, { status: 'error', error: reason, retryable: true });
       setAnnouncement(copy.announceError(name));
       // El toast sobrevive aunque la fila no esté a la vista (otra pestaña).
-      notifyError(copy.uploadFailedToast(name, reason), { onRetry: () => void upload(item) });
+      notifyError(copy.uploadFailedToast(name, reason), {
+        onRetry: () => {
+          // La fila de ahora, no la del fallo: la categoría o los dientes pudieron
+          // cambiar. Si ya se quitó de la cola, no se sube.
+          const current = queueRef.current.find((q) => q.key === item.key);
+          if (current) void upload(current);
+        },
+      });
     }
   }
 
