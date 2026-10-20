@@ -121,7 +121,9 @@ export function CatalogMultiPicker({
                         style={{ backgroundColor: item.color }}
                       />
                     ) : null}
-                    <span className="min-w-0 flex-1 truncate">{item.labelEs}</span>
+                    {/* `w-0`: el nombre crece con flex-1 pero no aporta ancho intrínseco;
+                        con solo `truncate` el más largo ensanchaba el diálogo a 390 px. */}
+                    <span className="w-0 min-w-0 flex-1 truncate">{item.labelEs}</span>
                     <span className="shrink-0 font-mono text-xs text-muted">{item.code}</span>
                   </label>
                 );
