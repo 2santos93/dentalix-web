@@ -367,7 +367,7 @@ describe('cobrar desde el estado de cuenta (DX-067)', () => {
     const taken = within(select).getAllByRole('option')[0];
     expect(taken).toBeDisabled();
     expect(taken).toHaveTextContent('(ya tiene plan de cuotas)');
-    expect(within(dialog).getByLabelText('Total a financiar')).toHaveValue(3000000);
+    expect(within(dialog).getByLabelText('Total a financiar')).toHaveValue('3000000');
 
     await user.click(within(dialog).getByRole('button', { name: 'Crear' }));
     await waitFor(() =>

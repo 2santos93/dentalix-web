@@ -1,5 +1,6 @@
 import type { PaymentMethod } from '@/lib/payments/payments-api';
 import { PAYMENT_METHOD_OPTIONS } from '@/lib/payments/payment-method';
+import { parseMoneyInput } from '@/lib/format/money';
 import type { CashAdjustmentKind, CashExpectedLine } from './cash-sessions-api';
 
 /*
@@ -50,19 +51,26 @@ export function countRows(
 }
 
 /**
- * Importe escrito en un campo: `null` si está vacío o no es un importe válido
- * (≥ 0 y como mucho 2 decimales). Acepta coma decimal («1500,50»).
+ * Importe escrito en un campo: `null` si está vacío o no es un importe válido.
+ * La misma lectura que el resto de campos de dinero (DX-241): «150.000» y
+ * «150,50» significan lo mismo aquí que en un abono o un compromiso.
  */
-export function parseCounted(value: string): number | null {
-  const text = value.trim().replace(',', '.');
-  if (!/^\d+(\.\d{1,2})?$/.test(text)) return null;
-  return Number(text);
+export function parseCounted(value: string, currency: string): number | null {
+  const parsed = parseMoneyInput(value, currency);
+  return parsed.ok ? parsed.value : null;
+}
+
+/** Por qué no se entiende lo escrito en una fila (`null` si vale o está vacía). */
+export function countedError(row: CountRow): string | null {
+  if (row.counted.trim() === '') return null;
+  const parsed = parseMoneyInput(row.counted, row.currency);
+  return parsed.ok ? null : parsed.message;
 }
 
 /** Diferencia (contado − esperado) de una fila, o `null` si aún no se puede saber. */
 export function rowDifference(row: CountRow): number | null {
   if (row.expected === null) return null;
-  const counted = row.counted.trim() === '' ? 0 : parseCounted(row.counted);
+  const counted = row.counted.trim() === '' ? 0 : parseCounted(row.counted, row.currency);
   if (counted === null) return null;
   return (cents(counted) - cents(row.expected)) / 100;
 }
@@ -77,13 +85,13 @@ export function hasDifference(rows: readonly CountRow[]): boolean {
 
 /** Filas con un importe que no se entiende (para avisar antes de enviar). */
 export function invalidRows(rows: readonly CountRow[]): CountRow[] {
-  return rows.filter((row) => row.counted.trim() !== '' && parseCounted(row.counted) === null);
+  return rows.filter((row) => countedError(row) !== null);
 }
 
 /** El cuerpo del cierre: solo las filas con algo escrito (lo vacío es 0). */
 export function countsPayload(rows: readonly CountRow[]): { currency: string; method: PaymentMethod; counted: number }[] {
   return rows.flatMap((row) => {
-    const counted = parseCounted(row.counted);
+    const counted = parseCounted(row.counted, row.currency);
     return row.counted.trim() === '' || counted === null
       ? []
       : [{ currency: row.currency, method: row.method, counted }];
