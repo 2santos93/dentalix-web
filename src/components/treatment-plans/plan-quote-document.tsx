@@ -13,6 +13,10 @@ const copy = {
   document: 'Documento',
   noDocument: 'Sin documento',
   professional: 'Profesional',
+  agreement: 'Convenio',
+  agreementValue: (name: string, payer: string) => `${name} · ${payer}`,
+  listPrice: (amount: string) => `Precio de lista ${amount}`,
+  agreementSaving: 'Ahorro por convenio',
   noProfessional: 'Sin asignar',
   tableCaption: 'Procedimientos del presupuesto',
   colTooth: 'Diente',
@@ -48,6 +52,13 @@ const copy = {
 const money = (value: number, currency: string) => formatCurrency(value, currency);
 const discount = (value: number, currency: string) =>
   value > 0 ? `−${money(value, currency)}` : copy.noDiscount;
+
+/** «Precio de lista» solo cuando el precio cobrado es otro (convenio o lista de la sede). */
+function listPriceOf(item: PlanQuoteItem, currency: string): string | null {
+  return item.listPrice !== null && item.listPrice !== item.unitPrice
+    ? copy.listPrice(money(item.listPrice, currency))
+    : null;
+}
 
 function surfacesOf(item: PlanQuoteItem): string {
   return item.surfaces.length > 0
@@ -132,6 +143,12 @@ export function PlanQuoteDocument({ quote }: PlanQuoteDocumentProps) {
           <dt className="text-xs font-medium text-[#6b7280]">{copy.professional}</dt>
           <dd>{quote.professionalName ?? copy.noProfessional}</dd>
         </div>
+        {quote.agreement ? (
+          <div className="sm:col-span-3 print:col-span-3" data-testid="quote-agreement">
+            <dt className="text-xs font-medium text-[#6b7280]">{copy.agreement}</dt>
+            <dd>{copy.agreementValue(quote.agreement.name, quote.agreement.payerName)}</dd>
+          </div>
+        ) : null}
       </dl>
 
       <section className="mt-6">
@@ -162,6 +179,11 @@ export function PlanQuoteDocument({ quote }: PlanQuoteDocumentProps) {
                   <td className="py-2 pr-3">
                     <span className="block">{item.procedure}</span>
                     <span className="block text-xs text-[#4b5563]">{surfacesOf(item)}</span>
+                    {listPriceOf(item, currency) ? (
+                      <span className="block text-xs text-[#4b5563] tabular-nums">
+                        {listPriceOf(item, currency)}
+                      </span>
+                    ) : null}
                   </td>
                   <td className="py-2 pr-3 text-right tabular-nums">{item.quantity}</td>
                   <td className="py-2 pr-3 text-right tabular-nums">{money(item.unitPrice, currency)}</td>
@@ -194,6 +216,9 @@ export function PlanQuoteDocument({ quote }: PlanQuoteDocumentProps) {
                   {copy.colPrice} {money(item.unitPrice, currency)}
                   {item.discount > 0 ? ` · ${copy.colDiscount} ${discount(item.discount, currency)}` : ''}
                 </p>
+                {listPriceOf(item, currency) ? (
+                  <p className="mt-0.5 text-xs text-[#4b5563] tabular-nums">{listPriceOf(item, currency)}</p>
+                ) : null}
               </li>
             ))
           )}
@@ -214,6 +239,12 @@ export function PlanQuoteDocument({ quote }: PlanQuoteDocumentProps) {
                 <dt className="text-[#4b5563]">{copy.discounts}</dt>
                 <dd className="tabular-nums">{discount(total.discount, total.currency)}</dd>
               </div>
+              {total.agreementSaving > 0 ? (
+                <div className="flex justify-between gap-4" data-testid={`quote-saving-${total.currency}`}>
+                  <dt className="text-[#4b5563]">{copy.agreementSaving}</dt>
+                  <dd className="tabular-nums">{money(total.agreementSaving, total.currency)}</dd>
+                </div>
+              ) : null}
               <div
                 data-testid={`quote-total-${total.currency}`}
                 className="flex justify-between gap-4 border-t border-[#111827] pt-1 text-base font-semibold"

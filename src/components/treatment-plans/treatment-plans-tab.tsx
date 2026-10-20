@@ -84,7 +84,9 @@ import {
   capFor,
   effectiveDiscount,
   exceedsCap,
+  NO_DISCOUNT_ALLOWED_NOTICE,
   needsReason,
+  noDiscountAllowed,
   priceBelowCatalogCapMessage,
   roleCapMessage,
   type DiscountReasonCode,
@@ -97,7 +99,10 @@ import {
   validateDiscountReason,
   type DiscountReasonValue,
 } from '@/components/discounts/discount-reason-fields';
-import { BulkDiscountModal } from '@/components/discounts/bulk-discount-modal';
+import { BulkDiscountModal, bulkDiscountCopy } from '@/components/discounts/bulk-discount-modal';
+import { usePriceQuote } from '@/lib/treatment-plans/use-price-quote';
+import { FieldError } from '@/components/errors/field-error';
+import { PriceQuoteLine, itemPriceOriginText } from './price-quote-line';
 
 // Copy as constants (i18n-ready, es-first) — matches odontogram-tab.tsx /
 // agenda-view.tsx convention until next-intl wiring lands.
@@ -191,6 +196,9 @@ const copy = {
   focusedToothRow: 'Diente en foco',
   clearFocusedTooth: 'Ver todos los dientes',
   priceLabel: 'Precio',
+  // DX-105: precio resuelto por convenio / lista de la sede.
+  priceQuoteLoading: 'Calculando el precio…',
+  priceQuoteError: 'No pudimos traer el precio',
   // Descuento por ítem (DX-012): sale en el presupuesto imprimible y resta del
   // total y del saldo.
   discountLabel: 'Descuento (opcional)',
@@ -394,10 +402,12 @@ interface ItemsTableProps {
 /** Línea del descuento de un ítem: importe y, si lo tiene, su motivo. */
 function ItemDiscountLine({ item, currency }: { item: TreatmentPlanItem; currency: string }) {
   const { priceReduction } = effectiveDiscount(item.catalogPrice, item.price, item.discount);
-  if (item.discount <= 0 && priceReduction <= 0) return null;
+  const origin = itemPriceOriginText(item, currency);
+  if (item.discount <= 0 && priceReduction <= 0 && !origin) return null;
   const reason = item.discountReason as DiscountReasonCode | null;
   return (
     <span className="block text-xs font-normal text-muted">
+      {origin ? <span className="block tabular-nums">{origin}</span> : null}
       {priceReduction > 0 && item.catalogPrice !== null ? (
         <span className="block">
           {copy.itemPriceReduction(
@@ -1069,6 +1079,8 @@ export function TreatmentPlansTab({
   const [bulkKey, setBulkKey] = useState(0);
   const [bulkNotice, setBulkNotice] = useState<string | null>(null);
   const [addItemSubmitting, setAddItemSubmitting] = useState(false);
+  // DX-105: el usuario tocó el precio precargado; solo entonces se envía.
+  const [priceEdited, setPriceEdited] = useState(false);
   const [addItemValidationError, setAddItemValidationError] = useState<string | null>(null);
   // DX-241: precio y descuento que no valen, junto a su campo (escalón 4).
   const [itemAmountErrors, setItemAmountErrors] = useState<{ price?: string; discount?: string }>({});
@@ -1225,6 +1237,31 @@ export function TreatmentPlansTab({
   }
 
   const catalogById = new Map(catalogItems.map((item) => [item.id, item]));
+
+  // DX-105: el precio resuelto de la prestación elegida para ESTE paciente
+  // (convenio > lista de la sede > catálogo). Precarga el campo; si falla,
+  // vuelve el precio de catálogo y el campo sigue editable.
+  const priceQuote = usePriceQuote({
+    token,
+    patientId,
+    catalogItemId,
+    currency: planDetail?.currency ?? '',
+    onSettled: (q) => {
+      if (q) {
+        setPrice(q.price !== null ? String(q.price) : '');
+        if (noDiscountAllowed(q)) setDiscount('');
+      } else {
+        const fallback = catalogById.get(catalogItemId)?.defaultPrice;
+        setPrice(fallback != null ? String(fallback) : '');
+      }
+      setPriceEdited(false);
+    },
+  });
+  const quoteReady = priceQuote.status === 'ready' ? priceQuote.quote : null;
+  const addPriceLoading = priceQuote.status === 'loading';
+  const addNoDiscount = noDiscountAllowed(quoteReady);
+  // Referencia de la rebaja (R1): el precio resuelto, no el de catálogo.
+  const referencePrice = quoteReady ? quoteReady.price : (catalogById.get(catalogItemId)?.defaultPrice ?? null);
 
   // Lo único de esta página donde la sede activa SÍ decide algo: a qué sede
   // queda atribuido un abono nuevo. Mismo aviso que el estado de cuenta
@@ -1655,10 +1692,11 @@ export function TreatmentPlansTab({
     setCatalogItemId(nextCatalogItemId);
     // Prefill (not lock) the price with the chosen procedure's default —
     // the field stays editable afterwards.
+    // El precio resuelto del paciente llega de `usePriceQuote`; hasta
+    // entonces el campo está en espera.
     const item = catalogById.get(nextCatalogItemId);
-    if (item?.defaultPrice != null) {
-      setPrice(String(item.defaultPrice));
-    }
+    setPrice(item?.defaultPrice != null ? String(item.defaultPrice) : '');
+    setPriceEdited(false);
   }
 
   function handleSurfaceChange(surface: ToothSurface, checked: boolean) {
@@ -1700,11 +1738,22 @@ export function TreatmentPlansTab({
       setItemAmountErrors({ discount: copy.invalidDiscount });
       return;
     }
+    // DX-105: una prestación sin descuentos no admite rebajar el precio
+    // resuelto ni descontar; se dice aquí, sin llamar a la API.
+    if (
+      addNoDiscount &&
+      (discountValue > 0 || (priceInput !== undefined && referencePrice !== null && priceInput < referencePrice))
+    ) {
+      setItemAmountErrors({
+        [discountValue > 0 ? 'discount' : 'price']: NO_DISCOUNT_ALLOWED_NOTICE,
+      });
+      return;
+    }
     // DX-204: tope del rol y motivo por encima del umbral, avisados aquí; la
     // API los vuelve a aplicar. SEC-041: sobre el descuento EFECTIVO, que
     // suma la rebaja del precio frente al de catálogo.
     setAddReasonErrors(null);
-    const catalogPrice = catalogById.get(catalogItemId)?.defaultPrice ?? null;
+    const catalogPrice = referencePrice;
     const effectivePrice = priceInput ?? catalogPrice;
     const effective =
       effectivePrice !== null ? effectiveDiscount(catalogPrice, effectivePrice, discountValue) : null;
@@ -1730,7 +1779,11 @@ export function TreatmentPlansTab({
         toothNumber: tooth,
         catalogItemId,
         ...(selectedSurfaces.length ? { surfaces: selectedSurfaces } : {}),
-        ...(priceInput !== undefined ? { price: priceInput } : {}),
+        // DX-105: el precio resuelto lo vuelve a calcular la API; solo se
+        // manda lo que el usuario escribió (o si no había precio resuelto).
+        ...(priceInput !== undefined && (priceEdited || !quoteReady || quoteReady.price === null)
+          ? { price: priceInput }
+          : {}),
         ...(discountValue > 0 ? { discount: discountValue } : {}),
         ...(discounted ? reasonPayload(addReason) : {}),
         ...(notes.trim() ? { notes: notes.trim() } : {}),
@@ -1739,6 +1792,7 @@ export function TreatmentPlansTab({
       setToothNumber('');
       setCatalogItemId('');
       setPrice('');
+      setPriceEdited(false);
       setDiscount('');
       setAddReason(EMPTY_REASON);
       setSurfaces(emptySurfacesState());
@@ -1781,7 +1835,7 @@ export function TreatmentPlansTab({
   const addDiscountInput = optionalAmount(discount, addCurrency);
   const addPriceInput = optionalAmount(price, addCurrency);
   const addDiscountValue = addDiscountInput ?? 0;
-  const addCatalogPrice = catalogById.get(catalogItemId)?.defaultPrice ?? null;
+  const addCatalogPrice = referencePrice;
   const addPrice = addPriceInput ?? addCatalogPrice;
   // SEC-041: descuento efectivo = rebaja frente al catálogo + descuento. Con
   // un precio o descuento que no se entiende no hay aviso (el envío lo para).
@@ -2295,8 +2349,12 @@ export function TreatmentPlansTab({
                           id="tp-price"
                           currency={addCurrency}
                           value={price}
+                          disabled={addPriceLoading}
+                          aria-busy={addPriceLoading || undefined}
+                          className={addPriceLoading ? 'animate-pulse' : undefined}
                           onValueChange={(text) => {
                             setPrice(text);
+                            setPriceEdited(true);
                             setItemAmountErrors((errors) => ({ ...errors, price: undefined }));
                           }}
                           aria-invalid={itemAmountErrors.price ? true : undefined}
@@ -2309,6 +2367,16 @@ export function TreatmentPlansTab({
                               .join(' ') || undefined
                           }
                         />
+                        {/* DX-105: de dónde sale el precio precargado. */}
+                        {addPriceLoading ? (
+                          <p role="status" className="text-xs text-muted">
+                            {copy.priceQuoteLoading}
+                          </p>
+                        ) : priceQuote.status === 'error' ? (
+                          <FieldError label={copy.priceQuoteError} onRetry={priceQuote.retry} />
+                        ) : quoteReady && selectedPlan ? (
+                          <PriceQuoteLine quote={quoteReady} currency={selectedPlan.currency} />
+                        ) : null}
                         {/* SEC-041: aviso, no bloqueo; la API decide con el
                             tope del rol. */}
                         <p id="tp-price-below-catalog" role="status" className="text-xs text-warning">
@@ -2329,12 +2397,13 @@ export function TreatmentPlansTab({
                       <FormField
                         htmlFor="tp-discount"
                         label={copy.discountLabel}
-                        hint={copy.discountHint}
+                        hint={addNoDiscount ? NO_DISCOUNT_ALLOWED_NOTICE : copy.discountHint}
                         error={itemAmountErrors.discount}
                       >
                         <MoneyInput
                           id="tp-discount"
                           currency={addCurrency}
+                          disabled={addNoDiscount}
                           value={discount}
                           onValueChange={(text) => {
                             setDiscount(text);
@@ -2391,7 +2460,7 @@ export function TreatmentPlansTab({
                     {addItemValidationError && <InlineError>{addItemValidationError}</InlineError>}
                     {addItemError && <InlineError>{addItemError}</InlineError>}
 
-                    <Button type="submit" disabled={addItemSubmitting} className="self-start">
+                    <Button type="submit" disabled={addItemSubmitting || addPriceLoading} className="self-start">
                       {addItemSubmitting ? copy.addItemSubmitting : copy.addItemSubmit}
                     </Button>
                   </form>
@@ -2414,9 +2483,17 @@ export function TreatmentPlansTab({
           procedureOf={(item) => procedureName(item, catalogById)}
           rules={discountRules}
           role={role}
-          onApplied={(updated) => {
+          onApplied={(updated, skippedNoDiscount) => {
             setSelectedItemIds(new Set());
-            setBulkNotice(copy.bulkDiscountApplied(updated.length));
+            // DX-105: lo que no admite descuento se salta; se dice cuántos.
+            setBulkNotice(
+              [
+                updated.length > 0 || skippedNoDiscount === 0 ? copy.bulkDiscountApplied(updated.length) : null,
+                skippedNoDiscount > 0 ? bulkDiscountCopy.skipped(skippedNoDiscount) : null,
+              ]
+                .filter(Boolean)
+                .join(' '),
+            );
             void refreshPlanDetail();
           }}
         />

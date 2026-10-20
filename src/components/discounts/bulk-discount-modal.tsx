@@ -37,6 +37,10 @@ export const bulkDiscountCopy = {
   previewLabel: 'Cómo quedan los ítems',
   previewRow: (tooth: string) => `Diente ${tooth}`,
   submit: 'Aplicar descuento',
+  skipped: (n: number) =>
+    n === 1
+      ? '1 prestación no admite descuento y se dejó igual.'
+      : `${n} prestaciones no admiten descuento y se dejaron igual.`,
   saveError: 'No pudimos aplicar el descuento. Intenta de nuevo.',
 };
 
@@ -51,7 +55,8 @@ interface BulkDiscountModalProps {
   procedureOf: (item: TreatmentPlanItem) => string;
   rules: DiscountRules;
   role: ClinicRole | null;
-  onApplied: (items: TreatmentPlanItem[]) => void;
+  /** `skippedNoDiscount`: ítems cuya prestación no admite descuentos (DX-105). */
+  onApplied: (items: TreatmentPlanItem[], skippedNoDiscount: number) => void;
 }
 
 /**
@@ -109,12 +114,12 @@ export function BulkDiscountModal({
     if (reasonProblems) return setReasonErrors(reasonProblems);
     setSubmitting(true);
     try {
-      const updated = await applyBulkDiscount(token, planId, {
+      const result = await applyBulkDiscount(token, planId, {
         itemIds: items.map((i) => i.id),
         percent,
         ...reasonPayload(reason),
       });
-      onApplied(updated);
+      onApplied(result.items, result.skippedNoDiscount);
       onOpenChange(false);
     } catch (err) {
       setError(apiErrorMessage(err, bulkDiscountCopy.saveError));

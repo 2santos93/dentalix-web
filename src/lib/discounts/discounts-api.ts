@@ -1,12 +1,12 @@
 import { apiFetch, apiFetchText } from '@/lib/api/client';
 import type { components } from '@/lib/api/schema';
 import type { ClinicRole } from '@/lib/me/me-api';
-import type { TreatmentPlanItem } from '@/lib/treatment-plans/treatment-plans-api';
 
 // Descuentos (DX-204). Las formas salen del Swagger de la API.
 export type DiscountPolicy = components['schemas']['DiscountPolicyDto'];
 export type UpdateDiscountPolicyInput = components['schemas']['UpdateDiscountPolicyDto'];
 export type ApplyBulkDiscountInput = components['schemas']['ApplyBulkDiscountDto'];
+export type ApplyBulkDiscountResult = components['schemas']['ApplyBulkDiscountResultDto'];
 export type DiscountReport = components['schemas']['DiscountReportDto'];
 export type DiscountReportItem = components['schemas']['DiscountReportItemDto'];
 export type DiscountReportTotal = components['schemas']['DiscountReportTotalDto'];
@@ -34,8 +34,8 @@ export function applyBulkDiscount(
   token: string,
   planId: string,
   input: ApplyBulkDiscountInput,
-): Promise<TreatmentPlanItem[]> {
-  return apiFetch<TreatmentPlanItem[]>(`/treatment-plans/${planId}/items/bulk-discount`, {
+): Promise<ApplyBulkDiscountResult> {
+  return apiFetch<ApplyBulkDiscountResult>(`/treatment-plans/${planId}/items/bulk-discount`, {
     method: 'POST',
     body: input,
     token,
