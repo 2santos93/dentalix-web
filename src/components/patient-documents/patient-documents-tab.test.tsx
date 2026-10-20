@@ -155,6 +155,12 @@ describe('PatientDocumentsTab (DX-151)', () => {
     expect(screen.getAllByRole('button', { name: /^anular/i })).toHaveLength(2);
   });
 
+  it('si la API no trae el nombre del autor, la fila dice «un usuario»', async () => {
+    mockedList.mockResolvedValue([makeDocument({ uploadedByName: null })]);
+    render(<PatientDocumentsTab token={DENTIST} patientId="p1" />);
+    expect(await screen.findByText(/^un usuario · /, VISIBLE)).toBeInTheDocument();
+  });
+
   it('«Anular» abre el modal con motivo y tacha el documento', async () => {
     const user = setupUser();
     mockedList.mockResolvedValue([makeDocument()]);

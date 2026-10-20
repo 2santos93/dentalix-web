@@ -532,7 +532,7 @@ export function PatientDocumentsTab({
           {doc.toothNumbers.length > 0 ? doc.toothNumbers.join(', ') : <span className="text-muted">{copy.noTeeth}</span>}
         </TableCell>
         <TableCell data-label={copy.colAuthor} className="text-sm max-sm:text-right">
-          {copy.uploadedBy(doc.uploadedByName, formatDateTime(doc.uploadedAt))}
+          {copy.uploadedBy(doc.uploadedByName ?? copy.unknownUser, formatDateTime(doc.uploadedAt))}
         </TableCell>
         <TableCell data-label={copy.colActions} className="max-sm:block max-sm:before:hidden">
           <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">

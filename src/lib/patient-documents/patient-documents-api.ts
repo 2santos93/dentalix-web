@@ -1,46 +1,22 @@
 import { apiFetch } from '@/lib/api/client';
 import { uploadWithProgress } from '@/lib/api/upload';
+import type { components } from '@/lib/api/schema';
 import type { ClinicRole } from '@/lib/me/me-api';
 
 // Documentos del paciente (DX-151): radiografías, fotos, remisiones,
-// consentimientos firmados en papel e informes.
-//
-// TODO(DX-151 T7): sustituir por components['schemas'][…] tras npm run codegen
-// (PatientDocumentDto, PatientDocumentCategory, PatientDocumentUrlDto). Los
-// nombres exportados se mantienen.
-export type PatientDocumentCategory = 'XRAY' | 'PHOTO' | 'REFERRAL' | 'SIGNED_CONSENT' | 'REPORT' | 'OTHER';
+// consentimientos firmados en papel e informes. Las formas salen del Swagger
+// de la API.
+export type PatientDocumentCategory = components['schemas']['PatientDocumentCategory'];
 
-export interface PatientDocument {
-  id: string;
-  patientId: string;
-  locationId: string;
-  category: PatientDocumentCategory;
-  originalName: string;
-  mimeType: string;
-  sizeBytes: number;
-  sha256: string;
-  /** Fecha clínica `YYYY-MM-DD` (la de la toma), o null. */
-  clinicalDate: string | null;
-  toothNumbers: string[];
-  notes: string | null;
-  uploadedById: string;
-  uploadedByName: string;
-  uploadedAt: string;
-  /** PDF, JPEG y PNG se ven en la web; DOCX, DICOM y HEIC solo se descargan. */
-  inlineViewable: boolean;
-  voidedAt: string | null;
-  voidedById: string | null;
-  voidedByName: string | null;
-  voidReason: string | null;
-}
+/**
+ * `inlineViewable`: PDF, JPEG y PNG se ven en la web; DOCX, DICOM y HEIC solo
+ * se descargan. `clinicalDate` es la fecha de la toma (`YYYY-MM-DD`) o null.
+ */
+export type PatientDocument = components['schemas']['PatientDocumentDto'];
 
-export type PatientDocumentDisposition = 'inline' | 'attachment';
+export type PatientDocumentUrl = components['schemas']['PatientDocumentUrlDto'];
 
-export interface PatientDocumentUrl {
-  url: string;
-  expiresAt: string;
-  disposition: PatientDocumentDisposition;
-}
+export type PatientDocumentDisposition = PatientDocumentUrl['disposition'];
 
 export const PATIENT_DOCUMENT_CATEGORY_LABELS: Record<PatientDocumentCategory, string> = {
   XRAY: 'Radiografía',

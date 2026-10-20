@@ -41,14 +41,7 @@ export const AUDIT_ACTION_VARIANT: Record<AuditAction, NonNullable<BadgeProps['v
   SEND: 'muted',
 };
 
-/**
- * Recursos de la API que el schema generado aún no trae.
- * TODO(DX-151 T7): tras `npm run codegen`, `PATIENT_DOCUMENT` ya está en
- * `AuditResourceType`; quitar este tipo y volver a `Record<AuditResourceType, string>`.
- */
-type PendingAuditResourceType = 'PATIENT_DOCUMENT';
-
-export const AUDIT_RESOURCE_LABELS: Record<AuditResourceType | PendingAuditResourceType, string> = {
+export const AUDIT_RESOURCE_LABELS: Record<AuditResourceType, string> = {
   SESSION: 'Sesión',
   PATIENT: 'Ficha del paciente',
   MEDICAL_HISTORY: 'Historia clínica',
