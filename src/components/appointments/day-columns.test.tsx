@@ -339,14 +339,18 @@ describe('DayColumns · chip «Cobertura vencida» (DX-153)', () => {
     const active = { status: 'ACTIVE' as const, payerName: 'Sura EPS', planName: null, validTo: null };
     renderColumns({
       appointments: [
-        { ...endo, coverage: expired },
-        { ...light, coverage: active },
+        { ...endo, coverage: active },
+        { ...light, coverage: expired },
       ],
     });
-    const chips = screen.getAllByTestId('coverage-chip');
-    expect(chips).toHaveLength(1);
-    expect(chips[0]).toHaveTextContent('Cobertura vencida');
-    expect(screen.getByRole('button', { name: /Cobertura vencida$/ })).toBeInTheDocument();
+    // `light` dura 30 min: el aviso va como marca en la fila de la hora, no como chip recortable.
+    const markers = screen.getAllByTestId('coverage-marker');
+    expect(markers).toHaveLength(1);
+    expect(markers[0]).toHaveAttribute('title', 'Cobertura vencida');
+    expect(screen.queryByTestId('coverage-chip')).not.toBeInTheDocument();
+    const card = screen.getByRole('button', { name: /Cobertura vencida$/ });
+    expect(card).toContainElement(markers[0]);
+    expect(card).toHaveAccessibleName(/Cobertura vencida/);
   });
 });
 

@@ -1,18 +1,7 @@
-import { formatCivilDate } from '@/lib/format/date';
 import type { CoverageSummary } from '@/lib/patients/patients-api';
+import { coverageDetailText } from '@/lib/patients/coverage-presentation';
 
-/**
- * Línea «Cobertura: …» del detalle de la cita (DX-153). Vacía (null) cuando el
- * paciente no tiene cobertura. Nunca lleva el número de afiliado.
- */
-export function coverageDetailText(coverage: CoverageSummary | null | undefined): string {
-  if (!coverage || coverage.status === 'NONE' || !coverage.payerName) return '';
-  const detail =
-    coverage.status === 'EXPIRED'
-      ? `venció el ${formatCivilDate(coverage.validTo)}`
-      : coverage.planName;
-  return ['Cobertura: ' + coverage.payerName, detail].filter(Boolean).join(' · ');
-}
+/** Línea «Cobertura: …» del detalle de la cita (DX-153); el texto vive en `coverage-presentation`. */
 
 export function CoverageDetailLine({
   coverage,

@@ -3,7 +3,7 @@ import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { apiErrorMessage } from '@/lib/api/error-message';
-import { getPatient, type Patient } from '@/lib/patients/patients-api';
+import { getPatient, replacePatientKeepingDerived, type Patient } from '@/lib/patients/patients-api';
 import { MedicalHistoryPanel } from '@/components/patients/medical-history-panel';
 import { ClinicalEntriesList } from '@/components/patients/clinical-entries-list';
 import { PatientPostOpDeliveries } from '@/components/postop/patient-postop-deliveries';
@@ -268,7 +268,7 @@ function PatientDetailView() {
             patient={patient}
             token={accessToken}
             isAdmin={getTokenRole(accessToken) === 'ADMIN'}
-            onUpdated={setPatient}
+            onUpdated={(next) => setPatient((prev) => replacePatientKeepingDerived(prev, next))}
             onArchived={() => router.push('/patients')}
           />
 

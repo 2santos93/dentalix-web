@@ -703,6 +703,11 @@ describe('AgendaView', () => {
       { status: 'ACTIVE' as const, payerName: 'Sura EPS', planName: 'Plan Oro', validTo: null },
       'Cobertura: Sura EPS · Plan Oro',
     ],
+    [
+      'pendiente de inicio',
+      { status: 'NOT_STARTED' as const, payerName: 'Sura EPS', planName: 'Plan Oro', validTo: null },
+      'Cobertura: Sura EPS · pendiente de inicio',
+    ],
   ])('Día: el detalle muestra la línea de cobertura (%s)', async (_label, coverage, expected) => {
     const future = new Date(Date.now() + 3 * 24 * 3600_000);
     const day = `${future.getFullYear()}-${String(future.getMonth() + 1).padStart(2, '0')}-${String(future.getDate()).padStart(2, '0')}`;

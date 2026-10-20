@@ -224,3 +224,12 @@ export async function partiallySuppressPatient(
     token,
   });
 }
+
+/**
+ * Sustituye el paciente por la respuesta de una mutación (retención, supresión
+ * parcial) sin perder `balance` ni `coverage`: la API solo los calcula en los
+ * GET de lista y detalle, así que esas respuestas vienen sin ellos.
+ */
+export function replacePatientKeepingDerived(prev: Patient | null, next: Patient): Patient {
+  return { ...next, balance: next.balance ?? prev?.balance, coverage: next.coverage ?? prev?.coverage };
+}

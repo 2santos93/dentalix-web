@@ -180,7 +180,10 @@ describe('PatientsView', () => {
       await waitFor(() => expect(within(select).getAllByRole('option')).toHaveLength(3));
       mockedList.mockResolvedValue(page([]));
       await user.selectOptions(select, 'py2');
-      expect(await screen.findByText(/ningún paciente coincide/i)).toBeInTheDocument();
+      expect(
+        await screen.findByText('Ningún paciente tiene cobertura con ese pagador.'),
+      ).toBeInTheDocument();
+      expect(screen.queryByText(/coincide con la búsqueda/i)).not.toBeInTheDocument();
     });
 
     it('si fallan los pagadores, avisa junto al filtro con reintento y la tabla sigue', async () => {

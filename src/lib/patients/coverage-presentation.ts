@@ -37,3 +37,18 @@ export function coverageStatusBadge(c: Pick<PatientCoverage, 'status'>): Coverag
   if (c.status === 'NOT_STARTED') return { label: 'Pendiente de inicio', variant: 'secondary' };
   return null;
 }
+
+/**
+ * Línea «Cobertura: …» del detalle de la cita. Vacía cuando el paciente no tiene
+ * cobertura. Nunca lleva el número de afiliado.
+ */
+export function coverageDetailText(coverage: CoverageSummary | null | undefined): string {
+  if (!coverage || coverage.status === 'NONE' || !coverage.payerName) return '';
+  const detail =
+    coverage.status === 'EXPIRED'
+      ? `venció el ${formatCivilDate(coverage.validTo)}`
+      : coverage.status === 'NOT_STARTED'
+        ? 'pendiente de inicio'
+        : coverage.planName;
+  return ['Cobertura: ' + coverage.payerName, detail].filter(Boolean).join(' · ');
+}

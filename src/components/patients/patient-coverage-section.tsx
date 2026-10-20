@@ -1,6 +1,6 @@
 'use client';
 import * as React from 'react';
-import { useEffect, useId, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { Plus, ShieldCheck } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { getTokenRole } from '@/lib/auth/token-role';
@@ -81,6 +81,23 @@ export function PatientCoverageSection({
   const addButtonRef = useRef<HTMLButtonElement>(null);
   const removedRef = useRef(false);
 
+  // Se vacía antes de anunciar: el mismo texto dos veces seguidas («Cobertura
+  // guardada.») no cambia el contenido de la región y no se volvería a leer.
+  const announceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (announceTimer.current) clearTimeout(announceTimer.current);
+    },
+    [],
+  );
+  const clearNotice = useCallback(() => {
+    if (announceTimer.current) clearTimeout(announceTimer.current);
+    setNotice(null);
+  }, []);
+  const announce = (text: string) => {
+    clearNotice();
+    announceTimer.current = setTimeout(() => setNotice(text), 50);
+  };
   useEffect(() => {
     let cancelled = false;
     Promise.all([listCoverages(token, patientId), listPayers(token)])
@@ -91,12 +108,14 @@ export function PatientCoverageSection({
         setLoadError(null);
       })
       .catch((err: unknown) => {
-        if (!cancelled) setLoadError(apiErrorMessage(err, { fallback: copy.loadError }));
+        if (cancelled) return;
+        clearNotice();
+        setLoadError(apiErrorMessage(err, { fallback: copy.loadError }));
       });
     return () => {
       cancelled = true;
     };
-  }, [token, patientId, reloadKey]);
+  }, [token, patientId, reloadKey, clearNotice]);
 
   const reload = () => setReloadKey((k) => k + 1);
   const mayCreatePayer = canCreatePayer(getTokenRole(token));
@@ -105,14 +124,16 @@ export function PatientCoverageSection({
     if (!removing) return;
     setRemoveBusy(true);
     setRemoveError(null);
+    clearNotice();
     try {
       await deleteCoverage(token, patientId, removing.id);
       removedRef.current = true;
       setRemoving(null);
-      setNotice(copy.removed);
+      announce(copy.removed);
       reload();
       onChanged?.();
     } catch (err) {
+      clearNotice();
       setRemoveError(apiErrorMessage(err, { fallback: copy.removeError }));
     } finally {
       setRemoveBusy(false);
@@ -193,7 +214,10 @@ export function PatientCoverageSection({
                   variant="secondary"
                   size="sm"
                   aria-label={copy.editLabel(c.payer.name)}
-                  onClick={() => setDialog({ coverage: c })}
+                  onClick={() => {
+                    clearNotice();
+                    setDialog({ coverage: c });
+                  }}
                   className="max-sm:h-11 max-sm:flex-1"
                 >
                   {copy.edit}
@@ -204,6 +228,7 @@ export function PatientCoverageSection({
                   size="sm"
                   aria-label={copy.removeLabel(c.payer.name)}
                   onClick={() => {
+                    clearNotice();
                     setRemoveError(null);
                     setRemoving(c);
                   }}
@@ -235,7 +260,10 @@ export function PatientCoverageSection({
             type="button"
             variant="secondary"
             size="sm"
-            onClick={() => setDialog({ coverage: null })}
+            onClick={() => {
+              clearNotice();
+              setDialog({ coverage: null });
+            }}
             className="max-sm:h-11 max-sm:w-full"
           >
             <Plus aria-hidden />
@@ -264,7 +292,7 @@ export function PatientCoverageSection({
             dialog.coverage ? (coverages?.length ?? 0) === 1 : (coverages?.length ?? 0) === 0
           }
           onSaved={() => {
-            setNotice(copy.saved);
+            announce(copy.saved);
             reload();
             onChanged?.();
           }}

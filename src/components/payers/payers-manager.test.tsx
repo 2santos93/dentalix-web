@@ -160,6 +160,8 @@ describe('PayersManager (DX-153)', () => {
     await waitFor(() =>
       expect(screen.queryByRole('table', { name: 'Pagadores' })).not.toBeInTheDocument(),
     );
+    // La fila retirada ya no existe: el foco pasa a «Nuevo pagador», no a <body>.
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Nuevo pagador' })).toHaveFocus());
   });
 
   it('el 409 por coberturas vivas se muestra en el diálogo y el pagador sigue en la lista', async () => {

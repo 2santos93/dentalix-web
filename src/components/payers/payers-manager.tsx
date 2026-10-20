@@ -1,6 +1,6 @@
 'use client';
 import * as React from 'react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Landmark, Lock, Plus } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import {
@@ -73,6 +73,8 @@ export function PayersManager({ token, allowed }: PayersManagerProps) {
   const [modalKey, setModalKey] = useState(0);
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [removing, setRemoving] = useState<Payer | null>(null);
+  const newButtonRef = useRef<HTMLButtonElement>(null);
+  const removedRef = useRef(false);
   const [removeError, setRemoveError] = useState<string | null>(null);
   const [removeBusy, setRemoveBusy] = useState(false);
 
@@ -142,6 +144,7 @@ export function PayersManager({ token, allowed }: PayersManagerProps) {
     try {
       await deletePayer(token, removing.id);
       setPayers((prev) => prev.filter((t) => t.id !== removing.id));
+      removedRef.current = true;
       setRemoving(null);
     } catch (err) {
       setRemoveError(apiErrorMessage(err, copy.removeError));
@@ -206,7 +209,12 @@ export function PayersManager({ token, allowed }: PayersManagerProps) {
         <p className="text-sm text-muted" aria-live="polite">
           {loading || error ? '' : copy.count(payers.length)}
         </p>
-        <Button type="button" onClick={() => openModal(null)} className="w-full sm:w-auto">
+        <Button
+          ref={newButtonRef}
+          type="button"
+          onClick={() => openModal(null)}
+          className="w-full sm:w-auto"
+        >
           <Plus aria-hidden />
           {copy.newPayer}
         </Button>
@@ -264,7 +272,7 @@ export function PayersManager({ token, allowed }: PayersManagerProps) {
               className="flex flex-col gap-2 rounded-lg border border-border bg-surface p-4 text-sm text-ink"
             >
               <div className="flex items-start justify-between gap-2">
-                <span className="min-w-0 truncate font-medium">{p.name}</span>
+                <span className="min-w-0 break-words font-medium">{p.name}</span>
                 {status(p)}
               </div>
               <p className="text-xs text-muted">
@@ -297,6 +305,13 @@ export function PayersManager({ token, allowed }: PayersManagerProps) {
         confirming={removeBusy}
         destructive
         error={removeError}
+        onCloseAutoFocus={(event) => {
+          // La fila retirada ya no existe: el foco pasa a «Nuevo pagador».
+          if (!removedRef.current) return;
+          removedRef.current = false;
+          event.preventDefault();
+          newButtonRef.current?.focus();
+        }}
       />
     </div>
   );

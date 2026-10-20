@@ -213,6 +213,23 @@ describe('PatientCoverageSection (DX-153)', () => {
     await waitFor(() => expect(onChanged).toHaveBeenCalledTimes(1));
   });
 
+  it('el aviso de éxito se limpia al abrir un diálogo y un nuevo guardado lo vuelve a anunciar', async () => {
+    mockedList.mockResolvedValue([coverage()]);
+    mockedDelete.mockResolvedValue(undefined);
+    mockedUpdate.mockResolvedValue(coverage());
+    renderSection();
+    const user = setupUser();
+
+    await user.click(await screen.findByRole('button', { name: 'Editar la cobertura de Sanitas' }));
+    await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: /guardar/i }));
+    expect(await screen.findByText('Cobertura guardada.')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Editar la cobertura de Sanitas' }));
+    expect(screen.queryByText('Cobertura guardada.')).not.toBeInTheDocument();
+    await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: /guardar/i }));
+    expect(await screen.findByText('Cobertura guardada.')).toBeInTheDocument();
+  });
+
   it('quita con confirmación, notifica y devuelve el foco a «Añadir cobertura»', async () => {
     mockedList.mockResolvedValueOnce([coverage()]);
     mockedList.mockResolvedValueOnce([]);

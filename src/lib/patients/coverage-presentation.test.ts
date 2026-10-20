@@ -1,6 +1,7 @@
 import {
   COVERAGE_EXPIRED_LABEL,
   coverageChipText,
+  coverageDetailText,
   coverageStatusBadge,
   coverageValidityLabel,
 } from './coverage-presentation';
@@ -51,5 +52,25 @@ describe('coverageStatusBadge (DX-153)', () => {
       variant: 'secondary',
     });
     expect(coverageStatusBadge({ status: 'ACTIVE' })).toBeNull();
+  });
+});
+
+describe('coverageDetailText (DX-153)', () => {
+  const base = { payerName: 'Sura EPS', planName: 'Plan X', validTo: '2026-01-31' };
+  it('vigente: pagador y plan', () => {
+    expect(coverageDetailText({ ...base, status: 'ACTIVE' })).toBe('Cobertura: Sura EPS · Plan X');
+  });
+  it('vencida: pagador y fecha de vencimiento', () => {
+    expect(coverageDetailText({ ...base, status: 'EXPIRED' })).toMatch(/^Cobertura: Sura EPS · venció el /);
+  });
+  it('pendiente de inicio: lo dice en vez de mostrar el plan como vigente', () => {
+    expect(coverageDetailText({ ...base, status: 'NOT_STARTED' })).toBe(
+      'Cobertura: Sura EPS · pendiente de inicio',
+    );
+  });
+  it('sin cobertura o sin pagador: vacío', () => {
+    expect(coverageDetailText({ ...base, status: 'NONE' })).toBe('');
+    expect(coverageDetailText({ ...base, payerName: null, status: 'ACTIVE' })).toBe('');
+    expect(coverageDetailText(null)).toBe('');
   });
 });

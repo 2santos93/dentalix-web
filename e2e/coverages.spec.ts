@@ -1,5 +1,6 @@
 import { test, expect, type Page } from './support/test';
 import { randomUUID } from 'node:crypto';
+import path from 'node:path';
 import { addStaffViaApi, apiPost, registerClinicViaApi, type ApiSession } from './support/api';
 import { loginAs } from './support/auth';
 import { atSede, sedeDayFromToday } from './support/clock';
@@ -32,14 +33,18 @@ const twoDaysAgo = sedeDayFromToday(-2);
 const tomorrow = sedeDayFromToday(1);
 const today = sedeDayFromToday(0);
 
-const QA_DIR =
-  process.env.DX153_QA_DIR ??
-  '/Users/ncaicedo/Desktop/dentalix/.planning/clickup-handoff-audit/qa/DX-153';
+const QA_DIR = path.resolve(process.env.DX153_QA_DIR ?? 'e2e/.qa-shots');
 const QA = process.env.DX153_QA_SHOTS === '1';
 
+/**
+ * Captura de QA estable: sin animaciones ni transiciones a medias (modo
+ * oscuro, fundido del diálogo), con las fuentes cargadas y la red en reposo.
+ */
 async function shot(page: Page, name: string, fullPage = false) {
   if (!QA) return;
-  await page.screenshot({ path: `${QA_DIR}/${name}.png`, fullPage });
+  await page.evaluate(() => document.fonts.ready);
+  await page.waitForLoadState('networkidle');
+  await page.screenshot({ path: path.join(QA_DIR, `${name}.png`), fullPage, animations: 'disabled' });
 }
 
 let session: ApiSession;
@@ -102,7 +107,7 @@ test('ADMIN crea «Sura EPS» en Ajustes y la ve activa; a 390 px sin scroll hor
   const table = page.getByRole('table', { name: 'Pagadores' });
   const row = table.getByRole('row', { name: new RegExp(payerName) });
   await expect(row).toContainText('EPS (Colombia)');
-  await expect(row).toContainText('Colombia');
+  await expect(row.getByRole('cell').nth(2)).toHaveText('Colombia');
   await expect(row.getByText('Activo', { exact: true })).toBeVisible();
   await shot(page, 'ajustes-pagadores-1440');
 
@@ -110,6 +115,13 @@ test('ADMIN crea «Sura EPS» en Ajustes y la ve activa; a 390 px sin scroll hor
   await expect(page.getByText(payerName).locator('visible=true').first()).toBeVisible();
   await expectNoHorizontalScroll(page);
   await shot(page, 'ajustes-pagadores-390');
+
+  await page.getByRole('button', { name: 'Nuevo pagador' }).first().click();
+  const modal390 = page.getByRole('dialog', { name: 'Nuevo pagador' });
+  await expectDialogInsideViewport(page, modal390);
+  await expectNoHorizontalScroll(page);
+  await modal390.getByRole('button', { name: 'Cancelar' }).click();
+  await expect(modal390).toBeHidden();
 
   const list = await page.request.get(`${API_URL}/payers`, { headers: session.headers });
   const payers = (await list.json()) as { id: string; name: string }[];
@@ -201,7 +213,7 @@ test('390 px: la ficha con cobertura no se desplaza y el diálogo cabe en la pan
   await expect(dialog).toBeHidden();
 });
 
-test('una cita de hoy con cobertura vencida muestra el chip en la agenda', async ({ page, request }) => {
+test('una cita corta de hoy con cobertura vencida muestra la marca en la agenda y en el detalle', async ({ page, request }) => {
   const staff = await request.get(`${API_URL}/staff`, { headers: session.headers });
   const members = (await staff.json()) as { userId: string; fullName: string }[];
   const providerId = members.find((m) => m.fullName === admin.fullName)!.userId;
@@ -209,7 +221,7 @@ test('una cita de hoy con cobertura vencida muestra el chip en la agenda', async
     patientId,
     providerId,
     start: atSede(today, '22:00').toISOString(),
-    end: atSede(today, '23:00').toISOString(),
+    end: atSede(today, '22:30').toISOString(),
   });
 
   await page.setViewportSize({ width: 1440, height: 900 });
@@ -221,11 +233,28 @@ test('una cita de hoy con cobertura vencida muestra el chip en la agenda', async
 
   const card = page.getByTestId('day-column-appointment').filter({ hasText: `Camila ${lastName}` });
   await expect(card).toBeVisible({ timeout: 15_000 });
-  // Una cita de una hora: en una de 30 min la tarjeta recorta el chip (lo lleva el aria-label).
+  // Cita de 30 min: la tarjeta recorta el chip, así que el aviso es la marca de la fila de la hora.
   await card.scrollIntoViewIfNeeded();
-  await expect(card.getByTestId('coverage-chip')).toBeVisible();
-  await expect(card.getByTestId('coverage-chip')).toContainText('Cobertura vencida');
+  await expect(card.locator('[title="Cobertura vencida"]')).toBeVisible();
   await shot(page, 'agenda-chip-1440');
+
+  // El nombre accesible anuncia el aviso y nunca lleva el número de afiliado.
+  const cardButton = card.getByRole('button').first();
+  await expect(cardButton).toHaveAttribute('aria-label', /Cobertura vencida/);
+  await expect(cardButton).not.toHaveAttribute('aria-label', /987654/);
+
+  await cardButton.click();
+  const detailLine = page.getByTestId('coverage-detail-line');
+  await expect(detailLine).toBeVisible();
+  await expect(detailLine).toContainText(`Cobertura: ${payerName}`);
+  await expect(detailLine).toContainText('venció el');
+  await expect(detailLine).not.toContainText('987654');
+  await page.keyboard.press('Escape');
+
+  // 390 px: la agenda no se desplaza y el aviso sigue a la vista.
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expectNoHorizontalScroll(page);
+  await expect(page.getByText('Cobertura vencida').or(page.locator('[title="Cobertura vencida"]')).first()).toBeVisible();
 });
 
 test('el listado de pacientes filtrado por «Sura EPS» muestra solo a ese paciente', async ({ page }) => {
@@ -239,9 +268,16 @@ test('el listado de pacientes filtrado por «Sura EPS» muestra solo a ese pacie
 
   const select = page.getByRole('combobox', { name: 'Filtrar por pagador' });
   await expect(select.locator('option', { hasText: payerName })).toHaveCount(1);
+  // Espera la respuesta filtrada: durante la carga la tabla son esqueletos y
+  // un «no está» pasaría aunque el filtro no se enviara.
+  const filtered = page.waitForResponse(
+    (r) => r.url().includes(`payerId=${payerId}`) && r.request().method() === 'GET' && r.ok(),
+  );
   await select.selectOption(payerId);
+  await filtered;
+  await expect(page.getByText('1 paciente', { exact: true })).toBeVisible({ timeout: 10_000 });
 
-  await expect(page.getByText(otherLastName)).toHaveCount(0, { timeout: 10_000 });
+  await expect(page.getByText(otherLastName)).toHaveCount(0);
   await expect(page.getByText(lastName).first()).toBeVisible();
   await shot(page, 'listado-filtro-1440');
 

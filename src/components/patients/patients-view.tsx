@@ -215,6 +215,7 @@ export function PatientsView({ token }: PatientsViewProps) {
               patients={patients}
               loading={loading}
               filtered={search !== '' || payerId !== ''}
+              payerOnly={search === '' && payerId !== ''}
             />
             <Pagination
               page={page}

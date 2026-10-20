@@ -182,7 +182,7 @@ it('DX-150: la tarjeta lleva el chip «Saldo vencido» (también en su nombre ac
   expect(cards[0]).toHaveAccessibleName(/Saldo vencido · 40 días/);
 });
 
-it('DX-153: la tarjeta con cobertura vencida lleva el chip «Cobertura vencida»; vigente, nada', () => {
+it('DX-153: la tarjeta con cobertura vencida lleva la marca «Cobertura vencida»; vigente, nada', () => {
   render(
     <WeekTimeGrid
       appointments={[
@@ -201,6 +201,10 @@ it('DX-153: la tarjeta con cobertura vencida lleva el chip «Cobertura vencida»
       onSelectDay={noop} onSelectSlot={noop} onSelectAppointment={noop}
     />,
   );
-  expect(screen.getAllByTestId('coverage-chip')).toHaveLength(1);
-  expect(screen.getByTestId('coverage-chip')).toHaveTextContent('Cobertura vencida');
+  // Ambas son de 30 min: la marca va en la fila de la hora y el nombre accesible la anuncia.
+  expect(screen.getAllByTestId('coverage-marker')).toHaveLength(1);
+  expect(screen.getByTestId('coverage-marker')).toHaveAttribute('title', 'Cobertura vencida');
+  const cards = screen.getAllByTestId('week-grid-appointment');
+  expect(cards[0]).toHaveAccessibleName(/Cobertura vencida/);
+  expect(cards[1]).not.toHaveAccessibleName(/Cobertura vencida/);
 });
