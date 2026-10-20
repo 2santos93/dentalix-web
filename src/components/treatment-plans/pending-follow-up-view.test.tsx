@@ -88,6 +88,17 @@ describe('PendingFollowUpView (DX-040)', () => {
     expect(mockedList).toHaveBeenCalledWith('tok', { olderThanDays: 7, page: 1 });
   });
 
+  it('alcance: «Todas las sedes» sin restricción, «Mis sedes» con claim acotado (DX-089)', async () => {
+    mockedList.mockResolvedValue(page([item()]));
+    const { unmount } = render(<PendingFollowUpView token="tok" />);
+    expect(await screen.findByText('Todas las sedes')).toBeInTheDocument();
+    unmount();
+    const b64 = (v: string) => btoa(v).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    const restricted = `${b64('{"alg":"HS256"}')}.${b64(JSON.stringify({ sub: 'u1', loc: ['loc-1'] }))}.firma`;
+    render(<PendingFollowUpView token={restricted} />);
+    expect(await screen.findByText('Mis sedes')).toBeInTheDocument();
+  });
+
   it('sin número utilizable no ofrece WhatsApp y lo explica', async () => {
     mockedList.mockResolvedValue(page([item({ patientPhone: null, patientWhatsApp: null })]));
     render(<PendingFollowUpView token="tok" />);

@@ -21,6 +21,7 @@ import { FormField } from '@/components/shared/form-field';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { formatDateLabel } from '@/lib/format/date';
+import { getTokenAllowedLocationIds } from '@/lib/auth/token-role';
 
 // Copy as constants (i18n-ready, es-first).
 const copy = {
@@ -34,6 +35,7 @@ const copy = {
   provider: 'Profesional',
   location: 'Sede',
   allLocations: 'Todas las sedes',
+  restrictedHint: 'Como tu acceso está acotado a sedes, el bloqueo debe tener sede.',
   kind: 'Motivo',
   wholeDays: 'Días completos',
   fromDate: 'Desde',
@@ -123,7 +125,11 @@ export function ScheduleBlockDialog({
       '',
   );
   const [locationId, setLocationId] = useState(activeLocationId ?? locations[0]?.id ?? '');
-  const [providerLocationId, setProviderLocationId] = useState('');
+  // Un miembro acotado a sedes no puede bloquear «todas»: la API responde 403.
+  const restricted = getTokenAllowedLocationIds(token) !== null;
+  const [providerLocationId, setProviderLocationId] = useState(
+    restricted ? (activeLocationId ?? locations[0]?.id ?? '') : '',
+  );
   const [kind, setKind] = useState<ScheduleBlockKind>('VACATION');
   const [wholeDays, setWholeDays] = useState(true);
   const [fromDate, setFromDate] = useState(defaultDate);
@@ -283,13 +289,14 @@ export function ScheduleBlockDialog({
                   value={providerLocationId}
                   onChange={(e) => setProviderLocationId(e.target.value)}
                 >
-                  <option value="">{copy.allLocations}</option>
+                  {!restricted && <option value="">{copy.allLocations}</option>}
                   {locations.map((l) => (
                     <option key={l.id} value={l.id}>
                       {l.name}
                     </option>
                   ))}
                 </select>
+                {restricted && <p className="mt-1 text-xs text-muted">{copy.restrictedHint}</p>}
               </FormField>
             </>
           ) : (
