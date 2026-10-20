@@ -1,4 +1,5 @@
 import { useAuthStore } from '@/lib/auth/auth-store';
+import { getTokenAllowedLocationIds } from '@/lib/auth/token-role';
 import {
   getActiveLocationId,
   setActiveLocationId,
@@ -308,10 +309,18 @@ async function doFetch(
     //
     // Lo mismo con una sede que existe pero ya no es del miembro (DX-089, 403
     // LOCATION_NOT_ALLOWED): sin cabecera, la API responde sobre sus sedes
-    // permitidas, que siempre vale.
+    // permitidas, que siempre vale. OJO: la API lanza ese mismo código al
+    // tocar un RECURSO de otra sede (abrir una cita de l3 con l1 activa); ahí
+    // la sede activa es válida y no se suelta. Solo es la cabecera cuando la
+    // sede enviada queda fuera del claim `loc` del token que se envió.
+    const allowedBySentToken = getTokenAllowedLocationIds(opts.token);
     const staleLocation =
       (res.status === 400 && message.toLowerCase().includes(UNKNOWN_LOCATION)) ||
-      (res.status === 403 && code === LOCATION_NOT_ALLOWED);
+      (res.status === 403 &&
+        code === LOCATION_NOT_ALLOWED &&
+        sentLocationId !== null &&
+        allowedBySentToken !== null &&
+        !allowedBySentToken.includes(sentLocationId));
     if (staleLocation && allowLocationReset && sentLocationId) {
       setActiveLocationId(null);
       return doFetch(path, opts, allowRefresh, false);

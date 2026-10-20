@@ -22,7 +22,10 @@ const copy = {
   all: 'Todas las sedes',
   allHint: 'Incluye las sedes que se den de alta más adelante.',
   legend: 'Sedes en las que trabaja',
-  inactive: (name: string) => `${name} (desactivada)`,
+  // `all: false` sin ids: la API solo devuelve sedes activas, así que el
+  // miembro quedó acotado a sedes que ya se desactivaron.
+  noActiveAssigned:
+    'Este miembro no tiene ninguna sede activa asignada; marca al menos una o «Todas las sedes».',
   save: 'Guardar sedes',
   saved: 'Sedes guardadas. Se aplican en la siguiente sesión del miembro (como mucho 15 minutos).',
   loading: 'Cargando sedes…',
@@ -99,9 +102,9 @@ function EditableStaffLocations({ token, userId }: { token: string; userId: stri
     };
   }, [token, userId, reloadKey]);
 
-  // Una sede desactivada solo se enseña si ya la tiene asignada: ocultarla
-  // haría que guardar se la quitara sin que nadie lo viera.
-  const shown = locations.filter((l) => l.isActive || selected.includes(l.id));
+  // La API solo acepta y devuelve sedes activas: las desactivadas no se ofrecen.
+  const shown = locations.filter((l) => l.isActive);
+  const noActiveAssigned = !saved.all && saved.ids.length === 0;
 
   const isUnchanged = all
     ? saved.all
@@ -177,6 +180,8 @@ function EditableStaffLocations({ token, userId }: { token: string; userId: stri
             </p>
           </div>
 
+          {noActiveAssigned && <p className="text-sm text-warning">{copy.noActiveAssigned}</p>}
+
           <fieldset disabled={all} className="flex min-w-0 flex-col gap-1.5">
             <legend className="t-label mb-1 text-muted">{copy.legend}</legend>
             <div className="rounded-lg border border-border">
@@ -199,7 +204,7 @@ function EditableStaffLocations({ token, userId }: { token: string; userId: stri
                       onChange={() => toggle(l.id)}
                       className={checkboxClass}
                     />
-                    <span>{l.isActive ? l.name : copy.inactive(l.name)}</span>
+                    <span>{l.name}</span>
                   </label>
                 );
               })}

@@ -30,6 +30,7 @@ export interface StaffMember {
    * DX-089: sedes en las que trabaja; `null` = todas (y siempre `null` en un
    * ADMIN). Opcional solo por las respuestas que no lo traen (`PATCH`).
    */
+  // TODO(DX-089 T7): sustituir por components['schemas'][…] tras npm run codegen
   locationIds?: string[] | null;
 }
 

@@ -35,8 +35,13 @@ describe('paymentLocationHint — miembro con sedes acotadas', () => {
     );
   });
 
-  it('con varias sedes permitidas, o sin restricción, el texto no cambia', () => {
-    expect(paymentLocationHint(two, null, ['l1', 'l2'])).toMatch(/sede por defecto de la clínica/);
+  it('con varias sedes permitidas y sin sede activa, la primera de las suyas', () => {
+    expect(paymentLocationHint(two, null, ['l1', 'l2'])).toBe(
+      'Sin una sede activa, este abono quedará en la primera de tus sedes asignadas.',
+    );
+  });
+
+  it('sin restricción el texto no cambia', () => {
     expect(paymentLocationHint(two, null, null)).toMatch(/sede por defecto de la clínica/);
   });
 });

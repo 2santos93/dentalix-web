@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { StaffLocationsCard } from './staff-locations-card';
 import { getStaffLocations, replaceStaffLocations } from '@/lib/staff/staff-api';
@@ -129,7 +129,33 @@ describe('StaffLocationsCard (DX-089)', () => {
     expect(screen.getByText('El ADMIN siempre tiene todas las sedes.')).toBeInTheDocument();
     expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Guardar sedes' })).not.toBeInTheDocument();
-    await waitFor(() => expect(mockedGet).not.toHaveBeenCalled());
+    // Ni siquiera hay efecto que pida nada: se comprueba tras vaciar la cola.
+    await act(async () => {});
+    expect(mockedGet).not.toHaveBeenCalled();
+    expect(mockedList).not.toHaveBeenCalled();
+  });
+
+  it('acotado solo a sedes ya desactivadas: lo explica y no marca nada', async () => {
+    // La API solo devuelve ids activos: `all: false` con lista vacía es eso.
+    mockedGet.mockResolvedValue({ all: false, locationIds: [] });
+    renderCard();
+
+    expect(
+      await screen.findByText(
+        'Este miembro no tiene ninguna sede activa asignada; marca al menos una o «Todas las sedes».',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'Todas las sedes' })).not.toBeChecked();
+    expect(screen.getByRole('checkbox', { name: 'Sede principal' })).not.toBeChecked();
+  });
+
+  it('las sedes desactivadas no se ofrecen', async () => {
+    mockedGet.mockResolvedValue({ all: true, locationIds: [] });
+    mockedList.mockResolvedValue([sede('l1', 'Sede principal'), sede('l2', 'Sede cerrada', false)]);
+    renderCard();
+
+    await screen.findByRole('checkbox', { name: 'Sede principal' });
+    expect(screen.queryByRole('checkbox', { name: /Sede cerrada/ })).not.toBeInTheDocument();
   });
 
   it('si no se pueden cargar sus sedes ofrece reintentar', async () => {

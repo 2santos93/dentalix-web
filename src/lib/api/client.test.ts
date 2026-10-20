@@ -627,6 +627,15 @@ describe('apiFetch — sede no permitida (DX-089)', () => {
     window.localStorage.clear();
   });
 
+  // Token cuyo claim `loc` NO incluye la sede guardada: la cabecera es la que
+  // sobra. Solo entonces se descarta (ver el test del recurso de otra sede).
+  function tokenWithLoc(loc: string[]): string {
+    const b64url = (value: string) =>
+      btoa(value).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    return `${b64url('{"alg":"HS256"}')}.${b64url(JSON.stringify({ sub: 'u1', loc }))}.firma`;
+  }
+  const T = tokenWithLoc(['l1', 'l2']);
+
   const NOT_ALLOWED = {
     statusCode: 403,
     error: 'Forbidden',
@@ -645,7 +654,7 @@ describe('apiFetch — sede no permitida (DX-089)', () => {
     });
     global.fetch = spy as unknown as typeof fetch;
 
-    await expect(apiFetch('/appointments', { token: 'T' })).resolves.toEqual({ ok: 1 });
+    await expect(apiFetch('/appointments', { token: T })).resolves.toEqual({ ok: 1 });
     expect(spy).toHaveBeenCalledTimes(2);
     expect(enviadas[0]['X-Location-Id']).toBe('sede-ajena');
     expect(enviadas[1]['X-Location-Id']).toBeUndefined();
@@ -657,11 +666,38 @@ describe('apiFetch — sede no permitida (DX-089)', () => {
     const spy = jest.fn(async () => ({ ok: false, status: 403, json: async () => NOT_ALLOWED }));
     global.fetch = spy as unknown as typeof fetch;
 
-    await expect(apiFetch('/appointments', { token: 'T' })).rejects.toMatchObject({
+    await expect(apiFetch('/appointments', { token: T })).rejects.toMatchObject({
       status: 403,
       code: 'LOCATION_NOT_ALLOWED',
     });
     expect(spy).toHaveBeenCalledTimes(2);
+  });
+
+  it('si la sede enviada SÍ está en el claim, el 403 es del recurso: no toca la sede', async () => {
+    // La API lanza el mismo código al abrir una cita de otra sede. La sede
+    // activa (l1) sigue siendo válida y no debe perderse.
+    setActiveLocationId('l1');
+    const spy = jest.fn(async () => ({ ok: false, status: 403, json: async () => NOT_ALLOWED }));
+    global.fetch = spy as unknown as typeof fetch;
+
+    await expect(apiFetch('/appointments/apt-l3', { token: T })).rejects.toMatchObject({
+      status: 403,
+      code: 'LOCATION_NOT_ALLOWED',
+    });
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(getActiveLocationId()).toBe('l1');
+  });
+
+  it('sin claim `loc` (todas las sedes) la cabecera no puede ser la culpable: no reintenta', async () => {
+    setActiveLocationId('l1');
+    const spy = jest.fn(async () => ({ ok: false, status: 403, json: async () => NOT_ALLOWED }));
+    global.fetch = spy as unknown as typeof fetch;
+
+    await expect(apiFetch('/appointments/apt-l3', { token: 'T' })).rejects.toMatchObject({
+      status: 403,
+    });
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(getActiveLocationId()).toBe('l1');
   });
 
   it('otro 403 (rol sin permiso) NO toca la sede guardada', async () => {

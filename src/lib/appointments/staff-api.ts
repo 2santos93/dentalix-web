@@ -19,6 +19,7 @@ export interface StaffMember {
   fullName: string;
   role: ClinicRole;
   /** DX-089: sedes en las que trabaja; `null` (o ausente) = todas. */
+  // TODO(DX-089 T7): sustituir por components['schemas'][…] tras npm run codegen
   locationIds?: string[] | null;
 }
 
