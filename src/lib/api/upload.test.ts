@@ -5,7 +5,7 @@
 import { uploadWithProgress } from './upload';
 import { ApiError, NetworkError } from './client';
 import { useAuthStore } from '@/lib/auth/auth-store';
-import { setActiveLocationId } from '@/lib/locations/location-store';
+import { getActiveLocationId, setActiveLocationId } from '@/lib/locations/location-store';
 
 /** XHR falso: guarda lo enviado y deja que el test decida la respuesta. */
 class FakeXhr {
@@ -152,6 +152,36 @@ describe('uploadWithProgress (DX-151)', () => {
     const err = (await uploadWithProgress('/x', new FormData(), { token: 'T' }).catch((e) => e)) as ApiError;
     expect(err.status).toBe(502);
     expect(err.messages).toEqual([]);
+  });
+
+  it('sede huérfana (400 «Unknown location»): suelta la sede y repite UNA vez sin X-Location-Id', async () => {
+    setActiveLocationId('loc-borrada');
+    let hits = 0;
+    FakeXhr.respond = (xhr) => {
+      hits += 1;
+      if (hits === 1) xhr.reply(400, { message: 'Unknown location for this tenant' });
+      else xhr.reply(201, { id: 'd1' });
+    };
+    const out = await uploadWithProgress('/patients/p1/documents', new FormData(), { token: 'T' });
+    expect(out).toEqual({ id: 'd1' });
+    expect(FakeXhr.instances).toHaveLength(2);
+    expect(FakeXhr.instances[0].headers['X-Location-Id']).toBe('loc-borrada');
+    expect(FakeXhr.instances[1].headers['X-Location-Id']).toBeUndefined();
+    expect(getActiveLocationId()).toBeNull();
+  });
+
+  it('sin sede enviada, un 400 «Unknown location» no se reintenta', async () => {
+    FakeXhr.respond = (xhr) => xhr.reply(400, { message: 'Unknown location' });
+    await expect(uploadWithProgress('/x', new FormData(), { token: 'T' })).rejects.toBeInstanceOf(ApiError);
+    expect(FakeXhr.instances).toHaveLength(1);
+  });
+
+  it('si la repetición sin sede vuelve a fallar, lanza ese error (no hay tercer intento)', async () => {
+    setActiveLocationId('loc-borrada');
+    FakeXhr.respond = (xhr) => xhr.reply(400, { message: 'Unknown location' });
+    const err = (await uploadWithProgress('/x', new FormData(), { token: 'T' }).catch((e) => e)) as ApiError;
+    expect(err.status).toBe(400);
+    expect(FakeXhr.instances).toHaveLength(2);
   });
 
   it('fallo de red → NetworkError', async () => {

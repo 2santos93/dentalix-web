@@ -18,6 +18,15 @@ const REFRESH_PATH = '/auth/refresh';
 // autocurarse (los tests de `client.test.ts` lo fijan por si acaso).
 const UNKNOWN_LOCATION = 'unknown location';
 
+/**
+ * `true` si la API rechazó la sede enviada en `X-Location-Id` por no ser del
+ * tenant (sede borrada, desactivada o de un reseed). Lo comparten `doFetch` y la
+ * subida con progreso (`upload.ts`) para autocurarse igual.
+ */
+export function isUnknownLocationError(error: ApiError): boolean {
+  return error.status === 400 && error.message.toLowerCase().includes(UNKNOWN_LOCATION);
+}
+
 interface ApiOptions {
   method?: string;
   body?: unknown;
@@ -330,7 +339,6 @@ async function doFetch(
       /* sin cuerpo JSON */
     }
     const error = apiErrorFromBody(res.status, body, res.headers?.get('Retry-After') ?? null);
-    const message = error.message;
     // Sede huérfana → autocuración. La sede elegida vive en localStorage y
     // sobrevive a la sede real: si se borra, se desactiva, o se reseedea la base
     // y cambian los ids, ese id se sigue mandando en CADA petición y el backend
@@ -342,12 +350,7 @@ async function doFetch(
     // pantallas que piden datos sin él. Se suelta la sede y se reintenta UNA
     // vez (`allowLocationReset: false`), ya sin la cabecera: eso devuelve la
     // vista consolidada, que es el comportamiento por defecto y siempre vale.
-    if (
-      res.status === 400 &&
-      allowLocationReset &&
-      sentLocationId &&
-      message.toLowerCase().includes(UNKNOWN_LOCATION)
-    ) {
+    if (allowLocationReset && sentLocationId && isUnknownLocationError(error)) {
       setActiveLocationId(null);
       return doFetch(path, opts, allowRefresh, false);
     }
