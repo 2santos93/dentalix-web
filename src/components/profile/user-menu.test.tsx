@@ -174,6 +174,11 @@ describe('UserMenu — plantillas de consentimiento (DX-006)', () => {
       'href',
       '/settings/indicaciones',
     );
+    // DX-153: catálogo de pagadores.
+    expect(screen.getByRole('menuitem', { name: 'Pagadores' })).toHaveAttribute(
+      'href',
+      '/settings/pagadores',
+    );
   });
 
   it.each(['DENTIST', 'ASSISTANT', 'RECEPTION'])('%s no lo ve', async (role) => {
@@ -189,5 +194,6 @@ describe('UserMenu — plantillas de consentimiento (DX-006)', () => {
     expect(
       screen.queryByRole('menuitem', { name: 'Indicaciones postoperatorias' }),
     ).not.toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'Pagadores' })).not.toBeInTheDocument();
   });
 });

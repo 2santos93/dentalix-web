@@ -574,6 +574,81 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/patients/{patientId}/coverages": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Coberturas del paciente: la principal primero, luego por fecha de alta (DX-153) */
+        get: operations["PatientCoveragesController_list"];
+        put?: never;
+        /**
+         * Añadir una cobertura al paciente (DX-153)
+         * @description La primera cobertura viva es la principal aunque no se pida. `isPrimary: true` en otra desmarca la anterior.
+         */
+        post: operations["PatientCoveragesController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{patientId}/coverages/{coverageId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Retirar una cobertura; si era la principal, la más antigua pasa a serlo (DX-153) */
+        delete: operations["PatientCoveragesController_remove"];
+        options?: never;
+        head?: never;
+        /** Editar una cobertura; null vacía los campos opcionales (DX-153) */
+        patch: operations["PatientCoveragesController_update"];
+        trace?: never;
+    };
+    "/api/v1/payers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Pagadores de la clínica (activos; con includeInactive, también los desactivados) */
+        get: operations["PayersController_list"];
+        put?: never;
+        /** Crear un pagador */
+        post: operations["PayersController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/payers/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Retirar un pagador sin coberturas (borrado lógico) */
+        delete: operations["PayersController_remove"];
+        options?: never;
+        head?: never;
+        /** Editar o desactivar un pagador */
+        patch: operations["PayersController_update"];
+        trace?: never;
+    };
     "/api/v1/catalog/items": {
         parameters: {
             query?: never;
@@ -3516,7 +3591,6 @@ export interface components {
             dataConsentPolicyVersion?: string;
             maritalStatus?: string;
             occupation?: string;
-            insurerEps?: string;
             physicianName?: string;
             physicianPhone?: string;
             emergencyContactName?: string;
@@ -3577,6 +3651,10 @@ export interface components {
             dataConsentPolicyVersion: string | null;
             maritalStatus: string | null;
             occupation: string | null;
+            /**
+             * @deprecated
+             * @description DEPRECADO (DX-153): texto libre original, solo lectura. La aseguradora vive ahora en las coberturas del paciente (`/patients/:id/coverages`); enviarlo en POST o PATCH se ignora.
+             */
             insurerEps: string | null;
             physicianName: string | null;
             physicianPhone: string | null;
@@ -3633,8 +3711,123 @@ export interface components {
             /** Format: date-time */
             updatedAt: string;
         };
+        /**
+         * @description NONE: sin coberturas vivas. EXPIRED: la vigencia terminó antes de hoy. NOT_STARTED: empieza después de hoy. ACTIVE: el resto.
+         * @enum {string}
+         */
+        CoverageSummaryStatus: "NONE" | "ACTIVE" | "EXPIRED" | "NOT_STARTED";
+        CoverageSummaryDto: {
+            /** @description NONE: sin coberturas vivas. EXPIRED: la vigencia terminó antes de hoy. NOT_STARTED: empieza después de hoy. ACTIVE: el resto. */
+            status: components["schemas"]["CoverageSummaryStatus"];
+            payerName: string | null;
+            planName: string | null;
+            /**
+             * @description Fin de la vigencia (AAAA-MM-DD); null si es indefinida.
+             * @example 2026-12-31
+             */
+            validTo: string | null;
+        };
+        PatientListItemDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            tenantId: string;
+            firstName: string;
+            lastName: string;
+            /** @enum {string} */
+            docType: "CC" | "TI" | "CE" | "PASSPORT" | "OTHER";
+            docNumber: string | null;
+            /** Format: date-time */
+            birthDate: string | null;
+            /** @enum {string} */
+            sex: "M" | "F" | "OTHER" | "UNSPECIFIED";
+            phone: string | null;
+            email: string | null;
+            address: string | null;
+            countryCode: string | null;
+            cityId: number | null;
+            notes: string | null;
+            /**
+             * @deprecated
+             * @description DEPRECADO (DX-037): resumen derivado de la última autorización GENERAL. La fuente de verdad es GET /patients/:id/data-consents.
+             */
+            dataConsentAccepted: boolean;
+            /**
+             * Format: date-time
+             * @deprecated
+             * @description DEPRECADO (DX-037): hora (servidor) de la última autorización GENERAL.
+             */
+            dataConsentAt: string | null;
+            /**
+             * @deprecated
+             * @description DEPRECADO (DX-037): versión («v1», «v2»…) de la política de la última autorización GENERAL.
+             */
+            dataConsentPolicyVersion: string | null;
+            maritalStatus: string | null;
+            occupation: string | null;
+            /**
+             * @deprecated
+             * @description DEPRECADO (DX-153): texto libre original, solo lectura. La aseguradora vive ahora en las coberturas del paciente (`/patients/:id/coverages`); enviarlo en POST o PATCH se ignora.
+             */
+            insurerEps: string | null;
+            physicianName: string | null;
+            physicianPhone: string | null;
+            emergencyContactName: string | null;
+            emergencyContactRelationship: string | null;
+            emergencyContactPhone: string | null;
+            /**
+             * @deprecated
+             * @description DEPRECADO (DX-203), solo lectura: el acudiente es ahora un responsable (`GET /patients/:id/responsible-parties`). La migración lo copió allí.
+             */
+            guardianName: string | null;
+            /**
+             * @deprecated
+             * @description DEPRECADO (DX-203), solo lectura. Ver `guardianName`.
+             */
+            guardianDocNumber: string | null;
+            /** Format: uuid */
+            createdById: string | null;
+            /**
+             * Format: date-time
+             * @description DX-039: fecha de la última atención clínica (evolución registrada o cita atendida). La mantiene la BD y nunca retrocede.
+             */
+            lastAttentionAt: string | null;
+            /** @description Retención extendida de la HC: NONE = 15 años desde la última atención (Res. 839/2017), DOUBLE = 30 años, PERMANENT = nunca se libera. Solo ADMIN la cambia. */
+            retentionExtended: components["schemas"]["RetentionExtension"];
+            /**
+             * Format: date
+             * @description Último día (incluido) en que la HC debe conservarse. null sin atenciones clínicas o con retención PERMANENT.
+             * @example 2039-02-28
+             */
+            retentionUntil: string | null;
+            /** @description Si hoy la HC está en retención legal: archivar o borrar al paciente responde 409 CLINICAL_RECORD_RETENTION. */
+            underRetention: boolean;
+            /**
+             * Format: date-time
+             * @description DX-039: cuándo se vaciaron sus datos no clínicos (supresión parcial).
+             */
+            partiallySuppressedAt: string | null;
+            /** @description DX-128: canal de los avisos automáticos (EMAIL, WHATSAPP o NONE). Detalle en GET /patients/:id/communication. */
+            contactChannel: components["schemas"]["ContactChannel"];
+            /** Format: date-time */
+            whatsappOptInAt: string | null;
+            whatsappOptInSource: components["schemas"]["WhatsappOptInSource"] | null;
+            /** Format: uuid */
+            whatsappOptInById: string | null;
+            /**
+             * Format: date-time
+             * @description DX-128: baja de los recordatorios automáticos.
+             */
+            reminderOptOutAt: string | null;
+            reminderOptOutSource: components["schemas"]["ReminderOptOutSource"] | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            coverage: components["schemas"]["CoverageSummaryDto"];
+        };
         ListPatientsResponseDto: {
-            items: components["schemas"]["PatientDto"][];
+            items: components["schemas"]["PatientListItemDto"][];
             total: number;
             page: number;
             pageSize: number;
@@ -3696,6 +3889,10 @@ export interface components {
             dataConsentPolicyVersion: string | null;
             maritalStatus: string | null;
             occupation: string | null;
+            /**
+             * @deprecated
+             * @description DEPRECADO (DX-153): texto libre original, solo lectura. La aseguradora vive ahora en las coberturas del paciente (`/patients/:id/coverages`); enviarlo en POST o PATCH se ignora.
+             */
             insurerEps: string | null;
             physicianName: string | null;
             physicianPhone: string | null;
@@ -3752,6 +3949,7 @@ export interface components {
             /** Format: date-time */
             updatedAt: string;
             balance: components["schemas"]["OverdueBalanceDto"];
+            coverage: components["schemas"]["CoverageSummaryDto"];
         };
         UpdatePatientDto: {
             firstName?: string;
@@ -3779,7 +3977,6 @@ export interface components {
             notes?: string | null;
             maritalStatus?: string | null;
             occupation?: string | null;
-            insurerEps?: string | null;
             physicianName?: string | null;
             physicianPhone?: string | null;
             emergencyContactName?: string | null;
@@ -4089,6 +4286,102 @@ export interface components {
         PatientCollectionsDto: {
             notes: components["schemas"]["CollectionNoteDto"][];
             promises: components["schemas"]["PaymentPromiseDto"][];
+        };
+        /** @enum {string} */
+        PayerType: "MUTUA_ES" | "PREPAGADA_CO" | "EPS_CO" | "EMPRESA" | "OTRO";
+        CoveragePayerDto: {
+            /** Format: uuid */
+            id: string;
+            /** @example Sanitas */
+            name: string;
+            type: components["schemas"]["PayerType"];
+            country: components["schemas"]["ClinicCountry"] | null;
+            active: boolean;
+        };
+        PatientCoverageDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            patientId: string;
+            payer: components["schemas"]["CoveragePayerDto"];
+            planName: string | null;
+            /** @description Dato personal: no va a logs ni a la auditoría. */
+            memberNumber: string | null;
+            /** @description Titular cuando no es el paciente (dato de un tercero). */
+            policyHolderName: string | null;
+            /** @example 2026-01-01 */
+            validFrom: string | null;
+            /**
+             * @description Sin fecha de fin = vigencia indefinida.
+             * @example 2026-12-31
+             */
+            validTo: string | null;
+            isPrimary: boolean;
+            notes: string | null;
+            /**
+             * @description Calculado a hoy en la zona de la sede.
+             * @enum {string}
+             */
+            status: "ACTIVE" | "EXPIRED" | "NOT_STARTED";
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        CreatePatientCoverageDto: {
+            /** Format: uuid */
+            payerId: string;
+            planName?: string;
+            memberNumber?: string;
+            policyHolderName?: string;
+            /** @example 2026-01-01 */
+            validFrom?: string;
+            /** @example 2026-12-31 */
+            validTo?: string;
+            /** @description La primera cobertura viva es principal aunque no se pida; true desmarca la anterior. */
+            isPrimary?: boolean;
+            notes?: string;
+        };
+        UpdatePatientCoverageDto: {
+            /** Format: uuid */
+            payerId?: string;
+            planName?: string | null;
+            memberNumber?: string | null;
+            policyHolderName?: string | null;
+            /** @example 2026-01-01 */
+            validFrom?: string | null;
+            /** @example 2026-12-31 */
+            validTo?: string | null;
+            /** @description true la hace principal (desmarca la anterior); false sobre la única principal se rechaza. */
+            isPrimary?: boolean;
+            notes?: string | null;
+        };
+        PayerDto: {
+            /** Format: uuid */
+            id: string;
+            /** @example Sanitas */
+            name: string;
+            type: components["schemas"]["PayerType"];
+            country: components["schemas"]["ClinicCountry"] | null;
+            active: boolean;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        CreatePayerDto: {
+            name: string;
+            type: components["schemas"]["PayerType"];
+            /** @description MUTUA_ES exige ES; PREPAGADA_CO y EPS_CO exigen CO; EMPRESA y OTRO admiten cualquiera o ninguno. */
+            country?: components["schemas"]["ClinicCountry"];
+        };
+        UpdatePayerDto: {
+            name?: string;
+            type?: components["schemas"]["PayerType"];
+            /** @description null = sin país. MUTUA_ES, PREPAGADA_CO y EPS_CO lo exigen. */
+            country?: components["schemas"]["ClinicCountry"] | null;
+            /** @description false = sale de los selectores. */
+            active?: boolean;
         };
         CreateCatalogItemDto: {
             /** @description Unique code within the tenant */
@@ -4764,6 +5057,7 @@ export interface components {
             /** Format: date-time */
             updatedAt: string;
             balance: components["schemas"]["OverdueBalanceDto"];
+            coverage: components["schemas"]["CoverageSummaryDto"];
         };
         OpeningDto: {
             /**
@@ -9581,6 +9875,8 @@ export interface operations {
             query?: {
                 /** @description Búsqueda libre por nombre, apellido o documento (subcadena). Desde 2 caracteres no distingue tildes ni mayúsculas: "jose" encuentra "José". */
                 query?: string;
+                /** @description DX-153: solo pacientes con alguna cobertura viva de este pagador. Combinable con `query`. Un pagador de otra clínica da una lista vacía. */
+                payerId?: string;
                 /** @description Tope: 5000 (un valor mayor responde 400). Para llegar más lejos, buscar. */
                 page?: number;
                 /** @description Tope: 100 (un valor mayor se recorta; la respuesta trae el pageSize aplicado) */
@@ -9592,6 +9888,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
+            /** @description Cada paciente lleva `coverage` (DX-153): resumen de su cobertura principal, calculado para la página entera en un número fijo de consultas. `payerId` limita a quienes tienen alguna cobertura viva de ese pagador. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -9675,7 +9972,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description La ficha con `balance` (DX-150): marca «Saldo vencido» y días para todos los roles; el importe, solo ADMIN y RECEPTION. */
+            /** @description La ficha con `balance` (DX-150): marca «Saldo vencido» y días para todos los roles; el importe, solo ADMIN y RECEPTION. Y con `coverage` (DX-153): resumen de la cobertura principal. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -10181,6 +10478,315 @@ export interface operations {
             };
             /** @description Paciente de otra clínica o inexistente */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientCoveragesController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PatientCoverageDto"][];
+                };
+            };
+            /** @description Paciente no encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientCoveragesController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreatePatientCoverageDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PatientCoverageDto"];
+                };
+            };
+            /** @description Validación, pagador inexistente o desactivado, vigencia inválida o más de 5 coberturas */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente no encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Otra petición cambió la cobertura principal a la vez */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientCoveragesController_remove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+                coverageId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Retirada */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente o cobertura no encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientCoveragesController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+                coverageId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdatePatientCoverageDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PatientCoverageDto"];
+                };
+            };
+            /** @description Validación, pagador inexistente o desactivado, vigencia inválida o dejar al paciente sin principal */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente o cobertura no encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Otra petición cambió la cobertura principal a la vez */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PayersController_list: {
+        parameters: {
+            query?: {
+                /** @description true = también los desactivados (pantalla de gestión). Por defecto, solo los activos. */
+                includeInactive?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PayerDto"][];
+                };
+            };
+        };
+    };
+    PayersController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreatePayerDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PayerDto"];
+                };
+            };
+            /** @description Nombre fuera de 2–120 caracteres o tipo que no corresponde con el país */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo ADMIN y recepción */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ya existe un pagador con ese nombre */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PayersController_remove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Retirado (borrado lógico). */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo ADMIN */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Pagador no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Tiene coberturas asociadas; se desactiva en lugar de retirarlo */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PayersController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdatePayerDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PayerDto"];
+                };
+            };
+            /** @description Campo inválido */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo ADMIN */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Pagador no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ya existe un pagador con ese nombre */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -10971,7 +11577,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Cada cita con `balance` (DX-150): marca «Saldo vencido» de su paciente, calculada para todo el lote en un número fijo de consultas (sin N+1). El importe, solo ADMIN y RECEPTION. */
+            /** @description Cada cita con `balance` (DX-150): marca «Saldo vencido» de su paciente, calculada para todo el lote en un número fijo de consultas (sin N+1). El importe, solo ADMIN y RECEPTION. Y con `coverage` (DX-153): resumen de la cobertura principal del paciente, también por lote. */
             200: {
                 headers: {
                     [name: string]: unknown;

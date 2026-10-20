@@ -22,6 +22,7 @@ import {
   ScanBarcode,
   LifeBuoy,
   Building2,
+  Landmark,
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useAuthStore } from '@/lib/auth/auth-store';
@@ -31,6 +32,7 @@ import { getTokenRole } from '@/lib/auth/token-role';
 import { canManageConsentTemplates } from '@/lib/consents/consents-api';
 import { canManagePrescriptionTemplates } from '@/lib/prescriptions/prescriptions-api';
 import { canManageAppointmentTypes } from '@/lib/appointments/appointment-types-api';
+import { canManagePayers } from '@/lib/payers/payers-api';
 import { canManageNoteTemplates } from '@/lib/clinical-notes/note-templates-api';
 import { canManagePostOpTemplates } from '@/lib/postop/postop-api';
 import { canManageReminders } from '@/lib/reminders/reminders-api';
@@ -75,6 +77,7 @@ const copy = {
   prescriptionSettings: 'Recetas',
   implantSettings: 'Implantes',
   appointmentTypes: 'Tipos de cita',
+  payers: 'Pagadores',
   noteTemplates: 'Plantillas de evolución',
   postOpTemplates: 'Indicaciones postoperatorias',
   reminders: 'Recordatorios',
@@ -320,6 +323,18 @@ export function UserMenu({
         >
           <CalendarClock className="size-4 text-muted" aria-hidden />
           {copy.appointmentTypes}
+        </Link>
+      ) : null}
+      {/* Catálogo de pagadores: aseguradoras, EPS, mutuas (DX-153): solo ADMIN. */}
+      {canManagePayers(getTokenRole(accessToken)) ? (
+        <Link
+          href="/settings/pagadores"
+          role="menuitem"
+          onClick={() => setOpen(false)}
+          className="flex items-center gap-3 px-3 py-2 text-sm text-ink hover:bg-bg"
+        >
+          <Landmark className="size-4 text-muted" aria-hidden />
+          {copy.payers}
         </Link>
       ) : null}
       {/* Plantillas de evolución con preguntas (DX-170): solo ADMIN. */}
