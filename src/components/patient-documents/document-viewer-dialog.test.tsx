@@ -35,11 +35,11 @@ describe('DocumentViewerDialog (DX-151)', () => {
     expect(mockedUrl).toHaveBeenCalledWith('T', 'p1', 'doc-1', 'inline');
   });
 
-  it('PDF en pantalla ancha: <iframe sandbox="" sin referrer>', async () => {
+  it('PDF en pantalla ancha: <iframe> sin referrer y SIN sandbox (Chromium bloquea su visor de PDF en marcos aislados)', async () => {
     renderViewer();
     const frame = await screen.findByTitle('Vista previa de panoramica.pdf');
     expect(frame.tagName).toBe('IFRAME');
-    expect(frame).toHaveAttribute('sandbox', '');
+    expect(frame).not.toHaveAttribute('sandbox');
     expect(frame).toHaveAttribute('referrerpolicy', 'no-referrer');
     expect(frame).toHaveAttribute('src', URL_INLINE);
     expect(screen.getByRole('link', { name: 'Abrir en otra pestaña' })).toBeInTheDocument();

@@ -40,7 +40,7 @@ interface DocumentViewerDialogProps {
 /**
  * Visor de un documento (DX-151). Pide una URL firmada `inline` de vida corta
  * (queda auditada como consulta) y pinta la imagen en `<img>` o el PDF en un
- * `<iframe>` aislado (`sandbox=""`, sin referrer). En pantallas estrechas
+ * `<iframe>` sin referrer. En pantallas estrechas
  * (< 640 px) solo las imágenes se ven dentro: el PDF se abre en otra pestaña,
  * donde el visor del sistema sí es usable. El padre lo monta con `key`.
  */
@@ -91,9 +91,12 @@ export function DocumentViewerDialog({ open, onOpenChange, token, document }: Do
     );
   } else if (wide) {
     body = (
+      // SIN `sandbox` a propósito (DX-151, decisión del controlador): Chromium
+      // bloquea su visor de PDF dentro de cualquier marco aislado y el PDF sale
+      // en blanco. Controles compensatorios: la API solo firma tipos de la lista
+      // blanca y los sirve con `nosniff`, y las imágenes van en `<img>`.
       <iframe
         src={url}
-        sandbox=""
         referrerPolicy="no-referrer"
         title={copy.frameTitle(document.originalName)}
         className="h-[70dvh] w-full rounded-lg border border-border bg-bg"
