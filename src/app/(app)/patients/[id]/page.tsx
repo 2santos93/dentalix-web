@@ -1,5 +1,5 @@
 'use client';
-import { Suspense, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
+import { Suspense, useCallback, useEffect, useRef, useState } from 'react';
 import { useParams, usePathname, useRouter, useSearchParams } from 'next/navigation';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { apiErrorMessage } from '@/lib/api/error-message';
@@ -33,6 +33,8 @@ import { PatientConsentsTab } from '@/components/consents/patient-consents-tab';
 import { PerioTab } from '@/components/perio/perio-tab';
 import { PatientPrescriptionsTab } from '@/components/prescriptions/patient-prescriptions-tab';
 import { PatientImplantsTab } from '@/components/implants/patient-implants-tab';
+import { PatientDocumentsTab } from '@/components/patient-documents/patient-documents-tab';
+import { PatientTabPanel as TabPanel } from '@/components/patients/patient-tab-panel';
 import { canRegisterImplants } from '@/lib/implants/implants-api';
 import { AuditLogView } from '@/components/audit/audit-log-view';
 
@@ -53,6 +55,7 @@ const copy = {
   tabPerio: 'Periodontograma',
   tabPrescriptions: 'Recetas',
   tabImplants: 'Implantes',
+  tabDocuments: 'Documentos',
   tabAccessLog: 'Accesos',
   anamnesisHeading: 'Anamnesis',
   entriesHeading: 'Evoluciones',
@@ -61,51 +64,6 @@ const copy = {
 
 function fullName(patient: Patient): string {
   return `${patient.firstName} ${patient.lastName}`;
-}
-
-/**
- * A tabpanel that is ALWAYS in the DOM (so every tab's `aria-controls` resolves
- * to a real element, instead of three of the four dangling at any moment) but
- * only mounts its children while it is the active one.
- *
- * That split is deliberate: `OdontogramTab`, `MedicalHistoryPanel`,
- * `ClinicalEntriesList` and `TreatmentPlansTab` all fetch on mount, so
- * rendering every panel eagerly would turn opening a patient into four round
- * trips. The panel element is a bare `<div>` — cheap enough to always exist,
- * and `hidden` keeps it out of both the layout and the accessibility tree.
- *
- * `tabIndex={-1}` makes the panel programmatically focusable so activating a
- * tab can drop focus into the content it just revealed.
- */
-function TabPanel({
-  tab,
-  activeTab,
-  register,
-  className,
-  children,
-}: {
-  tab: PatientDetailTabKey;
-  activeTab: PatientDetailTabKey;
-  register: (tab: PatientDetailTabKey, el: HTMLDivElement | null) => void;
-  className?: string;
-  children: ReactNode;
-}) {
-  const active = activeTab === tab;
-  return (
-    <div
-      role="tabpanel"
-      id={`tabpanel-${tab}`}
-      aria-labelledby={`tab-${tab}`}
-      ref={(el) => register(tab, el)}
-      tabIndex={-1}
-      hidden={!active}
-      // The layout classes only apply while the panel is showing: a `display`
-      // utility (`flex`) would otherwise win over `hidden`'s `display: none`.
-      className={active ? className : undefined}
-    >
-      {active ? children : null}
-    </div>
-  );
 }
 
 /**
@@ -138,6 +96,9 @@ function PatientDetailView() {
   // DX-150: un abono (o su anulación) cambia el saldo vencido de la cabecera y
   // puede cumplir el compromiso del bloque «Cobranza»: los dos se releen.
   const [moneyVersion, setMoneyVersion] = useState(0);
+  // DX-151: la cola de «Documentos» tiene archivos sin subir (o subiendo): su
+  // panel sigue montado (oculto) al cambiar de pestaña para no perderlos.
+  const [documentsPending, setDocumentsPending] = useState(false);
   const onMoneyChanged = useCallback(() => {
     setMoneyVersion((v) => v + 1);
     if (!accessToken) return;
@@ -316,6 +277,7 @@ function PatientDetailView() {
             perioLabel={access.perio ? copy.tabPerio : undefined}
             prescriptionsLabel={access.prescriptions ? copy.tabPrescriptions : undefined}
             implantsLabel={access.implants ? copy.tabImplants : undefined}
+            documentsLabel={access.documents ? copy.tabDocuments : undefined}
             accessLogLabel={access['access-log'] ? copy.tabAccessLog : undefined}
           />
 
@@ -399,6 +361,12 @@ function PatientDetailView() {
                 implantHref={
                   canRegisterImplants(getTokenRole(accessToken))
                     ? (tooth) => `${pathname}?tab=implants&registerTooth=${tooth}`
+                    : undefined
+                }
+                // DX-151: los documentos (radiografías, fotos) de ese diente.
+                documentsHref={
+                  access.documents
+                    ? (tooth) => `${pathname}?tab=documents&tooth=${tooth}&from=tooth`
                     : undefined
                 }
               />
@@ -488,6 +456,25 @@ function PatientDetailView() {
                 registerTooth={searchParams.get('registerTooth')}
                 registerPlanItemId={searchParams.get('planItem')}
                 onShortcutConsumed={() => setParams({ registerTooth: null, planItem: null })}
+              />
+            </TabPanel>
+          ) : null}
+          {/* DX-151: documentos del paciente. `?tooth=` llega como filtro
+              inicial por diente; solo si se llegó con «Documentos del diente»
+              (`from=tooth`) los archivos nuevos traen ese diente puesto. */}
+          {access.documents ? (
+            <TabPanel
+              tab="documents"
+              activeTab={activeTab}
+              register={registerPanel}
+              keepMounted={documentsPending}
+            >
+              <PatientDocumentsTab
+                token={accessToken}
+                patientId={patientId}
+                initialTooth={focusedTooth}
+                tagUploadsWithTooth={searchParams.get('from') === 'tooth'}
+                onPendingChange={setDocumentsPending}
               />
             </TabPanel>
           ) : null}

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { parseTenantFromHost } from './lib/tenant';
 import { buildCsp, generateNonce } from './lib/security/csp';
-import { apiOrigin } from './lib/api/api-base';
+import { apiOrigin, filesOrigin } from './lib/api/api-base';
 
 /**
  * Proxy de Next 16 (antes `middleware.ts`). En cada página:
@@ -20,6 +20,7 @@ export function proxy(req: NextRequest) {
     nonce,
     isDev: process.env.NODE_ENV === 'development',
     apiOrigin: apiOrigin(),
+    filesOrigin: filesOrigin(),
   });
 
   const requestHeaders = new Headers(req.headers);

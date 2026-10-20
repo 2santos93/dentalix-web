@@ -461,3 +461,38 @@ describe('PatientDetailTabs — pestaña opcional «Accesos» (DX-009)', () => {
     expect(onTabChange).toHaveBeenCalledWith('access-log');
   });
 });
+
+describe('PatientDetailTabs — pestaña «Documentos» (DX-151)', () => {
+  it('va justo después de «Implantes», antes de «Autorizaciones», y selecciona documents', async () => {
+    const user = userEvent.setup();
+    const onTabChange = jest.fn();
+    render(
+      <PatientDetailTabs
+        activeTab="data"
+        onTabChange={onTabChange}
+        tablistLabel="Ana García"
+        dataLabel="Datos"
+        implantsLabel="Implantes"
+        documentsLabel="Documentos"
+        dataConsentsLabel="Autorizaciones"
+      />,
+    );
+    expect(screen.getAllByRole('tab').map((t) => t.textContent)).toEqual([
+      'Datos',
+      'Implantes',
+      'Documentos',
+      'Autorizaciones',
+    ]);
+    const tab = screen.getByRole('tab', { name: 'Documentos' });
+    expect(tab).toHaveAttribute('aria-controls', 'tabpanel-documents');
+    await user.click(tab);
+    expect(onTabChange).toHaveBeenCalledWith('documents');
+  });
+
+  it('no aparece sin etiqueta', () => {
+    render(
+      <PatientDetailTabs activeTab="data" onTabChange={jest.fn()} tablistLabel="Ana García" dataLabel="Datos" />,
+    );
+    expect(screen.queryByRole('tab', { name: 'Documentos' })).not.toBeInTheDocument();
+  });
+});

@@ -29,6 +29,7 @@ describe('etiquetas de auditoría', () => {
     // DX-222: plantillas y entregas de indicaciones postoperatorias.
     expect(AUDIT_RESOURCE_LABELS.POSTOP_TEMPLATE).toBe('Plantilla de indicaciones');
     expect(AUDIT_RESOURCE_LABELS.POSTOP_DELIVERY).toBe('Indicaciones postoperatorias');
+    expect(AUDIT_RESOURCE_LABELS.PATIENT_DOCUMENT).toBe('Documento del paciente');
   });
 
   it('las opciones no repiten valores', () => {

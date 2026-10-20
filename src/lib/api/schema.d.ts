@@ -2933,6 +2933,95 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/patients/{patientId}/documents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["PatientDocumentsController_list"];
+        put?: never;
+        /**
+         * Subir un documento a la ficha del paciente
+         * @description PDF, JPG, PNG, HEIC, DOCX o DICOM de hasta 20 MB. El tipo lo decide el contenido; si no cuadra con el nombre o la etiqueta, 400. El mismo contenido vigente dos veces en la ficha, 409.
+         */
+        post: operations["PatientDocumentsController_upload"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{patientId}/documents/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["PatientDocumentsController_detail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{patientId}/documents/{id}/url/inline": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * URL firmada para VER el documento en el navegador
+         * @description Solo PDF, JPG y PNG. Caduca a los pocos minutos; disposición, nombre y tipo van firmados.
+         */
+        get: operations["PatientDocumentsController_inlineUrl"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{patientId}/documents/{id}/url/download": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** URL firmada para DESCARGAR el documento (cualquier tipo) */
+        get: operations["PatientDocumentsController_downloadUrl"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{patientId}/documents/{id}/void": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["PatientDocumentsController_void"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/reminder-settings": {
         parameters: {
             query?: never;
@@ -3009,7 +3098,7 @@ export interface components {
         /** @enum {string} */
         AuditAction: "VIEW" | "CREATE" | "UPDATE" | "DELETE" | "SIGN" | "VOID" | "LOGIN" | "LOGIN_FAILED" | "PASSWORD_RESET" | "EXPORT" | "PRINT" | "SEND";
         /** @enum {string} */
-        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION" | "POSTOP_TEMPLATE" | "POSTOP_DELIVERY";
+        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION" | "POSTOP_TEMPLATE" | "POSTOP_DELIVERY" | "PATIENT_DOCUMENT";
         /**
          * @description Rol con el que actuó (del token). `null` en un login fallido.
          * @enum {string}
@@ -8607,6 +8696,55 @@ export interface components {
             voided: boolean;
         };
         VoidImplantDto: {
+            reason: string;
+        };
+        /** @enum {string} */
+        PatientDocumentCategory: "XRAY" | "PHOTO" | "REFERRAL" | "SIGNED_CONSENT" | "REPORT" | "OTHER";
+        PatientDocumentDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            patientId: string;
+            /**
+             * Format: uuid
+             * @description Sede activa al subirlo
+             */
+            locationId: string;
+            category: components["schemas"]["PatientDocumentCategory"];
+            /** @description Nombre original (solo para mostrar) */
+            originalName: string;
+            /** @description Tipo DETECTADO por el contenido */
+            mimeType: string;
+            sizeBytes: number;
+            /** @description SHA-256 del contenido (hex) */
+            sha256: string;
+            /** Format: date */
+            clinicalDate: string | null;
+            toothNumbers: string[];
+            notes: string | null;
+            /** Format: uuid */
+            uploadedById: string;
+            uploadedByName: string | null;
+            /** Format: date-time */
+            uploadedAt: string;
+            /** @description PDF, JPEG o PNG: se puede abrir en el navegador */
+            inlineViewable: boolean;
+            /** Format: date-time */
+            voidedAt: string | null;
+            /** Format: uuid */
+            voidedById: string | null;
+            voidedByName: string | null;
+            voidReason: string | null;
+        };
+        PatientDocumentUrlDto: {
+            /** @description URL firmada de corta vida */
+            url: string;
+            /** Format: date-time */
+            expiresAt: string;
+            /** @enum {string} */
+            disposition: "inline" | "attachment";
+        };
+        VoidPatientDocumentDto: {
             reason: string;
         };
         LocationReminderSettingsDto: {
@@ -16438,6 +16576,265 @@ export interface operations {
                 content?: never;
             };
             /** @description El implante ya está anulado */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientDocumentsController_list: {
+        parameters: {
+            query?: {
+                category?: components["schemas"]["PatientDocumentCategory"];
+                /** @description Diente FDI */
+                tooth?: string;
+            };
+            header?: never;
+            path: {
+                patientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Más reciente primero; incluye anulados */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PatientDocumentDto"][];
+                };
+            };
+            /** @description Categoría o diente inválidos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientDocumentsController_upload: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Sede activa. Sin ella, la sede principal. */
+                "X-Location-Id"?: string;
+            };
+            path: {
+                patientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /**
+                     * Format: binary
+                     * @description PDF, JPG, PNG, HEIC, DOCX o DICOM de hasta 20 MB
+                     */
+                    file: string;
+                    category: components["schemas"]["PatientDocumentCategory"];
+                    /** Format: date */
+                    clinicalDate?: string;
+                    /**
+                     * @description Dientes FDI separados por comas
+                     * @example 11,21
+                     */
+                    toothNumbers?: string;
+                    notes?: string;
+                };
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PatientDocumentDto"];
+                };
+            };
+            /** @description Falta el archivo, tipo no admitido, contenido que no coincide con su tipo, categoría, dientes, fecha o notas inválidos (mensaje en español) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Este archivo ya está en la ficha del paciente. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El archivo supera el máximo de 20 MB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientDocumentsController_detail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PatientDocumentDto"];
+                };
+            };
+            /** @description Paciente o documento no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientDocumentsController_inlineUrl: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PatientDocumentUrlDto"];
+                };
+            };
+            /** @description Este tipo solo se puede descargar. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente o documento no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientDocumentsController_downloadUrl: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PatientDocumentUrlDto"];
+                };
+            };
+            /** @description Paciente o documento no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientDocumentsController_void: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VoidPatientDocumentDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PatientDocumentDto"];
+                };
+            };
+            /** @description Motivo vacío o demasiado corto */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo quien subió el documento o un administrador puede anularlo. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente o documento no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El documento ya está anulado. */
             409: {
                 headers: {
                     [name: string]: unknown;

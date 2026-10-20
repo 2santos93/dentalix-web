@@ -46,6 +46,22 @@ describe('buildCsp', () => {
     expect(d.get('img-src')).toEqual(["'self'", 'data:', 'blob:', 'http://localhost:3130']);
   });
 
+  it('DX-151: frame-src y img-src admiten el origen de los documentos (por defecto, la API)', () => {
+    const d = directives(buildCsp({ ...base, isDev: false }));
+    expect(d.get('frame-src')).toEqual(["'self'", 'http://localhost:3130']);
+    expect(d.get('img-src')).toEqual(["'self'", 'data:', 'blob:', 'http://localhost:3130']);
+
+    const bucket = directives(buildCsp({ ...base, isDev: false, filesOrigin: 'https://files.example.com' }));
+    expect(bucket.get('frame-src')).toEqual(["'self'", 'https://files.example.com']);
+    expect(bucket.get('img-src')).toEqual([
+      "'self'",
+      'data:',
+      'blob:',
+      'http://localhost:3130',
+      'https://files.example.com',
+    ]);
+  });
+
   it('estilos en línea permitidos (atributos style de React/Radix y el color del tenant)', () => {
     const d = directives(buildCsp({ ...base, isDev: false }));
     expect(d.get('style-src')).toEqual(["'self'", "'unsafe-inline'"]);

@@ -1,6 +1,6 @@
 import type { NextConfig } from "next";
 import { securityHeaderRules } from "./src/lib/security/security-headers";
-import { apiRewrites } from "./src/lib/api/api-base";
+import { API_PROXY_MAX_BODY_BYTES, apiRewrites } from "./src/lib/api/api-base";
 
 const nextConfig: NextConfig = {
   // El indicador de dev de Next se planta abajo a la izquierda, justo encima del
@@ -29,6 +29,11 @@ const nextConfig: NextConfig = {
   // refresh es del host de la clínica (DX-062, ver `api-base.ts`).
   async rewrites() {
     return apiRewrites();
+  },
+  experimental: {
+    // Sin esto Next corta a 10 MB el cuerpo que reenvía por el rewrite y una
+    // subida de documento de 10–20 MB llega truncada a la API (DX-151).
+    proxyClientMaxBodySize: API_PROXY_MAX_BODY_BYTES,
   },
 };
 

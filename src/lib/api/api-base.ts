@@ -10,6 +10,15 @@
  */
 export const API_PROXY_PATH = '/api/v1';
 
+/**
+ * Tope del cuerpo que el proxy de Next reenvía a la API (DX-151). Next copia el
+ * cuerpo en memoria y por defecto lo CORTA a 10 MB sin avisar al cliente: un
+ * documento del paciente de 10–20 MB llegaba truncado y la API respondía 500.
+ * 25 MB cubren el tope de 20 MB por fichero más el multipart, y un fichero de
+ * más llega entero a la API, que contesta 413 en español.
+ */
+export const API_PROXY_MAX_BODY_BYTES = 25 * 1024 * 1024;
+
 /** URL absoluta de la API (`NEXT_PUBLIC_API_URL`), para el servidor y el proxy. */
 export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000/api/v1';
 
@@ -26,4 +35,24 @@ export function apiRewrites(apiUrl: string = API_URL): { source: string; destina
 /** Origen de la API: sirve los logos y avatares (`img-src` de la CSP). */
 export function apiOrigin(apiUrl: string = API_URL): string {
   return new URL(apiUrl).origin;
+}
+
+/**
+ * Origen de las URL firmadas de los documentos del paciente (DX-151), que el
+ * visor pinta en `<img>`/`<iframe>`: el bucket (S3, R2, MinIO) si se configura
+ * `NEXT_PUBLIC_FILES_ORIGIN`; si no (almacenamiento en disco), la propia API.
+ * Un valor que no es una URL se ignora y cae en la API.
+ */
+export function filesOrigin(
+  configured: string | undefined = process.env.NEXT_PUBLIC_FILES_ORIGIN,
+  apiUrl: string = API_URL,
+): string {
+  if (configured?.trim()) {
+    try {
+      return new URL(configured.trim()).origin;
+    } catch {
+      /* mal configurada: la API */
+    }
+  }
+  return apiOrigin(apiUrl);
 }

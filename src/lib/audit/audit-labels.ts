@@ -86,6 +86,8 @@ export const AUDIT_RESOURCE_LABELS: Record<AuditResourceType, string> = {
   // DX-222: indicaciones postoperatorias (plantillas y entregas al paciente).
   POSTOP_TEMPLATE: 'Plantilla de indicaciones',
   POSTOP_DELIVERY: 'Indicaciones postoperatorias',
+  // DX-151: documentos del paciente (subir, ver, descargar, anular).
+  PATIENT_DOCUMENT: 'Documento del paciente',
 };
 
 export const AUDIT_RESOURCE_OPTIONS = Object.keys(AUDIT_RESOURCE_LABELS) as AuditResourceType[];
