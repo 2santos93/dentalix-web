@@ -1358,6 +1358,27 @@ describe('TreatmentPlansTab', () => {
       ).toBeInTheDocument();
       expect(mockedAddItem).not.toHaveBeenCalled();
     });
+    // Revisión DX-241 (2.ª pasada): un precio o descuento ambiguo dice por qué
+    // (no un «monto válido» genérico) y no llega a la API.
+    it.each([
+      ['Precio', 'El precio no se entiende.'],
+      ['Descuento (opcional)', 'El descuento no se entiende.'],
+    ])('«1.50.0» en «%s» se rechaza con el motivo antes de enviar', async (label, lead) => {
+      mockedListPlans.mockResolvedValue([plan1]);
+      mockedGetPlan.mockResolvedValue(plan1Detail);
+      const user = userEvent.setup();
+      render(<TreatmentPlansTab patientId="pat-1" token="tok" />);
+      await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+
+      await user.type(screen.getByLabelText(/código fdi/i), '16');
+      await user.click(screen.getByRole('radio', { name: /resina/i }));
+      const field = screen.getByLabelText(label, { exact: true });
+      await user.clear(field);
+      await user.type(field, '1.50.0');
+      await user.click(screen.getByRole('button', { name: /^agregar ítem$/i }));
+      expect(await screen.findByText(new RegExp(`^${lead} No sabemos leer «1\\.50\\.0»`))).toBeInTheDocument();
+      expect(mockedAddItem).not.toHaveBeenCalled();
+    });
   });
   describe('tope de descuento por rol y «Descuento %» (DX-204)', () => {
     beforeEach(() => {

@@ -196,7 +196,8 @@ const copy = {
   discountLabel: 'Descuento (opcional)',
   discountHint: 'En la moneda del plan. Sale en el presupuesto.',
   invalidDiscount: 'El descuento debe ser un monto válido, no mayor que el precio.',
-  invalidPrice: 'El precio debe ser un monto válido.',
+  unreadablePrice: (reason: string) => `El precio no se entiende. ${reason}`,
+  unreadableDiscount: (reason: string) => `El descuento no se entiende. ${reason}`,
   itemDiscount: (amount: string) => `Descuento −${amount}`,
   // SEC-041: el precio por debajo del de catálogo cuenta como descuento.
   itemPriceReduction: (amount: string, catalog: string) => `Rebaja −${amount} (catálogo ${catalog})`,
@@ -306,8 +307,6 @@ const ITEM_STATUS_BADGE_VARIANT: Record<TreatmentPlanItemStatus, BadgeProps['var
   DONE: 'success',
 };
 
-
-
 /**
  * Un importe opcional de un campo de dinero (DX-241): `undefined` si está
  * vacío, `null` si no se entiende, o el número leído con la regla común.
@@ -316,6 +315,12 @@ function optionalAmount(text: string, currency: string): number | undefined | nu
   if (text.trim() === '') return undefined;
   const parsed = parseMoneyInput(text, currency);
   return parsed.ok ? parsed.value : null;
+}
+
+/** El motivo por el que no se entiende un importe escrito. */
+function unreadableReason(text: string, currency: string): string {
+  const parsed = parseMoneyInput(text, currency);
+  return parsed.ok ? '' : parsed.message;
 }
 
 function emptySurfacesState(): Record<ToothSurface, boolean> {
@@ -1669,12 +1674,17 @@ export function TreatmentPlansTab({
     const itemCurrency = planDetail?.currency ?? '';
     const priceInput = optionalAmount(price, itemCurrency);
     const discountInput = optionalAmount(discount, itemCurrency);
+    // Lo que no se entiende dice por qué (la regla común de los importes).
     if (priceInput === null) {
-      setAddItemValidationError(copy.invalidPrice);
+      setAddItemValidationError(copy.unreadablePrice(unreadableReason(price, itemCurrency)));
+      return;
+    }
+    if (discountInput === null) {
+      setAddItemValidationError(copy.unreadableDiscount(unreadableReason(discount, itemCurrency)));
       return;
     }
     const discountValue = discountInput ?? 0;
-    if (discountInput === null || (priceInput !== undefined && discountValue > priceInput)) {
+    if (priceInput !== undefined && discountValue > priceInput) {
       setAddItemValidationError(copy.invalidDiscount);
       return;
     }
