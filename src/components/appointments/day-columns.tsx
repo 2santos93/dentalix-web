@@ -1,6 +1,8 @@
 'use client';
 import { OverdueChip } from '@/components/collections/overdue-chip';
 import { overdueChipText } from '@/lib/collections/presentation';
+import { CoverageChip } from '@/components/patients/coverage-chip';
+import { coverageChipText } from '@/lib/patients/coverage-presentation';
 import * as React from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { CalendarPlus, MoveRight, UserPlus } from 'lucide-react';
@@ -567,6 +569,7 @@ export function DayColumns({
                         aria-label={[
                           copy.detailFor(range, patient, p.fullName),
                           overdueChipText(a.balance),
+                          coverageChipText(a.coverage),
                           wantsEarlier ? WANTS_EARLIER_LABEL : null,
                         ]
                           .filter(Boolean)
@@ -591,6 +594,7 @@ export function DayColumns({
                           {[a.appointmentType?.name, STATUS_LABELS[a.status]].filter(Boolean).join(' · ')}
                         </span>
                         <OverdueChip balance={a.balance} compact />
+                        <CoverageChip coverage={a.coverage} compact />
                       </button>
                       {fills && a.status === 'CANCELLED' && new Date(a.end) > now ? (
                         <button

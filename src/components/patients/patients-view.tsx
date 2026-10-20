@@ -4,12 +4,15 @@ import Link from 'next/link';
 import { Plus } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { listPatients, type Patient } from '@/lib/patients/patients-api';
+import { listPayers, type Payer } from '@/lib/payers/payers-api';
 import { PatientsTable } from '@/components/patients/patients-table';
 import { PageHeader } from '@/components/shared/page-header';
 import { Pagination } from '@/components/shared/pagination';
-import { ListToolbar, ResultCount } from '@/components/shared/list-toolbar';
+import { ListToolbar, ResultCount, toolbarFieldClass } from '@/components/shared/list-toolbar';
 import { Button } from '@/components/ui/button';
 import { SectionError } from '@/components/errors/section-error';
+import { FieldError } from '@/components/errors/field-error';
+import { cn } from '@/lib/utils';
 import { ClinicWideNote } from '@/components/locations/clinic-wide-note';
 
 // Corto para no notarse al teclear, largo para no lanzar una petición por
@@ -29,6 +32,9 @@ const copy = {
   countNoun: 'paciente',
   countNounPlural: 'pacientes',
   genericError: 'No pudimos cargar los pacientes.',
+  payerFilterLabel: 'Filtrar por pagador',
+  allPayers: 'Todos los pagadores',
+  payersError: 'No cargaron los pagadores',
 };
 
 interface PatientsViewProps {
@@ -61,6 +67,31 @@ export function PatientsView({ token }: PatientsViewProps) {
   // personal e inventario.
   const [searchInput, setSearchInput] = useState('');
   const [search, setSearch] = useState('');
+  // Filtro por pagador (DX-153). Vacío = todos. En memoria, como la búsqueda.
+  const [payerId, setPayerId] = useState('');
+  const [payers, setPayers] = useState<Payer[]>([]);
+  const [payersFailed, setPayersFailed] = useState(false);
+  const [payersRetry, setPayersRetry] = useState(0);
+
+  // El catálogo de pagadores es una opción de un control: si falla, el listado
+  // sigue funcionando y el fallo se dice junto al select (escalón 2).
+  useEffect(() => {
+    let cancelled = false;
+    async function loadPayers() {
+      try {
+        const res = await listPayers(token);
+        if (cancelled) return;
+        setPayers(res);
+        setPayersFailed(false);
+      } catch {
+        if (!cancelled) setPayersFailed(true);
+      }
+    }
+    void loadPayers();
+    return () => {
+      cancelled = true;
+    };
+  }, [token, payersRetry]);
 
   useEffect(() => {
     const debounce = setTimeout(() => {
@@ -85,6 +116,7 @@ export function PatientsView({ token }: PatientsViewProps) {
         const res = await listPatients(token, {
           page,
           ...(search ? { query: search } : {}),
+          ...(payerId ? { payerId } : {}),
         });
         if (cancelled) return;
         setPatients(res.items);
@@ -104,7 +136,7 @@ export function PatientsView({ token }: PatientsViewProps) {
     return () => {
       cancelled = true;
     };
-  }, [token, retryCount, page, search]);
+  }, [token, retryCount, page, search, payerId]);
 
   return (
     <>
@@ -130,7 +162,35 @@ export function PatientsView({ token }: PatientsViewProps) {
               </Link>
             </Button>
           }
-        />
+        >
+          {payersFailed ? (
+            <FieldError
+              label={copy.payersError}
+              onRetry={() => {
+                setPayersFailed(false);
+                setPayersRetry((c) => c + 1);
+              }}
+              className="sm:w-56"
+            />
+          ) : (
+            <select
+              aria-label={copy.payerFilterLabel}
+              value={payerId}
+              onChange={(e) => {
+                setPayerId(e.target.value);
+                setPage(1);
+              }}
+              className={cn(toolbarFieldClass, 'sm:w-56')}
+            >
+              <option value="">{copy.allPayers}</option>
+              {payers.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+          )}
+        </ListToolbar>
 
         {!loading && !error ? (
           <ResultCount
@@ -154,7 +214,7 @@ export function PatientsView({ token }: PatientsViewProps) {
             <PatientsTable
               patients={patients}
               loading={loading}
-              filtered={search !== ''}
+              filtered={search !== '' || payerId !== ''}
             />
             <Pagination
               page={page}

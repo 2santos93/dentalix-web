@@ -292,3 +292,27 @@ describe('DayAgenda', () => {
     expect(screen.getAllByRole('button', { name: 'Acción apt-2' }).length).toBeGreaterThan(0);
   });
 });
+
+describe('DayAgenda · cobertura (DX-153)', () => {
+  it('muestra el chip «Cobertura vencida» solo en la cita con cobertura vencida', () => {
+    const expired = {
+      status: 'EXPIRED' as const,
+      payerName: 'Sura EPS',
+      planName: null,
+      validTo: '2026-01-31',
+    };
+    render(
+      <DayAgenda
+        appointments={[
+          { ...earlier, coverage: expired },
+          { ...later, coverage: { ...expired, status: 'ACTIVE' as const } },
+        ]}
+        loading={false}
+      />,
+    );
+    // Tabla ancha y tarjetas estrechas se montan a la vez: una marca por cada una.
+    const chips = screen.getAllByTestId('coverage-chip');
+    expect(chips.length).toBeGreaterThan(0);
+    chips.forEach((c) => expect(c).toHaveTextContent('Cobertura vencida'));
+  });
+});

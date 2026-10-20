@@ -1,6 +1,7 @@
 'use client';
 import type { ReactNode } from 'react';
 import { OverdueChip } from '@/components/collections/overdue-chip';
+import { CoverageChip } from '@/components/patients/coverage-chip';
 import { CalendarDays, ChevronDown, ChevronRight } from 'lucide-react';
 import type { Appointment, AppointmentStatus } from '@/lib/appointments/appointments-api';
 import {
@@ -259,6 +260,7 @@ export function DayAgenda({
                       {patientLabel(appointment, patientNames)}
                       <ConfirmationBadge appointment={appointment} />
                       <OverdueChip balance={appointment.balance} />
+                      <CoverageChip coverage={appointment.coverage} compact />
                     </span>
                     {renderActions?.(appointment)}
                   </td>
@@ -317,6 +319,7 @@ export function DayAgenda({
               <p className="mt-0.5 text-muted">{appointment.reason ?? copy.reasonFallback}</p>
               <ConfirmationBadge appointment={appointment} className="mt-2" />
               <OverdueChip balance={appointment.balance} className="mt-2" />
+              <CoverageChip coverage={appointment.coverage} compact className="mt-2" />
               {renderActions?.(appointment)}
               {(onStatusChange || onSelectAppointment) && (
                 <div className="mt-3 flex items-center justify-between gap-2">

@@ -181,3 +181,26 @@ it('DX-150: la tarjeta lleva el chip «Saldo vencido» (también en su nombre ac
   const cards = screen.getAllByTestId('week-grid-appointment');
   expect(cards[0]).toHaveAccessibleName(/Saldo vencido · 40 días/);
 });
+
+it('DX-153: la tarjeta con cobertura vencida lleva el chip «Cobertura vencida»; vigente, nada', () => {
+  render(
+    <WeekTimeGrid
+      appointments={[
+        appointment({
+          id: 'a1',
+          coverage: { status: 'EXPIRED', payerName: 'Sura EPS', planName: null, validTo: '2026-01-31' },
+        }),
+        appointment({
+          id: 'a2',
+          start: '2026-03-10T09:00:00.000Z',
+          end: '2026-03-10T09:30:00.000Z',
+          coverage: { status: 'ACTIVE', payerName: 'Sura EPS', planName: null, validTo: null },
+        }),
+      ]}
+      weekStart={WEEK_START}
+      onSelectDay={noop} onSelectSlot={noop} onSelectAppointment={noop}
+    />,
+  );
+  expect(screen.getAllByTestId('coverage-chip')).toHaveLength(1);
+  expect(screen.getByTestId('coverage-chip')).toHaveTextContent('Cobertura vencida');
+});

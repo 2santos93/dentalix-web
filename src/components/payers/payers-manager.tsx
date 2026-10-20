@@ -158,7 +158,7 @@ export function PayersManager({ token, allowed }: PayersManagerProps) {
           type="button"
           variant="secondary"
           size="sm"
-          className="max-sm:h-11"
+          className="max-md:h-11"
           onClick={() => openModal(payer)}
           aria-label={copy.actionFor(copy.edit, payer.name)}
         >
@@ -168,7 +168,7 @@ export function PayersManager({ token, allowed }: PayersManagerProps) {
           type="button"
           variant="ghost"
           size="sm"
-          className="max-sm:h-11"
+          className="max-md:h-11"
           loading={pendingId === payer.id}
           onClick={() => void toggleActive(payer)}
           aria-label={copy.actionFor(toggleLabel, payer.name)}
@@ -179,7 +179,7 @@ export function PayersManager({ token, allowed }: PayersManagerProps) {
           type="button"
           variant="ghost"
           size="sm"
-          className="max-sm:h-11"
+          className="max-md:h-11"
           onClick={() => {
             setRemoveError(null);
             setRemoving(payer);

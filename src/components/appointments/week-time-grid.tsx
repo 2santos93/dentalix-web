@@ -22,6 +22,7 @@ import {
   type ScheduleBlockLike,
 } from '@/lib/appointments/schedule-blocks';
 import { OverdueChip } from '@/components/collections/overdue-chip';
+import { CoverageChip } from '@/components/patients/coverage-chip';
 
 const copy = {
   heading: 'Agenda de la semana',
@@ -238,6 +239,7 @@ export function WeekTimeGrid({
                   <span className="block truncate">{patientLabel(a, patientNames)}</span>
                   {/* DX-150: «Saldo vencido» (el importe, solo ADMIN/RECEPTION). */}
                   <OverdueChip balance={a.balance} compact className="mt-0.5 px-1" />
+                  <CoverageChip coverage={a.coverage} compact className="mt-0.5 px-1" />
                 </button>
               );
             })}
