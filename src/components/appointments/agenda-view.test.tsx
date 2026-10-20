@@ -764,6 +764,9 @@ describe('AgendaView', () => {
     mockedListStaff.mockResolvedValue(staff);
     mockedListAppointments.mockResolvedValue([appointment({ id: 'apt-p', start, end })]);
     const user = userEvent.setup();
+    // Dos hermanos con la misma `key` hacen que React duplique paneles al
+    // re-renderizar (el de confirmación salía repetido tras «Enviar confirmación»).
+    const consoleError = jest.spyOn(console, 'error');
 
     render(<AgendaView token={receptionToken} />);
     await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
@@ -777,6 +780,12 @@ describe('AgendaView', () => {
     expect(await screen.findByRole('region', { name: 'Indicaciones' })).toBeInTheDocument();
     expect(getAppointmentPostOp).toHaveBeenCalledWith(receptionToken, 'apt-p');
     expect(await screen.findByText('No hay indicaciones para esta cita')).toBeInTheDocument();
+    expect(screen.getAllByRole('region', { name: 'Confirmación del paciente' })).toHaveLength(1);
+    const duplicateKeys = consoleError.mock.calls.filter((args) =>
+      args.some((a) => typeof a === 'string' && a.includes('same key')),
+    );
+    expect(duplicateKeys).toEqual([]);
+    consoleError.mockRestore();
   });
 
   // DX-121: vista Día en columnas por profesional.

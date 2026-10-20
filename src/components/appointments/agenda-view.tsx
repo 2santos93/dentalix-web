@@ -1350,10 +1350,13 @@ export function AgendaView({ token }: AgendaViewProps) {
                   appointment={liveDetailAppointment}
                   onLinkCreated={() => void refreshAppointmentsInPlace()}
                 />
-                {/* DX-222: indicaciones postoperatorias de la cita (propuesta y entrega). */}
+                {/* DX-222: indicaciones postoperatorias de la cita (propuesta y entrega).
+                    La `key` lleva prefijo: es hermano del panel de confirmación,
+                    que ya usa el id de la cita, y dos hermanos con la misma key
+                    se duplican al re-renderizar. */}
                 {canDeliverPostOp(role) ? (
                   <AppointmentPostOpPanel
-                    key={liveDetailAppointment.id}
+                    key={`postop-${liveDetailAppointment.id}`}
                     token={token}
                     appointmentId={liveDetailAppointment.id}
                   />
