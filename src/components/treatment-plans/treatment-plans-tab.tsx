@@ -47,7 +47,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
-import { FormField } from '@/components/shared/form-field';
+import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { MoneyInput } from '@/components/shared/money-input';
 import { parseMoneyInput } from '@/lib/format/money';
 import { FormModal } from '@/components/shared/form-modal';
@@ -258,7 +258,7 @@ const copy = {
   paymentNotesLabel: 'Notas',
   addPaymentSubmit: 'Registrar abono',
   addPaymentSubmitting: 'Registrando…',
-  invalidPaymentAmount: 'Ingresa un monto válido mayor a 0.',
+  invalidPaymentAmount: 'Escribe un importe mayor que 0.',
   invalidPaymentCurrency: 'Ingresa una moneda válida.',
   invalidPaymentDate: 'Ingresa una fecha válida.',
   genericAddPaymentError: 'No pudimos registrar el abono. Intenta de nuevo.',
@@ -1026,6 +1026,8 @@ export function TreatmentPlansTab({
   const [paymentNotes, setPaymentNotes] = useState('');
   const [addPaymentSubmitting, setAddPaymentSubmitting] = useState(false);
   const [addPaymentValidationError, setAddPaymentValidationError] = useState<string | null>(null);
+  // DX-241: el motivo de un monto que no vale va junto al campo (escalón 4).
+  const [paymentAmountError, setPaymentAmountError] = useState<string | null>(null);
   const [addPaymentError, setAddPaymentError] = useState<string | null>(null);
 
   const [voidingPaymentId, setVoidingPaymentId] = useState<string | null>(null);
@@ -1068,6 +1070,8 @@ export function TreatmentPlansTab({
   const [bulkNotice, setBulkNotice] = useState<string | null>(null);
   const [addItemSubmitting, setAddItemSubmitting] = useState(false);
   const [addItemValidationError, setAddItemValidationError] = useState<string | null>(null);
+  // DX-241: precio y descuento que no valen, junto a su campo (escalón 4).
+  const [itemAmountErrors, setItemAmountErrors] = useState<{ price?: string; discount?: string }>({});
   const [addItemError, setAddItemError] = useState<string | null>(null);
 
   // Política de descuentos (DX-204): solo para avisar del tope y del motivo
@@ -1202,6 +1206,7 @@ export function TreatmentPlansTab({
     setSurfaces(emptySurfacesState());
     setNotes('');
     setAddItemValidationError(null);
+    setItemAmountErrors({});
     setAddItemError(null);
     // Balance/abonos (PAY-T4) — same rationale: a different plan is a
     // genuinely different resource, and an in-progress abono form must not
@@ -1215,6 +1220,7 @@ export function TreatmentPlansTab({
     setPaymentMethod('');
     setPaymentNotes('');
     setAddPaymentValidationError(null);
+    setPaymentAmountError(null);
     setAddPaymentError(null);
   }
 
@@ -1479,6 +1485,7 @@ export function TreatmentPlansTab({
     setPaymentMethod('');
     setPaymentNotes('');
     setAddPaymentValidationError(null);
+    setPaymentAmountError(null);
     setAddPaymentError(null);
     setShowPaymentForm(true);
   }
@@ -1486,6 +1493,7 @@ export function TreatmentPlansTab({
   async function handleAddPayment(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setAddPaymentValidationError(null);
+    setPaymentAmountError(null);
     setAddPaymentError(null);
 
     if (!selectedPlanId) return;
@@ -1499,7 +1507,7 @@ export function TreatmentPlansTab({
     // la moneda del abono.
     const parsedAmount = parseMoneyInput(paymentAmount, currencyValue);
     if (!parsedAmount.ok || parsedAmount.value <= 0) {
-      setAddPaymentValidationError(
+      setPaymentAmountError(
         parsedAmount.ok || parsedAmount.reason === 'empty' ? copy.invalidPaymentAmount : parsedAmount.message,
       );
       return;
@@ -1656,6 +1664,7 @@ export function TreatmentPlansTab({
   async function handleAddItem(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setAddItemValidationError(null);
+    setItemAmountErrors({});
     setAddItemError(null);
 
     if (!selectedPlanId) return;
@@ -1675,17 +1684,16 @@ export function TreatmentPlansTab({
     const priceInput = optionalAmount(price, itemCurrency);
     const discountInput = optionalAmount(discount, itemCurrency);
     // Lo que no se entiende dice por qué (la regla común de los importes).
-    if (priceInput === null) {
-      setAddItemValidationError(copy.unreadablePrice(unreadableReason(price, itemCurrency)));
-      return;
-    }
-    if (discountInput === null) {
-      setAddItemValidationError(copy.unreadableDiscount(unreadableReason(discount, itemCurrency)));
+    if (priceInput === null || discountInput === null) {
+      setItemAmountErrors({
+        price: priceInput === null ? copy.unreadablePrice(unreadableReason(price, itemCurrency)) : undefined,
+        discount: discountInput === null ? copy.unreadableDiscount(unreadableReason(discount, itemCurrency)) : undefined,
+      });
       return;
     }
     const discountValue = discountInput ?? 0;
     if (priceInput !== undefined && discountValue > priceInput) {
-      setAddItemValidationError(copy.invalidDiscount);
+      setItemAmountErrors({ discount: copy.invalidDiscount });
       return;
     }
     // DX-204: tope del rol y motivo por encima del umbral, avisados aquí; la
@@ -2119,12 +2127,18 @@ export function TreatmentPlansTab({
                         {locationHint ? <p className="t-label text-muted">{locationHint}</p> : null}
 
                         <div className="grid gap-4 sm:grid-cols-2">
-                          <FormField htmlFor="tp-payment-amount" label={copy.paymentAmountLabel}>
+                          <FormField htmlFor="tp-payment-amount" label={copy.paymentAmountLabel} error={paymentAmountError}>
                             <MoneyInput
                               id="tp-payment-amount"
                               currency={paymentCurrency}
+                              requirePositive
                               value={paymentAmount}
-                              onValueChange={setPaymentAmount}
+                              onValueChange={(text) => {
+                                setPaymentAmount(text);
+                                setPaymentAmountError(null);
+                              }}
+                              aria-invalid={paymentAmountError ? true : undefined}
+                              aria-describedby={paymentAmountError ? fieldErrorId('tp-payment-amount') : undefined}
                             />
                           </FormField>
 
@@ -2272,13 +2286,24 @@ export function TreatmentPlansTab({
                     />
 
                     <div className="grid gap-4 sm:grid-cols-2">
-                      <FormField htmlFor="tp-price" label={copy.priceLabel}>
+                      <FormField htmlFor="tp-price" label={copy.priceLabel} error={itemAmountErrors.price}>
                         <MoneyInput
                           id="tp-price"
                           currency={addCurrency}
                           value={price}
-                          onValueChange={setPrice}
-                          aria-describedby={addBelowCatalog ? 'tp-price-below-catalog' : undefined}
+                          onValueChange={(text) => {
+                            setPrice(text);
+                            setItemAmountErrors((errors) => ({ ...errors, price: undefined }));
+                          }}
+                          aria-invalid={itemAmountErrors.price ? true : undefined}
+                          aria-describedby={
+                            [
+                              itemAmountErrors.price ? fieldErrorId('tp-price') : null,
+                              addBelowCatalog ? 'tp-price-below-catalog' : null,
+                            ]
+                              .filter(Boolean)
+                              .join(' ') || undefined
+                          }
                         />
                         {/* SEC-041: aviso, no bloqueo; la API decide con el
                             tope del rol. */}
@@ -2297,12 +2322,22 @@ export function TreatmentPlansTab({
                         </p>
                       </FormField>
 
-                      <FormField htmlFor="tp-discount" label={copy.discountLabel} hint={copy.discountHint}>
+                      <FormField
+                        htmlFor="tp-discount"
+                        label={copy.discountLabel}
+                        hint={copy.discountHint}
+                        error={itemAmountErrors.discount}
+                      >
                         <MoneyInput
                           id="tp-discount"
                           currency={addCurrency}
                           value={discount}
-                          onValueChange={setDiscount}
+                          onValueChange={(text) => {
+                            setDiscount(text);
+                            setItemAmountErrors((errors) => ({ ...errors, discount: undefined }));
+                          }}
+                          aria-invalid={itemAmountErrors.discount ? true : undefined}
+                          aria-describedby={itemAmountErrors.discount ? fieldErrorId('tp-discount') : undefined}
                         />
                       </FormField>
 

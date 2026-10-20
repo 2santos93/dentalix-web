@@ -1,3 +1,4 @@
+import { moneyInputCopy } from '@/lib/format/money';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { TreatmentPlansTab } from './treatment-plans-tab';
@@ -89,6 +90,14 @@ const mockedListCatalogItems = listCatalogItems as jest.MockedFunction<typeof li
 const mockedGetPlanBalance = getPlanBalance as jest.MockedFunction<typeof getPlanBalance>;
 const mockedListPayments = listPayments as jest.MockedFunction<typeof listPayments>;
 const mockedRecordPayment = recordPayment as jest.MockedFunction<typeof recordPayment>;
+
+/** El texto de lo que describe un campo (`aria-describedby`): error y vista previa. */
+function describedText(field: HTMLElement): string {
+  return (field.getAttribute('aria-describedby') ?? '')
+    .split(' ')
+    .map((id) => document.getElementById(id)?.textContent ?? '')
+    .join(' ');
+}
 const mockedVoidPayment = voidPayment as jest.MockedFunction<typeof voidPayment>;
 const mockedGetReceipt = getPaymentReceipt as jest.MockedFunction<typeof getPaymentReceipt>;
 const mockedListCurrencies = listCurrencies as jest.MockedFunction<typeof listCurrencies>;
@@ -1376,8 +1385,57 @@ describe('TreatmentPlansTab', () => {
       await user.clear(field);
       await user.type(field, '1.50.0');
       await user.click(screen.getByRole('button', { name: /^agregar ítem$/i }));
-      expect(await screen.findByText(new RegExp(`^${lead} No sabemos leer «1\\.50\\.0»`))).toBeInTheDocument();
+      // QA DX-241 (BUG-1): el motivo va junto al campo, que queda inválido y
+      // enlazado al error, como en el resto de formularios de dinero.
+      await waitFor(() => expect(field).toHaveAttribute('aria-invalid', 'true'));
+      expect(describedText(field)).toMatch(new RegExp(`${lead} No sabemos leer «1\\.50\\.0»`));
       expect(mockedAddItem).not.toHaveBeenCalled();
+      // Al volver a escribir, el error se va.
+      await user.type(field, '0');
+      expect(field).not.toHaveAttribute('aria-invalid');
+    });
+
+    it('«-50» en el descuento y un descuento mayor que el precio marcan el campo «Descuento»', async () => {
+      mockedListPlans.mockResolvedValue([plan1]);
+      mockedGetPlan.mockResolvedValue(plan1Detail);
+      const user = userEvent.setup();
+      render(<TreatmentPlansTab patientId="pat-1" token="tok" />);
+      await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+
+      await user.type(screen.getByLabelText(/código fdi/i), '16');
+      await user.click(screen.getByRole('radio', { name: /resina/i }));
+      const field = screen.getByLabelText('Descuento (opcional)', { exact: true });
+      await user.type(field, '-50');
+      await user.click(screen.getByRole('button', { name: /^agregar ítem$/i }));
+      await waitFor(() => expect(field).toHaveAttribute('aria-invalid', 'true'));
+      expect(describedText(field)).toContain(moneyInputCopy.signed);
+
+      await user.clear(field);
+      await user.type(field, '60000');
+      await user.click(screen.getByRole('button', { name: /^agregar ítem$/i }));
+      await waitFor(() => expect(field).toHaveAttribute('aria-invalid', 'true'));
+      expect(describedText(field)).toContain('El descuento debe ser un monto válido, no mayor que el precio.');
+      expect(mockedAddItem).not.toHaveBeenCalled();
+    });
+
+    it.each(['1.50.0', '-50', '0'])('«%s» en el monto de «Registrar abono» marca el campo y no envía', async (text) => {
+      mockedListPlans.mockResolvedValue([plan1]);
+      mockedGetPlan.mockResolvedValue(plan1Detail);
+      mockedGetPlanBalance.mockResolvedValue(balance1);
+      mockedListPayments.mockResolvedValue([]);
+      const user = userEvent.setup();
+      render(<TreatmentPlansTab patientId="pat-1" token="tok" />);
+      await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+      expect(await screen.findByText('A pagar')).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: /^registrar abono$/i }));
+      const field = screen.getByLabelText(/^monto$/i);
+      await user.type(field, text);
+      await user.click(screen.getByRole('button', { name: /^registrar abono$/i }));
+      await waitFor(() => expect(field).toHaveAttribute('aria-invalid', 'true'));
+      const expected =
+        text === '1.50.0' ? /No sabemos leer «1\.50\.0»/ : text === '-50' ? /sin signo/ : /Escribe un importe mayor que 0\./;
+      expect(describedText(field)).toMatch(expected);
+      expect(mockedRecordPayment).not.toHaveBeenCalled();
     });
   });
   describe('tope de descuento por rol y «Descuento %» (DX-204)', () => {
