@@ -3,7 +3,7 @@ import { join, relative } from 'node:path';
 
 /*
  * Guardián de DX-241 (corre en CI con el resto de jest): ningún componente lee
- * el texto de un campo de importe con `Number(…)`/`parseFloat(…)` — cada uno
+ * el texto de un campo de importe con `Number(…)`/`parseFloat(…)`/`parseInt(…)` — cada uno
  * lo interpretaba a su manera y «150.50» acababa en 15 050. El texto de un
  * campo de dinero se lee con `parseMoneyInput` (`@/lib/format/money`) y se
  * escribe con `<MoneyInput>`.
@@ -13,7 +13,7 @@ import { join, relative } from 'node:path';
  */
 const COMPONENTS = join(process.cwd(), 'src', 'components');
 const MONEY_NAME = /amount|price|discount|total|downpayment|\bpie\b|counted|balance|importe|monto|fondo/i;
-const NUMERIC_CALL = /\b(?:Number|parseFloat)\(([^()]*(?:\([^()]*\)[^()]*)*)\)/g;
+const NUMERIC_CALL = /\b(?:Number|parseFloat|parseInt)\(([^()]*(?:\([^()]*\)[^()]*)*)\)/g;
 
 function sources(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
@@ -34,6 +34,14 @@ describe('DX-241: sin Number( sobre el texto de un campo de importe', () => {
     expect(moneyNumberCalls("Number(form.downPayment || '0')")).toHaveLength(1);
     expect(moneyNumberCalls('Number(form.installmentsCount)')).toEqual([]);
     expect(moneyNumberCalls('Number(e.target.value)')).toEqual([]);
+    // Revisión DX-241: también parseInt y las formas `Number.parse…`, y en
+    // varias líneas.
+    expect(moneyNumberCalls('parseInt(amountText, 10)')).toHaveLength(1);
+    expect(moneyNumberCalls('Number.parseFloat(form.price)')).toHaveLength(1);
+    expect(moneyNumberCalls('Number(\n  totalText.trim(),\n)')).toHaveLength(1);
+    // Lo que no es dinero no salta (minutos, cuotas, días).
+    expect(moneyNumberCalls('Number(duration)')).toEqual([]);
+    expect(moneyNumberCalls("Number(day.date.slice(8, 10))")).toEqual([]);
   });
 
   it('ningún componente de src/components lo hace', () => {
