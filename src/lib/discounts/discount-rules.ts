@@ -1,4 +1,8 @@
 import type { ClinicRole } from '@/lib/me/me-api';
+import { currencyDecimals } from '@/lib/format/money';
+
+// La unidad de cada moneda es la misma que lee el campo de importe (DX-241).
+export { currencyDecimals };
 
 /**
  * Reglas de descuento de la clínica en la web (DX-204). Son un AVISO antes de
@@ -121,11 +125,6 @@ export function discountPercent(price: number, discount: number): number {
   return Math.round((discount / price) * 10000) / 100;
 }
 
-const ZERO_DECIMAL_CURRENCIES = new Set(['COP', 'CLP', 'JPY', 'KRW', 'PYG']);
-
-export function currencyDecimals(currency: string): 0 | 2 {
-  return ZERO_DECIMAL_CURRENCIES.has(currency.toUpperCase()) ? 0 : 2;
-}
 
 /**
  * Descuento de un ítem al aplicarle `percent` % en bloque: redondeado a la
