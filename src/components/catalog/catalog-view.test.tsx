@@ -146,6 +146,7 @@ describe('CatalogView', () => {
         kind: 'PROCEDURE',
         labelEs: 'Profilaxis',
         color: '#0E7490',
+        allowDiscount: true,
         defaultPrice: 80000,
       }),
     );
@@ -198,6 +199,7 @@ describe('CatalogView', () => {
         kind: 'DIAGNOSIS',
         labelEs: 'Caries dental',
         color: '#0E7490',
+        allowDiscount: true,
       }),
     );
   });
@@ -228,6 +230,7 @@ describe('CatalogView', () => {
         kind: 'PROCEDURE',
         labelEs: 'Profilaxis dental',
         color: '#0E7490',
+        allowDiscount: true,
         defaultPrice: 80000,
         category: 'Preventiva',
       }),
@@ -627,3 +630,49 @@ describe('CatalogView · código CUPS (DX-212)', () => {
   });
 });
 
+
+describe('CatalogView · admite descuentos (DX-105)', () => {
+  const admin = tokenFor('ADMIN', 'u-admin');
+
+  beforeEach(() => {
+    mockedList.mockReset().mockResolvedValue(page([item1]));
+    mockedUpdate.mockReset().mockResolvedValue(item1);
+    mockedCreate.mockReset().mockResolvedValue(item1);
+    mockedLocations.mockReset().mockResolvedValue(clinicIn('CO'));
+    (listCatalogItems as jest.Mock).mockReset().mockResolvedValue([item1]);
+    window.localStorage.clear();
+  });
+
+  it('un ítem nuevo nace con «Admite descuentos» marcada y lo envía', async () => {
+    const user = setupUser();
+    render(<CatalogView token={admin} />);
+    await screen.findByRole('table', { name: /catálogo/i });
+    await user.click(screen.getByRole('button', { name: /agregar ítem/i }));
+    const box = await screen.findByRole('checkbox', { name: 'Admite descuentos' });
+    expect(box).toBeChecked();
+    await user.type(screen.getByLabelText('Nombre'), 'Resina');
+    await user.type(screen.getByLabelText('Código'), 'RES');
+    await user.click(screen.getByRole('button', { name: 'Crear' }));
+    await waitFor(() =>
+      expect(mockedCreate).toHaveBeenCalledWith(admin, expect.objectContaining({ allowDiscount: true })),
+    );
+  });
+
+  it('al editar muestra el valor del ítem y guarda el cambio', async () => {
+    const user = setupUser();
+    (listCatalogItems as jest.Mock).mockResolvedValue([{ ...item1, allowDiscount: false }]);
+    render(<CatalogView token={admin} initialItemId="c1" />);
+    const box = await screen.findByRole('checkbox', { name: 'Admite descuentos' });
+    expect(box).not.toBeChecked();
+    await user.click(box);
+    await user.click(screen.getByRole('button', { name: 'Guardar' }));
+    await waitFor(() =>
+      expect(mockedUpdate).toHaveBeenCalledWith(admin, 'c1', expect.objectContaining({ allowDiscount: true })),
+    );
+  });
+
+  it('un ítem sin el campo (respuesta antigua) se trata como que admite descuentos', async () => {
+    render(<CatalogView token={admin} initialItemId="c1" />);
+    expect(await screen.findByRole('checkbox', { name: 'Admite descuentos' })).toBeChecked();
+  });
+});

@@ -28,6 +28,8 @@ export interface DentalCatalogItem {
   defaultPrice: number | null;
   /** DX-212: código CUPS (6 alfanuméricos) o null. */
   cupsCode?: string | null;
+  /** DX-105: false = la prestación no admite descuentos (ni de convenio ni discrecionales). */
+  allowDiscount?: boolean;
   active: boolean;
   createdAt: string;
   updatedAt: string;
@@ -111,6 +113,8 @@ export interface CreateCatalogItemInput {
   defaultPrice?: number;
   /** DX-212: código CUPS (6 alfanuméricos). Solo ADMIN. */
   cupsCode?: string;
+  /** DX-105: por defecto true. */
+  allowDiscount?: boolean;
   active?: boolean;
 }
 
@@ -144,6 +148,7 @@ export interface UpdateCatalogItemInput {
   defaultPrice?: number;
   /** DX-212: código CUPS; `null` lo quita. Solo ADMIN (queda auditado). */
   cupsCode?: string | null;
+  allowDiscount?: boolean;
   active?: boolean;
 }
 

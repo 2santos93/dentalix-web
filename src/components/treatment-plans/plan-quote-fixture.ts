@@ -4,6 +4,7 @@ import type { PlanQuote } from '@/lib/treatment-plans/plan-quote-api';
 export function planQuoteFixture(overrides: Partial<PlanQuote> = {}): PlanQuote {
   return {
     version: 1,
+    agreement: null,
     planId: 'plan-1',
     patientId: 'p1',
     planStatus: 'DRAFT',
@@ -26,6 +27,8 @@ export function planQuoteFixture(overrides: Partial<PlanQuote> = {}): PlanQuote 
         unitPrice: 3500000,
         discount: 350000,
         subtotal: 3150000,
+        listPrice: null,
+        agreementName: null,
       },
       {
         id: 'i2',
@@ -36,9 +39,11 @@ export function planQuoteFixture(overrides: Partial<PlanQuote> = {}): PlanQuote 
         unitPrice: 150000,
         discount: 0,
         subtotal: 150000,
+        listPrice: null,
+        agreementName: null,
       },
     ],
-    totals: [{ currency: 'COP', gross: 3650000, discount: 350000, net: 3300000 }],
+    totals: [{ currency: 'COP', gross: 3650000, discount: 350000, net: 3300000, agreementSaving: 0 }],
     contentHash: 'c'.repeat(64),
     acceptance: null,
     ...overrides,

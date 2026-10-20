@@ -54,7 +54,7 @@ describe('PlanQuoteDocument (DX-012)', () => {
       <PlanQuoteDocument
         quote={planQuoteFixture({
           items: [],
-          totals: [{ currency: 'COP', gross: 0, discount: 0, net: 0 }],
+          totals: [{ currency: 'COP', gross: 0, discount: 0, net: 0, agreementSaving: 0 }],
         })}
       />,
     );

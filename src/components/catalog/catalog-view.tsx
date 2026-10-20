@@ -101,6 +101,9 @@ const copy = {
   cupsHint: '6 caracteres alfanuméricos (ej. 890203). Lo piden el RDA y el RIPS en Colombia.',
   cupsReadOnly: 'Solo un administrador puede cambiarlo.',
   cupsInvalid: 'El código CUPS debe tener 6 caracteres alfanuméricos (ej. 890203).',
+  allowDiscountLabel: 'Admite descuentos',
+  allowDiscountHint:
+    'Si lo desmarcas, este procedimiento no recibe descuentos de convenio ni descuentos en el plan: se cobra al precio que corresponda.',
   colCups: 'CUPS',
   cupsFallback: '—',
   submit: 'Crear',
@@ -230,6 +233,7 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
   const [category, setCategory] = useState('');
   const [cups, setCups] = useState('');
   const [cupsError, setCupsError] = useState<string | null>(null);
+  const [allowDiscount, setAllowDiscount] = useState(true);
   const [priceError, setPriceError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
@@ -368,6 +372,7 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
     setCups('');
     setCupsError(null);
     setPriceError(null);
+    setAllowDiscount(true);
   }
 
   function openCreate() {
@@ -385,6 +390,7 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
     setColor(item.color);
     setCategory(item.category ?? '');
     setCups(item.cupsCode ?? '');
+    setAllowDiscount(item.allowDiscount ?? true);
     setCupsError(null);
     setEditingItem(item);
     setFormError(null);
@@ -424,6 +430,7 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
       kind,
       labelEs: name.trim(),
       color,
+      allowDiscount,
       ...(defaultPrice !== undefined ? { defaultPrice } : {}),
       ...(trimmedCategory ? { category: trimmedCategory } : {}),
       ...(canEdit && trimmedCups ? { cupsCode: trimmedCups } : {}),
@@ -687,6 +694,23 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
                 className="h-10 w-16 cursor-pointer p-1"
               />
             </FormField>
+          </div>
+
+          <div className="flex flex-col gap-1">
+            <label
+              htmlFor="catalog-allow-discount"
+              className="flex min-h-11 items-center gap-2 text-sm text-ink md:min-h-0"
+            >
+              <input
+                id="catalog-allow-discount"
+                type="checkbox"
+                checked={allowDiscount}
+                onChange={(e) => setAllowDiscount(e.target.checked)}
+                className="size-4 accent-primary"
+              />
+              {copy.allowDiscountLabel}
+            </label>
+            <p className="text-xs text-muted">{copy.allowDiscountHint}</p>
           </div>
         </FormModal>
 

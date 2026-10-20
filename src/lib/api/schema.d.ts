@@ -649,6 +649,64 @@ export interface paths {
         patch: operations["PayersController_update"];
         trace?: never;
     };
+    "/api/v1/patients/{patientId}/agreement": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Convenio vigente del paciente y, con includeHistory, las asignaciones retiradas (DX-105) */
+        get: operations["PatientAgreementsController_get"];
+        /**
+         * Asignar un convenio al paciente, sustituyendo el vigente (DX-105)
+         * @description La asignación anterior queda en el historial. Un convenio desactivado se acepta y la asignación sale con estado INACTIVE.
+         */
+        put: operations["PatientAgreementsController_put"];
+        post?: never;
+        /** Retirar el convenio vigente del paciente (DX-105) */
+        delete: operations["PatientAgreementsController_remove"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agreements": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Convenios de la clínica (activos; con includeInactive, también los desactivados) */
+        get: operations["AgreementsController_list"];
+        put?: never;
+        /** Crear un convenio con descuento porcentual o lista de precios */
+        post: operations["AgreementsController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/agreements/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Retirar un convenio sin pacientes asignados (borrado lógico) */
+        delete: operations["AgreementsController_remove"];
+        options?: never;
+        head?: never;
+        /** Editar o desactivar un convenio */
+        patch: operations["AgreementsController_update"];
+        trace?: never;
+    };
     "/api/v1/catalog/items": {
         parameters: {
             query?: never;
@@ -695,6 +753,92 @@ export interface paths {
         options?: never;
         head?: never;
         patch: operations["DentalCatalogController_update"];
+        trace?: never;
+    };
+    "/api/v1/locations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["LocationsController_list"];
+        put?: never;
+        post: operations["LocationsController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/locations/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["LocationsController_update"];
+        trace?: never;
+    };
+    "/api/v1/price-lists": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Listas de precios de la clínica (activas; con includeInactive, también las desactivadas) */
+        get: operations["PriceListsController_list"];
+        put?: never;
+        /** Crear una lista de precios */
+        post: operations["PriceListsController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/price-lists/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Retirar una lista de precios sin convenios (borrado lógico) */
+        delete: operations["PriceListsController_remove"];
+        options?: never;
+        head?: never;
+        /** Editar o desactivar una lista de precios */
+        patch: operations["PriceListsController_update"];
+        trace?: never;
+    };
+    "/api/v1/price-lists/{id}/items": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Procedimientos activos del catálogo con su precio en la lista (o null), paginados */
+        get: operations["PriceListsController_items"];
+        /** Fijar o quitar (price: null) los precios de hasta 500 procedimientos, en una transacción */
+        put: operations["PriceListsController_replace"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/patients/{patientId}/medical-history": {
@@ -1258,38 +1402,6 @@ export interface paths {
         patch: operations["ScheduleBlocksController_update"];
         trace?: never;
     };
-    "/api/v1/locations": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["LocationsController_list"];
-        put?: never;
-        post: operations["LocationsController_create"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/locations/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch: operations["LocationsController_update"];
-        trace?: never;
-    };
     "/api/v1/waitlist": {
         parameters: {
             query?: never;
@@ -1588,6 +1700,23 @@ export interface paths {
         get?: never;
         put?: never;
         post: operations["PlanQuoteController_accept"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{patientId}/price-quote": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Precio que tendría un ítem nuevo: convenio vigente → lista de la sede → catálogo */
+        get: operations["PriceQuoteController_quote"];
+        put?: never;
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -3173,7 +3302,7 @@ export interface components {
         /** @enum {string} */
         AuditAction: "VIEW" | "CREATE" | "UPDATE" | "DELETE" | "SIGN" | "VOID" | "LOGIN" | "LOGIN_FAILED" | "PASSWORD_RESET" | "EXPORT" | "PRINT" | "SEND";
         /** @enum {string} */
-        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION" | "POSTOP_TEMPLATE" | "POSTOP_DELIVERY" | "PATIENT_DOCUMENT";
+        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION" | "POSTOP_TEMPLATE" | "POSTOP_DELIVERY" | "PATIENT_DOCUMENT" | "AGREEMENT" | "PRICE_LIST";
         /**
          * @description Rol con el que actuó (del token). `null` en un login fallido.
          * @enum {string}
@@ -3851,6 +3980,17 @@ export interface components {
             /** @description Solo para ADMIN y RECEPTION, y solo con saldo vencido. DENTIST y ASSISTANT no lo reciben. */
             amounts?: components["schemas"]["OverdueAmountDto"][];
         };
+        /**
+         * @description NONE: sin convenio asignado. INACTIVE: el convenio está desactivado. EXPIRED / NOT_STARTED: la vigencia del convenio o de la asignación terminó o no empezó. ACTIVE: el resto.
+         * @enum {string}
+         */
+        AgreementSummaryStatus: "NONE" | "ACTIVE" | "EXPIRED" | "NOT_STARTED" | "INACTIVE";
+        AgreementSummaryDto: {
+            /** @description NONE: sin convenio asignado. INACTIVE: el convenio está desactivado. EXPIRED / NOT_STARTED: la vigencia del convenio o de la asignación terminó o no empezó. ACTIVE: el resto. */
+            status: components["schemas"]["AgreementSummaryStatus"];
+            agreementName: string | null;
+            payerName: string | null;
+        };
         PatientDetailDto: {
             /** Format: uuid */
             id: string;
@@ -3950,6 +4090,7 @@ export interface components {
             updatedAt: string;
             balance: components["schemas"]["OverdueBalanceDto"];
             coverage: components["schemas"]["CoverageSummaryDto"];
+            agreement: components["schemas"]["AgreementSummaryDto"];
         };
         UpdatePatientDto: {
             firstName?: string;
@@ -4383,6 +4524,180 @@ export interface components {
             /** @description false = sale de los selectores. */
             active?: boolean;
         };
+        /** @enum {string} */
+        AgreementKind: "PERCENT_DISCOUNT" | "PRICE_LIST";
+        AssignedAgreementPayerDto: {
+            /** Format: uuid */
+            id: string;
+            /** @example Sanitas */
+            name: string;
+        };
+        AssignedAgreementDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            kind: components["schemas"]["AgreementKind"];
+            active: boolean;
+            /** @example 2026-01-01 */
+            validFrom: string | null;
+            /** @example 2026-12-31 */
+            validTo: string | null;
+            payer: components["schemas"]["AssignedAgreementPayerDto"];
+        };
+        /**
+         * @description Calculado a hoy en la zona de la sede. INACTIVE: el convenio está desactivado o retirado; si no, se miran las dos vigencias (convenio y asignación).
+         * @enum {string}
+         */
+        PatientAgreementStatus: "ACTIVE" | "EXPIRED" | "NOT_STARTED" | "INACTIVE";
+        PatientAgreementDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            patientId: string;
+            agreement: components["schemas"]["AssignedAgreementDto"];
+            /**
+             * Format: uuid
+             * @description Cobertura del paciente que lleva su número de afiliado.
+             */
+            coverageId: string | null;
+            /** @example 2026-01-01 */
+            validFrom: string | null;
+            /** @example 2026-12-31 */
+            validTo: string | null;
+            notes: string | null;
+            /** @description Calculado a hoy en la zona de la sede. INACTIVE: el convenio está desactivado o retirado; si no, se miran las dos vigencias (convenio y asignación). */
+            status: components["schemas"]["PatientAgreementStatus"];
+            /** Format: date-time */
+            createdAt: string;
+            /**
+             * Format: date-time
+             * @description Cuándo se retiró; null mientras está vigente.
+             */
+            retiredAt: string | null;
+        };
+        PatientAgreementResponseDto: {
+            current: components["schemas"]["PatientAgreementDto"] | null;
+            /** @description Vacío salvo con `includeHistory=true`. */
+            history: components["schemas"]["PatientAgreementDto"][];
+        };
+        AssignPatientAgreementDto: {
+            /** Format: uuid */
+            agreementId: string;
+            /**
+             * Format: uuid
+             * @description Cobertura del paciente con el mismo pagador que el convenio; lleva su número de afiliado.
+             */
+            coverageId?: string | null;
+            /** @example 2026-01-01 */
+            validFrom?: string | null;
+            /** @example 2026-12-31 */
+            validTo?: string | null;
+            notes?: string | null;
+        };
+        AgreementPayerDto: {
+            /** Format: uuid */
+            id: string;
+            /** @example Sanitas */
+            name: string;
+        };
+        AgreementPriceListDto: {
+            /** Format: uuid */
+            id: string;
+            /** @example Lista Sanitas 2026 */
+            name: string;
+            /**
+             * @description Código ISO 4217
+             * @example COP
+             */
+            currency: string;
+        };
+        AgreementDto: {
+            /** Format: uuid */
+            id: string;
+            /** @example Convenio Sanitas */
+            name: string;
+            payer: components["schemas"]["AgreementPayerDto"];
+            kind: components["schemas"]["AgreementKind"];
+            /** @description Solo PERCENT_DISCOUNT: 0–100. */
+            percent: number | null;
+            /** @description Solo PERCENT_DISCOUNT: porcentaje por categoría del catálogo; gana sobre `percent`. */
+            percentByCategory: {
+                [key: string]: number;
+            } | null;
+            priceList: components["schemas"]["AgreementPriceListDto"] | null;
+            /**
+             * Format: uuid
+             * @description null = toda la clínica.
+             */
+            locationId: string | null;
+            /** @example 2026-01-01 */
+            validFrom: string | null;
+            /** @example 2026-12-31 */
+            validTo: string | null;
+            active: boolean;
+            /** @description Pacientes con este convenio asignado hoy. */
+            assignedCount: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        CreateAgreementDto: {
+            name: string;
+            /**
+             * Format: uuid
+             * @description Pagador vivo y activo.
+             */
+            payerId: string;
+            kind: components["schemas"]["AgreementKind"];
+            /** @description Obligatorio con PERCENT_DISCOUNT; no va con PRICE_LIST. */
+            percent?: Record<string, never>;
+            /** @description { "<categoría del catálogo>": <0–100> }, hasta 50 categorías de 80 caracteres. Solo PERCENT_DISCOUNT. */
+            percentByCategory?: {
+                [key: string]: number;
+            };
+            /**
+             * Format: uuid
+             * @description Obligatorio con PRICE_LIST; no va con PERCENT_DISCOUNT.
+             */
+            priceListId?: string;
+            /**
+             * Format: uuid
+             * @description Sede del convenio; ausente o null = toda la clínica.
+             */
+            locationId?: string;
+            /** @example 2026-01-01 */
+            validFrom?: string;
+            /** @example 2026-12-31 */
+            validTo?: string;
+            /** @description Por defecto true. */
+            active?: boolean;
+        };
+        UpdateAgreementDto: {
+            name?: string;
+            /** Format: uuid */
+            payerId?: string;
+            /** @description Al cambiarlo se vacían los campos del otro tipo y se piden los del nuevo. */
+            kind?: components["schemas"]["AgreementKind"];
+            percent?: number | null;
+            /** @description null vacía los porcentajes por categoría. */
+            percentByCategory?: {
+                [key: string]: number;
+            } | null;
+            /** Format: uuid */
+            priceListId?: string | null;
+            /**
+             * Format: uuid
+             * @description null = toda la clínica.
+             */
+            locationId?: string | null;
+            /** @example 2026-01-01 */
+            validFrom?: string | null;
+            /** @example 2026-12-31 */
+            validTo?: string | null;
+            /** @description false = sale de la resolución de precios. */
+            active?: boolean;
+        };
         CreateCatalogItemDto: {
             /** @description Unique code within the tenant */
             code: string;
@@ -4404,6 +4719,11 @@ export interface components {
              * @example 890203
              */
             cupsCode?: string | null;
+            /**
+             * @description DX-105: false = la prestación no admite descuentos. Por defecto true.
+             * @default true
+             */
+            allowDiscount: boolean;
             /** @default true */
             active: boolean;
         };
@@ -4423,6 +4743,8 @@ export interface components {
             defaultPrice: number | null;
             /** @description DX-212: código CUPS (6 alfanuméricos) o null. */
             cupsCode: string | null;
+            /** @description DX-105: false = la prestación no admite descuentos (ni % de convenio ni discrecionales). */
+            allowDiscount: boolean;
             active: boolean;
             /** Format: date-time */
             createdAt: string;
@@ -4453,7 +4775,142 @@ export interface components {
              * @example 890203
              */
             cupsCode?: string | null;
+            /** @description DX-105: false = la prestación no admite descuentos. */
+            allowDiscount?: boolean;
             active?: boolean;
+        };
+        LocationDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            address: string | null;
+            country: components["schemas"]["ClinicCountry"];
+            /** @description DX-212: código de habilitación REPS (12 dígitos) o null. */
+            repsHabilitationCode: string | null;
+            /** @description DX-222: teléfono de la sede o null. */
+            phone: string | null;
+            isActive: boolean;
+            /**
+             * @description Zona horaria IANA de la sede (la de su horario; sin horario, la de su país). Define sus días civiles: «hoy» en la caja y el dashboard (DX-097).
+             * @example America/Bogota
+             */
+            timeZone: string;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        CreateLocationDto: {
+            /** @example Sede Norte */
+            name: string;
+            /** @example Cra 15 #90-20 */
+            address?: string;
+            /** @description País de la sede: decide los campos legales obligatorios de la receta (CO o ES). Por defecto CO. */
+            country?: components["schemas"]["ClinicCountry"];
+            /**
+             * @description DX-222: teléfono de la sede que ven los pacientes en las indicaciones postoperatorias ({{telefono_sede}}). Hasta 40 caracteres.
+             * @example +57 601 555 0101
+             */
+            phone?: string;
+        };
+        UpdateLocationDto: {
+            name?: string;
+            address?: string;
+            /** @description País de la sede: decide los campos legales obligatorios de la receta (CO o ES). Por defecto CO. */
+            country?: components["schemas"]["ClinicCountry"];
+            /**
+             * @description DX-212: código de habilitación REPS de la sede (Colombia), 12 dígitos (400 con el formato esperado si no). Vacío o null lo quita. Solo ADMIN; queda auditado.
+             * @example 110010123401
+             */
+            repsHabilitationCode?: string | null;
+            /**
+             * @description DX-222: teléfono de la sede que ven los pacientes en las indicaciones postoperatorias ({{telefono_sede}}). Hasta 40 caracteres. Vacío o null lo quita; sin el campo no cambia.
+             * @example +57 601 555 0101
+             */
+            phone?: string | null;
+            /** @description Desactivar una sede la oculta para operar; no se puede desactivar la última activa. */
+            isActive?: boolean;
+        };
+        PriceListDto: {
+            /** Format: uuid */
+            id: string;
+            /** @example Convenio Sura EPS */
+            name: string;
+            /**
+             * @description Código ISO 4217
+             * @example COP
+             */
+            currency: string;
+            /**
+             * Format: uuid
+             * @description null = toda la clínica. A lo sumo una lista activa por sede.
+             */
+            locationId: string | null;
+            active: boolean;
+            /** @description Procedimientos con precio en la lista. */
+            itemCount: number;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        CreatePriceListDto: {
+            name: string;
+            /**
+             * @description Código ISO 4217 de `currencies`.
+             * @example COP
+             */
+            currency: string;
+            /**
+             * Format: uuid
+             * @description Sede de la lista; ausente o null = toda la clínica.
+             */
+            locationId?: string | null;
+        };
+        UpdatePriceListDto: {
+            name?: string;
+            /**
+             * @description Con precios cargados, otra moneda da 409.
+             * @example COP
+             */
+            currency?: string;
+            /**
+             * Format: uuid
+             * @description null = toda la clínica.
+             */
+            locationId?: string | null;
+            /** @description false = deja de resolver precios. */
+            active?: boolean;
+        };
+        PriceListItemRowDto: {
+            /** Format: uuid */
+            catalogItemId: string;
+            code: string;
+            labelEs: string;
+            category: string | null;
+            defaultPrice: number | null;
+            /** @description Precio en esta lista; null = sin precio. */
+            price: number | null;
+        };
+        PriceListItemsPageDto: {
+            items: components["schemas"]["PriceListItemRowDto"][];
+            /** @description Total que casa con la búsqueda. */
+            total: number;
+            page: number;
+            pageSize: number;
+        };
+        PriceListItemInputDto: {
+            /** Format: uuid */
+            catalogItemId: string;
+            /** @description Hasta 2 decimales. null quita el precio de la lista. */
+            price: number | null;
+        };
+        ReplacePriceListItemsDto: {
+            items: components["schemas"]["PriceListItemInputDto"][];
+        };
+        ReplacePriceListItemsResultDto: {
+            /** @description Precios creados o actualizados. */
+            upserted: number;
+            /** @description Precios quitados (filas con price null). */
+            removed: number;
         };
         SafetyFlagsDto: {
             embarazo: boolean;
@@ -5462,56 +5919,6 @@ export interface components {
             /** @description Igual que al crear, si el rango cambia. */
             confirmAffected?: boolean;
         };
-        LocationDto: {
-            /** Format: uuid */
-            id: string;
-            name: string;
-            address: string | null;
-            country: components["schemas"]["ClinicCountry"];
-            /** @description DX-212: código de habilitación REPS (12 dígitos) o null. */
-            repsHabilitationCode: string | null;
-            /** @description DX-222: teléfono de la sede o null. */
-            phone: string | null;
-            isActive: boolean;
-            /**
-             * @description Zona horaria IANA de la sede (la de su horario; sin horario, la de su país). Define sus días civiles: «hoy» en la caja y el dashboard (DX-097).
-             * @example America/Bogota
-             */
-            timeZone: string;
-            /** Format: date-time */
-            createdAt: string;
-        };
-        CreateLocationDto: {
-            /** @example Sede Norte */
-            name: string;
-            /** @example Cra 15 #90-20 */
-            address?: string;
-            /** @description País de la sede: decide los campos legales obligatorios de la receta (CO o ES). Por defecto CO. */
-            country?: components["schemas"]["ClinicCountry"];
-            /**
-             * @description DX-222: teléfono de la sede que ven los pacientes en las indicaciones postoperatorias ({{telefono_sede}}). Hasta 40 caracteres.
-             * @example +57 601 555 0101
-             */
-            phone?: string;
-        };
-        UpdateLocationDto: {
-            name?: string;
-            address?: string;
-            /** @description País de la sede: decide los campos legales obligatorios de la receta (CO o ES). Por defecto CO. */
-            country?: components["schemas"]["ClinicCountry"];
-            /**
-             * @description DX-212: código de habilitación REPS de la sede (Colombia), 12 dígitos (400 con el formato esperado si no). Vacío o null lo quita. Solo ADMIN; queda auditado.
-             * @example 110010123401
-             */
-            repsHabilitationCode?: string | null;
-            /**
-             * @description DX-222: teléfono de la sede que ven los pacientes en las indicaciones postoperatorias ({{telefono_sede}}). Hasta 40 caracteres. Vacío o null lo quita; sin el campo no cambia.
-             * @example +57 601 555 0101
-             */
-            phone?: string | null;
-            /** @description Desactivar una sede la oculta para operar; no se puede desactivar la última activa. */
-            isActive?: boolean;
-        };
         /** @enum {string} */
         WaitlistStatus: "OPEN" | "SCHEDULED" | "DISMISSED";
         WaitlistSourceAppointmentDto: {
@@ -5918,8 +6325,27 @@ export interface components {
             surfaces: ("MESIAL" | "DISTAL" | "OCCLUSAL" | "VESTIBULAR" | "LINGUAL")[];
             /** Format: uuid */
             catalogItemId: string;
-            /** @description SEC-041: precio de catálogo al dar de alta el ítem (null = ítem libre). Un precio por debajo cuenta como descuento: tope del rol, motivo e informe de descuentos. */
+            /** @description Precio de REFERENCIA al dar de alta el ítem (null = ítem libre). DX-105: el resuelto (convenio → lista de precios de la sede → catálogo). Un precio por debajo cuenta como descuento (SEC-041): tope del rol, motivo e informe de descuentos. */
             catalogPrice: number | null;
+            /** @description DX-105: precio de catálogo (`defaultPrice`) en el alta. Null en ítems anteriores a DX-105 o sin precio de catálogo. */
+            basePrice: number | null;
+            /**
+             * @description DX-105: de dónde salió `catalogPrice` (convenio por %, lista del convenio, lista de la sede o catálogo). Null en ítems anteriores a DX-105.
+             * @enum {string|null}
+             */
+            priceSource: "CATALOG" | "PRICE_LIST" | "AGREEMENT_PERCENT" | "AGREEMENT_PRICE_LIST" | null;
+            /**
+             * Format: uuid
+             * @description DX-105: convenio con el que se resolvió el precio
+             */
+            agreementId: string | null;
+            /** @description DX-105: nombre del convenio en el alta (foto: no cambia si se renombra) */
+            agreementName: string | null;
+            /**
+             * Format: uuid
+             * @description DX-105: sede con la que se resolvió el precio
+             */
+            pricingLocationId: string | null;
             price: number;
             /** @description Descuento en la moneda del plan (0 si no hay) */
             discount: number;
@@ -6050,7 +6476,7 @@ export interface components {
             surfaces?: ("MESIAL" | "DISTAL" | "OCCLUSAL" | "VESTIBULAR" | "LINGUAL")[];
             /** Format: uuid */
             catalogItemId: string;
-            /** @description Explicit price (at most 2 decimal places); if omitted, falls back to the catalog item defaultPrice (400 if neither is set). SEC-041: un precio por debajo del de catálogo cuenta como descuento (tope del rol y motivo de la política) */
+            /** @description Precio explícito (máx. 2 decimales). Si se omite, la API lo resuelve (DX-105): convenio vigente del paciente → lista de precios activa de la sede → precio de catálogo; sin ninguno, 400. El resuelto queda como referencia (`catalogPrice`): un precio por debajo cuenta como descuento (tope del rol y motivo de la política) y, si la prestación no admite descuentos, 400 */
             price?: number;
             /** @description Descuento en la moneda del plan (máx. 2 decimales, default 0); nunca mayor que el precio (400). DX-204: por encima del tope del rol, 403; en un plan aceptado, 409 */
             discount?: number;
@@ -6071,6 +6497,15 @@ export interface components {
              * @example 7.5
              */
             percent: number;
+        };
+        ApplyBulkDiscountResultDto: {
+            /** @description Los ítems descontados: el % de su precio redondeado a la unidad de la moneda del plan (COP sin decimales, EUR a céntimos), nunca por encima del tope del rol ítem a ítem */
+            items: components["schemas"]["TreatmentPlanItemDto"][];
+            /**
+             * @description DX-105: ítems pedidos cuyo procedimiento no admite descuentos; se saltan y no cambian
+             * @example 0
+             */
+            skippedNoDiscount: number;
         };
         UpdateTreatmentPlanItemDto: {
             /**
@@ -6100,6 +6535,12 @@ export interface components {
             /** @example CC 1020304050 */
             document: string | null;
         };
+        PlanQuoteAgreementDto: {
+            /** @description Nombre del convenio; si el plan mezcla varios, los nombres separados por « · ». */
+            name: string;
+            /** @description Pagador del primer convenio */
+            payerName: string;
+        };
         PlanQuoteItemDto: {
             /** Format: uuid */
             id: string;
@@ -6114,6 +6555,10 @@ export interface components {
             discount: number;
             /** @description unitPrice × quantity − discount */
             subtotal: number;
+            /** @description Precio de catálogo del procedimiento al añadirlo (v2). Null en ítems anteriores a DX-105 y en presupuestos v1. */
+            listPrice: number | null;
+            /** @description Convenio con que se fijó el precio del ítem (v2). Null si no hubo convenio. */
+            agreementName: string | null;
         };
         PlanQuoteTotalDto: {
             /** @example COP */
@@ -6124,6 +6569,8 @@ export interface components {
             discount: number;
             /** @description gross − discount */
             net: number;
+            /** @description Ahorro por convenio (v2): Σ max(0, precio de lista − precio de referencia) de los ítems con convenio, en la moneda del plan. 0 en v1. */
+            agreementSaving: number;
         };
         PlanQuoteAcceptanceDto: {
             signerName: string;
@@ -6142,8 +6589,11 @@ export interface components {
             integrityOk: boolean;
         };
         PlanQuoteDocumentDto: {
-            /** @enum {number} */
-            version: 1;
+            /**
+             * @description 2 = con convenio y ahorro (DX-105); 1 = foto firmada antes de DX-105 (sin convenio).
+             * @enum {number}
+             */
+            version: 1 | 2;
             /** Format: uuid */
             planId: string;
             /** Format: uuid */
@@ -6158,6 +6608,8 @@ export interface components {
             patient: components["schemas"]["PlanQuotePatientDto"];
             /** @description Profesional que creó el plan */
             professionalName: string | null;
+            /** @description Convenio de los ítems; null si ninguno lo tiene */
+            agreement: components["schemas"]["PlanQuoteAgreementDto"] | null;
             /**
              * @description Fecha de emisión (zona de la sede)
              * @example 2026-10-16
@@ -6181,6 +6633,24 @@ export interface components {
             signature: string;
             /** @description El contentHash del presupuesto que se mostró (GET …/quote). Si el presupuesto cambió desde entonces: 409. */
             contentHash: string;
+        };
+        PriceQuoteDto: {
+            /** @description Precio de catálogo (`defaultPrice`); null si no tiene */
+            basePrice: number | null;
+            /** @description Precio de referencia resuelto (el `catalogPrice` que tendría el ítem); null = sin precio: hay que indicarlo */
+            price: number | null;
+            /**
+             * @description De dónde sale `price`
+             * @enum {string}
+             */
+            source: "CATALOG" | "PRICE_LIST" | "AGREEMENT_PERCENT" | "AGREEMENT_PRICE_LIST";
+            /** Format: uuid */
+            agreementId: string | null;
+            agreementName: string | null;
+            /** @description false = la prestación no admite descuentos (ni % del convenio ni discrecionales) */
+            allowDiscount: boolean;
+            /** @example COP */
+            currency: string;
         };
         DiscountMaxPercentByRoleDto: {
             /** @description Administración (por defecto 100) */
@@ -9972,7 +10442,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description La ficha con `balance` (DX-150): marca «Saldo vencido» y días para todos los roles; el importe, solo ADMIN y RECEPTION. Y con `coverage` (DX-153): resumen de la cobertura principal. */
+            /** @description La ficha con `balance` (DX-150): marca «Saldo vencido» y días para todos los roles; el importe, solo ADMIN y RECEPTION. Con `coverage` (DX-153): resumen de la cobertura principal. Y con `agreement` (DX-105): resumen del convenio vigente. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -10794,6 +11264,270 @@ export interface operations {
             };
         };
     };
+    PatientAgreementsController_get: {
+        parameters: {
+            query?: {
+                /** @description true = incluye las asignaciones retiradas en `history`. */
+                includeHistory?: boolean;
+            };
+            header?: never;
+            path: {
+                patientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PatientAgreementResponseDto"];
+                };
+            };
+            /** @description Paciente no encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientAgreementsController_put: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AssignPatientAgreementDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PatientAgreementDto"];
+                };
+            };
+            /** @description Validación, convenio inexistente o retirado, vigencia inválida, o cobertura que no es del paciente ni del pagador del convenio */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente no encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Otra petición cambió el convenio del paciente a la vez */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientAgreementsController_remove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Retirado */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente no encontrado o sin convenio asignado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AgreementsController_list: {
+        parameters: {
+            query?: {
+                /** @description true = también los desactivados (pantalla de gestión). Por defecto, solo los activos. */
+                includeInactive?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgreementDto"][];
+                };
+            };
+        };
+    };
+    AgreementsController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateAgreementDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgreementDto"];
+                };
+            };
+            /** @description Campos del tipo, porcentaje, categoría, fechas, pagador, lista o sede inválidos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo ADMIN */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Nombre duplicado */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AgreementsController_remove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Retirado (borrado lógico). */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo ADMIN */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Convenio no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Tiene pacientes asignados; se desactiva en lugar de retirarlo */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AgreementsController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateAgreementDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AgreementDto"];
+                };
+            };
+            /** @description Campo inválido */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo ADMIN */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Convenio no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Nombre duplicado */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     DentalCatalogController_list: {
         parameters: {
             query?: {
@@ -10889,6 +11623,312 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["DentalCatalogItemDto"];
                 };
+            };
+        };
+    };
+    LocationsController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocationDto"][];
+                };
+            };
+        };
+    };
+    LocationsController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateLocationDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocationDto"];
+                };
+            };
+        };
+    };
+    LocationsController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateLocationDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocationDto"];
+                };
+            };
+        };
+    };
+    PriceListsController_list: {
+        parameters: {
+            query?: {
+                /** @description true = también las desactivadas (pantalla de gestión). Por defecto, solo las activas. */
+                includeInactive?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PriceListDto"][];
+                };
+            };
+        };
+    };
+    PriceListsController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreatePriceListDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PriceListDto"];
+                };
+            };
+            /** @description Nombre fuera de 2–120 caracteres, moneda o sede inválidas */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo ADMIN */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Nombre duplicado, o la sede ya tiene una lista de precios activa */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PriceListsController_remove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Retirada (borrado lógico). */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo ADMIN */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Lista de precios no encontrada en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La usa un convenio vivo; se desactiva en lugar de retirarla */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PriceListsController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdatePriceListDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PriceListDto"];
+                };
+            };
+            /** @description Campo inválido */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo ADMIN */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Lista de precios no encontrada en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Nombre duplicado, sede con otra lista activa o moneda bloqueada por tener precios */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PriceListsController_items: {
+        parameters: {
+            query?: {
+                /** @description Búsqueda libre (código, etiqueta es/en/pt o categoría) */
+                query?: string;
+                page?: number;
+                pageSize?: number;
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PriceListItemsPageDto"];
+                };
+            };
+            /** @description Lista de precios no encontrada en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PriceListsController_replace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReplacePriceListItemsDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReplacePriceListItemsResultDto"];
+                };
+            };
+            /** @description Precio inválido, prestación repetida o que no es del catálogo de esta clínica (no se escribe nada) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo ADMIN */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Lista de precios no encontrada en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -12564,73 +13604,6 @@ export interface operations {
             };
         };
     };
-    LocationsController_list: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LocationDto"][];
-                };
-            };
-        };
-    };
-    LocationsController_create: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreateLocationDto"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LocationDto"];
-                };
-            };
-        };
-    };
-    LocationsController_update: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpdateLocationDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LocationDto"];
-                };
-            };
-        };
-    };
     WaitlistController_list: {
         parameters: {
             query?: {
@@ -13420,13 +14393,13 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Los ítems con su descuento nuevo: el % de su precio redondeado a la unidad de la moneda del plan (COP sin decimales, EUR a céntimos), nunca por encima del tope del rol ítem a ítem */
+            /** @description Los ítems con su descuento nuevo y cuántos se saltaron por no admitir descuentos (DX-105) */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["TreatmentPlanItemDto"][];
+                    "application/json": components["schemas"]["ApplyBulkDiscountResultDto"];
                 };
             };
             /** @description DX-204: el descuento EFECTIVO (SEC-041: rebaja del precio frente al de catálogo + descuento) supera el tope del rol de quien lo da («Tu rol permite hasta un X % de descuento por ítem.»; con rebaja de precio, precedido de «Precio por debajo del de catálogo: cuenta como descuento.»). Subir el precio es libre */
@@ -13615,6 +14588,49 @@ export interface operations {
             };
             /** @description Ya estaba aceptado y firmado, el plan está rechazado, cancelado o completado, otra opción de su grupo ya está aceptada, o el presupuesto cambió desde que se mostró (contentHash) */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PriceQuoteController_quote: {
+        parameters: {
+            query: {
+                /** @description Procedimiento del catálogo */
+                catalogItemId: string;
+                /** @description Moneda del plan (ISO 4217) */
+                currency: string;
+            };
+            header?: {
+                /** @description Sede con la que se resuelve (convenio de sede y lista de la sede); sin ella, la de escritura de la sesión */
+                "X-Location-Id"?: string;
+            };
+            path: {
+                patientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PriceQuoteDto"];
+                };
+            };
+            /** @description Identificadores o moneda no válidos. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente o procedimiento no encontrado en esta clínica (inexistente o de otra clínica). */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
