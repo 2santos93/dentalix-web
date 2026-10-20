@@ -95,8 +95,8 @@ const mockedCreateConfirmationLink = createConfirmationLink as jest.MockedFuncti
 >;
 
 const staff = [
-  { userId: 'staff-1', fullName: 'Dra. Ana Ríos', role: 'DENTIST' as const },
-  { userId: 'staff-2', fullName: 'Dr. Luis Gómez', role: 'DENTIST' as const },
+  { userId: 'staff-1', fullName: 'Dra. Ana Ríos', role: 'DENTIST' as const, locationIds: null },
+  { userId: 'staff-2', fullName: 'Dr. Luis Gómez', role: 'DENTIST' as const, locationIds: null },
 ];
 
 const patientsPage = {
@@ -795,7 +795,7 @@ describe('AgendaView', () => {
     const receptionToken = `h.${btoa(JSON.stringify({ sub: 'u1', tenantId: 't1', role: 'RECEPTION' }))}.s`;
     const team = [
       ...staff,
-      { userId: 'staff-3', fullName: 'Rita Recepción', role: 'RECEPTION' as const },
+      { userId: 'staff-3', fullName: 'Rita Recepción', role: 'RECEPTION' as const, locationIds: null },
     ];
 
     it('por defecto, una columna por odontólogo/administración y pide sus citas con providerIds', async () => {
@@ -814,6 +814,51 @@ describe('AgendaView', () => {
       expect(screen.getByRole('button', { name: /profesionales en columnas/i })).toHaveTextContent(
         '2 profesionales',
       );
+    });
+
+    // DX-089: con una sede activa, las columnas por defecto son los clínicos
+    // que trabajan en ella (o en todas); si ninguno, como antes.
+    describe('con una sede activa (DX-089)', () => {
+      afterEach(() => window.localStorage.clear());
+      const porSede = [
+        { userId: 'staff-1', fullName: 'Dra. Norte', role: 'DENTIST' as const, locationIds: ['loc-2'] },
+        { userId: 'staff-2', fullName: 'Dr. Todas', role: 'ADMIN' as const, locationIds: null },
+        { userId: 'staff-4', fullName: 'Dr. Sur', role: 'DENTIST' as const, locationIds: ['loc-3'] },
+      ];
+
+      it('solo los profesionales de esa sede o de todas', async () => {
+        window.localStorage.setItem('dentalix.activeLocationId', 'loc-2');
+        mockedListStaff.mockResolvedValue(porSede);
+        mockedListAppointments.mockResolvedValue([]);
+        const user = userEvent.setup();
+        render(<AgendaView token="tok" />);
+        await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
+
+        await user.click(screen.getByRole('button', { name: /^día$/i }));
+
+        expect(await screen.findAllByTestId('day-column')).toHaveLength(2);
+        expect(mockedListAppointments.mock.calls.at(-1)![1].providerIds).toEqual([
+          'staff-1',
+          'staff-2',
+        ]);
+      });
+
+      it('si nadie trabaja en esa sede, vuelve a todos los clínicos', async () => {
+        window.localStorage.setItem('dentalix.activeLocationId', 'loc-9');
+        mockedListStaff.mockResolvedValue(porSede.filter((m) => m.locationIds !== null));
+        mockedListAppointments.mockResolvedValue([]);
+        const user = userEvent.setup();
+        render(<AgendaView token="tok" />);
+        await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
+
+        await user.click(screen.getByRole('button', { name: /^día$/i }));
+
+        expect(await screen.findAllByTestId('day-column')).toHaveLength(2);
+        expect(mockedListAppointments.mock.calls.at(-1)![1].providerIds).toEqual([
+          'staff-1',
+          'staff-4',
+        ]);
+      });
     });
 
     it('«Mover a…» mueve la cita con un PATCH y refresca; un 409 deja todo como estaba', async () => {

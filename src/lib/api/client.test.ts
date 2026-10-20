@@ -616,6 +616,105 @@ describe('apiFetch — sede huérfana en localStorage', () => {
   });
 });
 
+// DX-089: si un ADMIN restringe las sedes de un miembro, en cuanto se renueva
+// su sesión la API rechaza con 403 LOCATION_NOT_ALLOWED la sede que tenía
+// guardada. Mismo remedio que la sede huérfana: soltarla y reintentar una vez
+// sin cabecera (la API responde entonces sobre sus sedes permitidas).
+describe('apiFetch — sede no permitida (DX-089)', () => {
+  const realFetch = global.fetch;
+  afterEach(() => {
+    global.fetch = realFetch;
+    window.localStorage.clear();
+  });
+
+  // Token cuyo claim `loc` NO incluye la sede guardada: la cabecera es la que
+  // sobra. Solo entonces se descarta (ver el test del recurso de otra sede).
+  function tokenWithLoc(loc: string[]): string {
+    const b64url = (value: string) =>
+      btoa(value).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+    return `${b64url('{"alg":"HS256"}')}.${b64url(JSON.stringify({ sub: 'u1', loc }))}.firma`;
+  }
+  const T = tokenWithLoc(['l1', 'l2']);
+
+  const NOT_ALLOWED = {
+    statusCode: 403,
+    error: 'Forbidden',
+    code: 'LOCATION_NOT_ALLOWED',
+    message: 'No tienes acceso a esta sede.',
+  };
+
+  it('403 LOCATION_NOT_ALLOWED descarta la sede y reintenta UNA vez sin cabecera', async () => {
+    setActiveLocationId('sede-ajena');
+    const enviadas: Array<Record<string, string>> = [];
+    const spy = jest.fn(async (_url: string, init: RequestInit) => {
+      enviadas.push(init.headers as Record<string, string>);
+      return enviadas.length === 1
+        ? { ok: false, status: 403, json: async () => NOT_ALLOWED }
+        : { ok: true, status: 200, json: async () => ({ ok: 1 }) };
+    });
+    global.fetch = spy as unknown as typeof fetch;
+
+    await expect(apiFetch('/appointments', { token: T })).resolves.toEqual({ ok: 1 });
+    expect(spy).toHaveBeenCalledTimes(2);
+    expect(enviadas[0]['X-Location-Id']).toBe('sede-ajena');
+    expect(enviadas[1]['X-Location-Id']).toBeUndefined();
+    expect(getActiveLocationId()).toBeNull();
+  });
+
+  it('no reintenta en bucle si el reintento vuelve a dar 403', async () => {
+    setActiveLocationId('sede-ajena');
+    const spy = jest.fn(async () => ({ ok: false, status: 403, json: async () => NOT_ALLOWED }));
+    global.fetch = spy as unknown as typeof fetch;
+
+    await expect(apiFetch('/appointments', { token: T })).rejects.toMatchObject({
+      status: 403,
+      code: 'LOCATION_NOT_ALLOWED',
+    });
+    expect(spy).toHaveBeenCalledTimes(2);
+  });
+
+  it('si la sede enviada SÍ está en el claim, el 403 es del recurso: no toca la sede', async () => {
+    // La API lanza el mismo código al abrir una cita de otra sede. La sede
+    // activa (l1) sigue siendo válida y no debe perderse.
+    setActiveLocationId('l1');
+    const spy = jest.fn(async () => ({ ok: false, status: 403, json: async () => NOT_ALLOWED }));
+    global.fetch = spy as unknown as typeof fetch;
+
+    await expect(apiFetch('/appointments/apt-l3', { token: T })).rejects.toMatchObject({
+      status: 403,
+      code: 'LOCATION_NOT_ALLOWED',
+    });
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(getActiveLocationId()).toBe('l1');
+  });
+
+  it('sin claim `loc` (todas las sedes) la cabecera no puede ser la culpable: no reintenta', async () => {
+    setActiveLocationId('l1');
+    const spy = jest.fn(async () => ({ ok: false, status: 403, json: async () => NOT_ALLOWED }));
+    global.fetch = spy as unknown as typeof fetch;
+
+    await expect(apiFetch('/appointments/apt-l3', { token: 'T' })).rejects.toMatchObject({
+      status: 403,
+    });
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(getActiveLocationId()).toBe('l1');
+  });
+
+  it('otro 403 (rol sin permiso) NO toca la sede guardada', async () => {
+    setActiveLocationId('sede-viva');
+    const spy = jest.fn(async () => ({
+      ok: false,
+      status: 403,
+      json: async () => ({ statusCode: 403, message: 'Forbidden resource' }),
+    }));
+    global.fetch = spy as unknown as typeof fetch;
+
+    await expect(apiFetch('/staff', { token: 'T' })).rejects.toMatchObject({ status: 403 });
+    expect(spy).toHaveBeenCalledTimes(1);
+    expect(getActiveLocationId()).toBe('sede-viva');
+  });
+});
+
 describe('apiFetch — cuerpo de error (DX-063)', () => {
   const realFetch = global.fetch;
   beforeEach(() => useAuthStore.getState().clear());

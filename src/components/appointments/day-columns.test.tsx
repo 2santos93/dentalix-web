@@ -23,9 +23,9 @@ if (typeof window.PointerEvent === 'undefined') {
 
 const DATE = '2031-03-03'; // lunes
 const providers = [
-  { userId: 'prov-1', fullName: 'Dra. Ana Ríos', role: 'DENTIST' as const },
-  { userId: 'prov-2', fullName: 'Dr. Luis Gómez', role: 'DENTIST' as const },
-  { userId: 'prov-3', fullName: 'Dra. Sara Paz', role: 'ADMIN' as const },
+  { userId: 'prov-1', fullName: 'Dra. Ana Ríos', role: 'DENTIST' as const, locationIds: null },
+  { userId: 'prov-2', fullName: 'Dr. Luis Gómez', role: 'DENTIST' as const, locationIds: null },
+  { userId: 'prov-3', fullName: 'Dra. Sara Paz', role: 'ADMIN' as const, locationIds: null },
 ];
 const hours: BusinessHours = {
   timezone: 'America/Bogota',

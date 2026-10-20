@@ -11,6 +11,7 @@ import {
 } from '@/lib/treatment-plans/plan-options-api';
 import { followUpWhatsAppHref } from '@/lib/treatment-plans/plan-options';
 import { listLocations, type ClinicLocation } from '@/lib/locations/locations-api';
+import { getTokenAllowedLocationIds } from '@/lib/auth/token-role';
 import { getActiveLocationId } from '@/lib/locations/location-store';
 import { fetchClinicName } from '@/lib/clinic-branding';
 import { formatCurrency } from '@/lib/format/currency';
@@ -31,6 +32,7 @@ const copy = {
   description:
     'Presupuestos presentados que el paciente aún no acepta y sin cita agendada: llámalo o escríbele antes de que se enfríen.',
   scopeAll: 'Todas las sedes',
+  scopeMine: 'Mis sedes',
   scopeLocation: (name: string) => `Presentados en ${name}`,
   ageLabel: 'Presentados hace más de',
   ageOption: (days: number) => `${days} días`,
@@ -169,7 +171,10 @@ export function PendingFollowUpView({ token }: PendingFollowUpViewProps) {
         meta={
           <p className="mt-3 inline-flex max-w-[68ch] items-center gap-2 rounded-lg bg-surface-2 px-3 py-1.5 text-sm text-muted">
             <Building2 aria-hidden className="size-4 shrink-0 text-muted/80" />
-            <span>{activeLocation ? copy.scopeLocation(activeLocation.name) : copy.scopeAll}</span>
+            <span>{activeLocation ? copy.scopeLocation(activeLocation.name)
+                : getTokenAllowedLocationIds(token) !== null
+                  ? copy.scopeMine
+                  : copy.scopeAll}</span>
           </p>
         }
       />

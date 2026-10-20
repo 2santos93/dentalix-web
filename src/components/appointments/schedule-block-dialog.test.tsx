@@ -15,10 +15,18 @@ jest.mock('../../lib/appointments/schedule-blocks-api', () => ({
 const mockedCreate = createScheduleBlock as jest.MockedFunction<typeof createScheduleBlock>;
 const mockedAffected = listAffectedAppointments as jest.MockedFunction<typeof listAffectedAppointments>;
 
+const tokenWithLoc = (loc: string[]): string => {
+  const b64url = (value: string) =>
+    btoa(value).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  return `${b64url('{"alg":"HS256"}')}.${b64url(
+    JSON.stringify({ sub: 'u1', role: 'RECEPTION', loc }),
+  )}.firma`;
+};
+
 const DAY = '2031-03-04';
 const staff = [
-  { userId: 'prov-1', fullName: 'Dra. Ana Ríos', role: 'DENTIST' as const },
-  { userId: 'prov-2', fullName: 'Dr. Luis Gómez', role: 'DENTIST' as const },
+  { userId: 'prov-1', fullName: 'Dra. Ana Ríos', role: 'DENTIST' as const, locationIds: null },
+  { userId: 'prov-2', fullName: 'Dr. Luis Gómez', role: 'DENTIST' as const, locationIds: null },
 ];
 const locations = [
   { id: 'loc-1', name: 'Sede principal', address: null, country: 'CO' as const, isActive: true, timeZone: 'America/Bogota', createdAt: '' },
@@ -171,5 +179,51 @@ describe('ScheduleBlockDialog (DX-122)', () => {
     await userEvent.click(screen.getByRole('button', { name: 'Bloquear' }));
     expect(await screen.findByText('Completa el profesional o la sede, y las fechas.')).toBeInTheDocument();
     expect(screen.getByLabelText('Desde')).not.toBeRequired();
+  });
+
+  it('miembro acotado a sedes: sin «Todas las sedes» y el bloqueo de profesional lleva sede (DX-089)', async () => {
+    const token = tokenWithLoc(['loc-1', 'loc-2']);
+    const onCreated = renderDialog({ token });
+    const select = screen.getByLabelText('Sede');
+    expect(within(select).queryByRole('option', { name: 'Todas las sedes' })).not.toBeInTheDocument();
+    expect(select).toHaveValue('loc-1');
+    expect(
+      screen.getByText('Como tu acceso está acotado a sedes, el bloqueo debe tener sede.'),
+    ).toBeInTheDocument();
+    await userEvent.click(screen.getByRole('button', { name: 'Bloquear' }));
+    await waitFor(() => expect(onCreated).toHaveBeenCalledWith(created));
+    expect(mockedCreate).toHaveBeenCalledWith(
+      token,
+      expect.objectContaining({ providerId: 'prov-2', locationId: 'loc-1' }),
+    );
+  });
+
+  it('miembro acotado sin sede activa: propone la primera permitida', async () => {
+    renderDialog({ token: tokenWithLoc(['loc-2']), activeLocationId: null });
+    expect(screen.getByLabelText('Sede')).toHaveValue('loc-1');
+  });
+
+  it('sin restricción conserva «Todas las sedes» y no muestra el aviso', () => {
+    renderDialog();
+    expect(screen.getByRole('option', { name: 'Todas las sedes' })).toBeInTheDocument();
+    expect(screen.getByLabelText('Sede')).toHaveValue('');
+    expect(screen.queryByText(/acotado a sedes/)).not.toBeInTheDocument();
+  });
+
+  it('miembro acotado sin sedes disponibles: avisa, deshabilita y no pide nada (DX-089)', async () => {
+    renderDialog({ token: tokenWithLoc(['loc-1']), locations: [], activeLocationId: null });
+    expect(screen.getByText('No tienes ninguna sede disponible para el bloqueo.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Bloquear' })).toBeDisabled();
+    expect(mockedAffected).not.toHaveBeenCalled();
+    expect(mockedCreate).not.toHaveBeenCalled();
+  });
+
+  it('miembro acotado con sede activa obsoleta: envía la primera permitida (DX-089)', async () => {
+    const token = tokenWithLoc(['loc-1']);
+    const onCreated = renderDialog({ token, activeLocationId: 'loc-borrada' });
+    expect(screen.getByLabelText('Sede')).toHaveValue('loc-1');
+    await userEvent.click(screen.getByRole('button', { name: 'Bloquear' }));
+    await waitFor(() => expect(onCreated).toHaveBeenCalledWith(created));
+    expect(mockedCreate).toHaveBeenCalledWith(token, expect.objectContaining({ locationId: 'loc-1' }));
   });
 });

@@ -55,8 +55,8 @@ const endodoncia = {
 };
 
 const staff = [
-  { userId: 'staff-1', fullName: 'Dra. Ana Ríos', role: 'DENTIST' as const },
-  { userId: 'staff-2', fullName: 'Dr. Luis Gómez', role: 'DENTIST' as const },
+  { userId: 'staff-1', fullName: 'Dra. Ana Ríos', role: 'DENTIST' as const, locationIds: null },
+  { userId: 'staff-2', fullName: 'Dr. Luis Gómez', role: 'DENTIST' as const, locationIds: null },
 ];
 
 const patientsPage = {

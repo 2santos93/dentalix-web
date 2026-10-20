@@ -1,4 +1,5 @@
 import { useAuthStore } from '@/lib/auth/auth-store';
+import { getTokenAllowedLocationIds } from '@/lib/auth/token-role';
 import {
   getActiveLocationId,
   setActiveLocationId,
@@ -17,6 +18,10 @@ const REFRESH_PATH = '/auth/refresh';
 // acoplamiento a la respuesta del backend: si allí cambia el texto, aquí deja de
 // autocurarse (los tests de `client.test.ts` lo fijan por si acaso).
 const UNKNOWN_LOCATION = 'unknown location';
+
+// DX-089: código estable del 403 con el que la API rechaza una sede que el
+// miembro ya no puede usar (un ADMIN le acotó las sedes y su sesión se renovó).
+const LOCATION_NOT_ALLOWED = 'LOCATION_NOT_ALLOWED';
 
 interface ApiOptions {
   method?: string;
@@ -301,12 +306,22 @@ async function doFetch(
     // pantallas que piden datos sin él. Se suelta la sede y se reintenta UNA
     // vez (`allowLocationReset: false`), ya sin la cabecera: eso devuelve la
     // vista consolidada, que es el comportamiento por defecto y siempre vale.
-    if (
-      res.status === 400 &&
-      allowLocationReset &&
-      sentLocationId &&
-      message.toLowerCase().includes(UNKNOWN_LOCATION)
-    ) {
+    //
+    // Lo mismo con una sede que existe pero ya no es del miembro (DX-089, 403
+    // LOCATION_NOT_ALLOWED): sin cabecera, la API responde sobre sus sedes
+    // permitidas, que siempre vale. OJO: la API lanza ese mismo código al
+    // tocar un RECURSO de otra sede (abrir una cita de l3 con l1 activa); ahí
+    // la sede activa es válida y no se suelta. Solo es la cabecera cuando la
+    // sede enviada queda fuera del claim `loc` del token que se envió.
+    const allowedBySentToken = getTokenAllowedLocationIds(opts.token);
+    const staleLocation =
+      (res.status === 400 && message.toLowerCase().includes(UNKNOWN_LOCATION)) ||
+      (res.status === 403 &&
+        code === LOCATION_NOT_ALLOWED &&
+        sentLocationId !== null &&
+        allowedBySentToken !== null &&
+        !allowedBySentToken.includes(sentLocationId));
+    if (staleLocation && allowLocationReset && sentLocationId) {
       setActiveLocationId(null);
       return doFetch(path, opts, allowRefresh, false);
     }

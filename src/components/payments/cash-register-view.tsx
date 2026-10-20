@@ -48,7 +48,7 @@ import { Button } from '@/components/ui/button';
 import { VoidPaymentModal } from '@/components/payments/void-payment-modal';
 import { PaymentReceiptDialog } from '@/components/payments/payment-receipt-dialog';
 import { useVoidPayment, voidPaymentSubject } from '@/components/payments/use-void-payment';
-import { getTokenRole } from '@/lib/auth/token-role';
+import { getTokenAllowedLocationIds, getTokenRole } from '@/lib/auth/token-role';
 import { cn } from '@/lib/utils';
 
 // Copy como constantes (i18n-ready), igual que el resto de vistas.
@@ -56,6 +56,7 @@ const copy = {
   title: 'Caja',
   description: 'Lo cobrado en la clínica en el período: cada abono, por método y moneda.',
   scopeAll: 'Todas las sedes',
+  scopeMine: 'Mis sedes',
   scopeLocation: (name: string) => `Caja de ${name}`,
   periodLabel: 'Período',
   presets: {
@@ -270,7 +271,14 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
       <PageHeader
         title={copy.title}
         description={copy.description}
-        meta={data ? <ScopeMarker location={data.scope.location} /> : null}
+        meta={
+          data ? (
+            <ScopeMarker
+              location={data.scope.location}
+              restricted={getTokenAllowedLocationIds(token) !== null}
+            />
+          ) : null
+        }
       />
 
       {tabs?.nav}
@@ -551,11 +559,17 @@ function RegisteredNote({ payment }: { payment: CashPayment }) {
  * respuesta (`scope.location`), no del selector: es la sede que el servidor
  * aplicó de verdad.
  */
-function ScopeMarker({ location }: { location: { id: string; name: string } | null }) {
+function ScopeMarker({
+  location,
+  restricted = false,
+}: {
+  location: { id: string; name: string } | null;
+  restricted?: boolean;
+}) {
   return (
     <p className="mt-3 inline-flex max-w-[68ch] items-center gap-2 rounded-lg bg-surface-2 px-3 py-1.5 text-sm text-muted">
       <Building2 aria-hidden className="size-4 shrink-0 text-muted/80" />
-      <span>{location ? copy.scopeLocation(location.name) : copy.scopeAll}</span>
+      <span>{location ? copy.scopeLocation(location.name) : restricted ? copy.scopeMine : copy.scopeAll}</span>
     </p>
   );
 }
