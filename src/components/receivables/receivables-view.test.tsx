@@ -180,6 +180,26 @@ describe('ReceivablesView (DX-145)', () => {
     await waitFor(() => expect(mockedAging).toHaveBeenLastCalledWith('tok', { page: 1 }));
   });
 
+  it('QA DX-241: un saldo mínimo que no se entiende dice por qué, enlazado al campo', async () => {
+    mockedAging.mockResolvedValue(page([row()]));
+    const user = userEvent.setup();
+    render(<ReceivablesView token="tok" />);
+    await screen.findByRole('table');
+    const field = screen.getByRole('textbox', { name: 'Saldo mínimo' });
+    await user.type(field, '1.50.0');
+    expect(field).toHaveAttribute('aria-invalid', 'true');
+    const errorId = field.getAttribute('aria-describedby') ?? '';
+    const error = document.getElementById(errorId);
+    expect(error).toBeVisible();
+    expect(error).toHaveTextContent(/No sabemos leer «1\.50\.0»/);
+    expect(error).toHaveTextContent(/no se filtra por saldo/);
+    await user.clear(field);
+    await user.type(field, '100.000');
+    expect(field).not.toHaveAttribute('aria-invalid');
+    expect(field).not.toHaveAttribute('aria-describedby');
+    expect(document.getElementById(errorId)).toBeNull();
+  });
+
   it('vacío: «No hay saldos vencidos en esta sede»', async () => {
     mockedAging.mockResolvedValue(page([]));
     render(<ReceivablesView token="tok" />);

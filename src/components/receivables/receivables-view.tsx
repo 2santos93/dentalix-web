@@ -20,6 +20,7 @@ import { CollectionNoteDialog } from '@/components/collections/collection-note-d
 import { PaymentPromiseDialog } from '@/components/collections/payment-promise-dialog';
 import { parseMoneyInput } from '@/lib/format/money';
 import { notifyError } from '@/components/errors/notify';
+import { InlineError } from '@/components/errors/inline-error';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
@@ -54,6 +55,7 @@ export const receivablesCopy = {
   ageLabel: 'Antigüedad',
   minBalanceLabel: 'Saldo mínimo',
   minBalancePlaceholder: 'Saldo mínimo',
+  minBalanceInvalid: (reason: string) => `Saldo mínimo: ${reason} Mientras, no se filtra por saldo.`,
   currencyLabel: 'Moneda',
   currencyAll: 'Todas las monedas',
   export: 'Exportar CSV',
@@ -232,8 +234,11 @@ export function ReceivablesView({ token }: { token: string }) {
   }, [minBalanceText, minBalance, currency]);
   // Lo que no se entiende no filtra: el campo lo marca para que no parezca
   // aplicado.
-  const minBalanceInvalid =
-    minBalanceText.trim() !== '' && parseMinBalance(minBalanceText, currency) === undefined;
+  // QA DX-241: y dice por qué, enlazado al campo.
+  const minBalanceParsed = parseMoneyInput(minBalanceText, currency === 'ALL' ? '' : currency);
+  const minBalanceError =
+    minBalanceText.trim() !== '' && !minBalanceParsed.ok ? receivablesCopy.minBalanceInvalid(minBalanceParsed.message) : null;
+  const minBalanceErrorId = 'receivables-min-balance-error';
 
   async function exportCsv() {
     setExporting(true);
@@ -296,7 +301,8 @@ export function ReceivablesView({ token }: { token: string }) {
                 placeholder={receivablesCopy.minBalancePlaceholder}
                 value={minBalanceText}
                 onChange={(e) => setMinBalanceText(e.target.value)}
-                aria-invalid={minBalanceInvalid ? true : undefined}
+                aria-invalid={minBalanceError ? true : undefined}
+                aria-describedby={minBalanceError ? minBalanceErrorId : undefined}
                 autoComplete="off"
                 className="tabular-nums sm:w-40"
               />
@@ -348,6 +354,11 @@ export function ReceivablesView({ token }: { token: string }) {
                     </option>
                   ))}
                 </select>
+              ) : null}
+              {minBalanceError ? (
+                <InlineError id={minBalanceErrorId} className="text-xs sm:basis-full">
+                  {minBalanceError}
+                </InlineError>
               ) : null}
             </div>
             {isAdmin ? (
