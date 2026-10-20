@@ -40,7 +40,7 @@ describe('arqueo en pantalla (DX-027)', () => {
     expect(parseCounted(' 80000 ', 'COP')).toBe(80_000);
     expect(parseCounted('1.500.000', 'COP')).toBe(1_500_000);
     expect(parseCounted('1.005', 'COP')).toBe(1005);
-    expect(parseCounted('1,5', 'COP')).toBeNull();
+    expect(parseCounted('1,5', 'COP')).toBe(1.5);
     expect(parseCounted('-1', 'USD')).toBeNull();
     expect(parseCounted('1.50.0', 'USD')).toBeNull();
     expect(parseCounted('abc', 'USD')).toBeNull();

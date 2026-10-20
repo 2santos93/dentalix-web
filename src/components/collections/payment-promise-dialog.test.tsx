@@ -73,13 +73,15 @@ describe('PaymentPromiseDialog (DX-150)', () => {
     expect(mockedCreate).not.toHaveBeenCalled();
   });
 
-  it('DX-241: COP no lleva decimales', async () => {
+  it('DX-241: COP admite céntimos como la API («150.000,50» → 150000,5)', async () => {
+    mockedCreate.mockResolvedValue({ id: 'pp1' } as never);
     setup();
-    await userEvent.type(screen.getByLabelText('Importe'), '150,50');
+    await userEvent.type(screen.getByLabelText('Importe'), '150.000,50');
     await userEvent.type(screen.getByLabelText('Pagará hasta el'), inDays(1));
     await userEvent.click(screen.getByRole('button', { name: 'Guardar compromiso' }));
-    expect(await screen.findByText('COP no lleva decimales: escribe el importe sin céntimos.')).toBeInTheDocument();
-    expect(mockedCreate).not.toHaveBeenCalled();
+    await waitFor(() =>
+      expect(mockedCreate).toHaveBeenCalledWith('tok', 'pat-1', expect.objectContaining({ amount: 150000.5, currency: 'COP' })),
+    );
   });
 
   it('no admite una fecha pasada', async () => {

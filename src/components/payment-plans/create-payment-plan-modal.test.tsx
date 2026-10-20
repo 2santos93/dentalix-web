@@ -118,6 +118,22 @@ it('DX-241: un total ambiguo no se envía y el motivo sale junto al campo', asyn
   expect(mockedCreate).not.toHaveBeenCalled();
 });
 
+it('DX-241: un facturable en COP con céntimos se propone y se envía sin tocarlo', async () => {
+  const user = userEvent.setup();
+  mockedCreate.mockResolvedValue({} as Awaited<ReturnType<typeof createPaymentPlan>>);
+  renderModal({ plan: { id: 'plan-1', currency: 'COP', billable: 175000.5 } });
+  const dialog = screen.getByRole('dialog');
+  expect(within(dialog).getByLabelText('Total a financiar')).toHaveValue('175000,5');
+  await user.click(within(dialog).getByRole('button', { name: 'Crear' }));
+  await waitFor(() =>
+    expect(mockedCreate).toHaveBeenCalledWith(
+      'tok',
+      'plan-1',
+      expect.objectContaining({ downPayment: 0, totalToFinance: 175000.5 }),
+    ),
+  );
+});
+
 it('un 409 se explica en español y el modal sigue abierto', async () => {
   const user = userEvent.setup();
   mockedCreate.mockRejectedValue(

@@ -9,30 +9,34 @@
  * - Lo que no encaja (grupos que no son de 3, separadores mezclados, un
  *   separador suelto) es ambiguo: se devuelve un error con el motivo y el
  *   formulario no envía nada. Mejor preguntar que guardar 100 veces más.
- * - Los decimales máximos salen de la moneda (`currencyDecimals`).
+ * - Hasta 2 decimales en TODAS las monedas, también COP y CLP: la API y la
+ *   base guardan cualquier importe con céntimos (`@IsMoney`, `Decimal(…, 2)`)
+ *   y el catálogo de monedas no define otra unidad. Así un precio o un saldo
+ *   en COP con céntimos que se precarga en un campo se guarda sin tocarlo.
+ *   (El redondeo a la unidad de COP es solo de los descuentos en bloque:
+ *   `currencyDecimals` en `discount-rules.ts`.)
+ * - Un importe pegado tal como lo pinta la app («1.500.000,50 US$»,
+ *   «150.000,00 COP», «150,50 €») se lee igual: se quita el símbolo o el
+ *   código de la moneda del campo, nunca el de otra.
+ * - Hasta el tope de la API (`MONEY_INPUT_MAX`, 10 enteros).
  *
- * La API sigue recibiendo un `number` y es la autoridad (importe > 0,
- * decimales por moneda): esto solo evita mandarle una cifra que no es la que
+ * La API sigue recibiendo un `number` y es la autoridad (importe > 0, como
+ * mucho 2 decimales): esto solo evita mandarle una cifra que no es la que
  * la persona quiso escribir.
  */
 
-/**
- * Monedas que se manejan sin céntimos: las mismas que la API redondea a la
- * unidad (`discount-policy.ts`, COP sin decimales, EUR a céntimos).
- */
-const ZERO_DECIMAL_CURRENCIES = new Set(['COP', 'CLP', 'JPY', 'KRW', 'PYG']);
+/** Decimales que admite un importe escrito, en cualquier moneda. */
+const MONEY_DECIMALS = 2;
 
-/** Decimales que admite un importe en `currency` (2 si no se conoce). */
-export function currencyDecimals(currency: string): 0 | 2 {
-  return ZERO_DECIMAL_CURRENCIES.has(currency.toUpperCase()) ? 0 : 2;
-}
+/** Tope de la API para un importe (`MONEY_MAX` de `bounded-decimal.ts`). */
+export const MONEY_INPUT_MAX = 9_999_999_999.99;
 
 export const moneyInputCopy = {
   empty: 'Escribe un importe.',
   invalid: 'Escribe solo cifras, con punto o coma para los decimales.',
   ambiguous: (text: string) =>
     `No sabemos leer «${text}»: separa los miles en grupos de 3 (1.500.000) y los decimales con 1 o 2 cifras (150,50).`,
-  noDecimals: (currency: string) => `${currency} no lleva decimales: escribe el importe sin céntimos.`,
+  tooLarge: 'El importe es demasiado grande: como mucho 9.999.999.999,99.',
   maxDecimals: (max: number) =>
     max === 0 ? 'Escribe un número sin decimales.' : `Admite hasta ${max} decimales.`,
   /** La vista previa bajo el campo: lo que se va a guardar, ya formateado. */
@@ -41,7 +45,7 @@ export const moneyInputCopy = {
 
 export type DecimalParseResult =
   | { ok: true; value: number }
-  | { ok: false; reason: 'empty' | 'invalid' | 'ambiguous' | 'decimals'; message: string };
+  | { ok: false; reason: 'empty' | 'invalid' | 'ambiguous' | 'decimals' | 'tooLarge'; message: string };
 
 const SEPARATORS = /[., ]/;
 const DIGITS = /^\d+$/;
@@ -49,6 +53,8 @@ const DIGITS = /^\d+$/;
 /** La parte entera, con o sin miles: `null` si los grupos no son de 3. */
 function integerDigits(text: string, decimalSeparator: string | null): string | null {
   if (DIGITS.test(text)) return text;
+  // «.5» / «,50»: sin parte entera, el separador solo puede ser el decimal.
+  if (text === '' && decimalSeparator) return '0';
   const separator = text.match(SEPARATORS)?.[0];
   if (!separator || separator === decimalSeparator) return null;
   const groups = text.split(separator);
@@ -56,6 +62,60 @@ function integerDigits(text: string, decimalSeparator: string | null): string | 
   if (!/^[1-9]\d{0,2}$/.test(first)) return null;
   if (!rest.every((group) => /^\d{3}$/.test(group))) return null;
   return groups.join('');
+}
+
+/** Los espacios duros de Intl (U+00A0, U+202F) cuentan como espacio. */
+function normalizeSpaces(text: string): string {
+  return text.replace(/[\u00a0\u202f]/g, ' ').trim();
+}
+
+/**
+ * Quita el símbolo o el código de la moneda del campo, delante o detrás, como
+ * los pinta `formatCurrency` («150,50 US$», «150.000,00 COP», «150,50 €») o
+ * como se escriben a mano («$ 150,50»). El código de otra moneda se queda y el
+ * texto no se entiende: mejor eso que guardar euros como dólares.
+ */
+function stripCurrency(raw: string, currency: string): string {
+  const text = normalizeSpaces(raw);
+  const affixes = currencyAffixes(currency);
+  const lower = text.toLowerCase();
+  for (const affix of affixes) {
+    if (lower.startsWith(affix)) {
+      const rest = text.slice(affix.length).trim();
+      if (/\d/.test(rest)) return rest;
+    }
+    if (lower.endsWith(affix)) {
+      const rest = text.slice(0, -affix.length).trim();
+      if (/\d/.test(rest)) return rest;
+    }
+  }
+  return text;
+}
+
+const affixCache = new Map<string, string[]>();
+
+/** Cómo se puede escribir la moneda junto al importe: «$», «usd», «us$», «€»… */
+function currencyAffixes(currency: string): string[] {
+  const cached = affixCache.get(currency);
+  if (cached) return cached;
+  const affixes = new Set(['$']);
+  if (/^[a-z]{3}$/i.test(currency)) {
+    affixes.add(currency.toLowerCase());
+    for (const currencyDisplay of ['symbol', 'narrowSymbol'] as const) {
+      try {
+        const symbol = new Intl.NumberFormat('es', { style: 'currency', currency, currencyDisplay })
+          .formatToParts(0)
+          .find((part) => part.type === 'currency')?.value;
+        if (symbol) affixes.add(symbol.toLowerCase());
+      } catch {
+        // Código que Intl no conoce: basta con el propio código.
+      }
+    }
+  }
+  // Primero los más largos: «us$» antes que «$».
+  const sorted = [...affixes].sort((x, y) => y.length - x.length);
+  affixCache.set(currency, sorted);
+  return sorted;
 }
 
 /**
@@ -66,7 +126,7 @@ function integerDigits(text: string, decimalSeparator: string | null): string | 
 export function parseDecimalInput(raw: string, maxDecimals: number): DecimalParseResult {
   // Los espacios duros que trae un importe copiado de la propia app
   // («150.000,00 COP» lleva U+00A0) cuentan como espacio.
-  const text = raw.replace(/[  ]/g, ' ').trim();
+  const text = normalizeSpaces(raw);
   if (text === '') return { ok: false, reason: 'empty', message: moneyInputCopy.empty };
   if (!/^[\d., ]+$/.test(text)) return { ok: false, reason: 'invalid', message: moneyInputCopy.invalid };
   const ambiguous = { ok: false as const, reason: 'ambiguous' as const, message: moneyInputCopy.ambiguous(text) };
@@ -89,10 +149,9 @@ export function parseDecimalInput(raw: string, maxDecimals: number): DecimalPars
  * Ver la regla en la cabecera del fichero.
  */
 export function parseMoneyInput(text: string, currency: string): DecimalParseResult {
-  const max = currencyDecimals(currency);
-  const result = parseDecimalInput(text, max);
-  if (!result.ok && result.reason === 'decimals' && max === 0) {
-    return { ...result, message: moneyInputCopy.noDecimals(currency.toUpperCase()) };
+  const result = parseDecimalInput(stripCurrency(text, currency), MONEY_DECIMALS);
+  if (result.ok && result.value > MONEY_INPUT_MAX) {
+    return { ok: false, reason: 'tooLarge', message: moneyInputCopy.tooLarge };
   }
   return result;
 }
@@ -103,5 +162,7 @@ export function parseMoneyInput(text: string, currency: string): DecimalParseRes
  * `parseMoneyInput` lo vuelve a leer igual.
  */
 export function moneyInputText(amount: number): string {
-  return String(amount).replace('.', ',');
+  // Redondeado a céntimos: un total sumado en el cliente puede traer ruido de
+  // coma flotante (0,1 + 0,2 = 0,30000000000000004) que no se volvería a leer.
+  return String(Math.round(amount * 100) / 100).replace('.', ',');
 }

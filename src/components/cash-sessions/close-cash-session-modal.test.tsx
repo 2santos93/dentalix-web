@@ -174,6 +174,29 @@ describe('CloseCashSessionModal (DX-027)', () => {
     expect(input).not.toHaveAttribute('aria-invalid');
   });
 
+  it('DX-241: lo contado en COP admite céntimos (lo esperado puede traerlos)', async () => {
+    const user = userEvent.setup();
+    mockedClose.mockResolvedValue(closedCashSessionFixture());
+    renderModal();
+    await user.type(screen.getByLabelText('Contado en efectivo (COP)'), '80.000,50');
+    await user.type(screen.getByLabelText('Contado en tarjeta (COP)'), '25.000');
+    const reason = screen.queryByLabelText('Motivo de la diferencia');
+    if (reason) await user.type(reason, 'Céntimos del cambio');
+    await user.click(screen.getByRole('button', { name: 'Cerrar caja' }));
+    await waitFor(() =>
+      expect(mockedClose).toHaveBeenCalledWith(
+        'tok',
+        'cs-1',
+        expect.objectContaining({
+          counts: [
+            { currency: 'COP', method: 'CASH', counted: 80_000.5 },
+            { currency: 'COP', method: 'CARD', counted: 25_000 },
+          ],
+        }),
+      ),
+    );
+  });
+
   it('DX-241: «80.000» en COP es ochenta mil, como en un abono', async () => {
     const user = userEvent.setup();
     mockedClose.mockResolvedValue(closedCashSessionFixture());
