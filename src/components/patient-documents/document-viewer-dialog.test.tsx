@@ -70,4 +70,19 @@ describe('DocumentViewerDialog (DX-151)', () => {
     await user.click(screen.getByRole('button', { name: 'Reintentar' }));
     expect(await screen.findByTitle('Vista previa de panoramica.pdf')).toBeInTheDocument();
   });
+
+  it('«Abrir en otra pestaña» pide una URL nueva en cada clic (la anterior caduca)', async () => {
+    const user = setupUser();
+    const fakeTab = { opener: {} as unknown, location: { replace: jest.fn() }, close: jest.fn() };
+    const openSpy = jest.spyOn(window, 'open').mockReturnValue(fakeTab as unknown as Window);
+    renderViewer();
+    await screen.findByTitle('Vista previa de panoramica.pdf');
+    mockedUrl.mockResolvedValueOnce({ url: 'http://files/fresca', expiresAt: '', disposition: 'inline' });
+    await user.click(screen.getByRole('link', { name: 'Abrir en otra pestaña' }));
+    expect(openSpy).toHaveBeenCalledWith('', '_blank');
+    expect(mockedUrl).toHaveBeenCalledTimes(2);
+    expect(fakeTab.opener).toBeNull();
+    expect(fakeTab.location.replace).toHaveBeenCalledWith('http://files/fresca');
+    openSpy.mockRestore();
+  });
 });

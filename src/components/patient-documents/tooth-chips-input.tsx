@@ -23,6 +23,11 @@ interface ToothChipsInputProps {
   value: string[];
   onChange: (teeth: string[]) => void;
   disabled?: boolean;
+  /**
+   * `true` mientras lo escrito no es un código FDI válido (se queda en el campo
+   * con el error): quien lo usa no debe enviar el formulario así.
+   */
+  onInvalidChange?: (invalid: boolean) => void;
 }
 
 /**
@@ -30,10 +35,22 @@ interface ToothChipsInputProps {
  * y pinta la carta entera: en cada fila de la cola sería demasiado. Este acepta
  * «11, 21» tecleados o pegados, valida cada código y descarta repetidos.
  */
-export function ToothChipsInput({ id, label, value, onChange, disabled }: ToothChipsInputProps) {
+export function ToothChipsInput({
+  id,
+  label,
+  value,
+  onChange,
+  disabled,
+  onInvalidChange,
+}: ToothChipsInputProps) {
   const [draft, setDraft] = useState('');
   const [error, setError] = useState<string | null>(null);
   const hintId = `${id}-hint`;
+
+  function showError(message: string | null) {
+    setError(message);
+    onInvalidChange?.(message !== null);
+  }
 
   function commit(raw: string): boolean {
     const parts = raw
@@ -44,17 +61,17 @@ export function ToothChipsInput({ id, label, value, onChange, disabled }: ToothC
     const next = [...value];
     for (const part of parts) {
       if (!isFdiToothNumber(part)) {
-        setError(copy.invalid(part));
+        showError(copy.invalid(part));
         return false;
       }
       if (next.includes(part)) continue;
       if (next.length >= MAX_DOCUMENT_TEETH) {
-        setError(copy.full);
+        showError(copy.full);
         return false;
       }
       next.push(part);
     }
-    setError(null);
+    showError(null);
     onChange(next);
     return true;
   }
@@ -85,7 +102,7 @@ export function ToothChipsInput({ id, label, value, onChange, disabled }: ToothC
               disabled={disabled}
               aria-label={copy.remove(tooth)}
               onClick={() => onChange(value.filter((t) => t !== tooth))}
-              className="inline-flex size-8 items-center justify-center rounded-full text-muted hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              className="inline-flex size-11 items-center sm:size-8 justify-center rounded-full text-muted hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             >
               <X className="size-3.5" aria-hidden />
             </button>
@@ -103,13 +120,13 @@ export function ToothChipsInput({ id, label, value, onChange, disabled }: ToothC
           aria-invalid={error ? true : undefined}
           onChange={(e) => {
             setDraft(e.target.value);
-            if (error) setError(null);
+            if (error) showError(null);
           }}
           onKeyDown={handleKeyDown}
           onBlur={() => {
             if (commit(draft)) setDraft('');
           }}
-          className={cn(fieldClass, 'h-10 w-24 min-w-0 flex-1 tabular-nums sm:flex-none')}
+          className={cn(fieldClass, 'h-11 w-24 min-w-0 flex-1 tabular-nums sm:h-10 sm:flex-none')}
         />
       </div>
       <p id={hintId} className={cn('text-xs', error ? 'text-danger' : 'text-muted')} role={error ? 'alert' : undefined}>

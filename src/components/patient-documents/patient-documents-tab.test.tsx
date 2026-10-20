@@ -1,5 +1,8 @@
+import { useState } from 'react';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { PatientDocumentsTab } from './patient-documents-tab';
+import { PatientTabPanel } from '@/components/patients/patient-tab-panel';
+import type { PatientDetailTabKey } from '@/components/patients/patient-detail-tabs';
 import {
   getPatientDocumentUrl,
   listPatientDocuments,
@@ -291,6 +294,10 @@ describe('PatientDocumentsTab (DX-151)', () => {
     const dup = screen.getByRole('listitem', { name: 'dup.pdf' });
     expect(await within(dup).findByRole('alert')).toHaveTextContent('Este archivo ya está en la ficha del paciente.');
     expect(within(dup).getByText('Error')).toBeInTheDocument();
+    expect(mockedNotify).toHaveBeenCalledWith(
+      'No se subió «dup.pdf». Este archivo ya está en la ficha del paciente.',
+      expect.objectContaining({ onRetry: expect.any(Function) }),
+    );
     expect(within(screen.getByRole('listitem', { name: 'ok.pdf' })).getByText('Subido')).toBeInTheDocument();
 
     mockedUpload.mockResolvedValueOnce(makeDocument({ id: 'dup2', originalName: 'dup.pdf' }));
@@ -315,10 +322,126 @@ describe('PatientDocumentsTab (DX-151)', () => {
 
   it('desde el odontograma (?tooth=) la fila nueva trae ese diente', async () => {
     const user = setupUser();
-    render(<PatientDocumentsTab token={DENTIST} patientId="p1" initialTooth="36" />);
+    render(<PatientDocumentsTab token={DENTIST} patientId="p1" initialTooth="36" tagUploadsWithTooth />);
     await screen.findByText('Ningún documento con estos filtros');
     await user.upload(fileInput(), pdf('rx36.pdf'));
     const row = screen.getByRole('listitem', { name: 'rx36.pdf' });
     expect(within(row).getByRole('button', { name: 'Quitar el diente 36' })).toBeInTheDocument();
+  });
+
+  it('con ?tooth= pero sin venir de «Documentos del diente», solo se filtra: la fila nueva no trae diente', async () => {
+    const user = setupUser();
+    render(<PatientDocumentsTab token={DENTIST} patientId="p1" initialTooth="36" />);
+    await screen.findByText('Ningún documento con estos filtros');
+    await user.upload(fileInput(), pdf('rx.pdf'));
+    const row = screen.getByRole('listitem', { name: 'rx.pdf' });
+    expect(within(row).queryByRole('button', { name: /quitar el diente/i })).not.toBeInTheDocument();
+  });
+
+  it('un diente no válido sin confirmar bloquea «Subir» hasta corregirlo', async () => {
+    const user = setupUser();
+    render(<PatientDocumentsTab token={DENTIST} patientId="p1" />);
+    await screen.findByText('Sin documentos');
+    await user.upload(fileInput(), pdf('rx.pdf'));
+    const row = screen.getByRole('listitem', { name: 'rx.pdf' });
+    await user.type(within(row).getByLabelText('Dientes (opcional)'), '99');
+    await user.tab();
+    expect(within(row).getByText('«99» no es un código FDI válido.')).toBeInTheDocument();
+    expect(within(row).getByRole('button', { name: 'Subir rx.pdf' })).toBeDisabled();
+    await user.clear(within(row).getByLabelText('Dientes (opcional)'));
+    await user.type(within(row).getByLabelText('Dientes (opcional)'), '11{Enter}');
+    expect(within(row).getByRole('button', { name: 'Subir rx.pdf' })).toBeEnabled();
+  });
+
+  it('como mucho 3 subidas a la vez; la cuarta queda «En espera» y arranca al liberarse un hueco', async () => {
+    const user = setupUser();
+    const finishers: (() => void)[] = [];
+    mockedUpload.mockImplementation(
+      (_t, _p, input) =>
+        new Promise((resolve) => {
+          finishers.push(() => resolve(makeDocument({ id: input.file.name, originalName: input.file.name })));
+        }),
+    );
+    render(<PatientDocumentsTab token={DENTIST} patientId="p1" />);
+    await screen.findByText('Sin documentos');
+    await user.upload(fileInput(), [pdf('a.pdf'), pdf('b.pdf'), pdf('c.pdf'), pdf('d.pdf')]);
+    await user.click(screen.getByRole('button', { name: 'Subir 4 archivos' }));
+    expect(mockedUpload).toHaveBeenCalledTimes(3);
+    expect(within(screen.getByRole('listitem', { name: 'd.pdf' })).getByText('En espera…')).toBeInTheDocument();
+    await act(async () => finishers[0]());
+    expect(mockedUpload).toHaveBeenCalledTimes(4);
+  });
+
+  it('anuncia a lectores de pantalla «<nombre> subido» y «<nombre>: error»', async () => {
+    const user = setupUser();
+    mockedUpload.mockImplementation(async (_t, _p, input) => {
+      if (input.file.name === 'mal.pdf') throw new ApiError(400, 'El contenido no coincide con el tipo.');
+      return makeDocument({ id: 'ok', originalName: input.file.name });
+    });
+    render(<PatientDocumentsTab token={DENTIST} patientId="p1" />);
+    await screen.findByText('Sin documentos');
+    await user.upload(fileInput(), pdf('bien.pdf'));
+    await user.click(screen.getByRole('button', { name: 'Subir bien.pdf' }));
+    const live = await screen.findByText('bien.pdf subido');
+    expect(live).toHaveAttribute('aria-live', 'polite');
+    await user.upload(fileInput(), pdf('mal.pdf'));
+    await user.click(screen.getByRole('button', { name: 'Subir mal.pdf' }));
+    expect(await screen.findByText('mal.pdf: error')).toHaveAttribute('aria-live', 'polite');
+  });
+});
+
+/** Como la página: el panel de «Documentos» y otra pestaña; la cola retiene el panel. */
+function TabsHarness({ active }: { active: PatientDetailTabKey }) {
+  const [pending, setPending] = useState(false);
+  return (
+    <PatientTabPanel tab="documents" activeTab={active} register={() => {}} keepMounted={pending}>
+      <PatientDocumentsTab token={DENTIST} patientId="p1" onPendingChange={setPending} />
+    </PatientTabPanel>
+  );
+}
+
+describe('PatientDocumentsTab dentro de la ficha: cambiar de pestaña (DX-151)', () => {
+  beforeEach(() => {
+    mockedList.mockReset().mockResolvedValue([]);
+    mockedUpload.mockReset();
+    mockedNotify.mockReset();
+  });
+
+  it('una subida que falla con otra pestaña activa se ve al volver («Error» + «Reintentar») y avisa con un toast', async () => {
+    const user = setupUser();
+    let fail: ((err: unknown) => void) | undefined;
+    mockedUpload.mockImplementation(
+      () =>
+        new Promise((_resolve, reject) => {
+          fail = reject;
+        }),
+    );
+    const { rerender } = render(<TabsHarness active="documents" />);
+    await screen.findByText('Sin documentos');
+    await user.upload(fileInput(), [pdf('rx1.pdf'), pdf('rx2.pdf')]);
+    await user.click(screen.getByRole('button', { name: 'Subir rx1.pdf' }));
+
+    rerender(<TabsHarness active="odontogram" />);
+    expect(screen.getByRole('tabpanel', { hidden: true })).toHaveAttribute('hidden');
+    await act(async () => fail?.(new ApiError(409, 'Este archivo ya está en la ficha del paciente.')));
+    expect(mockedNotify).toHaveBeenCalledWith(
+      'No se subió «rx1.pdf». Este archivo ya está en la ficha del paciente.',
+      expect.objectContaining({ onRetry: expect.any(Function) }),
+    );
+
+    rerender(<TabsHarness active="documents" />);
+    const row = screen.getByRole('listitem', { name: 'rx1.pdf' });
+    expect(within(row).getByText('Error')).toBeInTheDocument();
+    expect(within(row).getByRole('button', { name: 'Reintentar rx1.pdf' })).toBeInTheDocument();
+    // El que seguía listo, con su fila intacta.
+    expect(screen.getByRole('button', { name: 'Subir rx2.pdf' })).toBeInTheDocument();
+  });
+
+  it('sin nada pendiente en la cola, el panel inactivo se desmonta como los demás', async () => {
+    const { rerender } = render(<TabsHarness active="documents" />);
+    await screen.findByText('Sin documentos');
+    rerender(<TabsHarness active="odontogram" />);
+    expect(screen.queryByText('Sin documentos')).not.toBeInTheDocument();
+    expect(screen.getByRole('tabpanel', { hidden: true })).toBeEmptyDOMElement();
   });
 });

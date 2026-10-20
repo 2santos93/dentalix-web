@@ -7,6 +7,7 @@ import { getTokenRole, getTokenUserId } from '@/lib/auth/token-role';
 import { formatCivilDate, formatDateTime } from '@/lib/format/date';
 import { isFdiToothNumber } from '@/lib/odontogram/fdi';
 import { startDownload } from '@/lib/patient-documents/download';
+import { createLimiter } from '@/lib/patient-documents/limit';
 import { convertHeicToJpeg, HEIC_CONVERSION_ERROR, isHeicFile } from '@/lib/patient-documents/heic';
 import {
   canUploadPatientDocuments,
@@ -59,6 +60,11 @@ const copy = {
   uploaded: 'Subido',
   failed: 'Error',
   converting: 'Convirtiendo la foto HEIC a JPG…',
+  waiting: 'En espera…',
+  announceDone: (name: string) => `${name} subido`,
+  announceError: (name: string) => `${name}: error`,
+  uploadFailedToast: (name: string, reason: string) => `No se subió «${name}». ${reason}`,
+  fixTeeth: 'Corrige los dientes antes de subir.',
   progressLabel: (name: string) => `Progreso de subida de ${name}`,
   uploadError: 'No pudimos subir el archivo.',
   fileFor: (name: string) => ` ${name}`,
@@ -91,7 +97,10 @@ const copy = {
   downloadError: 'No pudimos descargar el documento.',
 };
 
-type QueueStatus = 'converting' | 'ready' | 'uploading' | 'done' | 'error';
+type QueueStatus = 'converting' | 'ready' | 'waiting' | 'uploading' | 'done' | 'error';
+
+/** Subidas simultáneas como mucho; el resto queda «En espera». */
+const MAX_PARALLEL_UPLOADS = 3;
 
 interface QueueItem {
   key: string;
@@ -105,13 +114,25 @@ interface QueueItem {
   error: string | null;
   /** Un fallo de la subida se reintenta; uno del pre-chequeo, no. */
   retryable: boolean;
+  /** El campo de dientes tiene un código no válido sin confirmar: no se sube. */
+  teethInvalid: boolean;
 }
 
 interface PatientDocumentsTabProps {
   token: string;
   patientId: string;
-  /** Diente del `?tooth=` (desde el odontograma): filtro inicial por diente. */
+  /** Diente del `?tooth=`: filtro inicial por diente. */
   initialTooth?: string | null;
+  /**
+   * Se llegó con «Documentos del diente» (odontograma): los archivos nuevos de
+   * la cola traen ese diente puesto. Sin ello, solo se preselecciona el filtro.
+   */
+  tagUploadsWithTooth?: boolean;
+  /**
+   * Avisa de si la cola tiene archivos que no están subidos (listos, en espera,
+   * subiendo o con error). La página mantiene el panel montado mientras tanto.
+   */
+  onPendingChange?: (pending: boolean) => void;
 }
 
 /** Los códigos FDI en el orden de la carta: permanentes y luego temporales. */
@@ -147,7 +168,13 @@ let queueSeq = 0;
  * notas y progreso. Debajo, la lista filtrable por categoría y diente con
  * «Ver», «Descargar» y «Anular» (quien lo subió o un ADMIN).
  */
-export function PatientDocumentsTab({ token, patientId, initialTooth = null }: PatientDocumentsTabProps) {
+export function PatientDocumentsTab({
+  token,
+  patientId,
+  initialTooth = null,
+  tagUploadsWithTooth = false,
+  onPendingChange,
+}: PatientDocumentsTabProps) {
   const role = getTokenRole(token);
   const userId = getTokenUserId(token);
   const canUpload = canUploadPatientDocuments(role);
@@ -167,6 +194,30 @@ export function PatientDocumentsTab({ token, patientId, initialTooth = null }: P
   const [viewing, setViewing] = useState<PatientDocument | null>(null);
   const [voiding, setVoiding] = useState<PatientDocument | null>(null);
   const [downloading, setDownloading] = useState<ReadonlySet<string>>(new Set());
+  const [announcement, setAnnouncement] = useState('');
+  const [runLimited] = useState(() => createLimiter(MAX_PARALLEL_UPLOADS));
+
+  const pending = queue.some((item) => item.status !== 'done');
+  const inFlight = queue.some((item) => item.status === 'uploading' || item.status === 'waiting');
+
+  useEffect(() => {
+    onPendingChange?.(pending);
+  }, [pending, onPendingChange]);
+
+  // Al desmontar (otro paciente, otra página) la cola ya no retiene el panel.
+  useEffect(() => () => onPendingChange?.(false), [onPendingChange]);
+
+  // Cerrar o recargar la pestaña del navegador con subidas en curso las
+  // cortaría: el navegador pregunta antes.
+  useEffect(() => {
+    if (!inFlight) return;
+    function warn(event: BeforeUnloadEvent) {
+      event.preventDefault();
+      event.returnValue = '';
+    }
+    window.addEventListener('beforeunload', warn);
+    return () => window.removeEventListener('beforeunload', warn);
+  }, [inFlight]);
 
   useEffect(() => {
     let cancelled = false;
@@ -217,14 +268,15 @@ export function PatientDocumentsTab({ token, patientId, initialTooth = null }: P
         key: `q${queueSeq}`,
         file,
         category: 'OTHER',
-        // Desde el odontograma (filtro por diente) el diente viene puesto.
-        teeth: tooth ? [tooth] : [],
+        // Solo desde «Documentos del diente» el diente viene puesto.
+        teeth: tagUploadsWithTooth && startTooth ? [startTooth] : [],
         clinicalDate: '',
         notes: '',
         status: problem ? 'error' : heic ? 'converting' : 'ready',
         progress: 0,
         error: problem,
         retryable: false,
+        teethInvalid: false,
       };
     });
     setQueue((prev) => [...prev, ...added]);
@@ -238,28 +290,34 @@ export function PatientDocumentsTab({ token, patientId, initialTooth = null }: P
   }
 
   async function upload(item: QueueItem) {
-    updateItem(item.key, { status: 'uploading', progress: 0, error: null });
+    if (item.teethInvalid) return;
+    const name = item.file.name;
+    updateItem(item.key, { status: 'waiting', progress: 0, error: null });
     try {
-      const doc = await uploadPatientDocument(
-        token,
-        patientId,
-        {
-          file: item.file,
-          category: item.category,
-          clinicalDate: item.clinicalDate || null,
-          toothNumbers: item.teeth,
-          notes: item.notes,
-        },
-        { onProgress: (progress) => updateItem(item.key, { progress }) },
-      );
+      const doc = await runLimited(() => {
+        updateItem(item.key, { status: 'uploading' });
+        return uploadPatientDocument(
+          token,
+          patientId,
+          {
+            file: item.file,
+            category: item.category,
+            clinicalDate: item.clinicalDate || null,
+            toothNumbers: item.teeth,
+            notes: item.notes,
+          },
+          { onProgress: (progress) => updateItem(item.key, { progress }) },
+        );
+      });
       updateItem(item.key, { status: 'done', progress: 1 });
+      setAnnouncement(copy.announceDone(name));
       if (matchesFilters(doc)) setDocs((prev) => [doc, ...prev.filter((d) => d.id !== doc.id)]);
     } catch (err) {
-      updateItem(item.key, {
-        status: 'error',
-        error: apiErrorMessage(err, copy.uploadError),
-        retryable: true,
-      });
+      const reason = apiErrorMessage(err, copy.uploadError);
+      updateItem(item.key, { status: 'error', error: reason, retryable: true });
+      setAnnouncement(copy.announceError(name));
+      // El toast sobrevive aunque la fila no esté a la vista (otra pestaña).
+      notifyError(copy.uploadFailedToast(name, reason), { onRetry: () => void upload(item) });
     }
   }
 
@@ -284,7 +342,11 @@ export function PatientDocumentsTab({ token, patientId, initialTooth = null }: P
 
   function queueRow(item: QueueItem) {
     const name = item.file.name;
-    const locked = item.status === 'uploading' || item.status === 'done' || item.status === 'converting';
+    const locked =
+      item.status === 'uploading' ||
+      item.status === 'waiting' ||
+      item.status === 'done' ||
+      item.status === 'converting';
     const editable = item.status === 'ready' || (item.status === 'error' && item.retryable);
     const field = (suffix: string) => `${ids}-${item.key}-${suffix}`;
     return (
@@ -303,7 +365,7 @@ export function PatientDocumentsTab({ token, patientId, initialTooth = null }: P
           </span>
         </div>
 
-        {editable || item.status === 'uploading' ? (
+        {editable || item.status === 'uploading' || item.status === 'waiting' ? (
           <div className="grid min-w-0 gap-3 sm:grid-cols-2">
             <div className="flex min-w-0 flex-col gap-1">
               <label htmlFor={field('category')} className="t-label text-muted">
@@ -345,6 +407,7 @@ export function PatientDocumentsTab({ token, patientId, initialTooth = null }: P
               value={item.teeth}
               disabled={locked}
               onChange={(teeth) => updateItem(item.key, { teeth })}
+              onInvalidChange={(teethInvalid) => updateItem(item.key, { teethInvalid })}
             />
             <div className="flex min-w-0 flex-col gap-1">
               <label htmlFor={field('notes')} className="t-label text-muted">
@@ -363,11 +426,11 @@ export function PatientDocumentsTab({ token, patientId, initialTooth = null }: P
           </div>
         ) : null}
 
-        {item.status === 'converting' ? (
-          <p role="status" className="text-sm text-muted">
-            {copy.converting}
-          </p>
+        {item.status === 'converting' || item.status === 'waiting' ? (
+          <p className="text-sm text-muted">{item.status === 'converting' ? copy.converting : copy.waiting}</p>
         ) : null}
+
+        {item.teethInvalid && editable ? <p className="text-sm text-danger">{copy.fixTeeth}</p> : null}
 
         {item.status === 'uploading' || item.status === 'done' ? (
           <div
@@ -392,19 +455,31 @@ export function PatientDocumentsTab({ token, patientId, initialTooth = null }: P
 
         <div className="flex flex-col gap-2 sm:flex-row sm:justify-end">
           {item.status === 'ready' ? (
-            <Button type="button" size="sm" className="max-sm:min-h-11" onClick={() => void upload(item)}>
+            <Button
+              type="button"
+              size="sm"
+              className="max-sm:min-h-11"
+              disabled={item.teethInvalid}
+              onClick={() => void upload(item)}
+            >
               <Upload aria-hidden />
               {copy.upload}
               <span className="sr-only">{copy.fileFor(name)}</span>
             </Button>
           ) : null}
           {item.status === 'error' && item.retryable ? (
-            <Button type="button" size="sm" className="max-sm:min-h-11" onClick={() => void upload(item)}>
+            <Button
+              type="button"
+              size="sm"
+              className="max-sm:min-h-11"
+              disabled={item.teethInvalid}
+              onClick={() => void upload(item)}
+            >
               {copy.retry}
               <span className="sr-only">{copy.fileFor(name)}</span>
             </Button>
           ) : null}
-          {item.status !== 'uploading' && item.status !== 'converting' ? (
+          {item.status !== 'uploading' && item.status !== 'waiting' && item.status !== 'converting' ? (
             <Button
               type="button"
               variant="ghost"
@@ -588,7 +663,7 @@ export function PatientDocumentsTab({ token, patientId, initialTooth = null }: P
                       type="button"
                       size="sm"
                       className="max-sm:min-h-11"
-                      onClick={() => ready.forEach((item) => void upload(item))}
+                      onClick={() => ready.filter((item) => !item.teethInvalid).forEach((item) => void upload(item))}
                     >
                       <Upload aria-hidden />
                       {copy.uploadAll(ready.length)}
@@ -596,6 +671,10 @@ export function PatientDocumentsTab({ token, patientId, initialTooth = null }: P
                   ) : null}
                 </div>
               </div>
+              {/* Resultado de cada archivo para el lector de pantalla. */}
+              <p role="status" aria-live="polite" className="sr-only">
+                {announcement}
+              </p>
               <ul aria-label={copy.queueLabel} className="overflow-hidden rounded-lg border border-border bg-surface text-sm">
                 {queue.map(queueRow)}
               </ul>

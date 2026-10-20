@@ -10,6 +10,7 @@ import {
   PATIENT_DOCUMENT_CATEGORY_LABELS,
   type PatientDocument,
 } from '@/lib/patient-documents/patient-documents-api';
+import { notifyError } from '@/components/errors/notify';
 import { SectionError } from '@/components/errors/section-error';
 import { Button } from '@/components/ui/button';
 import {
@@ -28,6 +29,7 @@ const copy = {
   open: 'Abrir',
   pdfOnMobile: 'En el teléfono el PDF se lee mejor a pantalla completa.',
   frameTitle: (name: string) => `Vista previa de ${name}`,
+  openError: 'No pudimos abrir el documento en otra pestaña.',
 };
 
 interface DocumentViewerDialogProps {
@@ -70,6 +72,31 @@ export function DocumentViewerDialog({ open, onOpenChange, token, document }: Do
     };
   }, [open, token, document.patientId, document.id, reloadKey]);
 
+  /**
+   * La URL firmada caduca a los pocos minutos: «Abrir»/«Abrir en otra pestaña»
+   * piden una nueva en cada clic. La pestaña se abre YA (dentro del gesto, para
+   * que el bloqueador de ventanas no la frene) y se lleva a la URL al llegar.
+   * Clic con modificador o central: el navegador usa el `href` actual.
+   */
+  function openFresh(event: React.MouseEvent<HTMLAnchorElement>) {
+    if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+    event.preventDefault();
+    void openInNewTab();
+  }
+
+  async function openInNewTab() {
+    const tab = window.open('', '_blank');
+    if (tab) tab.opener = null;
+    try {
+      const fresh = await getPatientDocumentUrl(token, document.patientId, document.id, 'inline');
+      if (tab) tab.location.replace(fresh.url);
+      else window.open(fresh.url, '_blank', 'noopener,noreferrer');
+    } catch (err) {
+      tab?.close();
+      notifyError(apiErrorMessage(err, copy.openError), { onRetry: () => void openInNewTab() });
+    }
+  }
+
   let body: React.ReactNode;
   if (error) {
     body = <SectionError description={error} onRetry={() => setReloadKey((k) => k + 1)} />;
@@ -107,7 +134,7 @@ export function DocumentViewerDialog({ open, onOpenChange, token, document }: Do
       <div className="flex flex-col items-start gap-3 rounded-lg border border-border bg-bg p-4">
         <p className="text-sm text-muted">{copy.pdfOnMobile}</p>
         <Button asChild className="min-h-11 w-full">
-          <a href={url} target="_blank" rel="noopener noreferrer">
+          <a href={url} target="_blank" rel="noopener noreferrer" onClick={openFresh}>
             <ExternalLink aria-hidden />
             {copy.open}
           </a>
@@ -129,6 +156,7 @@ export function DocumentViewerDialog({ open, onOpenChange, token, document }: Do
             href={url}
             target="_blank"
             rel="noopener noreferrer"
+            onClick={openFresh}
             className="inline-flex min-h-11 items-center gap-2 self-start text-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
           >
             <ExternalLink className="size-4" aria-hidden />
