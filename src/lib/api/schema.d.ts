@@ -2463,6 +2463,167 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/post-op-templates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Plantillas de indicaciones de la clínica, con sus vínculos */
+        get: operations["PostOpTemplatesController_list"];
+        put?: never;
+        /** Crear una plantilla de indicaciones */
+        post: operations["PostOpTemplatesController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/post-op-templates/samples": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Cargar plantillas de ejemplo
+         * @description Crea las plantillas de ejemplo que la clínica aún no tiene (por código) y devuelve las creadas. Repetirlo no duplica nada.
+         */
+        post: operations["PostOpTemplatesController_samples"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/post-op-templates/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Editar o desactivar una plantilla
+         * @description Cambiar título o texto sube la versión; activar, desactivar o cambiar vínculos no. El código no se edita.
+         */
+        patch: operations["PostOpTemplatesController_update"];
+        trace?: never;
+    };
+    "/api/v1/appointments/{appointmentId}/post-op-instructions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Plantillas sugeridas para la cita, canales y entregas hechas */
+        get: operations["AppointmentPostOpController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/appointments/{appointmentId}/post-op-instructions/deliveries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Entregar indicaciones: impresas, por email o por WhatsApp
+         * @description Registra la entrega con el texto ya renderizado (no cambia aunque se edite la plantilla). EMAIL y WHATSAPP_LINK crean un enlace público de 30 días.
+         */
+        post: operations["AppointmentPostOpController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{patientId}/post-op-deliveries": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Indicaciones entregadas, las más recientes primero */
+        get: operations["PatientPostOpDeliveriesController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{patientId}/post-op-deliveries/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Una entrega con su texto, para verla o reimprimirla */
+        get: operations["PatientPostOpDeliveriesController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/post-op-instructions/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["PublicPostOpInstructionsController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/post-op-instructions/{token}/opened": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["PublicPostOpInstructionsController_opened"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/patients/{patientId}/perio-exams": {
         parameters: {
             query?: never;
@@ -2828,7 +2989,7 @@ export interface components {
         /** @enum {string} */
         AuditAction: "VIEW" | "CREATE" | "UPDATE" | "DELETE" | "SIGN" | "VOID" | "LOGIN" | "LOGIN_FAILED" | "PASSWORD_RESET" | "EXPORT" | "PRINT" | "SEND";
         /** @enum {string} */
-        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION";
+        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION" | "POSTOP_TEMPLATE" | "POSTOP_DELIVERY";
         /**
          * @description Rol con el que actuó (del token). `null` en un login fallido.
          * @enum {string}
@@ -4890,6 +5051,8 @@ export interface components {
             country: components["schemas"]["ClinicCountry"];
             /** @description DX-212: código de habilitación REPS (12 dígitos) o null. */
             repsHabilitationCode: string | null;
+            /** @description DX-222: teléfono de la sede o null. */
+            phone: string | null;
             isActive: boolean;
             /**
              * @description Zona horaria IANA de la sede (la de su horario; sin horario, la de su país). Define sus días civiles: «hoy» en la caja y el dashboard (DX-097).
@@ -4906,6 +5069,11 @@ export interface components {
             address?: string;
             /** @description País de la sede: decide los campos legales obligatorios de la receta (CO o ES). Por defecto CO. */
             country?: components["schemas"]["ClinicCountry"];
+            /**
+             * @description DX-222: teléfono de la sede que ven los pacientes en las indicaciones postoperatorias ({{telefono_sede}}). Hasta 40 caracteres.
+             * @example +57 601 555 0101
+             */
+            phone?: string;
         };
         UpdateLocationDto: {
             name?: string;
@@ -4917,6 +5085,11 @@ export interface components {
              * @example 110010123401
              */
             repsHabilitationCode?: string | null;
+            /**
+             * @description DX-222: teléfono de la sede que ven los pacientes en las indicaciones postoperatorias ({{telefono_sede}}). Hasta 40 caracteres. Vacío o null lo quita; sin el campo no cambia.
+             * @example +57 601 555 0101
+             */
+            phone?: string | null;
             /** @description Desactivar una sede la oculta para operar; no se puede desactivar la última activa. */
             isActive?: boolean;
         };
@@ -7634,6 +7807,219 @@ export interface components {
             patient: components["schemas"]["ConsentPatientDto"];
             /** @description true si el hash guardado coincide con el recalculado al leer */
             integrityOk: boolean;
+        };
+        PostOpTemplateCatalogItemDto: {
+            /** Format: uuid */
+            id: string;
+            code: string;
+            labelEs: string;
+        };
+        PostOpTemplateAppointmentTypeDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+        };
+        PostOpTemplateDto: {
+            /** Format: uuid */
+            id: string;
+            /** @example POI-EXO */
+            code: string;
+            title: string;
+            /** @description Variables admitidas: {{paciente}}, {{profesional}}, {{clinica}}, {{telefono_sede}}, {{fecha}}. Otra variable da 400. */
+            body: string;
+            /** @description Sube en 1 con cada cambio de título o texto. La entrega guarda la versión de la que salió. */
+            version: number;
+            active: boolean;
+            catalogItems: components["schemas"]["PostOpTemplateCatalogItemDto"][];
+            appointmentTypes: components["schemas"]["PostOpTemplateAppointmentTypeDto"][];
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+        };
+        CreatePostOpTemplateDto: {
+            /** @description Procedimientos del catálogo (kind PROCEDURE) que sugieren esta plantilla. Al editar, reemplaza la lista completa. */
+            catalogItemIds?: string[];
+            /** @description Tipos de cita que sugieren esta plantilla. Al editar, reemplaza la lista completa. */
+            appointmentTypeIds?: string[];
+            /**
+             * @description De 2 a 20 letras, números o guiones; se guarda en mayúsculas (400 si no). Único en la clínica (409) y no se edita después.
+             * @example POI-EXO
+             */
+            code: string;
+            title: string;
+            /** @description Variables admitidas: {{paciente}}, {{profesional}}, {{clinica}}, {{telefono_sede}}, {{fecha}}. Otra variable da 400. */
+            body: string;
+        };
+        UpdatePostOpTemplateDto: {
+            /** @description Procedimientos del catálogo (kind PROCEDURE) que sugieren esta plantilla. Al editar, reemplaza la lista completa. */
+            catalogItemIds?: string[];
+            /** @description Tipos de cita que sugieren esta plantilla. Al editar, reemplaza la lista completa. */
+            appointmentTypeIds?: string[];
+            title?: string;
+            /** @description Variables admitidas: {{paciente}}, {{profesional}}, {{clinica}}, {{telefono_sede}}, {{fecha}}. Otra variable da 400. */
+            body?: string;
+            /** @description false = desactivar la plantilla */
+            active?: boolean;
+        };
+        PostOpTemplateSummaryDto: {
+            /** Format: uuid */
+            id: string;
+            /** @example POI-EXO */
+            code: string;
+            title: string;
+            version: number;
+        };
+        PostOpEmailChannelDto: {
+            allowed: boolean;
+            /** @description Por qué no se puede enviar por email (en español) */
+            reason: string | null;
+            /** @example ca***@example.com */
+            toMasked: string | null;
+            /** @description Iría al responsable del paciente (DX-203) */
+            toResponsible: boolean;
+        };
+        PostOpWhatsAppChannelDto: {
+            /** @description Teléfono del paciente en E.164 sin "+", listo para https://wa.me/<número>. null si no hay uno utilizable o el paciente se dio de baja. */
+            phone: string | null;
+            reason: string | null;
+        };
+        /** @enum {string} */
+        PostOpDeliveryChannel: "PRINT" | "EMAIL" | "WHATSAPP_LINK";
+        PostOpDeliverySummaryDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            patientId: string;
+            /** Format: uuid */
+            appointmentId: string;
+            /** Format: uuid */
+            templateId: string;
+            /** @description Código de la plantilla al entregarla */
+            templateCode: string;
+            /** @description Título de la plantilla al entregarla */
+            templateTitle: string;
+            /** @description Versión de la plantilla de la que salió */
+            templateVersion: number;
+            channel: components["schemas"]["PostOpDeliveryChannel"];
+            /** Format: date-time */
+            deliveredAt: string;
+            deliveredByName: string;
+            /** @description Email enmascarado (`ca***@dominio`) o móvil con los 4 últimos dígitos; null en PRINT. */
+            recipientMasked: string | null;
+            /** @description El email fue al responsable (DX-203) */
+            sentToResponsible: boolean;
+            /**
+             * Format: date-time
+             * @description Primera apertura del enlace público por el paciente
+             */
+            firstOpenedAt: string | null;
+            /**
+             * Format: date-time
+             * @description Caducidad del enlace público; null en PRINT
+             */
+            linkExpiresAt: string | null;
+        };
+        PostOpSuggestionsDto: {
+            /** Format: uuid */
+            patientId: string;
+            /** @description Activas vinculadas al tipo de la cita o a un procedimiento hecho en ella */
+            suggested: components["schemas"]["PostOpTemplateSummaryDto"][];
+            others: components["schemas"]["PostOpTemplateSummaryDto"][];
+            email: components["schemas"]["PostOpEmailChannelDto"];
+            whatsapp: components["schemas"]["PostOpWhatsAppChannelDto"];
+            locationPhone: string | null;
+            /** @description Entregas de esta cita, las más recientes primero */
+            deliveries: components["schemas"]["PostOpDeliverySummaryDto"][];
+        };
+        DeliverPostOpDto: {
+            /**
+             * Format: uuid
+             * @description Plantilla activa de la clínica (400 si está inactiva).
+             */
+            templateId: string;
+            /** @description `PRINT`: se imprime y se entrega en mano. `EMAIL`: email con el enlace público (al responsable si el paciente es menor o no tiene email). `WHATSAPP_LINK`: la web abre wa.me con el mensaje y el enlace (sin el procedimiento). */
+            channel: components["schemas"]["PostOpDeliveryChannel"];
+        };
+        PostOpWhatsAppMessageDto: {
+            /** @description E.164 sin "+", para https://wa.me/<número> */
+            phone: string;
+            /** @description Mensaje con el enlace; sin el título ni el texto */
+            text: string;
+        };
+        PostOpDeliveryCreatedDto: {
+            delivery: components["schemas"]["PostOpDeliverySummaryDto"];
+            /** @description Enlace público (EMAIL y WHATSAPP_LINK). Su token solo sale aquí: no se guarda. */
+            publicUrl: string | null;
+            whatsapp: components["schemas"]["PostOpWhatsAppMessageDto"] | null;
+            /**
+             * @description Email enmascarado al que se encoló; null si no se encoló
+             * @example ca***@example.com
+             */
+            sentTo: string | null;
+            sentToResponsible: boolean;
+            /** @description true: el email quedó encolado. false en PRINT y WHATSAPP_LINK, y en un EMAIL cuyo encolado falló (la entrega queda registrada; ofrecer el enlace o WhatsApp). */
+            emailQueued: boolean;
+        };
+        PostOpClinicBrandingDto: {
+            name: string;
+            logoUrl: string | null;
+            primaryColor: string | null;
+        };
+        PostOpDeliveryDocumentDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            patientId: string;
+            /** Format: uuid */
+            appointmentId: string;
+            /** Format: uuid */
+            templateId: string;
+            /** @description Código de la plantilla al entregarla */
+            templateCode: string;
+            /** @description Título de la plantilla al entregarla */
+            templateTitle: string;
+            /** @description Versión de la plantilla de la que salió */
+            templateVersion: number;
+            channel: components["schemas"]["PostOpDeliveryChannel"];
+            /** Format: date-time */
+            deliveredAt: string;
+            deliveredByName: string;
+            /** @description Email enmascarado (`ca***@dominio`) o móvil con los 4 últimos dígitos; null en PRINT. */
+            recipientMasked: string | null;
+            /** @description El email fue al responsable (DX-203) */
+            sentToResponsible: boolean;
+            /**
+             * Format: date-time
+             * @description Primera apertura del enlace público por el paciente
+             */
+            firstOpenedAt: string | null;
+            /**
+             * Format: date-time
+             * @description Caducidad del enlace público; null en PRINT
+             */
+            linkExpiresAt: string | null;
+            /** @description Texto tal como se entregó */
+            renderedText: string;
+            clinic: components["schemas"]["PostOpClinicBrandingDto"];
+            locationName: string;
+            locationPhone: string | null;
+            patientName: string;
+        };
+        PublicPostOpDto: {
+            clinic: components["schemas"]["PostOpClinicBrandingDto"];
+            /** @description Teléfono de la sede de la cita, para dudas */
+            locationPhone: string | null;
+            /** @description Título de la plantilla al entregarla */
+            title: string;
+            /** @example POI-EXO */
+            code: string;
+            /** @description Versión de la plantilla de la que salió */
+            version: number;
+            /** @description Texto tal como se entregó */
+            renderedText: string;
+            /** Format: date-time */
+            deliveredAt: string;
         };
         /** @enum {string} */
         PerioExamStatus: "DRAFT" | "FINAL";
@@ -14643,6 +15029,365 @@ export interface operations {
             };
             /** @description Consentimiento no encontrado */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PostOpTemplatesController_list: {
+        parameters: {
+            query?: {
+                /** @description true = solo activas; false = solo inactivas; sin él, todas */
+                active?: boolean;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PostOpTemplateDto"][];
+                };
+            };
+        };
+    };
+    PostOpTemplatesController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreatePostOpTemplateDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PostOpTemplateDto"];
+                };
+            };
+            /** @description Código con formato inválido, texto vacío, variables no admitidas, o un procedimiento o tipo de cita que no existe en la clínica */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo ADMIN */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ya existe una plantilla con ese código */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PostOpTemplatesController_samples: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PostOpTemplateDto"][];
+                };
+            };
+            /** @description Solo ADMIN */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PostOpTemplatesController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdatePostOpTemplateDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PostOpTemplateDto"];
+                };
+            };
+            /** @description Texto vacío, variables no admitidas, o un procedimiento o tipo de cita que no existe en la clínica */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo ADMIN */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Plantilla de indicaciones no encontrada en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AppointmentPostOpController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                appointmentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PostOpSuggestionsDto"];
+                };
+            };
+            /** @description Cita no encontrada en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AppointmentPostOpController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                appointmentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DeliverPostOpDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PostOpDeliveryCreatedDto"];
+                };
+            };
+            /** @description La plantilla está inactiva, o el host de la petición no sirve para armar el enlace (EMAIL y WHATSAPP_LINK) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Cita no encontrada en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sin email ni responsable que reciba avisos, sin teléfono con indicativo, o el paciente dio de baja los envíos */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Tope de emails de la clínica o del destinatario */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientPostOpDeliveriesController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PostOpDeliverySummaryDto"][];
+                };
+            };
+            /** @description Paciente no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientPostOpDeliveriesController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PostOpDeliveryDocumentDto"];
+                };
+            };
+            /** @description Paciente o entrega no encontrados en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PublicPostOpInstructionsController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicPostOpDto"];
+                };
+            };
+            /** @description Token malformado, desconocido o de otra clínica. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El enlace caducó (30 días desde la entrega). */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PublicPostOpInstructionsController_opened: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Primera apertura registrada (las siguientes no cambian nada). */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Token malformado, desconocido o de otra clínica. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El enlace caducó (30 días desde la entrega). */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };

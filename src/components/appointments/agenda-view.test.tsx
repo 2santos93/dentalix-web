@@ -9,6 +9,7 @@ import { listStaff } from '@/lib/appointments/staff-api';
 import { listPatients } from '@/lib/patients/patients-api';
 import { createConfirmationLink } from '@/lib/appointments/confirmations-api';
 import { getAppointmentReminders } from '@/lib/reminders/reminders-api';
+import { getAppointmentPostOp } from '@/lib/postop/postop-api';
 import { deleteScheduleBlock, listScheduleBlocks } from '@/lib/appointments/schedule-blocks-api';
 import { listWaitlist, scheduleFromWaitlist } from '@/lib/appointments/waitlist-api';
 import { listLocations } from '@/lib/locations/locations-api';
@@ -49,6 +50,20 @@ jest.mock('../../lib/appointments/confirmations-api', () => ({
 jest.mock('../../lib/reminders/reminders-api', () => ({
   ...jest.requireActual('../../lib/reminders/reminders-api'),
   getAppointmentReminders: jest.fn(),
+}));
+// DX-222: el panel «Indicaciones» se prueba aparte; aquí basta con que cargue.
+jest.mock('../../lib/postop/postop-api', () => ({
+  ...jest.requireActual('../../lib/postop/postop-api'),
+  getAppointmentPostOp: jest.fn().mockResolvedValue({
+    patientId: 'p1',
+    suggested: [],
+    others: [],
+    email: { allowed: false, reason: null, toMasked: null, toResponsible: false },
+    whatsapp: { phone: null, reason: null },
+    locationPhone: null,
+    deliveries: [],
+  }),
+  deliverPostOp: jest.fn(),
 }));
 // DX-122: bloqueos y pendientes (su comportamiento propio se prueba abajo).
 jest.mock('../../lib/appointments/schedule-blocks-api', () => ({
@@ -735,6 +750,42 @@ describe('AgendaView', () => {
     expect(
       screen.getByRole('heading', { name: 'Recordatorios por email' }),
     ).toBeInTheDocument();
+    // DX-222: sin un rol legible en la sesión no se ofrecen las indicaciones.
+    expect(screen.queryByRole('heading', { name: 'Indicaciones' })).not.toBeInTheDocument();
+  });
+
+  // DX-222: «Indicaciones» en el detalle de la cita, para cualquier rol de la clínica.
+  it('el detalle de la cita monta el panel «Indicaciones» de esa cita', async () => {
+    const receptionToken = `h.${btoa(JSON.stringify({ sub: 'u1', tenantId: 't1', role: 'RECEPTION' }))}.s`;
+    const future = new Date(Date.now() + 3 * 24 * 3600_000);
+    const day = `${future.getFullYear()}-${String(future.getMonth() + 1).padStart(2, '0')}-${String(future.getDate()).padStart(2, '0')}`;
+    const start = new Date(`${day}T09:00:00`).toISOString();
+    const end = new Date(`${day}T09:30:00`).toISOString();
+    mockedListStaff.mockResolvedValue(staff);
+    mockedListAppointments.mockResolvedValue([appointment({ id: 'apt-p', start, end })]);
+    const user = userEvent.setup();
+    // Dos hermanos con la misma `key` hacen que React duplique paneles al
+    // re-renderizar (el de confirmación salía repetido tras «Enviar confirmación»).
+    const consoleError = jest.spyOn(console, 'error');
+
+    render(<AgendaView token={receptionToken} />);
+    await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
+    await user.click(screen.getByRole('button', { name: /^día$/i }));
+    const dateInput = screen.getByLabelText(/^fecha$/i);
+    await user.clear(dateInput);
+    await user.type(dateInput, day);
+    const [detail] = await screen.findAllByRole('button', { name: /detalle de la cita de 09:00–09:30/i });
+    await user.click(detail);
+
+    expect(await screen.findByRole('region', { name: 'Indicaciones' })).toBeInTheDocument();
+    expect(getAppointmentPostOp).toHaveBeenCalledWith(receptionToken, 'apt-p');
+    expect(await screen.findByText('No hay indicaciones para esta cita')).toBeInTheDocument();
+    expect(screen.getAllByRole('region', { name: 'Confirmación del paciente' })).toHaveLength(1);
+    const duplicateKeys = consoleError.mock.calls.filter((args) =>
+      args.some((a) => typeof a === 'string' && a.includes('same key')),
+    );
+    expect(duplicateKeys).toEqual([]);
+    consoleError.mockRestore();
   });
 
   // DX-121: vista Día en columnas por profesional.

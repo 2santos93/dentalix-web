@@ -26,6 +26,9 @@ describe('etiquetas de auditoría', () => {
     // DX-136: ver, reimprimir y enviar el recibo de caja.
     expect(AUDIT_ACTION_LABELS.SEND).toBe('Envío por email');
     expect(AUDIT_RESOURCE_LABELS.PAYMENT_RECEIPT).toBe('Recibo de caja');
+    // DX-222: plantillas y entregas de indicaciones postoperatorias.
+    expect(AUDIT_RESOURCE_LABELS.POSTOP_TEMPLATE).toBe('Plantilla de indicaciones');
+    expect(AUDIT_RESOURCE_LABELS.POSTOP_DELIVERY).toBe('Indicaciones postoperatorias');
   });
 
   it('las opciones no repiten valores', () => {
