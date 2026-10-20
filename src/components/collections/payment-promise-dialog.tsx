@@ -115,6 +115,7 @@ export function PaymentPromiseDialog({
           <MoneyInput
             id="pp-amount"
             currency={currency}
+            requirePositive
             value={amountText}
             onValueChange={(text) => {
               setAmountText(text);

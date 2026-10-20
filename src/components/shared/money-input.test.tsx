@@ -7,10 +7,12 @@ function Harness({
   currency = 'USD',
   initial = '',
   invalid = false,
+  requirePositive = false,
 }: {
   currency?: string;
   initial?: string;
   invalid?: boolean;
+  requirePositive?: boolean;
 }) {
   const [text, setText] = React.useState(initial);
   return (
@@ -21,6 +23,7 @@ function Harness({
         currency={currency}
         value={text}
         onValueChange={setText}
+        requirePositive={requirePositive}
         aria-invalid={invalid ? true : undefined}
         aria-describedby={invalid ? 'amount-error' : undefined}
       />
@@ -93,5 +96,16 @@ describe('MoneyInput (DX-241)', () => {
     render(<Harness currency="" initial="15.000,5" />);
     act(() => jest.advanceTimersByTime(MONEY_PREVIEW_DELAY_MS));
     expect(preview()).toHaveTextContent(/^Se guardará: 15\.000,50$/);
+  });
+
+  // QA DX-241: «Se guardará: 0,00» prometía algo que el envío rechaza.
+  it('con requirePositive, «0» avisa en la vista previa en vez de prometer «Se guardará: 0,00»', () => {
+    render(<Harness requirePositive initial="0" />);
+    expect(preview()).toHaveTextContent(/^Escribe un importe mayor que 0\.$/);
+  });
+
+  it('sin requirePositive, «0» se guarda como 0 (fondo de caja, arqueo)', () => {
+    render(<Harness initial="0" />);
+    expect(preview()).toHaveTextContent(/^Se guardará: 0,00\sUS\$$/);
   });
 });

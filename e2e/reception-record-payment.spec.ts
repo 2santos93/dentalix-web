@@ -175,7 +175,7 @@ for (const viewport of [
     // Sin importe: no registra y lo dice en español.
     const submit = dialog.getByRole('button', { name: 'Registrar abono' });
     await submit.click();
-    await expect(dialog.getByRole('alert')).toContainText('Ingresa un importe mayor que 0.');
+    await expect(dialog.getByRole('alert')).toContainText('Escribe un importe mayor que 0.');
 
     await dialog.getByLabel('Importe').fill(String(PAYMENT));
     await dialog.getByLabel('Método').selectOption('CASH');

@@ -257,6 +257,7 @@ export function CreatePaymentPlanModal({
           <MoneyInput
             id="pp-total"
             currency={currency}
+            requirePositive
             value={totalField}
             onValueChange={(text) => {
               patch({ total: text });

@@ -124,6 +124,7 @@ export function CashAdjustmentModal({
           <MoneyInput
             id={`${id}-amount`}
             currency={currency}
+            requirePositive
             value={amount}
             disabled={submitting}
             onValueChange={(text) => {

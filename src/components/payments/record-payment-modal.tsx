@@ -28,7 +28,7 @@ const copy = {
   method: 'Método',
   methodNone: 'Sin especificar',
   date: 'Fecha de pago',
-  invalidAmount: 'Ingresa un importe mayor que 0.',
+  invalidAmount: 'Escribe un importe mayor que 0.',
   invalidDate: 'Elige la fecha de pago.',
   recorded: (amount: string, date: string, plan: string) =>
     `Abono registrado: ${amount} · ${date} · ${plan}.`,
@@ -214,6 +214,7 @@ export function RecordPaymentModal({
                   <MoneyInput
                     id="rp-amount"
                     currency={currency}
+                    requirePositive
                     value={form.amount}
                     onValueChange={(amount) => {
                       patch({ amount });

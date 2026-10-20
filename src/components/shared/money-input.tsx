@@ -26,13 +26,19 @@ interface MoneyInputProps extends NativeProps {
   currency: string;
   /** Clases del contenedor (campo + vista previa); `className` va al campo. */
   containerClassName?: string;
+  /**
+   * El formulario exige un importe mayor que 0: con «0» la vista previa lo
+   * avisa en vez de prometer «Se guardará: 0,00».
+   */
+  requirePositive?: boolean;
 }
 
 /** La línea bajo el campo para un texto ya «asentado». */
-function previewText(text: string, currency: string): string {
+function previewText(text: string, currency: string, requirePositive: boolean): string {
   if (text.trim() === '') return '';
   const parsed = parseMoneyInput(text, currency);
   if (!parsed.ok) return parsed.message;
+  if (requirePositive && parsed.value <= 0) return moneyInputCopy.positive;
   const formatted = currency ? formatCurrency(parsed.value, currency) : formatAmount(parsed.value);
   return moneyInputCopy.preview(formatted);
 }
@@ -48,7 +54,17 @@ function previewText(text: string, currency: string): string {
  */
 export const MoneyInput = React.forwardRef<HTMLInputElement, MoneyInputProps>(
   (
-    { value, onValueChange, currency, containerClassName, className, id, 'aria-describedby': describedBy, ...props },
+    {
+      value,
+      onValueChange,
+      currency,
+      containerClassName,
+      requirePositive = false,
+      className,
+      id,
+      'aria-describedby': describedBy,
+      ...props
+    },
     ref,
   ) => {
     const autoId = useId();
@@ -62,7 +78,7 @@ export const MoneyInput = React.forwardRef<HTMLInputElement, MoneyInputProps>(
     }, [value]);
 
     const invalid = props['aria-invalid'] === true || props['aria-invalid'] === 'true';
-    const preview = invalid ? '' : previewText(settled, currency);
+    const preview = invalid ? '' : previewText(settled, currency, requirePositive);
 
     return (
       <div className={cn('flex min-w-0 flex-col gap-1', containerClassName)}>

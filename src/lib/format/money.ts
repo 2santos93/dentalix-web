@@ -33,6 +33,8 @@ export const MONEY_INPUT_MAX = 9_999_999_999.99;
 
 export const moneyInputCopy = {
   empty: 'Escribe un importe.',
+  /** Para los campos que exigen un importe positivo (abono, compromiso…). */
+  positive: 'Escribe un importe mayor que 0.',
   invalid: 'Escribe solo cifras, con punto o coma para los decimales.',
   ambiguous: (text: string) =>
     `No sabemos leer «${text}»: separa los miles en grupos de 3 (1.500.000) y los decimales con 1 o 2 cifras (150,50).`,
