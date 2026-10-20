@@ -8,6 +8,8 @@ import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/shared/page-header';
 import { OverdueChip } from '@/components/collections/overdue-chip';
 import { CoverageChip } from '@/components/patients/coverage-chip';
+import { AgreementChip } from '@/components/patients/agreement-chip';
+import { agreementChipText } from '@/lib/patients/agreement-presentation';
 import { coverageChipText } from '@/lib/patients/coverage-presentation';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
@@ -127,11 +129,14 @@ export function PatientRecordHeader({ patient, loading, onEdit }: PatientRecordH
             </p>
             {/* DX-150: «Saldo vencido · N días» (con importe solo para ADMIN y
                 RECEPTION: la API ya lo omite para los demás roles). */}
-            {/* DX-153: «Cobertura vencida», junto a la del saldo. */}
-            {patient?.balance?.hasOverdue || coverageChipText(patient?.coverage) ? (
+            {/* DX-153: «Cobertura vencida», junto a la del saldo. DX-105: «Convenio: X». */}
+            {patient?.balance?.hasOverdue ||
+            coverageChipText(patient?.coverage) ||
+            agreementChipText(patient?.agreement) ? (
               <div className="flex flex-wrap items-center gap-2">
                 {patient?.balance?.hasOverdue ? <OverdueChip balance={patient.balance} /> : null}
                 <CoverageChip coverage={patient?.coverage} />
+                <AgreementChip agreement={patient?.agreement} />
               </div>
             ) : null}
           </div>
