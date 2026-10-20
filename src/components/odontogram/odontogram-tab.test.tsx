@@ -249,6 +249,23 @@ describe('OdontogramTab', () => {
     expect(screen.queryByRole('link', { name: /registrar implante/i })).not.toBeInTheDocument();
   });
 
+  it('DX-151: «Documentos del diente» lleva a la pestaña de documentos filtrada por ese diente', async () => {
+    mockedListCatalog.mockResolvedValue(catalog);
+    mockedGetTimeline.mockResolvedValue([]);
+    mockedGetOdontogram.mockResolvedValue(initialGroups);
+    render(
+      <OdontogramTab
+        token="tok"
+        patientId="p1"
+        initialTooth="11"
+        documentsHref={(tooth) => `/patients/p1?tab=documents&tooth=${tooth}`}
+      />,
+    );
+    const link = await screen.findByRole('link', { name: 'Documentos del diente 11' });
+    expect(link).toHaveAttribute('href', '/patients/p1?tab=documents&tooth=11');
+    expect(link).toHaveTextContent('Documentos del diente');
+  });
+
   it('«Ver la carta al» recarga a esa fecha en solo lectura, con aviso y sin acciones', async () => {
     const user = userEvent.setup();
     mockedListCatalog.mockResolvedValue(catalog);

@@ -57,4 +57,10 @@ describe('proxy (DX-062: CSP con nonce por petición)', () => {
     expect(source.test('/_next/image')).toBe(false);
     expect(source.test('/favicon.ico')).toBe(false);
   });
+
+  it('DX-151: la CSP deja enmarcar e incrustar las URL firmadas de documentos (origen de la API por defecto)', () => {
+    const csp = run('http://demo.localhost:3001/patients/p1').headers.get('content-security-policy') as string;
+    const frameSrc = csp.split(';').map((d) => d.trim()).find((d) => d.startsWith('frame-src'));
+    expect(frameSrc).toBe(`frame-src 'self' ${new URL(process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000/api/v1').origin}`);
+  });
 });

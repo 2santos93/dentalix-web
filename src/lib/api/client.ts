@@ -150,7 +150,7 @@ async function refreshUnderLock(hasLocks: boolean): Promise<string | null> {
  * sesión o sesión muerta) la cierra. En el servidor (sin `window`) no hay
  * cookie de sesión que usar: siempre `null`.
  */
-function refreshAccessToken(): Promise<string | null> {
+export function refreshAccessToken(): Promise<string | null> {
   if (refreshInFlight) return refreshInFlight;
   refreshInFlight = (async () => {
     if (typeof window === 'undefined') return null;
@@ -193,6 +193,74 @@ export function bootstrapSession(): Promise<void> {
 }
 
 /**
+ * Las cabeceras de cada petición a la API: `Content-Type` JSON (salvo
+ * multipart), el bearer, el host del tenant, el modo cookie del refresh y la
+ * sede activa. Las comparten `doFetch` y la subida con progreso por XHR
+ * (`upload.ts`), para que ambas viajen igual.
+ */
+export function buildRequestHeaders(opts: {
+  token?: string;
+  /** `false` en multipart: el navegador pone el `boundary`. */
+  json?: boolean;
+  extra?: Record<string, string>;
+}): { headers: Record<string, string>; sentLocationId: string | null } {
+  const headers: Record<string, string> = {};
+  if (opts.json !== false) headers['Content-Type'] = 'application/json';
+  if (opts.token) headers.Authorization = `Bearer ${opts.token}`;
+  // The backend resolves the tenant from the request host (see
+  // `select-host.ts`: `x-tenant-host` → `x-forwarded-host` → `Host`, in that
+  // order, outside prod). In the browser, `window.location.host` IS the
+  // tenant's host (e.g. `agendademo7z.localhost:3001`), so send it — this
+  // makes the tenant travel automatically without any caller having to know
+  // or pass it. Server-side callers (no `window`) don't set this header; the
+  // backend then falls back to `x-forwarded-host`/`Host` from the proxied
+  // request, which is fine — there is no browser host to read here.
+  if (typeof window !== 'undefined') {
+    headers['X-Tenant-Host'] = window.location.host;
+    // Modo cookie (DX-062): los endpoints que abren o renuevan sesión dejan el
+    // refresh en la cookie HttpOnly y solo devuelven el access token.
+    headers['X-Refresh-Transport'] = 'cookie';
+  }
+  // Sede activa: igual que el tenant, viaja sola en cada request en vez de
+  // tener que pasarla por parámetro a cada llamada. Si no hay ninguna elegida
+  // no se manda la cabecera, y el backend responde la vista CONSOLIDADA de la
+  // clínica — que es el comportamiento de siempre.
+  const sentLocationId = getActiveLocationId();
+  if (sentLocationId) headers['X-Location-Id'] = sentLocationId;
+  if (opts.extra) Object.assign(headers, opts.extra);
+  return { headers, sentLocationId: sentLocationId ?? null };
+}
+
+/**
+ * `ApiError` a partir del cuerpo de error ya parseado (o `null` si no era
+ * JSON). El cuerpo de la API es `{ statusCode, message, error }`, con `message`
+ * texto o el array de class-validator. Se guarda tal cual en `messages`; qué se
+ * enseña lo decide `apiErrorMessage()`. Sin cuerpo JSON (proxy caído, HTML),
+ * `message` queda en `HTTP <status>`, solo para logs.
+ */
+export function apiErrorFromBody(
+  status: number,
+  body: unknown,
+  retryAfterHeader: string | null,
+): ApiError {
+  let messages: string[] = [];
+  let code: string | null = null;
+  if (body && typeof body === 'object') {
+    const data = body as { message?: unknown; code?: unknown };
+    const raw = data.message;
+    if (typeof raw === 'string' && raw) messages = [raw];
+    else if (Array.isArray(raw)) messages = raw.filter((m): m is string => typeof m === 'string');
+    if (typeof data.code === 'string' && data.code) code = data.code;
+  }
+  const message = messages.length > 0 ? messages.join('; ') : `HTTP ${status}`;
+  return new ApiError(status, message, {
+    messages,
+    retryAfterSeconds: parseRetryAfter(retryAfterHeader),
+    code,
+  });
+}
+
+/**
  * `fetch` que relanza su rechazo como `NetworkError` (revisión D-2), salvo
  * `AbortError`/`TimeoutError`, que son de quien llama (cancelación o límite de
  * tiempo) y pasan tal cual.
@@ -218,30 +286,11 @@ async function doFetch(
   // the correct `multipart/form-data; boundary=...` header itself when the
   // fetch `body` is a FormData instance.
   const isForm = typeof FormData !== 'undefined' && opts.body instanceof FormData;
-  const headers: Record<string, string> = {};
-  if (!isForm) headers['Content-Type'] = 'application/json';
-  if (opts.token) headers.Authorization = `Bearer ${opts.token}`;
-  // The backend resolves the tenant from the request host (see
-  // `select-host.ts`: `x-tenant-host` → `x-forwarded-host` → `Host`, in that
-  // order, outside prod). In the browser, `window.location.host` IS the
-  // tenant's host (e.g. `agendademo7z.localhost:3001`), so send it — this
-  // makes the tenant travel automatically without any caller having to know
-  // or pass it. Server-side callers (no `window`) don't set this header; the
-  // backend then falls back to `x-forwarded-host`/`Host` from the proxied
-  // request, which is fine — there is no browser host to read here.
-  if (typeof window !== 'undefined') {
-    headers['X-Tenant-Host'] = window.location.host;
-    // Modo cookie (DX-062): los endpoints que abren o renuevan sesión dejan el
-    // refresh en la cookie HttpOnly y solo devuelven el access token.
-    headers['X-Refresh-Transport'] = 'cookie';
-  }
-  // Sede activa: igual que el tenant, viaja sola en cada request en vez de
-  // tener que pasarla por parámetro a cada llamada. Si no hay ninguna elegida
-  // no se manda la cabecera, y el backend responde la vista CONSOLIDADA de la
-  // clínica — que es el comportamiento de siempre.
-  const sentLocationId = getActiveLocationId();
-  if (sentLocationId) headers['X-Location-Id'] = sentLocationId;
-  if (opts.headers) Object.assign(headers, opts.headers);
+  const { headers, sentLocationId } = buildRequestHeaders({
+    token: opts.token,
+    json: !isForm,
+    extra: opts.headers,
+  });
   const res = await fetchOrNetworkError(`${apiBaseUrl()}${path}`, {
     method: opts.method ?? 'GET',
     headers,
@@ -274,22 +323,14 @@ async function doFetch(
     }
   }
   if (!res.ok) {
-    // El cuerpo de error de la API es `{ statusCode, message, error }`, con
-    // `message` texto o el array de class-validator. Se guarda tal cual en
-    // `messages`; qué se enseña lo decide `apiErrorMessage()`. Sin cuerpo JSON
-    // (proxy caído, HTML), `message` queda en `HTTP <status>`, solo para logs.
-    let messages: string[] = [];
-    let code: string | null = null;
+    let body: unknown = null;
     try {
-      const data = (await res.json()) as { message?: unknown; code?: unknown };
-      const raw = data?.message;
-      if (typeof raw === 'string' && raw) messages = [raw];
-      else if (Array.isArray(raw)) messages = raw.filter((m): m is string => typeof m === 'string');
-      if (typeof data?.code === 'string' && data.code) code = data.code;
+      body = await res.json();
     } catch {
       /* sin cuerpo JSON */
     }
-    const message = messages.length > 0 ? messages.join('; ') : `HTTP ${res.status}`;
+    const error = apiErrorFromBody(res.status, body, res.headers?.get('Retry-After') ?? null);
+    const message = error.message;
     // Sede huérfana → autocuración. La sede elegida vive en localStorage y
     // sobrevive a la sede real: si se borra, se desactiva, o se reseedea la base
     // y cambian los ids, ese id se sigue mandando en CADA petición y el backend
@@ -310,11 +351,7 @@ async function doFetch(
       setActiveLocationId(null);
       return doFetch(path, opts, allowRefresh, false);
     }
-    throw new ApiError(res.status, message, {
-      messages,
-      retryAfterSeconds: parseRetryAfter(res.headers?.get('Retry-After') ?? null),
-      code,
-    });
+    throw error;
   }
   return res;
 }

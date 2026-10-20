@@ -13,19 +13,27 @@
  *   host (ver `api-base.ts`).
  * - `img-src`: logos y avatares los sirve la API (otro origen), `data:` para la
  *   firma de consentimientos y `blob:` para la vista previa de imágenes.
+ * - `img-src`/`frame-src` + `filesOrigin` (DX-151): el visor de documentos
+ *   pinta la URL firmada (imagen o PDF) del bucket, o de la API con el
+ *   almacenamiento en disco. Sin `frame-src`, un `<iframe>` caería en
+ *   `default-src 'self'` y el PDF no cargaría.
  */
 export interface CspOptions {
   nonce: string;
   isDev: boolean;
   apiOrigin: string;
+  /** Origen de las URL firmadas de documentos; por defecto, `apiOrigin`. */
+  filesOrigin?: string;
 }
 
-export function buildCsp({ nonce, isDev, apiOrigin }: CspOptions): string {
+export function buildCsp({ nonce, isDev, apiOrigin, filesOrigin = apiOrigin }: CspOptions): string {
+  const files = filesOrigin === apiOrigin ? [] : [filesOrigin];
   const directives: [string, string[]][] = [
     ['default-src', ["'self'"]],
     ['script-src', ["'self'", `'nonce-${nonce}'`, "'strict-dynamic'", ...(isDev ? ["'unsafe-eval'"] : [])]],
     ['style-src', ["'self'", "'unsafe-inline'"]],
-    ['img-src', ["'self'", 'data:', 'blob:', apiOrigin]],
+    ['img-src', ["'self'", 'data:', 'blob:', apiOrigin, ...files]],
+    ['frame-src', ["'self'", filesOrigin]],
     ['font-src', ["'self'"]],
     ['connect-src', ["'self'"]],
     ['object-src', ["'none'"]],

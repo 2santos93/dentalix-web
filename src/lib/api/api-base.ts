@@ -27,3 +27,23 @@ export function apiRewrites(apiUrl: string = API_URL): { source: string; destina
 export function apiOrigin(apiUrl: string = API_URL): string {
   return new URL(apiUrl).origin;
 }
+
+/**
+ * Origen de las URL firmadas de los documentos del paciente (DX-151), que el
+ * visor pinta en `<img>`/`<iframe>`: el bucket (S3, R2, MinIO) si se configura
+ * `NEXT_PUBLIC_FILES_ORIGIN`; si no (almacenamiento en disco), la propia API.
+ * Un valor que no es una URL se ignora y cae en la API.
+ */
+export function filesOrigin(
+  configured: string | undefined = process.env.NEXT_PUBLIC_FILES_ORIGIN,
+  apiUrl: string = API_URL,
+): string {
+  if (configured?.trim()) {
+    try {
+      return new URL(configured.trim()).origin;
+    } catch {
+      /* mal configurada: la API */
+    }
+  }
+  return apiOrigin(apiUrl);
+}

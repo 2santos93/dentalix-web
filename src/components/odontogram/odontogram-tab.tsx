@@ -60,6 +60,9 @@ const copy = {
   viewInPlanFor: (fdi: string) => `Ver en el plan los ítems del diente ${fdi}`,
   registerImplant: 'Registrar implante',
   registerImplantFor: (fdi: string) => `Registrar implante en el diente ${fdi}`,
+  // DX-151
+  toothDocuments: 'Documentos del diente',
+  toothDocumentsFor: (fdi: string) => `Documentos del diente ${fdi}`,
   // DX-120
   dentitionSwitch: 'Dentición de la carta',
   dentitionByAge: (age: number) => `Según la edad (${age} años)`,
@@ -105,6 +108,11 @@ interface OdontogramTabProps {
    * «Implantes» con el formulario). Sin él (rol que no registra) no se pinta.
    */
   implantHref?: (toothNumber: string) => string;
+  /**
+   * DX-151: href de «Documentos del diente» (la pestaña «Documentos» filtrada
+   * por ese diente). Es lectura, así que se pinta también en la carta pasada.
+   */
+  documentsHref?: (toothNumber: string) => string;
 }
 
 interface DentitionDialogState {
@@ -147,6 +155,7 @@ export function OdontogramTab({
   onToothChange,
   planHref,
   implantHref,
+  documentsHref,
 }: OdontogramTabProps) {
   const [toothGroups, setToothGroups] = useState<ToothGroup[]>([]);
   const [dentition, setDentition] = useState<DentitionView | null>(null);
@@ -494,6 +503,15 @@ export function OdontogramTab({
                   className="text-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
                 >
                   {copy.registerImplant}
+                </Link>
+              ) : null}
+              {documentsHref ? (
+                <Link
+                  href={documentsHref(selectedTooth)}
+                  aria-label={copy.toothDocumentsFor(selectedTooth)}
+                  className="text-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg"
+                >
+                  {copy.toothDocuments}
                 </Link>
               ) : null}
             </div>

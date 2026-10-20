@@ -16,6 +16,8 @@ describe('patientTabAccess (qué pestañas de la ficha ve cada rol)', () => {
     expect(access['access-log']).toBe(false);
     // DX-191: ve los implantes e imprime la tarjeta (la entrega en el mostrador).
     expect(access.implants).toBe(true);
+    // DX-151: los cuatro roles leen y suben documentos.
+    expect(access.documents).toBe(true);
   });
 
   it.each(['DENTIST', 'ASSISTANT'] as const)(
@@ -31,6 +33,7 @@ describe('patientTabAccess (qué pestañas de la ficha ve cada rol)', () => {
       expect(access['account-statement']).toBe(false);
       // DX-009: los accesos a la ficha solo los ve ADMIN.
       expect(access['access-log']).toBe(false);
+      expect(access.documents).toBe(true);
     },
   );
 

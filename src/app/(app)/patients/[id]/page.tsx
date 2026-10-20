@@ -33,6 +33,7 @@ import { PatientConsentsTab } from '@/components/consents/patient-consents-tab';
 import { PerioTab } from '@/components/perio/perio-tab';
 import { PatientPrescriptionsTab } from '@/components/prescriptions/patient-prescriptions-tab';
 import { PatientImplantsTab } from '@/components/implants/patient-implants-tab';
+import { PatientDocumentsTab } from '@/components/patient-documents/patient-documents-tab';
 import { canRegisterImplants } from '@/lib/implants/implants-api';
 import { AuditLogView } from '@/components/audit/audit-log-view';
 
@@ -53,6 +54,7 @@ const copy = {
   tabPerio: 'Periodontograma',
   tabPrescriptions: 'Recetas',
   tabImplants: 'Implantes',
+  tabDocuments: 'Documentos',
   tabAccessLog: 'Accesos',
   anamnesisHeading: 'Anamnesis',
   entriesHeading: 'Evoluciones',
@@ -316,6 +318,7 @@ function PatientDetailView() {
             perioLabel={access.perio ? copy.tabPerio : undefined}
             prescriptionsLabel={access.prescriptions ? copy.tabPrescriptions : undefined}
             implantsLabel={access.implants ? copy.tabImplants : undefined}
+            documentsLabel={access.documents ? copy.tabDocuments : undefined}
             accessLogLabel={access['access-log'] ? copy.tabAccessLog : undefined}
           />
 
@@ -399,6 +402,12 @@ function PatientDetailView() {
                 implantHref={
                   canRegisterImplants(getTokenRole(accessToken))
                     ? (tooth) => `${pathname}?tab=implants&registerTooth=${tooth}`
+                    : undefined
+                }
+                // DX-151: los documentos (radiografías, fotos) de ese diente.
+                documentsHref={
+                  access.documents
+                    ? (tooth) => `${pathname}?tab=documents&tooth=${tooth}`
                     : undefined
                 }
               />
@@ -488,6 +497,17 @@ function PatientDetailView() {
                 registerTooth={searchParams.get('registerTooth')}
                 registerPlanItemId={searchParams.get('planItem')}
                 onShortcutConsumed={() => setParams({ registerTooth: null, planItem: null })}
+              />
+            </TabPanel>
+          ) : null}
+          {/* DX-151: documentos del paciente. `?tooth=` (el diente del
+              odontograma) llega como filtro inicial por diente. */}
+          {access.documents ? (
+            <TabPanel tab="documents" activeTab={activeTab} register={registerPanel}>
+              <PatientDocumentsTab
+                token={accessToken}
+                patientId={patientId}
+                initialTooth={focusedTooth}
               />
             </TabPanel>
           ) : null}
