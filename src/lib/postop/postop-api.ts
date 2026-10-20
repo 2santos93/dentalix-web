@@ -1,118 +1,26 @@
 import { apiFetch, apiFetchOrNull } from '@/lib/api/client';
+import type { components } from '@/lib/api/schema';
 import type { ClinicRole } from '@/lib/me/me-api';
 export { whatsAppUrl } from '@/lib/appointments/confirmation-message';
 
-// TODO(DX-222 T12): sustituir por components['schemas'][…] tras npm run codegen
-// Hasta entonces los tipos se escriben a mano desde el contrato de la API
-// (DX-222 tareas 3 a 5). Los nombres exportados no cambian al regenerar.
+type Schemas = components['schemas'];
 
-export type PostOpChannel = 'PRINT' | 'EMAIL' | 'WHATSAPP_LINK';
-
-export interface PostOpTemplate {
-  id: string;
-  code: string;
-  title: string;
-  body: string;
-  version: number;
-  active: boolean;
-  catalogItems: Array<{ id: string; code: string; labelEs: string }>;
-  appointmentTypes: Array<{ id: string; name: string }>;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export interface CreatePostOpTemplateInput {
-  code: string;
-  title: string;
-  body: string;
-  catalogItemIds?: string[];
-  appointmentTypeIds?: string[];
-}
-
+// Tipos del cliente generado (`npm run codegen`); los nombres exportados son
+// los que usan los componentes.
+export type PostOpChannel = Schemas['PostOpDeliveryChannel'];
+export type PostOpTemplate = Schemas['PostOpTemplateDto'];
+export type CreatePostOpTemplateInput = Schemas['CreatePostOpTemplateDto'];
 /** `code` no se edita. Los vínculos, si vienen, se reemplazan completos. */
-export interface UpdatePostOpTemplateInput {
-  title?: string;
-  body?: string;
-  active?: boolean;
-  catalogItemIds?: string[];
-  appointmentTypeIds?: string[];
-}
-
-export interface PostOpTemplateSummary {
-  id: string;
-  code: string;
-  title: string;
-  version: number;
-}
-
-export interface PostOpDeliverySummary {
-  id: string;
-  patientId: string;
-  appointmentId: string;
-  templateId: string;
-  templateCode: string;
-  templateTitle: string;
-  templateVersion: number;
-  channel: PostOpChannel;
-  deliveredAt: string;
-  deliveredByName: string;
-  recipientMasked: string | null;
-  sentToResponsible: boolean;
-  firstOpenedAt: string | null;
-  linkExpiresAt: string | null;
-}
-
-export interface PostOpSuggestions {
-  patientId: string;
-  suggested: PostOpTemplateSummary[];
-  others: PostOpTemplateSummary[];
-  email: {
-    allowed: boolean;
-    reason: string | null;
-    toMasked: string | null;
-    toResponsible: boolean;
-  };
-  whatsapp: { phone: string | null; reason: string | null };
-  locationPhone: string | null;
-  deliveries: PostOpDeliverySummary[];
-}
-
-export interface PostOpClinicBranding {
-  name: string;
-  logoUrl: string | null;
-  primaryColor: string | null;
-}
-
-export type PostOpDeliveryDocument = PostOpDeliverySummary & {
-  renderedText: string;
-  clinic: PostOpClinicBranding;
-  locationName: string;
-  locationPhone: string | null;
-  patientName: string;
-};
-
-export interface PostOpDeliveryCreated {
-  delivery: PostOpDeliverySummary;
-  publicUrl: string | null;
-  whatsapp: { phone: string; text: string } | null;
-  sentTo: string | null;
-  sentToResponsible: boolean;
-}
-
-export interface PublicPostOp {
-  clinic: PostOpClinicBranding;
-  locationPhone: string | null;
-  title: string;
-  code: string;
-  version: number;
-  renderedText: string;
-  deliveredAt: string;
-}
-
-export interface DeliverPostOpInput {
-  templateId: string;
-  channel: PostOpChannel;
-}
+export type UpdatePostOpTemplateInput = Schemas['UpdatePostOpTemplateDto'];
+export type PostOpTemplateSummary = Schemas['PostOpTemplateSummaryDto'];
+export type PostOpDeliverySummary = Schemas['PostOpDeliverySummaryDto'];
+export type PostOpSuggestions = Schemas['PostOpSuggestionsDto'];
+export type PostOpClinicBranding = Schemas['PostOpClinicBrandingDto'];
+export type PostOpDeliveryDocument = Schemas['PostOpDeliveryDocumentDto'];
+/** `emailQueued` es `false` si la entrega EMAIL quedó registrada pero el email no se encoló. */
+export type PostOpDeliveryCreated = Schemas['PostOpDeliveryCreatedDto'];
+export type PublicPostOp = Schemas['PublicPostOpDto'];
+export type DeliverPostOpInput = Schemas['DeliverPostOpDto'];
 
 /** Variables que admite una plantilla, en el orden en que se ofrecen. */
 export const POSTOP_VARIABLES = [

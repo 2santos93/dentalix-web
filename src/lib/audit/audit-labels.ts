@@ -83,6 +83,9 @@ export const AUDIT_RESOURCE_LABELS: Record<AuditResourceType, string> = {
   // DX-212: código CUPS de un ítem del catálogo y REPS de una sede.
   DENTAL_CATALOG_ITEM: 'Ítem del catálogo',
   LOCATION: 'Sede',
+  // DX-222: indicaciones postoperatorias (plantillas y entregas al paciente).
+  POSTOP_TEMPLATE: 'Plantilla de indicaciones',
+  POSTOP_DELIVERY: 'Indicaciones postoperatorias',
 };
 
 export const AUDIT_RESOURCE_OPTIONS = Object.keys(AUDIT_RESOURCE_LABELS) as AuditResourceType[];

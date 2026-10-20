@@ -67,6 +67,7 @@ function created(overrides: Partial<PostOpDeliveryCreated> = {}): PostOpDelivery
     whatsapp: null,
     sentTo: null,
     sentToResponsible: false,
+    emailQueued: true,
     ...overrides,
   };
 }

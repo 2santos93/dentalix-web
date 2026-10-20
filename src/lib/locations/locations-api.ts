@@ -1,4 +1,5 @@
 import { apiFetch } from '@/lib/api/client';
+import type { components } from '@/lib/api/schema';
 
 export interface ClinicLocation {
   id: string;
@@ -10,9 +11,9 @@ export interface ClinicLocation {
   repsHabilitationCode?: string | null;
   /**
    * DX-222: teléfono de la sede para las indicaciones postoperatorias, con
-   * indicativo de país. TODO(DX-222 T12): sustituir por el tipo generado.
+   * indicativo de país.
    */
-  phone?: string | null;
+  phone?: components['schemas']['LocationDto']['phone'];
   isActive: boolean;
   /**
    * Zona IANA de la sede (DX-097): la de su horario o, sin horario, la de su
