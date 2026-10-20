@@ -63,7 +63,7 @@ import {
 import { PaymentReceiptDialog } from '@/components/payments/payment-receipt-dialog';
 import { VoidPaymentModal } from '@/components/payments/void-payment-modal';
 import { voidPaymentErrorMessage } from '@/components/payments/use-void-payment';
-import { getTokenRole } from '@/lib/auth/token-role';
+import { getTokenAllowedLocationIds, getTokenRole } from '@/lib/auth/token-role';
 import { PaymentPlanSection } from './payment-plan-section';
 import { PlanQuoteActions } from './plan-quote-actions';
 import { PlanOptionsPanel } from './plan-options-panel';
@@ -1204,7 +1204,11 @@ export function TreatmentPlansTab({
   // Lo único de esta página donde la sede activa SÍ decide algo: a qué sede
   // queda atribuido un abono nuevo. Mismo aviso que el estado de cuenta
   // (`paymentLocationHint`: nada con una sola sede).
-  const locationHint = paymentLocationHint(locations, activeLocationId);
+  const locationHint = paymentLocationHint(
+    locations,
+    activeLocationId,
+    getTokenAllowedLocationIds(token),
+  );
 
   function refreshPlansInPlace(): Promise<void> {
     setRefreshing(true);

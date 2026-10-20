@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { listLocations, type ClinicLocation } from '@/lib/locations/locations-api';
 import { getActiveLocationId } from '@/lib/locations/location-store';
 import { paymentLocationHint } from '@/lib/payments/payment-location';
+import { getTokenAllowedLocationIds } from '@/lib/auth/token-role';
 
 /**
  * El aviso «Este abono quedará registrado en la sede …» para un formulario de
@@ -33,5 +34,5 @@ export function usePaymentLocationHint(token: string, active: boolean): string |
     };
   }, [token, active]);
 
-  return paymentLocationHint(locations, activeLocationId);
+  return paymentLocationHint(locations, activeLocationId, getTokenAllowedLocationIds(token));
 }

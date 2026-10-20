@@ -25,6 +25,7 @@ import { AsyncSection } from '@/components/shared/async-section';
 import { InlineError } from '@/components/errors/inline-error';
 import { notifyError } from '@/components/errors/notify';
 import { ScheduleBlockDialog } from '@/components/appointments/schedule-block-dialog';
+import { StaffLocationsCard } from '@/components/staff/staff-locations-card';
 import { getTokenRole, getTokenUserId } from '@/lib/auth/token-role';
 import {
   blocksOwnAgendaOnly,
@@ -415,6 +416,11 @@ export function StaffMemberProfile({ token, userId }: StaffMemberProfileProps) {
                   {copy.blockAgenda}
                 </Button>
               </Card>
+            ) : null}
+
+            {/* DX-089: sedes del miembro; la API solo deja verlas y cambiarlas al ADMIN. */}
+            {viewerRole === 'ADMIN' ? (
+              <StaffLocationsCard token={token} userId={userId} memberRole={member.role} />
             ) : null}
 
             <Card className="flex flex-col gap-3 p-5">

@@ -26,6 +26,11 @@ export interface StaffMember {
   fullName: string;
   email: string;
   role: ClinicRole;
+  /**
+   * DX-089: sedes en las que trabaja; `null` = todas (y siempre `null` en un
+   * ADMIN). Opcional solo por las respuestas que no lo traen (`PATCH`).
+   */
+  locationIds?: string[] | null;
 }
 
 export interface UpdateStaffInput {
@@ -185,6 +190,39 @@ export async function reactivateStaff(
 export async function unlockStaffLogin(token: string, userId: string): Promise<void> {
   await apiFetchOrNull<null>(`/staff/${userId}/login-unlock`, {
     method: 'POST',
+    token,
+  });
+}
+
+// ---------------------------------------------------------------------------
+// Sedes permitidas del miembro (DX-089, solo ADMIN)
+// ---------------------------------------------------------------------------
+
+// TODO(DX-089 T7): sustituir por components['schemas'][…] tras npm run codegen
+/** `all: true` = todas las sedes (entonces `locationIds` llega vacío). */
+export interface StaffLocations {
+  all: boolean;
+  locationIds: string[];
+}
+
+/** `GET /staff/:userId/locations` — sedes en las que puede trabajar el miembro. */
+export async function getStaffLocations(token: string, userId: string): Promise<StaffLocations> {
+  return apiFetch<StaffLocations>(`/staff/${userId}/locations`, { token });
+}
+
+/**
+ * `PUT /staff/:userId/locations` — reemplaza sus sedes; `[]` = todas. 409 si
+ * el miembro es ADMIN; 400 si alguna sede no es de la clínica. El cambio se
+ * aplica cuando el miembro renueva su sesión (como mucho 15 minutos).
+ */
+export async function replaceStaffLocations(
+  token: string,
+  userId: string,
+  locationIds: string[],
+): Promise<StaffLocations> {
+  return apiFetch<StaffLocations>(`/staff/${userId}/locations`, {
+    method: 'PUT',
+    body: { locationIds },
     token,
   });
 }

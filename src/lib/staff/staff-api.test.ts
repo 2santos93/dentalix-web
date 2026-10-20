@@ -6,7 +6,14 @@
  * indirectly through their component tests), so this follows `client.test.ts`'s
  * fetch-mocking convention instead.
  */
-import { listStaff, updateStaff, deactivateStaff, unlockStaffLogin } from './staff-api';
+import {
+  listStaff,
+  updateStaff,
+  deactivateStaff,
+  unlockStaffLogin,
+  getStaffLocations,
+  replaceStaffLocations,
+} from './staff-api';
 import { ApiError } from '@/lib/api/client';
 
 describe('staff-api', () => {
@@ -77,5 +84,51 @@ describe('staff-api', () => {
     expect(String(url)).toMatch(/\/staff\/u1\/login-unlock$/);
     expect(init.method).toBe('POST');
     expect(init.headers.Authorization).toBe('Bearer tok');
+  });
+});
+
+describe('staff-api — sedes del miembro (DX-089)', () => {
+  const realFetch = global.fetch;
+  afterEach(() => {
+    global.fetch = realFetch;
+  });
+
+  it('getStaffLocations: GET /staff/:userId/locations', async () => {
+    const body = { all: false, locationIds: ['s1'] };
+    const spy = jest.fn().mockResolvedValue({ ok: true, json: async () => body });
+    global.fetch = spy as unknown as typeof fetch;
+
+    await expect(getStaffLocations('tok', 'u1')).resolves.toEqual(body);
+    const [url, init] = spy.mock.calls[0];
+    expect(String(url)).toMatch(/\/staff\/u1\/locations$/);
+    expect(init.method).toBe('GET');
+  });
+
+  it('replaceStaffLocations: PUT /staff/:userId/locations con { locationIds } ([] = todas)', async () => {
+    const body = { all: true, locationIds: [] };
+    const spy = jest.fn().mockResolvedValue({ ok: true, json: async () => body });
+    global.fetch = spy as unknown as typeof fetch;
+
+    await expect(replaceStaffLocations('tok', 'u1', [])).resolves.toEqual(body);
+    const [url, init] = spy.mock.calls[0];
+    expect(String(url)).toMatch(/\/staff\/u1\/locations$/);
+    expect(init.method).toBe('PUT');
+    expect(JSON.parse(init.body)).toEqual({ locationIds: [] });
+  });
+
+  it('replaceStaffLocations: el 409 de un ADMIN llega como ApiError con el mensaje de la API', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 409,
+      json: async () => ({
+        statusCode: 409,
+        message: 'El ADMIN siempre tiene todas las sedes y no se puede restringir.',
+      }),
+    }) as unknown as typeof fetch;
+
+    await expect(replaceStaffLocations('tok', 'u1', ['s1'])).rejects.toMatchObject({
+      status: 409,
+      message: 'El ADMIN siempre tiene todas las sedes y no se puede restringir.',
+    });
   });
 });

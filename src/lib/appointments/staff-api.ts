@@ -18,6 +18,8 @@ export interface StaffMember {
   userId: string;
   fullName: string;
   role: ClinicRole;
+  /** DX-089: sedes en las que trabaja; `null` (o ausente) = todas. */
+  locationIds?: string[] | null;
 }
 
 export async function listStaff(token: string): Promise<StaffMember[]> {

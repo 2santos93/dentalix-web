@@ -20,6 +20,8 @@ jest.mock('../../lib/staff/staff-api', () => ({
   deactivateStaff: jest.fn(),
   reactivateStaff: jest.fn(),
   unlockStaffLogin: jest.fn(),
+  getStaffLocations: jest.fn().mockResolvedValue({ all: true, locationIds: [] }),
+  replaceStaffLocations: jest.fn(),
 }));
 
 jest.mock('../../lib/locations/locations-api', () => ({
@@ -233,6 +235,18 @@ describe('StaffMemberProfile', () => {
     render(<StaffMemberProfile token={admin} userId="u1" />);
     await screen.findByText('Ana Ríos');
     expect(screen.queryByRole('button', { name: 'Bloquear agenda' })).not.toBeInTheDocument();
+  });
+
+  it('DX-089: el ADMIN ve la tarjeta «Sedes» del miembro; otro rol no', async () => {
+    const { unmount } = render(<StaffMemberProfile token="tok" userId="u1" />);
+    await screen.findByText('Ana Ríos');
+    expect(screen.queryByRole('heading', { name: 'Sedes' })).not.toBeInTheDocument();
+    unmount();
+
+    const admin = `h.${btoa(JSON.stringify({ sub: 'adm', tenantId: 't1', role: 'ADMIN' }))}.s`;
+    render(<StaffMemberProfile token={admin} userId="u1" />);
+    expect(await screen.findByRole('heading', { name: 'Sedes' })).toBeInTheDocument();
+    expect(await screen.findByRole('checkbox', { name: 'Todas las sedes' })).toBeChecked();
   });
 
   describe('inicio de sesión bloqueado (DX-048)', () => {
