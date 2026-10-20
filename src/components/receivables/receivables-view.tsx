@@ -18,6 +18,7 @@ import type { AgingRow } from '@/lib/receivables/receivables-api';
 import { listStaff, type StaffMember } from '@/lib/appointments/staff-api';
 import { CollectionNoteDialog } from '@/components/collections/collection-note-dialog';
 import { PaymentPromiseDialog } from '@/components/collections/payment-promise-dialog';
+import { parseMoneyInput } from '@/lib/format/money';
 import { notifyError } from '@/components/errors/notify';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -92,9 +93,13 @@ type CollectionDialog = { kind: 'note' | 'promise'; row: AgingRow } | null;
 
 const MIN_BALANCE_DEBOUNCE_MS = 400;
 
-function parseMinBalance(text: string): number | undefined {
-  const value = Number(text.replace(',', '.'));
-  return text.trim() !== '' && Number.isFinite(value) && value >= 0 ? value : undefined;
+/**
+ * El saldo mínimo del filtro, con la lectura común de los campos de dinero
+ * (DX-241): «100.000» es cien mil, también aquí. Vacío o ilegible, sin filtro.
+ */
+function parseMinBalance(text: string, currency: string): number | undefined {
+  const parsed = parseMoneyInput(text, currency === 'ALL' ? '' : currency);
+  return parsed.ok ? parsed.value : undefined;
 }
 
 function saveCsv(text: string, fileName: string): void {
@@ -217,14 +222,18 @@ export function ReceivablesView({ token }: { token: string }) {
 
   // El saldo mínimo se aplica al dejar de teclear, no en cada tecla.
   useEffect(() => {
-    const next = parseMinBalance(minBalanceText);
+    const next = parseMinBalance(minBalanceText, currency);
     if (next === minBalance) return;
     const timer = setTimeout(() => {
       setMinBalance(next);
       setPage(1);
     }, MIN_BALANCE_DEBOUNCE_MS);
     return () => clearTimeout(timer);
-  }, [minBalanceText, minBalance]);
+  }, [minBalanceText, minBalance, currency]);
+  // Lo que no se entiende no filtra: el campo lo marca para que no parezca
+  // aplicado.
+  const minBalanceInvalid =
+    minBalanceText.trim() !== '' && parseMinBalance(minBalanceText, currency) === undefined;
 
   async function exportCsv() {
     setExporting(true);
@@ -287,6 +296,8 @@ export function ReceivablesView({ token }: { token: string }) {
                 placeholder={receivablesCopy.minBalancePlaceholder}
                 value={minBalanceText}
                 onChange={(e) => setMinBalanceText(e.target.value)}
+                aria-invalid={minBalanceInvalid ? true : undefined}
+                autoComplete="off"
                 className="tabular-nums sm:w-40"
               />
               <select

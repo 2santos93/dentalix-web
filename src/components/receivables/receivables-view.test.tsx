@@ -166,6 +166,20 @@ describe('ReceivablesView (DX-145)', () => {
     );
   });
 
+  it('DX-241: el saldo mínimo se lee como cualquier importe («100.000» es cien mil); lo ambiguo no filtra', async () => {
+    mockedAging.mockResolvedValue(page([row()]));
+    const user = userEvent.setup();
+    render(<ReceivablesView token="tok" />);
+    await screen.findByRole('table');
+    const field = screen.getByRole('textbox', { name: 'Saldo mínimo' });
+    await user.type(field, '100.000');
+    await waitFor(() => expect(mockedAging).toHaveBeenLastCalledWith('tok', { minBalance: 100000, page: 1 }));
+    await user.clear(field);
+    await user.type(field, '1.00.000');
+    expect(field).toHaveAttribute('aria-invalid', 'true');
+    await waitFor(() => expect(mockedAging).toHaveBeenLastCalledWith('tok', { page: 1 }));
+  });
+
   it('vacío: «No hay saldos vencidos en esta sede»', async () => {
     mockedAging.mockResolvedValue(page([]));
     render(<ReceivablesView token="tok" />);

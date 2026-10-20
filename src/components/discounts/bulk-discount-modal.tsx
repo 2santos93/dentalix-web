@@ -3,6 +3,7 @@ import * as React from 'react';
 import { useState } from 'react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { formatCurrency } from '@/lib/format/currency';
+import { parseDecimalInput } from '@/lib/format/money';
 import type { ClinicRole } from '@/lib/me/me-api';
 import type { TreatmentPlanItem } from '@/lib/treatment-plans/treatment-plans-api';
 import { applyBulkDiscount } from '@/lib/discounts/discounts-api';
@@ -53,10 +54,13 @@ interface BulkDiscountModalProps {
   onApplied: (items: TreatmentPlanItem[]) => void;
 }
 
+/**
+ * El porcentaje con la misma regla decimal que los importes (DX-241): «7,5» y
+ * «7.5» valen lo mismo, hasta 2 decimales; fuera de 0–100, `null`.
+ */
 function parsePercent(text: string): number | null {
-  const value = Number(text.replace(',', '.'));
-  if (text.trim() === '' || !Number.isFinite(value) || value < 0 || value > 100) return null;
-  return Math.round(value * 100) / 100 === value ? value : null;
+  const parsed = parseDecimalInput(text, 2);
+  return parsed.ok && parsed.value <= 100 ? parsed.value : null;
 }
 
 /**

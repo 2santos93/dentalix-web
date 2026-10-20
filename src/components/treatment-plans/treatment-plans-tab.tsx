@@ -48,6 +48,8 @@ import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
 import { FormField } from '@/components/shared/form-field';
+import { MoneyInput } from '@/components/shared/money-input';
+import { parseMoneyInput } from '@/lib/format/money';
 import { FormModal } from '@/components/shared/form-modal';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { EmptyState } from '@/components/shared/empty-state';
@@ -194,6 +196,7 @@ const copy = {
   discountLabel: 'Descuento (opcional)',
   discountHint: 'En la moneda del plan. Sale en el presupuesto.',
   invalidDiscount: 'El descuento debe ser un monto válido, no mayor que el precio.',
+  invalidPrice: 'El precio debe ser un monto válido.',
   itemDiscount: (amount: string) => `Descuento −${amount}`,
   // SEC-041: el precio por debajo del de catálogo cuenta como descuento.
   itemPriceReduction: (amount: string, catalog: string) => `Rebaja −${amount} (catálogo ${catalog})`,
@@ -303,6 +306,17 @@ const ITEM_STATUS_BADGE_VARIANT: Record<TreatmentPlanItemStatus, BadgeProps['var
   DONE: 'success',
 };
 
+
+
+/**
+ * Un importe opcional de un campo de dinero (DX-241): `undefined` si está
+ * vacío, `null` si no se entiende, o el número leído con la regla común.
+ */
+function optionalAmount(text: string, currency: string): number | undefined | null {
+  if (text.trim() === '') return undefined;
+  const parsed = parseMoneyInput(text, currency);
+  return parsed.ok ? parsed.value : null;
+}
 
 function emptySurfacesState(): Record<ToothSurface, boolean> {
   return { VESTIBULAR: false, LINGUAL: false, MESIAL: false, DISTAL: false, OCCLUSAL: false };
@@ -1471,16 +1485,21 @@ export function TreatmentPlansTab({
 
     if (!selectedPlanId) return;
 
-    const amountNumber = Number(paymentAmount.trim());
-    if (!paymentAmount.trim() || !Number.isFinite(amountNumber) || amountNumber <= 0) {
-      setAddPaymentValidationError(copy.invalidPaymentAmount);
-      return;
-    }
     const currencyValue = paymentCurrency.trim().toUpperCase();
     if (!currencyValue) {
       setAddPaymentValidationError(copy.invalidPaymentCurrency);
       return;
     }
+    // DX-241: la lectura común de los campos de dinero, con los decimales de
+    // la moneda del abono.
+    const parsedAmount = parseMoneyInput(paymentAmount, currencyValue);
+    if (!parsedAmount.ok || parsedAmount.value <= 0) {
+      setAddPaymentValidationError(
+        parsedAmount.ok || parsedAmount.reason === 'empty' ? copy.invalidPaymentAmount : parsedAmount.message,
+      );
+      return;
+    }
+    const amountNumber = parsedAmount.value;
     if (!paymentDate) {
       setAddPaymentValidationError(copy.invalidPaymentDate);
       return;
@@ -1647,14 +1666,15 @@ export function TreatmentPlansTab({
     }
 
     const selectedSurfaces = SURFACE_ORDER.filter((s) => surfaces[s]);
-    const trimmedPrice = price.trim();
-    const trimmedDiscount = discount.trim();
-    const discountValue = trimmedDiscount ? Number(trimmedDiscount) : 0;
-    if (
-      !Number.isFinite(discountValue) ||
-      discountValue < 0 ||
-      (trimmedPrice !== '' && discountValue > Number(trimmedPrice))
-    ) {
+    const itemCurrency = planDetail?.currency ?? '';
+    const priceInput = optionalAmount(price, itemCurrency);
+    const discountInput = optionalAmount(discount, itemCurrency);
+    if (priceInput === null) {
+      setAddItemValidationError(copy.invalidPrice);
+      return;
+    }
+    const discountValue = discountInput ?? 0;
+    if (discountInput === null || (priceInput !== undefined && discountValue > priceInput)) {
       setAddItemValidationError(copy.invalidDiscount);
       return;
     }
@@ -1663,11 +1683,9 @@ export function TreatmentPlansTab({
     // suma la rebaja del precio frente al de catálogo.
     setAddReasonErrors(null);
     const catalogPrice = catalogById.get(catalogItemId)?.defaultPrice ?? null;
-    const effectivePrice = trimmedPrice ? Number(trimmedPrice) : catalogPrice;
+    const effectivePrice = priceInput ?? catalogPrice;
     const effective =
-      effectivePrice !== null && Number.isFinite(effectivePrice)
-        ? effectiveDiscount(catalogPrice, effectivePrice, discountValue)
-        : null;
+      effectivePrice !== null ? effectiveDiscount(catalogPrice, effectivePrice, discountValue) : null;
     if (discountRules && role && effective && exceedsCap(discountRules, role, effective.listPrice, effective.total)) {
       const cap = capFor(discountRules, role);
       setAddItemValidationError(
@@ -1690,7 +1708,7 @@ export function TreatmentPlansTab({
         toothNumber: tooth,
         catalogItemId,
         ...(selectedSurfaces.length ? { surfaces: selectedSurfaces } : {}),
-        ...(trimmedPrice ? { price: Number(trimmedPrice) } : {}),
+        ...(priceInput !== undefined ? { price: priceInput } : {}),
         ...(discountValue > 0 ? { discount: discountValue } : {}),
         ...(discounted ? reasonPayload(addReason) : {}),
         ...(notes.trim() ? { notes: notes.trim() } : {}),
@@ -1737,12 +1755,16 @@ export function TreatmentPlansTab({
   // DX-204: un presupuesto aceptado (firmado o no) o cerrado no se vuelve a
   // descontar.
   const discountable = Boolean(planDetail) && !signed && !closed && planDetail?.status !== 'ACCEPTED';
-  const addDiscountValue = Number(discount.trim() || '0');
+  const addCurrency = planDetail?.currency ?? '';
+  const addDiscountInput = optionalAmount(discount, addCurrency);
+  const addPriceInput = optionalAmount(price, addCurrency);
+  const addDiscountValue = addDiscountInput ?? 0;
   const addCatalogPrice = catalogById.get(catalogItemId)?.defaultPrice ?? null;
-  const addPrice = price.trim() ? Number(price.trim()) : addCatalogPrice;
-  // SEC-041: descuento efectivo = rebaja frente al catálogo + descuento.
+  const addPrice = addPriceInput ?? addCatalogPrice;
+  // SEC-041: descuento efectivo = rebaja frente al catálogo + descuento. Con
+  // un precio o descuento que no se entiende no hay aviso (el envío lo para).
   const addEffective =
-    addPrice !== null && Number.isFinite(addPrice) && Number.isFinite(addDiscountValue)
+    addPrice !== null && addDiscountInput !== null && addPriceInput !== null
       ? effectiveDiscount(addCatalogPrice, addPrice, addDiscountValue)
       : null;
   const addBelowCatalog = addEffective !== null && addEffective.priceReduction > 0;
@@ -2088,13 +2110,11 @@ export function TreatmentPlansTab({
 
                         <div className="grid gap-4 sm:grid-cols-2">
                           <FormField htmlFor="tp-payment-amount" label={copy.paymentAmountLabel}>
-                            <Input
+                            <MoneyInput
                               id="tp-payment-amount"
-                              type="number"
-                              min={0}
-                              step="0.01"
+                              currency={paymentCurrency}
                               value={paymentAmount}
-                              onChange={(e) => setPaymentAmount(e.target.value)}
+                              onValueChange={setPaymentAmount}
                             />
                           </FormField>
 
@@ -2243,13 +2263,11 @@ export function TreatmentPlansTab({
 
                     <div className="grid gap-4 sm:grid-cols-2">
                       <FormField htmlFor="tp-price" label={copy.priceLabel}>
-                        <Input
+                        <MoneyInput
                           id="tp-price"
-                          type="number"
-                          min={0}
-                          step="0.01"
+                          currency={addCurrency}
                           value={price}
-                          onChange={(e) => setPrice(e.target.value)}
+                          onValueChange={setPrice}
                           aria-describedby={addBelowCatalog ? 'tp-price-below-catalog' : undefined}
                         />
                         {/* SEC-041: aviso, no bloqueo; la API decide con el
@@ -2270,13 +2288,11 @@ export function TreatmentPlansTab({
                       </FormField>
 
                       <FormField htmlFor="tp-discount" label={copy.discountLabel} hint={copy.discountHint}>
-                        <Input
+                        <MoneyInput
                           id="tp-discount"
-                          type="number"
-                          min={0}
-                          step="0.01"
+                          currency={addCurrency}
                           value={discount}
-                          onChange={(e) => setDiscount(e.target.value)}
+                          onValueChange={setDiscount}
                         />
                       </FormField>
 

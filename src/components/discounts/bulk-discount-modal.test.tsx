@@ -78,6 +78,17 @@ describe('BulkDiscountModal (DX-204)', () => {
     expect(texts[1]).toMatch(/9,26/);
   });
 
+  it('DX-241: el porcentaje sigue la regla decimal de los importes («7.5» = «7,5»; lo ambiguo no se envía)', async () => {
+    renderModal('ADMIN', 'EUR', [item('i1', '11', 85.55)]);
+    await userEvent.type(percentInput(), '7.5');
+    expect(previews()[0]).toMatch(/6,42/);
+    await userEvent.clear(percentInput());
+    await userEvent.type(percentInput(), '7.5.0');
+    await userEvent.click(screen.getByRole('button', { name: 'Aplicar descuento' }));
+    expect(await screen.findByText('Escribe un porcentaje entre 0 y 100, con hasta 2 decimales.')).toBeInTheDocument();
+    expect(mockedApply).not.toHaveBeenCalled();
+  });
+
   it('un DENTIST que pide un 15 % ve el tope de su rol y no se envía nada', async () => {
     renderModal('DENTIST');
     await userEvent.type(percentInput(), '15');

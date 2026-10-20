@@ -158,9 +158,39 @@ describe('CloseCashSessionModal (DX-027)', () => {
   it('un importe que no se entiende no sale hacia la API', async () => {
     const user = userEvent.setup();
     renderModal();
-    await user.type(screen.getByLabelText('Contado en efectivo (COP)'), '12,345');
+    // DX-241: «12,345» ya no es un error (son 12.345); lo ambiguo sí.
+    const input = screen.getByLabelText('Contado en efectivo (COP)');
+    await user.type(input, '12.34.5');
     await user.click(screen.getByRole('button', { name: 'Cerrar caja' }));
-    expect(screen.getByRole('alert')).toHaveTextContent(/no se entienden/);
+    const alerts = screen.getAllByRole('alert').map((a) => a.textContent);
+    expect(alerts).toContain('Hay importes que no se entienden: revisa los marcados.');
+    expect(input).toHaveAttribute('aria-invalid', 'true');
+    expect(alerts.some((t) => t?.startsWith('No sabemos leer «12.34.5»'))).toBe(true);
     expect(mockedClose).not.toHaveBeenCalled();
+
+    // Al volver a escribir en la fila, su marca se va.
+    await user.clear(input);
+    await user.type(input, '80.000');
+    expect(input).not.toHaveAttribute('aria-invalid');
+  });
+
+  it('DX-241: «80.000» en COP es ochenta mil, como en un abono', async () => {
+    const user = userEvent.setup();
+    mockedClose.mockResolvedValue(closedCashSessionFixture());
+    renderModal();
+    await user.type(screen.getByLabelText('Contado en efectivo (COP)'), '80.000');
+    await user.type(screen.getByLabelText('Contado en tarjeta (COP)'), '25.000');
+    expect(screen.queryByLabelText('Motivo de la diferencia')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Cerrar caja' }));
+    await waitFor(() =>
+      expect(mockedClose).toHaveBeenCalledWith('tok', 'cs-1', {
+        counts: [
+          { currency: 'COP', method: 'CASH', counted: 80_000 },
+          { currency: 'COP', method: 'CARD', counted: 25_000 },
+        ],
+        differenceReason: undefined,
+        notes: undefined,
+      }),
+    );
   });
 });

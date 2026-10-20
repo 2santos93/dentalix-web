@@ -5,7 +5,9 @@ import { createPaymentPlan, type Periodicity } from '@/lib/payment-plans/payment
 import { paymentPlanErrorMessage } from '@/lib/payments/payment-errors';
 import { formatCurrency } from '@/lib/format/currency';
 import { Input } from '@/components/ui/input';
-import { FormField } from '@/components/shared/form-field';
+import { FormField, fieldErrorId } from '@/components/shared/form-field';
+import { MoneyInput } from '@/components/shared/money-input';
+import { moneyInputText, parseMoneyInput } from '@/lib/format/money';
 import { FormModal } from '@/components/shared/form-modal';
 
 // Copy como constantes (i18n-ready). Los textos son los que ya tenía el modal
@@ -102,6 +104,7 @@ export function CreatePaymentPlanModal({
   const [form, setForm] = useState<FormState>(initialForm);
   const [creating, setCreating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [fieldErrors, setFieldErrors] = useState<{ downPayment?: string; total?: string }>({});
 
   // Ajuste durante el render (patrón de React para "estado que depende de una
   // prop"): al abrir se empieza de cero, y al cambiar de plan el total vuelve
@@ -113,6 +116,7 @@ export function CreatePaymentPlanModal({
     if (open) {
       setForm(initialForm());
       setError(null);
+      setFieldErrors({});
     }
   }
   if ((plan?.id ?? null) !== prevPlanId) {
@@ -121,7 +125,13 @@ export function CreatePaymentPlanModal({
   }
 
   const currency = plan?.currency ?? '';
-  const totalField = form.total ?? (plan ? String(plan.billable) : '');
+  const totalField = form.total ?? (plan ? moneyInputText(plan.billable) : '');
+  // DX-241: la lectura común de los campos de dinero, con los decimales de la
+  // moneda del plan. El pie vacío es 0.
+  const parsedTotal = parseMoneyInput(totalField, currency);
+  const parsedPie = form.downPayment.trim() === '' ? null : parseMoneyInput(form.downPayment, currency);
+  const total = parsedTotal.ok ? parsedTotal.value : null;
+  const pie = parsedPie === null ? 0 : parsedPie.ok ? parsedPie.value : null;
 
   function patch(next: Partial<FormState>) {
     setForm((f) => ({ ...f, ...next }));
@@ -132,17 +142,21 @@ export function CreatePaymentPlanModal({
     if (!plan) return;
     setError(null);
     const count = Number(form.installmentsCount);
-    const pie = Number(form.downPayment || '0');
-    const total = Number(totalField);
+    const nextFieldErrors = {
+      total: !parsedTotal.ok && parsedTotal.reason !== 'empty' ? parsedTotal.message : undefined,
+      downPayment: parsedPie && !parsedPie.ok ? parsedPie.message : undefined,
+    };
+    setFieldErrors(nextFieldErrors);
+    if (nextFieldErrors.total || nextFieldErrors.downPayment || pie === null) return;
     if (!Number.isInteger(count) || count < 1 || count > 600) {
       setError(copy.invalidCount);
       return;
     }
-    if (!(total > 0)) {
+    if (total === null || total <= 0) {
       setError(copy.invalidTotal);
       return;
     }
-    if (pie < 0 || pie > total) {
+    if (pie > total) {
       setError(copy.invalidDownPayment);
       return;
     }
@@ -168,7 +182,7 @@ export function CreatePaymentPlanModal({
   }
 
   // Vista previa de la cuota (solo UX; el backend reparte de verdad).
-  const previewFinanced = round2(Math.max(Number(totalField || '0') - Number(form.downPayment || '0'), 0));
+  const previewFinanced = round2(Math.max((total ?? 0) - (pie ?? 0), 0));
   const count = Number(form.installmentsCount);
   const previewPer = count >= 1 ? round2(previewFinanced / count) : 0;
 
@@ -225,27 +239,31 @@ export function CreatePaymentPlanModal({
               onChange={(e) => patch({ startDate: e.target.value })}
             />
           </FormField>
-          <FormField htmlFor="pp-down" label={copy.downPayment}>
-            <Input
+          <FormField htmlFor="pp-down" label={copy.downPayment} error={fieldErrors.downPayment}>
+            <MoneyInput
               id="pp-down"
-              type="number"
-              inputMode="decimal"
-              min={0}
-              step="0.01"
+              currency={currency}
               value={form.downPayment}
-              onChange={(e) => patch({ downPayment: e.target.value })}
+              onValueChange={(downPayment) => {
+                patch({ downPayment });
+                setFieldErrors((f) => ({ ...f, downPayment: undefined }));
+              }}
+              aria-invalid={fieldErrors.downPayment ? true : undefined}
+              aria-describedby={fieldErrors.downPayment ? fieldErrorId('pp-down') : undefined}
             />
           </FormField>
         </div>
-        <FormField htmlFor="pp-total" label={copy.totalField}>
-          <Input
+        <FormField htmlFor="pp-total" label={copy.totalField} error={fieldErrors.total}>
+          <MoneyInput
             id="pp-total"
-            type="number"
-            inputMode="decimal"
-            min={0}
-            step="0.01"
+            currency={currency}
             value={totalField}
-            onChange={(e) => patch({ total: e.target.value })}
+            onValueChange={(text) => {
+              patch({ total: text });
+              setFieldErrors((f) => ({ ...f, total: undefined }));
+            }}
+            aria-invalid={fieldErrors.total ? true : undefined}
+            aria-describedby={fieldErrors.total ? fieldErrorId('pp-total') : undefined}
           />
         </FormField>
         <p className="text-sm text-muted tabular-nums">

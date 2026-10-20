@@ -4,6 +4,7 @@ import {
   hasDifference,
   invalidRows,
   parseCounted,
+  countedError,
   rowDifference,
 } from './arqueo';
 import type { CashExpectedLine } from './cash-sessions-api';
@@ -33,16 +34,28 @@ describe('arqueo en pantalla (DX-027)', () => {
     expect(rows.every((r) => r.expected === null)).toBe(true);
   });
 
-  it('lee importes con punto o coma y como mucho 2 decimales', () => {
-    expect(parseCounted('1500,5')).toBe(1500.5);
-    expect(parseCounted(' 80000 ')).toBe(80_000);
-    expect(parseCounted('-1')).toBeNull();
-    expect(parseCounted('1.005')).toBeNull();
-    expect(parseCounted('abc')).toBeNull();
+  it('lee importes con la regla común de los campos de dinero (DX-241)', () => {
+    expect(parseCounted('1500,5', 'USD')).toBe(1500.5);
+    expect(parseCounted('150.50', 'USD')).toBe(150.5);
+    expect(parseCounted(' 80000 ', 'COP')).toBe(80_000);
+    expect(parseCounted('1.500.000', 'COP')).toBe(1_500_000);
+    expect(parseCounted('1.005', 'COP')).toBe(1005);
+    expect(parseCounted('1,5', 'COP')).toBeNull();
+    expect(parseCounted('-1', 'USD')).toBeNull();
+    expect(parseCounted('1.50.0', 'USD')).toBeNull();
+    expect(parseCounted('abc', 'USD')).toBeNull();
+  });
+
+  it('el motivo de una fila que no se entiende sale del lector común', () => {
+    expect(countedError({ currency: 'USD', method: 'CASH', expected: null, counted: '1.50.0' })).toMatch(
+      /No sabemos leer «1\.50\.0»/,
+    );
+    expect(countedError({ currency: 'COP', method: 'CASH', expected: null, counted: '' })).toBeNull();
+    expect(countedError({ currency: 'COP', method: 'CASH', expected: null, counted: '80.000' })).toBeNull();
   });
 
   it('diferencia en vivo sin errores de coma flotante; lo vacío cuenta como 0', () => {
-    const row = { currency: 'COP', method: 'CASH' as const, expected: 0.3, counted: '0.1' };
+    const row = { currency: 'USD', method: 'CASH' as const, expected: 0.3, counted: '0.1' };
     expect(rowDifference(row)).toBe(-0.2);
     expect(rowDifference({ ...row, counted: '' })).toBe(-0.3);
     expect(rowDifference({ ...row, expected: null })).toBeNull();
