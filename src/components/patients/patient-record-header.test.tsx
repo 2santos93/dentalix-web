@@ -161,3 +161,50 @@ describe('PatientRecordHeader · saldo vencido (DX-150)', () => {
     expect(screen.queryByTestId('overdue-chip')).toBeNull();
   });
 });
+
+describe('PatientRecordHeader · cobertura vencida (DX-153)', () => {
+  const coverage = (status: 'NONE' | 'ACTIVE' | 'EXPIRED' | 'NOT_STARTED') => ({
+    status,
+    payerName: 'Sanitas',
+    planName: null,
+    validTo: '2026-01-31',
+  });
+
+  it('muestra el chip con una cobertura vencida', () => {
+    render(
+      <PatientRecordHeader
+        patient={patient({ coverage: coverage('EXPIRED') })}
+        loading={false}
+        onEdit={() => {}}
+      />,
+    );
+    expect(screen.getByTestId('coverage-chip')).toHaveTextContent('Cobertura vencida');
+  });
+
+  it.each(['ACTIVE', 'NONE', 'NOT_STARTED'] as const)('no lo muestra con %s', (status) => {
+    render(
+      <PatientRecordHeader
+        patient={patient({ coverage: coverage(status) })}
+        loading={false}
+        onEdit={() => {}}
+      />,
+    );
+    expect(screen.queryByTestId('coverage-chip')).not.toBeInTheDocument();
+  });
+
+  it('convive con el chip de saldo vencido', () => {
+    render(
+      <PatientRecordHeader
+        patient={patient({
+          coverage: coverage('EXPIRED'),
+          balance: { hasOverdue: true, overdueDays: 10 },
+        })}
+        loading={false}
+        onEdit={() => {}}
+      />,
+    );
+    expect(screen.getByTestId('coverage-chip')).toBeInTheDocument();
+    expect(screen.getByTestId('overdue-chip')).toBeInTheDocument();
+  });
+});
+

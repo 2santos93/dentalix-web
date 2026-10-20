@@ -7,6 +7,8 @@ import { ageFrom } from '@/lib/patients/age';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/shared/page-header';
 import { OverdueChip } from '@/components/collections/overdue-chip';
+import { CoverageChip } from '@/components/patients/coverage-chip';
+import { coverageChipText } from '@/lib/patients/coverage-presentation';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands. Cada entrada es una cadena COMPLETA: las que
@@ -125,9 +127,11 @@ export function PatientRecordHeader({ patient, loading, onEdit }: PatientRecordH
             </p>
             {/* DX-150: «Saldo vencido · N días» (con importe solo para ADMIN y
                 RECEPTION: la API ya lo omite para los demás roles). */}
-            {patient?.balance?.hasOverdue ? (
-              <div>
-                <OverdueChip balance={patient.balance} />
+            {/* DX-153: «Cobertura vencida», junto a la del saldo. */}
+            {patient?.balance?.hasOverdue || coverageChipText(patient?.coverage) ? (
+              <div className="flex flex-wrap items-center gap-2">
+                {patient?.balance?.hasOverdue ? <OverdueChip balance={patient.balance} /> : null}
+                <CoverageChip coverage={patient?.coverage} />
               </div>
             ) : null}
           </div>

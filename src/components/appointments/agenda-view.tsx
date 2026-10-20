@@ -29,6 +29,7 @@ import { listStaff, type StaffMember } from '@/lib/appointments/staff-api';
 import { localDayRange, localWeekRange } from '@/lib/appointments/day-range';
 import { monthGridRange, addMonths, monthLabel } from '@/lib/appointments/calendar-grid';
 import { DayAgenda } from '@/components/appointments/day-agenda';
+import { CoverageDetailLine } from '@/components/appointments/coverage-detail-line';
 import { DayColumns } from '@/components/appointments/day-columns';
 import { MoveAppointmentDialog } from '@/components/appointments/move-appointment-dialog';
 import {
@@ -1269,6 +1270,7 @@ export function AgendaView({ token }: AgendaViewProps) {
                 {liveDetailAppointment.reason && (
                   <p className="text-sm text-ink">{liveDetailAppointment.reason}</p>
                 )}
+                <CoverageDetailLine coverage={liveDetailAppointment.coverage} />
                 <FormField htmlFor="detail-status" label={copy.statusLabel}>
                   <select
                     id="detail-status"

@@ -1,6 +1,8 @@
 'use client';
 import { OverdueChip } from '@/components/collections/overdue-chip';
 import { overdueChipText } from '@/lib/collections/presentation';
+import { CoverageMarker } from '@/components/patients/coverage-chip';
+import { coverageChipText } from '@/lib/patients/coverage-presentation';
 import * as React from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { CalendarPlus, MoveRight, UserPlus } from 'lucide-react';
@@ -567,6 +569,7 @@ export function DayColumns({
                         aria-label={[
                           copy.detailFor(range, patient, p.fullName),
                           overdueChipText(a.balance),
+                          coverageChipText(a.coverage),
                           wantsEarlier ? WANTS_EARLIER_LABEL : null,
                         ]
                           .filter(Boolean)
@@ -576,11 +579,13 @@ export function DayColumns({
                       >
                         {/* La hora y el nombre no se encogen: en una cita corta
                             lo que no cabe (estado, chips) lo recorta la tarjeta,
-                            nunca el nombre. El chip DX-210 va en la fila de la
-                            hora para seguir viéndose en las citas de 30 min. */}
+                            nunca el nombre. El chip DX-210 y la marca de cobertura
+                            vencida (DX-153) van en la fila de la hora para
+                            seguir viéndose en las citas de 30 min. */}
                         <span className="flex w-full min-w-0 shrink-0 items-center gap-1.5">
                           <span className="shrink-0 text-xs font-medium tabular-nums">{range}</span>
                           <WantsEarlierChip wantsEarlier={wantsEarlier} className="min-w-0 py-0" />
+                          <CoverageMarker coverage={a.coverage} />
                         </span>
                         <span
                           className={cn('w-full shrink-0 truncate text-sm font-semibold', inactive && 'line-through')}

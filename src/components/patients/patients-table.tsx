@@ -20,6 +20,8 @@ const copy = {
   emptyHint: 'Crea el primer paciente para empezar a gestionar su historia.',
   noMatches: 'Ningún paciente coincide con la búsqueda.',
   noMatchesHint: 'Revisa el nombre o el número de documento.',
+  noPayerMatches: 'Ningún paciente tiene cobertura con ese pagador.',
+  noPayerMatchesHint: 'Elige «Todos los pagadores» para ver el listado completo.',
   colName: 'Nombre',
   colDoc: 'Documento',
   colPhone: 'Teléfono',
@@ -40,9 +42,20 @@ interface PatientsTableProps {
   loading: boolean;
   /** Hay una búsqueda activa: cambia qué significa una lista vacía. */
   filtered?: boolean;
+  /**
+   * El único filtro activo es el de pagador (sin búsqueda): el vacío no habla
+   * de nombre o documento, que la persona no escribió. Con búsqueda manda
+   * `filtered`.
+   */
+  payerOnly?: boolean;
 }
 
-export function PatientsTable({ patients, loading, filtered = false }: PatientsTableProps) {
+export function PatientsTable({
+  patients,
+  loading,
+  filtered = false,
+  payerOnly = false,
+}: PatientsTableProps) {
   if (loading) {
     return (
       <Card className="overflow-hidden p-2">
@@ -65,8 +78,10 @@ export function PatientsTable({ patients, loading, filtered = false }: PatientsT
     return (
       <EmptyState
         role="status"
-        title={filtered ? copy.noMatches : copy.empty}
-        description={filtered ? copy.noMatchesHint : copy.emptyHint}
+        title={payerOnly ? copy.noPayerMatches : filtered ? copy.noMatches : copy.empty}
+        description={
+          payerOnly ? copy.noPayerMatchesHint : filtered ? copy.noMatchesHint : copy.emptyHint
+        }
       />
     );
   }

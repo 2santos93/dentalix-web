@@ -691,6 +691,78 @@ describe('AgendaView', () => {
     expect(statusSelect.value).toBe('SCHEDULED');
   });
 
+  // DX-153: la línea de cobertura del detalle (nunca el número de afiliado).
+  it.each([
+    [
+      'vencida',
+      { status: 'EXPIRED' as const, payerName: 'Sura EPS', planName: 'Plan Oro', validTo: '2026-01-31' },
+      'Cobertura: Sura EPS · venció el 31/01/2026',
+    ],
+    [
+      'vigente con plan',
+      { status: 'ACTIVE' as const, payerName: 'Sura EPS', planName: 'Plan Oro', validTo: null },
+      'Cobertura: Sura EPS · Plan Oro',
+    ],
+    [
+      'pendiente de inicio',
+      { status: 'NOT_STARTED' as const, payerName: 'Sura EPS', planName: 'Plan Oro', validTo: null },
+      'Cobertura: Sura EPS · pendiente de inicio',
+    ],
+  ])('Día: el detalle muestra la línea de cobertura (%s)', async (_label, coverage, expected) => {
+    const future = new Date(Date.now() + 3 * 24 * 3600_000);
+    const day = `${future.getFullYear()}-${String(future.getMonth() + 1).padStart(2, '0')}-${String(future.getDate()).padStart(2, '0')}`;
+    const start = new Date(`${day}T09:00:00`).toISOString();
+    const end = new Date(`${day}T09:30:00`).toISOString();
+    mockedListStaff.mockResolvedValue(staff);
+    mockedListAppointments.mockResolvedValue([
+      appointment({ id: 'apt-cov', start, end, patientFirstName: 'María', coverage }),
+    ]);
+    const user = userEvent.setup();
+
+    render(<AgendaView token="tok" />);
+    await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
+    await user.click(screen.getByRole('button', { name: /^día$/i }));
+    const dateInput = screen.getByLabelText(/^fecha$/i);
+    await user.clear(dateInput);
+    await user.type(dateInput, day);
+
+    const [detail] = await screen.findAllByRole('button', { name: /detalle de la cita de 09:00–09:30/i });
+    await user.click(detail);
+
+    expect(await screen.findByTestId('coverage-detail-line')).toHaveTextContent(expected);
+  });
+
+  it('Día: sin cobertura, el detalle no pinta la línea', async () => {
+    const future = new Date(Date.now() + 3 * 24 * 3600_000);
+    const day = `${future.getFullYear()}-${String(future.getMonth() + 1).padStart(2, '0')}-${String(future.getDate()).padStart(2, '0')}`;
+    const start = new Date(`${day}T09:00:00`).toISOString();
+    const end = new Date(`${day}T09:30:00`).toISOString();
+    mockedListStaff.mockResolvedValue(staff);
+    mockedListAppointments.mockResolvedValue([
+      appointment({
+        id: 'apt-nocov',
+        start,
+        end,
+        patientFirstName: 'María',
+        coverage: { status: 'NONE', payerName: null, planName: null, validTo: null },
+      }),
+    ]);
+    const user = userEvent.setup();
+
+    render(<AgendaView token="tok" />);
+    await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
+    await user.click(screen.getByRole('button', { name: /^día$/i }));
+    const dateInput = screen.getByLabelText(/^fecha$/i);
+    await user.clear(dateInput);
+    await user.type(dateInput, day);
+
+    const [detail] = await screen.findAllByRole('button', { name: /detalle de la cita de 09:00–09:30/i });
+    await user.click(detail);
+
+    await screen.findByLabelText(/estado/i);
+    expect(screen.queryByTestId('coverage-detail-line')).not.toBeInTheDocument();
+  });
+
   // DX-005: "Enviar confirmación" vive en el detalle de la cita, que ahora
   // también se abre desde las filas del Día (botón "Detalle").
   it('Día: "Detalle" abre la cita; "Enviar confirmación" genera el enlace y la agenda se refresca para mostrar "Confirmación pendiente"', async () => {

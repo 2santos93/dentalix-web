@@ -59,7 +59,7 @@ type NullableTextKey =
   | 'docNumber' | 'birthDate' | 'phone' | 'email' | 'address' | 'notes'
   | 'emergencyContactName' | 'emergencyContactRelationship'
   | 'emergencyContactPhone'
-  | 'insurerEps' | 'occupation' | 'maritalStatus' | 'physicianName'
+  | 'occupation' | 'maritalStatus' | 'physicianName'
   | 'physicianPhone';
 
 type TextKey = RequiredTextKey | NullableTextKey;
@@ -109,7 +109,6 @@ const GROUPS: { title: string; fields: TextFieldSpec[] }[] = [
   {
     title: copy.administrative,
     fields: [
-      { key: 'insurerEps', label: 'Aseguradora / EPS' },
       { key: 'occupation', label: 'Ocupación' },
       { key: 'maritalStatus', label: 'Estado civil' },
       { key: 'physicianName', label: 'Médico tratante' },

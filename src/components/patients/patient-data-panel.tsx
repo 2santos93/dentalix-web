@@ -22,7 +22,9 @@ const copy = {
   emergencyContact: 'Contacto de emergencia',
   relationship: 'Parentesco',
   emergencyPhone: 'Teléfono de emergencia',
-  insurer: 'Aseguradora / EPS',
+  // DX-153: la cobertura vive en su sección; el texto libre solo se muestra
+  // como dato anterior si el paciente no tiene ninguna cobertura.
+  legacyInsurer: 'Aseguradora (dato anterior)',
   occupation: 'Ocupación',
   maritalStatus: 'Estado civil',
   physician: 'Médico tratante',
@@ -84,6 +86,12 @@ export function PatientDataPanel({ patient }: PatientDataPanelProps) {
   const birth = patient.birthDate
     ? `${formatCivilDate(patient.birthDate)}${age === null ? '' : ` · ${copy.years(age)}`}`
     : null;
+  // DX-153: el texto libre anterior solo sale si no hay ninguna cobertura (y se
+  // omite entero, sin «—», cuando no aplica).
+  const legacyInsurerFields: Field[] =
+    patient.coverage?.status === 'NONE' && patient.insurerEps
+      ? [{ label: copy.legacyInsurer, value: patient.insurerEps }]
+      : [];
   const consent = patient.dataConsentAccepted
     ? [copy.consentAccepted, formatCivilDate(patient.dataConsentAt ?? null)]
         .concat(patient.dataConsentPolicyVersion ? [copy.consentVersion(patient.dataConsentPolicyVersion)] : [])
@@ -123,7 +131,7 @@ export function PatientDataPanel({ patient }: PatientDataPanelProps) {
         <Block
           title={copy.administrative}
           fields={[
-            { label: copy.insurer, value: patient.insurerEps ?? null },
+            ...legacyInsurerFields,
             { label: copy.occupation, value: patient.occupation ?? null },
             { label: copy.maritalStatus, value: patient.maritalStatus ?? null },
             { label: copy.physician, value: patient.physicianName ?? null },

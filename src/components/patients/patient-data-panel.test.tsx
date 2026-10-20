@@ -160,3 +160,48 @@ describe('PatientDataPanel', () => {
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 });
+
+describe('PatientDataPanel · aseguradora (DX-153)', () => {
+  const coverage = (status: 'NONE' | 'ACTIVE' | 'EXPIRED' | 'NOT_STARTED') => ({
+    status,
+    payerName: null,
+    planName: null,
+    validTo: null,
+  });
+
+  it('ya no muestra «Aseguradora / EPS»', () => {
+    render(
+      <PatientDataPanel
+        patient={patient({ occupation: 'Docente', insurerEps: 'Sanitas', coverage: coverage('ACTIVE') })}
+      />,
+    );
+    expect(screen.queryByText('Aseguradora / EPS')).not.toBeInTheDocument();
+    expect(screen.queryByText('Sanitas')).not.toBeInTheDocument();
+  });
+
+  it('muestra el texto libre como «Aseguradora (dato anterior)» solo sin coberturas', () => {
+    render(
+      <PatientDataPanel patient={patient({ insurerEps: 'Sanitas', coverage: coverage('NONE') })} />,
+    );
+    expect(screen.getByText('Aseguradora (dato anterior)')).toBeInTheDocument();
+    expect(screen.getByText('Sanitas')).toBeInTheDocument();
+  });
+
+  it.each(['ACTIVE', 'EXPIRED', 'NOT_STARTED'] as const)(
+    'no lo muestra con una cobertura %s',
+    (status) => {
+      render(
+        <PatientDataPanel patient={patient({ insurerEps: 'Sanitas', coverage: coverage(status) })} />,
+      );
+      expect(screen.queryByText('Aseguradora (dato anterior)')).not.toBeInTheDocument();
+    },
+  );
+
+  it('sin texto anterior no deja ni la etiqueta ni un «—»', () => {
+    render(
+      <PatientDataPanel patient={patient({ occupation: 'Docente', coverage: coverage('NONE') })} />,
+    );
+    expect(screen.queryByText('Aseguradora (dato anterior)')).not.toBeInTheDocument();
+  });
+});
+

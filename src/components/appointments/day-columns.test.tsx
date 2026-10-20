@@ -333,6 +333,27 @@ describe('DayColumns · chip «Saldo vencido» (DX-150)', () => {
   });
 });
 
+describe('DayColumns · chip «Cobertura vencida» (DX-153)', () => {
+  it('la tarjeta con cobertura vencida lleva la marca y la anuncia en su nombre accesible; el resto, nada', () => {
+    const expired = { status: 'EXPIRED' as const, payerName: 'Sura EPS', planName: null, validTo: '2026-01-31' };
+    const active = { status: 'ACTIVE' as const, payerName: 'Sura EPS', planName: null, validTo: null };
+    renderColumns({
+      appointments: [
+        { ...endo, coverage: active },
+        { ...light, coverage: expired },
+      ],
+    });
+    // `light` dura 30 min: el aviso va como marca en la fila de la hora, no como chip recortable.
+    const markers = screen.getAllByTestId('coverage-marker');
+    expect(markers).toHaveLength(1);
+    expect(markers[0]).toHaveAttribute('title', 'Cobertura vencida');
+    expect(screen.queryByTestId('coverage-chip')).not.toBeInTheDocument();
+    const card = screen.getByRole('button', { name: /Cobertura vencida$/ });
+    expect(card).toContainElement(markers[0]);
+    expect(card).toHaveAccessibleName(/Cobertura vencida/);
+  });
+});
+
 describe('«Ocupar este hueco» (DX-210)', () => {
   const BEFORE = new Date(`${DATE}T06:00:00`);
 

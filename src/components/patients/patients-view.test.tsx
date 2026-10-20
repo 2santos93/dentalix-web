@@ -3,15 +3,25 @@ import { setupUser } from '@/lib/test/user';
 import { PatientsView } from './patients-view';
 import { listPatients, type Patient } from '@/lib/patients/patients-api';
 import { ApiError } from '@/lib/api/client';
+import { listPayers, type Payer } from '@/lib/payers/payers-api';
 
 // NOTE: jest.mock's string literal is not alias-rewritten by the SWC transform
 // (only real `import`/`require` specifiers are) — relative path here, matching
 // the convention of the other view tests.
 jest.mock('../../lib/patients/patients-api', () => ({
+  ...jest.requireActual('../../lib/patients/patients-api'),
   listPatients: jest.fn(),
+}));
+jest.mock('../../lib/payers/payers-api', () => ({
+  ...jest.requireActual('../../lib/payers/payers-api'),
+  listPayers: jest.fn(),
 }));
 
 const mockedList = listPatients as jest.MockedFunction<typeof listPatients>;
+const mockedPayers = listPayers as jest.MockedFunction<typeof listPayers>;
+
+const sura = { id: 'py1', name: 'Sura EPS' } as Payer;
+const colsanitas = { id: 'py2', name: 'Colsanitas' } as Payer;
 
 const maria: Patient = {
   id: 'p1',
@@ -39,6 +49,8 @@ describe('PatientsView', () => {
   beforeEach(() => {
     mockedList.mockReset();
     mockedList.mockResolvedValue(page([maria]));
+    mockedPayers.mockReset();
+    mockedPayers.mockResolvedValue([sura, colsanitas]);
   });
 
   it('la accion primaria vive en la barra de filtros, no colgada del titulo', async () => {
@@ -119,5 +131,80 @@ describe('PatientsView', () => {
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent(/no tienes permiso/i);
     expect(alert).not.toHaveTextContent(/insufficient role/i);
+  });
+
+  describe('filtro por pagador (DX-153)', () => {
+    it('ofrece «Todos los pagadores» y los pagadores activos', async () => {
+      render(<PatientsView token="tok" />);
+      const select = await screen.findByRole('combobox', { name: 'Filtrar por pagador' });
+      await waitFor(() => expect(within(select).getAllByRole('option')).toHaveLength(3));
+      const options = within(select).getAllByRole('option');
+      expect(options[0]).toHaveTextContent('Todos los pagadores');
+      expect(options[0]).toHaveValue('');
+      expect(options[1]).toHaveTextContent('Sura EPS');
+      expect(mockedPayers).toHaveBeenCalledWith('tok');
+    });
+
+    it('cambiar el pagador consulta con payerId y vuelve a la página 1', async () => {
+      const user = setupUser();
+      render(<PatientsView token="tok" />);
+      await screen.findByText('1 paciente');
+      const select = screen.getByRole('combobox', { name: 'Filtrar por pagador' });
+      await waitFor(() => expect(within(select).getAllByRole('option')).toHaveLength(3));
+
+      mockedList.mockClear();
+      await user.selectOptions(select, 'py1');
+
+      await waitFor(() =>
+        expect(mockedList).toHaveBeenCalledWith('tok', { page: 1, payerId: 'py1' }),
+      );
+    });
+
+    it('volver a «Todos» deja de mandar payerId', async () => {
+      const user = setupUser();
+      render(<PatientsView token="tok" />);
+      await screen.findByText('1 paciente');
+      const select = screen.getByRole('combobox', { name: 'Filtrar por pagador' });
+      await waitFor(() => expect(within(select).getAllByRole('option')).toHaveLength(3));
+      await user.selectOptions(select, 'py1');
+      mockedList.mockClear();
+      await user.selectOptions(select, '');
+      await waitFor(() => expect(mockedList).toHaveBeenCalledWith('tok', { page: 1 }));
+    });
+
+    it('con un pagador elegido, el vacío habla de filtro y no de pacientes inexistentes', async () => {
+      const user = setupUser();
+      render(<PatientsView token="tok" />);
+      await screen.findByText('1 paciente');
+      const select = screen.getByRole('combobox', { name: 'Filtrar por pagador' });
+      await waitFor(() => expect(within(select).getAllByRole('option')).toHaveLength(3));
+      mockedList.mockResolvedValue(page([]));
+      await user.selectOptions(select, 'py2');
+      expect(
+        await screen.findByText('Ningún paciente tiene cobertura con ese pagador.'),
+      ).toBeInTheDocument();
+      expect(screen.queryByText(/coincide con la búsqueda/i)).not.toBeInTheDocument();
+    });
+
+    it('si fallan los pagadores, avisa junto al filtro con reintento y la tabla sigue', async () => {
+      const user = setupUser();
+      mockedPayers.mockRejectedValueOnce(new Error('boom'));
+      render(<PatientsView token="tok" />);
+
+      expect(await screen.findByText('1 paciente')).toBeInTheDocument();
+      expect((await screen.findAllByText(/López/)).length).toBeGreaterThan(0);
+      const status = (await screen.findByText('No cargaron los pagadores')).closest(
+        '[role="status"]',
+      ) as HTMLElement;
+      expect(status).toBeInTheDocument();
+      expect(
+        screen.queryByRole('combobox', { name: 'Filtrar por pagador' }),
+      ).not.toBeInTheDocument();
+
+      await user.click(within(status).getByRole('button', { name: /reintentar/i }));
+      expect(
+        await screen.findByRole('combobox', { name: 'Filtrar por pagador' }),
+      ).toBeInTheDocument();
+    });
   });
 });

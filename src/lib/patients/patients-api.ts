@@ -29,6 +29,12 @@ export type Sex = components['schemas']['CreatePatientDto']['sex'];
 export type UpdatePatientInput = components['schemas']['UpdatePatientDto'];
 
 /**
+ * DX-153: resumen de la cobertura vigente del paciente (`GET /patients`,
+ * `GET /patients/:id` y `GET /appointments`). Nunca trae el n.º de afiliado.
+ */
+export type CoverageSummary = components['schemas']['CoverageSummaryDto'];
+
+/**
  * `GET /patients` (and `GET /patients/:id`) return a plain TS interface on
  * the backend (`Patient`, `ListPatientsOutput`), not a class decorated with
  * `@ApiProperty()` — NestJS Swagger can't introspect that, so the generated
@@ -67,6 +73,8 @@ export interface Patient {
   maritalStatus?: string | null;
   occupation?: string | null;
   insurerEps?: string | null;
+  /** DX-153: resumen de cobertura; solo en las lecturas (GET), no en PATCH. */
+  coverage?: CoverageSummary;
   physicianName?: string | null;
   physicianPhone?: string | null;
   emergencyContactName?: string | null;
@@ -127,6 +135,7 @@ export async function listPatients(
   if (params?.query) search.set('query', params.query);
   if (params?.page !== undefined) search.set('page', String(params.page));
   if (params?.pageSize !== undefined) search.set('pageSize', String(params.pageSize));
+  if (params?.payerId) search.set('payerId', params.payerId);
   const qs = search.toString();
 
   return apiFetch<PatientsListResponse>(`/patients${qs ? `?${qs}` : ''}`, {
@@ -214,4 +223,13 @@ export async function partiallySuppressPatient(
     body: input,
     token,
   });
+}
+
+/**
+ * Sustituye el paciente por la respuesta de una mutación (retención, supresión
+ * parcial) sin perder `balance` ni `coverage`: la API solo los calcula en los
+ * GET de lista y detalle, así que esas respuestas vienen sin ellos.
+ */
+export function replacePatientKeepingDerived(prev: Patient | null, next: Patient): Patient {
+  return { ...next, balance: next.balance ?? prev?.balance, coverage: next.coverage ?? prev?.coverage };
 }
