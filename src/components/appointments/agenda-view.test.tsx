@@ -1179,6 +1179,7 @@ describe('AgendaView', () => {
         Promise.resolve({
           ...slot,
           timeZone: 'America/Bogota',
+          providerOffSchedule: false,
           offerCap: 2,
           items: [candidate],
           truncated: false,
@@ -1231,6 +1232,7 @@ describe('AgendaView', () => {
         providerId: 'staff-1',
         start: '',
         end: '',
+        providerOffSchedule: false,
         timeZone: 'America/Bogota',
         offerCap: 2,
         items: [],

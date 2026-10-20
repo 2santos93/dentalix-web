@@ -76,6 +76,7 @@ function view(items: OpeningCandidate[]): OpeningCandidates {
     start: SLOT.start,
     end: SLOT.end,
     timeZone: 'UTC',
+    providerOffSchedule: false,
     offerCap: 2,
     items,
     truncated: false,

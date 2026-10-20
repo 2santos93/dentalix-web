@@ -1290,6 +1290,94 @@ export interface paths {
         patch: operations["LocationsController_update"];
         trace?: never;
     };
+    "/api/v1/providers/{providerId}/schedule": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Horario semanal del profesional, todas sus sedes */
+        get: operations["ProviderScheduleController_get"];
+        /** Reemplaza el horario semanal del profesional (todas sus sedes) */
+        put: operations["ProviderScheduleController_replace"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/providers/{providerId}/schedule-overrides": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Excepciones por fecha del profesional */
+        get: operations["ProviderScheduleController_overrides"];
+        put?: never;
+        /** Crea (o reemplaza) la excepción de una sede y fecha; sin tramos = «no trabaja» */
+        post: operations["ProviderScheduleController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/providers/{providerId}/schedule-overrides/{overrideId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Quita una excepción (vuelve a regir el semanal) */
+        delete: operations["ProviderScheduleController_remove"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/schedule/roster": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Cuadrante: cada profesional que atiende × día, con sus sedes y tramos */
+        get: operations["ScheduleRosterController_roster"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/schedule/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Modo estricto del horario de los profesionales */
+        get: operations["ScheduleRosterController_settings"];
+        /** Activa o quita el modo estricto (cita fuera del horario del profesional → 409) */
+        put: operations["ScheduleRosterController_update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/waitlist": {
         parameters: {
             query?: never;
@@ -3173,7 +3261,7 @@ export interface components {
         /** @enum {string} */
         AuditAction: "VIEW" | "CREATE" | "UPDATE" | "DELETE" | "SIGN" | "VOID" | "LOGIN" | "LOGIN_FAILED" | "PASSWORD_RESET" | "EXPORT" | "PRINT" | "SEND";
         /** @enum {string} */
-        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION" | "POSTOP_TEMPLATE" | "POSTOP_DELIVERY" | "PATIENT_DOCUMENT";
+        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION" | "POSTOP_TEMPLATE" | "POSTOP_DELIVERY" | "PATIENT_DOCUMENT" | "PROVIDER_SCHEDULE";
         /**
          * @description Rol con el que actuó (del token). `null` en un login fallido.
          * @enum {string}
@@ -3227,6 +3315,28 @@ export interface components {
             /** @example 2 */
             rows: number;
         };
+        AuditScheduleEntryDto: {
+            /** Format: uuid */
+            locationId: string;
+            /** @description Tramo semanal: 0 = domingo … 6 = sábado. */
+            weekday?: number;
+            /**
+             * @description Excepción: fecha civil de la sede.
+             * @example 2026-10-22
+             */
+            date?: string;
+            startMinute?: number;
+            endMinute?: number;
+            /**
+             * @description Excepción «no trabaja».
+             * @enum {boolean}
+             */
+            off?: true;
+        };
+        AuditScheduleChangeDto: {
+            before: components["schemas"]["AuditScheduleEntryDto"][];
+            after: components["schemas"]["AuditScheduleEntryDto"][];
+        };
         AuditMetadataDto: {
             /** @description UPDATE: nombres de los campos enviados (nunca sus valores). */
             changedFields?: string[];
@@ -3246,6 +3356,8 @@ export interface components {
             search?: components["schemas"]["AuditSearchDto"];
             /** @description DX-215: estado antes y después (p. ej. un compromiso de pago cumplido que vuelve a abierto al anular su abono). Solo códigos. */
             statusChange?: components["schemas"]["AuditStatusChangeDto"];
+            /** @description DX-233: horario de un profesional antes y después (semanal o una excepción por fecha): sedes, días, fechas y minutos. */
+            scheduleChange?: components["schemas"]["AuditScheduleChangeDto"];
         };
         AuditEventDto: {
             /** Format: uuid */
@@ -4930,6 +5042,11 @@ export interface components {
             durationMinutes: number;
             color: string;
         };
+        /**
+         * @description DX-233: código de cada aviso, en el mismo orden que `warnings`: SCHEDULE_BLOCK (bloqueo que deja agendar, DX-122) o PROVIDER_OFF_SCHEDULE (fuera del horario del profesional en la sede).
+         * @enum {string}
+         */
+        AppointmentWarningCode: "SCHEDULE_BLOCK" | "PROVIDER_OFF_SCHEDULE";
         AppointmentWriteDto: {
             /** Format: uuid */
             id: string;
@@ -4992,7 +5109,10 @@ export interface components {
             createdAt: string;
             /** Format: date-time */
             updatedAt: string;
+            /** @description Avisos en español que no impiden la operación (p. ej. «Fuera del horario del profesional en Sede Norte (jueves 22/10: 14:00–19:00).»). */
             warnings: string[];
+            /** @description DX-233: código de cada aviso, en el mismo orden que `warnings`: SCHEDULE_BLOCK (bloqueo que deja agendar, DX-122) o PROVIDER_OFF_SCHEDULE (fuera del horario del profesional en la sede). */
+            warningCodes: components["schemas"]["AppointmentWarningCode"][];
         };
         AppointmentListItemDto: {
             /** Format: uuid */
@@ -5512,6 +5632,160 @@ export interface components {
             /** @description Desactivar una sede la oculta para operar; no se puede desactivar la última activa. */
             isActive?: boolean;
         };
+        WeeklyRangeDto: {
+            /**
+             * @description Minutos de pared desde las 00:00 en la zona de la sede (0–1440), múltiplos de 5.
+             * @example 480
+             */
+            startMinute: number;
+            /**
+             * @description Minutos de pared desde las 00:00 en la zona de la sede (0–1440), múltiplos de 5. Mayor que el inicio; 1440 = 24:00 (un tramo no cruza medianoche).
+             * @example 780
+             */
+            endMinute: number;
+            /** @description 0=domingo .. 6=sábado */
+            weekday: number;
+        };
+        ProviderLocationScheduleDto: {
+            /** Format: uuid */
+            locationId: string;
+            /** @example Sede Norte */
+            locationName: string;
+            /** @example America/Bogota */
+            timeZone: string;
+            ranges: components["schemas"]["WeeklyRangeDto"][];
+        };
+        ProviderScheduleDto: {
+            /** Format: uuid */
+            providerId: string;
+            /** @description false = sin horario configurado: se le puede citar en cualquier horario de la sede (sin restricción). */
+            configured: boolean;
+            locations: components["schemas"]["ProviderLocationScheduleDto"][];
+        };
+        ProviderLocationScheduleInputDto: {
+            /** Format: uuid */
+            locationId: string;
+            /** @description Tramos de la semana en esta sede; como mucho 7 por día. Vacío = no trabaja en esta sede (no se guarda). */
+            ranges: components["schemas"]["WeeklyRangeDto"][];
+        };
+        ReplaceProviderScheduleDto: {
+            /** @description El horario COMPLETO del profesional, todas sus sedes. Las sedes que no vengan (o vengan sin tramos) dejan de tener horario suyo. Lista vacía = sin horario: se le puede citar en cualquier horario de la sede. */
+            locations: components["schemas"]["ProviderLocationScheduleInputDto"][];
+        };
+        MinuteRangeDto: {
+            /**
+             * @description Minutos de pared desde las 00:00 en la zona de la sede (0–1440), múltiplos de 5.
+             * @example 480
+             */
+            startMinute: number;
+            /**
+             * @description Minutos de pared desde las 00:00 en la zona de la sede (0–1440), múltiplos de 5. Mayor que el inicio; 1440 = 24:00 (un tramo no cruza medianoche).
+             * @example 780
+             */
+            endMinute: number;
+        };
+        ProviderOverrideDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            providerId: string;
+            /** Format: uuid */
+            locationId: string;
+            /** @example Sede Norte */
+            locationName: string;
+            /** @example 2026-10-22 */
+            date: string;
+            ranges: components["schemas"]["MinuteRangeDto"][];
+            /** @description true = «no trabaja» ese día en esa sede. */
+            off: boolean;
+            note: string | null;
+        };
+        SetProviderOverrideDto: {
+            /** Format: uuid */
+            locationId: string;
+            /**
+             * @description Fecha civil en la zona de la sede: de hoy a dos años vista. Una excepción viva por profesional, sede y fecha: si ya hay una, se reemplaza.
+             * @example 2026-10-22
+             */
+            date: string;
+            /** @description Tramos de ese día en esa sede (prevalecen sobre el semanal); como mucho 7. Vacío = «no trabaja» ese día en esa sede. */
+            ranges: components["schemas"]["MinuteRangeDto"][];
+            /** @example Cubre a la Dra. Ruiz */
+            note?: Record<string, never> | null;
+        };
+        SetProviderOverrideResultDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            providerId: string;
+            /** Format: uuid */
+            locationId: string;
+            /** @example Sede Norte */
+            locationName: string;
+            /** @example 2026-10-22 */
+            date: string;
+            ranges: components["schemas"]["MinuteRangeDto"][];
+            /** @description true = «no trabaja» ese día en esa sede. */
+            off: boolean;
+            note: string | null;
+            /** @description Había otra excepción para esa sede y fecha y se reemplazó. */
+            replaced: boolean;
+        };
+        RosterLocationDto: {
+            /** Format: uuid */
+            id: string;
+            /** @example Sede Norte */
+            name: string;
+            /** @example America/Bogota */
+            timeZone: string;
+        };
+        RosterAssignmentDto: {
+            /** Format: uuid */
+            locationId: string;
+            /** @enum {string} */
+            source: "WEEKLY" | "OVERRIDE";
+            /** Format: uuid */
+            overrideId: string | null;
+            /** @description Vacío = excepción «no trabaja» en esa sede ese día. */
+            ranges: components["schemas"]["MinuteRangeDto"][];
+        };
+        RosterDayDto: {
+            /** @example 2026-10-22 */
+            date: string;
+            weekday: number;
+            /** @description Sin horario configurado y sin excepción ese día: se le puede citar en cualquier sede (no sombrear). */
+            unrestricted: boolean;
+            /** @description Sedes en las que tiene algo ese día (semanal o excepción). */
+            assignments: components["schemas"]["RosterAssignmentDto"][];
+            /** @description Con `locationId`: trabaja ese día en esa sede (o no tiene restricción). Sin `locationId`, null. */
+            worksAtLocation: boolean | null;
+            /** @description Con `locationId`: sus tramos allí ese día (vacío = no trabaja allí). null = sin restricción o sin `locationId`. La agenda sombrea el resto del día. */
+            locationRanges: components["schemas"]["MinuteRangeDto"][] | null;
+        };
+        RosterProviderDto: {
+            /** Format: uuid */
+            providerId: string;
+            /** @example Dra. Ximena Ortiz */
+            fullName: string;
+            role: components["schemas"]["ClinicRole"];
+            configured: boolean;
+            days: components["schemas"]["RosterDayDto"][];
+        };
+        RosterDto: {
+            /** @example 2026-10-19 */
+            from: string;
+            /** @example 2026-10-25 */
+            to: string;
+            /** Format: uuid */
+            locationId: string | null;
+            locations: components["schemas"]["RosterLocationDto"][];
+            /** @description Miembros activos que atienden (DENTIST y ADMIN), por nombre. */
+            providers: components["schemas"]["RosterProviderDto"][];
+        };
+        ProviderScheduleSettingsDto: {
+            /** @description false (defecto): una cita fuera del horario del profesional se agenda con el aviso PROVIDER_OFF_SCHEDULE. true: se rechaza con 409. */
+            strictProviderSchedule: boolean;
+        };
         /** @enum {string} */
         WaitlistStatus: "OPEN" | "SCHEDULED" | "DISMISSED";
         WaitlistSourceAppointmentDto: {
@@ -5701,6 +5975,8 @@ export interface components {
             end: string;
             /** @example America/Bogota */
             timeZone: string;
+            /** @description DX-233: el profesional del hueco no trabaja todo ese hueco en la sede según su horario (entonces no hay candidatos). Sin `providerId`, false. */
+            providerOffSchedule: boolean;
             /** @description Tope de ofertas por paciente y día. */
             offerCap: number;
             items: components["schemas"]["OpeningCandidateDto"][];
@@ -12628,6 +12904,297 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["LocationDto"];
                 };
+            };
+        };
+    };
+    ProviderScheduleController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                providerId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderScheduleDto"];
+                };
+            };
+            /** @description El miembro no atiende pacientes */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Profesional no encontrado (o de otra clínica) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ProviderScheduleController_replace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                providerId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReplaceProviderScheduleDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderScheduleDto"];
+                };
+            };
+            /** @description Tramo inválido (minutos no múltiplos de 5, fuera de 0–1440, fin no posterior), más de 7 tramos por día y sede, solape en la misma sede, solape del mismo día en dos sedes o con una excepción de otra sede, sede inexistente o desactivada, o el miembro no atiende pacientes. Mensaje en español. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo un administrador puede cambiar los horarios de los profesionales. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Profesional no encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ProviderScheduleController_overrides: {
+        parameters: {
+            query?: {
+                /** @description Primer día, incluido. Por defecto, ayer (UTC). */
+                from?: string;
+                /** @description Último día, incluido. Por defecto, dos años después de `from`. Como mucho dos años. */
+                to?: string;
+            };
+            header?: never;
+            path: {
+                providerId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderOverrideDto"][];
+                };
+            };
+            /** @description Fechas inválidas o rango de más de dos años */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Profesional no encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ProviderScheduleController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                providerId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetProviderOverrideDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SetProviderOverrideResultDto"];
+                };
+            };
+            /** @description Fecha pasada o a más de dos años, tramos inválidos o solapados, solape con lo que tiene ese día en otra sede, nota de más de 200 caracteres o sede inexistente. Mensaje en español. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo un administrador puede cambiar los horarios de los profesionales. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Profesional no encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ProviderScheduleController_remove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                providerId: string;
+                overrideId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Excepción retirada */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo un administrador puede cambiar los horarios de los profesionales. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Profesional o excepción no encontrados */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ScheduleRosterController_roster: {
+        parameters: {
+            query: {
+                /** @description Primer día del cuadrante (normalmente el lunes de la semana). */
+                weekStart: string;
+                /** @description Días desde `weekStart` (1 = solo ese día, para la vista Día de la agenda). */
+                days?: number;
+                /** @description Sede de la agenda: añade a cada día `worksAtLocation` y `locationRanges`. */
+                locationId?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RosterDto"];
+                };
+            };
+            /** @description Fecha inválida o más de 31 días */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sede no encontrada */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ScheduleRosterController_settings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderScheduleSettingsDto"];
+                };
+            };
+        };
+    };
+    ScheduleRosterController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ProviderScheduleSettingsDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ProviderScheduleSettingsDto"];
+                };
+            };
+            /** @description Solo un administrador puede cambiar los horarios de los profesionales. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
