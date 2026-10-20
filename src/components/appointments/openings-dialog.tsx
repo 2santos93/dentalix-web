@@ -34,7 +34,7 @@ import { formatDateLabel } from '@/lib/format/date';
 const copy = {
   title: (name: string) => `Buscar hueco para ${name}`,
   description: (minutes: number) =>
-    `Huecos de ${minutes} min dentro del horario de la sede, sin chocar con otras citas y fuera de cualquier bloqueo (también los que dejan agendar, como el almuerzo).`,
+    `Huecos de ${minutes} min dentro del horario de la sede y del profesional en ella, sin chocar con otras citas y fuera de cualquier bloqueo (también los que dejan agendar, como el almuerzo).`,
   provider: 'Profesional',
   from: 'Desde',
   to: 'Hasta',

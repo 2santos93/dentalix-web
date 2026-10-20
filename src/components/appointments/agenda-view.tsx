@@ -9,6 +9,8 @@ import {
   type AppointmentStatus,
 } from '@/lib/appointments/appointments-api';
 import { getLocationSchedule, type BusinessHours } from '@/lib/locations/schedule-api';
+import { getRoster, type MinuteRangeDto, type Roster } from '@/lib/locations/provider-schedule-api';
+import { hiddenProviderIds, rosterDayOf } from '@/lib/locations/provider-schedule';
 import { getActiveLocationId } from '@/lib/locations/location-store';
 import { listLocations, type ClinicLocation } from '@/lib/locations/locations-api';
 import { getTokenRole, getTokenUserId } from '@/lib/auth/token-role';
@@ -177,6 +179,13 @@ const copy = {
   inClinicButton: 'En clínica',
   inClinicButtonCount: (n: number) => `En clínica: ${n}`,
   inClinicSheetDescription: 'Quién espera, quién está en el sillón y quién está listo para cobrar en la sede.',
+  // DX-233: horario de cada profesional en la sede activa.
+  showAllProviders: 'Mostrar todos',
+  hiddenProviders: (n: number) =>
+    n === 1
+      ? '1 profesional no atiende este día en esta sede.'
+      : `${n} profesionales no atienden este día en esta sede.`,
+  nobodyWorks: 'Ningún profesional de las columnas atiende este día en esta sede.',
 };
 
 /** Avisos de la API al crear o mover (p. ej. un bloqueo de almuerzo que deja agendar). */
@@ -379,6 +388,10 @@ export function AgendaView({ token }: AgendaViewProps) {
   // Horario de la sede activa (sombreado de la vista en columnas). Best-effort:
   // si no se puede leer no se sombrea nada; el servidor sigue validando (422).
   const [hours, setHours] = useState<BusinessHours | null>(null);
+  // DX-233: cuadrante del día en la sede activa (horario de cada profesional).
+  // Best-effort, como el horario de la sede: sin él no se sombrea ni se oculta.
+  const [roster, setRoster] = useState<Roster | null>(null);
+  const [showAllProviders, setShowAllProviders] = useState(false);
   const [movingAppointment, setMovingAppointment] = useState<Appointment | null>(null);
   const [movePendingId, setMovePendingId] = useState<string | null>(null);
   const role = getTokenRole(token);
@@ -495,6 +508,24 @@ export function AgendaView({ token }: AgendaViewProps) {
     };
   }, [token]);
 
+  // DX-233: en Día (columnas) con una sede activa, el cuadrante de ese día.
+  // En «Todas las sedes» no hay una sede con la que comparar: nada.
+  const rosterWanted = viewMode === 'day' && dayLayout === 'columns' && activeLocationId !== null;
+  useEffect(() => {
+    if (!token || !rosterWanted || activeLocationId === null) return;
+    let cancelled = false;
+    getRoster(token, { weekStart: selectedDate, days: 1, locationId: activeLocationId })
+      .then((r) => {
+        if (!cancelled) setRoster(r);
+      })
+      .catch(() => {
+        if (!cancelled) setRoster(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token, rosterWanted, activeLocationId, selectedDate, appointmentsReloadKey]);
+
   // Sedes (para «Bloquear horario»). Best-effort: sin ellas se puede bloquear
   // a un profesional en todas las sedes.
   useEffect(() => {
@@ -519,6 +550,22 @@ export function AgendaView({ token }: AgendaViewProps) {
     .map((id) => staff.find((s) => s.userId === id))
     .filter((s): s is StaffMember => s !== undefined);
   const columnsMode = viewMode === 'day' && dayLayout === 'columns';
+  // DX-233: el cuadrante solo vale para el día que se mira (uno viejo, de otro
+  // día, no oculta ni sombrea nada). Quien tiene citas activas ese día se ve
+  // siempre: ocultarlo escondería citas reales agendadas fuera de horario.
+  const dayRoster = rosterWanted && roster?.from === selectedDate ? roster : null;
+  const busyIds = new Set(
+    appointments.filter((a) => a.status !== 'CANCELLED').map((a) => a.providerId),
+  );
+  const offToday = [...hiddenProviderIds(dayRoster, selectedDate)].filter(
+    (id) => columnIds.includes(id) && !busyIds.has(id),
+  );
+  const visibleColumnProviders = showAllProviders
+    ? columnProviders
+    : columnProviders.filter((p) => !offToday.includes(p.userId));
+  const providerRanges: Record<string, MinuteRangeDto[] | null> = Object.fromEntries(
+    columnProviders.map((p) => [p.userId, rosterDayOf(dayRoster, p.userId, selectedDate)?.locationRanges ?? null]),
+  );
   const columnsKey = columnsMode ? columnIds.join(',') : '';
   // Solo en columnas importa esperar al personal (en las demás vistas no se
   // vuelve a pedir la agenda cuando termina de cargar).
@@ -1119,6 +1166,20 @@ export function AgendaView({ token }: AgendaViewProps) {
                 </button>
               ))}
             </div>
+            {columnsMode && offToday.length > 0 ? (
+              <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
+                <span className="text-muted">{copy.hiddenProviders(offToday.length)}</span>
+                <label className="inline-flex min-h-11 items-center gap-2 font-medium text-ink sm:min-h-0">
+                  <input
+                    type="checkbox"
+                    className="size-4 accent-[var(--color-primary)]"
+                    checked={showAllProviders}
+                    onChange={(e) => setShowAllProviders(e.target.checked)}
+                  />
+                  {copy.showAllProviders}
+                </label>
+              </div>
+            ) : null}
             {dayLayout === 'list' ? (
               <DayAgenda
                 appointments={appointments}
@@ -1134,10 +1195,15 @@ export function AgendaView({ token }: AgendaViewProps) {
               <p role="status" className="rounded-lg border border-dashed border-border bg-surface px-4 py-8 text-center text-sm text-muted">
                 {copy.noProviders}
               </p>
+            ) : !showAllProviders && visibleColumnProviders.length === 0 && !appointmentsLoading ? (
+              <p role="status" className="rounded-lg border border-dashed border-border bg-surface px-4 py-8 text-center text-sm text-muted">
+                {copy.nobodyWorks}
+              </p>
             ) : (
               <DayColumns
                 date={selectedDate}
-                providers={columnProviders}
+                providers={visibleColumnProviders}
+                providerRanges={providerRanges}
                 appointments={appointments}
                 hours={hours}
                 loading={appointmentsLoading || staffLoading}

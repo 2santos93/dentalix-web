@@ -136,6 +136,41 @@ describe('DayColumns (DX-121)', () => {
     expect(screen.getByText('Fuera del horario de la sede')).toBeInTheDocument();
   });
 
+  // DX-233: el horario del profesional en la sede.
+  it('sombrea en cada columna el tiempo fuera del horario del profesional en la sede', () => {
+    renderColumns({
+      providerRanges: {
+        'prov-1': [{ startMinute: 9 * 60, endMinute: 13 * 60 }],
+        'prov-2': null,
+      },
+    });
+    const [first, second, third] = screen.getAllByTestId('day-column');
+    // prov-1: antes de las 9 y de las 13 al final (dos franjas).
+    expect(within(first).getAllByTestId('provider-off-band')).toHaveLength(2);
+    // Sin horario propio (null) o sin dato: nada.
+    expect(within(second).queryAllByTestId('provider-off-band')).toHaveLength(0);
+    expect(within(third).queryAllByTestId('provider-off-band')).toHaveLength(0);
+    expect(screen.getByText('Fuera del horario del profesional en esta sede')).toBeInTheDocument();
+    // La cabecera dice su horario de ese día en la sede.
+    const headers = screen.getAllByTestId('day-column-header');
+    expect(within(headers[0]).getByTestId('provider-hours')).toHaveTextContent('09:00–13:00');
+    expect(within(headers[1]).queryByTestId('provider-hours')).not.toBeInTheDocument();
+  });
+
+  it('no propone huecos libres fuera del horario del profesional', () => {
+    renderColumns({
+      onFillOpening: jest.fn(),
+      now: new Date(`${DATE}T06:00:00`),
+      appointments: [],
+      providerRanges: { 'prov-1': [{ startMinute: 15 * 60, endMinute: 17 * 60 }] },
+    });
+    const [first, second] = screen.getAllByTestId('day-column');
+    const gaps = within(first).getAllByTestId('free-gap');
+    expect(gaps).toHaveLength(1);
+    expect(gaps[0]).toHaveTextContent('15:00–17:00');
+    expect(within(second).getAllByTestId('free-gap')).toHaveLength(2);
+  });
+
   it('columna vacía: «Sin citas hoy» y «Nueva cita» con ese profesional', async () => {
     const user = userEvent.setup();
     const { onNewAppointment } = renderColumns();

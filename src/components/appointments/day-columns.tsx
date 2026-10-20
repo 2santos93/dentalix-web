@@ -9,6 +9,8 @@ import { CalendarPlus, MoveRight, UserPlus } from 'lucide-react';
 import type { Appointment } from '@/lib/appointments/appointments-api';
 import type { StaffMember } from '@/lib/appointments/staff-api';
 import type { BusinessHours } from '@/lib/locations/schedule-api';
+import { describeRanges, outsideBands } from '@/lib/locations/provider-schedule';
+import type { MinuteRangeDto } from '@/lib/locations/provider-schedule-api';
 import {
   GRID_LINE_MINUTES,
   PX_PER_MINUTE,
@@ -56,6 +58,8 @@ const copy = {
   detailFor: (range: string, patient: string, provider: string) =>
     `Detalle de la cita de ${range} · ${patient} · ${provider}`,
   closedHours: 'Fuera del horario de la sede',
+  providerOffHours: 'Fuera del horario del profesional en esta sede',
+  providerNotHere: 'No atiende en esta sede este día',
   providerPicker: 'Profesional visible',
   appointmentsCount: (n: number) => (n === 1 ? '1 cita' : `${n} citas`),
   dragPreview: (time: string, provider: string) => `Mover a las ${time} · ${provider}`,
@@ -119,6 +123,12 @@ interface DayColumnsProps {
   canFillOpening?: (providerId: string) => boolean;
   /** «Ahora» para no proponer huecos pasados (los tests lo fijan). */
   now?: Date;
+  /**
+   * DX-233: tramos de cada profesional ese día en la sede activa (del
+   * cuadrante). `null` o sin clave = sin restricción (no se sombrea); vacío =
+   * no trabaja allí ese día (toda la columna).
+   */
+  providerRanges?: Record<string, MinuteRangeDto[] | null>;
 }
 
 interface DragState {
@@ -170,6 +180,7 @@ export function DayColumns({
   onFillOpening,
   canFillOpening = () => true,
   now: nowProp,
+  providerRanges = {},
 }: DayColumnsProps) {
   const [mountedAt] = useState(() => new Date());
   const now = nowProp ?? mountedAt;
@@ -375,6 +386,15 @@ export function DayColumns({
               >
                 <p className="truncate text-sm font-semibold text-ink">{p.fullName}</p>
                 <p className="text-xs tabular-nums text-muted">{copy.appointmentsCount(count)}</p>
+                {(() => {
+                  const ranges = providerRanges[p.userId] ?? null;
+                  if (ranges === null) return null;
+                  return (
+                    <p data-testid="provider-hours" className="truncate text-xs tabular-nums text-muted">
+                      {ranges.length > 0 ? describeRanges(ranges) : copy.providerNotHere}
+                    </p>
+                  );
+                })()}
               </div>
             );
           })}
@@ -405,6 +425,8 @@ export function DayColumns({
             const columnBlocks = blocks.filter((block) =>
               blockShownInColumn(block, p.userId, activeLocationId),
             );
+            const ranges = providerRanges[p.userId] ?? null;
+            const offBands = outsideBands(ranges, span);
             const fills = onFillOpening !== undefined && canFillOpening(p.userId);
             const gaps = fills
               ? freeGaps({
@@ -415,6 +437,7 @@ export function DayColumns({
                   providerId: p.userId,
                   activeLocationId,
                   now,
+                  providerRanges: ranges,
                 })
               : [];
             return (
@@ -445,6 +468,20 @@ export function DayColumns({
                     aria-hidden
                     title={copy.closedHours}
                     className="pointer-events-none absolute inset-x-0 bg-surface-2/80 [background-image:repeating-linear-gradient(135deg,transparent_0_6px,var(--color-border)_6px_7px)]"
+                    style={{
+                      top: offsetFromMinute(band.start, span),
+                      height: (band.end - band.start) * PX_PER_MINUTE,
+                    }}
+                  />
+                ))}
+
+                {offBands.map((band) => (
+                  <div
+                    key={`off-${band.start}`}
+                    data-testid="provider-off-band"
+                    aria-hidden
+                    title={copy.providerOffHours}
+                    className="pointer-events-none absolute inset-x-0 bg-[color-mix(in_oklab,var(--color-ink)_7%,transparent)] [background-image:repeating-linear-gradient(45deg,transparent_0_8px,var(--color-border)_8px_9px)]"
                     style={{
                       top: offsetFromMinute(band.start, span),
                       height: (band.end - band.start) * PX_PER_MINUTE,
@@ -656,6 +693,16 @@ export function DayColumns({
             className="inline-block size-3 rounded-sm border border-dashed border-warning/50 bg-warning/10"
           />
           {copy.blockLegend}
+        </p>
+      )}
+
+      {providers.some((p) => (providerRanges[p.userId] ?? null) !== null) && (
+        <p className="flex items-center gap-2 text-xs text-muted">
+          <span
+            aria-hidden
+            className="inline-block size-3 rounded-sm border border-border bg-[color-mix(in_oklab,var(--color-ink)_7%,transparent)] [background-image:repeating-linear-gradient(45deg,transparent_0_3px,var(--color-border)_3px_4px)]"
+          />
+          {copy.providerOffHours}
         </p>
       )}
 

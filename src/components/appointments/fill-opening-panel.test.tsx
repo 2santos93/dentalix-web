@@ -333,6 +333,15 @@ describe('«Ocupar este hueco» (DX-210)', () => {
     expect(screen.getByText('Elena Mora')).toBeInTheDocument();
   });
 
+  it('DX-233: un hueco fuera del horario del profesional lo dice en vez de «nadie cabe»', async () => {
+    mockedList.mockResolvedValue({ ...view([]), providerOffSchedule: true });
+    renderPanel();
+    expect(
+      await screen.findByText('Este hueco queda fuera del horario del profesional en la sede'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText('Nadie en la lista cabe en este hueco')).not.toBeInTheDocument();
+  });
+
   it('vacío con «Ver pendientes», carga con esqueleto y error con «Reintentar»', async () => {
     mockedList.mockRejectedValueOnce(new Error('boom')).mockResolvedValue(view([]));
     const { onShowWaitlist } = renderPanel();
