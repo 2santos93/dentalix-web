@@ -87,6 +87,13 @@ describe('PatientEditModal', () => {
     expect(input).not.toHaveProperty('insurerEps');
   });
 
+  it('ya no ofrece «Aseguradora / EPS»: la cobertura se edita en su sección (DX-153)', () => {
+    render(
+      <PatientEditModal open patient={patient} token="tok" onOpenChange={() => {}} onSaved={() => {}} />,
+    );
+    expect(screen.queryByLabelText(/aseguradora/i)).not.toBeInTheDocument();
+  });
+
   it('manda null cuando se borra un campo que sí tenía valor', async () => {
     const withEmail = { ...patient, email: 'viejo@x.com' };
     mockedUpdate.mockResolvedValue(withEmail);

@@ -18,6 +18,7 @@ import { PatientRecordHeader } from '@/components/patients/patient-record-header
 import { PatientRetentionSection } from '@/components/patients/patient-retention-section';
 import { PatientCommunicationSection } from '@/components/patients/patient-communication-section';
 import { PatientResponsiblePartiesSection } from '@/components/patients/patient-responsible-parties-section';
+import { PatientCoverageSection } from '@/components/patients/patient-coverage-section';
 import { canEditCommunication, withCommunication } from '@/lib/patients/communication-api';
 import { OdontogramTab } from '@/components/odontogram/odontogram-tab';
 import { TreatmentPlansTab } from '@/components/treatment-plans/treatment-plans-tab';
@@ -106,6 +107,16 @@ function PatientDetailView() {
       .then((fresh) => setPatient((prev) => (prev ? { ...prev, balance: fresh.balance } : prev)))
       .catch(() => {
         /* la cabecera conserva la marca leída; se corrige al recargar */
+      });
+  }, [accessToken, patientId]);
+  // DX-153: guardar o quitar una cobertura cambia el resumen de la cabecera
+  // («Cobertura vencida»): se relee y se copia solo `coverage`, como el saldo.
+  const onCoverageChanged = useCallback(() => {
+    if (!accessToken) return;
+    getPatient(accessToken, patientId)
+      .then((fresh) => setPatient((prev) => (prev ? { ...prev, coverage: fresh.coverage } : prev)))
+      .catch(() => {
+        /* la cabecera conserva el resumen leído; se corrige al recargar */
       });
   }, [accessToken, patientId]);
   const panels = useRef(new Map<PatientDetailTabKey, HTMLDivElement>());
@@ -308,6 +319,14 @@ function PatientDetailView() {
               token={accessToken}
               patientId={patientId}
             />
+            {/* DX-153: pagador, plan y n.º de afiliado. Lo gestionan los 4
+                roles; la cabecera se refresca vía `onChanged`. */}
+            <PatientCoverageSection
+              key={`coverage-${patientId}`}
+              token={accessToken}
+              patientId={patientId}
+              onChanged={onCoverageChanged}
+            />
           </TabPanel>
 
           <PatientEditModal
@@ -315,8 +334,15 @@ function PatientDetailView() {
             patient={patient}
             token={accessToken}
             onOpenChange={setEditing}
-            // PATCH no trae la marca de saldo (DX-150): se conserva la leída.
-            onSaved={(updated) => setPatient((prev) => ({ ...updated, balance: prev?.balance }))}
+            // PATCH no trae la marca de saldo (DX-150) ni el resumen de cobertura
+            // (DX-153): se conservan los leídos.
+            onSaved={(updated) =>
+              setPatient((prev) => ({
+                ...updated,
+                balance: prev?.balance,
+                coverage: prev?.coverage,
+              }))
+            }
           />
 
           {access['clinical-history'] ? (
