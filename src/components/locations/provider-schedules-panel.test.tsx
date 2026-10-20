@@ -14,6 +14,7 @@ import {
   type Roster,
 } from '@/lib/locations/provider-schedule-api';
 import { ApiError } from '@/lib/api/client';
+import { listStaff } from '@/lib/appointments/staff-api';
 
 // Ruta relativa: el literal de `jest.mock` no pasa por el alias (ver
 // business-hours-form.test.tsx).
@@ -31,9 +32,11 @@ jest.mock('../../lib/locations/provider-schedule-api', () => {
     updateProviderScheduleSettings: jest.fn(),
   };
 });
+jest.mock('../../lib/appointments/staff-api', () => ({ listStaff: jest.fn() }));
 jest.mock('sonner', () => ({ toast: { success: jest.fn(), error: jest.fn(), warning: jest.fn() } }));
 
 const mockedRoster = getRoster as jest.MockedFunction<typeof getRoster>;
+const mockedStaff = listStaff as jest.MockedFunction<typeof listStaff>;
 const mockedGet = getProviderSchedule as jest.MockedFunction<typeof getProviderSchedule>;
 const mockedReplace = replaceProviderSchedule as jest.MockedFunction<typeof replaceProviderSchedule>;
 const mockedOverrides = listProviderOverrides as jest.MockedFunction<typeof listProviderOverrides>;
@@ -80,6 +83,10 @@ const configured: ProviderSchedule = {
 beforeEach(() => {
   jest.clearAllMocks();
   mockedRoster.mockResolvedValue(roster);
+  mockedStaff.mockResolvedValue([
+    { userId: 'dra-x', fullName: 'Dra. Ximena', role: 'DENTIST', locationIds: null },
+    { userId: 'dr-y', fullName: 'Dr. Yepes', role: 'DENTIST', locationIds: null },
+  ]);
   mockedGet.mockResolvedValue(unconfigured);
   mockedOverrides.mockResolvedValue([]);
   mockedSettings.mockResolvedValue({ strictProviderSchedule: false });
@@ -204,6 +211,41 @@ describe('ProviderSchedulesPanel', () => {
         ],
       }),
     );
+  });
+
+  it('a un profesional acotado a la sede A (DX-089) solo se le ofrece la sede A', async () => {
+    mockedStaff.mockResolvedValue([
+      { userId: 'dra-x', fullName: 'Dra. Ximena', role: 'DENTIST', locationIds: [A] },
+      { userId: 'dr-y', fullName: 'Dr. Yepes', role: 'DENTIST', locationIds: null },
+    ]);
+    const user = userEvent.setup();
+    render(<ProviderSchedulesPanel token="tok" canEdit />);
+    const monday = await screen.findByRole('group', { name: 'Lunes' });
+    expect(within(monday).getByRole('button', { name: 'Agregar tramo en Sede A' })).toBeInTheDocument();
+    expect(within(monday).queryByRole('button', { name: 'Agregar tramo en Sede B' })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Añadir excepción' }));
+    const dialog = await screen.findByRole('dialog');
+    const options = within(within(dialog).getByLabelText('Sede')).getAllByRole('option');
+    expect(options.map((o) => o.textContent)).toEqual(['Sede A']);
+
+    // Sin restricción, las dos.
+    await user.click(within(dialog).getByRole('button', { name: 'Cancelar' }));
+    await user.selectOptions(screen.getByRole('combobox', { name: 'Profesional' }), 'dr-y');
+    const mondayY = await screen.findByRole('group', { name: 'Lunes' });
+    expect(within(mondayY).getByRole('button', { name: 'Agregar tramo en Sede B' })).toBeInTheDocument();
+  });
+
+  it('un profesional acotado solo a sedes que ya no están se explica en lugar del editor', async () => {
+    mockedStaff.mockResolvedValue([
+      { userId: 'dra-x', fullName: 'Dra. Ximena', role: 'DENTIST', locationIds: [] },
+      { userId: 'dr-y', fullName: 'Dr. Yepes', role: 'DENTIST', locationIds: null },
+    ]);
+    render(<ProviderSchedulesPanel token="tok" canEdit />);
+    expect(
+      await screen.findByText('No atiende en ninguna de estas sedes: asígnale sedes en su ficha de Personal.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Guardar horario' })).not.toBeInTheDocument();
   });
 
   it('otros roles lo ven en solo lectura: sin campos ni botones de guardar', async () => {

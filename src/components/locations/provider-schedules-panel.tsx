@@ -3,6 +3,7 @@ import * as React from 'react';
 import { useEffect, useMemo, useState } from 'react';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api/error-message';
+import { listStaff, type StaffMember } from '@/lib/appointments/staff-api';
 import {
   getProviderSchedule,
   getRoster,
@@ -10,6 +11,7 @@ import {
   replaceProviderSchedule,
   type ProviderOverride,
   type Roster,
+  type RosterLocation,
 } from '@/lib/locations/provider-schedule-api';
 import {
   buildSchedulePayload,
@@ -36,6 +38,7 @@ const copy = {
   noProviders: 'No hay profesionales que atiendan pacientes',
   noProvidersHint: 'Los odontólogos y administradores activos aparecen aquí para definir su horario.',
   noLocations: 'No hay sedes activas',
+  noAllowedLocations: 'No atiende en ninguna de estas sedes: asígnale sedes en su ficha de Personal.',
   unconfigured:
     'Este profesional aún no tiene horario: se le puede citar en cualquier horario de la sede.',
   weekly: 'Horario semanal',
@@ -73,6 +76,7 @@ interface ProviderSchedulesPanelProps {
  */
 export function ProviderSchedulesPanel({ token, canEdit }: ProviderSchedulesPanelProps) {
   const [roster, setRoster] = useState<Roster | null>(null);
+  const [staff, setStaff] = useState<StaffMember[]>([]);
   const [rosterError, setRosterError] = useState<string | null>(null);
   const [rosterKey, setRosterKey] = useState(0);
   const [providerId, setProviderId] = useState<string | null>(null);
@@ -82,8 +86,14 @@ export function ProviderSchedulesPanel({ token, canEdit }: ProviderSchedulesPane
     async function load() {
       setRoster(null);
       try {
-        const r = await getRoster(token, { weekStart: mondayOf(localDateString(new Date())), days: 1 });
+        // DX-089: `GET /staff` trae las sedes permitidas de cada profesional
+        // (como las columnas de la agenda); el editor solo le ofrece esas.
+        const [r, members] = await Promise.all([
+          getRoster(token, { weekStart: mondayOf(localDateString(new Date())), days: 1 }),
+          listStaff(token),
+        ]);
         if (cancelled) return;
+        setStaff(members);
         setRoster(r);
         setRosterError(null);
       } catch (err) {
@@ -106,6 +116,9 @@ export function ProviderSchedulesPanel({ token, canEdit }: ProviderSchedulesPane
   if (roster.locations.length === 0) return <EmptyState role="status" title={copy.noLocations} />;
 
   const selected = roster.providers.find((p) => p.providerId === providerId) ?? roster.providers[0];
+  const allowed = staff.find((m) => m.userId === selected.providerId)?.locationIds ?? null;
+  const providerLocations =
+    allowed === null ? roster.locations : roster.locations.filter((l) => allowed.includes(l.id));
 
   return (
     <div className="flex flex-col gap-8">
@@ -124,13 +137,17 @@ export function ProviderSchedulesPanel({ token, canEdit }: ProviderSchedulesPane
         </select>
       </FormField>
 
-      <ProviderScheduleDetail
-        key={selected.providerId}
-        token={token}
-        providerId={selected.providerId}
-        roster={roster}
-        canEdit={canEdit}
-      />
+      {providerLocations.length === 0 ? (
+        <EmptyState role="status" title={copy.noAllowedLocations} />
+      ) : (
+        <ProviderScheduleDetail
+          key={selected.providerId}
+          token={token}
+          providerId={selected.providerId}
+          locations={providerLocations}
+          canEdit={canEdit}
+        />
+      )}
 
       <section aria-labelledby="strict-schedule-title" className="flex flex-col gap-2 border-t border-border pt-6">
         <h3 id="strict-schedule-title" className="text-base font-semibold text-ink">
@@ -145,19 +162,20 @@ export function ProviderSchedulesPanel({ token, canEdit }: ProviderSchedulesPane
 function ProviderScheduleDetail({
   token,
   providerId,
-  roster,
+  locations,
   canEdit,
 }: {
   token: string;
   providerId: string;
-  roster: Roster;
+  /** Las sedes en las que se le puede poner horario (DX-089). */
+  locations: RosterLocation[];
   canEdit: boolean;
 }) {
-  const locationIds = useMemo(() => roster.locations.map((l) => l.id), [roster]);
-  const locationNames = useMemo(
-    () => Object.fromEntries(roster.locations.map((l) => [l.id, l.name])),
-    [roster],
-  );
+  // Por los ids: el padre filtra las sedes en cada render (array nuevo) y la
+  // carga no debe repetirse por eso.
+  const idsKey = locations.map((l) => l.id).join(',');
+  const locationIds = useMemo(() => (idsKey ? idsKey.split(',') : []), [idsKey]);
+  const locationNames = useMemo(() => Object.fromEntries(locations.map((l) => [l.id, l.name])), [locations]);
   const [draft, setDraft] = useState<ScheduleDraft | null>(null);
   const [configured, setConfigured] = useState(false);
   const [overrides, setOverrides] = useState<ProviderOverride[]>([]);
@@ -237,7 +255,7 @@ function ProviderScheduleDetail({
         {!canEdit ? <p className="text-xs text-muted">{copy.readOnly}</p> : null}
         <ProviderWeekEditor
           draft={draft}
-          locations={roster.locations}
+          locations={locations}
           canEdit={canEdit}
           onChange={(next) => {
             setDraft(next);
@@ -261,7 +279,7 @@ function ProviderScheduleDetail({
       <ProviderOverrides
         token={token}
         providerId={providerId}
-        locations={roster.locations}
+        locations={locations}
         overrides={overrides}
         canEdit={canEdit}
         onChange={setOverrides}
