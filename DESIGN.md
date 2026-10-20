@@ -243,8 +243,10 @@ inputs, small cards), **12px** (lg — cards and panels), pill for status chips 
 ### Money Fields
 Every amount a person types goes through `<MoneyInput>` (`src/components/shared/money-input.tsx`)
 and is read with `parseMoneyInput(text, currency)` (`src/lib/format/money.ts`). No screen
-parses an amount its own way, and no component calls `Number(…)` on a money field's text —
-a jest guard (`money-guard.test.ts`) fails CI if one does.
+parses an amount its own way: no component (or page) calls `Number(…)`/`parseFloat(…)`/
+`parseInt(…)` on a money field's text, keeps a `parseAmount`-style parser of its own, or
+renders a money field as `type="number"` — a jest guard (`money-guard.test.ts`) fails CI
+if one does.
 
 **The Amount Rule.** The same keystrokes mean the same amount everywhere, on a Spanish or
 an English keyboard:
