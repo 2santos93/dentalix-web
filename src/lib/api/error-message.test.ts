@@ -22,6 +22,9 @@ describe('isHumanSpanish — heurística de idioma', () => {
     // SEC-041: precio por debajo del de catálogo (403 y 422 de los ítems del plan).
     'Precio por debajo del de catálogo: cuenta como descuento. Tu rol permite hasta un 10 % de descuento por ítem.',
     'Precio por debajo del de catálogo: cuenta como descuento y supera el 10 %. Indica el motivo del descuento.',
+    // DX-233: 409 del modo estricto y 400 del solape entre sedes.
+    'Fuera del horario del profesional en Sede Norte (jueves 22/10: 14:00–19:00). La clínica no permite citar fuera del horario del profesional.',
+    'Fuera del horario del profesional: no trabaja en Sede Norte el jueves 22/10. La clínica no permite citar fuera del horario del profesional.',
   ])('reconoce como español: %s', (msg) => {
     expect(isHumanSpanish(msg)).toBe(true);
   });

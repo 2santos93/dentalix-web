@@ -24,6 +24,7 @@ import {
   isPatientOptOut,
   staffLoginDetail,
   cashSessionDetail,
+  scheduleChangeDetail,
   patientFlowDetail,
 } from '@/lib/audit/audit-labels';
 import { listStaff, type StaffMember } from '@/lib/staff/staff-api';
@@ -419,6 +420,7 @@ function AuditRow({ event, showPatient }: { event: AuditEvent; showPatient: bool
     implantSearchDetail(event.metadata) ??
     staffLoginDetail(event.metadata) ??
     cashSessionDetail(event.metadata) ??
+    scheduleChangeDetail(event.metadata) ??
     patientFlowDetail(event.metadata);
   return (
     <TableRow>

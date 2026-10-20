@@ -90,6 +90,8 @@ export interface Appointment {
    * operación (p. ej. «La cita cae en un bloqueo que permite agendar…»).
    */
   warnings?: string[];
+  /** DX-233: el código de cada aviso (`PROVIDER_OFF_SCHEDULE`, `SCHEDULE_BLOCK`), mismo orden. */
+  warningCodes?: components['schemas']['AppointmentWarningCode'][];
 }
 
 export async function createAppointment(

@@ -2,6 +2,7 @@
 import * as React from 'react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
+import { announceAppointmentWarnings } from '@/components/appointments/appointment-warnings';
 import { CalendarCheck, MessageCircle, MessageCircleReply, Phone, PhoneCall } from 'lucide-react';
 import { ApiError } from '@/lib/api/client';
 import { apiErrorMessage } from '@/lib/api/error-message';
@@ -245,7 +246,7 @@ export function FillOpeningPanel({
             })
           : await moveAppointmentToOpening(token, c.appointmentId ?? '', slot);
       toast.success(fillOpeningCopy.assigned(fullName(c), whenLabel(appointment.start)));
-      for (const warning of appointment.warnings) toast.warning(warning);
+      announceAppointmentWarnings(appointment);
       onAssigned(appointment);
     } catch (err) {
       notifyError(apiErrorMessage(err, fillOpeningCopy.assignError));

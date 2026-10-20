@@ -2,6 +2,7 @@
 import * as React from 'react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
+import { announceAppointmentWarnings } from '@/components/appointments/appointment-warnings';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { ApiError } from '@/lib/api/client';
 import {
@@ -184,7 +185,7 @@ export function OpeningsDialog({
       });
       const when = `${formatDateLabel(created.start, { weekday: 'short', day: 'numeric', month: 'short' })} ${formatTimeRange(created.start, created.end)}`;
       toast.success(copy.scheduled(name, when));
-      for (const warning of created.warnings) toast.warning(warning);
+      announceAppointmentWarnings(created);
       onScheduled(created);
     } catch (err) {
       if (isEntryGone(err)) {

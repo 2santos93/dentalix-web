@@ -34,6 +34,8 @@ import {
 import { PatientForm } from '@/components/patients/patient-form';
 import { FieldError } from '@/components/errors/field-error';
 import { InlineError } from '@/components/errors/inline-error';
+import { useProviderDay } from '@/components/appointments/use-provider-day';
+import { describeRanges, fitsRanges } from '@/lib/locations/provider-schedule';
 
 // Copy as constants (i18n-ready, es-first) — matches patient-form.tsx /
 // tooth-record-panel.tsx convention until next-intl wiring lands.
@@ -78,6 +80,13 @@ const copy = {
       : `Fuera del horario de atención. Ese día se atiende: ${ranges}.`,
   hoursHint: (ranges: string) => `Horario de ese día: ${ranges}`,
   hoursHintClosed: 'La sede no atiende ese día.',
+  // DX-233: aviso no bloqueante (la API decide: aviso o 409 en modo estricto).
+  providerOffSchedule: (name: string, ranges: string) =>
+    ranges === ''
+      ? `${name} no atiende en esta sede ese día.`
+      : `Fuera del horario de ${name} en esta sede (ese día: ${ranges}).`,
+  providerOffScheduleAllowed: 'Se puede agendar igual; quedará el aviso.',
+  providerOffScheduleStrict: 'La clínica no permite citar fuera del horario del profesional.',
 };
 
 function fullPatientName(patient: Patient): string {
@@ -201,6 +210,7 @@ export function AppointmentForm({
   // restricción (misma semántica que el backend).
   const [hours, setHours] = useState<BusinessHours | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
+  const providerDay = useProviderDay(token, providerId, date);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [showPatientDialog, setShowPatientDialog] = useState(false);
@@ -707,6 +717,25 @@ export function AppointmentForm({
         </div>
       ) : null}
 
+      {(() => {
+        // DX-233: aviso no bloqueante con el horario del profesional ese día.
+        const start = startTime ? Number(startTime.slice(0, 2)) * 60 + Number(startTime.slice(3, 5)) : NaN;
+        const end = endTime ? Number(endTime.slice(0, 2)) * 60 + Number(endTime.slice(3, 5)) : NaN;
+        if (Number.isNaN(start) || Number.isNaN(end) || end <= start) return null;
+        if (fitsRanges(providerDay.ranges, start, end)) return null;
+        const name = staff.find((s) => s.userId === providerId)?.fullName ?? '';
+        const ranges = describeRanges(providerDay.ranges ?? []);
+        return (
+          <p
+            role="status"
+            data-testid="provider-off-schedule"
+            className="rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-ink"
+          >
+            {copy.providerOffSchedule(name, ranges)}{' '}
+            {providerDay.strict ? copy.providerOffScheduleStrict : copy.providerOffScheduleAllowed}
+          </p>
+        );
+      })()}
       {validationError && <InlineError>{validationError}</InlineError>}
       {saveError && <InlineError>{saveError}</InlineError>}
 

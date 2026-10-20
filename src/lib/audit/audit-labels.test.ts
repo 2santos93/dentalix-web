@@ -9,6 +9,7 @@ import {
   isPatientOptOut,
   staffLoginDetail,
   cashSessionDetail,
+  scheduleChangeDetail,
   patientFlowDetail,
 } from './audit-labels';
 
@@ -102,5 +103,34 @@ describe('cashSessionDetail (DX-027)', () => {
       patientFlowDetail({ reason: 'ARRIVAL_UNDONE', status: { from: 'ARRIVED', to: 'SCHEDULED' } }),
     ).toBe('Deshacer llegada · En espera → Agendada');
     expect(patientFlowDetail({ reason: 'APPOINTMENT_MOVED' })).toBeNull();
+  });
+});
+
+describe('scheduleChangeDetail (DX-233)', () => {
+  it('semanal: antes y después por día', () => {
+    expect(
+      scheduleChangeDetail({
+        scheduleChange: {
+          before: [],
+          after: [
+            { locationId: 'a', weekday: 1, startMinute: 480, endMinute: 780 },
+            { locationId: 'b', weekday: 4, startMinute: 840, endMinute: 1140 },
+          ],
+        },
+      }),
+    ).toBe('Antes: sin horario · Después: lun 08:00–13:00, jue 14:00–19:00');
+  });
+  it('excepción: fecha y «no trabaja»', () => {
+    expect(
+      scheduleChangeDetail({
+        scheduleChange: {
+          before: [{ locationId: 'b', date: '2026-10-22', startMinute: 840, endMinute: 1140 }],
+          after: [{ locationId: 'b', date: '2026-10-22', off: true }],
+        },
+      }),
+    ).toBe('Antes: 22/10 14:00–19:00 · Después: 22/10 no trabaja');
+  });
+  it('sin cambio de horario, null', () => {
+    expect(scheduleChangeDetail({})).toBeNull();
   });
 });

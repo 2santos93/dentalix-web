@@ -33,6 +33,7 @@ import { monthGridRange, addMonths, monthLabel } from '@/lib/appointments/calend
 import { DayAgenda } from '@/components/appointments/day-agenda';
 import { CoverageDetailLine } from '@/components/appointments/coverage-detail-line';
 import { DayColumns } from '@/components/appointments/day-columns';
+import { announceAppointmentWarnings } from '@/components/appointments/appointment-warnings';
 import { MoveAppointmentDialog } from '@/components/appointments/move-appointment-dialog';
 import {
   MAX_PROVIDER_COLUMNS,
@@ -188,10 +189,6 @@ const copy = {
   nobodyWorks: 'Ningún profesional de las columnas atiende este día en esta sede.',
 };
 
-/** Avisos de la API al crear o mover (p. ej. un bloqueo de almuerzo que deja agendar). */
-function announceWarnings(appointment: Appointment | null | undefined) {
-  for (const warning of appointment?.warnings ?? []) toast.warning(warning);
-}
 
 // Native <select> styled to match the Input atom (kept native for a11y/tests).
 const fieldClass =
@@ -764,7 +761,7 @@ export function AgendaView({ token }: AgendaViewProps) {
   function handleAppointmentCreated(created?: Appointment) {
     setShowForm(false);
     setSlotPrefill(null);
-    announceWarnings(created);
+    announceAppointmentWarnings(created);
     refreshAppointmentsInPlace();
   }
 
@@ -809,7 +806,7 @@ export function AgendaView({ token }: AgendaViewProps) {
     try {
       const updated = await updateAppointment(token, appointment.id, target);
       toast.success(copy.moved);
-      announceWarnings(updated);
+      announceAppointmentWarnings(updated);
       await refreshAppointmentsInPlace();
     } catch (err) {
       setAppointments((prev) =>
@@ -827,7 +824,7 @@ export function AgendaView({ token }: AgendaViewProps) {
   function handleMoved(updated: Appointment) {
     setMovingAppointment(null);
     toast.success(copy.moved);
-    announceWarnings(updated);
+    announceAppointmentWarnings(updated);
     void refreshAppointmentsInPlace();
   }
 

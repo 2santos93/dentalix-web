@@ -181,6 +181,36 @@ export function implantSearchDetail(metadata: AuditMetadata): string | null {
   return [...terms, rows].join(' · ');
 }
 
+const WEEKDAY_SHORT = ['dom', 'lun', 'mar', 'mié', 'jue', 'vie', 'sáb'];
+
+function minuteLabel(m: number): string {
+  return `${String(Math.floor(m / 60)).padStart(2, '0')}:${String(m % 60).padStart(2, '0')}`;
+}
+
+type ScheduleEntry = NonNullable<AuditMetadata['scheduleChange']>['after'][number];
+
+function scheduleEntryLabel(e: ScheduleEntry): string {
+  const when =
+    e.date !== undefined
+      ? `${e.date.slice(8, 10)}/${e.date.slice(5, 7)}`
+      : WEEKDAY_SHORT[e.weekday ?? 0];
+  if (e.off) return `${when} no trabaja`;
+  return `${when} ${minuteLabel(e.startMinute ?? 0)}–${minuteLabel(e.endMinute ?? 0)}`;
+}
+
+/**
+ * DX-233: horario de un profesional antes y después (semanal o una
+ * excepción por fecha): «Antes: lun 08:00–13:00 · Después: …». null si el
+ * evento no es un cambio de horario.
+ */
+export function scheduleChangeDetail(metadata: AuditMetadata): string | null {
+  const change = metadata.scheduleChange;
+  if (!change) return null;
+  const side = (entries: ScheduleEntry[]) =>
+    entries.length === 0 ? 'sin horario' : entries.map(scheduleEntryLabel).join(', ');
+  return `Antes: ${side(change.before)} · Después: ${side(change.after)}`;
+}
+
 /** DX-200: etiqueta de un estado de la cita en el registro de auditoría. */
 const APPOINTMENT_STATUS_LABELS: Record<string, string> = {
   SCHEDULED: 'Agendada',
