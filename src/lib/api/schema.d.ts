@@ -18314,6 +18314,13 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     PatientDocumentsController_complete: {
