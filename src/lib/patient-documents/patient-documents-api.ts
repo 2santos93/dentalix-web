@@ -141,7 +141,15 @@ export interface UploadPatientDocumentInput {
 /** La autorización de subida directa al almacén (DX-259). */
 export type PatientDocumentUploadTicket = components['schemas']['PatientDocumentUploadDto'];
 
-/** SHA-256 del fichero en hex: el almacén rechaza un contenido con otra huella. */
+/**
+ * SHA-256 del fichero en hex: el almacén rechaza un contenido con otra huella.
+ *
+ * Lee el fichero entero en memoria A PROPÓSITO: Web Crypto (`subtle.digest`)
+ * no tiene API incremental, y hacerlo por trozos exigiría una implementación
+ * propia en JS/WASM (una dependencia más y varias veces más lenta). Con el
+ * tope de 20 MB (`MAX_PATIENT_DOCUMENT_BYTES`, comprobado antes) son a lo sumo
+ * 20 MB durante unos milisegundos, también en un móvil.
+ */
 export async function sha256HexOf(file: Blob): Promise<string> {
   const digest = await crypto.subtle.digest('SHA-256', await file.arrayBuffer());
   return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('');
