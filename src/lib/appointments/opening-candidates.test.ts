@@ -111,4 +111,22 @@ describe('freeGaps', () => {
   it('sin horario configurado no propone huecos', () => {
     expect(freeGaps({ ...base, hours: null, appointments: [] })).toEqual([]);
   });
+
+  // DX-233: con horario del profesional en la sede, solo dentro de sus tramos.
+  it('con horario del profesional, solo propone dentro de sus tramos en la sede', () => {
+    const gaps = freeGaps({
+      ...base,
+      appointments: [],
+      providerRanges: [{ startMinute: 10 * 60, endMinute: 16 * 60 }],
+    });
+    expect(gaps.map((g) => [g.start, g.end])).toEqual([
+      [at('10:00'), at('13:00')],
+      [at('15:00'), at('16:00')],
+    ]);
+  });
+
+  it('si ese día no trabaja en la sede (sin tramos), no hay huecos; null = sin restricción', () => {
+    expect(freeGaps({ ...base, appointments: [], providerRanges: [] })).toEqual([]);
+    expect(freeGaps({ ...base, appointments: [], providerRanges: null })).toHaveLength(2);
+  });
 });

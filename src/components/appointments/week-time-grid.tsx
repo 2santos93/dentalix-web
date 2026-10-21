@@ -23,6 +23,8 @@ import {
 } from '@/lib/appointments/schedule-blocks';
 import { OverdueChip } from '@/components/collections/overdue-chip';
 import { CoverageMarker } from '@/components/patients/coverage-chip';
+import { MedicalAlertIndicator } from '@/components/clinical/medical-alert-indicator';
+import { medicalAlertSeverity } from '@/lib/clinical/medical-alerts';
 
 const copy = {
   heading: 'Agenda de la semana',
@@ -217,14 +219,14 @@ export function WeekTimeGrid({
             ).map(({ appointment: a, lane, laneCount }) => {
               const { topPx, heightPx } = blockGeometry(a.start, a.end);
               const widthPct = 100 / laneCount;
+              const patient = patientLabel(a, patientNames);
+              // DX-247: el icono va junto a la tarjeta, no dentro (no se anidan
+              // botones); también en las de 15 min (20 px de alto).
+              const hasMedicalAlert = medicalAlertSeverity(a.medicalAlerts) !== null;
               return (
-                <button
+                <div
                   key={a.id}
-                  type="button"
-                  data-testid="week-grid-appointment"
-                  data-id={a.id}
-                  onClick={() => onSelectAppointment(a)}
-                  className={`absolute overflow-hidden rounded-md border px-1 py-0.5 text-left text-xs ${STATUS_BADGE_CLASSES[a.status]}`}
+                  className="absolute"
                   style={{
                     top: topPx,
                     height: heightPx,
@@ -232,15 +234,30 @@ export function WeekTimeGrid({
                     width: `calc(${widthPct}% - 2px)`,
                   }}
                 >
-                  <span className="flex items-center gap-1 font-medium">
-                    {formatTimeRange(a.start, a.end)}
-                    <ConfirmationBadge appointment={a} compact />
-                    <CoverageMarker coverage={a.coverage} srText />
-                  </span>
-                  <span className="block truncate">{patientLabel(a, patientNames)}</span>
-                  {/* DX-150: «Saldo vencido» (el importe, solo ADMIN/RECEPTION). */}
-                  <OverdueChip balance={a.balance} compact className="mt-0.5 px-1" />
-                </button>
+                  <button
+                    type="button"
+                    data-testid="week-grid-appointment"
+                    data-id={a.id}
+                    onClick={() => onSelectAppointment(a)}
+                    className={`h-full w-full overflow-hidden rounded-md border px-1 py-0.5 text-left text-xs ${hasMedicalAlert ? 'pr-6' : ''} ${STATUS_BADGE_CLASSES[a.status]}`}
+                  >
+                    <span className="flex items-center gap-1 font-medium">
+                      {formatTimeRange(a.start, a.end)}
+                      <ConfirmationBadge appointment={a} compact />
+                      <CoverageMarker coverage={a.coverage} srText />
+                    </span>
+                    <span className="block truncate">{patient}</span>
+                    {/* DX-150: «Saldo vencido» (el importe, solo ADMIN/RECEPTION). */}
+                    <OverdueChip balance={a.balance} compact className="mt-0.5 px-1" />
+                  </button>
+                  {hasMedicalAlert ? (
+                    <MedicalAlertIndicator
+                      flags={a.medicalAlerts}
+                      patientName={patient}
+                      className="absolute right-0.5 top-0"
+                    />
+                  ) : null}
+                </div>
               );
             })}
           </div>

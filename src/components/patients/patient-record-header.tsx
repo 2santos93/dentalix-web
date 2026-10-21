@@ -11,6 +11,13 @@ import { CoverageChip } from '@/components/patients/coverage-chip';
 import { AgreementChip } from '@/components/patients/agreement-chip';
 import { agreementChipText } from '@/lib/patients/agreement-presentation';
 import { coverageChipText } from '@/lib/patients/coverage-presentation';
+import { MedicalAlertIndicator } from '@/components/clinical/medical-alert-indicator';
+import { FieldError } from '@/components/errors/field-error';
+import {
+  medicalAlertHeadline,
+  medicalAlertSeverity,
+  type MedicalAlertFlags,
+} from '@/lib/clinical/medical-alerts';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands. Cada entrada es una cadena COMPLETA: las que
@@ -36,6 +43,8 @@ const copy = {
    */
   recordScope: 'Ficha centralizada · todas las sedes',
   edit: 'Editar datos',
+  alertsLoading: 'Comprobando alertas…',
+  alertsFailed: 'Alertas sin comprobar',
 };
 
 function fullName(patient: Patient): string {
@@ -64,6 +73,15 @@ interface PatientRecordHeaderProps {
   patient: Patient | null;
   loading: boolean;
   onEdit: () => void;
+  /**
+   * DX-247: banderas médicas del paciente. La cabecera encabeza todas las
+   * pestañas (también el plan de tratamiento y el odontograma), así que la
+   * alerta se ve sin abrir la historia clínica.
+   */
+  medicalAlerts?: MedicalAlertFlags | null;
+  /** No se pudieron comprobar: se dice, con reintento (nunca parece «sin alertas»). */
+  medicalAlertsFailed?: boolean;
+  onRetryMedicalAlerts?: () => void;
 }
 
 /**
@@ -80,8 +98,19 @@ interface PatientRecordHeaderProps {
  * cabecera —qué se muestra, qué se omite y qué dice sobre el alcance— queda
  * cubierto en `patient-record-header.test.tsx`.
  */
-export function PatientRecordHeader({ patient, loading, onEdit }: PatientRecordHeaderProps) {
+export function PatientRecordHeader({
+  patient,
+  loading,
+  onEdit,
+  medicalAlerts,
+  medicalAlertsFailed = false,
+  onRetryMedicalAlerts,
+}: PatientRecordHeaderProps) {
   const items = patient ? identityItems(patient) : [];
+  const alertSeverity = patient ? medicalAlertSeverity(medicalAlerts) : null;
+  const alertHeadline = medicalAlerts ? medicalAlertHeadline(medicalAlerts) : null;
+  // `null` = se están pidiendo; `undefined` = quien la usa no las pide.
+  const alertsPending = !!patient && !medicalAlertsFailed && medicalAlerts === null;
   const title = loading
     ? copy.loadingTitle
     : patient
@@ -130,10 +159,43 @@ export function PatientRecordHeader({ patient, loading, onEdit }: PatientRecordH
             {/* DX-150: «Saldo vencido · N días» (con importe solo para ADMIN y
                 RECEPTION: la API ya lo omite para los demás roles). */}
             {/* DX-153: «Cobertura vencida», junto a la del saldo. DX-105: «Convenio: X». */}
+            {/* DX-247: la misma alerta médica que la agenda, con su titular. */}
             {patient?.balance?.hasOverdue ||
             coverageChipText(patient?.coverage) ||
-            agreementChipText(patient?.agreement) ? (
+            agreementChipText(patient?.agreement) ||
+            alertSeverity ||
+            alertsPending ||
+            (patient && medicalAlertsFailed) ? (
               <div className="flex flex-wrap items-center gap-2">
+                {alertsPending ? (
+                  <p role="status" className="text-sm text-muted">
+                    {copy.alertsLoading}
+                  </p>
+                ) : null}
+                {patient && medicalAlertsFailed ? (
+                  <FieldError
+                    label={copy.alertsFailed}
+                    onRetry={onRetryMedicalAlerts}
+                    className="h-9"
+                  />
+                ) : null}
+                {patient && alertSeverity ? (
+                  <span
+                    data-testid="record-medical-alert"
+                    className={
+                      alertSeverity === 'critical'
+                        ? 'inline-flex items-center gap-1.5 text-sm font-semibold text-danger'
+                        : 'inline-flex items-center gap-1.5 text-sm font-medium text-warning'
+                    }
+                  >
+                    <MedicalAlertIndicator
+                      flags={medicalAlerts}
+                      patientName={fullName(patient)}
+                      size="default"
+                    />
+                    <span aria-hidden>{alertHeadline}</span>
+                  </span>
+                ) : null}
                 {patient?.balance?.hasOverdue ? <OverdueChip balance={patient.balance} /> : null}
                 <CoverageChip coverage={patient?.coverage} />
                 <AgreementChip agreement={patient?.agreement} />

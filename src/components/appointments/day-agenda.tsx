@@ -2,6 +2,7 @@
 import type { ReactNode } from 'react';
 import { OverdueChip } from '@/components/collections/overdue-chip';
 import { CoverageChip } from '@/components/patients/coverage-chip';
+import { MedicalAlertIndicator } from '@/components/clinical/medical-alert-indicator';
 import { CalendarDays, ChevronDown, ChevronRight } from 'lucide-react';
 import type { Appointment, AppointmentStatus } from '@/lib/appointments/appointments-api';
 import {
@@ -258,6 +259,10 @@ export function DayAgenda({
                   <td className="px-4 py-3 font-medium text-ink">
                     <span className="flex flex-wrap items-center gap-2">
                       {patientLabel(appointment, patientNames)}
+                      <MedicalAlertIndicator
+                        flags={appointment.medicalAlerts}
+                        patientName={patientLabel(appointment, patientNames)}
+                      />
                       <ConfirmationBadge appointment={appointment} />
                       <OverdueChip balance={appointment.balance} />
                       <CoverageChip coverage={appointment.coverage} compact />
@@ -313,8 +318,13 @@ export function DayAgenda({
                 </time>
                 {!onStatusChange && <StatusBadge status={appointment.status} />}
               </div>
-              <p className="mt-2 font-medium text-ink">
+              <p className="mt-2 flex items-center gap-2 font-medium text-ink">
                 {patientLabel(appointment, patientNames)}
+                <MedicalAlertIndicator
+                  flags={appointment.medicalAlerts}
+                  patientName={patientLabel(appointment, patientNames)}
+                  size="default"
+                />
               </p>
               <p className="mt-0.5 text-muted">{appointment.reason ?? copy.reasonFallback}</p>
               <ConfirmationBadge appointment={appointment} className="mt-2" />

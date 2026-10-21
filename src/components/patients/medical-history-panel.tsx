@@ -53,6 +53,8 @@ const copy = {
 interface MedicalHistoryPanelProps {
   token: string;
   patientId: string;
+  /** DX-247: una versión nueva cambia las banderas de la cabecera: se releen. */
+  onSaved?: () => void;
 }
 
 /**
@@ -130,7 +132,7 @@ function valueEqualsHistory(value: ClinicalHistoryValue, history: MedicalHistory
   return deepEqual(value, valueFromHistory(history));
 }
 
-export function MedicalHistoryPanel({ token, patientId }: MedicalHistoryPanelProps) {
+export function MedicalHistoryPanel({ token, patientId, onSaved }: MedicalHistoryPanelProps) {
   const [latest, setLatest] = useState<MedicalHistory | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -213,6 +215,7 @@ export function MedicalHistoryPanel({ token, patientId }: MedicalHistoryPanelPro
       // Re-sync from the just-saved version (not an empty value) so the
       // next edit still carries forward whatever wasn't just changed.
       setValue(valueFromHistory(saved));
+      onSaved?.();
     } catch (err) {
       setSaveError(apiErrorMessage(err, copy.genericSaveError));
     } finally {

@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { DayColumns } from './day-columns';
 import type { Appointment } from '@/lib/appointments/appointments-api';
@@ -134,6 +134,41 @@ describe('DayColumns (DX-121)', () => {
     // 3 franjas cerradas por columna × 3 columnas.
     expect(screen.getAllByTestId('closed-band')).toHaveLength(9);
     expect(screen.getByText('Fuera del horario de la sede')).toBeInTheDocument();
+  });
+
+  // DX-233: el horario del profesional en la sede.
+  it('sombrea en cada columna el tiempo fuera del horario del profesional en la sede', () => {
+    renderColumns({
+      providerRanges: {
+        'prov-1': [{ startMinute: 9 * 60, endMinute: 13 * 60 }],
+        'prov-2': null,
+      },
+    });
+    const [first, second, third] = screen.getAllByTestId('day-column');
+    // prov-1: antes de las 9 y de las 13 al final (dos franjas).
+    expect(within(first).getAllByTestId('provider-off-band')).toHaveLength(2);
+    // Sin horario propio (null) o sin dato: nada.
+    expect(within(second).queryAllByTestId('provider-off-band')).toHaveLength(0);
+    expect(within(third).queryAllByTestId('provider-off-band')).toHaveLength(0);
+    expect(screen.getByText('Fuera del horario del profesional en esta sede')).toBeInTheDocument();
+    // La cabecera dice su horario de ese día en la sede.
+    const headers = screen.getAllByTestId('day-column-header');
+    expect(within(headers[0]).getByTestId('provider-hours')).toHaveTextContent('09:00–13:00');
+    expect(within(headers[1]).queryByTestId('provider-hours')).not.toBeInTheDocument();
+  });
+
+  it('no propone huecos libres fuera del horario del profesional', () => {
+    renderColumns({
+      onFillOpening: jest.fn(),
+      now: new Date(`${DATE}T06:00:00`),
+      appointments: [],
+      providerRanges: { 'prov-1': [{ startMinute: 15 * 60, endMinute: 17 * 60 }] },
+    });
+    const [first, second] = screen.getAllByTestId('day-column');
+    const gaps = within(first).getAllByTestId('free-gap');
+    expect(gaps).toHaveLength(1);
+    expect(gaps[0]).toHaveTextContent('15:00–17:00');
+    expect(within(second).getAllByTestId('free-gap')).toHaveLength(2);
   });
 
   it('columna vacía: «Sin citas hoy» y «Nueva cita» con ese profesional', async () => {
@@ -440,5 +475,55 @@ describe('«Ocupar este hueco» (DX-210)', () => {
     expect(
       screen.getByRole('button', { name: /^Detalle de la cita de .* · Adelantar si hay hueco$/ }),
     ).toBeInTheDocument();
+  });
+});
+
+describe('DayColumns: alertas médicas (DX-247)', () => {
+  const short = appointment({
+    id: 'apt-15',
+    start: new Date(`${DATE}T15:00:00`).toISOString(),
+    end: new Date(`${DATE}T15:15:00`).toISOString(),
+    medicalAlerts: {
+      hasCriticalAlert: true,
+      requiresPremedication: true,
+      anamnesisStatus: 'CURRENT',
+      alerts: ['profilaxisAntibiotica', 'alergiaMarcada'],
+      anamnesisReviewedAt: '2030-12-01T00:00:00.000Z',
+    },
+  });
+  const noHistory = appointment({
+    id: 'apt-new',
+    providerId: 'prov-2',
+    patientFirstName: 'Leo',
+    medicalAlerts: {
+      hasCriticalAlert: false,
+      requiresPremedication: false,
+      anamnesisStatus: 'MISSING',
+      alerts: [],
+      anamnesisReviewedAt: null,
+    },
+  });
+
+  it('la cita de 15 min con alerta lleva el icono y su resumen en el nombre de la tarjeta', () => {
+    renderColumns({ appointments: [short, noHistory, light] });
+    const indicators = screen.getAllByTestId('medical-alert-indicator');
+    expect(indicators.map((i) => i.getAttribute('data-severity'))).toEqual(['critical', 'attention']);
+    const card = screen.getByRole('button', { name: /María López.*Requiere premedicación/ });
+    expect(card).not.toContainElement(indicators[0]);
+    // Sin anamnesis: «Sin anamnesis», nunca «sin alertas».
+    expect(screen.getByRole('button', { name: /Leo López.*Sin anamnesis/ })).toBeInTheDocument();
+  });
+
+  it('abrir las alertas con el teclado no abre la cita ni empieza a arrastrarla', async () => {
+    const user = userEvent.setup();
+    const handlers = renderColumns({ appointments: [short] });
+    const indicator = screen.getByRole('button', { name: 'Alertas médicas de María López' });
+    act(() => indicator.focus());
+    expect(screen.getByTestId('medical-alert-popover')).toHaveTextContent('Requiere profilaxis antibiótica');
+    expect(screen.getByTestId('medical-alert-popover')).toHaveTextContent('Alergia marcada como alerta');
+    await user.keyboard('{Enter}');
+    expect(handlers.onSelectAppointment).not.toHaveBeenCalled();
+    fireEvent.pointerDown(screen.getByTestId('medical-alert-popover'), { pointerType: 'mouse', clientY: 10 });
+    expect(handlers.onDrop).not.toHaveBeenCalled();
   });
 });

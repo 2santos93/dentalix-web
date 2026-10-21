@@ -25,6 +25,7 @@ import {
   Landmark,
   Handshake,
   ListOrdered,
+  ClipboardClock,
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useAuthStore } from '@/lib/auth/auth-store';
@@ -42,6 +43,7 @@ import { canManagePostOpTemplates } from '@/lib/postop/postop-api';
 import { canManageReminders } from '@/lib/reminders/reminders-api';
 import { canManageDiscounts } from '@/lib/discounts/discounts-api';
 import { canManageCashSessions } from '@/lib/cash-sessions/cash-sessions-api';
+import { canManageAnamnesisSettings } from '@/lib/clinical/medical-alerts';
 import { canManageDomains } from '@/lib/domains/domains-api';
 import { canSearchImplantLots } from '@/lib/implants/implants-api';
 import { canReadSupportAccesses } from '@/lib/support-accesses/support-accesses-api';
@@ -73,7 +75,7 @@ async function revokeSession(): Promise<void> {
 const copy = {
   account: 'Cuenta',
   profile: 'Mi perfil',
-  businessHours: 'Horario de atención',
+  businessHours: 'Horarios',
   // DX-212: datos legales de las sedes (código REPS).
   locations: 'Sedes',
   privacy: 'Privacidad de datos',
@@ -89,6 +91,7 @@ const copy = {
   reminders: 'Recordatorios',
   discounts: 'Descuentos',
   cashSettings: 'Caja',
+  clinicalHistorySettings: 'Historia clínica',
   domains: 'Dominios propios',
   supportAccesses: 'Accesos de soporte',
   logout: 'Cerrar sesión',
@@ -425,6 +428,18 @@ export function UserMenu({
         >
           <Wallet className="size-4 text-muted" aria-hidden />
           {copy.cashSettings}
+        </Link>
+      ) : null}
+      {/* Vigencia de la anamnesis (DX-247): solo ADMIN. */}
+      {canManageAnamnesisSettings(getTokenRole(accessToken)) ? (
+        <Link
+          href="/settings/historia-clinica"
+          role="menuitem"
+          onClick={() => setOpen(false)}
+          className="flex items-center gap-3 px-3 py-2 text-sm text-ink hover:bg-bg"
+        >
+          <ClipboardClock className="size-4 text-muted" aria-hidden />
+          {copy.clinicalHistorySettings}
         </Link>
       ) : null}
       {/* Plantillas de receta y país de las sedes (DX-013): solo ADMIN. */}

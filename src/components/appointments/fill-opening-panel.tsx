@@ -2,6 +2,7 @@
 import * as React from 'react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
+import { announceAppointmentWarnings } from '@/components/appointments/appointment-warnings';
 import { CalendarCheck, MessageCircle, MessageCircleReply, Phone, PhoneCall } from 'lucide-react';
 import { ApiError } from '@/lib/api/client';
 import { apiErrorMessage } from '@/lib/api/error-message';
@@ -46,6 +47,9 @@ export const fillOpeningCopy = {
   retry: 'Reintentar',
   empty: 'Nadie en la lista cabe en este hueco',
   emptyHint: 'Ni los pendientes por agendar ni las citas marcadas «Adelantar si hay hueco».',
+  // DX-233: el hueco cae fuera del horario del profesional en la sede.
+  offSchedule: 'Este hueco queda fuera del horario del profesional en la sede',
+  offScheduleHint: 'No se proponen candidatos. Revisa su horario en Ajustes › Horarios › Profesionales.',
   showWaitlist: 'Ver pendientes',
   count: (n: number) => (n === 1 ? '1 candidato' : `${n} candidatos`),
   truncated: 'Se muestran los 50 primeros.',
@@ -242,7 +246,7 @@ export function FillOpeningPanel({
             })
           : await moveAppointmentToOpening(token, c.appointmentId ?? '', slot);
       toast.success(fillOpeningCopy.assigned(fullName(c), whenLabel(appointment.start)));
-      for (const warning of appointment.warnings) toast.warning(warning);
+      announceAppointmentWarnings(appointment);
       onAssigned(appointment);
     } catch (err) {
       notifyError(apiErrorMessage(err, fillOpeningCopy.assignError));
@@ -291,6 +295,12 @@ export function FillOpeningPanel({
               onRetry={reload}
               retryLabel={fillOpeningCopy.retry}
               className="py-10"
+            />
+          ) : data?.providerOffSchedule ? (
+            <EmptyState
+              role="status"
+              title={fillOpeningCopy.offSchedule}
+              description={fillOpeningCopy.offScheduleHint}
             />
           ) : items.length === 0 ? (
             <EmptyState

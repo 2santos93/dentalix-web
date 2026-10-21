@@ -59,7 +59,7 @@ describe('UserMenu', () => {
     );
     // Única entrada a la pantalla de horarios: sin esto la ruta existe pero no
     // se puede llegar a ella desde la app.
-    expect(screen.getByRole('menuitem', { name: /horario de atención/i })).toHaveAttribute(
+    expect(screen.getByRole('menuitem', { name: /^horarios$/i })).toHaveAttribute(
       'href',
       '/settings/horarios',
     );
@@ -143,6 +143,11 @@ describe('UserMenu — plantillas de consentimiento (DX-006)', () => {
     expect(screen.getByRole('menuitem', { name: 'Consentimientos' })).toHaveAttribute(
       'href',
       '/settings/consentimientos',
+    );
+    // DX-247: vigencia de la anamnesis.
+    expect(screen.getByRole('menuitem', { name: 'Historia clínica' })).toHaveAttribute(
+      'href',
+      '/settings/historia-clinica',
     );
     // DX-013: plantillas de receta y país de las sedes.
     expect(screen.getByRole('menuitem', { name: 'Recetas' })).toHaveAttribute(

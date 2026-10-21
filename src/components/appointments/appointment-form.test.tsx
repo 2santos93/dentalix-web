@@ -6,6 +6,8 @@ import { listStaff } from '@/lib/appointments/staff-api';
 import { createPatient, listPatients } from '@/lib/patients/patients-api';
 import { getLocationSchedule } from '@/lib/locations/schedule-api';
 import { listAppointmentTypes } from '@/lib/appointments/appointment-types-api';
+import { getProviderScheduleSettings, getRoster } from '@/lib/locations/provider-schedule-api';
+import { getPatientMedicalAlerts } from '@/lib/clinical/medical-alerts';
 
 // PatientForm (rendered inside the "Crear paciente" dialog) calls
 // useRouter() — mock it the same way patient-form.test.tsx does, since it's
@@ -35,6 +37,21 @@ jest.mock('../../lib/patients/patients-api', () => ({
 jest.mock('../../lib/appointments/appointment-types-api', () => ({
   listAppointmentTypes: jest.fn(),
 }));
+// DX-233: horario del profesional en la sede activa (aviso antes de enviar).
+jest.mock('../../lib/locations/provider-schedule-api', () => ({
+  ...jest.requireActual('../../lib/locations/provider-schedule-api'),
+  getRoster: jest.fn(),
+  getProviderScheduleSettings: jest.fn(),
+}));
+
+// DX-247: las banderas médicas del paciente elegido.
+jest.mock('../../lib/clinical/medical-alerts', () => ({
+  ...jest.requireActual('../../lib/clinical/medical-alerts'),
+  getPatientMedicalAlerts: jest.fn(),
+}));
+const mockedGetMedicalAlerts = getPatientMedicalAlerts as jest.MockedFunction<
+  typeof getPatientMedicalAlerts
+>;
 
 const mockedCreateAppointment = createAppointment as jest.MockedFunction<typeof createAppointment>;
 const mockedListStaff = listStaff as jest.MockedFunction<typeof listStaff>;
@@ -205,6 +222,22 @@ describe('AppointmentForm', () => {
     mockedGetSchedule.mockResolvedValue(null);
     mockedListTypes.mockReset();
     mockedListTypes.mockResolvedValue([endodoncia]);
+    (getRoster as jest.Mock).mockReset();
+    (getProviderScheduleSettings as jest.Mock).mockReset();
+    (getProviderScheduleSettings as jest.Mock).mockResolvedValue({ strictProviderSchedule: false });
+    mockedGetMedicalAlerts.mockReset();
+    mockedGetMedicalAlerts.mockResolvedValue({
+      hasCriticalAlert: false,
+      requiresPremedication: false,
+      anamnesisStatus: 'CURRENT',
+      alerts: [],
+      anamnesisReviewedAt: '2026-01-01T00:00:00.000Z',
+      validityMonths: 12,
+      anamnesisExpiresOn: '2027-01-01',
+  today: '2026-10-20',
+  timeZone: 'America/Bogota',
+      lastReview: null,
+    });
   });
 
   // DX-121: el tipo fija la duración.
@@ -311,6 +344,48 @@ describe('AppointmentForm', () => {
     expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
     // The search box collapses once a patient is chosen.
     expect(screen.queryByLabelText(/^paciente$/i)).not.toBeInTheDocument();
+  });
+
+  it('DX-247: al elegir un paciente con profilaxis antibiótica avisa «Requiere premedicación» antes de agendar', async () => {
+    mockedGetMedicalAlerts.mockResolvedValue({
+      hasCriticalAlert: true,
+      requiresPremedication: true,
+      anamnesisStatus: 'CURRENT',
+      alerts: ['profilaxisAntibiotica'],
+      anamnesisReviewedAt: '2026-01-01T00:00:00.000Z',
+      validityMonths: 12,
+      anamnesisExpiresOn: '2027-01-01',
+  today: '2026-10-20',
+  timeZone: 'America/Bogota',
+      lastReview: null,
+    });
+    const user = userEvent.setup();
+    await renderFormAndWaitForLoad();
+    await selectMariaByDoc(user);
+    expect(await screen.findByTestId('premedication-notice')).toHaveTextContent(
+      'Requiere premedicación',
+    );
+    expect(mockedGetMedicalAlerts).toHaveBeenCalledWith('tok', 'pat-1');
+  });
+
+  it('DX-247: un paciente sin anamnesis sale «Sin anamnesis», no «sin alertas»', async () => {
+    mockedGetMedicalAlerts.mockResolvedValue({
+      hasCriticalAlert: false,
+      requiresPremedication: false,
+      anamnesisStatus: 'MISSING',
+      alerts: [],
+      anamnesisReviewedAt: null,
+      validityMonths: 12,
+      anamnesisExpiresOn: null,
+      today: '2026-10-20',
+      timeZone: 'America/Bogota',
+      lastReview: null,
+    });
+    const user = userEvent.setup();
+    await renderFormAndWaitForLoad();
+    await selectMariaByDoc(user);
+    expect(await screen.findByText('Sin anamnesis')).toBeInTheDocument();
+    expect(screen.queryByTestId('premedication-notice')).not.toBeInTheDocument();
   });
 
   it('lets you swap the chosen patient with "Cambiar", restoring the search box', async () => {
@@ -649,6 +724,86 @@ describe('AppointmentForm', () => {
       expect(screen.queryByText('Sofía Ramírez')).not.toBeInTheDocument();
     });
   });
+  // DX-233: aviso no bloqueante si la cita cae fuera del horario del profesional.
+  describe('horario del profesional (DX-233)', () => {
+    afterEach(() => window.localStorage.clear());
+
+    function mockRosterDay(ranges: { startMinute: number; endMinute: number }[] | null) {
+      (getRoster as jest.Mock).mockImplementation((_t: string, params: { weekStart: string }) =>
+        Promise.resolve({
+          from: params.weekStart,
+          to: params.weekStart,
+          locationId: 'loc-1',
+          locations: [],
+          providers: [
+            {
+              providerId: 'staff-1',
+              fullName: 'Dra. Ana Ríos',
+              role: 'DENTIST',
+              configured: true,
+              days: [
+                {
+                  date: params.weekStart,
+                  weekday: 4,
+                  unrestricted: ranges === null,
+                  assignments: [],
+                  worksAtLocation: ranges === null || ranges.length > 0,
+                  locationRanges: ranges,
+                },
+              ],
+            },
+          ],
+        }),
+      );
+    }
+
+    it('fuera de su horario en la sede avisa sin impedir agendar', async () => {
+      window.localStorage.setItem('dentalix.activeLocationId', 'loc-1');
+      mockRosterDay([{ startMinute: 14 * 60, endMinute: 19 * 60 }]);
+      mockedCreateAppointment.mockResolvedValue({ id: 'a1' } as never);
+      const user = userEvent.setup();
+      await renderFormAndWaitForLoad();
+      await fillValidForm(user);
+
+      expect(
+        await screen.findByText(
+          'Fuera del horario de Dra. Ana Ríos en esta sede (ese día: 14:00–19:00). Se puede agendar igual; quedará el aviso.',
+        ),
+      ).toBeInTheDocument();
+      expect(getRoster).toHaveBeenCalledWith('tok', { weekStart: FUTURE_DATE, days: 1, locationId: 'loc-1' });
+      await user.click(screen.getByRole('button', { name: 'Agendar cita' }));
+      await waitFor(() => expect(mockedCreateAppointment).toHaveBeenCalled());
+    });
+
+    it('en modo estricto avisa de que la clínica no lo permite; dentro del horario no dice nada', async () => {
+      window.localStorage.setItem('dentalix.activeLocationId', 'loc-1');
+      mockRosterDay([]);
+      (getProviderScheduleSettings as jest.Mock).mockResolvedValue({ strictProviderSchedule: true });
+      const user = userEvent.setup();
+      await renderFormAndWaitForLoad();
+      await fillValidForm(user);
+      expect(
+        await screen.findByText(
+          'Dra. Ana Ríos no atiende en esta sede ese día. La clínica no permite citar fuera del horario del profesional.',
+        ),
+      ).toBeInTheDocument();
+
+      mockRosterDay([{ startMinute: 8 * 60, endMinute: 13 * 60 }]);
+      await user.clear(screen.getByLabelText(/^fecha$/i));
+      await user.type(screen.getByLabelText(/^fecha$/i), FUTURE_DATE);
+      await waitFor(() =>
+        expect(screen.queryByText(/no atiende en esta sede ese día/)).not.toBeInTheDocument(),
+      );
+    });
+
+    it('sin sede activa no consulta el cuadrante', async () => {
+      const user = userEvent.setup();
+      await renderFormAndWaitForLoad();
+      await fillValidForm(user);
+      expect(getRoster).not.toHaveBeenCalled();
+    });
+  });
+
 });
 
 describe('«Adelantar si hay hueco» (DX-210)', () => {
@@ -673,4 +828,5 @@ describe('«Adelantar si hay hueco» (DX-210)', () => {
     await screen.findByRole('option', { name: /dra\. ana ríos/i });
     expect(screen.queryByRole('checkbox', { name: 'Adelantar si hay hueco' })).not.toBeInTheDocument();
   });
+
 });
