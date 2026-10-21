@@ -32,6 +32,10 @@ const copy = {
   consent: 'Consentimiento de datos',
   consentAccepted: 'Aceptado',
   consentPending: 'Pendiente',
+  // DX-107: importado de un archivo, nunca con autorización inventada.
+  consentPendingImported: 'Pendiente · importado sin autorización: pídela en su próxima visita',
+  origin: 'Origen de la ficha',
+  originImported: 'Importado desde archivo',
   consentVersion: (v: string) => `v${v}`,
   fallback: '—',
   years: (n: number) => `${n} años`,
@@ -96,7 +100,9 @@ export function PatientDataPanel({ patient }: PatientDataPanelProps) {
     ? [copy.consentAccepted, formatCivilDate(patient.dataConsentAt ?? null)]
         .concat(patient.dataConsentPolicyVersion ? [copy.consentVersion(patient.dataConsentPolicyVersion)] : [])
         .join(' · ')
-    : copy.consentPending;
+    : patient.importBatchId
+      ? copy.consentPendingImported
+      : copy.consentPending;
 
   return (
     <Card>
@@ -137,6 +143,7 @@ export function PatientDataPanel({ patient }: PatientDataPanelProps) {
             { label: copy.physician, value: patient.physicianName ?? null },
             { label: copy.physicianPhone, value: patient.physicianPhone ?? null },
             { label: copy.consent, value: consent, alwaysShown: true },
+            ...(patient.importBatchId ? [{ label: copy.origin, value: copy.originImported }] : []),
           ]}
         />
       </CardContent>

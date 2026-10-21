@@ -70,6 +70,8 @@ export interface Patient {
   dataConsentAccepted?: boolean;
   dataConsentAt?: string | null;
   dataConsentPolicyVersion?: string | null;
+  /** DX-107: lote de importación que creó al paciente (null = alta a mano). */
+  importBatchId?: string | null;
   maritalStatus?: string | null;
   occupation?: string | null;
   insurerEps?: string | null;

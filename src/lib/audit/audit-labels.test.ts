@@ -1,4 +1,5 @@
 import {
+  importBatchDetail,
   AUDIT_ACTION_LABELS,
   AUDIT_ACTION_OPTIONS,
   AUDIT_RESOURCE_LABELS,
@@ -132,5 +133,26 @@ describe('scheduleChangeDetail (DX-233)', () => {
   });
   it('sin cambio de horario, null', () => {
     expect(scheduleChangeDetail({})).toBeNull();
+  });
+});
+
+describe('importBatchDetail (DX-107)', () => {
+  const sha = 'abcdef0123456789'.repeat(4);
+
+  it('describe la validación con sus totales y el inicio del hash', () => {
+    expect(
+      importBatchDetail({
+        reason: 'IMPORT_VALIDATED',
+        importBatch: { fileSha256: sha, rows: 10, valid: 7, duplicates: 2, errors: 1 },
+      }),
+    ).toBe('Validación del archivo · 10 filas · 7 nuevos · 2 duplicados · 1 con error · SHA-256 abcdef012345…');
+  });
+
+  it('el deshacer dice cuánto retiró y revirtió', () => {
+    expect(
+      importBatchDetail({ reason: 'IMPORT_UNDONE', importBatch: { fileSha256: sha, undoneCreated: 3, undoneFilled: 1 } }),
+    ).toBe('Lote deshecho · 3 retirados · 1 revertidos · SHA-256 abcdef012345…');
+    expect(importBatchDetail({ reason: 'IMPORT_ERRORS' })).toBe('Informe de errores');
+    expect(importBatchDetail({ reason: 'CASH_SETTINGS' })).toBeNull();
   });
 });
