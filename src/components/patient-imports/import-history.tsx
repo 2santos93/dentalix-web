@@ -6,12 +6,14 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { AsyncSection, TableSkeleton } from '@/components/shared/async-section';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
+import { Pagination } from '@/components/shared/pagination';
 import { notifyError } from '@/components/errors/notify';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { formatDateTime } from '@/lib/format/date';
 import {
   STATUS_LABELS,
   downloadErrorsCsv,
+  isInProgress,
   errorsFileName,
   listImports,
   saveCsv,
@@ -20,10 +22,15 @@ import {
 } from '@/lib/patient-imports/patient-imports-api';
 import { STATUS_VARIANT } from './import-progress';
 
+const HISTORY_POLL_MS = 3000;
+
 export const historyCopy = {
   title: 'Historial de importaciones',
   listLabel: 'Importaciones de la clínica',
   loadError: 'No se pudo cargar el historial de importaciones.',
+  refreshError: 'No se pudo actualizar el historial de importaciones.',
+  progress: (b: ImportBatch) =>
+    `${b.progress.processedRows.toLocaleString('es-CO')} de ${b.progress.preparedRows.toLocaleString('es-CO')} filas procesadas`,
   empty: 'Aún no has importado pacientes',
   emptyHint: 'Cuando confirmes una importación, aparecerá aquí con su resultado y la opción de deshacerla.',
   meta: (date: string, author: string | null) => `${date}${author ? ` · ${author}` : ''}`,
@@ -51,9 +58,15 @@ export const historyCopy = {
  */
 export function ImportHistory({ token, reloadKey }: { token: string; reloadKey: number }) {
   const [items, setItems] = React.useState<ImportBatch[]>([]);
+  const [page, setPage] = React.useState(1);
+  const [total, setTotal] = React.useState(0);
+  const [pageSize, setPageSize] = React.useState(0);
   const [loading, setLoading] = React.useState(true);
   const [error, setError] = React.useState<string | null>(null);
   const [retryKey, setRetryKey] = React.useState(0);
+  // Refresco en segundo plano mientras un lote importa (sin esqueleto).
+  const [pollTick, setPollTick] = React.useState(0);
+  const pollFailed = React.useRef(false);
   const [undoing, setUndoing] = React.useState<ImportBatch | null>(null);
   const [undoBusy, setUndoBusy] = React.useState(false);
   const [undoError, setUndoError] = React.useState<string | null>(null);
@@ -63,9 +76,11 @@ export function ImportHistory({ token, reloadKey }: { token: string; reloadKey: 
     async function load() {
       setLoading(true);
       try {
-        const page = await listImports(token);
+        const result = await listImports(token, page);
         if (cancelled) return;
-        setItems(page.items);
+        setItems(result.items);
+        setTotal(result.total);
+        setPageSize(result.pageSize);
         setError(null);
       } catch (err) {
         if (cancelled) return;
@@ -78,7 +93,34 @@ export function ImportHistory({ token, reloadKey }: { token: string; reloadKey: 
     return () => {
       cancelled = true;
     };
-  }, [token, reloadKey, retryKey]);
+  }, [token, reloadKey, retryKey, page]);
+
+  // Mientras haya un lote en cola o importando, la lista se refresca sola.
+  // Un fallo del refresco no tapa lo que se ve: un aviso (solo el primero).
+  const active = items.some((b) => isInProgress(b.status));
+  React.useEffect(() => {
+    if (!active) return;
+    let cancelled = false;
+    const timer = window.setTimeout(async () => {
+      try {
+        const result = await listImports(token, page);
+        if (cancelled) return;
+        setItems(result.items);
+        setTotal(result.total);
+        pollFailed.current = false;
+      } catch (err) {
+        if (cancelled) return;
+        if (!pollFailed.current) notifyError(apiErrorMessage(err, historyCopy.refreshError));
+        pollFailed.current = true;
+      } finally {
+        if (!cancelled) setPollTick((t) => t + 1);
+      }
+    }, HISTORY_POLL_MS);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [token, page, active, pollTick]);
 
   async function report(batch: ImportBatch) {
     try {
@@ -130,7 +172,11 @@ export function ImportHistory({ token, reloadKey }: { token: string; reloadKey: 
                 {historyCopy.meta(formatDateTime(b.confirmedAt ?? b.createdAt), b.createdBy.fullName)}
               </p>
               <p className="tabular-nums text-ink">
-                {b.status === 'UNDONE' ? historyCopy.undone(b) : historyCopy.counts(b)}
+                {b.status === 'UNDONE'
+                  ? historyCopy.undone(b)
+                  : isInProgress(b.status)
+                    ? historyCopy.progress(b)
+                    : historyCopy.counts(b)}
               </p>
               <div className="flex flex-wrap gap-2 sm:justify-end">
                 {b.totals.errorRows + b.totals.duplicateRows > 0 ? (
@@ -162,6 +208,9 @@ export function ImportHistory({ token, reloadKey }: { token: string; reloadKey: 
             </li>
           ))}
         </ul>
+        <div className="mt-3">
+          <Pagination page={page} pageSize={pageSize} total={total} onPageChange={setPage} disabled={loading} />
+        </div>
       </AsyncSection>
       <ConfirmDialog
         open={undoing !== null}

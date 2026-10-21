@@ -5,11 +5,15 @@ import {
   confirmImport,
   getImport,
   inspectFile,
+  listImports,
   saveCsv,
   validateImport,
 } from '@/lib/patient-imports/patient-imports-api';
 import { batchFixture, inspectFixture } from '@/lib/test/patient-imports';
 import { PatientImportWizard } from './patient-import-wizard';
+import { notifyError } from '@/components/errors/notify';
+
+jest.mock('../errors/notify', () => ({ notifyError: jest.fn() }));
 
 jest.mock('../../lib/patient-imports/patient-imports-api', () => ({
   ...jest.requireActual('../../lib/patient-imports/patient-imports-api'),
@@ -17,6 +21,7 @@ jest.mock('../../lib/patient-imports/patient-imports-api', () => ({
   validateImport: jest.fn(),
   confirmImport: jest.fn(),
   getImport: jest.fn(),
+  listImports: jest.fn(),
   downloadTemplate: jest.fn(),
   downloadErrorsCsv: jest.fn().mockResolvedValue('csv'),
   saveCsv: jest.fn(),
@@ -26,11 +31,13 @@ const mockedInspect = inspectFile as jest.MockedFunction<typeof inspectFile>;
 const mockedValidate = validateImport as jest.MockedFunction<typeof validateImport>;
 const mockedConfirm = confirmImport as jest.MockedFunction<typeof confirmImport>;
 const mockedGet = getImport as jest.MockedFunction<typeof getImport>;
+const mockedList = listImports as jest.MockedFunction<typeof listImports>;
 
 const csv = () => new File(['tipo;doc\nCC;1'], 'pacientes.csv', { type: 'text/csv' });
 
 beforeEach(() => {
   jest.clearAllMocks();
+  mockedList.mockResolvedValue({ items: [], total: 0, page: 1, pageSize: 20 });
 });
 
 async function upload(user: ReturnType<typeof userEvent.setup>) {
@@ -173,4 +180,46 @@ it('sin filas que importar no deja continuar', async () => {
   await user.click(await screen.findByRole('button', { name: 'Validar archivo' }));
   expect(await screen.findByText(/No hay filas que importar/)).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: 'Continuar' })).not.toBeInTheDocument();
+});
+
+it('al volver con una importación en marcha, enseña su avance', async () => {
+  const running = batchFixture({
+    status: 'RUNNING',
+    canConfirm: false,
+    progress: { preparedRows: 10, processedRows: 4, createdCount: 4, updatedCount: 0, skippedCount: 0, failedCount: 0, percent: 40 },
+  });
+  mockedList.mockResolvedValue({ items: [running], total: 1, page: 1, pageSize: 20 });
+  mockedGet.mockResolvedValue(running);
+  render(<PatientImportWizard token="tok" onBatchChange={jest.fn()} />);
+  expect(await screen.findByText('4 de 10 filas procesadas')).toBeInTheDocument();
+  expect(screen.getByText('Importando')).toBeInTheDocument();
+});
+
+it('si el avance falla varias veces seguidas, un solo aviso', async () => {
+  jest.useFakeTimers();
+  try {
+    const running = batchFixture({ status: 'RUNNING', canConfirm: false });
+    mockedList.mockResolvedValue({ items: [running], total: 1, page: 1, pageSize: 20 });
+    mockedGet.mockResolvedValueOnce(running).mockRejectedValue(new Error('red'));
+    render(<PatientImportWizard token="tok" onBatchChange={jest.fn()} />);
+    expect(await screen.findByText('Importando')).toBeInTheDocument();
+    for (let i = 0; i < 3; i += 1) {
+      await act(async () => {
+        jest.advanceTimersByTime(1600);
+      });
+    }
+    expect(mockedGet.mock.calls.length).toBeGreaterThanOrEqual(3);
+    expect(notifyError).toHaveBeenCalledTimes(1);
+  } finally {
+    jest.useRealTimers();
+  }
+});
+
+it('tras un error del archivo, el campo se vacía para volver a elegirlo', async () => {
+  mockedInspect.mockRejectedValue(new ApiError(400, 'Bad Request', { messages: ['El archivo está vacío.'] }));
+  const user = userEvent.setup();
+  render(<PatientImportWizard token="tok" onBatchChange={jest.fn()} />);
+  await upload(user);
+  expect(await screen.findByRole('alert')).toHaveTextContent('El archivo está vacío.');
+  expect((screen.getByLabelText('Archivo de pacientes (CSV o .xlsx)') as HTMLInputElement).value).toBe('');
 });

@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ApiError } from '@/lib/api/client';
 import { listImports, undoImport } from '@/lib/patient-imports/patient-imports-api';
@@ -80,4 +80,29 @@ it('deshacer rechazado (409): el motivo en el diálogo y el lote intacto', async
   await user.click(await screen.findByRole('button', { name: /deshacer el lote/i }));
   await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Deshacer lote' }));
   expect(await within(screen.getByRole('dialog')).findByRole('alert')).toHaveTextContent(/ya tiene citas/);
+});
+
+it('paginado: «Siguiente» pide la página 2', async () => {
+  mockedList.mockResolvedValue({ items: [completed], total: 25, page: 1, pageSize: 20 });
+  const user = userEvent.setup();
+  render(<ImportHistory token="tok" reloadKey={0} />);
+  await screen.findByText('pacientes.csv');
+  await user.click(screen.getByRole('button', { name: /siguiente/i }));
+  await waitFor(() => expect(mockedList).toHaveBeenLastCalledWith('tok', 2));
+});
+
+it('un lote importando se refresca solo hasta terminar', async () => {
+  jest.useFakeTimers();
+  try {
+    const running = { ...completed, status: 'RUNNING' as const, canUndo: false, progress: { ...completed.progress, processedRows: 1, percent: 50 } };
+    mockedList.mockResolvedValueOnce(page([running])).mockResolvedValue(page());
+    render(<ImportHistory token="tok" reloadKey={0} />);
+    expect(await screen.findByText('1 de 2 filas procesadas')).toBeInTheDocument();
+    await act(async () => {
+      jest.advanceTimersByTime(3100);
+    });
+    expect(await screen.findByText(/1 creados/)).toBeInTheDocument();
+  } finally {
+    jest.useRealTimers();
+  }
 });

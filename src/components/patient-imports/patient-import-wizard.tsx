@@ -17,6 +17,7 @@ import {
   getImport,
   inspectFile,
   isInProgress,
+  listImports,
   saveCsv,
   validateImport,
   type ColumnMapping,
@@ -112,6 +113,28 @@ export function PatientImportWizard({ token, onBatchChange }: PatientImportWizar
   const [running, setRunning] = React.useState<ImportBatchDetail | null>(null);
   // Cada consulta del avance (bien o mal) programa la siguiente.
   const [pollTick, setPollTick] = React.useState(0);
+  const pollFailed = React.useRef(false);
+
+  // Al volver a la pantalla con una importación en marcha, se ve su avance
+  // (lo que promete el aviso «puedes seguir trabajando»).
+  React.useEffect(() => {
+    let cancelled = false;
+    async function resume() {
+      try {
+        const page = await listImports(token);
+        const active = page.items.find((b) => isInProgress(b.status));
+        if (!active || cancelled) return;
+        const detail = await getImport(token, active.id);
+        if (!cancelled) setRunning((current) => current ?? detail);
+      } catch {
+        // El historial de abajo ya enseña el error con «Reintentar».
+      }
+    }
+    void resume();
+    return () => {
+      cancelled = true;
+    };
+  }, [token]);
 
   // Avance: consulta el lote mientras la cola trabaja. Un fallo no borra lo
   // que se ve (escalón 3): aviso con reintento y se sigue consultando.
@@ -125,10 +148,13 @@ export function PatientImportWizard({ token, onBatchChange }: PatientImportWizar
         const next = await getImport(token, runningId);
         if (cancelled) return;
         setRunning(next);
+        pollFailed.current = false;
         if (!isInProgress(next.status)) onBatchChange();
       } catch (err) {
         if (cancelled) return;
-        notifyError(apiErrorMessage(err, wizardCopy.progressError));
+        // Un aviso por racha de fallos, no uno cada 1,5 s.
+        if (!pollFailed.current) notifyError(apiErrorMessage(err, wizardCopy.progressError));
+        pollFailed.current = true;
       } finally {
         if (!cancelled) setPollTick((t) => t + 1);
       }
@@ -167,6 +193,7 @@ export function PatientImportWizard({ token, onBatchChange }: PatientImportWizar
     setDryRun(null);
     if (chosen.size > MAX_IMPORT_BYTES) {
       setReadError(wizardCopy.tooBig);
+      if (inputRef.current) inputRef.current.value = '';
       return;
     }
     setReading(true);
@@ -178,6 +205,8 @@ export function PatientImportWizard({ token, onBatchChange }: PatientImportWizar
       setStep(1);
     } catch (err) {
       setReadError(apiErrorMessage(err, wizardCopy.readError));
+      // El mismo archivo, corregido, se puede volver a elegir.
+      if (inputRef.current) inputRef.current.value = '';
     } finally {
       setReading(false);
     }
