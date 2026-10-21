@@ -764,6 +764,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/locations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["LocationsController_list"];
+        put?: never;
+        post: operations["LocationsController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/locations/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["LocationsController_update"];
+        trace?: never;
+    };
     "/api/v1/patients/{patientId}/clinical-entries": {
         parameters: {
             query?: never;
@@ -1307,38 +1339,6 @@ export interface paths {
         options?: never;
         head?: never;
         patch: operations["ScheduleBlocksController_update"];
-        trace?: never;
-    };
-    "/api/v1/locations": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["LocationsController_list"];
-        put?: never;
-        post: operations["LocationsController_create"];
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/locations/{id}": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get?: never;
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch: operations["LocationsController_update"];
         trace?: never;
     };
     "/api/v1/providers/{providerId}/schedule": {
@@ -4678,7 +4678,7 @@ export interface components {
             reviewedAt: string;
         };
         /**
-         * @description CURRENT: al día. EXPIRED: la última versión o confirmación «Sin cambios hoy» es más antigua que la vigencia de la clínica. MISSING: sin anamnesis (no es «sin alertas»).
+         * @description CURRENT: al día. EXPIRED: el día civil evaluado (el de la cita en la zona de su sede; hoy en la ficha y en «En clínica») ya es el día en que se cumple la vigencia desde la última versión o confirmación «Sin cambios hoy». MISSING: sin anamnesis (no es «sin alertas»).
          * @enum {string}
          */
         AnamnesisStatus: "CURRENT" | "EXPIRED" | "MISSING";
@@ -4703,7 +4703,7 @@ export interface components {
             hasCriticalAlert: boolean;
             /** @description Profilaxis antibiótica activa: la cita avisa «Requiere premedicación». */
             requiresPremedication: boolean;
-            /** @description CURRENT: al día. EXPIRED: la última versión o confirmación «Sin cambios hoy» es más antigua que la vigencia de la clínica. MISSING: sin anamnesis (no es «sin alertas»). */
+            /** @description CURRENT: al día. EXPIRED: el día civil evaluado (el de la cita en la zona de su sede; hoy en la ficha y en «En clínica») ya es el día en que se cumple la vigencia desde la última versión o confirmación «Sin cambios hoy». MISSING: sin anamnesis (no es «sin alertas»). */
             anamnesisStatus: components["schemas"]["AnamnesisStatus"];
             /** @description Alertas activas en el orden del banner de la ficha. `alergiaMarcada`: otra alergia marcada como alerta (el alérgeno no viaja; se ve en la ficha). */
             alerts: components["schemas"]["MedicalAlertCode"][];
@@ -4715,10 +4715,20 @@ export interface components {
             /** @description Vigencia de la anamnesis en la clínica, en meses. */
             validityMonths: number;
             /**
-             * Format: date-time
-             * @description Desde cuándo sale «Anamnesis caducada»; null sin anamnesis.
+             * @description Primer día civil (AAAA-MM-DD, zona de la sede) en que sale «Anamnesis caducada»; null sin anamnesis.
+             * @example 2027-10-21
              */
-            anamnesisExpiresAt: string | null;
+            anamnesisExpiresOn: string | null;
+            /**
+             * @description Hoy (AAAA-MM-DD) en la sede con la que se evaluó: la del request o, en la vista consolidada, la principal.
+             * @example 2026-10-21
+             */
+            today: string;
+            /**
+             * @description Zona IANA de esa sede.
+             * @example America/Bogota
+             */
+            timeZone: string;
             lastReview: components["schemas"]["AnamnesisLastReviewDto"] | null;
         };
         AnamnesisSettingsDto: {
@@ -4727,6 +4737,56 @@ export interface components {
              * @example 12
              */
             anamnesisValidityMonths: number;
+        };
+        LocationDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+            address: string | null;
+            country: components["schemas"]["ClinicCountry"];
+            /** @description DX-212: código de habilitación REPS (12 dígitos) o null. */
+            repsHabilitationCode: string | null;
+            /** @description DX-222: teléfono de la sede o null. */
+            phone: string | null;
+            isActive: boolean;
+            /**
+             * @description Zona horaria IANA de la sede (la de su horario; sin horario, la de su país). Define sus días civiles: «hoy» en la caja y el dashboard (DX-097).
+             * @example America/Bogota
+             */
+            timeZone: string;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        CreateLocationDto: {
+            /** @example Sede Norte */
+            name: string;
+            /** @example Cra 15 #90-20 */
+            address?: string;
+            /** @description País de la sede: decide los campos legales obligatorios de la receta (CO o ES). Por defecto CO. */
+            country?: components["schemas"]["ClinicCountry"];
+            /**
+             * @description DX-222: teléfono de la sede que ven los pacientes en las indicaciones postoperatorias ({{telefono_sede}}). Hasta 40 caracteres.
+             * @example +57 601 555 0101
+             */
+            phone?: string;
+        };
+        UpdateLocationDto: {
+            name?: string;
+            address?: string;
+            /** @description País de la sede: decide los campos legales obligatorios de la receta (CO o ES). Por defecto CO. */
+            country?: components["schemas"]["ClinicCountry"];
+            /**
+             * @description DX-212: código de habilitación REPS de la sede (Colombia), 12 dígitos (400 con el formato esperado si no). Vacío o null lo quita. Solo ADMIN; queda auditado.
+             * @example 110010123401
+             */
+            repsHabilitationCode?: string | null;
+            /**
+             * @description DX-222: teléfono de la sede que ven los pacientes en las indicaciones postoperatorias ({{telefono_sede}}). Hasta 40 caracteres. Vacío o null lo quita; sin el campo no cambia.
+             * @example +57 601 555 0101
+             */
+            phone?: string | null;
+            /** @description Desactivar una sede la oculta para operar; no se puede desactivar la última activa. */
+            isActive?: boolean;
         };
         ClinicalEntryAnswerDto: {
             /**
@@ -5245,7 +5305,7 @@ export interface components {
             hasCriticalAlert: boolean;
             /** @description Profilaxis antibiótica activa: la cita avisa «Requiere premedicación». */
             requiresPremedication: boolean;
-            /** @description CURRENT: al día. EXPIRED: la última versión o confirmación «Sin cambios hoy» es más antigua que la vigencia de la clínica. MISSING: sin anamnesis (no es «sin alertas»). */
+            /** @description CURRENT: al día. EXPIRED: el día civil evaluado (el de la cita en la zona de su sede; hoy en la ficha y en «En clínica») ya es el día en que se cumple la vigencia desde la última versión o confirmación «Sin cambios hoy». MISSING: sin anamnesis (no es «sin alertas»). */
             anamnesisStatus: components["schemas"]["AnamnesisStatus"];
             /** @description Alertas activas en el orden del banner de la ficha. `alergiaMarcada`: otra alergia marcada como alerta (el alérgeno no viaja; se ve en la ficha). */
             alerts: components["schemas"]["MedicalAlertCode"][];
@@ -5726,56 +5786,6 @@ export interface components {
             note?: string | null;
             /** @description Igual que al crear, si el rango cambia. */
             confirmAffected?: boolean;
-        };
-        LocationDto: {
-            /** Format: uuid */
-            id: string;
-            name: string;
-            address: string | null;
-            country: components["schemas"]["ClinicCountry"];
-            /** @description DX-212: código de habilitación REPS (12 dígitos) o null. */
-            repsHabilitationCode: string | null;
-            /** @description DX-222: teléfono de la sede o null. */
-            phone: string | null;
-            isActive: boolean;
-            /**
-             * @description Zona horaria IANA de la sede (la de su horario; sin horario, la de su país). Define sus días civiles: «hoy» en la caja y el dashboard (DX-097).
-             * @example America/Bogota
-             */
-            timeZone: string;
-            /** Format: date-time */
-            createdAt: string;
-        };
-        CreateLocationDto: {
-            /** @example Sede Norte */
-            name: string;
-            /** @example Cra 15 #90-20 */
-            address?: string;
-            /** @description País de la sede: decide los campos legales obligatorios de la receta (CO o ES). Por defecto CO. */
-            country?: components["schemas"]["ClinicCountry"];
-            /**
-             * @description DX-222: teléfono de la sede que ven los pacientes en las indicaciones postoperatorias ({{telefono_sede}}). Hasta 40 caracteres.
-             * @example +57 601 555 0101
-             */
-            phone?: string;
-        };
-        UpdateLocationDto: {
-            name?: string;
-            address?: string;
-            /** @description País de la sede: decide los campos legales obligatorios de la receta (CO o ES). Por defecto CO. */
-            country?: components["schemas"]["ClinicCountry"];
-            /**
-             * @description DX-212: código de habilitación REPS de la sede (Colombia), 12 dígitos (400 con el formato esperado si no). Vacío o null lo quita. Solo ADMIN; queda auditado.
-             * @example 110010123401
-             */
-            repsHabilitationCode?: string | null;
-            /**
-             * @description DX-222: teléfono de la sede que ven los pacientes en las indicaciones postoperatorias ({{telefono_sede}}). Hasta 40 caracteres. Vacío o null lo quita; sin el campo no cambia.
-             * @example +57 601 555 0101
-             */
-            phone?: string | null;
-            /** @description Desactivar una sede la oculta para operar; no se puede desactivar la última activa. */
-            isActive?: boolean;
         };
         WeeklyRangeDto: {
             /**
@@ -11387,6 +11397,13 @@ export interface operations {
                     "application/json": components["schemas"]["AnamnesisConfirmationDto"];
                 };
             };
+            /** @description Solo DENTIST, ASSISTANT y ADMIN (los que ven la anamnesis); recepción recibe 403. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description Paciente no encontrado en esta clínica (inexistente o de otra clínica). */
             404: {
                 headers: {
@@ -11484,6 +11501,73 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    LocationsController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocationDto"][];
+                };
+            };
+        };
+    };
+    LocationsController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateLocationDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocationDto"];
+                };
+            };
+        };
+    };
+    LocationsController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateLocationDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocationDto"];
+                };
             };
         };
     };
@@ -12118,7 +12202,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Cada cita con `balance` (DX-150): marca «Saldo vencido» de su paciente, calculada para todo el lote en un número fijo de consultas (sin N+1). El importe, solo ADMIN y RECEPTION. Con `coverage` (DX-153): resumen de la cobertura principal del paciente, también por lote. Y con `medicalAlerts` (DX-247): SOLO banderas de la anamnesis (alerta, premedicación, al día / caducada / ausente y los códigos de alerta), nunca la historia médica. */
+            /** @description Cada cita con `balance` (DX-150): marca «Saldo vencido» de su paciente, calculada para todo el lote en un número fijo de consultas (sin N+1). El importe, solo ADMIN y RECEPTION. Con `coverage` (DX-153): resumen de la cobertura principal del paciente, también por lote. Y con `medicalAlerts` (DX-247): SOLO banderas de la anamnesis (alerta, premedicación, al día / caducada / ausente el día civil de la cita en la zona de su sede, y los códigos de alerta), nunca la historia médica. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -13102,73 +13186,6 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
-            };
-        };
-    };
-    LocationsController_list: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LocationDto"][];
-                };
-            };
-        };
-    };
-    LocationsController_create: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["CreateLocationDto"];
-            };
-        };
-        responses: {
-            201: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LocationDto"];
-                };
-            };
-        };
-    };
-    LocationsController_update: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody: {
-            content: {
-                "application/json": components["schemas"]["UpdateLocationDto"];
-            };
-        };
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["LocationDto"];
-                };
             };
         };
     };
