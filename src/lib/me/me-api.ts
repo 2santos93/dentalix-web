@@ -1,5 +1,6 @@
 import { apiFetch, apiFetchOrNull } from '@/lib/api/client';
 import { useAuthStore } from '@/lib/auth/auth-store';
+import { prepareAvatarFile } from './avatar-resize';
 
 // Espejo del enum Prisma `ClinicRole` (no se expone como componente propio en
 // el OpenAPI). Mantener en sync — mismo criterio que staff-api.ts.
@@ -50,9 +51,14 @@ export async function changePassword(
   if (fresh) useAuthStore.getState().setAccessToken(fresh.accessToken);
 }
 
-export function uploadAvatar(token: string, file: File): Promise<{ avatarUrl: string }> {
+/**
+ * Sube el avatar por el proxy `/api/v1`. DX-259: una foto de más de 900 KB se
+ * reduce antes en el navegador (el proxy copia como mucho 1 MB del cuerpo);
+ * si no se puede, `AvatarResizeError`.
+ */
+export async function uploadAvatar(token: string, file: File): Promise<{ avatarUrl: string }> {
   const fd = new FormData();
-  fd.append('file', file);
+  fd.append('file', await prepareAvatarFile(file));
   return apiFetch<{ avatarUrl: string }>('/me/avatar', { method: 'POST', token, body: fd });
 }
 
