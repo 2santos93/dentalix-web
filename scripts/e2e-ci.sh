@@ -5,7 +5,10 @@
 # propio paso y en local se corren todas con `all`.
 #
 #   scripts/e2e-ci.sh all                # todo, y para los servidores al final
-#   scripts/e2e-ci.sh setup|db|api|web|test|stop   # una fase
+#   scripts/e2e-ci.sh setup|db|api|web|test|skips|stop   # una fase
+#
+# `skips` (DX-252) falla si el informe de `test` tiene tests saltados fuera de
+# e2e/allowed-skips.json, y los nombra (scripts/check-e2e-skips.mjs).
 #
 # Variables (todas con default para la CI; en local se cambian puertos y BD):
 #   API_DIR          checkout de dentalix-api            (../dentalix-api)
@@ -217,11 +220,18 @@ phase_test() {
       E2E_DATABASE_URL="postgresql://${PG_SUPERUSER}:${PG_SUPERPASS}@${PG_HOST}:${PG_PORT}/${E2E_DB_NAME}" \
       E2E_EXPECT_PROD_CSP=1 \
       E2E_MAIL_DIR="$MAIL_FILE_DIR" \
+      E2E_REPORT_JSON=1 \
       npx playwright test "$@"
   ) || status=$?
   echo "Playwright terminó con código $status en $((SECONDS - start)) s"
   endgroup
   return "$status"
+}
+
+phase_skips() {
+  group "Tests saltados fuera de e2e/allowed-skips.json"
+  node "$WEB_DIR/scripts/check-e2e-skips.mjs" "$WEB_DIR/playwright-results.json"
+  endgroup
 }
 
 # El pid guardado es el de `npm`/`next`: se para con todos sus descendientes.
@@ -255,6 +265,7 @@ case "$cmd" in
   api) phase_api ;;
   web) phase_web ;;
   test) phase_test "$@" ;;
+  skips) phase_skips ;;
   stop) phase_stop ;;
   all)
     trap phase_stop EXIT
@@ -263,9 +274,10 @@ case "$cmd" in
     phase_api
     phase_web
     phase_test "$@"
+    phase_skips
     ;;
   *)
-    echo "uso: $0 [all|setup|db|api|web|test|stop] [args de playwright]" >&2
+    echo "uso: $0 [all|setup|db|api|web|test|skips|stop] [args de playwright]" >&2
     exit 2
     ;;
 esac

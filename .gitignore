@@ -56,3 +56,6 @@ next-env.d.ts
 # e2e en modo CI (scripts/e2e-ci.sh): pids, logs, env generado y storage
 /.e2e/
 /e2e/.qa-shots/
+
+# DX-252: informe JSON de la E2E (lo lee scripts/check-e2e-skips.mjs)
+/playwright-results.json
