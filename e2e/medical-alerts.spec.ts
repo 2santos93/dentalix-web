@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { addStaffViaApi, apiPost, registerClinicViaApi, type ApiSession } from './support/api';
 import { loginAs } from './support/auth';
-import { atSede, sedeDate, sedeDayFromToday } from './support/clock';
+import { LATE_BROWSER_TIME, atSede, lastSlotToday, sedeDayFromToday } from './support/clock';
 import { expectDialogInsideViewport, expectNoHorizontalScroll } from './support/layout';
 import { API_URL, tenantOrigin } from './support/urls';
 
@@ -61,6 +61,8 @@ const patients: Record<'jorge' | 'ana' | 'lucas' | 'clara', string> = {
 };
 /** La cita de hoy de Jorge para «En clínica»; vacía a menos de 1 h de la medianoche. */
 let todayAppointmentId = '';
+/** El día de la sede de la cita de hoy de Jorge. */
+let todayDay = '';
 
 test.describe.configure({ mode: 'serial' });
 
@@ -116,18 +118,17 @@ test.beforeAll(async ({ request }) => {
   });
   await saveHistory(patients.clara, {});
 
-  // Jorge, también hoy: llega para el panel «En clínica».
-  const start = new Date(Date.now() + 10 * MIN);
-  if (sedeDate(new Date(start.getTime() + 15 * MIN)) === sedeDate(new Date())) {
-    const appt = await apiPost<{ id: string }>(request, session, '/appointments', {
-      patientId: patients.jorge,
-      providerId: linaId,
-      start: start.toISOString(),
-      end: new Date(start.getTime() + 15 * MIN).toISOString(),
-      reason: 'Control',
-    });
-    todayAppointmentId = appt.id;
-  }
+  // Jorge, también hoy (23:55–23:59 de la sede, DX-252): llega para el panel «En clínica».
+  const slot = lastSlotToday();
+  todayDay = slot.day;
+  const appt = await apiPost<{ id: string }>(request, session, '/appointments', {
+    patientId: patients.jorge,
+    providerId: linaId,
+    start: slot.start.toISOString(),
+    end: slot.end.toISOString(),
+    reason: 'Control',
+  });
+  todayAppointmentId = appt.id;
 });
 
 /** La anamnesis de Ana tiene dos años: la historia no se puede antedatar por la API. */
@@ -302,7 +303,7 @@ test('«Nueva cita» con Jorge avisa «Requiere premedicación» antes de agenda
 });
 
 test('«En clínica» muestra la misma alerta junto al paciente que llegó', async ({ page, request }) => {
-  test.skip(todayAppointmentId === '', 'A menos de 1 h de la medianoche de la sede no hay cita de hoy.');
+  await page.clock.install({ time: atSede(todayDay, LATE_BROWSER_TIME) });
   const arrived = await request.patch(`${API_URL}/appointments/${todayAppointmentId}`, {
     headers: session.headers,
     data: { status: 'ARRIVED' },

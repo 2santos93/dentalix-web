@@ -30,3 +30,44 @@ export function atSede(day: string, hhmm: string): Date {
 export function sedeTime(at: Date): string {
   return at.toLocaleTimeString('es', { hour: '2-digit', minute: '2-digit', timeZone: SEDE_TZ });
 }
+
+/**
+ * DX-252 (TST-030): hora fija del NAVEGADOR (`page.clock.install`) en los specs
+ * que trabajan con citas de «hoy»: las 23:30 de la sede, la hora a la que antes
+ * se saltaban (`test.skip` cerca de medianoche). Cada ejecución ve la misma
+ * agenda, corra la suite a la hora que corra.
+ */
+export const LATE_BROWSER_TIME = '23:30';
+
+/** Una franja de «hoy» de la sede con su rótulo `HH:MM–HH:MM` de la agenda. */
+export interface SedeSlot {
+  /** `YYYY-MM-DD` de la sede. */
+  day: string;
+  start: Date;
+  end: Date;
+  label: string;
+}
+
+/**
+ * La última franja del día de HOY de la sede (23:55–23:59), siempre la misma
+ * hora: el navegador va a las 23:30 (`LATE_BROWSER_TIME`) y la cita está por
+ * venir. La API sí usa su reloj real: rechaza agendar en el pasado, marca la
+ * llegada solo el día de la cita y no liga una evolución a un día futuro. Por
+ * eso «hoy» es el día de la sede en el reloj de la máquina (el mismo de la API
+ * en la CI y en local), y la franja va al final del día para que valga a
+ * cualquier hora en la que se pueda crear. Si el reloj ya pasó de las 23:53
+ * (no queda margen ni para la llegada puntual), falla con un mensaje que lo
+ * dice en vez de saltarse el test.
+ */
+export function lastSlotToday(start = '23:55', end = '23:59'): SedeSlot {
+  const now = new Date();
+  const day = sedeDate(now);
+  const slot = { day, start: atSede(day, start), end: atSede(day, end), label: `${start}–${end}` };
+  const marginMs = 2 * 60_000;
+  if (slot.start.getTime() - now.getTime() < marginMs) {
+    throw new Error(
+      `Son las ${sedeTime(now)} en la sede: la franja de hoy ${slot.label} ya no se puede agendar con margen (la API usa su reloj real). Vuelve a lanzar el spec pasada la medianoche de Bogotá.`,
+    );
+  }
+  return slot;
+}

@@ -2,7 +2,7 @@ import { test, expect, type Page } from './support/test';
 import { randomUUID } from 'node:crypto';
 import { addStaffViaApi, apiPost, registerClinicViaApi, type ApiSession } from './support/api';
 import { loginAs } from './support/auth';
-import { sedeDate } from './support/clock';
+import { LATE_BROWSER_TIME, atSede, lastSlotToday, type SedeSlot } from './support/clock';
 import { expectNoHorizontalScroll } from './support/layout';
 import { API_URL, tenantOrigin } from './support/urls';
 
@@ -10,8 +10,11 @@ import { API_URL, tenantOrigin } from './support/urls';
  * e2e DX-200: flujo del paciente en la clínica.
  *
  * Una clínica nueva por corrida (una sola sede, sin restricción de horario)
- * con una odontóloga («Lina Flujo») y recepción, y dos citas de HOY de Lina:
- * Ana y Berta. En serie:
+ * con dos odontólogas («Lina Flujo» y «Marta Flujo») y recepción, y dos citas
+ * de HOY a las 23:55–23:59 de la sede: Ana con Lina y Berta con Marta. El
+ * navegador va con el reloj fijo a las 23:30 de Bogotá (DX-252, TST-030): la
+ * misma agenda a cualquier hora, sin `test.skip` cerca de medianoche (ver
+ * `lastSlotToday` en support/clock.ts). En serie:
  * 1. 1440 px: recepción marca «Llegó» en la tarjeta de Ana (Día · Lista) y la
  *    ve en el panel lateral «En clínica»; Lina ve «Te esperan 1» en la
  *    navegación, la pasa al sillón y la deja lista para cobrar desde
@@ -26,13 +29,18 @@ const origin = tenantOrigin(subdomain);
 const password = 'Password123!';
 const admin = { fullName: 'Ana Titular', email: `ana.flu.${suffix}@example.com` };
 const dentist = { fullName: 'Lina Flujo', email: `lina.flu.${suffix}@example.com` };
+const dentist2 = { fullName: 'Marta Flujo', email: `marta.flu.${suffix}@example.com` };
 const reception = { fullName: 'Rita Recepción', email: `rita.flu.${suffix}@example.com` };
 const last = `Flujo${suffix}`.slice(0, 40);
-const MIN = 60_000;
 
 let session: ApiSession;
-/** Las citas son de HOY: a menos de 1 h de la medianoche de la sede no hay día. */
-let today = '';
+/** La franja de HOY de las dos citas (23:55–23:59 de la sede). */
+let slot: SedeSlot;
+
+/** El reloj del navegador, fijo a las 23:30 de hoy en la sede (y corriendo desde ahí). */
+async function lateEvening(page: Page) {
+  await page.clock.install({ time: atSede(slot.day, LATE_BROWSER_TIME) });
+}
 
 test.describe.configure({ mode: 'serial' });
 
@@ -45,8 +53,9 @@ test.beforeAll(async ({ request }) => {
     password,
   });
   await addStaffViaApi(request, session, { ...dentist, role: 'DENTIST', password });
+  await addStaffViaApi(request, session, { ...dentist2, role: 'DENTIST', password });
   await addStaffViaApi(request, session, { ...reception, role: 'RECEPTION', password });
-  // Sin horario: el spec agenda a la hora que corra (ver disableBusinessHours).
+  // Sin horario: las citas van a las 23:55 (ver disableBusinessHours).
   const schedule = await request.put(`${API_URL}/locations/schedule`, {
     headers: session.headers,
     data: { timezone: 'America/Bogota', ranges: [] },
@@ -54,15 +63,12 @@ test.beforeAll(async ({ request }) => {
   expect(schedule.ok()).toBeTruthy();
   const staff = await request.get(`${API_URL}/staff`, { headers: session.headers });
   const members = (await staff.json()) as { userId: string; fullName: string }[];
-  const linaId = members.find((m) => m.fullName === dentist.fullName)!.userId;
+  const idOf = (fullName: string) => members.find((m) => m.fullName === fullName)!.userId;
 
-  const first = new Date(Date.now() + 10 * MIN);
-  const second = new Date(Date.now() + 30 * MIN);
-  if (sedeDate(second) !== sedeDate(new Date())) return;
-  today = sedeDate(first);
-  for (const [i, [name, start]] of ([
-    ['Ana', first],
-    ['Berta', second],
+  slot = lastSlotToday();
+  for (const [i, [name, providerId]] of ([
+    ['Ana', idOf(dentist.fullName)],
+    ['Berta', idOf(dentist2.fullName)],
   ] as const).entries()) {
     const patient = await apiPost<{ id: string }>(request, session, '/patients', {
       firstName: name,
@@ -73,9 +79,9 @@ test.beforeAll(async ({ request }) => {
     });
     await apiPost(request, session, '/appointments', {
       patientId: patient.id,
-      providerId: linaId,
-      start: start.toISOString(),
-      end: new Date(start.getTime() + 15 * MIN).toISOString(),
+      providerId,
+      start: slot.start.toISOString(),
+      end: slot.end.toISOString(),
       reason: 'Endodoncia',
     });
   }
@@ -88,7 +94,7 @@ async function openTodayList(page: Page) {
 }
 
 test('1440 px: llegó → en sillón → listo para cobrar → completada', async ({ page, browser }) => {
-  test.skip(today === '', 'A menos de 1 h de la medianoche de la sede no hay citas de hoy.');
+  await lateEvening(page);
   await page.setViewportSize({ width: 1440, height: 900 });
   await loginAs(page, origin, reception.email, password);
   await openTodayList(page);
@@ -111,7 +117,8 @@ test('1440 px: llegó → en sillón → listo para cobrar → completada', asyn
   await expect(panel).not.toContainText('Endodoncia');
 
   // La odontóloga: «Te esperan 1» en la navegación y su panel.
-  const lina = await browser.newPage({ viewport: { width: 1440, height: 900 } });
+  const lina = await browser.newPage({ viewport: { width: 1440, height: 900 }, timezoneId: 'America/Bogota', locale: 'es-CO' });
+  await lateEvening(lina);
   await loginAs(lina, origin, dentist.email, password);
   await expect(lina.getByRole('link', { name: 'Agenda · Te espera 1 paciente' }).first()).toBeVisible({
     timeout: 15_000,
@@ -142,7 +149,7 @@ test('1440 px: llegó → en sillón → listo para cobrar → completada', asyn
 });
 
 test('390 px: «Deshacer llegada» devuelve la cita a la agenda', async ({ page }) => {
-  test.skip(today === '', 'A menos de 1 h de la medianoche de la sede no hay citas de hoy.');
+  await lateEvening(page);
   await page.setViewportSize({ width: 390, height: 844 });
   await loginAs(page, origin, reception.email, password);
   await openTodayList(page);
