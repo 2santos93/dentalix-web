@@ -19,8 +19,20 @@ const plan = {
   status: "ACCEPTED",
   visitIntervals: { "2": 90 },
   items: [
-    { id: "a", visit: 1, visitLabel: "Cirugía", toothNumber: "46" },
-    { id: "b", visit: 2, visitLabel: "Corona", toothNumber: "46" },
+    {
+      id: "a",
+      visit: 1,
+      visitLabel: "Cirugía",
+      toothNumber: "46",
+      status: "ACCEPTED",
+    },
+    {
+      id: "b",
+      visit: 2,
+      visitLabel: "Corona",
+      toothNumber: "46",
+      status: "ACCEPTED",
+    },
   ],
 } as unknown as TreatmentPlan;
 beforeEach(() => {
@@ -137,4 +149,66 @@ it("incorpora ítems nuevos y recarga la disponibilidad al aceptar sin recargar 
   );
   expect(screen.getByText("a,new-item")).toBeInTheDocument();
   await waitFor(() => expect(getPlanVisits).toHaveBeenCalledTimes(2));
+});
+it("al marcar DONE con la misma fecha del plan oculta la visita agotada y recarga sus ítems", async () => {
+  const { rerender } = render(
+    <PlanVisitsBoard
+      token="token"
+      plan={plan}
+      role="DENTIST"
+      onChanged={jest.fn()}
+      renderItems={() => null}
+    />,
+  );
+  await screen.findByRole("button", { name: "Agendar visita 2" });
+  const done = {
+    ...plan,
+    items: (plan.items ?? []).map((i) => ({
+      ...i,
+      status: i.id === "b" ? ("DONE" as const) : ("ACCEPTED" as const),
+    })),
+  };
+  rerender(
+    <PlanVisitsBoard
+      token="token"
+      plan={done}
+      role="DENTIST"
+      onChanged={jest.fn()}
+      renderItems={() => null}
+    />,
+  );
+  expect(
+    screen.queryByRole("button", { name: "Agendar visita 2" }),
+  ).not.toBeInTheDocument();
+  await waitFor(() => expect(getPlanVisits).toHaveBeenCalledTimes(2));
+});
+it("muestra el día civil autoritativo aunque el instante caiga en el día anterior del navegador", async () => {
+  const data = await jest.mocked(getPlanVisits).getMockImplementation()!(
+    "token",
+    "plan1",
+  );
+  jest
+    .mocked(getPlanVisits)
+    .mockResolvedValue({
+      ...data,
+      visits: data.visits.map((v) =>
+        v.number === 2
+          ? {
+              ...v,
+              minimumDate: "2027-03-31T22:00:00Z",
+              minimumDay: "2027-04-01",
+            }
+          : v,
+      ),
+    });
+  render(
+    <PlanVisitsBoard
+      token="token"
+      plan={plan}
+      role="DENTIST"
+      onChanged={jest.fn()}
+      renderItems={() => null}
+    />,
+  );
+  expect(await screen.findByText("01/04/2027")).toBeInTheDocument();
 });
