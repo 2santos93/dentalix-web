@@ -3,7 +3,7 @@ import { randomUUID } from 'node:crypto';
 import path from 'node:path';
 import { addStaffViaApi, apiPost, registerClinicViaApi, type ApiSession } from './support/api';
 import { loginAs } from './support/auth';
-import { atSede, sedeDayFromToday } from './support/clock';
+import { lastSlotToday, sedeDayFromToday } from './support/clock';
 import { expectDialogInsideViewport, expectNoHorizontalScroll } from './support/layout';
 import { API_URL, tenantOrigin } from './support/urls';
 
@@ -31,7 +31,6 @@ const payerName = 'Sura EPS';
 const payerOption = `${payerName} · EPS (Colombia)`;
 const twoDaysAgo = sedeDayFromToday(-2);
 const tomorrow = sedeDayFromToday(1);
-const today = sedeDayFromToday(0);
 
 const QA_DIR = path.resolve(process.env.DX153_QA_DIR ?? 'e2e/.qa-shots');
 const QA = process.env.DX153_QA_SHOTS === '1';
@@ -217,11 +216,14 @@ test('una cita corta de hoy con cobertura vencida muestra la marca en la agenda 
   const staff = await request.get(`${API_URL}/staff`, { headers: session.headers });
   const members = (await staff.json()) as { userId: string; fullName: string }[];
   const providerId = members.find((m) => m.fullName === admin.fullName)!.userId;
+  // DX-252: la última franja de hoy en la sede (23:55–23:59), no las 22:00 (en
+  // el pasado si la suite corre de noche). La marca va en la fila de la hora.
+  const slot = lastSlotToday();
   await apiPost(request, session, '/appointments', {
     patientId,
     providerId,
-    start: atSede(today, '22:00').toISOString(),
-    end: atSede(today, '22:30').toISOString(),
+    start: slot.start.toISOString(),
+    end: slot.end.toISOString(),
   });
 
   await page.setViewportSize({ width: 1440, height: 900 });
@@ -229,7 +231,7 @@ test('una cita corta de hoy con cobertura vencida muestra la marca en la agenda 
   await loginAs(page, origin, reception.email, password);
   await page.goto(`${origin}/agenda`);
   await page.getByRole('button', { name: 'Día', exact: true }).click();
-  await page.getByLabel('Fecha', { exact: true }).fill(today);
+  await page.getByLabel('Fecha', { exact: true }).fill(slot.day);
 
   const card = page.getByTestId('day-column-appointment').filter({ hasText: `Camila ${lastName}` });
   await expect(card).toBeVisible({ timeout: 15_000 });
