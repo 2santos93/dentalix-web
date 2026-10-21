@@ -1,5 +1,5 @@
 import { apiFetch } from '@/lib/api/client';
-import { uploadWithProgress } from '@/lib/api/upload';
+import { uploadToStorage } from '@/lib/api/upload';
 import type { components } from '@/lib/api/schema';
 import type { ClinicRole } from '@/lib/me/me-api';
 
@@ -138,26 +138,63 @@ export interface UploadPatientDocumentInput {
   notes?: string | null;
 }
 
-/** `POST /patients/:id/documents` multipart, con progreso (0..1). */
-export function uploadPatientDocument(
+/** La autorización de subida directa al almacén (DX-259). */
+export type PatientDocumentUploadTicket = components['schemas']['PatientDocumentUploadDto'];
+
+/** SHA-256 del fichero en hex: el almacén rechaza un contenido con otra huella. */
+export async function sha256HexOf(file: Blob): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', await file.arrayBuffer());
+  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+/**
+ * Sube un documento a la ficha DIRECTAMENTE al almacén (DX-259), con
+ * progreso (0..1) de la subida:
+ *
+ * 1. `POST …/documents/upload-url` (por el proxy `/api/v1`, cuerpo pequeño):
+ *    tamaño y SHA-256; la API responde el POST prefirmado del bucket (clave,
+ *    tope de 20 MB y huella firmados) y el id del documento.
+ * 2. El fichero va al bucket por XHR, sin pasar por el proxy de Next ni por
+ *    la API.
+ * 3. `POST …/documents/:id/complete` con la categoría, dientes, fecha y
+ *    notas: la API comprueba tamaño, huella y tipo por contenido y crea el
+ *    documento (o responde 400 en español y lo borra).
+ */
+export async function uploadPatientDocument(
   token: string,
   patientId: string,
   input: UploadPatientDocumentInput,
   opts: { onProgress?: (fraction: number) => void } = {},
 ): Promise<PatientDocument> {
-  const form = new FormData();
-  form.append('file', input.file, input.file.name);
-  form.append('category', input.category);
-  if (input.clinicalDate) form.append('clinicalDate', input.clinicalDate);
-  if (input.toothNumbers && input.toothNumbers.length > 0) {
-    form.append('toothNumbers', input.toothNumbers.join(','));
-  }
-  const notes = input.notes?.trim();
-  if (notes) form.append('notes', notes);
-  return uploadWithProgress<PatientDocument>(documentsPath(patientId), form, {
+  const { file } = input;
+  const request: components['schemas']['CreatePatientDocumentUploadDto'] = {
+    fileName: file.name,
+    mimeType: file.type,
+    sizeBytes: file.size,
+    sha256: await sha256HexOf(file),
+  };
+  const ticket = await apiFetch<PatientDocumentUploadTicket>(documentsPath(patientId, '/upload-url'), {
+    method: 'POST',
     token,
-    onProgress: opts.onProgress,
+    body: request,
   });
+  // El último tramo (comprobar y crear) es rápido: la barra llega a 1 al final.
+  await uploadToStorage(ticket, file, { onProgress: (p) => opts.onProgress?.(Math.min(p, 0.99)) });
+  const notes = input.notes?.trim();
+  const fields: components['schemas']['CompletePatientDocumentUploadDto'] = {
+    category: input.category,
+    fileName: file.name,
+    mimeType: file.type,
+    ...(input.clinicalDate ? { clinicalDate: input.clinicalDate } : {}),
+    ...(input.toothNumbers && input.toothNumbers.length > 0 ? { toothNumbers: input.toothNumbers } : {}),
+    ...(notes ? { notes } : {}),
+  };
+  const doc = await apiFetch<PatientDocument>(
+    documentsPath(patientId, `/${encodeURIComponent(ticket.documentId)}/complete`),
+    { method: 'POST', token, body: fields },
+  );
+  opts.onProgress?.(1);
+  return doc;
 }
 
 /**

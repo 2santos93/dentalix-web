@@ -67,6 +67,7 @@ const copy = {
   fixTeeth: 'Corrige los dientes antes de subir.',
   progressLabel: (name: string) => `Progreso de subida de ${name}`,
   uploadError: 'No pudimos subir el archivo.',
+  storageBusy: 'El almacén de archivos no responde o hay muchas subidas en curso. Inténtalo de nuevo en unos minutos.',
   fileFor: (name: string) => ` ${name}`,
   filtersLabel: 'Filtrar documentos',
   allCategories: 'Todas las categorías',
@@ -165,7 +166,8 @@ let queueSeq = 0;
  * zona de subida: arrastrar y soltar o «Elegir archivos», con pre-chequeo de
  * tamaño y tipo en el navegador (sin pedir nada a la API), conversión de HEIC
  * a JPG y una fila por archivo con su categoría, dientes, fecha clínica,
- * notas y progreso. Debajo, la lista filtrable por categoría y diente con
+ * notas y progreso. DX-259: cada archivo sube DIRECTO al almacén (POST
+ * prefirmado), no por el proxy de la web ni por la API. Debajo, la lista filtrable por categoría y diente con
  * «Ver», «Descargar» y «Anular» (quien lo subió o un ADMIN).
  */
 export function PatientDocumentsTab({
@@ -319,7 +321,7 @@ export function PatientDocumentsTab({
       setAnnouncement(copy.announceDone(name));
       if (matchesFilters(doc)) setDocs((prev) => [doc, ...prev.filter((d) => d.id !== doc.id)]);
     } catch (err) {
-      const reason = apiErrorMessage(err, copy.uploadError);
+      const reason = apiErrorMessage(err, { fallback: copy.uploadError, byStatus: { 503: copy.storageBusy } });
       updateItem(item.key, { status: 'error', error: reason, retryable: true });
       setAnnouncement(copy.announceError(name));
       // El toast sobrevive aunque la fila no esté a la vista (otra pestaña).
