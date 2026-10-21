@@ -103,11 +103,13 @@ export interface Appointment {
 export async function createAppointment(
   token: string,
   input: CreateAppointmentInput,
+  locationId?: string,
 ): Promise<Appointment> {
   return apiFetch<Appointment>('/appointments', {
     method: 'POST',
     body: input,
     token,
+    ...(locationId ? {headers:{'X-Location-Id':locationId}} : {}),
   });
 }
 

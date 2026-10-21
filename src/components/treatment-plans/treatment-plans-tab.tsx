@@ -67,6 +67,7 @@ import { VoidPaymentModal } from '@/components/payments/void-payment-modal';
 import { voidPaymentErrorMessage } from '@/components/payments/use-void-payment';
 import { getTokenAllowedLocationIds, getTokenRole } from '@/lib/auth/token-role';
 import { PaymentPlanSection } from './payment-plan-section';
+import { PlanVisitsBoard } from './plan-visits-board';
 import { PlanQuoteActions } from './plan-quote-actions';
 import { PlanOptionsPanel } from './plan-options-panel';
 import { optionGroupOf, patchableStatuses } from '@/lib/treatment-plans/plan-options';
@@ -2083,8 +2084,8 @@ export function TreatmentPlansTab({
                   {bulkNotice}
                 </p>
 
-                <ItemsTable
-                  items={planDetail.items ?? []}
+                <PlanVisitsBoard key={planDetail.id} token={token} plan={planDetail} role={role} onChanged={refreshPlanDetail} renderItems={visitItems => <ItemsTable
+                  items={visitItems}
                   catalogById={catalogById}
                   currency={planDetail.currency}
                   updatingItemId={updatingItemId}
@@ -2110,7 +2111,7 @@ export function TreatmentPlansTab({
                         }
                       : undefined
                   }
-                />
+                />} />
 
                 <Separator />
 

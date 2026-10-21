@@ -6,6 +6,14 @@ import { planQuoteFixture, SIGNED_ACCEPTANCE } from './plan-quote-fixture';
 const text = (el: HTMLElement) => (el.textContent ?? '').replace(/\s/g, ' ');
 
 describe('PlanQuoteDocument (DX-012)', () => {
+  it('agrupa la organización actual por visitas sin cambiar precios firmados',()=>{
+    const quote=planQuoteFixture({visitOrganization:[{itemId:'i1',visit:1,label:'Cirugía',minDaysAfterPrevious:0},{itemId:'i2',visit:2,label:'Corona',minDaysAfterPrevious:90}]});
+    render(<PlanQuoteDocument quote={quote}/>);
+    expect(screen.getByRole('rowheader',{name:'Visita 1 · Cirugía'})).toBeInTheDocument();
+    expect(screen.getByRole('rowheader',{name:'Visita 2 · Corona · intervalo mínimo 90 días'})).toBeInTheDocument();
+    expect(screen.getByTestId('quote-total-COP')).toHaveTextContent('3.300.000');
+  });
+
   it('pinta logo y datos de la clínica y la sede, paciente, profesional, fecha y validez', () => {
     render(<PlanQuoteDocument quote={planQuoteFixture()} />);
     const header = screen.getByTestId('quote-header');
