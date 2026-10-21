@@ -4,10 +4,18 @@
 //   node scripts/check-e2e-skips.mjs [informe.json] [lista.json]
 //
 // Lee el informe JSON de Playwright (por defecto playwright-results.json, el
-// que escribe playwright.config.ts en la CI) y falla (código 1) si algún test
-// salió «skipped» y no está en la lista versionada e2e/allowed-skips.json,
-// con un mensaje que nombra cada test (fichero:línea y título). En GitHub
-// Actions además anota el test en el PR (`::error file=…`).
+// que escribe playwright.config.ts en la CI) y sale con 1, nombrando cada test
+// (fichero:línea, título y motivo), si alguno salió «skipped» sin ser un salto
+// permitido de e2e/allowed-skips.json. Un salto solo es permitido si:
+//   - el test (fichero + título completo) está en la lista;
+//   - lleva una anotación `skip`/`fixme` cuyo texto es EXACTAMENTE el de la
+//     entrada (un test que no llegó a ejecutarse por un fallo previo en serie
+//     no tiene anotación: nunca se permite);
+//   - la variable de entorno de `requiresUnset` NO está definida al correr la
+//     guardia (si la CI la define y aun así se salta, es una regresión).
+// Sale con 2 si no puede leer el informe, si no tiene tests o si trae errores
+// globales (config roto, fallo fuera de los tests). En GitHub Actions además
+// anota cada test en el PR (`::error file=…`).
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
@@ -16,12 +24,16 @@ const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..')
 const reportPath = process.argv[2] ?? path.join(root, 'playwright-results.json');
 const allowedPath = process.argv[3] ?? path.join(root, 'e2e', 'allowed-skips.json');
 
+function fail(message) {
+  console.error(message);
+  process.exit(2);
+}
+
 function readJson(file, what) {
   try {
     return JSON.parse(readFileSync(file, 'utf8'));
   } catch (err) {
-    console.error(`No pude leer ${what} (${file}): ${err instanceof Error ? err.message : String(err)}`);
-    process.exit(2);
+    fail(`No pude leer ${what} (${file}): ${err instanceof Error ? err.message : String(err)}`);
   }
 }
 
@@ -47,31 +59,50 @@ function* tests(suite, titles = []) {
   for (const child of suite.suites ?? []) yield* tests(child, here);
 }
 
-const key = (file, title) => `${file}${SEP}${title}`;
-const allowedKeys = new Set(allowed.map((a) => key(a.file, a.title)));
 const all = (report.suites ?? []).flatMap((s) => [...tests(s)]);
-const skipped = all.filter((t) => t.test.status === 'skipped');
-const offenders = skipped.filter((t) => !allowedKeys.has(key(t.file, t.title)));
+if ((report.errors ?? []).length > 0) {
+  fail(
+    `El informe de Playwright trae ${report.errors.length} error(es) globales: la suite no corrió entera.\n` +
+      report.errors.map((e) => `  - ${String(e.message ?? JSON.stringify(e)).split('\n')[0]}`).join('\n'),
+  );
+}
+if (all.length === 0) fail('El informe de Playwright no tiene ningún test: la suite no corrió.');
 
-/** El motivo del `test.skip`/`test.fixme`; sin anotación, no llegó a ejecutarse. */
-const reasonOf = (t) =>
-  (t.test.annotations ?? []).find((a) => a.type === 'skip' || a.type === 'fixme')?.description ??
-  'sin motivo: no llegó a ejecutarse (¿falló antes un test del mismo grupo en serie?) o un test.skip() sin texto';
+const entries = new Map(allowed.map((a) => [`${a.file}${SEP}${a.title}`, a]));
+const isSet = (name) => (process.env[name] ?? '') !== '';
+
+/** `null` si el salto está permitido; si no, por qué no. */
+function verdict(t) {
+  const note = (t.test.annotations ?? []).find((a) => a.type === 'skip' || a.type === 'fixme');
+  if (!note) return 'no llegó a ejecutarse (¿falló antes un test del mismo grupo en serie?)';
+  if (!note.description) return 'test.skip/test.fixme sin motivo';
+  const entry = entries.get(`${t.file}${SEP}${t.title}`);
+  if (!entry) return note.description;
+  if (entry.annotation !== note.description) {
+    return `${note.description} (el motivo no es el de e2e/allowed-skips.json: «${entry.annotation}»)`;
+  }
+  if (entry.requiresUnset && isSet(entry.requiresUnset)) {
+    return `${note.description} (pero ${entry.requiresUnset} está definida: este salto no debería ocurrir)`;
+  }
+  return null;
+}
+
+const skipped = all.filter((t) => t.test.status === 'skipped');
+const offenders = skipped.map((t) => ({ ...t, why: verdict(t) })).filter((t) => t.why !== null);
 
 console.log(
-  `Playwright: ${all.length} tests, ${skipped.length} saltados (${skipped.length - offenders.length} en la lista permitida).`,
+  `Playwright: ${all.length} tests, ${skipped.length} saltados (${skipped.length - offenders.length} permitidos por e2e/allowed-skips.json).`,
 );
 if (offenders.length === 0) process.exit(0);
 
-console.error(`\n${offenders.length} test(s) saltados fuera de e2e/allowed-skips.json:`);
+console.error(`\n${offenders.length} test(s) saltados sin permiso:`);
 for (const t of offenders) {
-  const where = `${t.file}:${t.line}`;
-  console.error(`  - ${where} «${t.title}» — ${reasonOf(t)}`);
+  console.error(`  - ${t.file}:${t.line} «${t.title}» — ${t.why}`);
   if (process.env.GITHUB_ACTIONS) {
-    console.log(`::error file=${t.file},line=${t.line},title=Test saltado::«${t.title}» se saltó (${reasonOf(t)}) y no está en e2e/allowed-skips.json`);
+    console.log(`::error file=${t.file},line=${t.line},title=Test saltado::«${t.title}» se saltó: ${t.why}`);
   }
 }
 console.error(
-  '\nUn test saltado no prueba nada: arregla la condición (p. ej. fija el reloj con e2e/support/clock.ts) o, si el salto es legítimo, añádelo a e2e/allowed-skips.json con su motivo.',
+  '\nUn test saltado no prueba nada: arregla la condición (p. ej. fija el reloj con e2e/support/clock.ts) o, si el salto es legítimo, añádelo a e2e/allowed-skips.json con su motivo exacto y la variable que lo justifica.',
 );
 process.exit(1);
