@@ -3157,10 +3157,50 @@ export interface paths {
         get: operations["PatientDocumentsController_list"];
         put?: never;
         /**
-         * Subir un documento a la ficha del paciente
-         * @description PDF, JPG, PNG, HEIC, DOCX o DICOM de hasta 20 MB. El tipo lo decide el contenido; si no cuadra con el nombre o la etiqueta, 400. El mismo contenido vigente dos veces en la ficha, 409.
+         * Subir un documento a la ficha del paciente (multipart, por la API)
+         * @description PDF, JPG, PNG, HEIC, DOCX o DICOM de hasta 20 MB. El tipo lo decide el contenido; si no cuadra con el nombre o la etiqueta, 400. El mismo contenido vigente dos veces en la ficha, 409. DX-259: el fichero pasa por un temporal en disco y un semáforo de subidas por réplica (503 con Retry-After si no hay plaza); la web usa la subida directa al almacén (`upload-url` + `complete`).
          */
         post: operations["PatientDocumentsController_upload"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{patientId}/documents/upload-url": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Autorización para subir un documento directamente al almacén
+         * @description DX-259: devuelve un POST prefirmado (S3) de pocos minutos para UN fichero: la clave la fija la API, de 1 B a 20 MB y con el SHA-256 declarado (el almacén rechaza otro contenido). El navegador envía `fields` y el fichero (campo `file`, al final) a `url` y después llama a `POST …/:documentId/complete`. Con el almacén en disco (desarrollo) `url` es la propia API (`/files/uploads`), con las mismas reglas. Nada llega a la ficha ni se audita hasta `complete`.
+         */
+        post: operations["PatientDocumentsController_uploadUrl"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{patientId}/documents/{id}/complete": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Terminar la subida directa: comprobar el fichero y crearlo en la ficha
+         * @description DX-259: comprueba el objeto subido con `upload-url` (de este usuario y paciente): tamaño y SHA-256 del almacén, y el tipo por contenido leyendo los primeros 64 KB con `Range`. Mismas reglas que el multipart: si el contenido no es de la lista blanca, no cuadra con lo declarado, o el tamaño o la huella no cuadran, el objeto se borra y la respuesta es 400 en español; el mismo contenido vigente, 409. Errores del formulario: 400 y el fichero se conserva para reintentar. Repetirlo con un documento ya creado lo devuelve.
+         */
+        post: operations["PatientDocumentsController_complete"];
         delete?: never;
         options?: never;
         head?: never;
@@ -9461,6 +9501,61 @@ export interface components {
             voidedByName: string | null;
             voidReason: string | null;
         };
+        CreatePatientDocumentUploadDto: {
+            /**
+             * @description Nombre del fichero (solo para mostrar; no se guarda aquí)
+             * @example radiografia-11.pdf
+             */
+            fileName?: string;
+            /** @example application/pdf */
+            mimeType?: string;
+            /** @description Tamaño en bytes (1 B – 20 MB) */
+            sizeBytes: number;
+            /** @description SHA-256 del contenido en hex. El almacén rechaza un contenido con otra huella. */
+            sha256: string;
+        };
+        PatientDocumentUploadDto: {
+            /**
+             * Format: uuid
+             * @description Id del documento: el de `POST …/:documentId/complete`
+             */
+            documentId: string;
+            /** @enum {string} */
+            method: "POST";
+            /** @description Adónde se envía el formulario: el bucket (S3) o la API (disco, en desarrollo) */
+            url: string;
+            /** @description Campos del formulario, en este orden y ANTES del fichero, que va al final en el campo `file` */
+            fields: {
+                [key: string]: string;
+            };
+            /** Format: date-time */
+            expiresAt: string;
+            /** @description Tamaño máximo en bytes */
+            maxBytes: number;
+        };
+        CompletePatientDocumentUploadDto: {
+            /** @description XRAY radiografía · PHOTO foto clínica · REFERRAL remisión · SIGNED_CONSENT consentimiento firmado (escaneado) · REPORT informe · OTHER otro */
+            category: components["schemas"]["PatientDocumentCategory"];
+            /**
+             * Format: date
+             * @description Día clínico del documento (no futuro en la sede)
+             * @example 2026-10-17
+             */
+            clinicalDate?: string;
+            /**
+             * @description Dientes FDI (como mucho 8)
+             * @example [
+             *       "11",
+             *       "21"
+             *     ]
+             */
+            toothNumbers?: string[];
+            notes?: string;
+            /** @description Nombre original (solo para mostrar) */
+            fileName?: string;
+            /** @description Tipo que declara el navegador; debe cuadrar con el contenido */
+            mimeType?: string;
+        };
         PatientDocumentUrlDto: {
             /** @description URL firmada de corta vida */
             url: string;
@@ -10263,6 +10358,13 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Hay demasiadas subidas en curso. Inténtalo de nuevo en unos segundos. / El almacén de archivos no responde. Inténtalo de nuevo en unos minutos. (con Retry-After) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     MeController_removeAvatar: {
@@ -10293,7 +10395,8 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            200: {
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -18143,6 +18246,127 @@ export interface operations {
             };
             /** @description El archivo supera el máximo de 20 MB. */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Hay demasiadas subidas en curso. Inténtalo de nuevo en unos segundos. / El almacén de archivos no responde. Inténtalo de nuevo en unos minutos. (con Retry-After) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientDocumentsController_uploadUrl: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Sede activa. Sin ella, la sede principal. */
+                "X-Location-Id"?: string;
+            };
+            path: {
+                patientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreatePatientDocumentUploadDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PatientDocumentUploadDto"];
+                };
+            };
+            /** @description Tamaño o huella SHA-256 no válidos, o archivo vacío */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Este archivo ya está en la ficha del paciente. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El archivo supera el máximo de 20 MB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientDocumentsController_complete: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Sede activa. Sin ella, la sede principal. */
+                "X-Location-Id"?: string;
+            };
+            path: {
+                patientId: string;
+                /** @description El `documentId` de `upload-url` */
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CompletePatientDocumentUploadDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PatientDocumentDto"];
+                };
+            };
+            /** @description Tipo no admitido, contenido que no coincide con su tipo, tamaño o huella que no cuadran, o campos del formulario inválidos (mensaje en español) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente no encontrado, o subida inexistente, caducada o de otra persona */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Este archivo ya está en la ficha del paciente. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El almacén de archivos no responde. Inténtalo de nuevo en unos minutos. (con Retry-After) */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
