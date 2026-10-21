@@ -7,9 +7,11 @@ import {
   confirmAnamnesisNoChanges,
   confirmedToday,
   reviewedToday,
+  sedeDateLabel,
+  sedeTimeLabel,
   type PatientMedicalAlerts,
 } from '@/lib/clinical/medical-alerts';
-import { formatDate, formatTime } from '@/lib/format/date';
+import { formatCivilDate } from '@/lib/format/date';
 import { Button } from '@/components/ui/button';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { FieldError } from '@/components/errors/field-error';
@@ -65,17 +67,19 @@ export function AnamnesisReviewLine({
 
   const status = alerts.anamnesisStatus;
   const review = alerts.lastReview;
-  const today = confirmedToday(review);
+  const today = confirmedToday(review, alerts);
   const Icon = status === 'MISSING' ? ClipboardX : status === 'EXPIRED' ? ClipboardClock : ClipboardCheck;
 
   let text: string;
   if (status === 'MISSING') {
     text = copy.missing;
   } else if (today && review) {
-    text = copy.noChangesToday(formatTime(review.at), review.byName);
+    text = copy.noChangesToday(sedeTimeLabel(review.at, alerts.timeZone), review.byName);
   } else {
     const head = status === 'EXPIRED' ? ANAMNESIS_EXPIRED_LABEL : copy.current;
-    text = review ? `${head} · ${copy.reviewed(formatDate(review.at), review.byName)}` : head;
+    text = review
+      ? `${head} · ${copy.reviewed(sedeDateLabel(review.at, alerts.timeZone), review.byName)}`
+      : head;
   }
 
   async function handleConfirm() {
@@ -112,15 +116,15 @@ export function AnamnesisReviewLine({
             <span className="text-muted">
               {' '}
               {copy.validity(alerts.validityMonths)}
-              {status === 'CURRENT' && alerts.anamnesisExpiresAt
-                ? ` ${copy.expiresOn(formatDate(alerts.anamnesisExpiresAt))}`
+              {status === 'CURRENT' && alerts.anamnesisExpiresOn
+                ? ` ${copy.expiresOn(formatCivilDate(alerts.anamnesisExpiresOn))}`
                 : ''}
             </span>
           ) : null}
         </p>
       </div>
       {/* Revisada hoy (versión nueva o «Sin cambios hoy»): no hay nada que confirmar. */}
-      {canConfirm && status !== 'MISSING' && !reviewedToday(review) ? (
+      {canConfirm && status !== 'MISSING' && !reviewedToday(review, alerts) ? (
         <Button
           type="button"
           variant="secondary"

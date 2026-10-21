@@ -245,6 +245,8 @@ function PatientDetailView() {
         loading={loading}
         onEdit={() => setEditing(true)}
         medicalAlerts={medicalAlerts.data}
+        medicalAlertsFailed={medicalAlerts.failed}
+        onRetryMedicalAlerts={medicalAlerts.reload}
       />
 
       {loading ? (

@@ -12,6 +12,8 @@ import {
   medicalAlertSeverity,
   medicalAlertSummary,
   reviewedToday,
+  sedeDateLabel,
+  sedeTimeLabel,
   type MedicalAlertFlags,
 } from './medical-alerts';
 
@@ -87,15 +89,20 @@ describe('medical-alerts (DX-247)', () => {
     expect(medicalAlertHeadline(flags())).toBeNull();
   });
 
-  it('«Sin cambios hoy» confirmado hoy (día local)', () => {
-    const now = new Date('2026-10-20T15:00:00.000Z');
-    expect(confirmedToday({ kind: 'NO_CHANGES', at: '2026-10-20T08:00:00.000Z', byName: 'X' }, now)).toBe(true);
-    expect(confirmedToday({ kind: 'NO_CHANGES', at: '2026-10-19T08:00:00.000Z', byName: 'X' }, now)).toBe(false);
-    expect(confirmedToday({ kind: 'UPDATED', at: '2026-10-20T08:00:00.000Z', byName: 'X' }, now)).toBe(false);
-    expect(confirmedToday(null, now)).toBe(false);
+  it('«hoy» es el de la sede, no el del navegador', () => {
+    const sede = { today: '2026-10-20', timeZone: 'America/Bogota' };
+    // 23:30 del 20/10 en Bogotá (04:30 UTC del 21/10): hoy en la sede.
+    const late = { kind: 'NO_CHANGES' as const, at: '2026-10-21T04:30:00.000Z', byName: 'X' };
+    expect(confirmedToday(late, sede)).toBe(true);
+    expect(confirmedToday(late, { today: '2026-10-21', timeZone: 'UTC' })).toBe(true);
+    expect(confirmedToday({ ...late, at: '2026-10-19T15:00:00.000Z' }, sede)).toBe(false);
+    expect(confirmedToday({ ...late, kind: 'UPDATED' }, sede)).toBe(false);
+    expect(confirmedToday(null, sede)).toBe(false);
     // Una versión guardada hoy también es una revisión de hoy.
-    expect(reviewedToday({ kind: 'UPDATED', at: '2026-10-20T08:00:00.000Z', byName: 'X' }, now)).toBe(true);
-    expect(reviewedToday(null, now)).toBe(false);
+    expect(reviewedToday({ ...late, kind: 'UPDATED' }, sede)).toBe(true);
+    expect(reviewedToday(null, sede)).toBe(false);
+    expect(sedeDateLabel(late.at, sede.timeZone)).toBe('20/10/2026');
+    expect(sedeTimeLabel(late.at, sede.timeZone)).toBe('23:30');
   });
 
   it('roles: «Sin cambios hoy» los clínicos; la vigencia, solo ADMIN', () => {

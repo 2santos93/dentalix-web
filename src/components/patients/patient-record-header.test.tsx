@@ -223,7 +223,7 @@ describe('PatientRecordHeader: alerta médica (DX-247)', () => {
     render(<PatientRecordHeader patient={patient()} loading={false} onEdit={() => {}} medicalAlerts={flags} />);
     expect(screen.getByTestId('record-medical-alert')).toHaveTextContent('Requiere premedicación');
     await user.click(screen.getByRole('button', { name: 'Alertas médicas de Carlos Mejía' }));
-    expect(screen.getByRole('tooltip')).toHaveTextContent('Requiere profilaxis antibiótica');
+    expect(screen.getByTestId('medical-alert-popover')).toHaveTextContent('Requiere profilaxis antibiótica');
   });
 
   it('sin anamnesis lo dice; al día y sin alertas no pinta nada', () => {
@@ -245,5 +245,31 @@ describe('PatientRecordHeader: alerta médica (DX-247)', () => {
       />,
     );
     expect(screen.queryByTestId('record-medical-alert')).not.toBeInTheDocument();
+  });
+});
+
+describe('PatientRecordHeader: alertas sin comprobar (DX-247)', () => {
+  it('mientras carga dice «Comprobando alertas…»; si falla, «Alertas sin comprobar» con reintento', async () => {
+    const user = userEvent.setup();
+    const onRetry = jest.fn();
+    const { rerender } = render(
+      <PatientRecordHeader patient={patient()} loading={false} onEdit={() => {}} medicalAlerts={null} />,
+    );
+    expect(screen.getByText('Comprobando alertas…')).toBeInTheDocument();
+    rerender(
+      <PatientRecordHeader
+        patient={patient()}
+        loading={false}
+        onEdit={() => {}}
+        medicalAlerts={null}
+        medicalAlertsFailed
+        onRetryMedicalAlerts={onRetry}
+      />,
+    );
+    expect(screen.queryByText('Comprobando alertas…')).not.toBeInTheDocument();
+    expect(screen.getByText('Alertas sin comprobar')).toBeInTheDocument();
+    expect(screen.queryByTestId('record-medical-alert')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Reintentar' }));
+    expect(onRetry).toHaveBeenCalled();
   });
 });

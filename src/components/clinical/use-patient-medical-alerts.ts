@@ -45,6 +45,10 @@ export function usePatientMedicalAlerts(
     };
   }, [token, patientId, reloadKey]);
 
-  const reload = useCallback(() => setReloadKey((k) => k + 1), []);
+  // Al reintentar se vuelve a «comprobando» hasta que llegue la respuesta.
+  const reload = useCallback(() => {
+    setFailed(false);
+    setReloadKey((k) => k + 1);
+  }, []);
   return { data, failed, version: reloadKey, reload };
 }

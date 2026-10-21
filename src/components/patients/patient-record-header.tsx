@@ -10,6 +10,7 @@ import { OverdueChip } from '@/components/collections/overdue-chip';
 import { CoverageChip } from '@/components/patients/coverage-chip';
 import { coverageChipText } from '@/lib/patients/coverage-presentation';
 import { MedicalAlertIndicator } from '@/components/clinical/medical-alert-indicator';
+import { FieldError } from '@/components/errors/field-error';
 import {
   medicalAlertHeadline,
   medicalAlertSeverity,
@@ -40,6 +41,8 @@ const copy = {
    */
   recordScope: 'Ficha centralizada · todas las sedes',
   edit: 'Editar datos',
+  alertsLoading: 'Comprobando alertas…',
+  alertsFailed: 'Alertas sin comprobar',
 };
 
 function fullName(patient: Patient): string {
@@ -74,6 +77,9 @@ interface PatientRecordHeaderProps {
    * alerta se ve sin abrir la historia clínica.
    */
   medicalAlerts?: MedicalAlertFlags | null;
+  /** No se pudieron comprobar: se dice, con reintento (nunca parece «sin alertas»). */
+  medicalAlertsFailed?: boolean;
+  onRetryMedicalAlerts?: () => void;
 }
 
 /**
@@ -95,10 +101,14 @@ export function PatientRecordHeader({
   loading,
   onEdit,
   medicalAlerts,
+  medicalAlertsFailed = false,
+  onRetryMedicalAlerts,
 }: PatientRecordHeaderProps) {
   const items = patient ? identityItems(patient) : [];
   const alertSeverity = patient ? medicalAlertSeverity(medicalAlerts) : null;
   const alertHeadline = medicalAlerts ? medicalAlertHeadline(medicalAlerts) : null;
+  // `null` = se están pidiendo; `undefined` = quien la usa no las pide.
+  const alertsPending = !!patient && !medicalAlertsFailed && medicalAlerts === null;
   const title = loading
     ? copy.loadingTitle
     : patient
@@ -148,8 +158,24 @@ export function PatientRecordHeader({
                 RECEPTION: la API ya lo omite para los demás roles). */}
             {/* DX-153: «Cobertura vencida», junto a la del saldo. */}
             {/* DX-247: la misma alerta médica que la agenda, con su titular. */}
-            {patient?.balance?.hasOverdue || coverageChipText(patient?.coverage) || alertSeverity ? (
+            {patient?.balance?.hasOverdue ||
+            coverageChipText(patient?.coverage) ||
+            alertSeverity ||
+            alertsPending ||
+            (patient && medicalAlertsFailed) ? (
               <div className="flex flex-wrap items-center gap-2">
+                {alertsPending ? (
+                  <p role="status" className="text-sm text-muted">
+                    {copy.alertsLoading}
+                  </p>
+                ) : null}
+                {patient && medicalAlertsFailed ? (
+                  <FieldError
+                    label={copy.alertsFailed}
+                    onRetry={onRetryMedicalAlerts}
+                    className="h-9"
+                  />
+                ) : null}
                 {patient && alertSeverity ? (
                   <span
                     data-testid="record-medical-alert"

@@ -19,7 +19,9 @@ const expired: PatientMedicalAlerts = {
   alerts: [],
   anamnesisReviewedAt: '2025-08-01T12:00:00.000Z',
   validityMonths: 12,
-  anamnesisExpiresAt: '2026-08-01T12:00:00.000Z',
+  anamnesisExpiresOn: '2026-08-01',
+  today: '2026-10-20',
+  timeZone: 'America/Bogota',
   lastReview: { kind: 'UPDATED', at: '2025-08-01T12:00:00.000Z', byName: 'Dra. Ruiz' },
 };
 
@@ -61,7 +63,7 @@ describe('AnamnesisReviewLine (DX-247)', () => {
         alerts={{
           ...expired,
           anamnesisStatus: 'CURRENT',
-          lastReview: { kind: 'NO_CHANGES', at: new Date().toISOString(), byName: 'Dr. Gómez' },
+          lastReview: { kind: 'NO_CHANGES', at: '2026-10-20T15:00:00.000Z', byName: 'Dr. Gómez' },
         }}
         failed={false}
         onReload={jest.fn()}
@@ -80,7 +82,7 @@ describe('AnamnesisReviewLine (DX-247)', () => {
         alerts={{
           ...expired,
           anamnesisStatus: 'CURRENT',
-          lastReview: { kind: 'UPDATED', at: new Date().toISOString(), byName: 'Dra. Ruiz' },
+          lastReview: { kind: 'UPDATED', at: '2026-10-20T15:00:00.000Z', byName: 'Dra. Ruiz' },
         }}
         failed={false}
         onReload={jest.fn()}

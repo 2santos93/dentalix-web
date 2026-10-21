@@ -3,7 +3,7 @@ import type { components } from '@/lib/api/schema';
 import type { ClinicRole } from '@/lib/me/me-api';
 import type { SafetyFlags } from '@/lib/clinical/clinical-types';
 import { canWriteClinicalHistory } from '@/lib/clinical/clinical-roles';
-import { formatDate } from '@/lib/format/date';
+import { civilDateInZone, formatCivilDate, formatDate, formatDateTimeInZone } from '@/lib/format/date';
 
 // DX-247: alertas médicas fuera de la ficha (agenda, «En clínica», cabecera de
 // la ficha y cita). Textos puros para que el banner, el indicador y los tests
@@ -100,14 +100,27 @@ export function medicalAlertSummary(flags: MedicalAlertFlags | null | undefined)
     .join(' · ');
 }
 
-/** ¿La última revisión (versión nueva o «Sin cambios hoy») es de hoy (día local)? */
-export function reviewedToday(review: AnamnesisLastReview | null | undefined, now = new Date()): boolean {
-  return !!review && formatDate(review.at) === formatDate(now);
+/** El «hoy» de la sede con el que la API evaluó la ficha (no el del navegador). */
+export type SedeToday = Pick<PatientMedicalAlerts, 'today' | 'timeZone'>;
+
+/** ¿La última revisión (versión nueva o «Sin cambios hoy») es de hoy en la sede? */
+export function reviewedToday(review: AnamnesisLastReview | null | undefined, sede: SedeToday): boolean {
+  return !!review && civilDateInZone(review.at, sede.timeZone) === sede.today;
 }
 
-/** ¿La última revisión es un «Sin cambios hoy» de hoy (día local)? */
-export function confirmedToday(review: AnamnesisLastReview | null | undefined, now = new Date()): boolean {
-  return review?.kind === 'NO_CHANGES' && reviewedToday(review, now);
+/** ¿La última revisión es un «Sin cambios hoy» de hoy en la sede? */
+export function confirmedToday(review: AnamnesisLastReview | null | undefined, sede: SedeToday): boolean {
+  return review?.kind === 'NO_CHANGES' && reviewedToday(review, sede);
+}
+
+/** `dd/mm/yyyy` de un instante en la zona de la sede. */
+export function sedeDateLabel(value: string, timeZone: string): string {
+  return formatCivilDate(civilDateInZone(value, timeZone));
+}
+
+/** `HH:mm` de un instante en la zona de la sede. */
+export function sedeTimeLabel(value: string, timeZone: string): string {
+  return formatDateTimeInZone(value, timeZone).slice(-5);
 }
 
 /** «Sin cambios hoy»: quien ve la anamnesis (la API responde 403 a recepción). */
