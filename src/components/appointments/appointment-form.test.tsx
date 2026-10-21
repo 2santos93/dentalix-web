@@ -7,6 +7,7 @@ import { createPatient, listPatients } from '@/lib/patients/patients-api';
 import { getLocationSchedule } from '@/lib/locations/schedule-api';
 import { listAppointmentTypes } from '@/lib/appointments/appointment-types-api';
 import { getProviderScheduleSettings, getRoster } from '@/lib/locations/provider-schedule-api';
+import { getPatientMedicalAlerts } from '@/lib/clinical/medical-alerts';
 
 // PatientForm (rendered inside the "Crear paciente" dialog) calls
 // useRouter() — mock it the same way patient-form.test.tsx does, since it's
@@ -42,6 +43,15 @@ jest.mock('../../lib/locations/provider-schedule-api', () => ({
   getRoster: jest.fn(),
   getProviderScheduleSettings: jest.fn(),
 }));
+
+// DX-247: las banderas médicas del paciente elegido.
+jest.mock('../../lib/clinical/medical-alerts', () => ({
+  ...jest.requireActual('../../lib/clinical/medical-alerts'),
+  getPatientMedicalAlerts: jest.fn(),
+}));
+const mockedGetMedicalAlerts = getPatientMedicalAlerts as jest.MockedFunction<
+  typeof getPatientMedicalAlerts
+>;
 
 const mockedCreateAppointment = createAppointment as jest.MockedFunction<typeof createAppointment>;
 const mockedListStaff = listStaff as jest.MockedFunction<typeof listStaff>;
@@ -215,6 +225,17 @@ describe('AppointmentForm', () => {
     (getRoster as jest.Mock).mockReset();
     (getProviderScheduleSettings as jest.Mock).mockReset();
     (getProviderScheduleSettings as jest.Mock).mockResolvedValue({ strictProviderSchedule: false });
+    mockedGetMedicalAlerts.mockReset();
+    mockedGetMedicalAlerts.mockResolvedValue({
+      hasCriticalAlert: false,
+      requiresPremedication: false,
+      anamnesisStatus: 'CURRENT',
+      alerts: [],
+      anamnesisReviewedAt: '2026-01-01T00:00:00.000Z',
+      validityMonths: 12,
+      anamnesisExpiresAt: '2027-01-01T00:00:00.000Z',
+      lastReview: null,
+    });
   });
 
   // DX-121: el tipo fija la duración.
@@ -321,6 +342,44 @@ describe('AppointmentForm', () => {
     expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
     // The search box collapses once a patient is chosen.
     expect(screen.queryByLabelText(/^paciente$/i)).not.toBeInTheDocument();
+  });
+
+  it('DX-247: al elegir un paciente con profilaxis antibiótica avisa «Requiere premedicación» antes de agendar', async () => {
+    mockedGetMedicalAlerts.mockResolvedValue({
+      hasCriticalAlert: true,
+      requiresPremedication: true,
+      anamnesisStatus: 'CURRENT',
+      alerts: ['profilaxisAntibiotica'],
+      anamnesisReviewedAt: '2026-01-01T00:00:00.000Z',
+      validityMonths: 12,
+      anamnesisExpiresAt: '2027-01-01T00:00:00.000Z',
+      lastReview: null,
+    });
+    const user = userEvent.setup();
+    await renderFormAndWaitForLoad();
+    await selectMariaByDoc(user);
+    expect(await screen.findByTestId('premedication-notice')).toHaveTextContent(
+      'Requiere premedicación',
+    );
+    expect(mockedGetMedicalAlerts).toHaveBeenCalledWith('tok', 'pat-1');
+  });
+
+  it('DX-247: un paciente sin anamnesis sale «Sin anamnesis», no «sin alertas»', async () => {
+    mockedGetMedicalAlerts.mockResolvedValue({
+      hasCriticalAlert: false,
+      requiresPremedication: false,
+      anamnesisStatus: 'MISSING',
+      alerts: [],
+      anamnesisReviewedAt: null,
+      validityMonths: 12,
+      anamnesisExpiresAt: null,
+      lastReview: null,
+    });
+    const user = userEvent.setup();
+    await renderFormAndWaitForLoad();
+    await selectMariaByDoc(user);
+    expect(await screen.findByText('Sin anamnesis')).toBeInTheDocument();
+    expect(screen.queryByTestId('premedication-notice')).not.toBeInTheDocument();
   });
 
   it('lets you swap the chosen patient with "Cambiar", restoring the search box', async () => {

@@ -656,6 +656,37 @@ describe('AgendaView', () => {
     expect(startInput.value).toBe('09:00');
   });
 
+  it('DX-247: al abrir la cita de un paciente con profilaxis antibiótica el detalle avisa «Requiere premedicación»', async () => {
+    mockedListStaff.mockResolvedValue(staff);
+    mockedListAppointments.mockResolvedValue([
+      {
+        ...apt1,
+        medicalAlerts: {
+          hasCriticalAlert: true,
+          requiresPremedication: true,
+          anamnesisStatus: 'EXPIRED',
+          alerts: ['profilaxisAntibiotica'],
+          anamnesisReviewedAt: '2025-01-10T00:00:00.000Z',
+        },
+      },
+    ]);
+    const user = userEvent.setup();
+    render(<AgendaView token="tok" />);
+    await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
+    const dateInput = screen.getByLabelText<HTMLInputElement>(/^fecha$/i);
+    await user.clear(dateInput);
+    await user.type(dateInput, '2026-03-11');
+    await user.click(screen.getByRole('button', { name: /^semana$/i }));
+    await screen.findByLabelText(/agenda de la semana/i);
+    expect(screen.getByTestId('medical-alert-indicator')).toHaveAttribute('data-severity', 'critical');
+
+    await user.click(screen.getByTestId('week-grid-appointment'));
+    expect(await screen.findByTestId('premedication-notice')).toHaveTextContent('Requiere premedicación');
+    expect(screen.getByTestId('appointment-medical-alerts')).toHaveTextContent(
+      'Anamnesis caducada · última revisión 10/01/2025',
+    );
+  });
+
   it('week mode: the detail panel\'s status select reflects the server-confirmed status, not an optimistic one — a failed PATCH leaves it showing the real (unchanged) status', async () => {
     mockedListStaff.mockResolvedValue(staff);
     mockedListAppointments.mockResolvedValue([apt1]);

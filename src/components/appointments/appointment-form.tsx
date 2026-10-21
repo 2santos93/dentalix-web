@@ -1,6 +1,7 @@
 'use client';
 import * as React from 'react';
 import { useEffect, useState } from 'react';
+import { PatientMedicalAlertsNotice } from '@/components/clinical/appointment-medical-alerts';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import {
   createAppointment,
@@ -461,31 +462,35 @@ export function AppointmentForm({
         </div>
 
         {selectedPatient ? (
-          // Chosen-patient chip: a document match (or a manual pick) resolves
-          // to a single patient, so we show who's booked instead of a list.
-          <div
-            role="status"
-            className="flex items-center justify-between gap-3 rounded-lg border border-border bg-surface px-3 py-2"
-          >
-            <div className="flex min-w-0 items-center gap-2">
-              <Check className="size-4 shrink-0 text-primary" />
-              <div className="min-w-0">
-                <p className="truncate text-sm font-medium text-ink">
-                  {fullPatientName(selectedPatient)}
-                </p>
-                <p className="truncate text-xs text-muted">{patientDocLabel(selectedPatient)}</p>
-              </div>
-            </div>
-            <Button
-              type="button"
-              variant="ghost"
-              size="sm"
-              className="h-7 shrink-0 gap-1.5 px-2 text-xs"
-              onClick={handleClearPatient}
+          <>
+            {/* Chosen-patient chip: a document match (or a manual pick) resolves
+                to a single patient, so we show who's booked instead of a list. */}
+            <div
+              role="status"
+              className="flex items-center justify-between gap-3 rounded-lg border border-border bg-surface px-3 py-2"
             >
-              <X className="size-3.5" /> {copy.changePatient}
-            </Button>
-          </div>
+              <div className="flex min-w-0 items-center gap-2">
+                <Check className="size-4 shrink-0 text-primary" />
+                <div className="min-w-0">
+                  <p className="truncate text-sm font-medium text-ink">
+                    {fullPatientName(selectedPatient)}
+                  </p>
+                  <p className="truncate text-xs text-muted">{patientDocLabel(selectedPatient)}</p>
+                </div>
+              </div>
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                className="h-7 shrink-0 gap-1.5 px-2 text-xs"
+                onClick={handleClearPatient}
+              >
+                <X className="size-3.5" /> {copy.changePatient}
+              </Button>
+            </div>
+            {/* DX-247: «Requiere premedicación» al agendar, antes de guardar. */}
+            <PatientMedicalAlertsNotice key={selectedPatient.id} token={token} patientId={selectedPatient.id} />
+          </>
         ) : (
           <>
             <div className="relative">

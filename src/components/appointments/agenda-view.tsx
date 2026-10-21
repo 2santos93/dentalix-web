@@ -42,6 +42,7 @@ import {
 import { WeekTimeGrid } from '@/components/appointments/week-time-grid';
 import { MonthAgenda } from '@/components/appointments/month-agenda';
 import { AppointmentForm } from '@/components/appointments/appointment-form';
+import { AppointmentMedicalAlerts } from '@/components/clinical/appointment-medical-alerts';
 import { ConfirmationLinkPanel } from '@/components/appointments/confirmation-link-panel';
 import { AppointmentRemindersPanel } from '@/components/reminders/appointment-reminders-panel';
 import { AppointmentPostOpPanel } from '@/components/postop/appointment-postop-panel';
@@ -1330,6 +1331,8 @@ export function AgendaView({ token }: AgendaViewProps) {
                 </SheetDescription>
               </SheetHeader>
               <SheetBody className="flex flex-col gap-4">
+                {/* DX-247: «Requiere premedicación» y las alertas, primero. */}
+                <AppointmentMedicalAlerts flags={liveDetailAppointment.medicalAlerts} />
                 {liveDetailAppointment.reason && (
                   <p className="text-sm text-ink">{liveDetailAppointment.reason}</p>
                 )}
