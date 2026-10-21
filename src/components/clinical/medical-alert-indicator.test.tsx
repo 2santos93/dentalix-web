@@ -66,13 +66,13 @@ describe('MedicalAlertIndicator (DX-247)', () => {
     const button = screen.getByRole('button', { name: 'Alertas médicas de Ana' });
     expect(button).toHaveFocus();
     expect(button).toHaveAttribute('aria-expanded', 'true');
-    const popover = screen.getByRole('tooltip');
+    const popover = screen.getByTestId('medical-alert-popover');
     expect(button).toHaveAttribute('aria-controls', popover.id);
     expect(popover).toHaveTextContent('Requiere premedicación');
     expect(popover).toHaveTextContent('Requiere profilaxis antibiótica');
     expect(popover).toHaveTextContent('Alergia a látex');
     await user.keyboard('{Escape}');
-    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('medical-alert-popover')).not.toBeInTheDocument();
     expect(button).toHaveFocus();
   });
 
@@ -87,14 +87,14 @@ describe('MedicalAlertIndicator (DX-247)', () => {
       );
       const button = screen.getByRole('button', { name: 'Alertas médicas de Eva' });
       fireEvent.pointerEnter(button, { pointerType: 'mouse' });
-      expect(screen.getByRole('tooltip')).toHaveTextContent(
+      expect(screen.getByTestId('medical-alert-popover')).toHaveTextContent(
         'Anamnesis caducada · última revisión 01/09/2026',
       );
       fireEvent.pointerLeave(button, { pointerType: 'mouse' });
       act(() => {
         jest.advanceTimersByTime(200);
       });
-      expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+      expect(screen.queryByTestId('medical-alert-popover')).not.toBeInTheDocument();
     } finally {
       jest.useRealTimers();
     }
@@ -110,17 +110,30 @@ describe('MedicalAlertIndicator (DX-247)', () => {
       </div>,
     );
     await user.click(screen.getByRole('button', { name: 'Alertas médicas de Ana' }));
-    expect(screen.getByRole('tooltip')).toBeInTheDocument();
+    expect(screen.getByTestId('medical-alert-popover')).toBeInTheDocument();
     expect(onCard).not.toHaveBeenCalled();
     fireEvent.pointerDown(screen.getByText('fuera'));
-    expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('medical-alert-popover')).not.toBeInTheDocument();
+  });
+
+  it('disclosure: el panel es un grupo con nombre; con alertas y anamnesis caducada, la nota lleva la carpeta con reloj', async () => {
+    const user = userEvent.setup();
+    render(
+      <MedicalAlertIndicator flags={{ ...premedicated, anamnesisStatus: 'EXPIRED' }} patientName="Ana" />,
+    );
+    await user.tab();
+    const panel = screen.getByRole('group', { name: 'Alertas médicas de Ana' });
+    expect(panel).toBe(screen.getByTestId('medical-alert-popover'));
+    expect(panel).toHaveTextContent('Anamnesis caducada');
+    expect(panel.querySelector('.lucide-clipboard-clock')).not.toBeNull();
+    expect(screen.getByRole('button', { name: 'Alertas médicas de Ana' }).querySelector('.lucide-triangle-alert')).not.toBeNull();
   });
 
   it('alerta sin códigos (anamnesis antigua): no se queda callada', async () => {
     const user = userEvent.setup();
     render(<MedicalAlertIndicator flags={{ ...base, hasCriticalAlert: true }} />);
     await user.tab();
-    expect(screen.getByRole('tooltip')).toHaveTextContent(
+    expect(screen.getByTestId('medical-alert-popover')).toHaveTextContent(
       'Alerta médica registrada (detalle en la ficha)',
     );
   });

@@ -329,7 +329,7 @@ describe('InClinicPanel: alertas médicas (DX-247)', () => {
     const indicators = screen.getAllByTestId('medical-alert-indicator');
     expect(indicators).toHaveLength(1);
     await user.click(screen.getByRole('button', { name: 'Alertas médicas de Jorge Ríos' }));
-    expect(screen.getByRole('tooltip')).toHaveTextContent('Requiere premedicación');
-    expect(screen.getByRole('tooltip')).toHaveTextContent('Requiere profilaxis antibiótica');
+    expect(screen.getByTestId('medical-alert-popover')).toHaveTextContent('Requiere premedicación');
+    expect(screen.getByTestId('medical-alert-popover')).toHaveTextContent('Requiere profilaxis antibiótica');
   });
 });

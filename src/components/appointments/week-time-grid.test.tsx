@@ -241,8 +241,8 @@ it('DX-247: una cita de 15 min con alerta lleva el icono, fuera del botón de la
   const [card] = screen.getAllByTestId('week-grid-appointment');
   expect(card).not.toContainElement(indicators[0]);
   act(() => indicators[0].focus());
-  expect(screen.getByRole('tooltip')).toHaveTextContent('Requiere profilaxis antibiótica');
+  expect(screen.getByTestId('medical-alert-popover')).toHaveTextContent('Requiere profilaxis antibiótica');
   await user.keyboard('{Escape}');
-  expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+  expect(screen.queryByTestId('medical-alert-popover')).not.toBeInTheDocument();
   expect(onSelectAppointment).not.toHaveBeenCalled();
 });

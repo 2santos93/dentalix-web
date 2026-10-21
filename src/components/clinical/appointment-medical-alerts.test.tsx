@@ -19,7 +19,9 @@ const premedicated: PatientMedicalAlerts = {
   alerts: ['profilaxisAntibiotica'],
   anamnesisReviewedAt: '2026-09-01T12:00:00.000Z',
   validityMonths: 12,
-  anamnesisExpiresAt: '2027-09-01T12:00:00.000Z',
+  anamnesisExpiresOn: '2027-09-01',
+  today: '2026-10-20',
+  timeZone: 'America/Bogota',
   lastReview: { kind: 'UPDATED', at: '2026-09-01T12:00:00.000Z', byName: 'Dra. Ruiz' },
 };
 

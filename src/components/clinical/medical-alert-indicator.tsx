@@ -40,7 +40,8 @@ interface MedicalAlertIndicatorProps {
  * con carpeta si la anamnesis caducó o no existe; nada si está al día y sin
  * alertas. Nunca solo color: el icono cambia y el texto lo dice.
  *
- * Al pasar el ratón, enfocarlo con el teclado o tocarlo abre un panel con las
+ * Disclosure no modal: al pasar el ratón, enfocarlo con el teclado o tocarlo
+ * abre (`aria-expanded`) un panel con las
  * alertas (las etiquetas del banner de la ficha). Escape lo cierra y el foco
  * sigue en el icono. El panel va en un portal: las tarjetas recortan lo que
  * sobresale. Su resumen está siempre en el árbol accesible (`aria-describedby`).
@@ -126,12 +127,11 @@ export function MedicalAlertIndicator({
 
   const lines = medicalAlertLines(flags);
   const note = anamnesisNote(flags);
-  const Icon =
-    severity === 'critical'
-      ? TriangleAlert
-      : flags.anamnesisStatus === 'MISSING'
-        ? ClipboardX
-        : ClipboardClock;
+  // El icono de la nota de anamnesis va por su estado, no por la gravedad: con
+  // alertas y anamnesis caducada, el botón lleva el triángulo y la nota, la
+  // carpeta con reloj.
+  const NoteIcon = flags.anamnesisStatus === 'MISSING' ? ClipboardX : ClipboardClock;
+  const Icon = severity === 'critical' ? TriangleAlert : NoteIcon;
 
   const scheduleClose = () => {
     if (pinned) return;
@@ -178,9 +178,10 @@ export function MedicalAlertIndicator({
           }
         }}
         className={cn(
-          // El ::after amplía la zona táctil a 44 px sin mover nada.
+          // El ::after amplía la zona táctil a 44 px sin mover nada. Su inset
+          // cuenta desde dentro del borde de 1 px: 18 + 2·13 = 26 + 2·9 = 44.
           "relative inline-flex shrink-0 items-center justify-center rounded-full border after:absolute after:content-[''] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
-          size === 'compact' ? 'size-5 after:-inset-3' : 'size-7 after:-inset-2',
+          size === 'compact' ? 'size-5 after:-inset-[13px]' : 'size-7 after:-inset-[9px]',
           severity === 'critical'
             ? 'border-danger/40 bg-surface text-danger'
             : 'border-warning/40 bg-surface text-warning',
@@ -197,7 +198,10 @@ export function MedicalAlertIndicator({
             <div
               ref={panelRef}
               id={panelId}
-              role="tooltip"
+              // Disclosure no modal: el botón lo abre (aria-expanded +
+              // aria-controls); el panel es un grupo con nombre, sin foco.
+              role="group"
+              aria-label={copy.label(patientName)}
               // El portal sigue en el árbol de React: sin esto, un toque en el
               // panel arrastraría la tarjeta o la abriría.
               data-no-drag
@@ -210,7 +214,7 @@ export function MedicalAlertIndicator({
                   ? { top: position.top, left: position.left, width: position.width }
                   : { top: 0, left: 0, visibility: 'hidden' }
               }
-              className="fixed z-50 flex flex-col gap-2 rounded-lg border border-border bg-surface p-3 text-left text-sm text-ink shadow-[0_8px_28px_-8px_rgb(15_23_42/0.18)]"
+              className="fixed z-50 flex flex-col gap-2 rounded-lg border border-border bg-surface p-3 text-left text-sm text-ink shadow-overlay"
             >
               {flags.requiresPremedication ? (
                 <p className="flex items-center gap-1.5 font-semibold text-danger">
@@ -233,7 +237,7 @@ export function MedicalAlertIndicator({
               ) : null}
               {note ? (
                 <p className="flex items-start gap-1.5 text-warning">
-                  <Icon aria-hidden className="mt-0.5 size-4 shrink-0" />
+                  <NoteIcon aria-hidden className="mt-0.5 size-4 shrink-0" />
                   <span>
                     <span className="sr-only">{copy.anamnesisTitle}: </span>
                     {note}

@@ -93,8 +93,8 @@ test.beforeAll(async ({ request }) => {
       sex: i % 2 === 0 ? 'M' : 'F',
     });
     patients[key] = created.id;
-    // 15 min cada una, mañana desde las 09:00: la tarjeta más corta.
-    const start = atSede(tomorrow, `09:${String(i * 15).padStart(2, '0')}`);
+    // 15 min cada una (la tarjeta más corta), cada media hora desde las 09:00.
+    const start = atSede(tomorrow, ['09:00', '09:30', '10:00', '10:30'][i]);
     await apiPost(request, session, '/appointments', {
       patientId: created.id,
       providerId: linaId,
@@ -192,7 +192,7 @@ test('1440 px: el icono en las citas de 15 min, con teclado y ratón, y «Requie
   await jorge.getByRole('button').first().focus();
   await page.keyboard.press('Tab');
   await expect(jorgeIcon).toBeFocused();
-  const popover = page.getByRole('tooltip');
+  const popover = page.getByTestId('medical-alert-popover');
   await expect(popover).toBeVisible();
   await expect(popover).toContainText('Requiere premedicación');
   await expect(popover).toContainText('Requiere profilaxis antibiótica');
@@ -204,9 +204,9 @@ test('1440 px: el icono en las citas de 15 min, con teclado y ratón, y «Requie
 
   // Ratón: pasar por encima del de Ana y del de Lucas.
   await card(page, 'Ana').getByTestId('medical-alert-indicator').hover();
-  await expect(page.getByRole('tooltip')).toContainText('Anamnesis caducada');
+  await expect(page.getByTestId('medical-alert-popover')).toContainText('Anamnesis caducada');
   await lucasIcon.hover();
-  await expect(page.getByRole('tooltip')).toContainText('Sin anamnesis');
+  await expect(page.getByTestId('medical-alert-popover')).toContainText('Sin anamnesis');
   await page.mouse.move(0, 0);
 
   // Abrir la cita: «Requiere premedicación» va primero en el detalle.
@@ -241,20 +241,37 @@ test('390 px oscuro: tocar el icono abre las alertas dentro de la pantalla, sin 
   await expect(jorge).toBeVisible({ timeout: 15_000 });
   await jorge.scrollIntoViewIfNeeded();
   const icon = jorge.getByRole('button', { name: `Alertas médicas de Jorge ${last}` });
-  // Zona táctil de 44 px (el ::after amplía la de 20 px que se ve).
-  const target = await icon.evaluate((el) => {
-    const after = getComputedStyle(el, '::after');
-    const box = el.getBoundingClientRect();
-    return {
-      width: box.width - parseFloat(after.left) - parseFloat(after.right),
-      height: box.height - parseFloat(after.top) - parseFloat(after.bottom),
-    };
+  // Zona táctil REAL de 44 px: lo que el navegador entrega al tocar en las
+  // esquinas del cuadrado de 44 px centrado en el icono es el propio icono (la
+  // tarjeta de 24 px no lo recorta); y «Mover» sigue recibiendo su toque.
+  // Centrada en la pantalla: las esquinas tienen que caer dentro de la ventana.
+  await icon.evaluate((el) => el.scrollIntoView({ block: 'center', inline: 'center' }));
+  const hits = await icon.evaluate((el) => {
+    const r = el.getBoundingClientRect();
+    const cx = r.left + r.width / 2;
+    const cy = r.top + r.height / 2;
+    const h = 21.5;
+    const owner = (x: number, y: number) =>
+      document.elementFromPoint(x, y)?.closest('[data-testid="medical-alert-indicator"]') === el;
+    return [
+      [cx - h, cy - h],
+      [cx + h, cy - h],
+      [cx - h, cy + h],
+      [cx + h, cy + h],
+      [cx, cy],
+    ].map(([x, y]) => owner(x, y));
   });
-  expect(target.width).toBeGreaterThanOrEqual(44);
-  expect(target.height).toBeGreaterThanOrEqual(44);
+  expect(hits).toEqual([true, true, true, true, true]);
+  const move = jorge.getByRole('button', { name: `Mover a… la cita de Jorge ${last}` });
+  const moveBox = await move.boundingBox();
+  const moveHit = await page.evaluate(
+    ([x, y]) => document.elementFromPoint(x, y)?.closest('button')?.getAttribute('aria-label') ?? '',
+    [moveBox!.x + moveBox!.width / 2, moveBox!.y + moveBox!.height / 2],
+  );
+  expect(moveHit).toBe(`Mover a… la cita de Jorge ${last}`);
 
   await icon.click();
-  const popover = page.getByRole('tooltip');
+  const popover = page.getByTestId('medical-alert-popover');
   await expect(popover).toContainText('Requiere profilaxis antibiótica');
   const box = await popover.boundingBox();
   expect(box!.x).toBeGreaterThanOrEqual(0);
@@ -302,7 +319,7 @@ test('«En clínica» muestra la misma alerta junto al paciente que llegó', asy
   const icon = item.getByRole('button', { name: `Alertas médicas de Jorge ${last}` });
   await expect(icon).toHaveAttribute('data-severity', 'critical');
   await icon.focus();
-  await expect(page.getByRole('tooltip')).toContainText('Requiere premedicación');
+  await expect(page.getByTestId('medical-alert-popover')).toContainText('Requiere premedicación');
   await shot(page, 'en-clinica-alerta-1440');
 });
 
@@ -320,7 +337,7 @@ test('la cabecera del plan y del odontograma lleva la alerta; «Sin cambios hoy�
     const header = page.getByTestId('record-medical-alert');
     await expect(header).toContainText('Requiere premedicación', { timeout: 15_000 });
     await header.getByRole('button', { name: `Alertas médicas de Jorge ${last}` }).click();
-    await expect(page.getByRole('tooltip')).toContainText('Alergia a látex');
+    await expect(page.getByTestId('medical-alert-popover')).toContainText('Alergia a látex');
     await page.keyboard.press('Escape');
   }
   await shot(page, 'ficha-odontograma-alerta-1440');

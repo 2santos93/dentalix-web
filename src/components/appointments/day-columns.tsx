@@ -591,7 +591,10 @@ export function DayColumns({
                       aria-busy={pendingId === a.id || undefined}
                       onPointerDown={(e) => startDrag(e, a)}
                       className={cn(
-                        'group absolute overflow-hidden rounded-md border text-left shadow-sm',
+                        // Sin overflow-hidden aquí: lo lleva el contenido de
+                        // dentro. Así la zona táctil de 44 px del icono de
+                        // alerta (DX-247) no se recorta en las citas de 15 min.
+                        'group absolute rounded-md border text-left shadow-sm',
                         !colors && 'border-border bg-surface-2 text-ink',
                         canMove && 'cursor-grab active:cursor-grabbing',
                         (dragging || pendingId === a.id) && 'opacity-50',
@@ -605,50 +608,55 @@ export function DayColumns({
                         width: `calc(${100 / laneCount}% - 4px)`,
                       }}
                     >
-                      <button
-                        type="button"
-                        aria-label={[
-                          copy.detailFor(range, patient, p.fullName),
-                          overdueChipText(a.balance),
-                          coverageChipText(a.coverage),
-                          medicalAlertSummary(a.medicalAlerts),
-                          wantsEarlier ? WANTS_EARLIER_LABEL : null,
-                        ]
-                          .filter(Boolean)
-                          .join(' · ')}
-                        onClick={() => handleCardClick(a)}
-                        className={cn(
-                          'flex h-full w-full flex-col items-start gap-0.5 px-2 py-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary',
-                          hasMedicalAlert ? 'pr-14' : 'pr-8',
-                        )}
-                      >
-                        {/* La hora y el nombre no se encogen: en una cita corta
-                            lo que no cabe (estado, chips) lo recorta la tarjeta,
-                            nunca el nombre. El chip DX-210 y la marca de cobertura
-                            vencida (DX-153) van en la fila de la hora para
-                            seguir viéndose en las citas de 30 min. */}
-                        <span className="flex w-full min-w-0 shrink-0 items-center gap-1.5">
-                          <span className="shrink-0 text-xs font-medium tabular-nums">{range}</span>
-                          <WantsEarlierChip wantsEarlier={wantsEarlier} className="min-w-0 py-0" />
-                          <CoverageMarker coverage={a.coverage} />
-                        </span>
-                        <span
-                          className={cn('w-full shrink-0 truncate text-sm font-semibold', inactive && 'line-through')}
+                      <div className="relative h-full overflow-hidden rounded-[inherit]">
+                        <button
+                          type="button"
+                          aria-label={[
+                            copy.detailFor(range, patient, p.fullName),
+                            overdueChipText(a.balance),
+                            coverageChipText(a.coverage),
+                            medicalAlertSummary(a.medicalAlerts),
+                            wantsEarlier ? WANTS_EARLIER_LABEL : null,
+                          ]
+                            .filter(Boolean)
+                            .join(' · ')}
+                          onClick={() => handleCardClick(a)}
+                          className={cn(
+                            'flex h-full w-full flex-col items-start gap-0.5 px-2 py-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary',
+                            hasMedicalAlert ? 'pr-[4.5rem]' : 'pr-8',
+                          )}
                         >
-                          {patient}
-                        </span>
-                        <span className="w-full truncate text-xs">
-                          {[a.appointmentType?.name, STATUS_LABELS[a.status]].filter(Boolean).join(' · ')}
-                        </span>
-                        <OverdueChip balance={a.balance} compact />
-                      </button>
+                          {/* La hora y el nombre no se encogen: en una cita corta
+                              lo que no cabe (estado, chips) lo recorta la tarjeta,
+                              nunca el nombre. El chip DX-210 y la marca de cobertura
+                              vencida (DX-153) van en la fila de la hora para
+                              seguir viéndose en las citas de 30 min. */}
+                          <span className="flex w-full min-w-0 shrink-0 items-center gap-1.5">
+                            <span className="shrink-0 text-xs font-medium tabular-nums">{range}</span>
+                            <WantsEarlierChip wantsEarlier={wantsEarlier} className="min-w-0 py-0" />
+                            <CoverageMarker coverage={a.coverage} />
+                          </span>
+                          <span
+                            className={cn('w-full shrink-0 truncate text-sm font-semibold', inactive && 'line-through')}
+                          >
+                            {patient}
+                          </span>
+                          <span className="w-full truncate text-xs">
+                            {[a.appointmentType?.name, STATUS_LABELS[a.status]].filter(Boolean).join(' · ')}
+                          </span>
+                          <OverdueChip balance={a.balance} compact />
+                        </button>
+                      </div>
                       {hasMedicalAlert ? (
-                        // Fuera del botón de la tarjeta (no se anidan botones),
-                        // a la izquierda de «Mover» / «Ocupar este hueco».
+                        // Fuera del botón de la tarjeta (no se anidan botones)
+                        // y del contenido recortado: su ::after de 44 px no se
+                        // corta y queda por encima de las tarjetas vecinas.
+                        // A 44 px del borde: llega justo hasta «Mover» /
+                        // «Ocupar este hueco» (los últimos 32 px), sin pisarlos.
                         <MedicalAlertIndicator
                           flags={a.medicalAlerts}
                           patientName={patient}
-                          className="absolute right-9 top-0.5"
+                          className="absolute right-11 top-0.5 z-10"
                         />
                       ) : null}
                       {fills && a.status === 'CANCELLED' && new Date(a.end) > now ? (

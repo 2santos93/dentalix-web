@@ -519,11 +519,11 @@ describe('DayColumns: alertas médicas (DX-247)', () => {
     const handlers = renderColumns({ appointments: [short] });
     const indicator = screen.getByRole('button', { name: 'Alertas médicas de María López' });
     act(() => indicator.focus());
-    expect(screen.getByRole('tooltip')).toHaveTextContent('Requiere profilaxis antibiótica');
-    expect(screen.getByRole('tooltip')).toHaveTextContent('Alergia marcada como alerta');
+    expect(screen.getByTestId('medical-alert-popover')).toHaveTextContent('Requiere profilaxis antibiótica');
+    expect(screen.getByTestId('medical-alert-popover')).toHaveTextContent('Alergia marcada como alerta');
     await user.keyboard('{Enter}');
     expect(handlers.onSelectAppointment).not.toHaveBeenCalled();
-    fireEvent.pointerDown(screen.getByRole('tooltip'), { pointerType: 'mouse', clientY: 10 });
+    fireEvent.pointerDown(screen.getByTestId('medical-alert-popover'), { pointerType: 'mouse', clientY: 10 });
     expect(handlers.onDrop).not.toHaveBeenCalled();
   });
 });

@@ -233,7 +233,9 @@ describe('AppointmentForm', () => {
       alerts: [],
       anamnesisReviewedAt: '2026-01-01T00:00:00.000Z',
       validityMonths: 12,
-      anamnesisExpiresAt: '2027-01-01T00:00:00.000Z',
+      anamnesisExpiresOn: '2027-01-01',
+  today: '2026-10-20',
+  timeZone: 'America/Bogota',
       lastReview: null,
     });
   });
@@ -352,7 +354,9 @@ describe('AppointmentForm', () => {
       alerts: ['profilaxisAntibiotica'],
       anamnesisReviewedAt: '2026-01-01T00:00:00.000Z',
       validityMonths: 12,
-      anamnesisExpiresAt: '2027-01-01T00:00:00.000Z',
+      anamnesisExpiresOn: '2027-01-01',
+  today: '2026-10-20',
+  timeZone: 'America/Bogota',
       lastReview: null,
     });
     const user = userEvent.setup();
@@ -372,7 +376,9 @@ describe('AppointmentForm', () => {
       alerts: [],
       anamnesisReviewedAt: null,
       validityMonths: 12,
-      anamnesisExpiresAt: null,
+      anamnesisExpiresOn: null,
+      today: '2026-10-20',
+      timeZone: 'America/Bogota',
       lastReview: null,
     });
     const user = userEvent.setup();
