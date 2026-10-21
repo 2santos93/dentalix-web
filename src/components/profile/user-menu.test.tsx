@@ -144,6 +144,11 @@ describe('UserMenu — plantillas de consentimiento (DX-006)', () => {
       'href',
       '/settings/consentimientos',
     );
+    // DX-247: vigencia de la anamnesis.
+    expect(screen.getByRole('menuitem', { name: 'Historia clínica' })).toHaveAttribute(
+      'href',
+      '/settings/historia-clinica',
+    );
     // DX-013: plantillas de receta y país de las sedes.
     expect(screen.getByRole('menuitem', { name: 'Recetas' })).toHaveAttribute(
       'href',
