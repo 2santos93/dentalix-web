@@ -4,6 +4,7 @@ import type { ClinicRole } from '@/lib/me/me-api';
 import type { AppointmentTypeSummary } from './appointment-types-api';
 import type { OverdueBalance } from '@/lib/collections/collections-api';
 import type { CoverageSummary } from '@/lib/patients/patients-api';
+import type { MedicalAlertFlags } from '@/lib/clinical/medical-alerts';
 
 export type CreateAppointmentInput = components['schemas']['CreateAppointmentDto'];
 export type UpdateAppointmentInput = components['schemas']['UpdateAppointmentDto'];
@@ -85,6 +86,11 @@ export interface Appointment {
   balance?: OverdueBalance;
   /** DX-153: cobertura del paciente (sin n.º de afiliado); solo en `GET /appointments`. */
   coverage?: CoverageSummary;
+  /**
+   * DX-247: banderas médicas del paciente (alerta, premedicación, anamnesis al
+   * día / caducada / ausente); solo en `GET /appointments`, nunca la historia.
+   */
+  medicalAlerts?: MedicalAlertFlags;
   /**
    * DX-122: solo en la respuesta de crear o mover — avisos que no impidieron la
    * operación (p. ej. «La cita cae en un bloqueo que permite agendar…»).

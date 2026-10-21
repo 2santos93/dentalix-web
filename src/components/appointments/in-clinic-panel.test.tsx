@@ -48,6 +48,13 @@ function item(overrides: Partial<InClinicItem> & { appointmentId: string }): InC
     minutesInStatus: 12,
     waitedMinutes: 12,
     punctuality: 'ON_TIME',
+    medicalAlerts: {
+      hasCriticalAlert: false,
+      requiresPremedication: false,
+      anamnesisStatus: 'CURRENT',
+      alerts: [],
+      anamnesisReviewedAt: '2026-09-01T00:00:00.000Z',
+    },
     ...overrides,
   };
 }
@@ -289,5 +296,40 @@ describe('InClinicPanel (DX-200)', () => {
     await waitFor(() => expect(screen.getByTestId('counter')).toHaveTextContent('1'));
     await userEvent.click(await screen.findByRole('button', { name: 'En sillón' }));
     await waitFor(() => expect(screen.getByTestId('counter')).toHaveTextContent('0'));
+  });
+});
+
+describe('InClinicPanel: alertas médicas (DX-247)', () => {
+  it('muestra la misma alerta que la agenda junto al paciente; sin alertas, nada', async () => {
+    const user = userEvent.setup();
+    render(
+      <InClinicPanel
+        state={staticState({
+          view: view({
+            waiting: [
+              item({
+                appointmentId: 'a1',
+                patientFirstName: 'Jorge',
+                medicalAlerts: {
+                  hasCriticalAlert: true,
+                  requiresPremedication: true,
+                  anamnesisStatus: 'CURRENT',
+                  alerts: ['profilaxisAntibiotica'],
+                  anamnesisReviewedAt: '2026-09-01T00:00:00.000Z',
+                },
+              }),
+              item({ appointmentId: 'a2', patientFirstName: 'Lucía' }),
+            ],
+          }),
+        })}
+        role="RECEPTION"
+        runner={noRunner}
+      />,
+    );
+    const indicators = screen.getAllByTestId('medical-alert-indicator');
+    expect(indicators).toHaveLength(1);
+    await user.click(screen.getByRole('button', { name: 'Alertas médicas de Jorge Ríos' }));
+    expect(screen.getByRole('tooltip')).toHaveTextContent('Requiere premedicación');
+    expect(screen.getByRole('tooltip')).toHaveTextContent('Requiere profilaxis antibiótica');
   });
 });

@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/react';
+import { act, render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { WeekTimeGrid } from './week-time-grid';
 import type { Appointment } from '@/lib/appointments/appointments-api';
@@ -91,7 +91,9 @@ it('places two overlapping same-day appointments in two lanes', () => {
   const blocks = screen.getAllByTestId('week-grid-appointment');
   expect(blocks).toHaveLength(2);
   // Anchos ~50% (2 carriles) — se comprueba que declaran width con "50"
-  expect(blocks[0].style.width).toContain('50');
+  // El ancho lo lleva el contenedor de la tarjeta (DX-247: el icono de alerta
+  // va a su lado, no dentro del botón).
+  expect(blocks[0].parentElement?.style.width).toContain('50');
 });
 
 it('marca en el bloque de la cita "pide llamada" (DX-005), con texto para lectores de pantalla', () => {
@@ -207,4 +209,40 @@ it('DX-153: la tarjeta con cobertura vencida lleva la marca «Cobertura vencida�
   const cards = screen.getAllByTestId('week-grid-appointment');
   expect(cards[0]).toHaveAccessibleName(/Cobertura vencida/);
   expect(cards[1]).not.toHaveAccessibleName(/Cobertura vencida/);
+});
+
+it('DX-247: una cita de 15 min con alerta lleva el icono, fuera del botón de la tarjeta, y abre las alertas con el teclado', async () => {
+  const user = userEvent.setup();
+  const onSelectAppointment = jest.fn();
+  render(
+    <WeekTimeGrid
+      appointments={[
+        appointment({
+          id: 'a1',
+          start: '2026-03-09T09:00:00.000Z',
+          end: '2026-03-09T09:15:00.000Z',
+          medicalAlerts: {
+            hasCriticalAlert: true,
+            requiresPremedication: true,
+            anamnesisStatus: 'CURRENT',
+            alerts: ['profilaxisAntibiotica'],
+            anamnesisReviewedAt: '2026-02-01T00:00:00.000Z',
+          },
+        }),
+        appointment({ id: 'a2', start: '2026-03-10T09:00:00.000Z', end: '2026-03-10T09:30:00.000Z' }),
+      ]}
+      weekStart={WEEK_START}
+      patientNames={{ 'pat-1': 'Ana García' }}
+      onSelectDay={noop} onSelectSlot={noop} onSelectAppointment={onSelectAppointment}
+    />,
+  );
+  const indicators = screen.getAllByTestId('medical-alert-indicator');
+  expect(indicators).toHaveLength(1);
+  const [card] = screen.getAllByTestId('week-grid-appointment');
+  expect(card).not.toContainElement(indicators[0]);
+  act(() => indicators[0].focus());
+  expect(screen.getByRole('tooltip')).toHaveTextContent('Requiere profilaxis antibiótica');
+  await user.keyboard('{Escape}');
+  expect(screen.queryByRole('tooltip')).not.toBeInTheDocument();
+  expect(onSelectAppointment).not.toHaveBeenCalled();
 });

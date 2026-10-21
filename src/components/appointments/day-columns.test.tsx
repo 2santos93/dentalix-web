@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { DayColumns } from './day-columns';
 import type { Appointment } from '@/lib/appointments/appointments-api';
@@ -475,5 +475,55 @@ describe('«Ocupar este hueco» (DX-210)', () => {
     expect(
       screen.getByRole('button', { name: /^Detalle de la cita de .* · Adelantar si hay hueco$/ }),
     ).toBeInTheDocument();
+  });
+});
+
+describe('DayColumns: alertas médicas (DX-247)', () => {
+  const short = appointment({
+    id: 'apt-15',
+    start: new Date(`${DATE}T15:00:00`).toISOString(),
+    end: new Date(`${DATE}T15:15:00`).toISOString(),
+    medicalAlerts: {
+      hasCriticalAlert: true,
+      requiresPremedication: true,
+      anamnesisStatus: 'CURRENT',
+      alerts: ['profilaxisAntibiotica', 'alergiaMarcada'],
+      anamnesisReviewedAt: '2030-12-01T00:00:00.000Z',
+    },
+  });
+  const noHistory = appointment({
+    id: 'apt-new',
+    providerId: 'prov-2',
+    patientFirstName: 'Leo',
+    medicalAlerts: {
+      hasCriticalAlert: false,
+      requiresPremedication: false,
+      anamnesisStatus: 'MISSING',
+      alerts: [],
+      anamnesisReviewedAt: null,
+    },
+  });
+
+  it('la cita de 15 min con alerta lleva el icono y su resumen en el nombre de la tarjeta', () => {
+    renderColumns({ appointments: [short, noHistory, light] });
+    const indicators = screen.getAllByTestId('medical-alert-indicator');
+    expect(indicators.map((i) => i.getAttribute('data-severity'))).toEqual(['critical', 'attention']);
+    const card = screen.getByRole('button', { name: /María López.*Requiere premedicación/ });
+    expect(card).not.toContainElement(indicators[0]);
+    // Sin anamnesis: «Sin anamnesis», nunca «sin alertas».
+    expect(screen.getByRole('button', { name: /Leo López.*Sin anamnesis/ })).toBeInTheDocument();
+  });
+
+  it('abrir las alertas con el teclado no abre la cita ni empieza a arrastrarla', async () => {
+    const user = userEvent.setup();
+    const handlers = renderColumns({ appointments: [short] });
+    const indicator = screen.getByRole('button', { name: 'Alertas médicas de María López' });
+    act(() => indicator.focus());
+    expect(screen.getByRole('tooltip')).toHaveTextContent('Requiere profilaxis antibiótica');
+    expect(screen.getByRole('tooltip')).toHaveTextContent('Alergia marcada como alerta');
+    await user.keyboard('{Enter}');
+    expect(handlers.onSelectAppointment).not.toHaveBeenCalled();
+    fireEvent.pointerDown(screen.getByRole('tooltip'), { pointerType: 'mouse', clientY: 10 });
+    expect(handlers.onDrop).not.toHaveBeenCalled();
   });
 });

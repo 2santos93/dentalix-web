@@ -2,6 +2,8 @@
 import { OverdueChip } from '@/components/collections/overdue-chip';
 import { overdueChipText } from '@/lib/collections/presentation';
 import { CoverageMarker } from '@/components/patients/coverage-chip';
+import { MedicalAlertIndicator } from '@/components/clinical/medical-alert-indicator';
+import { medicalAlertSeverity, medicalAlertSummary } from '@/lib/clinical/medical-alerts';
 import { coverageChipText } from '@/lib/patients/coverage-presentation';
 import * as React from 'react';
 import { useEffect, useRef, useState } from 'react';
@@ -579,6 +581,8 @@ export function DayColumns({
                   const dragging = drag?.started && drag.appointment.id === a.id;
                   const inactive = a.status === 'CANCELLED' || a.status === 'NO_SHOW';
                   const wantsEarlier = a.wantsEarlier && !inactive;
+                  // DX-247: también en las citas de 15 min (24 px de alto).
+                  const hasMedicalAlert = medicalAlertSeverity(a.medicalAlerts) !== null;
                   return (
                     <div
                       key={a.id}
@@ -607,12 +611,16 @@ export function DayColumns({
                           copy.detailFor(range, patient, p.fullName),
                           overdueChipText(a.balance),
                           coverageChipText(a.coverage),
+                          medicalAlertSummary(a.medicalAlerts),
                           wantsEarlier ? WANTS_EARLIER_LABEL : null,
                         ]
                           .filter(Boolean)
                           .join(' · ')}
                         onClick={() => handleCardClick(a)}
-                        className="flex h-full w-full flex-col items-start gap-0.5 px-2 py-1 pr-8 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
+                        className={cn(
+                          'flex h-full w-full flex-col items-start gap-0.5 px-2 py-1 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary',
+                          hasMedicalAlert ? 'pr-14' : 'pr-8',
+                        )}
                       >
                         {/* La hora y el nombre no se encogen: en una cita corta
                             lo que no cabe (estado, chips) lo recorta la tarjeta,
@@ -634,6 +642,15 @@ export function DayColumns({
                         </span>
                         <OverdueChip balance={a.balance} compact />
                       </button>
+                      {hasMedicalAlert ? (
+                        // Fuera del botón de la tarjeta (no se anidan botones),
+                        // a la izquierda de «Mover» / «Ocupar este hueco».
+                        <MedicalAlertIndicator
+                          flags={a.medicalAlerts}
+                          patientName={patient}
+                          className="absolute right-9 top-0.5"
+                        />
+                      ) : null}
                       {fills && a.status === 'CANCELLED' && new Date(a.end) > now ? (
                         <button
                           type="button"
