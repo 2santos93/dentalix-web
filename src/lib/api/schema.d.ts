@@ -18904,6 +18904,13 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description El informe de errores ya no está disponible: se borra al caducar la validación y a los 90 días de terminar o deshacer la importación. */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     PatientImportsController_confirm: {
