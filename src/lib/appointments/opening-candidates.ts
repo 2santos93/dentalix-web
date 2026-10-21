@@ -127,6 +127,22 @@ export function offerMessage({
   );
 }
 
+type DayRange = { startMinute: number; endMinute: number };
+
+/** La parte común de los tramos de la sede y los del profesional (`null` = todos). */
+function intersectRanges(location: DayRange[], provider: DayRange[] | null): DayRange[] {
+  if (provider === null) return location.map((r) => ({ startMinute: r.startMinute, endMinute: r.endMinute }));
+  const out: DayRange[] = [];
+  for (const a of location) {
+    for (const b of provider) {
+      const startMinute = Math.max(a.startMinute, b.startMinute);
+      const endMinute = Math.min(a.endMinute, b.endMinute);
+      if (endMinute > startMinute) out.push({ startMinute, endMinute });
+    }
+  }
+  return out;
+}
+
 /** Un hueco libre de una columna, en minutos locales del día y como instantes. */
 export interface FreeGap {
   startMinute: number;
@@ -144,7 +160,8 @@ const STEP = 5;
  * local): los tramos del horario de la sede menos sus citas activas (una
  * cancelada libera su hora; un no-show no, como la restricción de la BD) y los
  * bloqueos que no dejan agendar; sin el pasado y de al menos 15 min. Sin
- * horario configurado no hay huecos que proponer.
+ * horario configurado no hay huecos que proponer. Con horario del profesional
+ * (DX-233), solo dentro de sus tramos en la sede.
  */
 export function freeGaps({
   date,
@@ -154,9 +171,15 @@ export function freeGaps({
   providerId,
   activeLocationId,
   now,
+  providerRanges = null,
 }: {
   date: string;
   hours: BusinessHours | null;
+  /**
+   * DX-233: tramos del profesional ese día en la sede (del cuadrante). `null`
+   * = sin horario propio (sin restricción); vacío = no trabaja allí ese día.
+   */
+  providerRanges?: { startMinute: number; endMinute: number }[] | null;
   appointments: Pick<Appointment, 'providerId' | 'start' | 'end' | 'status'>[];
   blocks: ScheduleBlockLike[];
   providerId: string;
@@ -178,9 +201,10 @@ export function freeGaps({
   const nowMinute = Math.ceil((now.getTime() - midnight.getTime()) / 60000 / STEP) * STEP;
 
   const gaps: FreeGap[] = [];
-  const ranges = hours.ranges
-    .filter((r) => r.weekday === weekday)
-    .sort((a, b) => a.startMinute - b.startMinute);
+  const ranges = intersectRanges(
+    hours.ranges.filter((r) => r.weekday === weekday),
+    providerRanges,
+  ).sort((a, b) => a.startMinute - b.startMinute);
   for (const range of ranges) {
     let cursor = Math.max(range.startMinute, nowMinute);
     const push = (end: number) => {

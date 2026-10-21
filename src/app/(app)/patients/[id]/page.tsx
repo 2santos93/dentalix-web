@@ -8,6 +8,9 @@ import { MedicalHistoryPanel } from '@/components/patients/medical-history-panel
 import { ClinicalEntriesList } from '@/components/patients/clinical-entries-list';
 import { PatientPostOpDeliveries } from '@/components/postop/patient-postop-deliveries';
 import { ClinicalAlertBanner } from '@/components/patients/clinical-alert-banner';
+import { AnamnesisReviewLine } from '@/components/clinical/anamnesis-review-line';
+import { usePatientMedicalAlerts } from '@/components/clinical/use-patient-medical-alerts';
+import { canConfirmAnamnesis } from '@/lib/clinical/medical-alerts';
 import {
   PatientDetailTabs,
   type PatientDetailTabKey,
@@ -18,6 +21,7 @@ import { PatientRecordHeader } from '@/components/patients/patient-record-header
 import { PatientRetentionSection } from '@/components/patients/patient-retention-section';
 import { PatientCommunicationSection } from '@/components/patients/patient-communication-section';
 import { PatientResponsiblePartiesSection } from '@/components/patients/patient-responsible-parties-section';
+import { PatientAgreementSection } from '@/components/patients/patient-agreement-section';
 import { PatientCoverageSection } from '@/components/patients/patient-coverage-section';
 import { canEditCommunication, withCommunication } from '@/lib/patients/communication-api';
 import { OdontogramTab } from '@/components/odontogram/odontogram-tab';
@@ -119,6 +123,19 @@ function PatientDetailView() {
         /* la cabecera conserva el resumen leído; se corrige al recargar */
       });
   }, [accessToken, patientId]);
+  // DX-105: asignar, cambiar o quitar el convenio cambia el chip «Convenio: X»:
+  // se relee y se copia solo `agreement`.
+  const onAgreementChanged = useCallback(() => {
+    if (!accessToken) return;
+    getPatient(accessToken, patientId)
+      .then((fresh) => setPatient((prev) => (prev ? { ...prev, agreement: fresh.agreement } : prev)))
+      .catch(() => {
+        /* la cabecera conserva el resumen leído; se corrige al recargar */
+      });
+  }, [accessToken, patientId]);
+  // DX-247: banderas médicas de la cabecera (también la del plan y del
+  // odontograma) y de la línea de revisión de la anamnesis.
+  const medicalAlerts = usePatientMedicalAlerts(accessToken, patientId);
   const panels = useRef(new Map<PatientDetailTabKey, HTMLDivElement>());
   const firstRender = useRef(true);
 
@@ -238,6 +255,9 @@ function PatientDetailView() {
         patient={loading ? null : patient}
         loading={loading}
         onEdit={() => setEditing(true)}
+        medicalAlerts={medicalAlerts.data}
+        medicalAlertsFailed={medicalAlerts.failed}
+        onRetryMedicalAlerts={medicalAlerts.reload}
       />
 
       {loading ? (
@@ -260,7 +280,23 @@ function PatientDetailView() {
           {/* Las alertas salen de la anamnesis (dato clínico): sin acceso, la
               API responde 403 y el banner solo diría que no pudo comprobarlas. */}
           {access['clinical-history'] ? (
-            <ClinicalAlertBanner token={accessToken} patientId={patientId} />
+            <div className="flex flex-col gap-2">
+              {/* Se relee con las banderas (p. ej. tras guardar la anamnesis). */}
+              <ClinicalAlertBanner
+                key={medicalAlerts.version}
+                token={accessToken}
+                patientId={patientId}
+              />
+              {/* DX-247: anamnesis al día / caducada / ausente y «Sin cambios hoy». */}
+              <AnamnesisReviewLine
+                token={accessToken}
+                patientId={patientId}
+                alerts={medicalAlerts.data}
+                failed={medicalAlerts.failed}
+                onReload={medicalAlerts.reload}
+                canConfirm={canConfirmAnamnesis(getTokenRole(accessToken))}
+              />
+            </div>
           ) : null}
 
           {/* DX-039: aviso de retención legal para todos; controles, solo ADMIN. */}
@@ -327,6 +363,14 @@ function PatientDetailView() {
               patientId={patientId}
               onChanged={onCoverageChanged}
             />
+            {/* DX-105: convenio con el que se presupuesta; chip en la cabecera
+                vía `onChanged`. */}
+            <PatientAgreementSection
+              key={`agreement-${patientId}`}
+              token={accessToken}
+              patientId={patientId}
+              onChanged={onAgreementChanged}
+            />
           </TabPanel>
 
           <PatientEditModal
@@ -334,15 +378,9 @@ function PatientDetailView() {
             patient={patient}
             token={accessToken}
             onOpenChange={setEditing}
-            // PATCH no trae la marca de saldo (DX-150) ni el resumen de cobertura
-            // (DX-153): se conservan los leídos.
-            onSaved={(updated) =>
-              setPatient((prev) => ({
-                ...updated,
-                balance: prev?.balance,
-                coverage: prev?.coverage,
-              }))
-            }
+            // PATCH no trae la marca de saldo (DX-150) ni los resúmenes de cobertura
+            // (DX-153) y convenio (DX-105): se conservan los leídos.
+            onSaved={(updated) => setPatient((prev) => replacePatientKeepingDerived(prev, updated))}
           />
 
           {access['clinical-history'] ? (
@@ -354,7 +392,11 @@ function PatientDetailView() {
             >
               <section className="flex flex-col gap-3">
                 <h2 className="text-lg font-semibold text-ink">{copy.anamnesisHeading}</h2>
-                <MedicalHistoryPanel token={accessToken} patientId={patientId} />
+                <MedicalHistoryPanel
+                  token={accessToken}
+                  patientId={patientId}
+                  onSaved={medicalAlerts.reload}
+                />
               </section>
               <section className="flex flex-col gap-3">
                 <h2 className="text-lg font-semibold text-ink">{copy.entriesHeading}</h2>

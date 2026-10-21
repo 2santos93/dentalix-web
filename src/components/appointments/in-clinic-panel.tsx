@@ -18,6 +18,7 @@ import {
 import { EmptyState } from '@/components/shared/empty-state';
 import { SectionError } from '@/components/errors/section-error';
 import { Skeleton } from '@/components/ui/skeleton';
+import { MedicalAlertIndicator } from '@/components/clinical/medical-alert-indicator';
 import { cn } from '@/lib/utils';
 
 export const inClinicCopy = {
@@ -195,7 +196,11 @@ function InClinicGroup({
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="truncate font-medium text-ink">{name}</p>
+                    <p className="flex min-w-0 items-center gap-2 font-medium text-ink">
+                      <span className="truncate">{name}</span>
+                      {/* DX-247: la misma alerta que la tarjeta de la agenda. */}
+                      <MedicalAlertIndicator flags={item.medicalAlerts} patientName={name} size="default" />
+                    </p>
                     <p className="text-xs tabular-nums text-muted">
                       {inClinicCopy.appointmentAt(timeInZone(item.start, tz))}
                       {item.providerName ? ` · ${item.providerName}` : ''}

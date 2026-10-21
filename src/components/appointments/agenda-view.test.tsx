@@ -15,6 +15,7 @@ import { listWaitlist, scheduleFromWaitlist } from '@/lib/appointments/waitlist-
 import { listLocations } from '@/lib/locations/locations-api';
 import { getLocationSchedule } from '@/lib/locations/schedule-api';
 import { listOpeningCandidates } from '@/lib/appointments/opening-candidates';
+import { getRoster } from '@/lib/locations/provider-schedule-api';
 
 // NOTE: jest.mock's string literal is not alias-rewritten by the SWC
 // transform (only real `import`/`require` specifiers are) — use a relative
@@ -78,6 +79,17 @@ jest.mock('../../lib/clinical-notes/note-templates-api', () => ({
 jest.mock('../../lib/appointments/waitlist-api', () => ({
   listWaitlist: jest.fn().mockResolvedValue({ items: [], total: 0, page: 1, pageSize: 50 }),
   scheduleFromWaitlist: jest.fn(),
+}));
+// DX-233: cuadrante del día en la sede (por defecto, nadie con horario).
+jest.mock('../../lib/locations/provider-schedule-api', () => ({
+  ...jest.requireActual('../../lib/locations/provider-schedule-api'),
+  getRoster: jest.fn().mockResolvedValue({
+    from: '2026-01-01',
+    to: '2026-01-01',
+    locationId: null,
+    locations: [],
+    providers: [],
+  }),
 }));
 // DX-210: «Ocupar este hueco» (el panel se prueba aparte; aquí, el cableado).
 jest.mock('../../lib/appointments/opening-candidates', () => ({
@@ -644,6 +656,37 @@ describe('AgendaView', () => {
     expect(startInput.value).toBe('09:00');
   });
 
+  it('DX-247: al abrir la cita de un paciente con profilaxis antibiótica el detalle avisa «Requiere premedicación»', async () => {
+    mockedListStaff.mockResolvedValue(staff);
+    mockedListAppointments.mockResolvedValue([
+      {
+        ...apt1,
+        medicalAlerts: {
+          hasCriticalAlert: true,
+          requiresPremedication: true,
+          anamnesisStatus: 'EXPIRED',
+          alerts: ['profilaxisAntibiotica'],
+          anamnesisReviewedAt: '2025-01-10T00:00:00.000Z',
+        },
+      },
+    ]);
+    const user = userEvent.setup();
+    render(<AgendaView token="tok" />);
+    await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
+    const dateInput = screen.getByLabelText<HTMLInputElement>(/^fecha$/i);
+    await user.clear(dateInput);
+    await user.type(dateInput, '2026-03-11');
+    await user.click(screen.getByRole('button', { name: /^semana$/i }));
+    await screen.findByLabelText(/agenda de la semana/i);
+    expect(screen.getByTestId('medical-alert-indicator')).toHaveAttribute('data-severity', 'critical');
+
+    await user.click(screen.getByTestId('week-grid-appointment'));
+    expect(await screen.findByTestId('premedication-notice')).toHaveTextContent('Requiere premedicación');
+    expect(screen.getByTestId('appointment-medical-alerts')).toHaveTextContent(
+      'Anamnesis caducada · última revisión 10/01/2025',
+    );
+  });
+
   it('week mode: the detail panel\'s status select reflects the server-confirmed status, not an optimistic one — a failed PATCH leaves it showing the real (unchanged) status', async () => {
     mockedListStaff.mockResolvedValue(staff);
     mockedListAppointments.mockResolvedValue([apt1]);
@@ -986,6 +1029,81 @@ describe('AgendaView', () => {
     });
   });
 
+  // DX-233: el horario de cada profesional en la sede activa.
+  describe('horario del profesional (DX-233)', () => {
+    afterEach(() => {
+      window.localStorage.clear();
+      (getRoster as jest.Mock).mockReset().mockResolvedValue({
+        from: '2026-01-01',
+        to: '2026-01-01',
+        locationId: null,
+        locations: [],
+        providers: [],
+      });
+    });
+
+    function rosterDay(date: string, worksAtLocation: boolean, locationRanges: { startMinute: number; endMinute: number }[] | null) {
+      return { date, weekday: 2, unrestricted: false, assignments: [], worksAtLocation, locationRanges };
+    }
+
+    it('oculta a quien no atiende ese día en la sede, con «Mostrar todos», y sombrea fuera de su horario', async () => {
+      window.localStorage.setItem('dentalix.activeLocationId', 'loc-1');
+      mockedListStaff.mockResolvedValue(staff);
+      mockedListAppointments.mockResolvedValue([]);
+      (getRoster as jest.Mock).mockImplementation((_t: string, params: { weekStart: string }) =>
+        Promise.resolve({
+          from: params.weekStart,
+          to: params.weekStart,
+          locationId: 'loc-1',
+          locations: [{ id: 'loc-1', name: 'Sede principal', timeZone: 'America/Bogota' }],
+          providers: [
+            {
+              providerId: 'staff-1',
+              fullName: 'Dra. Ana Ríos',
+              role: 'DENTIST',
+              configured: true,
+              days: [rosterDay(params.weekStart, true, [{ startMinute: 9 * 60, endMinute: 13 * 60 }])],
+            },
+            {
+              providerId: 'staff-2',
+              fullName: 'Dr. Luis Gómez',
+              role: 'DENTIST',
+              configured: true,
+              days: [rosterDay(params.weekStart, false, [])],
+            },
+          ],
+        }),
+      );
+      const user = userEvent.setup();
+      render(<AgendaView token="tok" />);
+      await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
+      await user.click(screen.getByRole('button', { name: /^día$/i }));
+
+      await waitFor(() => expect(screen.getAllByTestId('day-column')).toHaveLength(1));
+      expect(getRoster).toHaveBeenLastCalledWith('tok', expect.objectContaining({ days: 1, locationId: 'loc-1' }));
+      const [only] = screen.getAllByTestId('day-column');
+      expect(only).toHaveAttribute('data-provider-id', 'staff-1');
+      expect(within(only).getAllByTestId('provider-off-band').length).toBeGreaterThan(0);
+
+      const toggle = screen.getByRole('checkbox', { name: /mostrar todos/i });
+      expect(screen.getByText('1 profesional no atiende este día en esta sede.')).toBeInTheDocument();
+      await user.click(toggle);
+      expect(screen.getAllByTestId('day-column')).toHaveLength(2);
+    });
+
+    it('con «Todas las sedes» no pide el cuadrante ni oculta a nadie', async () => {
+      mockedListStaff.mockResolvedValue(staff);
+      mockedListAppointments.mockResolvedValue([]);
+      const user = userEvent.setup();
+      render(<AgendaView token="tok" />);
+      await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
+      await user.click(screen.getByRole('button', { name: /^día$/i }));
+      expect(await screen.findAllByTestId('day-column')).toHaveLength(2);
+      expect(getRoster).not.toHaveBeenCalled();
+      expect(screen.queryByRole('checkbox', { name: /mostrar todos/i })).not.toBeInTheDocument();
+    });
+  });
+
   describe('bloqueos y pendientes (DX-122)', () => {
     const mockedListBlocks = listScheduleBlocks as jest.MockedFunction<typeof listScheduleBlocks>;
     const mockedDeleteBlock = deleteScheduleBlock as jest.MockedFunction<typeof deleteScheduleBlock>;
@@ -1179,6 +1297,7 @@ describe('AgendaView', () => {
         Promise.resolve({
           ...slot,
           timeZone: 'America/Bogota',
+          providerOffSchedule: false,
           offerCap: 2,
           items: [candidate],
           truncated: false,
@@ -1231,6 +1350,7 @@ describe('AgendaView', () => {
         providerId: 'staff-1',
         start: '',
         end: '',
+        providerOffSchedule: false,
         timeZone: 'America/Bogota',
         offerCap: 2,
         items: [],

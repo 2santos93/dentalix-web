@@ -2,6 +2,7 @@
 import * as React from 'react';
 import { useEffect, useState } from 'react';
 import { toast } from 'sonner';
+import { announceAppointmentWarnings } from '@/components/appointments/appointment-warnings';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { ApiError } from '@/lib/api/client';
 import {
@@ -34,7 +35,7 @@ import { formatDateLabel } from '@/lib/format/date';
 const copy = {
   title: (name: string) => `Buscar hueco para ${name}`,
   description: (minutes: number) =>
-    `Huecos de ${minutes} min dentro del horario de la sede, sin chocar con otras citas y fuera de cualquier bloqueo (también los que dejan agendar, como el almuerzo).`,
+    `Huecos de ${minutes} min dentro del horario de la sede y del profesional en ella, sin chocar con otras citas y fuera de cualquier bloqueo (también los que dejan agendar, como el almuerzo).`,
   provider: 'Profesional',
   from: 'Desde',
   to: 'Hasta',
@@ -184,7 +185,7 @@ export function OpeningsDialog({
       });
       const when = `${formatDateLabel(created.start, { weekday: 'short', day: 'numeric', month: 'short' })} ${formatTimeRange(created.start, created.end)}`;
       toast.success(copy.scheduled(name, when));
-      for (const warning of created.warnings) toast.warning(warning);
+      announceAppointmentWarnings(created);
       onScheduled(created);
     } catch (err) {
       if (isEntryGone(err)) {

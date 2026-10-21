@@ -208,3 +208,116 @@ describe('PatientRecordHeader · cobertura vencida (DX-153)', () => {
   });
 });
 
+
+describe('PatientRecordHeader · chip de convenio (DX-105)', () => {
+  const agreement = (status: 'NONE' | 'ACTIVE' | 'EXPIRED' | 'NOT_STARTED' | 'INACTIVE') => ({
+    status,
+    agreementName: 'Sanitas 2026',
+    payerName: 'Sanitas',
+  });
+
+  it('muestra «Convenio: nombre» con un convenio vigente', () => {
+    render(
+      <PatientRecordHeader
+        patient={patient({ agreement: agreement('ACTIVE') })}
+        loading={false}
+        onEdit={() => {}}
+      />,
+    );
+    expect(screen.getByTestId('agreement-chip')).toHaveTextContent('Convenio: Sanitas 2026');
+  });
+
+  it.each(['NONE', 'EXPIRED', 'NOT_STARTED', 'INACTIVE'] as const)(
+    'no lo muestra con %s',
+    (status) => {
+      render(
+        <PatientRecordHeader
+          patient={patient({ agreement: agreement(status) })}
+          loading={false}
+          onEdit={() => {}}
+        />,
+      );
+      expect(screen.queryByTestId('agreement-chip')).not.toBeInTheDocument();
+    },
+  );
+
+  it('convive con el chip de cobertura vencida', () => {
+    render(
+      <PatientRecordHeader
+        patient={patient({
+          agreement: agreement('ACTIVE'),
+          coverage: { status: 'EXPIRED', payerName: 'Sanitas', planName: null, validTo: '2026-01-31' },
+        })}
+        loading={false}
+        onEdit={() => {}}
+      />,
+    );
+    expect(screen.getByTestId('agreement-chip')).toBeInTheDocument();
+    expect(screen.getByTestId('coverage-chip')).toBeInTheDocument();
+  });
+});
+
+describe('PatientRecordHeader: alerta médica (DX-247)', () => {
+  const flags = {
+    hasCriticalAlert: true,
+    requiresPremedication: true,
+    anamnesisStatus: 'CURRENT' as const,
+    alerts: ['profilaxisAntibiotica' as const],
+    anamnesisReviewedAt: '2026-09-01T00:00:00.000Z',
+  };
+
+  it('la cabecera (que encabeza el plan y el odontograma) muestra la alerta con su titular', async () => {
+    const user = userEvent.setup();
+    render(<PatientRecordHeader patient={patient()} loading={false} onEdit={() => {}} medicalAlerts={flags} />);
+    expect(screen.getByTestId('record-medical-alert')).toHaveTextContent('Requiere premedicación');
+    await user.click(screen.getByRole('button', { name: 'Alertas médicas de Carlos Mejía' }));
+    expect(screen.getByTestId('medical-alert-popover')).toHaveTextContent('Requiere profilaxis antibiótica');
+  });
+
+  it('sin anamnesis lo dice; al día y sin alertas no pinta nada', () => {
+    const { rerender } = render(
+      <PatientRecordHeader
+        patient={patient()}
+        loading={false}
+        onEdit={() => {}}
+        medicalAlerts={{ ...flags, hasCriticalAlert: false, requiresPremedication: false, alerts: [], anamnesisStatus: 'MISSING' }}
+      />,
+    );
+    expect(screen.getByTestId('record-medical-alert')).toHaveTextContent('Sin anamnesis');
+    rerender(
+      <PatientRecordHeader
+        patient={patient()}
+        loading={false}
+        onEdit={() => {}}
+        medicalAlerts={{ ...flags, hasCriticalAlert: false, requiresPremedication: false, alerts: [] }}
+      />,
+    );
+    expect(screen.queryByTestId('record-medical-alert')).not.toBeInTheDocument();
+  });
+});
+
+describe('PatientRecordHeader: alertas sin comprobar (DX-247)', () => {
+  it('mientras carga dice «Comprobando alertas…»; si falla, «Alertas sin comprobar» con reintento', async () => {
+    const user = userEvent.setup();
+    const onRetry = jest.fn();
+    const { rerender } = render(
+      <PatientRecordHeader patient={patient()} loading={false} onEdit={() => {}} medicalAlerts={null} />,
+    );
+    expect(screen.getByText('Comprobando alertas…')).toBeInTheDocument();
+    rerender(
+      <PatientRecordHeader
+        patient={patient()}
+        loading={false}
+        onEdit={() => {}}
+        medicalAlerts={null}
+        medicalAlertsFailed
+        onRetryMedicalAlerts={onRetry}
+      />,
+    );
+    expect(screen.queryByText('Comprobando alertas…')).not.toBeInTheDocument();
+    expect(screen.getByText('Alertas sin comprobar')).toBeInTheDocument();
+    expect(screen.queryByTestId('record-medical-alert')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Reintentar' }));
+    expect(onRetry).toHaveBeenCalled();
+  });
+});

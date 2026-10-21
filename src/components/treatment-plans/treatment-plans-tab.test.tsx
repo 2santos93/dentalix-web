@@ -28,6 +28,7 @@ import { paymentReceiptFixture } from '@/lib/test/payment-receipt';
 import { listCurrencies } from '@/lib/reference/currencies-api';
 import { getPaymentPlan } from '@/lib/payment-plans/payment-plan-api';
 import { ITEM_WITHOUT_DISCOUNT, PLAN_WITHOUT_OPTIONS } from './plan-fixture';
+import { getPriceQuote, type PriceQuote } from '@/lib/patients/patient-agreement-api';
 import { applyBulkDiscount, getDiscountPolicy } from '@/lib/discounts/discounts-api';
 
 // NOTE: jest.mock's string literal is not alias-rewritten by the SWC
@@ -48,6 +49,11 @@ jest.mock('../../lib/treatment-plans/treatment-plans-api', () => ({
 jest.mock('../../lib/discounts/discounts-api', () => ({
   getDiscountPolicy: jest.fn(),
   applyBulkDiscount: jest.fn(),
+}));
+// DX-105: el precio resuelto del paciente. Por defecto el de catálogo (sin
+// convenio); los tests de convenio lo sustituyen.
+jest.mock('../../lib/patients/patient-agreement-api', () => ({
+  getPriceQuote: jest.fn(),
 }));
 jest.mock('../../lib/payments/payments-api', () => ({
   getPlanBalance: jest.fn(),
@@ -103,6 +109,7 @@ const mockedGetReceipt = getPaymentReceipt as jest.MockedFunction<typeof getPaym
 const mockedListCurrencies = listCurrencies as jest.MockedFunction<typeof listCurrencies>;
 const mockedGetPaymentPlan = getPaymentPlan as jest.MockedFunction<typeof getPaymentPlan>;
 const mockedGetDiscountPolicy = getDiscountPolicy as jest.MockedFunction<typeof getDiscountPolicy>;
+const mockedGetPriceQuote = getPriceQuote as jest.MockedFunction<typeof getPriceQuote>;
 const mockedApplyBulkDiscount = applyBulkDiscount as jest.MockedFunction<typeof applyBulkDiscount>;
 const DISCOUNT_POLICY = {
   maxPercentByRole: { ADMIN: 100, DENTIST: 10, ASSISTANT: 0, RECEPTION: 0 },
@@ -270,6 +277,21 @@ function deferred<T>() {
   return { promise, resolve };
 }
 
+/** Precio resuelto de ejemplo: por defecto el de catálogo, sin convenio. */
+function quoteOf(catalogItemId: string, overrides: Partial<PriceQuote> = {}, currency = 'USD'): PriceQuote {
+  const base = catalog.find((c) => c.id === catalogItemId)?.defaultPrice ?? null;
+  return {
+    basePrice: base,
+    price: base,
+    source: 'CATALOG',
+    agreementId: null,
+    agreementName: null,
+    allowDiscount: true,
+    currency,
+    ...overrides,
+  };
+}
+
 describe('TreatmentPlansTab', () => {
   beforeEach(() => {
     mockedCreatePlan.mockReset();
@@ -284,6 +306,10 @@ describe('TreatmentPlansTab', () => {
     mockedGetDiscountPolicy.mockReset();
     mockedGetDiscountPolicy.mockRejectedValue(new Error('sin política en este test'));
     mockedApplyBulkDiscount.mockReset();
+    mockedGetPriceQuote.mockReset();
+    mockedGetPriceQuote.mockImplementation(async (_token, _patientId, { catalogItemId, currency }) =>
+      quoteOf(catalogItemId, {}, currency),
+    );
     mockedGetPlanBalance.mockReset();
     mockedListPayments.mockReset();
     mockedRecordPayment.mockReset();
@@ -1345,7 +1371,6 @@ describe('TreatmentPlansTab', () => {
         expect(mockedAddItem).toHaveBeenCalledWith('tok', 'plan-1', {
           toothNumber: '16',
           catalogItemId: 'cat-1',
-          price: 50000,
           discount: 2500,
         }),
       );
@@ -1489,7 +1514,6 @@ describe('TreatmentPlansTab', () => {
         expect(mockedAddItem).toHaveBeenCalledWith(discountAdminToken, 'plan-1', {
           toothNumber: '16',
           catalogItemId: 'cat-1',
-          price: 50000,
           discount: 10000,
           discountReason: 'LOYALTY',
           discountReasonNote: 'Viene hace 10 años',
@@ -1500,10 +1524,13 @@ describe('TreatmentPlansTab', () => {
     it('«Descuento %» sobre los ítems seleccionados aplica y refresca el plan', async () => {
       mockedListPlans.mockResolvedValue([plan1]);
       mockedGetPlan.mockResolvedValue(plan1Detail);
-      mockedApplyBulkDiscount.mockResolvedValue([
-        { ...item1, discount: 2500 },
-        { ...item2, discount: 4000 },
-      ]);
+      mockedApplyBulkDiscount.mockResolvedValue({
+        items: [
+          { ...item1, discount: 2500 },
+          { ...item2, discount: 4000 },
+        ],
+        skippedNoDiscount: 0,
+      });
       const user = userEvent.setup();
       render(<TreatmentPlansTab patientId="pat-1" token={discountDentistToken} />);
       const table = await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
@@ -1650,6 +1677,267 @@ describe('TreatmentPlansTab', () => {
       expect(screen.queryByRole('button', { name: 'Descuento %' })).not.toBeInTheDocument();
       expect(
         screen.getByText('El presupuesto está aceptado: sus descuentos ya no se pueden cambiar.'),
+      ).toBeInTheDocument();
+    });
+  });
+
+  // DX-105: el precio sale del convenio del paciente; la web lo precarga y
+  // solo manda `price` si el usuario lo tocó.
+  describe('precio resuelto por convenio (DX-105)', () => {
+    const agreementQuote = (overrides: Partial<PriceQuote> = {}) =>
+      quoteOf(
+        'cat-1',
+        {
+          price: 40000,
+          basePrice: 50000,
+          source: 'AGREEMENT_PERCENT',
+          agreementId: 'ag-1',
+          agreementName: 'Seguros Sol',
+          ...overrides,
+        },
+        'USD',
+      );
+
+    async function openForm() {
+      mockedListPlans.mockResolvedValue([plan1]);
+      mockedGetPlan.mockResolvedValue(plan1Detail);
+      const user = userEvent.setup();
+      render(<TreatmentPlansTab patientId="pat-1" token="tok" />);
+      await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+      await user.type(screen.getByLabelText(/código fdi/i), '16');
+      return user;
+    }
+
+    const submit = () => screen.getByRole('button', { name: /^agregar ítem$/i });
+
+    it('pide el precio del paciente para la prestación, lo precarga y dice de dónde sale', async () => {
+      mockedGetPriceQuote.mockResolvedValue(agreementQuote());
+      const user = await openForm();
+      await user.click(screen.getByRole('radio', { name: /resina/i }));
+
+      await waitFor(() =>
+        expect(mockedGetPriceQuote).toHaveBeenCalledWith('tok', 'pat-1', {
+          catalogItemId: 'cat-1',
+          currency: 'USD',
+        }),
+      );
+      const price = screen.getByLabelText<HTMLInputElement>(/^precio$/i);
+      await waitFor(() => expect(price.value).toBe('40000'));
+      expect(await screen.findByText(/Convenio · Seguros Sol · precio de lista 50\.000,00/)).toBeInTheDocument();
+    });
+
+    it('la línea de origen queda atada al campo de precio (aria-describedby)', async () => {
+      mockedGetPriceQuote.mockResolvedValue(agreementQuote());
+      const user = await openForm();
+      await user.click(screen.getByRole('radio', { name: /resina/i }));
+      const line = await screen.findByText(/Convenio · Seguros Sol · precio de lista/);
+      const price = screen.getByLabelText(/^precio$/i);
+      expect(line.id).toBeTruthy();
+      expect(price.getAttribute('aria-describedby')?.split(' ')).toContain(line.id);
+    });
+
+    it('mientras llega el precio el campo está en espera y no se puede agregar', async () => {
+      let resolve!: (q: PriceQuote) => void;
+      mockedGetPriceQuote.mockReturnValue(new Promise<PriceQuote>((r) => (resolve = r)));
+      const user = await openForm();
+      await user.click(screen.getByRole('radio', { name: /resina/i }));
+
+      expect(screen.getByLabelText(/^precio$/i)).toBeDisabled();
+      expect(screen.getByText('Calculando el precio…')).toBeInTheDocument();
+      expect(submit()).toBeDisabled();
+
+      resolve(agreementQuote());
+      await waitFor(() => expect(screen.getByLabelText(/^precio$/i)).toBeEnabled());
+      expect(submit()).toBeEnabled();
+    });
+
+    it('sin tocar el precio precargado, no lo envía: lo resuelve la API', async () => {
+      mockedGetPriceQuote.mockResolvedValue(agreementQuote());
+      mockedAddItem.mockResolvedValue({ ...item1, id: 'item-3' });
+      const user = await openForm();
+      await user.click(screen.getByRole('radio', { name: /resina/i }));
+      await waitFor(() => expect(screen.getByLabelText<HTMLInputElement>(/^precio$/i).value).toBe('40000'));
+      await user.click(submit());
+
+      await waitFor(() =>
+        expect(mockedAddItem).toHaveBeenCalledWith('tok', 'plan-1', { toothNumber: '16', catalogItemId: 'cat-1' }),
+      );
+    });
+
+    it('si el usuario cambia el precio, lo envía', async () => {
+      mockedGetPriceQuote.mockResolvedValue(agreementQuote());
+      mockedAddItem.mockResolvedValue({ ...item1, id: 'item-3' });
+      const user = await openForm();
+      await user.click(screen.getByRole('radio', { name: /resina/i }));
+      const price = screen.getByLabelText<HTMLInputElement>(/^precio$/i);
+      await waitFor(() => expect(price.value).toBe('40000'));
+      await user.clear(price);
+      await user.type(price, '45000');
+      await user.click(submit());
+
+      await waitFor(() =>
+        expect(mockedAddItem).toHaveBeenCalledWith('tok', 'plan-1', {
+          toothNumber: '16',
+          catalogItemId: 'cat-1',
+          price: 45000,
+        }),
+      );
+    });
+
+    it('sin precio resuelto (null) el campo queda vacío y lo que se escribe se envía', async () => {
+      mockedGetPriceQuote.mockResolvedValue(agreementQuote({ price: null, basePrice: null, source: 'CATALOG' }));
+      mockedAddItem.mockResolvedValue({ ...item1, id: 'item-3' });
+      const user = await openForm();
+      await user.click(screen.getByRole('radio', { name: /resina/i }));
+      const price = screen.getByLabelText<HTMLInputElement>(/^precio$/i);
+      await waitFor(() => expect(price).toBeEnabled());
+      expect(price.value).toBe('');
+      await user.type(price, '30000');
+      await user.click(submit());
+
+      await waitFor(() =>
+        expect(mockedAddItem).toHaveBeenCalledWith('tok', 'plan-1', {
+          toothNumber: '16',
+          catalogItemId: 'cat-1',
+          price: 30000,
+        }),
+      );
+    });
+
+    it('si falla el precio resuelto: aviso con reintento, campo editable y precio de catálogo', async () => {
+      mockedGetPriceQuote.mockRejectedValueOnce(new Error('boom'));
+      mockedAddItem.mockResolvedValue({ ...item1, id: 'item-3' });
+      const user = await openForm();
+      await user.click(screen.getByRole('radio', { name: /resina/i }));
+
+      expect(await screen.findByText('No pudimos traer el precio')).toBeInTheDocument();
+      const price = screen.getByLabelText<HTMLInputElement>(/^precio$/i);
+      expect(price).toBeEnabled();
+      expect(price.value).toBe('50000');
+
+      // El fallo de vista previa no convierte el catálogo en un precio manual:
+      // la API debe resolver el convenio al crear el ítem.
+      await user.click(submit());
+      await waitFor(() =>
+        expect(mockedAddItem).toHaveBeenCalledWith('tok', 'plan-1', {
+          toothNumber: '16',
+          catalogItemId: 'cat-1',
+        }),
+      );
+    });
+
+    it('«Reintentar» vuelve a pedir el precio y lo precarga', async () => {
+      mockedGetPriceQuote.mockRejectedValueOnce(new Error('boom')).mockResolvedValue(agreementQuote());
+      const user = await openForm();
+      await user.click(screen.getByRole('radio', { name: /resina/i }));
+      await user.click(await screen.findByRole('button', { name: /reintentar/i }));
+
+      await waitFor(() => expect(screen.getByLabelText<HTMLInputElement>(/^precio$/i).value).toBe('40000'));
+      expect(screen.queryByText('No pudimos traer el precio')).not.toBeInTheDocument();
+    });
+
+    it('una prestación sin descuentos bloquea el campo de descuento y rechaza un precio por debajo', async () => {
+      mockedGetPriceQuote.mockResolvedValue(agreementQuote({ allowDiscount: false }));
+      const user = await openForm();
+      await user.click(screen.getByRole('radio', { name: /resina/i }));
+      const price = screen.getByLabelText<HTMLInputElement>(/^precio$/i);
+      await waitFor(() => expect(price.value).toBe('40000'));
+
+      const discount = screen.getByLabelText(/^descuento/i);
+      expect(discount).toBeDisabled();
+      const hint = screen.getByText('Esta prestación no admite descuentos.');
+      expect(hint.id).toBeTruthy();
+      expect(discount.getAttribute('aria-describedby')?.split(' ')).toContain(hint.id);
+
+      await user.clear(price);
+      await user.type(price, '35000');
+      await user.click(submit());
+      // El mismo texto, ahora también como error del campo de precio.
+      await waitFor(() => expect(screen.getAllByText('Esta prestación no admite descuentos.')).toHaveLength(2));
+      expect(price).toHaveAttribute('aria-invalid', 'true');
+      expect(mockedAddItem).not.toHaveBeenCalled();
+    });
+
+    it('una prestación sin descuentos admite subir el precio', async () => {
+      mockedGetPriceQuote.mockResolvedValue(agreementQuote({ allowDiscount: false }));
+      mockedAddItem.mockResolvedValue({ ...item1, id: 'item-3' });
+      const user = await openForm();
+      await user.click(screen.getByRole('radio', { name: /resina/i }));
+      const price = screen.getByLabelText<HTMLInputElement>(/^precio$/i);
+      await waitFor(() => expect(price.value).toBe('40000'));
+      await user.clear(price);
+      await user.type(price, '42000');
+      await user.click(submit());
+
+      await waitFor(() => expect(mockedAddItem).toHaveBeenCalled());
+    });
+
+    it('el ítem con convenio muestra «Convenio X · precio de lista»', async () => {
+      const withAgreement = {
+        ...item1,
+        catalogPrice: 40000,
+        basePrice: 50000,
+        priceSource: 'AGREEMENT_PERCENT' as const,
+        agreementId: 'ag-1',
+        agreementName: 'Seguros Sol',
+      };
+      mockedListPlans.mockResolvedValue([plan1]);
+      mockedGetPlan.mockResolvedValue({ ...plan1Detail, items: [withAgreement, item2] });
+      render(<TreatmentPlansTab patientId="pat-1" token="tok" />);
+      const table = await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+      expect(within(table).getByText(/Convenio Seguros Sol · precio de lista 50\.000,00/)).toBeInTheDocument();
+    });
+
+    it('un ítem con convenio y descuento muestra la línea del convenio Y la del descuento', async () => {
+      const both = {
+        ...item1,
+        catalogPrice: 40000,
+        basePrice: 50000,
+        discount: 2000,
+        priceSource: 'AGREEMENT_PERCENT' as const,
+        agreementId: 'ag-1',
+        agreementName: 'Seguros Sol',
+      };
+      mockedListPlans.mockResolvedValue([plan1]);
+      mockedGetPlan.mockResolvedValue({ ...plan1Detail, items: [both, item2] });
+      render(<TreatmentPlansTab patientId="pat-1" token="tok" />);
+      const table = await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+      expect(within(table).getByText(/Convenio Seguros Sol · precio de lista 50\.000,00/)).toBeInTheDocument();
+      expect(within(table).getByText(/Descuento −2000,00/)).toBeInTheDocument();
+    });
+
+    it('el ítem con lista de precios de la sede lo dice solo si el precio de lista difiere', async () => {
+      const fromList = {
+        ...item1,
+        catalogPrice: 45000,
+        basePrice: 50000,
+        priceSource: 'PRICE_LIST' as const,
+      };
+      const sameAsList = { ...item2, catalogPrice: 80000, basePrice: 80000, priceSource: 'PRICE_LIST' as const };
+      mockedListPlans.mockResolvedValue([plan1]);
+      mockedGetPlan.mockResolvedValue({ ...plan1Detail, items: [fromList, sameAsList] });
+      render(<TreatmentPlansTab patientId="pat-1" token="tok" />);
+      const table = await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+      expect(within(table).getAllByText(/Lista de precios de la sede · precio de lista/)).toHaveLength(1);
+    });
+
+    it('«Descuento %» avisa cuántas prestaciones no admiten descuento y se dejaron igual', async () => {
+      mockedListPlans.mockResolvedValue([plan1]);
+      mockedGetPlan.mockResolvedValue(plan1Detail);
+      mockedGetDiscountPolicy.mockResolvedValue(DISCOUNT_POLICY);
+      mockedApplyBulkDiscount.mockResolvedValue({ items: [{ ...item1, discount: 2500 }], skippedNoDiscount: 2 });
+      const user = userEvent.setup();
+      render(<TreatmentPlansTab patientId="pat-1" token={discountDentistToken} />);
+      const table = await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+      await waitFor(() => expect(mockedGetDiscountPolicy).toHaveBeenCalled());
+      await user.click(within(table).getByRole('checkbox', { name: 'Seleccionar el ítem del diente 11' }));
+      await user.click(screen.getByRole('button', { name: 'Descuento %' }));
+      const dialog = await screen.findByRole('dialog');
+      await user.type(within(dialog).getByLabelText('Porcentaje de descuento'), '5');
+      await user.click(within(dialog).getByRole('button', { name: 'Aplicar descuento' }));
+
+      expect(
+        await screen.findByText('Descuento aplicado a 1 ítem. 2 prestaciones no admiten descuento y se dejaron igual.'),
       ).toBeInTheDocument();
     });
   });

@@ -59,7 +59,7 @@ describe('UserMenu', () => {
     );
     // Única entrada a la pantalla de horarios: sin esto la ruta existe pero no
     // se puede llegar a ella desde la app.
-    expect(screen.getByRole('menuitem', { name: /horario de atención/i })).toHaveAttribute(
+    expect(screen.getByRole('menuitem', { name: /^horarios$/i })).toHaveAttribute(
       'href',
       '/settings/horarios',
     );
@@ -144,6 +144,11 @@ describe('UserMenu — plantillas de consentimiento (DX-006)', () => {
       'href',
       '/settings/consentimientos',
     );
+    // DX-247: vigencia de la anamnesis.
+    expect(screen.getByRole('menuitem', { name: 'Historia clínica' })).toHaveAttribute(
+      'href',
+      '/settings/historia-clinica',
+    );
     // DX-013: plantillas de receta y país de las sedes.
     expect(screen.getByRole('menuitem', { name: 'Recetas' })).toHaveAttribute(
       'href',
@@ -179,6 +184,15 @@ describe('UserMenu — plantillas de consentimiento (DX-006)', () => {
       'href',
       '/settings/pagadores',
     );
+    // DX-105: convenios y listas de precios.
+    expect(screen.getByRole('menuitem', { name: 'Convenios' })).toHaveAttribute(
+      'href',
+      '/settings/convenios',
+    );
+    expect(screen.getByRole('menuitem', { name: 'Listas de precios' })).toHaveAttribute(
+      'href',
+      '/settings/listas-de-precios',
+    );
   });
 
   it.each(['DENTIST', 'ASSISTANT', 'RECEPTION'])('%s no lo ve', async (role) => {
@@ -195,5 +209,7 @@ describe('UserMenu — plantillas de consentimiento (DX-006)', () => {
       screen.queryByRole('menuitem', { name: 'Indicaciones postoperatorias' }),
     ).not.toBeInTheDocument();
     expect(screen.queryByRole('menuitem', { name: 'Pagadores' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'Convenios' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'Listas de precios' })).not.toBeInTheDocument();
   });
 });
