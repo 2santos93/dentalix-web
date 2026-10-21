@@ -12,6 +12,7 @@ import {
   type PlanVisits,
   type VisitAssignment,
 } from "@/lib/treatment-plans/plan-visits-api";
+import { formatCivilDate } from "@/lib/format/date";
 import { apiErrorMessage } from "@/lib/api/error-message";
 import { Button } from "@/components/ui/button";
 import { InlineError } from "@/components/errors/inline-error";
@@ -54,6 +55,9 @@ export function PlanVisitsBoard({
     (plan.items ?? []).map((i) => [i.id, i.visit ?? 1, i.visitLabel ?? null]),
     plan.visitIntervals ?? {},
   ]);
+  const availabilityKey = JSON.stringify(
+    (plan.items ?? []).map((i) => [i.id, i.status]),
+  );
   const [loadedSignature, setLoadedSignature] = useState(sourceSignature);
   if (loadedSignature !== sourceSignature) {
     setLoadedSignature(sourceSignature);
@@ -84,7 +88,20 @@ export function PlanVisitsBoard({
     return () => {
       cancelled = true;
     };
-  }, [token, plan.id, plan.status, plan.updatedAt, reload]);
+  }, [token, plan.id, plan.status, plan.updatedAt, availabilityKey, reload]);
+  function scheduledVisit(number: number) {
+    const visit = schedule?.visits.find((v) => v.number === number);
+    return visit
+      ? {
+          ...visit,
+          planItemIds: visit.planItemIds.filter((id) =>
+            (plan.items ?? []).some(
+              (i) => i.id === id && i.status === "ACCEPTED",
+            ),
+          ),
+        }
+      : undefined;
+  }
   const numbers = [...new Set(assignments.map((i) => i.visit))].sort(
     (a, b) => a - b,
   );
@@ -170,12 +187,13 @@ export function PlanVisitsBoard({
           </button>
         </InlineError>
       ) : null}
+      {numbers.length === 0 ? renderItems([]) : null}
       {numbers.map((number) => {
         const assignment = assignments.filter((i) => i.visit === number);
         const items = (plan.items ?? []).filter((i) =>
           assignment.some((a) => a.itemId === i.id),
         );
-        const visit = schedule?.visits.find((v) => v.number === number);
+        const visit = scheduledVisit(number);
         const title = `Visita ${number}${assignment[0]?.visitLabel ? " · " + assignment[0].visitLabel : ""}`;
         return (
           <section
@@ -244,9 +262,7 @@ export function PlanVisitsBoard({
                 <p className="text-sm text-muted">
                   Fecha mínima sugerida:{" "}
                   <time dateTime={visit.minimumDate}>
-                    {new Intl.DateTimeFormat("es", {
-                      dateStyle: "medium",
-                    }).format(new Date(visit.minimumDate))}
+                    {formatCivilDate(visit.minimumDay)}
                   </time>
                 </p>
               ) : null}
@@ -293,7 +309,7 @@ export function PlanVisitsBoard({
           locationId={
             plan.acceptedLocationId ?? plan.presentedLocationId ?? undefined
           }
-          visit={schedule.visits.find((v) => v.number === booking)!}
+          visit={scheduledVisit(booking)!}
           onClose={() => setBooking(null)}
           onCreated={() => {
             setBooking(null);
