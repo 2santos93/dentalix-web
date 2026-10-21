@@ -3,6 +3,7 @@ import type { Appointment, AppointmentStatus } from '@/lib/appointments/appointm
 import { monthGridDays } from '@/lib/appointments/calendar-grid';
 import { formatTime, formatDateLabel } from '@/lib/format/date';
 import { patientLabel } from './appointment-display';
+import { MedicalAlertIndicator } from '@/components/clinical/medical-alert-indicator';
 import { SectionError } from '@/components/errors/section-error';
 
 // Copy as constants (i18n-ready, es-first) — matches day-agenda.tsx convention.
@@ -125,22 +126,25 @@ export function MonthAgenda({
           const dayNum = Number(day.date.slice(8, 10));
 
           return (
-            <button
-              type="button"
+            <div
               key={day.date}
-              onClick={() => onSelectDay(day.date)}
-              aria-pressed={isSelected}
-              aria-label={copy.dayLabel(longDayLabel(day.date), count)}
               data-testid="calendar-day"
               data-date={day.date}
               className={[
-                'flex min-h-[76px] flex-col gap-1 border-b border-r border-hairline p-1.5 text-left align-top transition-colors md:min-h-[104px]',
+                'relative flex min-w-0 min-h-[76px] flex-col gap-1 border-b border-r border-hairline p-1.5 text-left align-top transition-colors md:min-h-[104px]',
                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary',
                 day.inMonth ? 'hover:bg-surface-2' : 'bg-surface-2/40 hover:bg-surface-2',
                 isSelected ? 'ring-2 ring-inset ring-primary' : '',
               ].join(' ')}
             >
-              <div className="flex items-center justify-between">
+              <button
+                type="button"
+                onClick={() => onSelectDay(day.date)}
+                aria-pressed={isSelected}
+                aria-label={copy.dayLabel(longDayLabel(day.date), count)}
+                className="absolute inset-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary"
+              />
+              <div className="pointer-events-none relative flex items-center justify-between">
                 <span
                   className={
                     isToday
@@ -160,40 +164,31 @@ export function MonthAgenda({
                 )}
               </div>
 
-              {/* Desktop: chips with time + patient */}
-              <div className="hidden flex-col gap-0.5 md:flex">
+              {/* A single row per appointment at every width. 48 px keeps the
+                  indicator's 44 px touch area clear of neighbouring alerts. */}
+              <div className="pointer-events-none relative flex min-w-0 flex-col">
                 {visible.map((a) => (
                   <span
                     key={a.id}
-                    className="flex items-center gap-1 truncate rounded bg-surface-2 px-1 py-0.5 text-[11px] leading-tight text-ink"
+                    data-testid="month-appointment"
+                    className="relative flex min-h-12 min-w-0 items-center justify-center gap-1 rounded text-[11px] leading-tight text-ink md:justify-start md:bg-surface-2 md:px-1"
                   >
-                    <span
-                      aria-hidden
-                      className={`h-1.5 w-1.5 shrink-0 rounded-full ${STATUS_DOT[a.status]}`}
+                    <span aria-hidden className={`hidden h-1.5 w-1.5 shrink-0 rounded-full md:inline ${STATUS_DOT[a.status]}`} />
+                    <span className="hidden shrink-0 tabular-nums text-muted md:inline">{formatTime(a.start)}</span>
+                    <span className="hidden min-w-0 flex-1 truncate md:inline">{patientLabel(a, patientNames)}</span>
+                    <MedicalAlertIndicator
+                      flags={a.medicalAlerts}
+                      patientName={patientLabel(a, patientNames)}
+                      className="pointer-events-auto md:mr-1"
                     />
-                    <span className="shrink-0 tabular-nums text-muted">{formatTime(a.start)}</span>
-                    <span className="truncate">{patientLabel(a, patientNames)}</span>
+                    <span aria-hidden className={`absolute bottom-1 right-1 h-1.5 w-1.5 rounded-full md:hidden ${STATUS_DOT[a.status]}`} />
                   </span>
                 ))}
                 {overflow > 0 && (
-                  <span className="px-1 text-[11px] font-medium text-muted">{copy.more(overflow)}</span>
+                  <span className="text-center text-[10px] font-medium text-muted md:px-1 md:text-left md:text-[11px]">{copy.more(overflow)}</span>
                 )}
               </div>
-
-              {/* Mobile: compact dots */}
-              {count > 0 && (
-                <div className="flex flex-wrap gap-1 md:hidden">
-                  {visible.map((a) => (
-                    <span
-                      key={a.id}
-                      aria-hidden
-                      className={`h-1.5 w-1.5 rounded-full ${STATUS_DOT[a.status]}`}
-                    />
-                  ))}
-                  {overflow > 0 && <span aria-hidden className="text-[10px] leading-none text-muted">+{overflow}</span>}
-                </div>
-              )}
-            </button>
+            </div>
           );
         })}
       </div>
