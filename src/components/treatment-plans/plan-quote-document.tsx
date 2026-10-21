@@ -83,6 +83,11 @@ interface PlanQuoteDocumentProps {
  */
 export function PlanQuoteDocument({ quote }: PlanQuoteDocumentProps) {
   const { acceptance, currency } = quote;
+  const organization=new Map((quote.visitOrganization??[]).map(v=>[v.itemId,v]));
+  const orderedItems=[...quote.items].sort((a,b)=>(organization.get(a.id)?.visit??1)-(organization.get(b.id)?.visit??1));
+  const visitTitle=(id:string)=>{const v=organization.get(id);return `Visita ${v?.visit??1}${v?.label?' · '+v.label:''}${v?.minDaysAfterPrevious?' · intervalo mínimo '+v.minDaysAfterPrevious+' días':''}`;};
+  const startsVisit=(index:number)=>index===0||(organization.get(orderedItems[index-1].id)?.visit??1)!==(organization.get(orderedItems[index].id)?.visit??1);
+
 
   return (
     <article className="quote-print-root mx-auto w-full max-w-[210mm] bg-white px-4 py-6 text-[#111827] sm:px-10 sm:py-10 print:max-w-none print:p-0">
@@ -152,6 +157,7 @@ export function PlanQuoteDocument({ quote }: PlanQuoteDocumentProps) {
       </dl>
 
       <section className="mt-6">
+        {acceptance && quote.visitOrganization ? <p className="mb-3 text-xs text-[#4b5563]">Organización actual por visitas. Los precios y la aceptación corresponden al presupuesto firmado.</p> : null}
         {/* Pantalla ancha y papel: tabla. */}
         <table className="hidden w-full border-collapse text-sm sm:table print:table">
           <caption className="sr-only">{copy.tableCaption}</caption>
@@ -173,10 +179,10 @@ export function PlanQuoteDocument({ quote }: PlanQuoteDocumentProps) {
                 </td>
               </tr>
             ) : (
-              quote.items.map((item) => {
+              orderedItems.map((item,index) => {
                 const listLine = listPriceOf(item, currency);
                 return (
-                <tr key={item.id} className="quote-item border-b border-[#e5e7eb] align-top">
+                <React.Fragment key={item.id}>{startsVisit(index)?<tr><th scope="rowgroup" colSpan={6} className="border-b border-[#d1d5db] bg-[#f3f4f6] py-3 text-left font-semibold">{visitTitle(item.id)}</th></tr>:null}<tr className="quote-item border-b border-[#e5e7eb] align-top">
                   <td className="py-2 pr-3 font-medium tabular-nums">{item.toothNumber}</td>
                   <td className="py-2 pr-3">
                     <span className="block">{item.procedure}</span>
@@ -191,7 +197,7 @@ export function PlanQuoteDocument({ quote }: PlanQuoteDocumentProps) {
                   <td className="py-2 text-right font-medium tabular-nums">
                     {money(item.subtotal, currency)}
                   </td>
-                </tr>
+                </tr></React.Fragment>
                 );
               })
             )}
@@ -203,10 +209,11 @@ export function PlanQuoteDocument({ quote }: PlanQuoteDocumentProps) {
           {quote.items.length === 0 ? (
             <li className="py-6 text-center text-sm text-[#4b5563]">{copy.emptyItems}</li>
           ) : (
-            quote.items.map((item) => {
+            orderedItems.map((item,index) => {
               const listLine = listPriceOf(item, currency);
               return (
               <li key={item.id} className="py-3 text-sm">
+                {startsVisit(index)?<h2 className="mb-3 text-base font-semibold">{visitTitle(item.id)}</h2>:null}
                 <div className="flex items-baseline justify-between gap-3">
                   <span className="font-medium">{item.procedure}</span>
                   <span className="font-medium tabular-nums">{money(item.subtotal, currency)}</span>

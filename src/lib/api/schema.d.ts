@@ -1669,6 +1669,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/treatment-plans/unscheduled": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["PlanVisitsController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/treatment-plans/{id}/visits": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["PlanVisitsController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch: operations["PlanVisitsController_update"];
+        trace?: never;
+    };
     "/api/v1/treatment-plans/pending-follow-up": {
         parameters: {
             query?: never;
@@ -5607,6 +5639,8 @@ export interface components {
             void: components["schemas"]["ToothRecordVoidDto"] | null;
         };
         CreateAppointmentDto: {
+            /** @description Ítems aceptados del mismo paciente para esta cita (DX-256). [] desvincula al editar. */
+            planItemIds?: string[];
             /** Format: uuid */
             patientId: string;
             /** Format: uuid */
@@ -5641,6 +5675,7 @@ export interface components {
          */
         AppointmentWarningCode: "SCHEDULE_BLOCK" | "PROVIDER_OFF_SCHEDULE";
         AppointmentWriteDto: {
+            planItemIds: string[];
             /** Format: uuid */
             id: string;
             /** Format: uuid */
@@ -5723,6 +5758,7 @@ export interface components {
             anamnesisReviewedAt: string | null;
         };
         AppointmentListItemDto: {
+            planItemIds: string[];
             /** Format: uuid */
             id: string;
             /** Format: uuid */
@@ -5867,6 +5903,7 @@ export interface components {
             readyForCheckout: components["schemas"]["InClinicItemDto"][];
         };
         AppointmentDto: {
+            planItemIds: string[];
             /** Format: uuid */
             id: string;
             /** Format: uuid */
@@ -5930,6 +5967,8 @@ export interface components {
             updatedAt: string;
         };
         UpdateAppointmentDto: {
+            /** @description Ítems aceptados del mismo paciente para esta cita (DX-256). [] desvincula al editar. */
+            planItemIds?: string[];
             /** Format: date-time */
             start?: string;
             /** Format: date-time */
@@ -6695,6 +6734,75 @@ export interface components {
             /** @enum {string} */
             action: "confirm" | "cancel" | "call_me";
         };
+        UnscheduledPlanDto: {
+            /** Format: uuid */
+            planId: string;
+            /** Format: uuid */
+            patientId: string;
+            patientName: string;
+            patientWhatsApp: string | null;
+            optionLabel: string | null;
+            /** Format: uuid */
+            locationId: string | null;
+            /** Format: date-time */
+            acceptedAt: string | null;
+            daysSinceAccepted: number;
+            currency: string;
+            total: number;
+            itemCount: number;
+            nextVisit: number;
+            visitLabel: string | null;
+            /** Format: date-time */
+            minimumDate: string;
+            minimumDay: string;
+            planItemIds: string[];
+        };
+        UnscheduledPlansPageDto: {
+            items: components["schemas"]["UnscheduledPlanDto"][];
+            /** Format: uuid */
+            nextCursor: string | null;
+            limit: number;
+        };
+        PlanVisitItemViewDto: {
+            /** Format: uuid */
+            id: string;
+            visit: number;
+            visitLabel: string | null;
+        };
+        PlanVisitSummaryDto: {
+            number: number;
+            label: string | null;
+            minDaysAfterPrevious: number;
+            /** Format: date-time */
+            minimumDate: string;
+            /**
+             * @description Día civil de la sede; se muestra sin convertir a la zona del navegador.
+             * @example 2026-12-29
+             */
+            minimumDay: string;
+            planItemIds: string[];
+        };
+        PlanVisitsDto: {
+            /** Format: uuid */
+            planId: string;
+            items: components["schemas"]["PlanVisitItemViewDto"][];
+            visitIntervals: {
+                [key: string]: number;
+            };
+            visits: components["schemas"]["PlanVisitSummaryDto"][];
+        };
+        VisitItemDto: {
+            /** Format: uuid */
+            itemId: string;
+            visit: number;
+            visitLabel?: string | null;
+        };
+        UpdatePlanVisitsDto: {
+            items: components["schemas"]["VisitItemDto"][];
+            visitIntervals: {
+                [key: string]: number;
+            };
+        };
         PendingFollowUpItemDto: {
             /** Format: uuid */
             planId: string;
@@ -6745,6 +6853,9 @@ export interface components {
         /** @enum {string} */
         TreatmentPlanRejectionReason: "PRICE" | "FEAR" | "SECOND_OPINION" | "OTHER_OPTION_ACCEPTED" | "OTHER";
         TreatmentPlanItemDto: {
+            /** @default 1 */
+            visit: number;
+            visitLabel?: string | null;
             /** Format: uuid */
             id: string;
             /** Format: uuid */
@@ -6814,6 +6925,13 @@ export interface components {
             acceptedAt: string;
         };
         TreatmentPlanDto: {
+            visitIntervals?: {
+                [key: string]: number;
+            };
+            /** Format: date-time */
+            acceptedAt?: string | null;
+            /** Format: uuid */
+            acceptedLocationId?: string | null;
             /** Format: uuid */
             id: string;
             /** Format: uuid */
@@ -6954,6 +7072,13 @@ export interface components {
             surfaces?: ("MESIAL" | "DISTAL" | "OCCLUSAL" | "VESTIBULAR" | "LINGUAL")[];
             notes?: string;
         };
+        PlanQuoteVisitDto: {
+            /** Format: uuid */
+            itemId: string;
+            visit: number;
+            label: string | null;
+            minDaysAfterPrevious: number;
+        };
         PlanQuoteLocationDto: {
             /** Format: uuid */
             id: string;
@@ -7019,6 +7144,8 @@ export interface components {
             integrityOk: boolean;
         };
         PlanQuoteDocumentDto: {
+            /** @description Organización clínica actual; separada del contenido firmado. */
+            visitOrganization?: components["schemas"]["PlanQuoteVisitDto"][];
             /**
              * @description 2 = con convenio y ahorro (DX-105); 1 = foto firmada antes de DX-105 (sin convenio).
              * @enum {number}
@@ -14878,6 +15005,76 @@ export interface operations {
                     [name: string]: unknown;
                 };
                 content?: never;
+            };
+        };
+    };
+    PlanVisitsController_list: {
+        parameters: {
+            query?: {
+                locationId?: string;
+                cursor?: string;
+                olderThanDays?: number;
+                limit?: number;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["UnscheduledPlansPageDto"];
+                };
+            };
+        };
+    };
+    PlanVisitsController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanVisitsDto"];
+                };
+            };
+        };
+    };
+    PlanVisitsController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdatePlanVisitsDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PlanVisitsDto"];
+                };
             };
         };
     };

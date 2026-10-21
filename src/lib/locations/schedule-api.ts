@@ -21,8 +21,9 @@ export interface BusinessHours {
  */
 export async function getLocationSchedule(
   token: string,
+  locationId?:string,
 ): Promise<BusinessHours | null> {
-  return apiFetch<BusinessHours | null>('/locations/schedule', { token });
+  return apiFetch<BusinessHours | null>('/locations/schedule', { token, ...(locationId?{headers:{'X-Location-Id':locationId}}:{}) });
 }
 
 /**

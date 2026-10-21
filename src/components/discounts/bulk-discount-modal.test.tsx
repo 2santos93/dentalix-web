@@ -24,6 +24,7 @@ function item(id: string, tooth: string, price: number): TreatmentPlanItem {
     catalogItemId: 'cat-1',
     price,
     discount: 0,
+    visit: 1,
     ...ITEM_WITHOUT_DISCOUNT,
     status: 'PROPOSED',
     notes: null,
