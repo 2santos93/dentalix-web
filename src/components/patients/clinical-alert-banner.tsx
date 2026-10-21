@@ -2,7 +2,8 @@
 import { useEffect, useState } from 'react';
 import { CloudOff, TriangleAlert } from 'lucide-react';
 import { getMedicalHistory } from '@/lib/patients/clinical-api';
-import type { MedicalHistory, SafetyFlags } from '@/lib/clinical/clinical-types';
+import type { MedicalHistory } from '@/lib/clinical/clinical-types';
+import { SAFETY_FLAG_LABELS } from '@/lib/clinical/medical-alerts';
 import { Button } from '@/components/ui/button';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
@@ -20,19 +21,9 @@ const copy = {
   noHistory: 'Sin anamnesis registrada — nadie ha preguntado todavía por alergias ni condiciones.',
 };
 
-// flag -> etiqueta. `embarazo` gets the extra "(N semanas)" suffix handled
-// separately below since it needs `semanasEmbarazo`.
-const SAFETY_FLAG_LABELS: Record<Exclude<keyof SafetyFlags, 'semanasEmbarazo'>, string> = {
-  embarazo: 'Embarazo',
-  anticoagulantes: 'Anticoagulantes',
-  bifosfonatos: 'Bifosfonatos',
-  diabetes: 'Diabetes',
-  profilaxisAntibiotica: 'Requiere profilaxis antibiótica',
-  alergiaAnestesico: 'Alergia a anestésico',
-  alergiaPenicilina: 'Alergia a penicilina',
-  alergiaLatex: 'Alergia a látex',
-};
-
+// flag -> etiqueta: compartidas con la agenda (DX-247) para que la alerta se
+// lea igual en la ficha, la tarjeta de la cita y «En clínica». `embarazo`
+// lleva aparte el sufijo «(N semanas)», que necesita `semanasEmbarazo`.
 function buildAlertLines(data: MedicalHistory): string[] {
   const lines: string[] = [];
   const flags = data.safetyFlags;

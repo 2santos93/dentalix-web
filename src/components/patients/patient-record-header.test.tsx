@@ -208,3 +208,42 @@ describe('PatientRecordHeader · cobertura vencida (DX-153)', () => {
   });
 });
 
+
+describe('PatientRecordHeader: alerta médica (DX-247)', () => {
+  const flags = {
+    hasCriticalAlert: true,
+    requiresPremedication: true,
+    anamnesisStatus: 'CURRENT' as const,
+    alerts: ['profilaxisAntibiotica' as const],
+    anamnesisReviewedAt: '2026-09-01T00:00:00.000Z',
+  };
+
+  it('la cabecera (que encabeza el plan y el odontograma) muestra la alerta con su titular', async () => {
+    const user = userEvent.setup();
+    render(<PatientRecordHeader patient={patient()} loading={false} onEdit={() => {}} medicalAlerts={flags} />);
+    expect(screen.getByTestId('record-medical-alert')).toHaveTextContent('Requiere premedicación');
+    await user.click(screen.getByRole('button', { name: 'Alertas médicas de Carlos Mejía' }));
+    expect(screen.getByRole('tooltip')).toHaveTextContent('Requiere profilaxis antibiótica');
+  });
+
+  it('sin anamnesis lo dice; al día y sin alertas no pinta nada', () => {
+    const { rerender } = render(
+      <PatientRecordHeader
+        patient={patient()}
+        loading={false}
+        onEdit={() => {}}
+        medicalAlerts={{ ...flags, hasCriticalAlert: false, requiresPremedication: false, alerts: [], anamnesisStatus: 'MISSING' }}
+      />,
+    );
+    expect(screen.getByTestId('record-medical-alert')).toHaveTextContent('Sin anamnesis');
+    rerender(
+      <PatientRecordHeader
+        patient={patient()}
+        loading={false}
+        onEdit={() => {}}
+        medicalAlerts={{ ...flags, hasCriticalAlert: false, requiresPremedication: false, alerts: [] }}
+      />,
+    );
+    expect(screen.queryByTestId('record-medical-alert')).not.toBeInTheDocument();
+  });
+});
