@@ -122,5 +122,6 @@ describe('CashAdjustmentModal (DX-027, DX-252)', () => {
     mockedAdd.mockRejectedValueOnce(new ApiError(500, 'Internal server error'));
     await user.click(submit());
     expect(await screen.findByText('No pudimos registrar el ajuste. Intenta de nuevo.')).toBeInTheDocument();
+    expect(screen.queryByText(/Internal/)).not.toBeInTheDocument();
   });
 });

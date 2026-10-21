@@ -59,10 +59,8 @@ const patients: Record<'jorge' | 'ana' | 'lucas' | 'clara', string> = {
   lucas: '',
   clara: '',
 };
-/** La cita de hoy de Jorge para «En clínica»; vacía a menos de 1 h de la medianoche. */
-let todayAppointmentId = '';
-/** El día de la sede de la cita de hoy de Jorge. */
-let todayDay = '';
+/** La odontóloga de las citas (la de hoy de Jorge se crea en su test). */
+let linaId = '';
 
 test.describe.configure({ mode: 'serial' });
 
@@ -83,7 +81,7 @@ test.beforeAll(async ({ request }) => {
   expect(schedule.ok()).toBeTruthy();
   const staff = await request.get(`${API_URL}/staff`, { headers: session.headers });
   const members = (await staff.json()) as { userId: string; fullName: string }[];
-  const linaId = members.find((m) => m.fullName === dentist.fullName)!.userId;
+  linaId = members.find((m) => m.fullName === dentist.fullName)!.userId;
 
   const names = { jorge: 'Jorge', ana: 'Ana', lucas: 'Lucas', clara: 'Clara' } as const;
   for (const [i, key] of (['jorge', 'ana', 'lucas', 'clara'] as const).entries()) {
@@ -117,18 +115,6 @@ test.beforeAll(async ({ request }) => {
     allergies: [{ alergeno: 'Guantes de látex', tipo: 'MATERIAL', severidad: 'MODERADA', esAlerta: true }],
   });
   await saveHistory(patients.clara, {});
-
-  // Jorge, también hoy (23:55–23:59 de la sede, DX-252): llega para el panel «En clínica».
-  const slot = lastSlotToday();
-  todayDay = slot.day;
-  const appt = await apiPost<{ id: string }>(request, session, '/appointments', {
-    patientId: patients.jorge,
-    providerId: linaId,
-    start: slot.start.toISOString(),
-    end: slot.end.toISOString(),
-    reason: 'Control',
-  });
-  todayAppointmentId = appt.id;
 });
 
 /** La anamnesis de Ana tiene dos años: la historia no se puede antedatar por la API. */
@@ -303,8 +289,18 @@ test('«Nueva cita» con Jorge avisa «Requiere premedicación» antes de agenda
 });
 
 test('«En clínica» muestra la misma alerta junto al paciente que llegó', async ({ page, request }) => {
-  await page.clock.install({ time: atSede(todayDay, LATE_BROWSER_TIME) });
-  const arrived = await request.patch(`${API_URL}/appointments/${todayAppointmentId}`, {
+  // Jorge, también hoy (23:55–23:59 de la sede, DX-252), creada aquí: si el
+  // reloj ya no deja agendarla, solo falla este test, no el fichero entero.
+  const slot = lastSlotToday();
+  const today = await apiPost<{ id: string }>(request, session, '/appointments', {
+    patientId: patients.jorge,
+    providerId: linaId,
+    start: slot.start.toISOString(),
+    end: slot.end.toISOString(),
+    reason: 'Control',
+  });
+  await page.clock.install({ time: atSede(slot.day, LATE_BROWSER_TIME) });
+  const arrived = await request.patch(`${API_URL}/appointments/${today.id}`, {
     headers: session.headers,
     data: { status: 'ARRIVED' },
   });
