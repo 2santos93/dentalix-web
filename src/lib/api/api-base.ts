@@ -11,13 +11,20 @@
 export const API_PROXY_PATH = '/api/v1';
 
 /**
- * Tope del cuerpo que el proxy de Next reenvía a la API (DX-151). Next copia el
- * cuerpo en memoria y por defecto lo CORTA a 10 MB sin avisar al cliente: un
- * documento del paciente de 10–20 MB llegaba truncado y la API respondía 500.
- * 25 MB cubren el tope de 20 MB por fichero más el multipart, y un fichero de
- * más llega entero a la API, que contesta 413 en español.
+ * Tope del cuerpo que el proxy de Next copia en memoria al reenviar
+ * `/api/v1/*` a la API (DX-259, OPS-038): 1 MB. Vale para TODAS las peticiones
+ * del rewrite, también las anónimas (el JWT y el rate limit están en la API,
+ * detrás), así que tiene que ser pequeño: con 25 MB (DX-151), unas decenas de
+ * POST anónimos grandes llevaban el proceso de la web a OOM.
+ *
+ * Next no rechaza lo que pasa del tope: lo corta y reenvía solo el primer MB
+ * con el `Content-Length` original, y la API lo rechaza (413) sin leerlo.
+ * Nada legítimo se acerca: los documentos del paciente van directos al bucket
+ * (POST prefirmado, `patient-documents-api.ts`), el avatar se reduce en el
+ * navegador (`me-api.ts`) y el cuerpo más grande que queda, la firma de un
+ * consentimiento, son 700 KB.
  */
-export const API_PROXY_MAX_BODY_BYTES = 25 * 1024 * 1024;
+export const API_PROXY_MAX_BODY_BYTES = 1024 * 1024;
 
 /** URL absoluta de la API (`NEXT_PUBLIC_API_URL`), para el servidor y el proxy. */
 export const API_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000/api/v1';
@@ -39,7 +46,8 @@ export function apiOrigin(apiUrl: string = API_URL): string {
 
 /**
  * Origen de las URL firmadas de los documentos del paciente (DX-151), que el
- * visor pinta en `<img>`/`<iframe>`: el bucket (S3, R2, MinIO) si se configura
+ * visor pinta en `<img>`/`<iframe>`, y de la subida directa (DX-259, el POST
+ * prefirmado por XHR): el bucket (S3, R2, MinIO) si se configura
  * `NEXT_PUBLIC_FILES_ORIGIN`; si no (almacenamiento en disco), la propia API.
  * Un valor que no es una URL se ignora y cae en la API.
  */

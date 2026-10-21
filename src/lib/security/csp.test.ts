@@ -36,9 +36,12 @@ describe('buildCsp', () => {
     expect(d.get('form-action')).toEqual(["'self'"]);
   });
 
-  it('connect-src solo el propio origen: la API se alcanza por /api/v1 del mismo host', () => {
+  it('connect-src: el propio origen (la API por /api/v1) y el de los ficheros, para la subida directa (DX-259)', () => {
     const d = directives(buildCsp({ ...base, isDev: false }));
-    expect(d.get('connect-src')).toEqual(["'self'"]);
+    // Con el disco, el formulario va a la API (`/files/uploads`).
+    expect(d.get('connect-src')).toEqual(["'self'", 'http://localhost:3130']);
+    const bucket = directives(buildCsp({ ...base, isDev: false, filesOrigin: 'https://files.example.com' }));
+    expect(bucket.get('connect-src')).toEqual(["'self'", 'https://files.example.com']);
   });
 
   it('img-src admite logos y avatares servidos por la API, y data:/blob: (firma, vista previa del avatar)', () => {

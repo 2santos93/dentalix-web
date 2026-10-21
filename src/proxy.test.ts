@@ -2,7 +2,7 @@
  * @jest-environment node
  */
 import { NextRequest } from 'next/server';
-import { config, proxy } from './proxy';
+import { API_BODY_TOO_LARGE, config, proxy } from './proxy';
 
 function run(url: string, headers: Record<string, string> = {}) {
   return proxy(new NextRequest(url, { headers }));
@@ -62,5 +62,33 @@ describe('proxy (DX-062: CSP con nonce por petición)', () => {
     const csp = run('http://demo.localhost:3001/patients/p1').headers.get('content-security-policy') as string;
     const frameSrc = csp.split(';').map((d) => d.trim()).find((d) => d.startsWith('frame-src'));
     expect(frameSrc).toBe(`frame-src 'self' ${new URL(process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000/api/v1').origin}`);
+  });
+
+  it('DX-259: un POST a /api/v1 con más de 1 MB es 413 aquí, sin llegar a la API; lo demás sigue al rewrite sin tocar', async () => {
+    const big = proxy(
+      new NextRequest('http://demo.localhost:3001/api/v1/auth/login', {
+        method: 'POST',
+        headers: { host: 'demo.localhost:3001', 'content-length': String(5 * 1024 * 1024) },
+      }),
+    );
+    expect(big.status).toBe(413);
+    expect(await big.json()).toEqual(API_BODY_TOO_LARGE);
+    expect(big.headers.get('content-security-policy')).toBeNull();
+
+    const small = proxy(
+      new NextRequest('http://demo.localhost:3001/api/v1/auth/login', {
+        method: 'POST',
+        headers: { host: 'demo.localhost:3001', 'content-length': String(700 * 1024) },
+      }),
+    );
+    expect(small.status).toBe(200);
+    expect(small.headers.get('x-middleware-next')).toBe('1');
+    expect(small.headers.get('content-security-policy')).toBeNull();
+    expect(forwarded(small, 'x-nonce')).toBeNull();
+  });
+
+  it('DX-259: sobre /api/v1 solo corre si la petición trae cuerpo (Content-Length)', () => {
+    const api = config.matcher[1];
+    expect(api).toEqual({ source: '/api/v1/:path*', has: [{ type: 'header', key: 'content-length' }] });
   });
 });
