@@ -1815,13 +1815,13 @@ describe('TreatmentPlansTab', () => {
       expect(price).toBeEnabled();
       expect(price.value).toBe('50000');
 
-      // Sin precio resuelto no hay con qué compararlo: el precio se envía.
+      // El fallo de vista previa no convierte el catálogo en un precio manual:
+      // la API debe resolver el convenio al crear el ítem.
       await user.click(submit());
       await waitFor(() =>
         expect(mockedAddItem).toHaveBeenCalledWith('tok', 'plan-1', {
           toothNumber: '16',
           catalogItemId: 'cat-1',
-          price: 50000,
         }),
       );
     });

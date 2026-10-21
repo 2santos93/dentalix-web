@@ -72,4 +72,41 @@ describe('usePriceQuote (DX-105)', () => {
     await waitFor(() => expect(result.current.status).toBe('ready'));
     expect(result.current.quote?.price).toBe(70);
   });
+
+  it.each(['', 'c2'])(
+    'al volver a la misma prestación después de «%s», espera una cotización nueva',
+    async (intermediate) => {
+      const pending = deferred();
+      mocked.mockResolvedValueOnce(quote(80)).mockReturnValue(pending.promise);
+      const { result, rerender } = renderHook(
+        ({ id }) => usePriceQuote({ token: 't', patientId: 'p', catalogItemId: id, currency: 'COP' }),
+        { initialProps: { id: 'c1' } },
+      );
+      await waitFor(() => expect(result.current.status).toBe('ready'));
+
+      rerender({ id: intermediate });
+      rerender({ id: 'c1' });
+      expect(result.current.status).toBe('loading');
+      expect(result.current.quote).toBeNull();
+
+      await act(async () => pending.resolve(quote(70)));
+      expect(result.current.status).toBe('ready');
+      expect(result.current.quote?.price).toBe(70);
+    },
+  );
+
+  it('al renovar el token no muestra el precio anterior mientras consulta el nuevo contexto', async () => {
+    const pending = deferred();
+    mocked.mockResolvedValueOnce(quote(80)).mockReturnValueOnce(pending.promise);
+    const { result, rerender } = renderHook(
+      ({ token }) => usePriceQuote({ token, patientId: 'p', catalogItemId: 'c1', currency: 'COP' }),
+      { initialProps: { token: 'old' } },
+    );
+    await waitFor(() => expect(result.current.status).toBe('ready'));
+    rerender({ token: 'new' });
+    expect(result.current.status).toBe('loading');
+    expect(result.current.quote).toBeNull();
+    await act(async () => pending.resolve(quote(60)));
+    expect(result.current.quote?.price).toBe(60);
+  });
 });

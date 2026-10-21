@@ -1780,10 +1780,9 @@ export function TreatmentPlansTab({
         catalogItemId,
         ...(selectedSurfaces.length ? { surfaces: selectedSurfaces } : {}),
         // DX-105: el precio resuelto lo vuelve a calcular la API; solo se
-        // manda lo que el usuario escribió (o si no había precio resuelto).
-        ...(priceInput !== undefined && (priceEdited || !quoteReady || quoteReady.price === null)
-          ? { price: priceInput }
-          : {}),
+        // manda lo que el usuario escribió. Un fallo de vista previa tampoco
+        // convierte el precio de catálogo precargado en un precio manual.
+        ...(priceInput !== undefined && priceEdited ? { price: priceInput } : {}),
         ...(discountValue > 0 ? { discount: discountValue } : {}),
         ...(discounted ? reasonPayload(addReason) : {}),
         ...(notes.trim() ? { notes: notes.trim() } : {}),
