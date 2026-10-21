@@ -713,6 +713,57 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/patients/{patientId}/medical-history/no-changes": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["MedicalHistoryController_confirm"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{patientId}/medical-alerts": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Banderas médicas del paciente (alertas, premedicación, anamnesis al día / caducada / ausente) */
+        get: operations["PatientMedicalAlertsController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/medical-history/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Vigencia de la anamnesis de la clínica */
+        get: operations["AnamnesisSettingsController_get"];
+        /** Cambia la vigencia de la anamnesis (1–60 meses); queda en la auditoría */
+        put: operations["AnamnesisSettingsController_update"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/patients/{patientId}/clinical-entries": {
         parameters: {
             query?: never;
@@ -4602,6 +4653,81 @@ export interface components {
             /** Format: date-time */
             createdAt: string;
         };
+        AnamnesisConfirmationDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            patientId: string;
+            /**
+             * Format: uuid
+             * @description La versión vigente que se confirmó.
+             */
+            medicalHistoryVersionId: string;
+            /** Format: uuid */
+            reviewedById: string;
+            reviewedByName: string | null;
+            /**
+             * Format: uuid
+             * @description Sede del request; null en la vista consolidada.
+             */
+            locationId: string | null;
+            /**
+             * Format: date-time
+             * @description Reloj del servidor.
+             */
+            reviewedAt: string;
+        };
+        /**
+         * @description CURRENT: al día. EXPIRED: la última versión o confirmación «Sin cambios hoy» es más antigua que la vigencia de la clínica. MISSING: sin anamnesis (no es «sin alertas»).
+         * @enum {string}
+         */
+        AnamnesisStatus: "CURRENT" | "EXPIRED" | "MISSING";
+        /**
+         * @description Alertas activas en el orden del banner de la ficha. `alergiaMarcada`: otra alergia marcada como alerta (el alérgeno no viaja; se ve en la ficha).
+         * @enum {string}
+         */
+        MedicalAlertCode: "embarazo" | "anticoagulantes" | "bifosfonatos" | "diabetes" | "profilaxisAntibiotica" | "alergiaAnestesico" | "alergiaPenicilina" | "alergiaLatex" | "alergiaMarcada";
+        AnamnesisLastReviewDto: {
+            /**
+             * @description UPDATED: se guardó una versión. NO_CHANGES: «Sin cambios hoy».
+             * @enum {string}
+             */
+            kind: "UPDATED" | "NO_CHANGES";
+            /** Format: date-time */
+            at: string;
+            /** @description Quién la revisó (miembro de la clínica). */
+            byName: string | null;
+        };
+        PatientMedicalAlertsDto: {
+            /** @description La versión vigente de la anamnesis tiene alguna alerta (derivada en el servidor). false sin anamnesis. */
+            hasCriticalAlert: boolean;
+            /** @description Profilaxis antibiótica activa: la cita avisa «Requiere premedicación». */
+            requiresPremedication: boolean;
+            /** @description CURRENT: al día. EXPIRED: la última versión o confirmación «Sin cambios hoy» es más antigua que la vigencia de la clínica. MISSING: sin anamnesis (no es «sin alertas»). */
+            anamnesisStatus: components["schemas"]["AnamnesisStatus"];
+            /** @description Alertas activas en el orden del banner de la ficha. `alergiaMarcada`: otra alergia marcada como alerta (el alérgeno no viaja; se ve en la ficha). */
+            alerts: components["schemas"]["MedicalAlertCode"][];
+            /**
+             * Format: date-time
+             * @description Última versión de la anamnesis o última confirmación «Sin cambios hoy», la más reciente; null sin anamnesis.
+             */
+            anamnesisReviewedAt: string | null;
+            /** @description Vigencia de la anamnesis en la clínica, en meses. */
+            validityMonths: number;
+            /**
+             * Format: date-time
+             * @description Desde cuándo sale «Anamnesis caducada»; null sin anamnesis.
+             */
+            anamnesisExpiresAt: string | null;
+            lastReview: components["schemas"]["AnamnesisLastReviewDto"] | null;
+        };
+        AnamnesisSettingsDto: {
+            /**
+             * @description Meses que vale la anamnesis (o su última confirmación «Sin cambios hoy») antes de salir «Anamnesis caducada». 12 por defecto.
+             * @example 12
+             */
+            anamnesisValidityMonths: number;
+        };
         ClinicalEntryAnswerDto: {
             /**
              * Format: uuid
@@ -5114,6 +5240,21 @@ export interface components {
             /** @description DX-233: código de cada aviso, en el mismo orden que `warnings`: SCHEDULE_BLOCK (bloqueo que deja agendar, DX-122) o PROVIDER_OFF_SCHEDULE (fuera del horario del profesional en la sede). */
             warningCodes: components["schemas"]["AppointmentWarningCode"][];
         };
+        MedicalAlertFlagsDto: {
+            /** @description La versión vigente de la anamnesis tiene alguna alerta (derivada en el servidor). false sin anamnesis. */
+            hasCriticalAlert: boolean;
+            /** @description Profilaxis antibiótica activa: la cita avisa «Requiere premedicación». */
+            requiresPremedication: boolean;
+            /** @description CURRENT: al día. EXPIRED: la última versión o confirmación «Sin cambios hoy» es más antigua que la vigencia de la clínica. MISSING: sin anamnesis (no es «sin alertas»). */
+            anamnesisStatus: components["schemas"]["AnamnesisStatus"];
+            /** @description Alertas activas en el orden del banner de la ficha. `alergiaMarcada`: otra alergia marcada como alerta (el alérgeno no viaja; se ve en la ficha). */
+            alerts: components["schemas"]["MedicalAlertCode"][];
+            /**
+             * Format: date-time
+             * @description Última versión de la anamnesis o última confirmación «Sin cambios hoy», la más reciente; null sin anamnesis.
+             */
+            anamnesisReviewedAt: string | null;
+        };
         AppointmentListItemDto: {
             /** Format: uuid */
             id: string;
@@ -5178,6 +5319,8 @@ export interface components {
             updatedAt: string;
             balance: components["schemas"]["OverdueBalanceDto"];
             coverage: components["schemas"]["CoverageSummaryDto"];
+            /** @description DX-247: banderas médicas del paciente (alerta, premedicación, anamnesis al día / caducada / ausente). Sin alérgenos, condiciones, medicamentos ni notas. */
+            medicalAlerts: components["schemas"]["MedicalAlertFlagsDto"];
         };
         OpeningDto: {
             /**
@@ -5230,6 +5373,8 @@ export interface components {
              * @enum {string}
              */
             punctuality: "ON_TIME" | "LATE" | "VERY_LATE";
+            /** @description DX-247: la misma alerta médica que la tarjeta de la agenda (solo banderas). */
+            medicalAlerts: components["schemas"]["MedicalAlertFlagsDto"];
         };
         InClinicViewDto: {
             /** @example 2026-10-19 */
@@ -11222,6 +11367,126 @@ export interface operations {
             };
         };
     };
+    MedicalHistoryController_confirm: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Confirmación «Sin cambios hoy» sobre la versión vigente: autor, sede y hora del servidor. Queda en la auditoría (`NO_CHANGES_CONFIRMED`). */
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnamnesisConfirmationDto"];
+                };
+            };
+            /** @description Paciente no encontrado en esta clínica (inexistente o de otra clínica). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El paciente no tiene anamnesis que confirmar. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientMedicalAlertsController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PatientMedicalAlertsDto"];
+                };
+            };
+            /** @description Paciente no encontrado en esta clínica (inexistente o de otra clínica). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AnamnesisSettingsController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnamnesisSettingsDto"];
+                };
+            };
+        };
+    };
+    AnamnesisSettingsController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AnamnesisSettingsDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnamnesisSettingsDto"];
+                };
+            };
+            /** @description Fuera de 1–60 meses */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo un administrador puede cambiar la vigencia de la anamnesis. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     ClinicalEntriesController_list: {
         parameters: {
             query?: {
@@ -11853,7 +12118,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Cada cita con `balance` (DX-150): marca «Saldo vencido» de su paciente, calculada para todo el lote en un número fijo de consultas (sin N+1). El importe, solo ADMIN y RECEPTION. Y con `coverage` (DX-153): resumen de la cobertura principal del paciente, también por lote. */
+            /** @description Cada cita con `balance` (DX-150): marca «Saldo vencido» de su paciente, calculada para todo el lote en un número fijo de consultas (sin N+1). El importe, solo ADMIN y RECEPTION. Con `coverage` (DX-153): resumen de la cobertura principal del paciente, también por lote. Y con `medicalAlerts` (DX-247): SOLO banderas de la anamnesis (alerta, premedicación, al día / caducada / ausente y los códigos de alerta), nunca la historia médica. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -11980,7 +12245,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description DX-200 panel «En clínica» de la sede del request (X-Location-Id): en espera, en sillón y listo para cobrar de un día civil en la zona de la sede, con los minutos calculados con el reloj del servidor y la puntualidad de la llegada. Solo nombre y horas (nada clínico). DENTIST: solo sus pacientes («Te esperan»); RECEPTION, ASSISTANT y ADMIN: toda la sede. */
+            /** @description DX-200 panel «En clínica» de la sede del request (X-Location-Id): en espera, en sillón y listo para cobrar de un día civil en la zona de la sede, con los minutos calculados con el reloj del servidor y la puntualidad de la llegada. Solo nombre, horas y, desde DX-247, las banderas médicas mínimas (`medicalAlerts`), nunca la historia. DENTIST: solo sus pacientes («Te esperan»); RECEPTION, ASSISTANT y ADMIN: toda la sede. */
             200: {
                 headers: {
                     [name: string]: unknown;
