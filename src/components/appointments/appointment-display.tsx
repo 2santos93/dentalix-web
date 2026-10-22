@@ -1,5 +1,5 @@
 'use client';
-import { Phone, Send } from 'lucide-react';
+import { Phone, Send, Calendar, CircleCheck, CheckCheck, CircleX, CircleMinus, Clock, Armchair, Wallet } from 'lucide-react';
 import type { Appointment, AppointmentStatus } from '@/lib/appointments/appointments-api';
 import {
   confirmationIndicator,
@@ -20,6 +20,26 @@ export const STATUS_LABELS: Record<AppointmentStatus, string> = {
   IN_CHAIR: 'En sillón',
   READY_FOR_CHECKOUT: 'Listo para cobrar',
 };
+
+/** Formas distintas para reconocer los estados también sin matiz. */
+const STATUS_ICONS = {
+  SCHEDULED: Calendar, CONFIRMED: CircleCheck, COMPLETED: CheckCheck,
+  CANCELLED: CircleX, NO_SHOW: CircleMinus, ARRIVED: Clock,
+  IN_CHAIR: Armchair, READY_FOR_CHECKOUT: Wallet,
+} satisfies Record<AppointmentStatus, typeof Calendar>;
+const STATUS_SHORT_LABELS: Record<AppointmentStatus, string> = {
+  SCHEDULED: 'Agend.', CONFIRMED: 'Conf.', COMPLETED: 'Complet.',
+  CANCELLED: 'Cancel.', NO_SHOW: 'No asist.', ARRIVED: 'Espera',
+  IN_CHAIR: 'Sillón', READY_FOR_CHECKOUT: 'Cobrar',
+};
+
+export function AppointmentStatusLabel({ status, compact = false }: { status: AppointmentStatus; compact?: boolean }) {
+  const Icon = STATUS_ICONS[status];
+  return <span data-appointment-status={status} title={STATUS_LABELS[status]} className="inline-flex min-w-0 shrink-0 items-center gap-1">
+    <Icon aria-hidden className="size-3 shrink-0" />
+    <span>{compact ? STATUS_SHORT_LABELS[status] : STATUS_LABELS[status]}</span>
+  </span>;
+}
 
 // One semantic-token class per status — never a raw color utility
 // (`bg-*-500`, `text-[#...]`). SCHEDULED/CONFIRMED use the neutral/brand
@@ -72,7 +92,7 @@ export function StatusBadge({ status }: { status: AppointmentStatus }) {
       data-testid="appointment-status-badge"
       className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${STATUS_BADGE_CLASSES[status]}`}
     >
-      {STATUS_LABELS[status]}
+      <AppointmentStatusLabel status={status} />
     </span>
   );
 }

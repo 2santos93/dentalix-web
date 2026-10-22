@@ -1,4 +1,5 @@
 'use client';
+import { useSessionLocations } from '@/lib/locations/session-locations';
 import { useEffect, useRef, useState } from 'react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import {
@@ -12,7 +13,7 @@ import { getLocationSchedule, type BusinessHours } from '@/lib/locations/schedul
 import { getRoster, type MinuteRangeDto, type Roster } from '@/lib/locations/provider-schedule-api';
 import { hiddenProviderIds, rosterDayOf } from '@/lib/locations/provider-schedule';
 import { getActiveLocationId } from '@/lib/locations/location-store';
-import { listLocations, type ClinicLocation } from '@/lib/locations/locations-api';
+import type { ClinicLocation } from '@/lib/locations/locations-api';
 import { getTokenRole, getTokenUserId } from '@/lib/auth/token-role';
 import {
   blocksOwnAgendaOnly,
@@ -415,6 +416,7 @@ export function AgendaView({ token }: AgendaViewProps) {
   // DX-200: panel «En clínica» (lateral desde 1400 px; si no, en un cajón).
   // Se relee al cambiar un estado en la agenda, además de su sondeo.
   const [inClinicReloadKey, setInClinicReloadKey] = useState(0);
+  const requestLocations = useSessionLocations(token);
   const inClinic = useInClinic(token, { reloadKey: inClinicReloadKey });
   const [inClinicOpen, setInClinicOpen] = useState(false);
   const inClinicTotal = inClinic.view ? inClinicCount(inClinic.view) : null;
@@ -494,7 +496,7 @@ export function AgendaView({ token }: AgendaViewProps) {
     let cancelled = false;
     async function load() {
       if (getActiveLocationId() === null) {
-        const locations = await listLocations(token);
+        const locations = await requestLocations();
         if (locations.length !== 1) return;
       }
       const h = await getLocationSchedule(token);
@@ -504,7 +506,7 @@ export function AgendaView({ token }: AgendaViewProps) {
     return () => {
       cancelled = true;
     };
-  }, [token]);
+  }, [token, requestLocations]);
 
   // DX-233: en Día (columnas) con una sede activa, el cuadrante de ese día.
   // En «Todas las sedes» no hay una sede con la que comparar: nada.
@@ -529,7 +531,7 @@ export function AgendaView({ token }: AgendaViewProps) {
   useEffect(() => {
     if (!token) return;
     let cancelled = false;
-    listLocations(token)
+    requestLocations()
       .then((data) => {
         if (!cancelled) setLocations(data.filter((l) => l.isActive));
       })
@@ -537,7 +539,7 @@ export function AgendaView({ token }: AgendaViewProps) {
     return () => {
       cancelled = true;
     };
-  }, [token]);
+  }, [token, requestLocations]);
 
   // Columnas visibles: la selección del usuario (solo ids que siguen en el
   // personal) o la de por defecto.

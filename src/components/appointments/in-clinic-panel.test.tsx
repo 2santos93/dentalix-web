@@ -179,9 +179,26 @@ describe('InClinicPanel (DX-200)', () => {
     await userEvent.click(await screen.findByRole('button', { name: 'En sillón' }));
     expect(mockedUpdate).toHaveBeenCalledWith('T', 'a1', { status: 'IN_CHAIR' });
     expect(toast.success).toHaveBeenCalledWith('Ana Ríos pasó al sillón.');
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Listo para cobrar' })).toHaveFocus());
     await waitFor(() =>
       expect(within(screen.getByTestId('in-clinic-group-inChair')).getAllByTestId('in-clinic-item')).toHaveLength(1),
     );
+  });
+
+  it('DX-242: completar la última cita lleva foco al encabezado de su grupo', async () => {
+    mockedGet.mockResolvedValueOnce(view({ readyForCheckout: [item({ appointmentId:'last', status:'READY_FOR_CHECKOUT' })] })).mockResolvedValueOnce(view());
+    mockedUpdate.mockResolvedValue({} as never);
+    render(<Harness role="RECEPTION"/>);
+    await userEvent.click(await screen.findByRole('button', {name:'Completar'}));
+    await waitFor(() => expect(within(screen.getByTestId('in-clinic-group-readyForCheckout')).getByRole('heading')).toHaveFocus());
+    expect(document.body).not.toHaveFocus();
+  });
+
+  it('DX-242: abre pantalla completa y nunca muestra UUID como nombre', () => {
+    render(<InClinicPanel state={staticState({view:view({waiting:[item({appointmentId:'anon', patientFirstName:null, patientLastName:null, patientId:'uuid-clinico'})]})})} role="RECEPTION" runner={noRunner}/>);
+    expect(screen.getByText('Paciente sin nombre')).toBeInTheDocument();
+    expect(screen.queryByText('uuid-clinico')).not.toBeInTheDocument();
+    expect(screen.getByRole('link', {name:'Abrir a pantalla completa'})).toHaveAttribute('href','/agenda/en-clinica');
   });
 
   it('«Deshacer llegada» usa su ruta; un 409 avisa con Reintentar y relee', async () => {

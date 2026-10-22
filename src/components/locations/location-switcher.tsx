@@ -1,8 +1,9 @@
 'use client';
+import { useSessionLocations } from '@/lib/locations/session-locations';
 import { useEffect, useState } from 'react';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { getTokenAllowedLocationIds } from '@/lib/auth/token-role';
-import { listLocations, type ClinicLocation } from '@/lib/locations/locations-api';
+import type { ClinicLocation } from '@/lib/locations/locations-api';
 import {
   getActiveLocationId,
   setActiveLocationId,
@@ -53,6 +54,7 @@ export function LocationSwitcher({
   variant?: 'inline' | 'block' | 'rail';
 }) {
   const token = useAuthStore((s) => s.accessToken);
+  const requestLocations = useSessionLocations(token);
   const [locations, setLocations] = useState<ClinicLocation[]>([]);
   const [active, setActive] = useState<string | null>(null);
   // `null` = sin restricción. Se lee del token: cambia justo al renovarlo, que
@@ -74,9 +76,9 @@ export function LocationSwitcher({
   useEffect(() => {
     if (!token) return;
     let cancelled = false;
-    async function load(activeToken: string) {
+    async function load() {
       try {
-        const data = await listLocations(activeToken);
+        const data = await requestLocations();
         if (cancelled) return;
         // La API ya filtra `GET /locations` para un miembro acotado; filtrar
         // también aquí por el claim evita ofrecer una sede que daría 403 si
@@ -125,11 +127,11 @@ export function LocationSwitcher({
         // cada vez que la petición falle.
       }
     }
-    void load(token);
+    void load();
     return () => {
       cancelled = true;
     };
-  }, [token, allowedKey]);
+  }, [token, allowedKey, requestLocations]);
 
   // Sin ninguna sede sí se esconde: un selector vacío no ofrece nada. Con una
   // o más, se muestra (ver la nota de arriba).

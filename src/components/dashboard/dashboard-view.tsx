@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
+import { STATUS_LABELS } from '@/components/appointments/appointment-display';
 import { ApiError } from '@/lib/api/client';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { getDashboard, type Dashboard } from '@/lib/dashboard/dashboard-api';
@@ -49,17 +50,6 @@ const copy = {
   emptyUpcomingTitle: 'No hay citas próximas.',
   emptyUpcomingDescription: 'Las próximas citas agendadas aparecerán aquí.',
   patientCountHeading: '# Pacientes',
-  statusLabels: {
-    SCHEDULED: 'Agendada',
-    CONFIRMED: 'Confirmada',
-    COMPLETED: 'Completada',
-    CANCELLED: 'Cancelada',
-    NO_SHOW: 'No asistió',
-    // DX-200: en la clínica, «en curso».
-    ARRIVED: 'En espera',
-    IN_CHAIR: 'En sillón',
-    READY_FOR_CHECKOUT: 'Listo para cobrar',
-  } satisfies Record<Dashboard['upcomingAppointments'][number]['status'], string>,
 };
 
 type AppointmentStatus = Dashboard['upcomingAppointments'][number]['status'];
@@ -383,7 +373,7 @@ function UpcomingAppointmentsCard({
                     </span>
                   </div>
                   <Badge variant={STATUS_BADGE_VARIANT[appointment.status]}>
-                    {copy.statusLabels[appointment.status]}
+                    {STATUS_LABELS[appointment.status]}
                   </Badge>
                 </li>
               );

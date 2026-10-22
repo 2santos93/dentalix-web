@@ -613,6 +613,8 @@ export function DayColumns({
                           type="button"
                           aria-label={[
                             copy.detailFor(range, patient, p.fullName),
+                            STATUS_LABELS[a.status],
+                            a.appointmentType?.name,
                             overdueChipText(a.balance),
                             coverageChipText(a.coverage),
                             medicalAlertSummary(a.medicalAlerts),

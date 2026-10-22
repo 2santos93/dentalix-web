@@ -1,7 +1,8 @@
 'use client';
+import { useSessionLocations } from '@/lib/locations/session-locations';
 import { useEffect, useState } from 'react';
 import { DEFAULT_SEDE_TIME_ZONE, civilDateInZone } from '@/lib/format/date';
-import { listLocations, type ClinicLocation } from './locations-api';
+import type { ClinicLocation } from './locations-api';
 import { getActiveLocationId, onLocationChange } from './location-store';
 
 function isUsableZone(timeZone: string | undefined): timeZone is string {
@@ -42,13 +43,14 @@ export function sedeToday(timeZone: string | null, now: Date = new Date()): stri
  * Se recalcula al cambiar de sede.
  */
 export function useSedeTimeZone(token: string): string | null {
+  const requestLocations = useSessionLocations(token);
   const [locations, setLocations] = useState<ClinicLocation[] | null>(null);
   const [activeId, setActiveId] = useState<string | null>(() => getActiveLocationId());
 
   useEffect(() => {
     if (!token) return;
     let cancelled = false;
-    listLocations(token)
+    requestLocations()
       .then((data) => {
         if (!cancelled) setLocations(data);
       })
@@ -58,7 +60,7 @@ export function useSedeTimeZone(token: string): string | null {
     return () => {
       cancelled = true;
     };
-  }, [token]);
+  }, [token, requestLocations]);
 
   useEffect(() => onLocationChange(() => setActiveId(getActiveLocationId())), []);
 

@@ -527,3 +527,10 @@ describe('DayColumns: alertas médicas (DX-247)', () => {
     expect(handlers.onDrop).not.toHaveBeenCalled();
   });
 });
+
+
+it.each(['SCHEDULED', 'CONFIRMED', 'COMPLETED', 'CANCELLED', 'NO_SHOW', 'ARRIVED', 'IN_CHAIR', 'READY_FOR_CHECKOUT'] as const)('DX-242: Día %s anuncia estado y tipo', (status) => {
+  const labels = { SCHEDULED:'Agendada', CONFIRMED:'Confirmada', COMPLETED:'Completada', CANCELLED:'Cancelada', NO_SHOW:'No asistió', ARRIVED:'En espera', IN_CHAIR:'En sillón', READY_FOR_CHECKOUT:'Listo para cobrar' };
+  renderColumns({ appointments:[appointment({ id:'status', status })] });
+  expect(screen.getByRole('button', { name: new RegExp('Detalle.*' + labels[status]) })).toHaveAccessibleName(expect.stringContaining('Endodoncia'));
+});
