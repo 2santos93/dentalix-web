@@ -25,6 +25,8 @@ const copy = {
   pending: 'Pendiente',
   pendingAt: (at: string) => `sale el ${at}`,
   sending: 'Enviándose',
+  failed: 'Falló el envío',
+  failedHint: 'El recordatorio no pudo enviarse tras agotar los intentos.',
   skipped: (reason: string) => `Omitido: ${reason}`,
   missed: 'No enviado',
   missedHint: 'La cita se agendó después de esa hora.',
@@ -45,6 +47,7 @@ function shortDateTime(iso: string | null): string {
 
 const BADGE: Record<AppointmentReminderItem['state'], BadgeProps['variant']> = {
   SENT: 'success',
+  FAILED: 'danger',
   PENDING: 'muted',
   SENDING: 'muted',
   SKIPPED: 'warning',
@@ -53,6 +56,8 @@ const BADGE: Record<AppointmentReminderItem['state'], BadgeProps['variant']> = {
 
 function stateLabel(item: AppointmentReminderItem): string {
   switch (item.state) {
+    case 'FAILED':
+      return copy.failed;
     case 'SENT':
       return copy.sent(shortDateTime(item.sentAt));
     case 'PENDING':
@@ -67,6 +72,7 @@ function stateLabel(item: AppointmentReminderItem): string {
 }
 
 function detail(item: AppointmentReminderItem): string | null {
+  if (item.state === 'FAILED') return copy.failedHint;
   if (item.state === 'PENDING') return copy.pendingAt(shortDateTime(item.dueAt));
   if (item.state === 'MISSED') return copy.missedHint;
   if (item.state === 'SENT' && item.emailDelivery) return copy.delivery[item.emailDelivery];

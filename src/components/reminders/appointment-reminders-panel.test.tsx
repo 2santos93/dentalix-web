@@ -23,6 +23,7 @@ const item = (over: Partial<AppointmentReminderItem>): AppointmentReminderItem =
   state: 'PENDING',
   sentAt: null,
   skipReason: null,
+  failureReason: null,
   emailDelivery: null,
   sentToResponsible: false,
   current: true,
@@ -91,6 +92,26 @@ describe('AppointmentRemindersPanel (DX-026)', () => {
     expect(list).toHaveTextContent('La cita se agendó después de esa hora.');
     expect(list).toHaveTextContent('Omitido: sin email');
     expect(list).toHaveTextContent('El proveedor de correo no pudo entregarlo');
+  });
+
+  it('DX-160: fallo definitivo se distingue de pendiente con etiqueta y explicación', async () => {
+    mockedGet.mockResolvedValue({
+      enabled: true,
+      leadHours: [2],
+      patientBlocker: null,
+      items: [item({
+        leadHours: 2,
+        state: 'FAILED',
+        failureReason: 'Error ECONNRESET',
+      })],
+    });
+    render(<AppointmentRemindersPanel token="tok" appointmentId="a-1" />);
+    const list = await screen.findByRole('list', { name: 'Recordatorios de la cita' });
+    expect(within(list).getByText('Falló el envío')).toHaveClass('text-danger');
+    expect(list).toHaveTextContent('El recordatorio no pudo enviarse tras agotar los intentos.');
+    expect(list).not.toHaveTextContent('Pendiente');
+    expect(list).not.toHaveTextContent('sale el');
+    expect(list).not.toHaveTextContent('Error ECONNRESET');
   });
 
   it('vacío: sede sin recordatorios, o nada por salir', async () => {
