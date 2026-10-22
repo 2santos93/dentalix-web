@@ -980,7 +980,7 @@ export function AgendaView({ token }: AgendaViewProps) {
                       'h-8 rounded-md px-3.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface-2',
                       active
                         ? 'bg-surface text-ink shadow-sm'
-                        : 'text-muted hover:text-ink',
+                        : 'text-ink/80 hover:text-ink',
                     )}
                   >
                     {VIEW_LABEL[m]}
@@ -1159,7 +1159,7 @@ export function AgendaView({ token }: AgendaViewProps) {
                   onClick={() => setDayLayout(layout)}
                   className={cn(
                     'h-7 rounded-md px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
-                    dayLayout === layout ? 'bg-surface text-ink shadow-sm' : 'text-muted hover:text-ink',
+                    dayLayout === layout ? 'bg-surface text-ink shadow-sm' : 'text-ink/80 hover:text-ink',
                   )}
                 >
                   {layout === 'columns' ? copy.dayColumns : copy.dayList}

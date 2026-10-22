@@ -41,22 +41,23 @@ export function AppointmentStatusLabel({ status, compact = false }: { status: Ap
   </span>;
 }
 
-// One semantic-token class per status — never a raw color utility
+// Fondo/borde semánticos por estado; texto en tinta para conservar contraste
+// también en los tintes claros. Nunca una utilidad de color literal
 // (`bg-*-500`, `text-[#...]`). SCHEDULED/CONFIRMED use the neutral/brand
 // tokens (nothing has happened yet / it's been acknowledged); COMPLETED maps
 // to success, CANCELLED to danger, NO_SHOW to warning (attention-worthy but
 // not an error).
 export const STATUS_BADGE_CLASSES: Record<AppointmentStatus, string> = {
-  SCHEDULED: 'border-muted bg-muted/10 text-muted',
-  CONFIRMED: 'border-primary bg-primary/10 text-primary',
-  COMPLETED: 'border-success bg-success/10 text-success',
-  CANCELLED: 'border-danger bg-danger/10 text-danger',
-  NO_SHOW: 'border-warning bg-warning/10 text-warning',
+  SCHEDULED: 'border-muted bg-muted/10 text-ink',
+  CONFIRMED: 'border-primary bg-primary/10 text-ink',
+  COMPLETED: 'border-success bg-success/10 text-ink',
+  CANCELLED: 'border-danger bg-danger/10 text-ink',
+  NO_SHOW: 'border-warning bg-warning/10 text-ink',
   // DX-200: en la clínica. En espera, tinta (está aquí, nada clínico aún); en
   // el sillón, el acento; listo para cobrar, el éxito sin relleno (casi hecho).
   ARRIVED: 'border-ink/40 bg-surface-2 text-ink',
-  IN_CHAIR: 'border-primary bg-primary/15 text-primary',
-  READY_FOR_CHECKOUT: 'border-success bg-surface text-success',
+  IN_CHAIR: 'border-primary bg-primary/15 text-ink',
+  READY_FOR_CHECKOUT: 'border-success bg-surface text-ink',
 };
 
 /** e.g. "09:00–09:30", 24h times in the user's local timezone. */
