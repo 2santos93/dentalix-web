@@ -10107,10 +10107,10 @@ export interface components {
          */
         PatientReminderBlocker: "OPTED_OUT" | "CHANNEL_NONE" | "CHANNEL_WHATSAPP";
         /**
-         * @description SENT: dejado en el outbox de email (sentAt). SKIPPED: omitido (skipReason). SENDING: entregándose. PENDING: saldrá en dueAt. MISSED: su hora pasó sin enviarse (la cita se agendó después).
+         * @description SENT: dejado en el outbox de email (sentAt). SKIPPED: omitido (skipReason). FAILED: agotó los intentos (failureReason). SENDING: entregándose. PENDING: saldrá en dueAt. MISSED: su hora pasó sin enviarse (la cita se agendó después).
          * @enum {string}
          */
-        AppointmentReminderState: "SENT" | "SKIPPED" | "SENDING" | "PENDING" | "MISSED";
+        AppointmentReminderState: "SENT" | "SKIPPED" | "SENDING" | "PENDING" | "MISSED" | "FAILED";
         /**
          * @description NO_EMAIL sin email · OPTED_OUT el paciente se dio de baja · CHANNEL_NONE / CHANNEL_WHATSAPP su canal no es el email (DX-128) · CANCELLED/COMPLETED/NO_SHOW estado de la cita · IN_CLINIC el paciente ya llegó (DX-200) · RESCHEDULED a otra hora · DELETED retirada · DISABLED la sede los desactivó · TOO_LATE fuera de plazo (la cita ya había empezado o su hora pasó hace más de 1 h)
          * @enum {string}
@@ -10134,12 +10134,14 @@ export interface components {
              * @description Inicio menos la antelación
              */
             dueAt: string;
-            /** @description SENT: dejado en el outbox de email (sentAt). SKIPPED: omitido (skipReason). SENDING: entregándose. PENDING: saldrá en dueAt. MISSED: su hora pasó sin enviarse (la cita se agendó después). */
+            /** @description SENT: dejado en el outbox de email (sentAt). SKIPPED: omitido (skipReason). FAILED: agotó los intentos (failureReason). SENDING: entregándose. PENDING: saldrá en dueAt. MISSED: su hora pasó sin enviarse (la cita se agendó después). */
             state: components["schemas"]["AppointmentReminderState"];
             /** Format: date-time */
             sentAt: string | null;
             /** @description NO_EMAIL sin email · OPTED_OUT el paciente se dio de baja · CHANNEL_NONE / CHANNEL_WHATSAPP su canal no es el email (DX-128) · CANCELLED/COMPLETED/NO_SHOW estado de la cita · IN_CLINIC el paciente ya llegó (DX-200) · RESCHEDULED a otra hora · DELETED retirada · DISABLED la sede los desactivó · TOO_LATE fuera de plazo (la cita ya había empezado o su hora pasó hace más de 1 h) */
             skipReason: components["schemas"]["AppointmentReminderSkipReason"] | null;
+            /** @description Motivo técnico del fallo definitivo: solo tipo y código de describeJobError, sin datos del paciente. */
+            failureReason: string | null;
             /** @description Entrega del email por el proveedor (solo si se envió) */
             emailDelivery: components["schemas"]["ReminderEmailDelivery"] | null;
             /** @description DX-203: salió al email del responsable del paciente (un menor o un paciente sin email): «Recordatorio enviado al responsable». */
