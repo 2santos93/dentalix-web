@@ -1,5 +1,6 @@
 'use client';
-import { useId } from 'react';
+import { useEffect, useId, useRef } from 'react';
+import Link from 'next/link';
 import { MapPin, Armchair } from 'lucide-react';
 import type { ClinicRole } from '@/lib/me/me-api';
 import {
@@ -56,7 +57,7 @@ const GROUPS: GroupKey[] = ['waiting', 'inChair', 'readyForCheckout'];
 
 export function patientName(item: Pick<InClinicItem, 'patientFirstName' | 'patientLastName' | 'patientId'>): string {
   const joined = [item.patientFirstName, item.patientLastName].filter(Boolean).join(' ').trim();
-  return joined || item.patientId;
+  return joined || 'Paciente sin nombre';
 }
 
 interface InClinicPanelProps {
@@ -86,9 +87,37 @@ export function InClinicPanel({
   const { view, loading, error, noLocation, reload } = state;
   const mine = view?.scope === 'MINE' || (view === null && role === 'DENTIST');
   const total = view ? inClinicCount(view) : null;
+  const panelRef = useRef<HTMLElement>(null);
+  const pendingFocus = useRef<{ id: string; group: GroupKey; before: InClinicView | null } | null>(null);
+  const panelRunner: PatientFlowRunner = {
+    pendingId: runner.pendingId,
+    run: (id, action, name) => {
+      const source = GROUPS.find((group) => view?.[group].some((item) => item.appointmentId === id)) ?? 'waiting';
+      const destination = action === 'SEAT' ? 'inChair' : action === 'READY' ? 'readyForCheckout' : source;
+      pendingFocus.current = { id, group: destination, before: view };
+      return runner.run(id, action, name);
+    },
+  };
+  useEffect(() => {
+    const intent = pendingFocus.current;
+    const panel = panelRef.current;
+    if (!intent || !panel || view === intent.before || view === null) return;
+    const active = document.activeElement;
+    if (active && active !== document.body && active.isConnected && !panel.contains(active)) {
+      pendingFocus.current = null;
+      return;
+    }
+    const row = Array.from(panel.querySelectorAll<HTMLElement>('[data-appointment-id]'))
+      .find((element) => element.dataset.appointmentId === intent.id);
+    const target = row?.querySelector<HTMLButtonElement>('button[data-flow-action]:not(:disabled)')
+      ?? panel.querySelector<HTMLElement>(`[data-focus-group="${intent.group}"]`);
+    target?.focus();
+    pendingFocus.current = null;
+  }, [view]);
+
 
   return (
-    <section aria-labelledby={titleId} className={cn('flex min-w-0 flex-col gap-3', className)}>
+    <section ref={panelRef} aria-labelledby={titleId} className={cn('flex min-w-0 flex-col gap-3', className)}>
       <header className="flex items-baseline justify-between gap-2">
         <h2
           id={titleId}
@@ -106,6 +135,8 @@ export function InClinicPanel({
           {total !== null ? inClinicCopy.count(total) : ''}
         </span>
       </header>
+
+      {showTitle && <Link href="/agenda/en-clinica" className="w-fit text-sm font-medium text-primary underline underline-offset-4">Abrir a pantalla completa</Link>}
 
       {noLocation ? (
         <EmptyState
@@ -128,15 +159,9 @@ export function InClinicPanel({
             </div>
           ))}
         </div>
-      ) : inClinicCount(view) === 0 ? (
-        <EmptyState
-          role="status"
-          icon={<Armchair aria-hidden />}
-          title={inClinicCopy.emptyTitle}
-          description={inClinicCopy.emptyHint}
-        />
       ) : (
         <div className="flex flex-col gap-4">
+          {inClinicCount(view) === 0 && <EmptyState role="status" icon={<Armchair aria-hidden />} title={inClinicCopy.emptyTitle} description={inClinicCopy.emptyHint} />}
           {GROUPS.map((group) => (
             <InClinicGroup
               key={group}
@@ -145,7 +170,8 @@ export function InClinicPanel({
               items={view[group]}
               view={view}
               role={role}
-              runner={runner}
+              runner={panelRunner}
+              showEmptyHint={inClinicCount(view) > 0}
             />
           ))}
           <p className="text-xs text-muted">{inClinicCopy.refreshHint}</p>
@@ -162,6 +188,7 @@ function InClinicGroup({
   view,
   role,
   runner,
+  showEmptyHint,
 }: {
   group: GroupKey;
   title: string;
@@ -169,20 +196,23 @@ function InClinicGroup({
   view: InClinicView;
   role: ClinicRole | null;
   runner: PatientFlowRunner;
+  showEmptyHint: boolean;
 }) {
   const headingId = useId();
   return (
     <section aria-labelledby={headingId} data-testid={`in-clinic-group-${group}`}>
       <h3
         id={headingId}
+        tabIndex={-1}
+        data-focus-group={group}
         className="flex items-baseline justify-between border-b border-border pb-1.5 text-sm font-semibold text-ink"
       >
         {title}
         <span className="text-xs font-medium tabular-nums text-muted">{items.length}</span>
       </h3>
-      {items.length === 0 ? (
+      {items.length === 0 ? (showEmptyHint ? (
         <p className="py-2 text-sm text-muted">{inClinicCopy.groupEmpty[group]}</p>
-      ) : (
+      ) : null) : (
         <ul className="flex flex-col">
           {items.map((item) => {
             const name = patientName(item);
@@ -191,6 +221,7 @@ function InClinicGroup({
               <li
                 key={item.appointmentId}
                 data-testid="in-clinic-item"
+                data-appointment-id={item.appointmentId}
                 data-punctuality={item.punctuality}
                 className="flex flex-col gap-2 border-b border-hairline py-3 last:border-0"
               >

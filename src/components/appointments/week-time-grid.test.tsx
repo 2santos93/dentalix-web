@@ -250,7 +250,7 @@ it('DX-247: una cita de 15 min con alerta lleva el icono, fuera del botón de la
 
 it.each(['SCHEDULED', 'CONFIRMED', 'COMPLETED', 'CANCELLED', 'NO_SHOW', 'ARRIVED', 'IN_CHAIR', 'READY_FOR_CHECKOUT'] as const)('DX-242: %s tiene estado visible y nombre accesible con tipo', (status) => {
   const labels = { SCHEDULED:'Agendada', CONFIRMED:'Confirmada', COMPLETED:'Completada', CANCELLED:'Cancelada', NO_SHOW:'No asistió', ARRIVED:'En espera', IN_CHAIR:'En sillón', READY_FOR_CHECKOUT:'Listo para cobrar' };
-  render(<WeekTimeGrid appointments={[appointment({ id: status, status, appointmentType: { id:'t', name:'Control', color:null, durationMinutes:30 } })]} weekStart={WEEK_START} onSelectDay={noop} onSelectSlot={noop} onSelectAppointment={noop} />);
+  render(<WeekTimeGrid appointments={[appointment({ id: status, status, appointmentType: { id:'t', name:'Control', color:'#123456', durationMinutes:30 } })]} weekStart={WEEK_START} onSelectDay={noop} onSelectSlot={noop} onSelectAppointment={noop} />);
   const card = screen.getByTestId('week-grid-appointment');
   expect(card).toHaveAccessibleName(expect.stringContaining(labels[status]));
   expect(card).toHaveAccessibleName(expect.stringContaining('Control'));

@@ -1,6 +1,7 @@
 'use client';
+import { useSessionLocations } from '@/lib/locations/session-locations';
 import { useEffect, useState } from 'react';
-import { listLocations, type ClinicLocation } from './locations-api';
+import type { ClinicLocation } from './locations-api';
 
 /**
  * Moneda base de la clínica (DX-063 / FE-014). La API no guarda una moneda por
@@ -32,12 +33,13 @@ export function clinicBaseCurrency(locations: ClinicLocation[]): string | null {
  * `null` si las sedes no cargaron o no comparten moneda.
  */
 export function useClinicCurrency(token: string): string | null | undefined {
+  const requestLocations = useSessionLocations(token);
   const [currency, setCurrency] = useState<string | null | undefined>(undefined);
 
   useEffect(() => {
     if (!token) return;
     let cancelled = false;
-    listLocations(token)
+    requestLocations()
       .then((locations) => {
         if (!cancelled) setCurrency(clinicBaseCurrency(locations ?? []));
       })
@@ -47,7 +49,7 @@ export function useClinicCurrency(token: string): string | null | undefined {
     return () => {
       cancelled = true;
     };
-  }, [token]);
+  }, [token, requestLocations]);
 
   return currency;
 }
