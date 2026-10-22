@@ -28,7 +28,8 @@ import {
   setSidebarCollapsed,
 } from '@/lib/ui/sidebar-store';
 import { cn } from '@/lib/utils';
-import { useInClinic } from '@/components/appointments/use-in-clinic';
+import { SessionLocationsProvider } from '@/lib/locations/session-locations';
+import { InClinicProvider, useInClinic } from '@/components/appointments/use-in-clinic';
 import { waitingForYouLabel } from '@/lib/appointments/patient-flow';
 
 const copy = {
@@ -99,6 +100,16 @@ const NAV: NavItem[] = [
  * ahí como iconos.
  */
 export function AppShell({ children }: { children: React.ReactNode }) {
+  const token = useAuthStore((s) => s.accessToken);
+  const pathname = usePathname();
+  return <SessionLocationsProvider token={token}>
+    <InClinicProvider token={token} enabled={getTokenRole(token) === 'DENTIST' || pathname.startsWith('/agenda')}>
+      <AppShellContent>{children}</AppShellContent>
+    </InClinicProvider>
+  </SessionLocationsProvider>;
+}
+
+function AppShellContent({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const [collapsed, setCollapsed] = React.useState(false);
   const accessToken = useAuthStore((s) => s.accessToken);
@@ -227,8 +238,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           )}
         >
           {nav.map(({ href, label, icon: Icon }) => (
+            <div key={href} className={cn('relative flex items-center', !collapsed && 'gap-1')}>
             <Link
-              key={href}
               href={href}
               aria-current={isActive(href) ? 'page' : undefined}
               // En rail el texto no está, así que el nombre accesible tiene que
@@ -237,7 +248,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               title={collapsed ? navLabel(href, label) : undefined}
               className={cn(
                 'relative flex items-center rounded-lg text-sm font-medium transition-colors',
-                collapsed ? 'h-10 justify-center' : 'gap-3 px-3 py-2',
+                collapsed ? 'h-10 w-full justify-center' : 'min-w-0 flex-1 gap-3 px-3 py-2',
                 isActive(href)
                   ? 'bg-primary/10 text-primary'
                   : 'text-muted hover:bg-bg hover:text-ink',
@@ -245,10 +256,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             >
               <Icon className="size-4 shrink-0" />
               {!collapsed && label}
-              {href === '/agenda' && waitingForYou > 0 ? (
-                <WaitingForYouCount count={waitingForYou} variant={collapsed ? 'rail' : 'full'} />
-              ) : null}
             </Link>
+            {href === '/agenda' && waitingForYou > 0 && <Link href="/agenda/en-clinica" aria-label={waitingForYouLabel(waitingForYou)} className={cn('rounded-full focus-visible:outline-2 focus-visible:outline-primary', collapsed && 'absolute -right-1 -top-1')}>
+              <WaitingForYouCount count={waitingForYou} variant={collapsed ? 'rail' : 'full'} />
+            </Link>}
+            </div>
           ))}
         </nav>
         {/* Pie del sidebar: contexto (sede) encima de identidad (cuenta). El
@@ -279,8 +291,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               🦷
             </span>
             {nav.map(({ href, label, icon: Icon }) => (
+              <div key={href} className="flex shrink-0 items-center">
               <Link
-                key={href}
                 href={href}
                 aria-current={isActive(href) ? 'page' : undefined}
                 aria-label={href === '/agenda' && waitingForYou > 0 ? navLabel(href, label) : undefined}
@@ -293,10 +305,11 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               >
                 <Icon className="size-4 shrink-0" />
                 <span>{label}</span>
-                {href === '/agenda' && waitingForYou > 0 ? (
-                  <WaitingForYouCount count={waitingForYou} variant="inline" />
-                ) : null}
               </Link>
+              {href === '/agenda' && waitingForYou > 0 && <Link href="/agenda/en-clinica" aria-label={waitingForYouLabel(waitingForYou)} className="rounded-full focus-visible:outline-2 focus-visible:outline-primary">
+                <WaitingForYouCount count={waitingForYou} variant="inline" />
+              </Link>}
+              </div>
             ))}
           </nav>
           <div className="flex shrink-0 items-center gap-2">
@@ -340,7 +353,7 @@ function WaitingForYouCount({
       className={cn(
         'inline-flex items-center justify-center rounded-full border border-danger/40 bg-danger/10 text-xs font-semibold tabular-nums text-danger',
         variant === 'full' && 'ml-auto px-2 py-0.5',
-        variant === 'rail' && 'absolute -right-1 -top-1 min-w-5 px-1',
+        variant === 'rail' && 'min-w-5 px-1',
         variant === 'inline' && 'min-w-5 px-1.5',
       )}
     >
