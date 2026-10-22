@@ -185,6 +185,103 @@ describe('InClinicPanel (DX-200)', () => {
     );
   });
 
+  it('DX-242 I1: un sondeo anterior al PATCH no consume el foco del siguiente paso', async () => {
+    jest.useFakeTimers();
+    try {
+      const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
+      let resolvePoll!: (value: InClinicView) => void;
+      let resolvePatch!: () => void;
+      mockedGet
+        .mockResolvedValueOnce(view({ waiting: [item({ appointmentId: 'race' })] }))
+        .mockImplementationOnce(() => new Promise((resolve) => { resolvePoll = resolve; }))
+        .mockResolvedValue(view({ inChair: [item({ appointmentId: 'race', status: 'IN_CHAIR' })] }));
+      mockedUpdate.mockImplementationOnce(() => new Promise((resolve) => {
+        resolvePatch = () => resolve({} as never);
+      }));
+      render(<Harness role="ASSISTANT" />);
+      await act(async () => { await Promise.resolve(); });
+      await act(async () => { jest.advanceTimersByTime(45_000); });
+      expect(mockedGet).toHaveBeenCalledTimes(2);
+      await user.click(screen.getByRole('button', { name: 'En sillón' }));
+      await act(async () => {
+        resolvePoll(view({ waiting: [item({ appointmentId: 'race', minutesInStatus: 13 })] }));
+      });
+      await act(async () => { resolvePatch(); });
+      expect(mockedGet).toHaveBeenCalledTimes(3);
+      expect(screen.getByRole('button', { name: 'Listo para cobrar' })).toHaveFocus();
+      expect(document.body).not.toHaveFocus();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('DX-242 I1: conserva el foco si el GET antiguo llega después del PATCH y antes de la relectura', async () => {
+    jest.useFakeTimers();
+    try {
+      const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
+      let resolvePoll!: (value: InClinicView) => void;
+      let resolveFresh!: (value: InClinicView) => void;
+      let resolvePatch!: () => void;
+      mockedGet
+        .mockResolvedValueOnce(view({ waiting: [item({ appointmentId: 'late' })] }))
+        .mockImplementationOnce(() => new Promise((resolve) => { resolvePoll = resolve; }))
+        .mockImplementationOnce(() => new Promise((resolve) => { resolveFresh = resolve; }));
+      mockedUpdate.mockImplementationOnce(() => new Promise((resolve) => {
+        resolvePatch = () => resolve({} as never);
+      }));
+      render(<Harness role="ASSISTANT" />);
+      await act(async () => { await Promise.resolve(); });
+      await act(async () => { jest.advanceTimersByTime(45_000); });
+      await user.click(screen.getByRole('button', { name: 'En sillón' }));
+      await act(async () => { resolvePatch(); });
+      expect(mockedGet).toHaveBeenCalledTimes(2);
+      await act(async () => {
+        resolvePoll(view({ waiting: [item({ appointmentId: 'late', minutesInStatus: 13 })] }));
+      });
+      expect(mockedGet).toHaveBeenCalledTimes(3);
+      await act(async () => {
+        resolveFresh(view({ inChair: [item({ appointmentId: 'late', status: 'IN_CHAIR' })] }));
+      });
+      expect(screen.getByRole('button', { name: 'Listo para cobrar' })).toHaveFocus();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
+  it('DX-242 I1: si el PATCH falla tras aquel sondeo, restaura su botón y descarta la intención', async () => {
+    jest.useFakeTimers();
+    try {
+      const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
+      let resolvePoll!: (value: InClinicView) => void;
+      let rejectPatch!: (error: Error) => void;
+      mockedGet
+        .mockResolvedValueOnce(view({ waiting: [item({ appointmentId: 'failed' })] }))
+        .mockImplementationOnce(() => new Promise((resolve) => { resolvePoll = resolve; }))
+        .mockResolvedValue(view({ waiting: [item({ appointmentId: 'failed' })] }));
+      mockedUpdate.mockImplementationOnce(() => new Promise((_resolve, reject) => { rejectPatch = reject; }));
+      render(<Harness role="ASSISTANT" />);
+      await act(async () => { await Promise.resolve(); });
+      await act(async () => { jest.advanceTimersByTime(45_000); });
+      await user.click(screen.getByRole('button', { name: 'En sillón' }));
+      await act(async () => {
+        resolvePoll(view({ waiting: [item({ appointmentId: 'failed', minutesInStatus: 13 })] }));
+      });
+      await act(async () => { rejectPatch(new Error('sin conexión')); });
+      expect(screen.getByRole('button', { name: 'En sillón' })).toHaveFocus();
+      expect(toast.error).toHaveBeenCalled();
+      // Un cambio posterior de otra persona no reutiliza la intención fallida.
+      const external = document.createElement('button');
+      document.body.append(external);
+      external.focus();
+      mockedGet.mockResolvedValue(view({ inChair: [item({ appointmentId: 'failed', status: 'IN_CHAIR' })] }));
+      await act(async () => { jest.advanceTimersByTime(45_000); });
+      expect(external).toHaveFocus();
+      external.remove();
+    } finally {
+      jest.useRealTimers();
+    }
+  });
+
   it('DX-242: completar la última cita lleva foco al encabezado de su grupo', async () => {
     mockedGet.mockResolvedValueOnce(view({ readyForCheckout: [item({ appointmentId:'last', status:'READY_FOR_CHECKOUT' })] })).mockResolvedValueOnce(view());
     mockedUpdate.mockResolvedValue({} as never);
