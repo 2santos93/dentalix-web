@@ -35,6 +35,11 @@ import { applyBulkDiscount, getDiscountPolicy } from '@/lib/discounts/discounts-
 // transform (only real `import`/`require` specifiers are) — use a relative
 // path here, matching odontogram-tab.test.tsx's / agenda-view.test.tsx's
 // convention.
+// DX-256: la disponibilidad de visitas es una lectura del hijo, aislada de los fallos del detalle.
+jest.mock('../../lib/treatment-plans/plan-visits-api', () => ({
+  getPlanVisits: jest.fn().mockResolvedValue({planId:'plan-1',items:[],visitIntervals:{},visits:[]}),
+  updatePlanVisits: jest.fn(),
+}));
 jest.mock('../../lib/treatment-plans/treatment-plans-api', () => ({
   createPlan: jest.fn(),
   listPlans: jest.fn(),
@@ -178,7 +183,8 @@ const item1: TreatmentPlanItem = {
   catalogItemId: 'cat-1',
   price: 50000,
   discount: 0,
-  ...ITEM_WITHOUT_DISCOUNT,
+  visit: 1,
+    ...ITEM_WITHOUT_DISCOUNT,
   status: 'PROPOSED',
   notes: null,
   createdAt: '2026-01-02T00:00:00.000Z',
@@ -194,7 +200,8 @@ const item2: TreatmentPlanItem = {
   catalogItemId: 'cat-2',
   price: 80000,
   discount: 0,
-  ...ITEM_WITHOUT_DISCOUNT,
+  visit: 1,
+    ...ITEM_WITHOUT_DISCOUNT,
   status: 'ACCEPTED',
   notes: null,
   createdAt: '2026-01-02T00:00:00.000Z',

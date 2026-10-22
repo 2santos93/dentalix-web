@@ -129,6 +129,11 @@ function todayLocalDateString(): string {
 }
 
 interface AppointmentFormProps {
+  defaultPatient?: Patient;
+  defaultReason?: string;
+  planItemIds?: string[];
+  minimumDate?: string;
+  locationId?: string;
   token: string;
   /** Called with the created appointment once `createAppointment` succeeds — the caller (`AgendaView`) refreshes the day list in place, it does not remount this form. */
   onCreated: (appointment: Appointment) => void;
@@ -169,6 +174,11 @@ export function AppointmentForm({
   defaultStartTime,
   defaultEndTime,
   defaultProviderId,
+  defaultPatient,
+  defaultReason,
+  planItemIds,
+  minimumDate,
+  locationId,
 }: AppointmentFormProps) {
   const [patients, setPatients] = useState<Patient[]>([]);
   const [patientsLoading, setPatientsLoading] = useState(true);
@@ -178,11 +188,11 @@ export function AppointmentForm({
   const [patientsReloadKey, setPatientsReloadKey] = useState(0);
   const [patientQuery, setPatientQuery] = useState('');
   const debouncedPatientQuery = useDebouncedValue(patientQuery, PATIENT_SEARCH_DEBOUNCE_MS);
-  const [patientId, setPatientId] = useState('');
+  const [patientId, setPatientId] = useState(defaultPatient?.id ?? '');
   // The full chosen `Patient` — drives the "chosen-patient chip" that replaces
   // the search box once someone is picked (manually, by exact-document
   // auto-select, or via inline-create).
-  const [selectedPatient, setSelectedPatient] = useState<Patient | null>(null);
+  const [selectedPatient, setSelectedPatient] = useState<Patient | null>(defaultPatient ?? null);
 
   const [staff, setStaff] = useState<StaffMember[]>([]);
   const [staffLoading, setStaffLoading] = useState(true);
@@ -202,7 +212,7 @@ export function AppointmentForm({
   const [date, setDate] = useState(defaultDate ?? '');
   const [startTime, setStartTime] = useState(defaultStartTime ?? '');
   const [endTime, setEndTime] = useState(defaultEndTime ?? '');
-  const [reason, setReason] = useState('');
+  const [reason, setReason] = useState(defaultReason ?? '');
   // DX-210: «Adelantar si hay hueco» (recepción, odontología y ADMIN).
   const [wantsEarlier, setWantsEarlier] = useState(false);
   const canMarkWantsEarlier = canChangeWantsEarlier(getTokenRole(token));
@@ -211,7 +221,7 @@ export function AppointmentForm({
   // restricción (misma semántica que el backend).
   const [hours, setHours] = useState<BusinessHours | null>(null);
   const [validationError, setValidationError] = useState<string | null>(null);
-  const providerDay = useProviderDay(token, providerId, date);
+  const providerDay = useProviderDay(token, providerId, date, locationId);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [showPatientDialog, setShowPatientDialog] = useState(false);
@@ -264,7 +274,7 @@ export function AppointmentForm({
         const res = await listStaff(token);
         // Best-effort: si el horario no se puede leer, no se bloquea el
         // formulario — el backend sigue validando y es la autoridad.
-        void getLocationSchedule(token)
+        void (locationId ? getLocationSchedule(token,locationId) : getLocationSchedule(token))
           .then((h) => {
             if (!cancelled) setHours(h);
           })
@@ -283,7 +293,7 @@ export function AppointmentForm({
     return () => {
       cancelled = true;
     };
-  }, [token, staffReloadKey]);
+  }, [token, staffReloadKey, locationId]);
 
   useEffect(() => {
     let cancelled = false;
@@ -398,6 +408,7 @@ export function AppointmentForm({
     try {
       const input: CreateAppointmentInput = {
         patientId,
+        ...(planItemIds ? {planItemIds} : {}),
         providerId,
         start,
         end,
@@ -405,7 +416,7 @@ export function AppointmentForm({
         ...(reason.trim() ? { reason: reason.trim() } : {}),
         ...(wantsEarlier ? { wantsEarlier: true } : {}),
       };
-      const created = await createAppointment(token, input);
+      const created = await (locationId ? createAppointment(token,input,locationId) : createAppointment(token,input));
       resetForm();
       onCreated(created);
     } catch (err) {
@@ -448,7 +459,7 @@ export function AppointmentForm({
           <label htmlFor="appointment-patient-search" className="text-sm font-medium text-ink">
             {copy.patientLabel}
           </label>
-          {!showNoPatientMatch && (
+          {!defaultPatient && !showNoPatientMatch && (
             <Button
               type="button"
               variant="ghost"
@@ -478,7 +489,7 @@ export function AppointmentForm({
                   <p className="truncate text-xs text-muted">{patientDocLabel(selectedPatient)}</p>
                 </div>
               </div>
-              <Button
+              {!defaultPatient ? <Button
                 type="button"
                 variant="ghost"
                 size="sm"
@@ -486,7 +497,7 @@ export function AppointmentForm({
                 onClick={handleClearPatient}
               >
                 <X className="size-3.5" /> {copy.changePatient}
-              </Button>
+              </Button> : null}
             </div>
             {/* DX-247: «Requiere premedicación» al agendar, antes de guardar. */}
             <PatientMedicalAlertsNotice key={selectedPatient.id} token={token} patientId={selectedPatient.id} />
@@ -642,7 +653,7 @@ export function AppointmentForm({
             // No se puede agendar en el pasado: el date picker no ofrece días
             // anteriores a hoy. "Hoy a una hora ya pasada" lo cubre la validación
             // del instante en handleSubmit (y el backend con un 400).
-            min={todayLocalDateString()}
+            min={minimumDate && minimumDate > todayLocalDateString() ? minimumDate : todayLocalDateString()}
             value={date}
             onChange={(e) => setDate(e.target.value)}
             className="flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors placeholder:text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-50"

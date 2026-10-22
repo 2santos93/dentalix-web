@@ -100,11 +100,13 @@ export type AppointmentDetail = Appointment & { notes: string | null };
 export async function createAppointment(
   token: string,
   input: CreateAppointmentInput,
+  locationId?: string,
 ): Promise<AppointmentDetail> {
   return apiFetch<AppointmentDetail>('/appointments', {
     method: 'POST',
     body: input,
     token,
+    ...(locationId ? {headers:{'X-Location-Id':locationId}} : {}),
   });
 }
 
