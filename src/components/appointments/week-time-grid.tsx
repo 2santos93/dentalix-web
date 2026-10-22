@@ -11,10 +11,16 @@ import {
 } from '@/lib/appointments/week-grid-layout';
 import {
   ConfirmationBadge,
+  STATUS_LABELS,
+  AppointmentStatusLabel,
   STATUS_BADGE_CLASSES,
   formatTimeRange,
   patientLabel,
 } from './appointment-display';
+import { overdueChipText } from '@/lib/collections/presentation';
+import { coverageChipText } from '@/lib/patients/coverage-presentation';
+import { confirmationIndicator } from '@/lib/appointments/confirmation-message';
+import { CONFIRMATION_INDICATOR_LABELS } from './appointment-display';
 import { formatDateLabel } from '@/lib/format/date';
 import {
   blockBandForDay,
@@ -238,11 +244,13 @@ export function WeekTimeGrid({
                     type="button"
                     data-testid="week-grid-appointment"
                     data-id={a.id}
+                    aria-label={[formatTimeRange(a.start, a.end), patient, STATUS_LABELS[a.status], a.appointmentType?.name, overdueChipText(a.balance), coverageChipText(a.coverage), confirmationIndicator(a) ? CONFIRMATION_INDICATOR_LABELS[confirmationIndicator(a)!] : null].filter(Boolean).join(' · ')}
                     onClick={() => onSelectAppointment(a)}
                     className={`h-full w-full overflow-hidden rounded-md border px-1 py-0.5 text-left text-xs ${hasMedicalAlert ? 'pr-6' : ''} ${STATUS_BADGE_CLASSES[a.status]}`}
                   >
                     <span className="flex items-center gap-1 font-medium">
-                      {formatTimeRange(a.start, a.end)}
+                      <AppointmentStatusLabel status={a.status} compact={heightPx < 60} />
+                      <span className="truncate">{formatTimeRange(a.start, a.end)}</span>
                       <ConfirmationBadge appointment={a} compact />
                       <CoverageMarker coverage={a.coverage} srText />
                     </span>
