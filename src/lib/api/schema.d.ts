@@ -928,6 +928,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/patients/{patientId}/clinical-entries/rda-readiness": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Datos RDA de hasta50 evoluciones del paciente, con una auditoría */
+        get: operations["ClinicalEntriesController_readiness"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/patients/{patientId}/clinical-entries/{entryId}/addenda": {
         parameters: {
             query?: never;
@@ -5358,12 +5375,6 @@ export interface components {
             /** @description DX-212: diagnósticos CIE-10, el principal primero (vacío en las evoluciones sin diagnóstico) */
             diagnoses: components["schemas"]["ClinicalEntryDiagnosisDto"][];
         };
-        CreateClinicalEntryAddendumDto: {
-            /** @description Motivo de la corrección (p. ej. «pieza dental mal transcrita») */
-            reason: string;
-            /** @description Texto aclaratorio que corrige o completa la evolución */
-            text: string;
-        };
         /** @enum {string} */
         RdaMissingCode: "PATIENT_DOCUMENT" | "PRINCIPAL_DIAGNOSIS" | "PROCEDURE_CUPS" | "LOCATION_REPS" | "AUTHOR_LICENSE";
         RdaMissingItemDto: {
@@ -5384,6 +5395,23 @@ export interface components {
             label: string;
             /** @example pendiente de DX-019 */
             reason: string;
+        };
+        BatchRdaReadinessDto: {
+            /** @description true en una sede fuera de Colombia: el RDA no aplica (ready=false, listas vacías). */
+            notApplicable: boolean;
+            /** @description Sin faltantes (los pendientes no cuentan). */
+            ready: boolean;
+            missing: components["schemas"]["RdaMissingItemDto"][];
+            /** @description Datos que aún no existen en Dentalix y no bloquean. */
+            pending: components["schemas"]["RdaPendingItemDto"][];
+            /** Format: uuid */
+            entryId: string;
+        };
+        CreateClinicalEntryAddendumDto: {
+            /** @description Motivo de la corrección (p. ej. «pieza dental mal transcrita») */
+            reason: string;
+            /** @description Texto aclaratorio que corrige o completa la evolución */
+            text: string;
         };
         RdaReadinessDto: {
             /** @description true en una sede fuera de Colombia: el RDA no aplica (ready=false, listas vacías). */
@@ -12727,6 +12755,44 @@ export interface operations {
                 content?: never;
             };
             /** @description Paciente, cita o plantilla no encontrados en esta clínica (inexistentes o de otra clínica). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ClinicalEntriesController_readiness: {
+        parameters: {
+            query: {
+                /** @description De 1 a 50 UUID de evoluciones separados por comas. */
+                ids: string;
+            };
+            header?: never;
+            path: {
+                patientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["BatchRdaReadinessDto"][];
+                };
+            };
+            /** @description Envía entre1 y50 UUID separados por comas. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente o alguna evolución no encontrados en esta clínica y paciente. */
             404: {
                 headers: {
                     [name: string]: unknown;
