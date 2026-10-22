@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useId, useRef } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import Link from 'next/link';
 import { MapPin, Armchair } from 'lucide-react';
 import type { ClinicRole } from '@/lib/me/me-api';
@@ -8,6 +8,7 @@ import {
   inClinicCount,
   punctualityLabel,
   timeInZone,
+  type FlowAction,
   type InClinicItem,
   type InClinicView,
 } from '@/lib/appointments/patient-flow';
@@ -88,20 +89,48 @@ export function InClinicPanel({
   const mine = view?.scope === 'MINE' || (view === null && role === 'DENTIST');
   const total = view ? inClinicCount(view) : null;
   const panelRef = useRef<HTMLElement>(null);
-  const pendingFocus = useRef<{ id: string; group: GroupKey; before: InClinicView | null } | null>(null);
+  const pendingFocus = useRef<{
+    id: string;
+    group: GroupKey;
+    sourceStatus: InClinicItem['status'] | null;
+    exitsPanel: boolean;
+    action: FlowAction;
+    settled: boolean;
+    failed: boolean;
+  } | null>(null);
+  const [focusCompletion, setFocusCompletion] = useState(0);
   const panelRunner: PatientFlowRunner = {
     pendingId: runner.pendingId,
-    run: (id, action, name) => {
+    run: async (id, action, name) => {
       const source = GROUPS.find((group) => view?.[group].some((item) => item.appointmentId === id)) ?? 'waiting';
       const destination = action === 'SEAT' ? 'inChair' : action === 'READY' ? 'readyForCheckout' : source;
-      pendingFocus.current = { id, group: destination, before: view };
-      return runner.run(id, action, name);
+      const intent = {
+        id,
+        group: destination,
+        sourceStatus: view?.[source].find((item) => item.appointmentId === id)?.status ?? null,
+        exitsPanel: action === 'CHECKOUT' || action === 'UNDO_ARRIVAL',
+        action,
+        settled: false,
+        failed: false,
+      };
+      pendingFocus.current = intent;
+      const succeeded = await runner.run(id, action, name);
+      if (pendingFocus.current === intent) {
+        intent.settled = true;
+        intent.failed = succeeded === false;
+        setFocusCompletion((revision) => revision + 1);
+      }
+      return succeeded;
     },
   };
   useEffect(() => {
     const intent = pendingFocus.current;
     const panel = panelRef.current;
-    if (!intent || !panel || view === intent.before || view === null) return;
+    if (!intent || !panel || !intent.settled || runner.pendingId === intent.id || view === null) return;
+    const current = GROUPS.flatMap((group) => view[group]).find((item) => item.appointmentId === intent.id);
+    // Un GET iniciado antes del PATCH puede terminar después: minutos nuevos
+    // no confirman un paso. Esperar a que cambie el estado o salga del panel.
+    if (!intent.failed && (current?.status === intent.sourceStatus || (intent.exitsPanel && current))) return;
     const active = document.activeElement;
     if (active && active !== document.body && active.isConnected && !panel.contains(active)) {
       pendingFocus.current = null;
@@ -109,11 +138,13 @@ export function InClinicPanel({
     }
     const row = Array.from(panel.querySelectorAll<HTMLElement>('[data-appointment-id]'))
       .find((element) => element.dataset.appointmentId === intent.id);
-    const target = row?.querySelector<HTMLButtonElement>('button[data-flow-action]:not(:disabled)')
+    const target = (intent.failed
+      ? row?.querySelector<HTMLButtonElement>(`button[data-flow-action="${intent.action}"]:not(:disabled)`)
+      : row?.querySelector<HTMLButtonElement>('button[data-flow-action]:not(:disabled)'))
       ?? panel.querySelector<HTMLElement>(`[data-focus-group="${intent.group}"]`);
     target?.focus();
     pendingFocus.current = null;
-  }, [view]);
+  }, [view, runner.pendingId, focusCompletion]);
 
 
   return (
