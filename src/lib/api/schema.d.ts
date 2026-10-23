@@ -15003,7 +15003,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description La cita no tiene al paciente en la clínica, otra cita lo tomó a la vez (dice cuál), o la cita cambió mientras tanto */
+            /** @description La cita no tiene al paciente en la clínica, el tratamiento ya lo tiene otra cita con el paciente en la clínica (DX-288: con varias peticiones a la vez solo la primera lo trae), otra cita lo tomó a la vez (dice cuál), o la cita cambió mientras tanto */
             409: {
                 headers: {
                     [name: string]: unknown;
