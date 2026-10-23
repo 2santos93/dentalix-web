@@ -4,6 +4,7 @@ import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { getTokenRole } from '@/lib/auth/token-role';
 import { PageHeader } from '@/components/shared/page-header';
+import { SETTINGS_BACK } from '@/components/settings/settings-sections';
 import { LocationRepsSettings } from '@/components/locations/location-reps-settings';
 import { LocationPhoneSettings } from '@/components/locations/location-phone-settings';
 
@@ -39,7 +40,7 @@ export default function LocationSettingsPage() {
 
   return (
     <>
-      <PageHeader title={copy.title} description={copy.description} />
+      <PageHeader back={SETTINGS_BACK} title={copy.title} description={copy.description} />
       <LocationRepsSettings
         token={accessToken}
         canEdit={getTokenRole(accessToken) === 'ADMIN'}

@@ -340,6 +340,9 @@ that shares its fetch — those two look interchangeable and are not.
 ### Tables
 - **Header:** surface-2, label type, muted. **Rows:** hairline separators, 44px min height,
   hover = surface-2. **Numbers:** right-aligned, tabular. Collapse to stacked labeled cards below `sm`.
+- **Exception — rows with a muted support line** (the `/settings` index, DX-282): hover = bg
+  (Cool Paper), not surface-2. Muted on surface-2 is 4.34:1 and fails AA for body text; on bg
+  it is 4.51:1. Rows whose secondary text is muted use bg on hover; rows of ink only keep surface-2.
 - **Wider than its slot** (six columns on a tablet in portrait, where the rail already takes
   240px): the table scrolls sideways *inside its own frame* — the page itself never scrolls
   horizontally. A frame that scrolls must say so: when it actually overflows it becomes a

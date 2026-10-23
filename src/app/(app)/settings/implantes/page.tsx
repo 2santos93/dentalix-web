@@ -5,6 +5,7 @@ import { useAuthStore } from '@/lib/auth/auth-store';
 import { getTokenRole } from '@/lib/auth/token-role';
 import { canSearchImplantLots } from '@/lib/implants/implants-api';
 import { PageHeader } from '@/components/shared/page-header';
+import { SETTINGS_BACK } from '@/components/settings/settings-sections';
 import { ImplantLotSearch } from '@/components/implants/implant-lot-search';
 
 const copy = {
@@ -36,7 +37,7 @@ export default function ImplantSettingsPage() {
 
   return (
     <>
-      <PageHeader title={copy.title} description={copy.description} />
+      <PageHeader back={SETTINGS_BACK} title={copy.title} description={copy.description} />
       <ImplantLotSearch
         token={accessToken}
         allowed={canSearchImplantLots(getTokenRole(accessToken))}

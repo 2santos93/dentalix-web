@@ -5,6 +5,7 @@ import { useAuthStore } from '@/lib/auth/auth-store';
 import { getTokenRole } from '@/lib/auth/token-role';
 import { canManageAppointmentTypes } from '@/lib/appointments/appointment-types-api';
 import { PageHeader } from '@/components/shared/page-header';
+import { SETTINGS_BACK } from '@/components/settings/settings-sections';
 import { AppointmentTypesManager } from '@/components/appointment-types/appointment-types-manager';
 
 const copy = {
@@ -36,7 +37,7 @@ export default function AppointmentTypesPage() {
 
   return (
     <>
-      <PageHeader title={copy.title} description={copy.description} />
+      <PageHeader back={SETTINGS_BACK} title={copy.title} description={copy.description} />
       <AppointmentTypesManager
         token={accessToken}
         allowed={canManageAppointmentTypes(getTokenRole(accessToken))}

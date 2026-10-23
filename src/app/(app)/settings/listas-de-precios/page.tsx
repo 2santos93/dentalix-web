@@ -5,6 +5,7 @@ import { useAuthStore } from '@/lib/auth/auth-store';
 import { getTokenRole } from '@/lib/auth/token-role';
 import { canManagePriceLists } from '@/lib/price-lists/price-lists-api';
 import { PageHeader } from '@/components/shared/page-header';
+import { SETTINGS_BACK } from '@/components/settings/settings-sections';
 import { PriceListsManager } from '@/components/price-lists/price-lists-manager';
 
 const copy = {
@@ -36,7 +37,7 @@ export default function PriceListsPage() {
 
   return (
     <>
-      <PageHeader title={copy.title} description={copy.description} />
+      <PageHeader back={SETTINGS_BACK} title={copy.title} description={copy.description} />
       <PriceListsManager
         token={accessToken}
         allowed={canManagePriceLists(getTokenRole(accessToken))}

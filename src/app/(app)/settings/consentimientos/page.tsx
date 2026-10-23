@@ -5,6 +5,7 @@ import { useAuthStore } from '@/lib/auth/auth-store';
 import { getTokenRole } from '@/lib/auth/token-role';
 import { canManageConsentTemplates } from '@/lib/consents/consents-api';
 import { PageHeader } from '@/components/shared/page-header';
+import { SETTINGS_BACK } from '@/components/settings/settings-sections';
 import { ConsentTemplatesManager } from '@/components/consents/consent-templates-manager';
 
 const copy = {
@@ -36,7 +37,7 @@ export default function ConsentTemplatesPage() {
 
   return (
     <>
-      <PageHeader title={copy.title} description={copy.description} />
+      <PageHeader back={SETTINGS_BACK} title={copy.title} description={copy.description} />
       <ConsentTemplatesManager
         token={accessToken}
         allowed={canManageConsentTemplates(getTokenRole(accessToken))}

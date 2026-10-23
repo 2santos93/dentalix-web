@@ -6,6 +6,7 @@ import { getTokenRole } from '@/lib/auth/token-role';
 import { canEditProviderSchedules } from '@/lib/locations/provider-schedule-api';
 import { localDateString } from '@/lib/locations/provider-schedule';
 import { PageHeader } from '@/components/shared/page-header';
+import { SETTINGS_BACK } from '@/components/settings/settings-sections';
 import { BusinessHoursForm } from '@/components/locations/business-hours-form';
 import { ProviderSchedulesPanel } from '@/components/locations/provider-schedules-panel';
 import { ScheduleRoster } from '@/components/locations/schedule-roster';
@@ -74,7 +75,7 @@ function SchedulesRoute() {
 
   return (
     <>
-      <PageHeader title={copy.title} description={copy.description[tab]} />
+      <PageHeader back={SETTINGS_BACK} title={copy.title} description={copy.description[tab]} />
       <ScheduleTabs active={tab} onChange={changeTab} />
       <div role="tabpanel" id={schedulePanelId(tab)} aria-labelledby={scheduleTabId(tab)}>
         {tab === 'sede' ? <BusinessHoursForm token={accessToken} /> : null}
