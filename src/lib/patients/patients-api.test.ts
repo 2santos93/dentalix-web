@@ -57,4 +57,12 @@ describe('replacePatientKeepingDerived (DX-153)', () => {
     const next = { id: 'p1', coverage: cov } as unknown as Patient;
     expect(replacePatientKeepingDerived(null, next).coverage).toBe(cov);
   });
+  it('conserva el resumen de convenio (DX-105) si la mutación no lo trae', () => {
+    const agr = { status: 'ACTIVE', agreementName: 'Convenio Sura', payerName: 'Sura EPS' } as const;
+    const prev = { id: 'p1', agreement: agr } as unknown as Patient;
+    const next = { id: 'p1', firstName: 'B' } as unknown as Patient;
+    expect(replacePatientKeepingDerived(prev, next).agreement).toBe(agr);
+    const fresh = { status: 'NONE', agreementName: null, payerName: null } as const;
+    expect(replacePatientKeepingDerived(prev, { id: 'p1', agreement: fresh } as unknown as Patient).agreement).toBe(fresh);
+  });
 });

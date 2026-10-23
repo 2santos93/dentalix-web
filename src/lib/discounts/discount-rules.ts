@@ -87,6 +87,18 @@ export function effectiveDiscount(
   };
 }
 
+/** Texto cuando la prestación no admite descuentos (DX-105). */
+export const NO_DISCOUNT_ALLOWED_NOTICE = 'Esta prestación no admite descuentos.';
+
+/**
+ * DX-105: ¿la prestación no admite descuentos (ni el % del convenio ni los
+ * discrecionales)? Solo un `allowDiscount === false` explícito lo dice; sin
+ * dato (precio aún sin resolver) no se bloquea nada y decide la API.
+ */
+export function noDiscountAllowed(item: { allowDiscount?: boolean } | null | undefined): boolean {
+  return item?.allowDiscount === false;
+}
+
 function basisPoints(percent: number): bigint {
   return BigInt(Math.round(percent * 100));
 }

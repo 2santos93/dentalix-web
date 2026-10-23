@@ -209,6 +209,54 @@ describe('PatientRecordHeader · cobertura vencida (DX-153)', () => {
 });
 
 
+describe('PatientRecordHeader · chip de convenio (DX-105)', () => {
+  const agreement = (status: 'NONE' | 'ACTIVE' | 'EXPIRED' | 'NOT_STARTED' | 'INACTIVE') => ({
+    status,
+    agreementName: 'Sanitas 2026',
+    payerName: 'Sanitas',
+  });
+
+  it('muestra «Convenio: nombre» con un convenio vigente', () => {
+    render(
+      <PatientRecordHeader
+        patient={patient({ agreement: agreement('ACTIVE') })}
+        loading={false}
+        onEdit={() => {}}
+      />,
+    );
+    expect(screen.getByTestId('agreement-chip')).toHaveTextContent('Convenio: Sanitas 2026');
+  });
+
+  it.each(['NONE', 'EXPIRED', 'NOT_STARTED', 'INACTIVE'] as const)(
+    'no lo muestra con %s',
+    (status) => {
+      render(
+        <PatientRecordHeader
+          patient={patient({ agreement: agreement(status) })}
+          loading={false}
+          onEdit={() => {}}
+        />,
+      );
+      expect(screen.queryByTestId('agreement-chip')).not.toBeInTheDocument();
+    },
+  );
+
+  it('convive con el chip de cobertura vencida', () => {
+    render(
+      <PatientRecordHeader
+        patient={patient({
+          agreement: agreement('ACTIVE'),
+          coverage: { status: 'EXPIRED', payerName: 'Sanitas', planName: null, validTo: '2026-01-31' },
+        })}
+        loading={false}
+        onEdit={() => {}}
+      />,
+    );
+    expect(screen.getByTestId('agreement-chip')).toBeInTheDocument();
+    expect(screen.getByTestId('coverage-chip')).toBeInTheDocument();
+  });
+});
+
 describe('PatientRecordHeader: alerta médica (DX-247)', () => {
   const flags = {
     hasCriticalAlert: true,

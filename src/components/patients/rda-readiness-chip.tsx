@@ -44,7 +44,7 @@ export function rdaMissingHref(item: RdaMissingItem, patientId: string): string 
 
 interface RdaReadinessChipProps {
   patientId: string;
-  /** Lo trae `useRdaReadiness` en la lista (una petición por evolución). */
+  /** Lo trae `useRdaReadiness` en la lista (una petición por lote). */
   state: RdaState;
   onRetry: () => void;
 }

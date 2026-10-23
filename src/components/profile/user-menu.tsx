@@ -23,6 +23,8 @@ import {
   LifeBuoy,
   Building2,
   Landmark,
+  Handshake,
+  ListOrdered,
   ClipboardClock,
 } from 'lucide-react';
 import { useTheme } from 'next-themes';
@@ -34,6 +36,8 @@ import { canManageConsentTemplates } from '@/lib/consents/consents-api';
 import { canManagePrescriptionTemplates } from '@/lib/prescriptions/prescriptions-api';
 import { canManageAppointmentTypes } from '@/lib/appointments/appointment-types-api';
 import { canManagePayers } from '@/lib/payers/payers-api';
+import { canManagePriceLists } from '@/lib/price-lists/price-lists-api';
+import { canManageAgreements } from '@/lib/agreements/agreements-api';
 import { canManageNoteTemplates } from '@/lib/clinical-notes/note-templates-api';
 import { canManagePostOpTemplates } from '@/lib/postop/postop-api';
 import { canManageReminders } from '@/lib/reminders/reminders-api';
@@ -80,6 +84,8 @@ const copy = {
   implantSettings: 'Implantes',
   appointmentTypes: 'Tipos de cita',
   payers: 'Pagadores',
+  agreements: 'Convenios',
+  priceLists: 'Listas de precios',
   noteTemplates: 'Plantillas de evolución',
   postOpTemplates: 'Indicaciones postoperatorias',
   reminders: 'Recordatorios',
@@ -338,6 +344,30 @@ export function UserMenu({
         >
           <Landmark className="size-4 text-muted" aria-hidden />
           {copy.payers}
+        </Link>
+      ) : null}
+      {/* Convenios con pagadores (DX-105): descuento o lista de precios. Solo ADMIN. */}
+      {canManageAgreements(getTokenRole(accessToken)) ? (
+        <Link
+          href="/settings/convenios"
+          role="menuitem"
+          onClick={() => setOpen(false)}
+          className="flex items-center gap-3 px-3 py-2 text-sm text-ink hover:bg-bg"
+        >
+          <Handshake className="size-4 text-muted" aria-hidden />
+          {copy.agreements}
+        </Link>
+      ) : null}
+      {/* Listas de precios por sede o convenio (DX-105): solo ADMIN. */}
+      {canManagePriceLists(getTokenRole(accessToken)) ? (
+        <Link
+          href="/settings/listas-de-precios"
+          role="menuitem"
+          onClick={() => setOpen(false)}
+          className="flex items-center gap-3 px-3 py-2 text-sm text-ink hover:bg-bg"
+        >
+          <ListOrdered className="size-4 text-muted" aria-hidden />
+          {copy.priceLists}
         </Link>
       ) : null}
       {/* Plantillas de evolución con preguntas (DX-170): solo ADMIN. */}

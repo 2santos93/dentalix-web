@@ -159,3 +159,9 @@ export async function getRdaReadiness(token: string, entryId: string): Promise<R
     { token },
   );
 }
+
+/** DX-232: una comprobación auditada por lote, máximo50 evoluciones. */
+export async function getRdaReadinessBatch(token: string, patientId: string, entryIds: readonly string[]): Promise<components['schemas']['BatchRdaReadinessDto'][]> {
+  const query = new URLSearchParams({ ids: entryIds.join(',') });
+  return apiFetch(`/patients/${encodeURIComponent(patientId)}/clinical-entries/rda-readiness?${query}`, { token });
+}

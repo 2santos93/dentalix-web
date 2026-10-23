@@ -242,7 +242,16 @@ describe('AppointmentForm', () => {
 
   // DX-121: el tipo fija la duración.
   describe('tipo de cita', () => {
-    it('elegir «Endodoncia 90 min» fija la hora de fin y se envía el tipo', async () => {
+    it('preselecciona paciente, motivo e ítems de visita y guarda sus vínculos (DX-256)', async()=>{
+    mockedCreateAppointment.mockResolvedValue(createdAppointment);
+    render(<AppointmentForm token="tok" onCreated={jest.fn()} defaultPatient={patientsPage.items[0]} defaultProviderId="staff-1" defaultReason="Visita 2 · Corona" defaultDate={FUTURE_DATE} defaultStartTime="09:00" defaultEndTime="09:30" planItemIds={['plan-item-1','plan-item-2']}/>);
+    expect(screen.getByDisplayValue('Visita 2 · Corona')).toBeInTheDocument();
+    expect(screen.queryByRole('button',{name:'Cambiar'})).not.toBeInTheDocument();
+    const user=userEvent.setup();
+    await user.click(await screen.findByRole('button',{name:'Agendar cita'}));
+    await waitFor(()=>expect(mockedCreateAppointment).toHaveBeenCalledWith('tok',expect.objectContaining({patientId:'pat-1',reason:'Visita 2 · Corona',planItemIds:['plan-item-1','plan-item-2']})));
+  });
+  it('elegir «Endodoncia 90 min» fija la hora de fin y se envía el tipo', async () => {
       const user = userEvent.setup();
       mockedCreateAppointment.mockResolvedValue(createdAppointment);
       await renderFormAndWaitForLoad();

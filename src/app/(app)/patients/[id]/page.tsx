@@ -21,6 +21,7 @@ import { PatientRecordHeader } from '@/components/patients/patient-record-header
 import { PatientRetentionSection } from '@/components/patients/patient-retention-section';
 import { PatientCommunicationSection } from '@/components/patients/patient-communication-section';
 import { PatientResponsiblePartiesSection } from '@/components/patients/patient-responsible-parties-section';
+import { PatientAgreementSection } from '@/components/patients/patient-agreement-section';
 import { PatientCoverageSection } from '@/components/patients/patient-coverage-section';
 import { canEditCommunication, withCommunication } from '@/lib/patients/communication-api';
 import { OdontogramTab } from '@/components/odontogram/odontogram-tab';
@@ -118,6 +119,16 @@ function PatientDetailView() {
     if (!accessToken) return;
     getPatient(accessToken, patientId)
       .then((fresh) => setPatient((prev) => (prev ? { ...prev, coverage: fresh.coverage } : prev)))
+      .catch(() => {
+        /* la cabecera conserva el resumen leído; se corrige al recargar */
+      });
+  }, [accessToken, patientId]);
+  // DX-105: asignar, cambiar o quitar el convenio cambia el chip «Convenio: X»:
+  // se relee y se copia solo `agreement`.
+  const onAgreementChanged = useCallback(() => {
+    if (!accessToken) return;
+    getPatient(accessToken, patientId)
+      .then((fresh) => setPatient((prev) => (prev ? { ...prev, agreement: fresh.agreement } : prev)))
       .catch(() => {
         /* la cabecera conserva el resumen leído; se corrige al recargar */
       });
@@ -352,6 +363,14 @@ function PatientDetailView() {
               patientId={patientId}
               onChanged={onCoverageChanged}
             />
+            {/* DX-105: convenio con el que se presupuesta; chip en la cabecera
+                vía `onChanged`. */}
+            <PatientAgreementSection
+              key={`agreement-${patientId}`}
+              token={accessToken}
+              patientId={patientId}
+              onChanged={onAgreementChanged}
+            />
           </TabPanel>
 
           <PatientEditModal
@@ -359,15 +378,9 @@ function PatientDetailView() {
             patient={patient}
             token={accessToken}
             onOpenChange={setEditing}
-            // PATCH no trae la marca de saldo (DX-150) ni el resumen de cobertura
-            // (DX-153): se conservan los leídos.
-            onSaved={(updated) =>
-              setPatient((prev) => ({
-                ...updated,
-                balance: prev?.balance,
-                coverage: prev?.coverage,
-              }))
-            }
+            // PATCH no trae la marca de saldo (DX-150) ni los resúmenes de cobertura
+            // (DX-153) y convenio (DX-105): se conservan los leídos.
+            onSaved={(updated) => setPatient((prev) => replacePatientKeepingDerived(prev, updated))}
           />
 
           {access['clinical-history'] ? (

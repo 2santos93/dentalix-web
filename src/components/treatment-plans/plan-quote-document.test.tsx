@@ -6,6 +6,14 @@ import { planQuoteFixture, SIGNED_ACCEPTANCE } from './plan-quote-fixture';
 const text = (el: HTMLElement) => (el.textContent ?? '').replace(/\s/g, ' ');
 
 describe('PlanQuoteDocument (DX-012)', () => {
+  it('agrupa la organización actual por visitas sin cambiar precios firmados',()=>{
+    const quote=planQuoteFixture({visitOrganization:[{itemId:'i1',visit:1,label:'Cirugía',minDaysAfterPrevious:0},{itemId:'i2',visit:2,label:'Corona',minDaysAfterPrevious:90}]});
+    render(<PlanQuoteDocument quote={quote}/>);
+    expect(screen.getByRole('rowheader',{name:'Visita 1 · Cirugía'})).toBeInTheDocument();
+    expect(screen.getByRole('rowheader',{name:'Visita 2 · Corona · intervalo mínimo 90 días'})).toBeInTheDocument();
+    expect(screen.getByTestId('quote-total-COP')).toHaveTextContent('3.300.000');
+  });
+
   it('pinta logo y datos de la clínica y la sede, paciente, profesional, fecha y validez', () => {
     render(<PlanQuoteDocument quote={planQuoteFixture()} />);
     const header = screen.getByTestId('quote-header');
@@ -54,7 +62,7 @@ describe('PlanQuoteDocument (DX-012)', () => {
       <PlanQuoteDocument
         quote={planQuoteFixture({
           items: [],
-          totals: [{ currency: 'COP', gross: 0, discount: 0, net: 0 }],
+          totals: [{ currency: 'COP', gross: 0, discount: 0, net: 0, agreementSaving: 0 }],
         })}
       />,
     );
@@ -115,5 +123,54 @@ describe('PlanQuoteDocument (DX-012)', () => {
     const parties = screen.getByTestId('quote-parties');
     expect(parties).toHaveTextContent('Sin documento');
     expect(parties).toHaveTextContent('Sin asignar');
+  });
+
+  describe('convenio (DX-105)', () => {
+    const withAgreement = () =>
+      planQuoteFixture({
+        agreement: { name: 'Plan Oro', payerName: 'Seguros Sol' },
+        items: [
+          { ...planQuoteFixture().items[0], unitPrice: 3000000, subtotal: 2700000, listPrice: 3500000, agreementName: 'Plan Oro' },
+          { ...planQuoteFixture().items[1], listPrice: 150000 },
+        ],
+        totals: [{ currency: 'COP', gross: 3150000, discount: 350000, net: 2800000, agreementSaving: 500000 }],
+      });
+
+    it('pone el convenio en las partes: «Plan Oro · Seguros Sol»', () => {
+      render(<PlanQuoteDocument quote={withAgreement()} />);
+      const agreement = screen.getByTestId('quote-agreement');
+      expect(agreement).toHaveTextContent('Convenio');
+      expect(agreement).toHaveTextContent('Plan Oro · Seguros Sol');
+    });
+
+    it('sin convenio no hay entrada de convenio ni ahorro', () => {
+      render(<PlanQuoteDocument quote={planQuoteFixture()} />);
+      expect(screen.queryByTestId('quote-agreement')).not.toBeInTheDocument();
+      expect(screen.queryByText('Ahorro por convenio')).not.toBeInTheDocument();
+      expect(screen.queryByText(/Precio de lista/)).not.toBeInTheDocument();
+    });
+
+    it('cada ítem cuyo precio difiere del de lista lo dice; el que coincide, no', () => {
+      render(<PlanQuoteDocument quote={withAgreement()} />);
+      const table = screen.getByRole('table', { name: 'Procedimientos del presupuesto' });
+      const rows = within(table).getAllByRole('row');
+      const implant = rows.find((r) => r.textContent?.includes('Implante'))!;
+      const resin = rows.find((r) => r.textContent?.includes('Resina'))!;
+      expect(text(implant)).toContain('Precio de lista 3.500.000');
+      expect(text(resin)).not.toContain('Precio de lista');
+    });
+
+    it('la ficha de pantalla estrecha también lleva el precio de lista', () => {
+      render(<PlanQuoteDocument quote={withAgreement()} />);
+      const list = screen.getByRole('list', { name: 'Procedimientos del presupuesto' });
+      expect(text(list)).toContain('Precio de lista 3.500.000');
+    });
+
+    it('los totales llevan «Ahorro por convenio» cuando es mayor que cero', () => {
+      render(<PlanQuoteDocument quote={withAgreement()} />);
+      const totals = screen.getByTestId('quote-totals');
+      expect(within(totals).getByText('Ahorro por convenio')).toBeInTheDocument();
+      expect(text(within(totals).getByTestId('quote-saving-COP'))).toContain('500.000');
+    });
   });
 });
