@@ -9,7 +9,7 @@ import {
 } from '@/lib/patients/patient-agreement-api';
 import { ApiError } from '@/lib/api/client';
 import { setupUser } from '@/lib/test/user';
-import { agreementDto, patientAgreement } from './agreement-fixtures';
+import { agreementDto, coverageFor, patientAgreement } from './agreement-fixtures';
 
 jest.mock('../../lib/agreements/agreements-api', () => ({
   ...jest.requireActual('../../lib/agreements/agreements-api'),
@@ -34,7 +34,7 @@ const mockedCoverages = listCoverages as jest.MockedFunction<typeof listCoverage
 
 const sanitas = { id: 'pay-1', name: 'Sanitas' };
 const renderSection = (onChanged?: () => void) =>
-  render(<PatientAgreementSection token="tok" patientId="p1" onChanged={onChanged} />);
+  render(<PatientAgreementSection token="tok" patientId="p1" onChanged={onChanged} role="ADMIN" />);
 
 describe('PatientAgreementSection (DX-105)', () => {
   beforeEach(() => {
@@ -124,6 +124,8 @@ describe('PatientAgreementSection (DX-105)', () => {
     mockedGet.mockResolvedValueOnce({ current: null, history: [] });
     mockedGet.mockResolvedValueOnce({ current: patientAgreement(), history: [] });
     mockedAssign.mockResolvedValue(patientAgreement());
+    // SEC-047: el convenio de un pagador pide la cobertura vigente del paciente.
+    mockedCoverages.mockResolvedValue([coverageFor('c1', sanitas, 'Salud Plus')]);
     const onChanged = jest.fn();
     renderSection(onChanged);
     const user = setupUser();

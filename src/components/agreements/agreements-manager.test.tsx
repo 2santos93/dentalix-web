@@ -69,7 +69,7 @@ const norte: ClinicLocation = {
 const porcentaje: Agreement = {
   id: 'ag-1',
   name: 'Convenio Sanitas',
-  payer: { id: 'payer-1', name: 'Sanitas' },
+  payer: { id: 'payer-1', name: 'Sanitas', type: 'PREPAGADA_CO' },
   kind: 'PERCENT_DISCOUNT',
   percent: 15,
   percentByCategory: { Preventiva: 20, Endodoncia: 5 },
