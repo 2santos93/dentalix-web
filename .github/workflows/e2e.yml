@@ -14,10 +14,13 @@ on:
         required: false
         default: main
 
-# Un push nuevo a la misma rama/PR cancela la ejecución anterior.
+# En una rama o un PR, un push nuevo cancela la ejecución anterior. En main
+# no (DX-292, TST-033): cada merge tiene su E2E completa. Su grupo es propio
+# de cada run, porque en un grupo compartido GitHub cancela la run que espera
+# turno cuando llega otra, aunque no haya `cancel-in-progress`.
 concurrency:
-  group: e2e-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: e2e-${{ github.workflow }}-${{ github.ref == 'refs/heads/main' && github.run_id || github.ref }}
+  cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
 
 permissions:
   contents: read
@@ -26,7 +29,12 @@ jobs:
   playwright:
     name: Playwright (web + API + Postgres 16)
     runs-on: ubuntu-24.04
-    timeout-minutes: 30
+    # DX-292 (TST-033): cada paso lleva su propio tope y la suma cabe aquí.
+    # Si un paso se pasa, falla ESE paso (la run queda `failure`) y el informe
+    # se sube igual; si se pasara el job, GitHub la marcaría `cancelled` y el
+    # rojo no se vería. Pasos: ~3 min de checkout y Node + 10 + 5 + 5 + 8 +
+    # 35 + 2 + 2 + 5 = 75 (Playwright: ~17–20 min la suite entera).
+    timeout-minutes: 80
     services:
       postgres:
         image: postgres:16
@@ -83,35 +91,47 @@ jobs:
             dentalix-api/package-lock.json
 
       - name: Dependencias y Chromium
+        timeout-minutes: 10
         run: scripts/e2e-ci.sh setup
 
       - name: Base de datos (rol de la app, migrate deploy y siembra)
+        timeout-minutes: 5
         run: scripts/e2e-ci.sh db
 
       - name: API (build y start:prod)
+        timeout-minutes: 5
         run: scripts/e2e-ci.sh api
 
       - name: Web (next build y next start)
+        timeout-minutes: 8
         run: scripts/e2e-ci.sh web
 
       - name: Playwright
         id: playwright
+        timeout-minutes: 35
         run: scripts/e2e-ci.sh test
 
       # DX-252 (TST-030): la E2E no sale verde con tests sin ejecutar. Falla,
       # nombrando cada test, si el informe tiene «skipped» fuera de la lista
       # versionada e2e/allowed-skips.json. También corre si Playwright falló,
       # para que el resumen diga qué no se llegó a ejecutar.
-      - name: Sin tests saltados fuera de e2e/allowed-skips.json
+      # DX-292 (TST-033): nombra los flaky (rojo si hay más de 2) y deja en el
+      # resumen del job el recuento y los fallidos, flaky y saltados.
+      - name: Sin tests saltados fuera de e2e/allowed-skips.json ni flaky de más
         if: always() && (steps.playwright.outcome == 'success' || steps.playwright.outcome == 'failure')
+        timeout-minutes: 2
         run: scripts/e2e-ci.sh skips
 
       - name: Parar los servidores
         if: always()
+        timeout-minutes: 2
         run: scripts/e2e-ci.sh stop
 
+      # Siempre, también en verde (el informe trae los flaky) y si un paso
+      # anterior agotó su tope; con su propio margen dentro del del job.
       - name: Subir informe, trazas y logs
-        if: failure()
+        if: always()
+        timeout-minutes: 5
         uses: actions/upload-artifact@v4
         with:
           name: playwright-${{ github.run_id }}-${{ github.run_attempt }}
