@@ -6058,7 +6058,7 @@ export interface components {
             warnings: string[];
             /** @description DX-233: código de cada aviso, en el mismo orden que `warnings`: SCHEDULE_BLOCK (bloqueo que deja agendar, DX-122) o PROVIDER_OFF_SCHEDULE (fuera del horario del profesional en la sede). */
             warningCodes: components["schemas"]["AppointmentWarningCode"][];
-            /** @description DX-273: tratamientos de esta cita que siguen reservados en OTRA cita viva (p. ej. al marcar «Llegó», la reserva se quedó en la cita futura). Solo citas de sedes permitidas al usuario (DX-089): las de otras sedes se omiten. Vacío en una cita cancelada o no-show. Para moverla: `POST /appointments/:id/plan-items/:planItemId/claim`. */
+            /** @description DX-273: tratamientos de esta cita que siguen reservados en OTRA cita viva (p. ej. al marcar «Llegó», la reserva se quedó en la cita futura). Solo citas de sedes permitidas al usuario (DX-089): las de otras sedes se omiten. Vacío en una cita cancelada, no-show o completada. Si la cita que lo reservaba se cancela, se marca no-show o lo quita, la cita más temprana con el paciente en la clínica recupera la reserva en esa misma transacción (auditado `PLAN_ITEM_RESERVATION_RECOVERED`). Para moverla: `POST /appointments/:id/plan-items/:planItemId/claim`. */
             planItemsReservedElsewhere: components["schemas"]["PlanItemReservedElsewhereDto"][];
             /** @description DX-273: solo al sacar la cita de COMPLETED. El motivo y cómo queda el mínimo de la visita siguiente de cada plan afectado. */
             completedExit?: components["schemas"]["CompletedExitDto"];
