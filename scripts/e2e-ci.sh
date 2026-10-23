@@ -110,6 +110,12 @@ load_env() {
   # DX-099: el cuestionario público de anamnesis (por IP y por token).
   export RATE_LIMIT_ANAMNESIS_LIMIT=100000
   export RATE_LIMIT_ANAMNESIS_TOKEN_LIMIT=100000
+  # SEC-046: lecturas de un fichero de importación (inspect, dry-run y hoja de
+  # saldos), 10 por minuto por clínica + usuario en un balde común. Los specs
+  # de importación y de saldos migrados leen con el mismo ADMIN de la demo
+  # una docena de ficheros seguidos y el abono en móvil se quedaba en 429
+  # (DX-292, TST-033).
+  export RATE_LIMIT_PATIENT_IMPORT_LIMIT=100000
   # Topes de email en BD (DX-088): la suite reenvía una invitación al momento
   # de crearla; sin esto el enfriamiento de 60 s respondería 429.
   export MAIL_RECIPIENT_COOLDOWN_SECONDS=0
