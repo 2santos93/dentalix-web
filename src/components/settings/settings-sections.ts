@@ -80,7 +80,7 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
       {
         href: '/settings/sedes',
         label: 'Sedes',
-        description: 'Datos legales de cada sede y su código de prestador.',
+        description: 'Datos legales de cada sede, su código de prestador y su política de cancelación.',
         icon: Building2,
       },
       // SEC-009.

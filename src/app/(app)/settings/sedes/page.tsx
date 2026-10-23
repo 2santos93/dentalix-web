@@ -7,11 +7,12 @@ import { PageHeader } from '@/components/shared/page-header';
 import { SETTINGS_BACK } from '@/components/settings/settings-sections';
 import { LocationRepsSettings } from '@/components/locations/location-reps-settings';
 import { LocationPhoneSettings } from '@/components/locations/location-phone-settings';
+import { CancellationPolicySettings } from '@/components/locations/cancellation-policy-settings';
 
 const copy = {
   title: 'Sedes',
   description:
-    'Datos legales de cada sede. El código de habilitación (REPS) lo pide el Resumen Digital de Atención en Colombia.',
+    'Datos legales de cada sede y su política de cancelación. El código de habilitación (REPS) lo pide el Resumen Digital de Atención en Colombia.',
   checkingSession: 'Verificando sesión…',
 };
 
@@ -37,18 +38,21 @@ export default function LocationSettingsPage() {
     );
   }
   if (!accessToken) return null;
+  const isAdmin = getTokenRole(accessToken) === 'ADMIN';
 
   return (
     <>
       <PageHeader back={SETTINGS_BACK} title={copy.title} description={copy.description} />
       <LocationRepsSettings
         token={accessToken}
-        canEdit={getTokenRole(accessToken) === 'ADMIN'}
+        canEdit={isAdmin}
       />
       <LocationPhoneSettings
         token={accessToken}
-        canEdit={getTokenRole(accessToken) === 'ADMIN'}
+        canEdit={isAdmin}
       />
+      {/* DX-279: solo ADMIN (la API responde 403 al resto). */}
+      {isAdmin ? <CancellationPolicySettings token={accessToken} /> : null}
     </>
   );
 }
