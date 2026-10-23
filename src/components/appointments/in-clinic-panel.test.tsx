@@ -24,7 +24,7 @@ jest.mock('../../lib/locations/locations-api', () => ({
   listLocations: jest.fn(),
 }));
 jest.mock('sonner', () => ({
-  toast: { success: jest.fn(), warning: jest.fn(), error: jest.fn(), info: jest.fn() },
+  toast: { success: jest.fn(), warning: jest.fn(), error: jest.fn(), info: jest.fn(), dismiss: jest.fn() },
 }));
 const mockedGet = getInClinic as jest.MockedFunction<typeof getInClinic>;
 const mockedUndo = undoArrival as jest.MockedFunction<typeof undoArrival>;

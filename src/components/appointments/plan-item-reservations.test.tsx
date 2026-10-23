@@ -24,7 +24,7 @@ jest.mock('../../lib/appointments/plan-item-reservations', () => ({
 }));
 jest.mock('../../lib/locations/locations-api', () => ({ listLocations: jest.fn() }));
 jest.mock('sonner', () => ({
-  toast: { success: jest.fn(), warning: jest.fn(), error: jest.fn(), info: jest.fn() },
+  toast: { success: jest.fn(), warning: jest.fn(), error: jest.fn(), info: jest.fn(), dismiss: jest.fn() },
 }));
 const mockedGet = getInClinic as jest.MockedFunction<typeof getInClinic>;
 const mockedUpdate = updateAppointment as jest.MockedFunction<typeof updateAppointment>;
@@ -120,6 +120,8 @@ describe('Tratamiento reservado en otra cita (DX-273)', () => {
     await userEvent.click(await screen.findByRole('button', { name: /Traer a esta cita/ }));
     expect(mockedClaim).toHaveBeenCalledWith('T', 'a1', 'i1');
     expect(toast.success).toHaveBeenCalledWith('Implante · diente 36 quedó reservado en esta cita.');
+    // El aviso de «Llegó» de ese tratamiento se cierra (revisión M4).
+    expect(toast.dismiss).toHaveBeenCalledWith('reserved:a1:i1');
     await waitFor(() => expect(screen.queryByText(MESSAGE)).not.toBeInTheDocument());
     expect(mockedGet).toHaveBeenCalledTimes(2);
   });

@@ -8,6 +8,7 @@ import {
   updateAppointment,
   type Appointment,
   type AppointmentStatus,
+  type AppointmentWriteDetail,
 } from '@/lib/appointments/appointments-api';
 import { getLocationSchedule, type BusinessHours } from '@/lib/locations/schedule-api';
 import { getRoster, type MinuteRangeDto, type Roster } from '@/lib/locations/provider-schedule-api';
@@ -36,10 +37,7 @@ import { CoverageDetailLine } from '@/components/appointments/coverage-detail-li
 import { DayColumns } from '@/components/appointments/day-columns';
 import { announceAppointmentWarnings } from '@/components/appointments/appointment-warnings';
 import { MoveAppointmentDialog } from '@/components/appointments/move-appointment-dialog';
-import {
-  CompletedExitModal,
-  type CompletedExitResult,
-} from '@/components/appointments/completed-exit-modal';
+import { CompletedExitModal } from '@/components/appointments/completed-exit-modal';
 import { completedExitSummary } from '@/lib/appointments/plan-item-reservations';
 import {
   MAX_PROVIDER_COLUMNS,
@@ -937,7 +935,7 @@ export function AgendaView({ token }: AgendaViewProps) {
   }
 
   /** DX-273: la cita salió de «Completada»: aviso con el mínimo recalculado. */
-  async function handleCompletedExitDone(result: CompletedExitResult) {
+  async function handleCompletedExitDone(result: AppointmentWriteDetail) {
     setCompletedExit(null);
     const summary = result.completedExit ? completedExitSummary(result.completedExit) : [];
     toast.success(copy.completedExitDone(STATUS_LABELS[result.status]), {

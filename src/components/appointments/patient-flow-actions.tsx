@@ -58,6 +58,11 @@ export interface PatientFlowRunner {
   claim?: (appointmentId: string, item: PlanItemReservedElsewhere) => Promise<boolean>;
 }
 
+/** Id del toast «reservado en otra cita» de un tratamiento de la cita. */
+function reservedToastId(appointmentId: string, planItemId: string): string {
+  return `reserved:${claimKey(appointmentId, planItemId)}`;
+}
+
 /** Clave de un «Traer a esta cita» en curso. */
 export function claimKey(appointmentId: string, planItemId: string): string {
   return `${appointmentId}:${planItemId}`;
@@ -77,6 +82,9 @@ export function usePatientFlow(token: string, onChanged: () => void): PatientFlo
     setClaimingKey(claimKey(appointmentId, item.planItemId));
     try {
       await claimPlanItem(token, appointmentId, item.planItemId);
+      // Revisión M4: el aviso de «Llegó» ya no hace falta (se trajo desde el
+      // toast o desde el panel).
+      toast.dismiss(reservedToastId(appointmentId, item.planItemId));
       toast.success(reservationCopy.claimed(reservedItemLabel(item)));
       return true;
     } catch (err) {
@@ -98,9 +106,9 @@ export function usePatientFlow(token: string, onChanged: () => void): PatientFlo
       if (action === 'UNDO_ARRIVAL') {
         await undoArrival(token, appointmentId);
       } else {
-        const result = (await updateAppointment(token, appointmentId, {
+        const result = await updateAppointment(token, appointmentId, {
           status: FLOW_ACTION_STATUS[action],
-        })) as { planItemsReservedElsewhere?: PlanItemReservedElsewhere[] };
+        });
         reserved = result.planItemsReservedElsewhere ?? [];
       }
       toast.success(patientFlowCopy.done[action](patientName));
@@ -109,7 +117,7 @@ export function usePatientFlow(token: string, onChanged: () => void): PatientFlo
       if (action === 'ARRIVE') {
         for (const item of reserved) {
           toast.warning(reservedItemLabel(item), {
-            id: `reserved:${claimKey(appointmentId, item.planItemId)}`,
+            id: reservedToastId(appointmentId, item.planItemId),
             description: reservedElsewhereMessage(item),
             duration: Infinity,
             action: {

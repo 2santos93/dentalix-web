@@ -4,14 +4,13 @@ import { useId, useState } from 'react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import {
   updateAppointment,
-  type AppointmentDetail,
   type AppointmentStatus,
+  type AppointmentWriteDetail,
 } from '@/lib/appointments/appointments-api';
 import {
   STATUS_REASON_MAX,
   STATUS_REASON_MIN,
   validStatusReason,
-  type CompletedExit,
 } from '@/lib/appointments/plan-item-reservations';
 import { STATUS_LABELS } from '@/components/appointments/appointment-display';
 import { FormModal } from '@/components/shared/form-modal';
@@ -30,8 +29,6 @@ export const completedExitCopy = {
   genericError: 'No pudimos cambiar el estado de la cita. Intenta de nuevo.',
 };
 
-/** Respuesta del PATCH: la cita y, al salir de «Completada», el resumen. */
-export type CompletedExitResult = AppointmentDetail & { completedExit?: CompletedExit };
 
 interface CompletedExitModalProps {
   open: boolean;
@@ -40,7 +37,7 @@ interface CompletedExitModalProps {
   appointmentId: string;
   /** Estado al que pasa la cita. */
   to: AppointmentStatus;
-  onDone: (result: CompletedExitResult) => void;
+  onDone: (result: AppointmentWriteDetail) => void;
 }
 
 /**
@@ -75,7 +72,7 @@ export function CompletedExitModal({
         status: to,
         statusReason: reason.trim(),
       });
-      onDone(result as CompletedExitResult);
+      onDone(result);
     } catch (err) {
       setError(apiErrorMessage(err, completedExitCopy.genericError));
     } finally {
