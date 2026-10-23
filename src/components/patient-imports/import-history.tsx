@@ -110,7 +110,12 @@ export function ImportHistory({ token, reloadKey }: { token: string; reloadKey: 
         pollFailed.current = false;
       } catch (err) {
         if (cancelled) return;
-        if (!pollFailed.current) notifyError(apiErrorMessage(err, historyCopy.refreshError));
+        if (!pollFailed.current) {
+          // Way-Out Rule (DESIGN.md): el aviso trae «Reintentar» (refresca ya).
+          notifyError(apiErrorMessage(err, historyCopy.refreshError), {
+            onRetry: () => setPollTick((t) => t + 1),
+          });
+        }
         pollFailed.current = true;
       } finally {
         if (!cancelled) setPollTick((t) => t + 1);
@@ -179,7 +184,7 @@ export function ImportHistory({ token, reloadKey }: { token: string; reloadKey: 
                     : historyCopy.counts(b)}
               </p>
               <div className="flex flex-wrap gap-2 sm:justify-end">
-                {b.totals.errorRows + b.totals.duplicateRows > 0 ? (
+                {b.reportAvailable && b.totals.errorRows + b.totals.duplicateRows > 0 ? (
                   <Button
                     type="button"
                     variant="secondary"

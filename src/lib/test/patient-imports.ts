@@ -57,6 +57,7 @@ export function batchFixture(overrides: Partial<ImportBatchDetail> = {}): Import
     undoneFilled: null,
     canConfirm: true,
     canUndo: false,
+    reportAvailable: true,
     issues: [
       {
         row: 3,

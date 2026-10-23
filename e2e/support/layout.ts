@@ -8,6 +8,27 @@ export async function expectNoHorizontalScroll(page: Page): Promise<void> {
   expect(overflow, 'scroll horizontal de la página').toBeLessThanOrEqual(0);
 }
 
+/**
+ * Ningún contenedor que hace scroll propio (por defecto `<main>`, que en el
+ * layout de la app es quien se desplaza y no el documento) se desplaza en
+ * horizontal: `expectNoHorizontalScroll` solo mira el documento y no lo ve
+ * (QA DX-107, D1).
+ */
+export async function expectNoHorizontalScrollIn(page: Page, selector = 'main'): Promise<void> {
+  const overflows = await page.evaluate(
+    (sel) =>
+      Array.from(document.querySelectorAll(sel)).map((el) => ({
+        overflow: el.scrollWidth - el.clientWidth,
+        tag: el.tagName.toLowerCase(),
+      })),
+    selector,
+  );
+  expect(overflows.length, `no hay ningún «${selector}»`).toBeGreaterThan(0);
+  for (const { overflow, tag } of overflows) {
+    expect(overflow, `scroll horizontal de <${tag}>`).toBeLessThanOrEqual(0);
+  }
+}
+
 async function expectBoxInside(page: Page, locator: Locator, moment: string): Promise<void> {
   const box = await locator.boundingBox();
   const width = page.viewportSize()?.width ?? 0;

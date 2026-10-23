@@ -3,7 +3,10 @@ import userEvent from '@testing-library/user-event';
 import { ApiError } from '@/lib/api/client';
 import { listImports, undoImport } from '@/lib/patient-imports/patient-imports-api';
 import { batchFixture } from '@/lib/test/patient-imports';
+import { notifyError } from '@/components/errors/notify';
 import { ImportHistory } from './import-history';
+
+jest.mock('../errors/notify', () => ({ notifyError: jest.fn() }));
 
 jest.mock('../../lib/patient-imports/patient-imports-api', () => ({
   ...jest.requireActual('../../lib/patient-imports/patient-imports-api'),
@@ -102,6 +105,34 @@ it('un lote importando se refresca solo hasta terminar', async () => {
       jest.advanceTimersByTime(3100);
     });
     expect(await screen.findByText(/1 creados/)).toBeInTheDocument();
+  } finally {
+    jest.useRealTimers();
+  }
+});
+
+it('«Informe» solo si sigue disponible (revisión: tras la purga daría 410)', async () => {
+  const purged = { ...completed, id: 'batch-2', fileName: 'viejo.csv', reportAvailable: false };
+  mockedList.mockResolvedValue(page([completed, purged]));
+  render(<ImportHistory token="tok" reloadKey={0} />);
+  await screen.findByText('viejo.csv');
+  expect(screen.getByRole('button', { name: /informe.*pacientes\.csv/i })).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: /informe.*viejo\.csv/i })).not.toBeInTheDocument();
+});
+
+it('Way-Out Rule: el aviso de fallo del refresco trae «Reintentar»', async () => {
+  jest.useFakeTimers();
+  try {
+    const running = { ...completed, status: 'RUNNING' as const, canUndo: false };
+    mockedList.mockResolvedValueOnce(page([running])).mockRejectedValue(new Error('red'));
+    render(<ImportHistory token="tok" reloadKey={0} />);
+    await screen.findByText('pacientes.csv');
+    await act(async () => {
+      jest.advanceTimersByTime(3100);
+    });
+    expect(notifyError).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ onRetry: expect.any(Function) }),
+    );
   } finally {
     jest.useRealTimers();
   }

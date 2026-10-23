@@ -33,6 +33,7 @@ import { ImportProgress } from './import-progress';
 export const wizardCopy = {
   steps: ['Subir archivo', 'Columnas y validación', 'Confirmar'],
   uploadTitle: 'Sube el archivo de pacientes',
+  mappingTitle: 'Revisa las columnas y valida',
   uploadHint:
     'CSV o Excel (.xlsx) de hasta 5 MB y 10.000 pacientes. Si vienes de otro programa, exporta su lista de pacientes; si empiezas de cero, usa la plantilla (borra sus dos filas de ejemplo).',
   chooseFile: 'Elegir archivo',
@@ -114,6 +115,21 @@ export function PatientImportWizard({ token, onBatchChange }: PatientImportWizar
   // Cada consulta del avance (bien o mal) programa la siguiente.
   const [pollTick, setPollTick] = React.useState(0);
   const pollFailed = React.useRef(false);
+  // Al avanzar, el foco va al título del paso o resultado nuevo: el botón
+  // pulsado desaparece y el lector de pantalla anuncia dónde está (QA O1).
+  const focusTarget = React.useRef<string | null>(null);
+  const setFocusTarget = (target: string) => {
+    focusTarget.current = target;
+  };
+  // Tras cada render: si hay un título pendiente de foco y ya está pintado.
+  React.useEffect(() => {
+    if (!focusTarget.current) return;
+    const el = document.getElementById(`${id}-${focusTarget.current}`);
+    if (!el) return;
+    focusTarget.current = null;
+    el.focus();
+  });
+  const retryPoll = React.useCallback(() => setPollTick((t) => t + 1), []);
 
   // Al volver a la pantalla con una importación en marcha, se ve su avance
   // (lo que promete el aviso «puedes seguir trabajando»).
@@ -153,7 +169,9 @@ export function PatientImportWizard({ token, onBatchChange }: PatientImportWizar
       } catch (err) {
         if (cancelled) return;
         // Un aviso por racha de fallos, no uno cada 1,5 s.
-        if (!pollFailed.current) notifyError(apiErrorMessage(err, wizardCopy.progressError));
+        if (!pollFailed.current) {
+          notifyError(apiErrorMessage(err, wizardCopy.progressError), { onRetry: retryPoll });
+        }
         pollFailed.current = true;
       } finally {
         if (!cancelled) setPollTick((t) => t + 1);
@@ -163,7 +181,7 @@ export function PatientImportWizard({ token, onBatchChange }: PatientImportWizar
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [token, runningId, runningActive, pollTick, onBatchChange]);
+  }, [token, runningId, runningActive, pollTick, onBatchChange, retryPoll]);
 
   function reset() {
     setStep(0);
@@ -176,6 +194,7 @@ export function PatientImportWizard({ token, onBatchChange }: PatientImportWizar
     setConfirmError(null);
     setRunning(null);
     setMode('SKIP');
+    setFocusTarget('upload');
     if (inputRef.current) inputRef.current.value = '';
   }
 
@@ -203,6 +222,7 @@ export function PatientImportWizard({ token, onBatchChange }: PatientImportWizar
       setInspect(result);
       setMapping(result.suggestedMapping);
       setStep(1);
+      setFocusTarget('mapping');
     } catch (err) {
       setReadError(apiErrorMessage(err, wizardCopy.readError));
       // El mismo archivo, corregido, se puede volver a elegir.
@@ -218,6 +238,7 @@ export function PatientImportWizard({ token, onBatchChange }: PatientImportWizar
     setValidateError(null);
     try {
       setDryRun(await validateImport(token, file, mapping, defaultDocType));
+      setFocusTarget('dry-run');
     } catch (err) {
       setDryRun(null);
       setValidateError(apiErrorMessage(err, wizardCopy.validateError));
@@ -243,6 +264,7 @@ export function PatientImportWizard({ token, onBatchChange }: PatientImportWizar
     try {
       const batch = await confirmImport(token, dryRun.id, mode);
       setRunning(batch);
+      setFocusTarget('progress');
       toast.success(wizardCopy.started);
       onBatchChange();
     } catch (err) {
@@ -284,7 +306,7 @@ export function PatientImportWizard({ token, onBatchChange }: PatientImportWizar
     >
       {step === 0 ? (
         <section aria-labelledby={`${id}-upload`} className="flex flex-col gap-4">
-          <h2 id={`${id}-upload`} className="text-lg font-semibold text-ink">
+          <h2 id={`${id}-upload`} tabIndex={-1} className="text-lg font-semibold text-ink focus:outline-none">
             {wizardCopy.uploadTitle}
           </h2>
           <p className="max-w-prose text-sm text-muted">{wizardCopy.uploadHint}</p>
@@ -295,6 +317,8 @@ export function PatientImportWizard({ token, onBatchChange }: PatientImportWizar
               type="file"
               accept={IMPORT_ACCEPT}
               aria-label={wizardCopy.fileLabel}
+              // Invisible: no es una parada de Tab; se abre con «Elegir archivo» (QA D3).
+              tabIndex={-1}
               className="sr-only"
               onChange={(e) => void onFile(e.target.files?.[0])}
             />
@@ -322,7 +346,10 @@ export function PatientImportWizard({ token, onBatchChange }: PatientImportWizar
       ) : null}
 
       {step === 1 && inspect ? (
-        <section className="flex flex-col gap-6">
+        <section aria-labelledby={`${id}-mapping`} className="flex min-w-0 flex-col gap-6">
+          <h2 id={`${id}-mapping`} tabIndex={-1} className="text-lg font-semibold text-ink focus:outline-none">
+            {wizardCopy.mappingTitle}
+          </h2>
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <p className="flex min-w-0 items-center gap-2 text-sm text-ink">
               <FileSpreadsheet aria-hidden className="size-4 shrink-0 text-muted" />
@@ -361,9 +388,13 @@ export function PatientImportWizard({ token, onBatchChange }: PatientImportWizar
           </div>
           {dryRun ? (
             <DryRunResult
+              headingId={`${id}-dry-run`}
               batch={dryRun}
               onReport={() => void onReport(dryRun.id, dryRun.fileName)}
-              onContinue={() => setStep(2)}
+              onContinue={() => {
+                setStep(2);
+                setFocusTarget('confirm');
+              }}
             />
           ) : null}
         </section>
@@ -371,7 +402,7 @@ export function PatientImportWizard({ token, onBatchChange }: PatientImportWizar
 
       {step === 2 && dryRun ? (
         <section aria-labelledby={`${id}-confirm`} className="flex flex-col gap-5">
-          <h2 id={`${id}-confirm`} className="text-lg font-semibold text-ink">
+          <h2 id={`${id}-confirm`} tabIndex={-1} className="text-lg font-semibold text-ink focus:outline-none">
             {wizardCopy.confirmTitle}
           </h2>
           <Totals batch={dryRun} />
@@ -432,10 +463,12 @@ function Totals({ batch }: { batch: ImportBatchDetail }) {
 }
 
 function DryRunResult({
+  headingId,
   batch,
   onReport,
   onContinue,
 }: {
+  headingId: string;
   batch: ImportBatchDetail;
   onReport: () => void;
   onContinue: () => void;
@@ -443,18 +476,22 @@ function DryRunResult({
   return (
     <section aria-label={wizardCopy.dryRunTitle} className="flex flex-col gap-4 border-t border-border pt-5">
       <div className="flex flex-col gap-1">
-        <h2 className="text-lg font-semibold text-ink">{wizardCopy.dryRunTitle}</h2>
+        <h2 id={headingId} tabIndex={-1} className="text-lg font-semibold text-ink focus:outline-none">
+          {wizardCopy.dryRunTitle}
+        </h2>
         <p className="text-sm text-muted">{wizardCopy.dryRunHint}</p>
       </div>
       <Totals batch={batch} />
       {batch.issuesTotal > 0 ? (
         <div className="flex flex-col gap-3">
-          <div>
-            <Button type="button" variant="secondary" size="sm" onClick={onReport}>
-              <Download aria-hidden />
-              {wizardCopy.report}
-            </Button>
-          </div>
+          {batch.reportAvailable ? (
+            <div>
+              <Button type="button" variant="secondary" size="sm" onClick={onReport}>
+                <Download aria-hidden />
+                {wizardCopy.report}
+              </Button>
+            </div>
+          ) : null}
           <ImportIssuesTable issues={batch.issues} total={batch.issuesTotal} />
         </div>
       ) : (

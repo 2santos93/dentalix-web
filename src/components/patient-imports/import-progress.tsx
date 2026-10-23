@@ -57,7 +57,7 @@ export function ImportProgress({
   return (
     <div className="flex flex-col gap-4 rounded-xl border border-border bg-surface p-4 sm:p-6">
       <div className="flex flex-wrap items-start justify-between gap-2">
-        <h2 id={headingId} className="min-w-0 break-words text-lg font-semibold text-ink">
+        <h2 id={headingId} tabIndex={-1} className="min-w-0 break-words text-lg font-semibold text-ink focus:outline-none">
           {copy.title(batch.fileName)}
         </h2>
         <Badge variant={STATUS_VARIANT[batch.status]}>{STATUS_LABELS[batch.status]}</Badge>
@@ -86,7 +86,7 @@ export function ImportProgress({
       {batch.status === 'COMPLETED' && progress.createdCount > 0 ? (
         <p className="text-sm text-muted">{copy.consent}</p>
       ) : null}
-      {!active && (batch.totals.errorRows > 0 || batch.totals.duplicateRows > 0) ? (
+      {!active && batch.reportAvailable && (batch.totals.errorRows > 0 || batch.totals.duplicateRows > 0) ? (
         <div>
           <Button type="button" variant="secondary" size="sm" onClick={onReport}>
             <Download aria-hidden />

@@ -57,7 +57,9 @@ export function ColumnMappingFields({
   };
 
   return (
-    <fieldset className="flex flex-col gap-3" disabled={disabled}>
+    // min-w-0: un <fieldset> tiene `min-inline-size: min-content` y el selector
+    // más ancho lo sacaba 3 px del asistente a 390 px (QA D1).
+    <fieldset className="flex min-w-0 flex-col gap-3" disabled={disabled}>
       <legend className="text-base font-semibold text-ink">{copy.legend}</legend>
       <p className="text-sm text-muted">{copy.hint}</p>
       <div className="overflow-hidden rounded-xl border border-border bg-surface">

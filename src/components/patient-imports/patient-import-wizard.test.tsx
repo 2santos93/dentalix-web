@@ -10,6 +10,7 @@ import {
   validateImport,
 } from '@/lib/patient-imports/patient-imports-api';
 import { batchFixture, inspectFixture } from '@/lib/test/patient-imports';
+import { ImportProgress } from './import-progress';
 import { PatientImportWizard } from './patient-import-wizard';
 import { notifyError } from '@/components/errors/notify';
 
@@ -222,4 +223,51 @@ it('tras un error del archivo, el campo se vacía para volver a elegirlo', async
   await upload(user);
   expect(await screen.findByRole('alert')).toHaveTextContent('El archivo está vacío.');
   expect((screen.getByLabelText('Archivo de pacientes (CSV o .xlsx)') as HTMLInputElement).value).toBe('');
+});
+
+it('QA D3: el campo de archivo oculto no es una parada de Tab; «Elegir archivo» sí', () => {
+  render(<PatientImportWizard token="tok" onBatchChange={jest.fn()} />);
+  expect(screen.getByLabelText('Archivo de pacientes (CSV o .xlsx)')).toHaveAttribute('tabindex', '-1');
+  expect(screen.getByRole('button', { name: 'Elegir archivo' })).not.toHaveAttribute('tabindex', '-1');
+});
+
+it('QA O1: al avanzar, el foco va al título del paso nuevo (no se pierde en <body>)', async () => {
+  mockedInspect.mockResolvedValue(inspectFixture());
+  mockedValidate.mockResolvedValue(batchFixture());
+  const user = userEvent.setup();
+  render(<PatientImportWizard token="tok" onBatchChange={jest.fn()} />);
+  await upload(user);
+  await waitFor(() => expect(screen.getByRole('heading', { name: 'Revisa las columnas y valida' })).toHaveFocus());
+  await user.click(screen.getByRole('button', { name: 'Validar archivo' }));
+  await waitFor(() => expect(screen.getByRole('heading', { name: 'Resultado de la validación' })).toHaveFocus());
+  await user.click(screen.getByRole('button', { name: 'Continuar' }));
+  await waitFor(() => expect(screen.getByRole('heading', { name: 'Confirmar la importación' })).toHaveFocus());
+});
+
+it('Way-Out Rule: el aviso de fallo del avance trae «Reintentar»', async () => {
+  jest.useFakeTimers();
+  try {
+    const running = batchFixture({ status: 'RUNNING', canConfirm: false });
+    mockedList.mockResolvedValue({ items: [running], total: 1, page: 1, pageSize: 20 });
+    mockedGet.mockResolvedValueOnce(running).mockRejectedValue(new Error('red'));
+    render(<PatientImportWizard token="tok" onBatchChange={jest.fn()} />);
+    expect(await screen.findByText('Importando')).toBeInTheDocument();
+    await act(async () => {
+      jest.advanceTimersByTime(1600);
+    });
+    expect(notifyError).toHaveBeenCalledWith(
+      expect.any(String),
+      expect.objectContaining({ onRetry: expect.any(Function) }),
+    );
+  } finally {
+    jest.useRealTimers();
+  }
+});
+
+it('sin informe disponible (caducado o purgado) no ofrece descargarlo', async () => {
+  const done = batchFixture({ status: 'COMPLETED', canConfirm: false, canUndo: true, reportAvailable: false });
+  render(<ImportProgress batch={done} headingId="h" onReport={jest.fn()} />);
+  expect(screen.queryByRole('button', { name: /informe de errores/i })).not.toBeInTheDocument();
+  render(<ImportProgress batch={{ ...done, reportAvailable: true }} headingId="h2" onReport={jest.fn()} />);
+  expect(screen.getByRole('button', { name: /informe de errores/i })).toBeInTheDocument();
 });

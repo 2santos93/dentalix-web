@@ -4,14 +4,14 @@ import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { sessionCookie, waitForHydratedForm } from './support/auth';
 import { API_URL, tenantOrigin } from './support/urls';
-import { expectNoHorizontalScroll } from './support/layout';
+import { expectNoHorizontalScroll, expectNoHorizontalScrollIn } from './support/layout';
 
 /**
  * e2e (DX-107): Ajustes → Importar pacientes en la clínica demo, a 1440 y 390.
  *
  *   1. Subir un CSV con separador «;» (paso 1): el asistente propone el mapeo
  *      de columnas; a 390 px cada dato se apila (etiqueta sobre el selector) y
- *      la página no se desplaza de lado.
+ *      ni la página ni `<main>` (que es quien hace scroll) se desplazan de lado.
  *   2. Validar (dry-run, paso 2): totales, el error y el duplicado por fila
  *      con su motivo en español; ningún paciente creado todavía.
  *   3. Confirmar (paso 3): avance hasta «Importado»; la ficha del importado
@@ -86,12 +86,14 @@ for (const viewport of [
     const host = new URL(origin).host;
     const docA = `61${viewport.tag}${suffix}1`;
     const docB = `61${viewport.tag}${suffix}2`;
+    // Las mismas columnas que el CSV de ejemplo de la API: con ellas el mapeo
+    // a 390 px llegó a sacar 3 px de <main> (QA D1).
     const csv = [
-      'Tipo Doc;Cédula;Nombre;Apellidos;Fecha de nacimiento;Celular',
-      `CC;${docA};Ana;Importada${viewport.tag};03/05/1990;310 123 4567`,
-      `CC;${docB};Luis;Importado${viewport.tag};;`,
-      `CC;${docA};Ana;Repetida;;`,
-      `CC;99${suffix};;SinNombre;31/02/1990;`,
+      'Tipo Doc;Cédula;Nombre;Apellidos;Fecha de nacimiento;Sexo;Celular;Correo;Dirección;Observaciones',
+      `CC;${docA};Ana;Importada${viewport.tag};03/05/1990;F;310 123 4567;ana${suffix}@example.com;Calle 10 # 1-20;Importado de la hoja anterior`,
+      `CC;${docB};Luis;Importado${viewport.tag};;;;;;`,
+      `CC;${docA};Ana;Repetida;;;;;;`,
+      `CC;99${suffix};;SinNombre;31/02/1990;;;;;`,
     ].join('\n');
 
     await webLogin(page, origin);
@@ -116,6 +118,7 @@ for (const viewport of [
       expect(label!.y + label!.height, 'la etiqueta va encima del selector').toBeLessThanOrEqual(select!.y + 1);
     }
     await expectNoHorizontalScroll(page);
+    await expectNoHorizontalScrollIn(page, 'main');
     await shoot(page, `dx107-mapeo-${viewport.name}`);
 
     // Paso 2: dry-run.
@@ -129,6 +132,7 @@ for (const viewport of [
     await expect(issues).toContainText('La fecha de nacimiento no existe en el calendario.');
     expect(await patientsWithDoc(request, host, docA)).toHaveLength(0);
     await expectNoHorizontalScroll(page);
+    await expectNoHorizontalScrollIn(page, 'main');
     await shoot(page, `dx107-validacion-${viewport.name}`);
 
     // Paso 3: confirmar y seguir el avance.
@@ -138,6 +142,7 @@ for (const viewport of [
     await expect(page.getByText('Importado', { exact: true }).first()).toBeVisible({ timeout: 30_000 });
     await expect(page.getByText('2 de 2 filas procesadas')).toBeVisible();
     await expectNoHorizontalScroll(page);
+    await expectNoHorizontalScrollIn(page, 'main');
     await shoot(page, `dx107-importado-${viewport.name}`);
 
     const [created] = await patientsWithDoc(request, host, docA);
@@ -158,6 +163,7 @@ for (const viewport of [
     await expect(row).toContainText('Deshecho: 2 pacientes retirados');
     expect(await patientsWithDoc(request, host, docA)).toHaveLength(0);
     await expectNoHorizontalScroll(page);
+    await expectNoHorizontalScrollIn(page, 'main');
     await shoot(page, `dx107-historial-${viewport.name}`);
   });
 }
