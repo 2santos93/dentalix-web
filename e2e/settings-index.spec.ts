@@ -55,6 +55,28 @@ function accountTrigger(page: Page, fullName: string): Locator {
     : page.getByRole('button', { name: new RegExp(fullName) }).first();
 }
 
+/**
+ * Entra y espera a que la sesión esté resuelta en /patients, donde aterriza el
+ * login. A partir de aquí el spec navega DENTRO de la app (menú y enlaces), sin
+ * `page.goto`: cada carga completa vuelve a pedir `POST /auth/refresh` por el
+ * rewrite `/api/v1` de `next dev`, y en la suite completa (44 min) una de esas
+ * peticiones se quedó colgada sin llegar a la API (en su log no consta) y la
+ * pantalla se quedó en «Verificando sesión…». Menos recargas, menos ocasiones.
+ */
+async function signIn(page: Page, email: string): Promise<void> {
+  await loginAs(page, origin, email, PASSWORD);
+  if (!/\/patients$/.test(page.url())) await page.goto(`${origin}/patients`);
+  await expect(page.getByRole('heading', { name: 'Pacientes' })).toBeVisible({ timeout: 30_000 });
+}
+
+/** Menú de cuenta → «Ajustes», sin recargar la página. */
+async function openSettings(page: Page, fullName: string): Promise<void> {
+  await openAccountMenu(page, fullName);
+  await page.getByRole('menuitem', { name: 'Ajustes' }).click();
+  await expect(page).toHaveURL(`${origin}/settings`);
+  await expect(page.getByRole('heading', { level: 1, name: 'Ajustes' })).toBeVisible();
+}
+
 async function openAccountMenu(page: Page, fullName: string): Promise<Locator> {
   const trigger = accountTrigger(page, fullName);
   await expect(trigger).toBeVisible({ timeout: 15_000 });
@@ -110,7 +132,7 @@ test('ADMIN: el menú de cuenta cabe en 1366×768, 1440×900 y 390×844, tambié
   page,
 }) => {
   await page.setViewportSize({ width: 1366, height: 768 });
-  await loginAs(page, origin, admin.email, PASSWORD);
+  await signIn(page, admin.email);
 
   for (const viewport of [
     { width: 1366, height: 768 },
@@ -119,8 +141,6 @@ test('ADMIN: el menú de cuenta cabe en 1366×768, 1440×900 y 390×844, tambié
   ]) {
     const moment = `${viewport.width}×${viewport.height}`;
     await page.setViewportSize(viewport);
-    await page.goto(`${origin}/patients`);
-    await expect(page.getByRole('heading', { name: 'Pacientes' })).toBeVisible({ timeout: 15_000 });
     const menu = await openAccountMenu(page, admin.fullName);
     await expectEveryItemReachable(page, menu, moment);
     if (viewport.width < 768) {
@@ -137,14 +157,16 @@ test('ADMIN: el menú de cuenta cabe en 1366×768, 1440×900 y 390×844, tambié
   ]) {
     const moment = `${viewport.width}×${viewport.height} plegada`;
     await page.setViewportSize(viewport);
-    await page.goto(`${origin}/patients`);
-    await expect(page.getByRole('heading', { name: 'Pacientes' })).toBeVisible({ timeout: 15_000 });
     const collapse = page.getByRole('button', { name: 'Colapsar menú' });
+    const expand = page.getByRole('button', { name: 'Expandir menú' });
+    // Uno de los dos está a la vista: se espera a que lo esté antes de decidir.
+    await expect(collapse.or(expand)).toBeVisible();
     if (await collapse.isVisible()) await collapse.click();
-    await expect(page.getByRole('button', { name: 'Expandir menú' })).toBeVisible();
+    await expect(expand).toBeVisible();
     const menu = await openAccountMenu(page, admin.fullName);
     await expectEveryItemReachable(page, menu, moment);
     await page.keyboard.press('Escape');
+    await expect(menu).toBeHidden();
   }
   await page.getByRole('button', { name: 'Expandir menú' }).click();
 });
@@ -153,12 +175,8 @@ test('ADMIN: Ajustes agrupa las 19 pantallas; de ahí a Horarios y Sedes y de vu
   page,
 }) => {
   await page.setViewportSize({ width: 1366, height: 768 });
-  await loginAs(page, origin, admin.email, PASSWORD);
-  await page.goto(`${origin}/patients`);
-  await openAccountMenu(page, admin.fullName);
-  await page.getByRole('menuitem', { name: 'Ajustes' }).click();
-  await expect(page).toHaveURL(`${origin}/settings`);
-  await expect(page.getByRole('heading', { level: 1, name: 'Ajustes' })).toBeVisible();
+  await signIn(page, admin.email);
+  await openSettings(page, admin.fullName);
 
   const main = page.getByRole('main');
   await expect(main.getByRole('heading', { level: 2 })).toHaveText([
@@ -188,14 +206,15 @@ test('ADMIN: Ajustes agrupa las 19 pantallas; de ahí a Horarios y Sedes y de vu
 
 test('ADMIN a 390 px: filas del índice y «← Ajustes» de 44 px, sin scroll horizontal', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
-  await loginAs(page, origin, admin.email, PASSWORD);
-  await page.goto(`${origin}/settings`);
+  await signIn(page, admin.email);
+  await openSettings(page, admin.fullName);
   const links = page.getByRole('main').getByRole('listitem').getByRole('link');
   await expect(links).toHaveCount(19, { timeout: 15_000 });
   await expectTouchTargets(links, '/settings a 390');
   await expectNoHorizontalScroll(page);
 
-  await page.goto(`${origin}/settings/horarios`);
+  await page.getByRole('main').getByRole('link', { name: 'Horarios' }).click();
+  await expect(page).toHaveURL(`${origin}/settings/horarios`);
   const back = page.getByRole('main').getByRole('link', { name: 'Ajustes', exact: true });
   await expect(back).toBeVisible({ timeout: 15_000 });
   await expectTouchTargets(back, '«← Ajustes» a 390');
@@ -207,11 +226,8 @@ for (const person of [
 ]) {
   test(`${person.role}: en Ajustes solo Sedes, Horarios y Privacidad de datos`, async ({ page }) => {
     await page.setViewportSize({ width: 1366, height: 768 });
-    await loginAs(page, origin, person.account.email, PASSWORD);
-    await page.goto(`${origin}/patients`);
-    await openAccountMenu(page, person.account.fullName);
-    await page.getByRole('menuitem', { name: 'Ajustes' }).click();
-    await expect(page).toHaveURL(`${origin}/settings`);
+    await signIn(page, person.account.email);
+    await openSettings(page, person.account.fullName);
 
     const links = page.getByRole('main').getByRole('listitem').getByRole('link');
     await expect(links).toHaveText(['Sedes', 'Horarios', 'Privacidad de datos'].map((t) => new RegExp(`^${t}`)), {
@@ -226,8 +242,7 @@ test('teclado: Enter abre, las flechas recorren, Escape cierra y el foco vuelve 
   page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
-  await loginAs(page, origin, admin.email, PASSWORD);
-  await page.goto(`${origin}/patients`);
+  await signIn(page, admin.email);
   const trigger = accountTrigger(page, admin.fullName);
   await expect(trigger).toBeVisible({ timeout: 15_000 });
   await trigger.focus();
@@ -247,7 +262,8 @@ test('axe: /settings y el menú abierto, a 390 y 1440 px, en claro y oscuro', as
   const evidence = process.env.DX282_QA_DIR ?? testInfo.outputPath('qa');
   mkdirSync(evidence, { recursive: true });
   await page.setViewportSize({ width: 1440, height: 900 });
-  await loginAs(page, origin, admin.email, PASSWORD);
+  await signIn(page, admin.email);
+  await openSettings(page, admin.fullName);
 
   const axeSource = readFileSync(require.resolve('axe-core/axe.min.js'), 'utf8');
   async function serious(surface: string) {
@@ -266,16 +282,16 @@ test('axe: /settings y el menú abierto, a 390 y 1440 px, en claro y oscuro', as
   for (const width of [390, 1440]) {
     for (const colorScheme of ['light', 'dark'] as const) {
       await page.setViewportSize({ width, height: width < 768 ? 844 : 900 });
+      // Mismo documento: cambian la ventana y el esquema, sin recargar.
       await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
-      await page.goto(`${origin}/settings`);
-      await expect(page.getByRole('main').getByRole('listitem').getByRole('link')).toHaveCount(19, {
-        timeout: 15_000,
-      });
+      await expect(page.locator('html')).toHaveClass(new RegExp(`\\b${colorScheme}\\b`));
+      await expect(page.getByRole('main').getByRole('listitem').getByRole('link')).toHaveCount(19);
       expect.soft(await serious(`settings-${width}-${colorScheme}`), `/settings ${width} ${colorScheme}`).toEqual([]);
 
       await openAccountMenu(page, admin.fullName);
       expect.soft(await serious(`menu-${width}-${colorScheme}`), `menú ${width} ${colorScheme}`).toEqual([]);
       await page.keyboard.press('Escape');
+      await expect(page.getByRole('menu')).toBeHidden();
     }
   }
 });
