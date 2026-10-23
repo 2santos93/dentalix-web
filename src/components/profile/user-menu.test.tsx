@@ -87,16 +87,18 @@ describe('UserMenu', () => {
     }
   });
 
-  it.each(['DENTIST', 'ASSISTANT', 'RECEPTION'])('%s también ve «Ajustes»', async (role) => {
-    // Horarios, Sedes y Privacidad de datos los leen todos los roles.
-    mockAccessToken = tokenForRole(role);
+  it('los cuatro roles ven el mismo menú: «Ajustes» no depende del rol', async () => {
+    // Horarios, Sedes y Privacidad de datos los leen todos: el índice decide
+    // qué enseña a cada uno, el menú no.
     const user = setupUser();
-    render(<UserMenu />);
-    await user.click(await screen.findByRole('button', { name: /ana gómez/i }));
-    expect(await screen.findByRole('menuitem', { name: 'Ajustes' })).toHaveAttribute(
-      'href',
-      '/settings',
-    );
+    for (const role of ['ADMIN', 'DENTIST', 'ASSISTANT', 'RECEPTION']) {
+      mockAccessToken = tokenForRole(role);
+      const { unmount } = render(<UserMenu />);
+      await user.click(await screen.findByRole('button', { name: /ana gómez/i }));
+      const items = (await screen.findAllByRole('menuitem')).map((item) => item.textContent);
+      expect({ role, items }).toEqual({ role, items: ['Mi perfil', 'Ajustes', 'Cerrar sesión'] });
+      unmount();
+    }
   });
 
   it('cambiar el tema no cierra el menú', async () => {
@@ -175,6 +177,21 @@ describe('UserMenu', () => {
     expect(logout).toHaveBeenCalledWith();
     expect(clear).toHaveBeenCalled();
   });
+
+  it('mientras se cierra la sesión el menú sigue abierto con el ítem ocupado y deshabilitado', async () => {
+    (logout as jest.Mock).mockReturnValue(new Promise(() => {}));
+    await clickLogout();
+    expect(screen.getByRole('menu')).toBeInTheDocument();
+    const item = screen.getByRole('menuitem', { name: 'Cerrando sesión…' });
+    expect(item).toHaveAttribute('aria-busy', 'true');
+    expect(item).toHaveAttribute('aria-disabled', 'true');
+    expect(push).not.toHaveBeenCalled();
+    // Un segundo clic no vuelve a pedir el logout.
+    const user = setupUser();
+    await user.click(item);
+    expect(logout).toHaveBeenCalledTimes(1);
+    await waitFor(() => expect(push).toHaveBeenCalledWith('/login'), { timeout: 4000 });
+  }, 10_000);
 
   it('si logout no responde, limpia y redirige tras el timeout corto (DX-061)', async () => {
     (logout as jest.Mock).mockReturnValue(new Promise(() => {}));

@@ -47,6 +47,7 @@ const copy = {
   settings: 'Ajustes',
   darkTheme: 'Tema oscuro',
   logout: 'Cerrar sesión',
+  loggingOut: 'Cerrando sesión…',
 };
 
 // Etiquetas de rol en español — espejo de las de profile-view.tsx.
@@ -241,15 +242,21 @@ export function UserMenu({
       <DropdownMenuSeparator />
       <ThemeItem />
       <DropdownMenuSeparator />
+      {/* El menú se queda abierto mientras se revoca la sesión (hasta 3 s si
+          la red no responde): el ítem pasa a «Cerrando sesión…», ocupado y
+          deshabilitado, en vez de cerrarse sin señal. Luego se va a /login. */}
       <DropdownMenuItem
         destructive
         disabled={loggingOut}
         aria-busy={loggingOut}
-        onSelect={() => void handleLogout()}
+        onSelect={(event) => {
+          event.preventDefault();
+          void handleLogout();
+        }}
         className={cn('font-medium', ITEM)}
       >
         <LogOut aria-hidden />
-        {copy.logout}
+        {loggingOut ? copy.loggingOut : copy.logout}
       </DropdownMenuItem>
     </DropdownMenuContent>
   );
