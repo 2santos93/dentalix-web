@@ -3904,6 +3904,10 @@ export interface components {
             balanceRows?: number;
             balanceErrors?: number;
             balancesCreated?: number;
+            /** @description «Añadir aunque ya tenga saldo migrado» marcado (DX-262, QA D1) */
+            balanceAddToExisting?: boolean;
+            /** @description Saldos no creados porque el paciente ya tenía uno vivo en esa moneda (DX-262, QA D1) */
+            balancesExisting?: number;
             balancesUndone?: number;
             /** @description DX-262: total por moneda de los saldos migrados del lote (agregado, sin convertir) */
             balanceTotals?: components["schemas"]["AuditCurrencyTotalDto"][];
