@@ -257,7 +257,7 @@ test('DX-242: prepara ocho estados reales para QA de accesibilidad', async ({req
     qaIds.push(appointment.id);
     const steps = status === 'IN_CHAIR' ? ['ARRIVED','IN_CHAIR'] : status === 'READY_FOR_CHECKOUT' ? ['ARRIVED','IN_CHAIR','READY_FOR_CHECKOUT'] : status === 'SCHEDULED' ? [] : [status];
     for (const step of steps) {
-      const result = await request.patch(`${API_URL}/appointments/${appointment.id}`, {headers:session.headers, data:{status:step}});
+      const result = await request.patch(`${API_URL}/appointments/${appointment.id}`, {headers:session.headers, data:step === 'CANCELLED' ? {status:step, cancelledByKind:'CLINIC', cancelReasonCode:'CLINIC_RESCHEDULE'} : {status:step}});
       expect(result.ok(), await result.text()).toBeTruthy();
     }
   }

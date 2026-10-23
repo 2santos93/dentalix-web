@@ -5,6 +5,7 @@ import {
   type Page,
   type Locator,
 } from "./support/test";
+import { confirmCancellation } from "./support/cancellation";
 import { randomUUID } from "node:crypto";
 import { API_URL, tenantOrigin } from "./support/urls";
 import { loginAs, accessTokenOf } from "./support/auth";
@@ -510,6 +511,7 @@ for (const width of [390, 1440])
       });
       await expect(status).toHaveText("Agendada");
       await chooseAppointmentStatus(status, "Cancelada");
+      await confirmCancellation(page);
       await expect(status).toHaveText("Cancelada");
       await page.goto(origin + "/presupuestos");
       await page.getByRole("tab", { name: "Aceptado sin agendar" }).click();

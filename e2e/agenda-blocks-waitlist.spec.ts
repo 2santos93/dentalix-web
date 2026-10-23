@@ -1,4 +1,5 @@
 import { test, expect, type Locator, type Page } from './support/test';
+import { confirmCancellation } from './support/cancellation';
 import { randomUUID } from 'node:crypto';
 import { addStaffViaApi, apiPost, registerClinicViaApi, type ApiSession } from './support/api';
 import { loginAs } from './support/auth';
@@ -161,6 +162,7 @@ test('cancelar una cita la deja en «Pendientes» y reactivarla la saca; «Busca
   await page.getByRole('button', { name: 'Lista', exact: true }).click();
   const status = page.getByTestId('appointment-status-select').filter({ visible: true }).first();
   await chooseAppointmentStatus(status, 'Cancelada');
+  await confirmCancellation(page, 'El paciente avisa', 'ILLNESS');
   const entry = panel.getByTestId('waitlist-entry').filter({ hasText: `Bruno ${brunoLast}` });
   await expect(entry).toBeVisible({ timeout: 10_000 });
   await expect(entry).toContainText('Canceló la cita del');
@@ -170,6 +172,7 @@ test('cancelar una cita la deja en «Pendientes» y reactivarla la saca; «Busca
   await chooseAppointmentStatus(status, 'Agendada');
   await expect(panel.getByText('No hay pacientes pendientes por agendar')).toBeVisible({ timeout: 10_000 });
   await chooseAppointmentStatus(status, 'Cancelada');
+  await confirmCancellation(page, 'El paciente avisa', 'ILLNESS');
   await expect(entry).toBeVisible({ timeout: 10_000 });
 
   await entry.getByRole('button', { name: `Buscar hueco para Bruno ${brunoLast}` }).click();

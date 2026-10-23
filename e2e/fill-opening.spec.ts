@@ -1,4 +1,5 @@
 import { test, expect, type Locator, type Page } from './support/test';
+import { confirmCancellation } from './support/cancellation';
 import { randomUUID } from 'node:crypto';
 import { addStaffViaApi, apiPost, registerClinicViaApi, type ApiSession } from './support/api';
 import { loginAs } from './support/auth';
@@ -138,6 +139,7 @@ test('1440 px: cancelar una cita → «Ocupar este hueco» → «Asignar» → l
     .click();
   const detail = page.getByRole('dialog').filter({ hasText: 'Estado' });
   await chooseAppointmentStatus(detail.getByRole('combobox', { name: /^Estado: / }), 'Cancelada');
+  await confirmCancellation(page, 'El paciente avisa', 'ILLNESS');
   // El detalle (y el aviso de «Cita cancelada.») ofrecen ocupar el hueco.
   await detail.getByRole('button', { name: 'Ocupar este hueco', exact: true }).click();
 
