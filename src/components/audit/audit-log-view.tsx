@@ -27,6 +27,7 @@ import {
   scheduleChangeDetail,
   patientFlowDetail,
   importBatchDetail,
+  planItemAttributionDetail,
 } from '@/lib/audit/audit-labels';
 import { listStaff, type StaffMember } from '@/lib/staff/staff-api';
 import { formatDateTimeInZone, zonedDayStart } from '@/lib/format/date';
@@ -423,6 +424,7 @@ function AuditRow({ event, showPatient }: { event: AuditEvent; showPatient: bool
     cashSessionDetail(event.metadata) ??
     scheduleChangeDetail(event.metadata) ??
     patientFlowDetail(event.metadata) ??
+    planItemAttributionDetail(event.metadata) ??
     importBatchDetail(event.metadata);
   return (
     <TableRow>

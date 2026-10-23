@@ -155,6 +155,36 @@ describe('AuditLogView', () => {
     ).toBeInTheDocument();
   });
 
+  // DX-050: la corrección de quién realizó un ítem del plan se distingue del
+  // cambio genérico del ítem.
+  it('dice que un ADMIN corrigió quién realizó un ítem del plan', async () => {
+    const side = {
+      performedById: '11111111-1111-4111-8111-111111111111',
+      locationId: null,
+      completedAt: '2026-10-20T15:00:00.000Z',
+    };
+    mockedList.mockResolvedValue(
+      page({
+        items: [
+          {
+            ...view,
+            id: 'ev-7',
+            action: 'UPDATE',
+            resourceType: 'TREATMENT_PLAN_ITEM',
+            metadata: {
+              reason: 'PLAN_ITEM_ATTRIBUTION_CORRECTED',
+              attribution: { before: side, after: { ...side, performedById: '22222222-2222-4222-8222-222222222222' } },
+            },
+          },
+        ],
+      }),
+    );
+    render(<AuditLogView token="tok" />);
+    const table = await screen.findByRole('table', { name: 'Registro de auditoría' });
+    const [, corrected] = within(table).getAllByRole('row');
+    expect(within(corrected).getByText('Corrección de quién lo realizó · Otro profesional')).toBeInTheDocument();
+  });
+
   it('vacío: lo dice y sugiere cambiar los filtros', async () => {
     mockedList.mockResolvedValue(page({ items: [] }));
     render(<AuditLogView token="tok" />);

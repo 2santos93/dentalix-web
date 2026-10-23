@@ -29,4 +29,10 @@ export const ITEM_WITHOUT_DISCOUNT = {
   agreementId: null,
   agreementName: null,
   pricingLocationId: null,
+  // DX-050: sin realizar (o realizado antes de DX-050): sin atribución.
+  performedById: null,
+  performedByName: null,
+  performedLocationId: null,
+  performedLocationName: null,
+  completedAt: null,
 } as const;

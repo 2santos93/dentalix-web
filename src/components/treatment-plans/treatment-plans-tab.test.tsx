@@ -30,6 +30,7 @@ import { getPaymentPlan } from '@/lib/payment-plans/payment-plan-api';
 import { ITEM_WITHOUT_DISCOUNT, PLAN_WITHOUT_OPTIONS } from './plan-fixture';
 import { getPriceQuote, type PriceQuote } from '@/lib/patients/patient-agreement-api';
 import { applyBulkDiscount, getDiscountPolicy } from '@/lib/discounts/discounts-api';
+import { listStaff } from '@/lib/appointments/staff-api';
 
 // NOTE: jest.mock's string literal is not alias-rewritten by the SWC
 // transform (only real `import`/`require` specifiers are) — use a relative
@@ -65,6 +66,10 @@ jest.mock('../../lib/payments/payments-api', () => ({
   listPayments: jest.fn(),
   recordPayment: jest.fn(),
   voidPayment: jest.fn(),
+}));
+// DX-050: los profesionales que pueden figurar como quien realizó un ítem.
+jest.mock('../../lib/appointments/staff-api', () => ({
+  listStaff: jest.fn(),
 }));
 jest.mock('../../lib/odontogram/catalog-api', () => ({
   listCatalogItems: jest.fn(),
@@ -311,6 +316,11 @@ describe('TreatmentPlansTab', () => {
     mockedRemoveItem.mockReset();
     mockedListCatalogItems.mockReset();
     mockedListCatalogItems.mockResolvedValue(catalog);
+    jest.mocked(listStaff).mockReset();
+    jest.mocked(listStaff).mockResolvedValue([
+      { userId: 'u-laura', fullName: 'Dra. Laura Gómez', role: 'DENTIST', locationIds: null },
+      { userId: 'u-asis', fullName: 'Ana Asistente', role: 'ASSISTANT', locationIds: null },
+    ]);
     mockedGetDiscountPolicy.mockReset();
     mockedGetDiscountPolicy.mockRejectedValue(new Error('sin política en este test'));
     mockedApplyBulkDiscount.mockReset();
@@ -915,9 +925,98 @@ describe('TreatmentPlansTab', () => {
       expect(within(accepted).getByRole<HTMLOptionElement>('option', { name: 'Realizado' }).disabled).toBe(false);
 
       await user.selectOptions(accepted, 'DONE');
+      // DX-050: antes, quién lo realizó (la única que atiende viene elegida).
+      const dialog = await screen.findByRole('dialog', { name: 'Marcar como realizado' });
       await waitFor(() =>
-        expect(mockedUpdateItem).toHaveBeenCalledWith('tok', 'plan-1', 'item-2', { status: 'DONE' }),
+        expect(within(dialog).getByRole('combobox', { name: 'Profesional que lo realizó' })).toHaveValue('u-laura'),
       );
+      expect(mockedUpdateItem).not.toHaveBeenCalled();
+      await user.click(within(dialog).getByRole('button', { name: 'Marcar realizado' }));
+      await waitFor(() =>
+        expect(mockedUpdateItem).toHaveBeenCalledWith('tok', 'plan-1', 'item-2', {
+          status: 'DONE',
+          performedById: 'u-laura',
+        }),
+      );
+    });
+  });
+
+  describe('DX-050 · quién realizó cada ítem', () => {
+    const adminToken = `h.${btoa(JSON.stringify({ sub: 'u-admin', tenantId: 't1', role: 'ADMIN' }))}.s`;
+    const otherDentistToken = `h.${btoa(JSON.stringify({ sub: 'u-otra', tenantId: 't1', role: 'DENTIST' }))}.s`;
+    const doneByLaura: TreatmentPlanItem = {
+      ...item2,
+      status: 'DONE',
+      performedById: 'u-laura',
+      performedByName: 'Dra. Laura Gómez',
+      performedLocationId: 'loc-norte',
+      performedLocationName: 'Sede Norte',
+      completedAt: new Date(2026, 9, 20, 10, 0).toISOString(),
+    };
+    const legacyDone: TreatmentPlanItem = { ...item1, id: 'item-9', toothNumber: '47', status: 'DONE' };
+
+    it('la ficha dice quién, cuándo y en qué sede, o «Sin atribuir»', async () => {
+      mockedListPlans.mockResolvedValue([plan1]);
+      mockedGetPlan.mockResolvedValue({ ...plan1, items: [doneByLaura, legacyDone], total: 0 });
+      render(<TreatmentPlansTab patientId="pat-1" token="tok" />);
+      const table = await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+      expect(within(table).getByText('Realizado por Dra. Laura Gómez · 20/10/2026 · Sede Norte')).toBeInTheDocument();
+      expect(within(table).getByText('Sin atribuir')).toBeInTheDocument();
+      // La lista móvil dice lo mismo.
+      expect(screen.getAllByText('Realizado por Dra. Laura Gómez · 20/10/2026 · Sede Norte')).toHaveLength(2);
+    });
+
+    it('otra dentista no puede sacarlo de «Realizado» ni corregirlo', async () => {
+      mockedListPlans.mockResolvedValue([plan1]);
+      mockedGetPlan.mockResolvedValue({ ...plan1, items: [doneByLaura], total: 0 });
+      render(<TreatmentPlansTab patientId="pat-1" token={otherDentistToken} />);
+      const table = await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+      const select = within(table).getByRole('combobox', { name: /estado del ítem del diente 26/i });
+      expect(within(select).getByRole('option', { name: 'Aceptado' })).toBeDisabled();
+      expect(within(table).queryByRole('button', { name: /corregir quién/i })).not.toBeInTheDocument();
+    });
+
+    it('un ADMIN corrige quién lo realizó desde la ficha', async () => {
+      mockedListPlans.mockResolvedValue([plan1]);
+      mockedGetPlan.mockResolvedValue({ ...plan1, items: [doneByLaura], total: 0 });
+      jest.mocked(listStaff).mockResolvedValue([
+        { userId: 'u-laura', fullName: 'Dra. Laura Gómez', role: 'DENTIST', locationIds: null },
+        { userId: 'u-admin', fullName: 'Dr. Owner', role: 'ADMIN', locationIds: null },
+      ]);
+      mockedUpdateItem.mockResolvedValue({ ...doneByLaura, performedById: 'u-admin' });
+      const user = userEvent.setup();
+      render(<TreatmentPlansTab patientId="pat-1" token={adminToken} />);
+      const table = await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+      const select = within(table).getByRole('combobox', { name: /estado del ítem del diente 26/i });
+      expect(within(select).getByRole('option', { name: 'Aceptado' })).toBeEnabled();
+      await user.click(within(table).getByRole('button', { name: 'Corregir quién realizó el ítem del diente 26' }));
+      const dialog = await screen.findByRole('dialog', { name: 'Corregir quién lo realizó' });
+      const performer = within(dialog).getByRole('combobox', { name: 'Profesional que lo realizó' });
+      await waitFor(() => expect(performer).toHaveValue('u-laura'));
+      await user.selectOptions(performer, 'u-admin');
+      await user.click(within(dialog).getByRole('button', { name: 'Guardar' }));
+      await waitFor(() =>
+        expect(mockedUpdateItem).toHaveBeenCalledWith(adminToken, 'plan-1', 'item-2', {
+          performedById: 'u-admin',
+        }),
+      );
+    });
+
+    it('volver de «Realizado» a aceptado no pide profesional', async () => {
+      mockedListPlans.mockResolvedValue([plan1]);
+      mockedGetPlan.mockResolvedValue({ ...plan1, items: [doneByLaura], total: 0 });
+      mockedUpdateItem.mockResolvedValue({ ...item2 });
+      const user = userEvent.setup();
+      render(<TreatmentPlansTab patientId="pat-1" token={adminToken} />);
+      const table = await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+      await user.selectOptions(
+        within(table).getByRole('combobox', { name: /estado del ítem del diente 26/i }),
+        'ACCEPTED',
+      );
+      await waitFor(() =>
+        expect(mockedUpdateItem).toHaveBeenCalledWith(adminToken, 'plan-1', 'item-2', { status: 'ACCEPTED' }),
+      );
+      expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
     });
   });
 

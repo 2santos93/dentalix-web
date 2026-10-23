@@ -1,6 +1,7 @@
 import type { AuditAction, AuditEvent, AuditResourceType } from './audit-api';
 import type { ClinicRole } from '@/lib/me/me-api';
 import type { BadgeProps } from '@/components/ui/badge';
+import { formatDate } from '@/lib/format/date';
 
 // Copy en español (i18n-ready), como el resto de etiquetas de dominio.
 
@@ -272,3 +273,36 @@ export function patientFlowDetail(metadata: AuditMetadata): string | null {
   return `${what} · ${label(status.from)} → ${label(status.to)}`;
 }
 
+
+const PLAN_ITEM_ATTRIBUTION_REASONS: Record<string, string> = {
+  PLAN_ITEM_ATTRIBUTION_CORRECTED: 'Corrección de quién lo realizó',
+  PLAN_ITEM_DONE_REVERTED: 'Se quitó «Realizado»',
+};
+
+/**
+ * DX-050: un ADMIN corrigió quién o cuándo realizó un ítem del plan, o el ítem
+ * salió de «Realizado» («Corrección de quién lo realizó · Fecha 20/10/2026 →
+ * 19/10/2026»). La metadata solo trae ids e instantes: se dice qué cambió, no
+ * nombres. null si el evento no es de la atribución.
+ */
+export function planItemAttributionDetail(metadata: AuditMetadata): string | null {
+  const what = metadata.reason ? PLAN_ITEM_ATTRIBUTION_REASONS[metadata.reason] : undefined;
+  if (!what) return null;
+  const change = metadata.attribution;
+  if (!change) return what;
+  const { before, after } = change;
+  const parts = [what];
+  if (metadata.reason === 'PLAN_ITEM_DONE_REVERTED') {
+    if (before.completedAt) parts.push(`realizado el ${formatDate(before.completedAt)}`);
+    return parts.join(' · ');
+  }
+  if (before.performedById === null) {
+    parts.push('Antes sin atribuir');
+  } else if (before.performedById !== after.performedById) {
+    parts.push('Otro profesional');
+  }
+  if (before.completedAt && after.completedAt && before.completedAt !== after.completedAt) {
+    parts.push(`Fecha ${formatDate(before.completedAt)} → ${formatDate(after.completedAt)}`);
+  }
+  return parts.join(' · ');
+}
