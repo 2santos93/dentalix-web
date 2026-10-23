@@ -103,5 +103,10 @@ describe('OpenCashSessionModal (DX-027, DX-252)', () => {
     await user.click(submit());
     expect(await screen.findByText('Revisa los datos: hay campos con valores no válidos.')).toBeInTheDocument();
     expect(screen.queryByText(/must not/)).not.toBeInTheDocument();
+
+    mockedOpen.mockRejectedValueOnce(new ApiError(500, 'Internal server error'));
+    await user.click(submit());
+    expect(await screen.findByText('No pudimos abrir la caja. Intenta de nuevo.')).toBeInTheDocument();
+    expect(screen.queryByText(/Internal/)).not.toBeInTheDocument();
   });
 });

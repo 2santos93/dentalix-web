@@ -87,8 +87,16 @@ describe('ReopenCashSessionModal (DX-027, DX-252)', () => {
     ).toBeInTheDocument();
     expect(screen.queryByText(/Forbidden/)).not.toBeInTheDocument();
 
-    mockedReopen.mockRejectedValueOnce(new TypeError('Failed to parse'));
+    mockedReopen.mockRejectedValueOnce(new ApiError(500, 'Internal server error'));
     await user.click(submit());
     expect(await screen.findByText('No pudimos reabrir la caja. Intenta de nuevo.')).toBeInTheDocument();
+    expect(screen.queryByText(/Internal/)).not.toBeInTheDocument();
+
+    // Un fallo que ni siquiera es de la API (red, JSON roto): el mismo mensaje.
+    mockedReopen.mockRejectedValueOnce(new TypeError('Failed to parse'));
+    await user.click(submit());
+    await waitFor(() => expect(mockedReopen).toHaveBeenCalledTimes(4));
+    expect(await screen.findByText('No pudimos reabrir la caja. Intenta de nuevo.')).toBeInTheDocument();
+    expect(screen.queryByText(/Failed/)).not.toBeInTheDocument();
   });
 });
