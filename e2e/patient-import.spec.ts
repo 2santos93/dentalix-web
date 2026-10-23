@@ -145,6 +145,8 @@ for (const viewport of [
 
     // Paso 3: confirmar y seguir el avance.
     await result.getByRole('button', { name: 'Continuar' }).click();
+    // DX-262: el paso «Saldos» es opcional.
+    await page.getByRole('button', { name: 'Continuar sin saldos' }).click();
     await expect(page.getByText(/autorización de datos \(Ley 1581\) pendiente/)).toBeVisible();
     await page.getByRole('button', { name: 'Importar 2 pacientes' }).click();
     await expect(page.getByText('Importado', { exact: true }).first()).toBeVisible({ timeout: 30_000 });
@@ -275,9 +277,11 @@ test('DX-107 × DX-259: un CSV de 10.000 pacientes (> 1 MB) sube con progreso, s
 
   // Importar y seguir el avance.
   await result.getByRole('button', { name: 'Continuar' }).click();
+  await page.getByRole('button', { name: 'Continuar sin saldos' }).click();
   await page.getByRole('button', { name: /^Importar 10[.\s]?000 pacientes$/ }).click();
-  await expect(page.getByText('Importado', { exact: true }).first()).toBeVisible({ timeout: 120_000 });
-  await expect(page.getByText(/^10[.\s]?000 de 10[.\s]?000 filas procesadas$/)).toBeVisible();
+  // El avance del lote, no el «Importado» de otro lote del historial.
+  await expect(page.getByText(/^10[.\s]?000 de 10[.\s]?000 filas procesadas$/)).toBeVisible({ timeout: 120_000 });
+  await expect(page.getByText('Importado', { exact: true }).first()).toBeVisible();
 
   expect(uploads).toEqual(['/api/import-upload/inspect', '/api/import-upload/validate']);
   for (const req of viaApiProxy) {

@@ -1,6 +1,10 @@
 import { render, screen, within } from '@testing-library/react';
 import { AccountStatementDocument } from './account-statement-document';
-import { accountStatementFixture, emptyAccountStatementFixture } from '@/lib/test/account-statement';
+import {
+  accountStatementFixture,
+  emptyAccountStatementFixture,
+  openingBalanceStatementFixture,
+} from '@/lib/test/account-statement';
 
 function money(text: string | null | undefined): string {
   return (text ?? '').replace(/\s/g, ' ');
@@ -24,7 +28,10 @@ it('pinta el logo de la clínica cuando existe', () => {
   render(
     <AccountStatementDocument
       statement={accountStatementFixture({
-        clinic: { name: 'Clínica Sonrisas', logoUrl: 'https://cdn.example.com/logo.png' },
+        clinic: {
+          name: 'Clínica Sonrisas',
+          logoUrl: 'https://cdn.example.com/logo.png',
+        },
       })}
     />,
   );
@@ -63,8 +70,26 @@ it('dice cuándo no hay nada que listar en vez de dejar tablas vacías', () => {
 it('indica el rango cuando los movimientos vienen filtrados', () => {
   render(
     <AccountStatementDocument
-      statement={accountStatementFixture({ range: { from: '2026-09-01', to: '2026-09-30' } })}
+      statement={accountStatementFixture({
+        range: { from: '2026-09-01', to: '2026-09-30' },
+      })}
     />,
   );
   expect(screen.getByText(/movimientos del 01\/09\/2026 al 30\/09\/2026/i)).toBeInTheDocument();
+});
+
+it('DX-262: el documento lista el saldo migrado con su fecha de corte', () => {
+  render(<AccountStatementDocument statement={openingBalanceStatementFixture()} />);
+  const table = screen.getByRole('table', { name: 'Saldos migrados' });
+  expect(table).toHaveTextContent('Ortodoncia 2025');
+  expect(table).toHaveTextContent('23/10/2026 (aprox.)');
+  expect(money(table.textContent)).toContain('150.000,50');
+  const copRow = within(screen.getByRole('table', { name: /resumen/i })).getByRole('row', { name: /COP/ });
+  // El resumen dice que el saldo incluye el migrado (revisión M1).
+  expect(money(copRow.textContent)).toContain('200.000,50');
+  expect(screen.getByText(/El saldo incluye el saldo migrado/)).toBeInTheDocument();
+  const movements = screen.getByRole('table', { name: /movimientos/i });
+  expect(movements).toHaveTextContent('Saldo migrado · Ortodoncia 2025');
+  // QA D2: «Destino», no «Plan».
+  expect(within(movements).getByRole('columnheader', { name: 'Destino' })).toBeInTheDocument();
 });

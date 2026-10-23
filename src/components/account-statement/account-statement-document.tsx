@@ -4,6 +4,8 @@ import {
   installmentLabel,
   isEmptyStatement,
   methodLabel,
+  movementDestination,
+  openingAsOfLabel,
   planNamer,
   statementCopy,
   voidedDetail,
@@ -44,6 +46,8 @@ const copy = {
   colOverdue: 'Vencido',
   colNext: 'Próxima cuota',
   colPlan: 'Plan',
+  // QA D2: un abono va a un plan o a un saldo migrado.
+  colDestination: 'Destino',
   colStatus: 'Estado',
   colDate: 'Fecha',
   colMethod: 'Método',
@@ -75,6 +79,8 @@ interface AccountStatementDocumentProps {
 export function AccountStatementDocument({ statement }: AccountStatementDocumentProps) {
   const planName = planNamer(statement.plans);
   const { clinic, patient, range } = statement;
+  // M1: con saldo migrado, el «Saldo» no es solo presupuestado − abonado.
+  const withOpening = statement.summary.some((row) => row.openingBalance > 0);
   const filtered = range.from !== null || range.to !== null;
 
   return (
@@ -142,6 +148,7 @@ export function AccountStatementDocument({ statement }: AccountStatementDocument
                   <tr>
                     <Th>{copy.colCurrency}</Th>
                     <Th right>{copy.colBudgeted}</Th>
+                    {withOpening ? <Th right>{statementCopy.openingHeading}</Th> : null}
                     <Th right>{copy.colPaid}</Th>
                     <Th right>{copy.colBalance}</Th>
                     <Th right>{copy.colOverdue}</Th>
@@ -153,6 +160,9 @@ export function AccountStatementDocument({ statement }: AccountStatementDocument
                     <tr key={row.currency}>
                       <Th scope="row">{row.currency}</Th>
                       <Td right>{formatCurrency(row.budgeted, row.currency)}</Td>
+                      {withOpening ? (
+                        <Td right>{formatCurrency(row.openingBalance, row.currency)}</Td>
+                      ) : null}
                       <Td right>{formatCurrency(row.paid, row.currency)}</Td>
                       <Td right strong>
                         {formatCurrency(Math.abs(row.balance), row.currency)}
@@ -173,6 +183,38 @@ export function AccountStatementDocument({ statement }: AccountStatementDocument
                               row.currency,
                             )}`
                           : copy.none}
+                      </Td>
+                    </tr>
+                  ))}
+                </tbody>
+              </DocTable>
+              {withOpening ? (
+                <p className="mt-1 text-xs">{statementCopy.balanceIncludesOpening}</p>
+              ) : null}
+            </DocSection>
+          ) : null}
+
+          {statement.openingBalances.length > 0 ? (
+            <DocSection title={statementCopy.openingHeading}>
+              <DocTable label={statementCopy.openingTable}>
+                <thead>
+                  <tr>
+                    <Th>{statementCopy.colConcept}</Th>
+                    <Th>{statementCopy.colAsOf}</Th>
+                    <Th right>{copy.colAmount}</Th>
+                    <Th right>{statementCopy.colOpeningPaid}</Th>
+                    <Th right>{statementCopy.colOpeningPending}</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {statement.openingBalances.map((o) => (
+                    <tr key={o.id}>
+                      <Td>{o.concept}</Td>
+                      <Td>{openingAsOfLabel(o)}</Td>
+                      <Td right>{formatCurrency(o.amount, o.currency)}</Td>
+                      <Td right>{formatCurrency(o.paid, o.currency)}</Td>
+                      <Td right strong>
+                        {formatCurrency(o.pending, o.currency)}
                       </Td>
                     </tr>
                   ))}
@@ -262,7 +304,7 @@ export function AccountStatementDocument({ statement }: AccountStatementDocument
                 <thead>
                   <tr>
                     <Th>{copy.colDate}</Th>
-                    <Th>{copy.colPlan}</Th>
+                    <Th>{copy.colDestination}</Th>
                     <Th>{copy.colMethod}</Th>
                     <Th>{copy.colLocation}</Th>
                     <Th right>{copy.colAmount}</Th>
@@ -273,7 +315,7 @@ export function AccountStatementDocument({ statement }: AccountStatementDocument
                     <tr key={m.id} className={m.voided ? 'text-[#6b7280]' : undefined}>
                       <Td>{formatCivilDate(m.paidOn)}</Td>
                       <Td>
-                        {planName(m.treatmentPlanId)}
+                        {movementDestination(m, planName, statement.openingBalances)}
                         {voidedDetail(m) ? (
                           <span className="block text-xs">{voidedDetail(m)}</span>
                         ) : null}

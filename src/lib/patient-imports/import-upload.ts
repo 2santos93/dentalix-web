@@ -6,7 +6,7 @@ import {
   NetworkError,
   refreshAccessToken,
 } from '@/lib/api/client';
-import { IMPORT_UPLOAD_ROUTES, type ImportUploadStep } from './import-upload-routes';
+import { importUploadPaths, type ImportUploadTarget } from './import-upload-routes';
 
 export interface ImportUploadOptions {
   token?: string;
@@ -26,10 +26,20 @@ interface RawResponse {
  * Un POST multipart por XHR (`fetch` no informa del progreso de la SUBIDA) a
  * la ruta de subida de la web, con las mismas cabeceras que `doFetch`.
  */
-function send(step: ImportUploadStep, form: FormData, opts: ImportUploadOptions, token?: string): Promise<RawResponse> {
+function send(
+  target: ImportUploadTarget,
+  form: FormData,
+  opts: ImportUploadOptions,
+  token?: string,
+): Promise<RawResponse> {
   return new Promise((resolve, reject) => {
+    const paths = importUploadPaths(target);
+    if (!paths) {
+      reject(new Error('Invalid import upload target'));
+      return;
+    }
     const xhr = new XMLHttpRequest();
-    xhr.open('POST', IMPORT_UPLOAD_ROUTES[step].web);
+    xhr.open('POST', paths.web);
     const { headers, sentLocationId } = buildRequestHeaders({ token, json: false });
     for (const [name, value] of Object.entries(headers)) xhr.setRequestHeader(name, value);
     xhr.upload.onprogress = (event) => {
@@ -69,18 +79,18 @@ function parseJson(text: string): unknown {
  * fallo de red, `NetworkError`.
  */
 export async function uploadImportFile<T>(
-  step: ImportUploadStep,
+  target: ImportUploadTarget,
   form: FormData,
   opts: ImportUploadOptions = {},
 ): Promise<T> {
   let token = opts.token;
-  let res = await send(step, form, opts, token);
+  let res = await send(target, form, opts, token);
   if (res.status === 401) {
     const newToken = await refreshAccessToken();
     if (newToken) {
       token = newToken;
       opts.onProgress?.(0);
-      res = await send(step, form, opts, token);
+      res = await send(target, form, opts, token);
     }
   }
   let body = parseJson(res.text);
@@ -89,7 +99,7 @@ export async function uploadImportFile<T>(
     if (!isStaleLocationError(error, res.sentLocationId, token)) throw error;
     setActiveLocationId(null);
     opts.onProgress?.(0);
-    res = await send(step, form, opts, token);
+    res = await send(target, form, opts, token);
     body = parseJson(res.text);
     if (res.status < 200 || res.status >= 300) {
       throw apiErrorFromBody(res.status, body, res.retryAfter);

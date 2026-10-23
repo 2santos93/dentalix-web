@@ -93,6 +93,13 @@ describe('uploadImportFile (DX-107 × DX-259)', () => {
     expect(FakeXhr.instances[0].url).toBe('/api/import-upload/validate');
   });
 
+  it('la hoja de saldos (DX-262) va a la ruta de subida del lote', async () => {
+    FakeXhr.respond = (xhr) => xhr.reply(201, { id: 'b1' });
+    const id = '0b6f1c1e-2a3b-4c5d-8e9f-001122334455';
+    await uploadImportFile({ balancesOf: id }, new FormData(), { token: 'T' });
+    expect(FakeXhr.instances[0].url).toBe(`/api/import-upload/balances/${id}`);
+  });
+
   it('informa el progreso de la subida y termina en 1', async () => {
     const progress: number[] = [];
     FakeXhr.respond = (xhr) => {

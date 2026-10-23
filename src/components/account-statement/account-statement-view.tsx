@@ -14,6 +14,9 @@ import {
   installmentLabel,
   isEmptyStatement,
   methodLabel,
+  movementDestination,
+  openingAsOfLabel,
+  openingNoteFor,
   planNamer,
   statementCopy,
   voidedDetail,
@@ -79,6 +82,8 @@ const copy = {
   installmentsHeading: 'Cuotas',
   installmentsTable: 'Calendario de cuotas',
   colPlan: 'Plan',
+  // QA D2: un abono va a un plan o a un saldo migrado.
+  colDestination: 'Destino',
   colStatus: 'Estado',
   colBudgeted: 'Presupuestado',
   colPaid: 'Abonado',
@@ -286,6 +291,7 @@ export function AccountStatementView({ token, patientId, onChanged }: AccountSta
             onOpenChange={(open) => setChargeModal(open ? 'payment' : null)}
             token={token}
             patientId={patientId}
+            openingBalances={data?.openingBalances ?? []}
             onRecorded={charged}
           />
           <StatementPaymentPlanModal
@@ -343,6 +349,61 @@ function StatementBody({
             <CurrencySummary key={row.currency} row={row} />
           ))}
         </div>
+      ) : null}
+
+      {statement.openingBalances.length > 0 ? (
+        <SubSection title={statementCopy.openingHeading}>
+          <Card className="overflow-hidden p-0 shadow-none">
+            <Table aria-label={statementCopy.openingTable}>
+              <TableHeader>
+                <TableRow>
+                  <TableHead scope="col">{statementCopy.colConcept}</TableHead>
+                  <TableHead scope="col">{statementCopy.colAsOf}</TableHead>
+                  <TableHead scope="col" className="text-right">
+                    {copy.colAmount}
+                  </TableHead>
+                  <TableHead scope="col" className="text-right">
+                    {statementCopy.colOpeningPaid}
+                  </TableHead>
+                  <TableHead scope="col" className="text-right">
+                    {statementCopy.colOpeningPending}
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {statement.openingBalances.map((o) => (
+                  <TableRow key={o.id}>
+                    <TableCell
+                      className="font-medium break-words"
+                      data-label={statementCopy.colConcept}
+                    >
+                      {o.concept}
+                    </TableCell>
+                    <TableCell className="tabular-nums" data-label={statementCopy.colAsOf}>
+                      {openingAsOfLabel(o)}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums" data-label={copy.colAmount}>
+                      {formatCurrency(o.amount, o.currency)}
+                    </TableCell>
+                    <TableCell
+                      className="text-right tabular-nums"
+                      data-label={statementCopy.colOpeningPaid}
+                    >
+                      {formatCurrency(o.paid, o.currency)}
+                    </TableCell>
+                    <TableCell
+                      className="text-right font-medium tabular-nums"
+                      data-label={statementCopy.colOpeningPending}
+                    >
+                      {formatCurrency(o.pending, o.currency)}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </Card>
+          <p className="max-w-prose text-xs text-muted">{openingNoteFor(statement.openingBalances)}</p>
+        </SubSection>
       ) : null}
 
       {statement.plans.length > 0 ? (
@@ -482,7 +543,7 @@ function StatementBody({
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
                   <TableHead scope="col">{copy.colDate}</TableHead>
-                  <TableHead scope="col">{copy.colPlan}</TableHead>
+                  <TableHead scope="col">{copy.colDestination}</TableHead>
                   <TableHead scope="col">{copy.colMethod}</TableHead>
                   <TableHead scope="col">{copy.colLocation}</TableHead>
                   <TableHead scope="col" className="text-right">
@@ -499,8 +560,8 @@ function StatementBody({
                     <TableCell className="tabular-nums" data-label={copy.colDate}>
                       {formatCivilDate(m.paidOn)}
                     </TableCell>
-                    <TableCell className="text-muted" data-label={copy.colPlan}>
-                      {planName(m.treatmentPlanId)}
+                    <TableCell className="text-muted" data-label={copy.colDestination}>
+                      {movementDestination(m, planName, statement.openingBalances)}
                       <VoidedDetail movement={m} />
                     </TableCell>
                     <TableCell data-label={copy.colMethod}>
@@ -660,6 +721,17 @@ function CurrencySummary({ row }: { row: AccountStatementSummary }) {
           )}
         </Figure>
       </dl>
+      {row.openingPending > 0 ? (
+        <p
+          data-testid="opening"
+          className="border-t border-hairline px-4 py-2 text-xs text-muted sm:px-6"
+        >
+          {statementCopy.openingIncluded}{' '}
+          <span className="font-medium tabular-nums text-ink">
+            {formatCurrency(row.openingPending, row.currency)}
+          </span>
+        </p>
+      ) : null}
     </section>
   );
 }

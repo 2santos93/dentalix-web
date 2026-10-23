@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import { FamilyAccountStatementSection } from './family-account-statement-section';
 import { FamilyAccountStatementDocument } from './family-account-statement-document';
 import {
@@ -17,6 +17,8 @@ const mockedGet = getFamilyAccountStatement as jest.MockedFunction<typeof getFam
 const amounts = (currency: string, budgeted: number, paid: number) => ({
   currency,
   budgeted,
+  openingBalance: 0,
+  openingPending: 0,
   paid,
   balance: Math.round((budgeted - paid) * 100) / 100,
   overdueAmount: 0,
@@ -27,7 +29,12 @@ const family: FamilyAccountStatement = {
   clinic: { name: 'Clínica Sonrisas', logoUrl: null },
   payer: { id: 'mother', firstName: 'Marta', lastName: 'Gil' },
   members: [
-    { patient: { id: 'mother', firstName: 'Marta', lastName: 'Gil' }, relationship: null, self: true, summary: [] },
+    {
+      patient: { id: 'mother', firstName: 'Marta', lastName: 'Gil' },
+      relationship: null,
+      self: true,
+      summary: [],
+    },
     {
       patient: { id: 'son', firstName: 'Iván', lastName: 'Gil' },
       relationship: 'MOTHER',
@@ -78,7 +85,11 @@ describe('Estado de cuenta familiar (DX-203)', () => {
   });
 
   it('sin dependientes no se muestra', async () => {
-    mockedGet.mockResolvedValue({ ...family, members: family.members.slice(0, 1), totals: [] });
+    mockedGet.mockResolvedValue({
+      ...family,
+      members: family.members.slice(0, 1),
+      totals: [],
+    });
     const { container } = render(<FamilyAccountStatementSection token="tok" patientId="mother" />);
     await waitFor(() => expect(container).toBeEmptyDOMElement());
     expect(mockedGet).toHaveBeenCalledWith('tok', 'mother');
@@ -97,5 +108,18 @@ describe('Estado de cuenta familiar (DX-203)', () => {
     expect(screen.getByRole('heading', { name: 'Estado de cuenta familiar' })).toBeInTheDocument();
     expect(screen.getAllByTestId('family-member-row')).toHaveLength(3);
     expect(screen.getByTestId('family-total').textContent).toMatch(/1\.550\.000,55/);
+  });
+
+  it('DX-262 (M1): con saldo migrado, la pantalla y el documento explican que el saldo lo incluye', async () => {
+    const withOpening = {
+      ...family,
+      totals: [{ ...amounts('COP', 1550000.55, 550000.3), openingBalance: 50000, openingPending: 50000 }],
+    };
+    mockedGet.mockResolvedValue(withOpening);
+    render(<FamilyAccountStatementSection token="tok" patientId="mother" />);
+    expect(await screen.findByText('El saldo incluye el saldo migrado del programa anterior.')).toBeInTheDocument();
+    cleanup();
+    render(<FamilyAccountStatementDocument statement={withOpening} />);
+    expect(screen.getByText('El saldo incluye el saldo migrado del programa anterior.')).toBeInTheDocument();
   });
 });

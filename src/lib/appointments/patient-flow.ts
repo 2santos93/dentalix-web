@@ -2,6 +2,7 @@ import { apiFetch } from '@/lib/api/client';
 import type { components } from '@/lib/api/schema';
 import type { ClinicRole } from '@/lib/me/me-api';
 import type { Appointment, AppointmentStatus } from './appointments-api';
+import { canExitCompleted } from './plan-item-reservations';
 
 /**
  * DX-200: flujo del paciente en la clínica — llegó (en espera), en sillón y
@@ -109,8 +110,17 @@ const CLASSIC_STATUSES: AppointmentStatus[] = [
  * Opciones del selector de estado. Fuera del flujo, las de siempre (la
  * llegada se marca con «Llegó»); dentro, su estado y la salida: completar, o
  * cancelar si se fue sin pasar al sillón. Nunca «No asistió» desde el flujo.
+ * DX-273: una cita completada solo la sacan de «Completada» el odontólogo y
+ * la administración (con motivo); para el resto, solo su estado. Sin `role`
+ * (quien no lo conoce), las de siempre: el servidor decide.
  */
-export function statusOptionsFor(status: AppointmentStatus): AppointmentStatus[] {
+export function statusOptionsFor(
+  status: AppointmentStatus,
+  role?: ClinicRole | null,
+): AppointmentStatus[] {
+  if (status === 'COMPLETED' && role !== undefined && !canExitCompleted(role)) {
+    return ['COMPLETED'];
+  }
   if (status === 'ARRIVED') return ['ARRIVED', 'COMPLETED', 'CANCELLED'];
   if (status === 'IN_CHAIR' || status === 'READY_FOR_CHECKOUT') return [status, 'COMPLETED'];
   return CLASSIC_STATUSES;

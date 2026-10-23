@@ -19,7 +19,9 @@ jest.mock('../../lib/payments/payment-receipts-api', () => ({
 }));
 
 // DX-097: los atajos salen del día de la SEDE (su zona, de GET /locations).
-jest.mock('../../lib/locations/locations-api', () => ({ listLocations: jest.fn() }));
+jest.mock('../../lib/locations/locations-api', () => ({
+  listLocations: jest.fn(),
+}));
 const mockedLocations = listLocations as jest.MockedFunction<typeof listLocations>;
 const SEDE_ZONE = 'America/Bogota';
 const presetRange = (preset: Parameters<typeof presetRangeIn>[0]) => presetRangeIn(preset, SEDE_ZONE);
@@ -51,6 +53,7 @@ const anaCash: CashPayment = {
     status: 'ACCEPTED',
     createdAt: '2026-09-01T15:00:00.000Z',
   },
+  openingBalance: null,
 };
 const betoCard: CashPayment = {
   ...anaCash,
@@ -399,7 +402,11 @@ it('cada fila abre el recibo de caja de su abono (DX-136)', async () => {
   const table = await screen.findByRole('table', { name: /abonos/i });
   const beto = within(table).getByRole('row', { name: /beto ruiz/i });
   // También en las filas que no se pueden anular.
-  expect(within(beto).getByRole('button', { name: /recibo del abono de beto ruiz/i })).toBeInTheDocument();
+  expect(
+    within(beto).getByRole('button', {
+      name: /recibo del abono de beto ruiz/i,
+    }),
+  ).toBeInTheDocument();
   const ana = within(table).getByRole('row', { name: /ana gómez/i });
   await user.click(within(ana).getByRole('button', { name: /recibo del abono de ana gómez/i }));
 
@@ -496,15 +503,25 @@ describe('tras anular, la caja no se queda en una página vacía (DX-067)', () =
         );
       }
       return Promise.resolve(
-        response({ items: [anaCash, betoCard], total: mockedVoid.mock.calls.length > 0 ? 20 : 21, page: 1 }),
+        response({
+          items: [anaCash, betoCard],
+          total: mockedVoid.mock.calls.length > 0 ? 20 : 21,
+          page: 1,
+        }),
       );
     });
     mockedVoid.mockResolvedValue(undefined);
     render(<CashRegisterView token="tok" />);
 
     await user.click(await screen.findByRole('button', { name: /siguiente/i }));
-    await user.click(await screen.findByRole('button', { name: /anular abono de zoe última/i }));
-    const dialog = await screen.findByRole('dialog', { name: /anular este abono/i });
+    await user.click(
+      await screen.findByRole('button', {
+        name: /anular abono de zoe última/i,
+      }),
+    );
+    const dialog = await screen.findByRole('dialog', {
+      name: /anular este abono/i,
+    });
     await user.click(within(dialog).getByLabelText(/motivo/i));
     await user.paste(REASON);
     await user.click(within(dialog).getByRole('button', { name: /anular abono/i }));
@@ -541,7 +558,11 @@ describe('tras anular, la caja no se queda en una página vacía (DX-067)', () =
 
   it('una página vacía con total 0 no rebota: es el estado vacío', async () => {
     mockedList.mockResolvedValue(
-      response({ items: [], total: 0, summary: { count: 0, byCurrency: [], byMethod: [] } }),
+      response({
+        items: [],
+        total: 0,
+        summary: { count: 0, byCurrency: [], byMethod: [] },
+      }),
     );
     render(<CashRegisterView token="tok" />);
     expect(await screen.findByText(/no hay abonos en este período/i)).toBeInTheDocument();
@@ -586,12 +607,19 @@ describe('días de la sede (DX-097)', () => {
   });
 
   it('«Hoy» es el día de la sede, no el del navegador: a las 22:30 de Bogotá (03:30Z del día siguiente) pide ese día', async () => {
-    jest.useFakeTimers({ now: new Date('2026-10-16T03:30:00.000Z'), advanceTimers: true });
+    jest.useFakeTimers({
+      now: new Date('2026-10-16T03:30:00.000Z'),
+      advanceTimers: true,
+    });
     mockedList.mockResolvedValue(response());
     render(<CashRegisterView token="tok" />);
 
     await waitFor(() =>
-      expect(mockedList).toHaveBeenCalledWith('tok', { from: '2026-10-15', to: '2026-10-15', page: 1 }),
+      expect(mockedList).toHaveBeenCalledWith('tok', {
+        from: '2026-10-15',
+        to: '2026-10-15',
+        page: 1,
+      }),
     );
     expect(mockedList).toHaveBeenCalledTimes(1);
     expect(await screen.findByTestId('cash-period-note')).toHaveTextContent(
@@ -600,7 +628,10 @@ describe('días de la sede (DX-097)', () => {
   });
 
   it('con la sede en Madrid, «Hoy» es el día de Madrid', async () => {
-    jest.useFakeTimers({ now: new Date('2026-10-15T22:30:00.000Z'), advanceTimers: true });
+    jest.useFakeTimers({
+      now: new Date('2026-10-15T22:30:00.000Z'),
+      advanceTimers: true,
+    });
     mockedLocations.mockResolvedValue([
       {
         id: 'mad',
@@ -616,7 +647,11 @@ describe('días de la sede (DX-097)', () => {
     render(<CashRegisterView token="tok" />);
 
     await waitFor(() =>
-      expect(mockedList).toHaveBeenCalledWith('tok', { from: '2026-10-16', to: '2026-10-16', page: 1 }),
+      expect(mockedList).toHaveBeenCalledWith('tok', {
+        from: '2026-10-16',
+        to: '2026-10-16',
+        page: 1,
+      }),
     );
   });
 
@@ -630,13 +665,22 @@ describe('días de la sede (DX-097)', () => {
     resolveLocations([]);
     // Sin sedes: la zona por defecto de la sede, nunca la del navegador.
     await waitFor(() => expect(mockedList).toHaveBeenCalledTimes(1));
-    expect(mockedList).toHaveBeenCalledWith('tok', { ...presetRange('today'), page: 1 });
+    expect(mockedList).toHaveBeenCalledWith('tok', {
+      ...presetRange('today'),
+      page: 1,
+    });
   });
 
   it('la fecha de cada fila es su día en la sede (paidOn): un abono de las 20:00 sale en su día', async () => {
     mockedList.mockResolvedValue(
       response({
-        items: [{ ...anaCash, paidAt: '2026-10-16T01:00:00.000Z', paidOn: '2026-10-15' }],
+        items: [
+          {
+            ...anaCash,
+            paidAt: '2026-10-16T01:00:00.000Z',
+            paidOn: '2026-10-15',
+          },
+        ],
       }),
     );
     render(<CashRegisterView token="tok" />);
@@ -645,4 +689,25 @@ describe('días de la sede (DX-097)', () => {
     expect(within(row).getByText('15/10/2026')).toBeInTheDocument();
     expect(within(row).queryByText('16/10/2026')).not.toBeInTheDocument();
   });
+});
+
+it('DX-262: un abono contra el saldo migrado dice «Saldo migrado» y su concepto en vez del plan', async () => {
+  mockedList.mockResolvedValue(
+    response({
+      items: [
+        {
+          ...anaCash,
+          treatmentPlan: null,
+          openingBalance: { id: 'ob-1', concept: 'Ortodoncia 2025' },
+        },
+      ],
+    }),
+  );
+  render(<CashRegisterView token="tok" />);
+  const table = await screen.findByRole('table', { name: /abonos/i });
+  const row = within(table).getByRole('row', { name: /ana gómez/i });
+  expect(within(row).getByText('Saldo migrado · Ortodoncia 2025')).toBeInTheDocument();
+  // QA D2: la columna nombra el destino (un plan o un saldo migrado).
+  expect(within(table).getByRole('columnheader', { name: 'Destino' })).toBeInTheDocument();
+  expect(within(table).queryByRole('columnheader', { name: 'Plan' })).not.toBeInTheDocument();
 });

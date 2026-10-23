@@ -11,6 +11,7 @@ import { paymentReceiptFixture } from '@/lib/test/payment-receipt';
 import {
   accountStatementFixture,
   emptyAccountStatementFixture,
+  openingBalanceStatementFixture,
 } from '@/lib/test/account-statement';
 import { tokenForRole } from '@/lib/test/data-consents';
 
@@ -137,7 +138,9 @@ it('cada plan enlaza a su presupuesto imprimible (DX-012: recepción lo imprime 
   render(<AccountStatementView token={tokenForRole('RECEPTION')} patientId="pat-1" />);
 
   const table = await screen.findByRole('table', { name: /planes/i });
-  const links = within(table).getAllByRole('link', { name: /^Presupuesto · Plan del/ });
+  const links = within(table).getAllByRole('link', {
+    name: /^Presupuesto · Plan del/,
+  });
   expect(links).toHaveLength(statement.plans.length);
   expect(links[0]).toHaveAttribute(
     'href',
@@ -297,7 +300,9 @@ describe('cobrar desde el estado de cuenta (DX-067)', () => {
     await screen.findByText(/sin movimientos financieros/i);
 
     await user.click(screen.getByRole('button', { name: 'Registrar abono' }));
-    const dialog = await screen.findByRole('dialog', { name: 'Registrar abono' });
+    const dialog = await screen.findByRole('dialog', {
+      name: 'Registrar abono',
+    });
     expect(
       await within(dialog).findByText('Este paciente no tiene planes por cobrar.'),
     ).toBeInTheDocument();
@@ -310,6 +315,7 @@ describe('cobrar desde el estado de cuenta (DX-067)', () => {
       id: 'pay-new',
       tenantId: 't-1',
       treatmentPlanId: 'plan-1',
+      openingBalanceId: null,
       patientId: 'pat-1',
       amount: 50000,
       currency: 'COP',
@@ -328,7 +334,9 @@ describe('cobrar desde el estado de cuenta (DX-067)', () => {
     await screen.findByRole('region', { name: /resumen en COP/i });
 
     await user.click(screen.getByRole('button', { name: 'Registrar abono' }));
-    const dialog = await screen.findByRole('dialog', { name: 'Registrar abono' });
+    const dialog = await screen.findByRole('dialog', {
+      name: 'Registrar abono',
+    });
     expect(mockedBillable).toHaveBeenCalledWith(RECEPTION, 'pat-1');
     await within(dialog).findByLabelText('Plan');
     await user.type(within(dialog).getByLabelText('Importe'), '50000');
@@ -361,7 +369,9 @@ describe('cobrar desde el estado de cuenta (DX-067)', () => {
     await screen.findByRole('region', { name: /resumen en COP/i });
 
     await user.click(screen.getByRole('button', { name: 'Plan de cuotas' }));
-    const dialog = await screen.findByRole('dialog', { name: 'Crear plan de pagos' });
+    const dialog = await screen.findByRole('dialog', {
+      name: 'Crear plan de pagos',
+    });
     const select = await within(dialog).findByLabelText('Plan');
     expect(select).toHaveValue('plan-1');
     const taken = within(select).getAllByRole('option')[0];
@@ -374,11 +384,62 @@ describe('cobrar desde el estado de cuenta (DX-067)', () => {
       expect(mockedCreatePlan).toHaveBeenCalledWith(
         RECEPTION,
         'plan-1',
-        expect.objectContaining({ installmentsCount: 12, totalToFinance: 3000000 }),
+        expect.objectContaining({
+          installmentsCount: 12,
+          totalToFinance: 3000000,
+        }),
       ),
     );
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     expect(await screen.findByText(/plan de cuotas creado/i)).toBeInTheDocument();
     await waitFor(() => expect(mockedGet).toHaveBeenCalledTimes(2));
   });
+});
+
+it('DX-262: «Saldo migrado» con su fecha de corte («aprox.» si es la de importación) y en el resumen', async () => {
+  mockedGet.mockResolvedValue(openingBalanceStatementFixture());
+  render(<AccountStatementView token="tok" patientId="pat-1" />);
+
+  const table = await screen.findByRole('table', { name: 'Saldos migrados' });
+  const rows = within(table).getAllByRole('row').slice(1);
+  expect(rows).toHaveLength(2);
+  expect(rows[0]).toHaveTextContent('Ortodoncia 2025');
+  expect(rows[0]).toHaveTextContent('09/08/2026');
+  expect(rows[0]).not.toHaveTextContent('aprox.');
+  // Importe, abonado y pendiente (revisión C1).
+  expect(money(within(rows[0]).getByText(/200\.000,50/).textContent)).toContain('200.000,50');
+  expect(money(rows[0].textContent)).toContain('50.000,00');
+  expect(money(rows[0].textContent)).toContain('150.000,50');
+  expect(within(table).getByRole('columnheader', { name: 'Abonado' })).toBeInTheDocument();
+  expect(within(table).getByRole('columnheader', { name: 'Pendiente' })).toBeInTheDocument();
+  // El abono contra el saldo dice a qué se abonó.
+  const movements = screen.getByRole('table', { name: /movimientos/i });
+  expect(movements).toHaveTextContent('Saldo migrado · Ortodoncia 2025');
+  // QA D2: la columna nombra el destino del abono.
+  expect(within(movements).getByRole('columnheader', { name: 'Destino' })).toBeInTheDocument();
+  expect(rows[1]).toHaveTextContent('23/10/2026 (aprox.)');
+
+  const cop = screen.getByRole('region', { name: /resumen en COP/i });
+  // QA D5: lo que queda del migrado tras el abono, no el importe original.
+  expect(within(cop).getByTestId('opening')).toHaveTextContent(/^Incluye saldo migrado pendiente:/);
+  expect(money(within(cop).getByTestId('opening').textContent)).toContain('150.000,50');
+  expect(money(within(cop).getByTestId('opening').textContent)).not.toContain('200.000,50');
+  expect(money(within(cop).getByTestId('balance').textContent)).toContain('150.000,50');
+  // QA D3: hay una fila «aprox.», así que la nota lo explica.
+  expect(screen.getByText(/«aprox\.»: el archivo no traía la fecha/)).toBeInTheDocument();
+});
+
+it('QA D3: sin ninguna fila aproximada, la nota no habla de «aprox.»; QA D5: saldado, no hay «Incluye saldo migrado»', async () => {
+  const base = openingBalanceStatementFixture();
+  mockedGet.mockResolvedValue({
+    ...base,
+    summary: [{ ...base.summary[0], openingPending: 0, paid: 200000.5, balance: 0 }],
+    openingBalances: [{ ...base.openingBalances[0], paid: 200000.5, pending: 0 }],
+  });
+  render(<AccountStatementView token="tok" patientId="pat-1" />);
+  await screen.findByRole('table', { name: 'Saldos migrados' });
+  expect(screen.getByText(/^Deuda traída del programa anterior al importar los pacientes\.$/)).toBeInTheDocument();
+  expect(screen.queryByText(/aprox\./)).not.toBeInTheDocument();
+  const cop = screen.getByRole('region', { name: /resumen en COP/i });
+  expect(within(cop).queryByTestId('opening')).not.toBeInTheDocument();
 });

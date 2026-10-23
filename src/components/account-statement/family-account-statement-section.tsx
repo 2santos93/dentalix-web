@@ -128,6 +128,10 @@ export function FamilyAccountStatementSection({
               </li>
             ))}
           </ul>
+          {/* DX-262 (M1): el saldo incluye el saldo migrado. */}
+          {data.totals.some((t) => t.openingBalance > 0) ? (
+            <p className="text-xs text-muted">{statementCopy.balanceIncludesOpening}</p>
+          ) : null}
           {data.totals.map((t) => (
             <p
               key={t.currency}

@@ -27,17 +27,28 @@ const KIND_VARIANT: Record<ImportIssue['kind'], 'danger' | 'warning' | 'muted'> 
   ERROR: 'danger',
   DUPLICATE_FILE: 'warning',
   DUPLICATE_EXISTING: 'muted',
+  MERGED: 'muted',
+  EXISTING_BALANCE: 'warning',
 };
 
 /**
  * Problemas por fila del dry-run (DX-107): fila, columna del archivo, tipo,
  * motivo en español y el valor. Bajo `sm` cada fila es una tarjeta (Table).
  */
-export function ImportIssuesTable({ issues, total }: { issues: ImportIssue[]; total: number }) {
+export function ImportIssuesTable({
+  issues,
+  total,
+  label = copy.label,
+}: {
+  issues: ImportIssue[];
+  total: number;
+  /** Nombre accesible de la tabla (la hoja de saldos lleva el suyo, DX-262). */
+  label?: string;
+}) {
   return (
     <div className="flex flex-col gap-2">
       <div className="overflow-hidden rounded-xl border border-border bg-surface">
-        <Table aria-label={copy.label}>
+        <Table aria-label={label}>
           <TableHeader>
             <TableRow>
               <TableHead className="w-16 text-right">{copy.row}</TableHead>

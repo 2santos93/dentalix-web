@@ -6,17 +6,23 @@ import {
   getImport,
   inspectFile,
   listImports,
+  removeBalances,
   saveCsv,
+  uploadBalances,
   validateImport,
 } from '@/lib/patient-imports/patient-imports-api';
-import { batchFixture, inspectFixture } from '@/lib/test/patient-imports';
+import { balancesFixture, batchFixture, inspectFixture } from '@/lib/test/patient-imports';
 import { ImportProgress } from './import-progress';
 import { PatientImportWizard } from './patient-import-wizard';
 import { notifyError } from '@/components/errors/notify';
 import { toast } from 'sonner';
 
-jest.mock('../errors/notify', () => ({ notifyError: jest.fn(() => 'toast-poll') }));
-jest.mock('sonner', () => ({ toast: { success: jest.fn(), dismiss: jest.fn() } }));
+jest.mock('../errors/notify', () => ({
+  notifyError: jest.fn(() => 'toast-poll'),
+}));
+jest.mock('sonner', () => ({
+  toast: { success: jest.fn(), dismiss: jest.fn() },
+}));
 
 jest.mock('../../lib/patient-imports/patient-imports-api', () => ({
   ...jest.requireActual('../../lib/patient-imports/patient-imports-api'),
@@ -27,6 +33,10 @@ jest.mock('../../lib/patient-imports/patient-imports-api', () => ({
   listImports: jest.fn(),
   downloadTemplate: jest.fn(),
   downloadErrorsCsv: jest.fn().mockResolvedValue('csv'),
+  downloadBalanceTemplate: jest.fn().mockResolvedValue('csv'),
+  downloadBalanceErrorsCsv: jest.fn().mockResolvedValue('csv'),
+  uploadBalances: jest.fn(),
+  removeBalances: jest.fn(),
   saveCsv: jest.fn(),
 }));
 
@@ -35,6 +45,8 @@ const mockedValidate = validateImport as jest.MockedFunction<typeof validateImpo
 const mockedConfirm = confirmImport as jest.MockedFunction<typeof confirmImport>;
 const mockedGet = getImport as jest.MockedFunction<typeof getImport>;
 const mockedList = listImports as jest.MockedFunction<typeof listImports>;
+const mockedBalances = uploadBalances as jest.MockedFunction<typeof uploadBalances>;
+const mockedRemoveBalances = removeBalances as jest.MockedFunction<typeof removeBalances>;
 
 const csv = () => new File(['tipo;doc\nCC;1'], 'pacientes.csv', { type: 'text/csv' });
 
@@ -64,7 +76,9 @@ it('paso 1 → 2: lee el archivo y propone el mapeo de columnas con su ejemplo',
 it('un archivo de más de 5 MB se rechaza sin subirlo', async () => {
   const user = userEvent.setup();
   render(<PatientImportWizard token="tok" onBatchChange={jest.fn()} />);
-  const big = new File([new Uint8Array(5 * 1024 * 1024 + 1)], 'grande.csv', { type: 'text/csv' });
+  const big = new File([new Uint8Array(5 * 1024 * 1024 + 1)], 'grande.csv', {
+    type: 'text/csv',
+  });
   await user.upload(screen.getByLabelText('Archivo de pacientes (CSV o .xlsx)'), big);
   expect(await screen.findByRole('alert')).toHaveTextContent(/más de 5 MB/);
   expect(mockedInspect).not.toHaveBeenCalled();
@@ -72,7 +86,9 @@ it('un archivo de más de 5 MB se rechaza sin subirlo', async () => {
 
 it('el error del archivo sale en español junto a la subida', async () => {
   mockedInspect.mockRejectedValue(
-    new ApiError(400, 'Bad Request', { messages: ['Es un Excel antiguo (.xls) o protegido con contraseña.'] }),
+    new ApiError(400, 'Bad Request', {
+      messages: ['Es un Excel antiguo (.xls) o protegido con contraseña.'],
+    }),
   );
   const user = userEvent.setup();
   render(<PatientImportWizard token="tok" onBatchChange={jest.fn()} />);
@@ -144,9 +160,13 @@ it('paso 2: valida con el mapeo elegido y muestra totales, errores por fila y vi
     'CC',
     expect.any(Function),
   );
-  const result = await screen.findByRole('region', { name: /resultado de la validación/i });
+  const result = await screen.findByRole('region', {
+    name: /resultado de la validación/i,
+  });
   expect(within(result).getByText('Pacientes nuevos').nextSibling).toHaveTextContent('1');
-  const table = within(result).getByRole('table', { name: /errores y duplicados/i });
+  const table = within(result).getByRole('table', {
+    name: /errores y duplicados/i,
+  });
   expect(within(table).getAllByRole('row')).toHaveLength(3);
   expect(table).toHaveTextContent('Falta «Nombres».');
   expect(table).toHaveTextContent('Ya existe en la clínica');
@@ -184,6 +204,7 @@ it('paso 3: confirma con «actualizar vacíos» y sigue el avance hasta terminar
     await upload(user);
     await user.click(await screen.findByRole('button', { name: 'Validar archivo' }));
     await user.click(await screen.findByRole('button', { name: 'Continuar' }));
+    await user.click(await screen.findByRole('button', { name: 'Continuar sin saldos' }));
 
     expect(screen.getByText(/autorización de datos \(Ley 1581\) pendiente/)).toBeInTheDocument();
     await user.click(screen.getByLabelText(/actualizar solo los campos vacíos/i));
@@ -215,14 +236,19 @@ it('confirmar falla con 409: el motivo de la API junto al botón', async () => {
   await upload(user);
   await user.click(await screen.findByRole('button', { name: 'Validar archivo' }));
   await user.click(await screen.findByRole('button', { name: 'Continuar' }));
+  await user.click(await screen.findByRole('button', { name: 'Continuar sin saldos' }));
   await user.click(screen.getByRole('button', { name: 'Importar 1 paciente' }));
   expect(await screen.findByRole('alert')).toHaveTextContent(/en curso/);
 });
 
-it('sin filas que importar no deja continuar', async () => {
+it('sin filas que importar (y el lote caducado) no deja continuar', async () => {
   mockedInspect.mockResolvedValue(inspectFixture());
   mockedValidate.mockResolvedValue(
-    batchFixture({ canConfirm: false, totals: { totalRows: 1, validRows: 0, duplicateRows: 0, errorRows: 1 } }),
+    batchFixture({
+      canConfirm: false,
+      createdAt: '2020-01-01T00:00:00.000Z',
+      totals: { totalRows: 1, validRows: 0, duplicateRows: 0, errorRows: 1 },
+    }),
   );
   const user = userEvent.setup();
   render(<PatientImportWizard token="tok" onBatchChange={jest.fn()} />);
@@ -238,7 +264,12 @@ it('al volver con una importación en marcha, enseña su avance', async () => {
     canConfirm: false,
     progress: { preparedRows: 10, processedRows: 4, createdCount: 4, updatedCount: 0, skippedCount: 0, failedCount: 0, percent: 40 },
   });
-  mockedList.mockResolvedValue({ items: [running], total: 1, page: 1, pageSize: 20 });
+  mockedList.mockResolvedValue({
+    items: [running],
+    total: 1,
+    page: 1,
+    pageSize: 20,
+  });
   mockedGet.mockResolvedValue(running);
   render(<PatientImportWizard token="tok" onBatchChange={jest.fn()} />);
   expect(await screen.findByText('4 de 10 filas procesadas')).toBeInTheDocument();
@@ -249,7 +280,12 @@ it('si el avance falla varias veces seguidas, un solo aviso', async () => {
   jest.useFakeTimers();
   try {
     const running = batchFixture({ status: 'RUNNING', canConfirm: false });
-    mockedList.mockResolvedValue({ items: [running], total: 1, page: 1, pageSize: 20 });
+    mockedList.mockResolvedValue({
+      items: [running],
+      total: 1,
+      page: 1,
+      pageSize: 20,
+    });
     mockedGet.mockResolvedValueOnce(running).mockRejectedValue(new Error('red'));
     render(<PatientImportWizard token="tok" onBatchChange={jest.fn()} />);
     expect(await screen.findByText('Importando')).toBeInTheDocument();
@@ -290,14 +326,283 @@ it('QA O1: al avanzar, el foco va al título del paso nuevo (no se pierde en <bo
   await user.click(screen.getByRole('button', { name: 'Validar archivo' }));
   await waitFor(() => expect(screen.getByRole('heading', { name: 'Resultado de la validación' })).toHaveFocus());
   await user.click(screen.getByRole('button', { name: 'Continuar' }));
+  await waitFor(() =>
+    expect(
+      screen.getByRole('heading', {
+        name: 'Saldos de los pacientes (opcional)',
+      }),
+    ).toHaveFocus(),
+  );
+  await user.click(screen.getByRole('button', { name: 'Continuar sin saldos' }));
   await waitFor(() => expect(screen.getByRole('heading', { name: 'Confirmar la importación' })).toHaveFocus());
+});
+
+describe('DX-262: hoja de saldos «Saldo migrado»', () => {
+  const saldos = () =>
+    new File(['doc;importe;moneda\n1;2;COP'], 'saldos.csv', {
+      type: 'text/csv',
+    });
+
+  async function toBalances(user: ReturnType<typeof userEvent.setup>) {
+    mockedInspect.mockResolvedValue(inspectFixture());
+    mockedValidate.mockResolvedValue(batchFixture());
+    render(<PatientImportWizard token="tok" onBatchChange={jest.fn()} />);
+    await upload(user);
+    await user.click(await screen.findByRole('button', { name: 'Validar archivo' }));
+    await user.click(await screen.findByRole('button', { name: 'Continuar' }));
+  }
+
+  it('valida la hoja (dry-run): total por moneda del archivo y a importar, y errores por fila; luego se confirma', async () => {
+    mockedBalances.mockResolvedValue(
+      batchFixture({
+        balances: balancesFixture(),
+        balanceIssues: [
+          {
+            row: 3,
+            column: 'numero_documento',
+            kind: 'MERGED',
+            message: 'Mismo paciente y moneda que la fila 2: se suman en un solo saldo migrado.',
+            value: '111111',
+          },
+          {
+            row: 6,
+            column: 'importe',
+            kind: 'ERROR',
+            message: 'El importe debe ser mayor que 0.',
+            value: '-5',
+          },
+        ],
+        balanceIssuesTotal: 2,
+      }),
+    );
+    const user = userEvent.setup();
+    await toBalances(user);
+    expect(screen.getByText(/nada se guarda hasta confirmar/i)).toBeInTheDocument();
+    await user.upload(screen.getByLabelText('Hoja de saldos (CSV o .xlsx)'), saldos());
+    expect(mockedBalances).toHaveBeenCalledWith('tok', 'batch-1', expect.any(File), expect.any(Function), false);
+
+    // QA D4: lo que se importa y, aparte, lo de las filas con error (la
+    // diferencia con el total legible del archivo), con rótulos claros.
+    const totals = await screen.findByRole('table', {
+      name: 'Totales por moneda',
+    });
+    expect(within(totals).getByRole('columnheader', { name: 'Total de filas válidas' })).toBeInTheDocument();
+    expect(within(totals).getByRole('columnheader', { name: 'Total en filas con error' })).toBeInTheDocument();
+    const cop = within(totals).getByRole('row', { name: /COP/ });
+    expect(cop).toHaveTextContent('201.000,50');
+    expect(cop).toHaveTextContent(/100,00/);
+    expect(cop).not.toHaveTextContent('201.100,50');
+    expect(within(totals).getByRole('row', { name: /USD/ })).toHaveTextContent('40,00');
+    expect(screen.getByText(/importe 0, negativo o ilegible no suman/)).toBeInTheDocument();
+    const issues = screen.getByRole('table', {
+      name: 'Errores y avisos de la hoja de saldos',
+    });
+    expect(within(issues).getByText('Sumada a otra fila')).toBeInTheDocument();
+    expect(within(issues).getByText('El importe debe ser mayor que 0.')).toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Continuar' }));
+    expect(screen.getByRole('heading', { name: 'Confirmar la importación' })).toBeInTheDocument();
+    expect(screen.getByText(/3 saldos migrados/)).toBeInTheDocument();
+  });
+
+  it('QA D1: por defecto no se añade a quien ya tiene saldo migrado; marcar la casilla vuelve a validar la misma hoja', async () => {
+    mockedBalances.mockResolvedValueOnce(
+      batchFixture({
+        balances: balancesFixture({ preparedCount: 0 }),
+        balanceIssues: [
+          {
+            row: 2,
+            column: 'numero_documento',
+            kind: 'ERROR',
+            message:
+              'Este paciente ya tiene un saldo migrado vivo de 80.000,00 COP (lote «p.csv» del 22/10/2026, corte 01/09/2026): no se crea otro. Si es otra deuda, marca «Añadir aunque ya tenga saldo migrado» y vuelve a subir la hoja.',
+            value: '555555',
+          },
+        ],
+        balanceIssuesTotal: 1,
+      }),
+    );
+    mockedBalances.mockResolvedValueOnce(
+      batchFixture({
+        balances: balancesFixture({ preparedCount: 1, addToExisting: true }),
+        balanceIssues: [
+          {
+            row: 2,
+            column: 'numero_documento',
+            kind: 'EXISTING_BALANCE',
+            message: 'Este paciente ya tiene un saldo migrado vivo de 80.000,00 COP (…): se añadirá otro porque marcaste «Añadir aunque ya tenga saldo migrado».',
+            value: '555555',
+          },
+        ],
+        balanceIssuesTotal: 1,
+      }),
+    );
+    const user = userEvent.setup();
+    await toBalances(user);
+    const add = screen.getByRole('checkbox', { name: 'Añadir aunque ya tenga saldo migrado' });
+    expect(add).not.toBeChecked();
+    const sheet = saldos();
+    await user.upload(screen.getByLabelText('Hoja de saldos (CSV o .xlsx)'), sheet);
+    expect(mockedBalances).toHaveBeenLastCalledWith('tok', 'batch-1', sheet, expect.any(Function), false);
+    expect(await screen.findByText(/no se crea otro/)).toBeInTheDocument();
+
+    await user.click(add);
+    await waitFor(() => expect(mockedBalances).toHaveBeenCalledTimes(2));
+    expect(mockedBalances).toHaveBeenLastCalledWith('tok', 'batch-1', sheet, expect.any(Function), true);
+    const issues = await screen.findByRole('table', { name: 'Errores y avisos de la hoja de saldos' });
+    expect(within(issues).getByText('Ya tenía saldo migrado')).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'Añadir aunque ya tenga saldo migrado' })).toBeChecked();
+  });
+
+  it('QA D1: el avance cuenta los saldos no creados porque el paciente ya tenía uno', () => {
+    render(
+      <ImportProgress
+        headingId="h"
+        onReport={jest.fn()}
+        batch={batchFixture({
+          status: 'COMPLETED',
+          balances: balancesFixture({
+            progress: { processed: 2, created: 1, skipped: 0, ambiguous: 0, existing: 1 },
+          }),
+        })}
+      />,
+    );
+    expect(
+      screen.getByText(/1 saldo no se creó: su paciente ya tenía un saldo migrado en esa moneda/),
+    ).toBeInTheDocument();
+  });
+
+  it('el error de la hoja sale en español junto a la subida', async () => {
+    mockedBalances.mockRejectedValue(
+      new ApiError(400, 'Bad Request', {
+        messages: ['A la hoja de saldos le falta la columna «Moneda».'],
+      }),
+    );
+    const user = userEvent.setup();
+    await toBalances(user);
+    await user.upload(screen.getByLabelText('Hoja de saldos (CSV o .xlsx)'), saldos());
+    expect(await screen.findByRole('alert')).toHaveTextContent(/falta la columna «Moneda»/);
+    expect(screen.getByRole('button', { name: 'Continuar sin saldos' })).toBeInTheDocument();
+  });
+
+  it('quitar la hoja vuelve a «sin saldos»', async () => {
+    mockedBalances.mockResolvedValue(batchFixture({ balances: balancesFixture() }));
+    mockedRemoveBalances.mockResolvedValue(batchFixture());
+    const user = userEvent.setup();
+    await toBalances(user);
+    await user.upload(screen.getByLabelText('Hoja de saldos (CSV o .xlsx)'), saldos());
+    await user.click(await screen.findByRole('button', { name: 'Quitar la hoja de saldos' }));
+    expect(mockedRemoveBalances).toHaveBeenCalledWith('tok', 'batch-1');
+    expect(await screen.findByRole('button', { name: 'Continuar sin saldos' })).toBeInTheDocument();
+  });
+
+  it('I2: sin pacientes nuevos (todos ya existen) se puede seguir al paso «Saldos» e importar solo saldos', async () => {
+    const onlyExisting = batchFixture({
+      canConfirm: false,
+      createdAt: new Date().toISOString(),
+      totals: { totalRows: 2, validRows: 0, duplicateRows: 2, errorRows: 0 },
+      progress: { ...batchFixture().progress, preparedRows: 0 },
+      issues: [],
+      issuesTotal: 0,
+    });
+    mockedInspect.mockResolvedValue(inspectFixture());
+    mockedValidate.mockResolvedValue(onlyExisting);
+    mockedBalances.mockResolvedValue({
+      ...onlyExisting,
+      canConfirm: true,
+      balances: balancesFixture({ preparedCount: 3 }),
+    });
+    mockedConfirm.mockResolvedValue(batchFixture({ status: 'QUEUED', canConfirm: false }));
+    const user = userEvent.setup();
+    render(<PatientImportWizard token="tok" onBatchChange={jest.fn()} />);
+    await upload(user);
+    await user.click(await screen.findByRole('button', { name: 'Validar archivo' }));
+    expect(await screen.findByText(/No hay pacientes nuevos: puedes importar solo sus saldos/)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Continuar' }));
+    // Sin hoja todavía no hay nada que importar: no se puede seguir sin saldos.
+    expect(screen.getByRole('button', { name: 'Continuar sin saldos' })).toBeDisabled();
+    await user.upload(screen.getByLabelText('Hoja de saldos (CSV o .xlsx)'), saldos());
+    await user.click(await screen.findByRole('button', { name: 'Continuar' }));
+    await user.click(screen.getByRole('button', { name: 'Importar 3 saldos migrados' }));
+    expect(mockedConfirm).toHaveBeenCalledWith('tok', 'batch-1', 'SKIP');
+  });
+
+  it('I2: con pacientes que ya existen (preparados, «Saltarlos») el botón dice «Importar N saldos migrados»; con «Actualizar campos vacíos», que procesa a los existentes', async () => {
+    const existing = batchFixture({
+      createdAt: new Date().toISOString(),
+      totals: { totalRows: 1, validRows: 0, duplicateRows: 1, errorRows: 0 },
+      progress: { ...batchFixture().progress, preparedRows: 1 },
+      issues: [],
+      issuesTotal: 0,
+    });
+    mockedInspect.mockResolvedValue(inspectFixture());
+    mockedValidate.mockResolvedValue(existing);
+    mockedBalances.mockResolvedValue({ ...existing, balances: balancesFixture({ preparedCount: 1 }) });
+    mockedConfirm.mockResolvedValue(batchFixture({ status: 'QUEUED', canConfirm: false }));
+    const user = userEvent.setup();
+    render(<PatientImportWizard token="tok" onBatchChange={jest.fn()} />);
+    await upload(user);
+    await user.click(await screen.findByRole('button', { name: 'Validar archivo' }));
+    await user.click(await screen.findByRole('button', { name: 'Continuar' }));
+    await user.upload(screen.getByLabelText('Hoja de saldos (CSV o .xlsx)'), saldos());
+    await user.click(await screen.findByRole('button', { name: 'Continuar' }));
+    expect(screen.getByRole('button', { name: 'Importar 1 saldo migrado' })).toBeInTheDocument();
+    await user.click(screen.getByRole('radio', { name: /Actualizar solo los campos vacíos/ }));
+    expect(screen.getByRole('button', { name: 'Procesar los pacientes que ya existen' })).toBeInTheDocument();
+    await user.click(screen.getByRole('radio', { name: /Saltarlos/ }));
+    await user.click(screen.getByRole('button', { name: 'Importar 1 saldo migrado' }));
+    expect(mockedConfirm).toHaveBeenCalledWith('tok', 'batch-1', 'SKIP');
+  });
+
+  it('M7: el avance distingue los saldos no creados por documento ambiguo', () => {
+    render(
+      <ImportProgress
+        headingId="h"
+        onReport={jest.fn()}
+        batch={batchFixture({
+          status: 'COMPLETED',
+          balances: balancesFixture({
+            progress: { processed: 3, created: 1, skipped: 1, ambiguous: 1, existing: 0 },
+          }),
+        })}
+      />,
+    );
+    expect(screen.getByText(/1 saldo no se creó: su paciente no existía al importar/)).toBeInTheDocument();
+    expect(screen.getByText(/1 saldo no se creó: su documento es de varios pacientes/)).toBeInTheDocument();
+  });
+
+  it('el avance enseña los saldos migrados importados por moneda', () => {
+    render(
+      <ImportProgress
+        headingId="h"
+        onReport={jest.fn()}
+        batch={batchFixture({
+          status: 'COMPLETED',
+          balances: balancesFixture({
+            progress: { processed: 3, created: 3, skipped: 0, ambiguous: 0, existing: 0 },
+            imported: [
+              { currency: 'COP', count: 2, amount: 201000.5 },
+              { currency: 'USD', count: 1, amount: 40 },
+            ],
+          }),
+        })}
+      />,
+    );
+    expect(screen.getByText('Saldos migrados: 3 de 3')).toBeInTheDocument();
+    expect(screen.getByText(/201\.000,50/)).toBeInTheDocument();
+  });
 });
 
 it('Way-Out Rule: el aviso de fallo del avance trae «Reintentar»', async () => {
   jest.useFakeTimers();
   try {
     const running = batchFixture({ status: 'RUNNING', canConfirm: false });
-    mockedList.mockResolvedValue({ items: [running], total: 1, page: 1, pageSize: 20 });
+    mockedList.mockResolvedValue({
+      items: [running],
+      total: 1,
+      page: 1,
+      pageSize: 20,
+    });
     mockedGet.mockResolvedValueOnce(running).mockRejectedValue(new Error('red'));
     render(<PatientImportWizard token="tok" onBatchChange={jest.fn()} />);
     expect(await screen.findByText('Importando')).toBeInTheDocument();
@@ -314,7 +619,12 @@ it('Way-Out Rule: el aviso de fallo del avance trae «Reintentar»', async () =>
 });
 
 it('sin informe disponible (caducado o purgado) no ofrece descargarlo', async () => {
-  const done = batchFixture({ status: 'COMPLETED', canConfirm: false, canUndo: true, reportAvailable: false });
+  const done = batchFixture({
+    status: 'COMPLETED',
+    canConfirm: false,
+    canUndo: true,
+    reportAvailable: false,
+  });
   render(<ImportProgress batch={done} headingId="h" onReport={jest.fn()} />);
   expect(screen.queryByRole('button', { name: /informe de errores/i })).not.toBeInTheDocument();
   render(<ImportProgress batch={{ ...done, reportAvailable: true }} headingId="h2" onReport={jest.fn()} />);
@@ -325,7 +635,12 @@ it('el aviso del avance se cierra solo cuando la consulta vuelve a ir bien', asy
   jest.useFakeTimers();
   try {
     const running = batchFixture({ status: 'RUNNING', canConfirm: false });
-    mockedList.mockResolvedValue({ items: [running], total: 1, page: 1, pageSize: 20 });
+    mockedList.mockResolvedValue({
+      items: [running],
+      total: 1,
+      page: 1,
+      pageSize: 20,
+    });
     mockedGet.mockResolvedValueOnce(running).mockRejectedValueOnce(new Error('red')).mockResolvedValue(running);
     render(<PatientImportWizard token="tok" onBatchChange={jest.fn()} />);
     expect(await screen.findByText('Importando')).toBeInTheDocument();

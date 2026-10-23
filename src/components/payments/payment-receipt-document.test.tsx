@@ -117,3 +117,29 @@ it('la tirilla de 80 mm marca su formato para la impresión', () => {
   render(<PaymentReceiptDocument receipt={paymentReceiptFixture()} format="80mm" />);
   expect(screen.getByTestId('receipt-document')).toHaveAttribute('data-format', '80mm');
 });
+
+it('DX-262: el recibo de un abono al saldo migrado dice su concepto y su fecha de corte', () => {
+  const receipt = paymentReceiptFixture();
+  render(
+    <PaymentReceiptDocument
+      receipt={{
+        ...receipt,
+        snapshot: {
+          ...receipt.snapshot,
+          plan: null,
+          openingBalance: {
+            id: 'ob-1',
+            concept: 'Ortodoncia 2025',
+            asOfDate: '2026-03-15',
+          },
+        },
+      }}
+    />,
+  );
+  expect(screen.getByTestId('receipt-document')).toHaveTextContent(
+    'Saldo migrado · Ortodoncia 2025 · corte 15/03/2026',
+  );
+  // Revisión N1 / QA D2: sin plan, el saldo es lo que queda del migrado.
+  expect(screen.getByText('Saldo pendiente tras este abono')).toBeInTheDocument();
+  expect(screen.queryByText(/Saldo del plan/)).not.toBeInTheDocument();
+});

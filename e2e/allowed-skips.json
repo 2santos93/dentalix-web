@@ -91,6 +91,20 @@
       "annotation": "E2E_DATABASE_URL no definido: no se puede fechar la presentación en el pasado",
       "requiresUnset": "E2E_DATABASE_URL",
       "reason": "Sin E2E_DATABASE_URL no se puede fechar la presentación en el pasado."
+    },
+    {
+      "file": "e2e/plan-item-reservations.spec.ts",
+      "title": "1440 px: «Llegó» avisa de la reserva en la otra cita y «Traer a esta cita» la mueve",
+      "annotation": "E2E_DATABASE_URL no definido: no se puede mover a hoy la cita que ya empezó",
+      "requiresUnset": "E2E_DATABASE_URL",
+      "reason": "Sin E2E_DATABASE_URL no se puede mover a hoy (ya empezada) la cita cuya reserva venció."
+    },
+    {
+      "file": "e2e/plan-item-reservations.spec.ts",
+      "title": "390 px: el aviso en la hoja «En clínica» y «Traer a esta cita» con teclado",
+      "annotation": "E2E_DATABASE_URL no definido: no se puede mover a hoy la cita que ya empezó",
+      "requiresUnset": "E2E_DATABASE_URL",
+      "reason": "Sin E2E_DATABASE_URL no se puede mover a hoy (ya empezada) la cita cuya reserva venció."
     }
   ]
 }

@@ -1,9 +1,10 @@
-import { formatDate } from '@/lib/format/date';
+import { formatCivilDate, formatDate } from '@/lib/format/date';
 import { PAYMENT_METHOD_LABELS } from '@/lib/payments/payment-method';
 import type { PaymentMethod } from '@/lib/payments/payments-api';
 import type {
   AccountStatementInstallment,
   AccountStatementMovement,
+  AccountStatementOpeningBalance,
   AccountStatementPlan,
 } from './account-statement-api';
 
@@ -25,16 +26,63 @@ export const statementCopy = {
   inFavor: 'a favor',
   noOverdue: 'Sin cuotas vencidas',
   overdueCount: (n: number) => (n === 1 ? '1 cuota vencida' : `${n} cuotas vencidas`),
+  // DX-262: saldo inicial importado del programa anterior.
+  openingHeading: 'Saldo migrado',
+  openingTable: 'Saldos migrados',
+  // QA D5: lo que queda del saldo migrado tras sus abonos.
+  openingIncluded: 'Incluye saldo migrado pendiente:',
+  colConcept: 'Concepto',
+  colAsOf: 'Fecha de corte',
+  approx: 'aprox.',
+  colOpeningPaid: 'Abonado',
+  colOpeningPending: 'Pendiente',
+  openingMovement: (concept: string) => `Saldo migrado · ${concept}`,
+  /** M1: el «Saldo» de un resumen con saldo migrado no es solo presupuestado − abonado. */
+  balanceIncludesOpening: 'El saldo incluye el saldo migrado del programa anterior.',
+  openingNote: 'Deuda traída del programa anterior al importar los pacientes.',
+  /** QA D3: solo si alguna fila es aproximada. */
+  openingApproxNote: '«aprox.»: el archivo no traía la fecha y se tomó la de la importación.',
   emptyTitle: 'Sin movimientos financieros',
   emptyDescription: 'Este paciente no tiene planes con valor ni abonos registrados.',
   footnote:
     'Cifras en la moneda en que se presupuestaron o pagaron, sin conversión. Los abonos anulados se listan pero no suman.',
 };
 
+/** Nota bajo la tabla de saldos migrados: «aprox.» solo si alguna fila lo es (QA D3). */
+export function openingNoteFor(openings: Pick<AccountStatementOpeningBalance, 'asOfDateApproximate'>[]): string {
+  return openings.some((o) => o.asOfDateApproximate)
+    ? `${statementCopy.openingNote} ${statementCopy.openingApproxNote}`
+    : statementCopy.openingNote;
+}
+
+/** «15/03/2026» o «23/10/2026 (aprox.)» si la fecha es la de la importación. */
+export function openingAsOfLabel(
+  opening: Pick<AccountStatementOpeningBalance, 'asOfDate' | 'asOfDateApproximate'>,
+): string {
+  const day = formatCivilDate(opening.asOfDate);
+  return opening.asOfDateApproximate ? `${day} (${statementCopy.approx})` : day;
+}
+
 /** Nombre de un plan por su id (el plan no tiene título: se nombra por su fecha). */
-export function planNamer(plans: AccountStatementPlan[]): (id: string) => string {
+export function planNamer(plans: AccountStatementPlan[]): (id: string | null) => string {
   const byId = new Map(plans.map((p) => [p.id, statementCopy.planLabel(p.createdAt)]));
-  return (id) => byId.get(id) ?? statementCopy.unknownPlan;
+  return (id) => (id ? byId.get(id) : undefined) ?? statementCopy.unknownPlan;
+}
+
+/**
+ * A qué se abonó un movimiento: su plan o, DX-262, el saldo migrado
+ * («Saldo migrado · concepto»).
+ */
+export function movementDestination(
+  movement: Pick<AccountStatementMovement, 'treatmentPlanId' | 'openingBalanceId'>,
+  planName: (id: string | null) => string,
+  openings: Pick<AccountStatementOpeningBalance, 'id' | 'concept'>[],
+): string {
+  if (movement.openingBalanceId) {
+    const opening = openings.find((o) => o.id === movement.openingBalanceId);
+    return statementCopy.openingMovement(opening?.concept ?? statementCopy.openingHeading);
+  }
+  return planName(movement.treatmentPlanId);
 }
 
 export function methodLabel(method: PaymentMethod | null): string {

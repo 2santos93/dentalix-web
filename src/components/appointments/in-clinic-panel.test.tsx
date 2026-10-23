@@ -24,7 +24,7 @@ jest.mock('../../lib/locations/locations-api', () => ({
   listLocations: jest.fn(),
 }));
 jest.mock('sonner', () => ({
-  toast: { success: jest.fn(), warning: jest.fn(), error: jest.fn(), info: jest.fn() },
+  toast: { success: jest.fn(), warning: jest.fn(), error: jest.fn(), info: jest.fn(), dismiss: jest.fn() },
 }));
 const mockedGet = getInClinic as jest.MockedFunction<typeof getInClinic>;
 const mockedUndo = undoArrival as jest.MockedFunction<typeof undoArrival>;
@@ -55,6 +55,7 @@ function item(overrides: Partial<InClinicItem> & { appointmentId: string }): InC
       alerts: [],
       anamnesisReviewedAt: '2026-09-01T00:00:00.000Z',
     },
+    planItemsReservedElsewhere: [],
     ...overrides,
   };
 }

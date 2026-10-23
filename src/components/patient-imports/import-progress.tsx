@@ -3,6 +3,7 @@ import * as React from 'react';
 import { Download } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
+import { formatCurrency } from '@/lib/format/currency';
 import {
   STATUS_LABELS,
   isInProgress,
@@ -23,6 +24,15 @@ const copy = {
   failedNote:
     'La importación se detuvo con errores. Lo importado hasta ahora se conserva; puedes deshacer el lote desde el historial.',
   report: 'Descargar informe de errores',
+  balances: (done: number, total: number) =>
+    `Saldos migrados: ${done.toLocaleString('es-CO')} de ${total.toLocaleString('es-CO')}`,
+  balancesImported: 'Importado por moneda:',
+  balancesSkipped: (n: number) =>
+    `${n.toLocaleString('es-CO')} ${n === 1 ? 'saldo no se creó' : 'saldos no se crearon'}: su paciente no existía al importar.`,
+  balancesExisting: (n: number) =>
+    `${n.toLocaleString('es-CO')} ${n === 1 ? 'saldo no se creó' : 'saldos no se crearon'}: su paciente ya tenía un saldo migrado en esa moneda de otra importación.`,
+  balancesAmbiguous: (n: number) =>
+    `${n.toLocaleString('es-CO')} ${n === 1 ? 'saldo no se creó' : 'saldos no se crearon'}: su documento es de varios pacientes. Corrige las fichas repetidas.`,
   consent: 'Recuerda pedir la autorización de datos (Ley 1581) a los pacientes importados: su ficha la marca pendiente.',
 };
 
@@ -81,6 +91,28 @@ export function ImportProgress({
           </div>
         ))}
       </dl>
+      {batch.balances && batch.balances.preparedCount > 0 ? (
+        <div className="flex flex-col gap-1 text-sm">
+          <p className="tabular-nums text-ink">
+            {copy.balances(batch.balances.progress.processed, batch.balances.preparedCount)}
+          </p>
+          {batch.balances.imported.length > 0 ? (
+            <p className="break-words tabular-nums text-muted">
+              {copy.balancesImported}{' '}
+              {batch.balances.imported.map((t) => formatCurrency(t.amount, t.currency)).join(' · ')}
+            </p>
+          ) : null}
+          {batch.balances.progress.skipped > 0 ? (
+            <p className="text-warning">{copy.balancesSkipped(batch.balances.progress.skipped)}</p>
+          ) : null}
+          {batch.balances.progress.existing > 0 ? (
+            <p className="text-warning">{copy.balancesExisting(batch.balances.progress.existing)}</p>
+          ) : null}
+          {batch.balances.progress.ambiguous > 0 ? (
+            <p className="text-warning">{copy.balancesAmbiguous(batch.balances.progress.ambiguous)}</p>
+          ) : null}
+        </div>
+      ) : null}
       {active ? <p className="text-sm text-muted">{copy.working}</p> : null}
       {batch.status === 'FAILED' ? <p className="text-sm text-danger">{copy.failedNote}</p> : null}
       {batch.status === 'COMPLETED' && progress.createdCount > 0 ? (

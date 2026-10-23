@@ -16,6 +16,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton';
 import { SectionError } from '@/components/errors/section-error';
 import { statusOptionsFor } from '@/lib/appointments/patient-flow';
+import type { ClinicRole } from '@/lib/me/me-api';
 
 // Copy as constants (i18n-ready, es-first) — matches patients-table.tsx /
 // clinical-entries-list.tsx convention until next-intl wiring lands.
@@ -72,6 +73,8 @@ interface DayAgendaProps {
    * fila; nada si no devuelve nada.
    */
   renderActions?: (appointment: Appointment) => ReactNode;
+  /** DX-273: rol del usuario; de «Completada» solo salen ADMIN y DENTIST. */
+  role?: ClinicRole | null;
 }
 
 function DetailButton({
@@ -101,6 +104,7 @@ interface StatusSelectProps {
   timeRange: string;
   onStatusChange: (appointmentId: string, status: AppointmentStatus) => void;
   updating: boolean;
+  role?: ClinicRole | null;
 }
 
 /**
@@ -112,7 +116,7 @@ interface StatusSelectProps {
  * under a badge. Rendered once per row per responsive variant when
  * `onStatusChange` is passed to `DayAgenda`.
  */
-function StatusSelect({ appointment, timeRange, onStatusChange, updating }: StatusSelectProps) {
+function StatusSelect({ appointment, timeRange, onStatusChange, updating, role }: StatusSelectProps) {
   return (
     <span className="inline-flex items-center gap-2">
       <span className="relative inline-flex items-center">
@@ -124,7 +128,7 @@ function StatusSelect({ appointment, timeRange, onStatusChange, updating }: Stat
           onChange={(e) => onStatusChange(appointment.id, e.target.value as AppointmentStatus)}
           className={`cursor-pointer appearance-none rounded-full border py-1 pl-3 pr-7 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface disabled:cursor-not-allowed disabled:opacity-60 ${STATUS_BADGE_CLASSES[appointment.status]}`}
         >
-          {statusOptionsFor(appointment.status).map((status) => (
+          {statusOptionsFor(appointment.status, role).map((status) => (
             <option key={status} value={status} className="bg-surface font-normal text-ink">
               {STATUS_LABELS[status]}
             </option>
@@ -162,6 +166,7 @@ export function DayAgenda({
   updatingId,
   onSelectAppointment,
   renderActions,
+  role,
 }: DayAgendaProps) {
   if (loading) {
     return (
@@ -269,6 +274,7 @@ export function DayAgenda({
                         appointment={appointment}
                         timeRange={timeRange}
                         onStatusChange={onStatusChange}
+                        role={role}
                         updating={updating}
                       />
                     ) : (
@@ -329,6 +335,7 @@ export function DayAgenda({
                       appointment={appointment}
                       timeRange={timeRange}
                       onStatusChange={onStatusChange}
+                        role={role}
                       updating={updating}
                     />
                   ) : (

@@ -46,6 +46,25 @@ export async function recordPayment(
   });
 }
 
+/**
+ * `POST /opening-balances/:id/payments` (DX-262): abono contra el saldo
+ * migrado del paciente, con su recibo de caja; en la moneda del saldo y sin
+ * pasar de lo pendiente (400 en español si no).
+ */
+export async function recordOpeningBalancePayment(
+  token: string,
+  openingBalanceId: string,
+  input: RecordPaymentInput,
+  idempotencyKey: string,
+): Promise<Payment> {
+  return apiFetch<Payment>(`/opening-balances/${openingBalanceId}/payments`, {
+    method: 'POST',
+    body: input,
+    token,
+    headers: { 'Idempotency-Key': idempotencyKey },
+  });
+}
+
 /** `GET /treatment-plans/:id/payments` — active abonos for the plan, DESC by `paidAt`. */
 export async function listPayments(token: string, planId: string): Promise<Payment[]> {
   return apiFetch<Payment[]>(`/treatment-plans/${planId}/payments`, {
