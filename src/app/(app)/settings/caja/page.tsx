@@ -5,6 +5,7 @@ import { useAuthStore } from '@/lib/auth/auth-store';
 import { getTokenRole } from '@/lib/auth/token-role';
 import { canManageCashSessions } from '@/lib/cash-sessions/cash-sessions-api';
 import { PageHeader } from '@/components/shared/page-header';
+import { SETTINGS_BACK } from '@/components/settings/settings-sections';
 import { CashSettingsForm } from '@/components/cash-sessions/cash-settings-form';
 
 const copy = {
@@ -35,7 +36,7 @@ export default function CashSettingsPage() {
 
   return (
     <>
-      <PageHeader title={copy.title} description={copy.description} />
+      <PageHeader back={SETTINGS_BACK} title={copy.title} description={copy.description} />
       <CashSettingsForm token={accessToken} allowed={canManageCashSessions(getTokenRole(accessToken))} />
     </>
   );

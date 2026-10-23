@@ -5,6 +5,7 @@ import { useAuthStore } from '@/lib/auth/auth-store';
 import { getTokenRole } from '@/lib/auth/token-role';
 import { canManageDomains } from '@/lib/domains/domains-api';
 import { PageHeader } from '@/components/shared/page-header';
+import { SETTINGS_BACK } from '@/components/settings/settings-sections';
 import { DomainsManager } from '@/components/domains/domains-manager';
 
 const copy = {
@@ -36,7 +37,7 @@ export default function DomainsSettingsPage() {
 
   return (
     <>
-      <PageHeader title={copy.title} description={copy.description} />
+      <PageHeader back={SETTINGS_BACK} title={copy.title} description={copy.description} />
       <DomainsManager token={accessToken} allowed={canManageDomains(getTokenRole(accessToken))} />
     </>
   );
