@@ -2,7 +2,7 @@ import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ApiError } from '@/lib/api/client';
 import { listImports, undoImport } from '@/lib/patient-imports/patient-imports-api';
-import { batchFixture } from '@/lib/test/patient-imports';
+import { balancesFixture, batchFixture } from '@/lib/test/patient-imports';
 import { notifyError } from '@/components/errors/notify';
 import { toast } from 'sonner';
 import { ImportHistory } from './import-history';
@@ -162,4 +162,30 @@ it('el aviso del refresco se cierra solo cuando el refresco vuelve a ir bien', a
   } finally {
     jest.useRealTimers();
   }
+});
+
+it('DX-262: con saldos migrados, el deshacer avisa de que también se retiran y lo cuenta', async () => {
+  const withBalances = {
+    ...completed,
+    balances: balancesFixture({
+      progress: { processed: 3, created: 3, skipped: 0 },
+      imported: [{ currency: 'COP', count: 3, amount: 201000.5 }],
+    }),
+  };
+  mockedList.mockResolvedValue(page([withBalances]));
+  mockedUndo.mockResolvedValue({
+    ...withBalances,
+    status: 'UNDONE',
+    canUndo: false,
+    undoneCreated: 1,
+    undoneFilled: 0,
+    balances: balancesFixture({ imported: [], undoneCount: 3 }),
+  });
+  const user = userEvent.setup();
+  render(<ImportHistory token="tok" reloadKey={0} />);
+  await user.click(await screen.findByRole('button', { name: /deshacer el lote pacientes\.csv/i }));
+  const dialog = screen.getByRole('dialog');
+  expect(dialog).toHaveTextContent(/también sus 3 saldos migrados/);
+  await user.click(within(dialog).getByRole('button', { name: 'Deshacer lote' }));
+  expect(await screen.findByText(/3 saldos migrados retirados/)).toBeInTheDocument();
 });

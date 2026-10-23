@@ -24,7 +24,12 @@ import { STATUS_VARIANT } from './import-progress';
 
 const HISTORY_POLL_MS = 3000;
 
-export const historyCopy = {
+export /** Saldos migrados vivos del lote (DX-262). */
+function importedBalances(b: ImportBatch): number {
+  return (b.balances?.imported ?? []).reduce((n, t) => n + t.count, 0);
+}
+
+const historyCopy = {
   title: 'Historial de importaciones',
   listLabel: 'Importaciones de la clínica',
   loadError: 'No se pudo cargar el historial de importaciones.',
@@ -37,7 +42,9 @@ export const historyCopy = {
   counts: (b: ImportBatch) =>
     `${b.progress.createdCount.toLocaleString('es-CO')} creados · ${b.progress.updatedCount.toLocaleString('es-CO')} actualizados · ${(b.totals.duplicateRows + b.totals.errorRows).toLocaleString('es-CO')} duplicados o con error`,
   undone: (b: ImportBatch) =>
-    `Deshecho: ${(b.undoneCreated ?? 0).toLocaleString('es-CO')} pacientes retirados, ${(b.undoneFilled ?? 0).toLocaleString('es-CO')} fichas revertidas`,
+    `Deshecho: ${(b.undoneCreated ?? 0).toLocaleString('es-CO')} pacientes retirados, ${(b.undoneFilled ?? 0).toLocaleString('es-CO')} fichas revertidas${
+      b.balances?.undoneCount ? `, ${b.balances.undoneCount.toLocaleString('es-CO')} saldos migrados retirados` : ''
+    }`,
   report: 'Informe',
   reportFor: (name: string) => `Descargar el informe de errores de ${name}`,
   reportError: 'No se pudo descargar el informe.',
@@ -45,7 +52,11 @@ export const historyCopy = {
   undoFor: (name: string) => `Deshacer el lote ${name}`,
   undoTitle: 'Deshacer este lote',
   undoDescription: (b: ImportBatch) =>
-    `Se retirarán los ${b.progress.createdCount.toLocaleString('es-CO')} pacientes que creó este lote y se vaciarán los campos que rellenó (si nadie los cambió después). No se puede si alguno ya tiene citas, historia clínica, planes o pagos.`,
+    `Se retirarán los ${b.progress.createdCount.toLocaleString('es-CO')} pacientes que creó este lote y se vaciarán los campos que rellenó (si nadie los cambió después)${
+      importedBalances(b) > 0
+        ? `; se retirarán también sus ${importedBalances(b).toLocaleString('es-CO')} saldos migrados`
+        : ''
+    }. No se puede si alguno ya tiene citas, historia clínica, planes o pagos, o si un saldo migrado tiene abonos imputados.`,
   undoConfirm: 'Deshacer lote',
   undoError: 'No se pudo deshacer el lote.',
   undoDone: 'Lote deshecho.',
