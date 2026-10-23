@@ -28,6 +28,22 @@ function guardApiBody(req: NextRequest): NextResponse {
 }
 
 /**
+ * DX-099: el cuestionario de salud del paciente (`/anamnesis/<token>`) lleva el
+ * token en la URL y datos de salud en la página: ni se manda el Referer a
+ * terceros (el logo de la clínica en otro dominio), ni se guarda en cachés, ni
+ * se indexa. Van en la respuesta, además de los metadatos de la página.
+ */
+export const HEALTH_FORM_HEADERS: Record<string, string> = {
+  'Referrer-Policy': 'no-referrer',
+  'Cache-Control': 'no-store',
+  'X-Robots-Tag': 'noindex, nofollow',
+};
+
+function isHealthFormPath(pathname: string): boolean {
+  return pathname === '/anamnesis' || pathname.startsWith('/anamnesis/');
+}
+
+/**
  * Proxy de Next 16 (antes `middleware.ts`). En cada página:
  *
  * 1. `x-tenant`: el tenant derivado del host, para los Server Components
@@ -56,6 +72,9 @@ export function proxy(req: NextRequest) {
 
   const res = NextResponse.next({ request: { headers: requestHeaders } });
   res.headers.set('content-security-policy', csp);
+  if (isHealthFormPath(req.nextUrl.pathname)) {
+    for (const [key, value] of Object.entries(HEALTH_FORM_HEADERS)) res.headers.set(key, value);
+  }
   return res;
 }
 
