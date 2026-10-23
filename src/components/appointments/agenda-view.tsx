@@ -50,6 +50,7 @@ import { AppointmentMedicalAlerts } from '@/components/clinical/appointment-medi
 import { ConfirmationLinkPanel } from '@/components/appointments/confirmation-link-panel';
 import { AppointmentRemindersPanel } from '@/components/reminders/appointment-reminders-panel';
 import { AppointmentPostOpPanel } from '@/components/postop/appointment-postop-panel';
+import { AnamnesisLinkPanel } from '@/components/anamnesis/anamnesis-link-panel';
 import { canDeliverPostOp } from '@/lib/postop/postop-api';
 import { NewEvolutionModal } from '@/components/clinical-notes/new-evolution-modal';
 import { canRegisterEvolution } from '@/lib/clinical-notes/evolution-access';
@@ -1475,6 +1476,19 @@ export function AgendaView({ token }: AgendaViewProps) {
                   appointment={liveDetailAppointment}
                   onLinkCreated={() => void refreshAppointmentsInPlace()}
                 />
+                {/* DX-099: «Enviar anamnesis» antes de la cita (caduca a su
+                    inicio). Solo citas aún por atender. */}
+                {liveDetailAppointment.status === 'SCHEDULED' ||
+                liveDetailAppointment.status === 'CONFIRMED' ? (
+                  <div className="border-t border-hairline pt-4">
+                    <AnamnesisLinkPanel
+                      key={`anamnesis-${liveDetailAppointment.id}`}
+                      token={token}
+                      patientId={liveDetailAppointment.patientId}
+                      appointmentId={liveDetailAppointment.id}
+                    />
+                  </div>
+                ) : null}
                 {/* DX-222: indicaciones postoperatorias de la cita (propuesta y entrega).
                     La `key` lleva prefijo: es hermano del panel de confirmación,
                     que ya usa el id de la cita, y dos hermanos con la misma key
