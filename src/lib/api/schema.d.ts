@@ -3887,11 +3887,27 @@ export interface components {
             balanceRows?: number;
             balanceErrors?: number;
             balancesCreated?: number;
+            /** @description «Añadir aunque ya tenga saldo migrado» marcado (DX-262, QA D1) */
+            balanceAddToExisting?: boolean;
+            /** @description Saldos no creados porque el paciente ya tenía uno vivo en esa moneda (DX-262, QA D1) */
+            balancesExisting?: number;
             balancesUndone?: number;
             /** @description DX-262: total por moneda de los saldos migrados del lote (agregado, sin convertir) */
             balanceTotals?: components["schemas"]["AuditCurrencyTotalDto"][];
             /** @description DX-262: lo que retiró de verdad el deshacer, por moneda */
             balanceUndoneTotals?: components["schemas"]["AuditCurrencyTotalDto"][];
+        };
+        AuditAttributionSideDto: {
+            /** Format: uuid */
+            performedById: string | null;
+            /** Format: uuid */
+            locationId: string | null;
+            /** Format: date-time */
+            completedAt: string | null;
+        };
+        AuditAttributionChangeDto: {
+            before: components["schemas"]["AuditAttributionSideDto"];
+            after: components["schemas"]["AuditAttributionSideDto"];
         };
         AuditMetadataDto: {
             /** @description UPDATE: nombres de los campos enviados (nunca sus valores). */
@@ -3916,6 +3932,8 @@ export interface components {
             scheduleChange?: components["schemas"]["AuditScheduleChangeDto"];
             /** @description DX-107: lote de importación de pacientes — hash del archivo, modo de duplicados y totales (solo números). */
             importBatch?: components["schemas"]["AuditImportBatchDto"];
+            /** @description DX-050: quién realizó un ítem del plan, en qué sede y cuándo, antes y después (`reason` PLAN_ITEM_ATTRIBUTION_CORRECTED o PLAN_ITEM_DONE_REVERTED). Solo ids e instantes. */
+            attribution?: components["schemas"]["AuditAttributionChangeDto"];
         };
         AuditEventDto: {
             /** Format: uuid */
@@ -7360,6 +7378,25 @@ export interface components {
             discountLocationId: string | null;
             /** @enum {string} */
             status: "PROPOSED" | "ACCEPTED" | "DONE";
+            /**
+             * Format: uuid
+             * @description DX-050: usuario que realizó el procedimiento. Null fuera de DONE y en los DONE anteriores a DX-050 («Sin atribuir»)
+             */
+            performedById: string | null;
+            /** @description DX-050: su nombre (también si ya no es miembro activo de la clínica) */
+            performedByName: string | null;
+            /**
+             * Format: uuid
+             * @description DX-050: sede donde se realizó (la del request al marcarlo)
+             */
+            performedLocationId: string | null;
+            /** @description DX-050: su nombre */
+            performedLocationName: string | null;
+            /**
+             * Format: date-time
+             * @description DX-050: cuándo se realizó (hora del servidor al marcarlo)
+             */
+            completedAt: string | null;
             notes: string | null;
             /** Format: date-time */
             createdAt: string;
@@ -7514,8 +7551,21 @@ export interface components {
             price?: number;
             /** @description Descuento (máx. 2 decimales); nunca mayor que el precio (400). DX-204: por encima del tope del rol de quien lo cambia, 403; en un plan aceptado (con o sin firma): 409 */
             discount?: number;
-            /** @enum {string} */
+            /**
+             * @description DX-050: pasar a DONE guarda quién lo realizó (`performedById`), la sede del request (`X-Location-Id`) y `completedAt` (hora del servidor). Salir de DONE limpia los tres; solo ADMIN o quien lo realizó (403 si no), y queda auditado
+             * @enum {string}
+             */
             status?: "PROPOSED" | "ACCEPTED" | "DONE";
+            /**
+             * Format: uuid
+             * @description DX-050: usuario que realizó el procedimiento (miembro VIVO de esta clínica que atiende: DENTIST o ADMIN, y que atiende en la sede). Al pasar a DONE: por defecto quien marca si atiende; si no (ASSISTANT), obligatorio (400). Otra clínica o desactivado: 404. En un ítem ya DONE solo un ADMIN lo cambia (403), auditado
+             */
+            performedById?: string;
+            /**
+             * Format: date-time
+             * @description DX-050: SOLO para que un ADMIN corrija la fecha de un ítem ya DONE (403 a otro rol, 400 si es futura). Al pasar a DONE la pone el servidor (400 si llega)
+             */
+            completedAt?: string;
             surfaces?: ("MESIAL" | "DISTAL" | "OCCLUSAL" | "VESTIBULAR" | "LINGUAL")[];
             notes?: string;
         };
@@ -16474,7 +16524,10 @@ export interface operations {
     TreatmentPlansController_updateItem: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description DX-050: sede donde se realizó al pasar a DONE; sin ella, la de escritura de la sesión (la principal o la primera permitida) */
+                "X-Location-Id"?: string;
+            };
             path: {
                 itemId: string;
             };
@@ -16494,14 +16547,28 @@ export interface operations {
                     "application/json": components["schemas"]["TreatmentPlanItemDto"];
                 };
             };
-            /** @description DX-204: el descuento EFECTIVO (SEC-041: rebaja del precio frente al de catálogo + descuento) supera el tope del rol de quien lo da («Tu rol permite hasta un X % de descuento por ítem.»; con rebaja de precio, precedido de «Precio por debajo del de catálogo: cuenta como descuento.»). Subir el precio es libre */
+            /** @description DX-050: pasar a DONE sin `performedById` quien no atiende (ASSISTANT); el profesional no atiende (ASSISTANT/RECEPTION) o no atiende en la sede; `completedAt` al pasar a DONE o futuro; `performedById`/`completedAt` en un ítem que no queda DONE. Mensaje en español */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description DX-204: el descuento EFECTIVO (SEC-041: rebaja del precio frente al de catálogo + descuento) supera el tope del rol de quien lo da («Tu rol permite hasta un X % de descuento por ítem.»; con rebaja de precio, precedido de «Precio por debajo del de catálogo: cuenta como descuento.»). Subir el precio es libre. DX-050: cambiar quién o cuándo de un ítem DONE (solo ADMIN); sacarlo de DONE (solo ADMIN o quien lo realizó) */
             403: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description Plan aceptado con firma: sus ítems quedan congelados (DX-012); o el plan está cancelado, rechazado o completado (DX-109); o el descuento (también una rebaja del precio frente al de catálogo) cambia en un plan ya aceptado (DX-204, SEC-041). El estado del plan se comprueba con su fila bloqueada, dentro de la transacción (BE-036); firmado: solo admite avanzar el estado (no volver a PROPOSED); completado: solo admite marcar como DONE un ítem ACCEPTED sin otro cambio */
+            /** @description Ítem inexistente o de otra clínica; DX-050: `performedById` que no es miembro activo de esta clínica (otra clínica o desactivado) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Plan aceptado con firma: sus ítems quedan congelados (DX-012); o el plan está cancelado, rechazado o completado (DX-109); o el descuento (también una rebaja del precio frente al de catálogo) cambia en un plan ya aceptado (DX-204, SEC-041). El estado del plan se comprueba con su fila bloqueada, dentro de la transacción (BE-036); firmado: solo admite avanzar el estado (no volver a PROPOSED); completado: solo admite marcar como DONE un ítem ACCEPTED sin otro cambio; cerrado: DX-050 admite además corregir quién o cuándo de un ítem DONE, sin otro cambio */
             409: {
                 headers: {
                     [name: string]: unknown;
