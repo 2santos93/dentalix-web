@@ -12,6 +12,7 @@ import {
   cashSessionDetail,
   scheduleChangeDetail,
   patientFlowDetail,
+  planItemAttributionDetail,
 } from './audit-labels';
 
 describe('etiquetas de auditoría', () => {
@@ -154,5 +155,55 @@ describe('importBatchDetail (DX-107)', () => {
     ).toBe('Lote deshecho · 3 retirados · 1 revertidos · SHA-256 abcdef012345…');
     expect(importBatchDetail({ reason: 'IMPORT_ERRORS' })).toBe('Informe de errores');
     expect(importBatchDetail({ reason: 'CASH_SETTINGS' })).toBeNull();
+  });
+});
+
+describe('planItemAttributionDetail (DX-050)', () => {
+  const before = {
+    performedById: '11111111-1111-4111-8111-111111111111',
+    locationId: '33333333-3333-4333-8333-333333333333',
+    completedAt: '2026-10-20T15:00:00.000Z',
+  };
+
+  it('la corrección dice qué cambió: el profesional y, si cambió, la fecha', () => {
+    expect(
+      planItemAttributionDetail({
+        reason: 'PLAN_ITEM_ATTRIBUTION_CORRECTED',
+        attribution: { before, after: { ...before, performedById: '22222222-2222-4222-8222-222222222222' } },
+      }),
+    ).toBe('Corrección de quién lo realizó · Otro profesional');
+    expect(
+      planItemAttributionDetail({
+        reason: 'PLAN_ITEM_ATTRIBUTION_CORRECTED',
+        attribution: { before, after: { ...before, completedAt: '2026-10-19T15:00:00.000Z' } },
+      }),
+    ).toBe('Corrección de quién lo realizó · Fecha 20/10/2026 → 19/10/2026');
+  });
+
+  it('la corrección de un realizado «Sin atribuir» lo dice', () => {
+    expect(
+      planItemAttributionDetail({
+        reason: 'PLAN_ITEM_ATTRIBUTION_CORRECTED',
+        attribution: {
+          before: { performedById: null, locationId: null, completedAt: null },
+          after: { performedById: before.performedById, locationId: null, completedAt: null },
+        },
+      }),
+    ).toBe('Corrección de quién lo realizó · Antes sin atribuir');
+  });
+
+  it('quitar «Realizado» dice cuándo se había realizado', () => {
+    expect(
+      planItemAttributionDetail({
+        reason: 'PLAN_ITEM_DONE_REVERTED',
+        attribution: { before, after: { performedById: null, locationId: null, completedAt: null } },
+      }),
+    ).toBe('Se quitó «Realizado» · realizado el 20/10/2026');
+    expect(planItemAttributionDetail({ reason: 'PLAN_ITEM_DONE_REVERTED' })).toBe('Se quitó «Realizado»');
+  });
+
+  it('null fuera de la atribución', () => {
+    expect(planItemAttributionDetail({ reason: 'PATIENT_FLOW' })).toBeNull();
+    expect(planItemAttributionDetail({ changedFields: ['performedById'] })).toBeNull();
   });
 });
