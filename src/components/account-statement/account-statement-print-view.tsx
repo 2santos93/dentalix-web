@@ -1,27 +1,28 @@
-'use client';
-import { useEffect, useRef, useState } from 'react';
-import Link from 'next/link';
-import { ChevronLeft, Lock, Printer, UserX } from 'lucide-react';
-import { ApiError } from '@/lib/api/client';
+"use client";
+import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import { ChevronLeft, Lock, Printer, UserX } from "lucide-react";
+import { ApiError } from "@/lib/api/client";
 import {
   getAccountStatement,
   type AccountStatement,
-} from '@/lib/account-statement/account-statement-api';
-import { AccountStatementDocument } from './account-statement-document';
-import { SectionError } from '@/components/errors/section-error';
-import { EmptyState } from '@/components/shared/empty-state';
-import { Button } from '@/components/ui/button';
+} from "@/lib/account-statement/account-statement-api";
+import { AccountStatementDocument } from "./account-statement-document";
+import { SectionError } from "@/components/errors/section-error";
+import { EmptyState } from "@/components/shared/empty-state";
+import { Button } from "@/components/ui/button";
 
 const copy = {
-  toolbar: 'Acciones del documento',
-  print: 'Imprimir o guardar como PDF',
-  back: 'Volver a la ficha',
-  loading: 'Preparando el estado de cuenta…',
-  loadError: 'No pudimos cargar el estado de cuenta.',
-  notFoundTitle: 'No encontramos este paciente.',
-  notFoundHint: 'Puede que se haya retirado o que el enlace no sea de esta clínica.',
-  forbiddenTitle: 'Tu rol no tiene acceso al estado de cuenta.',
-  forbiddenHint: 'Es un dato financiero: lo ven administración y recepción.',
+  toolbar: "Acciones del documento",
+  print: "Imprimir o guardar como PDF",
+  back: "Volver a la ficha",
+  loading: "Preparando el estado de cuenta…",
+  loadError: "No pudimos cargar el estado de cuenta.",
+  notFoundTitle: "No encontramos este paciente.",
+  notFoundHint:
+    "Puede que se haya retirado o que el enlace no sea de esta clínica.",
+  forbiddenTitle: "Tu rol no tiene acceso al estado de cuenta.",
+  forbiddenHint: "Es un dato financiero: lo ven administración y recepción.",
   documentTitle: (name: string) => `Estado de cuenta · ${name}`,
 };
 
@@ -92,7 +93,11 @@ export function AccountStatementPrintView({
   return (
     <div className="flex min-h-full flex-1 flex-col bg-surface-2 print:bg-white">
       {data ? (
-        <title>{copy.documentTitle(`${data.patient.firstName} ${data.patient.lastName}`)}</title>
+        <title>
+          {copy.documentTitle(
+            `${data.patient.firstName} ${data.patient.lastName}`,
+          )}
+        </title>
       ) : null}
       <div
         role="toolbar"

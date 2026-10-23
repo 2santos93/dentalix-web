@@ -1,11 +1,11 @@
-'use client';
-import * as React from 'react';
-import { useId, useState } from 'react';
-import { FormModal } from '@/components/shared/form-modal';
-import { Label } from '@/components/ui/label';
-import { InlineError } from '@/components/errors/inline-error';
-import { fieldClass } from '@/lib/ui/field-class';
-import { cn } from '@/lib/utils';
+"use client";
+import * as React from "react";
+import { useId, useState } from "react";
+import { FormModal } from "@/components/shared/form-modal";
+import { Label } from "@/components/ui/label";
+import { InlineError } from "@/components/errors/inline-error";
+import { fieldClass } from "@/lib/ui/field-class";
+import { cn } from "@/lib/utils";
 
 // Mismos límites que `VoidPaymentDto.reason` en la API (tras recortar).
 export const VOID_REASON_MIN = 3;
@@ -14,16 +14,16 @@ export const VOID_REASON_MAX = 300;
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
 const copy = {
-  title: '¿Anular este abono?',
+  title: "¿Anular este abono?",
   description:
-    'El abono sale de la lista y deja de contar en el saldo, que se recalcula. Queda registrado quién lo anuló, cuándo y por qué, y se ve en el estado de cuenta. Si con él se cumplía un compromiso de pago, el compromiso vuelve a abierto (o a incumplido, si ya pasó su fecha).',
+    "El abono sale de la lista y deja de contar en el saldo, que se recalcula. Queda registrado quién lo anuló, cuándo y por qué, y se ve en el estado de cuenta. Si con él se cumplía un compromiso de pago, el compromiso vuelve a abierto (o a incumplido, si ya pasó su fecha).",
   restrictedHint:
-    'Desde recepción puedes anular solo los que registraste tú hoy; para los demás, pide a un administrador.',
-  reasonLabel: 'Motivo de la anulación',
+    "Desde recepción puedes anular solo los que registraste tú hoy; para los demás, pide a un administrador.",
+  reasonLabel: "Motivo de la anulación",
   reasonHint: `Entre ${VOID_REASON_MIN} y ${VOID_REASON_MAX} caracteres.`,
   reasonTooShort: `Escribe el motivo (al menos ${VOID_REASON_MIN} caracteres).`,
   counter: (n: number) => `${n}/${VOID_REASON_MAX}`,
-  submit: 'Anular abono',
+  submit: "Anular abono",
 };
 
 interface VoidPaymentModalProps {
@@ -57,7 +57,7 @@ export function VoidPaymentModal({
   const fieldId = useId();
   const hintId = `${fieldId}-hint`;
   const errorId = `${fieldId}-error`;
-  const [reason, setReason] = useState('');
+  const [reason, setReason] = useState("");
   const [validationError, setValidationError] = useState<string | null>(null);
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -76,7 +76,11 @@ export function VoidPaymentModal({
       open={open}
       onOpenChange={onOpenChange}
       title={copy.title}
-      description={restrictedToOwnToday ? `${copy.description} ${copy.restrictedHint}` : copy.description}
+      description={
+        restrictedToOwnToday
+          ? `${copy.description} ${copy.restrictedHint}`
+          : copy.description
+      }
       onSubmit={handleSubmit}
       submitLabel={copy.submit}
       submitting={submitting}
@@ -103,7 +107,7 @@ export function VoidPaymentModal({
           }}
           aria-invalid={validationError ? true : undefined}
           aria-describedby={validationError ? errorId : hintId}
-          className={cn(fieldClass, validationError && 'border-danger')}
+          className={cn(fieldClass, validationError && "border-danger")}
         />
         <div className="flex items-start justify-between gap-3">
           {validationError ? (
@@ -115,7 +119,10 @@ export function VoidPaymentModal({
               {copy.reasonHint}
             </p>
           )}
-          <span className="shrink-0 text-xs text-muted tabular-nums" aria-hidden="true">
+          <span
+            className="shrink-0 text-xs text-muted tabular-nums"
+            aria-hidden="true"
+          >
             {copy.counter(reason.length)}
           </span>
         </div>

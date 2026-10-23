@@ -1,38 +1,49 @@
-'use client';
-import * as React from 'react';
-import { useEffect, useState } from 'react';
-import { CalendarClock, FileText, HandCoins, Lock, Printer, Wallet } from 'lucide-react';
-import { ApiError } from '@/lib/api/client';
+"use client";
+import * as React from "react";
+import { useEffect, useState } from "react";
+import {
+  CalendarClock,
+  FileText,
+  HandCoins,
+  Lock,
+  Printer,
+  Wallet,
+} from "lucide-react";
+import { ApiError } from "@/lib/api/client";
 import {
   accountStatementPrintHref,
   getAccountStatement,
   type AccountStatement,
   type AccountStatementMovement,
   type AccountStatementSummary,
-} from '@/lib/account-statement/account-statement-api';
+} from "@/lib/account-statement/account-statement-api";
 import {
   installmentLabel,
   isEmptyStatement,
   methodLabel,
+  movementDestination,
   openingAsOfLabel,
   planNamer,
   statementCopy,
   voidedDetail,
-} from '@/lib/account-statement/presentation';
+} from "@/lib/account-statement/presentation";
 import {
   INSTALLMENT_STATUS_BADGE_VARIANT,
   INSTALLMENT_STATUS_LABELS,
-} from '@/lib/payment-plans/installment-status';
-import { PLAN_STATUS_BADGE_VARIANT, PLAN_STATUS_LABELS } from '@/lib/treatment-plans/plan-status';
-import { planQuotePrintHref } from '@/lib/treatment-plans/plan-quote-api';
-import { PAYMENT_METHOD_BADGE_VARIANT } from '@/lib/payments/payment-method';
-import { formatCurrency } from '@/lib/format/currency';
-import { formatCivilDate } from '@/lib/format/date';
-import { AsyncSection, TableSkeleton } from '@/components/shared/async-section';
-import { EmptyState } from '@/components/shared/empty-state';
-import { Badge } from '@/components/ui/badge';
-import { Button } from '@/components/ui/button';
-import { Card } from '@/components/ui/card';
+} from "@/lib/payment-plans/installment-status";
+import {
+  PLAN_STATUS_BADGE_VARIANT,
+  PLAN_STATUS_LABELS,
+} from "@/lib/treatment-plans/plan-status";
+import { planQuotePrintHref } from "@/lib/treatment-plans/plan-quote-api";
+import { PAYMENT_METHOD_BADGE_VARIANT } from "@/lib/payments/payment-method";
+import { formatCurrency } from "@/lib/format/currency";
+import { formatCivilDate } from "@/lib/format/date";
+import { AsyncSection, TableSkeleton } from "@/components/shared/async-section";
+import { EmptyState } from "@/components/shared/empty-state";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Card } from "@/components/ui/card";
 import {
   Table,
   TableBody,
@@ -40,73 +51,74 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '@/components/ui/table';
-import { VoidPaymentModal } from '@/components/payments/void-payment-modal';
-import { PaymentReceiptDialog } from '@/components/payments/payment-receipt-dialog';
+} from "@/components/ui/table";
+import { VoidPaymentModal } from "@/components/payments/void-payment-modal";
+import { PaymentReceiptDialog } from "@/components/payments/payment-receipt-dialog";
 import {
   useVoidPayment,
   voidPaymentSubject,
   type VoidPaymentTarget,
-} from '@/components/payments/use-void-payment';
-import { RecordPaymentModal } from '@/components/payments/record-payment-modal';
-import { StatementPaymentPlanModal } from './statement-payment-plan-modal';
-import { canRecordPayments } from '@/lib/payments/billable-plans-api';
-import { getTokenRole } from '@/lib/auth/token-role';
-import { cn } from '@/lib/utils';
+} from "@/components/payments/use-void-payment";
+import { RecordPaymentModal } from "@/components/payments/record-payment-modal";
+import { StatementPaymentPlanModal } from "./statement-payment-plan-modal";
+import { canRecordPayments } from "@/lib/payments/billable-plans-api";
+import { getTokenRole } from "@/lib/auth/token-role";
+import { cn } from "@/lib/utils";
 
 // Copy como constantes (i18n-ready), igual que el resto de vistas.
 const copy = {
-  title: 'Estado de cuenta',
+  title: "Estado de cuenta",
   description:
-    'Lo presupuestado, lo abonado y lo que falta, por moneda. De toda la historia del paciente, en todas las sedes.',
-  print: 'Imprimir',
+    "Lo presupuestado, lo abonado y lo que falta, por moneda. De toda la historia del paciente, en todas las sedes.",
+  print: "Imprimir",
   // DX-203: un menor o un paciente sin email.
   addressee: (name: string) => `Sale a nombre de su responsable: ${name}.`,
-  recordPayment: 'Registrar abono',
-  paymentPlan: 'Plan de cuotas',
-  printHint: '(se abre en otra pestaña)',
+  recordPayment: "Registrar abono",
+  paymentPlan: "Plan de cuotas",
+  printHint: "(se abre en otra pestaña)",
   summaryLabel: (currency: string) => `Resumen en ${currency}`,
-  budgeted: 'Presupuestado',
-  paid: 'Abonado',
-  balance: 'Saldo',
-  overdue: 'Vencido',
-  nextInstallment: 'Próxima cuota',
+  budgeted: "Presupuestado",
+  paid: "Abonado",
+  balance: "Saldo",
+  overdue: "Vencido",
+  nextInstallment: "Próxima cuota",
   nextInstallmentValue: (date: string, amount: string) => `${date} · ${amount}`,
-  plansHeading: 'Planes',
-  plansTable: 'Planes del paciente',
-  movementsHeading: 'Movimientos',
-  movementsTable: 'Movimientos (abonos)',
-  movementsEmpty: 'Todavía no hay abonos registrados.',
-  installmentsHeading: 'Cuotas',
-  installmentsTable: 'Calendario de cuotas',
-  colPlan: 'Plan',
-  colStatus: 'Estado',
-  colBudgeted: 'Presupuestado',
-  colPaid: 'Abonado',
-  colBalance: 'Saldo',
+  plansHeading: "Planes",
+  plansTable: "Planes del paciente",
+  movementsHeading: "Movimientos",
+  movementsTable: "Movimientos (abonos)",
+  movementsEmpty: "Todavía no hay abonos registrados.",
+  installmentsHeading: "Cuotas",
+  installmentsTable: "Calendario de cuotas",
+  colPlan: "Plan",
+  colStatus: "Estado",
+  colBudgeted: "Presupuestado",
+  colPaid: "Abonado",
+  colBalance: "Saldo",
   // Presupuesto imprimible del plan (DX-012): recepción lo imprime desde aquí,
   // sin entrar al plan de tratamiento (clínico).
-  colQuote: 'Presupuesto',
-  quoteLink: 'Presupuesto',
+  colQuote: "Presupuesto",
+  quoteLink: "Presupuesto",
   quoteLinkSuffix: (plan: string) => ` · ${plan} (se abre en otra pestaña)`,
-  colDate: 'Fecha',
-  colMethod: 'Método',
-  colLocation: 'Sede',
-  colAmount: 'Monto',
-  colActions: 'Acciones',
-  voidAction: 'Anular',
-  voidActionLabel: (amount: string, date: string) => `Anular abono de ${amount} del ${date}`,
-  receiptAction: 'Recibo',
+  colDate: "Fecha",
+  colMethod: "Método",
+  colLocation: "Sede",
+  colAmount: "Monto",
+  colActions: "Acciones",
+  voidAction: "Anular",
+  voidActionLabel: (amount: string, date: string) =>
+    `Anular abono de ${amount} del ${date}`,
+  receiptAction: "Recibo",
   receiptActionLabel: (amount: string, date: string) =>
     `Recibo del abono de ${amount} del ${date}`,
-  colDue: 'Vencimiento',
-  colInstallment: 'Cuota',
-  colOutstanding: 'Pendiente',
+  colDue: "Vencimiento",
+  colInstallment: "Cuota",
+  colOutstanding: "Pendiente",
   // Sin "Intenta de nuevo.": SectionError trae su propio botón.
-  loadError: 'No pudimos cargar el estado de cuenta.',
-  forbiddenTitle: 'Tu rol no tiene acceso al estado de cuenta.',
+  loadError: "No pudimos cargar el estado de cuenta.",
+  forbiddenTitle: "Tu rol no tiene acceso al estado de cuenta.",
   forbiddenHint:
-    'Es un dato financiero: lo ven administración y recepción. Pídele acceso a quien administra la clínica.',
+    "Es un dato financiero: lo ven administración y recepción. Pídele acceso a quien administra la clínica.",
 };
 
 interface AccountStatementViewProps {
@@ -132,7 +144,11 @@ interface AccountStatementViewProps {
  * «Guardar como PDF». Imprimir esta misma pantalla arrastraría el raíl, las
  * pestañas y los controles.
  */
-export function AccountStatementView({ token, patientId, onChanged }: AccountStatementViewProps) {
+export function AccountStatementView({
+  token,
+  patientId,
+  onChanged,
+}: AccountStatementViewProps) {
   const [data, setData] = useState<AccountStatement | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -149,13 +165,15 @@ export function AccountStatementView({ token, patientId, onChanged }: AccountSta
   // Cobrar (DX-067): recepción registra abonos y planes de cuotas aquí, sin
   // entrar al plan de tratamiento (clínico). Tras cada uno se recarga todo.
   const canCharge = canRecordPayments(getTokenRole(token));
-  const [chargeModal, setChargeModal] = useState<'payment' | 'payment-plan' | null>(null);
+  const [chargeModal, setChargeModal] = useState<
+    "payment" | "payment-plan" | null
+  >(null);
   const [chargeNotice, setChargeNotice] = useState<string | null>(null);
   // Recibo de caja (DX-136) de cualquier movimiento, también de los anulados
   // (sale marcado «ANULADO»).
   const [receiptPaymentId, setReceiptPaymentId] = useState<string | null>(null);
 
-  function openCharge(kind: 'payment' | 'payment-plan') {
+  function openCharge(kind: "payment" | "payment-plan") {
     setChargeNotice(null);
     setChargeModal(kind);
   }
@@ -204,9 +222,14 @@ export function AccountStatementView({ token, patientId, onChanged }: AccountSta
           <h2 id={headingId} className="t-title text-ink">
             {copy.title}
           </h2>
-          <p className="mt-1 max-w-[68ch] text-sm text-muted">{copy.description}</p>
-          {data?.addressee?.kind === 'RESPONSIBLE' ? (
-            <p className="mt-1 text-sm text-ink" data-testid="statement-addressee">
+          <p className="mt-1 max-w-[68ch] text-sm text-muted">
+            {copy.description}
+          </p>
+          {data?.addressee?.kind === "RESPONSIBLE" ? (
+            <p
+              className="mt-1 text-sm text-ink"
+              data-testid="statement-addressee"
+            >
               {copy.addressee(data.addressee.name)}
             </p>
           ) : null}
@@ -215,7 +238,11 @@ export function AccountStatementView({ token, patientId, onChanged }: AccountSta
           <div className="flex flex-col gap-2 sm:shrink-0 sm:flex-row sm:flex-wrap sm:justify-end">
             {showCharge ? (
               <>
-                <Button type="button" className="w-full sm:w-auto" onClick={() => openCharge('payment')}>
+                <Button
+                  type="button"
+                  className="w-full sm:w-auto"
+                  onClick={() => openCharge("payment")}
+                >
                   <HandCoins aria-hidden />
                   {copy.recordPayment}
                 </Button>
@@ -223,7 +250,7 @@ export function AccountStatementView({ token, patientId, onChanged }: AccountSta
                   type="button"
                   variant="secondary"
                   className="w-full sm:w-auto"
-                  onClick={() => openCharge('payment-plan')}
+                  onClick={() => openCharge("payment-plan")}
                 >
                   <CalendarClock aria-hidden />
                   {copy.paymentPlan}
@@ -232,7 +259,11 @@ export function AccountStatementView({ token, patientId, onChanged }: AccountSta
             ) : null}
             {showPrint ? (
               <Button asChild variant="secondary" className="w-full sm:w-auto">
-                <a href={accountStatementPrintHref(patientId)} target="_blank" rel="noopener">
+                <a
+                  href={accountStatementPrintHref(patientId)}
+                  target="_blank"
+                  rel="noopener"
+                >
                   <Printer aria-hidden />
                   {copy.print}
                   <span className="sr-only"> {copy.printHint}</span>
@@ -273,25 +304,34 @@ export function AccountStatementView({ token, patientId, onChanged }: AccountSta
 
       {/* Avisos de la última anulación y del último cobro: fuera de
           AsyncSection para que la recarga no los borre. */}
-      <p role="status" className={voiding.notice ? 'text-sm text-success' : 'sr-only'}>
+      <p
+        role="status"
+        className={voiding.notice ? "text-sm text-success" : "sr-only"}
+      >
         {voiding.notice}
       </p>
-      <p role="status" className={chargeNotice ? 'text-sm text-success' : 'sr-only'}>
+      <p
+        role="status"
+        className={chargeNotice ? "text-sm text-success" : "sr-only"}
+      >
         {chargeNotice}
       </p>
 
       {showCharge ? (
         <>
           <RecordPaymentModal
-            open={chargeModal === 'payment'}
-            onOpenChange={(open) => setChargeModal(open ? 'payment' : null)}
+            open={chargeModal === "payment"}
+            onOpenChange={(open) => setChargeModal(open ? "payment" : null)}
             token={token}
             patientId={patientId}
+            openingBalances={data?.openingBalances ?? []}
             onRecorded={charged}
           />
           <StatementPaymentPlanModal
-            open={chargeModal === 'payment-plan'}
-            onOpenChange={(open) => setChargeModal(open ? 'payment-plan' : null)}
+            open={chargeModal === "payment-plan"}
+            onOpenChange={(open) =>
+              setChargeModal(open ? "payment-plan" : null)
+            }
             token={token}
             patientId={patientId}
             onCreated={charged}
@@ -309,7 +349,7 @@ export function AccountStatementView({ token, patientId, onChanged }: AccountSta
 
       {/* `key` por abono: cada anulación empieza con el motivo en blanco. */}
       <VoidPaymentModal
-        key={voiding.target?.id ?? 'none'}
+        key={voiding.target?.id ?? "none"}
         open={voiding.target !== null}
         onOpenChange={(open) => {
           if (!open) voiding.close();
@@ -318,8 +358,10 @@ export function AccountStatementView({ token, patientId, onChanged }: AccountSta
         submitting={voiding.submitting}
         error={voiding.error}
         // Pinta el aviso de la ventana de recepción; la regla la aplica la API.
-        restrictedToOwnToday={getTokenRole(token) !== 'ADMIN'}
-        subject={voiding.target ? voidPaymentSubject(voiding.target) : undefined}
+        restrictedToOwnToday={getTokenRole(token) !== "ADMIN"}
+        subject={
+          voiding.target ? voidPaymentSubject(voiding.target) : undefined
+        }
       />
     </section>
   );
@@ -357,26 +399,55 @@ function StatementBody({
                   <TableHead scope="col" className="text-right">
                     {copy.colAmount}
                   </TableHead>
+                  <TableHead scope="col" className="text-right">
+                    {statementCopy.colOpeningPaid}
+                  </TableHead>
+                  <TableHead scope="col" className="text-right">
+                    {statementCopy.colOpeningPending}
+                  </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {statement.openingBalances.map((o) => (
                   <TableRow key={o.id}>
-                    <TableCell className="font-medium break-words" data-label={statementCopy.colConcept}>
+                    <TableCell
+                      className="font-medium break-words"
+                      data-label={statementCopy.colConcept}
+                    >
                       {o.concept}
                     </TableCell>
-                    <TableCell className="tabular-nums" data-label={statementCopy.colAsOf}>
+                    <TableCell
+                      className="tabular-nums"
+                      data-label={statementCopy.colAsOf}
+                    >
                       {openingAsOfLabel(o)}
                     </TableCell>
-                    <TableCell className="text-right tabular-nums" data-label={copy.colAmount}>
+                    <TableCell
+                      className="text-right tabular-nums"
+                      data-label={copy.colAmount}
+                    >
                       {formatCurrency(o.amount, o.currency)}
+                    </TableCell>
+                    <TableCell
+                      className="text-right tabular-nums"
+                      data-label={statementCopy.colOpeningPaid}
+                    >
+                      {formatCurrency(o.paid, o.currency)}
+                    </TableCell>
+                    <TableCell
+                      className="text-right font-medium tabular-nums"
+                      data-label={statementCopy.colOpeningPending}
+                    >
+                      {formatCurrency(o.pending, o.currency)}
                     </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
           </Card>
-          <p className="max-w-prose text-xs text-muted">{statementCopy.openingNote}</p>
+          <p className="max-w-prose text-xs text-muted">
+            {statementCopy.openingNote}
+          </p>
         </SubSection>
       ) : null}
 
@@ -405,7 +476,10 @@ function StatementBody({
               <TableBody>
                 {statement.plans.map((plan) => (
                   <TableRow key={plan.id}>
-                    <TableCell className="font-medium" data-label={copy.colPlan}>
+                    <TableCell
+                      className="font-medium"
+                      data-label={copy.colPlan}
+                    >
                       {planName(plan.id)}
                     </TableCell>
                     <TableCell data-label={copy.colStatus}>
@@ -414,17 +488,28 @@ function StatementBody({
                           {PLAN_STATUS_LABELS[plan.status]}
                         </Badge>
                         {!plan.countsTowardsBalance ? (
-                          <span className="text-xs text-muted">{statementCopy.notCounted}</span>
+                          <span className="text-xs text-muted">
+                            {statementCopy.notCounted}
+                          </span>
                         ) : null}
                       </span>
                     </TableCell>
-                    <TableCell className="text-right tabular-nums" data-label={copy.colBudgeted}>
+                    <TableCell
+                      className="text-right tabular-nums"
+                      data-label={copy.colBudgeted}
+                    >
                       {formatCurrency(plan.budgeted, plan.currency)}
                     </TableCell>
-                    <TableCell className="text-right tabular-nums" data-label={copy.colPaid}>
+                    <TableCell
+                      className="text-right tabular-nums"
+                      data-label={copy.colPaid}
+                    >
                       {formatCurrency(plan.paid, plan.currency)}
                       {plan.paidOtherCurrencies.map((o) => (
-                        <span key={o.currency} className="block text-xs text-muted">
+                        <span
+                          key={o.currency}
+                          className="block text-xs text-muted"
+                        >
                           + {formatCurrency(o.amount, o.currency)}
                         </span>
                       ))}
@@ -435,7 +520,10 @@ function StatementBody({
                     >
                       {formatCurrency(plan.balance, plan.currency)}
                     </TableCell>
-                    <TableCell className="text-right" data-label={copy.colQuote}>
+                    <TableCell
+                      className="text-right"
+                      data-label={copy.colQuote}
+                    >
                       <a
                         href={planQuotePrintHref(statement.patient.id, plan.id)}
                         target="_blank"
@@ -444,7 +532,9 @@ function StatementBody({
                       >
                         <FileText aria-hidden className="size-4" />
                         {copy.quoteLink}
-                        <span className="sr-only">{copy.quoteLinkSuffix(planName(plan.id))}</span>
+                        <span className="sr-only">
+                          {copy.quoteLinkSuffix(planName(plan.id))}
+                        </span>
                       </a>
                     </TableCell>
                   </TableRow>
@@ -475,17 +565,28 @@ function StatementBody({
               </TableHeader>
               <TableBody>
                 {statement.installments.map((inst) => (
-                  <TableRow key={`${inst.paymentPlanId}-${inst.kind}-${inst.sequence ?? 0}`}>
-                    <TableCell className="tabular-nums" data-label={copy.colDue}>
+                  <TableRow
+                    key={`${inst.paymentPlanId}-${inst.kind}-${inst.sequence ?? 0}`}
+                  >
+                    <TableCell
+                      className="tabular-nums"
+                      data-label={copy.colDue}
+                    >
                       {formatCivilDate(inst.dueDate)}
                     </TableCell>
-                    <TableCell className="tabular-nums" data-label={copy.colInstallment}>
+                    <TableCell
+                      className="tabular-nums"
+                      data-label={copy.colInstallment}
+                    >
                       {installmentLabel(inst)}
                     </TableCell>
                     <TableCell className="text-muted" data-label={copy.colPlan}>
                       {planName(inst.treatmentPlanId)}
                     </TableCell>
-                    <TableCell className="text-right tabular-nums" data-label={copy.colAmount}>
+                    <TableCell
+                      className="text-right tabular-nums"
+                      data-label={copy.colAmount}
+                    >
                       {formatCurrency(inst.amount, inst.currency)}
                     </TableCell>
                     <TableCell
@@ -530,12 +631,19 @@ function StatementBody({
               </TableHeader>
               <TableBody>
                 {statement.movements.map((m) => (
-                  <TableRow key={m.id} className={cn(m.voided && 'text-muted')}>
-                    <TableCell className="tabular-nums" data-label={copy.colDate}>
+                  <TableRow key={m.id} className={cn(m.voided && "text-muted")}>
+                    <TableCell
+                      className="tabular-nums"
+                      data-label={copy.colDate}
+                    >
                       {formatCivilDate(m.paidOn)}
                     </TableCell>
                     <TableCell className="text-muted" data-label={copy.colPlan}>
-                      {planName(m.treatmentPlanId)}
+                      {movementDestination(
+                        m,
+                        planName,
+                        statement.openingBalances,
+                      )}
                       <VoidedDetail movement={m} />
                     </TableCell>
                     <TableCell data-label={copy.colMethod}>
@@ -547,21 +655,31 @@ function StatementBody({
                         <span className="text-muted">{methodLabel(null)}</span>
                       )}
                     </TableCell>
-                    <TableCell data-label={copy.colLocation}>{m.location.name}</TableCell>
-                    <TableCell className="text-right tabular-nums" data-label={copy.colAmount}>
+                    <TableCell data-label={copy.colLocation}>
+                      {m.location.name}
+                    </TableCell>
+                    <TableCell
+                      className="text-right tabular-nums"
+                      data-label={copy.colAmount}
+                    >
                       <span className="inline-flex flex-wrap items-center justify-end gap-2">
-                        {m.voided ? <Badge variant="muted">{statementCopy.voided}</Badge> : null}
+                        {m.voided ? (
+                          <Badge variant="muted">{statementCopy.voided}</Badge>
+                        ) : null}
                         <span
                           className={cn(
-                            'font-medium',
-                            m.voided ? 'text-muted line-through' : 'text-ink',
+                            "font-medium",
+                            m.voided ? "text-muted line-through" : "text-ink",
                           )}
                         >
                           {formatCurrency(m.amount, m.currency)}
                         </span>
                       </span>
                     </TableCell>
-                    <TableCell className="text-right" data-label={copy.colActions}>
+                    <TableCell
+                      className="text-right"
+                      data-label={copy.colActions}
+                    >
                       <span className="inline-flex flex-wrap items-center justify-end gap-3">
                         <Button
                           type="button"
@@ -608,7 +726,9 @@ function StatementBody({
         )}
       </SubSection>
 
-      <p className="max-w-[68ch] text-xs text-muted">{statementCopy.footnote}</p>
+      <p className="max-w-[68ch] text-xs text-muted">
+        {statementCopy.footnote}
+      </p>
     </div>
   );
 }
@@ -619,10 +739,18 @@ function StatementBody({
  */
 function VoidedDetail({ movement }: { movement: AccountStatementMovement }) {
   const detail = voidedDetail(movement);
-  return detail ? <p className="mt-0.5 max-w-[40ch] text-xs text-muted">{detail}</p> : null;
+  return detail ? (
+    <p className="mt-0.5 max-w-[40ch] text-xs text-muted">{detail}</p>
+  ) : null;
 }
 
-function SubSection({ title, children }: { title: string; children: React.ReactNode }) {
+function SubSection({
+  title,
+  children,
+}: {
+  title: string;
+  children: React.ReactNode;
+}) {
   const id = React.useId();
   return (
     <section aria-labelledby={id} className="flex flex-col gap-3">
@@ -650,12 +778,10 @@ function CurrencySummary({ row }: { row: AccountStatementSummary }) {
       className="overflow-hidden rounded-xl border border-border bg-surface"
     >
       <div className="flex items-baseline justify-between gap-4 border-b border-hairline px-4 py-3 sm:px-6">
-        <p className="t-label text-muted">
-          {row.currency}
-        </p>
+        <p className="t-label text-muted">{row.currency}</p>
         {row.nextInstallment ? (
           <p className="text-right text-xs text-muted">
-            <span>{copy.nextInstallment}</span>{' '}
+            <span>{copy.nextInstallment}</span>{" "}
             <span className="font-medium text-ink tabular-nums">
               {copy.nextInstallmentValue(
                 formatCivilDate(row.nextInstallment.dueDate),
@@ -675,13 +801,15 @@ function CurrencySummary({ row }: { row: AccountStatementSummary }) {
         <Figure label={copy.balance} testId="balance" emphasis>
           {formatCurrency(Math.abs(row.balance), row.currency)}
           {inFavor ? (
-            <span className="ml-1 text-xs font-normal text-success">{statementCopy.inFavor}</span>
+            <span className="ml-1 text-xs font-normal text-success">
+              {statementCopy.inFavor}
+            </span>
           ) : null}
         </Figure>
         <Figure
           label={copy.overdue}
           testId="overdue"
-          className={hasOverdue ? 'bg-danger/5 text-danger' : undefined}
+          className={hasOverdue ? "bg-danger/5 text-danger" : undefined}
         >
           {hasOverdue ? (
             <>
@@ -691,14 +819,21 @@ function CurrencySummary({ row }: { row: AccountStatementSummary }) {
               </span>
             </>
           ) : (
-            <span className="text-sm font-normal text-muted">{statementCopy.noOverdue}</span>
+            <span className="text-sm font-normal text-muted">
+              {statementCopy.noOverdue}
+            </span>
           )}
         </Figure>
       </dl>
       {row.openingBalance > 0 ? (
-        <p data-testid="opening" className="border-t border-hairline px-4 py-2 text-xs text-muted sm:px-6">
-          {statementCopy.openingIncluded}{' '}
-          <span className="font-medium tabular-nums text-ink">{formatCurrency(row.openingBalance, row.currency)}</span>
+        <p
+          data-testid="opening"
+          className="border-t border-hairline px-4 py-2 text-xs text-muted sm:px-6"
+        >
+          {statementCopy.openingIncluded}{" "}
+          <span className="font-medium tabular-nums text-ink">
+            {formatCurrency(row.openingBalance, row.currency)}
+          </span>
         </p>
       ) : null}
     </section>
@@ -721,10 +856,10 @@ function Figure({
   return (
     <div
       className={cn(
-        'border-hairline px-4 py-3 sm:px-6',
+        "border-hairline px-4 py-3 sm:px-6",
         // Filetes de la rejilla: 2 columnas hasta `lg` (con el raíl, una
         // tablet no tiene ancho para cuatro importes), 4 desde ahí.
-        'max-lg:odd:border-r max-lg:[&:nth-child(n+3)]:border-t lg:[&:not(:first-child)]:border-l',
+        "max-lg:odd:border-r max-lg:[&:nth-child(n+3)]:border-t lg:[&:not(:first-child)]:border-l",
         className,
       )}
       data-testid={testId}
@@ -732,8 +867,8 @@ function Figure({
       <dt className="t-label text-muted">{label}</dt>
       <dd
         className={cn(
-          'mt-1 break-words tabular-nums',
-          emphasis ? 'text-base font-semibold sm:text-lg' : 'font-medium',
+          "mt-1 break-words tabular-nums",
+          emphasis ? "text-base font-semibold sm:text-lg" : "font-medium",
         )}
       >
         {children}

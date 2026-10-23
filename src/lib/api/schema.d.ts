@@ -2175,6 +2175,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/opening-balances/{id}/payments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Abono contra el saldo migrado de un paciente (DX-262)
+         * @description Como un abono a un plan (recibo de caja numerado por sede, caja por turno, Idempotency-Key, anulación con DELETE /payments/:id), pero contra el «Saldo migrado» importado. En la moneda del saldo y sin pasar de lo pendiente.
+         */
+        post: operations["PaymentsController_createForOpeningBalance"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/treatment-plans/{id}/balance": {
         parameters: {
             query?: never;
@@ -3613,6 +3633,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/patient-imports/{id}/balances/undo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Retirar solo los saldos migrados del lote (DX-262)
+         * @description Retira en blando los «Saldo migrado» vivos del lote aunque sus pacientes ya tengan citas u otra actividad (el lote sigue importado). Se niega (409) si alguno tiene abonos vivos: hay que anularlos antes.
+         */
+        post: operations["PatientImportsController_undoBalances"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/patient-imports/{id}/confirm": {
         parameters: {
             query?: never;
@@ -3834,6 +3874,8 @@ export interface components {
             balancesUndone?: number;
             /** @description DX-262: total por moneda de los saldos migrados del lote (agregado, sin convertir) */
             balanceTotals?: components["schemas"]["AuditCurrencyTotalDto"][];
+            /** @description DX-262: lo que retiró de verdad el deshacer, por moneda */
+            balanceUndoneTotals?: components["schemas"]["AuditCurrencyTotalDto"][];
         };
         AuditMetadataDto: {
             /** @description UPDATE: nombres de los campos enviados (nunca sus valores). */
@@ -7788,6 +7830,12 @@ export interface components {
              */
             createdAt: string;
         };
+        CashOpeningBalanceRefDto: {
+            /** Format: uuid */
+            id: string;
+            /** @example Saldo migrado */
+            concept: string;
+        };
         CashPaymentDto: {
             /** Format: uuid */
             id: string;
@@ -7827,7 +7875,10 @@ export interface components {
             notes: string | null;
             location: components["schemas"]["CashLocationRefDto"];
             patient: components["schemas"]["CashPatientRefDto"];
-            treatmentPlan: components["schemas"]["CashTreatmentPlanRefDto"];
+            /** @description null si el abono es contra un saldo migrado (DX-262) */
+            treatmentPlan: components["schemas"]["CashTreatmentPlanRefDto"] | null;
+            /** @description Saldo migrado del abono (DX-262); null si es a un plan */
+            openingBalance: components["schemas"]["CashOpeningBalanceRefDto"] | null;
         };
         CashScopeDto: {
             /** @description Sede activa del request (X-Location-Id), o null = todas las sedes. */
@@ -7904,8 +7955,16 @@ export interface components {
             id: string;
             /** Format: uuid */
             tenantId: string;
-            /** Format: uuid */
-            treatmentPlanId: string;
+            /**
+             * Format: uuid
+             * @description Plan del abono; null si es contra un saldo migrado (DX-262)
+             */
+            treatmentPlanId: string | null;
+            /**
+             * Format: uuid
+             * @description Saldo migrado del abono (DX-262); null si es a un plan
+             */
+            openingBalanceId: string | null;
             /** Format: uuid */
             patientId: string;
             /** @example 100 */
@@ -8022,6 +8081,17 @@ export interface components {
             /** Format: date-time */
             createdAt: string;
         };
+        ReceiptOpeningBalanceDto: {
+            /** Format: uuid */
+            id: string;
+            /** @example Saldo migrado */
+            concept: string;
+            /**
+             * @description Fecha de corte
+             * @example 2026-03-15
+             */
+            asOfDate: string;
+        };
         ReceiptPlanBalanceDto: {
             /** @example COP */
             currency: string;
@@ -8047,7 +8117,10 @@ export interface components {
             fiscalDataPending: boolean;
             patient: components["schemas"]["ReceiptPatientDto"];
             payment: components["schemas"]["ReceiptPaymentDto"];
-            plan: components["schemas"]["ReceiptPlanDto"];
+            /** @description null si el abono es contra un saldo migrado (DX-262) */
+            plan: components["schemas"]["ReceiptPlanDto"] | null;
+            /** @description DX-262: saldo migrado del abono (concepto y fecha de corte); ausente o null si es a un plan */
+            openingBalance?: components["schemas"]["ReceiptOpeningBalanceDto"] | null;
             /** @description Saldo del plan tras el abono (moneda del plan); null si no se pudo calcular. */
             planBalance: components["schemas"]["ReceiptPlanBalanceDto"] | null;
             /** @description Quién cobró. */
@@ -8379,8 +8452,16 @@ export interface components {
             /** @enum {string|null} */
             method: "CASH" | "CARD" | "TRANSFER" | "OTHER" | null;
             location: components["schemas"]["AccountStatementLocationRefDto"];
-            /** Format: uuid */
-            treatmentPlanId: string;
+            /**
+             * Format: uuid
+             * @description null si el abono es contra un saldo migrado (DX-262)
+             */
+            treatmentPlanId: string | null;
+            /**
+             * Format: uuid
+             * @description Saldo migrado del abono (DX-262), o null
+             */
+            openingBalanceId: string | null;
             /**
              * Format: uuid
              * @description Quién registró el abono; `null` en abonos antiguos sin autor.
@@ -8439,6 +8520,16 @@ export interface components {
              * @description Lote de importación
              */
             importBatchId: string;
+            /**
+             * @description Abonos vivos contra este saldo, en su moneda
+             * @example 50000
+             */
+            paid: number;
+            /**
+             * @description amount − paid: lo pendiente
+             * @example 100000
+             */
+            pending: number;
         };
         AccountStatementDto: {
             /** Format: date-time */
@@ -10573,6 +10664,8 @@ export interface components {
             created: number;
             /** @description No creados: su paciente no existía al importar */
             skipped: number;
+            /** @description No creados: su documento era de varios pacientes vivos (ambiguo) */
+            ambiguous: number;
         };
         PatientImportBalancesDto: {
             fileName: string;
@@ -10599,6 +10692,10 @@ export interface components {
             progress: components["schemas"]["BalanceProgressDto"];
             /** @description Saldos que retiró el deshacer */
             undoneCount: number | null;
+            /** @description Lo que retiró de verdad el deshacer, por moneda */
+            undoneTotals: components["schemas"]["BalanceCurrencyTotalDto"][];
+            /** @description Lote terminado con saldos vivos: se pueden retirar solos (POST :id/balances/undo) */
+            canUndo: boolean;
         };
         /**
          * @description MERGED (DX-262): fila de la hoja de saldos sumada a otra del mismo paciente y moneda (aviso, no error)
@@ -16947,6 +17044,52 @@ export interface operations {
             };
         };
     };
+    PaymentsController_createForOpeningBalance: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecordPaymentDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentDto"];
+                };
+            };
+            /** @description Otra moneda que la del saldo, o el abono supera lo pendiente (mensaje en español) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Saldo migrado no encontrado en esta clínica (o ya retirado). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La Idempotency-Key ya se usó con otro destino u otro cuerpo: genera una clave nueva. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     PaymentsController_balance: {
         parameters: {
             query?: never;
@@ -20766,6 +20909,48 @@ export interface operations {
             };
             /** @description Este lote no tiene hoja de saldos o su informe ya no está disponible. */
             410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientImportsController_undoBalances: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PatientImportBatchDetailDto"];
+                };
+            };
+            /** @description Solo un administrador de la clínica puede importar pacientes. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Lote de importación no encontrado en esta clínica. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El lote no está terminado o algún saldo tiene abonos */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

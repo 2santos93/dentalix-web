@@ -220,6 +220,7 @@ const payment1: Payment = {
   id: 'pay-1',
   tenantId: 't1',
   treatmentPlanId: 'plan-1',
+  openingBalanceId: null,
   patientId: 'pat-1',
   amount: 50000,
   currency: 'USD',

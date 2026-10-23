@@ -1,41 +1,44 @@
-'use client';
-import * as React from 'react';
-import { useEffect, useMemo, useState } from 'react';
-import Link from 'next/link';
-import { Building2, Lock } from 'lucide-react';
-import { ApiError } from '@/lib/api/client';
-import { apiErrorMessage } from '@/lib/api/error-message';
+"use client";
+import * as React from "react";
+import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
+import { Building2, Lock } from "lucide-react";
+import { ApiError } from "@/lib/api/client";
+import { apiErrorMessage } from "@/lib/api/error-message";
 import {
   listCashPayments,
   type CashPayment,
   type CashPaymentsResponse,
   type CashPaymentsQuery,
   type PaymentMethod,
-} from '@/lib/payments/payments-api';
+} from "@/lib/payments/payments-api";
 import {
   isValidRange,
   presetRange,
   MAX_RANGE_DAYS,
   type CashPreset,
   type CashRange,
-} from '@/lib/payments/cash-period';
+} from "@/lib/payments/cash-period";
 import {
   PAYMENT_METHOD_BADGE_VARIANT,
   PAYMENT_METHOD_LABELS,
   PAYMENT_METHOD_OPTIONS,
-} from '@/lib/payments/payment-method';
-import { formatCurrency } from '@/lib/format/currency';
-import { formatCivilDate, formatDate, zoneCityLabel } from '@/lib/format/date';
-import { useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
-import { Card } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import { Input } from '@/components/ui/input';
-import { AsyncSection, TableSkeleton } from '@/components/shared/async-section';
-import { EmptyState } from '@/components/shared/empty-state';
-import { Pagination } from '@/components/shared/pagination';
-import { PageHeader } from '@/components/shared/page-header';
-import { ResultCount, toolbarFieldClass } from '@/components/shared/list-toolbar';
-import { InlineError } from '@/components/errors/inline-error';
+} from "@/lib/payments/payment-method";
+import { formatCurrency } from "@/lib/format/currency";
+import { formatCivilDate, formatDate, zoneCityLabel } from "@/lib/format/date";
+import { useSedeTimeZone } from "@/lib/locations/use-sede-time-zone";
+import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
+import { AsyncSection, TableSkeleton } from "@/components/shared/async-section";
+import { EmptyState } from "@/components/shared/empty-state";
+import { Pagination } from "@/components/shared/pagination";
+import { PageHeader } from "@/components/shared/page-header";
+import {
+  ResultCount,
+  toolbarFieldClass,
+} from "@/components/shared/list-toolbar";
+import { InlineError } from "@/components/errors/inline-error";
 import {
   Table,
   TableBody,
@@ -43,78 +46,91 @@ import {
   TableHead,
   TableHeader,
   TableRow,
-} from '@/components/ui/table';
-import { Button } from '@/components/ui/button';
-import { VoidPaymentModal } from '@/components/payments/void-payment-modal';
-import { PaymentReceiptDialog } from '@/components/payments/payment-receipt-dialog';
-import { useVoidPayment, voidPaymentSubject } from '@/components/payments/use-void-payment';
-import { getTokenAllowedLocationIds, getTokenRole } from '@/lib/auth/token-role';
-import { cn } from '@/lib/utils';
+} from "@/components/ui/table";
+import { Button } from "@/components/ui/button";
+import { VoidPaymentModal } from "@/components/payments/void-payment-modal";
+import { PaymentReceiptDialog } from "@/components/payments/payment-receipt-dialog";
+import {
+  useVoidPayment,
+  voidPaymentSubject,
+} from "@/components/payments/use-void-payment";
+import {
+  getTokenAllowedLocationIds,
+  getTokenRole,
+} from "@/lib/auth/token-role";
+import { cn } from "@/lib/utils";
 
 // Copy como constantes (i18n-ready), igual que el resto de vistas.
 const copy = {
-  title: 'Caja',
-  description: 'Lo cobrado en la clínica en el período: cada abono, por método y moneda.',
-  scopeAll: 'Todas las sedes',
-  scopeMine: 'Mis sedes',
+  title: "Caja",
+  description:
+    "Lo cobrado en la clínica en el período: cada abono, por método y moneda.",
+  scopeAll: "Todas las sedes",
+  scopeMine: "Mis sedes",
   scopeLocation: (name: string) => `Caja de ${name}`,
-  periodLabel: 'Período',
+  periodLabel: "Período",
   presets: {
-    today: 'Hoy',
-    week: 'Esta semana',
-    month: 'Este mes',
-    custom: 'Personalizado',
-  } satisfies Record<CashPreset | 'custom', string>,
-  fromLabel: 'Desde',
-  toLabel: 'Hasta',
-  invalidRangeOrder: 'La fecha final no puede ser anterior a la inicial.',
+    today: "Hoy",
+    week: "Esta semana",
+    month: "Este mes",
+    custom: "Personalizado",
+  } satisfies Record<CashPreset | "custom", string>,
+  fromLabel: "Desde",
+  toLabel: "Hasta",
+  invalidRangeOrder: "La fecha final no puede ser anterior a la inicial.",
   invalidRangeLength: `El período no puede superar ${MAX_RANGE_DAYS} días. Acórtalo e intenta de nuevo.`,
-  invalidRangeEmpty: 'Elige las dos fechas del período.',
-  methodLabel: 'Método',
-  methodAll: 'Todos los métodos',
-  methodNone: 'Sin método',
-  countNoun: 'abono',
-  countNounPlural: 'abonos',
-  summaryTitle: 'Resumen del período',
-  byCurrency: 'Por moneda',
-  byMethod: 'Por método',
-  paymentsCount: (n: number) => `${n} ${n === 1 ? 'abono' : 'abonos'}`,
-  tableLabel: 'Abonos del período',
-  colDate: 'Fecha',
-  colPatient: 'Paciente',
-  colPlan: 'Plan',
-  colMethod: 'Método',
-  colLocation: 'Sede',
-  colAmount: 'Monto',
-  colActions: 'Acciones',
-  voidAction: 'Anular',
+  invalidRangeEmpty: "Elige las dos fechas del período.",
+  methodLabel: "Método",
+  methodAll: "Todos los métodos",
+  methodNone: "Sin método",
+  countNoun: "abono",
+  countNounPlural: "abonos",
+  summaryTitle: "Resumen del período",
+  byCurrency: "Por moneda",
+  byMethod: "Por método",
+  paymentsCount: (n: number) => `${n} ${n === 1 ? "abono" : "abonos"}`,
+  tableLabel: "Abonos del período",
+  colDate: "Fecha",
+  colPatient: "Paciente",
+  colPlan: "Plan",
+  colMethod: "Método",
+  colLocation: "Sede",
+  colAmount: "Monto",
+  colActions: "Acciones",
+  voidAction: "Anular",
   voidActionLabel: (patient: string) => `Anular abono de ${patient}`,
-  receiptAction: 'Recibo',
+  receiptAction: "Recibo",
   receiptActionLabel: (patient: string) => `Recibo del abono de ${patient}`,
   planLabel: (createdAt: string) => `Plan del ${formatDate(createdAt)}`,
+  // DX-262: abono contra el saldo migrado (sin plan).
+  openingLabel: (concept: string) =>
+    concept ? `Saldo migrado · ${concept}` : "Saldo migrado",
   // Sin "Intenta de nuevo." — alimenta AsyncSection -> SectionError, que trae su propio botón.
-  genericLoadError: 'No pudimos cargar la caja.',
+  genericLoadError: "No pudimos cargar la caja.",
   // 400: lo único que la pantalla manda es período, método y página, así que
   // el problema está ahí; el mensaje del servidor va en inglés y no se enseña.
-  badRequest: 'El período o el método no son válidos: revisa las fechas (como mucho 366 días).',
-  forbiddenTitle: 'Tu rol no tiene acceso a la caja.',
+  badRequest:
+    "El período o el método no son válidos: revisa las fechas (como mucho 366 días).",
+  forbiddenTitle: "Tu rol no tiene acceso a la caja.",
   forbiddenHint:
-    'La caja es para administración y recepción. Pídele acceso a quien administra la clínica.',
+    "La caja es para administración y recepción. Pídele acceso a quien administra la clínica.",
   // DX-067: la ventana de anulación de recepción mira el día de REGISTRO, no
   // la fecha de pago; cuando difieren, la fila lo dice.
-  registeredToday: 'Registrado hoy',
+  registeredToday: "Registrado hoy",
   // DX-097: los días son los del calendario de la sede, no los del navegador.
-  periodNote: (days: string, timeZone: string) => `${days} · días en hora de ${zoneCityLabel(timeZone)}`,
-  periodDays: (from: string, to: string) => (from === to ? from : `del ${from} al ${to}`),
+  periodNote: (days: string, timeZone: string) =>
+    `${days} · días en hora de ${zoneCityLabel(timeZone)}`,
+  periodDays: (from: string, to: string) =>
+    from === to ? from : `del ${from} al ${to}`,
   registeredOn: (date: string) => `Registrado el ${date}`,
-  empty: 'No hay abonos en este período.',
-  emptyHint: 'Prueba con otro rango de fechas o con otro método.',
+  empty: "No hay abonos en este período.",
+  emptyHint: "Prueba con otro rango de fechas o con otro método.",
 };
 
-type PeriodChoice = CashPreset | 'custom';
-type MethodFilter = PaymentMethod | 'ALL';
+type PeriodChoice = CashPreset | "custom";
+type MethodFilter = PaymentMethod | "ALL";
 
-const PERIOD_CHOICES: PeriodChoice[] = ['today', 'week', 'month', 'custom'];
+const PERIOD_CHOICES: PeriodChoice[] = ["today", "week", "month", "custom"];
 
 function methodLabel(method: PaymentMethod | null): string {
   return method ? PAYMENT_METHOD_LABELS[method] : copy.methodNone;
@@ -123,7 +139,9 @@ function methodLabel(method: PaymentMethod | null): string {
 function rangeError(range: CashRange): string | null {
   if (!range.from || !range.to) return copy.invalidRangeEmpty;
   if (isValidRange(range)) return null;
-  return range.from > range.to ? copy.invalidRangeOrder : copy.invalidRangeLength;
+  return range.from > range.to
+    ? copy.invalidRangeOrder
+    : copy.invalidRangeLength;
 }
 
 /** Las pestañas de la Caja (DX-027), bajo la cabecera, y el panel que rotulan. */
@@ -157,19 +175,23 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
   // IANA, de la API), no los del navegador. `null` mientras se resuelve: no se
   // consulta nada hasta saber qué día es en la sede.
   const timeZone = useSedeTimeZone(token);
-  const [period, setPeriod] = useState<PeriodChoice>('today');
+  const [period, setPeriod] = useState<PeriodChoice>("today");
   // El rango que se CONSULTA. Con un atajo sale del día de la sede (y se
   // recalcula si cambia la sede); en personalizado se copia de los campos solo
   // cuando son válidos, así que un rango a medio escribir o invertido nunca
   // sale hacia la API.
   const presetQuery = useMemo(
-    () => (timeZone && period !== 'custom' ? presetRange(period, timeZone) : null),
+    () =>
+      timeZone && period !== "custom" ? presetRange(period, timeZone) : null,
     [timeZone, period],
   );
   const [customQuery, setCustomQuery] = useState<CashRange | null>(null);
-  const range = period === 'custom' ? customQuery : presetQuery;
-  const [customRange, setCustomRange] = useState<CashRange>({ from: '', to: '' });
-  const [method, setMethod] = useState<MethodFilter>('ALL');
+  const range = period === "custom" ? customQuery : presetQuery;
+  const [customRange, setCustomRange] = useState<CashRange>({
+    from: "",
+    to: "",
+  });
+  const [method, setMethod] = useState<MethodFilter>("ALL");
   const [page, setPage] = useState(1);
   const [data, setData] = useState<CashPaymentsResponse | null>(null);
   const [loading, setLoading] = useState(true);
@@ -199,7 +221,7 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
         const params: CashPaymentsQuery = {
           from,
           to,
-          ...(method !== 'ALL' ? { method } : {}),
+          ...(method !== "ALL" ? { method } : {}),
           page,
         };
         const res = await listCashPayments(token, params);
@@ -220,7 +242,10 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
         if (cancelled) return;
         setForbidden(err instanceof ApiError && err.status === 403);
         setLoadError(
-          apiErrorMessage(err, { fallback: copy.genericLoadError, byStatus: { 400: copy.badRequest } }),
+          apiErrorMessage(err, {
+            fallback: copy.genericLoadError,
+            byStatus: { 400: copy.badRequest },
+          }),
         );
       }
       if (!cancelled) setLoading(false);
@@ -235,9 +260,9 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
   // filtro (React agrupa los dos `set`), así que sale una sola petición.
   function choosePeriod(next: PeriodChoice) {
     setPeriod(next);
-    if (next === 'custom') {
+    if (next === "custom") {
       // Arranca con el rango que se estaba viendo: no cambia la consulta.
-      const seed = range ?? { from: '', to: '' };
+      const seed = range ?? { from: "", to: "" };
       setCustomRange(seed);
       setCustomQuery(range);
       return;
@@ -259,7 +284,7 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
     setPage(1);
   }
 
-  const customError = period === 'custom' ? rangeError(customRange) : null;
+  const customError = period === "custom" ? rangeError(customRange) : null;
   const items = data?.items ?? [];
   // Con el rango escrito inválido, lo último cargado es de OTRO rango: no se
   // pinta (ni conteo, ni resumen, ni tabla, ni páginas) para que nadie lo lea
@@ -287,7 +312,13 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
           las demás listas. */}
       <div
         className="flex flex-col gap-3"
-        {...(tabs ? { role: 'tabpanel', id: tabs.panelId, 'aria-labelledby': tabs.tabId } : {})}
+        {...(tabs
+          ? {
+              role: "tabpanel",
+              id: tabs.panelId,
+              "aria-labelledby": tabs.tabId,
+            }
+          : {})}
       >
         <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
           <div
@@ -302,10 +333,10 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
                 aria-pressed={period === choice}
                 onClick={() => choosePeriod(choice)}
                 className={cn(
-                  'flex-1 whitespace-nowrap rounded-md px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
+                  "flex-1 whitespace-nowrap rounded-md px-3 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
                   period === choice
-                    ? 'bg-primary/10 text-primary'
-                    : 'text-muted hover:bg-surface-2 hover:text-ink',
+                    ? "bg-primary/10 text-primary"
+                    : "text-muted hover:bg-surface-2 hover:text-ink",
                 )}
               >
                 {copy.presets[choice]}
@@ -313,7 +344,7 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
             ))}
           </div>
 
-          {period === 'custom' ? (
+          {period === "custom" ? (
             <div className="flex min-w-0 gap-3">
               <label className="flex min-w-0 flex-1 items-center gap-2 text-sm text-muted">
                 <span className="shrink-0">{copy.fromLabel}</span>
@@ -346,7 +377,7 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
             aria-label={copy.methodLabel}
             value={method}
             onChange={(e) => changeMethod(e.target.value as MethodFilter)}
-            className={cn(toolbarFieldClass, 'sm:w-48')}
+            className={cn(toolbarFieldClass, "sm:w-48")}
           >
             <option value="ALL">{copy.methodAll}</option>
             {PAYMENT_METHOD_OPTIONS.map((m) => (
@@ -357,12 +388,21 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
           </select>
         </div>
 
-        {customError ? <InlineError id={rangeErrorId}>{customError}</InlineError> : null}
+        {customError ? (
+          <InlineError id={rangeErrorId}>{customError}</InlineError>
+        ) : null}
 
         {range && timeZone && customError === null ? (
-          <p className="text-sm text-muted tabular-nums" data-testid="cash-period-note" title={timeZone}>
+          <p
+            className="text-sm text-muted tabular-nums"
+            data-testid="cash-period-note"
+            title={timeZone}
+          >
             {copy.periodNote(
-              copy.periodDays(formatCivilDate(range.from), formatCivilDate(range.to)),
+              copy.periodDays(
+                formatCivilDate(range.from),
+                formatCivilDate(range.to),
+              ),
               timeZone,
             )}
           </p>
@@ -370,7 +410,10 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
 
         {/* Aviso de la última anulación: fuera de AsyncSection para que la
             recarga no lo borre. */}
-        <p role="status" className={voiding.notice ? 'text-sm text-success' : 'sr-only'}>
+        <p
+          role="status"
+          className={voiding.notice ? "text-sm text-success" : "sr-only"}
+        >
           {voiding.notice}
         </p>
 
@@ -425,7 +468,10 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
                   <TableBody>
                     {items.map((payment) => (
                       <TableRow key={payment.id}>
-                        <TableCell className="tabular-nums" data-label={copy.colDate}>
+                        <TableCell
+                          className="tabular-nums"
+                          data-label={copy.colDate}
+                        >
                           {formatCivilDate(payment.paidOn)}
                           <RegisteredNote payment={payment} />
                         </TableCell>
@@ -437,32 +483,52 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
                             {payment.patient.fullName}
                           </Link>
                         </TableCell>
-                        <TableCell className="text-muted" data-label={copy.colPlan}>
-                          {copy.planLabel(payment.treatmentPlan.createdAt)}
+                        <TableCell
+                          className="text-muted"
+                          data-label={copy.colPlan}
+                        >
+                          {payment.treatmentPlan
+                            ? copy.planLabel(payment.treatmentPlan.createdAt)
+                            : copy.openingLabel(
+                                payment.openingBalance?.concept ?? "",
+                              )}
                         </TableCell>
                         <TableCell data-label={copy.colMethod}>
                           {payment.method ? (
-                            <Badge variant={PAYMENT_METHOD_BADGE_VARIANT[payment.method]}>
+                            <Badge
+                              variant={
+                                PAYMENT_METHOD_BADGE_VARIANT[payment.method]
+                              }
+                            >
                               {PAYMENT_METHOD_LABELS[payment.method]}
                             </Badge>
                           ) : (
-                            <span className="text-muted">{copy.methodNone}</span>
+                            <span className="text-muted">
+                              {copy.methodNone}
+                            </span>
                           )}
                         </TableCell>
-                        <TableCell data-label={copy.colLocation}>{payment.location.name}</TableCell>
+                        <TableCell data-label={copy.colLocation}>
+                          {payment.location.name}
+                        </TableCell>
                         <TableCell
                           className="text-right font-medium tabular-nums text-ink"
                           data-label={copy.colAmount}
                         >
                           {formatCurrency(payment.amount, payment.currency)}
                         </TableCell>
-                        <TableCell className="text-right" data-label={copy.colActions}>
+                        <TableCell
+                          className="text-right"
+                          data-label={copy.colActions}
+                        >
                           <span className="inline-flex flex-wrap items-center justify-end gap-3">
                             <Button
                               type="button"
                               variant="outline"
                               size="sm"
-                              aria-label={copy.receiptActionLabel(payment.patient.fullName)}
+                              aria-label={copy.receiptActionLabel(
+                                payment.patient.fullName,
+                              )}
                               onClick={() => setReceiptPaymentId(payment.id)}
                             >
                               {copy.receiptAction}
@@ -472,7 +538,9 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
                                 type="button"
                                 variant="outline"
                                 size="sm"
-                                aria-label={copy.voidActionLabel(payment.patient.fullName)}
+                                aria-label={copy.voidActionLabel(
+                                  payment.patient.fullName,
+                                )}
                                 onClick={() =>
                                   voiding.request({
                                     id: payment.id,
@@ -518,7 +586,7 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
 
       {/* `key` por abono: cada anulación empieza con el motivo en blanco. */}
       <VoidPaymentModal
-        key={voiding.target?.id ?? 'none'}
+        key={voiding.target?.id ?? "none"}
         open={voiding.target !== null}
         onOpenChange={(open) => {
           if (!open) voiding.close();
@@ -527,8 +595,10 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
         submitting={voiding.submitting}
         error={voiding.error}
         // Pinta el aviso de la ventana de recepción; la regla la aplica la API.
-        restrictedToOwnToday={getTokenRole(token) !== 'ADMIN'}
-        subject={voiding.target ? voidPaymentSubject(voiding.target) : undefined}
+        restrictedToOwnToday={getTokenRole(token) !== "ADMIN"}
+        subject={
+          voiding.target ? voidPaymentSubject(voiding.target) : undefined
+        }
       />
     </>
   );
@@ -546,7 +616,9 @@ function RegisteredNote({ payment }: { payment: CashPayment }) {
     <span className="block text-xs font-normal text-muted">
       {payment.registeredToday
         ? copy.registeredToday
-        : copy.registeredOn(formatCivilDate(`${payment.registeredOn}T00:00:00.000Z`))}
+        : copy.registeredOn(
+            formatCivilDate(`${payment.registeredOn}T00:00:00.000Z`),
+          )}
     </span>
   );
 }
@@ -569,7 +641,13 @@ function ScopeMarker({
   return (
     <p className="mt-3 inline-flex max-w-[68ch] items-center gap-2 rounded-lg bg-surface-2 px-3 py-1.5 text-sm text-muted">
       <Building2 aria-hidden className="size-4 shrink-0 text-muted/80" />
-      <span>{location ? copy.scopeLocation(location.name) : restricted ? copy.scopeMine : copy.scopeAll}</span>
+      <span>
+        {location
+          ? copy.scopeLocation(location.name)
+          : restricted
+            ? copy.scopeMine
+            : copy.scopeAll}
+      </span>
     </p>
   );
 }
@@ -580,15 +658,24 @@ function ScopeMarker({
  * patrón "número grande / etiqueta pequeña" como estructura. En móvil las dos
  * columnas se apilan.
  */
-function CashSummary({ summary }: { summary: CashPaymentsResponse['summary'] }) {
+function CashSummary({
+  summary,
+}: {
+  summary: CashPaymentsResponse["summary"];
+}) {
   const headingId = React.useId();
   return (
-    <section aria-labelledby={headingId} className="rounded-xl border border-border bg-surface">
+    <section
+      aria-labelledby={headingId}
+      className="rounded-xl border border-border bg-surface"
+    >
       <div className="flex items-baseline justify-between gap-4 border-b border-hairline px-4 py-3 sm:px-6">
         <h2 id={headingId} className="t-title text-ink">
           {copy.summaryTitle}
         </h2>
-        <span className="text-sm text-muted tabular-nums">{copy.paymentsCount(summary.count)}</span>
+        <span className="text-sm text-muted tabular-nums">
+          {copy.paymentsCount(summary.count)}
+        </span>
       </div>
       <div className="grid gap-0 sm:grid-cols-2 sm:divide-x sm:divide-hairline">
         <SummaryList label={copy.byCurrency}>
@@ -601,10 +688,13 @@ function CashSummary({ summary }: { summary: CashPaymentsResponse['summary'] }) 
             />
           ))}
         </SummaryList>
-        <SummaryList label={copy.byMethod} className="max-sm:border-t max-sm:border-hairline">
+        <SummaryList
+          label={copy.byMethod}
+          className="max-sm:border-t max-sm:border-hairline"
+        >
           {summary.byMethod.map((row) => (
             <SummaryRow
-              key={`${row.method ?? 'none'}-${row.currency}`}
+              key={`${row.method ?? "none"}-${row.currency}`}
               label={methodLabel(row.method)}
               meta={`${row.currency} · ${copy.paymentsCount(row.count)}`}
               value={formatCurrency(row.total, row.currency)}
@@ -627,7 +717,7 @@ function SummaryList({
 }) {
   const labelId = React.useId();
   return (
-    <div className={cn('px-4 py-3 sm:px-6', className)}>
+    <div className={cn("px-4 py-3 sm:px-6", className)}>
       <p id={labelId} className="t-label text-muted">
         {label}
       </p>
@@ -638,14 +728,24 @@ function SummaryList({
   );
 }
 
-function SummaryRow({ label, meta, value }: { label: string; meta: string; value: string }) {
+function SummaryRow({
+  label,
+  meta,
+  value,
+}: {
+  label: string;
+  meta: string;
+  value: string;
+}) {
   return (
     <li className="flex items-baseline justify-between gap-4 py-2">
       <span className="min-w-0">
-        <span className="font-medium text-ink">{label}</span>{' '}
+        <span className="font-medium text-ink">{label}</span>{" "}
         <span className="text-xs text-muted tabular-nums">{meta}</span>
       </span>
-      <span className="shrink-0 font-medium tabular-nums text-ink">{value}</span>
+      <span className="shrink-0 font-medium tabular-nums text-ink">
+        {value}
+      </span>
     </li>
   );
 }

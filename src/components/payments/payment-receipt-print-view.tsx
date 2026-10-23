@@ -1,33 +1,33 @@
-'use client';
-import { useEffect, useRef, useState } from 'react';
-import Link from 'next/link';
-import { ChevronLeft, Lock, Printer, ReceiptText } from 'lucide-react';
-import { ApiError } from '@/lib/api/client';
+"use client";
+import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import { ChevronLeft, Lock, Printer, ReceiptText } from "lucide-react";
+import { ApiError } from "@/lib/api/client";
 import {
   printPaymentReceipt,
   receiptPrintHref,
   type PaymentReceipt,
   type ReceiptPrintFormat,
-} from '@/lib/payments/payment-receipts-api';
-import { PaymentReceiptDocument } from './payment-receipt-document';
-import { SectionError } from '@/components/errors/section-error';
-import { EmptyState } from '@/components/shared/empty-state';
-import { Button } from '@/components/ui/button';
-import { cn } from '@/lib/utils';
+} from "@/lib/payments/payment-receipts-api";
+import { PaymentReceiptDocument } from "./payment-receipt-document";
+import { SectionError } from "@/components/errors/section-error";
+import { EmptyState } from "@/components/shared/empty-state";
+import { Button } from "@/components/ui/button";
+import { cn } from "@/lib/utils";
 
 const copy = {
-  toolbar: 'Acciones del recibo',
-  formats: 'Formato de impresión',
-  a4: 'A4',
-  roll: 'Tirilla 80 mm',
-  print: 'Imprimir o guardar como PDF',
-  back: 'Volver a la ficha',
-  loading: 'Preparando el recibo…',
-  loadError: 'No pudimos cargar el recibo.',
-  notFoundTitle: 'No encontramos este abono.',
-  notFoundHint: 'Puede que el enlace no sea de esta clínica.',
-  forbiddenTitle: 'Tu rol no tiene acceso a los recibos de caja.',
-  forbiddenHint: 'Es un dato financiero: lo ven administración y recepción.',
+  toolbar: "Acciones del recibo",
+  formats: "Formato de impresión",
+  a4: "A4",
+  roll: "Tirilla 80 mm",
+  print: "Imprimir o guardar como PDF",
+  back: "Volver a la ficha",
+  loading: "Preparando el recibo…",
+  loadError: "No pudimos cargar el recibo.",
+  notFoundTitle: "No encontramos este abono.",
+  notFoundHint: "Puede que el enlace no sea de esta clínica.",
+  forbiddenTitle: "Tu rol no tiene acceso a los recibos de caja.",
+  forbiddenHint: "Es un dato financiero: lo ven administración y recepción.",
   documentTitle: (reference: string) => `Recibo de caja ${reference}`,
 };
 
@@ -92,7 +92,7 @@ export function PaymentReceiptPrintView({
 
   const backHref = receipt
     ? `/patients/${encodeURIComponent(receipt.snapshot.patient.id)}?tab=treatment-plans`
-    : '/patients';
+    : "/patients";
 
   return (
     <div
@@ -112,22 +112,31 @@ export function PaymentReceiptPrintView({
           </Link>
         </Button>
         <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-          <nav aria-label={copy.formats} className="flex gap-1 rounded-md border border-border p-1">
-            {(['a4', '80mm'] as const).map((f) => (
+          <nav
+            aria-label={copy.formats}
+            className="flex gap-1 rounded-md border border-border p-1"
+          >
+            {(["a4", "80mm"] as const).map((f) => (
               <Link
                 key={f}
                 href={receiptPrintHref(paymentId, f)}
-                aria-current={f === format ? 'page' : undefined}
+                aria-current={f === format ? "page" : undefined}
                 className={cn(
-                  'flex min-h-9 flex-1 items-center justify-center whitespace-nowrap rounded-sm px-3 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
-                  f === format ? 'bg-primary/10 text-primary' : 'text-muted hover:bg-surface-2',
+                  "flex min-h-9 flex-1 items-center justify-center whitespace-nowrap rounded-sm px-3 text-sm font-medium focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
+                  f === format
+                    ? "bg-primary/10 text-primary"
+                    : "text-muted hover:bg-surface-2",
                 )}
               >
-                {f === 'a4' ? copy.a4 : copy.roll}
+                {f === "a4" ? copy.a4 : copy.roll}
               </Link>
             ))}
           </nav>
-          <Button type="button" onClick={() => window.print()} disabled={!receipt}>
+          <Button
+            type="button"
+            onClick={() => window.print()}
+            disabled={!receipt}
+          >
             <Printer aria-hidden />
             {copy.print}
           </Button>
@@ -138,8 +147,8 @@ export function PaymentReceiptPrintView({
         {receipt ? (
           <div
             className={cn(
-              'mx-auto shadow-sm print:shadow-none',
-              format === '80mm' ? 'max-w-[80mm]' : 'max-w-[210mm]',
+              "mx-auto shadow-sm print:shadow-none",
+              format === "80mm" ? "max-w-[80mm]" : "max-w-[210mm]",
             )}
           >
             <PaymentReceiptDocument receipt={receipt} format={format} />

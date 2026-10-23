@@ -106,8 +106,10 @@ export function balancesFixture(
       { currency: 'USD', rows: 1, amount: 40 },
     ],
     imported: [],
-    progress: { processed: 0, created: 0, skipped: 0 },
+    progress: { processed: 0, created: 0, skipped: 0, ambiguous: 0 },
     undoneCount: null,
+    undoneTotals: [],
+    canUndo: false,
     ...overrides,
   };
 }

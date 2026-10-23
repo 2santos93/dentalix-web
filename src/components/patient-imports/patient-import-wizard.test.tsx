@@ -386,7 +386,7 @@ describe('DX-262: hoja de saldos «Saldo migrado»', () => {
         batch={batchFixture({
           status: 'COMPLETED',
           balances: balancesFixture({
-            progress: { processed: 3, created: 3, skipped: 0 },
+            progress: { processed: 3, created: 3, skipped: 0, ambiguous: 0 },
             imported: [
               { currency: 'COP', count: 2, amount: 201000.5 },
               { currency: 'USD', count: 1, amount: 40 },

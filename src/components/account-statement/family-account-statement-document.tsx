@@ -1,43 +1,43 @@
-import * as React from 'react';
+import * as React from "react";
 import type {
   FamilyAccountStatement,
   FamilyCurrencyAmounts,
   FamilyStatementMember,
-} from '@/lib/account-statement/account-statement-api';
-import { statementCopy } from '@/lib/account-statement/presentation';
-import { RELATIONSHIP_LABELS } from '@/lib/patients/responsible-parties-api';
-import { formatCurrency } from '@/lib/format/currency';
-import { formatDateTime } from '@/lib/format/date';
-import { DocSection, DocTable, Td, Th } from './account-statement-document';
+} from "@/lib/account-statement/account-statement-api";
+import { statementCopy } from "@/lib/account-statement/presentation";
+import { RELATIONSHIP_LABELS } from "@/lib/patients/responsible-parties-api";
+import { formatCurrency } from "@/lib/format/currency";
+import { formatDateTime } from "@/lib/format/date";
+import { DocSection, DocTable, Td, Th } from "./account-statement-document";
 
 export const familyStatementCopy = {
-  title: 'Estado de cuenta familiar',
-  issuedAt: 'Fecha de emisión',
-  payer: 'Pagador principal',
-  membersHeading: 'Detalle por paciente',
-  membersTable: 'Saldo de cada paciente',
-  totalsHeading: 'Total familiar',
-  totalsTable: 'Total por moneda',
-  colPatient: 'Paciente',
-  colCurrency: 'Moneda',
-  colBudgeted: 'Presupuestado',
-  colPaid: 'Abonado',
-  colBalance: 'Saldo',
-  colOverdue: 'Vencido',
-  self: 'Titular',
+  title: "Estado de cuenta familiar",
+  issuedAt: "Fecha de emisión",
+  payer: "Pagador principal",
+  membersHeading: "Detalle por paciente",
+  membersTable: "Saldo de cada paciente",
+  totalsHeading: "Total familiar",
+  totalsTable: "Total por moneda",
+  colPatient: "Paciente",
+  colCurrency: "Moneda",
+  colBudgeted: "Presupuestado",
+  colPaid: "Abonado",
+  colBalance: "Saldo",
+  colOverdue: "Vencido",
+  self: "Titular",
   /** El parentesco guardado es el del PAGADOR respecto del dependiente. */
   payerAs: (label: string) => `Pagador: ${label.toLowerCase()}`,
-  noBalance: 'Sin saldos',
-  empty: 'Ningún paciente de este pagador tiene saldos.',
+  noBalance: "Sin saldos",
+  empty: "Ningún paciente de este pagador tiene saldos.",
   footnote:
-    'Solo importes y nombres. Cada subtotal es el estado de cuenta individual del paciente; los abonos se registran en cada uno.',
-  none: '—',
+    "Solo importes y nombres. Cada subtotal es el estado de cuenta individual del paciente; los abonos se registran en cada uno.",
+  none: "—",
 };
 const copy = familyStatementCopy;
 
 function balanceText(row: FamilyCurrencyAmounts): string {
   return `${formatCurrency(Math.abs(row.balance), row.currency)}${
-    row.balance < 0 ? ` ${statementCopy.inFavor}` : ''
+    row.balance < 0 ? ` ${statementCopy.inFavor}` : ""
   }`;
 }
 
@@ -79,7 +79,9 @@ export function FamilyAccountStatementDocument({
       </header>
 
       <dl className="mt-4 text-sm">
-        <dt className="text-xs font-medium uppercase tracking-wide text-[#6b7280]">{copy.payer}</dt>
+        <dt className="text-xs font-medium uppercase tracking-wide text-[#6b7280]">
+          {copy.payer}
+        </dt>
         <dd className="font-medium">{`${payer.firstName} ${payer.lastName}`}</dd>
       </dl>
 
@@ -106,11 +108,18 @@ export function FamilyAccountStatementDocument({
                   <Td right strong>
                     {balanceText(t)}
                   </Td>
-                  <Td right>{t.overdueAmount > 0 ? formatCurrency(t.overdueAmount, t.currency) : copy.none}</Td>
+                  <Td right>
+                    {t.overdueAmount > 0
+                      ? formatCurrency(t.overdueAmount, t.currency)
+                      : copy.none}
+                  </Td>
                 </tr>
               ))}
             </tbody>
           </DocTable>
+          {totals.some((t) => t.openingBalance > 0) ? (
+            <p className="mt-1 text-xs">{statementCopy.balanceIncludesOpening}</p>
+          ) : null}
         </DocSection>
       )}
 
@@ -127,7 +136,10 @@ export function FamilyAccountStatementDocument({
           </thead>
           <tbody>
             {rows.map(({ member, row, first }) => (
-              <tr key={`${member.patient.id}-${row?.currency ?? 'none'}`} data-testid="family-member-row">
+              <tr
+                key={`${member.patient.id}-${row?.currency ?? "none"}`}
+                data-testid="family-member-row"
+              >
                 <Td>
                   {first ? (
                     <>
@@ -135,7 +147,9 @@ export function FamilyAccountStatementDocument({
                       <span className="block text-xs text-[#4b5563]">
                         {member.self || !member.relationship
                           ? copy.self
-                          : copy.payerAs(RELATIONSHIP_LABELS[member.relationship])}
+                          : copy.payerAs(
+                              RELATIONSHIP_LABELS[member.relationship],
+                            )}
                       </span>
                     </>
                   ) : null}
@@ -163,7 +177,9 @@ export function FamilyAccountStatementDocument({
         </DocTable>
       </DocSection>
 
-      <p className="mt-6 border-t border-[#e5e7eb] pt-3 text-xs text-[#4b5563]">{copy.footnote}</p>
+      <p className="mt-6 border-t border-[#e5e7eb] pt-3 text-xs text-[#4b5563]">
+        {copy.footnote}
+      </p>
     </div>
   );
 }

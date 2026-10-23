@@ -168,7 +168,7 @@ it('DX-262: con saldos migrados, el deshacer avisa de que también se retiran y 
   const withBalances = {
     ...completed,
     balances: balancesFixture({
-      progress: { processed: 3, created: 3, skipped: 0 },
+      progress: { processed: 3, created: 3, skipped: 0, ambiguous: 0 },
       imported: [{ currency: 'COP', count: 3, amount: 201000.5 }],
     }),
   };
