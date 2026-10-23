@@ -10418,6 +10418,8 @@ export interface components {
             canConfirm: boolean;
             /** @description Terminado o fallido: se puede intentar deshacer */
             canUndo: boolean;
+            /** @description El informe de errores (errors.csv) sigue disponible: ni caducado ni purgado a los 90 días */
+            reportAvailable: boolean;
             /** @description Los primeros 200; todos en errors.csv */
             issues: components["schemas"]["ImportIssueDto"][];
             issuesTotal: number;
@@ -10459,6 +10461,8 @@ export interface components {
             canConfirm: boolean;
             /** @description Terminado o fallido: se puede intentar deshacer */
             canUndo: boolean;
+            /** @description El informe de errores (errors.csv) sigue disponible: ni caducado ni purgado a los 90 días */
+            reportAvailable: boolean;
         };
         PatientImportListDto: {
             items: components["schemas"]["PatientImportBatchDto"][];
