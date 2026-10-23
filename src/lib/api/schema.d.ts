@@ -3079,7 +3079,10 @@ export interface paths {
             path?: never;
             cookie?: never;
         };
-        /** Anamnesis enviadas al paciente (estado, sin respuestas) */
+        /**
+         * Anamnesis enviadas al paciente (estado, sin respuestas)
+         * @description El motivo de un rechazo (texto libre clínico) solo llega a los roles clínicos; a recepción, `rejectReason` = null.
+         */
         get: operations["PatientAnamnesisRequestsController_list"];
         put?: never;
         /**
