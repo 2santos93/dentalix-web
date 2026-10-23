@@ -96,6 +96,49 @@ it('el error del archivo sale en español junto a la subida', async () => {
   expect(await screen.findByRole('alert')).toHaveTextContent(/Excel antiguo/);
 });
 
+describe('SEC-046: la API está leyendo otro archivo (503)', () => {
+  const busy = () =>
+    new ApiError(503, 'Service Unavailable', {
+      messages: ['Hay otras importaciones leyéndose ahora mismo. Vuelve a intentarlo en unos segundos.'],
+      retryAfterSeconds: 5,
+    });
+  const busyText = 'Hay otra lectura de archivo en curso; vuelve a intentarlo en unos segundos.';
+
+  it('al leer el archivo, el aviso en español junto a la subida', async () => {
+    mockedInspect.mockRejectedValue(busy());
+    const user = userEvent.setup();
+    render(<PatientImportWizard token="tok" onBatchChange={jest.fn()} />);
+    await upload(user);
+    expect(await screen.findByRole('alert')).toHaveTextContent(busyText);
+  });
+
+  it('al validar, el mismo aviso', async () => {
+    mockedInspect.mockResolvedValue(inspectFixture());
+    mockedValidate.mockRejectedValue(busy());
+    const user = userEvent.setup();
+    render(<PatientImportWizard token="tok" onBatchChange={jest.fn()} />);
+    await upload(user);
+    await user.click(await screen.findByRole('button', { name: 'Validar archivo' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(busyText);
+  });
+
+  it('al subir la hoja de saldos, el mismo aviso', async () => {
+    mockedInspect.mockResolvedValue(inspectFixture());
+    mockedValidate.mockResolvedValue(batchFixture());
+    mockedBalances.mockRejectedValue(busy());
+    const user = userEvent.setup();
+    render(<PatientImportWizard token="tok" onBatchChange={jest.fn()} />);
+    await upload(user);
+    await user.click(await screen.findByRole('button', { name: 'Validar archivo' }));
+    await user.click(await screen.findByRole('button', { name: 'Continuar' }));
+    await user.upload(
+      screen.getByLabelText('Hoja de saldos (CSV o .xlsx)'),
+      new File(['doc;importe;moneda\n1;2;COP'], 'saldos.csv', { type: 'text/csv' }),
+    );
+    expect(await screen.findByRole('alert')).toHaveTextContent(busyText);
+  });
+});
+
 it('DX-107 × DX-259: mientras sube el archivo enseña el progreso y, subido, que lo está leyendo', async () => {
   let report: ((fraction: number) => void) | undefined;
   let finish: ((value: ReturnType<typeof inspectFixture>) => void) | undefined;
