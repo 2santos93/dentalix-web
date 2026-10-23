@@ -475,6 +475,23 @@ export interface paths {
         patch: operations["PatientCommunicationController_update"];
         trace?: never;
     };
+    "/api/v1/patients/{id}/communication/opt-out-warnings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Últimos20 avisos de baja por móvil compartido (DX-214) */
+        get: operations["PatientCommunicationController_warnings"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/patients/{patientId}/responsible-parties": {
         parameters: {
             query?: never;
@@ -4770,6 +4787,14 @@ export interface components {
             reminderOptOut: components["schemas"]["ReminderOptOutDto"] | null;
             /** @description A quién se dirigen los avisos (como Dentrix Ascend: un menor, a su tutor o contacto principal). Usan el correo y el móvil de la ficha. */
             recipient: components["schemas"]["CommunicationRecipientDto"];
+        };
+        PatientOptOutMatchWarningDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            createdAt: string;
+            matchCount: number;
+            maxMatches: number;
         };
         UpdatePatientCommunicationDto: {
             contactChannel?: components["schemas"]["ContactChannel"];
@@ -12078,6 +12103,41 @@ export interface operations {
                 content?: never;
             };
             /** @description Solo recepción o un administrador pueden cambiar el canal de comunicación del paciente. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente no encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientCommunicationController_warnings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PatientOptOutMatchWarningDto"][];
+                };
+            };
+            /** @description Solo recepción y ADMIN. */
             403: {
                 headers: {
                     [name: string]: unknown;

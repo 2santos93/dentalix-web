@@ -1,4 +1,5 @@
 'use client';
+import { PatientOptOutWarnings } from './patient-opt-out-warnings';
 import * as React from 'react';
 import { useEffect, useId, useState } from 'react';
 import { MessageCircle } from 'lucide-react';
@@ -306,6 +307,7 @@ export function PatientCommunicationSection({
             )}
           </Row>
         </dl>
+        {canEdit ? <PatientOptOutWarnings token={token} patientId={patientId} /> : null}
         {data.contactChannel === 'WHATSAPP' && !optOut ? (
           <p className="flex items-start gap-2 text-sm text-muted">
             <MessageCircle aria-hidden className="mt-0.5 size-4 shrink-0" />
