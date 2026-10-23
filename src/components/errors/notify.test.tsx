@@ -73,4 +73,8 @@ describe('notifyError', () => {
     await user.click(screen.getByRole('button', { name: 'disparar' }));
     expect(mockedError.mock.calls[0][1].duration).toBeUndefined();
   });
+
+  it('devuelve el id del aviso para poder cerrarlo cuando el fallo se resuelve', () => {
+    expect(notifyError('Fallo de prueba')).toBe('error:Fallo de prueba');
+  });
 });

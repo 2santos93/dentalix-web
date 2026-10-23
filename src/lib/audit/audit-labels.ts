@@ -83,6 +83,8 @@ export const AUDIT_RESOURCE_LABELS: Record<AuditResourceType, string> = {
   // DX-212: código CUPS de un ítem del catálogo y REPS de una sede.
   DENTAL_CATALOG_ITEM: 'Ítem del catálogo',
   LOCATION: 'Sede',
+  // DX-107: lote de importación de pacientes (validar, confirmar, deshacer, informe).
+  PATIENT_IMPORT_BATCH: 'Importación de pacientes',
   // DX-222: indicaciones postoperatorias (plantillas y entregas al paciente).
   POSTOP_TEMPLATE: 'Plantilla de indicaciones',
   POSTOP_DELIVERY: 'Indicaciones postoperatorias',
@@ -167,6 +169,32 @@ const CASH_SESSION_REASONS: Record<string, string> = {
 /** DX-027: qué se hizo con la caja por turno, o null si no es de caja. */
 export function cashSessionDetail(metadata: AuditMetadata): string | null {
   return (metadata.reason && CASH_SESSION_REASONS[metadata.reason]) ?? null;
+}
+
+const IMPORT_REASONS: Record<string, string> = {
+  IMPORT_VALIDATED: 'Validación del archivo',
+  IMPORT_CONFIRMED: 'Importación confirmada',
+  IMPORT_UNDONE: 'Lote deshecho',
+  IMPORT_ERRORS: 'Informe de errores',
+};
+
+/**
+ * DX-107: qué se hizo con un lote de importación y sus totales (solo números
+ * y el inicio del SHA-256 del archivo), o null si no es de importación.
+ */
+export function importBatchDetail(metadata: AuditMetadata): string | null {
+  const what = metadata.reason ? IMPORT_REASONS[metadata.reason] : undefined;
+  if (!what) return null;
+  const batch = metadata.importBatch;
+  if (!batch) return what;
+  const parts = [what];
+  if (metadata.reason === 'IMPORT_UNDONE') {
+    parts.push(`${batch.undoneCreated ?? 0} retirados`, `${batch.undoneFilled ?? 0} revertidos`);
+  } else if (batch.rows !== undefined) {
+    parts.push(`${batch.rows} filas`, `${batch.valid ?? 0} nuevos`, `${batch.duplicates ?? 0} duplicados`, `${batch.errors ?? 0} con error`);
+  }
+  parts.push(`SHA-256 ${batch.fileSha256.slice(0, 12)}…`);
+  return parts.join(' · ');
 }
 
 /**

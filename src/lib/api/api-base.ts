@@ -21,8 +21,11 @@ export const API_PROXY_PATH = '/api/v1';
  * con el `Content-Length` original, y la API lo rechaza (413) sin leerlo.
  * Nada legítimo se acerca: los documentos del paciente van directos al bucket
  * (POST prefirmado, `patient-documents-api.ts`), el avatar se reduce en el
- * navegador (`me-api.ts`) y el cuerpo más grande que queda, la firma de un
- * consentimiento, son 700 KB.
+ * navegador (`me-api.ts`), el archivo de la importación de pacientes (hasta
+ * 5 MB, DX-107) va por su propia ruta de la web, fuera de este rewrite, en
+ * streaming (`import-upload-proxy.ts`), y el cuerpo más grande que queda, la
+ * firma de un consentimiento, son 700 KB. Este tope es GLOBAL en Next (no hay
+ * uno por ruta): no se sube para una ruta concreta.
  */
 export const API_PROXY_MAX_BODY_BYTES = 1024 * 1024;
 

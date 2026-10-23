@@ -205,3 +205,18 @@ describe('PatientDataPanel · aseguradora (DX-153)', () => {
   });
 });
 
+
+describe('paciente importado (DX-107)', () => {
+  it('marca el origen y la autorización de datos como pendiente, aunque no tenga datos administrativos', () => {
+    render(<PatientDataPanel patient={patient({ importBatchId: 'batch-1' })} />);
+    expect(screen.getByText('Origen de la ficha')).toBeInTheDocument();
+    expect(screen.getByText('Importado desde archivo')).toBeInTheDocument();
+    expect(screen.getByText(/Pendiente · importado sin autorización/)).toBeInTheDocument();
+  });
+
+  it('un alta a mano no lleva la marca de importado', () => {
+    render(<PatientDataPanel patient={patient({ importBatchId: null, occupation: 'Docente' })} />);
+    expect(screen.queryByText('Importado desde archivo')).not.toBeInTheDocument();
+    expect(screen.getByText('Pendiente')).toBeInTheDocument();
+  });
+});

@@ -59,7 +59,10 @@ export function proxy(req: NextRequest) {
   return res;
 }
 
-// Las páginas: todo salvo `/api` (se reescribe tal cual hacia la API), los
+// Las páginas: todo salvo `/api` (se reescribe tal cual hacia la API, y
+// `/api/import-upload/*`, la subida de la importación de pacientes, que NO
+// debe pasar por aquí: Next copiaría su cuerpo en memoria y lo cortaría en
+// 1 MB; ver `import-upload-proxy.ts`), los
 // estáticos de Next y el favicon. Y (DX-259) `/api/v1/*` solo cuando la
 // petición trae cuerpo (`Content-Length`), para el tope de 1 MB: los GET a la
 // API no pasan por aquí.
