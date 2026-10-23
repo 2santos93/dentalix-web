@@ -286,6 +286,16 @@ test('axe: /settings y el menú abierto, a 390 y 1440 px, en claro y oscuro', as
 
   const axeSource = readFileSync(require.resolve('axe-core/axe.min.js'), 'utf8');
   async function serious(surface: string) {
+    // Colores EN REPOSO. Al pasar de oscuro a claro, los enlaces de la barra
+    // (`transition-colors`, 150 ms; `reducedMotion` solo apaga las animaciones
+    // con keyframes) siguen a medio camino entre los dos temas, y axe medía
+    // ese contraste intermedio: en la CI (run 40036584441) salían 44 enlaces
+    // con «color-contrast» en «/settings 1440 light», en el intento y en el
+    // reintento (DX-292). Se terminan transiciones y animaciones antes de
+    // medir, sin esperar: no depende de la velocidad de la máquina.
+    await page.evaluate(() => {
+      for (const animation of document.getAnimations()) animation.finish();
+    });
     await page.evaluate(axeSource);
     const results = await page.evaluate(async () => {
       const axe = (window as unknown as { axe: { run: () => Promise<AxeResults> } }).axe;
