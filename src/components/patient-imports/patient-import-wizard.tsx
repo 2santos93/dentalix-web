@@ -115,6 +115,7 @@ export function PatientImportWizard({ token, onBatchChange }: PatientImportWizar
   // Cada consulta del avance (bien o mal) programa la siguiente.
   const [pollTick, setPollTick] = React.useState(0);
   const pollFailed = React.useRef(false);
+  const pollToast = React.useRef<string | null>(null);
   // Al avanzar, el foco va al título del paso o resultado nuevo: el botón
   // pulsado desaparece y el lector de pantalla anuncia dónde está (QA O1).
   const focusTarget = React.useRef<string | null>(null);
@@ -165,12 +166,17 @@ export function PatientImportWizard({ token, onBatchChange }: PatientImportWizar
         if (cancelled) return;
         setRunning(next);
         pollFailed.current = false;
+        // El aviso de la racha de fallos no se queda si el sondeo se recupera solo.
+        if (pollToast.current) {
+          toast.dismiss(pollToast.current);
+          pollToast.current = null;
+        }
         if (!isInProgress(next.status)) onBatchChange();
       } catch (err) {
         if (cancelled) return;
         // Un aviso por racha de fallos, no uno cada 1,5 s.
         if (!pollFailed.current) {
-          notifyError(apiErrorMessage(err, wizardCopy.progressError), { onRetry: retryPoll });
+          pollToast.current = notifyError(apiErrorMessage(err, wizardCopy.progressError), { onRetry: retryPoll });
         }
         pollFailed.current = true;
       } finally {

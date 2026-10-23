@@ -37,13 +37,16 @@ const WITH_ACTION_DURATION = Infinity;
  * correcto, así que el aviso no puede robar espacio ni dejar rojo permanente.
  *
  * El `id` derivado del mensaje deduplica: un refresh que falla en bucle
- * produce un solo toast que se actualiza, no una pila.
+ * produce un solo toast que se actualiza, no una pila. Devuelve ese `id` para
+ * que quien sondea lo cierre (`toast.dismiss`) cuando el fallo se resuelve.
  */
-export function notifyError(message: string, opts: NotifyErrorOptions = {}) {
+export function notifyError(message: string, opts: NotifyErrorOptions = {}): string {
   const { onRetry, retryLabel = notifyCopy.retry } = opts;
+  const id = `error:${message}`;
   toast.error(message, {
-    id: `error:${message}`,
+    id,
     action: onRetry ? { label: retryLabel, onClick: onRetry } : undefined,
     duration: onRetry ? WITH_ACTION_DURATION : undefined,
   });
+  return id;
 }

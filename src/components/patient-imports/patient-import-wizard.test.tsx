@@ -13,8 +13,10 @@ import { batchFixture, inspectFixture } from '@/lib/test/patient-imports';
 import { ImportProgress } from './import-progress';
 import { PatientImportWizard } from './patient-import-wizard';
 import { notifyError } from '@/components/errors/notify';
+import { toast } from 'sonner';
 
-jest.mock('../errors/notify', () => ({ notifyError: jest.fn() }));
+jest.mock('../errors/notify', () => ({ notifyError: jest.fn(() => 'toast-poll') }));
+jest.mock('sonner', () => ({ toast: { success: jest.fn(), dismiss: jest.fn() } }));
 
 jest.mock('../../lib/patient-imports/patient-imports-api', () => ({
   ...jest.requireActual('../../lib/patient-imports/patient-imports-api'),
@@ -270,4 +272,26 @@ it('sin informe disponible (caducado o purgado) no ofrece descargarlo', async ()
   expect(screen.queryByRole('button', { name: /informe de errores/i })).not.toBeInTheDocument();
   render(<ImportProgress batch={{ ...done, reportAvailable: true }} headingId="h2" onReport={jest.fn()} />);
   expect(screen.getByRole('button', { name: /informe de errores/i })).toBeInTheDocument();
+});
+
+it('el aviso del avance se cierra solo cuando la consulta vuelve a ir bien', async () => {
+  jest.useFakeTimers();
+  try {
+    const running = batchFixture({ status: 'RUNNING', canConfirm: false });
+    mockedList.mockResolvedValue({ items: [running], total: 1, page: 1, pageSize: 20 });
+    mockedGet.mockResolvedValueOnce(running).mockRejectedValueOnce(new Error('red')).mockResolvedValue(running);
+    render(<PatientImportWizard token="tok" onBatchChange={jest.fn()} />);
+    expect(await screen.findByText('Importando')).toBeInTheDocument();
+    await act(async () => {
+      jest.advanceTimersByTime(1600);
+    });
+    expect(notifyError).toHaveBeenCalledTimes(1);
+    expect(toast.dismiss).not.toHaveBeenCalled();
+    await act(async () => {
+      jest.advanceTimersByTime(1600);
+    });
+    expect(toast.dismiss).toHaveBeenCalledWith('toast-poll');
+  } finally {
+    jest.useRealTimers();
+  }
 });

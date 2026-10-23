@@ -67,6 +67,7 @@ export function ImportHistory({ token, reloadKey }: { token: string; reloadKey: 
   // Refresco en segundo plano mientras un lote importa (sin esqueleto).
   const [pollTick, setPollTick] = React.useState(0);
   const pollFailed = React.useRef(false);
+  const pollToast = React.useRef<string | null>(null);
   const [undoing, setUndoing] = React.useState<ImportBatch | null>(null);
   const [undoBusy, setUndoBusy] = React.useState(false);
   const [undoError, setUndoError] = React.useState<string | null>(null);
@@ -108,11 +109,16 @@ export function ImportHistory({ token, reloadKey }: { token: string; reloadKey: 
         setItems(result.items);
         setTotal(result.total);
         pollFailed.current = false;
+        // El aviso de la racha de fallos no se queda si el sondeo se recupera solo.
+        if (pollToast.current) {
+          toast.dismiss(pollToast.current);
+          pollToast.current = null;
+        }
       } catch (err) {
         if (cancelled) return;
         if (!pollFailed.current) {
-          // Way-Out Rule (DESIGN.md): el aviso trae «Reintentar» (refresca ya).
-          notifyError(apiErrorMessage(err, historyCopy.refreshError), {
+          // Way-Out Rule (DESIGN.md): el aviso trae «Reintentar» (vuelve a consultar).
+          pollToast.current = notifyError(apiErrorMessage(err, historyCopy.refreshError), {
             onRetry: () => setPollTick((t) => t + 1),
           });
         }

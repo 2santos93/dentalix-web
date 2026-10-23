@@ -4,9 +4,11 @@ import { ApiError } from '@/lib/api/client';
 import { listImports, undoImport } from '@/lib/patient-imports/patient-imports-api';
 import { batchFixture } from '@/lib/test/patient-imports';
 import { notifyError } from '@/components/errors/notify';
+import { toast } from 'sonner';
 import { ImportHistory } from './import-history';
 
-jest.mock('../errors/notify', () => ({ notifyError: jest.fn() }));
+jest.mock('../errors/notify', () => ({ notifyError: jest.fn(() => 'toast-poll') }));
+jest.mock('sonner', () => ({ toast: { success: jest.fn(), dismiss: jest.fn() } }));
 
 jest.mock('../../lib/patient-imports/patient-imports-api', () => ({
   ...jest.requireActual('../../lib/patient-imports/patient-imports-api'),
@@ -133,6 +135,30 @@ it('Way-Out Rule: el aviso de fallo del refresco trae «Reintentar»', async () 
       expect.any(String),
       expect.objectContaining({ onRetry: expect.any(Function) }),
     );
+  } finally {
+    jest.useRealTimers();
+  }
+});
+
+it('el aviso del refresco se cierra solo cuando el refresco vuelve a ir bien', async () => {
+  jest.useFakeTimers();
+  try {
+    const running = { ...completed, status: 'RUNNING' as const, canUndo: false };
+    mockedList
+      .mockResolvedValueOnce(page([running]))
+      .mockRejectedValueOnce(new Error('red'))
+      .mockResolvedValue(page([running]));
+    render(<ImportHistory token="tok" reloadKey={0} />);
+    await screen.findByText('pacientes.csv');
+    await act(async () => {
+      jest.advanceTimersByTime(3100);
+    });
+    expect(notifyError).toHaveBeenCalledTimes(1);
+    expect(toast.dismiss).not.toHaveBeenCalled();
+    await act(async () => {
+      jest.advanceTimersByTime(3100);
+    });
+    expect(toast.dismiss).toHaveBeenCalledWith('toast-poll');
   } finally {
     jest.useRealTimers();
   }
