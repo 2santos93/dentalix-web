@@ -18,10 +18,11 @@ const copy = {
     `${count} pacientes coincidentes · máximo ${max}`,
 };
 
-type State =
+type State = { token: string; patientId: string } & (
   | { kind: "loading" }
   | { kind: "error" }
-  | { kind: "ready"; warnings: PatientOptOutMatchWarning[] };
+  | { kind: "ready"; warnings: PatientOptOutMatchWarning[] }
+);
 
 /** Solo se monta para recepción/ADMIN dentro del bloque Comunicaciones. */
 export function PatientOptOutWarnings({
@@ -32,23 +33,31 @@ export function PatientOptOutWarnings({
   patientId: string;
 }) {
   const headingId = useId();
-  const [state, setState] = useState<State>({ kind: "loading" });
+  const [state, setState] = useState<State>({
+    token,
+    patientId,
+    kind: "loading",
+  });
   const [reloadKey, setReloadKey] = useState(0);
   useEffect(() => {
     let cancelled = false;
     getPatientOptOutWarnings(token, patientId)
       .then((warnings) => {
-        if (!cancelled) setState({ kind: "ready", warnings });
+        if (!cancelled) setState({ token, patientId, kind: "ready", warnings });
       })
       .catch(() => {
-        if (!cancelled) setState({ kind: "error" });
+        if (!cancelled) setState({ token, patientId, kind: "error" });
       });
     return () => {
       cancelled = true;
     };
   }, [token, patientId, reloadKey]);
 
-  if (state.kind === "loading")
+  if (
+    state.token !== token ||
+    state.patientId !== patientId ||
+    state.kind === "loading"
+  )
     return (
       <p role="status" className="text-sm text-muted">
         {copy.loading}
@@ -60,7 +69,7 @@ export function PatientOptOutWarnings({
         description={copy.error}
         className="py-6"
         onRetry={() => {
-          setState({ kind: "loading" });
+          setState({ token, patientId, kind: "loading" });
           setReloadKey((key) => key + 1);
         }}
       />
