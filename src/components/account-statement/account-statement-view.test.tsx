@@ -11,6 +11,7 @@ import { paymentReceiptFixture } from '@/lib/test/payment-receipt';
 import {
   accountStatementFixture,
   emptyAccountStatementFixture,
+  openingBalanceStatementFixture,
 } from '@/lib/test/account-statement';
 import { tokenForRole } from '@/lib/test/data-consents';
 
@@ -381,4 +382,22 @@ describe('cobrar desde el estado de cuenta (DX-067)', () => {
     expect(await screen.findByText(/plan de cuotas creado/i)).toBeInTheDocument();
     await waitFor(() => expect(mockedGet).toHaveBeenCalledTimes(2));
   });
+});
+
+it('DX-262: «Saldo migrado» con su fecha de corte («aprox.» si es la de importación) y en el resumen', async () => {
+  mockedGet.mockResolvedValue(openingBalanceStatementFixture());
+  render(<AccountStatementView token="tok" patientId="pat-1" />);
+
+  const table = await screen.findByRole('table', { name: 'Saldos migrados' });
+  const rows = within(table).getAllByRole('row').slice(1);
+  expect(rows).toHaveLength(2);
+  expect(rows[0]).toHaveTextContent('Ortodoncia 2025');
+  expect(rows[0]).toHaveTextContent('09/08/2026');
+  expect(rows[0]).not.toHaveTextContent('aprox.');
+  expect(money(rows[0].textContent)).toContain('200.000,50');
+  expect(rows[1]).toHaveTextContent('23/10/2026 (aprox.)');
+
+  const cop = screen.getByRole('region', { name: /resumen en COP/i });
+  expect(money(within(cop).getByTestId('opening').textContent)).toContain('200.000,50');
+  expect(money(within(cop).getByTestId('balance').textContent)).toContain('200.000,50');
 });

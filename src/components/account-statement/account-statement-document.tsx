@@ -4,6 +4,7 @@ import {
   installmentLabel,
   isEmptyStatement,
   methodLabel,
+  openingAsOfLabel,
   planNamer,
   statementCopy,
   voidedDetail,
@@ -174,6 +175,29 @@ export function AccountStatementDocument({ statement }: AccountStatementDocument
                             )}`
                           : copy.none}
                       </Td>
+                    </tr>
+                  ))}
+                </tbody>
+              </DocTable>
+            </DocSection>
+          ) : null}
+
+          {statement.openingBalances.length > 0 ? (
+            <DocSection title={statementCopy.openingHeading}>
+              <DocTable label={statementCopy.openingTable}>
+                <thead>
+                  <tr>
+                    <Th>{statementCopy.colConcept}</Th>
+                    <Th>{statementCopy.colAsOf}</Th>
+                    <Th right>{copy.colAmount}</Th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {statement.openingBalances.map((o) => (
+                    <tr key={o.id}>
+                      <Td>{o.concept}</Td>
+                      <Td>{openingAsOfLabel(o)}</Td>
+                      <Td right>{formatCurrency(o.amount, o.currency)}</Td>
                     </tr>
                   ))}
                 </tbody>

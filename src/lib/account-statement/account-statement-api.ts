@@ -9,6 +9,8 @@ export type AccountStatementSummary = components['schemas']['AccountStatementCur
 export type AccountStatementPlan = components['schemas']['AccountStatementPlanDto'];
 export type AccountStatementMovement = components['schemas']['AccountStatementMovementDto'];
 export type AccountStatementInstallment = components['schemas']['AccountStatementInstallmentDto'];
+/** DX-262: línea «Saldo migrado» (deuda traída del programa anterior). */
+export type AccountStatementOpeningBalance = components['schemas']['AccountStatementOpeningBalanceDto'];
 export type FamilyAccountStatement = components['schemas']['FamilyAccountStatementDto'];
 export type FamilyStatementMember = components['schemas']['FamilyStatementMemberDto'];
 export type FamilyCurrencyAmounts = components['schemas']['FamilyCurrencyAmountsDto'];

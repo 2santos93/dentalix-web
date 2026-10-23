@@ -1,6 +1,10 @@
 import { render, screen, within } from '@testing-library/react';
 import { AccountStatementDocument } from './account-statement-document';
-import { accountStatementFixture, emptyAccountStatementFixture } from '@/lib/test/account-statement';
+import {
+  accountStatementFixture,
+  emptyAccountStatementFixture,
+  openingBalanceStatementFixture,
+} from '@/lib/test/account-statement';
 
 function money(text: string | null | undefined): string {
   return (text ?? '').replace(/\s/g, ' ');
@@ -67,4 +71,13 @@ it('indica el rango cuando los movimientos vienen filtrados', () => {
     />,
   );
   expect(screen.getByText(/movimientos del 01\/09\/2026 al 30\/09\/2026/i)).toBeInTheDocument();
+});
+
+it('DX-262: el documento lista el saldo migrado con su fecha de corte', () => {
+  render(<AccountStatementDocument statement={openingBalanceStatementFixture()} />);
+  const table = screen.getByRole('table', { name: 'Saldos migrados' });
+  expect(table).toHaveTextContent('Ortodoncia 2025');
+  expect(table).toHaveTextContent('23/10/2026 (aprox.)');
+  const copRow = within(screen.getByRole('table', { name: /resumen/i })).getByRole('row', { name: /COP/ });
+  expect(money(copRow.textContent)).toContain('200.000,50');
 });

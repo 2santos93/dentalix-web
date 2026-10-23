@@ -167,3 +167,54 @@ export function accountStatementFixture(
 export function emptyAccountStatementFixture(): AccountStatement {
   return accountStatementFixture({ summary: [], plans: [], movements: [], installments: [] });
 }
+
+/** DX-262: paciente importado que solo trae saldos migrados (uno con fecha aproximada). */
+export function openingBalanceStatementFixture(): AccountStatement {
+  return accountStatementFixture({
+    summary: [
+      {
+        currency: 'COP',
+        budgeted: 0,
+        openingBalance: 200000.5,
+        paid: 0,
+        balance: 200000.5,
+        overdueCount: 0,
+        overdueAmount: 0,
+        nextInstallment: null,
+      },
+      {
+        currency: 'USD',
+        budgeted: 0,
+        openingBalance: 40,
+        paid: 0,
+        balance: 40,
+        overdueCount: 0,
+        overdueAmount: 0,
+        nextInstallment: null,
+      },
+    ],
+    plans: [],
+    movements: [],
+    installments: [],
+    openingBalances: [
+      {
+        id: 'ob-1',
+        currency: 'COP',
+        amount: 200000.5,
+        asOfDate: '2026-08-09',
+        asOfDateApproximate: false,
+        concept: 'Ortodoncia 2025',
+        importBatchId: 'batch-1',
+      },
+      {
+        id: 'ob-2',
+        currency: 'USD',
+        amount: 40,
+        asOfDate: '2026-10-23',
+        asOfDateApproximate: true,
+        concept: 'Saldo migrado',
+        importBatchId: 'batch-1',
+      },
+    ],
+  });
+}

@@ -14,6 +14,7 @@ import {
   installmentLabel,
   isEmptyStatement,
   methodLabel,
+  openingAsOfLabel,
   planNamer,
   statementCopy,
   voidedDetail,
@@ -345,6 +346,40 @@ function StatementBody({
         </div>
       ) : null}
 
+      {statement.openingBalances.length > 0 ? (
+        <SubSection title={statementCopy.openingHeading}>
+          <Card className="overflow-hidden p-0 shadow-none">
+            <Table aria-label={statementCopy.openingTable}>
+              <TableHeader>
+                <TableRow>
+                  <TableHead scope="col">{statementCopy.colConcept}</TableHead>
+                  <TableHead scope="col">{statementCopy.colAsOf}</TableHead>
+                  <TableHead scope="col" className="text-right">
+                    {copy.colAmount}
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {statement.openingBalances.map((o) => (
+                  <TableRow key={o.id}>
+                    <TableCell className="font-medium break-words" data-label={statementCopy.colConcept}>
+                      {o.concept}
+                    </TableCell>
+                    <TableCell className="tabular-nums" data-label={statementCopy.colAsOf}>
+                      {openingAsOfLabel(o)}
+                    </TableCell>
+                    <TableCell className="text-right tabular-nums" data-label={copy.colAmount}>
+                      {formatCurrency(o.amount, o.currency)}
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </Card>
+          <p className="max-w-prose text-xs text-muted">{statementCopy.openingNote}</p>
+        </SubSection>
+      ) : null}
+
       {statement.plans.length > 0 ? (
         <SubSection title={copy.plansHeading}>
           <Card className="overflow-hidden p-0 shadow-none">
@@ -660,6 +695,12 @@ function CurrencySummary({ row }: { row: AccountStatementSummary }) {
           )}
         </Figure>
       </dl>
+      {row.openingBalance > 0 ? (
+        <p data-testid="opening" className="border-t border-hairline px-4 py-2 text-xs text-muted sm:px-6">
+          {statementCopy.openingIncluded}{' '}
+          <span className="font-medium tabular-nums text-ink">{formatCurrency(row.openingBalance, row.currency)}</span>
+        </p>
+      ) : null}
     </section>
   );
 }

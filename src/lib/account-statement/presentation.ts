@@ -1,9 +1,10 @@
-import { formatDate } from '@/lib/format/date';
+import { formatCivilDate, formatDate } from '@/lib/format/date';
 import { PAYMENT_METHOD_LABELS } from '@/lib/payments/payment-method';
 import type { PaymentMethod } from '@/lib/payments/payments-api';
 import type {
   AccountStatementInstallment,
   AccountStatementMovement,
+  AccountStatementOpeningBalance,
   AccountStatementPlan,
 } from './account-statement-api';
 
@@ -25,11 +26,28 @@ export const statementCopy = {
   inFavor: 'a favor',
   noOverdue: 'Sin cuotas vencidas',
   overdueCount: (n: number) => (n === 1 ? '1 cuota vencida' : `${n} cuotas vencidas`),
+  // DX-262: saldo inicial importado del programa anterior.
+  openingHeading: 'Saldo migrado',
+  openingTable: 'Saldos migrados',
+  openingIncluded: 'Incluye saldo migrado:',
+  colConcept: 'Concepto',
+  colAsOf: 'Fecha de corte',
+  approx: 'aprox.',
+  openingNote:
+    'Deuda traída del programa anterior al importar los pacientes. «aprox.»: el archivo no traía la fecha y se tomó la de la importación.',
   emptyTitle: 'Sin movimientos financieros',
   emptyDescription: 'Este paciente no tiene planes con valor ni abonos registrados.',
   footnote:
     'Cifras en la moneda en que se presupuestaron o pagaron, sin conversión. Los abonos anulados se listan pero no suman.',
 };
+
+/** «15/03/2026» o «23/10/2026 (aprox.)» si la fecha es la de la importación. */
+export function openingAsOfLabel(
+  opening: Pick<AccountStatementOpeningBalance, 'asOfDate' | 'asOfDateApproximate'>,
+): string {
+  const day = formatCivilDate(opening.asOfDate);
+  return opening.asOfDateApproximate ? `${day} (${statementCopy.approx})` : day;
+}
 
 /** Nombre de un plan por su id (el plan no tiene título: se nombra por su fecha). */
 export function planNamer(plans: AccountStatementPlan[]): (id: string) => string {
