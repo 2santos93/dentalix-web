@@ -156,6 +156,19 @@ describe('Bloque de la ficha (DX-099)', () => {
     expect(screen.getByRole('button', { name: 'Enviar anamnesis' })).toBeInTheDocument();
   });
 
+  it('un enlace más nuevo (esperando o anulado) no tapa la anamnesis que sigue por revisar', async () => {
+    patientList.mockResolvedValue([
+      submission({ id: 's3', status: 'EXPIRED', submittedAt: null }),
+      submission({ id: 's2', status: 'PENDING_PATIENT', submittedAt: null }),
+      submission({ id: 's1', status: 'SUBMITTED' }),
+    ]);
+    render(<PatientAnamnesisSection token="t" patientId="p1" canReview />);
+    expect(await screen.findByText('Anamnesis pendiente de revisión')).toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Revisar' })).toHaveAttribute('href', '/anamnesis-por-revisar/s1');
+    // Y el último enlace sigue a la vista.
+    expect(screen.getByText('Caducada o anulada')).toBeInTheDocument();
+  });
+
   it('recepción no ve «Revisar»; enviar muestra el enlace y WhatsApp', async () => {
     patientList.mockResolvedValue([submission()]);
     create.mockResolvedValue({

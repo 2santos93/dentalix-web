@@ -55,7 +55,8 @@ function detail(s: AnamnesisSubmission): string | null {
 
 /**
  * Bloque de la ficha (DX-099): el estado del último cuestionario enviado por
- * enlace («Anamnesis pendiente de revisión», esperando al paciente…) y
+ * enlace (esperando al paciente, aceptada…), toda anamnesis aún por revisar
+ * («Anamnesis pendiente de revisión», aunque haya un enlace más nuevo) y
  * «Enviar anamnesis». Lo ven los cuatro roles; «Revisar» solo quien ve la
  * bandeja (la API no le da las respuestas a recepción).
  */
@@ -69,7 +70,7 @@ export function PatientAnamnesisSection({
   canReview: boolean;
 }) {
   const ids = useId();
-  const [latest, setLatest] = useState<AnamnesisSubmission | null>(null);
+  const [rows, setRows] = useState<AnamnesisSubmission[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
@@ -80,7 +81,7 @@ export function PatientAnamnesisSection({
     listPatientAnamnesisRequests(token, patientId)
       .then((rows) => {
         if (cancelled) return;
-        setLatest(rows[0] ?? null);
+        setRows(rows);
         setError(null);
       })
       .catch((err: unknown) => {
@@ -95,11 +96,16 @@ export function PatientAnamnesisSection({
   }, [token, patientId, reloadKey]);
 
   const reload = () => setReloadKey((k) => k + 1);
+  // Lo que se ve: toda anamnesis aún por revisar (un enlace más nuevo, esperando
+  // o anulado, no la tapa) y, si es otro, el último enlace enviado.
+  const pendingReview = rows.filter((r) => r.status === 'SUBMITTED');
+  const visible = rows[0] && rows[0].status !== 'SUBMITTED' ? [...pendingReview, rows[0]] : pendingReview;
 
   async function handleRevoke(id: string) {
     setRevoking(true);
     try {
-      setLatest(await revokeAnamnesisRequest(token, id));
+      const updated = await revokeAnamnesisRequest(token, id);
+      setRows((current) => current.map((r) => (r.id === updated.id ? updated : r)));
     } catch (err) {
       notifyError(apiErrorMessage(err, copy.revokeError), { onRetry: () => void handleRevoke(id) });
     } finally {
@@ -130,31 +136,35 @@ export function PatientAnamnesisSection({
             reload();
           }}
         />
-      ) : latest ? (
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-          <div className="flex flex-col gap-1">
-            <Badge variant={BADGE[latest.status]} className="self-start">
-              {SUBMISSION_STATUS_LABELS[latest.status]}
-            </Badge>
-            {detail(latest) && <p className="text-sm text-muted tabular-nums">{detail(latest)}</p>}
-          </div>
-          {latest.status === 'SUBMITTED' && canReview && (
-            <Button asChild variant="secondary" className="min-h-11 sm:min-h-10">
-              <Link href={`/anamnesis-por-revisar/${latest.id}`}>{copy.review}</Link>
-            </Button>
-          )}
-          {latest.status === 'PENDING_PATIENT' && (
-            <Button
-              type="button"
-              variant="ghost"
-              className="min-h-11 sm:min-h-10"
-              loading={revoking}
-              onClick={() => void handleRevoke(latest.id)}
-            >
-              {copy.revoke}
-            </Button>
-          )}
-        </div>
+      ) : visible.length > 0 ? (
+        <ul className="flex flex-col gap-3">
+          {visible.map((item) => (
+            <li key={item.id} className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+              <div className="flex flex-col gap-1">
+                <Badge variant={BADGE[item.status]} className="self-start">
+                  {SUBMISSION_STATUS_LABELS[item.status]}
+                </Badge>
+                {detail(item) && <p className="text-sm text-muted tabular-nums">{detail(item)}</p>}
+              </div>
+              {item.status === 'SUBMITTED' && canReview && (
+                <Button asChild variant="secondary" className="min-h-11 sm:min-h-10">
+                  <Link href={`/anamnesis-por-revisar/${item.id}`}>{copy.review}</Link>
+                </Button>
+              )}
+              {item.status === 'PENDING_PATIENT' && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  className="min-h-11 sm:min-h-10"
+                  loading={revoking}
+                  onClick={() => void handleRevoke(item.id)}
+                >
+                  {copy.revoke}
+                </Button>
+              )}
+            </li>
+          ))}
+        </ul>
       ) : null}
       <AnamnesisLinkPanel token={token} patientId={patientId} onCreated={reload} />
     </section>
