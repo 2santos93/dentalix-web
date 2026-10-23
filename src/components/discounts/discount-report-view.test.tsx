@@ -58,6 +58,15 @@ function row(overrides: Partial<DiscountReportItem> = {}): DiscountReportItem {
     discountOn: '2026-10-10',
     locationId: 'loc-1',
     locationName: 'Sede principal',
+    priceSource: 'CATALOG',
+    agreementName: null,
+    basePrice: null,
+    agreementReduction: 0,
+    agreementPercent: 0,
+    agreementAssignedById: null,
+    agreementAssignedByName: null,
+    createdById: 'adm-1',
+    createdByName: 'Dr. Owner',
     ...overrides,
   };
 }
@@ -68,7 +77,16 @@ function report(items: DiscountReportItem[], overrides: Partial<DiscountReport> 
     to: '2026-10-17',
     scope: { location: { id: 'loc-1', name: 'Sede principal' } },
     totals: items.length
-      ? [{ currency: 'COP', items: items.length, gross: 1200000, discount: 180000, percentOfGross: 15 }]
+      ? [
+          {
+            currency: 'COP',
+            items: items.length,
+            gross: 1200000,
+            discount: 180000,
+            agreementReduction: 0,
+            percentOfGross: 15,
+          },
+        ]
       : [],
     items,
     total: items.length,
@@ -120,6 +138,58 @@ describe('DiscountReportView (DX-204)', () => {
     expect(within(tableRow).getByText(/−200\.000,00/)).toBeInTheDocument();
     expect(within(tableRow).getByText(/20 % de 1\.000\.000,00/)).toBeInTheDocument();
     expect(within(tableRow).getByText(/Precio rebajado a 800\.000,00/)).toBeInTheDocument();
+  });
+
+  it('SEC-047: la rebaja de convenio sale aparte, con quién asignó el convenio y quién creó el ítem', async () => {
+    const agreed = row({
+      priceSource: 'AGREEMENT_PERCENT',
+      agreementName: 'Cortesía socios',
+      basePrice: 2000000,
+      catalogPrice: 0,
+      price: 0,
+      itemDiscount: 0,
+      discount: 0,
+      percent: 0,
+      reason: null,
+      reasonNote: null,
+      discountById: null,
+      discountByName: null,
+      agreementReduction: 2000000,
+      agreementPercent: 100,
+      agreementAssignedById: 'adm-1',
+      agreementAssignedByName: 'Dr. Owner',
+      createdById: 'dr-1',
+      createdByName: 'Dra. Ríos',
+    });
+    mockedReport.mockResolvedValue(
+      report([agreed], {
+        totals: [
+          {
+            currency: 'COP',
+            items: 1,
+            gross: 0,
+            discount: 0,
+            agreementReduction: 2000000,
+            percentOfGross: 0,
+          },
+        ],
+      }),
+    );
+    render(<DiscountReportView token="tok" />);
+    const summary = await screen.findByTestId('discount-total-COP');
+    expect(within(summary).getByText('Rebaja por convenio')).toBeInTheDocument();
+    expect(within(summary).getByText(/2\.000\.000,00/)).toBeInTheDocument();
+    const tableRow = screen.getByTestId('discount-row');
+    expect(within(tableRow).getByText(/Convenio «Cortesía socios»/)).toHaveTextContent(
+      /−\s?2\.000\.000,00.*100 %/,
+    );
+    expect(within(tableRow).getByText('Convenio asignado por Dr. Owner')).toBeInTheDocument();
+    expect(within(tableRow).getByText('Ítem creado por Dra. Ríos')).toBeInTheDocument();
+    // Sin descuento propio: no se pinta un «−0» como si lo hubiera.
+    expect(within(tableRow).queryByText(/^−\s?0,00/)).not.toBeInTheDocument();
+    const card = screen.getByTestId('discount-card');
+    expect(within(card).getByText(/Convenio «Cortesía socios»/)).toBeInTheDocument();
+    expect(within(card).getByText(/Convenio asignado por Dr\. Owner/)).toBeInTheDocument();
   });
 
   it('en móvil, cada descuento es una tarjeta (lista apilada)', async () => {

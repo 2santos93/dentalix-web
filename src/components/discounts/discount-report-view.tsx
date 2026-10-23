@@ -34,7 +34,7 @@ import { cn } from '@/lib/utils';
 export const discountReportCopy = {
   title: 'Descuentos',
   description:
-    'Lo que se descontó en los planes de tratamiento: cuánto, sobre qué bruto, por qué y quién lo dio. Por moneda y sin convertir.',
+    'Lo que se descontó en los planes de tratamiento: cuánto, sobre qué bruto, por qué y quién lo dio. Las rebajas por convenio van aparte, con quién asignó el convenio y quién creó el ítem. Por moneda y sin convertir.',
   scopeAll: 'Toda la clínica',
   scopeLocation: (name: string) => `Descuentos dados en ${name}`,
   fromLabel: 'Desde',
@@ -51,6 +51,11 @@ export const discountReportCopy = {
   totalDiscount: 'Descontado',
   gross: 'Bruto',
   percentOfGross: 'Sobre el bruto',
+  agreementReduction: 'Rebaja por convenio',
+  agreementLine: (name: string, amount: string, percent: string, base: string) =>
+    `Convenio «${name}»: −${amount} (${percent} de ${base})`,
+  agreementAssignedBy: (name: string) => `Convenio asignado por ${name}`,
+  itemCreatedBy: (name: string) => `Ítem creado por ${name}`,
   items: (n: number) => (n === 1 ? '1 ítem' : `${n} ítems`),
   percent: (n: number) => `${n.toLocaleString('es', { maximumFractionDigits: 2 })} %`,
   tableLabel: 'Descuentos del periodo, del más reciente al más antiguo',
@@ -114,7 +119,10 @@ function DiscountSummary({ totals }: { totals: DiscountReportTotal[] }) {
           <dl
             key={total.currency}
             data-testid={`discount-total-${total.currency}`}
-            className="grid grid-cols-2 gap-x-4 gap-y-2 px-4 py-3 sm:grid-cols-4 sm:px-6"
+            className={cn(
+              'grid grid-cols-2 gap-x-4 gap-y-2 px-4 py-3 sm:px-6',
+              total.agreementReduction > 0 ? 'sm:grid-cols-5' : 'sm:grid-cols-4',
+            )}
           >
             <div className="min-w-0">
               <dt className="t-label text-muted">{total.currency}</dt>
@@ -134,6 +142,14 @@ function DiscountSummary({ totals }: { totals: DiscountReportTotal[] }) {
               <dt className="t-label text-muted">{discountReportCopy.percentOfGross}</dt>
               <dd className="font-medium tabular-nums text-ink">{discountReportCopy.percent(total.percentOfGross)}</dd>
             </div>
+            {total.agreementReduction > 0 ? (
+              <div className="min-w-0">
+                <dt className="t-label text-muted">{discountReportCopy.agreementReduction}</dt>
+                <dd className="truncate tabular-nums text-ink">
+                  {formatCurrency(total.agreementReduction, total.currency)}
+                </dd>
+              </div>
+            ) : null}
           </dl>
         ))}
       </div>
@@ -143,26 +159,57 @@ function DiscountSummary({ totals }: { totals: DiscountReportTotal[] }) {
 
 /**
  * Importe descontado (SEC-041: rebaja de precio frente al catálogo + descuento)
- * y su % sobre el precio de referencia (el de catálogo si se rebajó).
+ * y su % sobre el precio de referencia (el de catálogo si se rebajó). SEC-047:
+ * la rebaja de convenio va en su propia línea; un ítem que solo tiene esa
+ * rebaja no pinta un «−0» de descuento.
  */
 function AmountCell({ item }: { item: DiscountReportItem }) {
+  const agreement = item.agreementReduction > 0;
   return (
     <>
-      <span className="block font-medium tabular-nums text-ink">
-        −{formatCurrency(item.discount, item.currency)}
-      </span>
-      <span className="block text-xs tabular-nums text-muted">
-        {discountReportCopy.ofPrice(
-          formatCurrency(item.price + item.priceReduction, item.currency),
-          discountReportCopy.percent(item.percent),
-        )}
-      </span>
+      {item.discount > 0 || !agreement ? (
+        <>
+          <span className="block font-medium tabular-nums text-ink">
+            −{formatCurrency(item.discount, item.currency)}
+          </span>
+          <span className="block text-xs tabular-nums text-muted">
+            {discountReportCopy.ofPrice(
+              formatCurrency(item.price + item.priceReduction, item.currency),
+              discountReportCopy.percent(item.percent),
+            )}
+          </span>
+        </>
+      ) : null}
       {item.priceReduction > 0 ? (
         <span className="block text-xs tabular-nums text-muted">
           {discountReportCopy.priceReduced(formatCurrency(item.price, item.currency))}
         </span>
       ) : null}
+      {agreement ? (
+        <span className="block text-xs tabular-nums text-ink">
+          {discountReportCopy.agreementLine(
+            item.agreementName ?? '',
+            formatCurrency(item.agreementReduction, item.currency),
+            discountReportCopy.percent(item.agreementPercent),
+            formatCurrency(item.basePrice ?? 0, item.currency),
+          )}
+        </span>
+      ) : null}
     </>
+  );
+}
+
+/** SEC-047: quién asignó el convenio y quién creó el ítem, si hay rebaja de convenio. */
+function AgreementAuthors({ item, className }: { item: DiscountReportItem; className?: string }) {
+  if (item.agreementReduction <= 0) return null;
+  const unknown = discountReportCopy.unknownAuthor;
+  return (
+    <span className={cn('block text-xs text-muted', className)}>
+      <span className="block">
+        {discountReportCopy.agreementAssignedBy(item.agreementAssignedByName ?? unknown)}
+      </span>
+      <span className="block">{discountReportCopy.itemCreatedBy(item.createdByName ?? unknown)}</span>
+    </span>
   );
 }
 
@@ -448,6 +495,7 @@ export function DiscountReportView({ token }: { token: string }) {
                           {item.locationName ? (
                             <span className="block text-xs text-muted">{item.locationName}</span>
                           ) : null}
+                          <AgreementAuthors item={item} />
                         </TableCell>
                       </TableRow>
                     ))}
@@ -487,6 +535,7 @@ export function DiscountReportView({ token }: { token: string }) {
                       {discountReportCopy.colBy}: {item.discountByName ?? discountReportCopy.unknownAuthor}
                       {item.locationName ? ` · ${item.locationName}` : ''}
                     </p>
+                    <AgreementAuthors item={item} />
                   </li>
                 ))}
               </ul>
