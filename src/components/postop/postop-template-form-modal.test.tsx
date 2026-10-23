@@ -241,4 +241,35 @@ describe('PostOpTemplateFormModal', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Crear plantilla' }));
     expect(await within(dialog).findByRole('alert')).toHaveTextContent(/ya existe una plantilla/i);
   });
+  it.each([null, exo])('el código describe su hint en alta y edición (%p)', async (template) => {
+    renderModal(template);
+    const input = screen.getByLabelText('Código');
+    expect(input).toHaveAccessibleDescription(template ? 'El código no se puede cambiar.' : 'Corto y único, p. ej. EXO o CIR-3M. No se puede cambiar después.');
+    await screen.findByRole('checkbox', { name: /exodoncia simple/i });
+  });
+
+  it('marca retirados y al cambiar vínculos solo envía procedimientos activos', async () => {
+    const user = setupUser();
+    mockedCatalog.mockResolvedValue([catalogItem('c2', 'CIR-03', 'Cirugía de tercer molar')]);
+    mockedUpdate.mockResolvedValue(exo);
+    const { dialog } = renderModal(exo);
+    const retired = await within(dialog).findByRole('checkbox', { name: /Exodoncia simple.*retirado/i });
+    expect(retired).toBeChecked();
+    expect(retired).toBeDisabled();
+    await user.click(within(dialog).getByRole('checkbox', { name: /Cirugía de tercer molar/ }));
+    await user.click(within(dialog).getByRole('button', { name: 'Guardar cambios' }));
+    expect(mockedUpdate).toHaveBeenCalledWith('tok', 'tpl-1', { catalogItemIds: ['c2'] });
+  });
+
+  it('editar solo el título conserva el vínculo retirado sin reenviarlo', async () => {
+    const user = setupUser();
+    mockedCatalog.mockResolvedValue([]);
+    mockedUpdate.mockResolvedValue(exo);
+    renderModal(exo);
+    await screen.findByRole('checkbox', { name: /Exodoncia simple/ });
+    await user.type(screen.getByLabelText('Título'), ' actualizado');
+    await user.click(screen.getByRole('button', { name: 'Guardar cambios' }));
+    expect(mockedUpdate).toHaveBeenCalledWith('tok', 'tpl-1', { title: exo.title + ' actualizado' });
+  });
+
 });

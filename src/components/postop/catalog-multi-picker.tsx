@@ -10,12 +10,15 @@ const copy = {
   defaultFilterPlaceholder: 'Exodoncia, endodoncia, implante…',
   noMatches: (query: string) => `Ningún procedimiento coincide con «${query}».`,
   noItems: 'No hay procedimientos activos en el catálogo.',
+  retired: 'Retirado',
   selected: (n: number) => (n === 1 ? '1 seleccionado' : `${n} seleccionados`),
 };
 
 /** Lo mínimo que se pinta de un ítem. Un vínculo a un ítem ya inactivo llega sin color. */
 export type CatalogMultiPickerItem = Pick<DentalCatalogItem, 'id' | 'code' | 'labelEs'> & {
   color?: string;
+  /** Vínculo conservado a un procedimiento ausente del catálogo activo. */
+  retired?: boolean;
 };
 
 interface CatalogMultiPickerProps {
@@ -111,6 +114,7 @@ export function CatalogMultiPicker({
                       id={id}
                       type="checkbox"
                       checked={checked}
+                      disabled={item.retired}
                       onChange={() => toggle(item.id)}
                       className="size-5 shrink-0 accent-[var(--color-primary)]"
                     />
@@ -124,6 +128,9 @@ export function CatalogMultiPicker({
                     {/* `w-0`: el nombre crece con flex-1 pero no aporta ancho intrínseco;
                         con solo `truncate` el más largo ensanchaba el diálogo a 390 px. */}
                     <span className="w-0 min-w-0 flex-1 truncate">{item.labelEs}</span>
+                    {item.retired ? (
+                      <span className="shrink-0 text-xs text-muted">{copy.retired}</span>
+                    ) : null}
                     <span className="shrink-0 font-mono text-xs text-muted">{item.code}</span>
                   </label>
                 );
