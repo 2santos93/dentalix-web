@@ -7,7 +7,8 @@ jest.mock('../../lib/me/me-api', () => ({
   uploadAvatar: jest.fn(),
   removeAvatar: jest.fn(),
 }));
-import { getMe, updateName } from '../../lib/me/me-api';
+import { getMe, updateName, uploadAvatar } from '../../lib/me/me-api';
+import { AvatarResizeError } from '../../lib/me/avatar-resize';
 
 const profile = {
   id: 'u1', email: 'ana@clinica.com', fullName: 'Ana Gómez', avatarUrl: null, emailVerifiedAt: null,
@@ -33,5 +34,15 @@ describe('ProfileView', () => {
     fireEvent.change(input, { target: { value: 'Ana G. Nueva' } });
     fireEvent.click(screen.getByRole('button', { name: /guardar/i }));
     await waitFor(() => expect(updateName).toHaveBeenCalledWith('T', 'Ana G. Nueva'));
+  });
+
+  it('revisión M-7: si la foto no se puede reducir, el aviso dice el tope real (900 KB)', async () => {
+    (uploadAvatar as jest.Mock).mockRejectedValue(new AvatarResizeError());
+    render(<ProfileView token="t" />);
+    const input = await screen.findByLabelText('Cambiar foto');
+    fireEvent.change(input, { target: { files: [new File(['x'], 'foto.jpg', { type: 'image/jpeg' })] } });
+    expect(
+      await screen.findByText('La foto pesa más de 900 KB y no pudimos reducirla. Elige otra imagen (PNG, JPEG o WebP).'),
+    ).toBeInTheDocument();
   });
 });

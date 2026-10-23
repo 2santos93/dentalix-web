@@ -33,7 +33,7 @@ const copy = {
   uploading: 'Subiendo…',
   remove: 'Quitar foto',
   avatarError: 'No pudimos actualizar tu foto. Intenta de nuevo.',
-  avatarTooLarge: 'La foto pesa más de 1 MB y no pudimos reducirla. Elige otra imagen (PNG, JPEG o WebP).',
+  avatarTooLarge: 'La foto pesa más de 900 KB y no pudimos reducirla. Elige otra imagen (PNG, JPEG o WebP).',
 };
 
 const ROLE_LABEL: Record<string, string> = {
