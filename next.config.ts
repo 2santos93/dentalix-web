@@ -31,8 +31,9 @@ const nextConfig: NextConfig = {
     return apiRewrites();
   },
   experimental: {
-    // Sin esto Next corta a 10 MB el cuerpo que reenvía por el rewrite y una
-    // subida de documento de 10–20 MB llega truncada a la API (DX-151).
+    // DX-259 (OPS-038): Next copia en memoria el cuerpo de cada petición que
+    // reescribe, y por defecto hasta 10 MB; 1 MB basta para la API (los
+    // documentos van directos al bucket). Ver `api-base.ts`.
     proxyClientMaxBodySize: API_PROXY_MAX_BODY_BYTES,
   },
 };

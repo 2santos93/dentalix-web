@@ -272,7 +272,12 @@ describe('PatientDocumentsTab (DX-151)', () => {
         toothNumbers: ['11', '21'],
         notes: 'Ortodoncia',
       },
-      { onProgress: expect.any(Function) },
+      {
+        onProgress: expect.any(Function),
+        signal: expect.any(AbortSignal),
+        resumeDocumentId: null,
+        onStored: expect.any(Function),
+      },
     );
     act(() => report?.(0.4));
     expect(within(row).getByRole('progressbar', { name: 'Progreso de subida de remision.pdf' })).toHaveAttribute(
@@ -287,29 +292,104 @@ describe('PatientDocumentsTab (DX-151)', () => {
   it('cola: un fichero falla y otro sube; el fallido muestra el error de la API y «Reintentar»', async () => {
     const user = setupUser();
     mockedUpload.mockImplementation(async (_t, _p, input) => {
-      if (input.file.name === 'dup.pdf') {
-        throw new ApiError(409, 'Este archivo ya está en la ficha del paciente.');
-      }
+      if (input.file.name === 'roto.pdf') throw new ApiError(500, 'Fallo');
       return makeDocument({ id: 'ok', originalName: input.file.name });
     });
     render(<PatientDocumentsTab token={DENTIST} patientId="p1" />);
     await screen.findByText('Sin documentos');
-    await user.upload(fileInput(), [pdf('dup.pdf'), pdf('ok.pdf')]);
+    await user.upload(fileInput(), [pdf('roto.pdf'), pdf('ok.pdf')]);
     await user.click(screen.getByRole('button', { name: 'Subir 2 archivos' }));
 
-    const dup = screen.getByRole('listitem', { name: 'dup.pdf' });
-    expect(await within(dup).findByRole('alert')).toHaveTextContent('Este archivo ya está en la ficha del paciente.');
-    expect(within(dup).getByText('Error')).toBeInTheDocument();
+    const broken = screen.getByRole('listitem', { name: 'roto.pdf' });
+    expect(await within(broken).findByText('Error')).toBeInTheDocument();
     expect(mockedNotify).toHaveBeenCalledWith(
-      'No se subió «dup.pdf». Este archivo ya está en la ficha del paciente.',
+      expect.stringMatching(/^No se subió «roto\.pdf»\./),
       expect.objectContaining({ onRetry: expect.any(Function) }),
     );
     expect(within(screen.getByRole('listitem', { name: 'ok.pdf' })).getByText('Subido')).toBeInTheDocument();
 
-    mockedUpload.mockResolvedValueOnce(makeDocument({ id: 'dup2', originalName: 'dup.pdf' }));
-    await user.click(within(dup).getByRole('button', { name: 'Reintentar dup.pdf' }));
-    expect(await within(dup).findByText('Subido')).toBeInTheDocument();
+    mockedUpload.mockResolvedValueOnce(makeDocument({ id: 'roto2', originalName: 'roto.pdf' }));
+    await user.click(within(broken).getByRole('button', { name: 'Reintentar roto.pdf' }));
+    expect(await within(broken).findByText('Subido')).toBeInTheDocument();
     expect(mockedUpload).toHaveBeenCalledTimes(3);
+  });
+
+  it.each([
+    ['duplicado (409)', new ApiError(409, 'Este archivo ya está en la ficha del paciente.')],
+    [
+      'contenido no admitido (400 DOCUMENT_CONTENT_REJECTED)',
+      new ApiError(400, 'Tipo de archivo no admitido. Se aceptan PDF, JPG, PNG, HEIC, DOCX y DICOM.', {
+        code: 'DOCUMENT_CONTENT_REJECTED',
+      }),
+    ],
+    ['más de 20 MB (413)', new ApiError(413, 'El archivo supera el máximo de 20 MB.')],
+  ])('QA D3: un error definitivo, %s, solo ofrece «Quitar», sin «Reintentar» en la fila ni en el aviso', async (_label, error) => {
+    const user = setupUser();
+    mockedUpload.mockRejectedValueOnce(error);
+    render(<PatientDocumentsTab token={DENTIST} patientId="p1" />);
+    await screen.findByText('Sin documentos');
+    dropFiles([pdf('x.pdf')]);
+    const row = await screen.findByRole('listitem', { name: 'x.pdf' });
+    await user.click(within(row).getByRole('button', { name: 'Subir x.pdf' }));
+    expect(await within(row).findByText('Error')).toBeInTheDocument();
+    expect(within(row).queryByRole('button', { name: /Reintentar/ })).toBeNull();
+    expect(within(row).getByRole('button', { name: 'Quitar x.pdf' })).toBeInTheDocument();
+    expect(mockedNotify).toHaveBeenCalledTimes(1);
+    expect(mockedNotify.mock.calls[0][1]).toBeUndefined();
+  });
+
+  it('un 400 del formulario (sin código de contenido) sí se puede corregir y reintentar', async () => {
+    const user = setupUser();
+    mockedUpload.mockRejectedValueOnce(new ApiError(400, 'La fecha clínica no es válida.'));
+    render(<PatientDocumentsTab token={DENTIST} patientId="p1" />);
+    await screen.findByText('Sin documentos');
+    dropFiles([pdf('x.pdf')]);
+    const row = await screen.findByRole('listitem', { name: 'x.pdf' });
+    await user.click(within(row).getByRole('button', { name: 'Subir x.pdf' }));
+    expect(await within(row).findByRole('button', { name: 'Reintentar x.pdf' })).toBeInTheDocument();
+  });
+
+  it('revisión M-6: si el fichero ya llegó al almacén, «Reintentar» repite el complete de ese documento', async () => {
+    const user = setupUser();
+    mockedUpload.mockImplementationOnce(async (_t, _p, _i, opts) => {
+      opts?.onStored?.('doc-1');
+      throw new ApiError(503, 'El almacén de archivos no responde.');
+    });
+    render(<PatientDocumentsTab token={DENTIST} patientId="p1" />);
+    await screen.findByText('Sin documentos');
+    dropFiles([pdf('x.pdf')]);
+    const row = await screen.findByRole('listitem', { name: 'x.pdf' });
+    await user.click(within(row).getByRole('button', { name: 'Subir x.pdf' }));
+    expect(await within(row).findByRole('alert')).toHaveTextContent(
+      'El almacén de archivos no responde o hay muchas subidas en curso.',
+    );
+    expect(mockedUpload.mock.calls[0][3]?.resumeDocumentId ?? null).toBeNull();
+    mockedUpload.mockResolvedValueOnce(makeDocument({ id: 'doc-1', originalName: 'x.pdf' }));
+    await user.click(within(row).getByRole('button', { name: 'Reintentar x.pdf' }));
+    expect(await within(row).findByText('Subido')).toBeInTheDocument();
+    expect(mockedUpload.mock.calls[1][3]?.resumeDocumentId).toBe('doc-1');
+  });
+
+  it('QA D2: durante la subida hay «Cancelar»: aborta la subida y la fila vuelve a estar lista, sin aviso de error', async () => {
+    const user = setupUser();
+    let signal: AbortSignal | undefined;
+    mockedUpload.mockImplementationOnce(
+      (_t, _p, _i, opts) =>
+        new Promise((_resolve, reject) => {
+          signal = opts?.signal;
+          signal?.addEventListener('abort', () => reject(new DOMException('Upload aborted', 'AbortError')));
+        }),
+    );
+    render(<PatientDocumentsTab token={DENTIST} patientId="p1" />);
+    await screen.findByText('Sin documentos');
+    dropFiles([pdf('x.pdf')]);
+    const row = await screen.findByRole('listitem', { name: 'x.pdf' });
+    await user.click(within(row).getByRole('button', { name: 'Subir x.pdf' }));
+    await user.click(await within(row).findByRole('button', { name: 'Cancelar x.pdf' }));
+    expect(signal?.aborted).toBe(true);
+    expect(await within(row).findByRole('button', { name: 'Subir x.pdf' })).toBeInTheDocument();
+    expect(within(row).queryByRole('button', { name: 'Cancelar x.pdf' })).toBeNull();
+    expect(mockedNotify).not.toHaveBeenCalled();
   });
 
   it('el «Reintentar» del toast usa la fila actual: si se cambió la categoría tras el fallo, se envía la nueva', async () => {
@@ -469,9 +549,9 @@ describe('PatientDocumentsTab dentro de la ficha: cambiar de pestaña (DX-151)',
 
     rerender(<TabsHarness active="odontogram" />);
     expect(screen.getByRole('tabpanel', { hidden: true })).toHaveAttribute('hidden');
-    await act(async () => fail?.(new ApiError(409, 'Este archivo ya está en la ficha del paciente.')));
+    await act(async () => fail?.(new ApiError(500, 'Fallo')));
     expect(mockedNotify).toHaveBeenCalledWith(
-      'No se subió «rx1.pdf». Este archivo ya está en la ficha del paciente.',
+      expect.stringMatching(/^No se subió «rx1\.pdf»\./),
       expect.objectContaining({ onRetry: expect.any(Function) }),
     );
 

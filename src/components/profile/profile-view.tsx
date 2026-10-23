@@ -2,6 +2,7 @@
 import * as React from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { apiErrorMessage } from '@/lib/api/error-message';
+import { AvatarResizeError } from '@/lib/me/avatar-resize';
 import {
   getMe,
   updateName,
@@ -32,6 +33,7 @@ const copy = {
   uploading: 'Subiendo…',
   remove: 'Quitar foto',
   avatarError: 'No pudimos actualizar tu foto. Intenta de nuevo.',
+  avatarTooLarge: 'La foto pesa más de 900 KB y no pudimos reducirla. Elige otra imagen (PNG, JPEG o WebP).',
 };
 
 const ROLE_LABEL: Record<string, string> = {
@@ -116,7 +118,7 @@ export function ProfileView({ token }: ProfileViewProps) {
       await uploadAvatar(token, file);
       setReloadKey((k) => k + 1);
     } catch (err) {
-      setAvatarError(apiErrorMessage(err, copy.avatarError));
+      setAvatarError(err instanceof AvatarResizeError ? copy.avatarTooLarge : apiErrorMessage(err, copy.avatarError));
     } finally {
       setAvatarBusy(false);
       if (fileRef.current) fileRef.current.value = '';

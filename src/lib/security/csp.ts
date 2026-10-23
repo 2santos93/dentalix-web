@@ -10,7 +10,8 @@
  *   inyecta el color de la clínica; un nonce no cubre atributos `style`. Los
  *   estilos no ejecutan código; la barrera contra XSS es `script-src`.
  * - `connect-src 'self'`: el navegador llega a la API por `/api/v1` del mismo
- *   host (ver `api-base.ts`).
+ *   host (ver `api-base.ts`). Más `filesOrigin` (DX-259): la subida directa
+ *   de documentos es un XHR al bucket (o a la API con el disco).
  * - `img-src`: logos y avatares los sirve la API (otro origen), `data:` para la
  *   firma de consentimientos y `blob:` para la vista previa de imágenes.
  * - `img-src`/`frame-src` + `filesOrigin` (DX-151): el visor de documentos
@@ -35,7 +36,7 @@ export function buildCsp({ nonce, isDev, apiOrigin, filesOrigin = apiOrigin }: C
     ['img-src', ["'self'", 'data:', 'blob:', apiOrigin, ...files]],
     ['frame-src', ["'self'", filesOrigin]],
     ['font-src', ["'self'"]],
-    ['connect-src', ["'self'"]],
+    ['connect-src', ["'self'", filesOrigin]],
     ['object-src', ["'none'"]],
     ['base-uri', ["'self'"]],
     ['form-action', ["'self'"]],
