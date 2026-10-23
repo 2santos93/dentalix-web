@@ -53,7 +53,7 @@ it('paso 1 → 2: lee el archivo y propone el mapeo de columnas con su ejemplo',
   render(<PatientImportWizard token="tok" onBatchChange={jest.fn()} />);
 
   await upload(user);
-  expect(mockedInspect).toHaveBeenCalledWith('tok', expect.any(File));
+  expect(mockedInspect).toHaveBeenCalledWith('tok', expect.any(File), expect.any(Function));
   expect(await screen.findByText('pacientes.csv · 3 filas')).toBeInTheDocument();
   const doc = screen.getByLabelText(/número de documento/i);
   expect(doc).toHaveValue('Cédula');
@@ -80,6 +80,52 @@ it('el error del archivo sale en español junto a la subida', async () => {
   expect(await screen.findByRole('alert')).toHaveTextContent(/Excel antiguo/);
 });
 
+it('DX-107 × DX-259: mientras sube el archivo enseña el progreso y, subido, que lo está leyendo', async () => {
+  let report: ((fraction: number) => void) | undefined;
+  let finish: ((value: ReturnType<typeof inspectFixture>) => void) | undefined;
+  mockedInspect.mockImplementation((_token, _file, onProgress) => {
+    report = onProgress;
+    return new Promise((resolve) => {
+      finish = resolve;
+    });
+  });
+  const user = userEvent.setup();
+  render(<PatientImportWizard token="tok" onBatchChange={jest.fn()} />);
+  await upload(user);
+
+  act(() => report?.(0.42));
+  expect(screen.getByRole('status')).toHaveTextContent('Subiendo el archivo… 42 %');
+  const bar = screen.getByRole('progressbar', { name: 'Subida del archivo' });
+  expect(bar).toHaveAttribute('aria-valuenow', '42');
+
+  act(() => report?.(1));
+  expect(screen.getByRole('status')).toHaveTextContent('Leyendo el archivo…');
+  expect(screen.queryByRole('progressbar', { name: 'Subida del archivo' })).not.toBeInTheDocument();
+
+  await act(async () => finish?.(inspectFixture()));
+  expect(await screen.findByText('pacientes.csv · 3 filas')).toBeInTheDocument();
+  expect(screen.queryByRole('status')).not.toBeInTheDocument();
+});
+
+it('DX-107 × DX-259: al validar vuelve a enseñar el progreso de la subida', async () => {
+  mockedInspect.mockResolvedValue(inspectFixture());
+  let report: ((fraction: number) => void) | undefined;
+  mockedValidate.mockImplementation((_t, _f, _m, _d, onProgress) => {
+    report = onProgress;
+    return new Promise(() => {});
+  });
+  const user = userEvent.setup();
+  render(<PatientImportWizard token="tok" onBatchChange={jest.fn()} />);
+  await upload(user);
+  await user.click(await screen.findByRole('button', { name: 'Validar archivo' }));
+
+  act(() => report?.(0.1));
+  expect(screen.getByRole('status')).toHaveTextContent('Subiendo el archivo… 10 %');
+  expect(screen.getByRole('progressbar', { name: 'Subida del archivo' })).toHaveAttribute('aria-valuenow', '10');
+  act(() => report?.(1));
+  expect(screen.getByRole('status')).toHaveTextContent('Validando… no se guarda ningún paciente todavía.');
+});
+
 it('paso 2: valida con el mapeo elegido y muestra totales, errores por fila y vista previa', async () => {
   mockedInspect.mockResolvedValue(inspectFixture());
   mockedValidate.mockResolvedValue(batchFixture());
@@ -96,6 +142,7 @@ it('paso 2: valida con el mapeo elegido y muestra totales, errores por fila y vi
     expect.any(File),
     { docNumber: 'Cédula', firstName: 'Nombre', lastName: 'Apellidos' },
     'CC',
+    expect.any(Function),
   );
   const result = await screen.findByRole('region', { name: /resultado de la validación/i });
   expect(within(result).getByText('Pacientes nuevos').nextSibling).toHaveTextContent('1');

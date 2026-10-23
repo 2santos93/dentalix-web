@@ -41,6 +41,8 @@ export const wizardCopy = {
   template: 'Descargar plantilla',
   templateError: 'No se pudo descargar la plantilla.',
   reading: 'Leyendo el archivo…',
+  uploading: (fraction: number) => `Subiendo el archivo… ${Math.round(fraction * 100)} %`,
+  uploadProgress: 'Subida del archivo',
   tooBig: 'El archivo pesa más de 5 MB. Divídelo en varios archivos más pequeños.',
   readError: 'No se pudo leer el archivo. Intenta de nuevo.',
   fileSummary: (name: string, rows: number) =>
@@ -95,6 +97,37 @@ interface PatientImportWizardProps {
  * avance). El archivo vive solo en el navegador entre pasos: volver a validar
  * lo sube de nuevo con el mapeo cambiado.
  */
+/**
+ * Mientras sube el archivo (DX-107 × DX-259: hasta 5 MB), el porcentaje y su
+ * barra; subido, `done` («Leyendo…», «Validando…») mientras la API trabaja.
+ */
+function UploadStatus({ uploaded, done }: { uploaded: number | null; done: string }) {
+  const sending = uploaded !== null && uploaded < 1;
+  const percent = Math.round((uploaded ?? 0) * 100);
+  return (
+    <div className="flex flex-col gap-2">
+      <p role="status" className="text-sm text-muted">
+        {sending ? wizardCopy.uploading(uploaded) : done}
+      </p>
+      {sending ? (
+        <div
+          role="progressbar"
+          aria-label={wizardCopy.uploadProgress}
+          aria-valuemin={0}
+          aria-valuemax={100}
+          aria-valuenow={percent}
+          className="h-2 w-full max-w-sm overflow-hidden rounded-full bg-surface-2"
+        >
+          <div
+            className="h-full rounded-full bg-primary transition-[width] duration-200 motion-reduce:transition-none"
+            style={{ width: `${percent}%` }}
+          />
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 export function PatientImportWizard({ token, onBatchChange }: PatientImportWizardProps) {
   const id = React.useId();
   const inputRef = React.useRef<HTMLInputElement>(null);
@@ -106,6 +139,8 @@ export function PatientImportWizard({ token, onBatchChange }: PatientImportWizar
   const [mapping, setMapping] = React.useState<ColumnMapping>({});
   const [defaultDocType, setDefaultDocType] = React.useState<DocType | null>('CC');
   const [validating, setValidating] = React.useState(false);
+  // Fracción subida del archivo (0..1) mientras se lee o se valida; null sin subida.
+  const [uploaded, setUploaded] = React.useState<number | null>(null);
   const [validateError, setValidateError] = React.useState<string | null>(null);
   const [dryRun, setDryRun] = React.useState<ImportBatchDetail | null>(null);
   const [mode, setMode] = React.useState<DuplicateMode>('SKIP');
@@ -223,7 +258,8 @@ export function PatientImportWizard({ token, onBatchChange }: PatientImportWizar
     }
     setReading(true);
     try {
-      const result = await inspectFile(token, chosen);
+      setUploaded(0);
+      const result = await inspectFile(token, chosen, setUploaded);
       setFile(chosen);
       setInspect(result);
       setMapping(result.suggestedMapping);
@@ -235,6 +271,7 @@ export function PatientImportWizard({ token, onBatchChange }: PatientImportWizar
       if (inputRef.current) inputRef.current.value = '';
     } finally {
       setReading(false);
+      setUploaded(null);
     }
   }
 
@@ -243,13 +280,15 @@ export function PatientImportWizard({ token, onBatchChange }: PatientImportWizar
     setValidating(true);
     setValidateError(null);
     try {
-      setDryRun(await validateImport(token, file, mapping, defaultDocType));
+      setUploaded(0);
+      setDryRun(await validateImport(token, file, mapping, defaultDocType, setUploaded));
       setFocusTarget('dry-run');
     } catch (err) {
       setDryRun(null);
       setValidateError(apiErrorMessage(err, wizardCopy.validateError));
     } finally {
       setValidating(false);
+      setUploaded(null);
     }
   }
 
@@ -342,11 +381,7 @@ export function PatientImportWizard({ token, onBatchChange }: PatientImportWizar
               {wizardCopy.template}
             </Button>
           </div>
-          {reading ? (
-            <p role="status" className="text-sm text-muted">
-              {wizardCopy.reading}
-            </p>
-          ) : null}
+          {reading ? <UploadStatus uploaded={uploaded} done={wizardCopy.reading} /> : null}
           {readError ? <InlineError variant="summary">{readError}</InlineError> : null}
         </section>
       ) : null}
@@ -385,11 +420,7 @@ export function PatientImportWizard({ token, onBatchChange }: PatientImportWizar
                 {dryRun ? wizardCopy.revalidate : wizardCopy.validate}
               </Button>
             </div>
-            {validating ? (
-              <p role="status" className="text-sm text-muted">
-                {wizardCopy.validating}
-              </p>
-            ) : null}
+            {validating ? <UploadStatus uploaded={uploaded} done={wizardCopy.validating} /> : null}
             {validateError ? <InlineError variant="summary">{validateError}</InlineError> : null}
           </div>
           {dryRun ? (

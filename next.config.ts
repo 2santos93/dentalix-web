@@ -33,7 +33,8 @@ const nextConfig: NextConfig = {
   experimental: {
     // DX-259 (OPS-038): Next copia en memoria el cuerpo de cada petición que
     // reescribe, y por defecto hasta 10 MB; 1 MB basta para la API (los
-    // documentos van directos al bucket). Ver `api-base.ts`.
+    // documentos van directos al bucket y la importación de pacientes, por
+    // `/api/import-upload/*` en streaming). Ver `api-base.ts`.
     proxyClientMaxBodySize: API_PROXY_MAX_BODY_BYTES,
   },
 };

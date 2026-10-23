@@ -2,6 +2,7 @@
  * @jest-environment node
  */
 import { NextRequest } from 'next/server';
+import { unstable_doesMiddlewareMatch } from 'next/experimental/testing/server';
 import { API_BODY_TOO_LARGE, config, proxy } from './proxy';
 
 function run(url: string, headers: Record<string, string> = {}) {
@@ -85,6 +86,36 @@ describe('proxy (DX-062: CSP con nonce por petición)', () => {
     expect(small.headers.get('x-middleware-next')).toBe('1');
     expect(small.headers.get('content-security-policy')).toBeNull();
     expect(forwarded(small, 'x-nonce')).toBeNull();
+  });
+
+  it('DX-107 × DX-259: la subida de la importación NO pasa por el proxy (Next no copia su cuerpo en memoria); /api/v1 sí', () => {
+    const body = { 'content-length': String(4 * 1024 * 1024) };
+    for (const url of ['/api/import-upload/inspect', '/api/import-upload/validate']) {
+      expect(unstable_doesMiddlewareMatch({ config, url, headers: body })).toBe(false);
+    }
+    // La ruta de siempre de la API sigue con el tope de 1 MB…
+    expect(unstable_doesMiddlewareMatch({ config, url: '/api/v1/patient-imports/inspect', headers: body })).toBe(true);
+    expect(unstable_doesMiddlewareMatch({ config, url: '/api/v1/patient-imports', headers: body })).toBe(true);
+    // …y las páginas, con su CSP.
+    expect(unstable_doesMiddlewareMatch({ config, url: '/settings/importar-pacientes' })).toBe(true);
+  });
+
+  it('DX-107 × DX-259: un multipart de más de 1 MB a /api/v1/patient-imports sigue siendo el 413 en español', async () => {
+    for (const path of ['/api/v1/patient-imports/inspect', '/api/v1/patient-imports']) {
+      const res = proxy(
+        new NextRequest(`http://demo.localhost:3001${path}`, {
+          method: 'POST',
+          headers: {
+            host: 'demo.localhost:3001',
+            authorization: 'Bearer T',
+            'content-type': 'multipart/form-data; boundary=x',
+            'content-length': String(1024 * 1024 + 1),
+          },
+        }),
+      );
+      expect(res.status).toBe(413);
+      expect(await res.json()).toEqual(API_BODY_TOO_LARGE);
+    }
   });
 
   it('DX-259: sobre /api/v1 solo corre si la petición trae cuerpo (Content-Length)', () => {

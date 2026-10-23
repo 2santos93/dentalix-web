@@ -1,7 +1,7 @@
 import { apiFetch, apiFetchText } from '@/lib/api/client';
-import { uploadWithProgress } from '@/lib/api/upload';
 import type { components } from '@/lib/api/schema';
 import type { ClinicRole } from '@/lib/me/me-api';
+import { uploadImportFile } from './import-upload';
 
 // DX-107: tipos del contrato generado (openapi-typescript).
 export type ImportInspect = components['schemas']['PatientImportInspectDto'];
@@ -21,8 +21,8 @@ export function canImportPatients(role: ClinicRole | null): boolean {
   return role === 'ADMIN';
 }
 
-/** Topes de la API: se comprueban antes de subir para no esperar al 413. */
-export const MAX_IMPORT_BYTES = 5 * 1024 * 1024;
+/** Tope de la API: se comprueba antes de subir para no esperar al 413. */
+export { MAX_IMPORT_BYTES } from './import-upload-routes';
 export const IMPORT_ACCEPT = '.csv,.xlsx,text/csv,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 
 export const STATUS_LABELS: Record<ImportStatus, string> = {
@@ -71,10 +71,7 @@ export function inspectFile(
   file: File,
   onProgress?: (fraction: number) => void,
 ): Promise<ImportInspect> {
-  return uploadWithProgress<ImportInspect>('/patient-imports/inspect', fileForm(file), {
-    token,
-    onProgress,
-  });
+  return uploadImportFile<ImportInspect>('inspect', fileForm(file), { token, onProgress });
 }
 
 /** Paso 2: dry-run con el mapeo elegido. No escribe pacientes. */
@@ -87,10 +84,7 @@ export function validateImport(
 ): Promise<ImportBatchDetail> {
   const fields: Record<string, string> = { mapping: JSON.stringify(mapping) };
   if (defaultDocType) fields.defaultDocType = defaultDocType;
-  return uploadWithProgress<ImportBatchDetail>('/patient-imports', fileForm(file, fields), {
-    token,
-    onProgress,
-  });
+  return uploadImportFile<ImportBatchDetail>('validate', fileForm(file, fields), { token, onProgress });
 }
 
 /** Paso 3: confirma; la importación corre en segundo plano. */
