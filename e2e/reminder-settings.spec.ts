@@ -9,7 +9,7 @@ import { API_URL, tenantOrigin } from './support/urls';
 /**
  * e2e DX-026: Ajustes → Recordatorios. El ADMIN activa los recordatorios por
  * email de su sede principal con 48 h y 2 h (y la validación habla en
- * español); recepción no ve la entrada del menú, la pantalla le dice que es de
+ * español); recepción no ve la entrada en Ajustes, la pantalla le dice que es de
  * administración y la API le responde 403 en español; el detalle de una cita
  * enseña sus recordatorios pendientes; todo cabe en 390 px.
  *
@@ -45,13 +45,16 @@ test.beforeAll(async ({ request }) => {
   expect(schedule.ok()).toBeTruthy();
 });
 
-test('ADMIN entra por el menú, activa la sede principal con 48 h y 2 h y la validación es en español', async ({
+test('ADMIN entra por Ajustes, activa la sede principal con 48 h y 2 h y la validación es en español', async ({
   page,
 }) => {
   await loginAs(page, origin, admin.email, password);
   await page.goto(`${origin}/patients`);
   await page.getByRole('button', { name: new RegExp(admin.fullName, 'i') }).first().click();
-  await page.getByRole('menuitem', { name: 'Recordatorios' }).click();
+  // DX-282: el menú de cuenta lleva a «Ajustes», que agrupa los ajustes por tema.
+  await page.getByRole('menuitem', { name: 'Ajustes' }).click();
+  await expect(page).toHaveURL(`${origin}/settings`);
+  await page.getByRole('link', { name: 'Recordatorios' }).click();
   await expect(page).toHaveURL(`${origin}/settings/recordatorios`);
   await expect(page.getByRole('heading', { name: 'Recordatorios' })).toBeVisible();
 
@@ -86,16 +89,16 @@ test('ADMIN entra por el menú, activa la sede principal con 48 h y 2 h y la val
   ).toContainText('2 días y 2 h antes', { timeout: 15_000 });
 });
 
-test('recepción: no ve la entrada del menú, la pantalla es de administración y la API responde 403 en español', async ({
+test('recepción: no ve la entrada en Ajustes, la pantalla es de administración y la API responde 403 en español', async ({
   page,
   request,
 }) => {
   await loginAs(page, origin, reception.email, password);
   await page.goto(`${origin}/patients`);
   await page.getByRole('button', { name: new RegExp(reception.fullName, 'i') }).first().click();
-  await expect(page.getByRole('menuitem', { name: /cerrar sesión/i })).toBeVisible();
-  await expect(page.getByRole('menuitem', { name: 'Recordatorios' })).toHaveCount(0);
-  await page.keyboard.press('Escape');
+  await page.getByRole('menuitem', { name: 'Ajustes' }).click();
+  await expect(page.getByRole('link', { name: 'Horarios' })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole('link', { name: 'Recordatorios' })).toHaveCount(0);
 
   await page.goto(`${origin}/settings/recordatorios`);
   await expect(page.getByText('Solo administración configura los recordatorios.')).toBeVisible({
