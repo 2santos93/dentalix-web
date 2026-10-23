@@ -96,6 +96,8 @@ export const AUDIT_RESOURCE_LABELS: Record<AuditResourceType, string> = {
   AGREEMENT: 'Convenio',
   // DX-233: horario de un profesional por sede y sus excepciones por fecha.
   PROVIDER_SCHEDULE: 'Horario del profesional',
+  // DX-099: anamnesis por enlace (enlace, envío, revisión, anulación).
+  MEDICAL_HISTORY_SUBMISSION: 'Anamnesis por enlace',
 };
 
 export const AUDIT_RESOURCE_OPTIONS = Object.keys(AUDIT_RESOURCE_LABELS) as AuditResourceType[];
@@ -140,9 +142,30 @@ export function communicationDetail(metadata: AuditMetadata): string | null {
   return metadata.origin ? `${what} · ${ORIGIN_LABELS[metadata.origin]}` : what;
 }
 
-/** DX-128: la baja la hizo el propio paciente (el evento no tiene usuario). */
+/**
+ * DX-128: la baja la hizo el propio paciente (el evento no tiene usuario).
+ * DX-099: también el envío de la anamnesis por enlace y su autorización.
+ */
 export function isPatientOptOut(metadata: AuditMetadata): boolean {
-  return metadata.reason === 'REMINDER_OPT_OUT';
+  return (
+    metadata.reason === 'REMINDER_OPT_OUT' ||
+    metadata.reason === 'ANAMNESIS_SUBMITTED' ||
+    metadata.reason === 'ANAMNESIS_LINK'
+  );
+}
+
+const ANAMNESIS_REASONS: Record<string, string> = {
+  ANAMNESIS_LINK_CREATED: 'Enlace de anamnesis creado',
+  ANAMNESIS_SUBMITTED: 'Anamnesis enviada por el paciente',
+  ANAMNESIS_LINK: 'Autorización de datos de salud dada en el enlace de anamnesis',
+  ANAMNESIS_ACCEPTED: 'Anamnesis aceptada en la historia clínica',
+  ANAMNESIS_REJECTED: 'Anamnesis rechazada',
+  ANAMNESIS_LINK_REVOKED: 'Enlace de anamnesis anulado',
+};
+
+/** DX-099: qué pasó con la anamnesis por enlace, o null si no es de ella. */
+export function anamnesisDetail(metadata: AuditMetadata): string | null {
+  return (metadata.reason && ANAMNESIS_REASONS[metadata.reason]) ?? null;
 }
 
 const STAFF_LOGIN_REASONS: Record<string, string> = {
