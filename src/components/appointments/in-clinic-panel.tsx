@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useId, useRef, useState } from 'react';
 import Link from 'next/link';
-import { MapPin, Armchair } from 'lucide-react';
+import { MapPin, Armchair, CalendarClock } from 'lucide-react';
 import type { ClinicRole } from '@/lib/me/me-api';
 import {
   PUNCTUALITY_CLASSES,
@@ -15,8 +15,15 @@ import {
 import type { InClinicState } from '@/components/appointments/use-in-clinic';
 import {
   PatientFlowActions,
+  claimKey,
   type PatientFlowRunner,
 } from '@/components/appointments/patient-flow-actions';
+import {
+  reservationCopy,
+  reservedElsewhereMessage,
+  reservedItemLabel,
+} from '@/lib/appointments/plan-item-reservations';
+import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/shared/empty-state';
 import { SectionError } from '@/components/errors/section-error';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -101,6 +108,8 @@ export function InClinicPanel({
   const [focusCompletion, setFocusCompletion] = useState(0);
   const panelRunner: PatientFlowRunner = {
     pendingId: runner.pendingId,
+    claimingKey: runner.claimingKey,
+    claim: runner.claim,
     run: async (id, action, name) => {
       const source = GROUPS.find((group) => view?.[group].some((item) => item.appointmentId === id)) ?? 'waiting';
       const destination = action === 'SEAT' ? 'inChair' : action === 'READY' ? 'readyForCheckout' : source;
@@ -285,6 +294,7 @@ function InClinicGroup({
                     {inClinicCopy.minutes[group](item.minutesInStatus)}
                   </span>
                 </div>
+                <ReservedElsewhereNotice item={item} runner={runner} />
                 <PatientFlowActions
                   appointmentId={item.appointmentId}
                   status={item.status}
@@ -299,5 +309,53 @@ function InClinicGroup({
         </ul>
       )}
     </section>
+  );
+}
+
+/**
+ * DX-273: tratamientos de la cita reservados en OTRA cita (la reserva se
+ * quedó allí al marcar «Llegó»). Aviso que no bloquea, con «Traer a esta
+ * cita» por tratamiento; nada si no hay.
+ */
+function ReservedElsewhereNotice({ item, runner }: { item: InClinicItem; runner: PatientFlowRunner }) {
+  const reserved = item.planItemsReservedElsewhere ?? [];
+  if (reserved.length === 0) return null;
+  return (
+    <div
+      role="group"
+      aria-label={reservationCopy.noticeTitle}
+      data-testid="reserved-elsewhere"
+      className="flex flex-col gap-2 rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-ink"
+    >
+      {reserved.map((r) => {
+        const label = reservedItemLabel(r);
+        const busy = runner.claimingKey === claimKey(item.appointmentId, r.planItemId);
+        return (
+          <div key={r.planItemId} className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex min-w-0 items-start gap-2">
+              <CalendarClock aria-hidden className="mt-0.5 size-4 shrink-0 text-warning" />
+              <div className="min-w-0">
+                <p className="text-sm font-medium break-words">{label}</p>
+                <p className="text-xs break-words">{reservedElsewhereMessage(r)}</p>
+              </div>
+            </div>
+            {runner.claim ? (
+              <Button
+                type="button"
+                size="sm"
+                variant="secondary"
+                loading={busy}
+                disabled={runner.claimingKey != null}
+                aria-label={`${reservationCopy.claim}: ${label}`}
+                onClick={() => void runner.claim?.(item.appointmentId, r)}
+                className="h-11 shrink-0 sm:h-9"
+              >
+                {reservationCopy.claim}
+              </Button>
+            ) : null}
+          </div>
+        );
+      })}
+    </div>
   );
 }
