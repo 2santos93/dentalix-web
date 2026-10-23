@@ -21674,6 +21674,20 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Hay demasiadas subidas en curso. Inténtalo de nuevo en unos segundos. (semáforo de subidas, antes de recibir el cuerpo) / Ya se está leyendo otro archivo de importación de esta clínica. Vuelve a intentarlo en unos segundos. / Hay otras importaciones leyéndose ahora mismo. Vuelve a intentarlo en unos segundos. (con el fichero ya recibido). Siempre con Retry-After. SEC-046: como mucho 2 lecturas a la vez por réplica y 1 por clínica (configurable). */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     PatientImportsController_list: {
@@ -21755,6 +21769,20 @@ export interface operations {
             };
             /** @description El archivo pesa más de 5 MB. Divídelo en varios archivos más pequeños. */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Hay demasiadas subidas en curso. Inténtalo de nuevo en unos segundos. (semáforo de subidas, antes de recibir el cuerpo) / Ya se está leyendo otro archivo de importación de esta clínica. Vuelve a intentarlo en unos segundos. / Hay otras importaciones leyéndose ahora mismo. Vuelve a intentarlo en unos segundos. (con el fichero ya recibido). Siempre con Retry-After. SEC-046: como mucho 2 lecturas a la vez por réplica y 1 por clínica (configurable). */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -21904,6 +21932,20 @@ export interface operations {
             };
             /** @description El archivo pesa más de 5 MB. Divídelo en varios archivos más pequeños. */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Hay demasiadas subidas en curso. Inténtalo de nuevo en unos segundos. (semáforo de subidas, antes de recibir el cuerpo) / Ya se está leyendo otro archivo de importación de esta clínica. Vuelve a intentarlo en unos segundos. / Hay otras importaciones leyéndose ahora mismo. Vuelve a intentarlo en unos segundos. (con el fichero ya recibido). Siempre con Retry-After. SEC-046: como mucho 2 lecturas a la vez por réplica y 1 por clínica (configurable). */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
