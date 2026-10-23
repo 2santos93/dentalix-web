@@ -37,6 +37,11 @@ import { DayColumns } from '@/components/appointments/day-columns';
 import { announceAppointmentWarnings } from '@/components/appointments/appointment-warnings';
 import { MoveAppointmentDialog } from '@/components/appointments/move-appointment-dialog';
 import {
+  CompletedExitModal,
+  type CompletedExitResult,
+} from '@/components/appointments/completed-exit-modal';
+import { completedExitSummary } from '@/lib/appointments/plan-item-reservations';
+import {
   MAX_PROVIDER_COLUMNS,
   ProviderColumnsPicker,
 } from '@/components/appointments/provider-columns-picker';
@@ -159,6 +164,7 @@ const copy = {
   moved: 'Cita movida.',
   // DX-210: «Ocupar este hueco» tras cancelar.
   cancelled: 'Cita cancelada.',
+  completedExitDone: (status: string) => `La cita pasó a «${status}».`,
   fillOpening: 'Ocupar este hueco',
   filled: 'La agenda ya muestra al paciente en el hueco.',
   wantsEarlierHint: 'Saldrá como candidato cuando se libere un hueco en un día anterior.',
@@ -463,6 +469,11 @@ export function AgendaView({ token }: AgendaViewProps) {
   // disable just that row's select; a failed PATCH surfaces via
   // `notifyError` (background, rung 3) instead of blocking state.
   const [updatingId, setUpdatingId] = useState<string | null>(null);
+  // DX-273: salir de «Completada» pide un motivo (modal).
+  const [completedExit, setCompletedExit] = useState<{
+    id: string;
+    to: AppointmentStatus;
+  } | null>(null);
 
   // Fetch active staff once (retriable) — feeds the provider selector.
   useEffect(() => {
@@ -881,8 +892,13 @@ export function AgendaView({ token }: AgendaViewProps) {
    */
   async function handleStatusChange(id: string, status: AppointmentStatus) {
     if (!token) return;
-    setUpdatingId(id);
     const before = appointments.find((a) => a.id === id);
+    // DX-273: la salida de «Completada» va por el modal del motivo.
+    if (before?.status === 'COMPLETED' && status !== 'COMPLETED') {
+      setCompletedExit({ id, to: status });
+      return;
+    }
+    setUpdatingId(id);
     try {
       await updateAppointment(token, id, { status });
       // DX-210: la cita recién cancelada deja un hueco: se ofrece ocuparlo.
@@ -918,6 +934,19 @@ export function AgendaView({ token }: AgendaViewProps) {
     } finally {
       setUpdatingId(null);
     }
+  }
+
+  /** DX-273: la cita salió de «Completada»: aviso con el mínimo recalculado. */
+  async function handleCompletedExitDone(result: CompletedExitResult) {
+    setCompletedExit(null);
+    const summary = result.completedExit ? completedExitSummary(result.completedExit) : [];
+    toast.success(copy.completedExitDone(STATUS_LABELS[result.status]), {
+      description: summary.length ? summary.join(' ') : undefined,
+    });
+    setWaitlistReloadKey((k) => k + 1);
+    setInClinicReloadKey((k) => k + 1);
+    notifyInClinicChanged();
+    await refreshAppointmentsInPlace();
   }
 
   /** DX-210: marcar o desmarcar «Adelantar si hay hueco» desde el detalle. */
@@ -1187,6 +1216,7 @@ export function AgendaView({ token }: AgendaViewProps) {
                 error={appointmentsLoadError}
                 onRetry={() => setAppointmentsReloadKey((k) => k + 1)}
                 onStatusChange={handleStatusChange}
+                role={role}
                 updatingId={updatingId}
                 onSelectAppointment={openAppointmentDetail}
                 renderActions={renderFlowActions}
@@ -1234,6 +1264,19 @@ export function AgendaView({ token }: AgendaViewProps) {
             )}
           </div>
         )}
+
+        {completedExit && token ? (
+          <CompletedExitModal
+            open
+            onOpenChange={(open) => {
+              if (!open) setCompletedExit(null);
+            }}
+            token={token}
+            appointmentId={completedExit.id}
+            to={completedExit.to}
+            onDone={(result) => void handleCompletedExitDone(result)}
+          />
+        ) : null}
 
         {movingAppointment && (
           <MoveAppointmentDialog
@@ -1293,6 +1336,7 @@ export function AgendaView({ token }: AgendaViewProps) {
                 error={appointmentsLoadError}
                 onRetry={() => setAppointmentsReloadKey((k) => k + 1)}
                 onStatusChange={handleStatusChange}
+                role={role}
                 updatingId={updatingId}
                 onSelectAppointment={openAppointmentDetail}
                 renderActions={renderFlowActions}
@@ -1352,7 +1396,7 @@ export function AgendaView({ token }: AgendaViewProps) {
                       );
                     }}
                   >
-                    {statusOptionsFor(liveDetailAppointment.status).map((s) => (
+                    {statusOptionsFor(liveDetailAppointment.status, role).map((s) => (
                       <option key={s} value={s}>
                         {STATUS_LABELS[s]}
                       </option>

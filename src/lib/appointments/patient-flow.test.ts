@@ -55,6 +55,14 @@ describe('patient-flow (DX-200)', () => {
     });
   });
 
+  it('DX-273: de «Completada» solo salen el odontólogo y la administración', () => {
+    expect(statusOptionsFor('COMPLETED', 'RECEPTION')).toEqual(['COMPLETED']);
+    expect(statusOptionsFor('COMPLETED', 'ASSISTANT')).toEqual(['COMPLETED']);
+    expect(statusOptionsFor('COMPLETED', 'DENTIST')).toContain('CANCELLED');
+    expect(statusOptionsFor('COMPLETED', 'ADMIN')).toContain('SCHEDULED');
+    expect(statusOptionsFor('SCHEDULED', 'RECEPTION')).toContain('CANCELLED');
+  });
+
   it('el selector de estado no ofrece saltos: en el flujo, solo su estado y la salida', () => {
     expect(statusOptionsFor('SCHEDULED')).toEqual([
       'SCHEDULED',

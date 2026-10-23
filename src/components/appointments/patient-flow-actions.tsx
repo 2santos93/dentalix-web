@@ -13,6 +13,13 @@ import {
   type FlowAction,
 } from '@/lib/appointments/patient-flow';
 import type { ClinicRole } from '@/lib/me/me-api';
+import {
+  claimPlanItem,
+  reservationCopy,
+  reservedElsewhereMessage,
+  reservedItemLabel,
+  type PlanItemReservedElsewhere,
+} from '@/lib/appointments/plan-item-reservations';
 import { notifyError } from '@/components/errors/notify';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -42,6 +49,18 @@ export interface PatientFlowRunner {
   pendingId: string | null;
   /** false: la API rechazó el paso; el aviso y el refresco ya se gestionaron. */
   run: (appointmentId: string, action: FlowAction, patientName: string) => Promise<boolean>;
+  /** DX-273: `${appointmentId}:${planItemId}` que se está trayendo, si hay. */
+  claimingKey?: string | null;
+  /**
+   * DX-273 «Traer a esta cita»: la cita pasa a reservar el tratamiento que
+   * reservaba otra. false si la API lo rechazó (ya avisado con Reintentar).
+   */
+  claim?: (appointmentId: string, item: PlanItemReservedElsewhere) => Promise<boolean>;
+}
+
+/** Clave de un «Traer a esta cita» en curso. */
+export function claimKey(appointmentId: string, planItemId: string): string {
+  return `${appointmentId}:${planItemId}`;
 }
 
 /**
@@ -52,16 +71,54 @@ export interface PatientFlowRunner {
  */
 export function usePatientFlow(token: string, onChanged: () => void): PatientFlowRunner {
   const [pendingId, setPendingId] = useState<string | null>(null);
+  const [claimingKey, setClaimingKey] = useState<string | null>(null);
+
+  async function claim(appointmentId: string, item: PlanItemReservedElsewhere) {
+    setClaimingKey(claimKey(appointmentId, item.planItemId));
+    try {
+      await claimPlanItem(token, appointmentId, item.planItemId);
+      toast.success(reservationCopy.claimed(reservedItemLabel(item)));
+      return true;
+    } catch (err) {
+      notifyError(apiErrorMessage(err, reservationCopy.claimError), {
+        onRetry: () => void claim(appointmentId, item),
+      });
+      return false;
+    } finally {
+      setClaimingKey(null);
+      onChanged();
+      notifyInClinicChanged();
+    }
+  }
 
   async function run(appointmentId: string, action: FlowAction, patientName: string) {
     setPendingId(appointmentId);
     try {
+      let reserved: PlanItemReservedElsewhere[] = [];
       if (action === 'UNDO_ARRIVAL') {
         await undoArrival(token, appointmentId);
       } else {
-        await updateAppointment(token, appointmentId, { status: FLOW_ACTION_STATUS[action] });
+        const result = (await updateAppointment(token, appointmentId, {
+          status: FLOW_ACTION_STATUS[action],
+        })) as { planItemsReservedElsewhere?: PlanItemReservedElsewhere[] };
+        reserved = result.planItemsReservedElsewhere ?? [];
       }
       toast.success(patientFlowCopy.done[action](patientName));
+      // DX-273: el tratamiento sigue reservado en otra cita. Aviso que no
+      // bloquea y espera (lleva acción); el panel «En clínica» lo repite.
+      if (action === 'ARRIVE') {
+        for (const item of reserved) {
+          toast.warning(reservedItemLabel(item), {
+            id: `reserved:${claimKey(appointmentId, item.planItemId)}`,
+            description: reservedElsewhereMessage(item),
+            duration: Infinity,
+            action: {
+              label: reservationCopy.claim,
+              onClick: () => void claim(appointmentId, item),
+            },
+          });
+        }
+      }
       return true;
     } catch (err) {
       // El reintento cierra sobre la propia operación (cita y paso): no hay
@@ -77,7 +134,7 @@ export function usePatientFlow(token: string, onChanged: () => void): PatientFlo
     }
   }
 
-  return { pendingId, run };
+  return { pendingId, run, claimingKey, claim };
 }
 
 interface PatientFlowActionsProps {
