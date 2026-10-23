@@ -1,13 +1,15 @@
-import { render, screen, fireEvent, waitFor } from '@testing-library/react';
+import { render, screen, waitFor } from '@testing-library/react';
+import { setupUser } from '@/lib/test/user';
 import { UserMenu } from './user-menu';
 
 const push = jest.fn();
 const clear = jest.fn();
+const setTheme = jest.fn();
 let mockAccessToken = 'T';
 jest.mock('next/navigation', () => ({ useRouter: () => ({ push, replace: push }) }));
 jest.mock('../../lib/me/me-api', () => ({ getMe: jest.fn() }));
 jest.mock('next-themes', () => ({
-  useTheme: () => ({ resolvedTheme: 'light', setTheme: jest.fn() }),
+  useTheme: () => ({ resolvedTheme: 'light', setTheme }),
 }));
 jest.mock('../../lib/auth/auth-store', () => ({
   useAuthStore: Object.assign(
@@ -20,10 +22,17 @@ jest.mock('../../lib/auth/auth-api', () => ({ logout: jest.fn() }));
 import { getMe } from '../../lib/me/me-api';
 import { logout } from '../../lib/auth/auth-api';
 
+function tokenForRole(role: string): string {
+  const part = (value: string) =>
+    btoa(value).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+  return `${part('{"alg":"HS256"}')}.${part(JSON.stringify({ sub: 'u1', tenantId: 't1', role }))}.sig`;
+}
+
 describe('UserMenu', () => {
   beforeEach(() => {
     push.mockReset();
     clear.mockReset();
+    setTheme.mockReset();
     (logout as jest.Mock).mockReset().mockResolvedValue(undefined);
     (getMe as jest.Mock).mockResolvedValue({
       id: 'u1',
@@ -34,6 +43,9 @@ describe('UserMenu', () => {
       memberships: [{ tenantId: 't1', clinicName: 'Sonrisa', role: 'ADMIN' }],
     });
   });
+  afterEach(() => {
+    mockAccessToken = 'T';
+  });
 
   it('muestra el nombre y el rol del usuario', async () => {
     render(<UserMenu />);
@@ -42,36 +54,104 @@ describe('UserMenu', () => {
   });
 
   it('el menú está cerrado hasta hacer clic', async () => {
+    const user = setupUser();
     render(<UserMenu />);
     await screen.findByText('Ana Gómez');
     expect(screen.queryByRole('menu')).not.toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: /ana gómez/i }));
-    expect(screen.getByRole('menu')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /ana gómez/i }));
+    expect(await screen.findByRole('menu')).toBeInTheDocument();
   });
 
-  it('el menú expone perfil, switch de tema y cerrar sesión', async () => {
+  it('DX-282: solo Mi perfil, Ajustes, el tema y Cerrar sesión — también para ADMIN', async () => {
+    // Con 21 entradas el menú no cabía en una pantalla de 1366×768 (FE-062):
+    // los ajustes de la clínica viven ahora en /settings.
+    mockAccessToken = tokenForRole('ADMIN');
+    const user = setupUser();
     render(<UserMenu />);
-    await screen.findByText('Ana Gómez');
-    fireEvent.click(screen.getByRole('button', { name: /ana gómez/i }));
-    expect(screen.getByRole('menuitem', { name: /mi perfil/i })).toHaveAttribute(
+    await user.click(await screen.findByRole('button', { name: /ana gómez/i }));
+    await screen.findByRole('menu');
+
+    expect(screen.getByRole('menuitem', { name: 'Mi perfil' })).toHaveAttribute(
       'href',
       '/settings/profile',
     );
-    // Única entrada a la pantalla de horarios: sin esto la ruta existe pero no
-    // se puede llegar a ella desde la app.
-    expect(screen.getByRole('menuitem', { name: /^horarios$/i })).toHaveAttribute(
-      'href',
-      '/settings/horarios',
+    expect(screen.getByRole('menuitem', { name: 'Ajustes' })).toHaveAttribute('href', '/settings');
+    expect(screen.getByRole('menuitemcheckbox', { name: 'Tema oscuro' })).toHaveAttribute(
+      'aria-checked',
+      'false',
     );
-    expect(screen.getByRole('switch', { name: /cambiar tema/i })).toBeInTheDocument();
     expect(screen.getByRole('menuitem', { name: /cerrar sesión/i })).toBeInTheDocument();
+    expect(screen.getAllByRole('menuitem')).toHaveLength(3);
+    for (const gone of ['Horarios', 'Sedes', 'Consentimientos', 'Recordatorios', 'Convenios']) {
+      expect(screen.queryByRole('menuitem', { name: gone })).not.toBeInTheDocument();
+    }
+  });
+
+  it.each(['DENTIST', 'ASSISTANT', 'RECEPTION'])('%s también ve «Ajustes»', async (role) => {
+    // Horarios, Sedes y Privacidad de datos los leen todos los roles.
+    mockAccessToken = tokenForRole(role);
+    const user = setupUser();
+    render(<UserMenu />);
+    await user.click(await screen.findByRole('button', { name: /ana gómez/i }));
+    expect(await screen.findByRole('menuitem', { name: 'Ajustes' })).toHaveAttribute(
+      'href',
+      '/settings',
+    );
+  });
+
+  it('cambiar el tema no cierra el menú', async () => {
+    const user = setupUser();
+    render(<UserMenu />);
+    await user.click(await screen.findByRole('button', { name: /ana gómez/i }));
+    await user.click(await screen.findByRole('menuitemcheckbox', { name: 'Tema oscuro' }));
+    expect(setTheme).toHaveBeenCalledWith('dark');
+    expect(screen.getByRole('menu')).toBeInTheDocument();
+  });
+
+  describe('teclado', () => {
+    it('Enter abre con el foco en el primer ítem; las flechas recorren y Escape devuelve el foco al disparador', async () => {
+      const user = setupUser();
+      render(<UserMenu />);
+      const trigger = await screen.findByRole('button', { name: /ana gómez/i });
+      trigger.focus();
+
+      await user.keyboard('{Enter}');
+      await screen.findByRole('menu');
+      expect(trigger).toHaveAttribute('aria-expanded', 'true');
+      await waitFor(() => expect(screen.getByRole('menuitem', { name: 'Mi perfil' })).toHaveFocus());
+
+      await user.keyboard('{ArrowDown}');
+      expect(screen.getByRole('menuitem', { name: 'Ajustes' })).toHaveFocus();
+      await user.keyboard('{ArrowDown}');
+      expect(screen.getByRole('menuitemcheckbox', { name: 'Tema oscuro' })).toHaveFocus();
+      await user.keyboard('{ArrowDown}');
+      expect(screen.getByRole('menuitem', { name: /cerrar sesión/i })).toHaveFocus();
+      await user.keyboard('{ArrowUp}');
+      expect(screen.getByRole('menuitemcheckbox', { name: 'Tema oscuro' })).toHaveFocus();
+
+      await user.keyboard('{Escape}');
+      await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument());
+      expect(trigger).toHaveAttribute('aria-expanded', 'false');
+      expect(trigger).toHaveFocus();
+    });
+
+    it('la flecha hacia arriba en el primero salta al último (bucle)', async () => {
+      const user = setupUser();
+      render(<UserMenu variant="compact" />);
+      const trigger = await screen.findByRole('button', { name: 'Cuenta' });
+      trigger.focus();
+      await user.keyboard('{Enter}');
+      await waitFor(() => expect(screen.getByRole('menuitem', { name: 'Mi perfil' })).toHaveFocus());
+      await user.keyboard('{ArrowUp}');
+      expect(screen.getByRole('menuitem', { name: /cerrar sesión/i })).toHaveFocus();
+    });
   });
 
   async function clickLogout() {
+    const user = setupUser();
     render(<UserMenu />);
-    await screen.findByText('Ana Gómez');
-    fireEvent.click(screen.getByRole('button', { name: /ana gómez/i }));
-    fireEvent.click(screen.getByRole('menuitem', { name: /cerrar sesión/i }));
+    await user.click(await screen.findByRole('button', { name: /ana gómez/i }));
+    await user.click(await screen.findByRole('menuitem', { name: /cerrar sesión/i }));
   }
 
   it('cierra sesión: revoca el refresh token ANTES de limpiar el estado y redirige a /login (DX-061)', async () => {
@@ -104,112 +184,4 @@ describe('UserMenu', () => {
     await waitFor(() => expect(push).toHaveBeenCalledWith('/login'), { timeout: 4000 });
     expect(clear).toHaveBeenCalled();
   }, 10_000);
-
-  it('se cierra al presionar Escape', async () => {
-    render(<UserMenu />);
-    await screen.findByText('Ana Gómez');
-    fireEvent.click(screen.getByRole('button', { name: /ana gómez/i }));
-    expect(screen.getByRole('menu')).toBeInTheDocument();
-    fireEvent.keyDown(document, { key: 'Escape' });
-    await waitFor(() => expect(screen.queryByRole('menu')).not.toBeInTheDocument());
-  });
-});
-
-describe('UserMenu — plantillas de consentimiento (DX-006)', () => {
-  function tokenForRole(role: string): string {
-    const part = (value: string) =>
-      btoa(value).replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
-    return `${part('{"alg":"HS256"}')}.${part(JSON.stringify({ sub: 'u1', tenantId: 't1', role }))}.sig`;
-  }
-
-  beforeEach(() => {
-    (getMe as jest.Mock).mockResolvedValue({
-      id: 'u1',
-      email: 'a@b.com',
-      fullName: 'Ana Gómez',
-      avatarUrl: null,
-      emailVerifiedAt: null,
-      memberships: [{ tenantId: 't1', clinicName: 'Sonrisa', role: 'ADMIN' }],
-    });
-  });
-  afterEach(() => {
-    mockAccessToken = 'T';
-  });
-
-  it('ADMIN ve el acceso a /settings/consentimientos', async () => {
-    mockAccessToken = tokenForRole('ADMIN');
-    render(<UserMenu />);
-    fireEvent.click(await screen.findByRole('button', { name: /ana gómez/i }));
-    expect(screen.getByRole('menuitem', { name: 'Consentimientos' })).toHaveAttribute(
-      'href',
-      '/settings/consentimientos',
-    );
-    // DX-247: vigencia de la anamnesis.
-    expect(screen.getByRole('menuitem', { name: 'Historia clínica' })).toHaveAttribute(
-      'href',
-      '/settings/historia-clinica',
-    );
-    // DX-013: plantillas de receta y país de las sedes.
-    expect(screen.getByRole('menuitem', { name: 'Recetas' })).toHaveAttribute(
-      'href',
-      '/settings/recetas',
-    );
-    // DX-026: recordatorios por email de cada sede.
-    expect(screen.getByRole('menuitem', { name: 'Recordatorios' })).toHaveAttribute(
-      'href',
-      '/settings/recordatorios',
-    );
-    // DX-191: búsqueda de implantes por lote.
-    expect(screen.getByRole('menuitem', { name: 'Implantes' })).toHaveAttribute(
-      'href',
-      '/settings/implantes',
-    );
-    // SEC-009: dominios propios (añadir, verificar, eliminar).
-    expect(screen.getByRole('menuitem', { name: 'Dominios propios' })).toHaveAttribute(
-      'href',
-      '/settings/dominios',
-    );
-    // SEC-008: accesos de soporte (break-glass) de Dentalix a la clínica.
-    expect(screen.getByRole('menuitem', { name: 'Accesos de soporte' })).toHaveAttribute(
-      'href',
-      '/settings/accesos-de-soporte',
-    );
-    // DX-222: plantillas de indicaciones postoperatorias.
-    expect(screen.getByRole('menuitem', { name: 'Indicaciones postoperatorias' })).toHaveAttribute(
-      'href',
-      '/settings/indicaciones',
-    );
-    // DX-153: catálogo de pagadores.
-    expect(screen.getByRole('menuitem', { name: 'Pagadores' })).toHaveAttribute(
-      'href',
-      '/settings/pagadores',
-    );
-    // DX-105: convenios y listas de precios.
-    expect(screen.getByRole('menuitem', { name: 'Convenios' })).toHaveAttribute(
-      'href',
-      '/settings/convenios',
-    );
-    expect(screen.getByRole('menuitem', { name: 'Listas de precios' })).toHaveAttribute(
-      'href',
-      '/settings/listas-de-precios',
-    );
-  });
-
-  it.each(['DENTIST', 'ASSISTANT', 'RECEPTION'])('%s no lo ve', async (role) => {
-    mockAccessToken = tokenForRole(role);
-    render(<UserMenu />);
-    fireEvent.click(await screen.findByRole('button', { name: /ana gómez/i }));
-    expect(screen.queryByRole('menuitem', { name: 'Consentimientos' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('menuitem', { name: 'Recetas' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('menuitem', { name: 'Recordatorios' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('menuitem', { name: 'Dominios propios' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('menuitem', { name: 'Implantes' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('menuitem', { name: 'Accesos de soporte' })).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole('menuitem', { name: 'Indicaciones postoperatorias' }),
-    ).not.toBeInTheDocument();
-    expect(screen.queryByRole('menuitem', { name: 'Pagadores' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('menuitem', { name: 'Convenios' })).not.toBeInTheDocument();
-    expect(screen.queryByRole('menuitem', { name: 'Listas de precios' })).not.toBeInTheDocument();
-  });
 });

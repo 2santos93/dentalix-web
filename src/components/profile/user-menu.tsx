@@ -1,54 +1,20 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import {
-  ChevronUp,
-  ClipboardList,
-  Clock,
-  FileSignature,
-  LogOut,
-  Pill,
-  Settings,
-  ShieldCheck,
-  Sun,
-  Moon,
-  CalendarClock,
-  BellRing,
-  BadgePercent,
-  Wallet,
-  NotebookPen,
-  FileUp,
-  Globe,
-  ScanBarcode,
-  LifeBuoy,
-  Building2,
-  Landmark,
-  Handshake,
-  ListOrdered,
-  ClipboardClock,
-} from 'lucide-react';
+import * as DropdownMenuPrimitive from '@radix-ui/react-dropdown-menu';
+import { ChevronUp, LogOut, Moon, Settings, UserRound } from 'lucide-react';
 import { useTheme } from 'next-themes';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { logout } from '@/lib/auth/auth-api';
 import { getMe, type ClinicRole } from '@/lib/me/me-api';
-import { getTokenRole } from '@/lib/auth/token-role';
-import { canManageConsentTemplates } from '@/lib/consents/consents-api';
-import { canManagePrescriptionTemplates } from '@/lib/prescriptions/prescriptions-api';
-import { canManageAppointmentTypes } from '@/lib/appointments/appointment-types-api';
-import { canManagePayers } from '@/lib/payers/payers-api';
-import { canManagePriceLists } from '@/lib/price-lists/price-lists-api';
-import { canManageAgreements } from '@/lib/agreements/agreements-api';
-import { canManageNoteTemplates } from '@/lib/clinical-notes/note-templates-api';
-import { canManagePostOpTemplates } from '@/lib/postop/postop-api';
-import { canManageReminders } from '@/lib/reminders/reminders-api';
-import { canManageDiscounts } from '@/lib/discounts/discounts-api';
-import { canManageCashSessions } from '@/lib/cash-sessions/cash-sessions-api';
-import { canManageAnamnesisSettings } from '@/lib/clinical/medical-alerts';
-import { canManageDomains } from '@/lib/domains/domains-api';
-import { canImportPatients } from '@/lib/patient-imports/patient-imports-api';
-import { canSearchImplantLots } from '@/lib/implants/implants-api';
-import { canReadSupportAccesses } from '@/lib/support-accesses/support-accesses-api';
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
 
 // Tope de espera a la revocación en el servidor al cerrar sesión: la API suele
@@ -77,28 +43,10 @@ async function revokeSession(): Promise<void> {
 const copy = {
   account: 'Cuenta',
   profile: 'Mi perfil',
-  businessHours: 'Horarios',
-  // DX-212: datos legales de las sedes (código REPS).
-  locations: 'Sedes',
-  privacy: 'Privacidad de datos',
-  consentTemplates: 'Consentimientos',
-  prescriptionSettings: 'Recetas',
-  implantSettings: 'Implantes',
-  appointmentTypes: 'Tipos de cita',
-  payers: 'Pagadores',
-  agreements: 'Convenios',
-  priceLists: 'Listas de precios',
-  noteTemplates: 'Plantillas de evolución',
-  postOpTemplates: 'Indicaciones postoperatorias',
-  reminders: 'Recordatorios',
-  discounts: 'Descuentos',
-  cashSettings: 'Caja',
-  clinicalHistorySettings: 'Historia clínica',
-  patientImport: 'Importar pacientes',
-  domains: 'Dominios propios',
-  supportAccesses: 'Accesos de soporte',
+  // DX-282: los ajustes de la clínica viven en /settings, agrupados por tema.
+  settings: 'Ajustes',
+  darkTheme: 'Tema oscuro',
   logout: 'Cerrar sesión',
-  theme: 'Cambiar tema',
 };
 
 // Etiquetas de rol en español — espejo de las de profile-view.tsx.
@@ -118,57 +66,77 @@ function initials(name: string): string {
     .join('');
 }
 
-/** Fila de cambio de tema (sol · switch · luna) dentro del dropdown. */
-function ThemeRow() {
+/**
+ * Clases de los ítems del menú de cuenta. Bajo `md` llegan a 44 px de alto
+ * (FE-068): en el móvil es un objetivo táctil.
+ */
+const ITEM = 'max-md:min-h-11';
+
+/**
+ * Tema oscuro como `menuitemcheckbox`: entra en el recorrido con flechas (un
+ * `switch` suelto dentro de un `role="menu"` no lo alcanza el teclado) y
+ * anuncia su estado. El interruptor de la derecha es solo la marca visual.
+ * Cambiarlo no cierra el menú: se ve el efecto y se sigue.
+ */
+function ThemeItem() {
   const { resolvedTheme, setTheme } = useTheme();
   const [mounted, setMounted] = useState(false);
   // Marca el montaje en cliente para evitar el mismatch de hidratación de
   // next-themes; setState-en-effect intencional para este patrón SSR.
   // eslint-disable-next-line react-hooks/set-state-in-effect
   useEffect(() => setMounted(true), []);
-  const isDark = resolvedTheme === 'dark';
+  const isDark = mounted && resolvedTheme === 'dark';
 
   return (
-    <div className="flex items-center justify-between px-3 py-2">
-      <Sun className="size-4 text-muted" aria-hidden />
-      {mounted ? (
-        <button
-          type="button"
-          role="switch"
-          aria-checked={isDark}
-          aria-label={copy.theme}
-          onClick={() => setTheme(isDark ? 'light' : 'dark')}
-          className={cn(
-            'relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border border-border transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
-            isDark ? 'bg-primary' : 'bg-bg',
-          )}
-        >
-          <span
-            className={cn(
-              'inline-block h-5 w-5 rounded-full bg-surface shadow transition-transform',
-              isDark ? 'translate-x-5' : 'translate-x-0.5',
-            )}
-          />
-        </button>
-      ) : (
-        // Placeholder inerte del mismo tamaño: evita el layout shift en SSR.
-        <span
-          aria-hidden
-          className="inline-flex h-6 w-11 shrink-0 rounded-full border border-border bg-bg"
-        />
+    <DropdownMenuPrimitive.CheckboxItem
+      checked={isDark}
+      disabled={!mounted}
+      onSelect={(event) => {
+        event.preventDefault();
+        setTheme(isDark ? 'light' : 'dark');
+      }}
+      className={cn(
+        'flex cursor-pointer select-none items-center gap-2.5 rounded-lg px-2.5 py-2 text-sm text-ink outline-none transition-colors',
+        'data-[highlighted]:bg-surface-2 data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
+        ITEM,
       )}
-      <Moon className="size-4 text-muted" aria-hidden />
-    </div>
+    >
+      <Moon className="size-4 shrink-0 text-muted" aria-hidden />
+      <span className="flex-1">{copy.darkTheme}</span>
+      <span
+        aria-hidden
+        className={cn(
+          'relative inline-flex h-6 w-11 shrink-0 items-center rounded-full border border-border transition-colors',
+          isDark ? 'bg-primary' : 'bg-bg',
+        )}
+      >
+        <span
+          className={cn(
+            'inline-block h-5 w-5 rounded-full bg-surface shadow transition-transform',
+            isDark ? 'translate-x-5' : 'translate-x-0.5',
+          )}
+        />
+      </span>
+    </DropdownMenuPrimitive.CheckboxItem>
   );
 }
 
 /**
- * Menú de cuenta. Muestra avatar (foto o iniciales), nombre y rol del usuario
- * autenticado (`GET /me`) y despliega un menú con acceso al perfil, cambio de
- * tema y cierre de sesión. Se cierra con clic-fuera o Escape.
+ * Menú de cuenta (DX-282, sobre Radix como pedía DX-065). Muestra avatar (foto
+ * o iniciales), nombre y rol del usuario autenticado (`GET /me`) y despliega
+ * «Mi perfil», «Ajustes», el tema y «Cerrar sesión».
+ *
+ * Los ajustes de la clínica ya no están aquí: con 21 entradas el menú se salía
+ * por arriba de una pantalla de 1366×768 (FE-062). Ahora son cuatro ítems, y
+ * aun así el panel lleva un tope de alto con scroll propio y Radix lo
+ * recoloca si choca con el borde (`collisionPadding`), por si el menú crece.
+ * Radix da además flechas, Escape, foco devuelto al disparador y clic fuera.
+ * No modal (`modal={false}`): un menú de cuenta no tiene por qué bloquear el
+ * scroll ni marcar `aria-hidden` el resto de la página, que sigue teniendo
+ * elementos enfocables (axe `aria-hidden-focus`); Tab fuera lo cierra.
  *
  * - `variant="card"` (default): tarjeta a lo ancho para el pie del sidebar; el
- *   menú se abre hacia ARRIBA, sobre la tarjeta.
+ *   menú se abre hacia ARRIBA, a lo ancho de la tarjeta.
  * - `variant="rail"`: solo el avatar, para el sidebar colapsado; el menú abre
  *   hacia arriba y desborda el rail hacia el contenido.
  * - `variant="compact"`: solo el avatar (topbar en móvil); el menú abre abajo.
@@ -185,7 +153,6 @@ export function UserMenu({
   const [role, setRole] = useState<ClinicRole | null>(null);
   const [open, setOpen] = useState(false);
   const [loggingOut, setLoggingOut] = useState(false);
-  const wrapRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (!accessToken) return;
@@ -204,23 +171,6 @@ export function UserMenu({
       active = false;
     };
   }, [accessToken]);
-
-  // Cerrar con clic-fuera y Escape.
-  useEffect(() => {
-    if (!open) return;
-    function onClick(e: MouseEvent) {
-      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) setOpen(false);
-    }
-    function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') setOpen(false);
-    }
-    document.addEventListener('mousedown', onClick);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('mousedown', onClick);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [open]);
 
   if (!accessToken) return null;
 
@@ -248,7 +198,10 @@ export function UserMenu({
       <span
         aria-hidden
         className={cn(
-          'flex shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary',
+          // Iniciales en tinta, no en el acento: sobre su propio tinte (y más aún
+          // con el tinte de la tarjeta abierta o en hover) el acento no llega a
+          // 4,5:1 (axe, DX-282), y con el color de otra clínica, menos.
+          'flex shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-ink',
           size,
         )}
       >
@@ -257,322 +210,99 @@ export function UserMenu({
     );
 
   const menu = (
-    <div
-      role="menu"
+    <DropdownMenuContent
+      side={variant === 'compact' ? 'bottom' : 'top'}
+      align={variant === 'compact' ? 'end' : 'start'}
+      avoidCollisions
+      collisionPadding={8}
+      // Cuatro ítems: de «Mi perfil» a «Cerrar sesión» con una sola flecha.
+      loop
       className={cn(
-        'absolute z-20 rounded-xl border border-border bg-surface py-1 shadow-lg',
-        variant === 'card' && 'bottom-full left-0 right-0 mb-2',
-        // En rail el menú no puede heredar el ancho del disparador (40px): se le
-        // da uno propio y desborda sobre el contenido, hacia arriba.
-        variant === 'rail' && 'bottom-full left-0 mb-2 w-56',
-        variant === 'compact' && 'right-0 top-full mt-2 w-56',
+        // Red de seguridad (FE-062): nunca más alto que el hueco que deja Radix
+        // ni que la ventana; si no cabe, scroll dentro del propio menú.
+        'max-h-[min(var(--radix-dropdown-menu-content-available-height),calc(100dvh-1rem))] overflow-auto overscroll-contain',
+        // En card, a lo ancho de la tarjeta; en rail el disparador mide 40px y
+        // el menú lleva un ancho propio.
+        variant === 'card' ? 'w-(--radix-dropdown-menu-trigger-width)' : 'w-56',
       )}
     >
-      <Link
-        href="/settings/profile"
-        role="menuitem"
-        onClick={() => setOpen(false)}
-        className="flex items-center gap-3 px-3 py-2 text-sm text-ink hover:bg-bg"
-      >
-        <Settings className="size-4 text-muted" aria-hidden />
-        {copy.profile}
-      </Link>
-      {/* El horario es de la clínica, no de la cuenta, pero este menú es el
-          único sitio de ajustes que hay: meterlo en la nav lateral sumaría una
-          séptima sección que en móvil ya no cabe. Aplica a la sede activa que
-          marca el selector de sede (pie del sidebar / topbar en móvil). */}
-      <Link
-        href="/settings/horarios"
-        role="menuitem"
-        onClick={() => setOpen(false)}
-        className="flex items-center gap-3 px-3 py-2 text-sm text-ink hover:bg-bg"
-      >
-        <Clock className="size-4 text-muted" aria-hidden />
-        {copy.businessHours}
-      </Link>
-      {/* Sedes (DX-212): el código REPS de cada sede. Lo leen todos (el chip
-          «RDA» de la ficha enlaza aquí); solo ADMIN lo cambia. */}
-      <Link
-        href="/settings/sedes"
-        role="menuitem"
-        onClick={() => setOpen(false)}
-        className="flex items-center gap-3 px-3 py-2 text-sm text-ink hover:bg-bg"
-      >
-        <Building2 className="size-4 text-muted" aria-hidden />
-        {copy.locations}
-      </Link>
-      {/* Política de tratamiento de datos (DX-037): de la clínica, como el
-          horario; todos la leen y solo ADMIN publica. */}
-      <Link
-        href="/settings/privacidad"
-        role="menuitem"
-        onClick={() => setOpen(false)}
-        className="flex items-center gap-3 px-3 py-2 text-sm text-ink hover:bg-bg"
-      >
-        <ShieldCheck className="size-4 text-muted" aria-hidden />
-        {copy.privacy}
-      </Link>
-      {/* Plantillas de consentimiento (DX-006): solo ADMIN las gestiona. El rol
-          sale del token (el de ESTA clínica), no de `/me`. */}
-      {canManageConsentTemplates(getTokenRole(accessToken)) ? (
-        <Link
-          href="/settings/consentimientos"
-          role="menuitem"
-          onClick={() => setOpen(false)}
-          className="flex items-center gap-3 px-3 py-2 text-sm text-ink hover:bg-bg"
-        >
-          <FileSignature className="size-4 text-muted" aria-hidden />
-          {copy.consentTemplates}
+      <DropdownMenuItem asChild className={ITEM}>
+        <Link href="/settings/profile">
+          <UserRound aria-hidden />
+          {copy.profile}
         </Link>
-      ) : null}
-      {/* Tipos de cita con duración y color (DX-121): solo ADMIN. */}
-      {canManageAppointmentTypes(getTokenRole(accessToken)) ? (
-        <Link
-          href="/settings/tipos-de-cita"
-          role="menuitem"
-          onClick={() => setOpen(false)}
-          className="flex items-center gap-3 px-3 py-2 text-sm text-ink hover:bg-bg"
-        >
-          <CalendarClock className="size-4 text-muted" aria-hidden />
-          {copy.appointmentTypes}
+      </DropdownMenuItem>
+      <DropdownMenuItem asChild className={ITEM}>
+        <Link href="/settings">
+          <Settings aria-hidden />
+          {copy.settings}
         </Link>
-      ) : null}
-      {/* Catálogo de pagadores: aseguradoras, EPS, mutuas (DX-153): solo ADMIN. */}
-      {canManagePayers(getTokenRole(accessToken)) ? (
-        <Link
-          href="/settings/pagadores"
-          role="menuitem"
-          onClick={() => setOpen(false)}
-          className="flex items-center gap-3 px-3 py-2 text-sm text-ink hover:bg-bg"
-        >
-          <Landmark className="size-4 text-muted" aria-hidden />
-          {copy.payers}
-        </Link>
-      ) : null}
-      {/* Convenios con pagadores (DX-105): descuento o lista de precios. Solo ADMIN. */}
-      {canManageAgreements(getTokenRole(accessToken)) ? (
-        <Link
-          href="/settings/convenios"
-          role="menuitem"
-          onClick={() => setOpen(false)}
-          className="flex items-center gap-3 px-3 py-2 text-sm text-ink hover:bg-bg"
-        >
-          <Handshake className="size-4 text-muted" aria-hidden />
-          {copy.agreements}
-        </Link>
-      ) : null}
-      {/* Listas de precios por sede o convenio (DX-105): solo ADMIN. */}
-      {canManagePriceLists(getTokenRole(accessToken)) ? (
-        <Link
-          href="/settings/listas-de-precios"
-          role="menuitem"
-          onClick={() => setOpen(false)}
-          className="flex items-center gap-3 px-3 py-2 text-sm text-ink hover:bg-bg"
-        >
-          <ListOrdered className="size-4 text-muted" aria-hidden />
-          {copy.priceLists}
-        </Link>
-      ) : null}
-      {/* Plantillas de evolución con preguntas (DX-170): solo ADMIN. */}
-      {canManageNoteTemplates(getTokenRole(accessToken)) ? (
-        <Link
-          href="/settings/plantillas-de-evolucion"
-          role="menuitem"
-          onClick={() => setOpen(false)}
-          className="flex items-center gap-3 px-3 py-2 text-sm text-ink hover:bg-bg"
-        >
-          <NotebookPen className="size-4 text-muted" aria-hidden />
-          {copy.noteTemplates}
-        </Link>
-      ) : null}
-      {/* Plantillas de indicaciones postoperatorias (DX-222): solo ADMIN. */}
-      {canManagePostOpTemplates(getTokenRole(accessToken)) ? (
-        <Link
-          href="/settings/indicaciones"
-          role="menuitem"
-          onClick={() => setOpen(false)}
-          className="flex items-center gap-3 px-3 py-2 text-sm text-ink hover:bg-bg"
-        >
-          <ClipboardList className="size-4 text-muted" aria-hidden />
-          {copy.postOpTemplates}
-        </Link>
-      ) : null}
-      {/* Recordatorios por email de cada sede (DX-026): solo ADMIN. */}
-      {canManageReminders(getTokenRole(accessToken)) ? (
-        <Link
-          href="/settings/recordatorios"
-          role="menuitem"
-          onClick={() => setOpen(false)}
-          className="flex items-center gap-3 px-3 py-2 text-sm text-ink hover:bg-bg"
-        >
-          <BellRing className="size-4 text-muted" aria-hidden />
-          {copy.reminders}
-        </Link>
-      ) : null}
-      {/* Topes de descuento por rol y motivo (DX-204): solo ADMIN. */}
-      {canManageDiscounts(getTokenRole(accessToken)) ? (
-        <Link
-          href="/settings/descuentos"
-          role="menuitem"
-          onClick={() => setOpen(false)}
-          className="flex items-center gap-3 px-3 py-2 text-sm text-ink hover:bg-bg"
-        >
-          <BadgePercent className="size-4 text-muted" aria-hidden />
-          {copy.discounts}
-        </Link>
-      ) : null}
-      {/* Ajustes de caja de la clínica (DX-027): solo ADMIN. */}
-      {canManageCashSessions(getTokenRole(accessToken)) ? (
-        <Link
-          href="/settings/caja"
-          role="menuitem"
-          onClick={() => setOpen(false)}
-          className="flex items-center gap-3 px-3 py-2 text-sm text-ink hover:bg-bg"
-        >
-          <Wallet className="size-4 text-muted" aria-hidden />
-          {copy.cashSettings}
-        </Link>
-      ) : null}
-      {/* Vigencia de la anamnesis (DX-247): solo ADMIN. */}
-      {canManageAnamnesisSettings(getTokenRole(accessToken)) ? (
-        <Link
-          href="/settings/historia-clinica"
-          role="menuitem"
-          onClick={() => setOpen(false)}
-          className="flex items-center gap-3 px-3 py-2 text-sm text-ink hover:bg-bg"
-        >
-          <ClipboardClock className="size-4 text-muted" aria-hidden />
-          {copy.clinicalHistorySettings}
-        </Link>
-      ) : null}
-      {/* Plantillas de receta y país de las sedes (DX-013): solo ADMIN. */}
-      {canManagePrescriptionTemplates(getTokenRole(accessToken)) ? (
-        <Link
-          href="/settings/recetas"
-          role="menuitem"
-          onClick={() => setOpen(false)}
-          className="flex items-center gap-3 px-3 py-2 text-sm text-ink hover:bg-bg"
-        >
-          <Pill className="size-4 text-muted" aria-hidden />
-          {copy.prescriptionSettings}
-        </Link>
-      ) : null}
-      {/* Búsqueda de implantes por lote y CSV (DX-191): solo ADMIN. */}
-      {canSearchImplantLots(getTokenRole(accessToken)) ? (
-        <Link
-          href="/settings/implantes"
-          role="menuitem"
-          onClick={() => setOpen(false)}
-          className="flex items-center gap-3 px-3 py-2 text-sm text-ink hover:bg-bg"
-        >
-          <ScanBarcode className="size-4 text-muted" aria-hidden />
-          {copy.implantSettings}
-        </Link>
-      ) : null}
-      {/* Importar pacientes desde CSV/XLSX (DX-107): solo ADMIN. */}
-      {canImportPatients(getTokenRole(accessToken)) ? (
-        <Link
-          href="/settings/importar-pacientes"
-          role="menuitem"
-          onClick={() => setOpen(false)}
-          className="flex items-center gap-3 px-3 py-2 text-sm text-ink hover:bg-bg"
-        >
-          <FileUp className="size-4 text-muted" aria-hidden />
-          {copy.patientImport}
-        </Link>
-      ) : null}
-      {/* Dominios propios de la clínica (SEC-009): solo ADMIN. */}
-      {canManageDomains(getTokenRole(accessToken)) ? (
-        <Link
-          href="/settings/dominios"
-          role="menuitem"
-          onClick={() => setOpen(false)}
-          className="flex items-center gap-3 px-3 py-2 text-sm text-ink hover:bg-bg"
-        >
-          <Globe className="size-4 text-muted" aria-hidden />
-          {copy.domains}
-        </Link>
-      ) : null}
-      {/* Accesos de soporte de Dentalix a la clínica (SEC-008): solo ADMIN. */}
-      {canReadSupportAccesses(getTokenRole(accessToken)) ? (
-        <Link
-          href="/settings/accesos-de-soporte"
-          role="menuitem"
-          onClick={() => setOpen(false)}
-          className="flex items-center gap-3 px-3 py-2 text-sm text-ink hover:bg-bg"
-        >
-          <LifeBuoy className="size-4 text-muted" aria-hidden />
-          {copy.supportAccesses}
-        </Link>
-      ) : null}
-      <div className="my-1 border-t border-border" />
-      <ThemeRow />
-      <div className="my-1 border-t border-border" />
-      <button
-        type="button"
-        role="menuitem"
-        onClick={handleLogout}
+      </DropdownMenuItem>
+      <DropdownMenuSeparator />
+      <ThemeItem />
+      <DropdownMenuSeparator />
+      <DropdownMenuItem
+        destructive
         disabled={loggingOut}
         aria-busy={loggingOut}
-        className="flex w-full items-center gap-3 px-3 py-2 text-left text-sm font-medium text-danger hover:bg-bg disabled:opacity-60"
+        onSelect={() => void handleLogout()}
+        className={cn('font-medium', ITEM)}
       >
-        <LogOut className="size-4" aria-hidden />
+        <LogOut aria-hidden />
         {copy.logout}
-      </button>
-    </div>
+      </DropdownMenuItem>
+    </DropdownMenuContent>
   );
 
   if (variant === 'compact' || variant === 'rail') {
     const isRail = variant === 'rail';
     return (
-      <div className="relative" ref={wrapRef}>
-        <button
-          type="button"
-          // En rail el avatar es lo único que se ve: el nombre pasa al title
-          // para que el hover lo revele, igual que los ítems de la nav.
-          aria-label={isRail ? (name ?? copy.account) : copy.account}
-          title={isRail ? (name ?? copy.account) : undefined}
-          aria-haspopup="menu"
-          aria-expanded={open}
-          onClick={() => setOpen((v) => !v)}
-          className={cn(
-            'flex items-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
-            isRail && 'size-10 justify-center',
-          )}
-        >
-          {avatar(isRail ? 'size-9' : 'size-8')}
-        </button>
-        {open && menu}
-      </div>
+      <DropdownMenu open={open} onOpenChange={setOpen} modal={false}>
+        <DropdownMenuTrigger asChild>
+          <button
+            type="button"
+            // En rail el avatar es lo único que se ve: el nombre pasa al title
+            // para que el hover lo revele, igual que los ítems de la nav.
+            aria-label={isRail ? (name ?? copy.account) : copy.account}
+            title={isRail ? (name ?? copy.account) : undefined}
+            className={cn(
+              'flex items-center rounded-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
+              isRail ? 'size-10 justify-center' : 'size-11 justify-center',
+            )}
+          >
+            {avatar(isRail ? 'size-9' : 'size-8')}
+          </button>
+        </DropdownMenuTrigger>
+        {menu}
+      </DropdownMenu>
     );
   }
 
   // variant === 'card' — pie del sidebar
   return (
-    <div className="relative" ref={wrapRef}>
-      <button
-        type="button"
-        aria-haspopup="menu"
-        aria-expanded={open}
-        onClick={() => setOpen((v) => !v)}
-        className={cn(
-          'flex w-full items-center gap-3 rounded-lg border px-3 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
-          open ? 'border-primary bg-primary/5' : 'border-border hover:bg-bg',
-        )}
-      >
-        {avatar('size-9')}
-        <span className="min-w-0 flex-1">
-          <span className="block truncate text-sm font-semibold text-ink">
-            {name ?? copy.account}
+    <DropdownMenu open={open} onOpenChange={setOpen} modal={false}>
+      <DropdownMenuTrigger asChild>
+        <button
+          type="button"
+          className={cn(
+            'flex w-full items-center gap-3 rounded-lg border px-3 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
+            open ? 'border-primary bg-primary/5' : 'border-border hover:bg-bg',
+          )}
+        >
+          {avatar('size-9')}
+          <span className="min-w-0 flex-1">
+            <span className="block truncate text-sm font-semibold text-ink">
+              {name ?? copy.account}
+            </span>
+            {roleLabel && <span className="block truncate text-xs text-primary">{roleLabel}</span>}
           </span>
-          {roleLabel && <span className="block truncate text-xs text-primary">{roleLabel}</span>}
-        </span>
-        <ChevronUp
-          aria-hidden
-          className={cn('size-4 shrink-0 text-muted transition-transform', open ? '' : 'rotate-180')}
-        />
-      </button>
-      {open && menu}
-    </div>
+          <ChevronUp
+            aria-hidden
+            className={cn('size-4 shrink-0 text-muted transition-transform', open ? '' : 'rotate-180')}
+          />
+        </button>
+      </DropdownMenuTrigger>
+      {menu}
+    </DropdownMenu>
   );
 }
