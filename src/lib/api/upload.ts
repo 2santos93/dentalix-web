@@ -15,6 +15,33 @@ export interface StorageUploadTarget {
 export interface StorageUploadOptions {
   /** Fracción enviada (0..1). */
   onProgress?: (fraction: number) => void;
+  /** Cancela la subida (botón «Cancelar»): rechaza con `AbortError`. */
+  signal?: AbortSignal;
+  /**
+   * Sin ningún avance durante esto (ms), el almacén se da por colgado: se
+   * cancela y es el 503 del almacén (QA D2). Por defecto 30 s.
+   */
+  stallTimeoutMs?: number;
+}
+
+/** QA D2: plazo sin avance de la subida antes de darla por colgada. */
+export const STORAGE_STALL_TIMEOUT_MS = 30_000;
+
+/**
+ * QA D1/D2: el almacén cortó la conexión o dejó de responder mientras el
+ * navegador, que sí tiene red, subía. Es el mismo 503 que da la API cuando el
+ * almacén no responde, no un «sin conexión» de la clínica.
+ */
+export const STORAGE_UNREACHABLE_CODE = 'STORAGE_UNREACHABLE';
+export const STORAGE_UNREACHABLE_MESSAGE = 'El almacén de archivos no responde. Inténtalo de nuevo en unos minutos.';
+
+function storageUnreachable(): ApiError {
+  return new ApiError(503, STORAGE_UNREACHABLE_MESSAGE, { code: STORAGE_UNREACHABLE_CODE });
+}
+
+/** `navigator.onLine` false: el navegador sabe que no tiene red. */
+function browserOffline(): boolean {
+  return typeof navigator !== 'undefined' && navigator.onLine === false;
 }
 
 /** Lo que dice el almacén cuando rechaza una subida (XML de S3). */
@@ -61,8 +88,11 @@ export function storageUploadError(status: number, text: string, retryAfter: str
  *
  * Va directo al bucket: ni por el proxy `/api/v1` de la web ni por la API,
  * así que sin `Authorization` ni cookies (la autorización va firmada en los
- * campos). Un rechazo es un `ApiError` con el mensaje en español; un fallo de
- * red (o CORS), `NetworkError`.
+ * campos). Un rechazo es un `ApiError` con el mensaje en español. Una
+ * conexión cortada o un almacén colgado (sin avance durante
+ * `stallTimeoutMs`) son el 503 del almacén (`STORAGE_UNREACHABLE_CODE`); solo
+ * si el navegador no tiene red (`navigator.onLine` false) es `NetworkError`.
+ * Cancelar con `signal` rechaza con `AbortError`.
  */
 export function uploadToStorage(
   target: StorageUploadTarget,
@@ -70,27 +100,56 @@ export function uploadToStorage(
   opts: StorageUploadOptions = {},
 ): Promise<void> {
   return new Promise((resolve, reject) => {
+    const { signal } = opts;
+    if (signal?.aborted) {
+      reject(new DOMException('Upload aborted', 'AbortError'));
+      return;
+    }
     const form = new FormData();
     for (const [name, value] of Object.entries(target.fields)) form.append(name, value);
     form.append('file', file);
     const xhr = new XMLHttpRequest();
+    const stallMs = opts.stallTimeoutMs ?? STORAGE_STALL_TIMEOUT_MS;
+    let stalled = false;
+    let watchdog: ReturnType<typeof setTimeout> | undefined;
+    const armWatchdog = () => {
+      clearTimeout(watchdog);
+      watchdog = setTimeout(() => {
+        stalled = true;
+        xhr.abort();
+      }, stallMs);
+    };
+    const onCancel = () => xhr.abort();
+    const settle = (fn: () => void) => {
+      clearTimeout(watchdog);
+      signal?.removeEventListener('abort', onCancel);
+      fn();
+    };
     xhr.open(target.method, target.url);
     xhr.withCredentials = false;
     xhr.upload.onprogress = (event) => {
+      armWatchdog();
       if (event.lengthComputable && event.total > 0) {
         opts.onProgress?.(Math.min(1, event.loaded / event.total));
       }
     };
-    xhr.onload = () => {
-      if (xhr.status >= 200 && xhr.status < 300) {
-        opts.onProgress?.(1);
-        resolve();
-        return;
-      }
-      reject(storageUploadError(xhr.status, xhr.responseText, xhr.getResponseHeader('Retry-After')));
-    };
-    xhr.onerror = () => reject(new NetworkError(new Error('Storage upload failed')));
-    xhr.onabort = () => reject(new DOMException('Upload aborted', 'AbortError'));
+    xhr.onload = () =>
+      settle(() => {
+        if (xhr.status >= 200 && xhr.status < 300) {
+          opts.onProgress?.(1);
+          resolve();
+          return;
+        }
+        reject(storageUploadError(xhr.status, xhr.responseText, xhr.getResponseHeader('Retry-After')));
+      });
+    xhr.onerror = () =>
+      settle(() =>
+        reject(browserOffline() ? new NetworkError(new Error('Storage upload failed')) : storageUnreachable()),
+      );
+    xhr.onabort = () =>
+      settle(() => reject(stalled ? storageUnreachable() : new DOMException('Upload aborted', 'AbortError')));
+    signal?.addEventListener('abort', onCancel);
+    armWatchdog();
     xhr.send(form);
   });
 }

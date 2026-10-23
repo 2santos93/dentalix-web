@@ -2,7 +2,12 @@
  * @jest-environment jsdom
  * @jest-environment-options {"url": "http://acme.localhost:3001"}
  */
-import { storageUploadError, uploadToStorage } from './upload';
+import {
+  STORAGE_UNREACHABLE_CODE,
+  STORAGE_UNREACHABLE_MESSAGE,
+  storageUploadError,
+  uploadToStorage,
+} from './upload';
 import { ApiError, NetworkError } from './client';
 
 /** XHR falso: guarda lo enviado y deja que el test decida la respuesta. */
@@ -23,6 +28,7 @@ class FakeXhr {
   onload: (() => void) | null = null;
   onerror: (() => void) | null = null;
   onabort: (() => void) | null = null;
+  aborted = false;
   constructor() {
     FakeXhr.instances.push(this);
   }
@@ -39,6 +45,10 @@ class FakeXhr {
   send(body: FormData) {
     this.body = body;
     queueMicrotask(() => FakeXhr.respond(this));
+  }
+  abort() {
+    this.aborted = true;
+    this.onabort?.();
   }
   reply(status: number, text = '') {
     this.status = status;
@@ -98,9 +108,79 @@ describe('uploadToStorage (DX-259)', () => {
     expect(err.code).toBe('EntityTooLarge');
   });
 
-  it('un fallo de red (o de CORS) es NetworkError', async () => {
-    FakeXhr.respond = (xhr) => xhr.onerror?.();
-    await expect(uploadToStorage(TARGET, new Blob(['x']))).rejects.toBeInstanceOf(NetworkError);
+  describe('fallos del almacén (QA D1, D2)', () => {
+    const onLine = jest.spyOn(window.navigator, 'onLine', 'get');
+    afterEach(() => {
+      onLine.mockReset();
+      jest.useRealTimers();
+    });
+
+    it('la conexión cortada por el almacén (el navegador tiene red) es el 503 del almacén, no «sin conexión»', async () => {
+      onLine.mockReturnValue(true);
+      FakeXhr.respond = (xhr) => xhr.onerror?.();
+      const err = (await uploadToStorage(TARGET, new Blob(['x'])).catch((e) => e)) as ApiError;
+      expect(err).toBeInstanceOf(ApiError);
+      expect(err.status).toBe(503);
+      expect(err.code).toBe(STORAGE_UNREACHABLE_CODE);
+      expect(err.messages).toEqual([STORAGE_UNREACHABLE_MESSAGE]);
+    });
+
+    it('sin red en el navegador (navigator.onLine false) sí es NetworkError', async () => {
+      onLine.mockReturnValue(false);
+      FakeXhr.respond = (xhr) => xhr.onerror?.();
+      await expect(uploadToStorage(TARGET, new Blob(['x']))).rejects.toBeInstanceOf(NetworkError);
+    });
+
+    it('un almacén colgado (sin progreso durante el plazo) se cancela y da el 503 del almacén', async () => {
+      jest.useFakeTimers();
+      FakeXhr.respond = (xhr) => xhr.upload.onprogress?.({ lengthComputable: true, loaded: 99, total: 100 });
+      const promise = uploadToStorage(TARGET, new Blob(['x']), { stallTimeoutMs: 30_000 }).catch((e) => e);
+      await Promise.resolve();
+      await jest.advanceTimersByTimeAsync(29_999);
+      expect(FakeXhr.instances[0].aborted).toBe(false);
+      await jest.advanceTimersByTimeAsync(1);
+      const err = (await promise) as ApiError;
+      expect(FakeXhr.instances[0].aborted).toBe(true);
+      expect(err).toBeInstanceOf(ApiError);
+      expect(err.status).toBe(503);
+      expect(err.code).toBe(STORAGE_UNREACHABLE_CODE);
+    });
+
+    it('cada avance del progreso reinicia el plazo: una subida lenta pero viva no se corta', async () => {
+      jest.useFakeTimers();
+      let xhr!: FakeXhr;
+      FakeXhr.respond = (x) => (xhr = x);
+      const promise = uploadToStorage(TARGET, new Blob(['x']), { stallTimeoutMs: 1000 });
+      await Promise.resolve();
+      for (let i = 1; i <= 5; i += 1) {
+        await jest.advanceTimersByTimeAsync(900);
+        xhr.upload.onprogress?.({ lengthComputable: true, loaded: i, total: 10 });
+      }
+      expect(xhr.aborted).toBe(false);
+      xhr.reply(204);
+      await expect(promise).resolves.toBeUndefined();
+    });
+
+    it('cancelar (AbortSignal) aborta el XHR y rechaza con AbortError', async () => {
+      FakeXhr.respond = () => {};
+      const controller = new AbortController();
+      const promise = uploadToStorage(TARGET, new Blob(['x']), { signal: controller.signal }).catch((e) => e);
+      await Promise.resolve();
+      controller.abort();
+      const err = (await promise) as DOMException;
+      expect(FakeXhr.instances[0].aborted).toBe(true);
+      expect(err.name).toBe('AbortError');
+    });
+
+    it('una señal ya cancelada no llega a enviar nada', async () => {
+      const controller = new AbortController();
+      controller.abort();
+      const err = (await uploadToStorage(TARGET, new Blob(['x']), { signal: controller.signal }).catch(
+        (e) => e,
+      )) as DOMException;
+      expect(err.name).toBe('AbortError');
+      expect(FakeXhr.instances).toHaveLength(0);
+    });
   });
 });
 
