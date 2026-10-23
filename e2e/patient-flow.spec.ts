@@ -1,11 +1,12 @@
 import { test, expect, type Page } from './support/test';
+import { execFileSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
 import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import type { AxeResults } from 'axe-core';
 import { addStaffViaApi, apiPost, registerClinicViaApi, type ApiSession } from './support/api';
 import { loginAs } from './support/auth';
-import { LATE_BROWSER_TIME, atSede, lastSlotToday, type SedeSlot } from './support/clock';
+import { LATE_BROWSER_TIME, atSede, lastSlotToday, sedeDayFromToday, type SedeSlot } from './support/clock';
 import { expectNoHorizontalScroll } from './support/layout';
 import { API_URL, tenantOrigin } from './support/urls';
 
@@ -127,7 +128,7 @@ test('1440 px: llegó → en sillón → listo para cobrar → completada', asyn
   await expect(lina.getByRole('link', { name: 'Agenda · Te espera 1 paciente' }).first()).toBeVisible({
     timeout: 15_000,
   });
-  await lina.clock.install({ time: new Date() });
+  // El reloj de Lina ya está instalado (lateEvening): el sondeo avanza con runFor.
   let inClinicReads = 0;
   let locationReads = 0;
   lina.on('request', (req) => {
@@ -213,12 +214,33 @@ test('390 px: «Deshacer llegada» devuelve la cita a la agenda', async ({ page 
 });
 
 
+const MIN = 60_000;
 const qaStatuses = ['SCHEDULED','CONFIRMED','COMPLETED','CANCELLED','NO_SHOW','ARRIVED','IN_CHAIR','READY_FOR_CHECKOUT'] as const;
 const qaLabels = ['Agendada','Confirmada','Completada','Cancelada','No asistió','En espera','En sillón','Listo para cobrar'];
 const qaIds: string[] = [];
+/**
+ * DX-252 (TST-030): las ocho citas del QA van HOY a horas fijas de la sede
+ * (08:00, 08:30… 11:30), corra la suite a la hora que corra. La API no deja
+ * agendar en el pasado ni marcar la llegada otro día, así que se crean mañana
+ * a esas horas y se mueven a hoy por la BD antes de cambiarles el estado. Sin
+ * BD e2e aislada (E2E_DATABASE_URL) el QA se salta con ese motivo, en la lista
+ * de e2e/allowed-skips.json; nunca por la hora.
+ */
+const QA_DB_SKIP = 'E2E_DATABASE_URL no definido: no se pueden mover a hoy las citas de los ocho estados';
+function moveQaAppointmentToToday(id: string, start: Date, end: Date): void {
+  execFileSync('psql', [
+    process.env.E2E_DATABASE_URL as string,
+    '-v',
+    'ON_ERROR_STOP=1',
+    '-c',
+    `UPDATE appointments SET start = '${start.toISOString()}', "end" = '${end.toISOString()}' WHERE id = '${id}'`,
+  ]);
+}
+
 test('DX-242: prepara ocho estados reales para QA de accesibilidad', async ({request}) => {
-  const qaStart = Math.ceil((Date.now()+30*MIN)/(30*MIN))*(30*MIN);
-  test.skip(sedeDate(new Date(qaStart+4*60*MIN)) !== sedeDate(new Date()), 'QA de ocho estados necesita cuatro horas disponibles en el día de la sede.');
+  test.skip(!process.env.E2E_DATABASE_URL, QA_DB_SKIP);
+  const today = sedeDayFromToday(0);
+  const tomorrow = sedeDayFromToday(1);
   const qaDentist = {fullName:'Odontóloga Estados QA', email:`estados.${suffix}@example.com`, role:'DENTIST', password};
   await addStaffViaApi(request, session, qaDentist);
   const staff = await request.get(`${API_URL}/staff`, {headers:session.headers});
@@ -226,8 +248,12 @@ test('DX-242: prepara ocho estados reales para QA de accesibilidad', async ({req
   const providerId = members.find(m => m.fullName === qaDentist.fullName)!.userId;
   for (const [i,status] of qaStatuses.entries()) {
     const patient = await apiPost<{id:string}>(request, session, '/patients', {firstName:`Estado ${i+1}`, lastName:'QA', docType:'CC', docNumber:`EST${i}${suffix}`.slice(0,20), sex:'F'});
-    const start = new Date(qaStart+i*30*MIN);
-    const appointment = await apiPost<{id:string}>(request, session, '/appointments', {patientId:patient.id, providerId, start:start.toISOString(), end:new Date(start.getTime()+(i%2 ? 30:15)*MIN).toISOString(), reason:'Control QA'});
+    const hhmm = `${String(8 + Math.floor(i / 2)).padStart(2, '0')}:${i % 2 ? '30' : '00'}`;
+    const minutes = i%2 ? 30:15;
+    const draftStart = atSede(tomorrow, hhmm);
+    const appointment = await apiPost<{id:string}>(request, session, '/appointments', {patientId:patient.id, providerId, start:draftStart.toISOString(), end:new Date(draftStart.getTime()+minutes*MIN).toISOString(), reason:'Control QA'});
+    const start = atSede(today, hhmm);
+    moveQaAppointmentToToday(appointment.id, start, new Date(start.getTime()+minutes*MIN));
     qaIds.push(appointment.id);
     const steps = status === 'IN_CHAIR' ? ['ARRIVED','IN_CHAIR'] : status === 'READY_FOR_CHECKOUT' ? ['ARRIVED','IN_CHAIR','READY_FOR_CHECKOUT'] : status === 'SCHEDULED' ? [] : [status];
     for (const step of steps) {
@@ -239,7 +265,9 @@ test('DX-242: prepara ocho estados reales para QA de accesibilidad', async ({req
 
 test('DX-242: axe Día/Semana/En clínica 390/1440 claro/oscuro', async ({page}, testInfo) => {
   test.setTimeout(240_000);
-  test.skip(qaIds.length !== 8, 'No se pudieron preparar los ocho estados en el día de la sede.');
+  test.skip(!process.env.E2E_DATABASE_URL, QA_DB_SKIP);
+  expect(qaIds, 'el test anterior prepara las ocho citas de hoy').toHaveLength(8);
+  await lateEvening(page);
   for (const width of [390,1440]) for (const colorScheme of ['light','dark'] as const) {
     const evidence = process.env.DX242_QA_DIR ?? testInfo.outputPath('qa');
     mkdirSync(evidence, {recursive:true});

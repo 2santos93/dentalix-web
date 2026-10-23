@@ -30,6 +30,13 @@
       "reason": "Sin E2E_DATABASE_URL no se puede fechar la anamnesis en el pasado."
     },
     {
+      "file": "e2e/medical-alerts.spec.ts",
+      "title": "DX-264 Mes: tres alertas, +1 más, teclado y toque a 390/1440 claro y oscuro",
+      "annotation": "Requiere la BD e2e aislada para fechar la anamnesis",
+      "requiresUnset": "E2E_DATABASE_URL",
+      "reason": "Sin E2E_DATABASE_URL no se puede fechar la anamnesis en el pasado."
+    },
+    {
       "file": "e2e/password-reset.spec.ts",
       "title": "Recuperar la contraseña › pedir el enlace desde el login, restablecer, cerrar las demás sesiones y no reutilizar el enlace",
       "annotation": "E2E_MAIL_DIR no definido: no se puede leer el email (usa scripts/e2e-ci.sh)",
@@ -49,6 +56,20 @@
       "annotation": "E2E_MAIL_DIR no definido: no se puede leer el email (usa scripts/e2e-ci.sh)",
       "requiresUnset": "E2E_MAIL_DIR",
       "reason": "Sin E2E_MAIL_DIR no se puede leer el email de restablecimiento."
+    },
+    {
+      "file": "e2e/patient-flow.spec.ts",
+      "title": "DX-242: axe Día/Semana/En clínica 390/1440 claro/oscuro",
+      "annotation": "E2E_DATABASE_URL no definido: no se pueden mover a hoy las citas de los ocho estados",
+      "requiresUnset": "E2E_DATABASE_URL",
+      "reason": "Sin E2E_DATABASE_URL no se pueden mover a hoy (a horas fijas) las ocho citas del QA: la API no agenda en el pasado."
+    },
+    {
+      "file": "e2e/patient-flow.spec.ts",
+      "title": "DX-242: prepara ocho estados reales para QA de accesibilidad",
+      "annotation": "E2E_DATABASE_URL no definido: no se pueden mover a hoy las citas de los ocho estados",
+      "requiresUnset": "E2E_DATABASE_URL",
+      "reason": "Sin E2E_DATABASE_URL no se pueden mover a hoy (a horas fijas) las ocho citas del QA: la API no agenda en el pasado."
     },
     {
       "file": "e2e/session-cookie.spec.ts",
