@@ -132,12 +132,18 @@ test('ADMIN crea la lista «Tarifa» en COP y le pone precio a un procedimiento;
   await expect(itemRow).not.toContainText('Sin precio');
   await shot(page, 'ajustes-lista-items-1440');
 
-  // Persistido en la API.
+  // Persistido en la API. El listado va paginado (20 por página, ~80 del
+  // catálogo base): se busca la prestación del test en vez de mirar solo la
+  // página 1, y se compara su precio, no cualquier número del cuerpo.
   const items = await page.request.get(`${API_URL}/price-lists/${priceListId}/items`, {
     headers: session.headers,
+    params: { query: procedureLabel },
   });
   expect(items.ok()).toBeTruthy();
-  expect(JSON.stringify(await items.json())).toContain(String(LIST_PRICE));
+  const listed = ((await items.json()) as { items: { labelEs: string; price: number | string | null }[] }).items;
+  const priced = listed.filter((item) => item.labelEs === procedureLabel);
+  expect(priced).toHaveLength(1);
+  expect(Number(priced[0].price)).toBe(LIST_PRICE);
 
   // 390 px: las dos pantallas y el diálogo caben.
   await page.setViewportSize({ width: 390, height: 844 });
