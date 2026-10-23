@@ -1,17 +1,17 @@
-"use client";
-import { useEffect, useState } from "react";
-import Link from "next/link";
-import { Lock, Mail, Printer, ReceiptText } from "lucide-react";
-import { toast } from "sonner";
-import { ApiError } from "@/lib/api/client";
-import { apiErrorMessage } from "@/lib/api/error-message";
+'use client';
+import { useEffect, useState } from 'react';
+import Link from 'next/link';
+import { Lock, Mail, Printer, ReceiptText } from 'lucide-react';
+import { toast } from 'sonner';
+import { ApiError } from '@/lib/api/client';
+import { apiErrorMessage } from '@/lib/api/error-message';
 import {
   getPaymentReceipt,
   receiptPrintHref,
   sendPaymentReceipt,
   type PaymentReceipt,
-} from "@/lib/payments/payment-receipts-api";
-import { PaymentReceiptDocument } from "./payment-receipt-document";
+} from '@/lib/payments/payment-receipts-api';
+import { PaymentReceiptDocument } from './payment-receipt-document';
 import {
   Dialog,
   DialogContent,
@@ -19,31 +19,29 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@/components/ui/dialog";
-import { Button } from "@/components/ui/button";
-import { EmptyState } from "@/components/shared/empty-state";
-import { SectionError } from "@/components/errors/section-error";
-import { notifyError } from "@/components/errors/notify";
+} from '@/components/ui/dialog';
+import { Button } from '@/components/ui/button';
+import { EmptyState } from '@/components/shared/empty-state';
+import { SectionError } from '@/components/errors/section-error';
+import { notifyError } from '@/components/errors/notify';
 
 const copy = {
-  title: "Recibo de caja",
-  description:
-    "El recibo del abono tal como se emitió: se imprime o se envía igual.",
-  loading: "Cargando el recibo…",
-  loadError: "No pudimos cargar el recibo.",
-  forbiddenTitle: "Tu rol no tiene acceso a los recibos de caja.",
-  forbiddenHint: "Es un dato financiero: lo ven administración y recepción.",
-  close: "Cerrar",
-  printA4: "Imprimir A4",
-  printRoll: "Tirilla 80 mm",
-  newTab: "(se abre en otra pestaña)",
-  send: "Enviar por email",
-  sending: "Enviando…",
+  title: 'Recibo de caja',
+  description: 'El recibo del abono tal como se emitió: se imprime o se envía igual.',
+  loading: 'Cargando el recibo…',
+  loadError: 'No pudimos cargar el recibo.',
+  forbiddenTitle: 'Tu rol no tiene acceso a los recibos de caja.',
+  forbiddenHint: 'Es un dato financiero: lo ven administración y recepción.',
+  close: 'Cerrar',
+  printA4: 'Imprimir A4',
+  printRoll: 'Tirilla 80 mm',
+  newTab: '(se abre en otra pestaña)',
+  send: 'Enviar por email',
+  sending: 'Enviando…',
   sent: (to: string) => `Recibo enviado a ${to}.`,
   // DX-203: un menor o un paciente sin email: a su responsable.
-  sentToResponsible: (to: string) =>
-    `Recibo enviado al responsable del paciente (${to}).`,
-  sendError: "No pudimos enviar el recibo.",
+  sentToResponsible: (to: string) => `Recibo enviado al responsable del paciente (${to}).`,
+  sendError: 'No pudimos enviar el recibo.',
 };
 
 interface PaymentReceiptDialogProps {
@@ -60,11 +58,7 @@ interface PaymentReceiptDialogProps {
  * tirilla de 80 mm (vista imprimible en otra pestaña) o enviarlo por email al
  * paciente. `paymentId` hace a la vez de bandera de apertura y de qué abono.
  */
-export function PaymentReceiptDialog({
-  token,
-  paymentId,
-  onOpenChange,
-}: PaymentReceiptDialogProps) {
+export function PaymentReceiptDialog({ token, paymentId, onOpenChange }: PaymentReceiptDialogProps) {
   return (
     <Dialog open={paymentId !== null} onOpenChange={onOpenChange}>
       {paymentId !== null ? (
@@ -73,11 +67,7 @@ export function PaymentReceiptDialog({
             <DialogTitle>{copy.title}</DialogTitle>
             <DialogDescription>{copy.description}</DialogDescription>
           </DialogHeader>
-          <ReceiptBody
-            token={token}
-            paymentId={paymentId}
-            onClose={() => onOpenChange(false)}
-          />
+          <ReceiptBody token={token} paymentId={paymentId} onClose={() => onOpenChange(false)} />
         </DialogContent>
       ) : null}
     </Dialog>
@@ -120,13 +110,8 @@ function ReceiptBody({
   async function send() {
     setSending(true);
     try {
-      const { sentTo, sentToResponsible } = await sendPaymentReceipt(
-        token,
-        paymentId,
-      );
-      toast.success(
-        sentToResponsible ? copy.sentToResponsible(sentTo) : copy.sent(sentTo),
-      );
+      const { sentTo, sentToResponsible } = await sendPaymentReceipt(token, paymentId);
+      toast.success(sentToResponsible ? copy.sentToResponsible(sentTo) : copy.sent(sentTo));
     } catch (err) {
       // Escalón 3: el recibo sigue en pantalla y correcto; el aviso trae
       // reintento (cierra sobre el propio abono, que es lo que se reintenta).
@@ -161,10 +146,7 @@ function ReceiptBody({
   }
   if (!receipt) {
     return (
-      <p
-        role="status"
-        className="flex items-center gap-2 py-12 text-sm text-muted"
-      >
+      <p role="status" className="flex items-center gap-2 py-12 text-sm text-muted">
         <ReceiptText aria-hidden className="size-4" />
         {copy.loading}
       </p>
@@ -180,32 +162,19 @@ function ReceiptBody({
         <Button type="button" variant="outline" onClick={onClose}>
           {copy.close}
         </Button>
-        <Button
-          type="button"
-          variant="outline"
-          onClick={() => void send()}
-          disabled={sending}
-        >
+        <Button type="button" variant="outline" onClick={() => void send()} disabled={sending}>
           <Mail aria-hidden />
           {sending ? copy.sending : copy.send}
         </Button>
         <Button asChild variant="outline">
-          <Link
-            href={receiptPrintHref(paymentId, "80mm")}
-            target="_blank"
-            rel="noopener"
-          >
+          <Link href={receiptPrintHref(paymentId, '80mm')} target="_blank" rel="noopener">
             <Printer aria-hidden />
             {copy.printRoll}
             <span className="sr-only">{copy.newTab}</span>
           </Link>
         </Button>
         <Button asChild>
-          <Link
-            href={receiptPrintHref(paymentId, "a4")}
-            target="_blank"
-            rel="noopener"
-          >
+          <Link href={receiptPrintHref(paymentId, 'a4')} target="_blank" rel="noopener">
             <Printer aria-hidden />
             {copy.printA4}
             <span className="sr-only">{copy.newTab}</span>

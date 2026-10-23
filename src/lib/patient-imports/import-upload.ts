@@ -26,7 +26,12 @@ interface RawResponse {
  * Un POST multipart por XHR (`fetch` no informa del progreso de la SUBIDA) a
  * la ruta de subida de la web, con las mismas cabeceras que `doFetch`.
  */
-function send(target: ImportUploadTarget, form: FormData, opts: ImportUploadOptions, token?: string): Promise<RawResponse> {
+function send(
+  target: ImportUploadTarget,
+  form: FormData,
+  opts: ImportUploadOptions,
+  token?: string,
+): Promise<RawResponse> {
   return new Promise((resolve, reject) => {
     const paths = importUploadPaths(target);
     if (!paths) {

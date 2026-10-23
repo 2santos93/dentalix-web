@@ -200,10 +200,7 @@ export function ImportHistory({ token, reloadKey }: { token: string; reloadKey: 
         emptyIcon={<History aria-hidden />}
         skeleton={<TableSkeleton rows={3} />}
       >
-        <ul
-          aria-label={historyCopy.listLabel}
-          className="flex flex-col rounded-xl border border-border bg-surface text-sm"
-        >
+        <ul aria-label={historyCopy.listLabel} className="flex flex-col rounded-xl border border-border bg-surface text-sm">
           {items.map((b) => (
             <li key={b.id} className="flex flex-col gap-2 border-b border-hairline p-4 last:border-0">
               <div className="flex flex-wrap items-start justify-between gap-2">

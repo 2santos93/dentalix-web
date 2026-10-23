@@ -1,48 +1,42 @@
-import { cn } from "@/lib/utils";
-import { formatCurrency } from "@/lib/format/currency";
-import { formatCivilDate, formatDate, formatDateTime } from "@/lib/format/date";
-import { DOC_TYPE_SHORT } from "@/lib/patients/doc-type";
-import { PAYMENT_METHOD_LABELS } from "@/lib/payments/payment-method";
-import type {
-  PaymentReceipt,
-  ReceiptPrintFormat,
-} from "@/lib/payments/payment-receipts-api";
+import { cn } from '@/lib/utils';
+import { formatCurrency } from '@/lib/format/currency';
+import { formatCivilDate, formatDate, formatDateTime } from '@/lib/format/date';
+import { DOC_TYPE_SHORT } from '@/lib/patients/doc-type';
+import { PAYMENT_METHOD_LABELS } from '@/lib/payments/payment-method';
+import type { PaymentReceipt, ReceiptPrintFormat } from '@/lib/payments/payment-receipts-api';
 
 // Copy en español (i18n-ready), como el resto de documentos imprimibles.
 const copy = {
-  title: "Recibo de caja",
+  title: 'Recibo de caja',
   number: (reference: string) => `N.º ${reference}`,
-  legacyBadge: "Sin serie",
-  legacyHint:
-    "Abono anterior a la numeración consecutiva: conserva su referencia.",
-  issuedAt: "Emitido",
+  legacyBadge: 'Sin serie',
+  legacyHint: 'Abono anterior a la numeración consecutiva: conserva su referencia.',
+  issuedAt: 'Emitido',
   // Un «sin serie» no tuvo emisión: lo que se conserva es el alta del abono.
-  registeredAt: "Abono registrado el",
-  fiscalPending: "Datos fiscales pendientes",
+  registeredAt: 'Abono registrado el',
+  fiscalPending: 'Datos fiscales pendientes',
   taxId: (value: string) => `NIT/NIF ${value}`,
-  location: (name: string, address: string | null) =>
-    address ? `${name} · ${address}` : name,
-  voidedStamp: "ANULADO",
-  voidedDetail: (when: string, reason: string) =>
-    `Anulado el ${when}. Motivo: ${reason}`,
-  receivedFrom: "Recibimos de",
-  document: "Documento",
-  amount: "Valor",
-  method: "Método",
-  methodFallback: "Sin especificar",
-  paidOn: "Fecha del abono",
-  concept: "Concepto",
+  location: (name: string, address: string | null) => (address ? `${name} · ${address}` : name),
+  voidedStamp: 'ANULADO',
+  voidedDetail: (when: string, reason: string) => `Anulado el ${when}. Motivo: ${reason}`,
+  receivedFrom: 'Recibimos de',
+  document: 'Documento',
+  amount: 'Valor',
+  method: 'Método',
+  methodFallback: 'Sin especificar',
+  paidOn: 'Fecha del abono',
+  concept: 'Concepto',
   // DX-262: abono contra el saldo migrado (sin plan).
   openingLabel: (opening: { concept: string; asOfDate: string } | null) =>
     opening
       ? `Saldo migrado · ${opening.concept} · corte ${formatCivilDate(opening.asOfDate)}`
-      : "Saldo migrado",
+      : 'Saldo migrado',
   planLabel: (date: string, optionLabel: string | null) =>
-    `Abono al plan de tratamiento del ${date}${optionLabel ? ` · ${optionLabel}` : ""}`,
-  balanceAfter: "Saldo del plan tras este abono",
-  balanceUnavailable: "No disponible",
-  cashier: "Recibió",
-  signature: "Firma y sello",
+    `Abono al plan de tratamiento del ${date}${optionLabel ? ` · ${optionLabel}` : ''}`,
+  balanceAfter: 'Saldo del plan tras este abono',
+  balanceUnavailable: 'No disponible',
+  cashier: 'Recibió',
+  signature: 'Firma y sello',
 };
 
 interface PaymentReceiptDocumentProps {
@@ -61,14 +55,10 @@ interface PaymentReceiptDocumentProps {
  * colores claros explícitos (papel blanco, tinta oscura) en vez de los tokens
  * del tema, porque el papel es blanco aunque la app esté en modo oscuro.
  */
-export function PaymentReceiptDocument({
-  receipt,
-  format = "a4",
-}: PaymentReceiptDocumentProps) {
+export function PaymentReceiptDocument({ receipt, format = 'a4' }: PaymentReceiptDocumentProps) {
   const { snapshot } = receipt;
-  const { clinic, location, patient, payment, plan, planBalance, cashier } =
-    snapshot;
-  const narrow = format === "80mm";
+  const { clinic, location, patient, payment, plan, planBalance, cashier } = snapshot;
+  const narrow = format === '80mm';
 
   return (
     <article
@@ -76,16 +66,16 @@ export function PaymentReceiptDocument({
       data-format={format}
       aria-labelledby="receipt-title"
       className={cn(
-        "receipt-print-root mx-auto w-full bg-white text-[#111827] print:max-w-none print:p-0",
+        'receipt-print-root mx-auto w-full bg-white text-[#111827] print:max-w-none print:p-0',
         narrow
-          ? "max-w-[80mm] px-3 py-4 text-[12px] leading-snug"
-          : "max-w-[210mm] px-4 py-6 text-sm sm:px-10 sm:py-10",
+          ? 'max-w-[80mm] px-3 py-4 text-[12px] leading-snug'
+          : 'max-w-[210mm] px-4 py-6 text-sm sm:px-10 sm:py-10',
       )}
     >
       <header
         className={cn(
-          "flex flex-col gap-3 border-b border-[#d1d5db] pb-4",
-          !narrow && "sm:flex-row sm:items-start sm:justify-between",
+          'flex flex-col gap-3 border-b border-[#d1d5db] pb-4',
+          !narrow && 'sm:flex-row sm:items-start sm:justify-between',
         )}
       >
         <div className="min-w-0">
@@ -106,20 +96,13 @@ export function PaymentReceiptDocument({
               ) : null}
             </p>
           )}
-          <p className="mt-1 text-xs text-[#4b5563]">
-            {copy.location(location.name, location.address)}
-          </p>
+          <p className="mt-1 text-xs text-[#4b5563]">{copy.location(location.name, location.address)}</p>
         </div>
-        <div className={cn(!narrow && "sm:text-right")}>
-          <h1
-            id="receipt-title"
-            className="text-xl font-semibold tracking-tight"
-          >
+        <div className={cn(!narrow && 'sm:text-right')}>
+          <h1 id="receipt-title" className="text-xl font-semibold tracking-tight">
             {copy.title}
           </h1>
-          <p className="text-lg font-semibold tabular-nums">
-            {copy.number(receipt.reference)}
-          </p>
+          <p className="text-lg font-semibold tabular-nums">{copy.number(receipt.reference)}</p>
           {receipt.legacy ? (
             <p className="mt-1 text-xs text-[#4b5563]">
               <span className="mr-1 rounded-sm border border-[#d1d5db] px-1.5 py-0.5 font-medium">
@@ -129,10 +112,8 @@ export function PaymentReceiptDocument({
             </p>
           ) : null}
           <p className="mt-1 text-xs text-[#4b5563]">
-            {receipt.legacy ? copy.registeredAt : copy.issuedAt}{" "}
-            <span className="tabular-nums">
-              {formatDateTime(receipt.issuedAt)}
-            </span>
+            {receipt.legacy ? copy.registeredAt : copy.issuedAt}{' '}
+            <span className="tabular-nums">{formatDateTime(receipt.issuedAt)}</span>
           </p>
         </div>
       </header>
@@ -143,24 +124,14 @@ export function PaymentReceiptDocument({
           role="note"
           className="mt-4 border-2 border-[#be123c] px-3 py-2 text-[#be123c]"
         >
-          <p className="text-2xl font-bold tracking-[0.3em]">
-            {copy.voidedStamp}
-          </p>
+          <p className="text-2xl font-bold tracking-[0.3em]">{copy.voidedStamp}</p>
           <p className="text-sm font-medium">
-            {copy.voidedDetail(
-              formatDateTime(receipt.voidedAt),
-              receipt.voidReason ?? "",
-            )}
+            {copy.voidedDetail(formatDateTime(receipt.voidedAt), receipt.voidReason ?? '')}
           </p>
         </div>
       ) : null}
 
-      <dl
-        className={cn(
-          "mt-4 grid gap-3",
-          narrow ? "grid-cols-1" : "grid-cols-1 sm:grid-cols-2",
-        )}
-      >
+      <dl className={cn('mt-4 grid gap-3', narrow ? 'grid-cols-1' : 'grid-cols-1 sm:grid-cols-2')}>
         <Field label={copy.receivedFrom}>{patient.fullName}</Field>
         {patient.docNumberMasked ? (
           <Field label={copy.document}>
@@ -170,23 +141,19 @@ export function PaymentReceiptDocument({
         <Field label={copy.amount}>
           <span
             className={cn(
-              "font-semibold tabular-nums",
-              narrow ? "text-base" : "text-lg",
-              receipt.voided && "line-through",
+              'font-semibold tabular-nums',
+              narrow ? 'text-base' : 'text-lg',
+              receipt.voided && 'line-through',
             )}
           >
             {formatCurrency(payment.amount, payment.currency)}
           </span>
         </Field>
         <Field label={copy.method}>
-          {payment.method
-            ? PAYMENT_METHOD_LABELS[payment.method]
-            : copy.methodFallback}
+          {payment.method ? PAYMENT_METHOD_LABELS[payment.method] : copy.methodFallback}
         </Field>
         <Field label={copy.paidOn}>
-          <span className="tabular-nums">
-            {formatCivilDate(payment.paidOn)}
-          </span>
+          <span className="tabular-nums">{formatCivilDate(payment.paidOn)}</span>
         </Field>
         <Field label={copy.concept}>
           {plan
@@ -200,33 +167,21 @@ export function PaymentReceiptDocument({
               : copy.balanceUnavailable}
           </span>
         </Field>
-        {cashier ? (
-          <Field label={copy.cashier}>{cashier.fullName}</Field>
-        ) : null}
+        {cashier ? <Field label={copy.cashier}>{cashier.fullName}</Field> : null}
       </dl>
 
       <footer className="mt-8 border-t border-[#d1d5db] pt-4">
-        <p className="text-xs text-[#4b5563]">
-          {copy.signature}: ______________________
-        </p>
+        <p className="text-xs text-[#4b5563]">{copy.signature}: ______________________</p>
         <p className="mt-3 text-xs font-medium">{snapshot.legalNotice}</p>
       </footer>
     </article>
   );
 }
 
-function Field({
-  label,
-  children,
-}: {
-  label: string;
-  children: React.ReactNode;
-}) {
+function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
     <div className="min-w-0">
-      <dt className="text-xs font-medium uppercase tracking-wide text-[#6b7280]">
-        {label}
-      </dt>
+      <dt className="text-xs font-medium uppercase tracking-wide text-[#6b7280]">{label}</dt>
       <dd className="break-words">{children}</dd>
     </div>
   );

@@ -27,7 +27,10 @@ const ADMIN_EMAIL = process.env.E2E_DEMO_ADMIN_EMAIL ?? 'admin@demo.dentalix.app
 const QA_DIR = process.env.E2E_QA_DIR;
 
 const rawSuffix = process.env.E2E_RUN_SUFFIX ?? randomUUID();
-const suffix = rawSuffix.replace(/[^0-9]/g, '').slice(-6).padStart(6, '5');
+const suffix = rawSuffix
+  .replace(/[^0-9]/g, '')
+  .slice(-6)
+  .padStart(6, '5');
 
 async function shoot(page: Page, name: string): Promise<void> {
   if (!QA_DIR) return;
@@ -46,9 +49,7 @@ async function webLogin(page: Page, origin: string): Promise<void> {
   await page.getByLabel('Correo electrónico').fill(ADMIN_EMAIL);
   await page.getByLabel('Contraseña', { exact: true }).fill(DEMO_PASSWORD);
   await page.getByRole('button', { name: 'Iniciar sesión' }).click();
-  await expect
-    .poll(async () => Boolean((await sessionCookie(page, origin))?.httpOnly), { timeout: 15_000 })
-    .toBe(true);
+  await expect.poll(async () => Boolean((await sessionCookie(page, origin))?.httpOnly), { timeout: 15_000 }).toBe(true);
   await page.waitForURL((url) => !url.pathname.endsWith('/login'), { timeout: 10_000 });
 }
 
@@ -82,7 +83,10 @@ for (const viewport of [
       buffer: Buffer.from(`Tipo Doc;Cédula;Nombre;Apellidos\nCC;${doc};Sara;${lastName}\n`, 'utf8'),
     });
     await page.getByRole('button', { name: 'Validar archivo' }).click();
-    await page.getByRole('region', { name: 'Resultado de la validación' }).getByRole('button', { name: 'Continuar' }).click();
+    await page
+      .getByRole('region', { name: 'Resultado de la validación' })
+      .getByRole('button', { name: 'Continuar' })
+      .click();
     await expect(page.getByRole('heading', { name: 'Saldos de los pacientes (opcional)' })).toBeVisible();
     await expectNoHorizontalScroll(page);
     await expectNoHorizontalScrollIn(page, 'main');
@@ -125,7 +129,10 @@ for (const viewport of [
 
     // Estado de cuenta del importado.
     await page.goto(`${origin}/patients?query=${doc}`);
-    await page.getByRole('link', { name: new RegExp(lastName) }).first().click();
+    await page
+      .getByRole('link', { name: new RegExp(lastName) })
+      .first()
+      .click();
     const tab = page.getByRole('tab', { name: 'Estado de cuenta' });
     await tab.click();
     const panel = page.locator('#tabpanel-account-statement');
@@ -151,7 +158,10 @@ for (const viewport of [
     // Deshacer el lote: el saldo se retira con él.
     await page.goto(`${origin}/settings/importar-pacientes`);
     const history = page.getByRole('list', { name: 'Importaciones de la clínica' });
-    const row = history.getByRole('listitem').filter({ hasText: `pacientes-saldos-${viewport.name}.csv` }).first();
+    const row = history
+      .getByRole('listitem')
+      .filter({ hasText: `pacientes-saldos-${viewport.name}.csv` })
+      .first();
     await row.getByRole('button', { name: /Deshacer el lote/ }).click();
     const dialog = page.getByRole('dialog');
     await dialog.getByRole('button', { name: 'Deshacer lote' }).click();

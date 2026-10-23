@@ -1,28 +1,28 @@
-"use client";
-import * as React from "react";
-import { useEffect, useState } from "react";
-import { Printer } from "lucide-react";
-import { apiErrorMessage } from "@/lib/api/error-message";
+'use client';
+import * as React from 'react';
+import { useEffect, useState } from 'react';
+import { Printer } from 'lucide-react';
+import { apiErrorMessage } from '@/lib/api/error-message';
 import {
   familyAccountStatementPrintHref,
   getFamilyAccountStatement,
   type FamilyAccountStatement,
-} from "@/lib/account-statement/account-statement-api";
-import { statementCopy } from "@/lib/account-statement/presentation";
-import { RELATIONSHIP_LABELS } from "@/lib/patients/responsible-parties-api";
-import { formatCurrency } from "@/lib/format/currency";
-import { Button } from "@/components/ui/button";
-import { SectionError } from "@/components/errors/section-error";
-import { familyStatementCopy } from "./family-account-statement-document";
+} from '@/lib/account-statement/account-statement-api';
+import { statementCopy } from '@/lib/account-statement/presentation';
+import { RELATIONSHIP_LABELS } from '@/lib/patients/responsible-parties-api';
+import { formatCurrency } from '@/lib/format/currency';
+import { Button } from '@/components/ui/button';
+import { SectionError } from '@/components/errors/section-error';
+import { familyStatementCopy } from './family-account-statement-document';
 
 const copy = {
   ...familyStatementCopy,
   description:
-    "Este paciente es el pagador principal de otros pacientes: su saldo y el de cada uno, con el total. Los abonos se registran en el estado de cuenta de cada paciente.",
-  print: "Imprimir estado familiar",
-  printHint: "(se abre en otra pestaña)",
-  loading: "Cargando el estado de cuenta familiar",
-  loadError: "No pudimos cargar el estado de cuenta familiar.",
+    'Este paciente es el pagador principal de otros pacientes: su saldo y el de cada uno, con el total. Los abonos se registran en el estado de cuenta de cada paciente.',
+  print: 'Imprimir estado familiar',
+  printHint: '(se abre en otra pestaña)',
+  loading: 'Cargando el estado de cuenta familiar',
+  loadError: 'No pudimos cargar el estado de cuenta familiar.',
 };
 
 /**
@@ -54,8 +54,7 @@ export function FamilyAccountStatementSection({
         setError(null);
       })
       .catch((err: unknown) => {
-        if (!cancelled)
-          setError(apiErrorMessage(err, { fallback: copy.loadError }));
+        if (!cancelled) setError(apiErrorMessage(err, { fallback: copy.loadError }));
       });
     return () => {
       cancelled = true;
@@ -66,15 +65,10 @@ export function FamilyAccountStatementSection({
   // se pinta el bloque: casi ningún paciente es pagador de otros, y el título
   // y la descripción afirmarían que este lo es.
   if (data && data.members.length < 2) return null;
-  if (!data && !error)
-    return <span role="status" aria-label={copy.loading} className="sr-only" />;
+  if (!data && !error) return <span role="status" aria-label={copy.loading} className="sr-only" />;
 
   return (
-    <section
-      aria-labelledby={headingId}
-      className="flex flex-col gap-3"
-      data-testid="family-statement"
-    >
+    <section aria-labelledby={headingId} className="flex flex-col gap-3" data-testid="family-statement">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="min-w-0">
           <h2 id={headingId} className="text-lg font-semibold text-ink">
@@ -83,16 +77,8 @@ export function FamilyAccountStatementSection({
           <p className="max-w-[68ch] text-sm text-muted">{copy.description}</p>
         </div>
         {data ? (
-          <Button
-            asChild
-            variant="outline"
-            className="max-sm:h-11 max-sm:w-full"
-          >
-            <a
-              href={familyAccountStatementPrintHref(patientId)}
-              target="_blank"
-              rel="noopener noreferrer"
-            >
+          <Button asChild variant="outline" className="max-sm:h-11 max-sm:w-full">
+            <a href={familyAccountStatementPrintHref(patientId)} target="_blank" rel="noopener noreferrer">
               <Printer aria-hidden />
               {copy.print}
               <span className="sr-only"> {copy.printHint}</span>
@@ -123,11 +109,8 @@ export function FamilyAccountStatementSection({
                     {m.patient.firstName} {m.patient.lastName}
                   </span>
                   <span className="text-sm text-muted">
-                    {" "}
-                    ·{" "}
-                    {m.self || !m.relationship
-                      ? copy.self
-                      : copy.payerAs(RELATIONSHIP_LABELS[m.relationship])}
+                    {' '}
+                    · {m.self || !m.relationship ? copy.self : copy.payerAs(RELATIONSHIP_LABELS[m.relationship])}
                   </span>
                 </span>
                 <span className="flex flex-col text-sm tabular-nums text-ink sm:items-end">
@@ -136,9 +119,8 @@ export function FamilyAccountStatementSection({
                   ) : (
                     m.summary.map((s) => (
                       <span key={s.currency}>
-                        {copy.colBalance}:{" "}
-                        {formatCurrency(Math.abs(s.balance), s.currency)}
-                        {s.balance < 0 ? ` ${statementCopy.inFavor}` : ""}
+                        {copy.colBalance}: {formatCurrency(Math.abs(s.balance), s.currency)}
+                        {s.balance < 0 ? ` ${statementCopy.inFavor}` : ''}
                       </span>
                     ))
                   )}
@@ -161,7 +143,7 @@ export function FamilyAccountStatementSection({
               </span>
               <span>
                 {formatCurrency(Math.abs(t.balance), t.currency)}
-                {t.balance < 0 ? ` ${statementCopy.inFavor}` : ""}
+                {t.balance < 0 ? ` ${statementCopy.inFavor}` : ''}
               </span>
             </p>
           ))}

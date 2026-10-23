@@ -1,28 +1,27 @@
-"use client";
-import { useEffect, useRef, useState } from "react";
-import Link from "next/link";
-import { ChevronLeft, Lock, Printer, UserX } from "lucide-react";
-import { ApiError } from "@/lib/api/client";
+'use client';
+import { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
+import { ChevronLeft, Lock, Printer, UserX } from 'lucide-react';
+import { ApiError } from '@/lib/api/client';
 import {
   getFamilyAccountStatement,
   type FamilyAccountStatement,
-} from "@/lib/account-statement/account-statement-api";
-import { FamilyAccountStatementDocument } from "./family-account-statement-document";
-import { SectionError } from "@/components/errors/section-error";
-import { EmptyState } from "@/components/shared/empty-state";
-import { Button } from "@/components/ui/button";
+} from '@/lib/account-statement/account-statement-api';
+import { FamilyAccountStatementDocument } from './family-account-statement-document';
+import { SectionError } from '@/components/errors/section-error';
+import { EmptyState } from '@/components/shared/empty-state';
+import { Button } from '@/components/ui/button';
 
 const copy = {
-  toolbar: "Acciones del documento",
-  print: "Imprimir o guardar como PDF",
-  back: "Volver a la ficha",
-  loading: "Preparando el estado de cuenta familiar…",
-  loadError: "No pudimos cargar el estado de cuenta familiar.",
-  notFoundTitle: "No encontramos este paciente.",
-  notFoundHint:
-    "Puede que se haya retirado o que el enlace no sea de esta clínica.",
-  forbiddenTitle: "Tu rol no tiene acceso al estado de cuenta.",
-  forbiddenHint: "Es un dato financiero: lo ven administración y recepción.",
+  toolbar: 'Acciones del documento',
+  print: 'Imprimir o guardar como PDF',
+  back: 'Volver a la ficha',
+  loading: 'Preparando el estado de cuenta familiar…',
+  loadError: 'No pudimos cargar el estado de cuenta familiar.',
+  notFoundTitle: 'No encontramos este paciente.',
+  notFoundHint: 'Puede que se haya retirado o que el enlace no sea de esta clínica.',
+  forbiddenTitle: 'Tu rol no tiene acceso al estado de cuenta.',
+  forbiddenHint: 'Es un dato financiero: lo ven administración y recepción.',
   documentTitle: (name: string) => `Estado de cuenta familiar · ${name}`,
 };
 
@@ -79,11 +78,7 @@ export function FamilyAccountStatementPrintView({
 
   return (
     <div className="flex min-h-full flex-1 flex-col bg-surface-2 print:bg-white">
-      {data ? (
-        <title>
-          {copy.documentTitle(`${data.payer.firstName} ${data.payer.lastName}`)}
-        </title>
-      ) : null}
+      {data ? <title>{copy.documentTitle(`${data.payer.firstName} ${data.payer.lastName}`)}</title> : null}
       <div
         role="toolbar"
         aria-label={copy.toolbar}
@@ -107,21 +102,11 @@ export function FamilyAccountStatementPrintView({
           </div>
         ) : forbidden ? (
           <div className="mx-auto max-w-xl px-4 py-8">
-            <EmptyState
-              role="status"
-              icon={<Lock aria-hidden />}
-              title={copy.forbiddenTitle}
-              description={copy.forbiddenHint}
-            />
+            <EmptyState role="status" icon={<Lock aria-hidden />} title={copy.forbiddenTitle} description={copy.forbiddenHint} />
           </div>
         ) : notFound ? (
           <div className="mx-auto max-w-xl px-4 py-8">
-            <EmptyState
-              role="status"
-              icon={<UserX aria-hidden />}
-              title={copy.notFoundTitle}
-              description={copy.notFoundHint}
-            />
+            <EmptyState role="status" icon={<UserX aria-hidden />} title={copy.notFoundTitle} description={copy.notFoundHint} />
           </div>
         ) : error ? (
           <div className="mx-auto max-w-xl px-4 py-8">

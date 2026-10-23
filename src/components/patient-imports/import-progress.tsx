@@ -31,8 +31,7 @@ const copy = {
     `${n.toLocaleString('es-CO')} ${n === 1 ? 'saldo no se creó' : 'saldos no se crearon'}: su paciente no existía al importar.`,
   balancesAmbiguous: (n: number) =>
     `${n.toLocaleString('es-CO')} ${n === 1 ? 'saldo no se creó' : 'saldos no se crearon'}: su documento es de varios pacientes. Corrige las fichas repetidas.`,
-  consent:
-    'Recuerda pedir la autorización de datos (Ley 1581) a los pacientes importados: su ficha la marca pendiente.',
+  consent: 'Recuerda pedir la autorización de datos (Ley 1581) a los pacientes importados: su ficha la marca pendiente.',
 };
 
 export const STATUS_VARIANT: Record<ImportStatus, 'success' | 'warning' | 'danger' | 'muted' | 'secondary'> = {
@@ -66,11 +65,7 @@ export function ImportProgress({
   return (
     <div className="flex flex-col gap-4 rounded-xl border border-border bg-surface p-4 sm:p-6">
       <div className="flex flex-wrap items-start justify-between gap-2">
-        <h2
-          id={headingId}
-          tabIndex={-1}
-          className="min-w-0 break-words text-lg font-semibold text-ink focus:outline-none"
-        >
+        <h2 id={headingId} tabIndex={-1} className="min-w-0 break-words text-lg font-semibold text-ink focus:outline-none">
           {copy.title(batch.fileName)}
         </h2>
         <Badge variant={STATUS_VARIANT[batch.status]}>{STATUS_LABELS[batch.status]}</Badge>

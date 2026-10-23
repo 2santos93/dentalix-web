@@ -1,49 +1,45 @@
-"use client";
-import * as React from "react";
-import { useState } from "react";
+'use client';
+import * as React from 'react';
+import { useState } from 'react';
 import {
   recordOpeningBalancePayment,
   recordPayment,
   type PaymentMethod,
-} from "@/lib/payments/payments-api";
-import type { AccountStatementOpeningBalance } from "@/lib/account-statement/account-statement-api";
-import {
-  PAYMENT_METHOD_LABELS,
-  PAYMENT_METHOD_OPTIONS,
-} from "@/lib/payments/payment-method";
-import { recordPaymentErrorMessage } from "@/lib/payments/payment-errors";
-import { statementCopy } from "@/lib/account-statement/presentation";
-import { formatCurrency } from "@/lib/format/currency";
-import { formatCivilDate } from "@/lib/format/date";
-import { Input } from "@/components/ui/input";
-import { FormField, fieldErrorId } from "@/components/shared/form-field";
-import { MoneyInput } from "@/components/shared/money-input";
-import { parseMoneyInput } from "@/lib/format/money";
-import { FormModal } from "@/components/shared/form-modal";
-import { CurrencySelect } from "@/components/shared/currency-select";
-import { BillablePlanField, BillablePlansEmpty } from "./billable-plan-field";
-import { useBillablePlans } from "./use-billable-plans";
-import { usePaymentLocationHint } from "./use-payment-location-hint";
-import { sedeToday, useSedeTimeZone } from "@/lib/locations/use-sede-time-zone";
+} from '@/lib/payments/payments-api';
+import type { AccountStatementOpeningBalance } from '@/lib/account-statement/account-statement-api';
+import { PAYMENT_METHOD_LABELS, PAYMENT_METHOD_OPTIONS } from '@/lib/payments/payment-method';
+import { recordPaymentErrorMessage } from '@/lib/payments/payment-errors';
+import { statementCopy } from '@/lib/account-statement/presentation';
+import { formatCurrency } from '@/lib/format/currency';
+import { formatCivilDate } from '@/lib/format/date';
+import { Input } from '@/components/ui/input';
+import { FormField, fieldErrorId } from '@/components/shared/form-field';
+import { MoneyInput } from '@/components/shared/money-input';
+import { parseMoneyInput } from '@/lib/format/money';
+import { FormModal } from '@/components/shared/form-modal';
+import { CurrencySelect } from '@/components/shared/currency-select';
+import { BillablePlanField, BillablePlansEmpty } from './billable-plan-field';
+import { useBillablePlans } from './use-billable-plans';
+import { usePaymentLocationHint } from './use-payment-location-hint';
+import { sedeToday, useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
 
 // Copy como constantes (i18n-ready).
 const copy = {
-  title: "Registrar abono",
-  description:
-    "El abono se aplica al plan que elijas y aparece en la caja de hoy.",
-  submit: "Registrar abono",
-  amount: "Importe",
-  currency: "Moneda",
-  method: "Método",
-  methodNone: "Sin especificar",
-  date: "Fecha de pago",
-  invalidAmount: "Escribe un importe mayor que 0.",
-  invalidDate: "Elige la fecha de pago.",
+  title: 'Registrar abono',
+  description: 'El abono se aplica al plan que elijas y aparece en la caja de hoy.',
+  submit: 'Registrar abono',
+  amount: 'Importe',
+  currency: 'Moneda',
+  method: 'Método',
+  methodNone: 'Sin especificar',
+  date: 'Fecha de pago',
+  invalidAmount: 'Escribe un importe mayor que 0.',
+  invalidDate: 'Elige la fecha de pago.',
   recorded: (amount: string, date: string, plan: string) =>
     `Abono registrado: ${amount} · ${date} · ${plan}.`,
   // DX-262: destino del abono cuando el paciente trae saldo migrado.
-  target: "Abonar a",
-  targetPlan: "Un plan de tratamiento",
+  target: 'Abonar a',
+  targetPlan: 'Un plan de tratamiento',
   targetOpening: (concept: string, pending: string) =>
     `Saldo migrado · ${concept} · pendiente ${pending}`,
   openingLabel: (concept: string) => `Saldo migrado · ${concept}`,
@@ -53,12 +49,12 @@ const copy = {
 };
 
 /** Valor del selector de destino de un saldo migrado. */
-const OPENING_PREFIX = "ob:";
+const OPENING_PREFIX = 'ob:';
 
 // <select> nativo con el aspecto del átomo Input (misma cadena que el resto de
 // formularios de pagos).
 const fieldClass =
-  "flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-50";
+  'flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-50';
 
 interface FormState {
   /**
@@ -71,18 +67,18 @@ interface FormState {
   amount: string;
   /** `''` = la moneda del plan elegido. */
   currency: string;
-  method: PaymentMethod | "";
+  method: PaymentMethod | '';
   date: string;
 }
 
 /** `today`: hoy en la zona de la sede (DX-097), no en la del navegador. */
 function initialForm(today: string): FormState {
   return {
-    target: "",
-    planId: "",
-    amount: "",
-    currency: "",
-    method: "",
+    target: '',
+    planId: '',
+    amount: '',
+    currency: '',
+    method: '',
     date: today,
   };
 }
@@ -123,12 +119,8 @@ export function RecordPaymentModal({
   const billable = useBillablePlans(token, patientId, open);
   const locationHint = usePaymentLocationHint(token, open);
   const timeZone = useSedeTimeZone(token);
-  const [form, setForm] = useState<FormState>(() =>
-    initialForm(sedeToday(timeZone)),
-  );
-  const [idempotencyKey, setIdempotencyKey] = useState(() =>
-    crypto.randomUUID(),
-  );
+  const [form, setForm] = useState<FormState>(() => initialForm(sedeToday(timeZone)));
+  const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [amountError, setAmountError] = useState<string | null>(null);
@@ -160,20 +152,13 @@ export function RecordPaymentModal({
   const noPlans = billable.plans !== null && plans.length === 0;
   // Sin elegir: un plan; sin planes cobrables, el primer saldo migrado.
   const targetValue =
-    form.target ||
-    (noPlans && openings.length > 0
-      ? `${OPENING_PREFIX}${openings[0].id}`
-      : "");
+    form.target || (noPlans && openings.length > 0 ? `${OPENING_PREFIX}${openings[0].id}` : '');
   const opening = targetValue.startsWith(OPENING_PREFIX)
     ? (openings.find((o) => `${OPENING_PREFIX}${o.id}` === targetValue) ?? null)
     : null;
-  const plan = opening
-    ? null
-    : (plans.find((p) => p.id === form.planId) ?? plans[0] ?? null);
+  const plan = opening ? null : (plans.find((p) => p.id === form.planId) ?? plans[0] ?? null);
   // El abono a un saldo migrado va siempre en su moneda.
-  const currency = opening
-    ? opening.currency
-    : form.currency || plan?.currency || "";
+  const currency = opening ? opening.currency : form.currency || plan?.currency || '';
 
   function patch(next: Partial<FormState>) {
     setForm((f) => ({ ...f, ...next }));
@@ -187,20 +172,11 @@ export function RecordPaymentModal({
     // la moneda del abono. El motivo va junto al campo.
     const parsed = parseMoneyInput(form.amount, currency);
     if (!parsed.ok || parsed.value <= 0) {
-      setAmountError(
-        parsed.ok || parsed.reason === "empty"
-          ? copy.invalidAmount
-          : parsed.message,
-      );
+      setAmountError(parsed.ok || parsed.reason === 'empty' ? copy.invalidAmount : parsed.message);
       return;
     }
-    if (
-      opening &&
-      Math.round(parsed.value * 100) > Math.round(opening.pending * 100)
-    ) {
-      setAmountError(
-        copy.overPending(formatCurrency(opening.pending, opening.currency)),
-      );
+    if (opening && Math.round(parsed.value * 100) > Math.round(opening.pending * 100)) {
+      setAmountError(copy.overPending(formatCurrency(opening.pending, opening.currency)));
       return;
     }
     setAmountError(null);
@@ -222,18 +198,8 @@ export function RecordPaymentModal({
         ...(form.method ? { method: form.method } : {}),
       };
       const saved = opening
-        ? await recordOpeningBalancePayment(
-            token,
-            opening.id,
-            body,
-            idempotencyKey,
-          )
-        : await recordPayment(
-            token,
-            (plan as NonNullable<typeof plan>).id,
-            body,
-            idempotencyKey,
-          );
+        ? await recordOpeningBalancePayment(token, opening.id, body, idempotencyKey)
+        : await recordPayment(token, (plan as NonNullable<typeof plan>).id, body, idempotencyKey);
       // El aviso sale de lo que la API GUARDÓ, no del formulario: si un envío
       // anterior con esta misma clave sí se registró (respuesta perdida) y la
       // persona cambió los datos antes de reintentar, la API devuelve el abono
@@ -241,8 +207,7 @@ export function RecordPaymentModal({
       const savedOpening = saved.openingBalanceId
         ? (openings.find((o) => o.id === saved.openingBalanceId) ?? opening)
         : null;
-      const savedPlan =
-        plans.find((p) => p.id === saved.treatmentPlanId) ?? plan;
+      const savedPlan = plans.find((p) => p.id === saved.treatmentPlanId) ?? plan;
       onRecorded(
         copy.recorded(
           formatCurrency(saved.amount, saved.currency),
@@ -251,7 +216,7 @@ export function RecordPaymentModal({
             ? copy.openingLabel(savedOpening.concept)
             : savedPlan
               ? statementCopy.planLabel(savedPlan.createdAt)
-              : "",
+              : '',
         ),
       );
     } catch (err) {
@@ -291,27 +256,19 @@ export function RecordPaymentModal({
               setAmountError(null);
               patch({ target: e.target.value });
             }}
-            aria-describedby={opening ? "rp-target-hint" : undefined}
+            aria-describedby={opening ? 'rp-target-hint' : undefined}
             className={fieldClass}
           >
             {!noPlans ? <option value="">{copy.targetPlan}</option> : null}
             {openings.map((o) => (
               <option key={o.id} value={`${OPENING_PREFIX}${o.id}`}>
-                {copy.targetOpening(
-                  o.concept,
-                  formatCurrency(o.pending, o.currency),
-                )}
+                {copy.targetOpening(o.concept, formatCurrency(o.pending, o.currency))}
               </option>
             ))}
           </select>
           {opening ? (
-            <p
-              id="rp-target-hint"
-              className="mt-1 text-xs text-muted tabular-nums"
-            >
-              {copy.openingPending(
-                formatCurrency(opening.pending, opening.currency),
-              )}
+            <p id="rp-target-hint" className="mt-1 text-xs text-muted tabular-nums">
+              {copy.openingPending(formatCurrency(opening.pending, opening.currency))}
             </p>
           ) : null}
         </FormField>
@@ -325,11 +282,11 @@ export function RecordPaymentModal({
             <BillablePlanField
               id="rp-plan"
               state={billable}
-              value={plan?.id ?? ""}
+              value={plan?.id ?? ''}
               onChange={(planId) => {
                 const next = plans.find((p) => p.id === planId);
                 // Cambiar de plan propone su moneda.
-                patch({ planId, currency: next?.currency ?? "" });
+                patch({ planId, currency: next?.currency ?? '' });
               }}
               disabled={submitting}
             />
@@ -337,11 +294,7 @@ export function RecordPaymentModal({
           {plan || opening ? (
             <>
               <div className="grid gap-4 sm:grid-cols-2">
-                <FormField
-                  htmlFor="rp-amount"
-                  label={copy.amount}
-                  error={amountError}
-                >
+                <FormField htmlFor="rp-amount" label={copy.amount} error={amountError}>
                   <MoneyInput
                     id="rp-amount"
                     currency={currency}
@@ -352,9 +305,7 @@ export function RecordPaymentModal({
                       setAmountError(null);
                     }}
                     aria-invalid={amountError ? true : undefined}
-                    aria-describedby={
-                      amountError ? fieldErrorId("rp-amount") : undefined
-                    }
+                    aria-describedby={amountError ? fieldErrorId('rp-amount') : undefined}
                   />
                 </FormField>
                 <FormField htmlFor="rp-currency" label={copy.currency}>
@@ -372,9 +323,7 @@ export function RecordPaymentModal({
                   <select
                     id="rp-method"
                     value={form.method}
-                    onChange={(e) =>
-                      patch({ method: e.target.value as PaymentMethod | "" })
-                    }
+                    onChange={(e) => patch({ method: e.target.value as PaymentMethod | '' })}
                     className={fieldClass}
                   >
                     <option value="">{copy.methodNone}</option>

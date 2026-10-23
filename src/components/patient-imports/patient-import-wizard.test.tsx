@@ -229,9 +229,7 @@ it('confirmar falla con 409: el motivo de la API junto al botón', async () => {
   mockedInspect.mockResolvedValue(inspectFixture());
   mockedValidate.mockResolvedValue(batchFixture());
   mockedConfirm.mockRejectedValue(
-    new ApiError(409, 'Conflict', {
-      messages: ['Ya hay una importación de pacientes en curso en la clínica: espera a que termine.'],
-    }),
+    new ApiError(409, 'Conflict', { messages: ['Ya hay una importación de pacientes en curso en la clínica: espera a que termine.'] }),
   );
   const user = userEvent.setup();
   render(<PatientImportWizard token="tok" onBatchChange={jest.fn()} />);
@@ -264,15 +262,7 @@ it('al volver con una importación en marcha, enseña su avance', async () => {
   const running = batchFixture({
     status: 'RUNNING',
     canConfirm: false,
-    progress: {
-      preparedRows: 10,
-      processedRows: 4,
-      createdCount: 4,
-      updatedCount: 0,
-      skippedCount: 0,
-      failedCount: 0,
-      percent: 40,
-    },
+    progress: { preparedRows: 10, processedRows: 4, createdCount: 4, updatedCount: 0, skippedCount: 0, failedCount: 0, percent: 40 },
   });
   mockedList.mockResolvedValue({
     items: [running],

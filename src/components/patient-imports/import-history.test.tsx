@@ -32,15 +32,7 @@ const completed = batchFixture({
   canConfirm: false,
   canUndo: true,
   confirmedAt: '2026-10-21T14:05:00.000Z',
-  progress: {
-    preparedRows: 2,
-    processedRows: 2,
-    createdCount: 1,
-    updatedCount: 1,
-    skippedCount: 0,
-    failedCount: 0,
-    percent: 100,
-  },
+  progress: { preparedRows: 2, processedRows: 2, createdCount: 1, updatedCount: 1, skippedCount: 0, failedCount: 0, percent: 100 },
 });
 const page = (items = [completed]) => ({
   items,
@@ -109,11 +101,7 @@ it('deshacer: pide confirmación y deja el lote como deshecho', async () => {
 it('deshacer rechazado (409): el motivo en el diálogo y el lote intacto', async () => {
   mockedList.mockResolvedValue(page());
   mockedUndo.mockRejectedValue(
-    new ApiError(409, 'Conflict', {
-      messages: [
-        'No se puede deshacer: 1 paciente de este lote ya tiene citas, historia clínica, planes, pagos u otros datos registrados. Corrígelo desde su ficha.',
-      ],
-    }),
+    new ApiError(409, 'Conflict', { messages: ['No se puede deshacer: 1 paciente de este lote ya tiene citas, historia clínica, planes, pagos u otros datos registrados. Corrígelo desde su ficha.'] }),
   );
   const user = userEvent.setup();
   render(<ImportHistory token="tok" reloadKey={0} />);
@@ -143,12 +131,7 @@ it('paginado: «Siguiente» pide la página 2', async () => {
 it('un lote importando se refresca solo hasta terminar', async () => {
   jest.useFakeTimers();
   try {
-    const running = {
-      ...completed,
-      status: 'RUNNING' as const,
-      canUndo: false,
-      progress: { ...completed.progress, processedRows: 1, percent: 50 },
-    };
+    const running = { ...completed, status: 'RUNNING' as const, canUndo: false, progress: { ...completed.progress, processedRows: 1, percent: 50 } };
     mockedList.mockResolvedValueOnce(page([running])).mockResolvedValue(page());
     render(<ImportHistory token="tok" reloadKey={0} />);
     expect(await screen.findByText('1 de 2 filas procesadas')).toBeInTheDocument();

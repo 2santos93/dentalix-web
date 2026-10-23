@@ -1,33 +1,30 @@
-"use client";
-import {
-  billablePlanLabel,
-  type BillablePlan,
-} from "@/lib/payments/billable-plans-api";
-import { formatCurrency } from "@/lib/format/currency";
-import { FormField } from "@/components/shared/form-field";
-import { FieldError } from "@/components/errors/field-error";
-import type { BillablePlansState } from "./use-billable-plans";
+'use client';
+import { billablePlanLabel, type BillablePlan } from '@/lib/payments/billable-plans-api';
+import { formatCurrency } from '@/lib/format/currency';
+import { FormField } from '@/components/shared/form-field';
+import { FieldError } from '@/components/errors/field-error';
+import type { BillablePlansState } from './use-billable-plans';
 
 // Copy como constantes (i18n-ready).
 export const billablePlanFieldCopy = {
-  label: "Plan",
-  loading: "Cargando planes…",
+  label: 'Plan',
+  loading: 'Cargando planes…',
   // Escalón 2 (FieldError): ≤4 palabras, el contexto lo da la etiqueta.
-  failed: "No cargaron los planes",
-  emptyTitle: "Este paciente no tiene planes por cobrar.",
+  failed: 'No cargaron los planes',
+  emptyTitle: 'Este paciente no tiene planes por cobrar.',
   emptyDescription:
-    "Se cobra contra un plan de tratamiento con procedimientos aceptados. Cuando el odontólogo lo deje aceptado, aparecerá aquí.",
+    'Se cobra contra un plan de tratamiento con procedimientos aceptados. Cuando el odontólogo lo deje aceptado, aparecerá aquí.',
   // El saldo se repite aquí: en móvil el `<select>` recorta el nombre del plan.
   figures: (balance: string, total: string, paid: string) =>
     `Saldo ${balance} · Total ${total} · Abonado ${paid}`,
-  inFavor: "a favor",
+  inFavor: 'a favor',
   otherCurrencies: (list: string) => `También abonado en otra moneda: ${list}`,
 };
 
 // <select> nativo con el aspecto del átomo Input (misma cadena que el resto de
 // formularios de pagos).
 const fieldClass =
-  "flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-50";
+  'flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-50';
 
 interface BillablePlanFieldProps {
   id: string;
@@ -59,10 +56,7 @@ export function BillablePlanField({
   return (
     <FormField htmlFor={id} label={billablePlanFieldCopy.label}>
       {state.failed ? (
-        <FieldError
-          label={billablePlanFieldCopy.failed}
-          onRetry={state.retry}
-        />
+        <FieldError label={billablePlanFieldCopy.failed} onRetry={state.retry} />
       ) : state.plans === null ? (
         <p
           role="status"
@@ -83,14 +77,8 @@ export function BillablePlanField({
             {state.plans.map((plan) => {
               const reason = unavailableReason?.(plan) ?? null;
               return (
-                <option
-                  key={plan.id}
-                  value={plan.id}
-                  disabled={reason !== null}
-                >
-                  {reason
-                    ? `${billablePlanLabel(plan)} (${reason})`
-                    : billablePlanLabel(plan)}
+                <option key={plan.id} value={plan.id} disabled={reason !== null}>
+                  {reason ? `${billablePlanLabel(plan)} (${reason})` : billablePlanLabel(plan)}
                 </option>
               );
             })}
@@ -105,7 +93,7 @@ export function BillablePlanField({
 function PlanFigures({ id, plan }: { id: string; plan: BillablePlan }) {
   const others = plan.paidOtherCurrencies
     .map((o) => formatCurrency(o.amount, o.currency))
-    .join(", ");
+    .join(', ');
   return (
     <p id={id} className="text-xs text-muted tabular-nums">
       {billablePlanFieldCopy.figures(
@@ -116,9 +104,7 @@ function PlanFigures({ id, plan }: { id: string; plan: BillablePlan }) {
         formatCurrency(plan.paid, plan.currency),
       )}
       {others ? (
-        <span className="block">
-          {billablePlanFieldCopy.otherCurrencies(others)}
-        </span>
+        <span className="block">{billablePlanFieldCopy.otherCurrencies(others)}</span>
       ) : null}
     </p>
   );
@@ -127,13 +113,8 @@ function PlanFigures({ id, plan }: { id: string; plan: BillablePlan }) {
 /** Paciente sin nada que cobrar: lo dice y explica de qué depende. */
 export function BillablePlansEmpty() {
   return (
-    <div
-      role="status"
-      className="rounded-lg border border-dashed border-border bg-surface px-4 py-6 text-center"
-    >
-      <p className="text-sm font-medium text-ink">
-        {billablePlanFieldCopy.emptyTitle}
-      </p>
+    <div role="status" className="rounded-lg border border-dashed border-border bg-surface px-4 py-6 text-center">
+      <p className="text-sm font-medium text-ink">{billablePlanFieldCopy.emptyTitle}</p>
       <p className="mx-auto mt-1 max-w-sm text-sm text-muted">
         {billablePlanFieldCopy.emptyDescription}
       </p>
