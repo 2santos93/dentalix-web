@@ -1,0 +1,96 @@
+{
+  "$comment": "DX-252 (TST-030): ÚNICOS tests de Playwright que pueden salir «skipped» en la E2E. scripts/check-e2e-skips.mjs pone la CI en rojo, nombrando el test, si se salta cualquier otro. Cada entrada: fichero, título completo y exacto (los describe y el test unidos por « › », como en el informe), `annotation` = el texto EXACTO del test.skip, `requiresUnset` = la variable de entorno cuya ausencia lo justifica, y `reason`. El salto solo se permite si esa variable NO está definida al correr la guardia: en la CI (scripts/e2e-ci.sh) E2E_DATABASE_URL y E2E_MAIL_DIR están definidas, así que allí cualquiera de estos saltos es rojo. Un test que no llegó a ejecutarse (fallo previo en serie) nunca se permite. Un salto por la hora del reloj NO es legítimo: fija el reloj (e2e/support/clock.ts).",
+  "allowed": [
+    {
+      "file": "e2e/break-glass.spec.ts",
+      "title": "el superadmin enrola el MFA, entra a una clínica con código y motivo, y la clínica lo ve",
+      "annotation": "E2E_DATABASE_URL no definido: no se puede otorgar el rol de superadmin",
+      "requiresUnset": "E2E_DATABASE_URL",
+      "reason": "Sin E2E_DATABASE_URL no se puede otorgar el rol de superadmin."
+    },
+    {
+      "file": "e2e/break-glass.spec.ts",
+      "title": "sin MFA el superadmin no puede entrar a una clínica (mensaje claro)",
+      "annotation": "E2E_DATABASE_URL no definido: no se puede otorgar el rol de superadmin",
+      "requiresUnset": "E2E_DATABASE_URL",
+      "reason": "Sin E2E_DATABASE_URL no se puede otorgar el rol de superadmin."
+    },
+    {
+      "file": "e2e/medical-alerts.spec.ts",
+      "title": "1440 px: el icono en las citas de 15 min, con teclado y ratón, y «Requiere premedicación» al abrir la cita",
+      "annotation": "E2E_DATABASE_URL no definido: no se puede fechar la anamnesis en el pasado",
+      "requiresUnset": "E2E_DATABASE_URL",
+      "reason": "Sin E2E_DATABASE_URL no se puede fechar la anamnesis en el pasado."
+    },
+    {
+      "file": "e2e/medical-alerts.spec.ts",
+      "title": "la cabecera del plan y del odontograma lleva la alerta; «Sin cambios hoy» queda con autor y hora",
+      "annotation": "E2E_DATABASE_URL no definido: no se puede fechar la anamnesis en el pasado",
+      "requiresUnset": "E2E_DATABASE_URL",
+      "reason": "Sin E2E_DATABASE_URL no se puede fechar la anamnesis en el pasado."
+    },
+    {
+      "file": "e2e/medical-alerts.spec.ts",
+      "title": "DX-264 Mes: tres alertas, +1 más, teclado y toque a 390/1440 claro y oscuro",
+      "annotation": "Requiere la BD e2e aislada para fechar la anamnesis",
+      "requiresUnset": "E2E_DATABASE_URL",
+      "reason": "Sin E2E_DATABASE_URL no se puede fechar la anamnesis en el pasado."
+    },
+    {
+      "file": "e2e/password-reset.spec.ts",
+      "title": "Recuperar la contraseña › pedir el enlace desde el login, restablecer, cerrar las demás sesiones y no reutilizar el enlace",
+      "annotation": "E2E_MAIL_DIR no definido: no se puede leer el email (usa scripts/e2e-ci.sh)",
+      "requiresUnset": "E2E_MAIL_DIR",
+      "reason": "Sin E2E_MAIL_DIR no se puede leer el email de restablecimiento."
+    },
+    {
+      "file": "e2e/password-reset.spec.ts",
+      "title": "Recuperar la contraseña › a 1440px los formularios caben sin scroll horizontal",
+      "annotation": "E2E_MAIL_DIR no definido: no se puede leer el email (usa scripts/e2e-ci.sh)",
+      "requiresUnset": "E2E_MAIL_DIR",
+      "reason": "Sin E2E_MAIL_DIR no se puede leer el email de restablecimiento."
+    },
+    {
+      "file": "e2e/password-reset.spec.ts",
+      "title": "Recuperar la contraseña › a 390px los formularios caben sin scroll horizontal",
+      "annotation": "E2E_MAIL_DIR no definido: no se puede leer el email (usa scripts/e2e-ci.sh)",
+      "requiresUnset": "E2E_MAIL_DIR",
+      "reason": "Sin E2E_MAIL_DIR no se puede leer el email de restablecimiento."
+    },
+    {
+      "file": "e2e/patient-flow.spec.ts",
+      "title": "DX-242: axe Día/Semana/En clínica 390/1440 claro/oscuro",
+      "annotation": "E2E_DATABASE_URL no definido: no se pueden mover a hoy las citas de los ocho estados",
+      "requiresUnset": "E2E_DATABASE_URL",
+      "reason": "Sin E2E_DATABASE_URL no se pueden mover a hoy (a horas fijas) las ocho citas del QA: la API no agenda en el pasado."
+    },
+    {
+      "file": "e2e/patient-flow.spec.ts",
+      "title": "DX-242: prepara ocho estados reales para QA de accesibilidad",
+      "annotation": "E2E_DATABASE_URL no definido: no se pueden mover a hoy las citas de los ocho estados",
+      "requiresUnset": "E2E_DATABASE_URL",
+      "reason": "Sin E2E_DATABASE_URL no se pueden mover a hoy (a horas fijas) las ocho citas del QA: la API no agenda en el pasado."
+    },
+    {
+      "file": "e2e/session-cookie.spec.ts",
+      "title": "el avatar y el logo de la clínica (servidos por la API) cargan con la CSP",
+      "annotation": "E2E_DATABASE_URL no definido: no se puede fijar el logo de la clínica",
+      "requiresUnset": "E2E_DATABASE_URL",
+      "reason": "Sin E2E_DATABASE_URL no se puede fijar el logo de la clínica."
+    },
+    {
+      "file": "e2e/treatment-plan-alternatives.spec.ts",
+      "title": "recepción sigue los presupuestos presentados y marca uno como rechazado (escritorio)",
+      "annotation": "E2E_DATABASE_URL no definido: no se puede fechar la presentación en el pasado",
+      "requiresUnset": "E2E_DATABASE_URL",
+      "reason": "Sin E2E_DATABASE_URL no se puede fechar la presentación en el pasado."
+    },
+    {
+      "file": "e2e/treatment-plan-alternatives.spec.ts",
+      "title": "recepción sigue los presupuestos presentados y marca uno como rechazado (móvil)",
+      "annotation": "E2E_DATABASE_URL no definido: no se puede fechar la presentación en el pasado",
+      "requiresUnset": "E2E_DATABASE_URL",
+      "reason": "Sin E2E_DATABASE_URL no se puede fechar la presentación en el pasado."
+    }
+  ]
+}

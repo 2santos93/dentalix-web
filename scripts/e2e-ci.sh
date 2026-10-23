@@ -5,7 +5,10 @@
 # propio paso y en local se corren todas con `all`.
 #
 #   scripts/e2e-ci.sh all                # todo, y para los servidores al final
-#   scripts/e2e-ci.sh setup|db|api|web|test|stop   # una fase
+#   scripts/e2e-ci.sh setup|db|api|web|test|skips|stop   # una fase
+#
+# `skips` (DX-252) falla si el informe de `test` tiene tests saltados fuera de
+# e2e/allowed-skips.json, y los nombra (scripts/check-e2e-skips.mjs).
 #
 # Variables (todas con default para la CI; en local se cambian puertos y BD):
 #   API_DIR          checkout de dentalix-api            (../dentalix-api)
@@ -205,21 +208,43 @@ phase_web() {
   endgroup
 }
 
+# Lo que ven los specs. La guardia de saltos (phase_skips) lo necesita también:
+# un salto permitido por la ausencia de una de estas variables es rojo si está.
+playwright_env() {
+  export E2E_WEB_SERVER=none
+  export E2E_WEB_PORT
+  export E2E_API_URL="$API_URL"
+  export E2E_DATABASE_URL="postgresql://${PG_SUPERUSER}:${PG_SUPERPASS}@${PG_HOST}:${PG_PORT}/${E2E_DB_NAME}"
+  export E2E_EXPECT_PROD_CSP=1
+  export E2E_MAIL_DIR="$MAIL_FILE_DIR"
+  export E2E_REPORT_JSON=1
+}
+
 phase_test() {
   load_env
   group "Playwright"
   local start=$SECONDS status=0
+  # Sin el informe de una ejecución anterior: si esta no lo escribe, la
+  # guardia falla en vez de leer uno viejo.
+  rm -f "$WEB_DIR/playwright-results.json"
   (
     cd "$WEB_DIR"
-    E2E_WEB_SERVER=none \
-      E2E_WEB_PORT="$E2E_WEB_PORT" \
-      E2E_API_URL="$API_URL" \
-      E2E_DATABASE_URL="postgresql://${PG_SUPERUSER}:${PG_SUPERPASS}@${PG_HOST}:${PG_PORT}/${E2E_DB_NAME}" \
-      E2E_EXPECT_PROD_CSP=1 \
-      E2E_MAIL_DIR="$MAIL_FILE_DIR" \
-      npx playwright test "$@"
+    playwright_env
+    npx playwright test "$@"
   ) || status=$?
   echo "Playwright terminó con código $status en $((SECONDS - start)) s"
+  endgroup
+  return "$status"
+}
+
+phase_skips() {
+  load_env
+  group "Tests saltados fuera de e2e/allowed-skips.json"
+  local status=0
+  (
+    playwright_env
+    node "$WEB_DIR/scripts/check-e2e-skips.mjs" "$WEB_DIR/playwright-results.json"
+  ) || status=$?
   endgroup
   return "$status"
 }
@@ -255,6 +280,7 @@ case "$cmd" in
   api) phase_api ;;
   web) phase_web ;;
   test) phase_test "$@" ;;
+  skips) phase_skips ;;
   stop) phase_stop ;;
   all)
     trap phase_stop EXIT
@@ -262,10 +288,15 @@ case "$cmd" in
     phase_db
     phase_api
     phase_web
-    phase_test "$@"
+    # La guardia corre aunque Playwright falle (dice qué no se ejecutó). Si la
+    # guardia falla sale con su código (set -e); si no, con el de Playwright.
+    st=0
+    phase_test "$@" || st=$?
+    phase_skips
+    exit "$st"
     ;;
   *)
-    echo "uso: $0 [all|setup|db|api|web|test|stop] [args de playwright]" >&2
+    echo "uso: $0 [all|setup|db|api|web|test|skips|stop] [args de playwright]" >&2
     exit 2
     ;;
 esac

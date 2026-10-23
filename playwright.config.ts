@@ -14,6 +14,7 @@ import { WEB_PORT } from './e2e/support/urls';
  * - `none`: ya está arrancada (lo que hace `scripts/e2e-ci.sh`).
  */
 const isCI = !!process.env.CI;
+const jsonReport: ['json', { outputFile: string }] = ['json', { outputFile: 'playwright-results.json' }];
 const webServerMode = process.env.E2E_WEB_SERVER ?? 'dev';
 const webServerCommand: Record<string, string> = {
   dev: `npx next dev -p ${WEB_PORT}`,
@@ -31,9 +32,14 @@ export default defineConfig({
   // reporter de CI lo marca como "flaky" igualmente.
   retries: isCI ? 1 : 0,
   workers: 1,
+  // DX-252: en CI (y con E2E_REPORT_JSON, que pone scripts/e2e-ci.sh) también
+  // el informe JSON, que lee scripts/check-e2e-skips.mjs para poner la E2E en
+  // rojo si se salta un test fuera de e2e/allowed-skips.json.
   reporter: isCI
-    ? [['github'], ['list'], ['html', { open: 'never', outputFolder: 'playwright-report' }]]
-    : 'list',
+    ? [['github'], ['list'], ['html', { open: 'never', outputFolder: 'playwright-report' }], jsonReport]
+    : process.env.E2E_REPORT_JSON
+      ? [['list'], jsonReport]
+      : 'list',
   use: {
     baseURL: `http://localhost:${WEB_PORT}`,
     // La zona y el idioma de la sede, no los del runner (en GitHub, UTC y

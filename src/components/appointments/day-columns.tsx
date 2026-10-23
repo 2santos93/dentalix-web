@@ -346,7 +346,7 @@ export function DayColumns({
             className={cn(
               'h-9 shrink-0 rounded-full border px-3.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
               p.userId === active
-                ? 'border-primary bg-primary/10 text-primary'
+                ? 'border-primary bg-primary/10 text-ink'
                 : 'border-border bg-surface text-muted hover:text-ink',
             )}
           >
