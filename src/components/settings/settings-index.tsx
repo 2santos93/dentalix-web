@@ -8,7 +8,8 @@ import { visibleSettingsSections } from './settings-sections';
  * separadas por filetes dentro de una sola tarjeta (DESIGN.md: «prefer a
  * labeled section over another card»). Cada fila es un enlace de al menos
  * 44 px de alto con su etiqueta y una línea de apoyo. El hover es `bg` y no
- * `surface-2`: sobre `surface-2` el gris de la línea de apoyo baja de 4,5:1.
+ * `surface-2`: sobre `surface-2` el gris de la línea de apoyo baja a 4,34:1
+ * (excepción anotada en DESIGN.md, «Tables»).
  *
  * El rol sale del token (el de ESTA clínica) y solo decide qué se pinta: quien
  * entre por la URL a una pantalla sin permiso recibe el 403 de la API.
