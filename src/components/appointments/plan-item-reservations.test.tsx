@@ -152,6 +152,24 @@ describe('Tratamiento reservado en otra cita (DX-273)', () => {
     await waitFor(() => expect(button).not.toBeDisabled());
   });
 
+  it('doble clic en «Traer a esta cita»: una sola petición, el botón deshabilitado mientras está en vuelo y ningún error (DX-288)', async () => {
+    mockedGet.mockResolvedValue(view([item()]));
+    let resolve: (v: never) => void = () => undefined;
+    mockedClaim.mockReturnValue(new Promise((r) => (resolve = r)));
+    render(<Harness />);
+    const button = await screen.findByRole('button', { name: /Traer a esta cita/ });
+    await userEvent.dblClick(button);
+    expect(mockedClaim).toHaveBeenCalledTimes(1);
+    expect(button).toBeDisabled();
+    expect(button).toHaveAttribute('aria-busy', 'true');
+    await userEvent.click(button);
+    expect(mockedClaim).toHaveBeenCalledTimes(1);
+    resolve({} as never);
+    await waitFor(() => expect(toast.success).toHaveBeenCalledTimes(1));
+    expect(toast.error).not.toHaveBeenCalled();
+    expect(mockedClaim).toHaveBeenCalledTimes(1);
+  });
+
   it('«Llegó» con un tratamiento reservado en otra cita: aviso no bloqueante con «Traer a esta cita»', async () => {
     mockedUpdate.mockResolvedValue({ id: 'a1', planItemsReservedElsewhere: [reserved] } as never);
     mockedClaim.mockResolvedValue({} as never);
