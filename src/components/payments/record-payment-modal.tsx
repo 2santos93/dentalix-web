@@ -27,6 +27,8 @@ import { sedeToday, useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
 const copy = {
   title: 'Registrar abono',
   description: 'El abono se aplica al plan que elijas y aparece en la caja de hoy.',
+  // QA D2: con saldos migrados pendientes, el destino puede ser uno de ellos.
+  descriptionWithOpenings: 'El abono se aplica al plan o al saldo migrado que elijas y aparece en la caja de hoy.',
   submit: 'Registrar abono',
   amount: 'Importe',
   currency: 'Moneda',
@@ -233,7 +235,7 @@ export function RecordPaymentModal({
       open={open}
       onOpenChange={onOpenChange}
       title={copy.title}
-      description={copy.description}
+      description={openings.length > 0 ? copy.descriptionWithOpenings : copy.description}
       onSubmit={handleSubmit}
       submitLabel={copy.submit}
       submitting={submitting}

@@ -351,6 +351,8 @@ describe('DX-262: abono contra el saldo migrado', () => {
     const { onRecorded } = renderModal([opening, { ...opening, id: 'ob-paid', pending: 0 }]);
     const dialog = screen.getByRole('dialog');
     const target = await within(dialog).findByLabelText('Abonar a');
+    // QA D2: con saldo migrado, la ayuda no habla solo de «plan».
+    expect(dialog).toHaveTextContent('El abono se aplica al plan o al saldo migrado que elijas y aparece en la caja de hoy.');
     // Solo los saldos con algo pendiente.
     expect(
       within(target)

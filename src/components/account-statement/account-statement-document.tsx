@@ -46,6 +46,8 @@ const copy = {
   colOverdue: 'Vencido',
   colNext: 'Próxima cuota',
   colPlan: 'Plan',
+  // QA D2: un abono va a un plan o a un saldo migrado.
+  colDestination: 'Destino',
   colStatus: 'Estado',
   colDate: 'Fecha',
   colMethod: 'Método',
@@ -302,7 +304,7 @@ export function AccountStatementDocument({ statement }: AccountStatementDocument
                 <thead>
                   <tr>
                     <Th>{copy.colDate}</Th>
-                    <Th>{copy.colPlan}</Th>
+                    <Th>{copy.colDestination}</Th>
                     <Th>{copy.colMethod}</Th>
                     <Th>{copy.colLocation}</Th>
                     <Th right>{copy.colAmount}</Th>

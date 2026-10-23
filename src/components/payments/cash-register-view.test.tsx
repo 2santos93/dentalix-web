@@ -707,4 +707,7 @@ it('DX-262: un abono contra el saldo migrado dice «Saldo migrado» y su concept
   const table = await screen.findByRole('table', { name: /abonos/i });
   const row = within(table).getByRole('row', { name: /ana gómez/i });
   expect(within(row).getByText('Saldo migrado · Ortodoncia 2025')).toBeInTheDocument();
+  // QA D2: la columna nombra el destino (un plan o un saldo migrado).
+  expect(within(table).getByRole('columnheader', { name: 'Destino' })).toBeInTheDocument();
+  expect(within(table).queryByRole('columnheader', { name: 'Plan' })).not.toBeInTheDocument();
 });

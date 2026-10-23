@@ -415,9 +415,31 @@ it('DX-262: «Saldo migrado» con su fecha de corte («aprox.» si es la de impo
   // El abono contra el saldo dice a qué se abonó.
   const movements = screen.getByRole('table', { name: /movimientos/i });
   expect(movements).toHaveTextContent('Saldo migrado · Ortodoncia 2025');
+  // QA D2: la columna nombra el destino del abono.
+  expect(within(movements).getByRole('columnheader', { name: 'Destino' })).toBeInTheDocument();
   expect(rows[1]).toHaveTextContent('23/10/2026 (aprox.)');
 
   const cop = screen.getByRole('region', { name: /resumen en COP/i });
-  expect(money(within(cop).getByTestId('opening').textContent)).toContain('200.000,50');
+  // QA D5: lo que queda del migrado tras el abono, no el importe original.
+  expect(within(cop).getByTestId('opening')).toHaveTextContent(/^Incluye saldo migrado pendiente:/);
+  expect(money(within(cop).getByTestId('opening').textContent)).toContain('150.000,50');
+  expect(money(within(cop).getByTestId('opening').textContent)).not.toContain('200.000,50');
   expect(money(within(cop).getByTestId('balance').textContent)).toContain('150.000,50');
+  // QA D3: hay una fila «aprox.», así que la nota lo explica.
+  expect(screen.getByText(/«aprox\.»: el archivo no traía la fecha/)).toBeInTheDocument();
+});
+
+it('QA D3: sin ninguna fila aproximada, la nota no habla de «aprox.»; QA D5: saldado, no hay «Incluye saldo migrado»', async () => {
+  const base = openingBalanceStatementFixture();
+  mockedGet.mockResolvedValue({
+    ...base,
+    summary: [{ ...base.summary[0], openingPending: 0, paid: 200000.5, balance: 0 }],
+    openingBalances: [{ ...base.openingBalances[0], paid: 200000.5, pending: 0 }],
+  });
+  render(<AccountStatementView token="tok" patientId="pat-1" />);
+  await screen.findByRole('table', { name: 'Saldos migrados' });
+  expect(screen.getByText(/^Deuda traída del programa anterior al importar los pacientes\.$/)).toBeInTheDocument();
+  expect(screen.queryByText(/aprox\./)).not.toBeInTheDocument();
+  const cop = screen.getByRole('region', { name: /resumen en COP/i });
+  expect(within(cop).queryByTestId('opening')).not.toBeInTheDocument();
 });

@@ -16,6 +16,7 @@ import {
   methodLabel,
   movementDestination,
   openingAsOfLabel,
+  openingNoteFor,
   planNamer,
   statementCopy,
   voidedDetail,
@@ -81,6 +82,8 @@ const copy = {
   installmentsHeading: 'Cuotas',
   installmentsTable: 'Calendario de cuotas',
   colPlan: 'Plan',
+  // QA D2: un abono va a un plan o a un saldo migrado.
+  colDestination: 'Destino',
   colStatus: 'Estado',
   colBudgeted: 'Presupuestado',
   colPaid: 'Abonado',
@@ -399,7 +402,7 @@ function StatementBody({
               </TableBody>
             </Table>
           </Card>
-          <p className="max-w-prose text-xs text-muted">{statementCopy.openingNote}</p>
+          <p className="max-w-prose text-xs text-muted">{openingNoteFor(statement.openingBalances)}</p>
         </SubSection>
       ) : null}
 
@@ -540,7 +543,7 @@ function StatementBody({
               <TableHeader>
                 <TableRow className="hover:bg-transparent">
                   <TableHead scope="col">{copy.colDate}</TableHead>
-                  <TableHead scope="col">{copy.colPlan}</TableHead>
+                  <TableHead scope="col">{copy.colDestination}</TableHead>
                   <TableHead scope="col">{copy.colMethod}</TableHead>
                   <TableHead scope="col">{copy.colLocation}</TableHead>
                   <TableHead scope="col" className="text-right">
@@ -557,7 +560,7 @@ function StatementBody({
                     <TableCell className="tabular-nums" data-label={copy.colDate}>
                       {formatCivilDate(m.paidOn)}
                     </TableCell>
-                    <TableCell className="text-muted" data-label={copy.colPlan}>
+                    <TableCell className="text-muted" data-label={copy.colDestination}>
                       {movementDestination(m, planName, statement.openingBalances)}
                       <VoidedDetail movement={m} />
                     </TableCell>
@@ -718,14 +721,14 @@ function CurrencySummary({ row }: { row: AccountStatementSummary }) {
           )}
         </Figure>
       </dl>
-      {row.openingBalance > 0 ? (
+      {row.openingPending > 0 ? (
         <p
           data-testid="opening"
           className="border-t border-hairline px-4 py-2 text-xs text-muted sm:px-6"
         >
           {statementCopy.openingIncluded}{' '}
           <span className="font-medium tabular-nums text-ink">
-            {formatCurrency(row.openingBalance, row.currency)}
+            {formatCurrency(row.openingPending, row.currency)}
           </span>
         </p>
       ) : null}

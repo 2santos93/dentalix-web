@@ -34,6 +34,8 @@ const copy = {
   planLabel: (date: string, optionLabel: string | null) =>
     `Abono al plan de tratamiento del ${date}${optionLabel ? ` · ${optionLabel}` : ''}`,
   balanceAfter: 'Saldo del plan tras este abono',
+  // Revisión N1 / QA D2: sin plan, lo que queda del saldo migrado.
+  openingBalanceAfter: 'Saldo pendiente tras este abono',
   balanceUnavailable: 'No disponible',
   cashier: 'Recibió',
   signature: 'Firma y sello',
@@ -160,7 +162,7 @@ export function PaymentReceiptDocument({ receipt, format = 'a4' }: PaymentReceip
             ? copy.planLabel(formatDate(plan.createdAt), plan.optionLabel)
             : copy.openingLabel(snapshot.openingBalance ?? null)}
         </Field>
-        <Field label={copy.balanceAfter}>
+        <Field label={plan ? copy.balanceAfter : copy.openingBalanceAfter}>
           <span className="tabular-nums">
             {planBalance
               ? formatCurrency(planBalance.balance, planBalance.currency)

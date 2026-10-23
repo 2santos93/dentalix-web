@@ -29,7 +29,8 @@ export const statementCopy = {
   // DX-262: saldo inicial importado del programa anterior.
   openingHeading: 'Saldo migrado',
   openingTable: 'Saldos migrados',
-  openingIncluded: 'Incluye saldo migrado:',
+  // QA D5: lo que queda del saldo migrado tras sus abonos.
+  openingIncluded: 'Incluye saldo migrado pendiente:',
   colConcept: 'Concepto',
   colAsOf: 'Fecha de corte',
   approx: 'aprox.',
@@ -38,13 +39,21 @@ export const statementCopy = {
   openingMovement: (concept: string) => `Saldo migrado · ${concept}`,
   /** M1: el «Saldo» de un resumen con saldo migrado no es solo presupuestado − abonado. */
   balanceIncludesOpening: 'El saldo incluye el saldo migrado del programa anterior.',
-  openingNote:
-    'Deuda traída del programa anterior al importar los pacientes. «aprox.»: el archivo no traía la fecha y se tomó la de la importación.',
+  openingNote: 'Deuda traída del programa anterior al importar los pacientes.',
+  /** QA D3: solo si alguna fila es aproximada. */
+  openingApproxNote: '«aprox.»: el archivo no traía la fecha y se tomó la de la importación.',
   emptyTitle: 'Sin movimientos financieros',
   emptyDescription: 'Este paciente no tiene planes con valor ni abonos registrados.',
   footnote:
     'Cifras en la moneda en que se presupuestaron o pagaron, sin conversión. Los abonos anulados se listan pero no suman.',
 };
+
+/** Nota bajo la tabla de saldos migrados: «aprox.» solo si alguna fila lo es (QA D3). */
+export function openingNoteFor(openings: Pick<AccountStatementOpeningBalance, 'asOfDateApproximate'>[]): string {
+  return openings.some((o) => o.asOfDateApproximate)
+    ? `${statementCopy.openingNote} ${statementCopy.openingApproxNote}`
+    : statementCopy.openingNote;
+}
 
 /** «15/03/2026» o «23/10/2026 (aprox.)» si la fecha es la de la importación. */
 export function openingAsOfLabel(

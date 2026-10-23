@@ -139,4 +139,7 @@ it('DX-262: el recibo de un abono al saldo migrado dice su concepto y su fecha d
   expect(screen.getByTestId('receipt-document')).toHaveTextContent(
     'Saldo migrado · Ortodoncia 2025 · corte 15/03/2026',
   );
+  // Revisión N1 / QA D2: sin plan, el saldo es lo que queda del migrado.
+  expect(screen.getByText('Saldo pendiente tras este abono')).toBeInTheDocument();
+  expect(screen.queryByText(/Saldo del plan/)).not.toBeInTheDocument();
 });

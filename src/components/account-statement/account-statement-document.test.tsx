@@ -88,7 +88,8 @@ it('DX-262: el documento lista el saldo migrado con su fecha de corte', () => {
   // El resumen dice que el saldo incluye el migrado (revisión M1).
   expect(money(copRow.textContent)).toContain('200.000,50');
   expect(screen.getByText(/El saldo incluye el saldo migrado/)).toBeInTheDocument();
-  expect(screen.getByRole('table', { name: /movimientos/i })).toHaveTextContent(
-    'Saldo migrado · Ortodoncia 2025',
-  );
+  const movements = screen.getByRole('table', { name: /movimientos/i });
+  expect(movements).toHaveTextContent('Saldo migrado · Ortodoncia 2025');
+  // QA D2: «Destino», no «Plan».
+  expect(within(movements).getByRole('columnheader', { name: 'Destino' })).toBeInTheDocument();
 });

@@ -82,7 +82,8 @@ const copy = {
   tableLabel: 'Abonos del período',
   colDate: 'Fecha',
   colPatient: 'Paciente',
-  colPlan: 'Plan',
+  // QA D2: un abono va a un plan o a un saldo migrado.
+  colPlan: 'Destino',
   colMethod: 'Método',
   colLocation: 'Sede',
   colAmount: 'Monto',
