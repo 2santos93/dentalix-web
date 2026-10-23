@@ -62,12 +62,12 @@ const passwordReset = (annotations: Annotation[]): FakeTest => ({
   annotations,
 });
 
-function run(rep: object, env: Record<string, string> = {}) {
+function run(rep: object, env: Record<string, string> = {}, list: object = allowed) {
   const dir = mkdtempSync(path.join(tmpdir(), 'dx252-skips-'));
   const reportPath = path.join(dir, 'report.json');
   const listPath = path.join(dir, 'allowed.json');
   writeFileSync(reportPath, JSON.stringify(rep));
-  writeFileSync(listPath, JSON.stringify(allowed));
+  writeFileSync(listPath, JSON.stringify(list));
   // Sin las variables del entorno del que corre jest: solo las del caso.
   const childEnv: NodeJS.ProcessEnv = { ...process.env, GITHUB_ACTIONS: '', E2E_MAIL_DIR: '', ...env };
   try {
@@ -128,5 +128,25 @@ describe('scripts/check-e2e-skips.mjs (DX-252)', () => {
   it('un informe sin tests o con errores globales no vale: 2', () => {
     expect(run(report([])).code).toBe(2);
     expect(run(report([ok('a')], [{ message: 'Error: no encuentro el config' }])).code).toBe(2);
+  });
+
+  describe('la lista e2e/allowed-skips.json se valida al cargarla: 2 si una entrada no cumple el contrato', () => {
+    const entry = allowed.allowed[0];
+    const rep = report([passwordReset([{ type: 'skip', description: MAIL_SKIP }])]);
+    it.each([
+      ['sin requiresUnset (se permitiría siempre, también en la CI)', { ...entry, requiresUnset: undefined }, 'requiresUnset'],
+      ['con requiresUnset que la CI no define', { ...entry, requiresUnset: 'TZ' }, 'requiresUnset'],
+      ['sin annotation', { ...entry, annotation: undefined }, 'annotation'],
+      ['sin title', { ...entry, title: '' }, 'title'],
+      ['sin file', { ...entry, file: undefined }, 'file'],
+    ])('%s', (_case, bad, field) => {
+      const res = run(rep, {}, { allowed: [bad] });
+      expect(res.code).toBe(2);
+      expect(res.out).toContain('e2e/allowed-skips.json');
+      expect(res.out).toContain(field);
+    });
+    it('sin la lista `allowed`: 2', () => {
+      expect(run(rep, {}, { nada: [] }).code).toBe(2);
+    });
   });
 });

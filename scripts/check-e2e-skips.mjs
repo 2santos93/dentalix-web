@@ -13,13 +13,17 @@
 //     no tiene anotación: nunca se permite);
 //   - la variable de entorno de `requiresUnset` NO está definida al correr la
 //     guardia (si la CI la define y aun así se salta, es una regresión).
-// Sale con 2 si no puede leer el informe, si no tiene tests o si trae errores
-// globales (config roto, fallo fuera de los tests). En GitHub Actions además
-// anota cada test en el PR (`::error file=…`).
+// Sale con 2 si no puede leer el informe, si no tiene tests, si trae errores
+// globales (config roto, fallo fuera de los tests) o si una entrada de la lista
+// no cumple su contrato (file/title/annotation y requiresUnset ∈ las variables
+// que define la CI). En GitHub Actions además anota cada test en el PR
+// (`::error file=…`).
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 
 const SEP = ' › ';
+/** Las únicas variables que justifican un salto: la CI siempre las define. */
+const CI_DEFINED_VARS = ['E2E_DATABASE_URL', 'E2E_MAIL_DIR'];
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
 const reportPath = process.argv[2] ?? path.join(root, 'playwright-results.json');
 const allowedPath = process.argv[3] ?? path.join(root, 'e2e', 'allowed-skips.json');
@@ -38,7 +42,33 @@ function readJson(file, what) {
 }
 
 const report = readJson(reportPath, 'el informe JSON de Playwright');
-const { allowed } = readJson(allowedPath, 'la lista de saltos permitidos');
+const allowed = validAllowed(readJson(allowedPath, 'la lista de saltos permitidos'));
+
+/**
+ * El contrato de e2e/allowed-skips.json, comprobado al cargarla: cada entrada
+ * con `file`, `title` y `annotation` no vacíos y `requiresUnset` igual a una de
+ * las variables que la CI define (scripts/e2e-ci.sh, playwright_env). Una
+ * entrada sin esa condición se permitiría siempre, también en la CI.
+ */
+function validAllowed(list) {
+  if (!Array.isArray(list?.allowed)) fail(`e2e/allowed-skips.json (${allowedPath}) no tiene la lista \`allowed\`.`);
+  const problems = [];
+  list.allowed.forEach((entry, i) => {
+    const name = `entrada ${i + 1}${entry?.title ? ` «${entry.title}»` : ''}`;
+    for (const field of ['file', 'title', 'annotation']) {
+      if (typeof entry?.[field] !== 'string' || entry[field].trim() === '') problems.push(`${name}: falta \`${field}\``);
+    }
+    if (!CI_DEFINED_VARS.includes(entry?.requiresUnset)) {
+      problems.push(
+        `${name}: \`requiresUnset\` debe ser ${CI_DEFINED_VARS.join(' o ')} (es ${JSON.stringify(entry?.requiresUnset ?? null)})`,
+      );
+    }
+  });
+  if (problems.length > 0) {
+    fail(`e2e/allowed-skips.json no cumple su contrato:\n${problems.map((p) => `  - ${p}`).join('\n')}`);
+  }
+  return list.allowed;
+}
 const testDir = report.config?.rootDir ?? path.join(root, 'e2e');
 
 /** `e2e/x.spec.ts`, relativo al repo de la web, venga como venga en el informe. */
@@ -81,7 +111,7 @@ function verdict(t) {
   if (entry.annotation !== note.description) {
     return `${note.description} (el motivo no es el de e2e/allowed-skips.json: «${entry.annotation}»)`;
   }
-  if (entry.requiresUnset && isSet(entry.requiresUnset)) {
+  if (isSet(entry.requiresUnset)) {
     return `${note.description} (pero ${entry.requiresUnset} está definida: este salto no debería ocurrir)`;
   }
   return null;
