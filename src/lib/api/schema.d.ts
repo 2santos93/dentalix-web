@@ -3072,6 +3072,153 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/patients/{patientId}/medical-history/requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Anamnesis enviadas al paciente (estado, sin respuestas)
+         * @description El motivo de un rechazo (texto libre clínico) solo llega a los roles clínicos; a recepción, `rejectReason` = null.
+         */
+        get: operations["PatientAnamnesisRequestsController_list"];
+        put?: never;
+        /**
+         * Crear el enlace de anamnesis para el paciente
+         * @description Un solo uso; caduca a los 7 días o al inicio de la cita. Anula el enlace anterior que aún esperaba respuesta. Devuelve la URL una única vez (se guarda solo el hash del token) y el mensaje para wa.me.
+         */
+        post: operations["PatientAnamnesisRequestsController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/medical-history/submissions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Bandeja de anamnesis (por defecto, las que están por revisar) */
+        get: operations["MedicalHistorySubmissionsController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/medical-history/submissions/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Contador del menú: anamnesis por revisar */
+        get: operations["MedicalHistorySubmissionsController_summary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/medical-history/submissions/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Revisión: respuestas, versión vigente y diferencias */
+        get: operations["MedicalHistorySubmissionsController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/medical-history/submissions/{id}/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Aceptar: crea una versión de la HC (origen formulario del paciente)
+         * @description En una transacción: una versión nueva con source=PATIENT_FORM y autor = quien revisa (banderas recalculadas), y el envío pasa a ACCEPTED. Con `medicalHistory`, guarda esos ajustes en vez de la propuesta.
+         */
+        post: operations["MedicalHistorySubmissionsController_accept"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/medical-history/submissions/{id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Rechazar con motivo (la HC no cambia) */
+        post: operations["MedicalHistorySubmissionsController_reject"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/medical-history/submissions/{id}/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Anular un enlace que aún espera al paciente */
+        post: operations["MedicalHistorySubmissionsController_revoke"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/medical-history/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Cuestionario de anamnesis del enlace (sin datos previos) */
+        get: operations["PublicMedicalHistoryController_get"];
+        put?: never;
+        /** Enviar las respuestas (una sola vez; la HC no cambia hasta que se revisa) */
+        post: operations["PublicMedicalHistoryController_submit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/patients/{patientId}/perio-exams": {
         parameters: {
             query?: never;
@@ -3785,7 +3932,7 @@ export interface components {
         /** @enum {string} */
         AuditAction: "VIEW" | "CREATE" | "UPDATE" | "DELETE" | "SIGN" | "VOID" | "LOGIN" | "LOGIN_FAILED" | "PASSWORD_RESET" | "EXPORT" | "PRINT" | "SEND";
         /** @enum {string} */
-        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION" | "POSTOP_TEMPLATE" | "POSTOP_DELIVERY" | "PATIENT_DOCUMENT" | "AGREEMENT" | "PRICE_LIST" | "PROVIDER_SCHEDULE" | "PATIENT_IMPORT_BATCH";
+        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION" | "POSTOP_TEMPLATE" | "POSTOP_DELIVERY" | "PATIENT_DOCUMENT" | "MEDICAL_HISTORY_SUBMISSION" | "AGREEMENT" | "PRICE_LIST" | "PROVIDER_SCHEDULE" | "PATIENT_IMPORT_BATCH";
         /**
          * @description Rol con el que actuó (del token). `null` en un login fallido.
          * @enum {string}
@@ -5497,6 +5644,11 @@ export interface components {
             alergiaPenicilina: boolean;
             alergiaLatex: boolean;
         };
+        /**
+         * @description DX-099: STAFF = la tecleó el personal; PATIENT_FORM = la aceptó un profesional (el autor) desde el formulario que llenó el paciente por enlace.
+         * @enum {string}
+         */
+        MedicalHistorySource: "STAFF" | "PATIENT_FORM";
         MedicalHistoryDto: {
             /** Format: uuid */
             id: string;
@@ -5516,6 +5668,8 @@ export interface components {
             notes: string | null;
             safetyFlags: components["schemas"]["SafetyFlagsDto"];
             hasCriticalAlert: boolean;
+            /** @description DX-099: STAFF = la tecleó el personal; PATIENT_FORM = la aceptó un profesional (el autor) desde el formulario que llenó el paciente por enlace. */
+            source: components["schemas"]["MedicalHistorySource"];
             /** Format: uuid */
             createdById: string | null;
             /** Format: date-time */
@@ -9251,7 +9405,7 @@ export interface components {
          * @description IN_PERSON = registrado en la clínica con el texto vigente. LEGACY = heredado del booleano anterior, sin texto versionado.
          * @enum {string}
          */
-        DataConsentChannel: "IN_PERSON" | "LEGACY";
+        DataConsentChannel: "IN_PERSON" | "LEGACY" | "PATIENT_LINK";
         PolicyVersionRefDto: {
             /** Format: uuid */
             id: string;
@@ -10050,6 +10204,320 @@ export interface components {
             renderedText: string;
             /** Format: date-time */
             deliveredAt: string;
+        };
+        CreateAnamnesisRequestDto: {
+            /**
+             * Format: uuid
+             * @description Cita del paciente: el enlace caduca a su inicio (o a los 7 días, lo que llegue antes) y la anamnesis va a la bandeja de su sede.
+             */
+            appointmentId?: string;
+        };
+        AnamnesisWhatsAppDto: {
+            /** @description E.164 sin «+», para wa.me */
+            phone: string;
+            /** @description Mensaje prellenado: saludo, clínica y enlace; nada clínico */
+            text: string;
+        };
+        AnamnesisRequestCreatedDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            patientId: string;
+            /** Format: uuid */
+            appointmentId: string | null;
+            /** @description Enlace público. El token solo viaja en esta respuesta: la API guarda su hash. */
+            url: string;
+            /** Format: date-time */
+            expiresAt: string;
+            whatsapp: components["schemas"]["AnamnesisWhatsAppDto"] | null;
+            whatsappUnavailableReason: string | null;
+            /** @description El paciente no tiene vigente SENSITIVE_HEALTH: el formulario la pedirá antes. */
+            consentRequired: boolean;
+        };
+        SubmissionPatientDto: {
+            /** Format: uuid */
+            id: string;
+            fullName: string;
+        };
+        SubmissionAppointmentDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            start: string;
+        };
+        SubmissionLocationDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+        };
+        /**
+         * @description PENDING_PATIENT = esperando al paciente; SUBMITTED = por revisar; ACCEPTED / REJECTED = revisada; EXPIRED = caducada o anulada.
+         * @enum {string}
+         */
+        MedicalHistorySubmissionStatus: "PENDING_PATIENT" | "SUBMITTED" | "ACCEPTED" | "REJECTED" | "EXPIRED";
+        AnamnesisSubmissionSummaryDto: {
+            /** Format: uuid */
+            id: string;
+            patient: components["schemas"]["SubmissionPatientDto"];
+            appointment: components["schemas"]["SubmissionAppointmentDto"] | null;
+            location: components["schemas"]["SubmissionLocationDto"];
+            /** @description PENDING_PATIENT = esperando al paciente; SUBMITTED = por revisar; ACCEPTED / REJECTED = revisada; EXPIRED = caducada o anulada. */
+            status: components["schemas"]["MedicalHistorySubmissionStatus"];
+            /** Format: date-time */
+            expiresAt: string;
+            /** Format: date-time */
+            createdAt: string;
+            createdByName: string;
+            /** Format: date-time */
+            submittedAt: string | null;
+            /** Format: date-time */
+            reviewedAt: string | null;
+            reviewedByName: string | null;
+            rejectReason: string | null;
+            /**
+             * Format: uuid
+             * @description Versión de la HC que creó al aceptarse
+             */
+            resultingVersionId: string | null;
+        };
+        AnamnesisInboxSummaryDto: {
+            /** @description Anamnesis por revisar en las sedes del alcance de la sesión */
+            submitted: number;
+        };
+        /**
+         * @description Sí / No / No sé
+         * @enum {string}
+         */
+        AnamnesisAnswer: "SI" | "NO" | "NO_SE";
+        /** @enum {string} */
+        AnamnesisAllergyType: "MEDICAMENTO" | "MATERIAL" | "ALIMENTO" | "AMBIENTAL";
+        /** @enum {string} */
+        AnamnesisAllergySeverity: "LEVE" | "MODERADA" | "ANAFILAXIA";
+        AllergyAnswerDto: {
+            alergeno: string;
+            tipo: components["schemas"]["AnamnesisAllergyType"];
+            reaccion?: string;
+            severidad: components["schemas"]["AnamnesisAllergySeverity"];
+        };
+        AllergiesAnswerDto: {
+            /** @description Sí / No / No sé */
+            answer: components["schemas"]["AnamnesisAnswer"];
+            items?: components["schemas"]["AllergyAnswerDto"][];
+        };
+        ConditionAnswerDto: {
+            /** @example DIABETES */
+            codigo: string;
+            /** @description Sí / No / No sé */
+            answer: components["schemas"]["AnamnesisAnswer"];
+            nota?: string;
+        };
+        MedicationAnswerDto: {
+            nombre: string;
+            dosis?: string;
+            frecuencia?: string;
+        };
+        MedicationsAnswerDto: {
+            /** @description Sí / No / No sé */
+            answer: components["schemas"]["AnamnesisAnswer"];
+            items?: components["schemas"]["MedicationAnswerDto"][];
+        };
+        AnticoagulantsAnswerDto: {
+            /** @description Sí / No / No sé */
+            answer: components["schemas"]["AnamnesisAnswer"];
+            /** @description ¿Cuál? */
+            detail?: string;
+        };
+        SmokingAnswerDto: {
+            /** @description Sí / No / No sé */
+            answer: components["schemas"]["AnamnesisAnswer"];
+            porDia?: number;
+        };
+        AlcoholAnswerDto: {
+            /** @description Sí / No / No sé */
+            answer: components["schemas"]["AnamnesisAnswer"];
+            frecuencia?: string;
+        };
+        SimpleAnswerDto: {
+            /** @description Sí / No / No sé */
+            answer: components["schemas"]["AnamnesisAnswer"];
+        };
+        HabitsAnswerDto: {
+            tabaquismo: components["schemas"]["SmokingAnswerDto"];
+            alcohol: components["schemas"]["AlcoholAnswerDto"];
+            bruxismo: components["schemas"]["SimpleAnswerDto"];
+        };
+        PregnancyAnswerDto: {
+            /** @description Sí / No / No sé */
+            answer: components["schemas"]["AnamnesisAnswer"];
+            semanas?: number;
+        };
+        SurgeryAnswerDto: {
+            descripcion: string;
+            /** @description Año o fecha aproximada */
+            fecha?: string;
+        };
+        SurgeriesAnswerDto: {
+            /** @description Sí / No / No sé */
+            answer: components["schemas"]["AnamnesisAnswer"];
+            items?: components["schemas"]["SurgeryAnswerDto"][];
+        };
+        AnamnesisAnswersDto: {
+            allergies: components["schemas"]["AllergiesAnswerDto"];
+            conditions: components["schemas"]["ConditionAnswerDto"][];
+            medications: components["schemas"]["MedicationsAnswerDto"];
+            anticoagulants: components["schemas"]["AnticoagulantsAnswerDto"];
+            habits: components["schemas"]["HabitsAnswerDto"];
+            pregnancy: components["schemas"]["PregnancyAnswerDto"];
+            surgeries: components["schemas"]["SurgeriesAnswerDto"];
+        };
+        CurrentVersionDto: {
+            /** Format: uuid */
+            id: string;
+            version: number;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        ProposedFlagsDto: {
+            safetyFlags: components["schemas"]["SafetyFlagsDto"];
+            hasCriticalAlert: boolean;
+        };
+        /** @enum {string} */
+        HistoryDiffSection: "ALLERGIES" | "CONDITIONS" | "MEDICATIONS" | "HABITS" | "PREGNANCY" | "SURGERIES";
+        /** @enum {string} */
+        HistoryDiffChange: "ADDED" | "REMOVED" | "CHANGED";
+        HistoryDiffEntryDto: {
+            section: components["schemas"]["HistoryDiffSection"];
+            label: string;
+            change: components["schemas"]["HistoryDiffChange"];
+            before: string | null;
+            after: string | null;
+            /** @description Hay un «Sí» a un lado u otro (va primero) */
+            affirmative: boolean;
+        };
+        HistoryDiffDto: {
+            hasPreviousVersion: boolean;
+            entries: components["schemas"]["HistoryDiffEntryDto"][];
+            unchangedCount: number;
+        };
+        AnamnesisReviewDto: {
+            submission: components["schemas"]["AnamnesisSubmissionSummaryDto"];
+            questionnaireVersion: string;
+            answers: components["schemas"]["AnamnesisAnswersDto"] | null;
+            affirmativeCount: number;
+            currentVersion: components["schemas"]["CurrentVersionDto"] | null;
+            /** @description Lo que quedaría al aceptar sin ajustes (solo por revisar). Es lo que precarga «Ajustar». */
+            proposed: components["schemas"]["SaveMedicalHistoryDto"] | null;
+            proposedFlags: components["schemas"]["ProposedFlagsDto"] | null;
+            diff: components["schemas"]["HistoryDiffDto"] | null;
+        };
+        AcceptAnamnesisDto: {
+            /** @description Ajustes del profesional: la versión completa a guardar. Sin él, se guarda la propuesta del envío. */
+            medicalHistory?: components["schemas"]["SaveMedicalHistoryDto"];
+        };
+        RejectAnamnesisDto: {
+            reason: string;
+        };
+        PublicAnamnesisClinicDto: {
+            name: string;
+            logoUrl: string | null;
+            primaryColor: string | null;
+        };
+        AnswerLabelsDto: {
+            /** @example Sí */
+            SI: string;
+            /** @example No */
+            NO: string;
+            /** @example No sé */
+            NO_SE: string;
+        };
+        OptionDto: {
+            value: string;
+            label: string;
+        };
+        QuestionnaireLimitsDto: {
+            text: number;
+            note: number;
+            listItems: number;
+            weeks: number;
+            perDay: number;
+        };
+        /** @enum {string} */
+        AnamnesisSectionKey: "allergies" | "conditions" | "medications" | "habits" | "pregnancy" | "surgeries";
+        /** @enum {string} */
+        AnamnesisFollowUpKind: "ALLERGY_LIST" | "MEDICATION_LIST" | "SURGERY_LIST" | "TEXT" | "NUMBER" | "NOTE";
+        FollowUpDto: {
+            kind: components["schemas"]["AnamnesisFollowUpKind"];
+            label: string;
+            /** @description Al contestar «Sí» hay que llenarlo */
+            required: boolean;
+        };
+        QuestionDto: {
+            /** @description Clave de la respuesta: allergies, condition:<codigo>, anticoagulants, medications, habits.tabaquismo, habits.alcohol, habits.bruxismo, pregnancy, surgeries */
+            key: string;
+            label: string;
+            help?: string;
+            followUp?: components["schemas"]["FollowUpDto"];
+        };
+        SectionDto: {
+            key: components["schemas"]["AnamnesisSectionKey"];
+            title: string;
+            description?: string;
+            questions: components["schemas"]["QuestionDto"][];
+        };
+        AnamnesisQuestionnaireDto: {
+            /** @example 2026-10-v1 */
+            version: string;
+            answers: components["schemas"]["AnamnesisAnswer"][];
+            answerLabels: components["schemas"]["AnswerLabelsDto"];
+            allergyTypes: components["schemas"]["OptionDto"][];
+            allergySeverities: components["schemas"]["OptionDto"][];
+            limits: components["schemas"]["QuestionnaireLimitsDto"];
+            /** @description Texto de la casilla de veracidad */
+            declaration: string;
+            sections: components["schemas"]["SectionDto"][];
+        };
+        PublicPolicyDto: {
+            /** Format: uuid */
+            id: string;
+            version: number;
+            /** @description Texto de la casilla SENSITIVE_HEALTH (DX-037) */
+            sensitiveHealthText: string;
+            /** @description Política completa (aviso de privacidad) */
+            policyText: string;
+        };
+        PublicConsentDto: {
+            /** @description El paciente no tiene vigente la autorización SENSITIVE_HEALTH: se pide antes del cuestionario. */
+            required: boolean;
+            policy: components["schemas"]["PublicPolicyDto"] | null;
+        };
+        PublicAnamnesisDto: {
+            clinic: components["schemas"]["PublicAnamnesisClinicDto"];
+            /** @description Solo el nombre de pila */
+            patientFirstName: string | null;
+            /** Format: date-time */
+            expiresAt: string;
+            questionnaire: components["schemas"]["AnamnesisQuestionnaireDto"];
+            consent: components["schemas"]["PublicConsentDto"];
+        };
+        PublicConsentDecisionDto: {
+            /**
+             * Format: uuid
+             * @description Versión de la política que se le mostró
+             */
+            policyVersionId: string;
+            /** @description true = autoriza el tratamiento de sus datos de salud */
+            granted: boolean;
+        };
+        SubmitPublicAnamnesisDto: {
+            answers: components["schemas"]["AnamnesisAnswersDto"];
+            /** @description Casilla «Declaro que la información es verdadera» */
+            declarationAccepted: boolean;
+            /** @description Solo si `consent.required`: la autorización SENSITIVE_HEALTH (DX-037) con la versión de política mostrada. */
+            consent?: components["schemas"]["PublicConsentDecisionDto"];
+        };
+        PublicAnamnesisSubmittedDto: {
+            /** Format: date-time */
+            submittedAt: string;
         };
         /** @enum {string} */
         PerioExamStatus: "DRAFT" | "FINAL";
@@ -19407,6 +19875,392 @@ export interface operations {
             };
         };
     };
+    PatientAnamnesisRequestsController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnamnesisSubmissionSummaryDto"][];
+                };
+            };
+            /** @description Paciente no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientAnamnesisRequestsController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateAnamnesisRequestDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnamnesisRequestCreatedDto"];
+                };
+            };
+            /** @description La cita es de otro paciente, o el host de la petición no sirve para armar el enlace */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El paciente no tiene la autorización de datos de salud y la clínica no ha publicado su política (no habría qué pedirle) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La cita ya empezó o no está agendada */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    MedicalHistorySubmissionsController_list: {
+        parameters: {
+            query?: {
+                /** @description PENDING_PATIENT = esperando al paciente; SUBMITTED = por revisar; ACCEPTED / REJECTED = revisada; EXPIRED = caducada o anulada. */
+                status?: components["schemas"]["MedicalHistorySubmissionStatus"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnamnesisSubmissionSummaryDto"][];
+                };
+            };
+        };
+    };
+    MedicalHistorySubmissionsController_summary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnamnesisInboxSummaryDto"];
+                };
+            };
+        };
+    };
+    MedicalHistorySubmissionsController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnamnesisReviewDto"];
+                };
+            };
+            /** @description Anamnesis no encontrada */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    MedicalHistorySubmissionsController_accept: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AcceptAnamnesisDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnamnesisSubmissionSummaryDto"];
+                };
+            };
+            /** @description Solo un odontólogo o un administrador puede aceptar o rechazar la anamnesis. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Anamnesis no encontrada */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ya revisada o aún sin enviar */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    MedicalHistorySubmissionsController_reject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RejectAnamnesisDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnamnesisSubmissionSummaryDto"];
+                };
+            };
+            /** @description Solo un odontólogo o un administrador puede aceptar o rechazar la anamnesis. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Anamnesis no encontrada */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ya revisada o aún sin enviar */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    MedicalHistorySubmissionsController_revoke: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnamnesisSubmissionSummaryDto"];
+                };
+            };
+            /** @description Anamnesis no encontrada */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El enlace ya no espera respuesta */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PublicMedicalHistoryController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicAnamnesisDto"];
+                };
+            };
+            /** @description Token malformado, desconocido o de otra clínica. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Este enlace ya no es válido, contacte con su clínica. */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PublicMedicalHistoryController_submit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SubmitPublicAnamnesisDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicAnamnesisSubmittedDto"];
+                };
+            };
+            /** @description Respuestas incompletas o sin la declaración de veracidad */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Token malformado, desconocido o de otra clínica. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La política de datos cambió o no está publicada */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Este enlace ya no es válido, contacte con su clínica. (caducado, anulado o ya enviado) */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Falta la autorización de datos de salud */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     PerioExamsController_list: {
         parameters: {
             query?: never;
@@ -20820,6 +21674,20 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Hay demasiadas subidas en curso. Inténtalo de nuevo en unos segundos. (semáforo de subidas, antes de recibir el cuerpo) / Ya se está leyendo otro archivo de importación de esta clínica. Vuelve a intentarlo en unos segundos. / Hay otras importaciones leyéndose ahora mismo. Vuelve a intentarlo en unos segundos. (con el fichero ya recibido). Siempre con Retry-After. SEC-046: como mucho 2 lecturas a la vez por réplica y 1 por clínica (configurable). */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     PatientImportsController_list: {
@@ -20901,6 +21769,20 @@ export interface operations {
             };
             /** @description El archivo pesa más de 5 MB. Divídelo en varios archivos más pequeños. */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Hay demasiadas subidas en curso. Inténtalo de nuevo en unos segundos. (semáforo de subidas, antes de recibir el cuerpo) / Ya se está leyendo otro archivo de importación de esta clínica. Vuelve a intentarlo en unos segundos. / Hay otras importaciones leyéndose ahora mismo. Vuelve a intentarlo en unos segundos. (con el fichero ya recibido). Siempre con Retry-After. SEC-046: como mucho 2 lecturas a la vez por réplica y 1 por clínica (configurable). */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -21050,6 +21932,20 @@ export interface operations {
             };
             /** @description El archivo pesa más de 5 MB. Divídelo en varios archivos más pequeños. */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Hay demasiadas subidas en curso. Inténtalo de nuevo en unos segundos. (semáforo de subidas, antes de recibir el cuerpo) / Ya se está leyendo otro archivo de importación de esta clínica. Vuelve a intentarlo en unos segundos. / Hay otras importaciones leyéndose ahora mismo. Vuelve a intentarlo en unos segundos. (con el fichero ya recibido). Siempre con Retry-After. SEC-046: como mucho 2 lecturas a la vez por réplica y 1 por clínica (configurable). */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };

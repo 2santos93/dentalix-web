@@ -42,6 +42,8 @@ import { PatientDocumentsTab } from '@/components/patient-documents/patient-docu
 import { PatientTabPanel as TabPanel } from '@/components/patients/patient-tab-panel';
 import { canRegisterImplants } from '@/lib/implants/implants-api';
 import { AuditLogView } from '@/components/audit/audit-log-view';
+import { PatientAnamnesisSection } from '@/components/anamnesis/patient-anamnesis-section';
+import { canSeeAnamnesisInbox } from '@/lib/anamnesis/anamnesis-api';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
@@ -298,6 +300,14 @@ function PatientDetailView() {
               />
             </div>
           ) : null}
+
+          {/* DX-099: anamnesis por enlace — estado («pendiente de revisión») y
+              «Enviar anamnesis», para los cuatro roles (recepción la manda). */}
+          <PatientAnamnesisSection
+            token={accessToken}
+            patientId={patientId}
+            canReview={canSeeAnamnesisInbox(getTokenRole(accessToken))}
+          />
 
           {/* DX-039: aviso de retención legal para todos; controles, solo ADMIN. */}
           <PatientRetentionSection

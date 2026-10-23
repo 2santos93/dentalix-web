@@ -102,6 +102,9 @@ load_env() {
   export RATE_LIMIT_PASSWORD_LIMIT=100000
   export RATE_LIMIT_CONFIRMATION_LIMIT=100000
   export RATE_LIMIT_INVITATION_EMAIL_LIMIT=100000
+  # DX-099: el cuestionario público de anamnesis (por IP y por token).
+  export RATE_LIMIT_ANAMNESIS_LIMIT=100000
+  export RATE_LIMIT_ANAMNESIS_TOKEN_LIMIT=100000
   # Topes de email en BD (DX-088): la suite reenvía una invitación al momento
   # de crearla; sin esto el enfriamiento de 60 s respondería 429.
   export MAIL_RECIPIENT_COOLDOWN_SECONDS=0

@@ -73,6 +73,8 @@ const copy = {
   decisionDenied: 'Revocó / no autorizó',
   channelInPerson: 'En la clínica',
   channelLegacy: 'Heredado',
+  // DX-099: la dio el propio paciente en el enlace de anamnesis.
+  channelPatientLink: 'El paciente, por enlace',
   unknownUser: '—',
 };
 
@@ -351,7 +353,11 @@ function HistoryTable({ rows }: { rows: DataConsentRecord[] }) {
                 {row.recordedBy?.fullName ?? copy.unknownUser}
               </TableCell>
               <TableCell className="text-muted" data-label={copy.colChannel}>
-                {row.channel === 'LEGACY' ? copy.channelLegacy : copy.channelInPerson}
+                {row.channel === 'LEGACY'
+                  ? copy.channelLegacy
+                  : row.channel === 'PATIENT_LINK'
+                    ? copy.channelPatientLink
+                    : copy.channelInPerson}
               </TableCell>
             </TableRow>
           ))}

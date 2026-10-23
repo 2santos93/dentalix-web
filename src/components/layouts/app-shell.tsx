@@ -14,6 +14,7 @@ import {
   BadgePercent,
   History,
   FileClock,
+  ClipboardCheck,
   PanelLeftClose,
   PanelLeftOpen,
 } from 'lucide-react';
@@ -31,6 +32,9 @@ import { cn } from '@/lib/utils';
 import { SessionLocationsProvider } from '@/lib/locations/session-locations';
 import { InClinicProvider, useInClinic } from '@/components/appointments/use-in-clinic';
 import { waitingForYouLabel } from '@/lib/appointments/patient-flow';
+import { useAnamnesisInboxCount } from '@/components/anamnesis/use-anamnesis-inbox-count';
+
+const ANAMNESIS_HREF = '/anamnesis-por-revisar';
 
 const copy = {
   collapse: 'Colapsar menú',
@@ -72,6 +76,14 @@ const NAV: NavItem[] = [
     label: 'Presupuestos',
     icon: FileClock,
     roles: ['ADMIN', 'RECEPTION'],
+  },
+  // DX-099: «Anamnesis por revisar» — la bandeja es dato clínico
+  // (CLINICAL_ROLES en la API), con su contador.
+  {
+    href: '/anamnesis-por-revisar',
+    label: 'Anamnesis por revisar',
+    icon: ClipboardCheck,
+    roles: ['ADMIN', 'DENTIST', 'ASSISTANT'],
   },
   // CATALOG_READ_ROLES: recepción no registra clínico.
   {
@@ -139,9 +151,21 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
   });
   const waitingForYou =
     role === 'DENTIST' && inClinic.view?.scope === 'MINE' ? inClinic.view.waiting.length : 0;
+  // DX-099: anamnesis enviadas por los pacientes y aún sin revisar (sus sedes).
+  const anamnesisCount = useAnamnesisInboxCount(
+    accessToken,
+    role === 'ADMIN' || role === 'DENTIST' || role === 'ASSISTANT',
+    pathname,
+  );
   /** Nombre accesible de una entrada: la Agenda dice además quién espera. */
   const navLabel = (href: string, label: string) =>
-    href === '/agenda' && waitingForYou > 0 ? `${label} · ${waitingForYouLabel(waitingForYou)}` : label;
+    href === '/agenda' && waitingForYou > 0
+      ? `${label} · ${waitingForYouLabel(waitingForYou)}`
+      : href === ANAMNESIS_HREF && anamnesisCount > 0
+        ? `${label} · ${anamnesisCount}`
+        : label;
+  const hasCount = (href: string) =>
+    (href === '/agenda' && waitingForYou > 0) || (href === ANAMNESIS_HREF && anamnesisCount > 0);
   // Activa la entrada MÁS específica que case: en /caja/cartera es «Cartera»,
   // no también «Caja».
   const activeHref = nav
@@ -244,7 +268,7 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
               aria-current={isActive(href) ? 'page' : undefined}
               // En rail el texto no está, así que el nombre accesible tiene que
               // venir del aria-label; el title lo hace visible al hover.
-              aria-label={collapsed || (href === '/agenda' && waitingForYou > 0) ? navLabel(href, label) : undefined}
+              aria-label={collapsed || hasCount(href) ? navLabel(href, label) : undefined}
               title={collapsed ? navLabel(href, label) : undefined}
               className={cn(
                 'relative flex items-center rounded-lg text-sm font-medium transition-colors',
@@ -256,6 +280,9 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
             >
               <Icon className="size-4 shrink-0" />
               {!collapsed && label}
+              {href === ANAMNESIS_HREF && anamnesisCount > 0 && (
+                <InboxCount count={anamnesisCount} variant={collapsed ? 'rail' : 'full'} />
+              )}
             </Link>
             {href === '/agenda' && waitingForYou > 0 && <Link href="/agenda/en-clinica" aria-label={waitingForYouLabel(waitingForYou)} className={cn('rounded-full focus-visible:outline-2 focus-visible:outline-primary', collapsed && 'absolute -right-1 -top-1')}>
               <WaitingForYouCount count={waitingForYou} variant={collapsed ? 'rail' : 'full'} />
@@ -295,7 +322,7 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
               <Link
                 href={href}
                 aria-current={isActive(href) ? 'page' : undefined}
-                aria-label={href === '/agenda' && waitingForYou > 0 ? navLabel(href, label) : undefined}
+                aria-label={hasCount(href) ? navLabel(href, label) : undefined}
                 className={cn(
                   'flex h-11 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-sm font-medium transition-colors',
                   isActive(href)
@@ -305,6 +332,9 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
               >
                 <Icon className="size-4 shrink-0" />
                 <span>{label}</span>
+                {href === ANAMNESIS_HREF && anamnesisCount > 0 && (
+                  <InboxCount count={anamnesisCount} variant="inline" />
+                )}
               </Link>
               {href === '/agenda' && waitingForYou > 0 && <Link href="/agenda/en-clinica" aria-label={waitingForYouLabel(waitingForYou)} className="rounded-full focus-visible:outline-2 focus-visible:outline-primary">
                 <WaitingForYouCount count={waitingForYou} variant="inline" />
@@ -358,6 +388,27 @@ function WaitingForYouCount({
       )}
     >
       {variant === 'full' ? `Te esperan ${count}` : count}
+    </span>
+  );
+}
+
+/**
+ * DX-099: contador de «Anamnesis por revisar». Tinte de aviso (no de peligro):
+ * hay trabajo pendiente, no una alerta. El número entero va en el nombre
+ * accesible del enlace.
+ */
+function InboxCount({ count, variant }: { count: number; variant: 'full' | 'rail' | 'inline' }) {
+  return (
+    <span
+      aria-hidden
+      data-testid="anamnesis-inbox-count"
+      className={cn(
+        'inline-flex min-w-5 items-center justify-center rounded-full bg-warning/15 px-1.5 text-xs font-semibold tabular-nums text-warning',
+        variant === 'full' && 'ml-auto',
+        variant === 'rail' && 'absolute -right-1 -top-1',
+      )}
+    >
+      {count}
     </span>
   );
 }
