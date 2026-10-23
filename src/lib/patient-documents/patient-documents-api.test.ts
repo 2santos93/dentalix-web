@@ -11,21 +11,41 @@ import {
   voidPatientDocument,
 } from './patient-documents-api';
 import { apiFetch } from '@/lib/api/client';
-import { uploadWithProgress } from '@/lib/api/upload';
+import { STORAGE_UNREACHABLE_CODE, STORAGE_UNREACHABLE_MESSAGE, uploadToStorage } from '@/lib/api/upload';
+import { ApiError, NetworkError } from '@/lib/api/api-error';
 import { makeDocument } from '@/lib/test/patient-documents';
 
 jest.mock('../api/client', () => ({ apiFetch: jest.fn() }));
-jest.mock('../api/upload', () => ({ uploadWithProgress: jest.fn() }));
+jest.mock('../api/upload', () => ({ ...jest.requireActual('../api/upload'), uploadToStorage: jest.fn() }));
 
 const mockedFetch = apiFetch as jest.MockedFunction<typeof apiFetch>;
-const mockedUpload = uploadWithProgress as jest.MockedFunction<typeof uploadWithProgress>;
+const mockedUpload = uploadToStorage as jest.MockedFunction<typeof uploadToStorage>;
+
+const TICKET = {
+  documentId: 'd 1',
+  method: 'POST' as const,
+  url: 'https://bucket.example.com/dentalix-files',
+  fields: { key: 'patient-documents/pending/t/d1' },
+  expiresAt: '2026-10-21T12:05:00.000Z',
+  maxBytes: 20 * 1024 * 1024,
+};
+
+/** File con `arrayBuffer` (jsdom no lo trae; el navegador sí). */
+function fileOf(content: string, name: string, type?: string): File {
+  const file = new File([content], name, type ? { type } : {});
+  Object.defineProperty(file, 'arrayBuffer', { value: async () => Uint8Array.from(Buffer.from(content)).buffer });
+  return file;
+}
+
+/** SHA-256 de «%PDF-» en hex. */
+const PDF_SHA = 'f0e3d8c46d6a0f1e3c3b8e0f4b6b2e1c9b8b4d6f8c6c2f8b7e0d5b0c7e9f4a1d';
 
 const MB = 1024 * 1024;
 
 describe('patient-documents-api (DX-151)', () => {
   beforeEach(() => {
     mockedFetch.mockReset().mockResolvedValue([]);
-    mockedUpload.mockReset().mockResolvedValue(makeDocument());
+    mockedUpload.mockReset().mockResolvedValue(undefined);
   });
 
   it('etiquetas de categoría en español', () => {
@@ -48,31 +68,129 @@ describe('patient-documents-api (DX-151)', () => {
     });
   });
 
-  it('sube en multipart con dientes en CSV, fecha y notas, y pasa el progreso', async () => {
-    const onProgress = jest.fn();
-    const file = new File(['%PDF-'], 'remision.pdf', { type: 'application/pdf' });
-    await uploadPatientDocument(
+  it('DX-259: pide la autorización, sube DIRECTO al almacén con progreso y completa con los campos', async () => {
+    const digest = jest.fn(async () => Uint8Array.from(Buffer.from(PDF_SHA, 'hex')).buffer);
+    Object.defineProperty(globalThis, 'crypto', { value: { subtle: { digest } }, configurable: true });
+    mockedFetch.mockReset().mockResolvedValueOnce(TICKET).mockResolvedValueOnce(makeDocument({ id: 'd 1' }));
+    mockedUpload.mockReset().mockImplementation(async (_t, _f, o) => {
+      o?.onProgress?.(0.5);
+      o?.onProgress?.(1);
+    });
+    const progress: number[] = [];
+    const file = fileOf('%PDF-', 'remision.pdf', 'application/pdf');
+    const doc = await uploadPatientDocument(
       'T',
       'p1',
       { file, category: 'REFERRAL', clinicalDate: '2026-10-01', toothNumbers: ['11', '21'], notes: '  ortodoncia ' },
-      { onProgress },
+      { onProgress: (p) => progress.push(p) },
     );
-    const [path, form, opts] = mockedUpload.mock.calls[0];
-    expect(path).toBe('/patients/p1/documents');
-    expect(opts).toEqual({ token: 'T', onProgress });
-    expect((form.get('file') as File).name).toBe('remision.pdf');
-    expect(form.get('category')).toBe('REFERRAL');
-    expect(form.get('clinicalDate')).toBe('2026-10-01');
-    expect(form.get('toothNumbers')).toBe('11,21');
-    expect(form.get('notes')).toBe('ortodoncia');
+    expect(doc.id).toBe('d 1');
+    expect(digest).toHaveBeenCalledWith('SHA-256', expect.anything());
+    expect(mockedFetch).toHaveBeenNthCalledWith(1, '/patients/p1/documents/upload-url', {
+      method: 'POST',
+      token: 'T',
+      body: { fileName: 'remision.pdf', mimeType: 'application/pdf', sizeBytes: 5, sha256: PDF_SHA },
+    });
+    expect(mockedUpload).toHaveBeenCalledWith(TICKET, file, { onProgress: expect.any(Function), signal: undefined });
+    expect(mockedFetch).toHaveBeenNthCalledWith(2, '/patients/p1/documents/d%201/complete', {
+      method: 'POST',
+      token: 'T',
+      body: {
+        category: 'REFERRAL',
+        fileName: 'remision.pdf',
+        mimeType: 'application/pdf',
+        clinicalDate: '2026-10-01',
+        toothNumbers: ['11', '21'],
+        notes: 'ortodoncia',
+      },
+    });
+    // La barra no llega a 1 hasta que la API crea el documento.
+    expect(progress).toEqual([0.5, 0.99, 1]);
   });
 
-  it('sin opcionales no manda esos campos', async () => {
-    await uploadPatientDocument('T', 'p1', { file: new File(['x'], 'a.png'), category: 'OTHER' });
-    const form = mockedUpload.mock.calls[0][1];
-    expect(form.has('clinicalDate')).toBe(false);
-    expect(form.has('toothNumbers')).toBe(false);
-    expect(form.has('notes')).toBe(false);
+  it('DX-259: sin opcionales no manda esos campos; si el almacén rechaza, no se completa', async () => {
+    Object.defineProperty(globalThis, 'crypto', {
+      value: { subtle: { digest: async () => new ArrayBuffer(32) } },
+      configurable: true,
+    });
+    mockedFetch.mockReset().mockResolvedValueOnce(TICKET).mockResolvedValueOnce(makeDocument());
+    mockedUpload.mockReset().mockResolvedValue(undefined);
+    await uploadPatientDocument('T', 'p1', { file: fileOf('x', 'a.png'), category: 'OTHER' });
+    expect(mockedFetch.mock.calls[1][1]?.body).toEqual({ category: 'OTHER', fileName: 'a.png', mimeType: '' });
+
+    mockedFetch.mockReset().mockResolvedValueOnce(TICKET);
+    mockedUpload.mockReset().mockRejectedValue(new Error('rechazado'));
+    await expect(
+      uploadPatientDocument('T', 'p1', { file: fileOf('x', 'a.png'), category: 'OTHER' }),
+    ).rejects.toThrow('rechazado');
+    expect(mockedFetch).toHaveBeenCalledTimes(1);
+  });
+
+  describe('reintentos y fallos del almacén (revisión M-6, QA D1)', () => {
+    beforeEach(() => {
+      Object.defineProperty(globalThis, 'crypto', {
+        value: { subtle: { digest: async () => new ArrayBuffer(32) } },
+        configurable: true,
+      });
+    });
+    const input = () => ({ file: fileOf('%PDF-', 'remision.pdf', 'application/pdf'), category: 'REFERRAL' as const });
+
+    it('avisa del documentId en cuanto el fichero está en el almacén (antes de complete)', async () => {
+      const stored: string[] = [];
+      mockedFetch.mockReset().mockResolvedValueOnce(TICKET).mockRejectedValueOnce(new ApiError(503, 'x'));
+      await expect(
+        uploadPatientDocument('T', 'p1', input(), { onStored: (id) => stored.push(id) }),
+      ).rejects.toBeInstanceOf(ApiError);
+      expect(stored).toEqual(['d 1']);
+    });
+
+    it('«Reintentar» con el fichero ya en el almacén repite primero el complete del mismo documento, sin otro ticket', async () => {
+      mockedFetch.mockReset().mockResolvedValueOnce(makeDocument({ id: 'd 1' }));
+      const doc = await uploadPatientDocument('T', 'p1', input(), { resumeDocumentId: 'd 1' });
+      expect(doc.id).toBe('d 1');
+      expect(mockedFetch).toHaveBeenCalledTimes(1);
+      expect(mockedFetch.mock.calls[0][0]).toBe('/patients/p1/documents/d%201/complete');
+      expect(mockedUpload).not.toHaveBeenCalled();
+    });
+
+    it('si ese complete da 404 (el pendiente caducó o nunca llegó), vuelve a subir desde el principio', async () => {
+      mockedFetch
+        .mockReset()
+        .mockRejectedValueOnce(new ApiError(404, 'No encontramos el archivo subido'))
+        .mockResolvedValueOnce(TICKET)
+        .mockResolvedValueOnce(makeDocument({ id: 'd 1' }));
+      const doc = await uploadPatientDocument('T', 'p1', input(), { resumeDocumentId: 'viejo' });
+      expect(doc.id).toBe('d 1');
+      expect(mockedFetch.mock.calls.map((c) => c[0])).toEqual([
+        '/patients/p1/documents/viejo/complete',
+        '/patients/p1/documents/upload-url',
+        '/patients/p1/documents/d%201/complete',
+      ]);
+      expect(mockedUpload).toHaveBeenCalledTimes(1);
+    });
+
+    const unreachable = () => new ApiError(503, STORAGE_UNREACHABLE_MESSAGE, { code: STORAGE_UNREACHABLE_CODE });
+
+    it('el almacén cortó la subida pero la API responde: es el 503 del almacén', async () => {
+      mockedFetch.mockReset().mockResolvedValueOnce(TICKET).mockResolvedValueOnce({ status: 'ok' });
+      mockedUpload.mockReset().mockRejectedValue(unreachable());
+      const err = (await uploadPatientDocument('T', 'p1', input()).catch((e) => e)) as ApiError;
+      expect(err.code).toBe(STORAGE_UNREACHABLE_CODE);
+      expect(mockedFetch.mock.calls[1][0]).toBe('/health');
+    });
+
+    it('si tampoco responde la API, el problema es la conexión de la clínica: NetworkError', async () => {
+      mockedFetch.mockReset().mockResolvedValueOnce(TICKET).mockRejectedValueOnce(new NetworkError(new Error('x')));
+      mockedUpload.mockReset().mockRejectedValue(unreachable());
+      await expect(uploadPatientDocument('T', 'p1', input())).rejects.toBeInstanceOf(NetworkError);
+    });
+
+    it('la señal de cancelar llega a la subida al almacén', async () => {
+      mockedFetch.mockReset().mockResolvedValueOnce(TICKET).mockResolvedValueOnce(makeDocument());
+      const controller = new AbortController();
+      await uploadPatientDocument('T', 'p1', input(), { signal: controller.signal });
+      expect(mockedUpload.mock.calls[0][2]?.signal).toBe(controller.signal);
+    });
   });
 
   it('URL inline y de descarga por rutas distintas; anular con motivo', async () => {

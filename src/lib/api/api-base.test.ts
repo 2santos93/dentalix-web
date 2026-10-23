@@ -33,11 +33,11 @@ describe('api-base', () => {
     expect(filesOrigin('no es una url', 'http://localhost:3130/api/v1')).toBe('http://localhost:3130');
   });
 
-  it('DX-151: el proxy deja pasar un documento de 20 MB entero (Next corta a 10 MB por defecto)', () => {
-    // Margen para las cabeceras y campos del multipart: un fichero justo por
-    // debajo del tope llega completo y uno por encima llega entero a la API,
-    // que responde 413 en español en vez de un multipart truncado (500).
-    expect(API_PROXY_MAX_BODY_BYTES).toBeGreaterThanOrEqual(MAX_PATIENT_DOCUMENT_BYTES + 2 * 1024 * 1024);
+  it('DX-259: el proxy de Next copia como mucho 1 MB del cuerpo (los documentos van directos al bucket)', () => {
+    expect(API_PROXY_MAX_BODY_BYTES).toBeLessThanOrEqual(1024 * 1024);
+    // La firma de un consentimiento (hasta ~700 KB en JSON) sigue cabiendo.
+    expect(API_PROXY_MAX_BODY_BYTES).toBeGreaterThanOrEqual(700 * 1024);
     expect(nextConfig.experimental?.proxyClientMaxBodySize).toBe(API_PROXY_MAX_BODY_BYTES);
+    expect(MAX_PATIENT_DOCUMENT_BYTES).toBeGreaterThan(API_PROXY_MAX_BODY_BYTES);
   });
 });

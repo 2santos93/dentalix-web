@@ -1,5 +1,6 @@
 import { apiFetch } from '@/lib/api/client';
-import { uploadWithProgress } from '@/lib/api/upload';
+import { ApiError, NetworkError } from '@/lib/api/api-error';
+import { STORAGE_UNREACHABLE_CODE, uploadToStorage } from '@/lib/api/upload';
 import type { components } from '@/lib/api/schema';
 import type { ClinicRole } from '@/lib/me/me-api';
 
@@ -138,25 +139,130 @@ export interface UploadPatientDocumentInput {
   notes?: string | null;
 }
 
-/** `POST /patients/:id/documents` multipart, con progreso (0..1). */
-export function uploadPatientDocument(
+/** La autorización de subida directa al almacén (DX-259). */
+export type PatientDocumentUploadTicket = components['schemas']['PatientDocumentUploadDto'];
+
+/**
+ * SHA-256 del fichero en hex: el almacén rechaza un contenido con otra huella.
+ *
+ * Lee el fichero entero en memoria A PROPÓSITO: Web Crypto (`subtle.digest`)
+ * no tiene API incremental, y hacerlo por trozos exigiría una implementación
+ * propia en JS/WASM (una dependencia más y varias veces más lenta). Con el
+ * tope de 20 MB (`MAX_PATIENT_DOCUMENT_BYTES`, comprobado antes) son a lo sumo
+ * 20 MB durante unos milisegundos, también en un móvil.
+ */
+export async function sha256HexOf(file: Blob): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', await file.arrayBuffer());
+  return Array.from(new Uint8Array(digest), (b) => b.toString(16).padStart(2, '0')).join('');
+}
+
+/**
+ * Sube un documento a la ficha DIRECTAMENTE al almacén (DX-259), con
+ * progreso (0..1) de la subida:
+ *
+ * 1. `POST …/documents/upload-url` (por el proxy `/api/v1`, cuerpo pequeño):
+ *    tamaño y SHA-256; la API responde el POST prefirmado del bucket (clave,
+ *    tope de 20 MB y huella firmados) y el id del documento.
+ * 2. El fichero va al bucket por XHR, sin pasar por el proxy de Next ni por
+ *    la API.
+ * 3. `POST …/documents/:id/complete` con la categoría, dientes, fecha y
+ *    notas: la API comprueba tamaño, huella y tipo por contenido y crea el
+ *    documento (o responde 400 en español y lo borra).
+ */
+export interface UploadPatientDocumentOptions {
+  onProgress?: (fraction: number) => void;
+  /** Cancela la subida al almacén (botón «Cancelar»). */
+  signal?: AbortSignal;
+  /** El fichero ya está en el almacén con este id: falta (o faltó) el `complete`. */
+  onStored?: (documentId: string) => void;
+  /**
+   * Revisión M-6: «Reintentar» de una subida que ya llegó al almacén. Repite
+   * primero el `complete` de ESE documento (idempotente: si la API ya creó la
+   * fila, la devuelve); solo si da 404 (el pendiente caducó o no llegó) se
+   * vuelve a subir desde el principio. Sin esto, un `complete` que creó la
+   * fila sin que llegara la respuesta acababa en 409 «ya está en la ficha».
+   */
+  resumeDocumentId?: string | null;
+}
+
+export async function uploadPatientDocument(
   token: string,
   patientId: string,
   input: UploadPatientDocumentInput,
-  opts: { onProgress?: (fraction: number) => void } = {},
+  opts: UploadPatientDocumentOptions = {},
 ): Promise<PatientDocument> {
-  const form = new FormData();
-  form.append('file', input.file, input.file.name);
-  form.append('category', input.category);
-  if (input.clinicalDate) form.append('clinicalDate', input.clinicalDate);
-  if (input.toothNumbers && input.toothNumbers.length > 0) {
-    form.append('toothNumbers', input.toothNumbers.join(','));
+  if (opts.resumeDocumentId) {
+    try {
+      const doc = await completePatientDocument(token, patientId, opts.resumeDocumentId, input);
+      opts.onProgress?.(1);
+      return doc;
+    } catch (err) {
+      if (!(err instanceof ApiError && err.status === 404)) throw err;
+    }
   }
-  const notes = input.notes?.trim();
-  if (notes) form.append('notes', notes);
-  return uploadWithProgress<PatientDocument>(documentsPath(patientId), form, {
+  const { file } = input;
+  const request: components['schemas']['CreatePatientDocumentUploadDto'] = {
+    fileName: file.name,
+    mimeType: file.type,
+    sizeBytes: file.size,
+    sha256: await sha256HexOf(file),
+  };
+  const ticket = await apiFetch<PatientDocumentUploadTicket>(documentsPath(patientId, '/upload-url'), {
+    method: 'POST',
     token,
-    onProgress: opts.onProgress,
+    body: request,
+  });
+  // El último tramo (comprobar y crear) es rápido: la barra llega a 1 al final.
+  try {
+    await uploadToStorage(ticket, file, {
+      onProgress: (p) => opts.onProgress?.(Math.min(p, 0.99)),
+      signal: opts.signal,
+    });
+  } catch (err) {
+    throw await storageOrNetwork(err);
+  }
+  opts.onStored?.(ticket.documentId);
+  const doc = await completePatientDocument(token, patientId, ticket.documentId, input);
+  opts.onProgress?.(1);
+  return doc;
+}
+
+/**
+ * QA D1: si el almacén cortó la subida, se pregunta a la API (`/health`): si
+ * tampoco responde, el problema es la conexión de la clínica (`NetworkError`);
+ * si responde, es el almacén (el 503 tal cual).
+ */
+async function storageOrNetwork(err: unknown): Promise<unknown> {
+  if (!(err instanceof ApiError && err.code === STORAGE_UNREACHABLE_CODE)) return err;
+  try {
+    await apiFetch<unknown>('/health');
+    return err;
+  } catch (probe) {
+    return probe instanceof NetworkError ? probe : err;
+  }
+}
+
+/** `POST …/documents/:id/complete` con los campos del formulario. */
+function completePatientDocument(
+  token: string,
+  patientId: string,
+  documentId: string,
+  input: UploadPatientDocumentInput,
+): Promise<PatientDocument> {
+  const { file } = input;
+  const notes = input.notes?.trim();
+  const fields: components['schemas']['CompletePatientDocumentUploadDto'] = {
+    category: input.category,
+    fileName: file.name,
+    mimeType: file.type,
+    ...(input.clinicalDate ? { clinicalDate: input.clinicalDate } : {}),
+    ...(input.toothNumbers && input.toothNumbers.length > 0 ? { toothNumbers: input.toothNumbers } : {}),
+    ...(notes ? { notes } : {}),
+  };
+  return apiFetch<PatientDocument>(documentsPath(patientId, `/${encodeURIComponent(documentId)}/complete`), {
+    method: 'POST',
+    token,
+    body: fields,
   });
 }
 
