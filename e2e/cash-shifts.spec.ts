@@ -21,6 +21,11 @@ import { expectDialogInsideViewport, expectNoHorizontalScroll } from './support/
  *     diferencia y quién abrió y cerró; en `media: print` solo queda el
  *     documento y el PDF sale en UNA hoja A4.
  * En escritorio (1440px) y en móvil (390px, sin scroll horizontal).
+ *
+ * DX-252 (TST-031): la administradora abre un turno CERRADO de recepción, lo
+ * corrige con un ajuste (que cuenta en SU caja abierta de la sede: así no cae
+ * en la próxima caja de recepción) y lo reabre con motivo; los dos quedan en
+ * el informe del turno. También a 1440 y 390 px.
  */
 const DEMO_SUBDOMAIN = process.env.E2E_DEMO_SUBDOMAIN ?? 'demo';
 const DEMO_PASSWORD = process.env.E2E_DEMO_PASSWORD ?? 'DemoDentalix2026!';
@@ -90,6 +95,22 @@ async function webLogin(page: Page, origin: string, email: string): Promise<void
     .poll(async () => Boolean((await sessionCookie(page, origin))?.httpOnly), { timeout: 15_000 })
     .toBe(true);
   await page.waitForURL((url) => !url.pathname.endsWith('/login'), { timeout: 10_000 });
+}
+
+interface CurrentSession {
+  session: { id: string; expected: Expected[]; adjustments: { amount: number; reason: string }[] } | null;
+}
+
+/** Cierra, si la hay, la caja abierta de quien trae `headers` (cuadrada). */
+async function closeOwnSession(request: APIRequestContext, headers: Record<string, string>): Promise<void> {
+  const current = await request.get(`${API_URL}/cash-sessions/current`, { headers });
+  expect(current.ok(), await current.text()).toBeTruthy();
+  const { session } = (await current.json()) as CurrentSession;
+  if (!session) return;
+  await post(request, headers, `/cash-sessions/${session.id}/close`, {
+    counts: session.expected.map((l) => ({ currency: l.currency, method: l.method, counted: Math.max(0, l.expected) })),
+    differenceReason: 'Cierre de limpieza de la prueba e2e',
+  });
 }
 
 /** Nº de hojas de un PDF (cuenta los objetos /Type /Page, no /Pages). */
@@ -221,3 +242,83 @@ test('abrir otra caja en la misma sede es 409 y un dentista no tiene acceso (403
   expect(denied.status()).toBe(403);
   expect(((await denied.json()) as { message: string }).message).toMatch(/Tu rol no tiene acceso a la caja/);
 });
+
+for (const viewport of [
+  { name: 'escritorio', width: 1440, height: 900 },
+  { name: 'móvil', width: 390, height: 844 },
+]) {
+  test(`ADMIN reabre una caja cerrada y la corrige con un ajuste (${viewport.name})`, async ({ page }) => {
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    const origin = tenantOrigin(DEMO_SUBDOMAIN);
+    const host = new URL(origin).host;
+    const { admin, reception } = await startClean(page.request, host);
+    await closeOwnSession(page.request, admin);
+    const tag = `${suffix}${viewport.width}`;
+    const narrow = viewport.width === 390;
+
+    try {
+      // Un turno de recepción, cerrado con un arqueo que cuadra.
+      const shift = await post<{ id: string }>(page.request, reception, '/cash-sessions/open', {
+        floats: [{ currency: 'COP', amount: 20_000 }],
+      });
+      await post(page.request, reception, `/cash-sessions/${shift.id}/close`, {
+        counts: [{ currency: 'COP', method: 'CASH', counted: 20_000 }],
+      });
+      // La caja de la administradora: el ajuste cuenta en ella.
+      await post(page.request, admin, '/cash-sessions/open', { floats: [] });
+
+      await webLogin(page, origin, ADMIN_EMAIL);
+      await page.goto(`${origin}/caja/turnos/${shift.id}`);
+      await expect(page.getByRole('heading', { name: 'Turno de caja' })).toBeVisible({ timeout: 15_000 });
+      const doc = page.getByTestId('cash-session-report');
+      await expect(doc).toContainText('Informe de cierre de caja');
+      await expect(page.getByRole('button', { name: 'Cerrar caja' })).toHaveCount(0);
+      if (narrow) await expectNoHorizontalScroll(page);
+
+      // Corregir: un ajuste que suma 5.000 en efectivo, con motivo.
+      const adjustReason = `Abono en efectivo sin registrar ${tag}`;
+      await page.getByRole('button', { name: 'Corregir con un ajuste' }).click();
+      const adjust = page.getByRole('dialog', { name: 'Corregir el cierre' });
+      if (narrow) await expectDialogInsideViewport(page, adjust);
+      await adjust.getByLabel('Tipo de ajuste').selectOption({ label: 'Suma (faltó registrar dinero)' });
+      await adjust.getByLabel('Importe').fill('5000');
+      await adjust.getByRole('button', { name: 'Registrar ajuste' }).click();
+      await expect(adjust.getByText('Escribe el motivo (al menos 3 caracteres).')).toBeVisible();
+      await adjust.getByLabel('Motivo').fill(adjustReason);
+      await adjust.getByRole('button', { name: 'Registrar ajuste' }).click();
+      await expect(adjust).toBeHidden({ timeout: 15_000 });
+      await expect(page.getByText('Ajuste registrado: cuenta en tu caja abierta')).toBeVisible();
+      await expect(doc).toContainText('Ajustes posteriores a este cierre', { timeout: 15_000 });
+      await expect(doc).toContainText(adjustReason);
+      if (narrow) await expectNoHorizontalScroll(page);
+
+      // Reabrir: sin motivo no deja; con motivo, el turno vuelve a estar abierto.
+      const reopenReason = `Faltó contar un sobre ${tag}`;
+      await page.getByRole('button', { name: 'Reabrir' }).click();
+      const reopen = page.getByRole('dialog', { name: '¿Reabrir esta caja?' });
+      if (narrow) await expectDialogInsideViewport(page, reopen);
+      await reopen.getByRole('button', { name: 'Reabrir caja' }).click();
+      await expect(reopen.getByText('Escribe el motivo (al menos 3 caracteres).')).toBeVisible();
+      await reopen.getByLabel('Motivo de la reapertura').fill(reopenReason);
+      await reopen.getByRole('button', { name: 'Reabrir caja' }).click();
+      await expect(reopen).toBeHidden({ timeout: 15_000 });
+      await expect(page.getByText('Caja reabierta. El cierre anterior queda en el historial.')).toBeVisible();
+      await expect(page.getByRole('button', { name: 'Cerrar caja' })).toBeVisible({ timeout: 15_000 });
+      await expect(page.getByRole('button', { name: 'Reabrir' })).toHaveCount(0);
+      await expect(page.getByRole('button', { name: 'Corregir con un ajuste' })).toHaveCount(0);
+      await expect(doc).toContainText('Historial');
+      await expect(doc).toContainText(reopenReason);
+      if (narrow) await expectNoHorizontalScroll(page);
+
+      // El ajuste cuenta en la caja abierta de la administradora, no en la de recepción.
+      const mine = await page.request.get(`${API_URL}/cash-sessions/current`, { headers: admin });
+      const { session } = (await mine.json()) as CurrentSession;
+      expect(session?.adjustments).toEqual(
+        expect.arrayContaining([expect.objectContaining({ amount: 5_000, reason: adjustReason })]),
+      );
+    } finally {
+      await closeOwnSession(page.request, admin);
+      await closeOwnSession(page.request, reception);
+    }
+  });
+}

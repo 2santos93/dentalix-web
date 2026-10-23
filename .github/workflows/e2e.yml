@@ -95,7 +95,16 @@ jobs:
         run: scripts/e2e-ci.sh web
 
       - name: Playwright
+        id: playwright
         run: scripts/e2e-ci.sh test
+
+      # DX-252 (TST-030): la E2E no sale verde con tests sin ejecutar. Falla,
+      # nombrando cada test, si el informe tiene «skipped» fuera de la lista
+      # versionada e2e/allowed-skips.json. También corre si Playwright falló,
+      # para que el resumen diga qué no se llegó a ejecutar.
+      - name: Sin tests saltados fuera de e2e/allowed-skips.json
+        if: always() && (steps.playwright.outcome == 'success' || steps.playwright.outcome == 'failure')
+        run: scripts/e2e-ci.sh skips
 
       - name: Parar los servidores
         if: always()
@@ -108,6 +117,7 @@ jobs:
           name: playwright-${{ github.run_id }}-${{ github.run_attempt }}
           path: |
             dentalix-web/playwright-report/
+            dentalix-web/playwright-results.json
             dentalix-web/test-results/
             dentalix-web/.e2e/logs/
           include-hidden-files: true
