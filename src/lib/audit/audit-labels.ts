@@ -98,6 +98,8 @@ export const AUDIT_RESOURCE_LABELS: Record<AuditResourceType, string> = {
   PROVIDER_SCHEDULE: 'Horario del profesional',
   // DX-099: anamnesis por enlace (enlace, envío, revisión, anulación).
   MEDICAL_HISTORY_SUBMISSION: 'Anamnesis por enlace',
+  // DX-279: nueva versión de la política de cancelación de una sede.
+  CANCELLATION_POLICY: 'Política de cancelación',
 };
 
 export const AUDIT_RESOURCE_OPTIONS = Object.keys(AUDIT_RESOURCE_LABELS) as AuditResourceType[];
@@ -327,5 +329,39 @@ export function planItemAttributionDetail(metadata: AuditMetadata): string | nul
   if (before.completedAt && after.completedAt && before.completedAt !== after.completedAt) {
     parts.push(`Fecha ${formatDate(before.completedAt)} → ${formatDate(after.completedAt)}`);
   }
+  return parts.join(' · ');
+}
+
+const CANCELLATION_KIND_AUDIT: Record<string, string> = {
+  PATIENT_LINK: 'el paciente por el enlace',
+  STAFF_FOR_PATIENT: 'el paciente avisó',
+  CLINIC: 'la clínica',
+};
+
+const CANCELLATION_REASON_AUDIT: Record<string, string> = {
+  ILLNESS: 'Enfermedad',
+  FORGOT: 'Olvido',
+  COST: 'Costo',
+  TRANSPORT: 'Transporte',
+  WORK: 'Trabajo',
+  CLINIC_RESCHEDULE: 'La clínica reprograma',
+  OTHER: 'Otro',
+};
+
+/**
+ * DX-279: la cancelación de una cita desde la agenda («Cita cancelada · el
+ * paciente avisó · Transporte · aviso de 300 min · tardía») y el cambio de la
+ * política de cancelación de una sede («Nueva política de cancelación · v2 ·
+ * 24 h»). La metadata solo trae códigos y números. null si no es ninguno.
+ */
+export function cancellationDetail(metadata: AuditMetadata): string | null {
+  if (metadata.reason === 'CANCELLATION_POLICY_CHANGED') return 'Nueva versión de la política de cancelación';
+  if (metadata.reason !== 'APPOINTMENT_CANCELLED') return null;
+  const c = metadata.cancellation;
+  if (!c) return 'Cita cancelada';
+  const parts = ['Cita cancelada', CANCELLATION_KIND_AUDIT[c.byKind] ?? c.byKind];
+  if (c.reasonCode) parts.push(CANCELLATION_REASON_AUDIT[c.reasonCode] ?? c.reasonCode);
+  parts.push(`aviso de ${c.noticeMinutes} min`);
+  if (c.lateCancellation) parts.push('tardía');
   return parts.join(' · ');
 }
