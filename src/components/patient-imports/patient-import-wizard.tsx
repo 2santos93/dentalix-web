@@ -26,12 +26,14 @@ import {
   type ImportBatchDetail,
   type ImportInspect,
 } from '@/lib/patient-imports/patient-imports-api';
+import { BalancesStep } from './balances-step';
 import { ColumnMappingFields } from './column-mapping-fields';
+import { formatCurrency } from '@/lib/format/currency';
 import { ImportIssuesTable } from './import-issues-table';
 import { ImportProgress } from './import-progress';
 
 export const wizardCopy = {
-  steps: ['Subir archivo', 'Columnas y validación', 'Confirmar'],
+  steps: ['Subir archivo', 'Columnas y validación', 'Saldos', 'Confirmar'],
   uploadTitle: 'Sube el archivo de pacientes',
   mappingTitle: 'Revisa las columnas y valida',
   uploadHint:
@@ -65,6 +67,10 @@ export const wizardCopy = {
   previewNew: 'Nuevo',
   previewExisting: 'Ya existe',
   nothingToImport: 'No hay filas que importar: corrige el archivo y vuelve a subirlo.',
+  // DX-262 (I2): sin pacientes nuevos, aún se pueden importar sus saldos.
+  onlyBalances: 'No hay pacientes nuevos: puedes importar solo sus saldos en el paso siguiente.',
+  confirmBalances: (n: number) =>
+    `Importar ${n.toLocaleString('es-CO')} ${n === 1 ? 'saldo migrado' : 'saldos migrados'}`,
   continue: 'Continuar',
   back: 'Atrás',
   confirmTitle: 'Confirmar la importación',
@@ -78,12 +84,24 @@ export const wizardCopy = {
   confirm: (n: number) => `Importar ${n.toLocaleString('es-CO')} ${n === 1 ? 'paciente' : 'pacientes'}`,
   confirmExistingOnly: 'Procesar los pacientes que ya existen',
   confirmError: 'No se pudo iniciar la importación. Intenta de nuevo.',
+  balancesNote: (count: number, totals: string) =>
+    `También se crearán ${count.toLocaleString('es-CO')} ${count === 1 ? 'saldo migrado' : 'saldos migrados'} (${totals}), después de los pacientes.`,
   started: 'Importación en marcha.',
   progressError: 'No se pudo actualizar el avance de la importación.',
   another: 'Importar otro archivo',
 };
 
 const POLL_MS = 1500;
+/** Lo que vale un dry-run sin confirmar (VALIDATION_TTL_HOURS de la API). */
+const VALIDATION_TTL_MS = 24 * 3_600_000;
+
+/**
+ * Lote validado y vigente (DX-262, I2): aunque no traiga pacientes que
+ * importar, se le puede añadir la hoja de saldos.
+ */
+export function isEditableDryRun(batch: ImportBatchDetail, now = Date.now()): boolean {
+  return batch.status === 'VALIDATED' && now < new Date(batch.createdAt).getTime() + VALIDATION_TTL_MS;
+}
 
 interface PatientImportWizardProps {
   token: string;
@@ -92,9 +110,9 @@ interface PatientImportWizardProps {
 }
 
 /**
- * Asistente «Importar pacientes» (DX-107) en tres pasos: subir → columnas y
- * validación (dry-run, sin escribir) → confirmar (en segundo plano, con
- * avance). El archivo vive solo en el navegador entre pasos: volver a validar
+ * Asistente «Importar pacientes» (DX-107) en cuatro pasos: subir → columnas
+ * y validación (dry-run, sin escribir) → saldos (hoja de saldos opcional,
+ * DX-262) → confirmar (en segundo plano, con avance). El archivo vive solo en el navegador entre pasos: volver a validar
  * lo sube de nuevo con el mapeo cambiado.
  */
 /**
@@ -211,7 +229,9 @@ export function PatientImportWizard({ token, onBatchChange }: PatientImportWizar
         if (cancelled) return;
         // Un aviso por racha de fallos, no uno cada 1,5 s.
         if (!pollFailed.current) {
-          pollToast.current = notifyError(apiErrorMessage(err, wizardCopy.progressError), { onRetry: retryPoll });
+          pollToast.current = notifyError(apiErrorMessage(err, wizardCopy.progressError), {
+            onRetry: retryPoll,
+          });
         }
         pollFailed.current = true;
       } finally {
@@ -243,7 +263,9 @@ export function PatientImportWizard({ token, onBatchChange }: PatientImportWizar
     try {
       saveCsv(await downloadTemplate(token), 'plantilla-pacientes.csv');
     } catch (err) {
-      notifyError(apiErrorMessage(err, wizardCopy.templateError), { onRetry: () => void onTemplate() });
+      notifyError(apiErrorMessage(err, wizardCopy.templateError), {
+        onRetry: () => void onTemplate(),
+      });
     }
   }
 
@@ -346,7 +368,13 @@ export function PatientImportWizard({ token, onBatchChange }: PatientImportWizar
       steps={wizardCopy.steps.map((label, i) => ({ key: String(i), label }))}
       current={step}
       onStepChange={(i) => {
-        if (i === 0 || (i === 1 && inspect) || (i === 2 && dryRun?.canConfirm)) setStep(i);
+        if (
+          i === 0 ||
+          (i === 1 && inspect) ||
+          (i === 2 && dryRun && isEditableDryRun(dryRun)) ||
+          (i === 3 && dryRun?.canConfirm)
+        )
+          setStep(i);
       }}
     >
       {step === 0 ? (
@@ -430,7 +458,7 @@ export function PatientImportWizard({ token, onBatchChange }: PatientImportWizar
               onReport={() => void onReport(dryRun.id, dryRun.fileName)}
               onContinue={() => {
                 setStep(2);
-                setFocusTarget('confirm');
+                setFocusTarget('balances');
               }}
             />
           ) : null}
@@ -438,6 +466,20 @@ export function PatientImportWizard({ token, onBatchChange }: PatientImportWizar
       ) : null}
 
       {step === 2 && dryRun ? (
+        <BalancesStep
+          token={token}
+          headingId={`${id}-balances`}
+          batch={dryRun}
+          onBatch={setDryRun}
+          onBack={() => setStep(1)}
+          onContinue={() => {
+            setStep(3);
+            setFocusTarget('confirm');
+          }}
+        />
+      ) : null}
+
+      {step === 3 && dryRun ? (
         <section aria-labelledby={`${id}-confirm`} className="flex flex-col gap-5">
           <h2 id={`${id}-confirm`} tabIndex={-1} className="text-lg font-semibold text-ink focus:outline-none">
             {wizardCopy.confirmTitle}
@@ -464,14 +506,28 @@ export function PatientImportWizard({ token, onBatchChange }: PatientImportWizar
           <ul className="flex max-w-prose list-disc flex-col gap-1 pl-5 text-sm text-muted">
             <li>{wizardCopy.consentNote}</li>
             <li>{wizardCopy.backgroundNote}</li>
+            {dryRun.balances && dryRun.balances.preparedCount > 0 ? (
+              <li>
+                {wizardCopy.balancesNote(
+                  dryRun.balances.preparedCount,
+                  dryRun.balances.validTotals.map((t) => formatCurrency(t.amount, t.currency)).join(' · '),
+                )}
+              </li>
+            ) : null}
           </ul>
           {confirmError ? <InlineError variant="summary">{confirmError}</InlineError> : null}
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-between">
-            <Button type="button" variant="outline" onClick={() => setStep(1)} className="w-full sm:w-auto">
+            <Button type="button" variant="outline" onClick={() => setStep(2)} className="w-full sm:w-auto">
               {wizardCopy.back}
             </Button>
             <Button type="button" loading={confirming} onClick={() => void onConfirm()} className="w-full sm:w-auto">
-              {dryRun.totals.validRows > 0 ? wizardCopy.confirm(dryRun.totals.validRows) : wizardCopy.confirmExistingOnly}
+              {dryRun.totals.validRows > 0
+                ? wizardCopy.confirm(dryRun.totals.validRows)
+                : // Sin pacientes nuevos y saltando los existentes, solo se importan saldos.
+                  (dryRun.progress.preparedRows === 0 || mode === 'SKIP') &&
+                    (dryRun.balances?.preparedCount ?? 0) > 0
+                  ? wizardCopy.confirmBalances(dryRun.balances?.preparedCount ?? 0)
+                  : wizardCopy.confirmExistingOnly}
             </Button>
           </div>
         </section>
@@ -546,7 +602,10 @@ function DryRunResult({
                 <span className="min-w-0 break-words text-ink">
                   <span className="tabular-nums text-muted">{row.rowNumber} · </span>
                   {row.data.firstName} {row.data.lastName}
-                  <span className="text-muted"> · {row.data.docType} {row.data.docNumber}</span>
+                  <span className="text-muted">
+                    {' '}
+                    · {row.data.docType} {row.data.docNumber}
+                  </span>
                 </span>
                 <span className="text-xs text-muted">
                   {row.status === 'NEW' ? wizardCopy.previewNew : wizardCopy.previewExisting}
@@ -556,11 +615,14 @@ function DryRunResult({
           </ul>
         </div>
       ) : null}
-      {batch.canConfirm ? (
-        <div>
-          <Button type="button" onClick={onContinue} className="w-full sm:w-auto">
-            {wizardCopy.continue}
-          </Button>
+      {batch.canConfirm || isEditableDryRun(batch) ? (
+        <div className="flex flex-col gap-2">
+          {!batch.canConfirm ? <p className="text-sm text-muted">{wizardCopy.onlyBalances}</p> : null}
+          <div>
+            <Button type="button" onClick={onContinue} className="w-full sm:w-auto">
+              {wizardCopy.continue}
+            </Button>
+          </div>
         </div>
       ) : (
         <InlineError variant="summary">{wizardCopy.nothingToImport}</InlineError>

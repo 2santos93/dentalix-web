@@ -82,7 +82,8 @@ const copy = {
   tableLabel: 'Abonos del período',
   colDate: 'Fecha',
   colPatient: 'Paciente',
-  colPlan: 'Plan',
+  // QA D2: un abono va a un plan o a un saldo migrado.
+  colPlan: 'Destino',
   colMethod: 'Método',
   colLocation: 'Sede',
   colAmount: 'Monto',
@@ -92,6 +93,8 @@ const copy = {
   receiptAction: 'Recibo',
   receiptActionLabel: (patient: string) => `Recibo del abono de ${patient}`,
   planLabel: (createdAt: string) => `Plan del ${formatDate(createdAt)}`,
+  // DX-262: abono contra el saldo migrado (sin plan).
+  openingLabel: (concept: string) => (concept ? `Saldo migrado · ${concept}` : 'Saldo migrado'),
   // Sin "Intenta de nuevo." — alimenta AsyncSection -> SectionError, que trae su propio botón.
   genericLoadError: 'No pudimos cargar la caja.',
   // 400: lo único que la pantalla manda es período, método y página, así que
@@ -168,7 +171,10 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
   );
   const [customQuery, setCustomQuery] = useState<CashRange | null>(null);
   const range = period === 'custom' ? customQuery : presetQuery;
-  const [customRange, setCustomRange] = useState<CashRange>({ from: '', to: '' });
+  const [customRange, setCustomRange] = useState<CashRange>({
+    from: '',
+    to: '',
+  });
   const [method, setMethod] = useState<MethodFilter>('ALL');
   const [page, setPage] = useState(1);
   const [data, setData] = useState<CashPaymentsResponse | null>(null);
@@ -287,7 +293,13 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
           las demás listas. */}
       <div
         className="flex flex-col gap-3"
-        {...(tabs ? { role: 'tabpanel', id: tabs.panelId, 'aria-labelledby': tabs.tabId } : {})}
+        {...(tabs
+          ? {
+              role: 'tabpanel',
+              id: tabs.panelId,
+              'aria-labelledby': tabs.tabId,
+            }
+          : {})}
       >
         <div className="flex min-w-0 flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
           <div
@@ -438,7 +450,9 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
                           </Link>
                         </TableCell>
                         <TableCell className="text-muted" data-label={copy.colPlan}>
-                          {copy.planLabel(payment.treatmentPlan.createdAt)}
+                          {payment.treatmentPlan
+                            ? copy.planLabel(payment.treatmentPlan.createdAt)
+                            : copy.openingLabel(payment.openingBalance?.concept ?? '')}
                         </TableCell>
                         <TableCell data-label={copy.colMethod}>
                           {payment.method ? (

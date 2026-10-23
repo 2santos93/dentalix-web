@@ -2,12 +2,13 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { RecordPaymentModal } from './record-payment-modal';
 import { ApiError } from '@/lib/api/client';
-import { recordPayment } from '@/lib/payments/payments-api';
+import { recordOpeningBalancePayment, recordPayment } from '@/lib/payments/payments-api';
 import { listBillablePlans, type BillablePlan } from '@/lib/payments/billable-plans-api';
 import { listLocations } from '@/lib/locations/locations-api';
 
 jest.mock('../../lib/payments/payments-api', () => ({
   recordPayment: jest.fn(),
+  recordOpeningBalancePayment: jest.fn(),
 }));
 jest.mock('../../lib/payments/billable-plans-api', () => ({
   ...jest.requireActual('../../lib/payments/billable-plans-api'),
@@ -24,6 +25,9 @@ jest.mock('../../lib/reference/currencies-api', () => ({
 }));
 
 const mockedRecord = recordPayment as jest.MockedFunction<typeof recordPayment>;
+const mockedRecordOpening = recordOpeningBalancePayment as jest.MockedFunction<
+  typeof recordOpeningBalancePayment
+>;
 const mockedList = listBillablePlans as jest.MockedFunction<typeof listBillablePlans>;
 const mockedLocations = listLocations as jest.MockedFunction<typeof listLocations>;
 
@@ -59,6 +63,7 @@ function savedPayment(
     id: 'pay-1',
     tenantId: 't-1',
     treatmentPlanId: 'plan-cop',
+    openingBalanceId: null,
     patientId: 'pat-1',
     amount: 150000,
     currency: 'COP',
@@ -76,12 +81,25 @@ function savedPayment(
 
 beforeEach(() => {
   mockedRecord.mockReset();
+  mockedRecordOpening.mockReset();
   mockedList.mockReset();
   mockedLocations.mockReset();
   mockedLocations.mockResolvedValue([]);
 });
 
-function renderModal() {
+const opening = {
+  id: 'ob-1',
+  currency: 'COP',
+  amount: 200000.5,
+  asOfDate: '2026-08-09',
+  asOfDateApproximate: false,
+  concept: 'Ortodoncia 2025',
+  importBatchId: 'batch-1',
+  paid: 50000.5,
+  pending: 150000,
+};
+
+function renderModal(openingBalances: (typeof opening)[] = []) {
   const onRecorded = jest.fn();
   const onOpenChange = jest.fn();
   render(
@@ -90,6 +108,7 @@ function renderModal() {
       onOpenChange={onOpenChange}
       token="tok"
       patientId="pat-1"
+      openingBalances={openingBalances}
       onRecorded={onRecorded}
     />,
   );
@@ -143,7 +162,10 @@ describe('fecha por defecto en la zona de la sede (DX-097)', () => {
   });
 
   it('a las 20:30 de Bogotá (01:30Z del día siguiente, navegador en UTC) propone el día de la sede', async () => {
-    jest.useFakeTimers({ now: new Date('2026-10-16T01:30:00.000Z'), advanceTimers: true });
+    jest.useFakeTimers({
+      now: new Date('2026-10-16T01:30:00.000Z'),
+      advanceTimers: true,
+    });
     mockedLocations.mockResolvedValue([sedeIn('America/Bogota')]);
     mockedList.mockResolvedValue([copPlan]);
     renderModal();
@@ -155,7 +177,10 @@ describe('fecha por defecto en la zona de la sede (DX-097)', () => {
   });
 
   it('con la sede en Madrid, el mismo instante ya es el día siguiente', async () => {
-    jest.useFakeTimers({ now: new Date('2026-10-15T22:30:00.000Z'), advanceTimers: true });
+    jest.useFakeTimers({
+      now: new Date('2026-10-15T22:30:00.000Z'),
+      advanceTimers: true,
+    });
     mockedLocations.mockResolvedValue([sedeIn('Europe/Madrid')]);
     mockedList.mockResolvedValue([copPlan]);
     renderModal();
@@ -224,7 +249,9 @@ it('si falla, lo dice en español y el reintento reusa la misma Idempotency-Key'
   await within(dialog).findByLabelText('Plan');
   await user.type(within(dialog).getByLabelText('Importe'), '1000');
 
-  const submit = within(dialog).getByRole('button', { name: 'Registrar abono' });
+  const submit = within(dialog).getByRole('button', {
+    name: 'Registrar abono',
+  });
   await user.click(submit);
   expect(await within(dialog).findByRole('alert')).toHaveTextContent(
     /no pudimos registrar el abono/i,
@@ -293,7 +320,9 @@ it('el aviso dice lo que la API registró, no lo que quedó en el formulario (re
   await user.type(within(dialog).getByLabelText('Importe'), '1000');
   await user.clear(within(dialog).getByLabelText('Fecha de pago'));
   await user.type(within(dialog).getByLabelText('Fecha de pago'), '2026-10-01');
-  const submit = within(dialog).getByRole('button', { name: 'Registrar abono' });
+  const submit = within(dialog).getByRole('button', {
+    name: 'Registrar abono',
+  });
   await user.click(submit);
   await within(dialog).findByRole('alert');
 
@@ -306,4 +335,57 @@ it('el aviso dice lo que la API registró, no lo que quedó en el formulario (re
   expect(onRecorded).toHaveBeenCalledWith(
     expect.stringMatching(/^Abono registrado: 1\.?000,00\sCOP · 01\/10\/2026 · Plan del 01\/08\/2026\.$/),
   );
+});
+
+describe('DX-262: abono contra el saldo migrado', () => {
+  it('ofrece el saldo migrado con su pendiente como destino y abona contra él, en su moneda', async () => {
+    mockedList.mockResolvedValue([copPlan]);
+    mockedRecordOpening.mockResolvedValue(
+      savedPayment({
+        treatmentPlanId: null,
+        openingBalanceId: 'ob-1',
+        amount: 100000,
+      }),
+    );
+    const user = userEvent.setup();
+    const { onRecorded } = renderModal([opening, { ...opening, id: 'ob-paid', pending: 0 }]);
+    const dialog = screen.getByRole('dialog');
+    const target = await within(dialog).findByLabelText('Abonar a');
+    // QA D2: con saldo migrado, la ayuda no habla solo de «plan».
+    expect(dialog).toHaveTextContent('El abono se aplica al plan o al saldo migrado que elijas y aparece en la caja de hoy.');
+    // Solo los saldos con algo pendiente.
+    expect(
+      within(target)
+        .getAllByRole('option')
+        .map((o) => money(o.textContent)),
+    ).toEqual(['Un plan de tratamiento', 'Saldo migrado · Ortodoncia 2025 · pendiente 150.000,00 COP']);
+    await user.selectOptions(target, 'ob:ob-1');
+    expect(within(dialog).queryByLabelText('Plan')).not.toBeInTheDocument();
+    expect(within(dialog).getByLabelText('Moneda')).toHaveValue('COP');
+    expect(within(dialog).getByLabelText('Moneda')).toBeDisabled();
+    await user.type(within(dialog).getByLabelText('Importe'), '100000');
+    await user.click(within(dialog).getByRole('button', { name: 'Registrar abono' }));
+    await waitFor(() => expect(onRecorded).toHaveBeenCalled());
+    expect(mockedRecordOpening).toHaveBeenCalledWith(
+      'tok',
+      'ob-1',
+      expect.objectContaining({ amount: 100000, currency: 'COP' }),
+      expect.any(String),
+    );
+    expect(mockedRecord).not.toHaveBeenCalled();
+    expect(money(onRecorded.mock.calls[0][0] as string)).toContain('Saldo migrado · Ortodoncia 2025');
+  });
+
+  it('un importe mayor que lo pendiente se avisa sin llamar a la API', async () => {
+    mockedList.mockResolvedValue([]);
+    const user = userEvent.setup();
+    renderModal([opening]);
+    const dialog = screen.getByRole('dialog');
+    // Sin planes cobrables pero con saldo migrado: se puede cobrar el saldo.
+    await waitFor(() => expect(within(dialog).getByLabelText('Abonar a')).toHaveValue('ob:ob-1'));
+    await user.type(within(dialog).getByLabelText('Importe'), '150000,01');
+    await user.click(within(dialog).getByRole('button', { name: 'Registrar abono' }));
+    expect(await within(dialog).findByText(/supera lo pendiente/)).toBeInTheDocument();
+    expect(mockedRecordOpening).not.toHaveBeenCalled();
+  });
 });

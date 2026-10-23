@@ -15,6 +15,9 @@ export type DuplicateMode = components['schemas']['PatientImportDuplicateMode'];
 export type DocType = components['schemas']['DocType'];
 export type ColumnMapping = components['schemas']['ColumnMappingDto'];
 export type ImportFieldKey = keyof ColumnMapping;
+// DX-262: hoja de saldos «Saldo migrado» del lote.
+export type ImportBalances = components['schemas']['PatientImportBalancesDto'];
+export type BalanceCurrencyTotal = components['schemas']['BalanceCurrencyTotalDto'];
 
 /** Igual que la API (PATIENT_IMPORT_ROLES): solo ADMIN. */
 export function canImportPatients(role: ClinicRole | null): boolean {
@@ -39,6 +42,8 @@ export const ISSUE_KIND_LABELS: Record<ImportIssue['kind'], string> = {
   ERROR: 'Error',
   DUPLICATE_FILE: 'Repetido en el archivo',
   DUPLICATE_EXISTING: 'Ya existe en la clínica',
+  MERGED: 'Sumada a otra fila',
+  EXISTING_BALANCE: 'Ya tenía saldo migrado',
 };
 
 export const DOC_TYPE_LABELS: Record<DocType, string> = {
@@ -110,6 +115,42 @@ export function listImports(token: string, page = 1): Promise<ImportBatchList> {
 
 export function downloadErrorsCsv(token: string, id: string): Promise<string> {
   return apiFetchText(`/patient-imports/${id}/errors.csv`, { token });
+}
+
+export function downloadBalanceTemplate(token: string): Promise<string> {
+  return apiFetchText('/patient-imports/balances-template', { token });
+}
+
+/**
+ * Hoja de saldos del lote validado (DX-262): dry-run. No crea saldos: se
+ * importan al confirmar, después de los pacientes. Volver a subirla la reemplaza.
+ */
+export function uploadBalances(
+  token: string,
+  batchId: string,
+  file: File,
+  onProgress?: (fraction: number) => void,
+  /** «Añadir aunque ya tenga saldo migrado» (QA D1); sin marcar, no se manda. */
+  addToExisting = false,
+): Promise<ImportBatchDetail> {
+  const fields: Record<string, string> = addToExisting ? { addToExisting: 'true' } : {};
+  return uploadImportFile<ImportBatchDetail>({ balancesOf: batchId }, fileForm(file, fields), { token, onProgress });
+}
+
+export function removeBalances(token: string, batchId: string): Promise<ImportBatchDetail> {
+  return apiFetch<ImportBatchDetail>(`/patient-imports/${batchId}/balances`, { method: 'DELETE', token });
+}
+
+export function downloadBalanceErrorsCsv(token: string, batchId: string): Promise<string> {
+  return apiFetchText(`/patient-imports/${batchId}/balances/errors.csv`, { token });
+}
+
+/**
+ * Retira SOLO los saldos migrados del lote (DX-262), aunque sus pacientes ya
+ * tengan actividad; 409 si alguno tiene abonos vivos.
+ */
+export function undoBalances(token: string, id: string): Promise<ImportBatchDetail> {
+  return apiFetch<ImportBatchDetail>(`/patient-imports/${id}/balances/undo`, { method: 'POST', token });
 }
 
 export function undoImport(token: string, id: string): Promise<ImportBatchDetail> {

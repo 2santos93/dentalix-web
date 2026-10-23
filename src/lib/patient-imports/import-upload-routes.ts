@@ -17,5 +17,28 @@ export const IMPORT_UPLOAD_ROUTES = {
 
 export type ImportUploadStep = keyof typeof IMPORT_UPLOAD_ROUTES;
 
+/**
+ * Qué se sube: un paso del asistente o la hoja de saldos («Saldo migrado»,
+ * DX-262) de un lote validado (`/api/import-upload/balances/:id` →
+ * `POST /patient-imports/:id/balances`).
+ */
+export type ImportUploadTarget = ImportUploadStep | { balancesOf: string };
+
+const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** El id del lote, solo si es un UUID (nunca un trozo de ruta). */
+export function balancesBatchId(target: ImportUploadTarget): string | null {
+  if (typeof target === 'string') return null;
+  return UUID.test(target.balancesOf) ? target.balancesOf : null;
+}
+
+/** Ruta de la web (navegador) y de la API para lo que se sube. */
+export function importUploadPaths(target: ImportUploadTarget): { web: string; api: string } | null {
+  if (typeof target === 'string') return IMPORT_UPLOAD_ROUTES[target];
+  const id = balancesBatchId(target);
+  if (id === null) return null;
+  return { web: `/api/import-upload/balances/${id}`, api: `/patient-imports/${id}/balances` };
+}
+
 /** Tope de la API para el archivo (MAX_IMPORT_BYTES de dentalix-api): 5 MB. */
 export const MAX_IMPORT_BYTES = 5 * 1024 * 1024;

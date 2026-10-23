@@ -3,7 +3,7 @@ import https from 'node:https';
 import { Readable } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
 import { API_URL } from '@/lib/api/api-base';
-import { IMPORT_UPLOAD_ROUTES, MAX_IMPORT_BYTES, type ImportUploadStep } from './import-upload-routes';
+import { importUploadPaths, MAX_IMPORT_BYTES, type ImportUploadTarget } from './import-upload-routes';
 
 /**
  * Subida del archivo de la importación de pacientes hacia la API (DX-107 ×
@@ -63,6 +63,7 @@ const NO_LENGTH_MESSAGE = 'No pudimos subir el archivo. Vuelve a intentarlo.';
 const TOO_LARGE_MESSAGE = 'El archivo pesa más de 5 MB. Divídelo en varios archivos más pequeños.';
 const UNREACHABLE_MESSAGE = 'No pudimos conectar con el servidor. Vuelve a intentarlo en unos minutos.';
 const TIMEOUT_MESSAGE = 'El servidor tardó demasiado en responder. Vuelve a intentarlo.';
+const BAD_BATCH_MESSAGE = 'El lote de importación no es válido. Vuelve a subir el archivo de pacientes.';
 
 /** Error con el formato de la API (`{ statusCode, error, message }`). */
 function apiError(statusCode: number, error: string, message: string, close = false): Response {
@@ -95,9 +96,11 @@ function toResponse(upstream: http.IncomingMessage): Response {
 
 export async function forwardImportUpload(
   req: Request,
-  step: ImportUploadStep,
+  target: ImportUploadTarget,
   opts: ForwardImportUploadOptions = {},
 ): Promise<Response> {
+  const paths = importUploadPaths(target);
+  if (!paths) return apiError(400, 'Bad Request', BAD_BATCH_MESSAGE, true);
   // Rechazos ANTES de leer el cuerpo. Sin tamaño o con más del tope, además
   // se cierra la conexión (no se lee un cuerpo de tamaño desconocido o
   // grande); sin sesión, el cuerpo ya está acotado y Node lo descarta sin
@@ -123,12 +126,12 @@ export async function forwardImportUpload(
   // TRUST_PROXY), nunca de un X-Forwarded-Host que mande el cliente.
   headers['x-forwarded-host'] = req.headers.get('host') ?? '';
 
-  const target = new URL(`${(opts.apiUrl ?? API_URL).replace(/\/+$/, '')}${IMPORT_UPLOAD_ROUTES[step].api}`);
-  const client = target.protocol === 'https:' ? https : http;
+  const url = new URL(`${(opts.apiUrl ?? API_URL).replace(/\/+$/, '')}${paths.api}`);
+  const client = url.protocol === 'https:' ? https : http;
   const body = Readable.fromWeb(req.body as import('node:stream/web').ReadableStream<Uint8Array>);
   try {
     const upstream = await new Promise<http.IncomingMessage>((resolve, reject) => {
-      const outgoing = client.request(target, { method: 'POST', headers, signal: req.signal }, resolve);
+      const outgoing = client.request(url, { method: 'POST', headers, signal: req.signal }, resolve);
       outgoing.setTimeout(opts.idleTimeoutMs ?? IMPORT_UPLOAD_IDLE_TIMEOUT_MS, () =>
         outgoing.destroy(new UpstreamTimeoutError()),
       );

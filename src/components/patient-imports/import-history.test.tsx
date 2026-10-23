@@ -1,25 +1,31 @@
 import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ApiError } from '@/lib/api/client';
-import { listImports, undoImport } from '@/lib/patient-imports/patient-imports-api';
-import { batchFixture } from '@/lib/test/patient-imports';
+import { listImports, undoBalances, undoImport } from '@/lib/patient-imports/patient-imports-api';
+import { balancesFixture, batchFixture } from '@/lib/test/patient-imports';
 import { notifyError } from '@/components/errors/notify';
 import { toast } from 'sonner';
 import { ImportHistory } from './import-history';
 
-jest.mock('../errors/notify', () => ({ notifyError: jest.fn(() => 'toast-poll') }));
-jest.mock('sonner', () => ({ toast: { success: jest.fn(), dismiss: jest.fn() } }));
+jest.mock('../errors/notify', () => ({
+  notifyError: jest.fn(() => 'toast-poll'),
+}));
+jest.mock('sonner', () => ({
+  toast: { success: jest.fn(), dismiss: jest.fn() },
+}));
 
 jest.mock('../../lib/patient-imports/patient-imports-api', () => ({
   ...jest.requireActual('../../lib/patient-imports/patient-imports-api'),
   listImports: jest.fn(),
   undoImport: jest.fn(),
+  undoBalances: jest.fn(),
   downloadErrorsCsv: jest.fn(),
   saveCsv: jest.fn(),
 }));
 
 const mockedList = listImports as jest.MockedFunction<typeof listImports>;
 const mockedUndo = undoImport as jest.MockedFunction<typeof undoImport>;
+const mockedUndoBalances = undoBalances as jest.MockedFunction<typeof undoBalances>;
 
 const completed = batchFixture({
   status: 'COMPLETED',
@@ -28,7 +34,12 @@ const completed = batchFixture({
   confirmedAt: '2026-10-21T14:05:00.000Z',
   progress: { preparedRows: 2, processedRows: 2, createdCount: 1, updatedCount: 1, skippedCount: 0, failedCount: 0, percent: 100 },
 });
-const page = (items = [completed]) => ({ items, total: items.length, page: 1, pageSize: 20 });
+const page = (items = [completed]) => ({
+  items,
+  total: items.length,
+  page: 1,
+  pageSize: 20,
+});
 
 beforeEach(() => jest.clearAllMocks());
 
@@ -36,7 +47,9 @@ it('carga con esqueleto y luego lista cada lote con su estado y resultado', asyn
   mockedList.mockResolvedValue(page());
   render(<ImportHistory token="tok" reloadKey={0} />);
   expect(screen.getByRole('status', { name: /cargando/i })).toBeInTheDocument();
-  const list = await screen.findByRole('list', { name: /importaciones de la clínica/i });
+  const list = await screen.findByRole('list', {
+    name: /importaciones de la clínica/i,
+  });
   expect(list).toHaveTextContent('pacientes.csv');
   expect(list).toHaveTextContent('Importado');
   expect(list).toHaveTextContent('1 creados · 1 actualizados · 2 duplicados o con error');
@@ -62,10 +75,20 @@ it('error: sección con «Reintentar» que vuelve a cargar', async () => {
 
 it('deshacer: pide confirmación y deja el lote como deshecho', async () => {
   mockedList.mockResolvedValue(page());
-  mockedUndo.mockResolvedValue({ ...completed, status: 'UNDONE', canUndo: false, undoneCreated: 1, undoneFilled: 1 });
+  mockedUndo.mockResolvedValue({
+    ...completed,
+    status: 'UNDONE',
+    canUndo: false,
+    undoneCreated: 1,
+    undoneFilled: 1,
+  });
   const user = userEvent.setup();
   render(<ImportHistory token="tok" reloadKey={0} />);
-  await user.click(await screen.findByRole('button', { name: /deshacer el lote pacientes\.csv/i }));
+  await user.click(
+    await screen.findByRole('button', {
+      name: /deshacer el lote pacientes\.csv/i,
+    }),
+  );
   const dialog = screen.getByRole('dialog');
   expect(dialog).toHaveTextContent(/Se retirarán los 1 pacientes/);
   await user.click(within(dialog).getByRole('button', { name: 'Deshacer lote' }));
@@ -83,12 +106,21 @@ it('deshacer rechazado (409): el motivo en el diálogo y el lote intacto', async
   const user = userEvent.setup();
   render(<ImportHistory token="tok" reloadKey={0} />);
   await user.click(await screen.findByRole('button', { name: /deshacer el lote/i }));
-  await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Deshacer lote' }));
+  await user.click(
+    within(screen.getByRole('dialog')).getByRole('button', {
+      name: 'Deshacer lote',
+    }),
+  );
   expect(await within(screen.getByRole('dialog')).findByRole('alert')).toHaveTextContent(/ya tiene citas/);
 });
 
 it('paginado: «Siguiente» pide la página 2', async () => {
-  mockedList.mockResolvedValue({ items: [completed], total: 25, page: 1, pageSize: 20 });
+  mockedList.mockResolvedValue({
+    items: [completed],
+    total: 25,
+    page: 1,
+    pageSize: 20,
+  });
   const user = userEvent.setup();
   render(<ImportHistory token="tok" reloadKey={0} />);
   await screen.findByText('pacientes.csv');
@@ -113,7 +145,12 @@ it('un lote importando se refresca solo hasta terminar', async () => {
 });
 
 it('«Informe» solo si sigue disponible (revisión: tras la purga daría 410)', async () => {
-  const purged = { ...completed, id: 'batch-2', fileName: 'viejo.csv', reportAvailable: false };
+  const purged = {
+    ...completed,
+    id: 'batch-2',
+    fileName: 'viejo.csv',
+    reportAvailable: false,
+  };
   mockedList.mockResolvedValue(page([completed, purged]));
   render(<ImportHistory token="tok" reloadKey={0} />);
   await screen.findByText('viejo.csv');
@@ -124,7 +161,11 @@ it('«Informe» solo si sigue disponible (revisión: tras la purga daría 410)',
 it('Way-Out Rule: el aviso de fallo del refresco trae «Reintentar»', async () => {
   jest.useFakeTimers();
   try {
-    const running = { ...completed, status: 'RUNNING' as const, canUndo: false };
+    const running = {
+      ...completed,
+      status: 'RUNNING' as const,
+      canUndo: false,
+    };
     mockedList.mockResolvedValueOnce(page([running])).mockRejectedValue(new Error('red'));
     render(<ImportHistory token="tok" reloadKey={0} />);
     await screen.findByText('pacientes.csv');
@@ -143,7 +184,11 @@ it('Way-Out Rule: el aviso de fallo del refresco trae «Reintentar»', async () 
 it('el aviso del refresco se cierra solo cuando el refresco vuelve a ir bien', async () => {
   jest.useFakeTimers();
   try {
-    const running = { ...completed, status: 'RUNNING' as const, canUndo: false };
+    const running = {
+      ...completed,
+      status: 'RUNNING' as const,
+      canUndo: false,
+    };
     mockedList
       .mockResolvedValueOnce(page([running]))
       .mockRejectedValueOnce(new Error('red'))
@@ -162,4 +207,65 @@ it('el aviso del refresco se cierra solo cuando el refresco vuelve a ir bien', a
   } finally {
     jest.useRealTimers();
   }
+});
+
+it('DX-262: con saldos migrados, el deshacer avisa de que también se retiran y lo cuenta', async () => {
+  const withBalances = {
+    ...completed,
+    balances: balancesFixture({
+      progress: { processed: 3, created: 3, skipped: 0, ambiguous: 0, existing: 0 },
+      imported: [{ currency: 'COP', count: 3, amount: 201000.5 }],
+    }),
+  };
+  mockedList.mockResolvedValue(page([withBalances]));
+  mockedUndo.mockResolvedValue({
+    ...withBalances,
+    status: 'UNDONE',
+    canUndo: false,
+    undoneCreated: 1,
+    undoneFilled: 0,
+    balances: balancesFixture({ imported: [], undoneCount: 3 }),
+  });
+  const user = userEvent.setup();
+  render(<ImportHistory token="tok" reloadKey={0} />);
+  await user.click(
+    await screen.findByRole('button', {
+      name: /deshacer el lote pacientes\.csv/i,
+    }),
+  );
+  const dialog = screen.getByRole('dialog');
+  expect(dialog).toHaveTextContent(/también sus 3 saldos migrados/);
+  await user.click(within(dialog).getByRole('button', { name: 'Deshacer lote' }));
+  expect(await screen.findByText(/3 saldos migrados retirados/)).toBeInTheDocument();
+});
+
+it('DX-262: «Retirar saldos migrados» retira solo los saldos (aunque los pacientes tengan actividad)', async () => {
+  const withBalances = {
+    ...completed,
+    balances: balancesFixture({
+      progress: { processed: 3, created: 2, skipped: 0, ambiguous: 1, existing: 0 },
+      imported: [{ currency: 'COP', count: 2, amount: 201000.5 }],
+      canUndo: true,
+    }),
+  };
+  mockedList.mockResolvedValue(page([withBalances]));
+  mockedUndoBalances.mockResolvedValue({
+    ...withBalances,
+    balances: balancesFixture({ imported: [], undoneCount: 2, canUndo: false }),
+  });
+  const user = userEvent.setup();
+  render(<ImportHistory token="tok" reloadKey={0} />);
+  await user.click(
+    await screen.findByRole('button', {
+      name: /retirar los saldos migrados de pacientes\.csv/i,
+    }),
+  );
+  const dialog = screen.getByRole('dialog');
+  expect(dialog).toHaveTextContent(/Se retirarán sus 2 saldos migrados/);
+  expect(dialog).toHaveTextContent(/los pacientes no se tocan/);
+  await user.click(within(dialog).getByRole('button', { name: 'Retirar saldos' }));
+  expect(mockedUndoBalances).toHaveBeenCalledWith('tok', 'batch-1');
+  expect(mockedUndo).not.toHaveBeenCalled();
+  await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+  expect(screen.queryByRole('button', { name: /retirar los saldos migrados/i })).not.toBeInTheDocument();
 });

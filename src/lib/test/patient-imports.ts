@@ -58,6 +58,9 @@ export function batchFixture(overrides: Partial<ImportBatchDetail> = {}): Import
     canConfirm: true,
     canUndo: false,
     reportAvailable: true,
+    balances: null,
+    balanceIssues: [],
+    balanceIssuesTotal: 0,
     issues: [
       {
         row: 3,
@@ -76,6 +79,38 @@ export function batchFixture(overrides: Partial<ImportBatchDetail> = {}): Import
         data: { docType: 'CC', docNumber: '1020304050', firstName: 'Ana', lastName: 'Pérez' },
       },
     ],
+    ...overrides,
+  };
+}
+
+/** Hoja de saldos (DX-262) validada: 7 filas, 3 con error, 1 sumada. */
+export function balancesFixture(
+  overrides: Partial<NonNullable<ImportBatchDetail['balances']>> = {},
+): NonNullable<ImportBatchDetail['balances']> {
+  return {
+    fileName: 'saldos.csv',
+    fileFormat: 'CSV',
+    fileSizeBytes: 200,
+    fileSha256: 'b'.repeat(64),
+    totalRows: 7,
+    validRows: 4,
+    errorRows: 3,
+    mergedRows: 1,
+    preparedCount: 3,
+    addToExisting: false,
+    fileTotals: [
+      { currency: 'COP', rows: 4, amount: 201100.5 },
+      { currency: 'USD', rows: 1, amount: 40 },
+    ],
+    validTotals: [
+      { currency: 'COP', rows: 3, amount: 201000.5 },
+      { currency: 'USD', rows: 1, amount: 40 },
+    ],
+    imported: [],
+    progress: { processed: 0, created: 0, skipped: 0, ambiguous: 0, existing: 0 },
+    undoneCount: null,
+    undoneTotals: [],
+    canUndo: false,
     ...overrides,
   };
 }
