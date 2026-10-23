@@ -6,6 +6,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { InlineError } from '@/components/errors/inline-error';
 import { notifyError } from '@/components/errors/notify';
 import { apiErrorMessage } from '@/lib/api/error-message';
+import { IMPORT_READ_BY_STATUS } from './import-read-busy';
 import { formatCurrency } from '@/lib/format/currency';
 import {
   IMPORT_ACCEPT,
@@ -114,7 +115,7 @@ export function BalancesStep({ token, headingId, batch, onBatch, onBack, onConti
       setUploaded(0);
       onBatch(await uploadBalances(token, batch.id, chosen, setUploaded, add));
     } catch (err) {
-      setError(apiErrorMessage(err, balancesCopy.error));
+      setError(apiErrorMessage(err, { fallback: balancesCopy.error, byStatus: IMPORT_READ_BY_STATUS }));
     } finally {
       setBusy(false);
       setUploaded(null);

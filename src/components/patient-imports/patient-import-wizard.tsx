@@ -7,6 +7,7 @@ import { Wizard } from '@/components/ui/wizard';
 import { InlineError } from '@/components/errors/inline-error';
 import { notifyError } from '@/components/errors/notify';
 import { apiErrorMessage } from '@/lib/api/error-message';
+import { IMPORT_READ_BY_STATUS } from './import-read-busy';
 import {
   IMPORT_ACCEPT,
   MAX_IMPORT_BYTES,
@@ -288,7 +289,7 @@ export function PatientImportWizard({ token, onBatchChange }: PatientImportWizar
       setStep(1);
       setFocusTarget('mapping');
     } catch (err) {
-      setReadError(apiErrorMessage(err, wizardCopy.readError));
+      setReadError(apiErrorMessage(err, { fallback: wizardCopy.readError, byStatus: IMPORT_READ_BY_STATUS }));
       // El mismo archivo, corregido, se puede volver a elegir.
       if (inputRef.current) inputRef.current.value = '';
     } finally {
@@ -307,7 +308,7 @@ export function PatientImportWizard({ token, onBatchChange }: PatientImportWizar
       setFocusTarget('dry-run');
     } catch (err) {
       setDryRun(null);
-      setValidateError(apiErrorMessage(err, wizardCopy.validateError));
+      setValidateError(apiErrorMessage(err, { fallback: wizardCopy.validateError, byStatus: IMPORT_READ_BY_STATUS }));
     } finally {
       setValidating(false);
       setUploaded(null);
