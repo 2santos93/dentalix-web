@@ -63,6 +63,31 @@ function reservedToastId(appointmentId: string, planItemId: string): string {
   return `reserved:${claimKey(appointmentId, planItemId)}`;
 }
 
+/** Avisos «reservado en otra cita» abiertos en esta pestaña. */
+const openReservedToasts = new Set<string>();
+
+/**
+ * QA DX-273 (D1): cierra los avisos «reservado en otra cita». Se llama al
+ * abrir la hoja «En clínica», que ya ofrece la misma acción: un toast queda
+ * por encima del diálogo modal pero no recibe toques (el diálogo bloquea el
+ * resto de la página) y el toque caería en lo de debajo.
+ */
+export function dismissReservedToasts(): void {
+  for (const id of openReservedToasts) toast.dismiss(id);
+  openReservedToasts.clear();
+}
+
+/** ¿Hay un diálogo modal abierto (hoja o modal de Radix)? */
+function modalOpen(): boolean {
+  return document.querySelector('[role="dialog"][data-state="open"]') !== null;
+}
+
+/**
+ * QA DX-273 (D2): el botón del aviso mide al menos 44×44 px en móvil (36 px
+ * de alto desde `sm`), como el resto de objetivos táctiles.
+ */
+const RESERVED_ACTION_CLASS = '!min-h-11 !min-w-11 !px-3 sm:!min-h-9';
+
 /** Clave de un «Traer a esta cita» en curso. */
 export function claimKey(appointmentId: string, planItemId: string): string {
   return `${appointmentId}:${planItemId}`;
@@ -84,7 +109,9 @@ export function usePatientFlow(token: string, onChanged: () => void): PatientFlo
       await claimPlanItem(token, appointmentId, item.planItemId);
       // Revisión M4: el aviso de «Llegó» ya no hace falta (se trajo desde el
       // toast o desde el panel).
-      toast.dismiss(reservedToastId(appointmentId, item.planItemId));
+      const toastId = reservedToastId(appointmentId, item.planItemId);
+      toast.dismiss(toastId);
+      openReservedToasts.delete(toastId);
       toast.success(reservationCopy.claimed(reservedItemLabel(item)));
       return true;
     } catch (err) {
@@ -115,14 +142,32 @@ export function usePatientFlow(token: string, onChanged: () => void): PatientFlo
       // DX-273: el tratamiento sigue reservado en otra cita. Aviso que no
       // bloquea y espera (lleva acción); el panel «En clínica» lo repite.
       if (action === 'ARRIVE') {
+        // Con un diálogo modal abierto (p. ej. el detalle de la cita) el
+        // toast no recibiría toques (QA D1): solo informa, sin acción, y
+        // remite a «En clínica», que sí la tiene.
+        const inModal = modalOpen();
         for (const item of reserved) {
+          const id = reservedToastId(appointmentId, item.planItemId);
+          if (inModal) {
+            toast.warning(reservedItemLabel(item), {
+              id,
+              description: `${reservedElsewhereMessage(item)} ${reservationCopy.claimFromPanel}`,
+            });
+            continue;
+          }
+          openReservedToasts.add(id);
           toast.warning(reservedItemLabel(item), {
-            id: reservedToastId(appointmentId, item.planItemId),
+            id,
             description: reservedElsewhereMessage(item),
             duration: Infinity,
+            onDismiss: () => openReservedToasts.delete(id),
+            classNames: { actionButton: RESERVED_ACTION_CLASS },
             action: {
               label: reservationCopy.claim,
-              onClick: () => void claim(appointmentId, item),
+              onClick: () => {
+                openReservedToasts.delete(id);
+                void claim(appointmentId, item);
+              },
             },
           });
         }

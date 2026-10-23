@@ -2,7 +2,7 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { toast } from 'sonner';
 import { InClinicPanel } from './in-clinic-panel';
-import { PatientFlowActions, usePatientFlow } from './patient-flow-actions';
+import { PatientFlowActions, dismissReservedToasts, usePatientFlow } from './patient-flow-actions';
 import { useInClinic } from './use-in-clinic';
 import { getInClinic, type InClinicItem, type InClinicView } from '@/lib/appointments/patient-flow';
 import { updateAppointment } from '@/lib/appointments/appointments-api';
@@ -174,5 +174,51 @@ describe('Tratamiento reservado en otra cita (DX-273)', () => {
     const { action } = (toast.warning as jest.Mock).mock.calls[0][1] as { action: { onClick: () => void } };
     action.onClick();
     await waitFor(() => expect(mockedClaim).toHaveBeenCalledWith('T', 'a1', 'i1'));
+  });
+
+  describe('QA a 390 px (D1, D2)', () => {
+    function Arrive() {
+      const runner = usePatientFlow('T', () => undefined);
+      return (
+        <PatientFlowActions appointmentId="a1" status="SCHEDULED" role="RECEPTION" isToday patientName="Ana" runner={runner} />
+      );
+    }
+
+    it('el botón del aviso mide 44 px en móvil (D2)', async () => {
+      mockedUpdate.mockResolvedValue({ id: 'a1', planItemsReservedElsewhere: [reserved] } as never);
+      render(<Arrive />);
+      await userEvent.click(screen.getByRole('button', { name: 'Llegó' }));
+      const options = (toast.warning as jest.Mock).mock.calls[0][1] as { classNames: { actionButton: string } };
+      expect(options.classNames.actionButton).toMatch(/!min-h-11/);
+      expect(options.classNames.actionButton).toMatch(/!min-w-11/);
+    });
+
+    it('al abrir «En clínica» se cierran los avisos abiertos (D1)', async () => {
+      mockedUpdate.mockResolvedValue({ id: 'a1', planItemsReservedElsewhere: [reserved] } as never);
+      render(<Arrive />);
+      await userEvent.click(screen.getByRole('button', { name: 'Llegó' }));
+      dismissReservedToasts();
+      expect(toast.dismiss).toHaveBeenCalledWith('reserved:a1:i1');
+      (toast.dismiss as jest.Mock).mockClear();
+      dismissReservedToasts();
+      expect(toast.dismiss).not.toHaveBeenCalled();
+    });
+
+    it('con un diálogo modal abierto, el aviso solo informa y remite a «En clínica» (D1)', async () => {
+      mockedUpdate.mockResolvedValue({ id: 'a1', planItemsReservedElsewhere: [reserved] } as never);
+      const modal = document.createElement('div');
+      modal.setAttribute('role', 'dialog');
+      modal.setAttribute('data-state', 'open');
+      document.body.appendChild(modal);
+      try {
+        render(<Arrive />);
+        await userEvent.click(screen.getByRole('button', { name: 'Llegó' }));
+        const options = (toast.warning as jest.Mock).mock.calls[0][1] as { action?: unknown; description: string };
+        expect(options.action).toBeUndefined();
+        expect(options.description).toBe(`${MESSAGE} Puedes traerlo a esta cita desde «En clínica».`);
+      } finally {
+        modal.remove();
+      }
+    });
   });
 });

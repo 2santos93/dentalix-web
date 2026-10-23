@@ -16,6 +16,7 @@ export const reservationCopy = {
   claim: 'Traer a esta cita',
   claimed: (name: string) => `${name} quedó reservado en esta cita.`,
   claimError: 'No pudimos traer el tratamiento a esta cita.',
+  claimFromPanel: 'Puedes traerlo a esta cita desde «En clínica».',
 };
 
 const formatters = new Map<string, Intl.DateTimeFormat>();

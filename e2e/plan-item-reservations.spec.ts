@@ -213,10 +213,17 @@ test('390 px: el aviso en la hoja «En clínica» y «Traer a esta cita» con te
   await arrive.focus();
   await page.keyboard.press('Enter');
   await expect(page.getByText(`${s.name} llegó.`)).toBeVisible();
-  await expect(page.locator('[data-sonner-toast]').filter({ hasText: s.itemLabel })).toContainText(s.message);
+  const toast = page.locator('[data-sonner-toast]').filter({ hasText: s.itemLabel });
+  await expect(toast).toContainText(s.message);
+  // QA D2: el botón del aviso es un objetivo táctil de 44 px.
+  const toastAction = await toast.getByRole('button', { name: 'Traer a esta cita' }).boundingBox();
+  expect(toastAction?.height ?? 0).toBeGreaterThanOrEqual(44);
+  expect(toastAction?.width ?? 0).toBeGreaterThanOrEqual(44);
   await expectNoHorizontalScroll(page);
 
   await page.getByRole('button', { name: /^En clínica/ }).click();
+  // QA D1: la hoja ya ofrece la acción; el aviso no queda encima sin recibir toques.
+  await expect(toast).toHaveCount(0);
   const sheet = page.getByRole('dialog');
   const notice = sheet.getByRole('group', { name: NOTICE });
   await expect(notice).toContainText(s.message, { timeout: 10_000 });

@@ -78,6 +78,7 @@ import {
 import { Plus, ChevronLeft, ChevronRight, CalendarOff, ListTodo, NotebookPen, Armchair } from 'lucide-react';
 import { InClinicPanel, inClinicCopy } from '@/components/appointments/in-clinic-panel';
 import {
+  dismissReservedToasts,
   PatientFlowActions,
   usePatientFlow,
 } from '@/components/appointments/patient-flow-actions';
@@ -1054,7 +1055,12 @@ export function AgendaView({ token }: AgendaViewProps) {
                 aria-label={
                   inClinicTotal === null ? copy.inClinicButton : copy.inClinicButtonCount(inClinicTotal)
                 }
-                onClick={() => setInClinicOpen(true)}
+                onClick={() => {
+                  // QA DX-273 (D1): la hoja ya ofrece «Traer a esta cita»;
+                  // el toast quedaría encima sin recibir toques.
+                  dismissReservedToasts();
+                  setInClinicOpen(true);
+                }}
               >
                 <Armchair aria-hidden /> {copy.inClinicButton}
                 {inClinicTotal ? (
