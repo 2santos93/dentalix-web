@@ -97,6 +97,7 @@ export function balancesFixture(
     errorRows: 3,
     mergedRows: 1,
     preparedCount: 3,
+    addToExisting: false,
     fileTotals: [
       { currency: 'COP', rows: 4, amount: 201100.5 },
       { currency: 'USD', rows: 1, amount: 40 },
@@ -106,7 +107,7 @@ export function balancesFixture(
       { currency: 'USD', rows: 1, amount: 40 },
     ],
     imported: [],
-    progress: { processed: 0, created: 0, skipped: 0, ambiguous: 0 },
+    progress: { processed: 0, created: 0, skipped: 0, ambiguous: 0, existing: 0 },
     undoneCount: null,
     undoneTotals: [],
     canUndo: false,

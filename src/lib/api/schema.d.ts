@@ -8212,7 +8212,7 @@ export interface components {
             plan: components["schemas"]["ReceiptPlanDto"] | null;
             /** @description DX-262: saldo migrado del abono (concepto y fecha de corte); ausente o null si es a un plan */
             openingBalance?: components["schemas"]["ReceiptOpeningBalanceDto"] | null;
-            /** @description Saldo del plan tras el abono (moneda del plan); null si no se pudo calcular. */
+            /** @description Saldo tras el abono: el del plan (en su moneda) o, si el abono va a un saldo migrado (DX-262), lo que queda pendiente de ese saldo; null si no se pudo calcular. */
             planBalance: components["schemas"]["ReceiptPlanBalanceDto"] | null;
             /** @description Quién cobró. */
             cashier: components["schemas"]["ReceiptCashierDto"] | null;
@@ -8455,6 +8455,11 @@ export interface components {
              */
             openingBalance: number;
             /**
+             * @description DX-262 (QA D5): lo que queda pendiente de esos saldos migrados tras sus abonos; es lo que «incluye» el saldo
+             * @example 100000
+             */
+            openingPending: number;
+            /**
              * @description Σ abonos no anulados en esta moneda (sin convertir)
              * @example 1200000
              */
@@ -8649,6 +8654,8 @@ export interface components {
             budgeted: number;
             /** @description DX-262: saldo migrado, ya incluido en balance */
             openingBalance: number;
+            /** @description DX-262 (QA D5): lo que queda pendiente del saldo migrado */
+            openingPending: number;
             paid: number;
             balance: number;
             overdueAmount: number;
@@ -10757,6 +10764,8 @@ export interface components {
             skipped: number;
             /** @description No creados: su documento era de varios pacientes vivos (ambiguo) */
             ambiguous: number;
+            /** @description No creados: el paciente ya tenía un saldo migrado vivo en esa moneda de otro lote (QA D1) */
+            existing: number;
         };
         PatientImportBalancesDto: {
             fileName: string;
@@ -10774,6 +10783,8 @@ export interface components {
             mergedRows: number;
             /** @description Saldos a crear: uno por paciente y moneda */
             preparedCount: number;
+            /** @description «Añadir aunque ya tenga saldo migrado» marcado al subir la hoja (QA D1) */
+            addToExisting: boolean;
             /** @description Total del archivo por moneda (filas con importe y moneda legibles) */
             fileTotals: components["schemas"]["BalanceCurrencyTotalDto"][];
             /** @description Lo que se importa, por moneda (sin convertir) */
@@ -10789,15 +10800,15 @@ export interface components {
             canUndo: boolean;
         };
         /**
-         * @description MERGED (DX-262): fila de la hoja de saldos sumada a otra del mismo paciente y moneda (aviso, no error)
+         * @description MERGED (DX-262): fila de la hoja de saldos sumada a otra del mismo paciente y moneda (aviso, no error). EXISTING_BALANCE (QA D1): el paciente ya tenía un saldo migrado vivo en esa moneda y se añade otro porque se marcó «Añadir aunque ya tenga saldo migrado» (aviso, no error).
          * @enum {string}
          */
-        PatientImportIssueKind: "ERROR" | "DUPLICATE_FILE" | "DUPLICATE_EXISTING" | "MERGED";
+        PatientImportIssueKind: "ERROR" | "DUPLICATE_FILE" | "DUPLICATE_EXISTING" | "MERGED" | "EXISTING_BALANCE";
         ImportIssueDto: {
             /** @description Fila del archivo (1 = cabecera) */
             row: number;
             column: string | null;
-            /** @description MERGED (DX-262): fila de la hoja de saldos sumada a otra del mismo paciente y moneda (aviso, no error) */
+            /** @description MERGED (DX-262): fila de la hoja de saldos sumada a otra del mismo paciente y moneda (aviso, no error). EXISTING_BALANCE (QA D1): el paciente ya tenía un saldo migrado vivo en esa moneda y se añade otro porque se marcó «Añadir aunque ya tenga saldo migrado» (aviso, no error). */
             kind: components["schemas"]["PatientImportIssueKind"];
             /** @description Motivo en español */
             message: string;
@@ -20925,6 +20936,11 @@ export interface operations {
                      * @description CSV (UTF-8, Latin-1 o UTF-16; separador «,» «;» o tabulador) o .xlsx; hasta 5 MB y 10.000 filas
                      */
                     file: string;
+                    /**
+                     * @description «Añadir aunque ya tenga saldo migrado» (QA D1). Por defecto false: un paciente con un saldo migrado vivo en esa moneda de otro lote no recibe otro (error de la fila con el importe, el lote y el corte del existente).
+                     * @enum {string}
+                     */
+                    addToExisting?: "true" | "false";
                 };
             };
         };
@@ -20937,7 +20953,7 @@ export interface operations {
                     "application/json": components["schemas"]["PatientImportBatchDetailDto"];
                 };
             };
-            /** @description Archivo vacío, de otro formato, sin las columnas de documento, importe o moneda */
+            /** @description Archivo vacío, de otro formato, sin las columnas de documento, importe o moneda; addToExisting que no es true/false */
             400: {
                 headers: {
                     [name: string]: unknown;

@@ -28,6 +28,7 @@ const KIND_VARIANT: Record<ImportIssue['kind'], 'danger' | 'warning' | 'muted'> 
   DUPLICATE_FILE: 'warning',
   DUPLICATE_EXISTING: 'muted',
   MERGED: 'muted',
+  EXISTING_BALANCE: 'warning',
 };
 
 /**

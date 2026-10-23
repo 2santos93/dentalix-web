@@ -43,6 +43,7 @@ export const ISSUE_KIND_LABELS: Record<ImportIssue['kind'], string> = {
   DUPLICATE_FILE: 'Repetido en el archivo',
   DUPLICATE_EXISTING: 'Ya existe en la clínica',
   MERGED: 'Sumada a otra fila',
+  EXISTING_BALANCE: 'Ya tenía saldo migrado',
 };
 
 export const DOC_TYPE_LABELS: Record<DocType, string> = {
@@ -129,8 +130,11 @@ export function uploadBalances(
   batchId: string,
   file: File,
   onProgress?: (fraction: number) => void,
+  /** «Añadir aunque ya tenga saldo migrado» (QA D1); sin marcar, no se manda. */
+  addToExisting = false,
 ): Promise<ImportBatchDetail> {
-  return uploadImportFile<ImportBatchDetail>({ balancesOf: batchId }, fileForm(file), { token, onProgress });
+  const fields: Record<string, string> = addToExisting ? { addToExisting: 'true' } : {};
+  return uploadImportFile<ImportBatchDetail>({ balancesOf: batchId }, fileForm(file, fields), { token, onProgress });
 }
 
 export function removeBalances(token: string, batchId: string): Promise<ImportBatchDetail> {

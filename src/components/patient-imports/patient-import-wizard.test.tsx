@@ -379,15 +379,21 @@ describe('DX-262: hoja de saldos «Saldo migrado»', () => {
     await toBalances(user);
     expect(screen.getByText(/nada se guarda hasta confirmar/i)).toBeInTheDocument();
     await user.upload(screen.getByLabelText('Hoja de saldos (CSV o .xlsx)'), saldos());
-    expect(mockedBalances).toHaveBeenCalledWith('tok', 'batch-1', expect.any(File), expect.any(Function));
+    expect(mockedBalances).toHaveBeenCalledWith('tok', 'batch-1', expect.any(File), expect.any(Function), false);
 
+    // QA D4: lo que se importa y, aparte, lo de las filas con error (la
+    // diferencia con el total legible del archivo), con rótulos claros.
     const totals = await screen.findByRole('table', {
       name: 'Totales por moneda',
     });
+    expect(within(totals).getByRole('columnheader', { name: 'Total de filas válidas' })).toBeInTheDocument();
+    expect(within(totals).getByRole('columnheader', { name: 'Total en filas con error' })).toBeInTheDocument();
     const cop = within(totals).getByRole('row', { name: /COP/ });
-    expect(cop).toHaveTextContent('201.100,50');
     expect(cop).toHaveTextContent('201.000,50');
+    expect(cop).toHaveTextContent(/100,00/);
+    expect(cop).not.toHaveTextContent('201.100,50');
     expect(within(totals).getByRole('row', { name: /USD/ })).toHaveTextContent('40,00');
+    expect(screen.getByText(/importe 0, negativo o ilegible no suman/)).toBeInTheDocument();
     const issues = screen.getByRole('table', {
       name: 'Errores y avisos de la hoja de saldos',
     });
@@ -397,6 +403,73 @@ describe('DX-262: hoja de saldos «Saldo migrado»', () => {
     await user.click(screen.getByRole('button', { name: 'Continuar' }));
     expect(screen.getByRole('heading', { name: 'Confirmar la importación' })).toBeInTheDocument();
     expect(screen.getByText(/3 saldos migrados/)).toBeInTheDocument();
+  });
+
+  it('QA D1: por defecto no se añade a quien ya tiene saldo migrado; marcar la casilla vuelve a validar la misma hoja', async () => {
+    mockedBalances.mockResolvedValueOnce(
+      batchFixture({
+        balances: balancesFixture({ preparedCount: 0 }),
+        balanceIssues: [
+          {
+            row: 2,
+            column: 'numero_documento',
+            kind: 'ERROR',
+            message:
+              'Este paciente ya tiene un saldo migrado vivo de 80.000,00 COP (lote «p.csv» del 22/10/2026, corte 01/09/2026): no se crea otro. Si es otra deuda, marca «Añadir aunque ya tenga saldo migrado» y vuelve a subir la hoja.',
+            value: '555555',
+          },
+        ],
+        balanceIssuesTotal: 1,
+      }),
+    );
+    mockedBalances.mockResolvedValueOnce(
+      batchFixture({
+        balances: balancesFixture({ preparedCount: 1, addToExisting: true }),
+        balanceIssues: [
+          {
+            row: 2,
+            column: 'numero_documento',
+            kind: 'EXISTING_BALANCE',
+            message: 'Este paciente ya tiene un saldo migrado vivo de 80.000,00 COP (…): se añadirá otro porque marcaste «Añadir aunque ya tenga saldo migrado».',
+            value: '555555',
+          },
+        ],
+        balanceIssuesTotal: 1,
+      }),
+    );
+    const user = userEvent.setup();
+    await toBalances(user);
+    const add = screen.getByRole('checkbox', { name: 'Añadir aunque ya tenga saldo migrado' });
+    expect(add).not.toBeChecked();
+    const sheet = saldos();
+    await user.upload(screen.getByLabelText('Hoja de saldos (CSV o .xlsx)'), sheet);
+    expect(mockedBalances).toHaveBeenLastCalledWith('tok', 'batch-1', sheet, expect.any(Function), false);
+    expect(await screen.findByText(/no se crea otro/)).toBeInTheDocument();
+
+    await user.click(add);
+    await waitFor(() => expect(mockedBalances).toHaveBeenCalledTimes(2));
+    expect(mockedBalances).toHaveBeenLastCalledWith('tok', 'batch-1', sheet, expect.any(Function), true);
+    const issues = await screen.findByRole('table', { name: 'Errores y avisos de la hoja de saldos' });
+    expect(within(issues).getByText('Ya tenía saldo migrado')).toBeInTheDocument();
+    expect(screen.getByRole('checkbox', { name: 'Añadir aunque ya tenga saldo migrado' })).toBeChecked();
+  });
+
+  it('QA D1: el avance cuenta los saldos no creados porque el paciente ya tenía uno', () => {
+    render(
+      <ImportProgress
+        headingId="h"
+        onReport={jest.fn()}
+        batch={batchFixture({
+          status: 'COMPLETED',
+          balances: balancesFixture({
+            progress: { processed: 2, created: 1, skipped: 0, ambiguous: 0, existing: 1 },
+          }),
+        })}
+      />,
+    );
+    expect(
+      screen.getByText(/1 saldo no se creó: su paciente ya tenía un saldo migrado en esa moneda/),
+    ).toBeInTheDocument();
   });
 
   it('el error de la hoja sale en español junto a la subida', async () => {
@@ -489,7 +562,7 @@ describe('DX-262: hoja de saldos «Saldo migrado»', () => {
         batch={batchFixture({
           status: 'COMPLETED',
           balances: balancesFixture({
-            progress: { processed: 3, created: 1, skipped: 1, ambiguous: 1 },
+            progress: { processed: 3, created: 1, skipped: 1, ambiguous: 1, existing: 0 },
           }),
         })}
       />,
@@ -506,7 +579,7 @@ describe('DX-262: hoja de saldos «Saldo migrado»', () => {
         batch={batchFixture({
           status: 'COMPLETED',
           balances: balancesFixture({
-            progress: { processed: 3, created: 3, skipped: 0, ambiguous: 0 },
+            progress: { processed: 3, created: 3, skipped: 0, ambiguous: 0, existing: 0 },
             imported: [
               { currency: 'COP', count: 2, amount: 201000.5 },
               { currency: 'USD', count: 1, amount: 40 },

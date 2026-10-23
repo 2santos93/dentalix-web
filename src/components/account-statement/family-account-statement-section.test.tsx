@@ -18,6 +18,7 @@ const amounts = (currency: string, budgeted: number, paid: number) => ({
   currency,
   budgeted,
   openingBalance: 0,
+  openingPending: 0,
   paid,
   balance: Math.round((budgeted - paid) * 100) / 100,
   overdueAmount: 0,
@@ -112,7 +113,7 @@ describe('Estado de cuenta familiar (DX-203)', () => {
   it('DX-262 (M1): con saldo migrado, la pantalla y el documento explican que el saldo lo incluye', async () => {
     const withOpening = {
       ...family,
-      totals: [{ ...amounts('COP', 1550000.55, 550000.3), openingBalance: 50000 }],
+      totals: [{ ...amounts('COP', 1550000.55, 550000.3), openingBalance: 50000, openingPending: 50000 }],
     };
     mockedGet.mockResolvedValue(withOpening);
     render(<FamilyAccountStatementSection token="tok" patientId="mother" />);

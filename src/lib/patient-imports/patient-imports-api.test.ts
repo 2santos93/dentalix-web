@@ -50,4 +50,11 @@ describe('subida de la importación (DX-107 × DX-259)', () => {
     });
     expect([...mockedUpload.mock.calls[0][1].keys()]).toEqual(['file']);
   });
+
+  it('uploadBalances (QA D1) manda «Añadir aunque ya tenga saldo migrado» antes del archivo', async () => {
+    await uploadBalances('tok', 'batch-1', file(), undefined, true);
+    const form = mockedUpload.mock.calls[0][1];
+    expect([...form.keys()]).toEqual(['addToExisting', 'file']);
+    expect(form.get('addToExisting')).toBe('true');
+  });
 });

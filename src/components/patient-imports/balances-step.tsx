@@ -43,8 +43,15 @@ export const balancesCopy = {
   errors: 'Filas con errores',
   totalsLabel: 'Totales por moneda',
   currency: 'Moneda',
-  fileTotal: 'Total del archivo',
-  importTotal: 'Se importará',
+  // QA D4: lo que se importa y, aparte, lo de las filas con error.
+  importTotal: 'Total de filas válidas',
+  errorTotal: 'Total en filas con error',
+  totalsNote:
+    'Las filas con importe 0, negativo o ilegible no suman en ninguna columna. «Total de filas válidas» es lo que se importará.',
+  // QA D1: subir dos veces la misma hoja no duplica la deuda.
+  addToExisting: 'Añadir aunque ya tenga saldo migrado',
+  addToExistingHint:
+    'Sin marcar, un paciente que ya tiene un saldo migrado vivo en esa moneda (de otra importación) no recibe otro: su fila sale como error. Márcalo solo si es otra deuda distinta.',
   approxNote:
     'Las filas sin fecha toman la de hoy como fecha de corte y se marcan «aprox.»; las del mismo paciente y moneda se suman en un solo saldo.',
   issuesLabel: 'Errores y avisos de la hoja de saldos',
@@ -79,6 +86,9 @@ export function BalancesStep({ token, headingId, batch, onBatch, onBack, onConti
   const [error, setError] = React.useState<string | null>(null);
   const [removing, setRemoving] = React.useState(false);
   const sheet = batch.balances;
+  const [addToExisting, setAddToExisting] = React.useState(sheet?.addToExisting ?? false);
+  // La última hoja elegida: cambiar la casilla la vuelve a validar.
+  const lastFile = React.useRef<File | null>(null);
 
   async function onTemplate() {
     try {
@@ -90,8 +100,9 @@ export function BalancesStep({ token, headingId, batch, onBatch, onBack, onConti
     }
   }
 
-  async function onFile(chosen: File | undefined) {
+  async function onFile(chosen: File | undefined, add = addToExisting) {
     if (!chosen) return;
+    lastFile.current = chosen;
     setError(null);
     if (chosen.size > MAX_IMPORT_BYTES) {
       setError(balancesCopy.tooBig);
@@ -101,7 +112,7 @@ export function BalancesStep({ token, headingId, batch, onBatch, onBack, onConti
     setBusy(true);
     try {
       setUploaded(0);
-      onBatch(await uploadBalances(token, batch.id, chosen, setUploaded));
+      onBatch(await uploadBalances(token, batch.id, chosen, setUploaded, add));
     } catch (err) {
       setError(apiErrorMessage(err, balancesCopy.error));
     } finally {
@@ -155,6 +166,27 @@ export function BalancesStep({ token, headingId, batch, onBatch, onBack, onConti
         className="sr-only"
         onChange={(e) => void onFile(e.target.files?.[0])}
       />
+      <div className="flex flex-col gap-1">
+        <label htmlFor={`${id}-add`} className="flex min-h-11 items-center gap-2 text-sm text-ink md:min-h-0">
+          <input
+            id={`${id}-add`}
+            type="checkbox"
+            checked={addToExisting}
+            disabled={busy}
+            aria-describedby={`${id}-add-hint`}
+            onChange={(e) => {
+              const next = e.target.checked;
+              setAddToExisting(next);
+              if (lastFile.current) void onFile(lastFile.current, next);
+            }}
+            className="size-4 accent-primary"
+          />
+          {balancesCopy.addToExisting}
+        </label>
+        <p id={`${id}-add-hint`} className="max-w-prose text-xs text-muted">
+          {balancesCopy.addToExistingHint}
+        </p>
+      </div>
       <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
         <Button
           type="button"
@@ -223,6 +255,7 @@ export function BalancesStep({ token, headingId, batch, onBatch, onBack, onConti
             ))}
           </dl>
           <CurrencyTotalsTable fileTotals={sheet.fileTotals} validTotals={sheet.validTotals} />
+          <p className="max-w-prose text-sm text-muted">{balancesCopy.totalsNote}</p>
           <p className="max-w-prose text-sm text-muted">{balancesCopy.approxNote}</p>
           {batch.balanceIssuesTotal > 0 ? (
             <div className="flex flex-col gap-3">
@@ -265,7 +298,10 @@ export function BalancesStep({ token, headingId, batch, onBatch, onBack, onConti
   );
 }
 
-/** Total del archivo y lo que se importa, por moneda (nunca se mezclan). */
+/**
+ * Lo que se importa y lo que traen las filas con error, por moneda (nunca se
+ * mezclan). Las dos columnas suman el total legible del archivo (QA D4).
+ */
 export function CurrencyTotalsTable({
   fileTotals,
   validTotals,
@@ -283,8 +319,8 @@ export function CurrencyTotalsTable({
         <TableHeader>
           <TableRow>
             <TableHead>{balancesCopy.currency}</TableHead>
-            <TableHead className="text-right">{balancesCopy.fileTotal}</TableHead>
             <TableHead className="text-right">{balancesCopy.importTotal}</TableHead>
+            <TableHead className="text-right">{balancesCopy.errorTotal}</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
@@ -293,11 +329,14 @@ export function CurrencyTotalsTable({
               <TableCell data-label={balancesCopy.currency} className="font-medium">
                 {currency}
               </TableCell>
-              <TableCell data-label={balancesCopy.fileTotal} className="tabular-nums sm:text-right">
-                {formatCurrency(amountOf(fileTotals, currency), currency)}
-              </TableCell>
               <TableCell data-label={balancesCopy.importTotal} className="tabular-nums sm:text-right">
                 {formatCurrency(amountOf(validTotals, currency), currency)}
+              </TableCell>
+              <TableCell data-label={balancesCopy.errorTotal} className="tabular-nums sm:text-right">
+                {formatCurrency(
+                  Math.max(0, Math.round((amountOf(fileTotals, currency) - amountOf(validTotals, currency)) * 100) / 100),
+                  currency,
+                )}
               </TableCell>
             </TableRow>
           ))}

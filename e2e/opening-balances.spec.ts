@@ -107,7 +107,10 @@ for (const viewport of [
     });
     const totals = page.getByRole('table', { name: 'Totales por moneda' });
     await expect(totals).toBeVisible({ timeout: 30_000 });
-    await expect(totals.getByRole('row', { name: /COP/ })).toContainText('200.100,50');
+    // QA D4: lo válido y, aparte, lo de las filas con error (el documento
+    // inexistente: 100 COP; el importe negativo no suma en ninguna).
+    await expect(totals.getByRole('columnheader', { name: 'Total de filas válidas' })).toHaveCount(1);
+    await expect(totals.getByRole('row', { name: /COP/ })).toContainText('100,00');
     await expect(totals.getByRole('row', { name: /COP/ })).toContainText('200.000,50');
     await expect(totals.getByRole('row', { name: /USD/ })).toContainText('40,00');
     const issues = page.getByRole('table', { name: 'Errores y avisos de la hoja de saldos' });

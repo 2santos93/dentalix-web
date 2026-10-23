@@ -19,6 +19,10 @@ import { expectNoHorizontalScroll, expectNoHorizontalScrollIn } from './support/
  *   4. Retirar los saldos del primer lote: 409 claro (tiene abonos vivos).
  *      Los del lote de I2 (sin abonos) sí se retiran.
  *
+ * QA D1: la hoja de I2 vuelve a traer deuda en COP para un paciente que ya
+ * tiene un saldo migrado en COP: el dry-run no lo crea hasta marcar «Añadir
+ * aunque ya tenga saldo migrado».
+ *
  * Requiere la API con worker (APP_ROLE=all) y la demo sembrada.
  */
 const DEMO_SUBDOMAIN = process.env.E2E_DEMO_SUBDOMAIN ?? 'demo';
@@ -128,6 +132,17 @@ for (const viewport of [
       `saldos-ajuste-${viewport.name}.csv`,
       `numero_documento;importe;moneda;fecha_antiguedad;concepto\n${doc};25.000;COP;;Ajuste de cartera\n`,
     );
+    // QA D1: ya tiene un saldo migrado en COP del primer lote: por defecto no
+    // se crea otro, y la fila dice cuál. Es otra deuda: se marca la casilla y
+    // la misma hoja se vuelve a validar.
+    const balanceIssues = page.getByRole('table', { name: 'Errores y avisos de la hoja de saldos' });
+    await expect(balanceIssues).toContainText(
+      new RegExp(`ya tiene un saldo migrado vivo de 100\\.000,00\\sCOP \\(lote «${firstFile.replace(/[.]/g, '\\.')}» del \\d{2}/\\d{2}/\\d{4}`),
+    );
+    await expect(balanceIssues).toContainText('no se crea otro');
+    await page.getByRole('checkbox', { name: 'Añadir aunque ya tenga saldo migrado' }).check();
+    await expect(balanceIssues).toContainText('se añadirá otro', { timeout: 30_000 });
+    await expect(balanceIssues).toContainText('Ya tenía saldo migrado');
     await expectNoHorizontalScroll(page);
     await page.getByRole('button', { name: 'Continuar', exact: true }).click();
     const confirmOnlyBalances = page.getByRole('button', { name: 'Importar 1 saldo migrado' });

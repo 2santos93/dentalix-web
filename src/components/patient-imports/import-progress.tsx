@@ -29,6 +29,8 @@ const copy = {
   balancesImported: 'Importado por moneda:',
   balancesSkipped: (n: number) =>
     `${n.toLocaleString('es-CO')} ${n === 1 ? 'saldo no se creó' : 'saldos no se crearon'}: su paciente no existía al importar.`,
+  balancesExisting: (n: number) =>
+    `${n.toLocaleString('es-CO')} ${n === 1 ? 'saldo no se creó' : 'saldos no se crearon'}: su paciente ya tenía un saldo migrado en esa moneda de otra importación.`,
   balancesAmbiguous: (n: number) =>
     `${n.toLocaleString('es-CO')} ${n === 1 ? 'saldo no se creó' : 'saldos no se crearon'}: su documento es de varios pacientes. Corrige las fichas repetidas.`,
   consent: 'Recuerda pedir la autorización de datos (Ley 1581) a los pacientes importados: su ficha la marca pendiente.',
@@ -102,6 +104,9 @@ export function ImportProgress({
           ) : null}
           {batch.balances.progress.skipped > 0 ? (
             <p className="text-warning">{copy.balancesSkipped(batch.balances.progress.skipped)}</p>
+          ) : null}
+          {batch.balances.progress.existing > 0 ? (
+            <p className="text-warning">{copy.balancesExisting(batch.balances.progress.existing)}</p>
           ) : null}
           {batch.balances.progress.ambiguous > 0 ? (
             <p className="text-warning">{copy.balancesAmbiguous(batch.balances.progress.ambiguous)}</p>
