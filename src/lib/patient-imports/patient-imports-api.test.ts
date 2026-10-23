@@ -1,4 +1,4 @@
-import { inspectFile, validateImport } from './patient-imports-api';
+import { inspectFile, uploadBalances, validateImport } from './patient-imports-api';
 import { uploadImportFile } from './import-upload';
 
 jest.mock('./import-upload', () => ({ uploadImportFile: jest.fn() }));
@@ -39,5 +39,15 @@ describe('subida de la importación (DX-107 × DX-259)', () => {
     await validateImport('tok', file(), {}, null);
     const form = mockedUpload.mock.calls[0][1];
     expect([...form.keys()]).toEqual(['mapping', 'file']);
+  });
+
+  it('uploadBalances (DX-262) sube la hoja de saldos por la ruta del lote', async () => {
+    const onProgress = jest.fn();
+    await uploadBalances('tok', 'batch-1', file(), onProgress);
+    expect(mockedUpload).toHaveBeenCalledWith({ balancesOf: 'batch-1' }, expect.any(FormData), {
+      token: 'tok',
+      onProgress,
+    });
+    expect([...mockedUpload.mock.calls[0][1].keys()]).toEqual(['file']);
   });
 });

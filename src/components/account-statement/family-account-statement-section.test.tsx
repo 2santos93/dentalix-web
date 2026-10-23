@@ -17,6 +17,7 @@ const mockedGet = getFamilyAccountStatement as jest.MockedFunction<typeof getFam
 const amounts = (currency: string, budgeted: number, paid: number) => ({
   currency,
   budgeted,
+  openingBalance: 0,
   paid,
   balance: Math.round((budgeted - paid) * 100) / 100,
   overdueAmount: 0,

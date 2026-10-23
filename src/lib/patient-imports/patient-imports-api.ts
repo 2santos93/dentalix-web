@@ -15,6 +15,9 @@ export type DuplicateMode = components['schemas']['PatientImportDuplicateMode'];
 export type DocType = components['schemas']['DocType'];
 export type ColumnMapping = components['schemas']['ColumnMappingDto'];
 export type ImportFieldKey = keyof ColumnMapping;
+// DX-262: hoja de saldos «Saldo migrado» del lote.
+export type ImportBalances = components['schemas']['PatientImportBalancesDto'];
+export type BalanceCurrencyTotal = components['schemas']['BalanceCurrencyTotalDto'];
 
 /** Igual que la API (PATIENT_IMPORT_ROLES): solo ADMIN. */
 export function canImportPatients(role: ClinicRole | null): boolean {
@@ -39,6 +42,7 @@ export const ISSUE_KIND_LABELS: Record<ImportIssue['kind'], string> = {
   ERROR: 'Error',
   DUPLICATE_FILE: 'Repetido en el archivo',
   DUPLICATE_EXISTING: 'Ya existe en la clínica',
+  MERGED: 'Sumada a otra fila',
 };
 
 export const DOC_TYPE_LABELS: Record<DocType, string> = {
@@ -110,6 +114,31 @@ export function listImports(token: string, page = 1): Promise<ImportBatchList> {
 
 export function downloadErrorsCsv(token: string, id: string): Promise<string> {
   return apiFetchText(`/patient-imports/${id}/errors.csv`, { token });
+}
+
+export function downloadBalanceTemplate(token: string): Promise<string> {
+  return apiFetchText('/patient-imports/balances-template', { token });
+}
+
+/**
+ * Hoja de saldos del lote validado (DX-262): dry-run. No crea saldos: se
+ * importan al confirmar, después de los pacientes. Volver a subirla la reemplaza.
+ */
+export function uploadBalances(
+  token: string,
+  batchId: string,
+  file: File,
+  onProgress?: (fraction: number) => void,
+): Promise<ImportBatchDetail> {
+  return uploadImportFile<ImportBatchDetail>({ balancesOf: batchId }, fileForm(file), { token, onProgress });
+}
+
+export function removeBalances(token: string, batchId: string): Promise<ImportBatchDetail> {
+  return apiFetch<ImportBatchDetail>(`/patient-imports/${batchId}/balances`, { method: 'DELETE', token });
+}
+
+export function downloadBalanceErrorsCsv(token: string, batchId: string): Promise<string> {
+  return apiFetchText(`/patient-imports/${batchId}/balances/errors.csv`, { token });
 }
 
 export function undoImport(token: string, id: string): Promise<ImportBatchDetail> {

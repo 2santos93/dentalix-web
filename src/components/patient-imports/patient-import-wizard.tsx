@@ -26,12 +26,14 @@ import {
   type ImportBatchDetail,
   type ImportInspect,
 } from '@/lib/patient-imports/patient-imports-api';
+import { BalancesStep } from './balances-step';
 import { ColumnMappingFields } from './column-mapping-fields';
+import { formatCurrency } from '@/lib/format/currency';
 import { ImportIssuesTable } from './import-issues-table';
 import { ImportProgress } from './import-progress';
 
 export const wizardCopy = {
-  steps: ['Subir archivo', 'Columnas y validación', 'Confirmar'],
+  steps: ['Subir archivo', 'Columnas y validación', 'Saldos', 'Confirmar'],
   uploadTitle: 'Sube el archivo de pacientes',
   mappingTitle: 'Revisa las columnas y valida',
   uploadHint:
@@ -78,6 +80,8 @@ export const wizardCopy = {
   confirm: (n: number) => `Importar ${n.toLocaleString('es-CO')} ${n === 1 ? 'paciente' : 'pacientes'}`,
   confirmExistingOnly: 'Procesar los pacientes que ya existen',
   confirmError: 'No se pudo iniciar la importación. Intenta de nuevo.',
+  balancesNote: (count: number, totals: string) =>
+    `También se crearán ${count.toLocaleString('es-CO')} ${count === 1 ? 'saldo migrado' : 'saldos migrados'} (${totals}), después de los pacientes.`,
   started: 'Importación en marcha.',
   progressError: 'No se pudo actualizar el avance de la importación.',
   another: 'Importar otro archivo',
@@ -92,9 +96,9 @@ interface PatientImportWizardProps {
 }
 
 /**
- * Asistente «Importar pacientes» (DX-107) en tres pasos: subir → columnas y
- * validación (dry-run, sin escribir) → confirmar (en segundo plano, con
- * avance). El archivo vive solo en el navegador entre pasos: volver a validar
+ * Asistente «Importar pacientes» (DX-107) en cuatro pasos: subir → columnas
+ * y validación (dry-run, sin escribir) → saldos (hoja de saldos opcional,
+ * DX-262) → confirmar (en segundo plano, con avance). El archivo vive solo en el navegador entre pasos: volver a validar
  * lo sube de nuevo con el mapeo cambiado.
  */
 /**
@@ -346,7 +350,7 @@ export function PatientImportWizard({ token, onBatchChange }: PatientImportWizar
       steps={wizardCopy.steps.map((label, i) => ({ key: String(i), label }))}
       current={step}
       onStepChange={(i) => {
-        if (i === 0 || (i === 1 && inspect) || (i === 2 && dryRun?.canConfirm)) setStep(i);
+        if (i === 0 || (i === 1 && inspect) || (i >= 2 && dryRun?.canConfirm)) setStep(i);
       }}
     >
       {step === 0 ? (
@@ -430,7 +434,7 @@ export function PatientImportWizard({ token, onBatchChange }: PatientImportWizar
               onReport={() => void onReport(dryRun.id, dryRun.fileName)}
               onContinue={() => {
                 setStep(2);
-                setFocusTarget('confirm');
+                setFocusTarget('balances');
               }}
             />
           ) : null}
@@ -438,6 +442,20 @@ export function PatientImportWizard({ token, onBatchChange }: PatientImportWizar
       ) : null}
 
       {step === 2 && dryRun ? (
+        <BalancesStep
+          token={token}
+          headingId={`${id}-balances`}
+          batch={dryRun}
+          onBatch={setDryRun}
+          onBack={() => setStep(1)}
+          onContinue={() => {
+            setStep(3);
+            setFocusTarget('confirm');
+          }}
+        />
+      ) : null}
+
+      {step === 3 && dryRun ? (
         <section aria-labelledby={`${id}-confirm`} className="flex flex-col gap-5">
           <h2 id={`${id}-confirm`} tabIndex={-1} className="text-lg font-semibold text-ink focus:outline-none">
             {wizardCopy.confirmTitle}
@@ -464,10 +482,18 @@ export function PatientImportWizard({ token, onBatchChange }: PatientImportWizar
           <ul className="flex max-w-prose list-disc flex-col gap-1 pl-5 text-sm text-muted">
             <li>{wizardCopy.consentNote}</li>
             <li>{wizardCopy.backgroundNote}</li>
+            {dryRun.balances && dryRun.balances.preparedCount > 0 ? (
+              <li>
+                {wizardCopy.balancesNote(
+                  dryRun.balances.preparedCount,
+                  dryRun.balances.validTotals.map((t) => formatCurrency(t.amount, t.currency)).join(' · '),
+                )}
+              </li>
+            ) : null}
           </ul>
           {confirmError ? <InlineError variant="summary">{confirmError}</InlineError> : null}
           <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-between">
-            <Button type="button" variant="outline" onClick={() => setStep(1)} className="w-full sm:w-auto">
+            <Button type="button" variant="outline" onClick={() => setStep(2)} className="w-full sm:w-auto">
               {wizardCopy.back}
             </Button>
             <Button type="button" loading={confirming} onClick={() => void onConfirm()} className="w-full sm:w-auto">

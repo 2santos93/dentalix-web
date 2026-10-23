@@ -23,6 +23,7 @@ export function accountStatementFixture(
       {
         currency: 'COP',
         budgeted: 3000000,
+        openingBalance: 0,
         paid: 1200000,
         balance: 1800000,
         overdueCount: 1,
@@ -37,6 +38,7 @@ export function accountStatementFixture(
       {
         currency: 'USD',
         budgeted: 0,
+        openingBalance: 0,
         paid: 50,
         balance: -50,
         overdueCount: 0,
@@ -156,6 +158,7 @@ export function accountStatementFixture(
         status: 'PENDING',
       },
     ],
+    openingBalances: [],
     ...overrides,
   };
 }
