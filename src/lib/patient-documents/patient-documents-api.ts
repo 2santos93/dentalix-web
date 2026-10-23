@@ -1,5 +1,6 @@
 import { apiFetch } from '@/lib/api/client';
-import { uploadToStorage } from '@/lib/api/upload';
+import { ApiError, NetworkError } from '@/lib/api/api-error';
+import { STORAGE_UNREACHABLE_CODE, uploadToStorage } from '@/lib/api/upload';
 import type { components } from '@/lib/api/schema';
 import type { ClinicRole } from '@/lib/me/me-api';
 
@@ -168,12 +169,37 @@ export async function sha256HexOf(file: Blob): Promise<string> {
  *    notas: la API comprueba tamaño, huella y tipo por contenido y crea el
  *    documento (o responde 400 en español y lo borra).
  */
+export interface UploadPatientDocumentOptions {
+  onProgress?: (fraction: number) => void;
+  /** Cancela la subida al almacén (botón «Cancelar»). */
+  signal?: AbortSignal;
+  /** El fichero ya está en el almacén con este id: falta (o faltó) el `complete`. */
+  onStored?: (documentId: string) => void;
+  /**
+   * Revisión M-6: «Reintentar» de una subida que ya llegó al almacén. Repite
+   * primero el `complete` de ESE documento (idempotente: si la API ya creó la
+   * fila, la devuelve); solo si da 404 (el pendiente caducó o no llegó) se
+   * vuelve a subir desde el principio. Sin esto, un `complete` que creó la
+   * fila sin que llegara la respuesta acababa en 409 «ya está en la ficha».
+   */
+  resumeDocumentId?: string | null;
+}
+
 export async function uploadPatientDocument(
   token: string,
   patientId: string,
   input: UploadPatientDocumentInput,
-  opts: { onProgress?: (fraction: number) => void } = {},
+  opts: UploadPatientDocumentOptions = {},
 ): Promise<PatientDocument> {
+  if (opts.resumeDocumentId) {
+    try {
+      const doc = await completePatientDocument(token, patientId, opts.resumeDocumentId, input);
+      opts.onProgress?.(1);
+      return doc;
+    } catch (err) {
+      if (!(err instanceof ApiError && err.status === 404)) throw err;
+    }
+  }
   const { file } = input;
   const request: components['schemas']['CreatePatientDocumentUploadDto'] = {
     fileName: file.name,
@@ -187,7 +213,43 @@ export async function uploadPatientDocument(
     body: request,
   });
   // El último tramo (comprobar y crear) es rápido: la barra llega a 1 al final.
-  await uploadToStorage(ticket, file, { onProgress: (p) => opts.onProgress?.(Math.min(p, 0.99)) });
+  try {
+    await uploadToStorage(ticket, file, {
+      onProgress: (p) => opts.onProgress?.(Math.min(p, 0.99)),
+      signal: opts.signal,
+    });
+  } catch (err) {
+    throw await storageOrNetwork(err);
+  }
+  opts.onStored?.(ticket.documentId);
+  const doc = await completePatientDocument(token, patientId, ticket.documentId, input);
+  opts.onProgress?.(1);
+  return doc;
+}
+
+/**
+ * QA D1: si el almacén cortó la subida, se pregunta a la API (`/health`): si
+ * tampoco responde, el problema es la conexión de la clínica (`NetworkError`);
+ * si responde, es el almacén (el 503 tal cual).
+ */
+async function storageOrNetwork(err: unknown): Promise<unknown> {
+  if (!(err instanceof ApiError && err.code === STORAGE_UNREACHABLE_CODE)) return err;
+  try {
+    await apiFetch<unknown>('/health');
+    return err;
+  } catch (probe) {
+    return probe instanceof NetworkError ? probe : err;
+  }
+}
+
+/** `POST …/documents/:id/complete` con los campos del formulario. */
+function completePatientDocument(
+  token: string,
+  patientId: string,
+  documentId: string,
+  input: UploadPatientDocumentInput,
+): Promise<PatientDocument> {
+  const { file } = input;
   const notes = input.notes?.trim();
   const fields: components['schemas']['CompletePatientDocumentUploadDto'] = {
     category: input.category,
@@ -197,12 +259,11 @@ export async function uploadPatientDocument(
     ...(input.toothNumbers && input.toothNumbers.length > 0 ? { toothNumbers: input.toothNumbers } : {}),
     ...(notes ? { notes } : {}),
   };
-  const doc = await apiFetch<PatientDocument>(
-    documentsPath(patientId, `/${encodeURIComponent(ticket.documentId)}/complete`),
-    { method: 'POST', token, body: fields },
-  );
-  opts.onProgress?.(1);
-  return doc;
+  return apiFetch<PatientDocument>(documentsPath(patientId, `/${encodeURIComponent(documentId)}/complete`), {
+    method: 'POST',
+    token,
+    body: fields,
+  });
 }
 
 /**

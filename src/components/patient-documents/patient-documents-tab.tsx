@@ -2,6 +2,7 @@
 import * as React from 'react';
 import { useEffect, useId, useRef, useState } from 'react';
 import { Download, Eye, FileText, Upload } from 'lucide-react';
+import { ApiError } from '@/lib/api/api-error';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { getTokenRole, getTokenUserId } from '@/lib/auth/token-role';
 import { formatCivilDate, formatDateTime } from '@/lib/format/date';
@@ -57,6 +58,7 @@ const copy = {
   upload: 'Subir',
   remove: 'Quitar',
   retry: 'Reintentar',
+  cancel: 'Cancelar',
   uploaded: 'Subido',
   failed: 'Error',
   converting: 'Convirtiendo la foto HEIC a JPG…',
@@ -98,6 +100,18 @@ const copy = {
   downloadError: 'No pudimos descargar el documento.',
 };
 
+/**
+ * QA D3: errores que no se arreglan reintentando el mismo fichero: duplicado
+ * (409), más de 20 MB (413) y contenido no admitido (400 con
+ * `DOCUMENT_CONTENT_REJECTED`). Un 400 del formulario sí se corrige y reintenta.
+ */
+function isDefinitiveUploadError(err: unknown): boolean {
+  return (
+    err instanceof ApiError &&
+    (err.status === 409 || err.status === 413 || err.code === 'DOCUMENT_CONTENT_REJECTED')
+  );
+}
+
 type QueueStatus = 'converting' | 'ready' | 'waiting' | 'uploading' | 'done' | 'error';
 
 /** Subidas simultáneas como mucho; el resto queda «En espera». */
@@ -113,8 +127,16 @@ interface QueueItem {
   status: QueueStatus;
   progress: number;
   error: string | null;
-  /** Un fallo de la subida se reintenta; uno del pre-chequeo, no. */
+  /**
+   * Un fallo de la subida se reintenta; uno del pre-chequeo o uno definitivo
+   * (duplicado, contenido no admitido, más de 20 MB: QA D3), no.
+   */
   retryable: boolean;
+  /**
+   * El fichero ya llegó al almacén con este id (falta o faltó el `complete`):
+   * «Reintentar» repite primero ese `complete` (revisión M-6).
+   */
+  storedDocumentId: string | null;
   /** El campo de dientes tiene un código no válido sin confirmar: no se sube. */
   teethInvalid: boolean;
 }
@@ -204,6 +226,8 @@ export function PatientDocumentsTab({
   const [downloading, setDownloading] = useState<ReadonlySet<string>>(new Set());
   const [announcement, setAnnouncement] = useState('');
   const [runLimited] = useState(() => createLimiter(MAX_PARALLEL_UPLOADS));
+  /** El `AbortController` de cada subida en curso, para «Cancelar» (QA D2). */
+  const uploadControllers = useRef(new Map<string, AbortController>());
 
   const pending = queue.some((item) => item.status !== 'done');
   const inFlight = queue.some((item) => item.status === 'uploading' || item.status === 'waiting');
@@ -284,6 +308,7 @@ export function PatientDocumentsTab({
         progress: 0,
         error: problem,
         retryable: false,
+        storedDocumentId: null,
         teethInvalid: false,
       };
     });
@@ -301,6 +326,8 @@ export function PatientDocumentsTab({
     if (item.teethInvalid) return;
     const name = item.file.name;
     updateItem(item.key, { status: 'waiting', progress: 0, error: null });
+    const controller = new AbortController();
+    uploadControllers.current.set(item.key, controller);
     try {
       const doc = await runLimited(() => {
         updateItem(item.key, { status: 'uploading' });
@@ -314,17 +341,32 @@ export function PatientDocumentsTab({
             toothNumbers: item.teeth,
             notes: item.notes,
           },
-          { onProgress: (progress) => updateItem(item.key, { progress }) },
+          {
+            onProgress: (progress) => updateItem(item.key, { progress }),
+            signal: controller.signal,
+            resumeDocumentId: item.storedDocumentId,
+            onStored: (documentId) => updateItem(item.key, { storedDocumentId: documentId }),
+          },
         );
       });
       updateItem(item.key, { status: 'done', progress: 1 });
       setAnnouncement(copy.announceDone(name));
       if (matchesFilters(doc)) setDocs((prev) => [doc, ...prev.filter((d) => d.id !== doc.id)]);
     } catch (err) {
+      if (controller.signal.aborted) {
+        // «Cancelar» (QA D2): la fila vuelve a estar lista, sin error.
+        updateItem(item.key, { status: 'ready', progress: 0, error: null });
+        return;
+      }
       const reason = apiErrorMessage(err, { fallback: copy.uploadError, byStatus: { 503: copy.storageBusy } });
-      updateItem(item.key, { status: 'error', error: reason, retryable: true });
+      const retryable = !isDefinitiveUploadError(err);
+      updateItem(item.key, { status: 'error', error: reason, retryable });
       setAnnouncement(copy.announceError(name));
       // El toast sobrevive aunque la fila no esté a la vista (otra pestaña).
+      if (!retryable) {
+        notifyError(copy.uploadFailedToast(name, reason));
+        return;
+      }
       notifyError(copy.uploadFailedToast(name, reason), {
         onRetry: () => {
           // La fila de ahora, no la del fallo: la categoría o los dientes pudieron
@@ -333,6 +375,8 @@ export function PatientDocumentsTab({
           if (current) void upload(current);
         },
       });
+    } finally {
+      if (uploadControllers.current.get(item.key) === controller) uploadControllers.current.delete(item.key);
     }
   }
 
@@ -479,6 +523,18 @@ export function PatientDocumentsTab({
             >
               <Upload aria-hidden />
               {copy.upload}
+              <span className="sr-only">{copy.fileFor(name)}</span>
+            </Button>
+          ) : null}
+          {item.status === 'uploading' ? (
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="max-sm:min-h-11"
+              onClick={() => uploadControllers.current.get(item.key)?.abort()}
+            >
+              {copy.cancel}
               <span className="sr-only">{copy.fileFor(name)}</span>
             </Button>
           ) : null}
