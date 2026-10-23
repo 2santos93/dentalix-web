@@ -2,14 +2,7 @@
 import * as React from 'react';
 import { Download, FileSpreadsheet, Trash2, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from '@/components/ui/table';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { InlineError } from '@/components/errors/inline-error';
 import { notifyError } from '@/components/errors/notify';
 import { apiErrorMessage } from '@/lib/api/error-message';
@@ -30,8 +23,7 @@ import { ImportIssuesTable } from './import-issues-table';
 
 export const balancesCopy = {
   title: 'Saldos de los pacientes (opcional)',
-  hint:
-    'Si tus pacientes te deben dinero del programa anterior, sube una hoja con su número de documento, el importe, la moneda y, si la tienes, la fecha desde la que deben. Cada paciente tendrá un «Saldo migrado» en su estado de cuenta y en la cartera. Nada se guarda hasta confirmar la importación.',
+  hint: 'Si tus pacientes te deben dinero del programa anterior, sube una hoja con su número de documento, el importe, la moneda y, si la tienes, la fecha desde la que deben. Cada paciente tendrá un «Saldo migrado» en su estado de cuenta y en la cartera. Nada se guarda hasta confirmar la importación.',
   fileLabel: 'Hoja de saldos (CSV o .xlsx)',
   choose: 'Subir hoja de saldos',
   other: 'Subir otra hoja',
@@ -44,8 +36,7 @@ export const balancesCopy = {
   error: 'No se pudo validar la hoja de saldos. Intenta de nuevo.',
   remove: 'Quitar la hoja de saldos',
   removeError: 'No se pudo quitar la hoja de saldos.',
-  summary: (name: string, rows: number) =>
-    `${name} · ${rows.toLocaleString('es-CO')} ${rows === 1 ? 'fila' : 'filas'}`,
+  summary: (name: string, rows: number) => `${name} · ${rows.toLocaleString('es-CO')} ${rows === 1 ? 'fila' : 'filas'}`,
   rows: 'Filas de la hoja',
   toImport: 'Saldos a crear',
   merged: 'Filas sumadas',
@@ -93,7 +84,9 @@ export function BalancesStep({ token, headingId, batch, onBatch, onBack, onConti
     try {
       saveCsv(await downloadBalanceTemplate(token), 'plantilla-saldos.csv');
     } catch (err) {
-      notifyError(apiErrorMessage(err, balancesCopy.templateError), { onRetry: () => void onTemplate() });
+      notifyError(apiErrorMessage(err, balancesCopy.templateError), {
+        onRetry: () => void onTemplate(),
+      });
     }
   }
 
@@ -125,7 +118,9 @@ export function BalancesStep({ token, headingId, batch, onBatch, onBack, onConti
     try {
       onBatch(await removeBalances(token, batch.id));
     } catch (err) {
-      notifyError(apiErrorMessage(err, balancesCopy.removeError), { onRetry: () => void onRemove() });
+      notifyError(apiErrorMessage(err, balancesCopy.removeError), {
+        onRetry: () => void onRemove(),
+      });
     } finally {
       setRemoving(false);
     }
@@ -135,7 +130,9 @@ export function BalancesStep({ token, headingId, batch, onBatch, onBack, onConti
     try {
       saveCsv(await downloadBalanceErrorsCsv(token, batch.id), errorsFileName(fileName));
     } catch (err) {
-      notifyError(apiErrorMessage(err, balancesCopy.reportError), { onRetry: () => void onReport(fileName) });
+      notifyError(apiErrorMessage(err, balancesCopy.reportError), {
+        onRetry: () => void onReport(fileName),
+      });
     }
   }
 
@@ -256,7 +253,8 @@ export function BalancesStep({ token, headingId, batch, onBatch, onBack, onConti
         <Button
           type="button"
           variant={sheet ? 'default' : 'secondary'}
-          disabled={busy}
+          // Sin pacientes ni saldos que importar, no hay nada que confirmar.
+          disabled={busy || !batch.canConfirm}
           onClick={onContinue}
           className="w-full sm:w-auto"
         >

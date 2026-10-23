@@ -67,6 +67,10 @@ export const wizardCopy = {
   previewNew: 'Nuevo',
   previewExisting: 'Ya existe',
   nothingToImport: 'No hay filas que importar: corrige el archivo y vuelve a subirlo.',
+  // DX-262 (I2): sin pacientes nuevos, aún se pueden importar sus saldos.
+  onlyBalances: 'No hay pacientes nuevos: puedes importar solo sus saldos en el paso siguiente.',
+  confirmBalances: (n: number) =>
+    `Importar ${n.toLocaleString('es-CO')} ${n === 1 ? 'saldo migrado' : 'saldos migrados'}`,
   continue: 'Continuar',
   back: 'Atrás',
   confirmTitle: 'Confirmar la importación',
@@ -88,6 +92,16 @@ export const wizardCopy = {
 };
 
 const POLL_MS = 1500;
+/** Lo que vale un dry-run sin confirmar (VALIDATION_TTL_HOURS de la API). */
+const VALIDATION_TTL_MS = 24 * 3_600_000;
+
+/**
+ * Lote validado y vigente (DX-262, I2): aunque no traiga pacientes que
+ * importar, se le puede añadir la hoja de saldos.
+ */
+export function isEditableDryRun(batch: ImportBatchDetail, now = Date.now()): boolean {
+  return batch.status === 'VALIDATED' && now < new Date(batch.createdAt).getTime() + VALIDATION_TTL_MS;
+}
 
 interface PatientImportWizardProps {
   token: string;
@@ -215,7 +229,9 @@ export function PatientImportWizard({ token, onBatchChange }: PatientImportWizar
         if (cancelled) return;
         // Un aviso por racha de fallos, no uno cada 1,5 s.
         if (!pollFailed.current) {
-          pollToast.current = notifyError(apiErrorMessage(err, wizardCopy.progressError), { onRetry: retryPoll });
+          pollToast.current = notifyError(apiErrorMessage(err, wizardCopy.progressError), {
+            onRetry: retryPoll,
+          });
         }
         pollFailed.current = true;
       } finally {
@@ -247,7 +263,9 @@ export function PatientImportWizard({ token, onBatchChange }: PatientImportWizar
     try {
       saveCsv(await downloadTemplate(token), 'plantilla-pacientes.csv');
     } catch (err) {
-      notifyError(apiErrorMessage(err, wizardCopy.templateError), { onRetry: () => void onTemplate() });
+      notifyError(apiErrorMessage(err, wizardCopy.templateError), {
+        onRetry: () => void onTemplate(),
+      });
     }
   }
 
@@ -350,7 +368,13 @@ export function PatientImportWizard({ token, onBatchChange }: PatientImportWizar
       steps={wizardCopy.steps.map((label, i) => ({ key: String(i), label }))}
       current={step}
       onStepChange={(i) => {
-        if (i === 0 || (i === 1 && inspect) || (i >= 2 && dryRun?.canConfirm)) setStep(i);
+        if (
+          i === 0 ||
+          (i === 1 && inspect) ||
+          (i === 2 && dryRun && isEditableDryRun(dryRun)) ||
+          (i === 3 && dryRun?.canConfirm)
+        )
+          setStep(i);
       }}
     >
       {step === 0 ? (
@@ -497,7 +521,11 @@ export function PatientImportWizard({ token, onBatchChange }: PatientImportWizar
               {wizardCopy.back}
             </Button>
             <Button type="button" loading={confirming} onClick={() => void onConfirm()} className="w-full sm:w-auto">
-              {dryRun.totals.validRows > 0 ? wizardCopy.confirm(dryRun.totals.validRows) : wizardCopy.confirmExistingOnly}
+              {dryRun.totals.validRows > 0
+                ? wizardCopy.confirm(dryRun.totals.validRows)
+                : dryRun.progress.preparedRows === 0 && (dryRun.balances?.preparedCount ?? 0) > 0
+                  ? wizardCopy.confirmBalances(dryRun.balances?.preparedCount ?? 0)
+                  : wizardCopy.confirmExistingOnly}
             </Button>
           </div>
         </section>
@@ -572,7 +600,10 @@ function DryRunResult({
                 <span className="min-w-0 break-words text-ink">
                   <span className="tabular-nums text-muted">{row.rowNumber} · </span>
                   {row.data.firstName} {row.data.lastName}
-                  <span className="text-muted"> · {row.data.docType} {row.data.docNumber}</span>
+                  <span className="text-muted">
+                    {' '}
+                    · {row.data.docType} {row.data.docNumber}
+                  </span>
                 </span>
                 <span className="text-xs text-muted">
                   {row.status === 'NEW' ? wizardCopy.previewNew : wizardCopy.previewExisting}
@@ -582,11 +613,14 @@ function DryRunResult({
           </ul>
         </div>
       ) : null}
-      {batch.canConfirm ? (
-        <div>
-          <Button type="button" onClick={onContinue} className="w-full sm:w-auto">
-            {wizardCopy.continue}
-          </Button>
+      {batch.canConfirm || isEditableDryRun(batch) ? (
+        <div className="flex flex-col gap-2">
+          {!batch.canConfirm ? <p className="text-sm text-muted">{wizardCopy.onlyBalances}</p> : null}
+          <div>
+            <Button type="button" onClick={onContinue} className="w-full sm:w-auto">
+              {wizardCopy.continue}
+            </Button>
+          </div>
         </div>
       ) : (
         <InlineError variant="summary">{wizardCopy.nothingToImport}</InlineError>

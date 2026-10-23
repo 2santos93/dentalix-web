@@ -141,6 +141,14 @@ export function downloadBalanceErrorsCsv(token: string, batchId: string): Promis
   return apiFetchText(`/patient-imports/${batchId}/balances/errors.csv`, { token });
 }
 
+/**
+ * Retira SOLO los saldos migrados del lote (DX-262), aunque sus pacientes ya
+ * tengan actividad; 409 si alguno tiene abonos vivos.
+ */
+export function undoBalances(token: string, id: string): Promise<ImportBatchDetail> {
+  return apiFetch<ImportBatchDetail>(`/patient-imports/${id}/balances/undo`, { method: 'POST', token });
+}
+
 export function undoImport(token: string, id: string): Promise<ImportBatchDetail> {
   return apiFetch<ImportBatchDetail>(`/patient-imports/${id}/undo`, { method: 'POST', token });
 }
