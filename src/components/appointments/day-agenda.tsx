@@ -8,6 +8,7 @@ import type { Appointment, AppointmentStatus } from '@/lib/appointments/appointm
 import {
   ConfirmationBadge,
   StatusBadge,
+  STATUS_LABELS,
   STATUS_BADGE_CLASSES,
   formatTimeRange,
   patientLabel,
@@ -29,16 +30,6 @@ const copy = {
   colStatus: 'Estado',
   reasonFallback: '—',
   heading: 'Agenda del día',
-  statusLabels: {
-    SCHEDULED: 'Agendada',
-    CONFIRMED: 'Confirmada',
-    COMPLETED: 'Completada',
-    CANCELLED: 'Cancelada',
-    NO_SHOW: 'No asistió',
-    ARRIVED: 'En espera',
-    IN_CHAIR: 'En sillón',
-    READY_FOR_CHECKOUT: 'Listo para cobrar',
-  } satisfies Record<AppointmentStatus, string>,
   /** `aria-label` for the status <select>, filled in with the row's time range — e.g. "Estado de la cita de 09:00–09:30". */
   statusSelectLabel: (timeRange: string) => `Estado de la cita de ${timeRange}`,
   updatingStatus: 'Actualizando…',
@@ -135,7 +126,7 @@ function StatusSelect({ appointment, timeRange, onStatusChange, updating }: Stat
         >
           {statusOptionsFor(appointment.status).map((status) => (
             <option key={status} value={status} className="bg-surface font-normal text-ink">
-              {copy.statusLabels[status]}
+              {STATUS_LABELS[status]}
             </option>
           ))}
         </select>
@@ -305,7 +296,7 @@ export function DayAgenda({
         {sorted.map((appointment) => {
           const timeRange = formatTimeRange(appointment.start, appointment.end);
           const updating = updatingId === appointment.id;
-          const label = `${timeRange} · ${patientLabel(appointment, patientNames)} · ${copy.statusLabels[appointment.status]}`;
+          const label = `${timeRange} · ${patientLabel(appointment, patientNames)} · ${STATUS_LABELS[appointment.status]}`;
           return (
             <li
               key={appointment.id}

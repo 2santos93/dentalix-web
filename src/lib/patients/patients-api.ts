@@ -33,6 +33,8 @@ export type UpdatePatientInput = components['schemas']['UpdatePatientDto'];
  * `GET /patients/:id` y `GET /appointments`). Nunca trae el n.º de afiliado.
  */
 export type CoverageSummary = components['schemas']['CoverageSummaryDto'];
+/** DX-105: resumen del convenio asignado (estado + nombres). */
+export type AgreementSummary = components['schemas']['AgreementSummaryDto'];
 
 /**
  * `GET /patients` (and `GET /patients/:id`) return a plain TS interface on
@@ -75,6 +77,8 @@ export interface Patient {
   insurerEps?: string | null;
   /** DX-153: resumen de cobertura; solo en las lecturas (GET), no en PATCH. */
   coverage?: CoverageSummary;
+  /** DX-105: resumen del convenio asignado; solo en las lecturas (GET). */
+  agreement?: AgreementSummary;
   physicianName?: string | null;
   physicianPhone?: string | null;
   emergencyContactName?: string | null;
@@ -227,9 +231,14 @@ export async function partiallySuppressPatient(
 
 /**
  * Sustituye el paciente por la respuesta de una mutación (retención, supresión
- * parcial) sin perder `balance` ni `coverage`: la API solo los calcula en los
+ * parcial) sin perder `balance`, `coverage` ni `agreement`: la API solo los calcula en los
  * GET de lista y detalle, así que esas respuestas vienen sin ellos.
  */
 export function replacePatientKeepingDerived(prev: Patient | null, next: Patient): Patient {
-  return { ...next, balance: next.balance ?? prev?.balance, coverage: next.coverage ?? prev?.coverage };
+  return {
+    ...next,
+    balance: next.balance ?? prev?.balance,
+    coverage: next.coverage ?? prev?.coverage,
+    agreement: next.agreement ?? prev?.agreement,
+  };
 }

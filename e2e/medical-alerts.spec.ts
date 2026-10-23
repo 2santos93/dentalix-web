@@ -101,6 +101,7 @@ test.beforeAll(async ({ request }) => {
       start: start.toISOString(),
       end: new Date(start.getTime() + 15 * MIN).toISOString(),
       reason: 'Control',
+      notes: 'Nota privada de cita DX264',
     });
   }
   const saveHistory = async (patientId: string, data: object) => {
@@ -143,6 +144,85 @@ async function openDay(page: Page, day: string) {
 function card(page: Page, firstName: string): Locator {
   return page.getByTestId('day-column-appointment').filter({ hasText: `${firstName} ${last}` });
 }
+
+test('DX-264 Mes: tres alertas, +1 más, teclado y toque a 390/1440 claro y oscuro', async ({ page }) => {
+  test.setTimeout(120_000);
+  test.skip(!process.env.E2E_DATABASE_URL, 'Requiere la BD e2e aislada para fechar la anamnesis');
+  backdateAnaHistory();
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
+  page.on('console', (message) => { if (message.type() === 'error') errors.push(message.text()); });
+  await loginAs(page, origin, reception.email, password);
+  await page.goto(`${origin}/agenda`);
+  await expect(page.getByLabel('Calendario del mes')).toBeVisible();
+  // Seleccionar mañana también resuelve el cambio de mes en su último día.
+  await openDay(page, tomorrow);
+  const listed = page.waitForResponse((r) => r.url().includes('/api/v1/appointments?') && r.request().method() === 'GET');
+  await page.getByRole('button', { name: 'Mes', exact: true }).click();
+  const body = await (await listed).json() as Record<string, unknown>[];
+  expect(body.length).toBeGreaterThan(0);
+  for (const appointment of body) expect(appointment).not.toHaveProperty('notes');
+  expect(JSON.stringify(body)).not.toContain('Nota privada de cita DX264');
+  const day = page.getByTestId('calendar-day').filter({ has: page.locator(`[data-testid="month-appointment"]`) }).and(page.locator(`[data-date="${tomorrow}"]`));
+  for (const width of [390, 1440]) {
+    for (const colorScheme of ['light', 'dark'] as const) {
+      await page.setViewportSize({ width, height: width === 390 ? 844 : 900 });
+      await page.emulateMedia({ colorScheme });
+      await expect(day.getByTestId('month-appointment')).toHaveCount(3);
+      await expect(day.getByText('+1 más', { exact: true })).toBeVisible();
+      const icons = day.getByTestId('medical-alert-indicator');
+      await expect(icons).toHaveCount(3);
+      const labels = ['Requiere premedicación', 'Anamnesis caducada', 'Sin anamnesis'];
+      for (let i = 0; i < labels.length; i++) {
+        const icon = icons.nth(i);
+        await expect(icon).toHaveAccessibleDescription(new RegExp(labels[i]));
+        await page.mouse.move(0, 0);
+        await day.getByRole('button', { name: /citas$/ }).focus();
+        await page.keyboard.press('Escape');
+        await icon.evaluate((el) => el.scrollIntoView({ block: 'center', inline: 'center' }));
+        const touchHits = await icon.evaluate((el) => {
+          const r = el.getBoundingClientRect();
+          const x = (r.left + r.right) / 2;
+          const y = (r.top + r.bottom) / 2;
+          return [[-21.5, -21.5], [21.5, -21.5], [-21.5, 21.5], [21.5, 21.5]].map(([dx, dy]) =>
+            document.elementFromPoint(x + dx, y + dy)?.closest('[data-testid="medical-alert-indicator"]') === el,
+          );
+        });
+        expect(touchHits, `${width}/${colorScheme}/alerta ${i}`).toEqual([true, true, true, true]);
+        await icon.click();
+        const popover = page.getByTestId('medical-alert-popover');
+        await expect(popover).toContainText(labels[i]);
+        const box = await popover.boundingBox();
+        expect(box!.x).toBeGreaterThanOrEqual(0);
+        expect(box!.x + box!.width).toBeLessThanOrEqual(width);
+        await page.keyboard.press('Escape');
+      }
+      await icons.first().focus();
+      await expect(page.getByTestId('medical-alert-popover')).toContainText(labels[0]);
+      await page.keyboard.press('Escape');
+      await expect(icons.first()).toBeFocused();
+      expect(await day.locator('button button').count()).toBe(0);
+      await expectNoHorizontalScroll(page);
+      const contained = await day.evaluate((cell) => {
+        const c = cell.getBoundingClientRect();
+        return [...cell.querySelectorAll('[data-testid="medical-alert-indicator"]')].every((el) => {
+          const r = el.getBoundingClientRect();
+          const center = (r.left + r.right) / 2;
+          return center - 22 >= c.left && center + 22 <= c.right;
+        });
+      });
+      expect(contained).toBe(true);
+      await page.mouse.move(0, 0);
+      await day.getByRole('button', { name: /citas$/ }).focus();
+      await page.keyboard.press('Escape');
+      await expect(page.getByTestId('medical-alert-popover')).toBeHidden();
+      await day.scrollIntoViewIfNeeded();
+      await shot(page, `agenda-mes-alertas-${width}-${colorScheme}`);
+      if (QA) await day.screenshot({ path: path.join(QA_DIR, `agenda-mes-celda-${width}-${colorScheme}.png`), animations: 'disabled' });
+    }
+  }
+  expect(errors).toEqual([]);
+});
 
 test('1440 px: el icono en las citas de 15 min, con teclado y ratón, y «Requiere premedicación» al abrir la cita', async ({
   page,

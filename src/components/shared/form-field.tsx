@@ -14,6 +14,8 @@ interface FormFieldProps {
   label: string;
   error?: string | null;
   hint?: string;
+  /** id of the hint, for the control's `aria-describedby` (e.g. a disabled control's reason). */
+  hintId?: string;
   className?: string;
   children: React.ReactNode;
 }
@@ -28,6 +30,7 @@ export function FormField({
   label,
   error,
   hint,
+  hintId,
   className,
   children,
 }: FormFieldProps) {
@@ -35,7 +38,7 @@ export function FormField({
     <div className={cn('flex flex-col gap-1.5', className)}>
       <Label htmlFor={htmlFor}>{label}</Label>
       {children}
-      {hint && !error ? <p className="text-xs text-muted">{hint}</p> : null}
+      {hint && !error ? <p id={hintId} className="text-xs text-muted">{hint}</p> : null}
       {error ? (
         <InlineError id={fieldErrorId(htmlFor)} className="text-xs">
           {error}

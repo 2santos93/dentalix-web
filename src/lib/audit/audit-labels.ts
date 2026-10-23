@@ -88,6 +88,9 @@ export const AUDIT_RESOURCE_LABELS: Record<AuditResourceType, string> = {
   POSTOP_DELIVERY: 'Indicaciones postoperatorias',
   // DX-151: documentos del paciente (subir, ver, descargar, anular).
   PATIENT_DOCUMENT: 'Documento del paciente',
+  // DX-105: listas de precios y convenios (crear, editar, asignar, retirar).
+  PRICE_LIST: 'Lista de precios',
+  AGREEMENT: 'Convenio',
   // DX-233: horario de un profesional por sede y sus excepciones por fecha.
   PROVIDER_SCHEDULE: 'Horario del profesional',
 };

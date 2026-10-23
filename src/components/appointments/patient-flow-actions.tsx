@@ -40,7 +40,8 @@ const ICONS: Record<FlowAction, typeof DoorOpen> = {
 export interface PatientFlowRunner {
   /** Cita cuyo cambio está en curso (sus botones quedan deshabilitados). */
   pendingId: string | null;
-  run: (appointmentId: string, action: FlowAction, patientName: string) => Promise<void>;
+  /** false: la API rechazó el paso; el aviso y el refresco ya se gestionaron. */
+  run: (appointmentId: string, action: FlowAction, patientName: string) => Promise<boolean>;
 }
 
 /**
@@ -61,12 +62,14 @@ export function usePatientFlow(token: string, onChanged: () => void): PatientFlo
         await updateAppointment(token, appointmentId, { status: FLOW_ACTION_STATUS[action] });
       }
       toast.success(patientFlowCopy.done[action](patientName));
+      return true;
     } catch (err) {
       // El reintento cierra sobre la propia operación (cita y paso): no hay
       // estado ambiente que pueda quedar viejo.
       notifyError(apiErrorMessage(err, patientFlowCopy.error), {
         onRetry: () => void run(appointmentId, action, patientName),
       });
+      return false;
     } finally {
       setPendingId(null);
       onChanged();

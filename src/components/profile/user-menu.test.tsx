@@ -184,6 +184,15 @@ describe('UserMenu — plantillas de consentimiento (DX-006)', () => {
       'href',
       '/settings/pagadores',
     );
+    // DX-105: convenios y listas de precios.
+    expect(screen.getByRole('menuitem', { name: 'Convenios' })).toHaveAttribute(
+      'href',
+      '/settings/convenios',
+    );
+    expect(screen.getByRole('menuitem', { name: 'Listas de precios' })).toHaveAttribute(
+      'href',
+      '/settings/listas-de-precios',
+    );
   });
 
   it.each(['DENTIST', 'ASSISTANT', 'RECEPTION'])('%s no lo ve', async (role) => {
@@ -200,5 +209,7 @@ describe('UserMenu — plantillas de consentimiento (DX-006)', () => {
       screen.queryByRole('menuitem', { name: 'Indicaciones postoperatorias' }),
     ).not.toBeInTheDocument();
     expect(screen.queryByRole('menuitem', { name: 'Pagadores' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'Convenios' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('menuitem', { name: 'Listas de precios' })).not.toBeInTheDocument();
   });
 });

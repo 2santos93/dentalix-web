@@ -6,6 +6,8 @@ import {
   discountPercent,
   exceedsCap,
   needsReason,
+  noDiscountAllowed,
+  NO_DISCOUNT_ALLOWED_NOTICE,
   roleCapMessage,
   PRICE_BELOW_CATALOG_NOTICE,
   effectiveDiscount,
@@ -92,5 +94,27 @@ describe('descuento efectivo: precio por debajo del de catálogo (SEC-041)', () 
     expect(priceBelowCatalogCapMessage(10)).toBe(
       'Precio por debajo del de catálogo: cuenta como descuento. Tu rol permite hasta un 10 % de descuento por ítem.',
     );
+  });
+});
+
+describe('referencia del descuento y prestaciones sin descuento (DX-105)', () => {
+  it('la base es el precio de referencia resuelto (catalogPrice): sin cambio de fórmula', () => {
+    // Convenio: lista 50.000, referencia 40.000. Cobrar 36.000 rebaja 4.000
+    // sobre la referencia, no 14.000 sobre la lista.
+    const e = effectiveDiscount(40000, 36000, 0);
+    expect(e.priceReduction).toBe(4000);
+    expect(e.listPrice).toBe(40000);
+    expect(e.total).toBe(4000);
+    // Cobrar la referencia no es descuento.
+    expect(effectiveDiscount(40000, 40000, 0).total).toBe(0);
+  });
+
+  it('noDiscountAllowed solo si allowDiscount es false de forma explícita', () => {
+    expect(noDiscountAllowed({ allowDiscount: false })).toBe(true);
+    expect(noDiscountAllowed({ allowDiscount: true })).toBe(false);
+    expect(noDiscountAllowed({})).toBe(false);
+    expect(noDiscountAllowed(null)).toBe(false);
+    expect(noDiscountAllowed(undefined)).toBe(false);
+    expect(NO_DISCOUNT_ALLOWED_NOTICE).toBe('Esta prestación no admite descuentos.');
   });
 });

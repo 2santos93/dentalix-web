@@ -8,6 +8,8 @@ import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/shared/page-header';
 import { OverdueChip } from '@/components/collections/overdue-chip';
 import { CoverageChip } from '@/components/patients/coverage-chip';
+import { AgreementChip } from '@/components/patients/agreement-chip';
+import { agreementChipText } from '@/lib/patients/agreement-presentation';
 import { coverageChipText } from '@/lib/patients/coverage-presentation';
 import { MedicalAlertIndicator } from '@/components/clinical/medical-alert-indicator';
 import { FieldError } from '@/components/errors/field-error';
@@ -156,10 +158,11 @@ export function PatientRecordHeader({
             </p>
             {/* DX-150: «Saldo vencido · N días» (con importe solo para ADMIN y
                 RECEPTION: la API ya lo omite para los demás roles). */}
-            {/* DX-153: «Cobertura vencida», junto a la del saldo. */}
+            {/* DX-153: «Cobertura vencida», junto a la del saldo. DX-105: «Convenio: X». */}
             {/* DX-247: la misma alerta médica que la agenda, con su titular. */}
             {patient?.balance?.hasOverdue ||
             coverageChipText(patient?.coverage) ||
+            agreementChipText(patient?.agreement) ||
             alertSeverity ||
             alertsPending ||
             (patient && medicalAlertsFailed) ? (
@@ -195,6 +198,7 @@ export function PatientRecordHeader({
                 ) : null}
                 {patient?.balance?.hasOverdue ? <OverdueChip balance={patient.balance} /> : null}
                 <CoverageChip coverage={patient?.coverage} />
+                <AgreementChip agreement={patient?.agreement} />
               </div>
             ) : null}
           </div>

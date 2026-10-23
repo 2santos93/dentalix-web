@@ -23,9 +23,9 @@ const NONE: ProviderDay = { ranges: null, strict: false };
  * («Todas las sedes») o si falla, no hay restricción que enseñar — la API
  * sigue siendo la autoridad (aviso o 409).
  */
-export function useProviderDay(token: string, providerId: string, date: string): ProviderDay {
+export function useProviderDay(token: string, providerId: string, date: string, explicitLocationId?:string): ProviderDay {
   const [loaded, setLoaded] = useState<{ key: string; day: ProviderDay } | null>(null);
-  const locationId = getActiveLocationId();
+  const locationId = explicitLocationId ?? getActiveLocationId();
   const key = locationId && providerId && date ? `${locationId}|${providerId}|${date}` : null;
 
   useEffect(() => {
