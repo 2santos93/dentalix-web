@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { Mail, MessageCircle, Printer } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api/error-message';
@@ -22,6 +22,9 @@ const copy = {
   heading: 'Indicaciones',
   loading: 'Cargando indicaciones',
   loadError: 'No pudimos cargar las indicaciones de la cita.',
+  refreshError:
+    'No pudimos actualizar las indicaciones. Se conservan los datos de la última carga y la entrega registrada.',
+  retry: 'Reintentar',
   suggestedLegend: 'Indicaciones sugeridas para esta cita',
   noneSuggested: 'No hay indicaciones para esta cita',
   othersLabel: 'Otras indicaciones',
@@ -88,6 +91,7 @@ function finishInTab(
  */
 export function AppointmentPostOpPanel({ token, appointmentId }: AppointmentPostOpPanelProps) {
   const ids = useId();
+  const headingId = `${ids}-heading`;
   const emailHintId = `${ids}-email-hint`;
   const whatsappHintId = `${ids}-whatsapp-hint`;
   const chooseHintId = `${ids}-choose-hint`;
@@ -99,6 +103,8 @@ export function AppointmentPostOpPanel({ token, appointmentId }: AppointmentPost
   const [reloadKey, setReloadKey] = useState(0);
   const [chosenId, setChosenId] = useState<string | null>(null);
   const [busy, setBusy] = useState<PostOpChannel | null>(null);
+  const deliveringRef = useRef(false);
+  const [interacted, setInteracted] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -122,6 +128,9 @@ export function AppointmentPostOpPanel({ token, appointmentId }: AppointmentPost
    * la frena) y se carga cuando la API responde; si falla, se cierra.
    */
   async function deliver(templateId: string, channel: PostOpChannel) {
+    if (deliveringRef.current) return;
+    deliveringRef.current = true;
+    setInteracted(true);
     const win = channel === 'EMAIL' ? null : window.open('', '_blank');
     if (win) win.opener = null;
     setBusy(channel);
@@ -150,6 +159,13 @@ export function AppointmentPostOpPanel({ token, appointmentId }: AppointmentPost
       } else {
         win?.close();
       }
+      // La respuesta ya confirma esta entrega aunque falle la recarga siguiente.
+      setData((current) =>
+        current ? {
+          ...current,
+          deliveries: [result.delivery, ...current.deliveries.filter((d) => d.id !== result.delivery.id)],
+        } : current,
+      );
       setReloadKey((k) => k + 1);
     } catch (err) {
       win?.close();
@@ -158,6 +174,7 @@ export function AppointmentPostOpPanel({ token, appointmentId }: AppointmentPost
         onRetry: () => void deliver(templateId, channel),
       });
     } finally {
+      deliveringRef.current = false;
       setBusy(null);
     }
   }
@@ -177,7 +194,10 @@ export function AppointmentPostOpPanel({ token, appointmentId }: AppointmentPost
                 name={`${ids}-template`}
                 value={t.id}
                 checked={selectedId === t.id}
-                onChange={() => setChosenId(t.id)}
+                onChange={() => {
+                  setInteracted(true);
+                  setChosenId(t.id);
+                }}
                 className="size-4 accent-primary"
               />
               <span className="text-sm text-ink">{t.title}</span>
@@ -189,7 +209,7 @@ export function AppointmentPostOpPanel({ token, appointmentId }: AppointmentPost
     }
     return (
       <div className="flex flex-col gap-2">
-        <p role="status" className="text-sm text-muted">
+        <p role={interacted ? 'status' : undefined} className="text-sm text-muted">
           {copy.noneSuggested}
         </p>
         {d.others.length > 0 ? (
@@ -200,7 +220,10 @@ export function AppointmentPostOpPanel({ token, appointmentId }: AppointmentPost
             <select
               id={othersId}
               value={selectedId ?? ''}
-              onChange={(e) => setChosenId(e.target.value || null)}
+              onChange={(e) => {
+                setInteracted(true);
+                setChosenId(e.target.value || null);
+              }}
               className="h-11 w-full rounded-lg border border-border bg-surface px-3 text-sm text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             >
               <option value="">{copy.choose}</option>
@@ -219,13 +242,13 @@ export function AppointmentPostOpPanel({ token, appointmentId }: AppointmentPost
   }
 
   function body() {
-    if (error) {
+    if (error && !data) {
       return (
         <SectionError
           description={error}
           onRetry={() => {
+            setInteracted(true);
             setError(null);
-            setData(null);
             setReloadKey((k) => k + 1);
           }}
           className="py-6"
@@ -256,6 +279,22 @@ export function AppointmentPostOpPanel({ token, appointmentId }: AppointmentPost
 
     return (
       <>
+        {error && (
+          <div role="status" className="flex flex-col items-start gap-2 text-sm text-muted">
+            <p>{copy.refreshError}</p>
+            <Button
+              type="button"
+              variant="secondary"
+              onClick={() => {
+                setError(null);
+                setInteracted(true);
+                setReloadKey((k) => k + 1);
+              }}
+            >
+              {copy.retry}
+            </Button>
+          </div>
+        )}
         {templatePicker(data, selectedId)}
         {hasTemplates && (
           <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap">
@@ -339,8 +378,8 @@ export function AppointmentPostOpPanel({ token, appointmentId }: AppointmentPost
   }
 
   return (
-    <section aria-labelledby="postop-heading" className="flex flex-col gap-3 border-t border-hairline pt-4">
-      <h3 id="postop-heading" className="text-sm font-semibold text-ink">
+    <section aria-labelledby={headingId} className="flex flex-col gap-3 border-t border-hairline pt-4">
+      <h3 id={headingId} className="text-sm font-semibold text-ink">
         {copy.heading}
       </h3>
       {body()}
