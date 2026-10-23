@@ -454,6 +454,33 @@ describe('DX-262: hoja de saldos «Saldo migrado»', () => {
     expect(mockedConfirm).toHaveBeenCalledWith('tok', 'batch-1', 'SKIP');
   });
 
+  it('I2: con pacientes que ya existen (preparados, «Saltarlos») el botón dice «Importar N saldos migrados»; con «Actualizar campos vacíos», que procesa a los existentes', async () => {
+    const existing = batchFixture({
+      createdAt: new Date().toISOString(),
+      totals: { totalRows: 1, validRows: 0, duplicateRows: 1, errorRows: 0 },
+      progress: { ...batchFixture().progress, preparedRows: 1 },
+      issues: [],
+      issuesTotal: 0,
+    });
+    mockedInspect.mockResolvedValue(inspectFixture());
+    mockedValidate.mockResolvedValue(existing);
+    mockedBalances.mockResolvedValue({ ...existing, balances: balancesFixture({ preparedCount: 1 }) });
+    mockedConfirm.mockResolvedValue(batchFixture({ status: 'QUEUED', canConfirm: false }));
+    const user = userEvent.setup();
+    render(<PatientImportWizard token="tok" onBatchChange={jest.fn()} />);
+    await upload(user);
+    await user.click(await screen.findByRole('button', { name: 'Validar archivo' }));
+    await user.click(await screen.findByRole('button', { name: 'Continuar' }));
+    await user.upload(screen.getByLabelText('Hoja de saldos (CSV o .xlsx)'), saldos());
+    await user.click(await screen.findByRole('button', { name: 'Continuar' }));
+    expect(screen.getByRole('button', { name: 'Importar 1 saldo migrado' })).toBeInTheDocument();
+    await user.click(screen.getByRole('radio', { name: /Actualizar solo los campos vacíos/ }));
+    expect(screen.getByRole('button', { name: 'Procesar los pacientes que ya existen' })).toBeInTheDocument();
+    await user.click(screen.getByRole('radio', { name: /Saltarlos/ }));
+    await user.click(screen.getByRole('button', { name: 'Importar 1 saldo migrado' }));
+    expect(mockedConfirm).toHaveBeenCalledWith('tok', 'batch-1', 'SKIP');
+  });
+
   it('M7: el avance distingue los saldos no creados por documento ambiguo', () => {
     render(
       <ImportProgress

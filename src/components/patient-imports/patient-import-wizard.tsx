@@ -523,7 +523,9 @@ export function PatientImportWizard({ token, onBatchChange }: PatientImportWizar
             <Button type="button" loading={confirming} onClick={() => void onConfirm()} className="w-full sm:w-auto">
               {dryRun.totals.validRows > 0
                 ? wizardCopy.confirm(dryRun.totals.validRows)
-                : dryRun.progress.preparedRows === 0 && (dryRun.balances?.preparedCount ?? 0) > 0
+                : // Sin pacientes nuevos y saltando los existentes, solo se importan saldos.
+                  (dryRun.progress.preparedRows === 0 || mode === 'SKIP') &&
+                    (dryRun.balances?.preparedCount ?? 0) > 0
                   ? wizardCopy.confirmBalances(dryRun.balances?.preparedCount ?? 0)
                   : wizardCopy.confirmExistingOnly}
             </Button>
