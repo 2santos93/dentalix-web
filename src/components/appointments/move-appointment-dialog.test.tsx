@@ -70,7 +70,7 @@ describe('MoveAppointmentDialog (DX-121)', () => {
 
   it('solo con teclado: cambia hora y profesional y hace UN PATCH conservando la duración', async () => {
     const user = userEvent.setup();
-    const moved = { ...appointment, providerId: 'prov-2' };
+    const moved = { ...appointment, notes: appointment.notes ?? null, providerId: 'prov-2' };
     mockedUpdate.mockResolvedValue(moved);
     const onMoved = renderDialog();
 

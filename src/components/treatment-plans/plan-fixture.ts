@@ -23,4 +23,10 @@ export const ITEM_WITHOUT_DISCOUNT = {
   discountById: null,
   discountAt: null,
   discountLocationId: null,
+  // DX-105: sin convenio ni lista, el ítem no lleva foto de origen del precio.
+  basePrice: null,
+  priceSource: null,
+  agreementId: null,
+  agreementName: null,
+  pricingLocationId: null,
 } as const;

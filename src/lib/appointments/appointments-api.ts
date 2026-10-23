@@ -18,15 +18,8 @@ export type AppointmentStatus = NonNullable<UpdateAppointmentInput['status']>;
 
 export type ListAppointmentsParams = paths['/api/v1/appointments']['get']['parameters']['query'];
 
-/**
- * `POST /appointments`, `GET /appointments`, `GET /appointments/:id` and
- * `PATCH /appointments/:id` return the plain TS `Appointment` interface on
- * the backend (`src/modules/appointments/domain/entities/appointment.entity.ts`),
- * not a class decorated with `@ApiProperty()` — same situation as
- * `Patient`/`ToothRecord` — so the generated `schema.d.ts` has no body shape
- * for these routes (`content?: never`). Hand-written to mirror that entity —
- * keep in sync if it changes.
- */
+/** Shared appointment shape. DX-264: notes are returned only by detail/write,
+ * never by the calendar list. ListAppointment tracks that contract explicitly. */
 export interface Appointment {
   id: string;
   tenantId: string;
@@ -48,7 +41,7 @@ export interface Appointment {
   end: string;
   status: AppointmentStatus;
   reason: string | null;
-  notes: string | null;
+  notes?: string | null;
   createdById: string | null;
   /** DX-121: tipo de la cita (null en las citas sin tipo). */
   appointmentTypeId: string | null;
@@ -100,14 +93,20 @@ export interface Appointment {
   warningCodes?: components['schemas']['AppointmentWarningCode'][];
 }
 
+/** DX-264: the grid receives no appointment notes. */
+export type ListAppointment = Omit<Appointment, 'notes'>;
+export type AppointmentDetail = Appointment & { notes: string | null };
+
 export async function createAppointment(
   token: string,
   input: CreateAppointmentInput,
-): Promise<Appointment> {
-  return apiFetch<Appointment>('/appointments', {
+  locationId?: string,
+): Promise<AppointmentDetail> {
+  return apiFetch<AppointmentDetail>('/appointments', {
     method: 'POST',
     body: input,
     token,
+    ...(locationId ? {headers:{'X-Location-Id':locationId}} : {}),
   });
 }
 
@@ -119,7 +118,7 @@ export async function createAppointment(
 export async function listAppointments(
   token: string,
   params: ListAppointmentsParams,
-): Promise<Appointment[]> {
+): Promise<ListAppointment[]> {
   const search = new URLSearchParams();
   search.set('from', params.from);
   search.set('to', params.to);
@@ -128,7 +127,7 @@ export async function listAppointments(
   for (const id of params.providerIds ?? []) search.append('providerIds', id);
   if (params.locationId) search.set('locationId', params.locationId);
 
-  return apiFetch<Appointment[]>(`/appointments?${search.toString()}`, {
+  return apiFetch<ListAppointment[]>(`/appointments?${search.toString()}`, {
     token,
   });
 }
@@ -136,8 +135,8 @@ export async function listAppointments(
 export async function getAppointment(
   token: string,
   id: string,
-): Promise<Appointment> {
-  return apiFetch<Appointment>(`/appointments/${id}`, {
+): Promise<AppointmentDetail> {
+  return apiFetch<AppointmentDetail>(`/appointments/${id}`, {
     token,
   });
 }
@@ -168,8 +167,8 @@ export async function updateAppointment(
   token: string,
   id: string,
   patch: UpdateAppointmentInput,
-): Promise<Appointment> {
-  return apiFetch<Appointment>(`/appointments/${id}`, {
+): Promise<AppointmentDetail> {
+  return apiFetch<AppointmentDetail>(`/appointments/${id}`, {
     method: 'PATCH',
     body: patch,
     token,

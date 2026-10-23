@@ -387,7 +387,7 @@ export function DayColumns({
                 )}
               >
                 <p className="truncate text-sm font-semibold text-ink">{p.fullName}</p>
-                <p className="text-xs tabular-nums text-muted">{copy.appointmentsCount(count)}</p>
+                <p className="text-xs tabular-nums text-ink/80">{copy.appointmentsCount(count)}</p>
                 {(() => {
                   const ranges = providerRanges[p.userId] ?? null;
                   if (ranges === null) return null;
@@ -613,6 +613,8 @@ export function DayColumns({
                           type="button"
                           aria-label={[
                             copy.detailFor(range, patient, p.fullName),
+                            STATUS_LABELS[a.status],
+                            a.appointmentType?.name,
                             overdueChipText(a.balance),
                             coverageChipText(a.coverage),
                             medicalAlertSummary(a.medicalAlerts),

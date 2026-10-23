@@ -39,7 +39,8 @@ export type TreatmentPlanItem = components['schemas']['TreatmentPlanItemDto'];
  * generated shape with the field by hand; drop it if the backend DTO is ever
  * annotated.
  */
-export type TreatmentPlan = components['schemas']['TreatmentPlanDto'] & {
+export type TreatmentPlan = Omit<components['schemas']['TreatmentPlanDto'], 'items'> & {
+  items?: TreatmentPlanItem[];
   currency: string;
 };
 

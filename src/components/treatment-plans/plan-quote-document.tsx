@@ -13,6 +13,10 @@ const copy = {
   document: 'Documento',
   noDocument: 'Sin documento',
   professional: 'Profesional',
+  agreement: 'Convenio',
+  agreementValue: (name: string, payer: string) => `${name} · ${payer}`,
+  listPrice: (amount: string) => `Precio de lista ${amount}`,
+  agreementSaving: 'Ahorro por convenio',
   noProfessional: 'Sin asignar',
   tableCaption: 'Procedimientos del presupuesto',
   colTooth: 'Diente',
@@ -49,6 +53,13 @@ const money = (value: number, currency: string) => formatCurrency(value, currenc
 const discount = (value: number, currency: string) =>
   value > 0 ? `−${money(value, currency)}` : copy.noDiscount;
 
+/** «Precio de lista» solo cuando el precio cobrado es otro (convenio o lista de la sede). */
+function listPriceOf(item: PlanQuoteItem, currency: string): string | null {
+  return item.listPrice !== null && item.listPrice !== item.unitPrice
+    ? copy.listPrice(money(item.listPrice, currency))
+    : null;
+}
+
 function surfacesOf(item: PlanQuoteItem): string {
   return item.surfaces.length > 0
     ? item.surfaces.map((s) => SURFACE_LABELS[s]).join(', ')
@@ -72,6 +83,11 @@ interface PlanQuoteDocumentProps {
  */
 export function PlanQuoteDocument({ quote }: PlanQuoteDocumentProps) {
   const { acceptance, currency } = quote;
+  const organization=new Map((quote.visitOrganization??[]).map(v=>[v.itemId,v]));
+  const orderedItems=[...quote.items].sort((a,b)=>(organization.get(a.id)?.visit??1)-(organization.get(b.id)?.visit??1));
+  const visitTitle=(id:string)=>{const v=organization.get(id);return `Visita ${v?.visit??1}${v?.label?' · '+v.label:''}${v?.minDaysAfterPrevious?' · intervalo mínimo '+v.minDaysAfterPrevious+' días':''}`;};
+  const startsVisit=(index:number)=>index===0||(organization.get(orderedItems[index-1].id)?.visit??1)!==(organization.get(orderedItems[index].id)?.visit??1);
+
 
   return (
     <article className="quote-print-root mx-auto w-full max-w-[210mm] bg-white px-4 py-6 text-[#111827] sm:px-10 sm:py-10 print:max-w-none print:p-0">
@@ -132,9 +148,16 @@ export function PlanQuoteDocument({ quote }: PlanQuoteDocumentProps) {
           <dt className="text-xs font-medium text-[#6b7280]">{copy.professional}</dt>
           <dd>{quote.professionalName ?? copy.noProfessional}</dd>
         </div>
+        {quote.agreement ? (
+          <div className="sm:col-span-3 print:col-span-3" data-testid="quote-agreement">
+            <dt className="text-xs font-medium text-[#6b7280]">{copy.agreement}</dt>
+            <dd>{copy.agreementValue(quote.agreement.name, quote.agreement.payerName)}</dd>
+          </div>
+        ) : null}
       </dl>
 
       <section className="mt-6">
+        {acceptance && quote.visitOrganization ? <p className="mb-3 text-xs text-[#4b5563]">Organización actual por visitas. Los precios y la aceptación corresponden al presupuesto firmado.</p> : null}
         {/* Pantalla ancha y papel: tabla. */}
         <table className="hidden w-full border-collapse text-sm sm:table print:table">
           <caption className="sr-only">{copy.tableCaption}</caption>
@@ -156,12 +179,17 @@ export function PlanQuoteDocument({ quote }: PlanQuoteDocumentProps) {
                 </td>
               </tr>
             ) : (
-              quote.items.map((item) => (
-                <tr key={item.id} className="quote-item border-b border-[#e5e7eb] align-top">
+              orderedItems.map((item,index) => {
+                const listLine = listPriceOf(item, currency);
+                return (
+                <React.Fragment key={item.id}>{startsVisit(index)?<tr><th scope="rowgroup" colSpan={6} className="border-b border-[#d1d5db] bg-[#f3f4f6] py-3 text-left font-semibold">{visitTitle(item.id)}</th></tr>:null}<tr className="quote-item border-b border-[#e5e7eb] align-top">
                   <td className="py-2 pr-3 font-medium tabular-nums">{item.toothNumber}</td>
                   <td className="py-2 pr-3">
                     <span className="block">{item.procedure}</span>
                     <span className="block text-xs text-[#4b5563]">{surfacesOf(item)}</span>
+                    {listLine ? (
+                      <span className="block text-xs text-[#4b5563] tabular-nums">{listLine}</span>
+                    ) : null}
                   </td>
                   <td className="py-2 pr-3 text-right tabular-nums">{item.quantity}</td>
                   <td className="py-2 pr-3 text-right tabular-nums">{money(item.unitPrice, currency)}</td>
@@ -169,8 +197,9 @@ export function PlanQuoteDocument({ quote }: PlanQuoteDocumentProps) {
                   <td className="py-2 text-right font-medium tabular-nums">
                     {money(item.subtotal, currency)}
                   </td>
-                </tr>
-              ))
+                </tr></React.Fragment>
+                );
+              })
             )}
           </tbody>
         </table>
@@ -180,8 +209,11 @@ export function PlanQuoteDocument({ quote }: PlanQuoteDocumentProps) {
           {quote.items.length === 0 ? (
             <li className="py-6 text-center text-sm text-[#4b5563]">{copy.emptyItems}</li>
           ) : (
-            quote.items.map((item) => (
+            orderedItems.map((item,index) => {
+              const listLine = listPriceOf(item, currency);
+              return (
               <li key={item.id} className="py-3 text-sm">
+                {startsVisit(index)?<h2 className="mb-3 text-base font-semibold">{visitTitle(item.id)}</h2>:null}
                 <div className="flex items-baseline justify-between gap-3">
                   <span className="font-medium">{item.procedure}</span>
                   <span className="font-medium tabular-nums">{money(item.subtotal, currency)}</span>
@@ -194,8 +226,10 @@ export function PlanQuoteDocument({ quote }: PlanQuoteDocumentProps) {
                   {copy.colPrice} {money(item.unitPrice, currency)}
                   {item.discount > 0 ? ` · ${copy.colDiscount} ${discount(item.discount, currency)}` : ''}
                 </p>
+                {listLine ? <p className="mt-0.5 text-xs text-[#4b5563] tabular-nums">{listLine}</p> : null}
               </li>
-            ))
+              );
+            })
           )}
         </ul>
 
@@ -214,6 +248,12 @@ export function PlanQuoteDocument({ quote }: PlanQuoteDocumentProps) {
                 <dt className="text-[#4b5563]">{copy.discounts}</dt>
                 <dd className="tabular-nums">{discount(total.discount, total.currency)}</dd>
               </div>
+              {total.agreementSaving > 0 ? (
+                <div className="flex justify-between gap-4" data-testid={`quote-saving-${total.currency}`}>
+                  <dt className="text-[#4b5563]">{copy.agreementSaving}</dt>
+                  <dd className="tabular-nums">{money(total.agreementSaving, total.currency)}</dd>
+                </div>
+              ) : null}
               <div
                 data-testid={`quote-total-${total.currency}`}
                 className="flex justify-between gap-4 border-t border-[#111827] pt-1 text-base font-semibold"

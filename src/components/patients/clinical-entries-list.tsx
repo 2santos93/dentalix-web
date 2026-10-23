@@ -125,7 +125,7 @@ export function ClinicalEntriesList({ token, patientId }: ClinicalEntriesListPro
 
   // DX-212: una comprobación RDA por evolución, compartida por tabla y tarjetas.
   const entryIds = useMemo(() => entries.map((e) => e.id), [entries]);
-  const rda = useRdaReadiness(token, entryIds);
+  const rda = useRdaReadiness(token, patientId, entryIds);
 
   function renderRda(entry: ClinicalEntry) {
     return (

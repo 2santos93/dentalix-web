@@ -1,6 +1,6 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { BulkDiscountModal } from './bulk-discount-modal';
+import { BulkDiscountModal, bulkDiscountCopy } from './bulk-discount-modal';
 import { applyBulkDiscount } from '@/lib/discounts/discounts-api';
 import type { TreatmentPlanItem } from '@/lib/treatment-plans/treatment-plans-api';
 import { ApiError } from '@/lib/api/client';
@@ -24,6 +24,7 @@ function item(id: string, tooth: string, price: number): TreatmentPlanItem {
     catalogItemId: 'cat-1',
     price,
     discount: 0,
+    visit: 1,
     ...ITEM_WITHOUT_DISCOUNT,
     status: 'PROPOSED',
     notes: null,
@@ -98,7 +99,7 @@ describe('BulkDiscountModal (DX-204)', () => {
   });
 
   it('por encima del umbral exige el motivo; con él, envía y avisa', async () => {
-    mockedApply.mockResolvedValue(ITEMS);
+    mockedApply.mockResolvedValue({ items: ITEMS, skippedNoDiscount: 0 });
     const { onApplied, onOpenChange } = renderModal('ADMIN');
     await userEvent.type(percentInput(), '20');
     expect(screen.getByText('Por encima del 10 % el motivo es obligatorio.')).toBeInTheDocument();
@@ -115,8 +116,18 @@ describe('BulkDiscountModal (DX-204)', () => {
         discountReason: 'PROMOTION',
       }),
     );
-    expect(onApplied).toHaveBeenCalledWith(ITEMS);
+    expect(onApplied).toHaveBeenCalledWith(ITEMS, 0);
     expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it('pasa al padre cuántas prestaciones no admiten descuento y se dejaron igual (DX-105)', async () => {
+    mockedApply.mockResolvedValue({ items: ITEMS.slice(0, 1), skippedNoDiscount: 2 });
+    const { onApplied } = renderModal('ADMIN');
+    await userEvent.type(percentInput(), '5');
+    await userEvent.click(screen.getByRole('button', { name: 'Aplicar descuento' }));
+    await waitFor(() => expect(onApplied).toHaveBeenCalledWith(ITEMS.slice(0, 1), 2));
+    expect(bulkDiscountCopy.skipped(2)).toBe('2 prestaciones no admiten descuento y se dejaron igual.');
+    expect(bulkDiscountCopy.skipped(1)).toBe('1 prestación no admite descuento y se dejó igual.');
   });
 
   it('«Otro» exige la nota', async () => {
