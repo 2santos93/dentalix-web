@@ -13,6 +13,13 @@ import {
   type FlowAction,
 } from '@/lib/appointments/patient-flow';
 import type { ClinicRole } from '@/lib/me/me-api';
+import {
+  claimPlanItem,
+  reservationCopy,
+  reservedElsewhereMessage,
+  reservedItemLabel,
+  type PlanItemReservedElsewhere,
+} from '@/lib/appointments/plan-item-reservations';
 import { notifyError } from '@/components/errors/notify';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -42,6 +49,48 @@ export interface PatientFlowRunner {
   pendingId: string | null;
   /** false: la API rechazó el paso; el aviso y el refresco ya se gestionaron. */
   run: (appointmentId: string, action: FlowAction, patientName: string) => Promise<boolean>;
+  /** DX-273: `${appointmentId}:${planItemId}` que se está trayendo, si hay. */
+  claimingKey?: string | null;
+  /**
+   * DX-273 «Traer a esta cita»: la cita pasa a reservar el tratamiento que
+   * reservaba otra. false si la API lo rechazó (ya avisado con Reintentar).
+   */
+  claim?: (appointmentId: string, item: PlanItemReservedElsewhere) => Promise<boolean>;
+}
+
+/** Id del toast «reservado en otra cita» de un tratamiento de la cita. */
+function reservedToastId(appointmentId: string, planItemId: string): string {
+  return `reserved:${claimKey(appointmentId, planItemId)}`;
+}
+
+/** Avisos «reservado en otra cita» abiertos en esta pestaña. */
+const openReservedToasts = new Set<string>();
+
+/**
+ * QA DX-273 (D1): cierra los avisos «reservado en otra cita». Se llama al
+ * abrir la hoja «En clínica», que ya ofrece la misma acción: un toast queda
+ * por encima del diálogo modal pero no recibe toques (el diálogo bloquea el
+ * resto de la página) y el toque caería en lo de debajo.
+ */
+export function dismissReservedToasts(): void {
+  for (const id of openReservedToasts) toast.dismiss(id);
+  openReservedToasts.clear();
+}
+
+/** ¿Hay un diálogo modal abierto (hoja o modal de Radix)? */
+function modalOpen(): boolean {
+  return document.querySelector('[role="dialog"][data-state="open"]') !== null;
+}
+
+/**
+ * QA DX-273 (D2): el botón del aviso mide al menos 44×44 px en móvil (36 px
+ * de alto desde `sm`), como el resto de objetivos táctiles.
+ */
+const RESERVED_ACTION_CLASS = '!min-h-11 !min-w-11 !px-3 sm:!min-h-9';
+
+/** Clave de un «Traer a esta cita» en curso. */
+export function claimKey(appointmentId: string, planItemId: string): string {
+  return `${appointmentId}:${planItemId}`;
 }
 
 /**
@@ -52,16 +101,77 @@ export interface PatientFlowRunner {
  */
 export function usePatientFlow(token: string, onChanged: () => void): PatientFlowRunner {
   const [pendingId, setPendingId] = useState<string | null>(null);
+  const [claimingKey, setClaimingKey] = useState<string | null>(null);
+
+  async function claim(appointmentId: string, item: PlanItemReservedElsewhere) {
+    setClaimingKey(claimKey(appointmentId, item.planItemId));
+    try {
+      await claimPlanItem(token, appointmentId, item.planItemId);
+      // Revisión M4: el aviso de «Llegó» ya no hace falta (se trajo desde el
+      // toast o desde el panel).
+      const toastId = reservedToastId(appointmentId, item.planItemId);
+      toast.dismiss(toastId);
+      openReservedToasts.delete(toastId);
+      toast.success(reservationCopy.claimed(reservedItemLabel(item)));
+      return true;
+    } catch (err) {
+      notifyError(apiErrorMessage(err, reservationCopy.claimError), {
+        onRetry: () => void claim(appointmentId, item),
+      });
+      return false;
+    } finally {
+      setClaimingKey(null);
+      onChanged();
+      notifyInClinicChanged();
+    }
+  }
 
   async function run(appointmentId: string, action: FlowAction, patientName: string) {
     setPendingId(appointmentId);
     try {
+      let reserved: PlanItemReservedElsewhere[] = [];
       if (action === 'UNDO_ARRIVAL') {
         await undoArrival(token, appointmentId);
       } else {
-        await updateAppointment(token, appointmentId, { status: FLOW_ACTION_STATUS[action] });
+        const result = await updateAppointment(token, appointmentId, {
+          status: FLOW_ACTION_STATUS[action],
+        });
+        reserved = result.planItemsReservedElsewhere ?? [];
       }
       toast.success(patientFlowCopy.done[action](patientName));
+      // DX-273: el tratamiento sigue reservado en otra cita. Aviso que no
+      // bloquea y espera (lleva acción); el panel «En clínica» lo repite.
+      if (action === 'ARRIVE') {
+        // Con un diálogo modal abierto (p. ej. el detalle de la cita) el
+        // toast no recibiría toques (QA D1): solo informa, sin acción, y
+        // remite a «En clínica», que sí la tiene.
+        const inModal = modalOpen();
+        for (const item of reserved) {
+          const id = reservedToastId(appointmentId, item.planItemId);
+          if (inModal) {
+            toast.warning(reservedItemLabel(item), {
+              id,
+              description: `${reservedElsewhereMessage(item)} ${reservationCopy.claimFromPanel}`,
+            });
+            continue;
+          }
+          openReservedToasts.add(id);
+          toast.warning(reservedItemLabel(item), {
+            id,
+            description: reservedElsewhereMessage(item),
+            duration: Infinity,
+            onDismiss: () => openReservedToasts.delete(id),
+            classNames: { actionButton: RESERVED_ACTION_CLASS },
+            action: {
+              label: reservationCopy.claim,
+              onClick: () => {
+                openReservedToasts.delete(id);
+                void claim(appointmentId, item);
+              },
+            },
+          });
+        }
+      }
       return true;
     } catch (err) {
       // El reintento cierra sobre la propia operación (cita y paso): no hay
@@ -77,7 +187,7 @@ export function usePatientFlow(token: string, onChanged: () => void): PatientFlo
     }
   }
 
-  return { pendingId, run };
+  return { pendingId, run, claimingKey, claim };
 }
 
 interface PatientFlowActionsProps {

@@ -1238,6 +1238,22 @@ export interface paths {
         patch: operations["AppointmentsController_update"];
         trace?: never;
     };
+    "/api/v1/appointments/{id}/plan-items/{planItemId}/claim": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["AppointmentsController_claimPlanItem"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/appointments/{id}/undo-arrival": {
         parameters: {
             query?: never;
@@ -5911,6 +5927,70 @@ export interface components {
          * @enum {string}
          */
         AppointmentWarningCode: "SCHEDULE_BLOCK" | "PROVIDER_OFF_SCHEDULE";
+        PlanItemReservedElsewhereDto: {
+            /** Format: uuid */
+            planItemId: string;
+            /**
+             * @description Nombre del procedimiento (catálogo, en español).
+             * @example Implante
+             */
+            name: string;
+            /** @example 36 */
+            toothNumber: string;
+            /**
+             * Format: uuid
+             * @description La cita que lo reserva.
+             */
+            appointmentId: string;
+            /**
+             * Format: date-time
+             * @description Inicio de esa cita.
+             */
+            start: string;
+            /** Format: uuid */
+            locationId: string;
+            /**
+             * @description Sede de esa cita.
+             * @example Sede Norte
+             */
+            locationName: string;
+            /**
+             * @description Zona IANA de esa sede: la fecha se muestra en ella.
+             * @example America/Bogota
+             */
+            timeZone: string;
+        };
+        VisitMinimumChangeDto: {
+            /** Format: uuid */
+            planId: string;
+            /** @description Visita siguiente (2 si la cita era de la 1). */
+            visit: number;
+            /**
+             * @description Mínimo (día civil en la zona de la sede del plan) antes de sacar la cita de COMPLETED. null = sin mínimo clínico.
+             * @example 2027-01-20
+             */
+            minimumDayBefore: string | null;
+            /**
+             * @description Mínimo recalculado: la última cita de la visita anterior que SIGUE completada más el intervalo. null = ninguna sigue completada (o intervalo 0): se puede agendar desde hoy.
+             * @example null
+             */
+            minimumDayAfter: string | null;
+            /**
+             * Format: uuid
+             * @description La cita completada que fija ahora el mínimo, o null.
+             */
+            anchorAppointmentIdAfter: string | null;
+        };
+        CompletedExitDto: {
+            /**
+             * Format: uuid
+             * @description Fila de `appointment_status_reversals` con el motivo; el `audit_event` COMPLETED_EXIT la enlaza en `params.reversalId`.
+             */
+            reversalId: string;
+            /** @description El motivo, recortado. */
+            reason: string;
+            visitMinimums: components["schemas"]["VisitMinimumChangeDto"][];
+        };
         AppointmentWriteDto: {
             planItemIds: string[];
             /** Format: uuid */
@@ -5978,6 +6058,10 @@ export interface components {
             warnings: string[];
             /** @description DX-233: código de cada aviso, en el mismo orden que `warnings`: SCHEDULE_BLOCK (bloqueo que deja agendar, DX-122) o PROVIDER_OFF_SCHEDULE (fuera del horario del profesional en la sede). */
             warningCodes: components["schemas"]["AppointmentWarningCode"][];
+            /** @description DX-273: tratamientos de esta cita que siguen reservados en OTRA cita viva (p. ej. al marcar «Llegó», la reserva se quedó en la cita futura). Solo citas de sedes permitidas al usuario (DX-089): las de otras sedes se omiten. Vacío en una cita cancelada, no-show o completada. Si la cita que lo reservaba se cancela, se marca no-show o lo quita, la cita más temprana con el paciente en la clínica recupera la reserva en esa misma transacción (auditado `PLAN_ITEM_RESERVATION_RECOVERED`). Para moverla: `POST /appointments/:id/plan-items/:planItemId/claim`. */
+            planItemsReservedElsewhere: components["schemas"]["PlanItemReservedElsewhereDto"][];
+            /** @description DX-273: solo al sacar la cita de COMPLETED. El motivo y cómo queda el mínimo de la visita siguiente de cada plan afectado. */
+            completedExit?: components["schemas"]["CompletedExitDto"];
         };
         MedicalAlertFlagsDto: {
             /** @description La versión vigente de la anamnesis tiene alguna alerta (derivada en el servidor). false sin anamnesis. */
@@ -6112,6 +6196,8 @@ export interface components {
              * @enum {string}
              */
             punctuality: "ON_TIME" | "LATE" | "VERY_LATE";
+            /** @description DX-273: tratamientos de la cita reservados en OTRA cita viva (solo sedes permitidas al usuario). Vacío si no hay. */
+            planItemsReservedElsewhere: components["schemas"]["PlanItemReservedElsewhereDto"][];
             /** @description DX-247: la misma alerta médica que la tarjeta de la agenda (solo banderas). */
             medicalAlerts: components["schemas"]["MedicalAlertFlagsDto"];
         };
@@ -6216,10 +6302,15 @@ export interface components {
              */
             providerId?: string;
             /**
-             * @description DX-200: flujo en la clínica sin saltos (409 si no): ARRIVED desde SCHEDULED/CONFIRMED y solo el día de la cita (RECEPTION, ASSISTANT, ADMIN; fija `arrivedAt`); IN_CHAIR desde ARRIVED y READY_FOR_CHECKOUT desde IN_CHAIR (DENTIST, ASSISTANT, ADMIN; fijan `seatedAt` / `readyForCheckoutAt`); la salida a COMPLETED (o CANCELLED si se fue sin pasar al sillón) desde el flujo, RECEPTION, ASSISTANT, ADMIN. Nunca NO_SHOW desde el flujo; para volver a agendada, `POST /appointments/:id/undo-arrival`. Las horas las pone el servidor. Rol sin permiso: 403.
+             * @description DX-200: flujo en la clínica sin saltos (409 si no): ARRIVED desde SCHEDULED/CONFIRMED y solo el día de la cita (RECEPTION, ASSISTANT, ADMIN; fija `arrivedAt`); IN_CHAIR desde ARRIVED y READY_FOR_CHECKOUT desde IN_CHAIR (DENTIST, ASSISTANT, ADMIN; fijan `seatedAt` / `readyForCheckoutAt`); la salida a COMPLETED (o CANCELLED si se fue sin pasar al sillón) desde el flujo, RECEPTION, ASSISTANT, ADMIN. Nunca NO_SHOW desde el flujo; para volver a agendada, `POST /appointments/:id/undo-arrival`. Las horas las pone el servidor. Rol sin permiso: 403. DX-273: salir de COMPLETED (a cualquier otro estado) solo ADMIN y DENTIST, con `statusReason` (403 / 400).
              * @enum {string}
              */
             status?: "SCHEDULED" | "CONFIRMED" | "COMPLETED" | "CANCELLED" | "NO_SHOW" | "ARRIVED" | "IN_CHAIR" | "READY_FOR_CHECKOUT";
+            /**
+             * @description DX-273: motivo OBLIGATORIO para sacar la cita de COMPLETED (a SCHEDULED, CONFIRMED, CANCELLED…), de 3 a 500 caracteres tras recortar; sin él, 400. Esa salida solo la hacen ADMIN y DENTIST (RECEPTION/ASSISTANT: 403). Se guarda en `appointment_status_reversals` y queda auditado (`COMPLETED_EXIT`). El mínimo de la visita siguiente del plan se recalcula con la última cita de la visita anterior que siga completada (o queda sin mínimo); la respuesta lo dice en `completedExit.visitMinimums`. En cualquier otro cambio se ignora.
+             * @example La cirugía no se hizo: se marcó completada por error.
+             */
+            statusReason?: string;
             reason?: string;
             notes?: string;
             /** @description DX-210: «Adelantar si hay hueco». La cita sale como candidata para los huecos libres de días anteriores de su sede y profesional. Solo RECEPTION, DENTIST y ADMIN (403 para ASSISTANT); queda auditado. */
@@ -14031,6 +14122,7 @@ export interface operations {
             };
         };
         responses: {
+            /** @description La cita, los avisos y `planItemsReservedElsewhere` (DX-273: tratamientos de la cita que reserva otra cita, p. ej. tras «Llegó»). Al sacarla de COMPLETED, además `completedExit`. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -14039,14 +14131,14 @@ export interface operations {
                     "application/json": components["schemas"]["AppointmentWriteDto"];
                 };
             };
-            /** @description Datos inválidos o al pasado */
+            /** @description Datos inválidos o al pasado, o salida de COMPLETED sin `statusReason` válido (DX-273) */
             400: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description Rol sin permiso de agenda, o sin permiso para ese paso del flujo en la clínica (DX-200) */
+            /** @description Rol sin permiso de agenda, sin permiso para ese paso del flujo en la clínica (DX-200), o RECEPTION/ASSISTANT sacando una cita de COMPLETED (DX-273) */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -14069,6 +14161,57 @@ export interface operations {
             };
             /** @description Fuera del horario de atención de la sede de la cita */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AppointmentsController_claimPlanItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                planItemId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description DX-273 «Traer a esta cita»: con el paciente en la clínica (ARRIVED, IN_CHAIR o READY_FOR_CHECKOUT), la cita pasa a reservar un tratamiento suyo que reservaba otra cita viva; esa otra cita lo deja (su vínculo se retira). Una transacción, con las dos citas bloqueadas, y un `audit_event` APPOINTMENT_PLAN_ITEMS en cada una (`params`: planItemId, fromAppointmentId, toAppointmentId). Si ninguna otra cita lo reserva, solo recupera la reserva; si ya la tiene, no cambia nada. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AppointmentWriteDto"];
+                };
+            };
+            /** @description Ids que no son UUID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sede de la cita no permitida, o la cita que lo reserva es de una sede no permitida al usuario (DX-089; no se dice cuál) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La cita no existe en esta clínica, o el tratamiento no está en ella */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La cita no tiene al paciente en la clínica, otra cita lo tomó a la vez (dice cuál), o la cita cambió mientras tanto */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

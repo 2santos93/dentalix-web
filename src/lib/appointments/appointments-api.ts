@@ -96,6 +96,12 @@ export interface Appointment {
 /** DX-264: the grid receives no appointment notes. */
 export type ListAppointment = Omit<Appointment, 'notes'>;
 export type AppointmentDetail = Appointment & { notes: string | null };
+/**
+ * Respuesta del PATCH (DX-273): la cita, los tratamientos reservados en otra
+ * cita y, al sacarla de «Completada», el resumen del mínimo recalculado.
+ */
+export type AppointmentWriteDetail = AppointmentDetail &
+  Partial<Pick<components['schemas']['AppointmentWriteDto'], 'planItemsReservedElsewhere' | 'completedExit'>>;
 
 export async function createAppointment(
   token: string,
@@ -167,8 +173,8 @@ export async function updateAppointment(
   token: string,
   id: string,
   patch: UpdateAppointmentInput,
-): Promise<AppointmentDetail> {
-  return apiFetch<AppointmentDetail>(`/appointments/${id}`, {
+): Promise<AppointmentWriteDetail> {
+  return apiFetch<AppointmentWriteDetail>(`/appointments/${id}`, {
     method: 'PATCH',
     body: patch,
     token,
