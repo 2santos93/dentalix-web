@@ -34,6 +34,16 @@ jest.mock('../../lib/appointments/appointments-api', () => ({
   listAppointments: jest.fn(),
   updateAppointment: jest.fn(),
 }));
+// DX-279: la vista previa del aviso del diálogo de cancelar.
+jest.mock('../../lib/cancellations/cancellation', () => ({
+  ...jest.requireActual('../../lib/cancellations/cancellation'),
+  getCancellationPreview: jest.fn().mockResolvedValue({
+    appointmentId: 'apt-c',
+    noticeMinutes: 300,
+    lateCancellation: true,
+    policy: { id: 'p1', version: 1, noticeHours: 24 },
+  }),
+}));
 jest.mock('../../lib/appointments/appointment-types-api', () => ({
   listAppointmentTypes: jest.fn().mockResolvedValue([]),
 }));
@@ -1195,6 +1205,20 @@ describe('AgendaView', () => {
 
       const [select] = await screen.findAllByTestId('appointment-status-select');
       await pickStatus(user, select, 'Cancelada');
+      // DX-279: cancelar pide origen y motivo, y avisa si es tardía.
+      const dialog = await screen.findByRole('dialog', { name: /Cancelar la cita de/ });
+      expect(mockedUpdateAppointment).not.toHaveBeenCalled();
+      await user.click(within(dialog).getByLabelText(/El paciente avisa/));
+      expect(await within(dialog).findByTestId('late-cancellation-warning')).toHaveTextContent(
+        'Cancelación tardía: aviso de 5 h, la política pide 24 h',
+      );
+      await user.selectOptions(within(dialog).getByLabelText('Motivo'), 'ILLNESS');
+      await user.click(within(dialog).getByRole('button', { name: 'Cancelar la cita' }));
+      expect(mockedUpdateAppointment).toHaveBeenCalledWith(expect.any(String), 'apt-c', {
+        status: 'CANCELLED',
+        cancelledByKind: 'STAFF_FOR_PATIENT',
+        cancelReasonCode: 'ILLNESS',
+      });
       await waitFor(() => expect(mockedListWaitlist.mock.calls.length).toBeGreaterThan(before));
     });
   });

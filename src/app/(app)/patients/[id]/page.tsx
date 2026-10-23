@@ -10,6 +10,7 @@ import { PatientPostOpDeliveries } from '@/components/postop/patient-postop-deli
 import { ClinicalAlertBanner } from '@/components/patients/clinical-alert-banner';
 import { AnamnesisReviewLine } from '@/components/clinical/anamnesis-review-line';
 import { usePatientMedicalAlerts } from '@/components/clinical/use-patient-medical-alerts';
+import { usePatientAttendance } from '@/components/patients/use-patient-attendance';
 import { canConfirmAnamnesis } from '@/lib/clinical/medical-alerts';
 import {
   PatientDetailTabs,
@@ -138,6 +139,8 @@ function PatientDetailView() {
   // DX-247: banderas médicas de la cabecera (también la del plan y del
   // odontograma) y de la línea de revisión de la anamnesis.
   const medicalAlerts = usePatientMedicalAlerts(accessToken, patientId);
+  // DX-279: insignia de inasistencias y cancelaciones tardías (12 meses).
+  const attendance = usePatientAttendance(accessToken, patientId);
   const panels = useRef(new Map<PatientDetailTabKey, HTMLDivElement>());
   const firstRender = useRef(true);
 
@@ -260,6 +263,9 @@ function PatientDetailView() {
         medicalAlerts={medicalAlerts.data}
         medicalAlertsFailed={medicalAlerts.failed}
         onRetryMedicalAlerts={medicalAlerts.reload}
+        attendance={attendance.data}
+        attendanceFailed={attendance.failed}
+        onRetryAttendance={attendance.reload}
       />
 
       {loading ? (

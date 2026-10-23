@@ -1,5 +1,6 @@
 'use client';
 import { OverdueChip } from '@/components/collections/overdue-chip';
+import { AttendanceBadge } from '@/components/appointments/attendance-badge';
 import { overdueChipText } from '@/lib/collections/presentation';
 import { CoverageMarker } from '@/components/patients/coverage-chip';
 import { MedicalAlertIndicator } from '@/components/clinical/medical-alert-indicator';
@@ -647,6 +648,8 @@ export function DayColumns({
                             {[a.appointmentType?.name, STATUS_LABELS[a.status]].filter(Boolean).join(' · ')}
                           </span>
                           <OverdueChip balance={a.balance} compact />
+                          {/* DX-279: inasistencias y cancelaciones tardías (12 meses). */}
+                          <AttendanceBadge counts={a.attendance} compact />
                         </button>
                       </div>
                       {hasMedicalAlert ? (

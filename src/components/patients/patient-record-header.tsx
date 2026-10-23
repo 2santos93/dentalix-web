@@ -13,6 +13,11 @@ import { agreementChipText } from '@/lib/patients/agreement-presentation';
 import { coverageChipText } from '@/lib/patients/coverage-presentation';
 import { MedicalAlertIndicator } from '@/components/clinical/medical-alert-indicator';
 import { FieldError } from '@/components/errors/field-error';
+import { AttendanceBadge } from '@/components/appointments/attendance-badge';
+import {
+  attendanceBadgeText,
+  type PatientAttendanceSummary,
+} from '@/lib/cancellations/cancellation';
 import {
   medicalAlertHeadline,
   medicalAlertSeverity,
@@ -45,6 +50,8 @@ const copy = {
   edit: 'Editar datos',
   alertsLoading: 'Comprobando alertas…',
   alertsFailed: 'Alertas sin comprobar',
+  attendanceLoading: 'Comprobando inasistencias…',
+  attendanceFailed: 'Asistencia sin comprobar',
 };
 
 function fullName(patient: Patient): string {
@@ -82,6 +89,13 @@ interface PatientRecordHeaderProps {
   /** No se pudieron comprobar: se dice, con reintento (nunca parece «sin alertas»). */
   medicalAlertsFailed?: boolean;
   onRetryMedicalAlerts?: () => void;
+  /**
+   * DX-279: inasistencias y cancelaciones tardías de 12 meses (en las sedes
+   * del usuario). `null` = se están pidiendo; `undefined` = no se piden.
+   */
+  attendance?: PatientAttendanceSummary | null;
+  attendanceFailed?: boolean;
+  onRetryAttendance?: () => void;
 }
 
 /**
@@ -105,12 +119,17 @@ export function PatientRecordHeader({
   medicalAlerts,
   medicalAlertsFailed = false,
   onRetryMedicalAlerts,
+  attendance,
+  attendanceFailed = false,
+  onRetryAttendance,
 }: PatientRecordHeaderProps) {
   const items = patient ? identityItems(patient) : [];
   const alertSeverity = patient ? medicalAlertSeverity(medicalAlerts) : null;
   const alertHeadline = medicalAlerts ? medicalAlertHeadline(medicalAlerts) : null;
   // `null` = se están pidiendo; `undefined` = quien la usa no las pide.
   const alertsPending = !!patient && !medicalAlertsFailed && medicalAlerts === null;
+  const attendancePending = !!patient && !attendanceFailed && attendance === null;
+  const hasAttendanceBadge = !!patient && attendanceBadgeText(attendance?.totals) !== null;
   const title = loading
     ? copy.loadingTitle
     : patient
@@ -156,6 +175,12 @@ export function PatientRecordHeader({
               <Building2 aria-hidden className="size-3.5 shrink-0" />
               {copy.recordScope}
             </p>
+            {/* Sin hueco visible mientras se pide: la insignia aparece si la hay. */}
+            {attendancePending ? (
+              <p role="status" className="sr-only">
+                {copy.attendanceLoading}
+              </p>
+            ) : null}
             {/* DX-150: «Saldo vencido · N días» (con importe solo para ADMIN y
                 RECEPTION: la API ya lo omite para los demás roles). */}
             {/* DX-153: «Cobertura vencida», junto a la del saldo. DX-105: «Convenio: X». */}
@@ -165,7 +190,9 @@ export function PatientRecordHeader({
             agreementChipText(patient?.agreement) ||
             alertSeverity ||
             alertsPending ||
-            (patient && medicalAlertsFailed) ? (
+            (patient && medicalAlertsFailed) ||
+            hasAttendanceBadge ||
+            (patient && attendanceFailed) ? (
               <div className="flex flex-wrap items-center gap-2">
                 {alertsPending ? (
                   <p role="status" className="text-sm text-muted">
@@ -197,6 +224,15 @@ export function PatientRecordHeader({
                   </span>
                 ) : null}
                 {patient?.balance?.hasOverdue ? <OverdueChip balance={patient.balance} /> : null}
+                {/* DX-279: «2 inasistencias · 1 cancelación tardía (12 meses)». */}
+                {patient && attendanceFailed ? (
+                  <FieldError
+                    label={copy.attendanceFailed}
+                    onRetry={onRetryAttendance}
+                    className="h-9"
+                  />
+                ) : null}
+                {patient ? <AttendanceBadge counts={attendance?.totals} /> : null}
                 <CoverageChip coverage={patient?.coverage} />
                 <AgreementChip agreement={patient?.agreement} />
               </div>
