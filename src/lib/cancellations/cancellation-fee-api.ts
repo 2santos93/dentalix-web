@@ -3,7 +3,10 @@ import type { components } from '@/lib/api/schema';
 
 export type CancellationFeeView = components['schemas']['CancellationFeeViewDto'];
 
-/** Límites de la API (DX-291): motivo de la condonación de 3 a 500 caracteres. */
+/**
+ * Límites de la API (DX-291): motivo de la condonación (y de la anulación,
+ * SEC-050) de 3 a 500 caracteres.
+ */
 export const WAIVE_REASON_MIN = 3;
 export const WAIVE_REASON_MAX = 500;
 
@@ -41,6 +44,21 @@ export function waiveCancellationFee(
 ): Promise<CancellationFeeView> {
   return apiFetch<CancellationFeeView>(
     `/appointments/${encodeURIComponent(appointmentId)}/cancellation-fee/waive`,
+    { method: 'POST', body: { reason }, token },
+  );
+}
+
+/**
+ * `POST /appointments/:id/cancellation-fee/void` (SEC-050) — anula un cargo ya
+ * generado, con motivo: es la única forma; desde el plan su ítem no se toca.
+ */
+export function voidCancellationFee(
+  token: string,
+  appointmentId: string,
+  reason: string,
+): Promise<CancellationFeeView> {
+  return apiFetch<CancellationFeeView>(
+    `/appointments/${encodeURIComponent(appointmentId)}/cancellation-fee/void`,
     { method: 'POST', body: { reason }, token },
   );
 }

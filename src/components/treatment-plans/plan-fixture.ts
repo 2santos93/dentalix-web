@@ -35,4 +35,6 @@ export const ITEM_WITHOUT_DISCOUNT = {
   performedLocationId: null,
   performedLocationName: null,
   completedAt: null,
+  // SEC-050: no es el ítem de un cargo por inasistencia.
+  cancellationFeeAppointmentId: null,
 } as const;
