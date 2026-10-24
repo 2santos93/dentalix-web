@@ -994,7 +994,7 @@ export interface paths {
         };
         /**
          * Datos del RDA que faltan en la atención de una evolución
-         * @description Comprueba documento del paciente, diagnóstico principal CIE-10, CUPS de los procedimientos realizados ese día (odontograma), REPS de la sede (la de la cita o, sin cita, la principal) y registro profesional del autor. El NIT de la clínica sale en `pending` hasta DX-019. Sede fuera de Colombia: `notApplicable: true`.
+         * @description Comprueba documento del paciente, diagnóstico principal CIE-10, CUPS de los procedimientos realizados ese día (odontograma) y registro profesional del autor. La sede de la atención es la de la cita o, sin cita, la principal. El NIT de la clínica sale en `pending` hasta DX-019. Sede fuera de Colombia: `notApplicable: true`.
          */
         get: operations["ClinicalEntryRdaController_get"];
         put?: never;
@@ -4241,6 +4241,15 @@ export interface components {
             noticeMinutes: number;
             lateCancellation: boolean;
         };
+        AuditHealthRegistrationSideDto: {
+            number: string | null;
+            /** @description Si el nº sale en los documentos de la sede. */
+            shown: boolean;
+        };
+        AuditHealthRegistrationChangeDto: {
+            before: components["schemas"]["AuditHealthRegistrationSideDto"];
+            after: components["schemas"]["AuditHealthRegistrationSideDto"];
+        };
         AuditMetadataDto: {
             /** @description UPDATE: nombres de los campos enviados (nunca sus valores). */
             changedFields?: string[];
@@ -4268,6 +4277,8 @@ export interface components {
             attribution?: components["schemas"]["AuditAttributionChangeDto"];
             /** @description DX-279: cita cancelada desde la agenda, en su único evento (`reason` APPOINTMENT_CANCELLED; PATIENT_FLOW si estaba en la clínica; COMPLETED_EXIT si estaba completada): quién, código del motivo, minutos de aviso y si fue tardía. Nunca el texto libre del motivo. */
             cancellation?: components["schemas"]["AuditCancellationDto"];
+            /** @description DX-319: nº de registro sanitario de una sede y si sale en los documentos, antes y después (dato público de la sede, nunca de un paciente). */
+            healthRegistration?: components["schemas"]["AuditHealthRegistrationChangeDto"];
         };
         AuditEventDto: {
             /** Format: uuid */
@@ -5698,8 +5709,10 @@ export interface components {
             name: string;
             address: string | null;
             country: components["schemas"]["ClinicCountry"];
-            /** @description DX-212: código de habilitación REPS (12 dígitos) o null. */
-            repsHabilitationCode: string | null;
+            /** @description DX-319: nº de registro sanitario (texto libre) o null. */
+            healthRegistrationNumber: string | null;
+            /** @description DX-319: si el nº de registro sanitario aparece en los documentos de la sede (por defecto no). */
+            showHealthRegistrationNumber: boolean;
             /** @description DX-222: teléfono de la sede o null. */
             phone: string | null;
             isActive: boolean;
@@ -5730,10 +5743,12 @@ export interface components {
             /** @description País de la sede: decide los campos legales obligatorios de la receta (CO o ES). Por defecto CO. */
             country?: components["schemas"]["ClinicCountry"];
             /**
-             * @description DX-212: código de habilitación REPS de la sede (Colombia), 12 dígitos (400 con el formato esperado si no). Vacío o null lo quita. Solo ADMIN; queda auditado.
-             * @example 110010123401
+             * @description DX-319: nº de registro sanitario de la sede, texto libre sin formato ni validación por país (hasta 64 caracteres, se recorta). Solo ADMIN; queda auditado con su antes y después. Vacío o null lo quita; sin el campo no cambia.
+             * @example NRS 28/1234-AB
              */
-            repsHabilitationCode?: string | null;
+            healthRegistrationNumber?: string | null;
+            /** @description DX-319: si el nº de registro sanitario aparece en los documentos de la sede (por defecto no). */
+            showHealthRegistrationNumber?: boolean;
             /**
              * @description DX-222: teléfono de la sede que ven los pacientes en las indicaciones postoperatorias ({{telefono_sede}}). Hasta 40 caracteres. Vacío o null lo quita; sin el campo no cambia.
              * @example +57 601 555 0101
@@ -6084,14 +6099,14 @@ export interface components {
             diagnoses: components["schemas"]["ClinicalEntryDiagnosisDto"][];
         };
         /** @enum {string} */
-        RdaMissingCode: "PATIENT_DOCUMENT" | "PRINCIPAL_DIAGNOSIS" | "PROCEDURE_CUPS" | "LOCATION_REPS" | "AUTHOR_LICENSE";
+        RdaMissingCode: "PATIENT_DOCUMENT" | "PRINCIPAL_DIAGNOSIS" | "PROCEDURE_CUPS" | "AUTHOR_LICENSE";
         RdaMissingItemDto: {
             code: components["schemas"]["RdaMissingCode"];
             /** @example Código CUPS de «Profilaxis» */
             label: string;
             /**
              * Format: uuid
-             * @description Dónde completarlo: paciente (PATIENT_DOCUMENT), ítem del catálogo (PROCEDURE_CUPS), sede (LOCATION_REPS) o usuario autor (AUTHOR_LICENSE); null si no aplica.
+             * @description Dónde completarlo: paciente (PATIENT_DOCUMENT), ítem del catálogo (PROCEDURE_CUPS) o usuario autor (AUTHOR_LICENSE); null si no aplica.
              */
             resourceId: string | null;
         };

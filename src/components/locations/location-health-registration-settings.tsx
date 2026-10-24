@@ -1,15 +1,14 @@
 'use client';
 import * as React from 'react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { CheckCircle2 } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import {
+  HEALTH_REGISTRATION_NUMBER_MAX_LENGTH,
   listLocations,
-  REPS_PATTERN,
-  updateLocationReps,
+  updateLocationHealthRegistration,
   type ClinicLocation,
 } from '@/lib/locations/locations-api';
-import { COUNTRY_LABELS } from '@/lib/prescriptions/prescriptions-api';
 import { AsyncSection } from '@/components/shared/async-section';
 import { InlineError } from '@/components/errors/inline-error';
 import { Input } from '@/components/ui/input';
@@ -17,35 +16,39 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 
-export const locationRepsCopy = {
-  heading: 'Código de habilitación (REPS)',
+export const locationHealthRegistrationCopy = {
+  heading: 'Nº de registro sanitario',
   support:
-    'El código con el que la sede está inscrita en el REPS (12 dígitos). Lo pide el Resumen Digital de Atención (Res. 1888/2025) en las sedes de Colombia.',
-  label: 'Código de habilitación (REPS)',
-  labelFor: (name: string) => `Código de habilitación (REPS) de ${name}`,
-  placeholder: '12 dígitos',
+    'El número con el que la sede está inscrita ante la autoridad sanitaria. Es opcional y solo aparece en los documentos si lo activas.',
+  label: 'Nº de registro sanitario',
+  hint: 'Texto libre, tal como te lo asignó la autoridad sanitaria. Hasta 64 caracteres.',
+  show: 'Mostrar en los documentos',
+  showHint: 'Si lo activas, aparecerá en los documentos de esta sede que lo incluyan.',
   save: 'Guardar',
-  saveFor: (name: string) => `Guardar el código REPS de ${name}`,
+  saveFor: (name: string) => `Guardar el nº de registro sanitario de ${name}`,
   saved: 'Guardado',
-  invalid: 'El código de habilitación REPS debe tener 12 dígitos (ej. 110010123401).',
-  saveError: 'No pudimos guardar el código. Intenta de nuevo.',
-  notApplicable: 'No aplica: el REPS es de Colombia.',
+  saveError: 'No pudimos guardar el nº de registro sanitario. Intenta de nuevo.',
   readOnly: 'Solo un administrador puede cambiarlo.',
-  empty: 'Sin código',
+  empty: 'Sin nº',
+  shown: 'Aparece en los documentos',
+  hidden: 'No aparece en los documentos',
   loadError: 'No pudimos cargar las sedes.',
   inactive: 'inactiva',
 };
 
-const copy = locationRepsCopy;
+const copy = locationHealthRegistrationCopy;
 
-interface LocationRepsSettingsProps {
+interface LocationHealthRegistrationSettingsProps {
   token: string;
   /** Solo ADMIN edita (la API responde 403 al resto). */
   canEdit: boolean;
 }
 
-/** DX-212: código REPS de cada sede. ADMIN lo edita; el resto lo ve. */
-export function LocationRepsSettings({ token, canEdit }: LocationRepsSettingsProps) {
+/**
+ * DX-319: nº de registro sanitario de cada sede (texto libre, sin formato por
+ * país) y si sale en los documentos. ADMIN lo edita; el resto lo ve.
+ */
+export function LocationHealthRegistrationSettings({ token, canEdit }: LocationHealthRegistrationSettingsProps) {
   const [locations, setLocations] = useState<ClinicLocation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -74,9 +77,9 @@ export function LocationRepsSettings({ token, canEdit }: LocationRepsSettingsPro
   }, [token, reloadKey]);
 
   return (
-    <section aria-labelledby="reps-heading" className="flex flex-col gap-3">
+    <section aria-labelledby="health-registration-heading" className="flex flex-col gap-3">
       <div>
-        <h2 id="reps-heading" className="text-lg font-semibold text-ink">
+        <h2 id="health-registration-heading" className="text-lg font-semibold text-ink">
           {copy.heading}
         </h2>
         <p className="max-w-[68ch] text-sm text-muted">{copy.support}</p>
@@ -85,7 +88,7 @@ export function LocationRepsSettings({ token, canEdit }: LocationRepsSettingsPro
         <ul className="flex flex-col divide-y divide-hairline rounded-lg border border-border bg-surface">
           {locations.map((location) => (
             <li key={location.id} className="px-4 py-3">
-              <LocationRepsRow
+              <LocationHealthRegistrationRow
                 token={token}
                 location={location}
                 canEdit={canEdit}
@@ -101,7 +104,7 @@ export function LocationRepsSettings({ token, canEdit }: LocationRepsSettingsPro
   );
 }
 
-function LocationRepsRow({
+function LocationHealthRegistrationRow({
   token,
   location,
   canEdit,
@@ -112,29 +115,41 @@ function LocationRepsRow({
   canEdit: boolean;
   onSaved: (location: ClinicLocation) => void;
 }) {
-  const current = location.repsHabilitationCode ?? '';
+  const current = location.healthRegistrationNumber ?? '';
+  const currentShow = location.showHealthRegistrationNumber ?? false;
   const [value, setValue] = useState(current);
+  const [show, setShow] = useState(currentShow);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
-  const inputId = `reps-${location.id}`;
+  const inputRef = useRef<HTMLInputElement>(null);
+  const inputId = `health-registration-${location.id}`;
+  const hintId = `${inputId}-hint`;
   const errorId = `${inputId}-error`;
+  const showId = `${inputId}-show`;
+  const showHintId = `${showId}-hint`;
   const name = `${location.name}${location.isActive ? '' : ` (${copy.inactive})`}`;
+  const dirty = value.trim() !== current || show !== currentShow;
+
+  // Tras un error, el foco va al campo que hay que corregir, ya con el error
+  // enlazado (se lee al recibir el foco).
+  useEffect(() => {
+    if (error) inputRef.current?.focus();
+  }, [error]);
 
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
     setSaved(false);
-    const next = value.trim();
-    if (next && !REPS_PATTERN.test(next)) {
-      setError(copy.invalid);
-      return;
-    }
     setSaving(true);
     try {
-      const updated = await updateLocationReps(token, location.id, next || null);
+      const updated = await updateLocationHealthRegistration(token, location.id, {
+        healthRegistrationNumber: value.trim() || null,
+        showHealthRegistrationNumber: show,
+      });
       onSaved(updated);
-      setValue(updated.repsHabilitationCode ?? '');
+      setValue(updated.healthRegistrationNumber ?? '');
+      setShow(updated.showHealthRegistrationNumber ?? false);
       setSaved(true);
     } catch (err) {
       setError(apiErrorMessage(err, copy.saveError));
@@ -143,21 +158,7 @@ function LocationRepsRow({
     }
   }
 
-  const header = (
-    <div className="flex flex-col">
-      <span className="font-medium text-ink">{name}</span>
-      <span className="text-xs text-muted">{COUNTRY_LABELS[location.country]}</span>
-    </div>
-  );
-
-  if (location.country !== 'CO') {
-    return (
-      <div className="flex flex-col gap-1 text-sm sm:flex-row sm:items-center sm:justify-between">
-        {header}
-        <span className="text-muted">{copy.notApplicable}</span>
-      </div>
-    );
-  }
+  const header = <span className="font-medium text-ink">{name}</span>;
 
   if (!canEdit) {
     return (
@@ -165,7 +166,8 @@ function LocationRepsRow({
         {header}
         <div className="flex flex-col sm:items-end">
           <span className="text-xs text-muted">{copy.label}</span>
-          <span className="tabular-nums text-ink">{current || copy.empty}</span>
+          <span className="break-all text-ink">{current || copy.empty}</span>
+          <span className="text-xs text-muted">{currentShow ? copy.shown : copy.hidden}</span>
           <span className="text-xs text-muted">{copy.readOnly}</span>
         </div>
       </div>
@@ -180,32 +182,51 @@ function LocationRepsRow({
           {copy.label}
           <span className="sr-only"> · {name}</span>
         </Label>
-        <div className="flex gap-2">
-          <Input
-            id={inputId}
-            inputMode="numeric"
-            autoComplete="off"
-            maxLength={12}
-            placeholder={copy.placeholder}
-            value={value}
+        <Input
+          ref={inputRef}
+          id={inputId}
+          autoComplete="off"
+          maxLength={HEALTH_REGISTRATION_NUMBER_MAX_LENGTH}
+          value={value}
+          onChange={(e) => {
+            setValue(e.target.value);
+            setSaved(false);
+          }}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={error ? `${hintId} ${errorId}` : hintId}
+          className={cn(error && 'border-danger')}
+        />
+        <p id={hintId} className="text-xs text-muted">
+          {copy.hint}
+        </p>
+        <label htmlFor={showId} className="flex min-h-11 items-center gap-2 text-ink md:min-h-0">
+          <input
+            id={showId}
+            type="checkbox"
+            checked={show}
             onChange={(e) => {
-              setValue(e.target.value.replace(/\s/g, ''));
+              setShow(e.target.checked);
               setSaved(false);
             }}
-            aria-invalid={error ? true : undefined}
-            aria-describedby={error ? errorId : undefined}
-            className={cn('tabular-nums', error && 'border-danger')}
+            aria-describedby={showHintId}
+            className="size-4 accent-primary"
           />
-          <Button
-            type="submit"
-            variant="secondary"
-            disabled={saving || value.trim() === current}
-            aria-busy={saving || undefined}
-            aria-label={copy.saveFor(location.name)}
-          >
-            {copy.save}
-          </Button>
-        </div>
+          {copy.show}
+          <span className="sr-only"> · {name}</span>
+        </label>
+        <p id={showHintId} className="text-xs text-muted">
+          {copy.showHint}
+        </p>
+        <Button
+          type="submit"
+          variant="secondary"
+          className="self-start sm:self-end"
+          disabled={saving || !dirty}
+          aria-busy={saving || undefined}
+          aria-label={copy.saveFor(location.name)}
+        >
+          {copy.save}
+        </Button>
         {error ? (
           <InlineError id={errorId} className="text-xs">
             {error}

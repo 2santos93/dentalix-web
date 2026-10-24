@@ -8,14 +8,14 @@ import { API_URL } from './support/urls';
 /**
  * e2e (DX-212): códigos para el Resumen Digital de Atención.
  *
- * Una clínica nueva (sede principal en Colombia, sin REPS) con un paciente con
+ * Una clínica nueva (sede principal en Colombia) con un paciente con
  * documento, el registro profesional del ADMIN y un procedimiento hecho hoy en
  * el odontograma con un ítem del catálogo SIN CUPS. En la ficha:
  *   - «Nueva evolución» con diagnóstico principal K02.1 (buscando «caries») y
  *     relacionado K05.1 en el 36: la evolución los muestra con código y texto;
- *   - el chip dice «RDA: faltan 2 datos» y su lista enlaza a completarlos;
- *   - el CUPS se completa en el catálogo desde «Completar» y el REPS en
- *     Ajustes › Sedes;
+ *   - el chip dice «RDA: falta 1 dato» y su lista enlaza a completarlo;
+ *   - el CUPS se completa en el catálogo desde «Completar» (DX-319: la sede
+ *     ya no tiene REPS);
  *   - de vuelta en la ficha, el chip dice «RDA: listo».
  * En escritorio (1440px) y móvil (390px), sin scroll horizontal ni errores en
  * la consola del navegador.
@@ -48,7 +48,7 @@ async function expectNoHorizontalScroll(page: Page): Promise<void> {
 
 for (const viewport of VIEWPORTS) {
  for (const scheme of ['light', 'dark'] as const) {
-  test(`evolución con CIE-10 → «RDA: listo» tras completar CUPS y REPS (${viewport.name}, ${scheme})`, async ({
+  test(`evolución con CIE-10 → «RDA: listo» tras completar el CUPS (${viewport.name}, ${scheme})`, async ({
     page,
   }) => {
     test.setTimeout(120_000);
@@ -132,12 +132,11 @@ for (const viewport of VIEWPORTS) {
     await expect(diagnoses).toContainText('Caries de la dentina');
     await expect(diagnoses).toContainText('K05.1');
     await expect(diagnoses).toContainText('diente 36');
-    const chip = page.getByRole('button', { name: 'RDA: faltan 2 datos' }).locator('visible=true');
+    const chip = page.getByRole('button', { name: 'RDA: falta 1 dato' }).locator('visible=true');
     await expect(chip).toBeVisible({ timeout: 15_000 });
     await chip.click();
     const missing = page.getByRole('list', { name: 'Datos que faltan para el RDA' }).locator('visible=true');
     await expect(missing).toContainText(`Código CUPS de «${procedure.labelEs}»`);
-    await expect(missing).toContainText('Código de habilitación (REPS) de «Sede principal»');
     await expect(page.getByText('NIT de la clínica: pendiente de DX-019.').locator('visible=true')).toBeVisible();
     await expectNoHorizontalScroll(page);
     await shot('faltan');
@@ -154,15 +153,7 @@ for (const viewport of VIEWPORTS) {
     await expect(edit).toBeHidden();
     await expect(page.getByText('232101').locator('visible=true').first()).toBeVisible();
 
-    // 4. REPS en Ajustes › Sedes.
-    await page.goto(`${origin}/settings/sedes`);
-    const reps = page.getByLabel(/Código de habilitación \(REPS\) · Sede principal/);
-    await reps.fill('110010123401');
-    await page.getByRole('button', { name: 'Guardar el código REPS de Sede principal' }).click();
-    await expect(page.getByText('Guardado')).toBeVisible();
-    await expectNoHorizontalScroll(page);
-
-    // 5. Abrir40 evoluciones produce un único lote y conserva carga/error/retry.
+    // 4. Abrir40 evoluciones produce un único lote y conserva carga/error/retry.
     for (let i = 0; i < 39; i++) {
       await api('post', `/patients/${patient.id}/clinical-entries`, { notes: `Control QA ${i}`, diagnoses: [{ icd10Code: 'K02.1', kind: 'PRINCIPAL' }] });
     }

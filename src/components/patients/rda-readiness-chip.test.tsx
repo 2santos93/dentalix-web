@@ -30,7 +30,7 @@ describe('RdaReadinessChip (DX-212)', () => {
           missing: [
             { code: 'PRINCIPAL_DIAGNOSIS', label: 'Diagnóstico principal (CIE-10)', resourceId: null },
             { code: 'PROCEDURE_CUPS', label: 'Código CUPS de «Profilaxis»', resourceId: 'ci-1' },
-            { code: 'LOCATION_REPS', label: 'Código de habilitación (REPS) de «Sede»', resourceId: 'l1' },
+            { code: 'AUTHOR_LICENSE', label: 'Registro profesional de Dra. Ríos', resourceId: 'u1' },
           ],
         })}
       />,
@@ -45,8 +45,8 @@ describe('RdaReadinessChip (DX-212)', () => {
       screen.getByRole('link', { name: 'Completar: Código CUPS de «Profilaxis»' }),
     ).toHaveAttribute('href', '/catalog?item=ci-1');
     expect(
-      screen.getByRole('link', { name: 'Completar: Código de habilitación (REPS) de «Sede»' }),
-    ).toHaveAttribute('href', '/settings/sedes');
+      screen.getByRole('link', { name: 'Completar: Registro profesional de Dra. Ríos' }),
+    ).toHaveAttribute('href', '/staff/u1');
     expect(screen.getByText('NIT de la clínica: pendiente de DX-019.')).toBeInTheDocument();
   });
 

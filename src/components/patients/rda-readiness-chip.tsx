@@ -33,8 +33,6 @@ export function rdaMissingHref(item: RdaMissingItem, patientId: string): string 
       return `/patients/${encodeURIComponent(patientId)}?tab=data`;
     case 'PROCEDURE_CUPS':
       return item.resourceId ? `/catalog?item=${encodeURIComponent(item.resourceId)}` : '/catalog';
-    case 'LOCATION_REPS':
-      return '/settings/sedes';
     case 'AUTHOR_LICENSE':
       return item.resourceId ? `/staff/${encodeURIComponent(item.resourceId)}` : null;
     case 'PRINCIPAL_DIAGNOSIS':
