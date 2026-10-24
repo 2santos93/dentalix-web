@@ -1,24 +1,22 @@
-"use client";
-import * as React from "react";
-import { useRef, type KeyboardEvent } from "react";
-import { cn } from "@/lib/utils";
+'use client';
+import * as React from 'react';
+import { useRef, type KeyboardEvent } from 'react';
+import { cn } from '@/lib/utils';
 
-export type ExpensesTabKey = "gastos" | "resumen";
+export type ExpensesTabKey = 'gastos' | 'resumen';
 
 const TABS: { key: ExpensesTabKey; label: string }[] = [
-  { key: "gastos", label: "Gastos" },
-  { key: "resumen", label: "Resumen" },
+  { key: 'gastos', label: 'Gastos' },
+  { key: 'resumen', label: 'Resumen' },
 ];
 
 const copy = {
-  tablist: "Vistas de los gastos",
+  tablist: 'Vistas de los gastos',
 };
 
 /** `?tab=` de la URL → pestaña (cualquier otro valor cae en «Gastos»). */
-export function resolveExpensesTab(
-  value: string | null | undefined,
-): ExpensesTabKey {
-  return value === "resumen" ? "resumen" : "gastos";
+export function resolveExpensesTab(value: string | null | undefined): ExpensesTabKey {
+  return value === 'resumen' ? 'resumen' : 'gastos';
 }
 
 export const expensesTabId = (key: ExpensesTabKey) => `expenses-tab-${key}`;
@@ -35,9 +33,9 @@ export interface ExpensesViewTabs {
 export function expensesPanelProps(tabs: ExpensesViewTabs | undefined) {
   return tabs
     ? ({
-        role: "tabpanel",
+        role: 'tabpanel',
         id: tabs.panelId,
-        "aria-labelledby": tabs.tabId,
+        'aria-labelledby': tabs.tabId,
       } as const)
     : {};
 }
@@ -61,17 +59,17 @@ export function ExpensesTabs({ active, onChange }: ExpensesTabsProps) {
   function onKeyDown(event: KeyboardEvent<HTMLButtonElement>, index: number) {
     const last = TABS.length - 1;
     const next =
-      event.key === "ArrowRight"
+      event.key === 'ArrowRight'
         ? index === last
           ? 0
           : index + 1
-        : event.key === "ArrowLeft"
+        : event.key === 'ArrowLeft'
           ? index === 0
             ? last
             : index - 1
-          : event.key === "Home"
+          : event.key === 'Home'
             ? 0
-            : event.key === "End"
+            : event.key === 'End'
               ? last
               : null;
     if (next === null) return;
@@ -80,11 +78,7 @@ export function ExpensesTabs({ active, onChange }: ExpensesTabsProps) {
   }
 
   return (
-    <div
-      role="tablist"
-      aria-label={copy.tablist}
-      className="mb-6 flex gap-1 overflow-x-auto border-b border-border"
-    >
+    <div role="tablist" aria-label={copy.tablist} className="mb-6 flex gap-1 overflow-x-auto border-b border-border">
       {TABS.map((tab, index) => {
         const selected = tab.key === active;
         return (
@@ -102,10 +96,8 @@ export function ExpensesTabs({ active, onChange }: ExpensesTabsProps) {
             onClick={() => onChange(tab.key)}
             onKeyDown={(e) => onKeyDown(e, index)}
             className={cn(
-              "-mb-px min-h-11 whitespace-nowrap border-b-2 px-4 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary",
-              selected
-                ? "border-primary text-primary"
-                : "border-transparent text-muted hover:text-ink",
+              '-mb-px min-h-11 whitespace-nowrap border-b-2 px-4 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
+              selected ? 'border-primary text-primary' : 'border-transparent text-muted hover:text-ink',
             )}
           >
             {tab.label}

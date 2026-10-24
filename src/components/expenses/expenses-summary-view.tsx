@@ -1,16 +1,16 @@
-"use client";
-import * as React from "react";
-import { Fragment, useEffect, useState } from "react";
-import { ChevronDown, ChevronRight, Download, Lock } from "lucide-react";
-import { ApiError } from "@/lib/api/client";
-import { apiErrorMessage } from "@/lib/api/error-message";
+'use client';
+import * as React from 'react';
+import { Fragment, useEffect, useState } from 'react';
+import { ChevronDown, ChevronRight, Download, Lock } from 'lucide-react';
+import { ApiError } from '@/lib/api/client';
+import { apiErrorMessage } from '@/lib/api/error-message';
 import {
   downloadExpenseSummaryCsv,
   getExpenseSummary,
   type ExpenseSummary,
   type ExpenseSummaryQuery,
   type ExpenseSummaryRow,
-} from "@/lib/expenses/expenses-api";
+} from '@/lib/expenses/expenses-api';
 import {
   EXPENSE_SUMMARY_DEFAULT_MONTHS,
   EXPENSE_SUMMARY_MAX_DAYS,
@@ -20,73 +20,66 @@ import {
   shiftMonth,
   summaryMonthLabel,
   summaryRangeDays,
-} from "@/lib/expenses/presentation";
-import { saveCsv } from "@/lib/files/save-csv";
-import { formatCurrency } from "@/lib/format/currency";
-import { sedeToday, useSedeTimeZone } from "@/lib/locations/use-sede-time-zone";
-import { getActiveLocationId } from "@/lib/locations/location-store";
-import { notifyError } from "@/components/errors/notify";
-import { AsyncSection, TableSkeleton } from "@/components/shared/async-section";
-import { EmptyState } from "@/components/shared/empty-state";
-import { toolbarFieldClass } from "@/components/shared/list-toolbar";
-import { PageHeader } from "@/components/shared/page-header";
-import { Button } from "@/components/ui/button";
-import { Card } from "@/components/ui/card";
-import { Input } from "@/components/ui/input";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { cn } from "@/lib/utils";
-import { expensesPanelProps, type ExpensesViewTabs } from "./expenses-tabs";
-import { useExpenseLocations } from "./use-expense-locations";
+} from '@/lib/expenses/presentation';
+import { saveCsv } from '@/lib/files/save-csv';
+import { formatCurrency } from '@/lib/format/currency';
+import { sedeToday, useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
+import { getActiveLocationId } from '@/lib/locations/location-store';
+import { notifyError } from '@/components/errors/notify';
+import { AsyncSection, TableSkeleton } from '@/components/shared/async-section';
+import { EmptyState } from '@/components/shared/empty-state';
+import { toolbarFieldClass } from '@/components/shared/list-toolbar';
+import { PageHeader } from '@/components/shared/page-header';
+import { Button } from '@/components/ui/button';
+import { Card } from '@/components/ui/card';
+import { Input } from '@/components/ui/input';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { cn } from '@/lib/utils';
+import { expensesCopy } from './expenses-view';
+import { expensesPanelProps, type ExpensesViewTabs } from './expenses-tabs';
+import { useExpenseLocations } from './use-expense-locations';
 
 export const expensesSummaryCopy = {
-  title: "Gastos",
-  description:
-    "Lo que gasta cada sede: facturas, proveedores, pagos y salidas de caja menor. Por fecha de factura, en su moneda y sin convertir.",
-  locationLabel: "Sede",
-  locationAll: "Todas las sedes",
-  fromLabel: "Desde",
-  toLabel: "Hasta",
-  export: "Exportar CSV",
-  exporting: "Exportando…",
-  exportError: "No pudimos exportar el resumen.",
-  exported: "Resumen exportado.",
-  rangeOrder: "«Desde» no puede ser posterior a «Hasta».",
+  locationLabel: 'Sede',
+  locationAll: 'Todas las sedes',
+  fromLabel: 'Desde',
+  toLabel: 'Hasta',
+  export: 'Exportar CSV',
+  exporting: 'Exportando…',
+  exportError: 'No pudimos exportar el resumen.',
+  exported: 'Resumen exportado.',
+  rangeOrder: '«Desde» no puede ser posterior a «Hasta».',
   rangeLength: `El resumen abarca como máximo ${EXPENSE_SUMMARY_MAX_MONTHS} meses (${EXPENSE_SUMMARY_MAX_DAYS} días). Acorta el periodo.`,
-  rangeInvalid: "Elige un mes de inicio y un mes de fin.",
-  tableLabel: "Ingresos y gastos por mes, sede y moneda",
-  colMonth: "Mes",
-  colLocation: "Sede",
-  colCurrency: "Moneda",
-  colIncome: "Ingresos",
-  colExpenses: "Gastos",
-  colNet: "Neto",
-  breakdownLabel: "Gastos por categoría",
-  showBreakdown: (month: string, location: string) =>
-    `Ver gastos por categoría de ${month}, ${location}`,
-  hideBreakdown: (month: string, location: string) =>
-    `Ocultar gastos por categoría de ${month}, ${location}`,
-  noExpenses: "Sin gastos en el mes",
-  currencyNote: "Cada moneda va por separado: nunca se suman ni se convierten.",
+  rangeInvalid: 'Elige un mes de inicio y un mes de fin.',
+  tableLabel: 'Ingresos y gastos por mes, sede y moneda',
+  colMonth: 'Mes',
+  colLocation: 'Sede',
+  colCurrency: 'Moneda',
+  colIncome: 'Ingresos',
+  colExpenses: 'Gastos',
+  colNet: 'Neto',
+  breakdownLabel: 'Gastos por categoría',
+  // El nombre accesible empieza por la acción y acaba en el importe visible
+  // (WCAG 2.5.3: el nombre contiene el texto del botón).
+  showBreakdown: (month: string, location: string, amount: string) =>
+    `Ver gastos por categoría de ${month}, ${location}: ${amount}`,
+  hideBreakdown: (month: string, location: string, amount: string) =>
+    `Ocultar gastos por categoría de ${month}, ${location}: ${amount}`,
+  monthPlaceholder: 'AAAA-MM',
+  noExpenses: 'Sin gastos en el mes',
+  currencyNote: 'Cada moneda va por separado: nunca se suman ni se convierten.',
   // Sin «Intenta de nuevo.»: AsyncSection → SectionError trae «Reintentar».
-  loadError: "No pudimos cargar el resumen.",
-  badRequest: "El periodo no es válido. Revisa «Desde» y «Hasta».",
-  forbiddenTitle: "Tu rol no tiene acceso al resumen de gastos.",
-  forbiddenHint:
-    "Los gastos de la sede son para la administración de la clínica.",
-  empty: "No hay movimientos en este periodo",
-  emptyHint:
-    "No hay ingresos ni gastos en los meses elegidos. Prueba con otro periodo o con otra sede.",
+  loadError: 'No pudimos cargar el resumen.',
+  badRequest: 'El periodo no es válido. Revisa «Desde» y «Hasta».',
+  forbiddenTitle: 'Tu rol no tiene acceso al resumen de gastos.',
+  forbiddenHint: 'Los gastos de la sede son para la administración de la clínica.',
+  empty: 'No hay movimientos en este periodo',
+  emptyHint: 'No hay ingresos ni gastos en los meses elegidos. Prueba con otro periodo o con otra sede.',
 };
 
-const rowKey = (row: ExpenseSummaryRow) =>
-  `${row.month}|${row.locationId}|${row.currency}`;
+const ZONE_TIMEOUT_MS = 8000;
+
+const rowKey = (row: ExpenseSummaryRow) => `${row.month}|${row.locationId}|${row.currency}`;
 
 /**
  * «Resumen» (DX-274, solo ADMIN): ingresos contra gastos por mes, sede y
@@ -95,23 +88,23 @@ const rowKey = (row: ExpenseSummaryRow) =>
  * se elige en meses y no pasa de 366 días: lo impide el selector y lo valida
  * la pantalla antes de pedir nada.
  */
-export function ExpensesSummaryView({
-  token,
-  tabs,
-}: {
-  token: string;
-  tabs?: ExpensesViewTabs;
-}) {
+export function ExpensesSummaryView({ token, tabs }: { token: string; tabs?: ExpensesViewTabs }) {
   const timeZone = useSedeTimeZone(token);
-  const today = timeZone ? sedeToday(timeZone) : null;
+  // Si la zona de la sede no llega, tras un tiempo se sigue con la zona por
+  // defecto: la pantalla no se queda en el esqueleto.
+  const [zoneTimedOut, setZoneTimedOut] = useState(false);
+  useEffect(() => {
+    if (timeZone) return;
+    const timer = setTimeout(() => setZoneTimedOut(true), ZONE_TIMEOUT_MS);
+    return () => clearTimeout(timer);
+  }, [timeZone]);
+  const today = timeZone || zoneTimedOut ? sedeToday(timeZone) : null;
   const currentMonth = today ? today.slice(0, 7) : null;
-  const [activeLocationId] = useState<string | null>(() =>
-    getActiveLocationId(),
-  );
+  const [activeLocationId] = useState<string | null>(() => getActiveLocationId());
   const { locations } = useExpenseLocations(token);
   const [fromMonth, setFromMonth] = useState<string | null>(null);
   const [toMonth, setToMonth] = useState<string | null>(null);
-  const [locationId, setLocationId] = useState("ALL");
+  const [locationId, setLocationId] = useState('ALL');
   const [data, setData] = useState<ExpenseSummary | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -124,25 +117,16 @@ export function ExpensesSummaryView({
   // Por defecto, los últimos meses hasta el en curso, en la zona de la sede.
   const effectiveTo = toMonth ?? currentMonth;
   const effectiveFrom =
-    fromMonth ??
-    (currentMonth
-      ? shiftMonth(currentMonth, 1 - EXPENSE_SUMMARY_DEFAULT_MONTHS)
-      : null);
-  const days =
-    effectiveFrom && effectiveTo
-      ? summaryRangeDays(effectiveFrom, effectiveTo)
-      : null;
+    fromMonth ?? (currentMonth ? shiftMonth(currentMonth, 1 - EXPENSE_SUMMARY_DEFAULT_MONTHS) : null);
+  const days = effectiveFrom && effectiveTo ? summaryRangeDays(effectiveFrom, effectiveTo) : null;
   let rangeError: string | null = null;
   if (effectiveFrom && effectiveTo) {
     if (!days) rangeError = expensesSummaryCopy.rangeInvalid;
     else if (days.from > days.to) rangeError = expensesSummaryCopy.rangeOrder;
-    else if (daysInRange(days.from, days.to) > EXPENSE_SUMMARY_MAX_DAYS)
-      rangeError = expensesSummaryCopy.rangeLength;
+    else if (daysInRange(days.from, days.to) > EXPENSE_SUMMARY_MAX_DAYS) rangeError = expensesSummaryCopy.rangeLength;
   }
   const query: ExpenseSummaryQuery | null =
-    days && !rangeError
-      ? { ...days, ...(locationId !== "ALL" ? { locationId } : {}) }
-      : null;
+    days && !rangeError ? { ...days, ...(locationId !== 'ALL' ? { locationId } : {}) } : null;
   const queryKey = query ? JSON.stringify(query) : null;
 
   useEffect(() => {
@@ -189,12 +173,9 @@ export function ExpensesSummaryView({
       });
       setNotice(expensesSummaryCopy.exported);
     } catch (err) {
-      notifyError(
-        apiErrorMessage(err, { fallback: expensesSummaryCopy.exportError }),
-        {
-          onRetry: () => void exportCsv(),
-        },
-      );
+      notifyError(apiErrorMessage(err, { fallback: expensesSummaryCopy.exportError }), {
+        onRetry: () => void exportCsv(),
+      });
     } finally {
       setExporting(false);
     }
@@ -211,22 +192,14 @@ export function ExpensesSummaryView({
   const rows = data?.rows ?? [];
   const showLoading = !rangeError && ((loading && data === null) || !query);
   const activeLocations = locations.filter((l) => l.isActive);
-  const showLocationFilter =
-    activeLocationId === null && activeLocations.length > 1;
+  const showLocationFilter = activeLocationId === null && activeLocations.length > 1;
   // Los meses que ofrecen los selectores caben siempre en 366 días.
-  const fromMin = effectiveTo
-    ? shiftMonth(effectiveTo, 1 - EXPENSE_SUMMARY_MAX_MONTHS)
-    : null;
-  const toMax = effectiveFrom
-    ? shiftMonth(effectiveFrom, EXPENSE_SUMMARY_MAX_MONTHS - 1)
-    : null;
+  const fromMin = effectiveTo ? shiftMonth(effectiveTo, 1 - EXPENSE_SUMMARY_MAX_MONTHS) : null;
+  const toMax = effectiveFrom ? shiftMonth(effectiveFrom, EXPENSE_SUMMARY_MAX_MONTHS - 1) : null;
 
   return (
     <>
-      <PageHeader
-        title={expensesSummaryCopy.title}
-        description={expensesSummaryCopy.description}
-      />
+      <PageHeader title={expensesCopy.title} description={expensesCopy.description} />
       {tabs?.nav}
       <div className="flex flex-col gap-3" {...expensesPanelProps(tabs)}>
         {!forbidden ? (
@@ -237,7 +210,7 @@ export function ExpensesSummaryView({
                   aria-label={expensesSummaryCopy.locationLabel}
                   value={locationId}
                   onChange={(e) => setLocationId(e.target.value)}
-                  className={cn(toolbarFieldClass, "sm:w-48")}
+                  className={cn(toolbarFieldClass, 'sm:w-48')}
                 >
                   <option value="ALL">{expensesSummaryCopy.locationAll}</option>
                   {activeLocations.map((l) => (
@@ -248,63 +221,36 @@ export function ExpensesSummaryView({
                 </select>
               ) : null}
               <div className="grid grid-cols-2 gap-3 sm:flex sm:items-center">
-                <label className="flex min-w-0 items-center gap-2 text-sm text-muted">
-                  <span className="shrink-0">
-                    {expensesSummaryCopy.fromLabel}
-                  </span>
-                  <Input
-                    type="month"
-                    value={effectiveFrom ?? ""}
-                    min={fromMin ?? undefined}
-                    max={effectiveTo ?? undefined}
-                    onChange={(e) =>
-                      e.target.value && setFromMonth(e.target.value)
-                    }
-                    className="min-w-0 tabular-nums sm:w-40"
-                  />
-                </label>
-                <label className="flex min-w-0 items-center gap-2 text-sm text-muted">
-                  <span className="shrink-0">
-                    {expensesSummaryCopy.toLabel}
-                  </span>
-                  <Input
-                    type="month"
-                    value={effectiveTo ?? ""}
-                    min={effectiveFrom ?? undefined}
-                    max={toMax ?? undefined}
-                    onChange={(e) =>
-                      e.target.value && setToMonth(e.target.value)
-                    }
-                    className="min-w-0 tabular-nums sm:w-40"
-                  />
-                </label>
+                <MonthField
+                  label={expensesSummaryCopy.fromLabel}
+                  value={effectiveFrom ?? ''}
+                  min={fromMin ?? undefined}
+                  max={effectiveTo ?? undefined}
+                  onCommit={setFromMonth}
+                />
+                <MonthField
+                  label={expensesSummaryCopy.toLabel}
+                  value={effectiveTo ?? ''}
+                  min={effectiveFrom ?? undefined}
+                  max={toMax ?? undefined}
+                  onCommit={setToMonth}
+                />
               </div>
             </div>
             <Button
               type="button"
               variant="secondary"
               onClick={() => void exportCsv()}
-              disabled={
-                exporting ||
-                showLoading ||
-                Boolean(loadError) ||
-                Boolean(rangeError) ||
-                rows.length === 0
-              }
+              disabled={exporting || showLoading || Boolean(loadError) || Boolean(rangeError) || rows.length === 0}
               className="max-sm:mt-1"
             >
               <Download aria-hidden />
-              {exporting
-                ? expensesSummaryCopy.exporting
-                : expensesSummaryCopy.export}
+              {exporting ? expensesSummaryCopy.exporting : expensesSummaryCopy.export}
             </Button>
           </div>
         ) : null}
 
-        <p
-          role="status"
-          className={notice ? "text-sm text-success" : "sr-only"}
-        >
+        <p role="status" className={notice ? 'text-sm text-success' : 'sr-only'}>
           {notice}
         </p>
 
@@ -331,25 +277,14 @@ export function ExpensesSummaryView({
             emptyDescription={expensesSummaryCopy.emptyHint}
             skeleton={<TableSkeleton rows={5} />}
           >
-            <Card
-              aria-busy={loading || undefined}
-              className="overflow-hidden p-0"
-            >
-              <Table aria-label={expensesSummaryCopy.tableLabel}>
-                <caption className="sr-only">
-                  {expensesSummaryCopy.tableLabel}
-                </caption>
+            <Card aria-busy={loading || undefined} className="overflow-hidden p-0">
+              <Table>
+                <caption className="sr-only">{expensesSummaryCopy.tableLabel}</caption>
                 <TableHeader>
                   <TableRow className="hover:bg-transparent">
-                    <TableHead scope="col">
-                      {expensesSummaryCopy.colMonth}
-                    </TableHead>
-                    <TableHead scope="col">
-                      {expensesSummaryCopy.colLocation}
-                    </TableHead>
-                    <TableHead scope="col">
-                      {expensesSummaryCopy.colCurrency}
-                    </TableHead>
+                    <TableHead scope="col">{expensesSummaryCopy.colMonth}</TableHead>
+                    <TableHead scope="col">{expensesSummaryCopy.colLocation}</TableHead>
+                    <TableHead scope="col">{expensesSummaryCopy.colCurrency}</TableHead>
                     <TableHead scope="col" className="text-right">
                       {expensesSummaryCopy.colIncome}
                     </TableHead>
@@ -366,37 +301,22 @@ export function ExpensesSummaryView({
                     const key = rowKey(row);
                     const open = expanded.has(key);
                     const month = summaryMonthLabel(row.month);
-                    const panelId = `summary-breakdown-${key.replace(/[^\w-]/g, "_")}`;
+                    const expenses = formatCurrency(row.expensesTotal, row.currency);
+                    const panelId = `summary-breakdown-${key.replace(/[^\w-]/g, '_')}`;
                     return (
                       <Fragment key={key}>
                         <TableRow data-testid="summary-row">
-                          <TableCell
-                            data-label={expensesSummaryCopy.colMonth}
-                            className="font-medium"
-                          >
+                          <TableCell data-label={expensesSummaryCopy.colMonth} className="font-medium">
                             {month}
                           </TableCell>
-                          <TableCell
-                            data-label={expensesSummaryCopy.colLocation}
-                          >
-                            {row.locationName}
-                          </TableCell>
-                          <TableCell
-                            data-label={expensesSummaryCopy.colCurrency}
-                            className="tabular-nums"
-                          >
+                          <TableCell data-label={expensesSummaryCopy.colLocation}>{row.locationName}</TableCell>
+                          <TableCell data-label={expensesSummaryCopy.colCurrency} className="tabular-nums">
                             {row.currency}
                           </TableCell>
-                          <TableCell
-                            data-label={expensesSummaryCopy.colIncome}
-                            className="text-right tabular-nums"
-                          >
+                          <TableCell data-label={expensesSummaryCopy.colIncome} className="text-right tabular-nums">
                             {formatCurrency(row.income, row.currency)}
                           </TableCell>
-                          <TableCell
-                            data-label={expensesSummaryCopy.colExpenses}
-                            className="text-right tabular-nums"
-                          >
+                          <TableCell data-label={expensesSummaryCopy.colExpenses} className="text-right tabular-nums">
                             {row.categories.length > 0 ? (
                               <button
                                 type="button"
@@ -404,14 +324,8 @@ export function ExpensesSummaryView({
                                 aria-controls={panelId}
                                 aria-label={
                                   open
-                                    ? expensesSummaryCopy.hideBreakdown(
-                                        month,
-                                        row.locationName,
-                                      )
-                                    : expensesSummaryCopy.showBreakdown(
-                                        month,
-                                        row.locationName,
-                                      )
+                                    ? expensesSummaryCopy.hideBreakdown(month, row.locationName, expenses)
+                                    : expensesSummaryCopy.showBreakdown(month, row.locationName, expenses)
                                 }
                                 onClick={() => toggle(key)}
                                 className="inline-flex min-h-11 items-center gap-1 rounded-md px-1 tabular-nums hover:text-primary focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary sm:min-h-8"
@@ -419,52 +333,32 @@ export function ExpensesSummaryView({
                                 {open ? (
                                   <ChevronDown aria-hidden className="size-4" />
                                 ) : (
-                                  <ChevronRight
-                                    aria-hidden
-                                    className="size-4"
-                                  />
+                                  <ChevronRight aria-hidden className="size-4" />
                                 )}
-                                {formatCurrency(
-                                  row.expensesTotal,
-                                  row.currency,
-                                )}
+                                {expenses}
                               </button>
                             ) : (
-                              formatCurrency(row.expensesTotal, row.currency)
+                              expenses
                             )}
                           </TableCell>
                           <TableCell
                             data-label={expensesSummaryCopy.colNet}
-                            className={cn(
-                              "text-right font-medium tabular-nums",
-                              row.net < 0 && "text-danger",
-                            )}
+                            className={cn('text-right font-medium tabular-nums', row.net < 0 && 'text-danger')}
                           >
                             {formatCurrency(row.net, row.currency)}
                           </TableCell>
                         </TableRow>
                         {open ? (
                           <TableRow className="bg-surface-2 hover:bg-surface-2">
-                            <TableCell
-                              id={panelId}
-                              colSpan={6}
-                              data-label={expensesSummaryCopy.breakdownLabel}
-                            >
+                            <TableCell id={panelId} colSpan={6} data-label={expensesSummaryCopy.breakdownLabel}>
                               <ul
                                 aria-label={expensesSummaryCopy.breakdownLabel}
                                 className="flex flex-col gap-1 text-sm"
                               >
                                 {row.categories.map((c) => (
-                                  <li
-                                    key={c.category}
-                                    className="flex justify-between gap-4"
-                                  >
-                                    <span className="min-w-0 [overflow-wrap:anywhere]">
-                                      {c.category}
-                                    </span>
-                                    <span className="tabular-nums">
-                                      {formatCurrency(c.amount, row.currency)}
-                                    </span>
+                                  <li key={c.category} className="flex justify-between gap-4">
+                                    <span className="min-w-0 [overflow-wrap:anywhere]">{c.category}</span>
+                                    <span className="tabular-nums">{formatCurrency(c.amount, row.currency)}</span>
                                   </li>
                                 ))}
                               </ul>
@@ -477,12 +371,53 @@ export function ExpensesSummaryView({
                 </TableBody>
               </Table>
             </Card>
-            <p className="mt-3 text-xs text-muted">
-              {expensesSummaryCopy.currencyNote}
-            </p>
+            <p className="mt-3 text-xs text-muted">{expensesSummaryCopy.currencyNote}</p>
           </AsyncSection>
         )}
       </div>
     </>
+  );
+}
+
+const MONTH_TEXT = /^\d{4}-\d{2}$/;
+
+interface MonthFieldProps {
+  label: string;
+  value: string;
+  min?: string;
+  max?: string;
+  onCommit: (month: string) => void;
+}
+
+/**
+ * Selector de mes. Donde no hay selector nativo (Safari de escritorio) es un
+ * campo de texto: se guarda lo tecleado y solo se confirma un `AAAA-MM`
+ * completo, para que «2026-1» a medio escribir no dispare el aviso de rango.
+ */
+function MonthField({ label, value, min, max, onCommit }: MonthFieldProps) {
+  const [draft, setDraft] = useState(value);
+  const [synced, setSynced] = useState(value);
+  if (value !== synced) {
+    setSynced(value);
+    setDraft(value);
+  }
+  return (
+    <label className="flex min-w-0 items-center gap-2 text-sm text-muted">
+      <span className="shrink-0">{label}</span>
+      <Input
+        type="month"
+        inputMode="numeric"
+        pattern="\d{4}-\d{2}"
+        placeholder={expensesSummaryCopy.monthPlaceholder}
+        value={draft}
+        min={min}
+        max={max}
+        onChange={(e) => {
+          setDraft(e.target.value);
+          if (MONTH_TEXT.test(e.target.value)) onCommit(e.target.value);
+        }}
+        className="min-w-0 tabular-nums sm:w-40"
+      />
+    </label>
   );
 }
