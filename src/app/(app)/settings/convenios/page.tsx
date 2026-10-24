@@ -5,6 +5,7 @@ import { useAuthStore } from '@/lib/auth/auth-store';
 import { getTokenRole } from '@/lib/auth/token-role';
 import { canManageAgreements } from '@/lib/agreements/agreements-api';
 import { PageHeader } from '@/components/shared/page-header';
+import { SETTINGS_BACK } from '@/components/settings/settings-sections';
 import { AgreementsManager } from '@/components/agreements/agreements-manager';
 
 const copy = {
@@ -36,7 +37,7 @@ export default function AgreementsPage() {
 
   return (
     <>
-      <PageHeader title={copy.title} description={copy.description} />
+      <PageHeader back={SETTINGS_BACK} title={copy.title} description={copy.description} />
       <AgreementsManager
         token={accessToken}
         allowed={canManageAgreements(getTokenRole(accessToken))}

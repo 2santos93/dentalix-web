@@ -229,7 +229,12 @@ test('treatment plan: create -> add item -> total -> status DONE -> remove -> to
   // --- Change item 1's status: PROPOSED -> DONE ("Realizado") ---
   const itemStatusSelect = (tooth: string) => itemRow(tooth).getByLabel(`Estado del ítem del diente ${tooth}`);
   await itemStatusSelect(tooth1).selectOption({ label: 'Realizado' });
-  await expect(itemRow(tooth1)).toContainText('Realizado', { timeout: 10_000 });
+  // DX-050: «Realizado» pide quién lo hizo; la titular (ADMIN, atiende) viene elegida.
+  const markDone = page.getByRole('dialog', { name: 'Marcar como realizado' });
+  await expect(markDone.getByLabel('Profesional que lo realizó')).not.toHaveValue('');
+  await markDone.getByRole('button', { name: 'Marcar realizado' }).click();
+  await expect(markDone).toBeHidden();
+  await expect(itemRow(tooth1)).toContainText(`Realizado por ${fullName}`, { timeout: 10_000 });
   await expect(itemStatusSelect(tooth1)).toHaveValue('DONE');
 
   // --- Add a second item (tooth 21), same seeded procedure ---

@@ -65,7 +65,7 @@ import {
 import { PaymentReceiptDialog } from '@/components/payments/payment-receipt-dialog';
 import { VoidPaymentModal } from '@/components/payments/void-payment-modal';
 import { voidPaymentErrorMessage } from '@/components/payments/use-void-payment';
-import { getTokenAllowedLocationIds, getTokenRole } from '@/lib/auth/token-role';
+import { getTokenAllowedLocationIds, getTokenRole, getTokenUserId } from '@/lib/auth/token-role';
 import { PaymentPlanSection } from './payment-plan-section';
 import { PlanVisitsBoard } from './plan-visits-board';
 import { PlanQuoteActions } from './plan-quote-actions';
@@ -104,6 +104,8 @@ import { BulkDiscountModal, bulkDiscountCopy } from '@/components/discounts/bulk
 import { usePriceQuote } from '@/lib/treatment-plans/use-price-quote';
 import { FieldError } from '@/components/errors/field-error';
 import { PriceQuoteLine, itemPriceOriginText } from './price-quote-line';
+import { MarkDoneModal } from './mark-done-modal';
+import { attributionText } from '@/lib/treatment-plans/item-attribution';
 
 // Copy as constants (i18n-ready, es-first) — matches odontogram-tab.tsx /
 // agenda-view.tsx convention until next-intl wiring lands.
@@ -152,6 +154,9 @@ const copy = {
   genericPlanStatusError: 'No pudimos actualizar el estado del plan. Intenta de nuevo.',
   itemsTableCaption: 'Ítems del plan de tratamiento',
   colTooth: 'Diente',
+  // DX-291: un cargo administrativo (inasistencia) no es de ningún diente.
+  noTooth: 'Sin diente',
+  noSurfaces: '—',
   colProcedure: 'Procedimiento',
   colSurfaces: 'Caras',
   colPrice: 'Precio',
@@ -176,6 +181,10 @@ const copy = {
   genericItemUpdateError: 'No pudimos actualizar el estado del ítem. Intenta de nuevo.',
   genericRemoveItemError: 'No pudimos quitar el ítem. Intenta de nuevo.',
   itemStatusSelectLabel: (tooth: string) => `Estado del ítem del diente ${tooth}`,
+  // DX-050: quién lo realizó. Corregirlo es solo de la administración.
+  correctAttribution: 'Corregir',
+  correctAttributionFor: (tooth: string) => `Corregir quién realizó el ítem del diente ${tooth}`,
+  markDoneSubject: (procedure: string, tooth: string) => `${procedure} · diente ${tooth}`,
   addItemHeading: 'Agregar ítem',
   invalidToothNumber: 'Número de diente inválido. Usa la notación FDI (ej. 11, 26, 55).',
   procedureLabel: 'Procedimiento',
@@ -376,6 +385,13 @@ interface ItemsTableProps {
   onStatusChange: (itemId: string, status: TreatmentPlanItemStatus) => void;
   onRemove: (itemId: string) => void;
   /**
+   * DX-050: sacar un ítem de «Realizado» es de la administración o de quien
+   * lo realizó (la API responde 403 a otro): si no, solo se ofrece su estado.
+   */
+  canLeaveDone?: (item: TreatmentPlanItem) => boolean;
+  /** DX-050: ADMIN corrige quién realizó un ítem (sin ella, no se ofrece). */
+  onCorrectAttribution?: (itemId: string) => void;
+  /**
    * Plan aceptado con firma (DX-012): sus ítems no se quitan ni vuelven a
    * «Propuesto» (la API responde 409); el tratamiento sí avanza.
    */
@@ -398,6 +414,38 @@ interface ItemsTableProps {
     selectedIds: ReadonlySet<string>;
     onToggle: (itemId: string, checked: boolean) => void;
   };
+}
+
+/**
+ * DX-050: «Realizado por Dra. X · fecha · sede» (o «Sin atribuir») bajo un
+ * ítem realizado; con `onCorrect` (ADMIN), el enlace para corregirlo.
+ */
+function ItemAttributionLine({
+  item,
+  onCorrect,
+}: {
+  item: TreatmentPlanItem;
+  onCorrect?: (itemId: string) => void;
+}) {
+  const text = attributionText(item);
+  if (!text) return null;
+  return (
+    <span className="flex flex-wrap items-center gap-x-2 text-xs text-muted">
+      <span className="tabular-nums">{text}</span>
+      {onCorrect ? (
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="h-11 px-2 text-xs md:h-7"
+          aria-label={copy.correctAttributionFor(item.toothNumber)}
+          onClick={() => onCorrect(item.id)}
+        >
+          {copy.correctAttribution}
+        </Button>
+      ) : null}
+    </span>
+  );
 }
 
 /** Línea del descuento de un ítem: importe y, si lo tiene, su motivo. */
@@ -455,7 +503,8 @@ function OdontogramLink({
   toothNumber: string;
   href?: (toothNumber: string) => string;
 }) {
-  if (!href) return null;
+  // DX-291: un cargo administrativo no tiene diente al que volver.
+  if (!href || !toothNumber) return null;
   return (
     <Link
       href={href(toothNumber)}
@@ -567,9 +616,9 @@ function procedureName(item: TreatmentPlanItem, catalogById: Map<string, DentalC
 }
 
 function surfacesLabel(item: TreatmentPlanItem): string {
-  return item.surfaces.length > 0
-    ? item.surfaces.map((s) => SURFACE_LABELS[s]).join(', ')
-    : copy.wholeToothFallback;
+  if (item.surfaces.length > 0) return item.surfaces.map((s) => SURFACE_LABELS[s]).join(', ');
+  // DX-291: un cargo administrativo no tiene diente ni caras.
+  return item.toothNumber ? copy.wholeToothFallback : copy.noSurfaces;
 }
 
 function ItemsTable({
@@ -582,6 +631,8 @@ function ItemsTable({
   implantHref,
   onStatusChange,
   onRemove,
+  canLeaveDone = () => true,
+  onCorrectAttribution,
   locked = false,
   closed = false,
   markDoneOnly = false,
@@ -598,7 +649,9 @@ function ItemsTable({
   const statusFrozen = (item: TreatmentPlanItem) =>
     closed && !(markDoneOnly && item.status === 'ACCEPTED');
   const optionDisabled = (item: TreatmentPlanItem, status: TreatmentPlanItemStatus) =>
-    (locked && status === 'PROPOSED') || (closed && status !== item.status && status !== 'DONE');
+    (locked && status === 'PROPOSED') ||
+    (closed && status !== item.status && status !== 'DONE') ||
+    (item.status === 'DONE' && status !== 'DONE' && !canLeaveDone(item));
   if (items.length === 0) {
     return <EmptyState role="status" title={copy.emptyItemsTitle} description={copy.emptyItemsDescription} />;
   }
@@ -643,7 +696,7 @@ function ItemsTable({
                       <ItemSelectBox item={item} selection={selection} />
                     </TableCell>
                   ) : null}
-                  <TableCell className="font-medium tabular-nums">{item.toothNumber}</TableCell>
+                  <TableCell className="font-medium tabular-nums">{item.toothNumber || copy.noTooth}</TableCell>
                   <TableCell>{procedureName(item, catalogById)}</TableCell>
                   <TableCell className="text-muted">{surfacesLabel(item)}</TableCell>
                   <TableCell className="tabular-nums">
@@ -675,6 +728,7 @@ function ItemsTable({
                           </span>
                         )}
                       </span>
+                      <ItemAttributionLine item={item} onCorrect={onCorrectAttribution} />
                     </div>
                   </TableCell>
                   <TableCell>
@@ -683,8 +737,8 @@ function ItemsTable({
                         toque. */}
                     <div className="flex flex-wrap items-center gap-3">
                       <OdontogramLink toothNumber={item.toothNumber} href={odontogramHref} />
-                      {implantLink ? <RegisterImplantLink item={item} href={implantLink} /> : null}
-                      {odontogramHref && !locked && !closed ? <Separator orientation="vertical" className="h-5" /> : null}
+                      {implantLink && item.toothNumber ? <RegisterImplantLink item={item} href={implantLink} /> : null}
+                      {item.toothNumber && odontogramHref && !locked && !closed ? <Separator orientation="vertical" className="h-5" /> : null}
                       {locked || closed ? null : (
                         <Button
                           type="button"
@@ -723,7 +777,7 @@ function ItemsTable({
               <div className="flex items-center justify-between gap-2">
                 <span className="flex items-center gap-3 font-medium text-ink tabular-nums">
                   {selection ? <ItemSelectBox item={item} selection={selection} /> : null}
-                  {copy.colTooth} {item.toothNumber}
+                  {item.toothNumber ? `${copy.colTooth} ${item.toothNumber}` : copy.noTooth}
                 </span>
                 <Badge variant={ITEM_STATUS_BADGE_VARIANT[item.status]}>
                   {ITEM_STATUS_LABELS[item.status]}
@@ -735,6 +789,9 @@ function ItemsTable({
                 {formatCurrency(item.price, currency)}
                 <ItemDiscountLine item={item} currency={currency} />
               </p>
+              <div className="mt-1">
+                <ItemAttributionLine item={item} onCorrect={onCorrectAttribution} />
+              </div>
               <div className="mt-3 flex items-center justify-between gap-2">
                 <select
                   aria-label={copy.itemStatusSelectLabel(item.toothNumber)}
@@ -761,10 +818,10 @@ function ItemsTable({
                   </Button>
                 )}
               </div>
-              {odontogramHref || implantLink ? (
+              {item.toothNumber && (odontogramHref || implantLink) ? (
                 <p className="mt-3 flex flex-wrap gap-x-4 gap-y-2">
                   <OdontogramLink toothNumber={item.toothNumber} href={odontogramHref} />
-                  {implantLink ? <RegisterImplantLink item={item} href={implantLink} /> : null}
+                  {implantLink && item.toothNumber ? <RegisterImplantLink item={item} href={implantLink} /> : null}
                 </p>
               ) : null}
             </li>
@@ -966,6 +1023,7 @@ export function TreatmentPlansTab({
   // Plans list + catalog (loaded together).
   const [plans, setPlans] = useState<TreatmentPlan[]>([]);
   const [catalogItems, setCatalogItems] = useState<DentalCatalogItem[]>([]);
+  const [allCatalogItems, setAllCatalogItems] = useState<DentalCatalogItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -1008,6 +1066,9 @@ export function TreatmentPlansTab({
   // que se confirma o se cancela. El error va al diálogo, no a la línea
   // inline de arriba, que es la del cambio de estado.
   const [itemToRemove, setItemToRemove] = useState<string | null>(null);
+  // DX-050: el ítem que se marca como realizado (eligiendo quién lo hizo) o
+  // cuya atribución corrige un ADMIN.
+  const [markDone, setMarkDone] = useState<{ itemId: string; mode: 'done' | 'correct' } | null>(null);
   const [removeItemError, setRemoveItemError] = useState<string | null>(null);
 
   // Balance + abonos (PAY-T4) — a genuinely separate resource from
@@ -1127,11 +1188,16 @@ export function TreatmentPlansTab({
       try {
         const [plansData, catalogData] = await Promise.all([
           listPlans(token, patientId),
-          listCatalogItems(token, { kind: 'PROCEDURE', activeOnly: true }),
+          // Todos (también los inactivos): un ítem ya dado de alta conserva su
+          // nombre aunque el procedimiento se retire (p. ej. el cargo por
+          // inasistencia de DX-291, inactivo a propósito). El selector solo
+          // ofrece los activos.
+          listCatalogItems(token, { kind: 'PROCEDURE' }),
         ]);
         if (cancelled) return;
         setPlans(plansData);
-        setCatalogItems(catalogData);
+        setAllCatalogItems(catalogData);
+        setCatalogItems(catalogData.filter((item) => item.active));
         setLoadError(null);
         setHasLoadedOnce(true);
       } catch (err) {
@@ -1237,7 +1303,7 @@ export function TreatmentPlansTab({
     setAddPaymentError(null);
   }
 
-  const catalogById = new Map(catalogItems.map((item) => [item.id, item]));
+  const catalogById = new Map(allCatalogItems.map((item) => [item.id, item]));
 
   // DX-105: el precio resuelto de la prestación elegida para ESTE paciente
   // (convenio > lista de la sede > catálogo). Precarga el campo; si falla,
@@ -1636,6 +1702,12 @@ export function TreatmentPlansTab({
 
   async function handleItemStatusChange(itemId: string, status: TreatmentPlanItemStatus) {
     if (!selectedPlanId) return;
+    // DX-050: «Realizado» pide antes quién lo hizo.
+    const current = planDetail?.items?.find((i) => i.id === itemId);
+    if (status === 'DONE' && current && current.status !== 'DONE') {
+      setMarkDone({ itemId, mode: 'done' });
+      return;
+    }
     setUpdatingItemId(itemId);
     setItemActionError(null);
     try {
@@ -1647,6 +1719,13 @@ export function TreatmentPlansTab({
     } finally {
       setUpdatingItemId(null);
     }
+  }
+
+  /** DX-050: el modal guardó; el ítem (y lo facturable) se refrescan. */
+  function handleMarkDoneSaved() {
+    setMarkDone(null);
+    setItemActionError(null);
+    void Promise.all([refreshPlanDetail(), refreshBalanceAndPayments()]);
   }
 
   /** La fila ya no quita: abre la confirmación. */
@@ -1828,6 +1907,9 @@ export function TreatmentPlansTab({
   const closed = planDetail ? isPlanClosed(planDetail.status) : false;
   const billable = planDetail ? isPlanBillable(planDetail.status) : true;
   const role = getTokenRole(token);
+  const sessionUserId = getTokenUserId(token);
+  // DX-050: el ítem del modal «Marcar como realizado» / «Corregir».
+  const markDoneItem = markDone ? (planDetail?.items?.find((i) => i.id === markDone.itemId) ?? null) : null;
   // DX-204: un presupuesto aceptado (firmado o no) o cerrado no se vuelve a
   // descontar.
   const discountable = Boolean(planDetail) && !signed && !closed && planDetail?.status !== 'ACCEPTED';
@@ -2094,6 +2176,10 @@ export function TreatmentPlansTab({
                   implantHref={implantHref}
                   onStatusChange={handleItemStatusChange}
                   onRemove={openRemoveConfirm}
+                  canLeaveDone={(item) => role === 'ADMIN' || item.performedById === sessionUserId}
+                  onCorrectAttribution={
+                    role === 'ADMIN' ? (itemId) => setMarkDone({ itemId, mode: 'correct' }) : undefined
+                  }
                   locked={signed}
                   closed={closed}
                   markDoneOnly={planDetail?.status === 'COMPLETED'}
@@ -2515,6 +2601,26 @@ export function TreatmentPlansTab({
           if (!open) setReceiptPaymentId(null);
         }}
       />
+
+      {markDone && markDoneItem && planDetail ? (
+        <MarkDoneModal
+          key={`${markDone.itemId}-${markDone.mode}`}
+          open
+          onOpenChange={(open) => {
+            if (!open) setMarkDone(null);
+          }}
+          token={token}
+          planId={planDetail.id}
+          item={markDoneItem}
+          subject={copy.markDoneSubject(procedureName(markDoneItem, catalogById), markDoneItem.toothNumber)}
+          mode={markDone.mode}
+          // Se lee al abrir (tras un clic, sin riesgo de hidratación): es la
+          // sede que el cliente HTTP manda en `X-Location-Id`.
+          activeLocationId={getActiveLocationId()}
+          locationName={locations.find((l) => l.id === getActiveLocationId())?.name ?? null}
+          onSaved={handleMarkDoneSaved}
+        />
+      ) : null}
 
       <ConfirmDialog
         open={itemToRemove !== null}

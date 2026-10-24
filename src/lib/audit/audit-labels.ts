@@ -1,6 +1,7 @@
 import type { AuditAction, AuditEvent, AuditResourceType } from './audit-api';
 import type { ClinicRole } from '@/lib/me/me-api';
 import type { BadgeProps } from '@/components/ui/badge';
+import { formatDate } from '@/lib/format/date';
 
 // Copy en español (i18n-ready), como el resto de etiquetas de dominio.
 
@@ -95,6 +96,10 @@ export const AUDIT_RESOURCE_LABELS: Record<AuditResourceType, string> = {
   AGREEMENT: 'Convenio',
   // DX-233: horario de un profesional por sede y sus excepciones por fecha.
   PROVIDER_SCHEDULE: 'Horario del profesional',
+  // DX-099: anamnesis por enlace (enlace, envío, revisión, anulación).
+  MEDICAL_HISTORY_SUBMISSION: 'Anamnesis por enlace',
+  // DX-279: nueva versión de la política de cancelación de una sede.
+  CANCELLATION_POLICY: 'Política de cancelación',
 };
 
 export const AUDIT_RESOURCE_OPTIONS = Object.keys(AUDIT_RESOURCE_LABELS) as AuditResourceType[];
@@ -139,9 +144,30 @@ export function communicationDetail(metadata: AuditMetadata): string | null {
   return metadata.origin ? `${what} · ${ORIGIN_LABELS[metadata.origin]}` : what;
 }
 
-/** DX-128: la baja la hizo el propio paciente (el evento no tiene usuario). */
+/**
+ * DX-128: la baja la hizo el propio paciente (el evento no tiene usuario).
+ * DX-099: también el envío de la anamnesis por enlace y su autorización.
+ */
 export function isPatientOptOut(metadata: AuditMetadata): boolean {
-  return metadata.reason === 'REMINDER_OPT_OUT';
+  return (
+    metadata.reason === 'REMINDER_OPT_OUT' ||
+    metadata.reason === 'ANAMNESIS_SUBMITTED' ||
+    metadata.reason === 'ANAMNESIS_LINK'
+  );
+}
+
+const ANAMNESIS_REASONS: Record<string, string> = {
+  ANAMNESIS_LINK_CREATED: 'Enlace de anamnesis creado',
+  ANAMNESIS_SUBMITTED: 'Anamnesis enviada por el paciente',
+  ANAMNESIS_LINK: 'Autorización de datos de salud dada en el enlace de anamnesis',
+  ANAMNESIS_ACCEPTED: 'Anamnesis aceptada en la historia clínica',
+  ANAMNESIS_REJECTED: 'Anamnesis rechazada',
+  ANAMNESIS_LINK_REVOKED: 'Enlace de anamnesis anulado',
+};
+
+/** DX-099: qué pasó con la anamnesis por enlace, o null si no es de ella. */
+export function anamnesisDetail(metadata: AuditMetadata): string | null {
+  return (metadata.reason && ANAMNESIS_REASONS[metadata.reason]) ?? null;
 }
 
 const STAFF_LOGIN_REASONS: Record<string, string> = {
@@ -272,3 +298,74 @@ export function patientFlowDetail(metadata: AuditMetadata): string | null {
   return `${what} · ${label(status.from)} → ${label(status.to)}`;
 }
 
+
+const PLAN_ITEM_ATTRIBUTION_REASONS: Record<string, string> = {
+  PLAN_ITEM_ATTRIBUTION_CORRECTED: 'Corrección de quién lo realizó',
+  PLAN_ITEM_DONE_REVERTED: 'Se quitó «Realizado»',
+};
+
+/**
+ * DX-050: un ADMIN corrigió quién o cuándo realizó un ítem del plan, o el ítem
+ * salió de «Realizado» («Corrección de quién lo realizó · Fecha 20/10/2026 →
+ * 19/10/2026»). La metadata solo trae ids e instantes: se dice qué cambió, no
+ * nombres. null si el evento no es de la atribución.
+ */
+export function planItemAttributionDetail(metadata: AuditMetadata): string | null {
+  const what = metadata.reason ? PLAN_ITEM_ATTRIBUTION_REASONS[metadata.reason] : undefined;
+  if (!what) return null;
+  const change = metadata.attribution;
+  if (!change) return what;
+  const { before, after } = change;
+  const parts = [what];
+  if (metadata.reason === 'PLAN_ITEM_DONE_REVERTED') {
+    if (before.completedAt) parts.push(`realizado el ${formatDate(before.completedAt)}`);
+    return parts.join(' · ');
+  }
+  if (before.performedById === null) {
+    parts.push('Antes sin atribuir');
+  } else if (before.performedById !== after.performedById) {
+    parts.push('Otro profesional');
+  }
+  if (before.completedAt && after.completedAt && before.completedAt !== after.completedAt) {
+    parts.push(`Fecha ${formatDate(before.completedAt)} → ${formatDate(after.completedAt)}`);
+  }
+  return parts.join(' · ');
+}
+
+const CANCELLATION_KIND_AUDIT: Record<string, string> = {
+  PATIENT_LINK: 'el paciente por el enlace',
+  STAFF_FOR_PATIENT: 'el paciente avisó',
+  CLINIC: 'la clínica',
+};
+
+const CANCELLATION_REASON_AUDIT: Record<string, string> = {
+  ILLNESS: 'Enfermedad',
+  FORGOT: 'Olvido',
+  COST: 'Costo',
+  TRANSPORT: 'Transporte',
+  WORK: 'Trabajo',
+  CLINIC_RESCHEDULE: 'La clínica reprograma',
+  OTHER: 'Otro',
+};
+
+/**
+ * DX-279: la cancelación de una cita desde la agenda («Cita cancelada · el
+ * paciente avisó · Transporte · aviso de 300 min · tardía») y el cambio de la
+ * política de cancelación de una sede («Nueva política de cancelación · v2 ·
+ * 24 h»). La metadata solo trae códigos y números. null si no es ninguno.
+ */
+export function cancellationDetail(metadata: AuditMetadata): string | null {
+  if (metadata.reason === 'CANCELLATION_POLICY_CHANGED') return 'Nueva versión de la política de cancelación';
+  // DX-291: cargo por inasistencia o cancelación tardía y su condonación
+  // (el motivo de la condonación nunca viaja en la metadata).
+  if (metadata.reason === 'CANCELLATION_FEE_CHARGED') return 'Cargo por inasistencia o cancelación tardía';
+  if (metadata.reason === 'CANCELLATION_FEE_WAIVED') return 'Cargo por inasistencia condonado';
+  if (metadata.reason !== 'APPOINTMENT_CANCELLED') return null;
+  const c = metadata.cancellation;
+  if (!c) return 'Cita cancelada';
+  const parts = ['Cita cancelada', CANCELLATION_KIND_AUDIT[c.byKind] ?? c.byKind];
+  if (c.reasonCode) parts.push(CANCELLATION_REASON_AUDIT[c.reasonCode] ?? c.reasonCode);
+  parts.push(`aviso de ${c.noticeMinutes} min`);
+  if (c.lateCancellation) parts.push('tardía');
+  return parts.join(' · ');
+}

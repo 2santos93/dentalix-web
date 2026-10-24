@@ -11,7 +11,9 @@ jest.mock('../../lib/payments/payment-receipts-api', () => ({
   getPaymentReceipt: jest.fn(),
   sendPaymentReceipt: jest.fn(),
 }));
-jest.mock('sonner', () => ({ toast: { success: jest.fn(), error: jest.fn() } }));
+jest.mock('sonner', () => ({
+  toast: { success: jest.fn(), error: jest.fn() },
+}));
 
 const mockedGet = getPaymentReceipt as jest.MockedFunction<typeof getPaymentReceipt>;
 const mockedSend = sendPaymentReceipt as jest.MockedFunction<typeof sendPaymentReceipt>;
@@ -67,7 +69,10 @@ it('un 403 se muestra como aviso de acceso, sin reintento', async () => {
 
 it('enviar por email avisa del destino enmascarado', async () => {
   mockedGet.mockResolvedValue(paymentReceiptFixture());
-  mockedSend.mockResolvedValue({ sentTo: 'ca***@example.com', sentToResponsible: false });
+  mockedSend.mockResolvedValue({
+    sentTo: 'ca***@example.com',
+    sentToResponsible: false,
+  });
   render(<PaymentReceiptDialog token="tok" paymentId="pay-1" onOpenChange={() => undefined} />);
 
   await screen.findByTestId('receipt-document');
@@ -93,7 +98,9 @@ it('si el envío falla, el motivo en español va a un aviso con reintento y el r
   await waitFor(() =>
     expect(toast.error).toHaveBeenCalledWith(
       'El paciente no tiene un email registrado. Añádelo en su ficha para enviarle el recibo.',
-      expect.objectContaining({ action: expect.objectContaining({ label: 'Reintentar' }) }),
+      expect.objectContaining({
+        action: expect.objectContaining({ label: 'Reintentar' }),
+      }),
     ),
   );
   expect(screen.getByTestId('receipt-document')).toBeInTheDocument();

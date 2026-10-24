@@ -234,7 +234,7 @@ test('una cita fuera de su horario se agenda con el aviso; «Buscar hueco» en l
   expect(appointment.warnings).toEqual([]);
   const cancel = await request.patch(`${API_URL}/appointments/${appointment.id}`, {
     headers: sedeBHeaders,
-    data: { status: 'CANCELLED' },
+    data: { status: 'CANCELLED', cancelledByKind: 'CLINIC', cancelReasonCode: 'CLINIC_RESCHEDULE' },
   });
   expect(cancel.ok(), await cancel.text()).toBeTruthy();
 

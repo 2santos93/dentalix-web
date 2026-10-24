@@ -3,7 +3,7 @@
  */
 import { NextRequest } from 'next/server';
 import { unstable_doesMiddlewareMatch } from 'next/experimental/testing/server';
-import { API_BODY_TOO_LARGE, config, proxy } from './proxy';
+import { API_BODY_TOO_LARGE, HEALTH_FORM_HEADERS, config, proxy } from './proxy';
 
 function run(url: string, headers: Record<string, string> = {}) {
   return proxy(new NextRequest(url, { headers }));
@@ -23,6 +23,17 @@ describe('proxy (DX-062: CSP con nonce por petición)', () => {
     const nonce = /'nonce-([^']+)'/.exec(csp as string)?.[1];
     expect(forwarded(res, 'x-nonce')).toBe(nonce);
     expect(forwarded(res, 'content-security-policy')).toBe(csp);
+  });
+
+  it('DX-099: el cuestionario de salud sale sin Referer, sin caché y sin indexar; el resto no cambia', () => {
+    const res = run('http://demo.localhost:3001/anamnesis/abc', { host: 'demo.localhost:3001' });
+    expect(res.headers.get('referrer-policy')).toBe('no-referrer');
+    expect(res.headers.get('cache-control')).toBe('no-store');
+    expect(res.headers.get('x-robots-tag')).toBe('noindex, nofollow');
+    expect(Object.keys(HEALTH_FORM_HEADERS)).toHaveLength(3);
+    const other = run('http://demo.localhost:3001/anamnesis-por-revisar', { host: 'demo.localhost:3001' });
+    expect(other.headers.get('cache-control')).toBeNull();
+    expect(other.headers.get('referrer-policy')).toBeNull();
   });
 
   it('genera un nonce distinto en cada petición', () => {

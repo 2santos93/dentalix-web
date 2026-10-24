@@ -5,6 +5,7 @@ import { useAuthStore } from '@/lib/auth/auth-store';
 import { getTokenRole } from '@/lib/auth/token-role';
 import { canManageNoteTemplates } from '@/lib/clinical-notes/note-templates-api';
 import { PageHeader } from '@/components/shared/page-header';
+import { SETTINGS_BACK } from '@/components/settings/settings-sections';
 import { NoteTemplatesManager } from '@/components/clinical-notes/note-templates-manager';
 
 const copy = {
@@ -36,7 +37,7 @@ export default function NoteTemplatesPage() {
 
   return (
     <>
-      <PageHeader title={copy.title} description={copy.description} />
+      <PageHeader back={SETTINGS_BACK} title={copy.title} description={copy.description} />
       <NoteTemplatesManager
         token={accessToken}
         allowed={canManageNoteTemplates(getTokenRole(accessToken))}

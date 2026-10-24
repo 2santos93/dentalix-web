@@ -26,9 +26,16 @@ const copy = {
   methodFallback: 'Sin especificar',
   paidOn: 'Fecha del abono',
   concept: 'Concepto',
+  // DX-262: abono contra el saldo migrado (sin plan).
+  openingLabel: (opening: { concept: string; asOfDate: string } | null) =>
+    opening
+      ? `Saldo migrado · ${opening.concept} · corte ${formatCivilDate(opening.asOfDate)}`
+      : 'Saldo migrado',
   planLabel: (date: string, optionLabel: string | null) =>
     `Abono al plan de tratamiento del ${date}${optionLabel ? ` · ${optionLabel}` : ''}`,
   balanceAfter: 'Saldo del plan tras este abono',
+  // Revisión N1 / QA D2: sin plan, lo que queda del saldo migrado.
+  openingBalanceAfter: 'Saldo pendiente tras este abono',
   balanceUnavailable: 'No disponible',
   cashier: 'Recibió',
   signature: 'Firma y sello',
@@ -150,8 +157,12 @@ export function PaymentReceiptDocument({ receipt, format = 'a4' }: PaymentReceip
         <Field label={copy.paidOn}>
           <span className="tabular-nums">{formatCivilDate(payment.paidOn)}</span>
         </Field>
-        <Field label={copy.concept}>{copy.planLabel(formatDate(plan.createdAt), plan.optionLabel)}</Field>
-        <Field label={copy.balanceAfter}>
+        <Field label={copy.concept}>
+          {plan
+            ? copy.planLabel(formatDate(plan.createdAt), plan.optionLabel)
+            : copy.openingLabel(snapshot.openingBalance ?? null)}
+        </Field>
+        <Field label={plan ? copy.balanceAfter : copy.openingBalanceAfter}>
           <span className="tabular-nums">
             {planBalance
               ? formatCurrency(planBalance.balance, planBalance.currency)

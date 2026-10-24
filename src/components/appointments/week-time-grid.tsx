@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useRef } from 'react';
+import { AttendanceBadge } from '@/components/appointments/attendance-badge';
 import type { Appointment } from '@/lib/appointments/appointments-api';
 import {
   ROW_HEIGHT_PX,
@@ -257,6 +258,8 @@ export function WeekTimeGrid({
                     <span className="block truncate">{patient}</span>
                     {/* DX-150: «Saldo vencido» (el importe, solo ADMIN/RECEPTION). */}
                     <OverdueChip balance={a.balance} compact className="mt-0.5 px-1" />
+                    {/* DX-279: inasistencias y cancelaciones tardías (12 meses). */}
+                    <AttendanceBadge counts={a.attendance} compact className="mt-0.5 px-1" />
                   </button>
                   {hasMedicalAlert ? (
                     <MedicalAlertIndicator

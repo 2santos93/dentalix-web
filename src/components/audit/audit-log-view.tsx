@@ -25,8 +25,11 @@ import {
   staffLoginDetail,
   cashSessionDetail,
   scheduleChangeDetail,
+  cancellationDetail,
   patientFlowDetail,
   importBatchDetail,
+  planItemAttributionDetail,
+  anamnesisDetail,
 } from '@/lib/audit/audit-labels';
 import { listStaff, type StaffMember } from '@/lib/staff/staff-api';
 import { formatDateTimeInZone, zonedDayStart } from '@/lib/format/date';
@@ -422,8 +425,11 @@ function AuditRow({ event, showPatient }: { event: AuditEvent; showPatient: bool
     staffLoginDetail(event.metadata) ??
     cashSessionDetail(event.metadata) ??
     scheduleChangeDetail(event.metadata) ??
+    cancellationDetail(event.metadata) ??
     patientFlowDetail(event.metadata) ??
-    importBatchDetail(event.metadata);
+    planItemAttributionDetail(event.metadata) ??
+    importBatchDetail(event.metadata) ??
+    anamnesisDetail(event.metadata);
   return (
     <TableRow>
       <TableCell className="whitespace-nowrap tabular-nums" data-label={copy.colWhen}>

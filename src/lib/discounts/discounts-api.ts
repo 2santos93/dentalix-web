@@ -10,6 +10,7 @@ export type ApplyBulkDiscountResult = components['schemas']['ApplyBulkDiscountRe
 export type DiscountReport = components['schemas']['DiscountReportDto'];
 export type DiscountReportItem = components['schemas']['DiscountReportItemDto'];
 export type DiscountReportTotal = components['schemas']['DiscountReportTotalDto'];
+export type AgreementReductionTotal = components['schemas']['AgreementReductionTotalDto'];
 
 /** Cambiar la política y ver el informe: solo ADMIN (como la API). */
 export function canManageDiscounts(role: ClinicRole | null): boolean {

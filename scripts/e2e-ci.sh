@@ -75,6 +75,11 @@ load_env() {
   # https, dominios no locales y contraseñas de BD no de ejemplo, y marca la
   # cookie como Secure). `start:prod` sí es el binario compilado de producción.
   export PORT="$E2E_API_PORT"
+  # DX-284: la API corre también el worker de la cola (DX-085) en el mismo
+  # proceso. Sin él, la importación de pacientes (DX-107) y sus saldos
+  # migrados (DX-262) se quedan «En cola» para siempre, y ese lote sin
+  # terminar bloquea cualquier otra importación de la clínica demo.
+  export APP_ROLE=all
   export DATABASE_URL
   export DIRECT_URL
   export JWT_ACCESS_TTL=900s
@@ -102,6 +107,15 @@ load_env() {
   export RATE_LIMIT_PASSWORD_LIMIT=100000
   export RATE_LIMIT_CONFIRMATION_LIMIT=100000
   export RATE_LIMIT_INVITATION_EMAIL_LIMIT=100000
+  # DX-099: el cuestionario público de anamnesis (por IP y por token).
+  export RATE_LIMIT_ANAMNESIS_LIMIT=100000
+  export RATE_LIMIT_ANAMNESIS_TOKEN_LIMIT=100000
+  # SEC-046: lecturas de un fichero de importación (inspect, dry-run y hoja de
+  # saldos), 10 por minuto por clínica + usuario en un balde común. Los specs
+  # de importación y de saldos migrados leen con el mismo ADMIN de la demo
+  # una docena de ficheros seguidos y el abono en móvil se quedaba en 429
+  # (DX-292, TST-033).
+  export RATE_LIMIT_PATIENT_IMPORT_LIMIT=100000
   # Topes de email en BD (DX-088): la suite reenvía una invitación al momento
   # de crearla; sin esto el enfriamiento de 60 s respondería 429.
   export MAIL_RECIPIENT_COOLDOWN_SECONDS=0
@@ -196,7 +210,29 @@ phase_api() {
   mkdir -p "$STORAGE_DIR"
   start_bg api "$API_DIR" npm run start:prod
   wait_for "${API_URL}/health/ready" API "$LOG_DIR/api.log" "$STATE_DIR/api.pid"
+  wait_for_worker
   endgroup
+}
+
+# DX-284: /health/ready no dice si hay worker. Su latido en job_workers sí:
+# sin él la suite no empieza (si no, los specs de importación fallan a los
+# 30 s con «En cola» y sin pista de por qué).
+wait_for_worker() {
+  local pidfile="$STATE_DIR/api.pid" tries=60
+  for ((i = 0; i < tries; i++)); do
+    if [[ -n "$(psql_owner -d "$E2E_DB_NAME" -c "SELECT 1 FROM job_workers WHERE \"lastBeatAt\" > timezone('utc', now()) - interval '1 minute' LIMIT 1")" ]]; then
+      echo "Worker de la cola activo (APP_ROLE=$APP_ROLE)"
+      return 0
+    fi
+    if ! kill -0 "$(cat "$pidfile")" 2>/dev/null; then
+      echo "La API terminó antes de que latiera el worker. Últimas líneas de $LOG_DIR/api.log:" >&2
+      tail -n 50 "$LOG_DIR/api.log" >&2
+      return 1
+    fi
+    sleep 1
+  done
+  echo "El worker de la cola no latió en ${tries}s (¿APP_ROLE=all?): la importación de pacientes no se procesaría." >&2
+  return 1
 }
 
 phase_web() {

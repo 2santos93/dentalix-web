@@ -2,13 +2,16 @@
  * @jest-environment node
  */
 import { execFileSync } from 'node:child_process';
-import { mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, readFileSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 /**
  * DX-252 (TST-030): la guardia de la E2E contra informes de Playwright de
  * ejemplo. Corre el script de verdad (`node scripts/check-e2e-skips.mjs`).
+ * DX-292 (TST-033): además nombra los tests flaky (pasaron solo al
+ * reintentar), pone rojo si hay más de 2 y deja el recuento en el resumen
+ * del job (`$GITHUB_STEP_SUMMARY`).
  */
 const SCRIPT = path.join(__dirname, 'check-e2e-skips.mjs');
 const ROOT_DIR = path.join(__dirname, '..', 'e2e');
@@ -19,7 +22,7 @@ interface FakeTest {
   file: string;
   title: string;
   describe?: string;
-  status: 'expected' | 'skipped' | 'unexpected';
+  status: 'expected' | 'skipped' | 'unexpected' | 'flaky';
   annotations?: Annotation[];
 }
 
@@ -80,6 +83,15 @@ function run(rep: object, env: Record<string, string> = {}, list: object = allow
 }
 
 const ok = (title: string): FakeTest => ({ file: 'agenda.spec.ts', title, status: 'expected' });
+const flaky = (title: string): FakeTest => ({ file: 'rda-codes.spec.ts', title, status: 'flaky' });
+
+/** Corre la guardia con `GITHUB_STEP_SUMMARY` apuntando a un fichero y lo devuelve. */
+function runWithSummary(rep: object, env: Record<string, string> = {}) {
+  const summary = path.join(mkdtempSync(path.join(tmpdir(), 'dx292-summary-')), 'summary.md');
+  writeFileSync(summary, '');
+  const res = run(rep, { GITHUB_STEP_SUMMARY: summary, ...env });
+  return { ...res, summary: readFileSync(summary, 'utf8') };
+}
 
 describe('scripts/check-e2e-skips.mjs (DX-252)', () => {
   it('sin saltos: 0', () => {
@@ -147,6 +159,56 @@ describe('scripts/check-e2e-skips.mjs (DX-252)', () => {
     });
     it('sin la lista `allowed`: 2', () => {
       expect(run(rep, {}, { nada: [] }).code).toBe(2);
+    });
+  });
+
+  describe('flaky (DX-292, TST-033): pasaron solo al reintentar', () => {
+    it('uno o dos se nombran (fichero:línea y título) y no ponen rojo', () => {
+      const res = run(report([ok('crea una cita'), flaky('guarda el REPS'), flaky('valida el código')]));
+      expect(res.code).toBe(0);
+      expect(res.out).toContain('2 flaky');
+      expect(res.out).toContain('e2e/rda-codes.spec.ts:7 «guarda el REPS»');
+      expect(res.out).toContain('e2e/rda-codes.spec.ts:7 «valida el código»');
+    });
+
+    it('más de 2: 1, y los nombra todos', () => {
+      const res = run(report([flaky('a'), flaky('b'), flaky('c')]));
+      expect(res.code).toBe(1);
+      expect(res.out).toContain('3 flaky');
+      expect(res.out).toContain('más de 2');
+      for (const t of ['a', 'b', 'c']) expect(res.out).toContain(`e2e/rda-codes.spec.ts:7 «${t}»`);
+    });
+
+    it('en GitHub Actions cada flaky es un aviso anotado en el fichero', () => {
+      const res = run(report([flaky('guarda el REPS')]), { GITHUB_ACTIONS: 'true' });
+      expect(res.code).toBe(0);
+      expect(res.out).toContain('::warning file=e2e/rda-codes.spec.ts,line=7,title=Test flaky::');
+    });
+  });
+
+  describe('resumen del job ($GITHUB_STEP_SUMMARY)', () => {
+    it('recuento y, por nombre, los flaky, los fallidos y los saltados sin permiso', () => {
+      const res = runWithSummary(
+        report([
+          ok('crea una cita'),
+          flaky('guarda el REPS'),
+          { file: 'settings-index.spec.ts', title: 'Mi perfil mide 44 px', status: 'unexpected' },
+          { file: 'patient-flow.spec.ts', title: 'llegó', status: 'skipped', annotations: [{ type: 'skip', description: 'Motivo' }] },
+        ]),
+      );
+      expect(res.code).toBe(1);
+      expect(res.summary).toContain('4 tests');
+      expect(res.summary).toMatch(/1 passed · 1 failed · 1 flaky · 1 skipped/);
+      expect(res.summary).toContain('`e2e/rda-codes.spec.ts:7` «guarda el REPS»');
+      expect(res.summary).toContain('`e2e/settings-index.spec.ts:7` «Mi perfil mide 44 px»');
+      expect(res.summary).toContain('`e2e/patient-flow.spec.ts:7` «llegó» — Motivo');
+    });
+
+    it('sin flaky ni fallos lo dice también', () => {
+      const res = runWithSummary(report([ok('crea una cita')]));
+      expect(res.code).toBe(0);
+      expect(res.summary).toMatch(/1 passed · 0 failed · 0 flaky · 0 skipped/);
+      expect(res.summary).toContain('Sin tests flaky');
     });
   });
 });

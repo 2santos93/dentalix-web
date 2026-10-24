@@ -8,7 +8,7 @@ import { API_URL, tenantOrigin } from './support/urls';
 /**
  * e2e SEC-009: Ajustes → Dominios propios. El ADMIN añade un dominio (queda
  * Pendiente con el TXT a publicar), verificarlo sin TXT lo deja Pendiente, y
- * lo elimina con confirmación; recepción no ve la entrada del menú, la
+ * lo elimina con confirmación; recepción no ve la entrada en Ajustes, la
  * pantalla le dice que es de administración y la API le responde 403; un id
  * que no es UUID es 400; todo cabe en 390 px.
  *
@@ -38,13 +38,16 @@ test.beforeAll(async ({ request }) => {
   await addStaffViaApi(request, session, { ...reception, role: 'RECEPTION', password });
 });
 
-test('ADMIN entra por el menú, añade un dominio (Pendiente con su TXT), lo intenta verificar y lo elimina', async ({
+test('ADMIN entra por Ajustes, añade un dominio (Pendiente con su TXT), lo intenta verificar y lo elimina', async ({
   page,
 }) => {
   await loginAs(page, origin, admin.email, password);
   await page.goto(`${origin}/patients`);
   await page.getByRole('button', { name: new RegExp(admin.fullName, 'i') }).first().click();
-  await page.getByRole('menuitem', { name: 'Dominios propios' }).click();
+  // DX-282: el menú de cuenta lleva a «Ajustes», que agrupa los ajustes por tema.
+  await page.getByRole('menuitem', { name: 'Ajustes' }).click();
+  await expect(page).toHaveURL(`${origin}/settings`);
+  await page.getByRole('link', { name: 'Dominios propios' }).click();
   await expect(page).toHaveURL(`${origin}/settings/dominios`);
   await expect(page.getByRole('heading', { name: 'Dominios propios' })).toBeVisible();
   await expect(page.getByText('Todavía no hay dominios propios.')).toBeVisible({ timeout: 15_000 });
@@ -83,16 +86,16 @@ test('ADMIN entra por el menú, añade un dominio (Pendiente con su TXT), lo int
   await expect(page.getByText('Todavía no hay dominios propios.')).toBeVisible();
 });
 
-test('recepción: no ve la entrada del menú, la pantalla es de administración y la API responde 403', async ({
+test('recepción: no ve la entrada en Ajustes, la pantalla es de administración y la API responde 403', async ({
   page,
   request,
 }) => {
   await loginAs(page, origin, reception.email, password);
   await page.goto(`${origin}/patients`);
   await page.getByRole('button', { name: new RegExp(reception.fullName, 'i') }).first().click();
-  await expect(page.getByRole('menuitem', { name: /cerrar sesión/i })).toBeVisible();
-  await expect(page.getByRole('menuitem', { name: 'Dominios propios' })).toHaveCount(0);
-  await page.keyboard.press('Escape');
+  await page.getByRole('menuitem', { name: 'Ajustes' }).click();
+  await expect(page.getByRole('link', { name: 'Horarios' })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole('link', { name: 'Dominios propios' })).toHaveCount(0);
 
   await page.goto(`${origin}/settings/dominios`);
   await expect(page.getByText('Solo administración gestiona los dominios propios.')).toBeVisible({

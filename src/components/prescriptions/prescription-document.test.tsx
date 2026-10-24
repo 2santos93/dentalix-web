@@ -51,6 +51,9 @@ describe('PrescriptionDocument (A4)', () => {
           voidReason: 'Dosis equivocada',
           allergyOverride: true,
           allergyMatches: [{ activeIngredient: 'Amoxicilina', allergen: 'Penicilina' }],
+          // Receta anterior a DX-300: sin avisos de seguridad sellados.
+          safetyRulesVersion: null,
+          safetyAlerts: null,
           integrityOk: false,
         })}
       />,
@@ -59,5 +62,46 @@ describe('PrescriptionDocument (A4)', () => {
     expect(screen.getByRole('note')).toHaveTextContent('Motivo: Dosis equivocada');
     expect(screen.getByText(/alergia registrada a: Penicilina \(Amoxicilina\)/)).toBeInTheDocument();
     expect(screen.getByText(/pudo alterarse fuera de Dentalix/)).toBeInTheDocument();
+  });
+
+  it('DX-300: los avisos bloqueantes confirmados y el motivo salen en el documento; los informativos no', () => {
+    render(
+      <PrescriptionDocument
+        prescription={makePrescriptionDocument({
+          allergyOverride: true,
+          allergyMatches: [{ activeIngredient: 'Amoxicilina', allergen: 'penicilina' }],
+          safetyAlerts: [
+            {
+              rule: 'ALLERGY',
+              code: 'ALLERGY_MATCH',
+              severity: 'BLOCKING',
+              activeIngredient: 'Amoxicilina',
+              message: 'Alergia: el paciente tiene registrada alergia a penicilina y Amoxicilina puede causarla.',
+              source: 'Anamnesis: alergias registradas',
+            },
+            {
+              rule: 'ANTIRESORPTIVE',
+              code: 'ANTIRESORPTIVE_MRONJ',
+              severity: 'INFO',
+              activeIngredient: null,
+              message: 'El paciente toma antirresortivos.',
+              source: 'SDCEP',
+            },
+          ],
+          safetyOverrideReason: 'Prueba cutánea negativa en 2025',
+        })}
+      />,
+    );
+    const block = screen.getByRole('region', { name: 'Avisos de seguridad confirmados' });
+    expect(block).toHaveTextContent('Amoxicilina puede causarla');
+    expect(block).toHaveTextContent('Motivo: Prueba cutánea negativa en 2025');
+    expect(block).not.toHaveTextContent('antirresortivos');
+    // Sin duplicar con la nota de alergia de DX-013.
+    expect(screen.queryByText(/confirmó la prescripción conociendo la alergia/)).not.toBeInTheDocument();
+  });
+
+  it('DX-300: sin avisos bloqueantes no hay bloque de avisos', () => {
+    render(<PrescriptionDocument prescription={makePrescriptionDocument()} />);
+    expect(screen.queryByRole('region', { name: 'Avisos de seguridad confirmados' })).not.toBeInTheDocument();
   });
 });

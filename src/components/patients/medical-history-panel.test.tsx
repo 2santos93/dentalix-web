@@ -31,6 +31,7 @@ const latest: MedicalHistory = {
   tenantId: 't1',
   patientId: 'p1',
   version: 2,
+  source: 'STAFF',
   allergies: [
     { alergeno: 'Penicilina', tipo: 'MEDICAMENTO', severidad: 'MODERADA', esAlerta: true },
   ],

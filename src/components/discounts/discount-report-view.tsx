@@ -17,6 +17,7 @@ import {
   type DiscountReportFilters,
   type DiscountReportItem,
   type DiscountReportTotal,
+  type AgreementReductionTotal,
 } from '@/lib/discounts/discounts-api';
 import { DISCOUNT_REASON_LABELS, type DiscountReasonCode } from '@/lib/discounts/discount-rules';
 import { notifyError } from '@/components/errors/notify';
@@ -34,7 +35,7 @@ import { cn } from '@/lib/utils';
 export const discountReportCopy = {
   title: 'Descuentos',
   description:
-    'Lo que se descontó en los planes de tratamiento: cuánto, sobre qué bruto, por qué y quién lo dio. Por moneda y sin convertir.',
+    'Lo que se descontó en los planes de tratamiento: cuánto, sobre qué bruto, por qué y quién lo dio. Las rebajas por convenio van aparte, con quién asignó el convenio y quién creó el ítem. Por moneda y sin convertir.',
   scopeAll: 'Toda la clínica',
   scopeLocation: (name: string) => `Descuentos dados en ${name}`,
   fromLabel: 'Desde',
@@ -45,12 +46,19 @@ export const discountReportCopy = {
   exporting: 'Exportando…',
   exportError: 'No pudimos exportar el informe.',
   exported: 'Informe exportado.',
-  countNoun: 'ítem con descuento',
-  countNounPlural: 'ítems con descuento',
+  countNoun: 'ítem con descuento o convenio',
+  countNounPlural: 'ítems con descuento o convenio',
   summaryTitle: 'Total del periodo',
   totalDiscount: 'Descontado',
   gross: 'Bruto',
   percentOfGross: 'Sobre el bruto',
+  agreementReduction: 'Rebaja por convenio',
+  agreementItems: (n: number) => (n === 1 ? '1 ítem con rebaja de convenio' : `${n} ítems con rebaja de convenio`),
+  agreementReason: (name: string | null) => `Convenio ${name ?? ''}`.trim(),
+  agreementLine: (name: string, amount: string, percent: string, base: string) =>
+    `Convenio «${name}»: −${amount} (${percent} de ${base})`,
+  agreementAssignedBy: (name: string) => `Convenio asignado por ${name}`,
+  itemCreatedBy: (name: string) => `Ítem creado por ${name}`,
   items: (n: number) => (n === 1 ? '1 ítem' : `${n} ítems`),
   percent: (n: number) => `${n.toLocaleString('es', { maximumFractionDigits: 2 })} %`,
   tableLabel: 'Descuentos del periodo, del más reciente al más antiguo',
@@ -92,18 +100,39 @@ function saveCsv(text: string, fileName: string): void {
   URL.revokeObjectURL(url);
 }
 
+/** SEC-047: línea que solo tiene rebaja de convenio (sin descuento propio). */
+function agreementOnly(item: DiscountReportItem): boolean {
+  return item.discount === 0 && item.agreementReduction > 0;
+}
+
 function reasonLabel(item: DiscountReportItem): string {
+  if (agreementOnly(item)) return discountReportCopy.agreementReason(item.agreementName);
   return item.reason ? DISCOUNT_REASON_LABELS[item.reason as DiscountReasonCode] : discountReportCopy.noReason;
+}
+
+/** Quién: el del descuento; en una línea solo de convenio, quien lo asignó o creó el ítem. */
+function authorName(item: DiscountReportItem): string | null {
+  return agreementOnly(item) ? (item.agreementAssignedByName ?? item.createdByName) : item.discountByName;
 }
 
 function patientHref(item: DiscountReportItem): string {
   return `/patients/${item.patientId}?tab=treatment-plans`;
 }
 
-/** Totales por moneda como registro con filete (no tarjetas de métrica). */
-function DiscountSummary({ totals }: { totals: DiscountReportTotal[] }) {
+/**
+ * Totales por moneda como registro con filete (no tarjetas de métrica). Los de
+ * DX-204 solo cuentan descuentos; las rebajas de convenio van en sus filas
+ * (SEC-047).
+ */
+function DiscountSummary({
+  totals,
+  agreementTotals,
+}: {
+  totals: DiscountReportTotal[];
+  agreementTotals: AgreementReductionTotal[];
+}) {
   const headingId = React.useId();
-  if (totals.length === 0) return null;
+  if (totals.length === 0 && agreementTotals.length === 0) return null;
   return (
     <section aria-labelledby={headingId} className="rounded-xl border border-border bg-surface">
       <h2 id={headingId} className="t-title border-b border-hairline px-4 py-3 text-ink sm:px-6">
@@ -136,6 +165,24 @@ function DiscountSummary({ totals }: { totals: DiscountReportTotal[] }) {
             </div>
           </dl>
         ))}
+        {agreementTotals.map((total) => (
+          <dl
+            key={`agreement-${total.currency}`}
+            data-testid={`agreement-total-${total.currency}`}
+            className="grid grid-cols-2 gap-x-4 gap-y-2 px-4 py-3 sm:grid-cols-4 sm:px-6"
+          >
+            <div className="min-w-0">
+              <dt className="t-label text-muted">{total.currency}</dt>
+              <dd className="tabular-nums text-ink">{discountReportCopy.agreementItems(total.items)}</dd>
+            </div>
+            <div className="min-w-0">
+              <dt className="t-label text-muted">{discountReportCopy.agreementReduction}</dt>
+              <dd className="truncate font-medium tabular-nums text-ink">
+                {formatCurrency(total.reduction, total.currency)}
+              </dd>
+            </div>
+          </dl>
+        ))}
       </div>
     </section>
   );
@@ -143,33 +190,69 @@ function DiscountSummary({ totals }: { totals: DiscountReportTotal[] }) {
 
 /**
  * Importe descontado (SEC-041: rebaja de precio frente al catálogo + descuento)
- * y su % sobre el precio de referencia (el de catálogo si se rebajó).
+ * y su % sobre el precio de referencia (el de catálogo si se rebajó). SEC-047:
+ * la rebaja de convenio va en su propia línea; un ítem que solo tiene esa
+ * rebaja no pinta un «−0» de descuento. En la tarjeta móvil la frase del
+ * convenio va fuera de la cabecera (`withAgreement` a false), en su propio
+ * párrafo que parte líneas: dentro de un bloque que no se encoge desbordaba
+ * 390 px (QA D1).
  */
-function AmountCell({ item }: { item: DiscountReportItem }) {
+function AmountCell({ item, withAgreement = true }: { item: DiscountReportItem; withAgreement?: boolean }) {
+  const agreement = item.agreementReduction > 0;
   return (
     <>
-      <span className="block font-medium tabular-nums text-ink">
-        −{formatCurrency(item.discount, item.currency)}
-      </span>
-      <span className="block text-xs tabular-nums text-muted">
-        {discountReportCopy.ofPrice(
-          formatCurrency(item.price + item.priceReduction, item.currency),
-          discountReportCopy.percent(item.percent),
-        )}
-      </span>
+      {item.discount > 0 || !agreement ? (
+        <>
+          <span className="block font-medium tabular-nums text-ink">
+            −{formatCurrency(item.discount, item.currency)}
+          </span>
+          <span className="block text-xs tabular-nums text-muted">
+            {discountReportCopy.ofPrice(
+              formatCurrency(item.price + item.priceReduction, item.currency),
+              discountReportCopy.percent(item.percent),
+            )}
+          </span>
+        </>
+      ) : null}
       {item.priceReduction > 0 ? (
         <span className="block text-xs tabular-nums text-muted">
           {discountReportCopy.priceReduced(formatCurrency(item.price, item.currency))}
         </span>
       ) : null}
+      {agreement && withAgreement ? (
+        <span className="block text-xs tabular-nums text-ink">{agreementLine(item)}</span>
+      ) : null}
     </>
+  );
+}
+
+function agreementLine(item: DiscountReportItem): string {
+  return discountReportCopy.agreementLine(
+    item.agreementName ?? '',
+    formatCurrency(item.agreementReduction, item.currency),
+    discountReportCopy.percent(item.agreementPercent),
+    formatCurrency(item.basePrice ?? 0, item.currency),
+  );
+}
+
+/** SEC-047: quién asignó el convenio y quién creó el ítem, si hay rebaja de convenio. */
+function AgreementAuthors({ item, className }: { item: DiscountReportItem; className?: string }) {
+  if (item.agreementReduction <= 0) return null;
+  const unknown = discountReportCopy.unknownAuthor;
+  return (
+    <span className={cn('block text-xs text-muted', className)}>
+      <span className="block">{discountReportCopy.agreementAssignedBy(item.agreementAssignedByName ?? unknown)}</span>
+      <span className="block">{discountReportCopy.itemCreatedBy(item.createdByName ?? unknown)}</span>
+    </span>
   );
 }
 
 function ReasonCell({ item }: { item: DiscountReportItem }) {
   return (
     <>
-      <span className={cn('block', item.reason ? 'text-ink' : 'text-muted')}>{reasonLabel(item)}</span>
+      <span className={cn('block', item.reason || agreementOnly(item) ? 'text-ink' : 'text-muted')}>
+        {reasonLabel(item)}
+      </span>
       {item.reasonNote ? <span className="block break-words text-xs text-muted">{item.reasonNote}</span> : null}
     </>
   );
@@ -396,7 +479,7 @@ export function DiscountReportView({ token }: { token: string }) {
               emptyDescription={discountReportCopy.emptyHint}
               skeleton={<TableSkeleton rows={5} />}
             >
-              {data ? <DiscountSummary totals={data.totals} /> : null}
+              {data ? <DiscountSummary totals={data.totals} agreementTotals={data.agreementTotals} /> : null}
 
               {/* Escritorio: una tabla. */}
               <Card className="overflow-hidden p-0 max-sm:hidden">
@@ -442,12 +525,13 @@ export function DiscountReportView({ token }: { token: string }) {
                           <ReasonCell item={item} />
                         </TableCell>
                         <TableCell>
-                          <span className={item.discountByName ? 'text-ink' : 'text-muted'}>
-                            {item.discountByName ?? discountReportCopy.unknownAuthor}
+                          <span data-testid="discount-author" className={authorName(item) ? 'text-ink' : 'text-muted'}>
+                            {authorName(item) ?? discountReportCopy.unknownAuthor}
                           </span>
                           {item.locationName ? (
                             <span className="block text-xs text-muted">{item.locationName}</span>
                           ) : null}
+                          <AgreementAuthors item={item} />
                         </TableCell>
                       </TableRow>
                     ))}
@@ -471,10 +555,13 @@ export function DiscountReportView({ token }: { token: string }) {
                       >
                         {item.patientName}
                       </Link>
-                      <span className="shrink-0 text-right">
-                        <AmountCell item={item} />
+                      <span data-testid="discount-card-amount" className="shrink-0 text-right">
+                        <AmountCell item={item} withAgreement={false} />
                       </span>
                     </div>
+                    {item.agreementReduction > 0 ? (
+                      <p className="break-words text-xs tabular-nums text-ink">{agreementLine(item)}</p>
+                    ) : null}
                     <p className="text-ink">{discountReportCopy.tooth(item.toothNumber, item.procedure)}</p>
                     <p className="text-xs text-muted tabular-nums">
                       {formatCivilDate(item.discountOn)} ·{' '}
@@ -484,9 +571,10 @@ export function DiscountReportView({ token }: { token: string }) {
                       <ReasonCell item={item} />
                     </div>
                     <p className="text-xs text-muted">
-                      {discountReportCopy.colBy}: {item.discountByName ?? discountReportCopy.unknownAuthor}
+                      {discountReportCopy.colBy}: {authorName(item) ?? discountReportCopy.unknownAuthor}
                       {item.locationName ? ` · ${item.locationName}` : ''}
                     </p>
+                    <AgreementAuthors item={item} />
                   </li>
                 ))}
               </ul>

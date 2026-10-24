@@ -10,6 +10,7 @@ import { PatientPostOpDeliveries } from '@/components/postop/patient-postop-deli
 import { ClinicalAlertBanner } from '@/components/patients/clinical-alert-banner';
 import { AnamnesisReviewLine } from '@/components/clinical/anamnesis-review-line';
 import { usePatientMedicalAlerts } from '@/components/clinical/use-patient-medical-alerts';
+import { usePatientAttendance } from '@/components/patients/use-patient-attendance';
 import { canConfirmAnamnesis } from '@/lib/clinical/medical-alerts';
 import {
   PatientDetailTabs,
@@ -42,6 +43,8 @@ import { PatientDocumentsTab } from '@/components/patient-documents/patient-docu
 import { PatientTabPanel as TabPanel } from '@/components/patients/patient-tab-panel';
 import { canRegisterImplants } from '@/lib/implants/implants-api';
 import { AuditLogView } from '@/components/audit/audit-log-view';
+import { PatientAnamnesisSection } from '@/components/anamnesis/patient-anamnesis-section';
+import { canSeeAnamnesisInbox } from '@/lib/anamnesis/anamnesis-api';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
@@ -136,6 +139,8 @@ function PatientDetailView() {
   // DX-247: banderas médicas de la cabecera (también la del plan y del
   // odontograma) y de la línea de revisión de la anamnesis.
   const medicalAlerts = usePatientMedicalAlerts(accessToken, patientId);
+  // DX-279: insignia de inasistencias y cancelaciones tardías (12 meses).
+  const attendance = usePatientAttendance(accessToken, patientId);
   const panels = useRef(new Map<PatientDetailTabKey, HTMLDivElement>());
   const firstRender = useRef(true);
 
@@ -258,6 +263,9 @@ function PatientDetailView() {
         medicalAlerts={medicalAlerts.data}
         medicalAlertsFailed={medicalAlerts.failed}
         onRetryMedicalAlerts={medicalAlerts.reload}
+        attendance={attendance.data}
+        attendanceFailed={attendance.failed}
+        onRetryAttendance={attendance.reload}
       />
 
       {loading ? (
@@ -298,6 +306,14 @@ function PatientDetailView() {
               />
             </div>
           ) : null}
+
+          {/* DX-099: anamnesis por enlace — estado («pendiente de revisión») y
+              «Enviar anamnesis», para los cuatro roles (recepción la manda). */}
+          <PatientAnamnesisSection
+            token={accessToken}
+            patientId={patientId}
+            canReview={canSeeAnamnesisInbox(getTokenRole(accessToken))}
+          />
 
           {/* DX-039: aviso de retención legal para todos; controles, solo ADMIN. */}
           <PatientRetentionSection
@@ -370,6 +386,7 @@ function PatientDetailView() {
               token={accessToken}
               patientId={patientId}
               onChanged={onAgreementChanged}
+              role={getTokenRole(accessToken)}
             />
           </TabPanel>
 

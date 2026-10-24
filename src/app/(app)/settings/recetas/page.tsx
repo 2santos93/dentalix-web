@@ -5,6 +5,7 @@ import { useAuthStore } from '@/lib/auth/auth-store';
 import { getTokenRole } from '@/lib/auth/token-role';
 import { canManagePrescriptionTemplates } from '@/lib/prescriptions/prescriptions-api';
 import { PageHeader } from '@/components/shared/page-header';
+import { SETTINGS_BACK } from '@/components/settings/settings-sections';
 import { PrescriptionTemplatesManager } from '@/components/prescriptions/prescription-templates-manager';
 import { LocationCountrySettings } from '@/components/prescriptions/location-country-settings';
 
@@ -38,7 +39,7 @@ export default function PrescriptionSettingsPage() {
   const allowed = canManagePrescriptionTemplates(getTokenRole(accessToken));
   return (
     <>
-      <PageHeader title={copy.title} description={copy.description} />
+      <PageHeader back={SETTINGS_BACK} title={copy.title} description={copy.description} />
       <div className="flex flex-col gap-10">
         <PrescriptionTemplatesManager token={accessToken} allowed={allowed} />
         {allowed ? <LocationCountrySettings token={accessToken} /> : null}

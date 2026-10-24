@@ -660,7 +660,7 @@ export interface paths {
         get: operations["PatientAgreementsController_get"];
         /**
          * Asignar un convenio al paciente, sustituyendo el vigente (DX-105)
-         * @description La asignación anterior queda en el historial. Un convenio desactivado se acepta y la asignación sale con estado INACTIVE.
+         * @description La asignación anterior queda en el historial. Un convenio desactivado se acepta y la asignación sale con estado INACTIVE. SEC-047: un convenio de pagador externo exige `coverageId` con una cobertura vigente del paciente con ese pagador (cualquier rol); uno de pagador OTRO (cortesía, empleados…) solo lo asigna ADMIN, con la cobertura opcional.
          */
         put: operations["PatientAgreementsController_put"];
         post?: never;
@@ -1222,6 +1222,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/appointments/{id}/cancellation-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["AppointmentsController_cancellationPreview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/appointments/{id}": {
         parameters: {
             query?: never;
@@ -1236,6 +1252,22 @@ export interface paths {
         options?: never;
         head?: never;
         patch: operations["AppointmentsController_update"];
+        trace?: never;
+    };
+    "/api/v1/appointments/{id}/plan-items/{planItemId}/claim": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["AppointmentsController_claimPlanItem"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/appointments/{id}/undo-arrival": {
@@ -1268,6 +1300,26 @@ export interface paths {
         options?: never;
         head?: never;
         patch: operations["AppointmentsController_moveToOpening"];
+        trace?: never;
+    };
+    "/api/v1/patients/{id}/attendance-summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Citas, inasistencias y cancelaciones tardías de 12 meses
+         * @description Calculado al pedirlo (sin contador guardado): citas que ya empezaron, inasistencias (NO_SHOW) y cancelaciones tardías (nunca las de la clínica) cuyo inicio cae en los últimos 12 meses, por sede y en total. Un miembro restringido a sedes (DX-089) solo cuenta las suyas, sin mirar la sede activa de la cabecera.
+         */
+        get: operations["PatientAttendanceController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/staff": {
@@ -2175,6 +2227,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/opening-balances/{id}/payments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Abono contra el saldo migrado de un paciente (DX-262)
+         * @description Como un abono a un plan (recibo de caja numerado por sede, caja por turno, Idempotency-Key, anulación con DELETE /payments/:id), pero contra el «Saldo migrado» importado. En la moneda del saldo y sin pasar de lo pendiente.
+         */
+        post: operations["PaymentsController_createForOpeningBalance"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/treatment-plans/{id}/balance": {
         parameters: {
             query?: never;
@@ -2376,6 +2448,46 @@ export interface paths {
          * @description Una línea por paciente y moneda, UTF-8 con BOM. La columna «Fecha aproximada» marca la deuda que envejece desde la fecha del plan. Solo ADMIN; cada descarga deja un evento EXPORT en la auditoría.
          */
         get: operations["ReceivablesController_csv"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/locations-comparison": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Comparar sedes: indicadores por sede frente a otro período
+         * @description Una fila por sede que ve quien consulta (DX-089: un miembro restringido solo ve las suyas, y el total solo las suma a ellas) y «Total clínica». La cabecera X-Location-Id no acota la comparación: siempre salen todas las sedes visibles. Indicadores (ver `kpis`, la definición de cada uno con su dirección): producción, cobrado, % de cobro, citas atendidas, no-show %, pacientes nuevos, ticket medio y ocupación %, en días civiles de la zona de cada sede (DX-097). Importes por moneda, sin convertir ni sumar monedas distintas. Con `compare`, cada valor trae el del período anterior, su variación % y si mejora o empeora.
+         */
+        get: operations["LocationsComparisonController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/locations-comparison.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Comparar sedes en CSV (mismos filtros)
+         * @description Una fila por sede que ve quien consulta (DX-089: un miembro restringido solo ve las suyas, y el total solo las suma a ellas) y «Total clínica». La cabecera X-Location-Id no acota la comparación: siempre salen todas las sedes visibles. Indicadores (ver `kpis`, la definición de cada uno con su dirección): producción, cobrado, % de cobro, citas atendidas, no-show %, pacientes nuevos, ticket medio y ocupación %, en días civiles de la zona de cada sede (DX-097). Importes por moneda, sin convertir ni sumar monedas distintas. Con `compare`, cada valor trae el del período anterior, su variación % y si mejora o empeora. Una línea por sede, indicador y moneda; UTF-8 con BOM; celdas protegidas contra fórmulas.
+         */
+        get: operations["LocationsComparisonController_csv"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2626,6 +2738,88 @@ export interface paths {
         get: operations["InventoryController_listMovements"];
         put?: never;
         post: operations["InventoryController_createMovement"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/locations/{id}/cancellation-policy/email-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Vista previa del recordatorio por email con la política vigente (DX-291)
+         * @description El email `appointment-reminder` tal como saldría desde esta sede, con la marca de la clínica y la política vigente en `{politica_cancelacion}` (horas, texto e importe). Paciente y profesional son de ejemplo. No envía ni registra nada.
+         */
+        get: operations["CancellationPolicyController_emailPreview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/locations/{id}/cancellation-policy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Política de cancelación de la sede: la vigente y su historial */
+        get: operations["CancellationPolicyController_get"];
+        put?: never;
+        /**
+         * Guardar la política de la sede (crea la versión siguiente)
+         * @description La versión anterior no cambia: queda en el historial como prueba de lo que se comunicó al paciente. Horas de aviso 0–168; importe sugerido ≥ 0 con su moneda (los dos o ninguno); texto para el paciente de hasta 1000 caracteres. Queda en la auditoría (CANCELLATION_POLICY, CANCELLATION_POLICY_CHANGED, con los campos enviados).
+         */
+        post: operations["CancellationPolicyController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/appointments/{id}/cancellation-fee": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Estado del cargo por inasistencia o cancelación tardía de la cita */
+        get: operations["CancellationFeeController_get"];
+        put?: never;
+        /**
+         * Generar el cargo (ítem DONE en el plan «Cargos administrativos»)
+         * @description Solo una cita NO_SHOW o cancelada tarde con la política comunicada al paciente (`policyVersionId`). Crea o reutiliza el plan ACCEPTED «Cargos administrativos» del paciente en la moneda de esa versión y le añade un ítem DONE con el importe (el sugerido, o menos); sale en el estado de cuenta y se cobra con un abono y su recibo (DX-136). Idempotente: una sola decisión por cita (índice único y cita bloqueada). Auditado (APPOINTMENT, CANCELLATION_FEE_CHARGED).
+         */
+        post: operations["CancellationFeeController_charge"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/appointments/{id}/cancellation-fee/waive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Condonar el cargo con motivo (no se cobrará)
+         * @description Solo una cita NO_SHOW o cancelada tarde, antes de cobrar y una vez. El motivo (3–500) queda con la decisión; la auditoría registra la condonación (APPOINTMENT, CANCELLATION_FEE_WAIVED) sin el texto.
+         */
+        post: operations["CancellationFeeController_waive"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3036,6 +3230,153 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/patients/{patientId}/medical-history/requests": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Anamnesis enviadas al paciente (estado, sin respuestas)
+         * @description El motivo de un rechazo (texto libre clínico) solo llega a los roles clínicos; a recepción, `rejectReason` = null.
+         */
+        get: operations["PatientAnamnesisRequestsController_list"];
+        put?: never;
+        /**
+         * Crear el enlace de anamnesis para el paciente
+         * @description Un solo uso; caduca a los 7 días o al inicio de la cita. Anula el enlace anterior que aún esperaba respuesta. Devuelve la URL una única vez (se guarda solo el hash del token) y el mensaje para wa.me.
+         */
+        post: operations["PatientAnamnesisRequestsController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/medical-history/submissions": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Bandeja de anamnesis (por defecto, las que están por revisar) */
+        get: operations["MedicalHistorySubmissionsController_list"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/medical-history/submissions/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Contador del menú: anamnesis por revisar */
+        get: operations["MedicalHistorySubmissionsController_summary"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/medical-history/submissions/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Revisión: respuestas, versión vigente y diferencias */
+        get: operations["MedicalHistorySubmissionsController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/medical-history/submissions/{id}/accept": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Aceptar: crea una versión de la HC (origen formulario del paciente)
+         * @description En una transacción: una versión nueva con source=PATIENT_FORM y autor = quien revisa (banderas recalculadas), y el envío pasa a ACCEPTED. Con `medicalHistory`, guarda esos ajustes en vez de la propuesta.
+         */
+        post: operations["MedicalHistorySubmissionsController_accept"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/medical-history/submissions/{id}/reject": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Rechazar con motivo (la HC no cambia) */
+        post: operations["MedicalHistorySubmissionsController_reject"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/medical-history/submissions/{id}/revoke": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Anular un enlace que aún espera al paciente */
+        post: operations["MedicalHistorySubmissionsController_revoke"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/public/medical-history/{token}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Cuestionario de anamnesis del enlace (sin datos previos) */
+        get: operations["PublicMedicalHistoryController_get"];
+        put?: never;
+        /** Enviar las respuestas (una sola vez; la HC no cambia hasta que se revisa) */
+        post: operations["PublicMedicalHistoryController_submit"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/patients/{patientId}/perio-exams": {
         parameters: {
             query?: never;
@@ -3110,6 +3451,22 @@ export interface paths {
         get: operations["PatientPrescriptionsController_list"];
         put?: never;
         post: operations["PatientPrescriptionsController_issue"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{patientId}/prescriptions/safety-check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["PatientPrescriptionsController_safetyCheck"];
         delete?: never;
         options?: never;
         head?: never;
@@ -3474,6 +3831,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/patient-imports/balances-template": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Plantilla CSV de la hoja de saldos («Saldo migrado», DX-262)
+         * @description numero_documento, importe, moneda, fecha_antiguedad (opcional) y concepto (opcional). UTF-8 con BOM; una fila de ejemplo ficticia que hay que borrar.
+         */
+        get: operations["PatientImportsController_balanceTemplate"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/patient-imports/inspect": {
         parameters: {
             query?: never;
@@ -3552,6 +3929,67 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/patient-imports/{id}/balances": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Hoja de saldos del lote (DX-262): validar el «Saldo migrado» (dry-run)
+         * @description Solo con el lote validado y sin confirmar. Valida cada fila (documento del paciente en la clínica o en el archivo de pacientes del lote, importe > 0, moneda admitida, fecha de antigüedad no futura, concepto ≤ 200), suma las filas del mismo paciente y moneda y devuelve el total por moneda del archivo y de lo que se importará. NO crea ningún saldo: se importan al confirmar el lote, después de los pacientes. Volver a subirla la reemplaza.
+         */
+        post: operations["PatientImportsController_balances"];
+        /** Quitar la hoja de saldos de un lote aún sin confirmar (DX-262) */
+        delete: operations["PatientImportsController_removeBalances"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patient-imports/{id}/balances/errors.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Informe de errores y avisos de la hoja de saldos (CSV, DX-262)
+         * @description Fila, columna, tipo, motivo y valor. UTF-8 con BOM; fórmulas neutralizadas (inyección CSV).
+         */
+        get: operations["PatientImportsController_balanceErrors"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patient-imports/{id}/balances/undo": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Retirar solo los saldos migrados del lote (DX-262)
+         * @description Retira en blando los «Saldo migrado» vivos del lote aunque sus pacientes ya tengan citas u otra actividad (el lote sigue importado). Se niega (409) si alguno tiene abonos vivos: hay que anularlos antes.
+         */
+        post: operations["PatientImportsController_undoBalances"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/patient-imports/{id}/confirm": {
         parameters: {
             query?: never;
@@ -3563,7 +4001,7 @@ export interface paths {
         put?: never;
         /**
          * Paso 3: confirmar e importar en segundo plano
-         * @description Encola el trabajo que importa el lote por bloques (la clínica sigue trabajando). Una importación en curso por clínica. Los pacientes quedan SIN autorización de datos (Ley 1581) registrada: la ficha la marca pendiente.
+         * @description Encola el trabajo que importa el lote por bloques (la clínica sigue trabajando): primero los pacientes y después, si el lote trae hoja de saldos, un «Saldo migrado» por paciente y moneda (DX-262). Una importación en curso por clínica. Los pacientes quedan SIN autorización de datos (Ley 1581) registrada: la ficha la marca pendiente.
          */
         post: operations["PatientImportsController_confirm"];
         delete?: never;
@@ -3583,7 +4021,7 @@ export interface paths {
         put?: never;
         /**
          * Deshacer el lote
-         * @description Retira en blando SOLO los pacientes que creó el lote y revierte los campos que rellenó (si siguen con el valor del lote). Se niega (409) si alguno de los creados ya tiene citas, historia clínica, planes, pagos u otros datos.
+         * @description Retira en blando SOLO los pacientes que creó el lote, revierte los campos que rellenó (si siguen con el valor del lote) y retira sus saldos migrados (DX-262). Se niega (409) si alguno de los creados ya tiene citas, historia clínica, planes, pagos, saldos de otra importación u otros datos, o si algún saldo migrado del lote tiene abonos imputados.
          */
         post: operations["PatientImportsController_undo"];
         delete?: never;
@@ -3668,7 +4106,7 @@ export interface components {
         /** @enum {string} */
         AuditAction: "VIEW" | "CREATE" | "UPDATE" | "DELETE" | "SIGN" | "VOID" | "LOGIN" | "LOGIN_FAILED" | "PASSWORD_RESET" | "EXPORT" | "PRINT" | "SEND";
         /** @enum {string} */
-        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION" | "POSTOP_TEMPLATE" | "POSTOP_DELIVERY" | "PATIENT_DOCUMENT" | "AGREEMENT" | "PRICE_LIST" | "PROVIDER_SCHEDULE" | "PATIENT_IMPORT_BATCH";
+        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION" | "POSTOP_TEMPLATE" | "POSTOP_DELIVERY" | "PATIENT_DOCUMENT" | "MEDICAL_HISTORY_SUBMISSION" | "AGREEMENT" | "PRICE_LIST" | "PROVIDER_SCHEDULE" | "PATIENT_IMPORT_BATCH" | "CANCELLATION_POLICY";
         /**
          * @description Rol con el que actuó (del token). `null` en un login fallido.
          * @enum {string}
@@ -3744,6 +4182,14 @@ export interface components {
             before: components["schemas"]["AuditScheduleEntryDto"][];
             after: components["schemas"]["AuditScheduleEntryDto"][];
         };
+        AuditCurrencyTotalDto: {
+            /** @example COP */
+            currency: string;
+            /** @description Filas del archivo */
+            rows: number;
+            /** @example 1500000 */
+            amount: number;
+        };
         AuditImportBatchDto: {
             /** @description SHA-256 (hex) del archivo importado */
             fileSha256: string;
@@ -3757,6 +4203,43 @@ export interface components {
             updated?: number;
             undoneCreated?: number;
             undoneFilled?: number;
+            /** @description DX-262: SHA-256 (hex) de la hoja de saldos */
+            balanceFileSha256?: string;
+            balanceRows?: number;
+            balanceErrors?: number;
+            balancesCreated?: number;
+            /** @description «Añadir aunque ya tenga saldo migrado» marcado (DX-262, QA D1) */
+            balanceAddToExisting?: boolean;
+            /** @description Saldos no creados porque el paciente ya tenía uno vivo en esa moneda (DX-262, QA D1) */
+            balancesExisting?: number;
+            balancesUndone?: number;
+            /** @description DX-262: total por moneda de los saldos migrados del lote (agregado, sin convertir) */
+            balanceTotals?: components["schemas"]["AuditCurrencyTotalDto"][];
+            /** @description DX-262: lo que retiró de verdad el deshacer, por moneda */
+            balanceUndoneTotals?: components["schemas"]["AuditCurrencyTotalDto"][];
+        };
+        AuditAttributionSideDto: {
+            /** Format: uuid */
+            performedById: string | null;
+            /** Format: uuid */
+            locationId: string | null;
+            /** Format: date-time */
+            completedAt: string | null;
+        };
+        AuditAttributionChangeDto: {
+            before: components["schemas"]["AuditAttributionSideDto"];
+            after: components["schemas"]["AuditAttributionSideDto"];
+        };
+        /** @enum {string} */
+        AuditCancellationKind: "PATIENT_LINK" | "STAFF_FOR_PATIENT" | "CLINIC";
+        /** @enum {string} */
+        AuditCancellationReason: "ILLNESS" | "FORGOT" | "COST" | "TRANSPORT" | "WORK" | "CLINIC_RESCHEDULE" | "OTHER";
+        AuditCancellationDto: {
+            byKind: components["schemas"]["AuditCancellationKind"];
+            reasonCode: components["schemas"]["AuditCancellationReason"] | null;
+            /** @example 300 */
+            noticeMinutes: number;
+            lateCancellation: boolean;
         };
         AuditMetadataDto: {
             /** @description UPDATE: nombres de los campos enviados (nunca sus valores). */
@@ -3781,6 +4264,10 @@ export interface components {
             scheduleChange?: components["schemas"]["AuditScheduleChangeDto"];
             /** @description DX-107: lote de importación de pacientes — hash del archivo, modo de duplicados y totales (solo números). */
             importBatch?: components["schemas"]["AuditImportBatchDto"];
+            /** @description DX-050: quién realizó un ítem del plan, en qué sede y cuándo, antes y después (`reason` PLAN_ITEM_ATTRIBUTION_CORRECTED o PLAN_ITEM_DONE_REVERTED). Solo ids e instantes. */
+            attribution?: components["schemas"]["AuditAttributionChangeDto"];
+            /** @description DX-279: cita cancelada desde la agenda, en su único evento (`reason` APPOINTMENT_CANCELLED; PATIENT_FLOW si estaba en la clínica; COMPLETED_EXIT si estaba completada): quién, código del motivo, minutos de aviso y si fue tardía. Nunca el texto libre del motivo. */
+            cancellation?: components["schemas"]["AuditCancellationDto"];
         };
         AuditEventDto: {
             /** Format: uuid */
@@ -4880,6 +5367,8 @@ export interface components {
             validTo: string | null;
             isPrimary: boolean;
             notes: string | null;
+            /** @description Copiada de la aseguradora en texto libre de la ficha (DX-153); la API no la crea. SEC-047: habilita a cualquier rol a asignar un convenio de pagador OTRO. */
+            migratedFromInsurerEps: boolean;
             /**
              * @description Calculado a hoy en la zona de la sede.
              * @enum {string}
@@ -4952,6 +5441,7 @@ export interface components {
             id: string;
             /** @example Sanitas */
             name: string;
+            type: components["schemas"]["PayerType"];
         };
         AssignedAgreementDto: {
             /** Format: uuid */
@@ -5020,6 +5510,8 @@ export interface components {
             id: string;
             /** @example Sanitas */
             name: string;
+            /** @description SEC-047: con un pagador externo, asignar el convenio exige una cobertura viva del paciente con él; OTRO (cortesía, empleados…) solo lo asigna ADMIN. */
+            type: components["schemas"]["PayerType"];
         };
         AgreementPriceListDto: {
             /** Format: uuid */
@@ -5344,6 +5836,11 @@ export interface components {
             alergiaPenicilina: boolean;
             alergiaLatex: boolean;
         };
+        /**
+         * @description DX-099: STAFF = la tecleó el personal; PATIENT_FORM = la aceptó un profesional (el autor) desde el formulario que llenó el paciente por enlace.
+         * @enum {string}
+         */
+        MedicalHistorySource: "STAFF" | "PATIENT_FORM";
         MedicalHistoryDto: {
             /** Format: uuid */
             id: string;
@@ -5363,6 +5860,8 @@ export interface components {
             notes: string | null;
             safetyFlags: components["schemas"]["SafetyFlagsDto"];
             hasCriticalAlert: boolean;
+            /** @description DX-099: STAFF = la tecleó el personal; PATIENT_FORM = la aceptó un profesional (el autor) desde el formulario que llenó el paciente por enlace. */
+            source: components["schemas"]["MedicalHistorySource"];
             /** Format: uuid */
             createdById: string | null;
             /** Format: date-time */
@@ -5907,10 +6406,92 @@ export interface components {
             color: string;
         };
         /**
+         * @description DX-279: quién canceló — PATIENT_LINK (enlace del paciente), STAFF_FOR_PATIENT (el personal por el paciente) o CLINIC (la clínica; nunca tardía).
+         * @enum {string}
+         */
+        CancellationByKind: "PATIENT_LINK" | "STAFF_FOR_PATIENT" | "CLINIC";
+        /**
+         * @description DX-279: motivo del catálogo cerrado.
+         * @enum {string}
+         */
+        CancellationReasonCode: "ILLNESS" | "FORGOT" | "COST" | "TRANSPORT" | "WORK" | "CLINIC_RESCHEDULE" | "OTHER";
+        /**
          * @description DX-233: código de cada aviso, en el mismo orden que `warnings`: SCHEDULE_BLOCK (bloqueo que deja agendar, DX-122) o PROVIDER_OFF_SCHEDULE (fuera del horario del profesional en la sede).
          * @enum {string}
          */
         AppointmentWarningCode: "SCHEDULE_BLOCK" | "PROVIDER_OFF_SCHEDULE";
+        PlanItemReservedElsewhereDto: {
+            /** Format: uuid */
+            planItemId: string;
+            /**
+             * @description Nombre del procedimiento (catálogo, en español).
+             * @example Implante
+             */
+            name: string;
+            /** @example 36 */
+            toothNumber: string;
+            /**
+             * @description DX-293: la cita que lo reserva es de hoy (día civil de su sede) con el paciente en la clínica (ARRIVED, IN_CHAIR o READY_FOR_CHECKOUT). Entonces «Traer a esta cita» responde 409 (DX-288): la web no lo ofrece y explica dónde está la reserva. Una titular olvidada en la clínica de un día anterior o una cita futura: false.
+             * @example false
+             */
+            heldInClinic: boolean;
+            /**
+             * Format: uuid
+             * @description La cita que lo reserva. null si su sede no está permitida al usuario (DX-089); solo pasa con heldInClinic true: las demás reservas de sedes no permitidas no se listan.
+             */
+            appointmentId: string | null;
+            /**
+             * Format: date-time
+             * @description Inicio de esa cita. null si su sede no está permitida.
+             */
+            start: string | null;
+            /**
+             * Format: uuid
+             * @description Sede de esa cita. null si no está permitida.
+             */
+            locationId: string | null;
+            /**
+             * @description Nombre de la sede de esa cita. null si no está permitida.
+             * @example Sede Norte
+             */
+            locationName: string | null;
+            /**
+             * @description Zona IANA de esa sede: la fecha se muestra en ella. null si no está permitida.
+             * @example America/Bogota
+             */
+            timeZone: string | null;
+        };
+        VisitMinimumChangeDto: {
+            /** Format: uuid */
+            planId: string;
+            /** @description Visita siguiente (2 si la cita era de la 1). */
+            visit: number;
+            /**
+             * @description Mínimo (día civil en la zona de la sede del plan) antes de sacar la cita de COMPLETED. null = sin mínimo clínico.
+             * @example 2027-01-20
+             */
+            minimumDayBefore: string | null;
+            /**
+             * @description Mínimo recalculado: la última cita de la visita anterior que SIGUE completada más el intervalo. null = ninguna sigue completada (o intervalo 0): se puede agendar desde hoy.
+             * @example null
+             */
+            minimumDayAfter: string | null;
+            /**
+             * Format: uuid
+             * @description La cita completada que fija ahora el mínimo, o null.
+             */
+            anchorAppointmentIdAfter: string | null;
+        };
+        CompletedExitDto: {
+            /**
+             * Format: uuid
+             * @description Fila de `appointment_status_reversals` con el motivo; el `audit_event` COMPLETED_EXIT la enlaza en `params.reversalId`.
+             */
+            reversalId: string;
+            /** @description El motivo, recortado. */
+            reason: string;
+            visitMinimums: components["schemas"]["VisitMinimumChangeDto"][];
+        };
         AppointmentWriteDto: {
             planItemIds: string[];
             /** Format: uuid */
@@ -5970,6 +6551,31 @@ export interface components {
              * @description DX-200: cuándo quedó listo para cobrar.
              */
             readyForCheckoutAt: string | null;
+            /**
+             * Format: date-time
+             * @description DX-279: cuándo se canceló (reloj del servidor). Solo en CANCELLED; null en las canceladas antiguas.
+             */
+            cancelledAt: string | null;
+            /** @description DX-279: quién canceló — PATIENT_LINK (enlace del paciente), STAFF_FOR_PATIENT (el personal por el paciente) o CLINIC (la clínica; nunca tardía). */
+            cancelledByKind: components["schemas"]["CancellationByKind"] | null;
+            /** @description DX-279: motivo del catálogo cerrado. */
+            cancelReasonCode: components["schemas"]["CancellationReasonCode"] | null;
+            /** @description DX-279: detalle opcional del motivo (≤ 500). No sale en GET /appointments (como las notas). */
+            cancelReasonText: string | null;
+            /** @description DX-279: minutos de aviso entre la cancelación y el inicio (0 si ya había empezado). */
+            noticeMinutes: number | null;
+            /** @description DX-279: con menos aviso que el que pedía la política vigente de la sede. */
+            lateCancellation: boolean | null;
+            /**
+             * Format: date-time
+             * @description DX-279: cuándo se marcó la inasistencia (solo en NO_SHOW).
+             */
+            noShowMarkedAt: string | null;
+            /**
+             * Format: uuid
+             * @description DX-279: versión de la política comunicada al paciente (la rellena DX-291; hoy null).
+             */
+            policyVersionId: string | null;
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
@@ -5978,6 +6584,16 @@ export interface components {
             warnings: string[];
             /** @description DX-233: código de cada aviso, en el mismo orden que `warnings`: SCHEDULE_BLOCK (bloqueo que deja agendar, DX-122) o PROVIDER_OFF_SCHEDULE (fuera del horario del profesional en la sede). */
             warningCodes: components["schemas"]["AppointmentWarningCode"][];
+            /** @description DX-273: tratamientos de esta cita que siguen reservados en OTRA cita viva (p. ej. al marcar «Llegó», la reserva se quedó en la cita futura). Solo citas de sedes permitidas al usuario (DX-089): las de otras sedes se omiten, salvo la de hoy con el paciente en la clínica, que sale con `heldInClinic` y sin cita, hora ni sede (DX-293). Vacío en una cita cancelada, no-show o completada. Si la cita que lo reservaba se cancela, se marca no-show o lo quita, la cita más temprana con el paciente en la clínica recupera la reserva en esa misma transacción (auditado `PLAN_ITEM_RESERVATION_RECOVERED`). Para moverla: `POST /appointments/:id/plan-items/:planItemId/claim` (no con `heldInClinic`: daría 409). */
+            planItemsReservedElsewhere: components["schemas"]["PlanItemReservedElsewhereDto"][];
+            /** @description DX-273: solo al sacar la cita de COMPLETED. El motivo y cómo queda el mínimo de la visita siguiente de cada plan afectado. */
+            completedExit?: components["schemas"]["CompletedExitDto"];
+        };
+        PatientIncidentCountsDto: {
+            /** @example 2 */
+            noShows: number;
+            /** @example 1 */
+            lateCancellations: number;
         };
         MedicalAlertFlagsDto: {
             /** @description La versión vigente de la anamnesis tiene alguna alerta (derivada en el servidor). false sin anamnesis. */
@@ -6052,10 +6668,35 @@ export interface components {
              * @description DX-200: cuándo quedó listo para cobrar.
              */
             readyForCheckoutAt: string | null;
+            /**
+             * Format: date-time
+             * @description DX-279: cuándo se canceló (reloj del servidor). Solo en CANCELLED; null en las canceladas antiguas.
+             */
+            cancelledAt: string | null;
+            /** @description DX-279: quién canceló — PATIENT_LINK (enlace del paciente), STAFF_FOR_PATIENT (el personal por el paciente) o CLINIC (la clínica; nunca tardía). */
+            cancelledByKind: components["schemas"]["CancellationByKind"] | null;
+            /** @description DX-279: motivo del catálogo cerrado. */
+            cancelReasonCode: components["schemas"]["CancellationReasonCode"] | null;
+            /** @description DX-279: minutos de aviso entre la cancelación y el inicio (0 si ya había empezado). */
+            noticeMinutes: number | null;
+            /** @description DX-279: con menos aviso que el que pedía la política vigente de la sede. */
+            lateCancellation: boolean | null;
+            /**
+             * Format: date-time
+             * @description DX-279: cuándo se marcó la inasistencia (solo en NO_SHOW).
+             */
+            noShowMarkedAt: string | null;
+            /**
+             * Format: uuid
+             * @description DX-279: versión de la política comunicada al paciente (la rellena DX-291; hoy null).
+             */
+            policyVersionId: string | null;
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
             updatedAt: string;
+            /** @description DX-279: inasistencias y cancelaciones tardías del paciente en los últimos 12 meses, en las sedes permitidas al usuario (DX-089), calculadas para todo el lote en una consulta (sin N+1). Las de la clínica no cuentan. */
+            attendance: components["schemas"]["PatientIncidentCountsDto"];
             balance: components["schemas"]["OverdueBalanceDto"];
             coverage: components["schemas"]["CoverageSummaryDto"];
             /** @description DX-247: banderas médicas del paciente (alerta, premedicación, anamnesis al día / caducada / ausente). Sin alérgenos, condiciones, medicamentos ni notas. */
@@ -6112,6 +6753,8 @@ export interface components {
              * @enum {string}
              */
             punctuality: "ON_TIME" | "LATE" | "VERY_LATE";
+            /** @description DX-273: tratamientos de la cita reservados en OTRA cita viva (solo sedes permitidas al usuario; de otra sede, solo la de hoy con el paciente en la clínica, sin sus datos: DX-293). `heldInClinic` true: no se ofrece «Traer a esta cita». Vacío si no hay. */
+            planItemsReservedElsewhere: components["schemas"]["PlanItemReservedElsewhereDto"][];
             /** @description DX-247: la misma alerta médica que la tarjeta de la agenda (solo banderas). */
             medicalAlerts: components["schemas"]["MedicalAlertFlagsDto"];
         };
@@ -6138,6 +6781,27 @@ export interface components {
             inChair: components["schemas"]["InClinicItemDto"][];
             /** @description Listo para cobrar (READY_FOR_CHECKOUT). */
             readyForCheckout: components["schemas"]["InClinicItemDto"][];
+        };
+        CancellationPolicyRefDto: {
+            /** Format: uuid */
+            id: string;
+            /** @example 3 */
+            version: number;
+            /** @example 24 */
+            noticeHours: number;
+        };
+        CancellationPreviewDto: {
+            /** Format: uuid */
+            appointmentId: string;
+            /**
+             * @description Minutos que faltan para el inicio (0 si ya empezó), en UTC.
+             * @example 300
+             */
+            noticeMinutes: number;
+            /** @description Si el paciente cancelara ahora, sería tardía (menos aviso que la política). Una cancelación de la clínica nunca lo es. */
+            lateCancellation: boolean;
+            /** @description Política vigente de la sede de la cita; null = sin política. */
+            policy: components["schemas"]["CancellationPolicyRefDto"] | null;
         };
         AppointmentDto: {
             planItemIds: string[];
@@ -6198,6 +6862,31 @@ export interface components {
              * @description DX-200: cuándo quedó listo para cobrar.
              */
             readyForCheckoutAt: string | null;
+            /**
+             * Format: date-time
+             * @description DX-279: cuándo se canceló (reloj del servidor). Solo en CANCELLED; null en las canceladas antiguas.
+             */
+            cancelledAt: string | null;
+            /** @description DX-279: quién canceló — PATIENT_LINK (enlace del paciente), STAFF_FOR_PATIENT (el personal por el paciente) o CLINIC (la clínica; nunca tardía). */
+            cancelledByKind: components["schemas"]["CancellationByKind"] | null;
+            /** @description DX-279: motivo del catálogo cerrado. */
+            cancelReasonCode: components["schemas"]["CancellationReasonCode"] | null;
+            /** @description DX-279: detalle opcional del motivo (≤ 500). No sale en GET /appointments (como las notas). */
+            cancelReasonText: string | null;
+            /** @description DX-279: minutos de aviso entre la cancelación y el inicio (0 si ya había empezado). */
+            noticeMinutes: number | null;
+            /** @description DX-279: con menos aviso que el que pedía la política vigente de la sede. */
+            lateCancellation: boolean | null;
+            /**
+             * Format: date-time
+             * @description DX-279: cuándo se marcó la inasistencia (solo en NO_SHOW).
+             */
+            noShowMarkedAt: string | null;
+            /**
+             * Format: uuid
+             * @description DX-279: versión de la política comunicada al paciente (la rellena DX-291; hoy null).
+             */
+            policyVersionId: string | null;
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
@@ -6216,10 +6905,27 @@ export interface components {
              */
             providerId?: string;
             /**
-             * @description DX-200: flujo en la clínica sin saltos (409 si no): ARRIVED desde SCHEDULED/CONFIRMED y solo el día de la cita (RECEPTION, ASSISTANT, ADMIN; fija `arrivedAt`); IN_CHAIR desde ARRIVED y READY_FOR_CHECKOUT desde IN_CHAIR (DENTIST, ASSISTANT, ADMIN; fijan `seatedAt` / `readyForCheckoutAt`); la salida a COMPLETED (o CANCELLED si se fue sin pasar al sillón) desde el flujo, RECEPTION, ASSISTANT, ADMIN. Nunca NO_SHOW desde el flujo; para volver a agendada, `POST /appointments/:id/undo-arrival`. Las horas las pone el servidor. Rol sin permiso: 403.
+             * @description DX-200: flujo en la clínica sin saltos (409 si no): ARRIVED desde SCHEDULED/CONFIRMED y solo el día de la cita (RECEPTION, ASSISTANT, ADMIN; fija `arrivedAt`); IN_CHAIR desde ARRIVED y READY_FOR_CHECKOUT desde IN_CHAIR (DENTIST, ASSISTANT, ADMIN; fijan `seatedAt` / `readyForCheckoutAt`); la salida a COMPLETED (o CANCELLED si se fue sin pasar al sillón) desde el flujo, RECEPTION, ASSISTANT, ADMIN. Nunca NO_SHOW desde el flujo; para volver a agendada, `POST /appointments/:id/undo-arrival`. Las horas las pone el servidor. Rol sin permiso: 403. DX-273: salir de COMPLETED (a cualquier otro estado) solo ADMIN y DENTIST, con `statusReason` (403 / 400).
              * @enum {string}
              */
             status?: "SCHEDULED" | "CONFIRMED" | "COMPLETED" | "CANCELLED" | "NO_SHOW" | "ARRIVED" | "IN_CHAIR" | "READY_FOR_CHECKOUT";
+            /**
+             * @description DX-273: motivo OBLIGATORIO para sacar la cita de COMPLETED (a SCHEDULED, CONFIRMED, CANCELLED…), de 3 a 500 caracteres tras recortar; sin él, 400. Esa salida solo la hacen ADMIN y DENTIST (RECEPTION/ASSISTANT: 403). Se guarda en `appointment_status_reversals` y queda auditado (`COMPLETED_EXIT`). El mínimo de la visita siguiente del plan se recalcula con la última cita de la visita anterior que siga completada (o queda sin mínimo); la respuesta lo dice en `completedExit.visitMinimums`. En cualquier otro cambio se ignora.
+             * @example La cirugía no se hizo: se marcó completada por error.
+             */
+            statusReason?: string;
+            /**
+             * @description DX-279: quién cancela, OBLIGATORIO al pasar a CANCELLED (400 sin él): STAFF_FOR_PATIENT (el paciente lo comunica al personal) o CLINIC (la clínica cancela o reprograma; nunca cuenta como tardía). El enlace público (PATIENT_LINK) no pasa por aquí. En cualquier otro cambio se ignora.
+             * @enum {string}
+             */
+            cancelledByKind?: "STAFF_FOR_PATIENT" | "CLINIC";
+            /**
+             * @description DX-279: motivo del catálogo cerrado, OBLIGATORIO al pasar a CANCELLED (400 sin él). El servidor guarda la hora (UTC), los minutos de aviso y si es tardía según la política vigente de la sede de la cita; queda auditado (APPOINTMENT_CANCELLED, sin el texto libre).
+             * @enum {string}
+             */
+            cancelReasonCode?: "ILLNESS" | "FORGOT" | "COST" | "TRANSPORT" | "WORK" | "CLINIC_RESCHEDULE" | "OTHER";
+            /** @description DX-279: detalle opcional del motivo (hasta 500 caracteres; vacío = sin detalle). No pidas datos de salud. Solo al pasar a CANCELLED. */
+            cancelReasonText?: string;
             reason?: string;
             notes?: string;
             /** @description DX-210: «Adelantar si hay hueco». La cita sale como candidata para los huecos libres de días anteriores de su sede y profesional. Solo RECEPTION, DENTIST y ADMIN (403 para ASSISTANT); queda auditado. */
@@ -6238,6 +6944,49 @@ export interface components {
              * @description Profesional del hueco; si falta, el de la cita.
              */
             providerId?: string;
+        };
+        AttendanceTotalsDto: {
+            /** @example 2 */
+            noShows: number;
+            /** @example 1 */
+            lateCancellations: number;
+            /**
+             * @description Citas que ya empezaron. Las cancelaciones tardías pueden incluir citas futuras: no se lea como ratio.
+             * @example 6
+             */
+            appointments: number;
+        };
+        LocationAttendanceDto: {
+            /** @example 2 */
+            noShows: number;
+            /** @example 1 */
+            lateCancellations: number;
+            /** Format: uuid */
+            locationId: string;
+            /** @example Sede principal */
+            locationName: string;
+            /**
+             * @description Citas de la ventana que ya empezaron (cualquier estado). No es el denominador de las incidencias: una cancelación tardía puede ser de una cita futura.
+             * @example 6
+             */
+            appointments: number;
+        };
+        PatientAttendanceSummaryDto: {
+            /** Format: uuid */
+            patientId: string;
+            /**
+             * Format: date-time
+             * @description Hace 12 meses (UTC).
+             */
+            since: string;
+            /**
+             * Format: date-time
+             * @description Instante del cálculo.
+             */
+            until: string;
+            totals: components["schemas"]["AttendanceTotalsDto"];
+            /** @description Solo las sedes con citas en la ventana y permitidas al usuario (DX-089), por nombre. */
+            byLocation: components["schemas"]["LocationAttendanceDto"][];
         };
         StaffMemberDto: {
             /** Format: uuid */
@@ -6953,6 +7702,19 @@ export interface components {
             primaryColor: string;
             logoUrl: string | null;
         };
+        PublicCancellationPolicyDto: {
+            /**
+             * Format: uuid
+             * @description Versión mostrada: la página la devuelve en `policyVersionId` al responder.
+             */
+            policyVersionId: string;
+            noticeHours: number;
+            /** @description Texto de la clínica (puede ir vacío). */
+            text: string;
+            suggestedFee: number | null;
+            /** @example COP */
+            currency: string | null;
+        };
         PublicAppointmentConfirmationDto: {
             /**
              * @description PENDING: puede responder. RESPONDED: ya respondió (ver `response`). EXPIRED: caducado o sin efecto.
@@ -6966,10 +7728,21 @@ export interface components {
             response: "confirm" | "cancel" | "call_me" | null;
             /** Format: date-time */
             respondedAt: string | null;
+            /** @description DX-291: política vigente de la sede (solo con el enlace PENDING; null sin política). */
+            cancellationPolicy: components["schemas"]["PublicCancellationPolicyDto"] | null;
+            /** @description DX-291: cancelar ahora tendría menos aviso que la política: cancelar exige `acknowledgePolicy`. */
+            isLate: boolean;
         };
         RespondAppointmentConfirmationDto: {
             /** @enum {string} */
             action: "confirm" | "cancel" | "call_me";
+            /** @description DX-291: el paciente acepta la política de cancelación. Obligatorio (true) para cancelar con menos aviso que la política (400 sin él). */
+            acknowledgePolicy?: boolean;
+            /**
+             * Format: uuid
+             * @description DX-291: versión de la política que mostró la página (null = ninguna). Si ya no es la vigente: 409 y la página se recarga.
+             */
+            policyVersionId?: string | null;
         };
         UnscheduledPlanDto: {
             /** Format: uuid */
@@ -7150,6 +7923,25 @@ export interface components {
             discountLocationId: string | null;
             /** @enum {string} */
             status: "PROPOSED" | "ACCEPTED" | "DONE";
+            /**
+             * Format: uuid
+             * @description DX-050: usuario que realizó el procedimiento. Null fuera de DONE y en los DONE anteriores a DX-050 («Sin atribuir»)
+             */
+            performedById: string | null;
+            /** @description DX-050: su nombre (también si ya no es miembro activo de la clínica) */
+            performedByName: string | null;
+            /**
+             * Format: uuid
+             * @description DX-050: sede donde se realizó (la del request al marcarlo)
+             */
+            performedLocationId: string | null;
+            /** @description DX-050: su nombre */
+            performedLocationName: string | null;
+            /**
+             * Format: date-time
+             * @description DX-050: cuándo se realizó (hora del servidor al marcarlo)
+             */
+            completedAt: string | null;
             notes: string | null;
             /** Format: date-time */
             createdAt: string;
@@ -7304,8 +8096,21 @@ export interface components {
             price?: number;
             /** @description Descuento (máx. 2 decimales); nunca mayor que el precio (400). DX-204: por encima del tope del rol de quien lo cambia, 403; en un plan aceptado (con o sin firma): 409 */
             discount?: number;
-            /** @enum {string} */
+            /**
+             * @description DX-050: pasar a DONE guarda quién lo realizó (`performedById`), la sede del request (`X-Location-Id`) y `completedAt` (hora del servidor). Salir de DONE limpia los tres; solo ADMIN o quien lo realizó (403 si no), y queda auditado
+             * @enum {string}
+             */
             status?: "PROPOSED" | "ACCEPTED" | "DONE";
+            /**
+             * Format: uuid
+             * @description DX-050: usuario que realizó el procedimiento (miembro VIVO de esta clínica que atiende: DENTIST o ADMIN, y que atiende en la sede). Al pasar a DONE: por defecto quien marca si atiende; si no (ASSISTANT), obligatorio (400). Otra clínica o desactivado: 404. En un ítem ya DONE solo un ADMIN lo cambia (403), auditado
+             */
+            performedById?: string;
+            /**
+             * Format: date-time
+             * @description DX-050: SOLO para que un ADMIN corrija la fecha de un ítem ya DONE (403 a otro rol, 400 si es futura). Al pasar a DONE la pone el servidor (400 si llega)
+             */
+            completedAt?: string;
             surfaces?: ("MESIAL" | "DISTAL" | "OCCLUSAL" | "VESTIBULAR" | "LINGUAL")[];
             notes?: string;
         };
@@ -7493,6 +8298,14 @@ export interface components {
             /** @description Descuento sobre el bruto, en % (2 decimales) */
             percentOfGross: number;
         };
+        AgreementReductionTotalDto: {
+            /** @example COP */
+            currency: string;
+            /** @description Líneas con rebaja de convenio en esta moneda */
+            items: number;
+            /** @description Suma de las rebajas de convenio (precio de catálogo − precio del convenio) */
+            reduction: number;
+        };
         DiscountReportItemDto: {
             /** Format: uuid */
             itemId: string;
@@ -7550,6 +8363,31 @@ export interface components {
             /** Format: uuid */
             locationId: string | null;
             locationName: string | null;
+            /**
+             * @description DX-105: de dónde salió el precio de referencia (null en ítems anteriores)
+             * @enum {string|null}
+             */
+            priceSource: "CATALOG" | "PRICE_LIST" | "AGREEMENT_PERCENT" | "AGREEMENT_PRICE_LIST" | null;
+            /** @description Convenio con el que se resolvió el precio al dar de alta el ítem */
+            agreementName: string | null;
+            /** @description DX-105: precio de catálogo al dar de alta el ítem (sin convenio) */
+            basePrice: number | null;
+            /** @description SEC-047: rebaja de convenio (precio de catálogo − precio del convenio; 0 sin convenio). Aparte del descuento total */
+            agreementReduction: number;
+            /** @description SEC-047: % de la rebaja de convenio sobre el precio de catálogo, 2 decimales */
+            agreementPercent: number;
+            /**
+             * Format: uuid
+             * @description SEC-047: quién asignó el convenio al paciente
+             */
+            agreementAssignedById: string | null;
+            agreementAssignedByName: string | null;
+            /**
+             * Format: uuid
+             * @description SEC-047: quién dio de alta el ítem (null en los anteriores a SEC-047)
+             */
+            createdById: string | null;
+            createdByName: string | null;
         };
         DiscountReportDto: {
             /** @example 2026-10-01 */
@@ -7559,9 +8397,11 @@ export interface components {
             scope: components["schemas"]["DiscountReportScopeDto"];
             /** @description Por moneda, sin convertir */
             totals: components["schemas"]["DiscountReportTotalDto"][];
+            /** @description SEC-047: rebajas de convenio por moneda. Van aparte: `totals` solo cuenta los descuentos (como en DX-204) */
+            agreementTotals: components["schemas"]["AgreementReductionTotalDto"][];
             /** @description Página de ítems, más recientes primero */
             items: components["schemas"]["DiscountReportItemDto"][];
-            /** @description Ítems del periodo (todas las páginas) */
+            /** @description Líneas del periodo (todas las páginas): descuentos y rebajas de convenio */
             total: number;
             page: number;
             pageSize: number;
@@ -7711,6 +8551,12 @@ export interface components {
              */
             createdAt: string;
         };
+        CashOpeningBalanceRefDto: {
+            /** Format: uuid */
+            id: string;
+            /** @example Saldo migrado */
+            concept: string;
+        };
         CashPaymentDto: {
             /** Format: uuid */
             id: string;
@@ -7750,7 +8596,10 @@ export interface components {
             notes: string | null;
             location: components["schemas"]["CashLocationRefDto"];
             patient: components["schemas"]["CashPatientRefDto"];
-            treatmentPlan: components["schemas"]["CashTreatmentPlanRefDto"];
+            /** @description null si el abono es contra un saldo migrado (DX-262) */
+            treatmentPlan: components["schemas"]["CashTreatmentPlanRefDto"] | null;
+            /** @description Saldo migrado del abono (DX-262); null si es a un plan */
+            openingBalance: components["schemas"]["CashOpeningBalanceRefDto"] | null;
         };
         CashScopeDto: {
             /** @description Sede activa del request (X-Location-Id), o null = todas las sedes. */
@@ -7827,8 +8676,16 @@ export interface components {
             id: string;
             /** Format: uuid */
             tenantId: string;
-            /** Format: uuid */
-            treatmentPlanId: string;
+            /**
+             * Format: uuid
+             * @description Plan del abono; null si es contra un saldo migrado (DX-262)
+             */
+            treatmentPlanId: string | null;
+            /**
+             * Format: uuid
+             * @description Saldo migrado del abono (DX-262); null si es a un plan
+             */
+            openingBalanceId: string | null;
             /** Format: uuid */
             patientId: string;
             /** @example 100 */
@@ -7945,6 +8802,17 @@ export interface components {
             /** Format: date-time */
             createdAt: string;
         };
+        ReceiptOpeningBalanceDto: {
+            /** Format: uuid */
+            id: string;
+            /** @example Saldo migrado */
+            concept: string;
+            /**
+             * @description Fecha de corte
+             * @example 2026-03-15
+             */
+            asOfDate: string;
+        };
         ReceiptPlanBalanceDto: {
             /** @example COP */
             currency: string;
@@ -7970,8 +8838,11 @@ export interface components {
             fiscalDataPending: boolean;
             patient: components["schemas"]["ReceiptPatientDto"];
             payment: components["schemas"]["ReceiptPaymentDto"];
-            plan: components["schemas"]["ReceiptPlanDto"];
-            /** @description Saldo del plan tras el abono (moneda del plan); null si no se pudo calcular. */
+            /** @description null si el abono es contra un saldo migrado (DX-262) */
+            plan: components["schemas"]["ReceiptPlanDto"] | null;
+            /** @description DX-262: saldo migrado del abono (concepto y fecha de corte); ausente o null si es a un plan */
+            openingBalance?: components["schemas"]["ReceiptOpeningBalanceDto"] | null;
+            /** @description Saldo tras el abono: el del plan (en su moneda) o, si el abono va a un saldo migrado (DX-262), lo que queda pendiente de ese saldo; null si no se pudo calcular. */
             planBalance: components["schemas"]["ReceiptPlanBalanceDto"] | null;
             /** @description Quién cobró. */
             cashier: components["schemas"]["ReceiptCashierDto"] | null;
@@ -8209,13 +9080,23 @@ export interface components {
              */
             budgeted: number;
             /**
+             * @description DX-262: Σ saldos migrados vivos en esta moneda (deuda traída del programa anterior)
+             * @example 150000
+             */
+            openingBalance: number;
+            /**
+             * @description DX-262 (QA D5): lo que queda pendiente de esos saldos migrados tras sus abonos; es lo que «incluye» el saldo
+             * @example 100000
+             */
+            openingPending: number;
+            /**
              * @description Σ abonos no anulados en esta moneda (sin convertir)
              * @example 1200000
              */
             paid: number;
             /**
-             * @description budgeted - paid (negativo = saldo a favor)
-             * @example 1800000
+             * @description budgeted + openingBalance - paid (negativo = saldo a favor)
+             * @example 1950000
              */
             balance: number;
             /** @example 1 */
@@ -8297,8 +9178,16 @@ export interface components {
             /** @enum {string|null} */
             method: "CASH" | "CARD" | "TRANSFER" | "OTHER" | null;
             location: components["schemas"]["AccountStatementLocationRefDto"];
-            /** Format: uuid */
-            treatmentPlanId: string;
+            /**
+             * Format: uuid
+             * @description null si el abono es contra un saldo migrado (DX-262)
+             */
+            treatmentPlanId: string | null;
+            /**
+             * Format: uuid
+             * @description Saldo migrado del abono (DX-262), o null
+             */
+            openingBalanceId: string | null;
             /**
              * Format: uuid
              * @description Quién registró el abono; `null` en abonos antiguos sin autor.
@@ -8336,6 +9225,38 @@ export interface components {
             /** @enum {string} */
             status: "PAID" | "PARTIAL" | "PENDING" | "OVERDUE";
         };
+        AccountStatementOpeningBalanceDto: {
+            /** Format: uuid */
+            id: string;
+            /** @example COP */
+            currency: string;
+            /** @example 150000 */
+            amount: number;
+            /**
+             * @description Fecha de corte (día civil AAAA-MM-DD) desde la que cuenta
+             * @example 2026-03-15
+             */
+            asOfDate: string;
+            /** @description La fecha es la de la importación: el archivo no traía fecha de antigüedad («aprox.») */
+            asOfDateApproximate: boolean;
+            /** @example Saldo migrado */
+            concept: string;
+            /**
+             * Format: uuid
+             * @description Lote de importación
+             */
+            importBatchId: string;
+            /**
+             * @description Abonos vivos contra este saldo, en su moneda
+             * @example 50000
+             */
+            paid: number;
+            /**
+             * @description amount − paid: lo pendiente
+             * @example 100000
+             */
+            pending: number;
+        };
         AccountStatementDto: {
             /** Format: date-time */
             issuedAt: string;
@@ -8347,6 +9268,8 @@ export interface components {
             plans: components["schemas"]["AccountStatementPlanDto"][];
             movements: components["schemas"]["AccountStatementMovementDto"][];
             installments: components["schemas"]["AccountStatementInstallmentDto"][];
+            /** @description DX-262: saldos migrados vivos, de la fecha de corte más antigua a la más reciente */
+            openingBalances: components["schemas"]["AccountStatementOpeningBalanceDto"][];
         };
         FamilyMemberPatientDto: {
             /** Format: uuid */
@@ -8359,6 +9282,10 @@ export interface components {
             currency: string;
             /** @description Igual que `summary[].budgeted` individual */
             budgeted: number;
+            /** @description DX-262: saldo migrado, ya incluido en balance */
+            openingBalance: number;
+            /** @description DX-262 (QA D5): lo que queda pendiente del saldo migrado */
+            openingPending: number;
             paid: number;
             balance: number;
             overdueAmount: number;
@@ -8562,6 +9489,107 @@ export interface components {
             pageSize: number;
             /** @description Por moneda, de TODAS las filas filtradas (no solo la página) */
             totals: components["schemas"]["AgingTotalDto"][];
+        };
+        KpiDefinitionDto: {
+            /** @enum {string} */
+            key: "production" | "collected" | "collectionRate" | "completedAppointments" | "noShowRate" | "newPatients" | "averageTicket" | "occupancy";
+            /** @example Producción */
+            label: string;
+            /** @enum {string} */
+            unit: "MONEY" | "PERCENT" | "COUNT";
+            /** @description true = un valor por moneda (lista), nunca sumados */
+            perCurrency: boolean;
+            /**
+             * @description Hacia dónde mejora: el no-show mejora al bajar
+             * @enum {string}
+             */
+            direction: "HIGHER_IS_BETTER" | "LOWER_IS_BETTER";
+            /**
+             * @description Unidad de `change`: PERCENT = % relativo ((valor − anterior) ÷ |anterior|); POINTS = puntos porcentuales (valor − anterior), en los indicadores que ya son un %
+             * @enum {string}
+             */
+            changeUnit: "PERCENT" | "POINTS";
+            /** @description Texto de «Cómo se calcula» */
+            howItIsCalculated: string;
+        };
+        CurrencyMetricDto: {
+            /** @description Valor del período. Porcentajes en % con 2 decimales; null = no se puede calcular (sin base) */
+            value: number | null;
+            /** @description Valor del período de comparación (null sin comparación) */
+            previous: number | null;
+            /** @description Variación frente al anterior, 1 decimal, en la unidad `changeUnit` del indicador: % relativo ((valor − anterior) ÷ |anterior|; null con anterior 0) o puntos porcentuales en % de cobro, no-show % y ocupación % (valor − anterior: 8 % → 10 % = 2). null sin anterior */
+            change: number | null;
+            /**
+             * @description Lectura de la variación según la dirección del indicador
+             * @enum {string|null}
+             */
+            trend: "BETTER" | "WORSE" | "EQUAL" | null;
+            /** @example COP */
+            currency: string;
+        };
+        MetricDto: {
+            /** @description Valor del período. Porcentajes en % con 2 decimales; null = no se puede calcular (sin base) */
+            value: number | null;
+            /** @description Valor del período de comparación (null sin comparación) */
+            previous: number | null;
+            /** @description Variación frente al anterior, 1 decimal, en la unidad `changeUnit` del indicador: % relativo ((valor − anterior) ÷ |anterior|; null con anterior 0) o puntos porcentuales en % de cobro, no-show % y ocupación % (valor − anterior: 8 % → 10 % = 2). null sin anterior */
+            change: number | null;
+            /**
+             * @description Lectura de la variación según la dirección del indicador
+             * @enum {string|null}
+             */
+            trend: "BETTER" | "WORSE" | "EQUAL" | null;
+        };
+        ComparisonMetricsDto: {
+            production: components["schemas"]["CurrencyMetricDto"][];
+            collected: components["schemas"]["CurrencyMetricDto"][];
+            collectionRate: components["schemas"]["CurrencyMetricDto"][];
+            completedAppointments: components["schemas"]["MetricDto"];
+            noShowRate: components["schemas"]["MetricDto"];
+            newPatients: components["schemas"]["MetricDto"];
+            averageTicket: components["schemas"]["CurrencyMetricDto"][];
+            occupancy: components["schemas"]["MetricDto"];
+        };
+        ComparisonRowDto: {
+            /**
+             * Format: uuid
+             * @description null en «Total clínica»
+             */
+            locationId: string | null;
+            /** @example Sede Norte */
+            name: string;
+            /** @description false = sede desactivada (sigue saliendo) */
+            isActive: boolean;
+            /**
+             * @description Zona con la que la sede corta sus días (null en el total)
+             * @example America/Bogota
+             */
+            timeZone: string | null;
+            /** @description ¿Hubo producción, cobros o citas (atendidas o no-show) en el período? */
+            hasActivity: boolean;
+            metrics: components["schemas"]["ComparisonMetricsDto"];
+        };
+        LocationsComparisonDto: {
+            /** @example 2026-10-01 */
+            from: string;
+            /** @example 2026-10-31 */
+            to: string;
+            /** @enum {string} */
+            compare: "previous" | "previous_year" | "none";
+            /** @example 2026-08-31 */
+            previousFrom: string | null;
+            /** @example 2026-09-30 */
+            previousTo: string | null;
+            /** @description Moneda del filtro; null = todas, por separado */
+            currency: string | null;
+            /** @description Los indicadores, en el orden de las columnas */
+            kpis: components["schemas"]["KpiDefinitionDto"][];
+            /** @description Una fila por sede visible, en orden de creación */
+            locations: components["schemas"]["ComparisonRowDto"][];
+            /** @description «Total clínica»: solo las sedes de `locations`; importes por moneda */
+            total: components["schemas"]["ComparisonRowDto"];
+            /** @description ¿Alguna sede tuvo actividad en el período? */
+            hasActivity: boolean;
         };
         CashSettingsDto: {
             /** @description «Exigir caja abierta»: sin caja abierta en la sede no se registra un abono en efectivo (409). */
@@ -8904,7 +9932,7 @@ export interface components {
          * @description IN_PERSON = registrado en la clínica con el texto vigente. LEGACY = heredado del booleano anterior, sin texto versionado.
          * @enum {string}
          */
-        DataConsentChannel: "IN_PERSON" | "LEGACY";
+        DataConsentChannel: "IN_PERSON" | "LEGACY" | "PATIENT_LINK";
         PolicyVersionRefDto: {
             /** Format: uuid */
             id: string;
@@ -9032,6 +10060,139 @@ export interface components {
              */
             quantity: number;
             reason?: string;
+        };
+        ReminderEmailPreviewDto: {
+            /** @example Recordatorio de tu cita en Clínica Sonrisa */
+            subject: string;
+            /** @description HTML completo del email (con la marca de la clínica). Muéstralo en un iframe con sandbox. */
+            html: string;
+            /** @description Versión en texto plano. */
+            text: string;
+        };
+        CancellationPolicyVersionDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            locationId: string;
+            /**
+             * @description Número de versión en la sede (1, 2, 3…)
+             * @example 2
+             */
+            version: number;
+            /**
+             * @description Horas de aviso que pide la sede. Con menos, la cancelación es tardía.
+             * @example 24
+             */
+            noticeHours: number;
+            /**
+             * @description Importe sugerido del cargo (lo usará DX-291); null = sin importe
+             * @example 50000
+             */
+            suggestedFee: number | null;
+            /** @example COP */
+            currency: string | null;
+            /** @description Texto para el paciente */
+            patientText: string;
+            /** @description RECEPTION también podrá generar el cargo (DX-291). Por defecto, no. */
+            receptionCanCharge: boolean;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: uuid */
+            createdById: string;
+            /** @example Dra. Ana Gómez */
+            createdByName: string | null;
+        };
+        CancellationPolicyDto: {
+            /** Format: uuid */
+            locationId: string;
+            /** @description La versión vigente (la de mayor número); null si nunca se configuró */
+            current: components["schemas"]["CancellationPolicyVersionDto"] | null;
+            /** @description Historial de versiones, de la más nueva a la más antigua */
+            versions: components["schemas"]["CancellationPolicyVersionDto"][];
+        };
+        CreateCancellationPolicyDto: {
+            /** @example 24 */
+            noticeHours: number;
+            /**
+             * @description Importe sugerido ≥ 0, con 2 decimales como mucho. Exige `currency`.
+             * @example 50000
+             */
+            suggestedFee?: number | null;
+            /**
+             * @description ISO 4217 del importe sugerido (obligatoria con importe)
+             * @example COP
+             */
+            currency?: string | null;
+            /** @example Si no puedes venir, avísanos con 24 horas de antelación. */
+            patientText?: string;
+            /** @description RECEPTION también podrá generar el cargo (DX-291). Si falta, no. */
+            receptionCanCharge?: boolean;
+        };
+        CommunicatedPolicyDto: {
+            /** Format: uuid */
+            policyVersionId: string;
+            version: number;
+            noticeHours: number;
+            suggestedFee: number | null;
+            /** @example COP */
+            currency: string | null;
+        };
+        CancellationFeeRecordDto: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            status: "CHARGED" | "WAIVED";
+            amount: number | null;
+            currency: string | null;
+            /**
+             * Format: uuid
+             * @description Plan «Cargos administrativos» donde se cobra con un abono.
+             */
+            planId: string | null;
+            /** Format: uuid */
+            planItemId: string | null;
+            /** @description El ítem del cargo se quitó del plan («Quitar»): el cargo quedó anulado y no hay nada que cobrar. El ítem no admite descuento; así se anula un cargo generado por error. La cita sigue con su única decisión (otro cargo o condonar: 409). */
+            planItemRemoved: boolean;
+            waiveReason: string | null;
+            /** Format: uuid */
+            policyVersionId: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            createdByName: string | null;
+        };
+        CancellationFeeViewDto: {
+            /** Format: uuid */
+            appointmentId: string;
+            /** Format: uuid */
+            patientId: string;
+            /** @description NO_SHOW o cancelación tardía. */
+            eligible: boolean;
+            /** @enum {string} */
+            status: "NONE" | "CHARGED" | "WAIVED";
+            /**
+             * @description Por qué no se puede generar el cargo ahora: no es inasistencia ni tardía, no consta la política comunicada, la versión comunicada no tiene importe, EPS_CO activa en Colombia, o ya cobrado/condonado.
+             * @enum {string|null}
+             */
+            chargeBlock: "NOT_ELIGIBLE" | "NOT_INFORMED" | "NO_FEE" | "EPS_CO" | "ALREADY_CHARGED" | "ALREADY_WAIVED" | null;
+            chargeBlockMessage: string | null;
+            /** @description El usuario puede generar o condonar: ADMIN, o RECEPTION si la política vigente de la sede lo permite. */
+            canManage: boolean;
+            communicated: components["schemas"]["CommunicatedPolicyDto"] | null;
+            fee: components["schemas"]["CancellationFeeRecordDto"] | null;
+        };
+        ChargeCancellationFeeDto: {
+            /**
+             * @description Importe del cargo en la moneda de la política comunicada. Sin él, el sugerido. Editable a la baja: por encima del sugerido es 400.
+             * @example 50000
+             */
+            amount?: number;
+        };
+        WaiveCancellationFeeDto: {
+            /**
+             * @description Motivo de la condonación (3–500 caracteres). Queda en la cita; la auditoría registra la condonación sin el texto.
+             * @example Hospitalización documentada
+             */
+            reason: string;
         };
         PlatformTenantDto: {
             /** Format: uuid */
@@ -9704,6 +10865,320 @@ export interface components {
             /** Format: date-time */
             deliveredAt: string;
         };
+        CreateAnamnesisRequestDto: {
+            /**
+             * Format: uuid
+             * @description Cita del paciente: el enlace caduca a su inicio (o a los 7 días, lo que llegue antes) y la anamnesis va a la bandeja de su sede.
+             */
+            appointmentId?: string;
+        };
+        AnamnesisWhatsAppDto: {
+            /** @description E.164 sin «+», para wa.me */
+            phone: string;
+            /** @description Mensaje prellenado: saludo, clínica y enlace; nada clínico */
+            text: string;
+        };
+        AnamnesisRequestCreatedDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            patientId: string;
+            /** Format: uuid */
+            appointmentId: string | null;
+            /** @description Enlace público. El token solo viaja en esta respuesta: la API guarda su hash. */
+            url: string;
+            /** Format: date-time */
+            expiresAt: string;
+            whatsapp: components["schemas"]["AnamnesisWhatsAppDto"] | null;
+            whatsappUnavailableReason: string | null;
+            /** @description El paciente no tiene vigente SENSITIVE_HEALTH: el formulario la pedirá antes. */
+            consentRequired: boolean;
+        };
+        SubmissionPatientDto: {
+            /** Format: uuid */
+            id: string;
+            fullName: string;
+        };
+        SubmissionAppointmentDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: date-time */
+            start: string;
+        };
+        SubmissionLocationDto: {
+            /** Format: uuid */
+            id: string;
+            name: string;
+        };
+        /**
+         * @description PENDING_PATIENT = esperando al paciente; SUBMITTED = por revisar; ACCEPTED / REJECTED = revisada; EXPIRED = caducada o anulada.
+         * @enum {string}
+         */
+        MedicalHistorySubmissionStatus: "PENDING_PATIENT" | "SUBMITTED" | "ACCEPTED" | "REJECTED" | "EXPIRED";
+        AnamnesisSubmissionSummaryDto: {
+            /** Format: uuid */
+            id: string;
+            patient: components["schemas"]["SubmissionPatientDto"];
+            appointment: components["schemas"]["SubmissionAppointmentDto"] | null;
+            location: components["schemas"]["SubmissionLocationDto"];
+            /** @description PENDING_PATIENT = esperando al paciente; SUBMITTED = por revisar; ACCEPTED / REJECTED = revisada; EXPIRED = caducada o anulada. */
+            status: components["schemas"]["MedicalHistorySubmissionStatus"];
+            /** Format: date-time */
+            expiresAt: string;
+            /** Format: date-time */
+            createdAt: string;
+            createdByName: string;
+            /** Format: date-time */
+            submittedAt: string | null;
+            /** Format: date-time */
+            reviewedAt: string | null;
+            reviewedByName: string | null;
+            rejectReason: string | null;
+            /**
+             * Format: uuid
+             * @description Versión de la HC que creó al aceptarse
+             */
+            resultingVersionId: string | null;
+        };
+        AnamnesisInboxSummaryDto: {
+            /** @description Anamnesis por revisar en las sedes del alcance de la sesión */
+            submitted: number;
+        };
+        /**
+         * @description Sí / No / No sé
+         * @enum {string}
+         */
+        AnamnesisAnswer: "SI" | "NO" | "NO_SE";
+        /** @enum {string} */
+        AnamnesisAllergyType: "MEDICAMENTO" | "MATERIAL" | "ALIMENTO" | "AMBIENTAL";
+        /** @enum {string} */
+        AnamnesisAllergySeverity: "LEVE" | "MODERADA" | "ANAFILAXIA";
+        AllergyAnswerDto: {
+            alergeno: string;
+            tipo: components["schemas"]["AnamnesisAllergyType"];
+            reaccion?: string;
+            severidad: components["schemas"]["AnamnesisAllergySeverity"];
+        };
+        AllergiesAnswerDto: {
+            /** @description Sí / No / No sé */
+            answer: components["schemas"]["AnamnesisAnswer"];
+            items?: components["schemas"]["AllergyAnswerDto"][];
+        };
+        ConditionAnswerDto: {
+            /** @example DIABETES */
+            codigo: string;
+            /** @description Sí / No / No sé */
+            answer: components["schemas"]["AnamnesisAnswer"];
+            nota?: string;
+        };
+        MedicationAnswerDto: {
+            nombre: string;
+            dosis?: string;
+            frecuencia?: string;
+        };
+        MedicationsAnswerDto: {
+            /** @description Sí / No / No sé */
+            answer: components["schemas"]["AnamnesisAnswer"];
+            items?: components["schemas"]["MedicationAnswerDto"][];
+        };
+        AnticoagulantsAnswerDto: {
+            /** @description Sí / No / No sé */
+            answer: components["schemas"]["AnamnesisAnswer"];
+            /** @description ¿Cuál? */
+            detail?: string;
+        };
+        SmokingAnswerDto: {
+            /** @description Sí / No / No sé */
+            answer: components["schemas"]["AnamnesisAnswer"];
+            porDia?: number;
+        };
+        AlcoholAnswerDto: {
+            /** @description Sí / No / No sé */
+            answer: components["schemas"]["AnamnesisAnswer"];
+            frecuencia?: string;
+        };
+        SimpleAnswerDto: {
+            /** @description Sí / No / No sé */
+            answer: components["schemas"]["AnamnesisAnswer"];
+        };
+        HabitsAnswerDto: {
+            tabaquismo: components["schemas"]["SmokingAnswerDto"];
+            alcohol: components["schemas"]["AlcoholAnswerDto"];
+            bruxismo: components["schemas"]["SimpleAnswerDto"];
+        };
+        PregnancyAnswerDto: {
+            /** @description Sí / No / No sé */
+            answer: components["schemas"]["AnamnesisAnswer"];
+            semanas?: number;
+        };
+        SurgeryAnswerDto: {
+            descripcion: string;
+            /** @description Año o fecha aproximada */
+            fecha?: string;
+        };
+        SurgeriesAnswerDto: {
+            /** @description Sí / No / No sé */
+            answer: components["schemas"]["AnamnesisAnswer"];
+            items?: components["schemas"]["SurgeryAnswerDto"][];
+        };
+        AnamnesisAnswersDto: {
+            allergies: components["schemas"]["AllergiesAnswerDto"];
+            conditions: components["schemas"]["ConditionAnswerDto"][];
+            medications: components["schemas"]["MedicationsAnswerDto"];
+            anticoagulants: components["schemas"]["AnticoagulantsAnswerDto"];
+            habits: components["schemas"]["HabitsAnswerDto"];
+            pregnancy: components["schemas"]["PregnancyAnswerDto"];
+            surgeries: components["schemas"]["SurgeriesAnswerDto"];
+        };
+        CurrentVersionDto: {
+            /** Format: uuid */
+            id: string;
+            version: number;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        ProposedFlagsDto: {
+            safetyFlags: components["schemas"]["SafetyFlagsDto"];
+            hasCriticalAlert: boolean;
+        };
+        /** @enum {string} */
+        HistoryDiffSection: "ALLERGIES" | "CONDITIONS" | "MEDICATIONS" | "HABITS" | "PREGNANCY" | "SURGERIES";
+        /** @enum {string} */
+        HistoryDiffChange: "ADDED" | "REMOVED" | "CHANGED";
+        HistoryDiffEntryDto: {
+            section: components["schemas"]["HistoryDiffSection"];
+            label: string;
+            change: components["schemas"]["HistoryDiffChange"];
+            before: string | null;
+            after: string | null;
+            /** @description Hay un «Sí» a un lado u otro (va primero) */
+            affirmative: boolean;
+        };
+        HistoryDiffDto: {
+            hasPreviousVersion: boolean;
+            entries: components["schemas"]["HistoryDiffEntryDto"][];
+            unchangedCount: number;
+        };
+        AnamnesisReviewDto: {
+            submission: components["schemas"]["AnamnesisSubmissionSummaryDto"];
+            questionnaireVersion: string;
+            answers: components["schemas"]["AnamnesisAnswersDto"] | null;
+            affirmativeCount: number;
+            currentVersion: components["schemas"]["CurrentVersionDto"] | null;
+            /** @description Lo que quedaría al aceptar sin ajustes (solo por revisar). Es lo que precarga «Ajustar». */
+            proposed: components["schemas"]["SaveMedicalHistoryDto"] | null;
+            proposedFlags: components["schemas"]["ProposedFlagsDto"] | null;
+            diff: components["schemas"]["HistoryDiffDto"] | null;
+        };
+        AcceptAnamnesisDto: {
+            /** @description Ajustes del profesional: la versión completa a guardar. Sin él, se guarda la propuesta del envío. */
+            medicalHistory?: components["schemas"]["SaveMedicalHistoryDto"];
+        };
+        RejectAnamnesisDto: {
+            reason: string;
+        };
+        PublicAnamnesisClinicDto: {
+            name: string;
+            logoUrl: string | null;
+            primaryColor: string | null;
+        };
+        AnswerLabelsDto: {
+            /** @example Sí */
+            SI: string;
+            /** @example No */
+            NO: string;
+            /** @example No sé */
+            NO_SE: string;
+        };
+        OptionDto: {
+            value: string;
+            label: string;
+        };
+        QuestionnaireLimitsDto: {
+            text: number;
+            note: number;
+            listItems: number;
+            weeks: number;
+            perDay: number;
+        };
+        /** @enum {string} */
+        AnamnesisSectionKey: "allergies" | "conditions" | "medications" | "habits" | "pregnancy" | "surgeries";
+        /** @enum {string} */
+        AnamnesisFollowUpKind: "ALLERGY_LIST" | "MEDICATION_LIST" | "SURGERY_LIST" | "TEXT" | "NUMBER" | "NOTE";
+        FollowUpDto: {
+            kind: components["schemas"]["AnamnesisFollowUpKind"];
+            label: string;
+            /** @description Al contestar «Sí» hay que llenarlo */
+            required: boolean;
+        };
+        QuestionDto: {
+            /** @description Clave de la respuesta: allergies, condition:<codigo>, anticoagulants, medications, habits.tabaquismo, habits.alcohol, habits.bruxismo, pregnancy, surgeries */
+            key: string;
+            label: string;
+            help?: string;
+            followUp?: components["schemas"]["FollowUpDto"];
+        };
+        SectionDto: {
+            key: components["schemas"]["AnamnesisSectionKey"];
+            title: string;
+            description?: string;
+            questions: components["schemas"]["QuestionDto"][];
+        };
+        AnamnesisQuestionnaireDto: {
+            /** @example 2026-10-v1 */
+            version: string;
+            answers: components["schemas"]["AnamnesisAnswer"][];
+            answerLabels: components["schemas"]["AnswerLabelsDto"];
+            allergyTypes: components["schemas"]["OptionDto"][];
+            allergySeverities: components["schemas"]["OptionDto"][];
+            limits: components["schemas"]["QuestionnaireLimitsDto"];
+            /** @description Texto de la casilla de veracidad */
+            declaration: string;
+            sections: components["schemas"]["SectionDto"][];
+        };
+        PublicPolicyDto: {
+            /** Format: uuid */
+            id: string;
+            version: number;
+            /** @description Texto de la casilla SENSITIVE_HEALTH (DX-037) */
+            sensitiveHealthText: string;
+            /** @description Política completa (aviso de privacidad) */
+            policyText: string;
+        };
+        PublicConsentDto: {
+            /** @description El paciente no tiene vigente la autorización SENSITIVE_HEALTH: se pide antes del cuestionario. */
+            required: boolean;
+            policy: components["schemas"]["PublicPolicyDto"] | null;
+        };
+        PublicAnamnesisDto: {
+            clinic: components["schemas"]["PublicAnamnesisClinicDto"];
+            /** @description Solo el nombre de pila */
+            patientFirstName: string | null;
+            /** Format: date-time */
+            expiresAt: string;
+            questionnaire: components["schemas"]["AnamnesisQuestionnaireDto"];
+            consent: components["schemas"]["PublicConsentDto"];
+        };
+        PublicConsentDecisionDto: {
+            /**
+             * Format: uuid
+             * @description Versión de la política que se le mostró
+             */
+            policyVersionId: string;
+            /** @description true = autoriza el tratamiento de sus datos de salud */
+            granted: boolean;
+        };
+        SubmitPublicAnamnesisDto: {
+            answers: components["schemas"]["AnamnesisAnswersDto"];
+            /** @description Casilla «Declaro que la información es verdadera» */
+            declarationAccepted: boolean;
+            /** @description Solo si `consent.required`: la autorización SENSITIVE_HEALTH (DX-037) con la versión de política mostrada. */
+            consent?: components["schemas"]["PublicConsentDecisionDto"];
+        };
+        PublicAnamnesisSubmittedDto: {
+            /** Format: date-time */
+            submittedAt: string;
+        };
         /** @enum {string} */
         PerioExamStatus: "DRAFT" | "FINAL";
         PerioIndicesDto: {
@@ -9847,6 +11322,29 @@ export interface components {
              */
             allergen: string;
         };
+        /** @enum {string} */
+        PrescriptionSafetyRule: "ALLERGY" | "INTERACTION" | "PREGNANCY" | "ANTIRESORPTIVE" | "PEDIATRIC_DOSE" | "NO_ANAMNESIS";
+        /**
+         * @description BLOCKING exige confirmación y motivo para emitir
+         * @enum {string}
+         */
+        PrescriptionSafetySeverity: "BLOCKING" | "INFO";
+        SafetyAlertDto: {
+            rule: components["schemas"]["PrescriptionSafetyRule"];
+            /**
+             * @description Referencia estable de la regla (prescription-safety.ts)
+             * @example INTERACTION_ANTICOAGULANT_NSAID
+             */
+            code: string;
+            /** @description BLOCKING exige confirmación y motivo para emitir */
+            severity: components["schemas"]["PrescriptionSafetySeverity"];
+            /** @description Principio activo que lo dispara; null si es general */
+            activeIngredient: string | null;
+            /** @description Texto en español para quien prescribe */
+            message: string;
+            /** @example SDCEP, Drug Prescribing for Dentistry */
+            source: string;
+        };
         PrescriptionItemDto: {
             /** Format: uuid */
             id: string;
@@ -9910,6 +11408,12 @@ export interface components {
             /** @description El profesional confirmó una alerta de alergia */
             allergyOverride: boolean;
             allergyMatches: components["schemas"]["AllergyMatchDto"][];
+            /** @description Versión de las reglas de la receta segura (DX-300); null en recetas anteriores */
+            safetyRulesVersion: string | null;
+            /** @description Avisos calculados al emitir (dentro del hash); null en recetas anteriores a DX-300 */
+            safetyAlerts: components["schemas"]["SafetyAlertDto"][] | null;
+            /** @description Motivo con el que se confirmaron los avisos bloqueantes */
+            safetyOverrideReason: string | null;
             /** @description SHA-256 (hex) del contenido emitido */
             contentHash: string;
             /** Format: date-time */
@@ -9919,6 +11423,32 @@ export interface components {
             voidedByName: string | null;
             voidReason: string | null;
             items: components["schemas"]["PrescriptionItemDto"][];
+        };
+        SafetyCheckItemDto: {
+            /** @example Ibuprofeno */
+            activeIngredient: string;
+            /** @example 400 mg */
+            concentration?: string;
+            /** @example 1 comprimido */
+            dose?: string;
+            /** @example Cada 8 horas */
+            frequency?: string;
+        };
+        PrescriptionSafetyCheckDto: {
+            /** @description 0 a 10 */
+            items: components["schemas"]["SafetyCheckItemDto"][];
+        };
+        PrescriptionSafetyPreviewDto: {
+            /** @example RX_SAFETY_V1 */
+            rulesVersion: string;
+            /**
+             * @description MISSING = el paciente no tiene anamnesis
+             * @enum {string}
+             */
+            anamnesis: "PRESENT" | "MISSING";
+            /** @description Hay avisos que exigen confirmación y motivo */
+            hasBlocking: boolean;
+            alerts: components["schemas"]["SafetyAlertDto"][];
         };
         PrescriptionItemInputDto: {
             /**
@@ -9965,14 +11495,26 @@ export interface components {
             notes?: string;
             /** @description Registro profesional (CO) / nº de colegiado (ES) si tu perfil aún no lo tiene; queda guardado en la receta y en tu perfil de la clínica. Si el perfil ya lo tiene, se ignora (lo cambia un ADMIN en Personal). */
             professionalLicense?: string;
-            /** @description Confirmación explícita del profesional ante una alerta de alergia. Sin ella, una coincidencia con la anamnesis da 409. */
+            /**
+             * @deprecated
+             * @description Clientes anteriores a DX-300: confirmación ante una alerta de alergia. Cuenta como `safetyOverride`; el motivo sigue siendo obligatorio.
+             */
             allergyOverride?: boolean;
+            /** @description DX-300: confirmación explícita de los avisos bloqueantes (alergia, interacción, embarazo, dosis infantil). Sin ella, o sin `safetyOverrideReason`, la API responde 409 con los avisos. */
+            safetyOverride?: boolean;
+            /**
+             * @description DX-300: motivo de la confirmación. Queda en la receta (dentro del hash). Se ignora si no hay avisos bloqueantes.
+             * @example INR estable; pauta corta acordada con hematología
+             */
+            safetyOverrideReason?: string;
         };
-        AllergyConflictDto: {
+        SafetyConflictDto: {
             /** @example 409 */
             statusCode: number;
+            /** @description Mensaje en español con los avisos */
             message: string;
             allergyMatches: components["schemas"]["AllergyMatchDto"][];
+            safetyAlerts: components["schemas"]["SafetyAlertDto"][];
         };
         PrescriptionIssuerDto: {
             country: components["schemas"]["ClinicCountry"];
@@ -10033,6 +11575,12 @@ export interface components {
             /** @description El profesional confirmó una alerta de alergia */
             allergyOverride: boolean;
             allergyMatches: components["schemas"]["AllergyMatchDto"][];
+            /** @description Versión de las reglas de la receta segura (DX-300); null en recetas anteriores */
+            safetyRulesVersion: string | null;
+            /** @description Avisos calculados al emitir (dentro del hash); null en recetas anteriores a DX-300 */
+            safetyAlerts: components["schemas"]["SafetyAlertDto"][] | null;
+            /** @description Motivo con el que se confirmaron los avisos bloqueantes */
+            safetyOverrideReason: string | null;
             /** @description SHA-256 (hex) del contenido emitido */
             contentHash: string;
             /** Format: date-time */
@@ -10444,12 +11992,74 @@ export interface components {
         };
         /** @enum {string} */
         PatientImportDuplicateMode: "SKIP" | "FILL_EMPTY";
-        /** @enum {string} */
-        PatientImportIssueKind: "ERROR" | "DUPLICATE_FILE" | "DUPLICATE_EXISTING";
+        BalanceCurrencyTotalDto: {
+            /** @example COP */
+            currency: string;
+            /** @description Filas del archivo */
+            rows: number;
+            /** @example 1500000.5 */
+            amount: number;
+        };
+        ImportedBalanceTotalDto: {
+            /** @example COP */
+            currency: string;
+            /** @description Saldos migrados vivos */
+            count: number;
+            /** @example 1500000.5 */
+            amount: number;
+        };
+        BalanceProgressDto: {
+            processed: number;
+            created: number;
+            /** @description No creados: su paciente no existía al importar */
+            skipped: number;
+            /** @description No creados: su documento era de varios pacientes vivos (ambiguo) */
+            ambiguous: number;
+            /** @description No creados: el paciente ya tenía un saldo migrado vivo en esa moneda de otro lote (QA D1) */
+            existing: number;
+        };
+        PatientImportBalancesDto: {
+            fileName: string;
+            fileFormat: components["schemas"]["PatientImportFileFormat"];
+            fileSizeBytes: number;
+            /** @description SHA-256 (hex) de la hoja de saldos */
+            fileSha256: string;
+            /** @description Filas con datos */
+            totalRows: number;
+            /** @description Filas que se importan (las sumadas a otra incluidas) */
+            validRows: number;
+            /** @description Filas con algún error: no se importan */
+            errorRows: number;
+            /** @description Filas sumadas a otra del mismo paciente y moneda */
+            mergedRows: number;
+            /** @description Saldos a crear: uno por paciente y moneda */
+            preparedCount: number;
+            /** @description «Añadir aunque ya tenga saldo migrado» marcado al subir la hoja (QA D1) */
+            addToExisting: boolean;
+            /** @description Total del archivo por moneda (filas con importe y moneda legibles) */
+            fileTotals: components["schemas"]["BalanceCurrencyTotalDto"][];
+            /** @description Lo que se importa, por moneda (sin convertir) */
+            validTotals: components["schemas"]["BalanceCurrencyTotalDto"][];
+            /** @description Saldos migrados vivos del lote, por moneda */
+            imported: components["schemas"]["ImportedBalanceTotalDto"][];
+            progress: components["schemas"]["BalanceProgressDto"];
+            /** @description Saldos que retiró el deshacer */
+            undoneCount: number | null;
+            /** @description Lo que retiró de verdad el deshacer, por moneda */
+            undoneTotals: components["schemas"]["BalanceCurrencyTotalDto"][];
+            /** @description Lote terminado con saldos vivos: se pueden retirar solos (POST :id/balances/undo) */
+            canUndo: boolean;
+        };
+        /**
+         * @description MERGED (DX-262): fila de la hoja de saldos sumada a otra del mismo paciente y moneda (aviso, no error). EXISTING_BALANCE (QA D1): el paciente ya tenía un saldo migrado vivo en esa moneda y se añade otro porque se marcó «Añadir aunque ya tenga saldo migrado» (aviso, no error).
+         * @enum {string}
+         */
+        PatientImportIssueKind: "ERROR" | "DUPLICATE_FILE" | "DUPLICATE_EXISTING" | "MERGED" | "EXISTING_BALANCE";
         ImportIssueDto: {
             /** @description Fila del archivo (1 = cabecera) */
             row: number;
             column: string | null;
+            /** @description MERGED (DX-262): fila de la hoja de saldos sumada a otra del mismo paciente y moneda (aviso, no error). EXISTING_BALANCE (QA D1): el paciente ya tenía un saldo migrado vivo en esa moneda y se añade otro porque se marcó «Añadir aunque ya tenga saldo migrado» (aviso, no error). */
             kind: components["schemas"]["PatientImportIssueKind"];
             /** @description Motivo en español */
             message: string;
@@ -10515,11 +12125,16 @@ export interface components {
             canUndo: boolean;
             /** @description El informe de errores (errors.csv) sigue disponible: ni caducado ni purgado a los 90 días */
             reportAvailable: boolean;
+            /** @description DX-262: hoja de saldos del lote; null si no trae */
+            balances: components["schemas"]["PatientImportBalancesDto"] | null;
             /** @description Los primeros 200; todos en errors.csv */
             issues: components["schemas"]["ImportIssueDto"][];
             issuesTotal: number;
             /** @description Solo en el dry-run: las primeras filas que se importarán */
             preview: components["schemas"]["ImportPreviewRowDto"][];
+            /** @description DX-262: errores y avisos de la hoja de saldos (los primeros 200; todos en balances/errors.csv) */
+            balanceIssues: components["schemas"]["ImportIssueDto"][];
+            balanceIssuesTotal: number;
         };
         PatientImportBatchDto: {
             /** Format: uuid */
@@ -10558,6 +12173,8 @@ export interface components {
             canUndo: boolean;
             /** @description El informe de errores (errors.csv) sigue disponible: ni caducado ni purgado a los 90 días */
             reportAvailable: boolean;
+            /** @description DX-262: hoja de saldos del lote; null si no trae */
+            balances: components["schemas"]["PatientImportBalancesDto"] | null;
         };
         PatientImportListDto: {
             items: components["schemas"]["PatientImportBatchDto"][];
@@ -12386,8 +14003,15 @@ export interface operations {
                     "application/json": components["schemas"]["PatientAgreementDto"];
                 };
             };
-            /** @description Validación, convenio inexistente o retirado, vigencia inválida, o cobertura que no es del paciente ni del pagador del convenio */
+            /** @description Validación, convenio inexistente o retirado, vigencia inválida, convenio de pagador sin cobertura, o cobertura que no es del paciente, ni del pagador del convenio, o no está vigente */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Convenio sin pagador externo (pagador OTRO) asignado por un rol distinto de ADMIN */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -13850,7 +15474,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Cada cita con `balance` (DX-150): marca «Saldo vencido» de su paciente, calculada para todo el lote en un número fijo de consultas (sin N+1). El importe, solo ADMIN y RECEPTION. Con `coverage` (DX-153): resumen de la cobertura principal del paciente, también por lote. Y con `medicalAlerts` (DX-247): SOLO banderas de la anamnesis (alerta, premedicación, al día / caducada / ausente el día civil de la cita en la zona de su sede, y los códigos de alerta), nunca la historia médica ni las notas de la cita (disponibles en GET /appointments/:id). */
+            /** @description Cada cita con `balance` (DX-150): marca «Saldo vencido» de su paciente, calculada para todo el lote en un número fijo de consultas (sin N+1). El importe, solo ADMIN y RECEPTION. Con `coverage` (DX-153): resumen de la cobertura principal del paciente, también por lote. Y con `medicalAlerts` (DX-247): SOLO banderas de la anamnesis (alerta, premedicación, al día / caducada / ausente el día civil de la cita en la zona de su sede, y los códigos de alerta), nunca la historia médica ni las notas de la cita (disponibles en GET /appointments/:id). Con `attendance` (DX-279): inasistencias y cancelaciones tardías del paciente en 12 meses, por lote; sin el detalle libre del motivo de cancelación (`cancelReasonText`, en GET /appointments/:id). */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -13995,6 +15619,49 @@ export interface operations {
             };
         };
     };
+    AppointmentsController_cancellationPreview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description DX-279: antes de confirmar la cancelación en la agenda, los minutos de aviso si se cancelara AHORA (reloj del servidor, UTC) y si sería tardía para el paciente según la política vigente de la sede de la cita. Mismo cálculo que el PATCH a CANCELLED; la de la clínica nunca es tardía. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CancellationPreviewDto"];
+                };
+            };
+            /** @description Id que no es UUID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La cita es de una sede no permitida al usuario (DX-089) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Cita no encontrada en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     AppointmentsController_get: {
         parameters: {
             query?: never;
@@ -14031,6 +15698,7 @@ export interface operations {
             };
         };
         responses: {
+            /** @description La cita, los avisos y `planItemsReservedElsewhere` (DX-273: tratamientos de la cita que reserva otra cita, p. ej. tras «Llegó»). Al sacarla de COMPLETED, además `completedExit`. */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -14039,14 +15707,14 @@ export interface operations {
                     "application/json": components["schemas"]["AppointmentWriteDto"];
                 };
             };
-            /** @description Datos inválidos o al pasado */
+            /** @description Datos inválidos o al pasado, salida de COMPLETED sin `statusReason` válido (DX-273), o cancelar sin `cancelledByKind` o sin `cancelReasonCode` (DX-279), con el mensaje en español */
             400: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description Rol sin permiso de agenda, o sin permiso para ese paso del flujo en la clínica (DX-200) */
+            /** @description Rol sin permiso de agenda, sin permiso para ese paso del flujo en la clínica (DX-200), o RECEPTION/ASSISTANT sacando una cita de COMPLETED (DX-273) */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -14069,6 +15737,57 @@ export interface operations {
             };
             /** @description Fuera del horario de atención de la sede de la cita */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    AppointmentsController_claimPlanItem: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                planItemId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description DX-273 «Traer a esta cita»: con el paciente en la clínica (ARRIVED, IN_CHAIR o READY_FOR_CHECKOUT), la cita pasa a reservar un tratamiento suyo que reservaba otra cita viva; esa otra cita lo deja (su vínculo se retira). Una transacción, con las dos citas bloqueadas, y un `audit_event` APPOINTMENT_PLAN_ITEMS en cada una (`params`: planItemId, fromAppointmentId, toAppointmentId). Si ninguna otra cita lo reserva, solo recupera la reserva; si ya la tiene, no cambia nada. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AppointmentWriteDto"];
+                };
+            };
+            /** @description Ids que no son UUID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sede de la cita no permitida, o la cita que lo reserva es de una sede no permitida al usuario (DX-089; no se dice cuál) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La cita no existe en esta clínica, o el tratamiento no está en ella */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La cita no tiene al paciente en la clínica, el tratamiento ya lo tiene otra cita de hoy con el paciente en la clínica (DX-288: con varias peticiones a la vez solo la primera lo trae; dice su hora y su sede si la sede está permitida), otra cita lo tomó a la vez (dice cuál), o la cita cambió mientras tanto */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -14173,6 +15892,48 @@ export interface operations {
             };
             /** @description Fuera del horario de atención de la sede de la cita */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientAttendanceController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PatientAttendanceSummaryDto"];
+                };
+            };
+            /** @description El identificador del paciente no es válido. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Rol sin acceso a la agenda */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente no encontrado en esta clínica */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -15527,6 +17288,13 @@ export interface operations {
                     "application/json": components["schemas"]["PublicAppointmentConfirmationDto"];
                 };
             };
+            /** @description DX-291: cancelar con menos aviso que la política sin `acknowledgePolicy: true` (mensaje en español). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description Token desconocido o de otra clínica. */
             404: {
                 headers: {
@@ -15534,7 +17302,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description El enlace ya se usó para responder. */
+            /** @description El enlace ya se usó para responder, o (DX-291) la política vigente no es la que mostró la página. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -16056,7 +17824,10 @@ export interface operations {
     TreatmentPlansController_updateItem: {
         parameters: {
             query?: never;
-            header?: never;
+            header?: {
+                /** @description DX-050: sede donde se realizó al pasar a DONE; sin ella, la de escritura de la sesión (la principal o la primera permitida) */
+                "X-Location-Id"?: string;
+            };
             path: {
                 itemId: string;
             };
@@ -16076,14 +17847,28 @@ export interface operations {
                     "application/json": components["schemas"]["TreatmentPlanItemDto"];
                 };
             };
-            /** @description DX-204: el descuento EFECTIVO (SEC-041: rebaja del precio frente al de catálogo + descuento) supera el tope del rol de quien lo da («Tu rol permite hasta un X % de descuento por ítem.»; con rebaja de precio, precedido de «Precio por debajo del de catálogo: cuenta como descuento.»). Subir el precio es libre */
+            /** @description DX-050: pasar a DONE sin `performedById` quien no atiende (ASSISTANT); el profesional no atiende (ASSISTANT/RECEPTION) o no atiende en la sede; `completedAt` al pasar a DONE o futuro; `performedById`/`completedAt` en un ítem que no queda DONE. Mensaje en español */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description DX-204: el descuento EFECTIVO (SEC-041: rebaja del precio frente al de catálogo + descuento) supera el tope del rol de quien lo da («Tu rol permite hasta un X % de descuento por ítem.»; con rebaja de precio, precedido de «Precio por debajo del de catálogo: cuenta como descuento.»). Subir el precio es libre. DX-050: cambiar quién o cuándo de un ítem DONE (solo ADMIN); sacarlo de DONE (solo ADMIN o quien lo realizó) */
             403: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content?: never;
             };
-            /** @description Plan aceptado con firma: sus ítems quedan congelados (DX-012); o el plan está cancelado, rechazado o completado (DX-109); o el descuento (también una rebaja del precio frente al de catálogo) cambia en un plan ya aceptado (DX-204, SEC-041). El estado del plan se comprueba con su fila bloqueada, dentro de la transacción (BE-036); firmado: solo admite avanzar el estado (no volver a PROPOSED); completado: solo admite marcar como DONE un ítem ACCEPTED sin otro cambio */
+            /** @description Ítem inexistente o de otra clínica; DX-050: `performedById` que no es miembro activo de esta clínica (otra clínica o desactivado) */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Plan aceptado con firma: sus ítems quedan congelados (DX-012); o el plan está cancelado, rechazado o completado (DX-109); o el descuento (también una rebaja del precio frente al de catálogo) cambia en un plan ya aceptado (DX-204, SEC-041). El estado del plan se comprueba con su fila bloqueada, dentro de la transacción (BE-036); firmado: solo admite avanzar el estado (no volver a PROPOSED); completado: solo admite marcar como DONE un ítem ACCEPTED sin otro cambio; cerrado: DX-050 admite además corregir quién o cuándo de un ítem DONE, sin otro cambio */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -16780,6 +18565,52 @@ export interface operations {
             };
         };
     };
+    PaymentsController_createForOpeningBalance: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RecordPaymentDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentDto"];
+                };
+            };
+            /** @description Otra moneda que la del saldo, o el abono supera lo pendiente (mensaje en español) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Saldo migrado no encontrado en esta clínica (o ya retirado). */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La Idempotency-Key ya se usó con otro destino u otro cuerpo: genera una clave nueva. */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     PaymentsController_balance: {
         parameters: {
             query?: never;
@@ -17264,6 +19095,91 @@ export interface operations {
                 content?: never;
             };
             /** @description Solo la administración puede exportar la cartera. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    LocationsComparisonController_get: {
+        parameters: {
+            query: {
+                /** @description Primer día del período (AAAA-MM-DD, en la zona de cada sede). Como mucho 366 días. */
+                from: string;
+                /** @description Último día (inclusive) */
+                to: string;
+                /** @description `previous`: los mismos días inmediatamente antes; `previous_year`: las mismas fechas un año antes; `none`: sin comparación. */
+                compare?: "previous" | "previous_year" | "none";
+                /** @description Solo los importes en esta moneda (ISO 4217). Sin él, todas, cada una por separado: nunca se suman monedas distintas ni se convierten. */
+                currency?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocationsComparisonDto"];
+                };
+            };
+            /** @description Período inválido o de más de 366 días, `compare` o `currency` inválidos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo la administración ve los reportes de la clínica. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    LocationsComparisonController_csv: {
+        parameters: {
+            query: {
+                /** @description Primer día del período (AAAA-MM-DD, en la zona de cada sede). Como mucho 366 días. */
+                from: string;
+                /** @description Último día (inclusive) */
+                to: string;
+                /** @description `previous`: los mismos días inmediatamente antes; `previous_year`: las mismas fechas un año antes; `none`: sin comparación. */
+                compare?: "previous" | "previous_year" | "none";
+                /** @description Solo los importes en esta moneda (ISO 4217). Sin él, todas, cada una por separado: nunca se suman monedas distintas ni se convierten. */
+                currency?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Fichero CSV */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
+                };
+            };
+            /** @description Período inválido o de más de 366 días, `compare` o `currency` inválidos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo la administración ve los reportes de la clínica. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -17942,6 +19858,284 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["InventoryMovementDto"];
                 };
+            };
+        };
+    };
+    CancellationPolicyController_emailPreview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReminderEmailPreviewDto"];
+                };
+            };
+            /** @description El identificador de la sede no es válido. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo un administrador puede ver y cambiar la política de cancelación. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sede no encontrada en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    CancellationPolicyController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CancellationPolicyDto"];
+                };
+            };
+            /** @description El identificador de la sede no es válido. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo un administrador puede ver y cambiar la política de cancelación. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sede no encontrada en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    CancellationPolicyController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateCancellationPolicyDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CancellationPolicyVersionDto"];
+                };
+            };
+            /** @description Horas fuera de 0–168, importe negativo o sin moneda, moneda desconocida o texto de más de 1000 caracteres (mensaje en español) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo un administrador puede ver y cambiar la política de cancelación. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sede no encontrada en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    CancellationFeeController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CancellationFeeViewDto"];
+                };
+            };
+            /** @description Id que no es UUID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Rol sin permiso, o sede de la cita no permitida al usuario (DX-089) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Cita no encontrada en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    CancellationFeeController_charge: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChargeCancellationFeeDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CancellationFeeViewDto"];
+                };
+            };
+            /** @description Importe no válido o por encima del sugerido por la versión comunicada */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ni ADMIN ni RECEPTION con permiso de la política; o sede no permitida */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Cita no encontrada en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No es inasistencia ni tardía, «No consta que el paciente fuera informado de la política», la versión comunicada no tiene importe, cobertura EPS_CO activa en una sede de Colombia (Ley 1438 art. 55), ya cobrado o condonado, o la cita cambió mientras tanto */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    CancellationFeeController_waive: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WaiveCancellationFeeDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CancellationFeeViewDto"];
+                };
+            };
+            /** @description Motivo vacío o de más de 500 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ni ADMIN ni RECEPTION con permiso de la política; o sede no permitida */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Cita no encontrada en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No es inasistencia ni tardía, ya cobrado o condonado, o la cita cambió */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -18876,6 +21070,392 @@ export interface operations {
             };
         };
     };
+    PatientAnamnesisRequestsController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnamnesisSubmissionSummaryDto"][];
+                };
+            };
+            /** @description Paciente no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientAnamnesisRequestsController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateAnamnesisRequestDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnamnesisRequestCreatedDto"];
+                };
+            };
+            /** @description La cita es de otro paciente, o el host de la petición no sirve para armar el enlace */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El paciente no tiene la autorización de datos de salud y la clínica no ha publicado su política (no habría qué pedirle) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La cita ya empezó o no está agendada */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    MedicalHistorySubmissionsController_list: {
+        parameters: {
+            query?: {
+                /** @description PENDING_PATIENT = esperando al paciente; SUBMITTED = por revisar; ACCEPTED / REJECTED = revisada; EXPIRED = caducada o anulada. */
+                status?: components["schemas"]["MedicalHistorySubmissionStatus"];
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnamnesisSubmissionSummaryDto"][];
+                };
+            };
+        };
+    };
+    MedicalHistorySubmissionsController_summary: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnamnesisInboxSummaryDto"];
+                };
+            };
+        };
+    };
+    MedicalHistorySubmissionsController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnamnesisReviewDto"];
+                };
+            };
+            /** @description Anamnesis no encontrada */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    MedicalHistorySubmissionsController_accept: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AcceptAnamnesisDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnamnesisSubmissionSummaryDto"];
+                };
+            };
+            /** @description Solo un odontólogo o un administrador puede aceptar o rechazar la anamnesis. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Anamnesis no encontrada */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ya revisada o aún sin enviar */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    MedicalHistorySubmissionsController_reject: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["RejectAnamnesisDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnamnesisSubmissionSummaryDto"];
+                };
+            };
+            /** @description Solo un odontólogo o un administrador puede aceptar o rechazar la anamnesis. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Anamnesis no encontrada */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ya revisada o aún sin enviar */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    MedicalHistorySubmissionsController_revoke: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["AnamnesisSubmissionSummaryDto"];
+                };
+            };
+            /** @description Anamnesis no encontrada */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El enlace ya no espera respuesta */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PublicMedicalHistoryController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicAnamnesisDto"];
+                };
+            };
+            /** @description Token malformado, desconocido o de otra clínica. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Este enlace ya no es válido, contacte con su clínica. */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PublicMedicalHistoryController_submit: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                token: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SubmitPublicAnamnesisDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PublicAnamnesisSubmittedDto"];
+                };
+            };
+            /** @description Respuestas incompletas o sin la declaración de veracidad */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Token malformado, desconocido o de otra clínica. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La política de datos cambió o no está publicada */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Este enlace ya no es válido, contacte con su clínica. (caducado, anulado o ya enviado) */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Falta la autorización de datos de salud */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     PerioExamsController_list: {
         parameters: {
             query?: never;
@@ -19215,14 +21795,64 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Alerta de alergia: un principio activo coincide con una alergia de la anamnesis y no se envió allergyOverride=true */
+            /** @description Avisos de seguridad bloqueantes (DX-300: alergia —lista o casillas de la anamnesis—, interacción grave, embarazo, dosis infantil) sin `safetyOverride=true` y `safetyOverrideReason`; mensaje en español con los avisos */
             409: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AllergyConflictDto"];
+                    "application/json": components["schemas"]["SafetyConflictDto"];
                 };
+            };
+        };
+    };
+    PatientPrescriptionsController_safetyCheck: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Sede desde la que se emite (da el país y la dirección). Sin ella, la sede principal. */
+                "X-Location-Id"?: string;
+            };
+            path: {
+                patientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PrescriptionSafetyCheckDto"];
+            };
+        };
+        responses: {
+            /** @description Avisos de seguridad que daría la emisión con estos medicamentos (alergias con las casillas de la anamnesis, interacciones, embarazo, antirresortivos, dosis infantil por peso, sin anamnesis). Solo una vista previa: no guarda nada y la emisión los vuelve a calcular. Es una ayuda: no sustituye el juicio clínico. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrescriptionSafetyPreviewDto"];
+                };
+            };
+            /** @description Cuerpo inválido (en español) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo DENTIST y ADMIN emiten recetas */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };
@@ -20214,6 +22844,33 @@ export interface operations {
             };
         };
     };
+    PatientImportsController_balanceTemplate: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Plantilla CSV */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
+                };
+            };
+            /** @description Solo un administrador de la clínica puede importar pacientes. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     PatientImportsController_inspect: {
         parameters: {
             query?: never;
@@ -20257,6 +22914,20 @@ export interface operations {
             };
             /** @description El archivo pesa más de 5 MB. Divídelo en varios archivos más pequeños. */
             413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Hay demasiadas subidas en curso. Inténtalo de nuevo en unos segundos. (semáforo de subidas, antes de recibir el cuerpo) / Ya se está leyendo otro archivo de importación de esta clínica. Vuelve a intentarlo en unos segundos. / Hay otras importaciones leyéndose ahora mismo. Vuelve a intentarlo en unos segundos. (con el fichero ya recibido). Siempre con Retry-After. SEC-046: como mucho 2 lecturas a la vez por réplica y 1 por clínica (configurable). */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -20348,6 +23019,20 @@ export interface operations {
                 };
                 content?: never;
             };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Hay demasiadas subidas en curso. Inténtalo de nuevo en unos segundos. (semáforo de subidas, antes de recibir el cuerpo) / Ya se está leyendo otro archivo de importación de esta clínica. Vuelve a intentarlo en unos segundos. / Hay otras importaciones leyéndose ahora mismo. Vuelve a intentarlo en unos segundos. (con el fichero ya recibido). Siempre con Retry-After. SEC-046: como mucho 2 lecturas a la vez por réplica y 1 por clínica (configurable). */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
         };
     };
     PatientImportsController_get: {
@@ -20421,6 +23106,218 @@ export interface operations {
             };
             /** @description El informe de errores ya no está disponible: se borra al caducar la validación y a los 90 días de terminar o deshacer la importación. */
             410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientImportsController_balances: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /**
+                     * Format: binary
+                     * @description CSV (UTF-8, Latin-1 o UTF-16; separador «,» «;» o tabulador) o .xlsx; hasta 5 MB y 10.000 filas
+                     */
+                    file: string;
+                    /**
+                     * @description «Añadir aunque ya tenga saldo migrado» (QA D1). Por defecto false: un paciente con un saldo migrado vivo en esa moneda de otro lote no recibe otro (error de la fila con el importe, el lote y el corte del existente).
+                     * @enum {string}
+                     */
+                    addToExisting?: "true" | "false";
+                };
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PatientImportBatchDetailDto"];
+                };
+            };
+            /** @description Archivo vacío, de otro formato, sin las columnas de documento, importe o moneda; addToExisting que no es true/false */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo un administrador de la clínica puede importar pacientes. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Lote de importación no encontrado en esta clínica. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La hoja de saldos solo se puede cambiar antes de confirmar la importación. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El archivo pesa más de 5 MB. Divídelo en varios archivos más pequeños. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Hay demasiadas subidas en curso. Inténtalo de nuevo en unos segundos. (semáforo de subidas, antes de recibir el cuerpo) / Ya se está leyendo otro archivo de importación de esta clínica. Vuelve a intentarlo en unos segundos. / Hay otras importaciones leyéndose ahora mismo. Vuelve a intentarlo en unos segundos. (con el fichero ya recibido). Siempre con Retry-After. SEC-046: como mucho 2 lecturas a la vez por réplica y 1 por clínica (configurable). */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientImportsController_removeBalances: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PatientImportBatchDetailDto"];
+                };
+            };
+            /** @description Solo un administrador de la clínica puede importar pacientes. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Lote de importación no encontrado en esta clínica. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La hoja de saldos solo se puede cambiar antes de confirmar la importación. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientImportsController_balanceErrors: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Fichero CSV */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
+                };
+            };
+            /** @description Solo un administrador de la clínica puede importar pacientes. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Lote de importación no encontrado en esta clínica. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Este lote no tiene hoja de saldos o su informe ya no está disponible. */
+            410: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientImportsController_undoBalances: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PatientImportBatchDetailDto"];
+                };
+            };
+            /** @description Solo un administrador de la clínica puede importar pacientes. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Lote de importación no encontrado en esta clínica. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El lote no está terminado o algún saldo tiene abonos */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

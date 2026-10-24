@@ -17,12 +17,18 @@ import {
   errorsFileName,
   listImports,
   saveCsv,
+  undoBalances,
   undoImport,
   type ImportBatch,
 } from '@/lib/patient-imports/patient-imports-api';
 import { STATUS_VARIANT } from './import-progress';
 
 const HISTORY_POLL_MS = 3000;
+
+/** Saldos migrados vivos del lote (DX-262). */
+function importedBalances(b: ImportBatch): number {
+  return (b.balances?.imported ?? []).reduce((n, t) => n + t.count, 0);
+}
 
 export const historyCopy = {
   title: 'Historial de importaciones',
@@ -37,7 +43,9 @@ export const historyCopy = {
   counts: (b: ImportBatch) =>
     `${b.progress.createdCount.toLocaleString('es-CO')} creados · ${b.progress.updatedCount.toLocaleString('es-CO')} actualizados · ${(b.totals.duplicateRows + b.totals.errorRows).toLocaleString('es-CO')} duplicados o con error`,
   undone: (b: ImportBatch) =>
-    `Deshecho: ${(b.undoneCreated ?? 0).toLocaleString('es-CO')} pacientes retirados, ${(b.undoneFilled ?? 0).toLocaleString('es-CO')} fichas revertidas`,
+    `Deshecho: ${(b.undoneCreated ?? 0).toLocaleString('es-CO')} pacientes retirados, ${(b.undoneFilled ?? 0).toLocaleString('es-CO')} fichas revertidas${
+      b.balances?.undoneCount ? `, ${b.balances.undoneCount.toLocaleString('es-CO')} saldos migrados retirados` : ''
+    }`,
   report: 'Informe',
   reportFor: (name: string) => `Descargar el informe de errores de ${name}`,
   reportError: 'No se pudo descargar el informe.',
@@ -45,10 +53,25 @@ export const historyCopy = {
   undoFor: (name: string) => `Deshacer el lote ${name}`,
   undoTitle: 'Deshacer este lote',
   undoDescription: (b: ImportBatch) =>
-    `Se retirarán los ${b.progress.createdCount.toLocaleString('es-CO')} pacientes que creó este lote y se vaciarán los campos que rellenó (si nadie los cambió después). No se puede si alguno ya tiene citas, historia clínica, planes o pagos.`,
+    `Se retirarán los ${b.progress.createdCount.toLocaleString('es-CO')} pacientes que creó este lote y se vaciarán los campos que rellenó (si nadie los cambió después)${
+      importedBalances(b) > 0
+        ? `; se retirarán también sus ${importedBalances(b).toLocaleString('es-CO')} saldos migrados`
+        : ''
+    }. No se puede si alguno ya tiene citas, historia clínica, planes o pagos, o si un saldo migrado tiene abonos.`,
   undoConfirm: 'Deshacer lote',
   undoError: 'No se pudo deshacer el lote.',
   undoDone: 'Lote deshecho.',
+  // DX-262: retirar solo los saldos migrados.
+  undoBalances: 'Retirar saldos migrados',
+  undoBalancesFor: (name: string) => `Retirar los saldos migrados de ${name}`,
+  undoBalancesTitle: 'Retirar los saldos migrados',
+  undoBalancesDescription: (b: ImportBatch) =>
+    `Se retirarán sus ${importedBalances(b).toLocaleString('es-CO')} saldos migrados del estado de cuenta y de la cartera; los pacientes no se tocan. No se puede si algún saldo ya tiene abonos: anúlalos antes.`,
+  undoBalancesConfirm: 'Retirar saldos',
+  undoBalancesError: 'No se pudieron retirar los saldos migrados.',
+  undoBalancesDone: 'Saldos migrados retirados.',
+  ambiguous: (n: number) =>
+    `${n.toLocaleString('es-CO')} ${n === 1 ? 'saldo no se creó' : 'saldos no se crearon'}: su documento es de varios pacientes.`,
 };
 
 /**
@@ -69,6 +92,8 @@ export function ImportHistory({ token, reloadKey }: { token: string; reloadKey: 
   const pollFailed = React.useRef(false);
   const pollToast = React.useRef<string | null>(null);
   const [undoing, setUndoing] = React.useState<ImportBatch | null>(null);
+  // DX-262: deshacer el lote entero o retirar solo sus saldos migrados.
+  const [undoMode, setUndoMode] = React.useState<'batch' | 'balances'>('batch');
   const [undoBusy, setUndoBusy] = React.useState(false);
   const [undoError, setUndoError] = React.useState<string | null>(null);
 
@@ -137,7 +162,9 @@ export function ImportHistory({ token, reloadKey }: { token: string; reloadKey: 
     try {
       saveCsv(await downloadErrorsCsv(token, batch.id), errorsFileName(batch.fileName));
     } catch (err) {
-      notifyError(apiErrorMessage(err, historyCopy.reportError), { onRetry: () => void report(batch) });
+      notifyError(apiErrorMessage(err, historyCopy.reportError), {
+        onRetry: () => void report(batch),
+      });
     }
   }
 
@@ -145,13 +172,14 @@ export function ImportHistory({ token, reloadKey }: { token: string; reloadKey: 
     if (!undoing) return;
     setUndoBusy(true);
     setUndoError(null);
+    const balancesOnly = undoMode === 'balances';
     try {
-      const updated = await undoImport(token, undoing.id);
+      const updated = balancesOnly ? await undoBalances(token, undoing.id) : await undoImport(token, undoing.id);
       setItems((prev) => prev.map((b) => (b.id === updated.id ? updated : b)));
       setUndoing(null);
-      toast.success(historyCopy.undoDone);
+      toast.success(balancesOnly ? historyCopy.undoBalancesDone : historyCopy.undoDone);
     } catch (err) {
-      setUndoError(apiErrorMessage(err, historyCopy.undoError));
+      setUndoError(apiErrorMessage(err, balancesOnly ? historyCopy.undoBalancesError : historyCopy.undoError));
     } finally {
       setUndoBusy(false);
     }
@@ -182,6 +210,9 @@ export function ImportHistory({ token, reloadKey }: { token: string; reloadKey: 
               <p className="tabular-nums text-muted">
                 {historyCopy.meta(formatDateTime(b.confirmedAt ?? b.createdAt), b.createdBy.fullName)}
               </p>
+              {b.balances && b.balances.progress.ambiguous > 0 ? (
+                <p className="text-warning">{historyCopy.ambiguous(b.balances.progress.ambiguous)}</p>
+              ) : null}
               <p className="tabular-nums text-ink">
                 {b.status === 'UNDONE'
                   ? historyCopy.undone(b)
@@ -201,6 +232,21 @@ export function ImportHistory({ token, reloadKey }: { token: string; reloadKey: 
                     {historyCopy.report}
                   </Button>
                 ) : null}
+                {b.balances?.canUndo ? (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    aria-label={historyCopy.undoBalancesFor(b.fileName)}
+                    onClick={() => {
+                      setUndoError(null);
+                      setUndoMode('balances');
+                      setUndoing(b);
+                    }}
+                  >
+                    {historyCopy.undoBalances}
+                  </Button>
+                ) : null}
                 {b.canUndo ? (
                   <Button
                     type="button"
@@ -209,6 +255,7 @@ export function ImportHistory({ token, reloadKey }: { token: string; reloadKey: 
                     aria-label={historyCopy.undoFor(b.fileName)}
                     onClick={() => {
                       setUndoError(null);
+                      setUndoMode('batch');
                       setUndoing(b);
                     }}
                   >
@@ -228,9 +275,15 @@ export function ImportHistory({ token, reloadKey }: { token: string; reloadKey: 
         onOpenChange={(open) => {
           if (!open) setUndoing(null);
         }}
-        title={historyCopy.undoTitle}
-        description={undoing ? historyCopy.undoDescription(undoing) : undefined}
-        confirmLabel={historyCopy.undoConfirm}
+        title={undoMode === 'balances' ? historyCopy.undoBalancesTitle : historyCopy.undoTitle}
+        description={
+          undoing
+            ? undoMode === 'balances'
+              ? historyCopy.undoBalancesDescription(undoing)
+              : historyCopy.undoDescription(undoing)
+            : undefined
+        }
+        confirmLabel={undoMode === 'balances' ? historyCopy.undoBalancesConfirm : historyCopy.undoConfirm}
         onConfirm={() => void confirmUndo()}
         confirming={undoBusy}
         error={undoError}

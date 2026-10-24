@@ -111,6 +111,9 @@ export function FamilyAccountStatementDocument({
               ))}
             </tbody>
           </DocTable>
+          {totals.some((t) => t.openingBalance > 0) ? (
+            <p className="mt-1 text-xs">{statementCopy.balanceIncludesOpening}</p>
+          ) : null}
         </DocSection>
       )}
 

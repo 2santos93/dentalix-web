@@ -23,6 +23,8 @@ export function accountStatementFixture(
       {
         currency: 'COP',
         budgeted: 3000000,
+        openingBalance: 0,
+        openingPending: 0,
         paid: 1200000,
         balance: 1800000,
         overdueCount: 1,
@@ -37,6 +39,8 @@ export function accountStatementFixture(
       {
         currency: 'USD',
         budgeted: 0,
+        openingBalance: 0,
+        openingPending: 0,
         paid: 50,
         balance: -50,
         overdueCount: 0,
@@ -78,6 +82,7 @@ export function accountStatementFixture(
         method: 'CARD',
         location: { id: 'loc-1', name: 'Sede Norte' },
         treatmentPlanId: 'plan-1',
+        openingBalanceId: null,
         createdById: 'u-recep',
         canVoid: false,
         voided: true,
@@ -94,6 +99,7 @@ export function accountStatementFixture(
         method: 'TRANSFER',
         location: { id: 'loc-2', name: 'Sede Principal' },
         treatmentPlanId: 'plan-1',
+        openingBalanceId: null,
         createdById: 'u-recep',
         canVoid: true,
         voided: false,
@@ -110,6 +116,7 @@ export function accountStatementFixture(
         method: null,
         location: { id: 'loc-2', name: 'Sede Principal' },
         treatmentPlanId: 'plan-2',
+        openingBalanceId: null,
         createdById: 'u-admin',
         canVoid: false,
         voided: false,
@@ -156,6 +163,7 @@ export function accountStatementFixture(
         status: 'PENDING',
       },
     ],
+    openingBalances: [],
     ...overrides,
   };
 }
@@ -163,4 +171,80 @@ export function accountStatementFixture(
 /** Un paciente sin planes con valor ni abonos. */
 export function emptyAccountStatementFixture(): AccountStatement {
   return accountStatementFixture({ summary: [], plans: [], movements: [], installments: [] });
+}
+
+/** DX-262: paciente importado que solo trae saldos migrados (uno con fecha aproximada). */
+export function openingBalanceStatementFixture(): AccountStatement {
+  return accountStatementFixture({
+    summary: [
+      {
+        currency: 'COP',
+        budgeted: 0,
+        openingBalance: 200000.5,
+        openingPending: 150000.5,
+        paid: 50000,
+        balance: 150000.5,
+        overdueCount: 0,
+        overdueAmount: 0,
+        nextInstallment: null,
+      },
+      {
+        currency: 'USD',
+        budgeted: 0,
+        openingBalance: 40,
+        openingPending: 40,
+        paid: 0,
+        balance: 40,
+        overdueCount: 0,
+        overdueAmount: 0,
+        nextInstallment: null,
+      },
+    ],
+    plans: [],
+    // DX-262 (revisión C1): un abono contra el saldo migrado.
+    movements: [
+      {
+        id: 'pay-ob',
+        paidAt: '2026-10-20T17:00:00.000Z',
+        paidOn: '2026-10-20',
+        amount: 50000,
+        currency: 'COP',
+        method: 'TRANSFER',
+        location: { id: 'loc-1', name: 'Sede Principal' },
+        treatmentPlanId: null,
+        openingBalanceId: 'ob-1',
+        createdById: 'u-1',
+        canVoid: true,
+        voided: false,
+        voidedAt: null,
+        voidedBy: null,
+        voidReason: null,
+      },
+    ],
+    installments: [],
+    openingBalances: [
+      {
+        id: 'ob-1',
+        currency: 'COP',
+        amount: 200000.5,
+        asOfDate: '2026-08-09',
+        asOfDateApproximate: false,
+        concept: 'Ortodoncia 2025',
+        importBatchId: 'batch-1',
+        paid: 50000,
+        pending: 150000.5,
+      },
+      {
+        id: 'ob-2',
+        currency: 'USD',
+        amount: 40,
+        asOfDate: '2026-10-23',
+        asOfDateApproximate: true,
+        concept: 'Saldo migrado',
+        importBatchId: 'batch-1',
+        paid: 0,
+        pending: 40,
+      },
+    ],
+  });
 }

@@ -2,7 +2,7 @@ import { test, expect, type APIRequestContext, type Page } from './support/test'
 import { randomUUID } from 'node:crypto';
 import { sessionCookie, waitForHydratedForm } from './support/auth';
 import { API_URL, tenantOrigin } from './support/urls';
-import { expectNoHorizontalScroll } from './support/layout';
+import { expectNoHorizontalScroll, expectNoHorizontalScrollIn } from './support/layout';
 
 /**
  * e2e (DX-204): tope de descuento por rol, motivo obligatorio e informe.
@@ -53,7 +53,14 @@ async function seed(
   request: APIRequestContext,
   origin: string,
   tag: string,
-): Promise<{ patientId: string; planId: string; fullName: string; procedureId: string; procedureLabel: string }> {
+): Promise<{
+  patientId: string;
+  planId: string;
+  fullName: string;
+  procedureId: string;
+  procedureLabel: string;
+  agreementPatientName: string;
+}> {
   const host = new URL(origin).host;
   const headers = {
     'X-Tenant-Host': host,
@@ -89,12 +96,40 @@ async function seed(
       price,
     });
   }
+  // SEC-047: otra paciente con un convenio interno (lo asigna el ADMIN, sin
+  // cobertura) y un ítem resuelto por él: su línea del informe lleva la frase
+  // larga del convenio, que a 390 px no debe desbordar la tarjeta (QA D1).
+  const payer = await post<{ id: string }>('/payers', { name: `Cortesía empleados ${tag}`, type: 'OTRO' });
+  const agreement = await post<{ id: string }>('/agreements', {
+    name: `Cortesía empleados de la clínica 100 % ${tag}`,
+    payerId: payer.id,
+    kind: 'PERCENT_DISCOUNT',
+    percent: 100,
+  });
+  const agreementLastName = `Convenio${tag}`;
+  const agreementPatient = await post<{ id: string }>('/patients', {
+    firstName: 'Marta',
+    lastName: agreementLastName,
+    docType: 'CC',
+    docNumber: `SEC47${tag}`.slice(0, 20),
+    sex: 'F',
+  });
+  const assigned = await request.put(`${API_URL}/patients/${agreementPatient.id}/agreement`, {
+    headers,
+    data: { agreementId: agreement.id },
+  });
+  expect(assigned.ok(), `PUT agreement falló: ${await assigned.text()}`).toBeTruthy();
+  const agreementPlan = await post<{ id: string }>(`/patients/${agreementPatient.id}/treatment-plans`, {
+    currency: 'COP',
+  });
+  await post(`/treatment-plans/${agreementPlan.id}/items`, { toothNumber: '11', catalogItemId: procedure.id });
   return {
     patientId: patient.id,
     planId: plan.id,
     fullName: `Rosa ${lastName}`,
     procedureId: procedure.id,
     procedureLabel: `Resina DX204 ${tag}`,
+    agreementPatientName: `Marta ${agreementLastName}`,
   };
 }
 
@@ -226,7 +261,14 @@ for (const viewport of [
     await expect(
       rows.filter({ hasText: data.fullName }).filter({ hasText: /Precio rebajado a 80\.?750,00/ }),
     ).toHaveCount(1);
-    if (viewport.width === 390) await expectNoHorizontalScroll(admin);
+    // SEC-047: la línea solo de convenio, con su frase, sin desbordar a 390 px.
+    const agreementLine = rows.filter({ hasText: data.agreementPatientName });
+    await expect(agreementLine).toHaveCount(1);
+    await expect(agreementLine).toContainText('Convenio «Cortesía empleados de la clínica 100 %');
+    if (viewport.width === 390) {
+      await expectNoHorizontalScroll(admin);
+      await expectNoHorizontalScrollIn(admin);
+    }
 
     await admin.goto(`${origin}/settings/descuentos`);
     await expect(admin.getByText('Motivo obligatorio por encima del 10 %.')).toBeVisible({ timeout: 15_000 });
