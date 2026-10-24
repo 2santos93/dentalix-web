@@ -1,6 +1,6 @@
 'use client';
 import * as React from 'react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import {
   createPayer,
@@ -72,6 +72,7 @@ export function PayerFormModal({ open, onOpenChange, payer, token, onSaved }: Pa
   // solo los asigna ADMIN), así que nunca se elige sin querer.
   const [type, setType] = useState<PayerType | ''>(payer?.type ?? '');
   const [typeError, setTypeError] = useState<string | null>(null);
+  const typeRef = useRef<HTMLSelectElement>(null);
   const [country, setCountry] = useState<PayerCountry | ''>(payer?.country ?? '');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -80,7 +81,12 @@ export function PayerFormModal({ open, onOpenChange, payer, token, onSaved }: Pa
     e.preventDefault();
     setError(null);
     setTypeError(null);
-    if (type === '') return setTypeError(copy.typeRequired);
+    if (type === '') {
+      setTypeError(copy.typeRequired);
+      // El foco va al campo que hay que corregir (WCAG 3.3.1).
+      typeRef.current?.focus();
+      return;
+    }
     const trimmed = name.trim().replace(/\s+/g, ' ');
     if (trimmed.length < 2 || trimmed.length > 120) return setError(copy.invalidName);
     const required = REQUIRED_COUNTRY[type];
@@ -137,6 +143,7 @@ export function PayerFormModal({ open, onOpenChange, payer, token, onSaved }: Pa
       >
         <select
           id="payer-type"
+          ref={typeRef}
           value={type}
           onChange={(e) => {
             setType(e.target.value as PayerType | '');

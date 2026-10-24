@@ -67,6 +67,9 @@ describe('PayerFormModal (DX-153)', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Crear pagador' }));
     expect(await within(dialog).findByText('Elige el tipo de pagador.')).toBeInTheDocument();
     expect(type).toHaveAttribute('aria-invalid', 'true');
+    // QA D3: el foco va al campo que hay que corregir.
+    expect(type).toHaveFocus();
+    expect(type).toHaveAccessibleDescription('Elige el tipo de pagador.');
     expect(mockedCreate).not.toHaveBeenCalled();
   });
 
