@@ -192,6 +192,13 @@ describe('DiscountReportView (DX-204)', () => {
     expect(within(card).getByText(/Convenio «Cortesía socios»/)).toBeInTheDocument();
     expect(within(card).getByText(/Convenio asignado por Dr\. Owner/)).toBeInTheDocument();
     expect(within(card).queryByText(/Sin registrar/)).not.toBeInTheDocument();
+    // QA D1: en la tarjeta móvil la frase del convenio no va en la cabecera que
+    // no se encoge (desbordaba 390 px): va en su propio párrafo, que parte líneas.
+    const header = within(card).getByTestId('discount-card-amount');
+    expect(within(header).queryByText(/Convenio «/)).not.toBeInTheDocument();
+    const phrase = within(card).getByText(/Convenio «Cortesía socios»/);
+    expect(phrase.tagName).toBe('P');
+    expect(phrase).toHaveClass('break-words');
   });
 
   it('B5: sin quien asignó el convenio, el autor es quien creó el ítem', async () => {

@@ -192,9 +192,12 @@ function DiscountSummary({
  * Importe descontado (SEC-041: rebaja de precio frente al catálogo + descuento)
  * y su % sobre el precio de referencia (el de catálogo si se rebajó). SEC-047:
  * la rebaja de convenio va en su propia línea; un ítem que solo tiene esa
- * rebaja no pinta un «−0» de descuento.
+ * rebaja no pinta un «−0» de descuento. En la tarjeta móvil la frase del
+ * convenio va fuera de la cabecera (`withAgreement` a false), en su propio
+ * párrafo que parte líneas: dentro de un bloque que no se encoge desbordaba
+ * 390 px (QA D1).
  */
-function AmountCell({ item }: { item: DiscountReportItem }) {
+function AmountCell({ item, withAgreement = true }: { item: DiscountReportItem; withAgreement?: boolean }) {
   const agreement = item.agreementReduction > 0;
   return (
     <>
@@ -216,17 +219,19 @@ function AmountCell({ item }: { item: DiscountReportItem }) {
           {discountReportCopy.priceReduced(formatCurrency(item.price, item.currency))}
         </span>
       ) : null}
-      {agreement ? (
-        <span className="block text-xs tabular-nums text-ink">
-          {discountReportCopy.agreementLine(
-            item.agreementName ?? '',
-            formatCurrency(item.agreementReduction, item.currency),
-            discountReportCopy.percent(item.agreementPercent),
-            formatCurrency(item.basePrice ?? 0, item.currency),
-          )}
-        </span>
+      {agreement && withAgreement ? (
+        <span className="block text-xs tabular-nums text-ink">{agreementLine(item)}</span>
       ) : null}
     </>
+  );
+}
+
+function agreementLine(item: DiscountReportItem): string {
+  return discountReportCopy.agreementLine(
+    item.agreementName ?? '',
+    formatCurrency(item.agreementReduction, item.currency),
+    discountReportCopy.percent(item.agreementPercent),
+    formatCurrency(item.basePrice ?? 0, item.currency),
   );
 }
 
@@ -550,10 +555,13 @@ export function DiscountReportView({ token }: { token: string }) {
                       >
                         {item.patientName}
                       </Link>
-                      <span className="shrink-0 text-right">
-                        <AmountCell item={item} />
+                      <span data-testid="discount-card-amount" className="shrink-0 text-right">
+                        <AmountCell item={item} withAgreement={false} />
                       </span>
                     </div>
+                    {item.agreementReduction > 0 ? (
+                      <p className="break-words text-xs tabular-nums text-ink">{agreementLine(item)}</p>
+                    ) : null}
                     <p className="text-ink">{discountReportCopy.tooth(item.toothNumber, item.procedure)}</p>
                     <p className="text-xs text-muted tabular-nums">
                       {formatCivilDate(item.discountOn)} ·{' '}
