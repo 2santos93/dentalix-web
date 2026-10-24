@@ -49,6 +49,29 @@ describe('PlanQuoteDocument (DX-012)', () => {
     expect(text(resin)).toContain('—');
   });
 
+  it('DX-291: un cargo administrativo sin diente dice «Sin diente» y no «Diente completo»', () => {
+    const fee = {
+      id: 'fee',
+      toothNumber: '',
+      surfaces: [],
+      procedure: 'Cargo por inasistencia o cancelación tardía',
+      quantity: 1,
+      unitPrice: 50000,
+      discount: 0,
+      subtotal: 50000,
+      listPrice: null,
+      agreementName: null,
+    };
+    render(<PlanQuoteDocument quote={planQuoteFixture({ items: [fee] })} />);
+    const table = screen.getByRole('table', { name: 'Procedimientos del presupuesto' });
+    const row = within(table).getAllByRole('row').find((r) => r.textContent?.includes('Cargo por inasistencia'))!;
+    expect(row).toHaveTextContent('Sin diente');
+    expect(row).not.toHaveTextContent('Diente completo');
+    const card = screen.getByRole('list', { name: 'Procedimientos del presupuesto' });
+    expect(card).toHaveTextContent('Sin diente');
+    expect(card).not.toHaveTextContent(/Diente completo|Diente ·/);
+  });
+
   it('suma los totales por moneda: subtotal, descuentos y total', () => {
     render(<PlanQuoteDocument quote={planQuoteFixture()} />);
     const totals = screen.getByTestId('quote-totals');

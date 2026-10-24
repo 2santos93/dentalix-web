@@ -212,3 +212,19 @@ it("muestra el día civil autoritativo aunque el instante caiga en el día anter
   );
   expect(await screen.findByText("01/04/2027")).toBeInTheDocument();
 });
+it("DX-291: un ítem sin diente (cargo administrativo) no deja «diente ,» en la etiqueta", () => {
+  const feePlan = {
+    ...plan,
+    items: [{ id: "fee", visit: 1, visitLabel: null, toothNumber: "", status: "DONE" }],
+  } as unknown as TreatmentPlan;
+  render(
+    <PlanVisitsBoard
+      token="token"
+      plan={feePlan}
+      role="DENTIST"
+      onChanged={jest.fn()}
+      renderItems={() => null}
+    />,
+  );
+  expect(screen.getByLabelText("Mover a visita: sin diente, ítem 1")).toBeInTheDocument();
+});

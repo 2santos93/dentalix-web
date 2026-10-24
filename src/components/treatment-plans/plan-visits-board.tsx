@@ -17,6 +17,11 @@ import { apiErrorMessage } from "@/lib/api/error-message";
 import { Button } from "@/components/ui/button";
 import { InlineError } from "@/components/errors/inline-error";
 import { ScheduleVisitDialog } from "./schedule-visit-dialog";
+
+/** DX-291: un cargo administrativo (inasistencia) no es de ningún diente. */
+function toothLabel(toothNumber: string): string {
+  return toothNumber ? `diente ${toothNumber}` : "sin diente";
+}
 const field =
   "min-h-11 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary";
 export function PlanVisitsBoard({
@@ -273,12 +278,12 @@ export function PlanVisitsBoard({
                       key={item.id}
                       className="flex flex-col gap-1.5 text-sm text-ink"
                     >
-                      Mover a visita: diente {item.toothNumber}, ítem{" "}
+                      Mover a visita: {toothLabel(item.toothNumber)}, ítem{" "}
                       {(plan.items ?? []).findIndex((i) => i.id === item.id) +
                         1}
                       <select
                         disabled={saving}
-                        aria-label={`Mover a visita: diente ${item.toothNumber}, ítem ${(plan.items ?? []).findIndex((i) => i.id === item.id) + 1}`}
+                        aria-label={`Mover a visita: ${toothLabel(item.toothNumber)}, ítem ${(plan.items ?? []).findIndex((i) => i.id === item.id) + 1}`}
                         name={`visit-item-${item.id}`}
                         className={field}
                         value={number}

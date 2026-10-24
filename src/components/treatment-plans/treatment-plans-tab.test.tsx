@@ -429,6 +429,27 @@ describe('TreatmentPlansTab', () => {
     expect(mobile).toHaveLength(2);
   });
 
+  it('DX-291: el ítem sin diente (cargo administrativo) dice «Sin diente», sin caras ni implante ni odontograma', async () => {
+    mockedListPlans.mockResolvedValue([plan1]);
+    const fee = { ...item2, id: 'item-fee', toothNumber: '', surfaces: [], status: 'DONE' as const };
+    mockedGetPlan.mockResolvedValue({ ...plan1, items: [fee], total: fee.price });
+
+    render(
+      <TreatmentPlansTab
+        patientId="pat-1"
+        token="tok"
+        implantHref={(item) => `/patients/pat-1?tab=implants&registerTooth=${item.toothNumber}&planItem=${item.id}`}
+        odontogramHref={(tooth) => `/patients/pat-1?tab=odontogram&tooth=${tooth}`}
+      />,
+    );
+
+    const table = await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+    expect(within(table).getByText('Sin diente')).toBeInTheDocument();
+    expect(within(table).queryByText('Diente completo')).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /registrar implante/i })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: /odontograma/i })).not.toBeInTheDocument();
+  });
+
   it('DX-191: sin `implantHref` (rol que no registra) no hay «Registrar implante»', async () => {
     mockedListPlans.mockResolvedValue([plan1]);
     mockedGetPlan.mockResolvedValue(plan1Detail);

@@ -156,6 +156,7 @@ const copy = {
   colTooth: 'Diente',
   // DX-291: un cargo administrativo (inasistencia) no es de ningún diente.
   noTooth: 'Sin diente',
+  noSurfaces: '—',
   colProcedure: 'Procedimiento',
   colSurfaces: 'Caras',
   colPrice: 'Precio',
@@ -615,9 +616,9 @@ function procedureName(item: TreatmentPlanItem, catalogById: Map<string, DentalC
 }
 
 function surfacesLabel(item: TreatmentPlanItem): string {
-  return item.surfaces.length > 0
-    ? item.surfaces.map((s) => SURFACE_LABELS[s]).join(', ')
-    : copy.wholeToothFallback;
+  if (item.surfaces.length > 0) return item.surfaces.map((s) => SURFACE_LABELS[s]).join(', ');
+  // DX-291: un cargo administrativo no tiene diente ni caras.
+  return item.toothNumber ? copy.wholeToothFallback : copy.noSurfaces;
 }
 
 function ItemsTable({
@@ -736,8 +737,8 @@ function ItemsTable({
                         toque. */}
                     <div className="flex flex-wrap items-center gap-3">
                       <OdontogramLink toothNumber={item.toothNumber} href={odontogramHref} />
-                      {implantLink ? <RegisterImplantLink item={item} href={implantLink} /> : null}
-                      {odontogramHref && !locked && !closed ? <Separator orientation="vertical" className="h-5" /> : null}
+                      {implantLink && item.toothNumber ? <RegisterImplantLink item={item} href={implantLink} /> : null}
+                      {item.toothNumber && odontogramHref && !locked && !closed ? <Separator orientation="vertical" className="h-5" /> : null}
                       {locked || closed ? null : (
                         <Button
                           type="button"
@@ -817,10 +818,10 @@ function ItemsTable({
                   </Button>
                 )}
               </div>
-              {odontogramHref || implantLink ? (
+              {item.toothNumber && (odontogramHref || implantLink) ? (
                 <p className="mt-3 flex flex-wrap gap-x-4 gap-y-2">
                   <OdontogramLink toothNumber={item.toothNumber} href={odontogramHref} />
-                  {implantLink ? <RegisterImplantLink item={item} href={implantLink} /> : null}
+                  {implantLink && item.toothNumber ? <RegisterImplantLink item={item} href={implantLink} /> : null}
                 </p>
               ) : null}
             </li>
