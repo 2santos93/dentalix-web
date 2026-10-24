@@ -20,8 +20,8 @@ jest.mock('../../lib/patient-imports/patient-imports-api', () => ({
   undoImport: jest.fn(),
   undoBalances: jest.fn(),
   downloadErrorsCsv: jest.fn(),
-  saveCsv: jest.fn(),
 }));
+jest.mock('../../lib/files/save-csv', () => ({ saveCsv: jest.fn() }));
 
 const mockedList = listImports as jest.MockedFunction<typeof listImports>;
 const mockedUndo = undoImport as jest.MockedFunction<typeof undoImport>;

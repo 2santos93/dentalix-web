@@ -21,6 +21,7 @@ import { FormField } from '@/components/shared/form-field';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { saveCsv } from '@/lib/files/save-csv';
 
 const copy = {
   heading: '¿Quién recibió este lote?',
@@ -55,16 +56,6 @@ const copy = {
   tooth: (t: string) => `Diente ${t}`,
 };
 
-function saveCsv(text: string, fileName: string): void {
-  const url = URL.createObjectURL(new Blob([text], { type: 'text/csv;charset=utf-8' }));
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = fileName;
-  document.body.append(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
-}
 
 /**
  * Ajustes → Implantes (DX-191): búsqueda por lote/REF y su CSV, solo ADMIN.

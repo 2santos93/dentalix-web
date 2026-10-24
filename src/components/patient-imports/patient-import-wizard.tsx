@@ -19,7 +19,6 @@ import {
   inspectFile,
   isInProgress,
   listImports,
-  saveCsv,
   validateImport,
   type ColumnMapping,
   type DocType,
@@ -27,6 +26,7 @@ import {
   type ImportBatchDetail,
   type ImportInspect,
 } from '@/lib/patient-imports/patient-imports-api';
+import { saveCsv } from '@/lib/files/save-csv';
 import { BalancesStep } from './balances-step';
 import { ColumnMappingFields } from './column-mapping-fields';
 import { formatCurrency } from '@/lib/format/currency';
@@ -262,7 +262,7 @@ export function PatientImportWizard({ token, onBatchChange }: PatientImportWizar
 
   async function onTemplate() {
     try {
-      saveCsv(await downloadTemplate(token), 'plantilla-pacientes.csv');
+      saveCsv(await downloadTemplate(token), 'plantilla-pacientes.csv', { bom: true });
     } catch (err) {
       notifyError(apiErrorMessage(err, wizardCopy.templateError), {
         onRetry: () => void onTemplate(),
@@ -317,7 +317,7 @@ export function PatientImportWizard({ token, onBatchChange }: PatientImportWizar
 
   async function onReport(batchId: string, fileName: string) {
     try {
-      saveCsv(await downloadErrorsCsv(token, batchId), errorsFileName(fileName));
+      saveCsv(await downloadErrorsCsv(token, batchId), errorsFileName(fileName), { bom: true });
     } catch (err) {
       notifyError(apiErrorMessage(err, wizardCopy.reportError), {
         onRetry: () => void onReport(batchId, fileName),

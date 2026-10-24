@@ -1,6 +1,6 @@
 import { apiFetch } from '@/lib/api/client';
-import { ApiError, NetworkError } from '@/lib/api/api-error';
-import { STORAGE_UNREACHABLE_CODE, uploadToStorage } from '@/lib/api/upload';
+import { ApiError } from '@/lib/api/api-error';
+import { storageOrNetwork, uploadToStorage } from '@/lib/api/upload';
 import type { components } from '@/lib/api/schema';
 import type { ClinicRole } from '@/lib/me/me-api';
 
@@ -225,21 +225,6 @@ export async function uploadPatientDocument(
   const doc = await completePatientDocument(token, patientId, ticket.documentId, input);
   opts.onProgress?.(1);
   return doc;
-}
-
-/**
- * QA D1: si el almacén cortó la subida, se pregunta a la API (`/health`): si
- * tampoco responde, el problema es la conexión de la clínica (`NetworkError`);
- * si responde, es el almacén (el 503 tal cual).
- */
-async function storageOrNetwork(err: unknown): Promise<unknown> {
-  if (!(err instanceof ApiError && err.code === STORAGE_UNREACHABLE_CODE)) return err;
-  try {
-    await apiFetch<unknown>('/health');
-    return err;
-  } catch (probe) {
-    return probe instanceof NetworkError ? probe : err;
-  }
 }
 
 /** `POST …/documents/:id/complete` con los campos del formulario. */

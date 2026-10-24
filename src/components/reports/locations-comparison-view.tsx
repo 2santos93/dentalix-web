@@ -6,7 +6,7 @@ import { ApiError } from '@/lib/api/client';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { formatCivilDate } from '@/lib/format/date';
 import { sedeToday, useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
-import { saveCsv } from '@/lib/patient-imports/patient-imports-api';
+import { saveCsv } from '@/lib/files/save-csv';
 import { isValidPeriod, PERIOD_PRESETS, periodFor, type PeriodPresetKey } from '@/lib/reports/period-presets';
 import { metricValues, nextSort, sortRows, type SortKey, type SortState } from '@/lib/reports/comparison-table';
 import {
@@ -200,7 +200,7 @@ export function LocationsComparisonView({ token }: { token: string }) {
     try {
       const query = JSON.parse(filterKey) as LocationsComparisonFilters;
       const text = await downloadLocationsComparisonCsv(token, query);
-      saveCsv(text, `comparar-sedes-${query.from}-${query.to}.csv`);
+      saveCsv(text, `comparar-sedes-${query.from}-${query.to}.csv`, { bom: true });
       setNotice(locationsComparisonCopy.exported);
     } catch (err) {
       notifyError(apiErrorMessage(err, { fallback: locationsComparisonCopy.exportError }), {

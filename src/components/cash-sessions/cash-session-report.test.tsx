@@ -46,6 +46,7 @@ describe('CashSessionReport (DX-027)', () => {
               createdBy: { id: 'u-admin', fullName: 'Admin' },
               sessionId: 'cs-1',
               payment: { id: 'pay-9', patient: { id: 'p', fullName: 'Beto Ruiz' }, paidOn: '2026-10-16', receiptNumber: null },
+              expensePayment: null,
               originalSession: { id: 'cs-0', openedAt: '2026-10-16T13:00:00.000Z', openedBy: { id: 'u-recep', fullName: 'Paola' } },
             },
           ],

@@ -19,6 +19,7 @@ import { listStaff, type StaffMember } from '@/lib/appointments/staff-api';
 import { CollectionNoteDialog } from '@/components/collections/collection-note-dialog';
 import { PaymentPromiseDialog } from '@/components/collections/payment-promise-dialog';
 import { parseMoneyInput } from '@/lib/format/money';
+import { saveCsv } from '@/lib/files/save-csv';
 import { notifyError } from '@/components/errors/notify';
 import { InlineError } from '@/components/errors/inline-error';
 import { Button } from '@/components/ui/button';
@@ -104,16 +105,6 @@ function parseMinBalance(text: string, currency: string): number | undefined {
   return parsed.ok ? parsed.value : undefined;
 }
 
-function saveCsv(text: string, fileName: string): void {
-  const url = URL.createObjectURL(new Blob([text], { type: 'text/csv;charset=utf-8' }));
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = fileName;
-  document.body.append(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
-}
 
 /**
  * Cartera por antigüedad (DX-145): la lista de cobro de la sede activa. Mismo

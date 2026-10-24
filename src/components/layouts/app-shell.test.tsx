@@ -87,6 +87,7 @@ describe('AppShell', () => {
         'Agenda',
         'Caja',
         'Cartera',
+        'Gastos',
         'Presupuestos',
         'Catálogo',
         'Inventario',
@@ -98,15 +99,15 @@ describe('AppShell', () => {
     },
     DENTIST: {
       visible: ['Pacientes', 'Agenda', 'Catálogo'],
-      hidden: ['Dashboard', 'Caja', 'Cartera', 'Presupuestos', 'Inventario', 'Personal', 'Auditoría', 'Reportes'],
+      hidden: ['Dashboard', 'Caja', 'Cartera', 'Gastos', 'Presupuestos', 'Inventario', 'Personal', 'Auditoría', 'Reportes'],
     },
     ASSISTANT: {
       visible: ['Pacientes', 'Agenda', 'Catálogo', 'Inventario'],
-      hidden: ['Dashboard', 'Caja', 'Cartera', 'Presupuestos', 'Personal', 'Auditoría', 'Reportes'],
+      hidden: ['Dashboard', 'Caja', 'Cartera', 'Gastos', 'Presupuestos', 'Personal', 'Auditoría', 'Reportes'],
     },
     RECEPTION: {
       visible: ['Pacientes', 'Agenda', 'Caja', 'Cartera', 'Presupuestos'],
-      hidden: ['Dashboard', 'Catálogo', 'Inventario', 'Personal', 'Auditoría', 'Reportes'],
+      hidden: ['Dashboard', 'Gastos', 'Catálogo', 'Inventario', 'Personal', 'Auditoría', 'Reportes'],
     },
   };
   it.each(Object.keys(ROLE_NAV))('el menú de %s solo enseña lo que su rol puede abrir', async (role) => {

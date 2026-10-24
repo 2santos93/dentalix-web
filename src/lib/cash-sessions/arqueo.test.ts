@@ -16,6 +16,8 @@ const line = (method: CashExpectedLine['method'], expected: number): CashExpecte
   payments: expected,
   paymentsCount: 1,
   adjustments: 0,
+  outflows: 0,
+  outflowsCount: 0,
   expected,
 });
 

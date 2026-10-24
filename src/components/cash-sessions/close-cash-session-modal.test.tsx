@@ -133,6 +133,7 @@ describe('CloseCashSessionModal (DX-027)', () => {
             createdBy: { id: 'u-admin', fullName: 'Admin' },
             sessionId: 'cs-1',
             payment: null,
+            expensePayment: null,
             originalSession: null,
           },
         ],

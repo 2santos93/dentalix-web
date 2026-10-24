@@ -2654,6 +2654,297 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/expenses.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Gastos en CSV (mismos filtros que la lista, sin paginar)
+         * @description UTF-8 con BOM; celdas protegidas contra fórmulas; importes con los decimales de su moneda. Hasta 10 000 filas.
+         */
+        get: operations["ExpenseReportsController_expensesCsv"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/expenses/attachments/upload-url": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Autorización para subir el soporte de un gasto al almacén
+         * @description POST prefirmado de pocos minutos para UN fichero (PDF, JPG o PNG de 1 B a 20 MB) con el SHA-256 declarado. El navegador envía `target.fields` y el fichero (campo `file`, al final) a `target.url` y después entrega el `uploadId` al alta del gasto (`attachmentUploadId`) o a `POST /expenses/:id/attachment`. Nada se audita ni se asocia a un gasto hasta entonces.
+         */
+        post: operations["ExpensesController_uploadUrl"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/expenses/suppliers": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Proveedores ya usados en gastos (sugerencias)
+         * @description Hasta 20 nombres distintos (sin mayúsculas ni tildes) que contienen `query`, el de uso más reciente primero.
+         */
+        get: operations["ExpensesController_suppliers"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/expenses/summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Resumen mensual: ingresos − gastos por sede y moneda
+         * @description Gastos no anulados por fecha de factura (devengado), con su desglose por categoría; ingresos = abonos vivos por el día civil de la sede. Rango de hasta 366 días; las monedas no se convierten. Respeta las sedes permitidas del usuario.
+         */
+        get: operations["ExpensesController_summaryOf"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/expenses/summary.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Resumen mensual en CSV */
+        get: operations["ExpensesController_summaryCsv"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/expenses": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Gastos de las sedes del usuario, paginados
+         * @description Filtros: fecha de factura `from`/`to`, `locationId`, `category`, `status` (`OPEN` = pendiente + parcial), `overdue`, `query` (proveedor o descripción). Respeta las sedes permitidas del usuario.
+         */
+        get: operations["ExpensesController_list"];
+        put?: never;
+        /** Registrar un gasto (con su pago y su soporte, opcionalmente) */
+        post: operations["ExpensesController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/expenses/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Un gasto con sus pagos */
+        get: operations["ExpensesController_detail"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        /**
+         * Editar un gasto no anulado
+         * @description Categoría, proveedor, descripción y fechas, siempre. El importe puede cambiar pero nunca por debajo de lo ya pagado; la sede y la moneda solo mientras el gasto no tenga ningún pago.
+         */
+        patch: operations["ExpensesController_update"];
+        trace?: never;
+    };
+    "/api/v1/expenses/{id}/void": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Anular el gasto y todos sus pagos vivos
+         * @description Anular no borra: el gasto sigue en la lista, tachado.
+         */
+        post: operations["ExpensesController_void"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/expenses/{id}/payments": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Registrar un pago (total o parcial) del gasto
+         * @description La suma de los pagos vivos no puede pasar del importe (400 con lo pendiente). El día del pago no es futuro en la sede.
+         */
+        post: operations["ExpensesController_pay"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/expenses/{id}/payments/{paymentId}/void": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Anular un pago del gasto (una vez) */
+        post: operations["ExpensesController_voidOnePayment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/expenses/{id}/attachment": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Adjuntar el soporte (una vez) a un gasto que no lo tiene
+         * @description Comprueba el objeto subido con `upload-url` (de este usuario): tamaño, SHA-256 y tipo por contenido (PDF, JPG o PNG). Si no vale, el objeto se borra y la respuesta es 400.
+         */
+        post: operations["ExpensesController_attachment"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/expenses/{id}/attachment/url": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** URL firmada (5 min) para ver o descargar el soporte */
+        get: operations["ExpensesController_attachmentUrl"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/expense-categories": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Categorías para el selector: predefinidas y propias activas */
+        get: operations["ExpenseCategoriesController_list"];
+        put?: never;
+        /** Crear una categoría propia */
+        post: operations["ExpenseCategoriesController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/expense-categories/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /**
+         * Retirar una categoría propia (borrado lógico)
+         * @description Los gastos que la usan conservan su nombre: es una foto de texto.
+         */
+        delete: operations["ExpenseCategoriesController_remove"];
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/cash-sessions/current/outflows": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Registrar una salida de caja menor desde mi caja abierta
+         * @description Crea un gasto de la sede de la caja abierta de quien llama (con `X-Location-Id`, la de esa sede), con fecha de hoy, pagado en efectivo desde esa caja en la misma transacción: resta del efectivo esperado. La respuesta es el gasto, sin datos del esperado de la caja.
+         */
+        post: operations["CashOutflowsController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/privacy-policies": {
         parameters: {
             query?: never;
@@ -4106,7 +4397,7 @@ export interface components {
         /** @enum {string} */
         AuditAction: "VIEW" | "CREATE" | "UPDATE" | "DELETE" | "SIGN" | "VOID" | "LOGIN" | "LOGIN_FAILED" | "PASSWORD_RESET" | "EXPORT" | "PRINT" | "SEND";
         /** @enum {string} */
-        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION" | "POSTOP_TEMPLATE" | "POSTOP_DELIVERY" | "PATIENT_DOCUMENT" | "MEDICAL_HISTORY_SUBMISSION" | "AGREEMENT" | "PRICE_LIST" | "PROVIDER_SCHEDULE" | "PATIENT_IMPORT_BATCH" | "CANCELLATION_POLICY";
+        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION" | "POSTOP_TEMPLATE" | "POSTOP_DELIVERY" | "PATIENT_DOCUMENT" | "MEDICAL_HISTORY_SUBMISSION" | "AGREEMENT" | "PRICE_LIST" | "PROVIDER_SCHEDULE" | "PATIENT_IMPORT_BATCH" | "EXPENSE" | "CANCELLATION_POLICY";
         /**
          * @description Rol con el que actuó (del token). `null` en un login fallido.
          * @enum {string}
@@ -9622,7 +9913,10 @@ export interface components {
             paymentsCount: number;
             /** @description Ajustes que entraron en esta caja (con signo) */
             adjustments: number;
-            /** @description opening + payments + adjustments */
+            /** @description Salidas de caja menor del turno (DX-274), en positivo: se restan. Solo en efectivo. */
+            outflows: number;
+            outflowsCount: number;
+            /** @description opening + payments + adjustments − outflows (puede ser negativo) */
             expected: number;
         };
         CashSessionPaymentDto: {
@@ -9669,11 +9963,53 @@ export interface components {
             /** @description Anulado con la caja ya cerrada: sigue contando aquí y la anulación es un ajuste en otra caja. */
             bookedAsAdjustment: boolean;
         };
+        CashOutflowDto: {
+            /**
+             * Format: uuid
+             * @description Id del pago de gasto
+             */
+            id: string;
+            /** Format: uuid */
+            expenseId: string;
+            /** @example Mensajería */
+            category: string;
+            supplier: string | null;
+            amount: number;
+            /** @example COP */
+            currency: string;
+            /** Format: date-time */
+            createdAt: string;
+            createdBy: components["schemas"]["CashStaffRefDto"];
+        };
+        CashVoidedOutflowDto: {
+            /**
+             * Format: uuid
+             * @description Id del pago de gasto
+             */
+            id: string;
+            /** Format: uuid */
+            expenseId: string;
+            /** @example Mensajería */
+            category: string;
+            supplier: string | null;
+            amount: number;
+            /** @example COP */
+            currency: string;
+            /** Format: date-time */
+            createdAt: string;
+            createdBy: components["schemas"]["CashStaffRefDto"];
+            /** Format: date-time */
+            voidedAt: string | null;
+            voidedBy: components["schemas"]["CashStaffRefDto"] | null;
+            voidReason: string | null;
+            /** @description Anulada con la caja ya cerrada: sigue restando aquí y la anulación es un ajuste OUTFLOW_VOID en otra caja. */
+            bookedAsAdjustment: boolean;
+        };
         /**
-         * @description VOID: anulación de un abono de una caja cerrada. LATE_PAYMENT: abono con fecha de un día ya cerrado. CORRECTION: corrección de un ADMIN.
+         * @description VOID: anulación de un abono de una caja cerrada. LATE_PAYMENT: abono con fecha de un día ya cerrado. CORRECTION: corrección de un ADMIN. OUTFLOW_VOID: anulación (positiva) de una salida de caja de una caja cerrada.
          * @enum {string}
          */
-        CashAdjustmentKind: "VOID" | "LATE_PAYMENT" | "CORRECTION";
+        CashAdjustmentKind: "VOID" | "LATE_PAYMENT" | "CORRECTION" | "OUTFLOW_VOID";
         CashAdjustmentPaymentDto: {
             /** Format: uuid */
             id: string;
@@ -9681,6 +10017,14 @@ export interface components {
             /** @example 2026-10-16 */
             paidOn: string;
             receiptNumber: string | null;
+        };
+        CashAdjustmentExpensePaymentDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            expenseId: string;
+            category: string;
+            supplier: string | null;
         };
         CashSessionRefDto: {
             /** Format: uuid */
@@ -9692,7 +10036,7 @@ export interface components {
         CashAdjustmentDto: {
             /** Format: uuid */
             id: string;
-            /** @description VOID: anulación de un abono de una caja cerrada. LATE_PAYMENT: abono con fecha de un día ya cerrado. CORRECTION: corrección de un ADMIN. */
+            /** @description VOID: anulación de un abono de una caja cerrada. LATE_PAYMENT: abono con fecha de un día ya cerrado. CORRECTION: corrección de un ADMIN. OUTFLOW_VOID: anulación (positiva) de una salida de caja de una caja cerrada. */
             kind: components["schemas"]["CashAdjustmentKind"];
             /** @example COP */
             currency: string;
@@ -9709,6 +10053,8 @@ export interface components {
              */
             sessionId: string | null;
             payment: components["schemas"]["CashAdjustmentPaymentDto"] | null;
+            /** @description OUTFLOW_VOID: la salida de caja anulada y su gasto */
+            expensePayment: components["schemas"]["CashAdjustmentExpensePaymentDto"] | null;
             /** @description La caja cerrada de la que viene (enlace al original) */
             originalSession: components["schemas"]["CashSessionRefDto"] | null;
         };
@@ -9785,6 +10131,10 @@ export interface components {
             payments: components["schemas"]["CashSessionPaymentDto"][] | null;
             /** @description Anulados (DX-049): no cuentan en el esperado salvo si se anularon con la caja cerrada */
             voidedPayments: components["schemas"]["CashVoidedPaymentDto"][];
+            /** @description Salidas de caja menor vivas del turno (DX-274). Se ven también con el arqueo ciego. */
+            outflows: components["schemas"]["CashOutflowDto"][];
+            /** @description Salidas anuladas: no restan salvo si se anularon con la caja cerrada */
+            voidedOutflows: components["schemas"]["CashVoidedOutflowDto"][];
             /** @description Ajustes que cuentan en esta caja */
             adjustments: components["schemas"]["CashAdjustmentDto"][];
             /** @description Ajustes nacidos de esta caja ya cerrada, que cuentan en otra */
@@ -9887,6 +10237,362 @@ export interface components {
              */
             amount: number;
             reason: string;
+        };
+        CreateExpenseUploadDto: {
+            /** @example factura-luz.pdf */
+            name?: string;
+            /** @example application/pdf */
+            mimeType?: string;
+            /** @description Tamaño en bytes (1 B – 20 MB) */
+            size: number;
+            /** @description SHA-256 del contenido en hex. El almacén rechaza un contenido con otra huella. */
+            sha256: string;
+        };
+        ExpenseReceiptTargetDto: {
+            /** @enum {string} */
+            method: "POST";
+            /** @description Adónde se envía el formulario: el bucket (S3) o la API (disco, en desarrollo) */
+            url: string;
+            /** @description Campos del formulario, en este orden y ANTES del fichero, que va al final en el campo `file` */
+            fields: {
+                [key: string]: string;
+            };
+            /** Format: date-time */
+            expiresAt: string;
+        };
+        ExpenseReceiptUploadDto: {
+            /**
+             * Format: uuid
+             * @description Se entrega con el alta (`attachmentUploadId`) o a `POST /expenses/:id/attachment`
+             */
+            uploadId: string;
+            target: components["schemas"]["ExpenseReceiptTargetDto"];
+            /** @description Tamaño máximo en bytes */
+            maxBytes: number;
+        };
+        ExpenseSummaryCategoryDto: {
+            /** @example Arriendo */
+            category: string;
+            /** @example 2500000 */
+            amount: number;
+        };
+        ExpenseSummaryRowDto: {
+            /**
+             * @description Mes AAAA-MM.
+             * @example 2026-10
+             */
+            month: string;
+            /** Format: uuid */
+            locationId: string;
+            locationName: string;
+            /** @example COP */
+            currency: string;
+            /** @description Abonos vivos del mes civil de la sede, sin anulados. */
+            income: number;
+            /** @description Gastos no anulados por fecha de factura; mayor primero. */
+            categories: components["schemas"]["ExpenseSummaryCategoryDto"][];
+            expensesTotal: number;
+            /** @description Ingresos − gastos; puede ser negativo. */
+            net: number;
+        };
+        ExpenseSummaryDto: {
+            /** Format: date */
+            from: string;
+            /** Format: date */
+            to: string;
+            /** @description Por mes, sede y moneda; las monedas nunca se mezclan. */
+            rows: components["schemas"]["ExpenseSummaryRowDto"][];
+        };
+        ExpenseAttachmentDto: {
+            /** @example factura-luz.pdf */
+            name: string;
+            /** @example application/pdf */
+            mimeType: string;
+            sizeBytes: number;
+            sha256: string;
+        };
+        ExpenseDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            locationId: string;
+            /**
+             * @description Foto del nombre al crear o editar.
+             * @example Servicios públicos
+             */
+            category: string;
+            supplier: string | null;
+            description: string | null;
+            /** @example 150000 */
+            amount: number;
+            /** @example COP */
+            currency: string;
+            /**
+             * Format: date
+             * @example 2026-10-20
+             */
+            invoiceDate: string;
+            /** Format: date */
+            dueDate: string | null;
+            /** @description Σ de los pagos vivos. */
+            paidAmount: number;
+            /** @description Lo que falta por pagar (0 si está anulado). */
+            pendingAmount: number;
+            /**
+             * @description Derivado de los pagos vivos y la anulación.
+             * @enum {string}
+             */
+            status: "PENDING" | "PARTIAL" | "PAID" | "VOIDED";
+            /** @description No pagado del todo y con el vencimiento ya pasado. */
+            overdue: boolean;
+            attachment: components["schemas"]["ExpenseAttachmentDto"] | null;
+            /** Format: uuid */
+            createdById: string;
+            createdByName: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            /** Format: date-time */
+            voidedAt: string | null;
+            /** Format: uuid */
+            voidedById: string | null;
+            voidedByName: string | null;
+            voidReason: string | null;
+        };
+        ExpensePageDto: {
+            items: components["schemas"]["ExpenseDto"][];
+            total: number;
+            page: number;
+            pageSize: number;
+        };
+        InitialExpensePaymentDto: {
+            /**
+             * @description Mayor que cero, con hasta 2 decimales.
+             * @example 150000
+             */
+            amount: number;
+            method: components["schemas"]["PaymentMethod"];
+            /**
+             * Format: date
+             * @description Día del pago (no futuro en la sede). Por defecto, hoy. Desde la caja, solo hoy.
+             */
+            paidOn?: string;
+            /**
+             * @description «Desde mi caja» (R1): el dinero sale del cajón de la caja abierta de quien registra, en la sede del gasto. Exige `method: CASH` y el día de hoy (400 si no) y una caja abierta (409 si no). Resta del efectivo esperado de esa caja.
+             * @default false
+             */
+            fromCashSession: boolean;
+        };
+        CreateExpenseDto: {
+            /**
+             * Format: uuid
+             * @description Sede del gasto. Sin ella, la de la cabecera `X-Location-Id` o la primera permitida.
+             */
+            locationId?: string;
+            /**
+             * @description Una predefinida o una propia activa de la clínica.
+             * @example Servicios públicos
+             */
+            category: string;
+            supplier?: string | null;
+            description?: string | null;
+            /**
+             * @description Mayor que cero, con hasta 2 decimales.
+             * @example 150000
+             */
+            amount: number;
+            /**
+             * @description Código ISO 4217
+             * @example COP
+             */
+            currency: string;
+            /**
+             * Format: date
+             * @description Día de la factura (no futuro en la sede).
+             * @example 2026-10-20
+             */
+            invoiceDate: string;
+            /**
+             * Format: date
+             * @description Vencimiento (no anterior a la factura).
+             */
+            dueDate?: string | null;
+            /** @description Pago en la misma transacción, fuera de caja o desde la caja abierta (`fromCashSession`). En efectivo fuera de caja, si la clínica exige caja abierta, 409. */
+            payment?: components["schemas"]["InitialExpensePaymentDto"];
+            /**
+             * Format: uuid
+             * @description El `uploadId` de `POST /expenses/attachments/upload-url`, ya subido al almacén.
+             */
+            attachmentUploadId?: string;
+        };
+        ExpensePaymentDto: {
+            /** Format: uuid */
+            id: string;
+            /** @example 150000 */
+            amount: number;
+            /** @example COP */
+            currency: string;
+            method: components["schemas"]["PaymentMethod"];
+            /**
+             * Format: date
+             * @example 2026-10-23
+             */
+            paidOn: string;
+            /**
+             * Format: uuid
+             * @description La caja de la que salió el efectivo (salida de caja).
+             */
+            cashSessionId: string | null;
+            /** Format: uuid */
+            createdById: string;
+            createdByName: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            voidedAt: string | null;
+            /** Format: uuid */
+            voidedById: string | null;
+            voidedByName: string | null;
+            voidReason: string | null;
+        };
+        ExpenseDetailDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            locationId: string;
+            /**
+             * @description Foto del nombre al crear o editar.
+             * @example Servicios públicos
+             */
+            category: string;
+            supplier: string | null;
+            description: string | null;
+            /** @example 150000 */
+            amount: number;
+            /** @example COP */
+            currency: string;
+            /**
+             * Format: date
+             * @example 2026-10-20
+             */
+            invoiceDate: string;
+            /** Format: date */
+            dueDate: string | null;
+            /** @description Σ de los pagos vivos. */
+            paidAmount: number;
+            /** @description Lo que falta por pagar (0 si está anulado). */
+            pendingAmount: number;
+            /**
+             * @description Derivado de los pagos vivos y la anulación.
+             * @enum {string}
+             */
+            status: "PENDING" | "PARTIAL" | "PAID" | "VOIDED";
+            /** @description No pagado del todo y con el vencimiento ya pasado. */
+            overdue: boolean;
+            attachment: components["schemas"]["ExpenseAttachmentDto"] | null;
+            /** Format: uuid */
+            createdById: string;
+            createdByName: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: date-time */
+            updatedAt: string;
+            /** Format: date-time */
+            voidedAt: string | null;
+            /** Format: uuid */
+            voidedById: string | null;
+            voidedByName: string | null;
+            voidReason: string | null;
+            payments: components["schemas"]["ExpensePaymentDto"][];
+        };
+        UpdateExpenseDto: {
+            category?: string;
+            supplier?: string | null;
+            description?: string | null;
+            /** Format: date */
+            invoiceDate?: string;
+            /** Format: date */
+            dueDate?: string | null;
+            /**
+             * @description Nunca por debajo de lo ya pagado (409). Con pagos, la sede y la moneda no cambian.
+             * @example 150000
+             */
+            amount?: number;
+            /** @example COP */
+            currency?: string;
+            /** Format: uuid */
+            locationId?: string;
+        };
+        VoidExpenseDto: {
+            reason: string;
+        };
+        AddExpensePaymentDto: {
+            /**
+             * @description Mayor que cero, con hasta 2 decimales.
+             * @example 150000
+             */
+            amount: number;
+            method: components["schemas"]["PaymentMethod"];
+            /**
+             * Format: date
+             * @description Día del pago (no futuro en la sede). Por defecto, hoy. Desde la caja, solo hoy.
+             */
+            paidOn?: string;
+            /**
+             * @description «Desde mi caja» (R1): el dinero sale del cajón de la caja abierta de quien registra, en la sede del gasto. Exige `method: CASH` y el día de hoy (400 si no) y una caja abierta (409 si no). Resta del efectivo esperado de esa caja.
+             * @default false
+             */
+            fromCashSession: boolean;
+        };
+        AttachExpenseReceiptDto: {
+            /** Format: uuid */
+            uploadId: string;
+        };
+        ExpenseReceiptUrlDto: {
+            url: string;
+            /** Format: date-time */
+            expiresAt: string;
+            /** @enum {string} */
+            disposition: "inline" | "attachment";
+        };
+        ExpenseCategoryDto: {
+            /**
+             * Format: uuid
+             * @description null en las predefinidas (son constantes, no filas).
+             */
+            id?: string | null;
+            /** @example Papelería */
+            name: string;
+            predefined: boolean;
+        };
+        CreateExpenseCategoryDto: {
+            /** @example Seguros */
+            name: string;
+        };
+        CreateCashOutflowDto: {
+            /**
+             * @description Una predefinida o una propia activa de la clínica.
+             * @example Servicios públicos
+             */
+            category: string;
+            supplier?: string | null;
+            description?: string | null;
+            /**
+             * @description Mayor que cero, con hasta 2 decimales.
+             * @example 150000
+             */
+            amount: number;
+            /**
+             * @description Código ISO 4217
+             * @example COP
+             */
+            currency: string;
+            /**
+             * Format: uuid
+             * @description El `uploadId` de `POST /expenses/attachments/upload-url`, ya subido al almacén.
+             */
+            attachmentUploadId?: string;
         };
         UserRefDto: {
             /** Format: uuid */
@@ -19556,6 +20262,787 @@ export interface operations {
             };
             /** @description La caja no está cerrada: mientras está abierta, el arqueo del cierre lo recoge todo. */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ExpenseReportsController_expensesCsv: {
+        parameters: {
+            query?: {
+                /** @description Fecha de factura, desde. */
+                from?: string;
+                /** @description Fecha de factura, hasta. */
+                to?: string;
+                locationId?: string;
+                category?: string;
+                /** @description `OPEN` = pendiente + parcial. */
+                status?: "PENDING" | "PARTIAL" | "PAID" | "VOIDED" | "OPEN";
+                /** @description true = solo vencidos; false = solo no vencidos. */
+                overdue?: boolean;
+                /** @description Proveedor o descripción. */
+                query?: string;
+            };
+            header?: {
+                /** @description Sede activa. Sin ella, todas las sedes que el usuario ve. */
+                "X-Location-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Fichero CSV */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
+                };
+            };
+            /** @description Filtros no válidos o más de 10 000 gastos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo ADMIN */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ExpensesController_uploadUrl: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateExpenseUploadDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExpenseReceiptUploadDto"];
+                };
+            };
+            /** @description Tamaño, huella o tipo declarado no válidos, o archivo vacío */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo ADMIN y recepción */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Más de 20 MB */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ExpensesController_suppliers: {
+        parameters: {
+            query?: {
+                /** @description Texto contenido en el nombre. */
+                query?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": string[];
+                };
+            };
+            /** @description Solo ADMIN y recepción */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ExpensesController_summaryOf: {
+        parameters: {
+            query: {
+                /** @description Primer día (AAAA-MM-DD). */
+                from: string;
+                /** @description Último día (AAAA-MM-DD), como mucho 366 días después. */
+                to: string;
+                locationId?: string;
+            };
+            header?: {
+                /** @description Sede activa. Sin ella, todas las sedes que el usuario ve. */
+                "X-Location-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExpenseSummaryDto"];
+                };
+            };
+            /** @description Periodo no válido o de más de 366 días */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo ADMIN */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ExpensesController_summaryCsv: {
+        parameters: {
+            query: {
+                /** @description Primer día (AAAA-MM-DD). */
+                from: string;
+                /** @description Último día (AAAA-MM-DD), como mucho 366 días después. */
+                to: string;
+                locationId?: string;
+            };
+            header?: {
+                /** @description Sede activa. Sin ella, todas las sedes que el usuario ve. */
+                "X-Location-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Fichero CSV */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
+                };
+            };
+            /** @description Periodo no válido o de más de 366 días */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo ADMIN */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ExpensesController_list: {
+        parameters: {
+            query?: {
+                /** @description Fecha de factura, desde. */
+                from?: string;
+                /** @description Fecha de factura, hasta. */
+                to?: string;
+                locationId?: string;
+                category?: string;
+                /** @description `OPEN` = pendiente + parcial. */
+                status?: "PENDING" | "PARTIAL" | "PAID" | "VOIDED" | "OPEN";
+                /** @description true = solo vencidos; false = solo no vencidos. */
+                overdue?: boolean;
+                /** @description Proveedor o descripción. */
+                query?: string;
+                page?: number;
+                pageSize?: number;
+            };
+            header?: {
+                /** @description Sede activa. Sin ella, todas las sedes que el usuario ve. */
+                "X-Location-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExpensePageDto"];
+                };
+            };
+            /** @description Fechas o filtros no válidos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo ADMIN */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ExpensesController_create: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description UUID. Repetir la MISMA petición con la misma clave devuelve el resultado original; con otro cuerpo, 422. */
+                "Idempotency-Key"?: string;
+                /** @description Sede activa. Sin ella, todas las sedes que el usuario ve. */
+                "X-Location-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateExpenseDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExpenseDetailDto"];
+                };
+            };
+            /** @description Importe, categoría, fechas, sede, pago o soporte no válidos (mensaje en español) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo ADMIN, o sede no permitida */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Efectivo fuera de caja en una clínica que lo exige en caja; pago «desde la caja» sin caja abierta en la sede; o la Idempotency-Key ya se usó para un gasto de otra sede */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La Idempotency-Key ya se usó con otros datos */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ExpensesController_detail: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExpenseDetailDto"];
+                };
+            };
+            /** @description Gasto no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ExpensesController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateExpenseDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExpenseDetailDto"];
+                };
+            };
+            /** @description Campo no válido */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Gasto no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Gasto anulado, con pagos (sede y moneda) o importe < pagado */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ExpensesController_void: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VoidExpenseDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExpenseDetailDto"];
+                };
+            };
+            /** @description Motivo de 5 a 500 caracteres */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Gasto no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El gasto ya está anulado. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ExpensesController_pay: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description UUID. Repetir la MISMA petición con la misma clave devuelve el resultado original; con otro cuerpo, 422. */
+                "Idempotency-Key"?: string;
+            };
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AddExpensePaymentDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExpenseDetailDto"];
+                };
+            };
+            /** @description Importe, día o tope no válidos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Gasto no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Gasto anulado; efectivo fuera de caja en una clínica que lo exige en caja; pago «desde la caja» sin caja abierta en la sede; o la Idempotency-Key ya se usó para un pago de otra sede */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La Idempotency-Key ya se usó con otros datos */
+            422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ExpensesController_voidOnePayment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                paymentId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VoidExpenseDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExpenseDetailDto"];
+                };
+            };
+            /** @description Motivo de 5 a 500 caracteres */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Gasto o pago no encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El pago ya está anulado. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ExpensesController_attachment: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["AttachExpenseReceiptDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExpenseDetailDto"];
+                };
+            };
+            /** @description Contenido que no es PDF, JPG o PNG */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Gasto o subida no encontrados */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El gasto ya tiene un soporte o está anulado */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ExpensesController_attachmentUrl: {
+        parameters: {
+            query?: {
+                disposition?: "inline" | "attachment";
+            };
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExpenseReceiptUrlDto"];
+                };
+            };
+            /** @description Gasto no encontrado o sin soporte */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ExpenseCategoriesController_list: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExpenseCategoryDto"][];
+                };
+            };
+            /** @description Solo ADMIN y recepción */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ExpenseCategoriesController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateExpenseCategoryDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExpenseCategoryDto"];
+                };
+            };
+            /** @description Nombre fuera de 2–60 caracteres */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo ADMIN */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ya existe una categoría con ese nombre */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ExpenseCategoriesController_remove: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Retirada. */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo ADMIN */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Categoría no encontrada en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    CashOutflowsController_create: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description UUID. Repetir la MISMA petición con la misma clave devuelve la salida original; con otro cuerpo, 422. */
+                "Idempotency-Key"?: string;
+                /** @description Sede de la caja. Sin ella, la única sede donde quien llama tiene caja abierta. */
+                "X-Location-Id"?: string;
+            };
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateCashOutflowDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ExpenseDetailDto"];
+                };
+            };
+            /** @description Importe, categoría, moneda o soporte no válidos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo ADMIN y recepción */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sin caja abierta (en esa sede); con cajas abiertas en varias sedes sin elegir una; o la Idempotency-Key ya se usó para un gasto de otra sede */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La Idempotency-Key ya se usó con otros datos */
+            422: {
                 headers: {
                     [name: string]: unknown;
                 };

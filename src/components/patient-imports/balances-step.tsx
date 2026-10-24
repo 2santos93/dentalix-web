@@ -15,11 +15,11 @@ import {
   downloadBalanceTemplate,
   errorsFileName,
   removeBalances,
-  saveCsv,
   uploadBalances,
   type BalanceCurrencyTotal,
   type ImportBatchDetail,
 } from '@/lib/patient-imports/patient-imports-api';
+import { saveCsv } from '@/lib/files/save-csv';
 import { ImportIssuesTable } from './import-issues-table';
 
 export const balancesCopy = {
@@ -93,7 +93,7 @@ export function BalancesStep({ token, headingId, batch, onBatch, onBack, onConti
 
   async function onTemplate() {
     try {
-      saveCsv(await downloadBalanceTemplate(token), 'plantilla-saldos.csv');
+      saveCsv(await downloadBalanceTemplate(token), 'plantilla-saldos.csv', { bom: true });
     } catch (err) {
       notifyError(apiErrorMessage(err, balancesCopy.templateError), {
         onRetry: () => void onTemplate(),
@@ -140,7 +140,7 @@ export function BalancesStep({ token, headingId, batch, onBatch, onBack, onConti
 
   async function onReport(fileName: string) {
     try {
-      saveCsv(await downloadBalanceErrorsCsv(token, batch.id), errorsFileName(fileName));
+      saveCsv(await downloadBalanceErrorsCsv(token, batch.id), errorsFileName(fileName), { bom: true });
     } catch (err) {
       notifyError(apiErrorMessage(err, balancesCopy.reportError), {
         onRetry: () => void onReport(fileName),
