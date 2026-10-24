@@ -4149,7 +4149,7 @@ export interface components {
             importBatch?: components["schemas"]["AuditImportBatchDto"];
             /** @description DX-050: quién realizó un ítem del plan, en qué sede y cuándo, antes y después (`reason` PLAN_ITEM_ATTRIBUTION_CORRECTED o PLAN_ITEM_DONE_REVERTED). Solo ids e instantes. */
             attribution?: components["schemas"]["AuditAttributionChangeDto"];
-            /** @description DX-279: cita cancelada desde la agenda (`reason` APPOINTMENT_CANCELLED): quién, código del motivo, minutos de aviso y si fue tardía. Nunca el texto libre del motivo. */
+            /** @description DX-279: cita cancelada desde la agenda, en su único evento (`reason` APPOINTMENT_CANCELLED; PATIENT_FLOW si estaba en la clínica; COMPLETED_EXIT si estaba completada): quién, código del motivo, minutos de aviso y si fue tardía. Nunca el texto libre del motivo. */
             cancellation?: components["schemas"]["AuditCancellationDto"];
         };
         AuditEventDto: {
