@@ -92,9 +92,12 @@ test.beforeAll(async ({ request }) => {
   }));
   // SEC-047: el convenio de un pagador exige una cobertura vigente del
   // paciente con ese pagador; el diálogo la elige sola si es la única.
+  // SEC-049: con el nº de afiliado (obligatorio en una EPS); la registra el
+  // ADMIN, así que recepción puede asignar el convenio con ella.
   await apiPost(request, session, `/patients/${patientId}/coverages`, {
     payerId: payer.id,
     planName: 'Plan Sura',
+    memberNumber: '1020304050',
   });
 });
 
@@ -325,4 +328,68 @@ test('el DENTISTA abre el plan: el precio llega precargado con el convenio, la f
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(itemRow.or(panel.getByText(procedureLabel).locator('visible=true').first())).toBeVisible();
   await expectNoHorizontalScroll(page);
+});
+
+test('SEC-049: la cobertura que registra RECEPCIÓN no habilita su convenio hasta que el ADMIN la verifica', async ({
+  page,
+  request,
+}) => {
+  const { id: secondPatient } = await apiPost<{ id: string }>(request, session, '/patients', {
+    firstName: 'Bruno',
+    lastName,
+    docType: 'CC',
+    docNumber: `CVB${suffix}`.slice(0, 20),
+    sex: 'M',
+  });
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.emulateMedia({ colorScheme: 'light' });
+  await loginAs(page, origin, reception.email, password);
+  await page.goto(`${origin}/patients/${secondPatient}`);
+
+  // Recepción registra la cobertura de la EPS con su nº de afiliado…
+  const coverages = page.getByTestId('patient-coverage');
+  await coverages.getByRole('button', { name: 'Añadir cobertura' }).click({ timeout: 15_000 });
+  const add = page.getByRole('dialog', { name: 'Añadir cobertura' });
+  await add.getByLabel('Pagador').selectOption({ label: `${payerName} · EPS (Colombia)` });
+  await add.getByLabel('Nº de afiliado o póliza').fill('5544332211');
+  await add.getByRole('button', { name: 'Añadir', exact: true }).click();
+  await expect(add).toBeHidden({ timeout: 10_000 });
+  await expect(coverages.getByTestId('coverage-verification')).toHaveText('Sin verificar');
+
+  // …y no puede asignar el convenio con ella: el diálogo dice qué falta.
+  const section = page.getByTestId('patient-agreement');
+  await section.getByRole('button', { name: 'Asignar convenio' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Asignar convenio' });
+  await dialog.getByLabel('Convenio', { exact: true }).selectOption({ label: `${agreementName} · ${payerName}` });
+  await expect(dialog.getByRole('alert')).toContainText(
+    `La cobertura de «${payerName}» la registraste tú y aún no la ha verificado un administrador`,
+  );
+  await expect(dialog.getByRole('button', { name: 'Asignar', exact: true })).toBeDisabled();
+  await shot(page, 'convenio-cobertura-sin-verificar-1440');
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expectDialogInsideViewport(page, dialog);
+  await expectNoHorizontalScroll(page);
+  await dialog.getByRole('button', { name: 'Cancelar' }).click();
+  await expect(dialog).toBeHidden();
+
+  // El ADMIN la verifica (por la API; la pantalla está en coverages.spec.ts).
+  const list = await request.get(`${API_URL}/patients/${secondPatient}/coverages`, {
+    headers: session.headers,
+  });
+  const [coverage] = (await list.json()) as { id: string }[];
+  await apiPost(request, session, `/patients/${secondPatient}/coverages/${coverage.id}/verification`, {
+    checkedMemberNumber: '5544332211',
+  });
+
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.reload();
+  await expect(coverages.getByTestId('coverage-verification')).toHaveText('Verificada', {
+    timeout: 15_000,
+  });
+  await section.getByRole('button', { name: 'Asignar convenio' }).click();
+  await dialog.getByLabel('Convenio', { exact: true }).selectOption({ label: `${agreementName} · ${payerName}` });
+  await expect(dialog.getByLabel('Cobertura del pagador')).toHaveValue(coverage.id);
+  await dialog.getByRole('button', { name: 'Asignar', exact: true }).click();
+  await expect(dialog).toBeHidden({ timeout: 10_000 });
+  await expect(page.getByTestId('agreement-chip')).toContainText(`Convenio: ${agreementName}`);
 });

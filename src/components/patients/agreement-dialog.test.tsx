@@ -29,9 +29,14 @@ const sanitas = { id: 'pay-1', name: 'Sanitas', type: 'EPS_CO' as const };
 const axa = { id: 'pay-2', name: 'Axa', type: 'PREPAGADA_CO' as const };
 const cortesia = { id: 'pay-3', name: 'Cortesía', type: 'OTRO' as const };
 
+/** Token con `sub` (SEC-049: el diálogo mira quién registró la cobertura). */
+const tokenFor = (sub: string) =>
+  `h.${btoa(JSON.stringify({ sub, tenantId: 't1', role: 'RECEPTION' })).replace(/=+$/, '')}.s`;
+
 function renderDialog(
   current = null as ReturnType<typeof patientAgreement> | null,
   role: ClinicRole | null = 'ADMIN',
+  token = 'tok',
 ) {
   const onSaved = jest.fn();
   const onOpenChange = jest.fn();
@@ -39,7 +44,7 @@ function renderDialog(
     <AgreementDialog
       open
       onOpenChange={onOpenChange}
-      token="tok"
+      token={token}
       patientId="p1"
       current={current}
       onSaved={onSaved}
@@ -246,6 +251,46 @@ describe('AgreementDialog (DX-105)', () => {
       expect(within(dialog).queryByLabelText('Cobertura del pagador')).not.toBeInTheDocument();
       expect(within(dialog).getByRole('button', { name: 'Asignar' })).toBeDisabled();
       expect(mockedAssign).not.toHaveBeenCalled();
+    });
+
+    it('SEC-049: con solo la cobertura que registró él y sin verificar, explica que falta la verificación', async () => {
+      mockedCoverages.mockResolvedValue([
+        { ...coverageFor('c1', sanitas, 'Salud Plus'), declaredById: 'u-recepcion' },
+      ]);
+      renderDialog(null, 'RECEPTION', tokenFor('u-recepcion'));
+      const user = setupUser();
+      const dialog = await screen.findByRole('dialog');
+      await screen.findByRole('option', { name: /Sanitas 2026/ });
+      await user.selectOptions(within(dialog).getByLabelText('Convenio'), 'ag1');
+      expect(within(dialog).getByRole('alert')).toHaveTextContent(
+        'La cobertura de «Sanitas» la registraste tú y aún no la ha verificado un administrador: pide a un administrador que la verifique en «Coberturas» (o que asigne él el convenio).',
+      );
+      expect(within(dialog).getByRole('button', { name: 'Asignar' })).toBeDisabled();
+    });
+
+    it('SEC-049: verificada por un ADMIN, la ofrece y la envía', async () => {
+      mockedAssign.mockResolvedValue(patientAgreement());
+      mockedCoverages.mockResolvedValue([
+        {
+          ...coverageFor('c1', sanitas, 'Salud Plus'),
+          declaredById: 'u-recepcion',
+          verifiedAt: '2026-10-20T15:00:00.000Z',
+        },
+      ]);
+      renderDialog(null, 'RECEPTION', tokenFor('u-recepcion'));
+      const user = setupUser();
+      const dialog = await screen.findByRole('dialog');
+      await screen.findByRole('option', { name: /Sanitas 2026/ });
+      await user.selectOptions(within(dialog).getByLabelText('Convenio'), 'ag1');
+      expect(within(dialog).getByLabelText('Cobertura del pagador')).toHaveValue('c1');
+      await user.click(within(dialog).getByRole('button', { name: 'Asignar' }));
+      await waitFor(() =>
+        expect(mockedAssign).toHaveBeenCalledWith(
+          tokenFor('u-recepcion'),
+          'p1',
+          expect.objectContaining({ coverageId: 'c1' }),
+        ),
+      );
     });
 
     it.each(['DENTIST', 'ASSISTANT', 'RECEPTION'] as const)(

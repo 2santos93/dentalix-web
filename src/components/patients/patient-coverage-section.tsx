@@ -7,8 +7,10 @@ import { getTokenRole } from '@/lib/auth/token-role';
 import {
   deleteCoverage,
   listCoverages,
+  verifyCoverage,
   type PatientCoverage,
 } from '@/lib/patients/coverages-api';
+import { coverageVerificationBadge, requiresMemberNumber } from '@/lib/patients/member-number';
 import { canCreatePayer, listPayers, type Payer } from '@/lib/payers/payers-api';
 import {
   coverageStatusBadge,
@@ -45,6 +47,14 @@ export const coverageCopy = {
   removeError: 'No pudimos quitar la cobertura.',
   saved: 'Cobertura guardada.',
   removed: 'Cobertura quitada.',
+  // SEC-049: verificación del nº de afiliado por un ADMIN.
+  verify: 'Verificar',
+  verifyLabel: (payer: string) => `Verificar la cobertura de ${payer}`,
+  verifyTitle: 'Verificar cobertura',
+  verifyDescription: (payer: string, member: string) =>
+    `Comprueba con el carné o con ${payer} que el nº de afiliado ${member} es de este paciente. Con la cobertura verificada, cualquier rol podrá asignar el convenio de ${payer} con ella.`,
+  verifyError: 'No pudimos verificar la cobertura.',
+  verified: 'Cobertura verificada.',
 };
 const copy = coverageCopy;
 
@@ -60,6 +70,10 @@ interface PatientCoverageSectionProps {
  * paciente. Carga lo suyo (esqueleto → error con reintento → vacío o lista);
  * alta y edición en un modal, quitar con confirmación. Lo gestionan los 4
  * roles; crear un pagador nuevo, solo ADMIN y RECEPTION.
+ *
+ * SEC-049: cada cobertura de un pagador externo lleva «Verificada» (con quién
+ * y cuándo) o «Sin verificar»; el ADMIN la verifica desde aquí, con una
+ * confirmación que le enseña el nº que va a dar por bueno.
  */
 export function PatientCoverageSection({
   token,
@@ -76,6 +90,9 @@ export function PatientCoverageSection({
   const [removeBusy, setRemoveBusy] = useState(false);
   const [removeError, setRemoveError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [verifying, setVerifying] = useState<PatientCoverage | null>(null);
+  const [verifyBusy, setVerifyBusy] = useState(false);
+  const [verifyError, setVerifyError] = useState<string | null>(null);
   // Tras quitar, su botón «Quitar» ya no existe: el foco pasa a «Añadir
   // cobertura» en vez de perderse en <body> (WCAG 2.4.3).
   const addButtonRef = useRef<HTMLButtonElement>(null);
@@ -118,7 +135,27 @@ export function PatientCoverageSection({
   }, [token, patientId, reloadKey, clearNotice]);
 
   const reload = () => setReloadKey((k) => k + 1);
-  const mayCreatePayer = canCreatePayer(getTokenRole(token));
+  const role = getTokenRole(token);
+  const mayCreatePayer = canCreatePayer(role);
+  const mayVerify = role === 'ADMIN';
+
+  async function confirmVerify() {
+    if (!verifying?.memberNumber) return;
+    setVerifyBusy(true);
+    setVerifyError(null);
+    clearNotice();
+    try {
+      await verifyCoverage(token, patientId, verifying.id, verifying.memberNumber);
+      setVerifying(null);
+      announce(copy.verified);
+      reload();
+      onChanged?.();
+    } catch (err) {
+      setVerifyError(apiErrorMessage(err, { fallback: copy.verifyError }));
+    } finally {
+      setVerifyBusy(false);
+    }
+  }
 
   async function confirmRemove() {
     if (!removing) return;
@@ -176,6 +213,9 @@ export function PatientCoverageSection({
       <ul className="flex flex-col divide-y divide-hairline rounded-xl border border-border bg-surface">
         {coverages.map((c) => {
           const statusBadge = coverageStatusBadge(c);
+          const verification = coverageVerificationBadge(c);
+          const canVerify =
+            mayVerify && requiresMemberNumber(c.payer.type) && !c.verifiedAt && !!c.memberNumber;
           return (
             <li
               key={c.id}
@@ -199,16 +239,40 @@ export function PatientCoverageSection({
                   </span>
                 ) : null}
                 <span className="text-sm text-muted tabular-nums">{coverageValidityLabel(c)}</span>
-                {c.isPrimary || statusBadge ? (
+                {c.isPrimary || statusBadge || verification ? (
                   <span className="flex flex-wrap gap-1.5">
                     {c.isPrimary ? <Badge variant="success">{copy.primary}</Badge> : null}
                     {statusBadge ? (
                       <Badge variant={statusBadge.variant}>{statusBadge.label}</Badge>
                     ) : null}
+                    {verification ? (
+                      <Badge variant={verification.variant} data-testid="coverage-verification">
+                        {verification.label}
+                      </Badge>
+                    ) : null}
                   </span>
                 ) : null}
+                {verification?.detail ? (
+                  <span className="break-words text-xs text-muted">{verification.detail}</span>
+                ) : null}
               </div>
-              <div className="flex shrink-0 gap-2">
+              <div className="flex shrink-0 flex-wrap gap-2">
+                {canVerify ? (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    aria-label={copy.verifyLabel(c.payer.name)}
+                    onClick={() => {
+                      clearNotice();
+                      setVerifyError(null);
+                      setVerifying(c);
+                    }}
+                    className="max-sm:h-11 max-sm:flex-1"
+                  >
+                    {copy.verify}
+                  </Button>
+                ) : null}
                 <Button
                   type="button"
                   variant="secondary"
@@ -299,6 +363,24 @@ export function PatientCoverageSection({
           onPayerCreated={(created) => setPayers((prev) => [...prev, created])}
         />
       ) : null}
+
+      <ConfirmDialog
+        open={verifying !== null}
+        onOpenChange={(open) => {
+          if (!open && !verifyBusy) setVerifying(null);
+        }}
+        title={copy.verifyTitle}
+        description={
+          verifying
+            ? copy.verifyDescription(verifying.payer.name, verifying.memberNumber ?? '')
+            : undefined
+        }
+        confirmLabel={copy.verify}
+        destructive={false}
+        onConfirm={() => void confirmVerify()}
+        confirming={verifyBusy}
+        error={verifyError}
+      />
 
       <ConfirmDialog
         open={removing !== null}
