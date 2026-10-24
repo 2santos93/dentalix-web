@@ -377,9 +377,9 @@ export function LocationsComparisonView({ token }: { token: string }) {
               {unattributed ? (
                 <p
                   role="note"
-                  className="flex max-w-[80ch] items-start gap-1.5 self-start rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-warning"
+                  className="flex max-w-[80ch] items-start gap-1.5 self-start rounded-lg border border-warning/40 bg-warning/10 px-3 py-2 text-sm text-ink"
                 >
-                  <span aria-hidden className="font-semibold">
+                  <span aria-hidden className="font-semibold text-warning">
                     *
                   </span>
                   <span>{locationsComparisonCopy.unattributedNote}</span>
