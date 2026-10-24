@@ -14,6 +14,7 @@ import {
 } from '@/lib/appointments/patient-flow';
 import type { ClinicRole } from '@/lib/me/me-api';
 import {
+  canClaimReserved,
   claimPlanItem,
   reservationCopy,
   reservedElsewhereMessage,
@@ -148,6 +149,12 @@ export function usePatientFlow(token: string, onChanged: () => void): PatientFlo
         const inModal = modalOpen();
         for (const item of reserved) {
           const id = reservedToastId(appointmentId, item.planItemId);
+          // DX-293: la reserva la tiene otra cita de hoy con el paciente en
+          // la clínica: «Traer» daría 409. Solo explica dónde está.
+          if (!canClaimReserved(item)) {
+            toast.warning(reservedItemLabel(item), { id, description: reservedElsewhereMessage(item) });
+            continue;
+          }
           if (inModal) {
             toast.warning(reservedItemLabel(item), {
               id,

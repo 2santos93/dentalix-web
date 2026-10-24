@@ -19,6 +19,7 @@ import {
   type PatientFlowRunner,
 } from '@/components/appointments/patient-flow-actions';
 import {
+  canClaimReserved,
   reservationCopy,
   reservedElsewhereMessage,
   reservedItemLabel,
@@ -315,7 +316,8 @@ function InClinicGroup({
 /**
  * DX-273: tratamientos de la cita reservados en OTRA cita (la reserva se
  * quedó allí al marcar «Llegó»). Aviso que no bloquea, con «Traer a esta
- * cita» por tratamiento; nada si no hay.
+ * cita» por tratamiento; nada si no hay. DX-293: si la tiene otra cita de
+ * hoy con el paciente en la clínica, sin botón: el texto dice dónde está.
  */
 function ReservedElsewhereNotice({ item, runner }: { item: InClinicItem; runner: PatientFlowRunner }) {
   const reserved = item.planItemsReservedElsewhere ?? [];
@@ -330,16 +332,18 @@ function ReservedElsewhereNotice({ item, runner }: { item: InClinicItem; runner:
       {reserved.map((r) => {
         const label = reservedItemLabel(r);
         const busy = runner.claimingKey === claimKey(item.appointmentId, r.planItemId);
+        const claimable = canClaimReserved(r);
+        const Icon = claimable ? CalendarClock : Armchair;
         return (
           <div key={r.planItemId} className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex min-w-0 items-start gap-2">
-              <CalendarClock aria-hidden className="mt-0.5 size-4 shrink-0 text-warning" />
+              <Icon aria-hidden className="mt-0.5 size-4 shrink-0 text-warning" />
               <div className="min-w-0">
                 <p className="text-sm font-medium break-words">{label}</p>
                 <p className="text-xs break-words">{reservedElsewhereMessage(r)}</p>
               </div>
             </div>
-            {runner.claim ? (
+            {runner.claim && claimable ? (
               <Button
                 type="button"
                 size="sm"
