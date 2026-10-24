@@ -9,10 +9,17 @@ export interface SortState {
   direction: SortDirection;
 }
 
+/** Tope de la ocupación (BE-042): la API ya lo aplica; la pantalla no lo pasa nunca. */
+const MAX_OCCUPANCY = 100;
+
 /** Un indicador como lista de valores (uno por moneda, o uno solo). */
-export function metricValues(row: ComparisonRow, key: KpiKey): (Metric & { currency?: string })[] {
+export function metricValues(row: ComparisonRow, key: KpiKey): (Metric & Partial<CurrencyMetric>)[] {
   const value: Metric | CurrencyMetric[] = row.metrics[key];
-  return Array.isArray(value) ? value : [value];
+  if (Array.isArray(value)) return value;
+  if (key === 'occupancy' && value.value !== null && value.value > MAX_OCCUPANCY) {
+    return [{ ...value, value: MAX_OCCUPANCY }];
+  }
+  return [value];
 }
 
 /**

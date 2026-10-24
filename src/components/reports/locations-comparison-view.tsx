@@ -52,6 +52,10 @@ export const locationsComparisonCopy = {
   comparedWith: (from: string, to: string) => `comparado con ${from} – ${to}`,
   legend:
     'Verde: mejora · rojo: empeora frente al período comparado. La flecha dice si el valor subió o bajó. En los porcentajes, la variación va en puntos (p.p.).',
+  // BE-045: una línea junto a la tabla cuando el período comparado no tiene
+  // toda su producción atribuida a una sede.
+  unattributedNote:
+    '«Producción» y «% de cobro» no se comparan donde dice «Sin comparar»: el período comparado tiene procedimientos realizados antes de registrar su sede («Sin atribuir») o cobros sin producción.',
   tableLabel: 'Indicadores por sede y total de la clínica',
   cardsLabel: 'Indicadores por sede',
   location: 'Sede',
@@ -71,6 +75,22 @@ export const locationsComparisonCopy = {
 };
 
 const COMPARE_MODES: CompareMode[] = ['previous', 'previous_year', 'none'];
+
+/** Indicadores que dependen de la producción atribuida (BE-045). */
+const ATTRIBUTION_SENSITIVE: ReadonlySet<string> = new Set(['production', 'collectionRate']);
+
+/**
+ * «*» junto a «Producción» y «% de cobro» cuando llega la bandera (BE-045). Es
+ * solo visual: el aviso (`role="note"`) y cada celda «Sin comparar» lo dicen en
+ * texto.
+ */
+function UnattributedMark() {
+  return (
+    <span aria-hidden data-testid="unattributed-mark" className="font-semibold text-warning">
+      *
+    </span>
+  );
+}
 
 type SortOption = { value: string; label: string; sort: SortState | null };
 
@@ -218,6 +238,8 @@ export function LocationsComparisonView({ token }: { token: string }) {
 
   const showLoading = !invalidPeriod && (loading || !filters);
   const compared = Boolean(data && data.compare !== 'none');
+  const unattributed = compared && Boolean(data?.previousPeriodUnattributed);
+  const marked = (key: string) => unattributed && ATTRIBUTION_SENSITIVE.has(key);
   const kpis = data?.kpis ?? [];
   const rows = data ? sortRows(data, sort) : [];
   const sortOptions: SortOption[] = [
@@ -352,6 +374,17 @@ export function LocationsComparisonView({ token }: { token: string }) {
           {data ? (
             <>
               {compared ? <p className="text-xs text-muted">{locationsComparisonCopy.legend}</p> : null}
+              {unattributed ? (
+                <p
+                  role="note"
+                  className="flex max-w-[80ch] items-start gap-1.5 self-start rounded-lg border border-warning/30 bg-warning/10 px-3 py-2 text-sm text-warning"
+                >
+                  <span aria-hidden className="font-semibold">
+                    *
+                  </span>
+                  <span>{locationsComparisonCopy.unattributedNote}</span>
+                </p>
+              ) : null}
 
               {/* Escritorio: una tabla con cabeceras ordenables. */}
               <Card className="overflow-hidden p-0 max-sm:hidden">
@@ -383,6 +416,7 @@ export function LocationsComparisonView({ token }: { token: string }) {
                               className="t-label inline-flex min-h-8 items-center gap-1 rounded text-right text-muted hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
                             >
                               {k.label}
+                              {marked(k.key) ? <UnattributedMark /> : null}
                               <SortIcon sort={sort} column={k.key as KpiKey} />
                             </button>
                             <HowCalculated column={k.label} text={k.howItIsCalculated} />
@@ -465,7 +499,10 @@ export function LocationsComparisonView({ token }: { token: string }) {
                         {kpis.map((k) => (
                           <div key={k.key} className="min-w-0">
                             <dt className="t-label flex items-center gap-0.5 text-muted">
-                              <span className="min-w-0">{k.label}</span>
+                              <span className="min-w-0">
+                                {k.label}
+                                {marked(k.key) ? <UnattributedMark /> : null}
+                              </span>
                               <HowCalculated column={k.label} text={k.howItIsCalculated} />
                             </dt>
                             <dd className="mt-1">
