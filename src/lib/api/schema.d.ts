@@ -5250,6 +5250,8 @@ export interface components {
             validTo: string | null;
             isPrimary: boolean;
             notes: string | null;
+            /** @description Copiada de la aseguradora en texto libre de la ficha (DX-153); la API no la crea. SEC-047: habilita a cualquier rol a asignar un convenio de pagador OTRO. */
+            migratedFromInsurerEps: boolean;
             /**
              * @description Calculado a hoy en la zona de la sede.
              * @enum {string}
@@ -8152,10 +8154,16 @@ export interface components {
             gross: number;
             /** @description Suma de su descuento efectivo: rebajas de precio frente al catálogo + descuentos (SEC-041) */
             discount: number;
-            /** @description SEC-047: suma de las rebajas de convenio de esos ítems (precio de catálogo − precio del convenio). Va aparte: no suma en `discount` ni en el bruto */
-            agreementReduction: number;
             /** @description Descuento sobre el bruto, en % (2 decimales) */
             percentOfGross: number;
+        };
+        AgreementReductionTotalDto: {
+            /** @example COP */
+            currency: string;
+            /** @description Líneas con rebaja de convenio en esta moneda */
+            items: number;
+            /** @description Suma de las rebajas de convenio (precio de catálogo − precio del convenio) */
+            reduction: number;
         };
         DiscountReportItemDto: {
             /** Format: uuid */
@@ -8248,9 +8256,11 @@ export interface components {
             scope: components["schemas"]["DiscountReportScopeDto"];
             /** @description Por moneda, sin convertir */
             totals: components["schemas"]["DiscountReportTotalDto"][];
+            /** @description SEC-047: rebajas de convenio por moneda. Van aparte: `totals` solo cuenta los descuentos (como en DX-204) */
+            agreementTotals: components["schemas"]["AgreementReductionTotalDto"][];
             /** @description Página de ítems, más recientes primero */
             items: components["schemas"]["DiscountReportItemDto"][];
-            /** @description Ítems del periodo (todas las páginas) */
+            /** @description Líneas del periodo (todas las páginas): descuentos y rebajas de convenio */
             total: number;
             page: number;
             pageSize: number;
