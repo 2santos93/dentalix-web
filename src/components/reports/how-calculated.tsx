@@ -12,10 +12,13 @@ const GUTTER = 8;
 /**
  * «Cómo se calcula» de una columna (DX-014): un botón con icono que enseña la
  * definición del indicador al pasar el ratón, al enfocarlo con el teclado o al
- * tocarlo (el toque ya la abre con el foco: el clic no la alterna, o se
- * cerraría en el mismo toque; se cierra al salir o con Escape), y la anuncia como su descripción (`aria-describedby`, también
- * oculta). Escape la cierra. La burbuja va en `position: fixed` junto al botón
- * —la tabla recorta lo que se sale de su marco—, sin salirse de la ventana.
+ * tocarlo, y la anuncia como su descripción (`aria-describedby`, también
+ * oculta). Escape la cierra. Pasar por encima y salir solo cuentan con
+ * ratón: al levantar el dedo el navegador emite «salir» del puntero (y un
+ * mouseleave de compatibilidad) y la cerraba en el mismo toque. El clic abre,
+ * no alterna, por lo mismo; con el dedo se cierra al tocar fuera (blur). La
+ * burbuja va en `position: fixed` junto al botón —la tabla recorta lo que se
+ * sale de su marco—, sin salirse de la ventana.
  */
 export function HowCalculated({ column, text }: { column: string; text: string }) {
   const id = React.useId();
@@ -47,8 +50,12 @@ export function HowCalculated({ column, text }: { column: string; text: string }
         type="button"
         aria-label={copy.label(column)}
         aria-describedby={id}
-        onMouseEnter={show}
-        onMouseLeave={hide}
+        onPointerEnter={(event) => {
+          if (event.pointerType === 'mouse') show();
+        }}
+        onPointerLeave={(event) => {
+          if (event.pointerType === 'mouse') hide();
+        }}
         onFocus={show}
         onBlur={hide}
         onClick={show}

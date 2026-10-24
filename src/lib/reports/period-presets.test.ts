@@ -1,7 +1,15 @@
-import { PERIOD_PRESETS, periodFor } from './period-presets';
+import { isValidPeriod, MAX_PERIOD_DAYS, PERIOD_PRESETS, periodFor } from './period-presets';
 
 describe('periodos de «Comparar sedes» (DX-014)', () => {
   const today = '2026-10-24';
+
+  it('un período personalizado vale con «Desde» ≤ «Hasta» y hasta 366 días, como en la API', () => {
+    expect(MAX_PERIOD_DAYS).toBe(366);
+    expect(isValidPeriod({ from: '2026-10-01', to: '2026-10-01' })).toBe(true);
+    expect(isValidPeriod({ from: '2025-10-31', to: '2026-10-31' })).toBe(true);
+    expect(isValidPeriod({ from: '2025-10-30', to: '2026-10-31' })).toBe(false);
+    expect(isValidPeriod({ from: '2026-10-02', to: '2026-10-01' })).toBe(false);
+  });
 
   it('ofrece los cinco atajos en orden', () => {
     expect(PERIOD_PRESETS.map((p) => p.key)).toEqual([

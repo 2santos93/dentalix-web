@@ -14,6 +14,17 @@ export interface CivilPeriod {
   to: string;
 }
 
+/** Como `LOCATIONS_COMPARISON_MAX_DAYS` en la API: un año, bisiesto incluido. */
+export const MAX_PERIOD_DAYS = 366;
+
+const DAY_MS = 86_400_000;
+
+/** ¿«Desde» ≤ «Hasta» y caben como mucho 366 días (ambos incluidos)? */
+export function isValidPeriod({ from, to }: CivilPeriod): boolean {
+  const days = (Date.parse(`${to}T00:00:00Z`) - Date.parse(`${from}T00:00:00Z`)) / DAY_MS + 1;
+  return days >= 1 && days <= MAX_PERIOD_DAYS;
+}
+
 function iso(y: number, m: number, d: number): string {
   return new Date(Date.UTC(y, m, d)).toISOString().slice(0, 10);
 }

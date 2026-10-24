@@ -7,7 +7,7 @@ import { apiErrorMessage } from '@/lib/api/error-message';
 import { formatCivilDate } from '@/lib/format/date';
 import { sedeToday, useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
 import { saveCsv } from '@/lib/patient-imports/patient-imports-api';
-import { PERIOD_PRESETS, periodFor, type PeriodPresetKey } from '@/lib/reports/period-presets';
+import { isValidPeriod, PERIOD_PRESETS, periodFor, type PeriodPresetKey } from '@/lib/reports/period-presets';
 import { metricValues, nextSort, sortRows, type SortKey, type SortState } from '@/lib/reports/comparison-table';
 import {
   downloadLocationsComparisonCsv,
@@ -19,6 +19,7 @@ import {
   type LocationsComparison,
   type LocationsComparisonFilters,
 } from '@/lib/reports/reports-api';
+import { InlineError } from '@/components/errors/inline-error';
 import { notifyError } from '@/components/errors/notify';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -152,10 +153,14 @@ export function LocationsComparisonView({ token }: { token: string }) {
   const [reloadKey, setReloadKey] = useState(0);
   const [exporting, setExporting] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const periodErrorId = React.useId();
 
   const presetPeriod = today ? periodFor(preset, today) : null;
   const period = preset === 'custom' ? (custom ?? (today ? periodFor('this_month', today) : null)) : presetPeriod;
-  const filters: LocationsComparisonFilters | null = period ? { ...period, compare } : null;
+  // Un personalizado inválido se dice junto a las fechas (escalón 4), sin pedir
+  // a la API un 400 que solo podría «Reintentarse» igual.
+  const invalidPeriod = preset === 'custom' && period !== null && !isValidPeriod(period);
+  const filters: LocationsComparisonFilters | null = period && !invalidPeriod ? { ...period, compare } : null;
   const filterKey = filters ? JSON.stringify(filters) : null;
 
   useEffect(() => {
@@ -211,7 +216,7 @@ export function LocationsComparisonView({ token }: { token: string }) {
     setPreset(next);
   }
 
-  const showLoading = loading || !filters;
+  const showLoading = !invalidPeriod && (loading || !filters);
   const compared = Boolean(data && data.compare !== 'none');
   const kpis = data?.kpis ?? [];
   const rows = data ? sortRows(data, sort) : [];
@@ -272,6 +277,8 @@ export function LocationsComparisonView({ token }: { token: string }) {
                     if (e.target.value) setCustom({ from: e.target.value, to: period.to });
                   }}
                   className="tabular-nums sm:w-44"
+                  aria-invalid={invalidPeriod || undefined}
+                  aria-describedby={invalidPeriod ? periodErrorId : undefined}
                 />
               </label>
               <label className="flex min-w-0 flex-col gap-1 text-sm text-muted">
@@ -284,6 +291,8 @@ export function LocationsComparisonView({ token }: { token: string }) {
                     if (e.target.value) setCustom({ from: period.from, to: e.target.value });
                   }}
                   className="tabular-nums sm:w-44"
+                  aria-invalid={invalidPeriod || undefined}
+                  aria-describedby={invalidPeriod ? periodErrorId : undefined}
                 />
               </label>
             </>
@@ -307,7 +316,7 @@ export function LocationsComparisonView({ token }: { token: string }) {
         <Button
           type="button"
           onClick={() => void exportCsv()}
-          disabled={exporting || showLoading || Boolean(loadError)}
+          disabled={exporting || showLoading || invalidPeriod || Boolean(loadError)}
           className="shrink-0"
         >
           <Download aria-hidden />
@@ -319,7 +328,9 @@ export function LocationsComparisonView({ token }: { token: string }) {
         {notice}
       </p>
 
-      {data && !showLoading && !loadError ? (
+      {invalidPeriod ? <InlineError id={periodErrorId}>{locationsComparisonCopy.badRequest}</InlineError> : null}
+
+      {data && !invalidPeriod && !showLoading && !loadError ? (
         <p className="text-sm text-muted tabular-nums">
           {locationsComparisonCopy.periodLine(formatCivilDate(data.from), formatCivilDate(data.to))}
           {data.previousFrom && data.previousTo
@@ -328,147 +339,149 @@ export function LocationsComparisonView({ token }: { token: string }) {
         </p>
       ) : null}
 
-      <AsyncSection
-        loading={showLoading}
-        error={loadError}
-        onRetry={() => setReloadKey((k) => k + 1)}
-        isEmpty={!data?.hasActivity}
-        emptyTitle={locationsComparisonCopy.empty}
-        emptyDescription={locationsComparisonCopy.emptyHint}
-        skeleton={<ComparisonSkeleton />}
-      >
-        {data ? (
-          <>
-            {compared ? <p className="text-xs text-muted">{locationsComparisonCopy.legend}</p> : null}
+      {invalidPeriod ? null : (
+        <AsyncSection
+          loading={showLoading}
+          error={loadError}
+          onRetry={() => setReloadKey((k) => k + 1)}
+          isEmpty={!data?.hasActivity}
+          emptyTitle={locationsComparisonCopy.empty}
+          emptyDescription={locationsComparisonCopy.emptyHint}
+          skeleton={<ComparisonSkeleton />}
+        >
+          {data ? (
+            <>
+              {compared ? <p className="text-xs text-muted">{locationsComparisonCopy.legend}</p> : null}
 
-            {/* Escritorio: una tabla con cabeceras ordenables. */}
-            <Card className="overflow-hidden p-0 max-sm:hidden">
-              <Table aria-label={locationsComparisonCopy.tableLabel}>
-                <caption className="sr-only">{locationsComparisonCopy.tableLabel}</caption>
-                <thead>
-                  <tr className="border-b border-border">
-                    <th scope="col" aria-sort={ariaSort(sort, 'name')} className="px-4 py-2 text-left align-bottom">
-                      <button
-                        type="button"
-                        onClick={() => setSort((s) => nextSort(s, 'name'))}
-                        className="t-label inline-flex min-h-8 items-center gap-1 rounded text-muted hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-                      >
-                        {locationsComparisonCopy.location}
-                        <SortIcon sort={sort} column="name" />
-                      </button>
-                    </th>
-                    {kpis.map((k) => (
-                      <th
-                        key={k.key}
-                        scope="col"
-                        aria-sort={ariaSort(sort, k.key as KpiKey)}
-                        className="px-3 py-2 text-right align-bottom"
-                      >
-                        <span className="inline-flex items-center justify-end gap-0.5">
-                          <button
-                            type="button"
-                            onClick={() => setSort((s) => nextSort(s, k.key as KpiKey))}
-                            className="t-label inline-flex min-h-8 items-center gap-1 rounded text-right text-muted hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
-                          >
-                            {k.label}
-                            <SortIcon sort={sort} column={k.key as KpiKey} />
-                          </button>
-                          <HowCalculated column={k.label} text={k.howItIsCalculated} />
-                        </span>
+              {/* Escritorio: una tabla con cabeceras ordenables. */}
+              <Card className="overflow-hidden p-0 max-sm:hidden">
+                <Table aria-label={locationsComparisonCopy.tableLabel}>
+                  <caption className="sr-only">{locationsComparisonCopy.tableLabel}</caption>
+                  <thead>
+                    <tr className="border-b border-border">
+                      <th scope="col" aria-sort={ariaSort(sort, 'name')} className="px-4 py-2 text-left align-bottom">
+                        <button
+                          type="button"
+                          onClick={() => setSort((s) => nextSort(s, 'name'))}
+                          className="t-label inline-flex min-h-8 items-center gap-1 rounded text-muted hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                        >
+                          {locationsComparisonCopy.location}
+                          <SortIcon sort={sort} column="name" />
+                        </button>
                       </th>
-                    ))}
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-hairline">
-                  {rows.map((row) => (
-                    <tr key={row.locationId} data-testid="comparison-row" className="align-top hover:bg-bg">
-                      <th scope="row" className="px-4 py-3 text-left font-medium text-ink">
-                        {row.name}
-                        {!row.isActive ? (
-                          <span className="block text-xs font-normal text-muted">
-                            {locationsComparisonCopy.inactive}
+                      {kpis.map((k) => (
+                        <th
+                          key={k.key}
+                          scope="col"
+                          aria-sort={ariaSort(sort, k.key as KpiKey)}
+                          className="px-3 py-2 text-right align-bottom"
+                        >
+                          <span className="inline-flex items-center justify-end gap-0.5">
+                            <button
+                              type="button"
+                              onClick={() => setSort((s) => nextSort(s, k.key as KpiKey))}
+                              className="t-label inline-flex min-h-8 items-center gap-1 rounded text-right text-muted hover:text-ink focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-primary"
+                            >
+                              {k.label}
+                              <SortIcon sort={sort} column={k.key as KpiKey} />
+                            </button>
+                            <HowCalculated column={k.label} text={k.howItIsCalculated} />
                           </span>
-                        ) : null}
+                        </th>
+                      ))}
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-hairline">
+                    {rows.map((row) => (
+                      <tr key={row.locationId} data-testid="comparison-row" className="align-top hover:bg-bg">
+                        <th scope="row" className="px-4 py-3 text-left font-medium text-ink">
+                          {row.name}
+                          {!row.isActive ? (
+                            <span className="block text-xs font-normal text-muted">
+                              {locationsComparisonCopy.inactive}
+                            </span>
+                          ) : null}
+                        </th>
+                        {kpis.map((k) => (
+                          <td key={k.key} className="px-3 py-3 text-right">
+                            <MetricCell def={k} row={row} compare={compared} />
+                          </td>
+                        ))}
+                      </tr>
+                    ))}
+                  </tbody>
+                  <tfoot className="border-t border-border bg-bg">
+                    <tr data-testid="comparison-total" className="align-top">
+                      <th scope="row" className="px-4 py-3 text-left font-semibold text-ink">
+                        {data.total.name}
                       </th>
                       {kpis.map((k) => (
                         <td key={k.key} className="px-3 py-3 text-right">
-                          <MetricCell def={k} row={row} compare={compared} />
+                          <MetricCell def={k} row={data.total} compare={compared} />
                         </td>
                       ))}
                     </tr>
-                  ))}
-                </tbody>
-                <tfoot className="border-t border-border bg-bg">
-                  <tr data-testid="comparison-total" className="align-top">
-                    <th scope="row" className="px-4 py-3 text-left font-semibold text-ink">
-                      {data.total.name}
-                    </th>
-                    {kpis.map((k) => (
-                      <td key={k.key} className="px-3 py-3 text-right">
-                        <MetricCell def={k} row={data.total} compare={compared} />
-                      </td>
-                    ))}
-                  </tr>
-                </tfoot>
-              </Table>
-            </Card>
+                  </tfoot>
+                </Table>
+              </Card>
 
-            {/* Móvil: una tarjeta por sede (y el total al final), sin scroll lateral. */}
-            <div className="flex flex-col gap-3 sm:hidden">
-              <label className="flex min-w-0 flex-col gap-1 text-sm text-muted">
-                {locationsComparisonCopy.sortBy}
-                <select
-                  aria-label={locationsComparisonCopy.sortBy}
-                  value={sort?.key ?? ''}
-                  onChange={(e) => {
-                    const option = sortOptions.find((o) => o.value === e.target.value);
-                    if (option) setSort(option.sort);
-                  }}
-                  className={toolbarFieldClass}
-                >
-                  {sortOptions.map((o) => (
-                    <option key={o.value} value={o.value}>
-                      {o.label}
-                    </option>
-                  ))}
-                </select>
-              </label>
-              <ul aria-label={locationsComparisonCopy.cardsLabel} className="flex flex-col gap-3">
-                {[...rows, data.total].map((row) => (
-                  <li
-                    key={row.locationId ?? 'total'}
-                    data-testid={row.locationId ? 'comparison-card' : 'comparison-total-card'}
-                    className={cn(
-                      'rounded-xl border border-border p-4',
-                      row.locationId ? 'bg-surface' : 'bg-bg',
-                    )}
+              {/* Móvil: una tarjeta por sede (y el total al final), sin scroll lateral. */}
+              <div className="flex flex-col gap-3 sm:hidden">
+                <label className="flex min-w-0 flex-col gap-1 text-sm text-muted">
+                  {locationsComparisonCopy.sortBy}
+                  <select
+                    aria-label={locationsComparisonCopy.sortBy}
+                    value={sort?.key ?? ''}
+                    onChange={(e) => {
+                      const option = sortOptions.find((o) => o.value === e.target.value);
+                      if (option) setSort(option.sort);
+                    }}
+                    className={toolbarFieldClass}
                   >
-                    <h2 className="t-title text-ink">
-                      {row.name}
-                      {!row.isActive ? (
-                        <span className="ml-2 text-xs font-normal text-muted">{locationsComparisonCopy.inactive}</span>
-                      ) : null}
-                    </h2>
-                    <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3">
-                      {kpis.map((k) => (
-                        <div key={k.key} className="min-w-0">
-                          <dt className="t-label flex items-center gap-0.5 text-muted">
-                            <span className="min-w-0">{k.label}</span>
-                            <HowCalculated column={k.label} text={k.howItIsCalculated} />
-                          </dt>
-                          <dd className="mt-1">
-                            <MobileMetric def={k} row={row} compare={compared} />
-                          </dd>
-                        </div>
-                      ))}
-                    </dl>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          </>
-        ) : null}
-      </AsyncSection>
+                    {sortOptions.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <ul aria-label={locationsComparisonCopy.cardsLabel} className="flex flex-col gap-3">
+                  {[...rows, data.total].map((row) => (
+                    <li
+                      key={row.locationId ?? 'total'}
+                      data-testid={row.locationId ? 'comparison-card' : 'comparison-total-card'}
+                      className={cn(
+                        'rounded-xl border border-border p-4',
+                        row.locationId ? 'bg-surface' : 'bg-bg',
+                      )}
+                    >
+                      <h2 className="t-title text-ink">
+                        {row.name}
+                        {!row.isActive ? (
+                          <span className="ml-2 text-xs font-normal text-muted">{locationsComparisonCopy.inactive}</span>
+                        ) : null}
+                      </h2>
+                      <dl className="mt-3 grid grid-cols-2 gap-x-4 gap-y-3">
+                        {kpis.map((k) => (
+                          <div key={k.key} className="min-w-0">
+                            <dt className="t-label flex items-center gap-0.5 text-muted">
+                              <span className="min-w-0">{k.label}</span>
+                              <HowCalculated column={k.label} text={k.howItIsCalculated} />
+                            </dt>
+                            <dd className="mt-1">
+                              <MobileMetric def={k} row={row} compare={compared} />
+                            </dd>
+                          </div>
+                        ))}
+                      </dl>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </>
+          ) : null}
+        </AsyncSection>
+      )}
     </div>
   );
 }

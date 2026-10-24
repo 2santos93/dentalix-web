@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { LocationsComparisonView } from './locations-comparison-view';
 import {
@@ -186,6 +186,11 @@ describe('LocationsComparisonView (DX-014)', () => {
     await userEvent.click(button);
     const open = () => screen.queryAllByRole('tooltip').find((t) => !t.hidden);
     expect(open()).toHaveTextContent('Definición de No-show %.');
+    // El navegador táctil emite «salir» del puntero (y el mouseleave de
+    // compatibilidad) al levantar el dedo: no debe cerrarla.
+    fireEvent.pointerLeave(button, { pointerType: 'touch' });
+    fireEvent.mouseLeave(button);
+    expect(open()).toHaveTextContent('Definición de No-show %.');
     await userEvent.keyboard('{Escape}');
     expect(open()).toBeUndefined();
   });
@@ -201,6 +206,21 @@ describe('LocationsComparisonView (DX-014)', () => {
     await userEvent.selectOptions(screen.getByLabelText('Período'), 'custom');
     expect(screen.getByLabelText('Desde')).toHaveValue('2026-09-01');
     expect(screen.getByLabelText('Hasta')).toHaveValue('2026-09-30');
+  });
+
+  it('un período personalizado inválido avisa junto a las fechas, sin pedir el reporte ni «Reintentar»', async () => {
+    render(<LocationsComparisonView token="t" />);
+    await screen.findByRole('table');
+    await userEvent.selectOptions(screen.getByLabelText('Período'), 'custom');
+    mockedGet.mockClear();
+    fireEvent.change(screen.getByLabelText('Desde'), { target: { value: '2024-01-01' } });
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'El período no es válido: «Desde» no puede ser posterior a «Hasta» y caben como mucho 366 días.',
+    );
+    expect(screen.queryByRole('button', { name: 'Reintentar' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('table')).not.toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Exportar CSV' })).toBeDisabled();
+    expect(mockedGet).not.toHaveBeenCalled();
   });
 
   it('sin comparación no pinta variaciones', async () => {
