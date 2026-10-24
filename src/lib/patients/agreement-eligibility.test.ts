@@ -6,10 +6,12 @@ const cov = (
   id: string,
   payerId: string,
   status: 'ACTIVE' | 'EXPIRED' | 'NOT_STARTED' = 'ACTIVE',
+  migratedFromInsurerEps = false,
 ) => ({
   id,
   payer: { id: payerId },
   status,
+  migratedFromInsurerEps,
 });
 
 describe('agreementEligibility (SEC-047)', () => {
@@ -43,6 +45,7 @@ describe('agreementEligibility (SEC-047)', () => {
     expect(agreementEligibility({ payer: cortesia }, coverages, 'ADMIN')).toEqual({
       kind: 'optional-coverage',
       coverages: [coverages[0]],
+      notice: agreementEligibilityCopy.reclassify('Cortesía'),
     });
     for (const role of ['DENTIST', 'ASSISTANT', 'RECEPTION', null] as const) {
       expect(agreementEligibility({ payer: cortesia }, coverages, role)).toEqual({
@@ -51,7 +54,21 @@ describe('agreementEligibility (SEC-047)', () => {
       });
     }
     expect(agreementEligibilityCopy.adminOnly).toBe(
-      'Este convenio no es de un pagador externo (cortesía, empleados…): solo un administrador puede asignarlo.',
+      'Este convenio no es de un pagador externo (cortesía, empleados…): solo un administrador puede asignarlo. Si es una aseguradora, pide al administrador que reclasifique el pagador.',
     );
+    expect(agreementEligibilityCopy.reclassify('Cortesía')).toBe(
+      'El pagador «Cortesía» es de tipo «Otro / interno»: solo un administrador puede asignar este convenio. Si es una aseguradora o una empresa, reclasifica el pagador en Ajustes › Pagadores.',
+    );
+  });
+
+  it('M2: una cobertura MIGRADA y vigente del pagador OTRO habilita a cualquier rol', () => {
+    const migrated = cov('c5', cortesia.id, 'ACTIVE', true);
+    const coverages = [cov('c3', cortesia.id), migrated, cov('c6', cortesia.id, 'EXPIRED', true)];
+    for (const role of ['DENTIST', 'ASSISTANT', 'RECEPTION'] as const) {
+      expect(agreementEligibility({ payer: cortesia }, coverages, role)).toEqual({
+        kind: 'needs-coverage',
+        coverages: [migrated],
+      });
+    }
   });
 });

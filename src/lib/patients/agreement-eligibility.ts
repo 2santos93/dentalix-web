@@ -5,25 +5,30 @@ import type { PatientCoverage } from '@/lib/patients/coverages-api';
 // SEC-047: quién puede asignar qué convenio. Es el espejo de la regla de la API
 // (que es la que manda): un convenio de un pagador externo solo se asigna con
 // una cobertura VIGENTE del paciente con ese pagador, sea cual sea el rol; uno
-// interno —pagador de tipo OTRO: cortesía, empleados— solo lo asigna ADMIN.
+// interno —pagador de tipo OTRO: cortesía, empleados— solo lo asigna ADMIN,
+// salvo que el paciente traiga una cobertura MIGRADA de su aseguradora en texto
+// libre (DX-153) de ese pagador: el relleno creó pagadores OTRO para
+// aseguradoras reales y esa cobertura no se puede crear por la API.
 
 export const agreementEligibilityCopy = {
   noLiveCoverage: (payer: string) =>
     `El paciente no tiene una cobertura vigente de «${payer}». Añádela en «Coberturas» y vuelve a asignar el convenio.`,
   adminOnly:
-    'Este convenio no es de un pagador externo (cortesía, empleados…): solo un administrador puede asignarlo.',
+    'Este convenio no es de un pagador externo (cortesía, empleados…): solo un administrador puede asignarlo. Si es una aseguradora, pide al administrador que reclasifique el pagador.',
+  reclassify: (payer: string) =>
+    `El pagador «${payer}» es de tipo «Otro / interno»: solo un administrador puede asignar este convenio. Si es una aseguradora o una empresa, reclasifica el pagador en Ajustes › Pagadores.`,
 };
 
 type PayerType = Agreement['payer']['type'];
-type CoverageLike = Pick<PatientCoverage, 'id' | 'status'> & {
+type CoverageLike = Pick<PatientCoverage, 'id' | 'status' | 'migratedFromInsurerEps'> & {
   payer: Pick<PatientCoverage['payer'], 'id'>;
 };
 
 export type AgreementEligibility<C extends CoverageLike> =
-  /** Pagador externo: hay que elegir una de estas coberturas (al menos una). */
+  /** Hay que elegir una de estas coberturas (al menos una). */
   | { kind: 'needs-coverage'; coverages: C[] }
-  /** Convenio interno y ADMIN: la cobertura es opcional. */
-  | { kind: 'optional-coverage'; coverages: C[] }
+  /** Convenio interno y ADMIN: la cobertura es opcional; `notice`, el aviso de reclasificar. */
+  | { kind: 'optional-coverage'; coverages: C[]; notice: string }
   /** No se puede asignar: `reason` lo explica. */
   | { kind: 'blocked'; reason: string };
 
@@ -39,8 +44,16 @@ export function agreementEligibility<C extends CoverageLike>(
 ): AgreementEligibility<C> {
   const live = coverages.filter((c) => c.payer.id === agreement.payer.id && c.status === 'ACTIVE');
   if (!isExternalPayer(agreement.payer.type)) {
-    return role === 'ADMIN'
-      ? { kind: 'optional-coverage', coverages: live }
+    if (role === 'ADMIN') {
+      return {
+        kind: 'optional-coverage',
+        coverages: live,
+        notice: agreementEligibilityCopy.reclassify(agreement.payer.name),
+      };
+    }
+    const migrated = live.filter((c) => c.migratedFromInsurerEps);
+    return migrated.length > 0
+      ? { kind: 'needs-coverage', coverages: migrated }
       : { kind: 'blocked', reason: agreementEligibilityCopy.adminOnly };
   }
   return live.length > 0

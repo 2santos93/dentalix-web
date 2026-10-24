@@ -258,7 +258,7 @@ describe('AgreementDialog (DX-105)', () => {
         await screen.findByRole('option', { name: /Cortesía socios/ });
         await user.selectOptions(within(dialog).getByLabelText('Convenio'), 'ag9');
         expect(within(dialog).getByRole('alert')).toHaveTextContent(
-          'Este convenio no es de un pagador externo (cortesía, empleados…): solo un administrador puede asignarlo.',
+          'Este convenio no es de un pagador externo (cortesía, empleados…): solo un administrador puede asignarlo. Si es una aseguradora, pide al administrador que reclasifique el pagador.',
         );
         expect(within(dialog).getByRole('button', { name: 'Asignar' })).toBeDisabled();
       },
@@ -281,6 +281,56 @@ describe('AgreementDialog (DX-105)', () => {
           expect.objectContaining({ agreementId: 'ag9', coverageId: null }),
         ),
       );
+    });
+
+    it('M2: con una cobertura migrada del pagador OTRO, un no-ADMIN la elige y asigna', async () => {
+      mockedAgreements.mockResolvedValue([agreementDto('ag9', 'Sura migrada', cortesia)]);
+      mockedCoverages.mockResolvedValue([
+        coverageFor('c7', cortesia, 'Plan migrado', 'ACTIVE', true),
+        coverageFor('c8', cortesia, 'Manual'),
+      ]);
+      mockedAssign.mockResolvedValue(patientAgreement());
+      renderDialog(null, 'RECEPTION');
+      const user = setupUser();
+      const dialog = await screen.findByRole('dialog');
+      await screen.findByRole('option', { name: /Sura migrada/ });
+      await user.selectOptions(within(dialog).getByLabelText('Convenio'), 'ag9');
+      const coverage = within(dialog).getByLabelText('Cobertura del pagador');
+      expect(coverage).toHaveValue('c7');
+      expect(within(coverage).queryByRole('option', { name: /Manual/ })).not.toBeInTheDocument();
+      await user.click(within(dialog).getByRole('button', { name: 'Asignar' }));
+      await waitFor(() =>
+        expect(mockedAssign).toHaveBeenCalledWith(
+          'tok',
+          'p1',
+          expect.objectContaining({ agreementId: 'ag9', coverageId: 'c7' }),
+        ),
+      );
+    });
+
+    it('M2: al ADMIN le avisa de reclasificar un pagador OTRO, sin bloquear', async () => {
+      mockedAgreements.mockResolvedValue([agreementDto('ag9', 'Cortesía socios', cortesia)]);
+      renderDialog(null, 'ADMIN');
+      const user = setupUser();
+      const dialog = await screen.findByRole('dialog');
+      await screen.findByRole('option', { name: /Cortesía socios/ });
+      await user.selectOptions(within(dialog).getByLabelText('Convenio'), 'ag9');
+      expect(
+        within(dialog).getByText(
+          'El pagador «Cortesía» es de tipo «Otro / interno»: solo un administrador puede asignar este convenio. Si es una aseguradora o una empresa, reclasifica el pagador en Ajustes › Pagadores.',
+        ),
+      ).toBeInTheDocument();
+      expect(within(dialog).queryByRole('alert')).not.toBeInTheDocument();
+      expect(within(dialog).getByRole('button', { name: 'Asignar' })).toBeEnabled();
+    });
+
+    it('B4: mientras cargan las coberturas no muestra el bloqueo, sino su propio estado de carga', async () => {
+      mockedCoverages.mockReturnValue(new Promise(() => {}));
+      renderDialog(patientAgreement({ coverageId: 'c1' }), 'RECEPTION');
+      const dialog = await screen.findByRole('dialog');
+      expect(within(dialog).getByText('Cargando coberturas…')).toBeInTheDocument();
+      expect(within(dialog).queryByRole('alert')).not.toBeInTheDocument();
+      expect(within(dialog).getByRole('button', { name: /guardar/i })).toBeDisabled();
     });
   });
 });

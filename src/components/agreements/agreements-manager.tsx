@@ -1,7 +1,7 @@
 'use client';
 import * as React from 'react';
 import { useEffect, useRef, useState } from 'react';
-import { Handshake, Lock, Plus } from 'lucide-react';
+import { AlertTriangle, Handshake, Lock, Plus } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import {
   deleteAgreement,
@@ -23,6 +23,20 @@ import { Button } from '@/components/ui/button';
 import { AgreementFormModal } from './agreement-form-modal';
 import { AGREEMENT_KIND_LABELS } from './agreement-labels';
 
+/**
+ * SEC-047: un convenio de pagador OTRO solo lo asigna ADMIN. El relleno de
+ * DX-153 creó pagadores OTRO para aseguradoras reales: aviso para reclasificar.
+ */
+function InternalPayerNote({ agreement }: { agreement: Agreement }) {
+  if (agreement.payer.type !== 'OTRO') return null;
+  return (
+    <span className="mt-1 flex items-start gap-1.5 text-xs text-warning">
+      <AlertTriangle aria-hidden className="mt-0.5 size-3.5 shrink-0" />
+      <span>{copy.internalPayer}</span>
+    </span>
+  );
+}
+
 const copy = {
   newAgreement: 'Nuevo convenio',
   count: (n: number) => (n === 1 ? '1 convenio' : `${n} convenios`),
@@ -33,6 +47,8 @@ const copy = {
   forbiddenTitle: 'Solo administración gestiona los convenios.',
   forbiddenHint: 'El resto del equipo los asigna al paciente desde su ficha.',
   tableLabel: 'Convenios',
+  internalPayer:
+    'Solo un administrador podrá asignarlo. Si es una aseguradora o una empresa, reclasifica el pagador.',
   colName: 'Convenio',
   colKind: 'Tipo',
   colCondition: 'Condición',
@@ -328,6 +344,7 @@ export function AgreementsManager({ token, allowed }: AgreementsManagerProps) {
                 <td className="px-4 py-3">
                   <span className="font-medium">{a.name}</span>
                   <span className="block text-xs text-muted">{a.payer.name}</span>
+                  <InternalPayerNote agreement={a} />
                 </td>
                 <td className="px-4 py-3">{AGREEMENT_KIND_LABELS[a.kind]}</td>
                 <td className="px-4 py-3">{conditionText(a)}</td>
@@ -354,6 +371,7 @@ export function AgreementsManager({ token, allowed }: AgreementsManagerProps) {
               <p className="text-xs text-muted">
                 {a.payer.name} · {AGREEMENT_KIND_LABELS[a.kind]}
               </p>
+              <InternalPayerNote agreement={a} />
               <p>{conditionText(a)}</p>
               <p className="text-xs text-muted">
                 {locationLabel(a)} · {copy.validity(a.validFrom, a.validTo)}

@@ -33,6 +33,7 @@ export const agreementDialogCopy = {
   coverageRequiredHint:
     'Obligatoria: el convenio solo se aplica con una cobertura vigente del paciente con este pagador.',
   coverageMissing: 'Elige la cobertura del paciente con este pagador.',
+  coveragesLoading: 'Cargando coberturas…',
   validFrom: 'Vigente desde',
   validTo: 'Vigente hasta',
   validToHint: 'Déjala vacía si no tiene fecha de fin.',
@@ -141,7 +142,11 @@ export function AgreementDialog({
     });
   }
   const chosen = options.find((o) => o.id === draft.agreementId);
-  const eligibility = chosen ? agreementEligibility(chosen, coverages, role) : null;
+  // Convenios y coberturas llegan juntos: hasta entonces no se decide nada
+  // (B4: ni un bloqueo falso mientras carga).
+  const loading = agreements === null;
+  const eligibility = chosen && !loading ? agreementEligibility(chosen, coverages, role) : null;
+  const notice = eligibility?.kind === 'optional-coverage' ? eligibility.notice : null;
   const coverageOptions =
     eligibility && eligibility.kind !== 'blocked' ? eligibility.coverages : [];
   const blockedReason = eligibility?.kind === 'blocked' ? eligibility.reason : null;
@@ -225,7 +230,7 @@ export function AgreementDialog({
       onSubmit={(e) => void submit(e)}
       submitLabel={editing ? undefined : copy.assign}
       submitting={saving}
-      submitDisabled={blockedReason !== null}
+      submitDisabled={loading || blockedReason !== null}
       error={saveError}
     >
       <FormField htmlFor={agreementId} label={copy.agreement} error={fieldErrors.agreement}>
@@ -249,7 +254,13 @@ export function AgreementDialog({
         </select>
       </FormField>
 
-      {blockedReason ? (
+      {loading ? (
+        <FormField htmlFor={coverageId} label={copy.coverage}>
+          <select id={coverageId} disabled value="" className={cn(fieldClass, 'h-10')}>
+            <option value="">{copy.coveragesLoading}</option>
+          </select>
+        </FormField>
+      ) : blockedReason ? (
         <InlineError id={reasonId} variant="summary">
           {blockedReason}
         </InlineError>
@@ -257,7 +268,7 @@ export function AgreementDialog({
         <FormField
           htmlFor={coverageId}
           label={coverageRequired ? copy.coverageRequired : copy.coverage}
-          hint={coverageRequired ? copy.coverageRequiredHint : copy.coverageHint}
+          hint={notice ?? (coverageRequired ? copy.coverageRequiredHint : copy.coverageHint)}
           error={fieldErrors.coverage}
         >
           <select

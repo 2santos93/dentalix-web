@@ -161,6 +161,22 @@ describe('AgreementsManager (DX-105)', () => {
     expect(mockedCatalog).toHaveBeenCalledWith('tok', { kind: 'PROCEDURE' });
   });
 
+  it('SEC-047: un convenio de pagador OTRO avisa de que solo lo asigna un administrador', async () => {
+    mockedList.mockResolvedValue([
+      porcentaje,
+      { ...porcentaje, id: 'ag-9', name: 'Cortesía socios', payer: { id: 'payer-9', name: 'Cortesía', type: 'OTRO' } },
+    ]);
+    render(<AgreementsManager token="tok" allowed />);
+    const table = await screen.findByRole('table', { name: 'Convenios' });
+    const rows = within(table).getAllByRole('row');
+    const warning =
+      'Solo un administrador podrá asignarlo. Si es una aseguradora o una empresa, reclasifica el pagador.';
+    expect(rows[1]).not.toHaveTextContent(warning);
+    expect(rows[2]).toHaveTextContent(warning);
+    const list = screen.getByRole('list', { name: 'Convenios' });
+    expect(within(list).getByText(warning)).toBeInTheDocument();
+  });
+
   it('vacío: enseña qué hacer', async () => {
     mockedList.mockResolvedValue([]);
     render(<AgreementsManager token="tok" allowed />);
