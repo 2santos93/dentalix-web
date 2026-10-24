@@ -156,6 +156,24 @@ describe('ClinicalEntriesList', () => {
     expect(screen.getAllByText('Primera visita')).toHaveLength(2);
   });
 
+  // DX-318: sin indicador de preparación por evolución (ni su chip ni su
+  // petición): toda la API está simulada, así que cualquier fetch sobra.
+  it('DX-318: la ficha no muestra chips de estado ni hace peticiones propias', async () => {
+    const fetchSpy = jest.fn<Promise<Response>, Parameters<typeof fetch>>(() => new Promise(() => {}));
+    const realFetch = global.fetch;
+    global.fetch = fetchSpy as unknown as typeof fetch;
+    try {
+      mockedList.mockResolvedValue(entries);
+      render(<ClinicalEntriesList token="tok" patientId="p1" />);
+      expect(await screen.findAllByText('Todo en orden')).toHaveLength(2);
+      expect(screen.queryByRole('status')).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /faltan|listo/i })).not.toBeInTheDocument();
+      expect(fetchSpy).not.toHaveBeenCalled();
+    } finally {
+      global.fetch = realFetch;
+    }
+  });
+
   it('«Nueva evolución» abre el formulario en un modal con sus etiquetas', async () => {
     mockedList.mockResolvedValue([]);
     const user = userEvent.setup();

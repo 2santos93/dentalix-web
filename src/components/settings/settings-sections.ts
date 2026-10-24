@@ -75,8 +75,7 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     id: 'clinica',
     title: 'Clínica y sedes',
     entries: [
-      // DX-212: datos legales de las sedes (código REPS). El chip «RDA» de la
-      // ficha enlaza aquí.
+      // DX-212: datos legales de las sedes (código REPS).
       {
         href: '/settings/sedes',
         label: 'Sedes',

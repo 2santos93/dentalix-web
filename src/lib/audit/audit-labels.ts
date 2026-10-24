@@ -81,7 +81,7 @@ export const AUDIT_RESOURCE_LABELS: Record<AuditResourceType, string> = {
   // DX-210: oferta de un hueco libre a un candidato.
   WAITLIST_OFFER: 'Oferta de hueco',
   CASH_SESSION: 'Caja por turno',
-  // DX-212: código CUPS de un ítem del catálogo y REPS de una sede.
+  // DX-212: ítems del catálogo y sedes (código REPS incluido).
   DENTAL_CATALOG_ITEM: 'Ítem del catálogo',
   LOCATION: 'Sede',
   // DX-107: lote de importación de pacientes (validar, confirmar, deshacer, informe).

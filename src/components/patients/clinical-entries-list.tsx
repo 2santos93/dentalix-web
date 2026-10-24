@@ -9,8 +9,6 @@ import {
   type ClinicalEntryAddendum,
 } from '@/lib/patients/clinical-api';
 import { ClinicalEntryAddendumModal } from '@/components/patients/clinical-entry-addendum-modal';
-import { RdaReadinessChip } from '@/components/patients/rda-readiness-chip';
-import { useRdaReadiness } from '@/lib/rda/use-rda-readiness';
 import { NewEvolutionModal } from '@/components/clinical-notes/new-evolution-modal';
 import { appointmentLine } from '@/lib/clinical-notes/appointment-line';
 import { listStaff, type StaffMember } from '@/lib/staff/staff-api';
@@ -122,20 +120,6 @@ export function ClinicalEntriesList({ token, patientId }: ClinicalEntriesListPro
       cancelled = true;
     };
   }, [token]);
-
-  // DX-212: una comprobación RDA por evolución, compartida por tabla y tarjetas.
-  const entryIds = useMemo(() => entries.map((e) => e.id), [entries]);
-  const rda = useRdaReadiness(token, patientId, entryIds);
-
-  function renderRda(entry: ClinicalEntry) {
-    return (
-      <RdaReadinessChip
-        patientId={patientId}
-        state={rda.stateOf(entry.id)}
-        onRetry={() => rda.retry(entry.id)}
-      />
-    );
-  }
 
   const staffById = useMemo(
     () => new Map(staff.map((member) => [member.userId, member.fullName])),
@@ -316,9 +300,6 @@ export function ClinicalEntriesList({ token, patientId }: ClinicalEntriesListPro
                 {/* Subordinado: es la procedencia del asiento, no su contenido. */}
                 <td className="px-4 py-3 align-top text-muted">
                   <p>{recordLine(entry.performedById, entry.createdAt)}</p>
-                  <div className="mt-2">
-                    {renderRda(entry)}
-                  </div>
                   <div className="mt-2">{renderAddButton(entry)}</div>
                 </td>
               </tr>
@@ -345,7 +326,6 @@ export function ClinicalEntriesList({ token, patientId }: ClinicalEntriesListPro
                 {recordLine(entry.performedById, entry.createdAt)}
               </p>
               <div className="mt-2 flex flex-col items-start gap-2">
-                {renderRda(entry)}
                 {renderAddButton(entry)}
               </div>
             </div>

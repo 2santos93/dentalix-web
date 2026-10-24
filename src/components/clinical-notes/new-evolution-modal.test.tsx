@@ -269,7 +269,7 @@ describe('NewEvolutionModal · diagnósticos CIE-10 (DX-212)', () => {
   it('sin diagnóstico avisa pero deja guardar (sin el campo)', async () => {
     const user = userEvent.setup();
     renderModal();
-    expect(screen.getByText(/RDA: faltan datos/)).toBeInTheDocument();
+    expect(screen.getByText('Opcional: puedes guardar la evolución sin diagnóstico.')).toBeInTheDocument();
     await user.type(screen.getByRole('textbox', { name: 'Texto de la evolución' }), 'Control');
     await user.click(screen.getByRole('button', { name: 'Guardar evolución' }));
     await waitFor(() => expect(mockedCreate).toHaveBeenCalled());

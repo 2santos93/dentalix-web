@@ -13,13 +13,13 @@ const copy = {
   title: 'Sedes',
   // DX-279: la política de cancelación solo la ve ADMIN; al resto no se le anuncia.
   description: (isAdmin: boolean) =>
-    `${isAdmin ? 'Datos legales de cada sede y su política de cancelación.' : 'Datos legales de cada sede.'} El código de habilitación (REPS) lo pide el Resumen Digital de Atención en Colombia.`,
+    isAdmin ? 'Datos legales de cada sede y su política de cancelación.' : 'Datos legales de cada sede.',
   checkingSession: 'Verificando sesión…',
 };
 
 /**
- * DX-212: datos legales de las sedes (código REPS). Todos los roles lo leen
- * (el chip «RDA» de la ficha enlaza aquí); solo ADMIN lo cambia.
+ * DX-212: datos legales de las sedes (código REPS). Todos los roles lo leen;
+ * solo ADMIN lo cambia.
  */
 export default function LocationSettingsPage() {
   const router = useRouter();
