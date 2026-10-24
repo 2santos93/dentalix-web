@@ -176,7 +176,7 @@ test('1440 px: llegó → en sillón → listo para cobrar → completada', asyn
   await openTodayList(page);
   await expect(
     page.getByRole('row').filter({ hasText: `Ana ${last}` }).getByTestId('appointment-status-select'),
-  ).toHaveValue('COMPLETED');
+  ).toHaveText('Completada');
 });
 
 test('390 px: «Deshacer llegada» devuelve la cita a la agenda', async ({ page }) => {
@@ -257,7 +257,7 @@ test('DX-242: prepara ocho estados reales para QA de accesibilidad', async ({req
     qaIds.push(appointment.id);
     const steps = status === 'IN_CHAIR' ? ['ARRIVED','IN_CHAIR'] : status === 'READY_FOR_CHECKOUT' ? ['ARRIVED','IN_CHAIR','READY_FOR_CHECKOUT'] : status === 'SCHEDULED' ? [] : [status];
     for (const step of steps) {
-      const result = await request.patch(`${API_URL}/appointments/${appointment.id}`, {headers:session.headers, data:{status:step}});
+      const result = await request.patch(`${API_URL}/appointments/${appointment.id}`, {headers:session.headers, data:step === 'CANCELLED' ? {status:step, cancelledByKind:'CLINIC', cancelReasonCode:'CLINIC_RESCHEDULE'} : {status:step}});
       expect(result.ok(), await result.text()).toBeTruthy();
     }
   }

@@ -1,18 +1,19 @@
 'use client';
 import type { ReactNode } from 'react';
+import { AttendanceBadge } from '@/components/appointments/attendance-badge';
 import { OverdueChip } from '@/components/collections/overdue-chip';
 import { CoverageChip } from '@/components/patients/coverage-chip';
 import { MedicalAlertIndicator } from '@/components/clinical/medical-alert-indicator';
-import { CalendarDays, ChevronDown, ChevronRight } from 'lucide-react';
+import { CalendarDays, ChevronRight } from 'lucide-react';
 import type { Appointment, AppointmentStatus } from '@/lib/appointments/appointments-api';
 import {
   ConfirmationBadge,
   StatusBadge,
   STATUS_LABELS,
-  STATUS_BADGE_CLASSES,
   formatTimeRange,
   patientLabel,
 } from './appointment-display';
+import { AppointmentStatusSelect } from './appointment-status-select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { SectionError } from '@/components/errors/section-error';
 import { statusOptionsFor } from '@/lib/appointments/patient-flow';
@@ -31,7 +32,7 @@ const copy = {
   colStatus: 'Estado',
   reasonFallback: '—',
   heading: 'Agenda del día',
-  /** `aria-label` for the status <select>, filled in with the row's time range — e.g. "Estado de la cita de 09:00–09:30". */
+  /** Nombre accesible del selector de estado (más el estado actual), filled in with the row's time range — e.g. "Estado de la cita de 09:00–09:30". */
   statusSelectLabel: (timeRange: string) => `Estado de la cita de ${timeRange}`,
   updatingStatus: 'Actualizando…',
   detail: 'Detalle',
@@ -55,12 +56,16 @@ interface DayAgendaProps {
    */
   patientNames?: Record<string, string>;
   /**
-   * When provided, each row renders a status `<select>` (in addition to the
+   * When provided, each row renders a status selector (in addition to the
    * read-only badge) letting the caller change an appointment's status —
    * see `AgendaView.handleStatusChange`. When omitted, rows render the
    * badge only (read-only) — existing callers/tests are unaffected.
    */
-  onStatusChange?: (appointmentId: string, status: AppointmentStatus) => void;
+  onStatusChange?: (
+    appointmentId: string,
+    status: AppointmentStatus,
+    trigger?: HTMLElement | null,
+  ) => void;
   /** The `id` of the appointment currently being updated, if any — disables that row's status select and shows a small "Actualizando…" hint next to it. */
   updatingId?: string | null;
   /**
@@ -102,7 +107,11 @@ function DetailButton({
 interface StatusSelectProps {
   appointment: Appointment;
   timeRange: string;
-  onStatusChange: (appointmentId: string, status: AppointmentStatus) => void;
+  onStatusChange: (
+    appointmentId: string,
+    status: AppointmentStatus,
+    trigger?: HTMLElement | null,
+  ) => void;
   updating: boolean;
   role?: ClinicRole | null;
 }
@@ -110,35 +119,23 @@ interface StatusSelectProps {
 /**
  * Interactive status control for one appointment row — a single colored pill
  * that both SHOWS the current status (tinted with the same semantic token as
- * `StatusBadge`) and lets the user CHANGE it. A native `<select>` under the
- * hood (kept for a11y + `selectOptions` tests), styled `appearance-none` with
- * a chevron so it reads as one status chip instead of a bare dropdown stacked
- * under a badge. Rendered once per row per responsive variant when
- * `onStatusChange` is passed to `DayAgenda`.
+ * `StatusBadge`) and lets the user CHANGE it. DX-295: `AppointmentStatusSelect`
+ * (no un `<select>` nativo), así que las flechas no cambian la cita: solo se
+ * aplica con Enter o con un clic/toque en una opción. Rendered once per row
+ * per responsive variant when `onStatusChange` is passed to `DayAgenda`.
  */
 function StatusSelect({ appointment, timeRange, onStatusChange, updating, role }: StatusSelectProps) {
   return (
     <span className="inline-flex items-center gap-2">
-      <span className="relative inline-flex items-center">
-        <select
-          aria-label={copy.statusSelectLabel(timeRange)}
-          data-testid="appointment-status-select"
-          value={appointment.status}
-          disabled={updating}
-          onChange={(e) => onStatusChange(appointment.id, e.target.value as AppointmentStatus)}
-          className={`cursor-pointer appearance-none rounded-full border py-1 pl-3 pr-7 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface disabled:cursor-not-allowed disabled:opacity-60 ${STATUS_BADGE_CLASSES[appointment.status]}`}
-        >
-          {statusOptionsFor(appointment.status, role).map((status) => (
-            <option key={status} value={status} className="bg-surface font-normal text-ink">
-              {STATUS_LABELS[status]}
-            </option>
-          ))}
-        </select>
-        <ChevronDown
-          aria-hidden
-          className="pointer-events-none absolute right-2 h-3.5 w-3.5 opacity-70"
-        />
-      </span>
+      <AppointmentStatusSelect
+        variant="chip"
+        label={copy.statusSelectLabel(timeRange)}
+        data-testid="appointment-status-select"
+        value={appointment.status}
+        options={statusOptionsFor(appointment.status, role)}
+        disabled={updating}
+        onChange={(status, trigger) => onStatusChange(appointment.id, status, trigger)}
+      />
       {updating && (
         <span role="status" className="text-xs text-muted">
           {copy.updatingStatus}
@@ -262,6 +259,7 @@ export function DayAgenda({
                       <ConfirmationBadge appointment={appointment} />
                       <OverdueChip balance={appointment.balance} />
                       <CoverageChip coverage={appointment.coverage} compact />
+                      <AttendanceBadge counts={appointment.attendance} />
                     </span>
                     {renderActions?.(appointment)}
                   </td>
@@ -327,6 +325,7 @@ export function DayAgenda({
               <ConfirmationBadge appointment={appointment} className="mt-2" />
               <OverdueChip balance={appointment.balance} className="mt-2" />
               <CoverageChip coverage={appointment.coverage} compact className="mt-2" />
+              <AttendanceBadge counts={appointment.attendance} className="mt-2" />
               {renderActions?.(appointment)}
               {(onStatusChange || onSelectAppointment) && (
                 <div className="mt-3 flex items-center justify-between gap-2">

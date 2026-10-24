@@ -5,6 +5,7 @@ import { useAuthStore } from '@/lib/auth/auth-store';
 import { getTokenRole } from '@/lib/auth/token-role';
 import { canManageReminders } from '@/lib/reminders/reminders-api';
 import { PageHeader } from '@/components/shared/page-header';
+import { SETTINGS_BACK } from '@/components/settings/settings-sections';
 import { ReminderSettingsManager } from '@/components/reminders/reminder-settings-manager';
 
 const copy = {
@@ -36,7 +37,7 @@ export default function RemindersSettingsPage() {
 
   return (
     <>
-      <PageHeader title={copy.title} description={copy.description} />
+      <PageHeader back={SETTINGS_BACK} title={copy.title} description={copy.description} />
       <ReminderSettingsManager
         token={accessToken}
         allowed={canManageReminders(getTokenRole(accessToken))}

@@ -7,6 +7,8 @@ import {
   canManagePrescriptionTemplates,
   canUsePrescriptions,
   canVoidPrescription,
+  checkPrescriptionSafety,
+  cimaTechnicalSheetUrl,
   createPrescriptionTemplate,
   deletePrescriptionTemplate,
   getPrescription,
@@ -110,5 +112,22 @@ describe('prescriptions-api', () => {
 
   it('ruta de la vista imprimible', () => {
     expect(prescriptionPrintHref('p 1', 'rx/1')).toBe('/print/patients/p%201/prescriptions/rx%2F1');
+  });
+
+  it('DX-300: previsualiza los avisos con POST …/prescriptions/safety-check', async () => {
+    const spy = mockFetch({ rulesVersion: 'RX_SAFETY_V1', anamnesis: 'PRESENT', hasBlocking: false, alerts: [] });
+    await checkPrescriptionSafety('tok', 'p 1', [{ activeIngredient: 'Ibuprofeno' }]);
+    const { path, method, body } = call(spy);
+    expect(path).toMatch(/\/patients\/p%201\/prescriptions\/safety-check$/);
+    expect(method).toBe('POST');
+    expect(body).toEqual({ items: [{ activeIngredient: 'Ibuprofeno' }] });
+  });
+
+  it('DX-300: enlace a la ficha técnica de la CIMA solo con un nº de registro válido', () => {
+    expect(cimaTechnicalSheetUrl(' 62985 ')).toBe(
+      'https://cima.aemps.es/cima/dochtml/ft/62985/FT_62985.html',
+    );
+    expect(cimaTechnicalSheetUrl('Ana Pérez')).toBeNull();
+    expect(cimaTechnicalSheetUrl('')).toBeNull();
   });
 });

@@ -5,6 +5,7 @@ import { useAuthStore } from '@/lib/auth/auth-store';
 import { getTokenRole } from '@/lib/auth/token-role';
 import { canManageDiscounts } from '@/lib/discounts/discounts-api';
 import { PageHeader } from '@/components/shared/page-header';
+import { SETTINGS_BACK } from '@/components/settings/settings-sections';
 import { DiscountPolicyManager } from '@/components/discounts/discount-policy-manager';
 
 const copy = {
@@ -36,7 +37,7 @@ export default function DiscountSettingsPage() {
 
   return (
     <>
-      <PageHeader title={copy.title} description={copy.description} />
+      <PageHeader back={SETTINGS_BACK} title={copy.title} description={copy.description} />
       <DiscountPolicyManager token={accessToken} allowed={canManageDiscounts(getTokenRole(accessToken))} />
     </>
   );

@@ -32,6 +32,9 @@ const copy = {
   notes: 'Indicaciones generales',
   allergyNote: (detail: string) =>
     `El profesional confirmó la prescripción conociendo la alergia registrada a: ${detail}.`,
+  safetyHeading: 'Avisos de seguridad confirmados',
+  safetyIntro: 'El profesional emitió la receta conociendo estos avisos:',
+  safetyReason: 'Motivo',
   signature: 'Firma del profesional',
   voided: 'RECETA ANULADA',
   voidedDetail: (when: string, who: string, reason: string) =>
@@ -65,6 +68,7 @@ interface PrescriptionDocumentProps {
 export function PrescriptionDocument({ prescription: rx }: PrescriptionDocumentProps) {
   const country = rx.country;
   const voided = rx.status === 'VOIDED';
+  const confirmedAlerts = (rx.safetyAlerts ?? []).filter((a) => a.severity === 'BLOCKING');
 
   return (
     <article className="prescription-print-root relative mx-auto w-full max-w-[210mm] bg-white px-4 py-6 text-[#111827] sm:px-10 sm:py-10 print:max-w-none print:p-0">
@@ -187,7 +191,30 @@ export function PrescriptionDocument({ prescription: rx }: PrescriptionDocumentP
             <span className="text-[#4b5563]">{copy.notes}:</span> {rx.notes}
           </p>
         ) : null}
-        {rx.allergyOverride ? (
+        {/* DX-300: avisos bloqueantes confirmados y su motivo (sellados en el hash). */}
+        {confirmedAlerts.length > 0 ? (
+          <section
+            aria-label={copy.safetyHeading}
+            className="mt-3 break-inside-avoid rounded border border-[#f59e0b] p-3 text-xs text-[#92400e]"
+          >
+            <h3 className="font-semibold">{copy.safetyHeading}</h3>
+            <p className="mt-1">{copy.safetyIntro}</p>
+            <ul className="mt-1 list-disc pl-4">
+              {confirmedAlerts.map((alert, i) => (
+                <li key={`${alert.code}-${i}`} className="break-words">
+                  {alert.message}
+                </li>
+              ))}
+            </ul>
+            {rx.safetyOverrideReason ? (
+              <p className="mt-1 break-words">
+                <span className="font-semibold">{copy.safetyReason}:</span> {rx.safetyOverrideReason}
+              </p>
+            ) : null}
+          </section>
+        ) : null}
+        {/* Recetas anteriores a DX-300: la nota de alergia de DX-013. */}
+        {rx.allergyOverride && rx.safetyAlerts === null ? (
           <p className="mt-2 text-xs text-[#92400e]">
             {copy.allergyNote(
               rx.allergyMatches.map((m) => `${m.allergen} (${m.activeIngredient})`).join(', '),

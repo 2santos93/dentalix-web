@@ -1,4 +1,5 @@
 import {
+  canClaimReserved,
   canExitCompleted,
   completedExitSummary,
   reservedAt,
@@ -11,6 +12,7 @@ const item = {
   planItemId: 'i1',
   name: 'Implante',
   toothNumber: '36',
+  heldInClinic: false,
   appointmentId: 'a2',
   start: '2026-10-30T14:00:00.000Z',
   locationId: 'l1',
@@ -58,5 +60,42 @@ describe('plan-item-reservations (DX-273)', () => {
       'Visita 2: ahora se puede agendar desde hoy: ya no queda ninguna cita completada de la visita anterior.',
       'Visita 3: ahora se puede agendar desde el 10/02/2027 (última cita que sigue completada).',
     ]);
+  });
+});
+
+describe('plan-item-reservations: titular de hoy en la clínica (DX-293)', () => {
+  const held = { ...item, heldInClinic: true, start: '2026-10-24T14:05:00.000Z' };
+  const hidden = {
+    ...item,
+    heldInClinic: true,
+    appointmentId: null,
+    start: null,
+    locationId: null,
+    locationName: null,
+    timeZone: null,
+  };
+
+  it('dice la hora (en la zona de su sede) y la sede, con el paciente en la clínica', () => {
+    expect(reservedElsewhereMessage(held)).toBe(
+      'Reservado en la cita de hoy a las 09:05 (Sede Norte), con el paciente en la clínica.',
+    );
+    expect(reservedElsewhereMessage({ ...held, timeZone: 'Europe/Madrid' })).toBe(
+      'Reservado en la cita de hoy a las 16:05 (Sede Norte), con el paciente en la clínica.',
+    );
+  });
+
+  it('sede no permitida: texto genérico, sin hora ni sede (DX-089)', () => {
+    const text = reservedElsewhereMessage(hidden);
+    expect(text).toBe('Reservado en otra cita de hoy, con el paciente en la clínica.');
+    expect(text).not.toMatch(/\d/);
+    expect(text).not.toMatch(/Sede/);
+  });
+
+  it('«Traer a esta cita» solo si la titular no es de hoy con el paciente en la clínica', () => {
+    expect(canClaimReserved(item)).toBe(true);
+    // Olvidada de un día anterior: la API dice heldInClinic false.
+    expect(canClaimReserved({ ...item, start: '2026-10-20T14:00:00.000Z' })).toBe(true);
+    expect(canClaimReserved(held)).toBe(false);
+    expect(canClaimReserved(hidden)).toBe(false);
   });
 });

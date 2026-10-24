@@ -321,3 +321,52 @@ describe('PatientRecordHeader: alertas sin comprobar (DX-247)', () => {
     expect(onRetry).toHaveBeenCalled();
   });
 });
+
+describe('PatientRecordHeader: insignia de asistencia (DX-279)', () => {
+  const summary = (noShows: number, lateCancellations: number) => ({
+    patientId: 'p1',
+    since: '2025-10-23T00:00:00.000Z',
+    until: '2026-10-23T00:00:00.000Z',
+    totals: { appointments: 8, noShows, lateCancellations },
+    byLocation: [],
+  });
+
+  it('muestra «2 inasistencias · 1 cancelación tardía (12 meses)»', () => {
+    render(
+      <PatientRecordHeader patient={patient()} loading={false} onEdit={() => {}} attendance={summary(2, 1)} />,
+    );
+    expect(screen.getByTestId('attendance-badge')).toHaveTextContent(
+      '2 inasistencias · 1 cancelación tardía (12 meses)',
+    );
+  });
+
+  it('sin incidencias no hay insignia; mientras carga solo lo anuncia', () => {
+    const { rerender } = render(
+      <PatientRecordHeader patient={patient()} loading={false} onEdit={() => {}} attendance={null} />,
+    );
+    expect(screen.getByRole('status', { name: '' })).toHaveTextContent('Comprobando inasistencias…');
+    rerender(
+      <PatientRecordHeader patient={patient()} loading={false} onEdit={() => {}} attendance={summary(0, 0)} />,
+    );
+    expect(screen.queryByTestId('attendance-badge')).not.toBeInTheDocument();
+    expect(screen.queryByText('Comprobando inasistencias…')).not.toBeInTheDocument();
+  });
+
+  it('si falla, «Asistencia sin comprobar» con reintento', async () => {
+    const user = userEvent.setup();
+    const onRetry = jest.fn();
+    render(
+      <PatientRecordHeader
+        patient={patient()}
+        loading={false}
+        onEdit={() => {}}
+        attendance={null}
+        attendanceFailed
+        onRetryAttendance={onRetry}
+      />,
+    );
+    expect(screen.getByText('Asistencia sin comprobar')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Reintentar' }));
+    expect(onRetry).toHaveBeenCalled();
+  });
+});

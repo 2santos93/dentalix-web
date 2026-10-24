@@ -5,6 +5,7 @@ import { useAuthStore } from '@/lib/auth/auth-store';
 import { getTokenRole } from '@/lib/auth/token-role';
 import { canManageAnamnesisSettings } from '@/lib/clinical/medical-alerts';
 import { PageHeader } from '@/components/shared/page-header';
+import { SETTINGS_BACK } from '@/components/settings/settings-sections';
 import { AnamnesisSettingsSection } from '@/components/clinical/anamnesis-settings';
 
 const copy = {
@@ -35,7 +36,7 @@ export default function ClinicalHistorySettingsPage() {
 
   return (
     <>
-      <PageHeader title={copy.title} description={copy.description} />
+      <PageHeader back={SETTINGS_BACK} title={copy.title} description={copy.description} />
       <AnamnesisSettingsSection
         token={accessToken}
         allowed={canManageAnamnesisSettings(getTokenRole(accessToken))}

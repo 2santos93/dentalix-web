@@ -6,6 +6,7 @@ import { Plus } from 'lucide-react';
 import { ApiError } from '@/lib/api/client';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import {
+  checkPrescriptionSafety,
   COUNTRY_LABELS,
   getPrescriptionIssuer,
   issuePrescription,
@@ -23,8 +24,6 @@ import {
   type ItemDraft,
   type ItemDraftErrors,
 } from '@/lib/prescriptions/prescription-draft';
-import { findAllergyMatches } from '@/lib/prescriptions/allergy-match';
-import { getMedicalHistory } from '@/lib/patients/clinical-api';
 import { FormModal } from '@/components/shared/form-modal';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { FieldError } from '@/components/errors/field-error';
@@ -36,6 +35,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { fieldClass } from '@/lib/ui/field-class';
 import { cn } from '@/lib/utils';
 import { PrescriptionItemFields } from './prescription-item-fields';
+import { PrescriptionSafetyPanel, type SafetyState } from './prescription-safety-panel';
 
 const copy = {
   title: 'Nueva receta',
@@ -60,23 +60,21 @@ const copy = {
   licenseLabel: { CO: 'Tu registro profesional', ES: 'Tu nº de colegiado' },
   licenseHint: 'Tu perfil de esta clínica aún no lo tiene: se guardará en la receta y en tu perfil.',
   licenseMissing: { CO: 'Falta tu registro profesional.', ES: 'Falta tu nº de colegiado.' },
-  allergiesError: 'Alergias no comprobadas',
-  allergyTitle: 'Alerta de alergia',
-  allergyBody: (detail: string) => `El paciente tiene registrada alergia a: ${detail}.`,
-  allergyConfirm:
-    'Confirmo que conozco la alergia y prescribo igualmente bajo mi responsabilidad.',
   submit: 'Emitir receta',
   genericError: 'No pudimos emitir la receta. Intenta de nuevo.',
-  // 409 de la API sin un texto que se pueda enseñar: aun así es una alerta de
-  // alergia, y no un «los datos cambiaron».
-  serverAllergyFallback:
-    'La API detectó una posible alergia a alguno de estos principios activos. Revisa la anamnesis del paciente antes de confirmar.',
+  reasonMissing: 'Escribe el motivo para emitir pese a los avisos.',
+  // 409 de la API sin un texto que se pueda enseñar: aun así son avisos de
+  // seguridad, y no un «los datos cambiaron».
+  serverSafetyFallback:
+    'La API detectó avisos de seguridad que no estaban confirmados. Revísalos antes de emitir.',
 };
 
-// La alerta de la API lista los alérgenos (texto libre de la anamnesis): con
+// El 409 de la API lista los avisos (nombran fármacos de la anamnesis): con
 // varios pasa de los 240 caracteres del helper y se perdería el detalle que
 // quien prescribe necesita para confirmar (revisión D-1).
-const SERVER_ALLERGY_MAX_LENGTH = 2000;
+const SERVER_SAFETY_MAX_LENGTH = 2000;
+/** Espera tras la última tecla antes de pedir los avisos al servidor. */
+export const SAFETY_CHECK_DEBOUNCE_MS = 400;
 
 interface NewPrescriptionModalProps {
   open: boolean;
@@ -95,10 +93,12 @@ interface NewPrescriptionModalProps {
  * formulario no conoce (documento o nacimiento del paciente) lo dice la API en
  * un 400, que `FormModal` muestra en un resumen visible y con el foco.
  *
- * Alerta de alergia: el modal compara EN VIVO cada principio activo con las
- * alergias de la anamnesis y, si coincide, exige marcar una confirmación
- * explícita antes de emitir; la API vuelve a comprobarlo (409 sin
- * `allergyOverride`) y guarda la confirmación en la receta.
+ * Receta segura (DX-300): mientras se escribe, el modal pide al SERVIDOR los
+ * avisos de seguridad (alergias con las casillas de la anamnesis,
+ * interacciones, embarazo, antirresortivos, dosis infantil por peso) y los
+ * muestra agrupados por gravedad. No se emite mientras se calculan ni si la
+ * comprobación falló; los bloqueantes exigen confirmación y motivo, y la API
+ * los vuelve a calcular al emitir (409 sin ellos).
  *
  * El padre lo monta con una `key` nueva en cada apertura.
  */
@@ -115,19 +115,22 @@ export function NewPrescriptionModal({
   const [templates, setTemplates] = useState<PrescriptionTemplate[] | null>(null);
   const [templatesFailed, setTemplatesFailed] = useState(false);
   const [templatesKey, setTemplatesKey] = useState(0);
-  const [allergies, setAllergies] = useState<string[] | null>(null);
-  const [allergiesFailed, setAllergiesFailed] = useState(false);
-  const [allergiesKey, setAllergiesKey] = useState(0);
+  const [safety, setSafety] = useState<SafetyState>({ kind: 'idle' });
+  // Para qué contenido es `safety`: un resultado de otra versión del
+  // formulario no vale para emitir.
+  const [safetyFor, setSafetyFor] = useState<string | null>(null);
+  const [safetyRetry, setSafetyRetry] = useState(0);
 
   const [templateId, setTemplateId] = useState('');
   const [items, setItems] = useState<ItemDraft[]>([emptyItemDraft()]);
   const [dispensationDate, setDispensationDate] = useState('');
   const [notes, setNotes] = useState('');
   const [license, setLicense] = useState('');
-  // La confirmación vale para UN conjunto de coincidencias: si cambian (otro
-  // fármaco que también choca), hay que volver a confirmar.
+  // La confirmación vale para UN conjunto de avisos bloqueantes: si cambian
+  // (otro fármaco que también choca), hay que volver a confirmar.
   const [confirmedKey, setConfirmedKey] = useState<string | null>(null);
-  const [serverAllergy, setServerAllergy] = useState<string | null>(null);
+  const [reason, setReason] = useState('');
+  const [reasonError, setReasonError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [itemErrors, setItemErrors] = useState<ItemDraftErrors[]>([]);
@@ -167,39 +170,63 @@ export function NewPrescriptionModal({
     };
   }, [open, token, templatesKey]);
 
+  // Lo que la comprobación necesita de cada medicamento (sin vacíos).
+  const safetyItems = useMemo(
+    () =>
+      items
+        .filter((item) => item.activeIngredient.trim() !== '')
+        .map((item) => ({
+          activeIngredient: item.activeIngredient.trim(),
+          ...(item.concentration.trim() ? { concentration: item.concentration.trim() } : {}),
+          ...(item.dose.trim() ? { dose: item.dose.trim() } : {}),
+          ...(item.frequency.trim() ? { frequency: item.frequency.trim() } : {}),
+        })),
+    [items],
+  );
+  const safetyKey = JSON.stringify(safetyItems);
+
   useEffect(() => {
     if (!open) return;
+    if (safetyItems.length === 0) {
+      const id = setTimeout(() => {
+        setSafety({ kind: 'idle' });
+        setSafetyFor(safetyKey);
+      }, 0);
+      return () => clearTimeout(id);
+    }
     let cancelled = false;
-    getMedicalHistory(token, patientId)
-      .then((history) => {
-        if (cancelled) return;
-        setAllergies((history?.allergies ?? []).map((a) => a.alergeno));
-        setAllergiesFailed(false);
-      })
-      .catch(() => {
-        if (!cancelled) setAllergiesFailed(true);
-      });
+    const id = setTimeout(() => {
+      setSafety({ kind: 'loading' });
+      setSafetyFor(null);
+      checkPrescriptionSafety(token, patientId, safetyItems)
+        .then((preview) => {
+          if (cancelled) return;
+          setSafety({ kind: 'ready', preview });
+          setSafetyFor(safetyKey);
+        })
+        .catch(() => {
+          if (!cancelled) setSafety({ kind: 'error' });
+        });
+    }, SAFETY_CHECK_DEBOUNCE_MS);
     return () => {
       cancelled = true;
+      clearTimeout(id);
     };
-  }, [open, token, patientId, allergiesKey]);
+    // `safetyKey` resume `safetyItems`: solo se vuelve a pedir si cambia.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, token, patientId, safetyKey, safetyRetry]);
 
-  const matchesByItem = useMemo(
-    () => items.map((item) => findAllergyMatches([item.activeIngredient], allergies ?? [])),
-    [items, allergies],
-  );
-  const allMatches = matchesByItem.flat();
+  const blockingAlerts =
+    safety.kind === 'ready' ? safety.preview.alerts.filter((a) => a.severity === 'BLOCKING') : [];
   const alertKey =
-    allMatches.length > 0
-      ? allMatches.map((m) => `${m.activeIngredient.trim().toLowerCase()}|${m.allergen}`).join(';')
-      : serverAllergy
-        ? `server:${serverAllergy}`
-        : null;
+    blockingAlerts.length > 0
+      ? blockingAlerts.map((a) => `${a.code}|${a.activeIngredient ?? ''}|${a.message}`).join(';')
+      : null;
   const confirmed = alertKey !== null && confirmedKey === alertKey;
-  const alertDetail =
-    allMatches.length > 0
-      ? copy.allergyBody(allMatches.map((m) => `${m.allergen} (${m.activeIngredient.trim()})`).join(', '))
-      : serverAllergy;
+  // Comprobación al día con lo escrito: sin ella no se emite.
+  const safetyReady = safetyFor === safetyKey && safety.kind !== 'loading' && safety.kind !== 'error';
+  // Sin motivo el botón sigue activo: al pulsarlo, el campo dice qué falta.
+  const safetyBlocksSubmit = !safetyReady || (alertKey !== null && !confirmed);
 
   const country = issuer?.country ?? 'CO';
   const maxItems = issuer?.maxItems ?? 10;
@@ -208,7 +235,6 @@ export function NewPrescriptionModal({
 
   function updateItem(index: number, patch: Partial<ItemDraft>) {
     setItems((prev) => prev.map((item, i) => (i === index ? { ...item, ...patch } : item)));
-    setServerAllergy(null);
     setError(null);
     // Al corregir un campo su error se va; los de los demás siguen.
     setItemErrors((prev) =>
@@ -229,7 +255,6 @@ export function NewPrescriptionModal({
 
   function applyTemplate(id: string) {
     setTemplateId(id);
-    setServerAllergy(null);
     setError(null);
     setItemErrors([]);
     setLicenseError(null);
@@ -244,8 +269,13 @@ export function NewPrescriptionModal({
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    if (!issuer || tooMany || (alertKey !== null && !confirmed)) return;
+    if (!issuer || tooMany || !safetyReady || (alertKey !== null && !confirmed)) return;
     setError(null);
+    if (alertKey !== null && reason.trim() === '') {
+      setReasonError(copy.reasonMissing);
+      document.getElementById('rx-safety-reason')?.focus();
+      return;
+    }
 
     const nextItemErrors = items.map((item) => itemDraftErrors(item, country));
     const nextLicenseError = needsLicense && !license.trim() ? copy.licenseMissing[country] : null;
@@ -278,7 +308,9 @@ export function NewPrescriptionModal({
       ...(dispensationDate ? { dispensationDate } : {}),
       ...(notes.trim() ? { notes: notes.trim() } : {}),
       ...(needsLicense && license.trim() ? { professionalLicense: license.trim() } : {}),
-      ...(alertKey !== null && confirmed ? { allergyOverride: true } : {}),
+      ...(alertKey !== null && confirmed
+        ? { safetyOverride: true, safetyOverrideReason: reason.trim() }
+        : {}),
     };
     try {
       const issued = await issuePrescription(token, patientId, input);
@@ -286,15 +318,17 @@ export function NewPrescriptionModal({
       onIssued(issued);
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
-        // La API detectó una alergia que aquí no se vio (p. ej. la anamnesis
-        // no cargó): mismo bloque de confirmación, con su mensaje.
-        setServerAllergy(
+        // La anamnesis cambió entre la vista previa y la emisión: la API dice
+        // qué avisos faltan por confirmar y se vuelven a pedir.
+        setError(
           apiErrorMessage(err, {
-            fallback: copy.serverAllergyFallback,
-            byStatus: { 409: copy.serverAllergyFallback },
-            maxLength: SERVER_ALLERGY_MAX_LENGTH,
+            fallback: copy.serverSafetyFallback,
+            byStatus: { 409: copy.serverSafetyFallback },
+            maxLength: SERVER_SAFETY_MAX_LENGTH,
           }),
         );
+        setConfirmedKey(null);
+        setSafetyRetry((k) => k + 1);
       } else {
         setError(apiErrorMessage(err, copy.genericError));
       }
@@ -314,7 +348,7 @@ export function NewPrescriptionModal({
       onSubmit={handleSubmit}
       submitLabel={copy.submit}
       submitting={submitting}
-      submitDisabled={!ready || tooMany || (alertKey !== null && !confirmed)}
+      submitDisabled={!ready || tooMany || safetyBlocksSubmit}
       error={error}
       size="lg"
     >
@@ -364,17 +398,6 @@ export function NewPrescriptionModal({
             )}
           </FormField>
 
-          {allergiesFailed ? (
-            <FieldError
-              label={copy.allergiesError}
-              className="w-full"
-              onRetry={() => {
-                setAllergiesFailed(false);
-                setAllergiesKey((k) => k + 1);
-              }}
-            />
-          ) : null}
-
           <p className="text-xs text-muted">{copy.requiredNote}</p>
           <div className="flex flex-col gap-3">
             {items.map((item, index) => (
@@ -384,7 +407,6 @@ export function NewPrescriptionModal({
                 item={item}
                 idPrefix="rx-item"
                 mode={{ kind: 'prescription', country }}
-                allergyMatches={matchesByItem[index]}
                 errors={itemErrors[index]}
                 onChange={(patch) => updateItem(index, patch)}
                 onRemove={items.length > 1 ? () => removeItem(index) : undefined}
@@ -452,24 +474,20 @@ export function NewPrescriptionModal({
             />
           </FormField>
 
-          {alertKey !== null ? (
-            <div
-              role="alert"
-              className="flex flex-col gap-2 rounded-lg border border-danger/40 bg-danger/5 p-4 text-sm text-ink"
-            >
-              <p className="font-semibold text-danger">{copy.allergyTitle}</p>
-              <p>{alertDetail}</p>
-              <label className="flex items-start gap-2">
-                <input
-                  type="checkbox"
-                  className="mt-0.5 size-4 accent-[var(--color-danger)]"
-                  checked={confirmed}
-                  onChange={(e) => setConfirmedKey(e.target.checked ? alertKey : null)}
-                />
-                <span>{copy.allergyConfirm}</span>
-              </label>
-            </div>
-          ) : null}
+          <PrescriptionSafetyPanel
+            state={safety}
+            country={country}
+            onRetry={() => setSafetyRetry((k) => k + 1)}
+            confirmed={confirmed}
+            onConfirmedChange={(checked) => setConfirmedKey(checked ? alertKey : null)}
+            reason={reason}
+            onReasonChange={(value) => {
+              setReason(value);
+              setReasonError(null);
+              setError(null);
+            }}
+            reasonError={reasonError}
+          />
         </>
       )}
     </FormModal>

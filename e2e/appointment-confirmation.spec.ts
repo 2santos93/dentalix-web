@@ -130,7 +130,7 @@ test('recepción genera el enlace -> el paciente confirma desde el móvil -> la 
   // DX-121: el Día abre en columnas; la fila con estado está en «Lista».
   await page.getByRole('button', { name: 'Lista', exact: true }).click();
   await page.getByLabel('Fecha', { exact: true }).fill(day);
-  await expect(row.getByLabel(/Estado de la cita de/)).toHaveValue('SCHEDULED', { timeout: 10_000 });
+  await expect(row.getByRole('combobox', { name: /Estado de la cita de/ })).toHaveText('Agendada', { timeout: 10_000 });
 
   // Segundo clic: confirmar.
   await patientPage.getByRole('button', { name: 'Confirmar asistencia' }).click();
@@ -148,6 +148,6 @@ test('recepción genera el enlace -> el paciente confirma desde el móvil -> la 
   // DX-121: el Día abre en columnas; la fila con estado está en «Lista».
   await page.getByRole('button', { name: 'Lista', exact: true }).click();
   await page.getByLabel('Fecha', { exact: true }).fill(day);
-  await expect(row.getByLabel(/Estado de la cita de/)).toHaveValue('CONFIRMED', { timeout: 10_000 });
+  await expect(row.getByRole('combobox', { name: /Estado de la cita de/ })).toHaveText('Confirmada', { timeout: 10_000 });
   await expect(row.getByText('Confirmación pendiente')).toHaveCount(0);
 });

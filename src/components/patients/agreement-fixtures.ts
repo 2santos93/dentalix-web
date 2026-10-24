@@ -6,13 +6,13 @@ import type { PatientCoverage } from '@/lib/patients/coverages-api';
 export function agreementDto(
   id: string,
   name: string,
-  payer: { id: string; name: string },
+  payer: { id: string; name: string; type?: Agreement['payer']['type'] },
   over: Partial<Agreement> = {},
 ): Agreement {
   return {
     id,
     name,
-    payer,
+    payer: { type: 'EPS_CO', ...payer },
     kind: 'PERCENT_DISCOUNT',
     active: true,
     validFrom: null,
@@ -32,7 +32,7 @@ export function patientAgreement(over: Partial<PatientAgreement> = {}): PatientA
       active: true,
       validFrom: null,
       validTo: null,
-      payer: { id: 'pay-1', name: 'Sanitas' },
+      payer: { id: 'pay-1', name: 'Sanitas', type: 'EPS_CO' },
     },
     coverageId: null,
     validFrom: null,
@@ -49,6 +49,8 @@ export function coverageFor(
   id: string,
   payer: { id: string; name: string },
   planName: string | null,
+  status: PatientCoverage['status'] = 'ACTIVE',
+  migratedFromInsurerEps = false,
 ): PatientCoverage {
   return {
     id,
@@ -61,7 +63,8 @@ export function coverageFor(
     validTo: null,
     isPrimary: true,
     notes: null,
-    status: 'ACTIVE',
+    migratedFromInsurerEps,
+    status,
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
   } as PatientCoverage;

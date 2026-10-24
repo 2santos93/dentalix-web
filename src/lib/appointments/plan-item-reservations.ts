@@ -5,9 +5,14 @@ import type { ClinicRole } from '@/lib/me/me-api';
 /**
  * DX-273 (revisión DX-271, I2): tratamientos de una cita que siguen
  * reservados en OTRA cita viva (la reserva se quedó allí al marcar «Llegó»),
- * y «Traer a esta cita». La API solo devuelve citas de sedes permitidas.
+ * y «Traer a esta cita». La API solo devuelve citas de sedes permitidas,
+ * salvo la de hoy con el paciente en la clínica (`heldInClinic`), que llega
+ * sin cita, hora ni sede (DX-293, DX-089).
  */
 export type PlanItemReservedElsewhere = components['schemas']['PlanItemReservedElsewhereDto'];
+
+/** La cita titular con su hora y su sede (sede permitida al usuario). */
+type WithHolder = PlanItemReservedElsewhere & { start: string; timeZone: string; locationName: string };
 export type AppointmentWriteResult = components['schemas']['AppointmentWriteDto'];
 export type CompletedExit = components['schemas']['CompletedExitDto'];
 
@@ -17,12 +22,14 @@ export const reservationCopy = {
   claimed: (name: string) => `${name} quedó reservado en esta cita.`,
   claimError: 'No pudimos traer el tratamiento a esta cita.',
   claimFromPanel: 'Puedes traerlo a esta cita desde «En clínica».',
+  /** DX-293: la titular es de otra sede no permitida: sin hora ni sede. */
+  heldInClinicHidden: 'Reservado en otra cita de hoy, con el paciente en la clínica.',
 };
 
 const formatters = new Map<string, Intl.DateTimeFormat>();
 
-/** «30/10/2026 a las 09:00», en la zona de la sede de ESA cita. */
-export function reservedAt(item: Pick<PlanItemReservedElsewhere, 'start' | 'timeZone'>): string {
+/** Día y hora de la cita en la zona de la sede de ESA cita. */
+function wallParts(item: { start: string; timeZone: string }): Record<string, string> {
   let f = formatters.get(item.timeZone);
   if (!f) {
     f = new Intl.DateTimeFormat('es-CO', {
@@ -36,7 +43,12 @@ export function reservedAt(item: Pick<PlanItemReservedElsewhere, 'start' | 'time
     });
     formatters.set(item.timeZone, f);
   }
-  const p = Object.fromEntries(f.formatToParts(new Date(item.start)).map((x) => [x.type, x.value]));
+  return Object.fromEntries(f.formatToParts(new Date(item.start)).map((x) => [x.type, x.value]));
+}
+
+/** «30/10/2026 a las 09:00», en la zona de la sede de ESA cita. */
+export function reservedAt(item: { start: string; timeZone: string }): string {
+  const p = wallParts(item);
   return `${p.day}/${p.month}/${p.year} a las ${p.hour}:${p.minute}`;
 }
 
@@ -45,9 +57,31 @@ export function reservedItemLabel(item: Pick<PlanItemReservedElsewhere, 'name' |
   return `${item.name} · diente ${item.toothNumber}`;
 }
 
-/** «Este tratamiento está reservado en la cita del 30/10/2026 a las 09:00 (Sede Norte).» */
+function hasHolder(item: PlanItemReservedElsewhere): item is WithHolder {
+  return item.start !== null && item.timeZone !== null && item.locationName !== null;
+}
+
+/**
+ * «Este tratamiento está reservado en la cita del 30/10/2026 a las 09:00
+ * (Sede Norte).» DX-293: con la titular de hoy con el paciente en la clínica,
+ * «Reservado en la cita de hoy a las 09:05 (Sede Norte), con el paciente en
+ * la clínica.»; sin sus datos (sede no permitida), el texto genérico.
+ */
 export function reservedElsewhereMessage(item: PlanItemReservedElsewhere): string {
+  if (!hasHolder(item)) return reservationCopy.heldInClinicHidden;
+  if (item.heldInClinic) {
+    const p = wallParts(item);
+    return `Reservado en la cita de hoy a las ${p.hour}:${p.minute} (${item.locationName}), con el paciente en la clínica.`;
+  }
   return `Este tratamiento está reservado en la cita del ${reservedAt(item)} (${item.locationName}).`;
+}
+
+/**
+ * DX-293: «Traer a esta cita» solo si la API lo dejaría: no con la titular
+ * de hoy con el paciente en la clínica (409 de DX-288) ni sin sus datos.
+ */
+export function canClaimReserved(item: PlanItemReservedElsewhere): boolean {
+  return !item.heldInClinic && hasHolder(item);
 }
 
 /**

@@ -18,10 +18,18 @@
 // no cumple su contrato (file/title/annotation y requiresUnset ∈ las variables
 // que define la CI). En GitHub Actions además anota cada test en el PR
 // (`::error file=…`).
-import { readFileSync } from 'node:fs';
+//
+// DX-292 (TST-033): con `retries: 1` un test que solo pasa al reintentar sale
+// «flaky» y la run queda verde sin que nadie lo cuente. La guardia los nombra
+// siempre (`::warning` en Actions) y sale con 1 si hay más de MAX_FLAKY. Con
+// GITHUB_STEP_SUMMARY deja en el resumen del job el recuento y, por nombre,
+// los flaky, los fallidos y los saltados sin permiso.
+import { appendFileSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 
 const SEP = ' › ';
+/** Más flaky que esto en una run es rojo: la suite no es de fiar. */
+const MAX_FLAKY = 2;
 /** Las únicas variables que justifican un salto: la CI siempre las define. */
 const CI_DEFINED_VARS = ['E2E_DATABASE_URL', 'E2E_MAIL_DIR'];
 const root = path.resolve(path.dirname(new URL(import.meta.url).pathname), '..');
@@ -119,20 +127,71 @@ function verdict(t) {
 
 const skipped = all.filter((t) => t.test.status === 'skipped');
 const offenders = skipped.map((t) => ({ ...t, why: verdict(t) })).filter((t) => t.why !== null);
+const flaky = all.filter((t) => t.test.status === 'flaky');
+const failed = all.filter((t) => t.test.status === 'unexpected');
+const passed = all.filter((t) => t.test.status === 'expected');
+const tooFlaky = flaky.length > MAX_FLAKY;
+
+const name = (t) => `${t.file}:${t.line} «${t.title}»`;
+
+writeSummary();
 
 console.log(
-  `Playwright: ${all.length} tests, ${skipped.length} saltados (${skipped.length - offenders.length} permitidos por e2e/allowed-skips.json).`,
+  `Playwright: ${all.length} tests, ${skipped.length} saltados (${skipped.length - offenders.length} permitidos por e2e/allowed-skips.json), ${flaky.length} flaky.`,
 );
-if (offenders.length === 0) process.exit(0);
 
-console.error(`\n${offenders.length} test(s) saltados sin permiso:`);
-for (const t of offenders) {
-  console.error(`  - ${t.file}:${t.line} «${t.title}» — ${t.why}`);
-  if (process.env.GITHUB_ACTIONS) {
-    console.log(`::error file=${t.file},line=${t.line},title=Test saltado::«${t.title}» se saltó: ${t.why}`);
+if (flaky.length > 0) {
+  const log = tooFlaky ? console.error : console.log;
+  log(`\n${flaky.length} flaky (pasaron solo al reintentar)${tooFlaky ? `: más de ${MAX_FLAKY}, la E2E sale en rojo` : ''}:`);
+  for (const t of flaky) {
+    log(`  - ${name(t)}`);
+    if (process.env.GITHUB_ACTIONS) {
+      console.log(`::warning file=${t.file},line=${t.line},title=Test flaky::«${t.title}» pasó solo al reintentar.`);
+    }
   }
 }
-console.error(
-  '\nUn test saltado no prueba nada: arregla la condición (p. ej. fija el reloj con e2e/support/clock.ts) o, si el salto es legítimo, añádelo a e2e/allowed-skips.json con su motivo exacto y la variable que lo justifica.',
-);
-process.exit(1);
+
+if (offenders.length > 0) {
+  console.error(`\n${offenders.length} test(s) saltados sin permiso:`);
+  for (const t of offenders) {
+    console.error(`  - ${name(t)} — ${t.why}`);
+    if (process.env.GITHUB_ACTIONS) {
+      console.log(`::error file=${t.file},line=${t.line},title=Test saltado::«${t.title}» se saltó: ${t.why}`);
+    }
+  }
+  console.error(
+    '\nUn test saltado no prueba nada: arregla la condición (p. ej. fija el reloj con e2e/support/clock.ts) o, si el salto es legítimo, añádelo a e2e/allowed-skips.json con su motivo exacto y la variable que lo justifica.',
+  );
+}
+if (tooFlaky) {
+  console.error(
+    `\nMás de ${MAX_FLAKY} tests flaky en una run: busca la causa de cada uno (traza en el informe de Playwright) en vez de confiar en el reintento.`,
+  );
+}
+process.exit(offenders.length > 0 || tooFlaky ? 1 : 0);
+
+/**
+ * Resumen del job en GitHub Actions (`$GITHUB_STEP_SUMMARY`, Markdown): que
+ * un rojo, un flaky o un salto se lean en la página de la run sin abrir logs.
+ */
+function writeSummary() {
+  const file = process.env.GITHUB_STEP_SUMMARY;
+  if (!file) return;
+  const item = (t, why) => `- \`${t.file}:${t.line}\` «${t.title}»${why ? ` — ${why}` : ''}`;
+  const section = (title, list, empty, why) =>
+    list.length === 0 ? [`**${empty}**`, ''] : [`**${title} (${list.length})**`, '', ...list.map((t) => item(t, why?.(t))), ''];
+  const lines = [
+    '### E2E (Playwright)',
+    '',
+    `${all.length} tests: ${passed.length} passed · ${failed.length} failed · ${flaky.length} flaky · ${skipped.length} skipped`,
+    '',
+    ...section('Fallidos', failed, 'Sin tests fallidos'),
+    ...section(
+      tooFlaky ? `Flaky: más de ${MAX_FLAKY}, la E2E sale en rojo` : 'Flaky (pasaron solo al reintentar)',
+      flaky,
+      'Sin tests flaky',
+    ),
+    ...(offenders.length > 0 ? section('Saltados sin permiso', offenders, '', (t) => t.why) : []),
+  ];
+  appendFileSync(file, `${lines.join('\n')}\n`);
+}

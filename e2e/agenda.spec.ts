@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { registerAndLogin } from './support/auth';
 import { disableBusinessHours } from './support/business-hours';
 import { atSede, sedeDayFromToday } from './support/clock';
+import { chooseAppointmentStatus } from './support/appointment-status';
 
 /**
  * e2e: register clinic + login, create a patient through the real UI, go to
@@ -173,16 +174,16 @@ for (const browserClock of ['23:30', '06:00']) {
     await expect(appointmentRow).toContainText(startTime);
     await expect(appointmentRow).toContainText(endTime);
     await expect(appointmentRow).toContainText(`${patientFirstName} ${patientLastName}`);
-    await expect(appointmentRow.getByLabel(/Estado de la cita de/i)).toHaveValue('SCHEDULED');
+    await expect(appointmentRow.getByRole('combobox', { name: /Estado de la cita de/i })).toHaveText('Agendada');
 
-    // --- Change status via `DayAgenda`'s status <select> (Task 6b): SCHEDULED
+    // --- Change status via `DayAgenda`'s status selector (Task 6b; DX-295: combobox): SCHEDULED
     // ("Agendada") -> CONFIRMED ("Confirmada"). `AgendaView.handleStatusChange`
     // PATCHes the appointment and refreshes the day list in place — assert the
     // badge reflects the change (real backend round-trip, no mocks). ---
-    const statusSelect = appointmentRow.getByLabel(/Estado de la cita de/i);
-    await statusSelect.selectOption({ label: 'Confirmada' });
+    const statusSelect = appointmentRow.getByRole('combobox', { name: /Estado de la cita de/i });
+    await chooseAppointmentStatus(statusSelect, 'Confirmada');
 
-    await expect(statusSelect).toHaveValue('CONFIRMED', { timeout: 10_000 });
+    await expect(statusSelect).toHaveText('Confirmada', { timeout: 10_000 });
 
     // --- Reload: the appointment and its now-CONFIRMED status persist ---
     // The active day/provider selection is local component state, not
@@ -204,8 +205,8 @@ for (const browserClock of ['23:30', '06:00']) {
     await expect(appointmentRowAfterReload).toContainText(startTime);
     await expect(appointmentRowAfterReload).toContainText(endTime);
     await expect(appointmentRowAfterReload).toContainText(`${patientFirstName} ${patientLastName}`);
-    await expect(appointmentRowAfterReload.getByLabel(/Estado de la cita de/i)).toHaveValue(
-      'CONFIRMED',
-    );
+    await expect(
+      appointmentRowAfterReload.getByRole('combobox', { name: /Estado de la cita de/i }),
+    ).toHaveText('Confirmada');
   });
 }

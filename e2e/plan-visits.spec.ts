@@ -5,10 +5,12 @@ import {
   type Page,
   type Locator,
 } from "./support/test";
+import { confirmCancellation } from "./support/cancellation";
 import { randomUUID } from "node:crypto";
 import { API_URL, tenantOrigin } from "./support/urls";
 import { loginAs, accessTokenOf } from "./support/auth";
 import { atSede, sedeDayFromToday } from "./support/clock";
+import { chooseAppointmentStatus } from "./support/appointment-status";
 const origin = tenantOrigin("demo");
 const password = "DemoDentalix2026!";
 async function seed(request: APIRequestContext, tag: string) {
@@ -505,11 +507,12 @@ for (const width of [390, 1440])
       await page.getByRole("button", { name: "Lista", exact: true }).click();
       await page.getByLabel("Fecha", { exact: true }).fill(day);
       const status = page.getByRole("combobox", {
-        name: "Estado de la cita de 10:15–10:45",
+        name: /^Estado de la cita de 10:15–10:45/,
       });
-      await expect(status).toHaveValue("SCHEDULED");
-      await status.selectOption("CANCELLED");
-      await expect(status).toHaveValue("CANCELLED");
+      await expect(status).toHaveText("Agendada");
+      await chooseAppointmentStatus(status, "Cancelada");
+      await confirmCancellation(page);
+      await expect(status).toHaveText("Cancelada");
       await page.goto(origin + "/presupuestos");
       await page.getByRole("tab", { name: "Aceptado sin agendar" }).click();
       await list

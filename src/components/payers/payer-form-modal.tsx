@@ -1,6 +1,6 @@
 'use client';
 import * as React from 'react';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import {
   createPayer,
@@ -10,7 +10,7 @@ import {
   type PayerType,
 } from '@/lib/payers/payers-api';
 import { FormModal } from '@/components/shared/form-modal';
-import { FormField } from '@/components/shared/form-field';
+import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { Input } from '@/components/ui/input';
 import { PAYER_COUNTRY_LABELS, PAYER_TYPE_LABELS } from './payer-labels';
 
@@ -22,6 +22,10 @@ const copy = {
   name: 'Nombre',
   namePlaceholder: 'Por ejemplo, Sanitas',
   type: 'Tipo',
+  typePlaceholder: 'Elige un tipo',
+  typeRequired: 'Elige el tipo de pagador.',
+  otherHint:
+    'Para convenios internos (cortesía, empleados): solo un administrador podrá asignarlos. Una aseguradora o empresa va en su tipo.',
   country: 'País',
   noCountry: '—',
   create: 'Crear pagador',
@@ -61,16 +65,14 @@ interface PayerFormModalProps {
  * enviar (la API repite las reglas). El padre lo monta con una `key` por
  * apertura para resembrar el estado.
  */
-export function PayerFormModal({
-  open,
-  onOpenChange,
-  payer,
-  token,
-  onSaved,
-}: PayerFormModalProps) {
+export function PayerFormModal({ open, onOpenChange, payer, token, onSaved }: PayerFormModalProps) {
   const editing = payer !== null;
   const [name, setName] = useState(payer?.name ?? '');
-  const [type, setType] = useState<PayerType>(payer?.type ?? 'OTRO');
+  // SEC-047: sin tipo por defecto. OTRO marca un pagador interno (sus convenios
+  // solo los asigna ADMIN), así que nunca se elige sin querer.
+  const [type, setType] = useState<PayerType | ''>(payer?.type ?? '');
+  const [typeError, setTypeError] = useState<string | null>(null);
+  const typeRef = useRef<HTMLSelectElement>(null);
   const [country, setCountry] = useState<PayerCountry | ''>(payer?.country ?? '');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -78,6 +80,13 @@ export function PayerFormModal({
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
+    setTypeError(null);
+    if (type === '') {
+      setTypeError(copy.typeRequired);
+      // El foco va al campo que hay que corregir (WCAG 3.3.1).
+      typeRef.current?.focus();
+      return;
+    }
     const trimmed = name.trim().replace(/\s+/g, ' ');
     if (trimmed.length < 2 || trimmed.length > 120) return setError(copy.invalidName);
     const required = REQUIRED_COUNTRY[type];
@@ -126,13 +135,28 @@ export function PayerFormModal({
           required
         />
       </FormField>
-      <FormField htmlFor="payer-type" label={copy.type}>
+      <FormField
+        htmlFor="payer-type"
+        label={copy.type}
+        error={typeError}
+        hint={type === 'OTRO' ? copy.otherHint : undefined}
+      >
         <select
           id="payer-type"
+          ref={typeRef}
           value={type}
-          onChange={(e) => setType(e.target.value as PayerType)}
+          onChange={(e) => {
+            setType(e.target.value as PayerType | '');
+            setTypeError(null);
+          }}
+          aria-required
+          aria-invalid={typeError ? true : undefined}
+          aria-describedby={typeError ? fieldErrorId('payer-type') : undefined}
           className={selectClass}
         >
+          <option value="" disabled>
+            {copy.typePlaceholder}
+          </option>
           {TYPES.map((t) => (
             <option key={t} value={t}>
               {PAYER_TYPE_LABELS[t]}

@@ -5,6 +5,7 @@ import { useAuthStore } from '@/lib/auth/auth-store';
 import { getTokenRole } from '@/lib/auth/token-role';
 import { canManagePayers } from '@/lib/payers/payers-api';
 import { PageHeader } from '@/components/shared/page-header';
+import { SETTINGS_BACK } from '@/components/settings/settings-sections';
 import { PayersManager } from '@/components/payers/payers-manager';
 
 const copy = {
@@ -36,7 +37,7 @@ export default function PayersPage() {
 
   return (
     <>
-      <PageHeader title={copy.title} description={copy.description} />
+      <PageHeader back={SETTINGS_BACK} title={copy.title} description={copy.description} />
       <PayersManager
         token={accessToken}
         allowed={canManagePayers(getTokenRole(accessToken))}

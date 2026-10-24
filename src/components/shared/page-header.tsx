@@ -1,4 +1,6 @@
 import * as React from 'react';
+import Link from 'next/link';
+import { ChevronLeft } from 'lucide-react';
 
 interface PageHeaderProps {
   title: string;
@@ -27,6 +29,12 @@ interface PageHeaderProps {
    * identidad de la pantalla.
    */
   actions?: React.ReactNode;
+  /**
+   * Enlace de vuelta encima del título («← Ajustes» en cada pantalla de
+   * ajustes, DX-282). Es navegación, no identidad: va antes del h1 y en tinta
+   * de enlace pequeña, para que no compita con el título.
+   */
+  back?: { href: string; label: string };
 }
 
 /**
@@ -42,12 +50,22 @@ interface PageHeaderProps {
  * pantalla y su contenido: es el intervalo más grande de la página, y por eso lo
  * demás puede ir apretado sin que todo pese lo mismo.
  */
-export function PageHeader({ title, description, meta, actions }: PageHeaderProps) {
+export function PageHeader({ title, description, meta, actions, back }: PageHeaderProps) {
   return (
     <div className="mb-8 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
       {/* `min-w-0` + `break-words`: a long patient name must shrink and wrap
           inside its own column instead of pushing the actions off-screen. */}
       <div className="min-w-0 break-words">
+        {back ? (
+          // 44 px de alto en móvil (objetivo táctil); en escritorio, una línea.
+          <Link
+            href={back.href}
+            className="mb-2 inline-flex items-center gap-1 rounded-sm text-sm font-medium text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg max-md:mb-0 max-md:min-h-11"
+          >
+            <ChevronLeft aria-hidden className="size-4" />
+            {back.label}
+          </Link>
+        ) : null}
         <h1 className="t-display text-ink">{title}</h1>
         {/* `max-w-[68ch]`: la línea de apoyo es prosa y se lee en medida de
             prosa. Sin tope, en escritorio se estiraba los 1150px del contenido
