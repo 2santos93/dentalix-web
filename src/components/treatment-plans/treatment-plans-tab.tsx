@@ -184,6 +184,9 @@ const copy = {
   // DX-050: quién lo realizó. Corregirlo es solo de la administración.
   correctAttribution: 'Corregir',
   correctAttributionFor: (tooth: string) => `Corregir quién realizó el ítem del diente ${tooth}`,
+  // DX-305: un realizado «Sin atribuir» se atribuye con quién, cuándo y dónde.
+  attributeItem: 'Atribuir',
+  attributeItemFor: (tooth: string) => `Atribuir quién, cuándo y dónde se realizó el ítem del diente ${tooth}`,
   markDoneSubject: (procedure: string, tooth: string) => `${procedure} · diente ${tooth}`,
   addItemHeading: 'Agregar ítem',
   invalidToothNumber: 'Número de diente inválido. Usa la notación FDI (ej. 11, 26, 55).',
@@ -438,10 +441,14 @@ function ItemAttributionLine({
           variant="ghost"
           size="sm"
           className="h-11 px-2 text-xs md:h-7"
-          aria-label={copy.correctAttributionFor(item.toothNumber)}
+          aria-label={
+            item.performedLocationId === null
+              ? copy.attributeItemFor(item.toothNumber)
+              : copy.correctAttributionFor(item.toothNumber)
+          }
           onClick={() => onCorrect(item.id)}
         >
-          {copy.correctAttribution}
+          {item.performedLocationId === null ? copy.attributeItem : copy.correctAttribution}
         </Button>
       ) : null}
     </span>
@@ -2618,6 +2625,7 @@ export function TreatmentPlansTab({
           // sede que el cliente HTTP manda en `X-Location-Id`.
           activeLocationId={getActiveLocationId()}
           locationName={locations.find((l) => l.id === getActiveLocationId())?.name ?? null}
+          locations={locations}
           onSaved={handleMarkDoneSaved}
         />
       ) : null}

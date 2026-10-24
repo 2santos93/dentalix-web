@@ -1023,6 +1023,24 @@ describe('TreatmentPlansTab', () => {
       );
     });
 
+    it('un ADMIN atribuye un «Sin atribuir»: el modal pide sede y fecha (DX-305)', async () => {
+      mockedListPlans.mockResolvedValue([plan1]);
+      mockedGetPlan.mockResolvedValue({ ...plan1, items: [legacyDone], total: 0 });
+      jest.mocked(listStaff).mockResolvedValue([
+        { userId: 'u-laura', fullName: 'Dra. Laura Gómez', role: 'DENTIST', locationIds: null },
+      ]);
+      const user = userEvent.setup();
+      render(<TreatmentPlansTab patientId="pat-1" token={adminToken} />);
+      const table = await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+      expect(within(table).queryByRole('button', { name: /corregir quién/i })).not.toBeInTheDocument();
+      await user.click(
+        within(table).getByRole('button', { name: 'Atribuir quién, cuándo y dónde se realizó el ítem del diente 47' }),
+      );
+      const dialog = await screen.findByRole('dialog', { name: 'Atribuir el procedimiento' });
+      expect(within(dialog).getByRole('combobox', { name: 'Sede donde se realizó' })).toBeInTheDocument();
+      expect(within(dialog).getByLabelText('Fecha en que se realizó')).toBeInTheDocument();
+    });
+
     it('volver de «Realizado» a aceptado no pide profesional', async () => {
       mockedListPlans.mockResolvedValue([plan1]);
       mockedGetPlan.mockResolvedValue({ ...plan1, items: [doneByLaura], total: 0 });
