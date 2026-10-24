@@ -5,6 +5,7 @@ import {
   deleteCoverage,
   listCoverages,
   updateCoverage,
+  verifyCoverage,
   type PatientCoverage,
 } from '@/lib/patients/coverages-api';
 import { listPayers, type Payer } from '@/lib/payers/payers-api';
@@ -17,18 +18,21 @@ jest.mock('../../lib/patients/coverages-api', () => ({
   createCoverage: jest.fn(),
   updateCoverage: jest.fn(),
   deleteCoverage: jest.fn(),
+  verifyCoverage: jest.fn(),
 }));
 jest.mock('../../lib/payers/payers-api', () => ({
   ...jest.requireActual('../../lib/payers/payers-api'),
   listPayers: jest.fn(),
   createPayer: jest.fn(),
 }));
-jest.mock('../../lib/auth/token-role', () => ({ getTokenRole: () => 'RECEPTION' }));
+let mockRole = 'RECEPTION';
+jest.mock('../../lib/auth/token-role', () => ({ getTokenRole: () => mockRole }));
 
 const mockedList = listCoverages as jest.MockedFunction<typeof listCoverages>;
 const mockedCreate = createCoverage as jest.MockedFunction<typeof createCoverage>;
 const mockedUpdate = updateCoverage as jest.MockedFunction<typeof updateCoverage>;
 const mockedDelete = deleteCoverage as jest.MockedFunction<typeof deleteCoverage>;
+const mockedVerify = verifyCoverage as jest.MockedFunction<typeof verifyCoverage>;
 const mockedPayers = listPayers as jest.MockedFunction<typeof listPayers>;
 
 const payer = (id: string, name: string, over: Partial<Payer> = {}): Payer => ({
@@ -58,6 +62,10 @@ function coverage(over: Partial<PatientCoverage> = {}): PatientCoverage {
     isPrimary: true,
     notes: null,
     migratedFromInsurerEps: false,
+    declaredById: null,
+    verifiedAt: null,
+    verifiedById: null,
+    verifiedByName: null,
     status: 'ACTIVE',
     createdAt: '2026-01-01T00:00:00.000Z',
     updatedAt: '2026-01-01T00:00:00.000Z',
@@ -71,6 +79,7 @@ const renderSection = (onChanged?: () => void) =>
 describe('PatientCoverageSection (DX-153)', () => {
   beforeEach(() => {
     jest.resetAllMocks();
+    mockRole = 'RECEPTION';
     mockedPayers.mockResolvedValue([sanitas, colsanitas]);
   });
 
@@ -172,7 +181,7 @@ describe('PatientCoverageSection (DX-153)', () => {
     const dialog = await screen.findByRole('dialog');
     await user.selectOptions(within(dialog).getByLabelText('Pagador'), 'pay-1');
     await user.type(within(dialog).getByLabelText('Plan'), 'Salud Plus');
-    await user.type(within(dialog).getByLabelText('Número de afiliado'), '88123456');
+    await user.type(within(dialog).getByLabelText('Nº de afiliado o póliza'), '88123456');
     await user.click(within(dialog).getByRole('button', { name: 'Añadir' }));
 
     await waitFor(() => expect(mockedCreate).toHaveBeenCalledTimes(1));
@@ -266,5 +275,135 @@ describe('PatientCoverageSection (DX-153)', () => {
 
     expect(await within(confirm).findByText(/No pudimos quitar la cobertura|boom/)).toBeInTheDocument();
     expect(onChanged).not.toHaveBeenCalled();
+  });
+
+  describe('verificación (SEC-049)', () => {
+    const otro = payer('pay-3', 'Cortesía');
+
+    it('insignia «Verificada» con quién y cuándo, «Sin verificar», y nada con un pagador interno', async () => {
+      mockedList.mockResolvedValue([
+        coverage({
+          verifiedAt: '2026-10-20T15:00:00.000Z',
+          verifiedById: 'admin-1',
+          verifiedByName: 'Ana Gómez',
+        }),
+        coverage({ id: 'c2', payer: colsanitas, isPrimary: false }),
+        coverage({ id: 'c3', payer: otro, isPrimary: false }),
+      ]);
+      renderSection();
+      const rows = await screen.findAllByTestId('coverage-row');
+      expect(within(rows[0]).getByTestId('coverage-verification')).toHaveTextContent('Verificada');
+      expect(
+        within(rows[0]).getByText(/^Verificada por Ana Gómez el \d{2}\/\d{2}\/2026$/),
+      ).toBeInTheDocument();
+      expect(within(rows[1]).getByTestId('coverage-verification')).toHaveTextContent(
+        'Sin verificar',
+      );
+      expect(within(rows[2]).queryByTestId('coverage-verification')).not.toBeInTheDocument();
+    });
+
+    it('recepción no ve «Verificar»', async () => {
+      mockedList.mockResolvedValue([coverage()]);
+      renderSection();
+      await screen.findByTestId('coverage-row');
+      expect(screen.queryByRole('button', { name: /^Verificar/ })).not.toBeInTheDocument();
+    });
+
+    it('el ADMIN verifica con confirmación que enseña el nº, avisa y recarga', async () => {
+      mockRole = 'ADMIN';
+      const verified = coverage({
+        verifiedAt: '2026-10-20T15:00:00.000Z',
+        verifiedById: 'admin-1',
+        verifiedByName: 'Ana Gómez',
+      });
+      mockedList.mockResolvedValueOnce([coverage()]).mockResolvedValueOnce([verified]);
+      mockedVerify.mockResolvedValue(verified);
+      const onChanged = jest.fn();
+      renderSection(onChanged);
+      const user = setupUser();
+
+      await user.click(
+        await screen.findByRole('button', { name: 'Verificar la cobertura de Sanitas' }),
+      );
+      const dialog = await screen.findByRole('dialog', { name: 'Verificar cobertura' });
+      expect(dialog).toHaveTextContent('el nº de afiliado 88123456 es de este paciente');
+      await user.click(within(dialog).getByRole('button', { name: 'Verificar' }));
+
+      await waitFor(() =>
+        expect(mockedVerify).toHaveBeenCalledWith('tok', 'p1', 'c1', '88123456'),
+      );
+      expect(await screen.findByText('Cobertura verificada.')).toBeInTheDocument();
+      expect(await screen.findByText('Verificada')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /^Verificar la/ })).not.toBeInTheDocument();
+      expect(onChanged).toHaveBeenCalledTimes(1);
+    });
+
+    it('si verificar falla (el nº cambió), el diálogo sigue abierto con el error', async () => {
+      mockRole = 'ADMIN';
+      mockedList.mockResolvedValue([coverage()]);
+      mockedVerify.mockRejectedValue(
+        new ApiError(
+          409,
+          'El pagador o el nº de afiliado de esta cobertura cambió mientras lo revisabas: vuelve a abrirla y compruébalo.',
+        ),
+      );
+      renderSection();
+      const user = setupUser();
+      await user.click(
+        await screen.findByRole('button', { name: 'Verificar la cobertura de Sanitas' }),
+      );
+      const dialog = await screen.findByRole('dialog', { name: 'Verificar cobertura' });
+      await user.click(within(dialog).getByRole('button', { name: 'Verificar' }));
+      expect(
+        await within(dialog).findByText(
+          'El pagador o el nº de afiliado de esta cobertura cambió mientras lo revisabas: vuelve a abrirla y compruébalo.',
+        ),
+      ).toBeInTheDocument();
+    });
+
+    it('tras un 409 recarga la lista: al reabrir enseña y verifica el nº nuevo', async () => {
+      mockRole = 'ADMIN';
+      const changed = coverage({ memberNumber: '88123499' });
+      mockedList.mockResolvedValueOnce([coverage()]).mockResolvedValue([changed]);
+      mockedVerify
+        .mockRejectedValueOnce(
+          new ApiError(
+            409,
+            'El pagador o el nº de afiliado de esta cobertura cambió mientras lo revisabas: vuelve a abrirla y compruébalo.',
+          ),
+        )
+        .mockResolvedValueOnce({ ...changed, verifiedAt: '2026-10-20T15:00:00.000Z' });
+      renderSection();
+      const user = setupUser();
+      await user.click(
+        await screen.findByRole('button', { name: 'Verificar la cobertura de Sanitas' }),
+      );
+      let dialog = await screen.findByRole('dialog', { name: 'Verificar cobertura' });
+      await user.click(within(dialog).getByRole('button', { name: 'Verificar' }));
+      await within(dialog).findByText(/cambió mientras lo revisabas/);
+      await waitFor(() => expect(mockedList).toHaveBeenCalledTimes(2));
+      await user.keyboard('{Escape}');
+      await waitFor(() =>
+        expect(screen.queryByRole('dialog', { name: 'Verificar cobertura' })).not.toBeInTheDocument(),
+      );
+
+      await user.click(
+        await screen.findByRole('button', { name: 'Verificar la cobertura de Sanitas' }),
+      );
+      dialog = await screen.findByRole('dialog', { name: 'Verificar cobertura' });
+      expect(dialog).toHaveTextContent('el nº de afiliado 88123499 es de este paciente');
+      await user.click(within(dialog).getByRole('button', { name: 'Verificar' }));
+      await waitFor(() =>
+        expect(mockedVerify).toHaveBeenLastCalledWith('tok', 'p1', 'c1', '88123499'),
+      );
+    });
+
+    it('sin nº no ofrece verificar', async () => {
+      mockRole = 'ADMIN';
+      mockedList.mockResolvedValue([coverage({ memberNumber: null })]);
+      renderSection();
+      await screen.findByTestId('coverage-row');
+      expect(screen.queryByRole('button', { name: /^Verificar/ })).not.toBeInTheDocument();
+    });
   });
 });

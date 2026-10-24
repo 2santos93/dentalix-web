@@ -1,12 +1,17 @@
 'use client';
 import * as React from 'react';
-import { useId, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import {
   createCoverage,
   updateCoverage,
   type PatientCoverage,
 } from '@/lib/patients/coverages-api';
+import {
+  memberNumberCopy,
+  memberNumberError,
+  requiresMemberNumber,
+} from '@/lib/patients/member-number';
 import type { Payer } from '@/lib/payers/payers-api';
 import { PAYER_TYPE_LABELS } from '@/components/payers/payer-labels';
 import { PayerFormModal } from '@/components/payers/payer-form-modal';
@@ -28,6 +33,8 @@ export const coverageDialogCopy = {
   createPayer: '¿No está en la lista? Crear pagador',
   plan: 'Plan',
   memberNumber: 'Número de afiliado',
+  memberNumberRequired: 'Nº de afiliado o póliza',
+  memberNumberVerifiedHint: 'Cambiarlo quita la verificación del administrador.',
   policyHolder: 'Titular',
   policyHolderHint: 'Solo si la póliza está a nombre de otra persona.',
   validFrom: 'Vigente desde',
@@ -109,7 +116,12 @@ export function CoverageDialog({
   const ids = useId();
   const editing = coverage !== null;
   const [draft, setDraft] = useState<Draft>(() => draftFrom(coverage, onlyCoverage));
-  const [fieldErrors, setFieldErrors] = useState<{ payer?: string; range?: string }>({});
+  const [fieldErrors, setFieldErrors] = useState<{
+    payer?: string;
+    member?: string;
+    range?: string;
+  }>({});
+  const memberRef = useRef<HTMLInputElement>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
   const [creatingPayer, setCreatingPayer] = useState(false);
@@ -121,6 +133,10 @@ export function CoverageDialog({
   if (coverage && !options.some((p) => p.id === coverage.payer.id)) options.unshift(coverage.payer);
 
   const primaryLocked = onlyCoverage || (editing && coverage.isPrimary);
+  // SEC-049: con un pagador externo el nº de afiliado es obligatorio.
+  const payerType = options.find((p) => p.id === draft.payerId)?.type ?? null;
+  const memberRequired = payerType !== null && requiresMemberNumber(payerType);
+  const normalizedMember = (value: string) => value.trim().replace(/\s+/g, ' ');
 
   function set<K extends keyof Draft>(key: K, value: Draft[K]) {
     setDraft((d) => ({ ...d, [key]: value }));
@@ -131,6 +147,19 @@ export function CoverageDialog({
     event.preventDefault();
     if (!draft.payerId) {
       setFieldErrors({ payer: copy.payerRequired });
+      return;
+    }
+    // Como la API: una cobertura anterior sin nº se sigue editando en lo demás;
+    // se pide al crearla o al cambiar su pagador o su número.
+    const memberTouched =
+      !editing ||
+      draft.payerId !== coverage.payer.id ||
+      normalizedMember(draft.memberNumber) !== normalizedMember(coverage.memberNumber ?? '');
+    const memberError =
+      payerType && memberTouched ? memberNumberError(payerType, draft.memberNumber) : null;
+    if (memberError) {
+      setFieldErrors({ member: memberError });
+      memberRef.current?.focus();
       return;
     }
     if (draft.validFrom && draft.validTo && draft.validTo < draft.validFrom) {
@@ -176,6 +205,13 @@ export function CoverageDialog({
   }
 
   const payerId = `${ids}-payer`;
+  const memberId = `${ids}-member`;
+  const memberHint =
+    editing && coverage.verifiedAt
+      ? copy.memberNumberVerifiedHint
+      : memberRequired
+        ? memberNumberCopy.hint
+        : undefined;
   const toId = `${ids}-to`;
   const primaryId = `${ids}-primary`;
   const primaryHint = onlyCoverage
@@ -237,12 +273,28 @@ export function CoverageDialog({
               onChange={(e) => set('planName', e.target.value)}
             />
           </FormField>
-          <FormField htmlFor={`${ids}-member`} label={copy.memberNumber}>
+          <FormField
+            htmlFor={memberId}
+            label={memberRequired ? copy.memberNumberRequired : copy.memberNumber}
+            hint={memberHint}
+            hintId={`${memberId}-hint`}
+            error={fieldErrors.member}
+          >
             <Input
-              id={`${ids}-member`}
+              ref={memberRef}
+              id={memberId}
               value={draft.memberNumber}
               maxLength={60}
               autoComplete="off"
+              aria-required={memberRequired || undefined}
+              aria-invalid={fieldErrors.member ? true : undefined}
+              aria-describedby={
+                fieldErrors.member
+                  ? fieldErrorId(memberId)
+                  : memberHint
+                    ? `${memberId}-hint`
+                    : undefined
+              }
               onChange={(e) => set('memberNumber', e.target.value)}
               className="tabular-nums"
             />

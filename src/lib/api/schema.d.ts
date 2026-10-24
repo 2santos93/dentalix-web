@@ -586,7 +586,7 @@ export interface paths {
         put?: never;
         /**
          * Añadir una cobertura al paciente (DX-153)
-         * @description La primera cobertura viva es la principal aunque no se pida. `isPrimary: true` en otra desmarca la anterior.
+         * @description La primera cobertura viva es la principal aunque no se pida. `isPrimary: true` en otra desmarca la anterior. SEC-049: con un pagador externo el nº de afiliado es obligatorio; la cobertura queda declarada por quien la crea y sin verificar.
          */
         post: operations["PatientCoveragesController_create"];
         delete?: never;
@@ -609,8 +609,31 @@ export interface paths {
         delete: operations["PatientCoveragesController_remove"];
         options?: never;
         head?: never;
-        /** Editar una cobertura; null vacía los campos opcionales (DX-153) */
+        /**
+         * Editar una cobertura; null vacía los campos opcionales (DX-153)
+         * @description SEC-049: cambiar el pagador o el nº de afiliado borra la verificación y deja la cobertura declarada por quien la edita.
+         */
         patch: operations["PatientCoveragesController_update"];
+        trace?: never;
+    };
+    "/api/v1/patients/{patientId}/coverages/{coverageId}/verification": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Verificar el nº de afiliado de una cobertura de un pagador externo; solo ADMIN (SEC-049)
+         * @description Marca quién y cuándo. Con ella verificada, cualquier rol puede asignar el convenio de ese pagador con esta cobertura. Volver a verificar actualiza quién y cuándo.
+         */
+        post: operations["PatientCoveragesController_verify"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/payers": {
@@ -5390,6 +5413,20 @@ export interface components {
             /** @description Copiada de la aseguradora en texto libre de la ficha (DX-153); la API no la crea. SEC-047: habilita a cualquier rol a asignar un convenio de pagador OTRO. */
             migratedFromInsurerEps: boolean;
             /**
+             * Format: uuid
+             * @description SEC-049: quién puso por última vez el pagador o el nº de afiliado (en las anteriores, quien la creó). Un rol que no es ADMIN no puede asignar un convenio con una cobertura que declaró él y nadie verificó.
+             */
+            declaredById: string | null;
+            /**
+             * Format: date-time
+             * @description SEC-049: cuándo la verificó un ADMIN; null = sin verificar. Cambiar el pagador o el nº de afiliado la borra.
+             */
+            verifiedAt: string | null;
+            /** Format: uuid */
+            verifiedById: string | null;
+            /** @example Ana Gómez */
+            verifiedByName: string | null;
+            /**
              * @description Calculado a hoy en la zona de la sede.
              * @enum {string}
              */
@@ -5403,6 +5440,7 @@ export interface components {
             /** Format: uuid */
             payerId: string;
             planName?: string;
+            /** @description SEC-049: obligatorio con un pagador externo (todo tipo salvo OTRO), con la misma regla para todos: tras normalizar, de 4 a 40 caracteres (letras, dígitos, espacio, `-`, `.` o `/`), al menos un dígito y no un mismo carácter repetido; opcional con OTRO. */
             memberNumber?: string;
             policyHolderName?: string;
             /** @example 2026-01-01 */
@@ -5426,6 +5464,10 @@ export interface components {
             /** @description true la hace principal (desmarca la anterior); false sobre la única principal se rechaza. */
             isPrimary?: boolean;
             notes?: string | null;
+        };
+        VerifyPatientCoverageDto: {
+            /** @description El nº de afiliado que el administrador comprobó. Si ya no es el guardado, o cambió el pagador (otra petición los cambió), 409. */
+            checkedMemberNumber: string;
         };
         PayerDto: {
             /** Format: uuid */
@@ -13752,7 +13794,7 @@ export interface operations {
                     "application/json": components["schemas"]["PatientCoverageDto"];
                 };
             };
-            /** @description Validación, pagador inexistente o desactivado, vigencia inválida o más de 5 coberturas */
+            /** @description Validación, pagador inexistente o desactivado, vigencia inválida, nº de afiliado ausente o sin formato con un pagador externo, o más de 5 coberturas */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -13827,7 +13869,7 @@ export interface operations {
                     "application/json": components["schemas"]["PatientCoverageDto"];
                 };
             };
-            /** @description Validación, pagador inexistente o desactivado, vigencia inválida o dejar al paciente sin principal */
+            /** @description Validación, pagador inexistente o desactivado, vigencia inválida, nº de afiliado ausente o sin formato con un pagador externo, o dejar al paciente sin principal */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -13843,6 +13885,60 @@ export interface operations {
             };
             /** @description Otra petición cambió la cobertura principal a la vez */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientCoveragesController_verify: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+                coverageId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VerifyPatientCoverageDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PatientCoverageDto"];
+                };
+            };
+            /** @description Validación, cobertura sin nº de afiliado o de un pagador interno (OTRO) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo un administrador */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente o cobertura no encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El pagador o el nº de afiliado cambió mientras el administrador lo revisaba */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
