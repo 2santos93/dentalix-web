@@ -9,7 +9,7 @@ import { ADJUSTMENT_KIND_LABELS } from '@/lib/cash-sessions/arqueo';
 import { moneyList, sessionStatusLabel } from '@/lib/cash-sessions/presentation';
 import { PAYMENT_METHOD_LABELS } from '@/lib/payments/payment-method';
 import { formatCurrency } from '@/lib/format/currency';
-import { formatCivilDate, formatDateTimeInZone } from '@/lib/format/date';
+import { formatCivilDate, formatDateTimeInZone, formatTimeInZone } from '@/lib/format/date';
 import {
   Table,
   TableBody,
@@ -37,6 +37,7 @@ const copy = {
   colOpening: 'Fondo',
   colPayments: 'Cobros',
   colAdjustments: 'Ajustes',
+  colOutflows: 'Salidas',
   colExpected: 'Esperado',
   colCounted: 'Contado',
   colDifference: 'Diferencia',
@@ -76,6 +77,15 @@ const copy = {
   pending: 'Pendiente de la próxima caja de la sede',
   otherSession: 'Otra caja de la sede',
   noAdjustments: 'Sin ajustes.',
+  outflowsTitle: 'Salidas de caja',
+  outflowsLabel: 'Salidas de caja',
+  voidedOutflowsLabel: 'Salidas anuladas',
+  colTime: 'Hora',
+  colCategory: 'Categoría',
+  colSupplier: 'Proveedor',
+  noOutflows: 'Sin salidas de caja en este turno.',
+  outflowBookedElsewhere:
+    'Anulada con la caja ya cerrada: aquí sigue restando y la anulación es un ajuste en otra caja.',
   historyTitle: 'Historial',
   closedEvent: (n: number, who: string, when: string) => `Cierre ${n}: ${who}, ${when}`,
   reopenedEvent: (n: number, who: string, when: string, reason: string) =>
@@ -92,6 +102,7 @@ interface ArqueoRow {
   opening: number;
   payments: number | null;
   adjustments: number | null;
+  outflows: number | null;
   expected: number;
   counted: number | null;
   difference: number | null;
@@ -99,8 +110,8 @@ interface ArqueoRow {
 
 /**
  * Las filas del arqueo: las del cierre vigente (esperado, contado, diferencia,
- * inmutables) con el desglose de cobros y ajustes del cálculo actual, o, con
- * la caja abierta, solo lo esperado.
+ * inmutables) con el desglose de cobros, ajustes y salidas del cálculo actual,
+ * o, con la caja abierta, solo lo esperado.
  */
 function arqueoRows(session: CashSessionDetail): ArqueoRow[] {
   const expected = new Map((session.expected ?? []).map((l) => [`${l.currency}|${l.method}`, l]));
@@ -115,6 +126,7 @@ function arqueoRows(session: CashSessionDetail): ArqueoRow[] {
         opening: line.opening,
         payments: breakdown?.payments ?? null,
         adjustments: breakdown?.adjustments ?? null,
+        outflows: breakdown?.outflows ?? null,
         expected: line.expected,
         counted: line.counted,
         difference: line.difference,
@@ -128,6 +140,7 @@ function arqueoRows(session: CashSessionDetail): ArqueoRow[] {
     opening: line.opening,
     payments: line.payments,
     adjustments: line.adjustments,
+    outflows: line.outflows,
     expected: line.expected,
     counted: null,
     difference: null,
@@ -205,6 +218,7 @@ export function CashSessionReport({ session, linkSessions = true }: CashSessionR
                   <TableHead scope="col" className="text-right">{copy.colOpening}</TableHead>
                   <TableHead scope="col" className="text-right">{copy.colPayments}</TableHead>
                   <TableHead scope="col" className="text-right">{copy.colAdjustments}</TableHead>
+                  <TableHead scope="col" className="text-right">{copy.colOutflows}</TableHead>
                   <TableHead scope="col" className="text-right">{copy.colExpected}</TableHead>
                   <TableHead scope="col" className="text-right">{copy.colCounted}</TableHead>
                   <TableHead scope="col" className="text-right">{copy.colDifference}</TableHead>
@@ -227,7 +241,14 @@ export function CashSessionReport({ session, linkSessions = true }: CashSessionR
                       <TableCell data-label={copy.colAdjustments} className="text-right tabular-nums">
                         {money(row.adjustments)}
                       </TableCell>
-                      <TableCell data-label={copy.colExpected} className="text-right font-medium tabular-nums">
+                      <TableCell data-label={copy.colOutflows} className="text-right tabular-nums">
+                        {/* Se restan: con signo, para que la fila se lea como una suma. */}
+                        {money(row.outflows ? -row.outflows : row.outflows)}
+                      </TableCell>
+                      <TableCell
+                        data-label={copy.colExpected}
+                        className={cn('text-right font-medium tabular-nums', row.expected < 0 && 'text-danger')}
+                      >
                         {money(row.expected)}
                       </TableCell>
                       <TableCell data-label={copy.colCounted} className="text-right tabular-nums">
@@ -332,6 +353,10 @@ export function CashSessionReport({ session, linkSessions = true }: CashSessionR
         )}
       </Section>
 
+      <Section title={copy.outflowsTitle}>
+        <OutflowList session={session} when={when} />
+      </Section>
+
       <Section title={copy.adjustmentsTitle}>
         <AdjustmentList
           items={session.adjustments}
@@ -411,6 +436,78 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
+/** «Mensajería · Mensajeros Ya», o solo la categoría sin proveedor. */
+function outflowSubject(outflow: { category: string; supplier: string | null }): string {
+  return outflow.supplier ? `${outflow.category} · ${outflow.supplier}` : outflow.category;
+}
+
+/**
+ * Salidas de caja menor del turno (DX-274): se ven también con arqueo ciego
+ * (R6), porque no dicen cuánto se espera. Las anuladas van aparte, tachadas y
+ * con su motivo.
+ */
+function OutflowList({ session, when }: { session: CashSessionDetail; when: (iso: string) => string }) {
+  const zone = session.timeZone;
+  const { outflows, voidedOutflows } = session;
+  if (outflows.length === 0 && voidedOutflows.length === 0) return <p className="text-muted">{copy.noOutflows}</p>;
+  return (
+    <div className="flex flex-col gap-2">
+      {outflows.length > 0 ? (
+        <div className="overflow-hidden rounded-lg border border-border">
+          <Table aria-label={copy.outflowsLabel}>
+            <TableHeader>
+              <TableRow className="hover:bg-transparent">
+                <TableHead scope="col">{copy.colTime}</TableHead>
+                <TableHead scope="col">{copy.colCategory}</TableHead>
+                <TableHead scope="col">{copy.colSupplier}</TableHead>
+                <TableHead scope="col">{copy.colBy}</TableHead>
+                <TableHead scope="col" className="text-right">{copy.colAmount}</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {outflows.map((o) => (
+                <TableRow key={o.id} className="cash-report-row">
+                  <TableCell data-label={copy.colTime} className="tabular-nums">
+                    {formatTimeInZone(o.createdAt, zone)}
+                  </TableCell>
+                  <TableCell data-label={copy.colCategory}>{o.category}</TableCell>
+                  <TableCell data-label={copy.colSupplier}>{o.supplier ?? '—'}</TableCell>
+                  <TableCell data-label={copy.colBy}>{o.createdBy.fullName ?? '—'}</TableCell>
+                  <TableCell data-label={copy.colAmount} className="text-right font-medium tabular-nums">
+                    {formatCurrency(o.amount, o.currency)}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
+      ) : null}
+      {voidedOutflows.length > 0 ? (
+        <ul className="divide-y divide-hairline rounded-lg border border-border" aria-label={copy.voidedOutflowsLabel}>
+          {voidedOutflows.map((o) => (
+            <li key={o.id} className="cash-report-row flex flex-col gap-1 px-3 py-2">
+              <div className="flex flex-wrap items-baseline justify-between gap-2">
+                <span className="font-medium line-through decoration-1">
+                  {formatTimeInZone(o.createdAt, zone)} · {outflowSubject(o)}
+                </span>
+                <span className="font-medium tabular-nums line-through decoration-1">
+                  {formatCurrency(o.amount, o.currency)}
+                </span>
+              </div>
+              <p className="text-xs text-muted">
+                {copy.colReason}: {o.voidReason ?? '—'} · {copy.colBy}: {o.createdBy.fullName ?? '—'} ·{' '}
+                {copy.colVoidedBy}: {o.voidedBy?.fullName ?? '—'}
+                {o.voidedAt ? ` · ${when(o.voidedAt)}` : ''}
+              </p>
+              {o.bookedAsAdjustment ? <p className="text-xs text-warning">{copy.outflowBookedElsewhere}</p> : null}
+            </li>
+          ))}
+        </ul>
+      ) : null}
+    </div>
+  );
+}
+
 function AdjustmentList({
   items,
   label,
@@ -446,6 +543,7 @@ function AdjustmentList({
             </div>
             <p className="text-xs text-muted">
               {a.payment ? `${a.payment.patient.fullName}${a.payment.receiptNumber ? ` · ${a.payment.receiptNumber}` : ''} · ` : ''}
+              {a.expensePayment ? `${outflowSubject(a.expensePayment)} · ` : ''}
               {a.reason ? `${a.reason} · ` : ''}
               {a.createdBy.fullName ?? '—'} · {when(a.createdAt)}
             </p>

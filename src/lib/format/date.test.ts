@@ -7,6 +7,7 @@ import {
   formatDateLabel,
   formatDateTime,
   formatDateTimeInZone,
+  formatTimeInZone,
   formatTime,
   zonedDayStart,
 } from './date';
@@ -62,6 +63,14 @@ describe('formatDateTime (local)', () => {
   it('joins date and time', () => {
     const d = new Date(2026, 6, 3, 8, 0);
     expect(formatDateTime(d)).toBe('03/07/2026 08:00');
+  });
+});
+
+describe('formatTimeInZone', () => {
+  it('renders HH:mm in the zone', () => {
+    expect(formatTimeInZone('2026-10-16T03:30:00.000Z', 'America/Bogota')).toBe('22:30');
+    expect(formatTimeInZone('2026-10-16T05:00:00.000Z', 'America/Bogota')).toBe('00:00');
+    expect(formatTimeInZone(null, 'America/Bogota')).toBe('—');
   });
 });
 

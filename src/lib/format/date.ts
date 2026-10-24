@@ -127,6 +127,19 @@ export function formatDateTimeInZone(
   return `${pad(p.day)}/${pad(p.month)}/${p.year} ${pad(p.hour)}:${pad(p.minute)}`;
 }
 
+/** `HH:mm` of a genuine instant in a given IANA zone (unknown zone: local time). */
+export function formatTimeInZone(
+  value: string | number | Date | null | undefined,
+  timeZone: string,
+  fallback: string = FALLBACK,
+): string {
+  const d = toDate(value);
+  if (!d) return fallback;
+  const p = zonedParts(d, timeZone);
+  if (!p) return formatTime(d, fallback);
+  return `${String(p.hour).padStart(2, '0')}:${String(p.minute).padStart(2, '0')}`;
+}
+
 /**
  * The UTC instant (ISO) at which the civil day `YYYY-MM-DD` starts in
  * `timeZone` — to turn a date-picker day into the API's `from`/`to` instants

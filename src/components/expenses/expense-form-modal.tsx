@@ -1,26 +1,20 @@
 'use client';
 import * as React from 'react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useState } from 'react';
 import { Settings2 } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import {
   createExpense,
   requestExpenseReceiptUpload,
-  suggestExpenseSuppliers,
   updateExpense,
   type CreateExpenseInput,
   type ExpenseDetail,
   type UpdateExpenseInput,
 } from '@/lib/expenses/expenses-api';
-import {
-  EXPENSE_DESCRIPTION_MAX,
-  EXPENSE_RECEIPT_ACCEPT,
-  EXPENSE_RECEIPT_RULES,
-  EXPENSE_SUPPLIER_MAX,
-} from '@/lib/expenses/presentation';
+import { EXPENSE_RECEIPT_ACCEPT, EXPENSE_RECEIPT_RULES } from '@/lib/expenses/presentation';
 import type { SingleFileUploadRequest } from '@/lib/files/upload-single-file';
 import { formatCurrency } from '@/lib/format/currency';
-import { moneyInputText, parseMoneyInput } from '@/lib/format/money';
+import { moneyInputText } from '@/lib/format/money';
 import { collapseSpaces } from '@/lib/format/text';
 import { COUNTRY_CURRENCY } from '@/lib/locations/clinic-currency';
 import type { ClinicLocation } from '@/lib/locations/locations-api';
@@ -36,6 +30,14 @@ import { Input } from '@/components/ui/input';
 import { fieldClass } from '@/lib/ui/field-class';
 import { cn } from '@/lib/utils';
 import {
+  ExpenseCategoryField,
+  ExpenseDescriptionField,
+  ExpenseSupplierField,
+  expenseFieldsCopy,
+  expenseTextErrors,
+  parseExpenseAmount,
+} from './expense-fields';
+import {
   ExpensePaymentFields,
   paidOnError,
   paymentBody,
@@ -44,6 +46,7 @@ import {
 import type { ExpenseCategoriesState } from './use-expense-categories';
 
 export const expenseFormCopy = {
+  ...expenseFieldsCopy,
   createTitle: 'Nuevo gasto',
   createDescription:
     'Lo que la sede gastó: categoría, proveedor, importe y fechas de la factura. Si ya se pagó, regístralo aquí mismo.',
@@ -52,41 +55,23 @@ export const expenseFormCopy = {
   create: 'Registrar gasto',
   save: 'Guardar cambios',
   location: 'Sede',
-  category: 'Categoría',
-  categoryPlaceholder: 'Elige una categoría',
-  categoriesLoading: 'Cargando categorías…',
-  categoriesError: 'Categorías no disponibles',
   locationsError: 'Sedes no disponibles',
   manageCategories: 'Gestionar categorías',
-  supplier: 'Proveedor',
-  supplierHint: 'Opcional. Te sugerimos los que ya usaste.',
-  description: 'Descripción',
-  amount: 'Importe',
-  currency: 'Moneda',
   invoiceDate: 'Fecha de factura',
   dueDate: 'Vencimiento',
   dueDateHint: 'Opcional.',
-  receipt: 'Soporte',
-  receiptHint: 'PDF, JPG, PNG o foto HEIC, hasta 20 MB. Opcional.',
   paid: 'Ya está pagado',
   paidHint: 'Registra el pago completo junto con el gasto.',
   lockedByPayments: 'Con pagos registrados, la sede y la moneda no cambian.',
   amountMin: (paid: string) => `No puede ser menor que lo ya pagado (${paid}).`,
-  categoryRequired: 'Elige una categoría.',
-  amountRequired: 'Escribe un importe mayor que 0.',
   invoiceDateRequired: 'Elige la fecha de la factura.',
   invoiceDateFuture: 'La fecha de la factura no puede ser futura.',
   dueBeforeInvoice: 'El vencimiento no puede ser anterior a la fecha de la factura.',
-  supplierTooLong: `El proveedor admite hasta ${EXPENSE_SUPPLIER_MAX} caracteres.`,
-  descriptionTooLong: `La descripción admite hasta ${EXPENSE_DESCRIPTION_MAX} caracteres.`,
-  receiptPending: 'El soporte no se subió: reintenta la subida o quítalo antes de guardar.',
   createError: 'No pudimos registrar el gasto. Intenta de nuevo.',
   saveError: 'No pudimos guardar los cambios. Intenta de nuevo.',
   created: 'Gasto registrado.',
   saved: 'Gasto actualizado.',
 };
-
-const SUPPLIER_DEBOUNCE_MS = 300;
 
 interface FormState {
   locationId: string;
@@ -189,7 +174,6 @@ export function ExpenseFormModal({
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [idempotencyKey] = useState(() => crypto.randomUUID());
-  const [suppliers, setSuppliers] = useState<string[]>([]);
 
   const requestTicket = useCallback(
     (request: SingleFileUploadRequest) => requestExpenseReceiptUpload(token, request),
@@ -217,26 +201,6 @@ export function ExpenseFormModal({
   const location = locations.find((l) => l.id === form.locationId);
   const today = sedeToday(location?.timeZone ?? null);
 
-  // Sugerencias de proveedor al teclear; si fallan, el campo sigue siendo libre.
-  const supplierQuery = collapseSpaces(form.supplier);
-  useEffect(() => {
-    if (!open || !token) return;
-    let cancelled = false;
-    const timer = setTimeout(() => {
-      suggestExpenseSuppliers(token, supplierQuery)
-        .then((names) => {
-          if (!cancelled) setSuppliers(names);
-        })
-        .catch(() => {
-          /* sin sugerencias */
-        });
-    }, SUPPLIER_DEBOUNCE_MS);
-    return () => {
-      cancelled = true;
-      clearTimeout(timer);
-    };
-  }, [open, token, supplierQuery]);
-
   function patch(next: Partial<FormState>) {
     setForm((f) => ({ ...f, ...next }));
   }
@@ -258,13 +222,9 @@ export function ExpenseFormModal({
   }
 
   function validate(): { next: FieldErrors; amount: number | null } {
-    const next: FieldErrors = {};
-    if (!form.category) next.category = expenseFormCopy.categoryRequired;
-    const parsed = parseMoneyInput(form.amount, form.currency);
-    let amount: number | null = null;
-    if (!parsed.ok) next.amount = parsed.reason === 'empty' ? expenseFormCopy.amountRequired : parsed.message;
-    else if (parsed.value <= 0) next.amount = expenseFormCopy.amountRequired;
-    else amount = parsed.value;
+    const next: FieldErrors = expenseTextErrors(form);
+    const { amount, error: amountError } = parseExpenseAmount(form.amount, form.currency);
+    if (amountError) next.amount = amountError;
     if (amount !== null && expense && Math.round(amount * 100) < Math.round(expense.paidAmount * 100)) {
       next.amount = expenseFormCopy.amountMin(formatCurrency(expense.paidAmount, expense.currency));
     }
@@ -272,10 +232,6 @@ export function ExpenseFormModal({
     else if (form.invoiceDate > today) next.invoiceDate = expenseFormCopy.invoiceDateFuture;
     if (form.dueDate && form.invoiceDate && form.dueDate < form.invoiceDate) {
       next.dueDate = expenseFormCopy.dueBeforeInvoice;
-    }
-    if (collapseSpaces(form.supplier).length > EXPENSE_SUPPLIER_MAX) next.supplier = expenseFormCopy.supplierTooLong;
-    if (form.description.trim().length > EXPENSE_DESCRIPTION_MAX) {
-      next.description = expenseFormCopy.descriptionTooLong;
     }
     if (!editing && form.paid) {
       const paidOn = paidOnError(form.payment, today);
@@ -336,11 +292,6 @@ export function ExpenseFormModal({
     }
   }
 
-  const options = categories.categories ?? [];
-  // Editando un gasto con una categoría ya retirada, sigue elegible la suya.
-  const categoryNames = options.map((c) => c.name);
-  if (form.category && !categoryNames.includes(form.category)) categoryNames.unshift(form.category);
-
   return (
     <FormModal
       open={open}
@@ -386,37 +337,17 @@ export function ExpenseFormModal({
             </select>
           )}
         </FormField>
-        <FormField htmlFor="expense-category" label={expenseFormCopy.category} error={errors.category}>
-          {categories.failed ? (
-            <FieldError
-              label={expenseFormCopy.categoriesError}
-              onRetry={categories.reload}
-              className="h-10 w-full"
-              retryId="expense-category"
-            />
-          ) : (
-            <select
-              id="expense-category"
-              value={form.category}
-              disabled={submitting || categories.categories === null}
-              onChange={(e) => {
-                patch({ category: e.target.value });
-                clearError('category');
-              }}
-              aria-invalid={errors.category ? true : undefined}
-              aria-describedby={errors.category ? fieldErrorId('expense-category') : undefined}
-              className={cn(fieldClass, 'h-10')}
-            >
-              <option value="">
-                {categories.categories === null ? expenseFormCopy.categoriesLoading : expenseFormCopy.categoryPlaceholder}
-              </option>
-              {categoryNames.map((name) => (
-                <option key={name} value={name}>
-                  {name}
-                </option>
-              ))}
-            </select>
-          )}
+        <ExpenseCategoryField
+          id="expense-category"
+          value={form.category}
+          onChange={(category) => {
+            patch({ category });
+            clearError('category');
+          }}
+          categories={categories}
+          error={errors.category}
+          disabled={submitting}
+        >
           <Button
             type="button"
             variant="link"
@@ -427,53 +358,32 @@ export function ExpenseFormModal({
             <Settings2 aria-hidden />
             {expenseFormCopy.manageCategories}
           </Button>
-        </FormField>
+        </ExpenseCategoryField>
       </div>
 
-      <FormField
-        htmlFor="expense-supplier"
-        label={expenseFormCopy.supplier}
-        hint={expenseFormCopy.supplierHint}
-        hintId="expense-supplier-hint"
+      <ExpenseSupplierField
+        id="expense-supplier"
+        token={token}
+        enabled={open}
+        value={form.supplier}
+        onChange={(supplier) => {
+          patch({ supplier });
+          clearError('supplier');
+        }}
         error={errors.supplier}
-      >
-        <Input
-          id="expense-supplier"
-          list="expense-supplier-options"
-          value={form.supplier}
-          maxLength={EXPENSE_SUPPLIER_MAX}
-          autoComplete="off"
-          disabled={submitting}
-          onChange={(e) => {
-            patch({ supplier: e.target.value });
-            clearError('supplier');
-          }}
-          aria-invalid={errors.supplier ? true : undefined}
-          aria-describedby={errors.supplier ? fieldErrorId('expense-supplier') : 'expense-supplier-hint'}
-        />
-        <datalist id="expense-supplier-options">
-          {suppliers.map((name) => (
-            <option key={name} value={name} />
-          ))}
-        </datalist>
-      </FormField>
+        disabled={submitting}
+      />
 
-      <FormField htmlFor="expense-description" label={expenseFormCopy.description} error={errors.description}>
-        <textarea
-          id="expense-description"
-          rows={2}
-          value={form.description}
-          maxLength={EXPENSE_DESCRIPTION_MAX}
-          disabled={submitting}
-          onChange={(e) => {
-            patch({ description: e.target.value });
-            clearError('description');
-          }}
-          aria-invalid={errors.description ? true : undefined}
-          aria-describedby={errors.description ? fieldErrorId('expense-description') : undefined}
-          className={fieldClass}
-        />
-      </FormField>
+      <ExpenseDescriptionField
+        id="expense-description"
+        value={form.description}
+        onChange={(description) => {
+          patch({ description });
+          clearError('description');
+        }}
+        error={errors.description}
+        disabled={submitting}
+      />
 
       <div className="grid gap-4 sm:grid-cols-[1fr_12rem]">
         <FormField htmlFor="expense-amount" label={expenseFormCopy.amount} error={errors.amount}>

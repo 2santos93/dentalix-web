@@ -49,6 +49,7 @@ import {
 import type { CashViewTabs } from '@/components/payments/cash-register-view';
 import { OpenCashSessionModal } from './open-cash-session-modal';
 import { CloseCashSessionModal } from './close-cash-session-modal';
+import { CashOutflowModal } from './cash-outflow-modal';
 import { cn } from '@/lib/utils';
 
 const copy = {
@@ -65,6 +66,8 @@ const copy = {
   expectedTitle: 'Esperado hasta ahora',
   open: 'Abrir caja',
   close: 'Cerrar caja',
+  outflow: 'Salida de caja',
+  outflowsCount: (n: number) => `Salidas del turno: ${n}`,
   viewShift: 'Ver turno',
   currentError: 'No pudimos cargar tu caja.',
   listTitle: 'Turnos',
@@ -126,6 +129,7 @@ export function CashShiftsView({ token, tabs }: CashShiftsViewProps) {
   const [forbidden, setForbidden] = useState(false);
   const [opening, setOpening] = useState(false);
   const [closing, setClosing] = useState(false);
+  const [outflowing, setOutflowing] = useState(false);
   const [modalKey, setModalKey] = useState(0);
   const [notice, setNotice] = useState('');
 
@@ -244,6 +248,10 @@ export function CashShiftsView({ token, tabs }: CashShiftsViewProps) {
             onClose={() => {
               setModalKey((k) => k + 1);
               setClosing(true);
+            }}
+            onOutflow={() => {
+              setModalKey((k) => k + 1);
+              setOutflowing(true);
             }}
           />
         ) : null}
@@ -396,6 +404,18 @@ export function CashShiftsView({ token, tabs }: CashShiftsViewProps) {
           }}
         />
       ) : null}
+      {session && current ? (
+        <CashOutflowModal
+          key={`outflow-${modalKey}`}
+          open={outflowing}
+          onOpenChange={setOutflowing}
+          token={token}
+          locationId={current.locationId}
+          sedeName={sedeName}
+          defaultCurrency={defaultCurrency}
+          onCreated={(_expense, notice) => afterChange(notice)}
+        />
+      ) : null}
     </>
   );
 }
@@ -406,12 +426,14 @@ function CurrentSessionCard({
   timeZone,
   onOpen,
   onClose,
+  onOutflow,
 }: {
   current: CurrentCashSession;
   sedeName: string;
   timeZone: string;
   onOpen: () => void;
   onClose: () => void;
+  onOutflow: () => void;
 }) {
   const session: CashSessionDetail | null = current.session;
   const headingId = React.useId();
@@ -430,6 +452,9 @@ function CurrentSessionCard({
           ) : (
             <p className="text-sm text-muted">{copy.noSession}</p>
           )}
+          {session ? (
+            <p className="text-sm text-muted tabular-nums">{copy.outflowsCount(session.outflows.length)}</p>
+          ) : null}
           {current.settings.requireOpenSession ? (
             <p className="mt-1 text-sm text-warning">{copy.requireOpen}</p>
           ) : null}
@@ -439,6 +464,9 @@ function CurrentSessionCard({
             <>
               <Button asChild variant="outline">
                 <Link href={cashSessionHref(session.id)}>{copy.viewShift}</Link>
+              </Button>
+              <Button type="button" variant="outline" onClick={onOutflow}>
+                {copy.outflow}
               </Button>
               <Button type="button" onClick={onClose}>
                 {copy.close}
@@ -469,7 +497,7 @@ function CurrentSessionCard({
                     {PAYMENT_METHOD_LABELS[line.method]}{' '}
                     <span className="text-xs text-muted">{line.currency}</span>
                   </span>
-                  <span className="font-medium tabular-nums text-ink">
+                  <span className={cn('font-medium tabular-nums', line.expected < 0 ? 'text-danger' : 'text-ink')}>
                     {formatCurrency(line.expected, line.currency)}
                   </span>
                 </li>

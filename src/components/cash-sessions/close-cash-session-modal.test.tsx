@@ -3,7 +3,7 @@ import userEvent from '@testing-library/user-event';
 import { CloseCashSessionModal } from './close-cash-session-modal';
 import { closeCashSession } from '@/lib/cash-sessions/cash-sessions-api';
 import { ApiError } from '@/lib/api/client';
-import { cashSessionFixture, closedCashSessionFixture } from '@/lib/test/cash-session';
+import { cashSessionFixture, closedCashSessionFixture, outflowFixture } from '@/lib/test/cash-session';
 
 jest.mock('../../lib/cash-sessions/cash-sessions-api', () => ({
   ...jest.requireActual('../../lib/cash-sessions/cash-sessions-api'),
@@ -154,6 +154,31 @@ describe('CloseCashSessionModal (DX-027)', () => {
         expect.objectContaining({ counts: [{ currency: 'USD', method: 'CASH', counted: 30 }] }),
       ),
     );
+  });
+
+  it('DX-274: arqueo ciego con salidas de caja: cuenta su moneda sin enseñar lo esperado', () => {
+    renderModal(
+      cashSessionFixture({
+        blindHidden: true,
+        expected: null,
+        payments: null,
+        outflows: [outflowFixture({ currency: 'USD', amount: 12 })],
+      }),
+    );
+    expect(screen.getByLabelText('Contado en efectivo (USD)')).toBeInTheDocument();
+    expect(screen.queryByText(/Esperado/)).not.toBeInTheDocument();
+  });
+
+  it('DX-274: un esperado negativo se enseña con su signo y la diferencia sale de él', async () => {
+    const user = userEvent.setup();
+    const [cash] = cashSessionFixture().expected!;
+    renderModal(
+      cashSessionFixture({ expected: [{ ...cash, outflows: 100_000, outflowsCount: 1, expected: -20_000 }] }),
+    );
+    expect(screen.getByText(/Esperado -20\.?000,00/)).toBeInTheDocument();
+    await user.type(screen.getByLabelText('Contado en efectivo (COP)'), '0');
+    expect(screen.getByTestId('row-difference')).toHaveTextContent(/20\.?000,00/);
+    expect(screen.getByTestId('row-difference')).not.toHaveTextContent('-');
   });
 
   it('un importe que no se entiende no sale hacia la API', async () => {
