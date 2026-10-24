@@ -6,17 +6,15 @@ import { accessTokenOf, registerAndLogin } from './support/auth';
 import { API_URL } from './support/urls';
 
 /**
- * e2e (DX-212): códigos para el Resumen Digital de Atención.
+ * e2e (DX-212, DX-318, DX-320): códigos clínicos de la evolución.
  *
- * Una clínica nueva (sede principal en Colombia, sin REPS) con un paciente con
- * documento, el registro profesional del ADMIN y un procedimiento hecho hoy en
- * el odontograma con un ítem del catálogo SIN CUPS. En la ficha:
+ * Una clínica nueva con un paciente y un procedimiento hecho hoy en el
+ * odontograma. En la ficha:
  *   - «Nueva evolución» con diagnóstico principal K02.1 (buscando «caries») y
  *     relacionado K05.1 en el 36: la evolución los muestra con código y texto;
- *   - el chip dice «RDA: faltan 2 datos» y su lista enlaza a completarlos;
- *   - el CUPS se completa en el catálogo desde «Completar» y el REPS en
- *     Ajustes › Sedes;
- *   - de vuelta en la ficha, el chip dice «RDA: listo».
+ *   - DX-318: no hay chip «RDA» ni la ficha pide datos del RDA a la API;
+ *   - DX-320: el catálogo no tiene columna ni campo «Código CUPS»;
+ *   - el REPS se sigue guardando en Ajustes › Sedes.
  * En escritorio (1440px) y móvil (390px), sin scroll horizontal ni errores en
  * la consola del navegador.
  */
@@ -29,16 +27,6 @@ const VIEWPORTS = [
   { name: 'móvil', width: 390, height: 844 },
 ];
 
-interface CatalogItem {
-  id: string;
-  labelEs: string;
-}
-
-function subOf(token: string): string {
-  const payload = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
-  return (JSON.parse(Buffer.from(payload, 'base64').toString('utf8')) as { sub: string }).sub;
-}
-
 async function expectNoHorizontalScroll(page: Page): Promise<void> {
   const overflow = await page.evaluate(
     () => document.documentElement.scrollWidth - document.documentElement.clientWidth,
@@ -48,7 +36,7 @@ async function expectNoHorizontalScroll(page: Page): Promise<void> {
 
 for (const viewport of VIEWPORTS) {
  for (const scheme of ['light', 'dark'] as const) {
-  test(`evolución con CIE-10 → «RDA: listo» tras completar CUPS y REPS (${viewport.name}, ${scheme})`, async ({
+  test(`evolución con CIE-10, sin chip RDA ni CUPS en el catálogo (${viewport.name}, ${scheme})`, async ({
     page,
   }) => {
     test.setTimeout(120_000);
@@ -57,6 +45,10 @@ for (const viewport of VIEWPORTS) {
       if (msg.type() === 'error') consoleErrors.push(msg.text());
     });
     page.on('pageerror', (err) => consoleErrors.push(err.message));
+    const rdaRequests: string[] = [];
+    page.on('request', (req) => {
+      if (new URL(req.url()).pathname.includes('/rda-readiness')) rdaRequests.push(req.url());
+    });
 
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
     await page.emulateMedia({ colorScheme: scheme });
@@ -67,10 +59,10 @@ for (const viewport of VIEWPORTS) {
       if (shots) await page.screenshot({ path: join(shots, `${viewport.width}-${scheme}-${name}.png`) });
     }
     const origin = await registerAndLogin(page, {
-      subdomain: `test-clinic-rda-${tag}`,
-      clinicName: `Clinica RDA ${tag}`,
+      subdomain: `test-clinic-cie-${tag}`,
+      clinicName: `Clinica CIE ${tag}`,
       fullName: 'Rosa Diagnóstico',
-      email: `test.user.rda.${tag}@example.com`,
+      email: `test.user.cie.${tag}@example.com`,
       password,
     });
     const token = await accessTokenOf(page);
@@ -82,15 +74,14 @@ for (const viewport of VIEWPORTS) {
     }
 
     // Datos de partida por la API real.
-    await api('patch', `/staff/${subOf(token)}`, { professionalLicense: 'TP 52-1234-19' });
     const patient = await api<{ id: string }>('post', '/patients', {
       firstName: 'Lucía',
-      lastName: `Rda${tag}`,
+      lastName: `Cie${tag}`,
       docType: 'CC',
-      docNumber: `RDA${tag}`.slice(0, 20),
+      docNumber: `CIE${tag}`.slice(0, 20),
       sex: 'F',
     });
-    const procedures = await api<CatalogItem[]>('get', '/catalog/items?kind=PROCEDURE');
+    const procedures = await api<{ id: string }[]>('get', '/catalog/items?kind=PROCEDURE');
     const procedure = procedures[0];
     await api('post', `/patients/${patient.id}/tooth-records`, {
       toothNumber: '36',
@@ -126,35 +117,29 @@ for (const viewport of VIEWPORTS) {
     await dialog.getByRole('button', { name: 'Guardar evolución' }).click();
     await expect(dialog).toBeHidden();
 
-    // 2. La ficha muestra los diagnósticos y el chip con lo que falta.
+    // 2. La ficha muestra los diagnósticos y ningún chip RDA (DX-318).
     const diagnoses = page.getByRole('list', { name: /Diagnósticos de la evolución del/ }).locator('visible=true');
     await expect(diagnoses).toContainText('K02.1');
     await expect(diagnoses).toContainText('Caries de la dentina');
     await expect(diagnoses).toContainText('K05.1');
     await expect(diagnoses).toContainText('diente 36');
-    const chip = page.getByRole('button', { name: 'RDA: faltan 2 datos' }).locator('visible=true');
-    await expect(chip).toBeVisible({ timeout: 15_000 });
-    await chip.click();
-    const missing = page.getByRole('list', { name: 'Datos que faltan para el RDA' }).locator('visible=true');
-    await expect(missing).toContainText(`Código CUPS de «${procedure.labelEs}»`);
-    await expect(missing).toContainText('Código de habilitación (REPS) de «Sede principal»');
-    await expect(page.getByText('NIT de la clínica: pendiente de DX-019.').locator('visible=true')).toBeVisible();
+    await expect(page.getByText(/\bRDA\b/)).toHaveCount(0);
     await expectNoHorizontalScroll(page);
-    await shot('faltan');
+    await shot('ficha');
 
-    // 3. CUPS desde «Completar» (abre el ítem en el catálogo).
-    await missing.getByRole('link', { name: `Completar: Código CUPS de «${procedure.labelEs}»` }).click();
+    // 3. DX-320: el catálogo no muestra ni pide código CUPS.
+    await page.goto(`${origin}/catalog?item=${procedure.id}`);
     const edit = page.getByRole('dialog', { name: 'Editar ítem' });
     await expect(edit).toBeVisible({ timeout: 15_000 });
-    await edit.getByLabel('Código CUPS').fill('89-20');
-    await edit.getByRole('button', { name: 'Guardar' }).click();
-    await expect(edit.getByText(/6 caracteres alfanuméricos/).first()).toBeVisible();
-    await edit.getByLabel('Código CUPS').fill('232101');
-    await edit.getByRole('button', { name: 'Guardar' }).click();
+    await expect(edit.getByLabel(/CUPS/i)).toHaveCount(0);
+    await expect(edit.getByText(/CUPS/i)).toHaveCount(0);
+    await edit.getByRole('button', { name: 'Cancelar' }).click();
     await expect(edit).toBeHidden();
-    await expect(page.getByText('232101').locator('visible=true').first()).toBeVisible();
+    await expect(page.getByRole('columnheader', { name: /CUPS/i })).toHaveCount(0);
+    await expectNoHorizontalScroll(page);
+    await shot('catalogo');
 
-    // 4. REPS en Ajustes › Sedes.
+    // 4. REPS en Ajustes › Sedes (no cambia con DX-318).
     await page.goto(`${origin}/settings/sedes`);
     const reps = page.getByLabel(/Código de habilitación \(REPS\) · Sede principal/);
     await reps.fill('110010123401');
@@ -162,45 +147,8 @@ for (const viewport of VIEWPORTS) {
     await expect(page.getByText('Guardado')).toBeVisible();
     await expectNoHorizontalScroll(page);
 
-    // 5. Abrir40 evoluciones produce un único lote y conserva carga/error/retry.
-    for (let i = 0; i < 39; i++) {
-      await api('post', `/patients/${patient.id}/clinical-entries`, { notes: `Control QA ${i}`, diagnoses: [{ icd10Code: 'K02.1', kind: 'PRINCIPAL' }] });
-    }
-    let release!: () => void;
-    const held = new Promise<void>((resolve) => { release = resolve; });
-    let count = 0;
-    const batchPattern = '**/patients/*/clinical-entries/rda-readiness?*';
-    await page.route(batchPattern, async (route) => {
-      count++;
-      expect(new URL(route.request().url()).searchParams.get('ids')!.split(',')).toHaveLength(40);
-      await held;
-      await route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ message: 'QA temporal' }) });
-    });
-    await page.goto(`${origin}/patients/${patient.id}?tab=clinical-history`);
-    await expect(page.getByRole('status', { name: 'Comprobando datos del RDA' }).locator('visible=true').first()).toBeVisible();
-    await page.getByRole('status', { name: 'Comprobando datos del RDA' }).locator('visible=true').first().scrollIntoViewIfNeeded();
-    await shot('carga');
-    release();
-    await expect(page.getByText('RDA no disponible').locator('visible=true').first()).toBeVisible();
-    await page.getByText('RDA no disponible').locator('visible=true').first().scrollIntoViewIfNeeded();
-    await shot('error');
-    expect(count).toBe(1);
-    await page.unroute(batchPattern);
-    await page.getByRole('button', { name: 'Reintentar', exact: true }).locator('visible=true').first().click();
-    await expect(page.getByText('RDA: listo').locator('visible=true').first()).toBeVisible();
-    // Nueva apertura,40 evoluciones listas en una única petición real.
-    const requests: string[] = [];
-    page.on('request', (req) => { if (req.url().includes('/rda-readiness')) requests.push(req.url()); });
-    await page.reload();
-    await expect(page.getByText('RDA: listo').locator('visible=true').first()).toBeVisible({ timeout: 15_000 });
-    expect(requests).toHaveLength(1);
-    expect(new URL(requests[0]).searchParams.get('ids')!.split(',')).toHaveLength(40);
-    await expectNoHorizontalScroll(page);
-    await page.getByText('RDA: listo').locator('visible=true').first().scrollIntoViewIfNeeded();
-    await shot('listo');
-
-    // El503 es intencional; ningún error JS ni otro fallo de consola.
-    expect(consoleErrors.filter((error) => !error.includes('503')), 'errores en la consola del navegador').toEqual([]);
+    expect(rdaRequests, 'la web ya no pide datos del RDA').toEqual([]);
+    expect(consoleErrors, 'errores en la consola del navegador').toEqual([]);
   });
 }
 
