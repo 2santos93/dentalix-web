@@ -118,7 +118,10 @@ test('emitir con alerta de alergia, imprimir en A4, anular; recepción sin pesta
   await expect(printPage.getByText('21 (veintiuno) cápsulas')).toBeVisible();
   await expect(printPage.getByText('TP-12345')).toBeVisible();
   await expect(printPage.getByText(`RX${suffix}`.slice(0, 20)).first()).toBeVisible();
-  await expect(printPage.getByText(/alergia registrada a: Penicilina/)).toBeVisible();
+  // DX-300: el aviso confirmado y su motivo salen en el documento.
+  const confirmedAlerts = printPage.getByRole('region', { name: 'Avisos de seguridad confirmados' });
+  await expect(confirmedAlerts).toContainText(/alergia a Penicilina/);
+  await expect(confirmedAlerts).toContainText('Motivo: Prueba cutánea negativa');
   await printPage.emulateMedia({ media: 'print' });
   await expect(printPage.getByRole('toolbar', { name: 'Acciones de la receta' })).toBeHidden();
   const pdf = (await printPage.pdf({ preferCSSPageSize: true })).toString('latin1');
