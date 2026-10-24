@@ -86,6 +86,18 @@ async function openDayList(page: Page) {
   await page.getByLabel('Fecha', { exact: true }).fill(DAY);
 }
 
+/**
+ * Recorre la lista abierta tecla a tecla, esperando a que el foco llegue a cada
+ * opción antes de la siguiente (a ritmo de persona: con pulsaciones seguidas en
+ * una máquina cargada Radix puede no haber movido aún el foco).
+ */
+async function walkOptions(page: Page, steps: Array<[string, string]>) {
+  for (const [key, option] of steps) {
+    await page.keyboard.press(key);
+    await expect(page.getByRole('option', { name: option, exact: true })).toBeFocused();
+  }
+}
+
 test('1440 px: en la fila, ↑/↓ no envían nada y Enter aplica el estado', async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await loginAs(page, origin, reception.email, password);
@@ -103,9 +115,13 @@ test('1440 px: en la fila, ↑/↓ no envían nada y Enter aplica el estado', as
   const listbox = page.getByRole('listbox');
   await expect(listbox).toBeVisible();
   await expect(page.getByRole('option', { name: 'Agendada', exact: true })).toBeFocused();
-  for (const key of ['ArrowDown', 'ArrowDown', 'ArrowDown', 'ArrowUp', 'ArrowDown']) {
-    await page.keyboard.press(key);
-  }
+  await walkOptions(page, [
+    ['ArrowDown', 'Confirmada'],
+    ['ArrowDown', 'Completada'],
+    ['ArrowDown', 'Cancelada'],
+    ['ArrowUp', 'Completada'],
+    ['ArrowDown', 'Cancelada'],
+  ]);
   await expect(page.getByRole('option', { name: 'Cancelada', exact: true })).toBeFocused();
   await page.keyboard.press('Escape');
   await expect(listbox).toBeHidden();
@@ -134,6 +150,8 @@ test('1440 px: en la fila, ↑/↓ no envían nada y Enter aplica el estado', as
   expect((await patched).ok()).toBeTruthy();
   await expect(status).toHaveText('Confirmada', { timeout: 10_000 });
   expect(patches.count).toBe(1);
+  // QA DX-295 (DEF-1): tras guardar, el foco sigue en el selector.
+  await expect(status).toBeFocused();
 
   await page.reload();
   await page.getByRole('button', { name: 'Día', exact: true }).click();
@@ -163,9 +181,13 @@ test('390 px: en el detalle, ↑/↓ no envían nada y Enter aplica el estado', 
   await status.focus();
   await page.keyboard.press('ArrowDown');
   await expect(page.getByRole('option', { name: 'Confirmada', exact: true })).toBeFocused();
-  for (const key of ['ArrowDown', 'ArrowDown', 'ArrowUp', 'ArrowDown', 'ArrowDown']) {
-    await page.keyboard.press(key);
-  }
+  await walkOptions(page, [
+    ['ArrowDown', 'Completada'],
+    ['ArrowDown', 'Cancelada'],
+    ['ArrowUp', 'Completada'],
+    ['ArrowDown', 'Cancelada'],
+    ['ArrowDown', 'No asistió'],
+  ]);
   await expect(page.getByRole('option', { name: 'No asistió', exact: true })).toBeFocused();
   await expectNoHorizontalScroll(page);
   expect(patches.count).toBe(0);
@@ -177,4 +199,5 @@ test('390 px: en el detalle, ↑/↓ no envían nada y Enter aplica el estado', 
   expect((await patched).ok()).toBeTruthy();
   await expect(status).toHaveText('No asistió', { timeout: 10_000 });
   expect(patches.count).toBe(1);
+  await expect(status).toBeFocused();
 });
