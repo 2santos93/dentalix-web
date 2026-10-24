@@ -27,7 +27,10 @@ const copy = {
   colSubtotal: 'Subtotal',
   wholeTooth: 'Diente completo',
   noDiscount: '—',
-  toothLabel: (tooth: string) => `Diente ${tooth}`,
+  toothLabel: (tooth: string) => (tooth ? `Diente ${tooth}` : 'Sin diente'),
+  // DX-291: un cargo administrativo no tiene diente ni caras.
+  noTooth: 'Sin diente',
+  noSurfaces: '—',
   quantityLabel: (n: number) => `Cantidad ${n}`,
   emptyItems: 'Este plan todavía no tiene procedimientos.',
   totalsHeading: 'Totales',
@@ -63,7 +66,9 @@ function listPriceOf(item: PlanQuoteItem, currency: string): string | null {
 function surfacesOf(item: PlanQuoteItem): string {
   return item.surfaces.length > 0
     ? item.surfaces.map((s) => SURFACE_LABELS[s]).join(', ')
-    : copy.wholeTooth;
+    : item.toothNumber
+      ? copy.wholeTooth
+      : copy.noSurfaces;
 }
 
 interface PlanQuoteDocumentProps {
@@ -183,7 +188,7 @@ export function PlanQuoteDocument({ quote }: PlanQuoteDocumentProps) {
                 const listLine = listPriceOf(item, currency);
                 return (
                 <React.Fragment key={item.id}>{startsVisit(index)?<tr><th scope="rowgroup" colSpan={6} className="border-b border-[#d1d5db] bg-[#f3f4f6] py-3 text-left font-semibold">{visitTitle(item.id)}</th></tr>:null}<tr className="quote-item border-b border-[#e5e7eb] align-top">
-                  <td className="py-2 pr-3 font-medium tabular-nums">{item.toothNumber}</td>
+                  <td className="py-2 pr-3 font-medium tabular-nums">{item.toothNumber || copy.noTooth}</td>
                   <td className="py-2 pr-3">
                     <span className="block">{item.procedure}</span>
                     <span className="block text-xs text-[#4b5563]">{surfacesOf(item)}</span>

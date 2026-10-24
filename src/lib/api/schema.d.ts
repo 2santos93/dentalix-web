@@ -2744,6 +2744,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/locations/{id}/cancellation-policy/email-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Vista previa del recordatorio por email con la política vigente (DX-291)
+         * @description El email `appointment-reminder` tal como saldría desde esta sede, con la marca de la clínica y la política vigente en `{politica_cancelacion}` (horas, texto e importe). Paciente y profesional son de ejemplo. No envía ni registra nada.
+         */
+        get: operations["CancellationPolicyController_emailPreview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/locations/{id}/cancellation-policy": {
         parameters: {
             query?: never;
@@ -2759,6 +2779,47 @@ export interface paths {
          * @description La versión anterior no cambia: queda en el historial como prueba de lo que se comunicó al paciente. Horas de aviso 0–168; importe sugerido ≥ 0 con su moneda (los dos o ninguno); texto para el paciente de hasta 1000 caracteres. Queda en la auditoría (CANCELLATION_POLICY, CANCELLATION_POLICY_CHANGED, con los campos enviados).
          */
         post: operations["CancellationPolicyController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/appointments/{id}/cancellation-fee": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Estado del cargo por inasistencia o cancelación tardía de la cita */
+        get: operations["CancellationFeeController_get"];
+        put?: never;
+        /**
+         * Generar el cargo (ítem DONE en el plan «Cargos administrativos»)
+         * @description Solo una cita NO_SHOW o cancelada tarde con la política comunicada al paciente (`policyVersionId`). Crea o reutiliza el plan ACCEPTED «Cargos administrativos» del paciente en la moneda de esa versión y le añade un ítem DONE con el importe (el sugerido, o menos); sale en el estado de cuenta y se cobra con un abono y su recibo (DX-136). Idempotente: una sola decisión por cita (índice único y cita bloqueada). Auditado (APPOINTMENT, CANCELLATION_FEE_CHARGED).
+         */
+        post: operations["CancellationFeeController_charge"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/appointments/{id}/cancellation-fee/waive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Condonar el cargo con motivo (no se cobrará)
+         * @description Solo una cita NO_SHOW o cancelada tarde, antes de cobrar y una vez. El motivo (3–500) queda con la decisión; la auditoría registra la condonación (APPOINTMENT, CANCELLATION_FEE_WAIVED) sin el texto.
+         */
+        post: operations["CancellationFeeController_waive"];
         delete?: never;
         options?: never;
         head?: never;
@@ -7641,6 +7702,19 @@ export interface components {
             primaryColor: string;
             logoUrl: string | null;
         };
+        PublicCancellationPolicyDto: {
+            /**
+             * Format: uuid
+             * @description Versión mostrada: la página la devuelve en `policyVersionId` al responder.
+             */
+            policyVersionId: string;
+            noticeHours: number;
+            /** @description Texto de la clínica (puede ir vacío). */
+            text: string;
+            suggestedFee: number | null;
+            /** @example COP */
+            currency: string | null;
+        };
         PublicAppointmentConfirmationDto: {
             /**
              * @description PENDING: puede responder. RESPONDED: ya respondió (ver `response`). EXPIRED: caducado o sin efecto.
@@ -7654,10 +7728,21 @@ export interface components {
             response: "confirm" | "cancel" | "call_me" | null;
             /** Format: date-time */
             respondedAt: string | null;
+            /** @description DX-291: política vigente de la sede (solo con el enlace PENDING; null sin política). */
+            cancellationPolicy: components["schemas"]["PublicCancellationPolicyDto"] | null;
+            /** @description DX-291: cancelar ahora tendría menos aviso que la política: cancelar exige `acknowledgePolicy`. */
+            isLate: boolean;
         };
         RespondAppointmentConfirmationDto: {
             /** @enum {string} */
             action: "confirm" | "cancel" | "call_me";
+            /** @description DX-291: el paciente acepta la política de cancelación. Obligatorio (true) para cancelar con menos aviso que la política (400 sin él). */
+            acknowledgePolicy?: boolean;
+            /**
+             * Format: uuid
+             * @description DX-291: versión de la política que mostró la página (null = ninguna). Si ya no es la vigente: 409 y la página se recarga.
+             */
+            policyVersionId?: string | null;
         };
         UnscheduledPlanDto: {
             /** Format: uuid */
@@ -9976,6 +10061,14 @@ export interface components {
             quantity: number;
             reason?: string;
         };
+        ReminderEmailPreviewDto: {
+            /** @example Recordatorio de tu cita en Clínica Sonrisa */
+            subject: string;
+            /** @description HTML completo del email (con la marca de la clínica). Muéstralo en un iframe con sandbox. */
+            html: string;
+            /** @description Versión en texto plano. */
+            text: string;
+        };
         CancellationPolicyVersionDto: {
             /** Format: uuid */
             id: string;
@@ -10034,6 +10127,72 @@ export interface components {
             patientText?: string;
             /** @description RECEPTION también podrá generar el cargo (DX-291). Si falta, no. */
             receptionCanCharge?: boolean;
+        };
+        CommunicatedPolicyDto: {
+            /** Format: uuid */
+            policyVersionId: string;
+            version: number;
+            noticeHours: number;
+            suggestedFee: number | null;
+            /** @example COP */
+            currency: string | null;
+        };
+        CancellationFeeRecordDto: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            status: "CHARGED" | "WAIVED";
+            amount: number | null;
+            currency: string | null;
+            /**
+             * Format: uuid
+             * @description Plan «Cargos administrativos» donde se cobra con un abono.
+             */
+            planId: string | null;
+            /** Format: uuid */
+            planItemId: string | null;
+            /** @description El ítem del cargo se quitó del plan («Quitar»): el cargo quedó anulado y no hay nada que cobrar. El ítem no admite descuento; así se anula un cargo generado por error. La cita sigue con su única decisión (otro cargo o condonar: 409). */
+            planItemRemoved: boolean;
+            waiveReason: string | null;
+            /** Format: uuid */
+            policyVersionId: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            createdByName: string | null;
+        };
+        CancellationFeeViewDto: {
+            /** Format: uuid */
+            appointmentId: string;
+            /** Format: uuid */
+            patientId: string;
+            /** @description NO_SHOW o cancelación tardía. */
+            eligible: boolean;
+            /** @enum {string} */
+            status: "NONE" | "CHARGED" | "WAIVED";
+            /**
+             * @description Por qué no se puede generar el cargo ahora: no es inasistencia ni tardía, no consta la política comunicada, la versión comunicada no tiene importe, EPS_CO activa en Colombia, o ya cobrado/condonado.
+             * @enum {string|null}
+             */
+            chargeBlock: "NOT_ELIGIBLE" | "NOT_INFORMED" | "NO_FEE" | "EPS_CO" | "ALREADY_CHARGED" | "ALREADY_WAIVED" | null;
+            chargeBlockMessage: string | null;
+            /** @description El usuario puede generar o condonar: ADMIN, o RECEPTION si la política vigente de la sede lo permite. */
+            canManage: boolean;
+            communicated: components["schemas"]["CommunicatedPolicyDto"] | null;
+            fee: components["schemas"]["CancellationFeeRecordDto"] | null;
+        };
+        ChargeCancellationFeeDto: {
+            /**
+             * @description Importe del cargo en la moneda de la política comunicada. Sin él, el sugerido. Editable a la baja: por encima del sugerido es 400.
+             * @example 50000
+             */
+            amount?: number;
+        };
+        WaiveCancellationFeeDto: {
+            /**
+             * @description Motivo de la condonación (3–500 caracteres). Queda en la cita; la auditoría registra la condonación sin el texto.
+             * @example Hospitalización documentada
+             */
+            reason: string;
         };
         PlatformTenantDto: {
             /** Format: uuid */
@@ -17129,6 +17288,13 @@ export interface operations {
                     "application/json": components["schemas"]["PublicAppointmentConfirmationDto"];
                 };
             };
+            /** @description DX-291: cancelar con menos aviso que la política sin `acknowledgePolicy: true` (mensaje en español). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description Token desconocido o de otra clínica. */
             404: {
                 headers: {
@@ -17136,7 +17302,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description El enlace ya se usó para responder. */
+            /** @description El enlace ya se usó para responder, o (DX-291) la política vigente no es la que mostró la página. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -19695,6 +19861,48 @@ export interface operations {
             };
         };
     };
+    CancellationPolicyController_emailPreview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReminderEmailPreviewDto"];
+                };
+            };
+            /** @description El identificador de la sede no es válido. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo un administrador puede ver y cambiar la política de cancelación. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sede no encontrada en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     CancellationPolicyController_get: {
         parameters: {
             query?: never;
@@ -19776,6 +19984,154 @@ export interface operations {
             };
             /** @description Sede no encontrada en esta clínica */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    CancellationFeeController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CancellationFeeViewDto"];
+                };
+            };
+            /** @description Id que no es UUID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Rol sin permiso, o sede de la cita no permitida al usuario (DX-089) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Cita no encontrada en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    CancellationFeeController_charge: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChargeCancellationFeeDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CancellationFeeViewDto"];
+                };
+            };
+            /** @description Importe no válido o por encima del sugerido por la versión comunicada */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ni ADMIN ni RECEPTION con permiso de la política; o sede no permitida */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Cita no encontrada en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No es inasistencia ni tardía, «No consta que el paciente fuera informado de la política», la versión comunicada no tiene importe, cobertura EPS_CO activa en una sede de Colombia (Ley 1438 art. 55), ya cobrado o condonado, o la cita cambió mientras tanto */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    CancellationFeeController_waive: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WaiveCancellationFeeDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CancellationFeeViewDto"];
+                };
+            };
+            /** @description Motivo vacío o de más de 500 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ni ADMIN ni RECEPTION con permiso de la política; o sede no permitida */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Cita no encontrada en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No es inasistencia ni tardía, ya cobrado o condonado, o la cita cambió */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

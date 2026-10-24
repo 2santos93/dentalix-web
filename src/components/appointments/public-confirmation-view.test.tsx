@@ -37,6 +37,8 @@ function view(overrides: Partial<PublicConfirmation> = {}): PublicConfirmation {
     appointment: APPOINTMENT,
     response: null,
     respondedAt: null,
+    cancellationPolicy: null,
+    isLate: false,
     ...overrides,
   };
 }
@@ -86,7 +88,12 @@ describe('PublicConfirmationView', () => {
     render(<PublicConfirmationView confirmationToken="tok-1" />);
     fireEvent.click(await screen.findByRole('button', { name: label }));
 
-    await waitFor(() => expect(respond).toHaveBeenCalledWith('tok-1', action));
+    await waitFor(() =>
+      expect(respond).toHaveBeenCalledWith('tok-1', action, {
+        policyVersionId: null,
+        acknowledgePolicy: undefined,
+      }),
+    );
     expect(await screen.findByText(done)).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: label })).not.toBeInTheDocument();
   });
@@ -157,5 +164,70 @@ describe('PublicConfirmationView', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Cancelar cita' }));
 
     expect(await screen.findByRole('heading', { name: /enlace ya no es válido/i })).toBeInTheDocument();
+  });
+
+  describe('política de cancelación (DX-291)', () => {
+    const POLICY = {
+      policyVersionId: 'pol-1',
+      noticeHours: 24,
+      text: 'Las citas no avisadas se cobran.',
+      suggestedFee: 50000,
+      currency: 'COP',
+    };
+
+    it('muestra el texto, las horas y el importe; a tiempo no avisa ni pide aceptación', async () => {
+      get.mockResolvedValueOnce(view({ cancellationPolicy: POLICY, isLate: false }));
+      render(<PublicConfirmationView confirmationToken="tok-1" />);
+      const section = await screen.findByRole('region', { name: 'Política de cancelación' });
+      expect(section).toHaveTextContent('avísanos con al menos 24 h de antelación');
+      expect(section).toHaveTextContent('Las citas no avisadas se cobran.');
+      expect(section).toHaveTextContent(/50\.000/);
+      expect(screen.queryByText(/menos de 24 h de aviso/i)).not.toBeInTheDocument();
+      expect(screen.queryByRole('checkbox')).not.toBeInTheDocument();
+    });
+
+    it('tarde: avisa «Cancelación con menos de 24 h de aviso» y cancelar sin aceptar no envía nada', async () => {
+      get.mockResolvedValueOnce(view({ cancellationPolicy: POLICY, isLate: true }));
+      render(<PublicConfirmationView confirmationToken="tok-1" />);
+      expect(await screen.findByText('Cancelación con menos de 24 h de aviso')).toBeInTheDocument();
+      const box = screen.getByRole('checkbox', { name: /acepto la política de cancelación/i });
+      fireEvent.click(screen.getByRole('button', { name: 'Cancelar cita' }));
+      expect(respond).not.toHaveBeenCalled();
+      expect(await screen.findByRole('alert')).toHaveTextContent(/marca que aceptas la política/i);
+      expect(box).toHaveFocus();
+      expect(box).toHaveAttribute('aria-invalid', 'true');
+    });
+
+    it('tarde y aceptada: envía acknowledgePolicy con la versión mostrada', async () => {
+      get.mockResolvedValueOnce(view({ cancellationPolicy: POLICY, isLate: true }));
+      respond.mockResolvedValueOnce(
+        view({ status: 'RESPONDED', response: 'cancel', respondedAt: '2026-10-19T10:00:00.000Z' }),
+      );
+      render(<PublicConfirmationView confirmationToken="tok-1" />);
+      fireEvent.click(await screen.findByRole('checkbox', { name: /acepto la política/i }));
+      fireEvent.click(screen.getByRole('button', { name: 'Cancelar cita' }));
+      await waitFor(() =>
+        expect(respond).toHaveBeenCalledWith('tok-1', 'cancel', {
+          policyVersionId: 'pol-1',
+          acknowledgePolicy: true,
+        }),
+      );
+      expect(await screen.findByText(/cancelaste la cita/i)).toBeInTheDocument();
+    });
+
+    it('tarde: «Quiero que me llamen» no pide aceptación', async () => {
+      get.mockResolvedValueOnce(view({ cancellationPolicy: POLICY, isLate: true }));
+      respond.mockResolvedValueOnce(
+        view({ status: 'RESPONDED', response: 'call_me', respondedAt: '2026-10-19T10:00:00.000Z' }),
+      );
+      render(<PublicConfirmationView confirmationToken="tok-1" />);
+      fireEvent.click(await screen.findByRole('button', { name: 'Quiero que me llamen' }));
+      await waitFor(() =>
+        expect(respond).toHaveBeenCalledWith('tok-1', 'call_me', {
+          policyVersionId: 'pol-1',
+          acknowledgePolicy: undefined,
+        }),
+      );
+    });
   });
 });

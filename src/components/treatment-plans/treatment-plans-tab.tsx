@@ -154,6 +154,9 @@ const copy = {
   genericPlanStatusError: 'No pudimos actualizar el estado del plan. Intenta de nuevo.',
   itemsTableCaption: 'Ítems del plan de tratamiento',
   colTooth: 'Diente',
+  // DX-291: un cargo administrativo (inasistencia) no es de ningún diente.
+  noTooth: 'Sin diente',
+  noSurfaces: '—',
   colProcedure: 'Procedimiento',
   colSurfaces: 'Caras',
   colPrice: 'Precio',
@@ -500,7 +503,8 @@ function OdontogramLink({
   toothNumber: string;
   href?: (toothNumber: string) => string;
 }) {
-  if (!href) return null;
+  // DX-291: un cargo administrativo no tiene diente al que volver.
+  if (!href || !toothNumber) return null;
   return (
     <Link
       href={href(toothNumber)}
@@ -612,9 +616,9 @@ function procedureName(item: TreatmentPlanItem, catalogById: Map<string, DentalC
 }
 
 function surfacesLabel(item: TreatmentPlanItem): string {
-  return item.surfaces.length > 0
-    ? item.surfaces.map((s) => SURFACE_LABELS[s]).join(', ')
-    : copy.wholeToothFallback;
+  if (item.surfaces.length > 0) return item.surfaces.map((s) => SURFACE_LABELS[s]).join(', ');
+  // DX-291: un cargo administrativo no tiene diente ni caras.
+  return item.toothNumber ? copy.wholeToothFallback : copy.noSurfaces;
 }
 
 function ItemsTable({
@@ -692,7 +696,7 @@ function ItemsTable({
                       <ItemSelectBox item={item} selection={selection} />
                     </TableCell>
                   ) : null}
-                  <TableCell className="font-medium tabular-nums">{item.toothNumber}</TableCell>
+                  <TableCell className="font-medium tabular-nums">{item.toothNumber || copy.noTooth}</TableCell>
                   <TableCell>{procedureName(item, catalogById)}</TableCell>
                   <TableCell className="text-muted">{surfacesLabel(item)}</TableCell>
                   <TableCell className="tabular-nums">
@@ -733,8 +737,8 @@ function ItemsTable({
                         toque. */}
                     <div className="flex flex-wrap items-center gap-3">
                       <OdontogramLink toothNumber={item.toothNumber} href={odontogramHref} />
-                      {implantLink ? <RegisterImplantLink item={item} href={implantLink} /> : null}
-                      {odontogramHref && !locked && !closed ? <Separator orientation="vertical" className="h-5" /> : null}
+                      {implantLink && item.toothNumber ? <RegisterImplantLink item={item} href={implantLink} /> : null}
+                      {item.toothNumber && odontogramHref && !locked && !closed ? <Separator orientation="vertical" className="h-5" /> : null}
                       {locked || closed ? null : (
                         <Button
                           type="button"
@@ -773,7 +777,7 @@ function ItemsTable({
               <div className="flex items-center justify-between gap-2">
                 <span className="flex items-center gap-3 font-medium text-ink tabular-nums">
                   {selection ? <ItemSelectBox item={item} selection={selection} /> : null}
-                  {copy.colTooth} {item.toothNumber}
+                  {item.toothNumber ? `${copy.colTooth} ${item.toothNumber}` : copy.noTooth}
                 </span>
                 <Badge variant={ITEM_STATUS_BADGE_VARIANT[item.status]}>
                   {ITEM_STATUS_LABELS[item.status]}
@@ -814,10 +818,10 @@ function ItemsTable({
                   </Button>
                 )}
               </div>
-              {odontogramHref || implantLink ? (
+              {item.toothNumber && (odontogramHref || implantLink) ? (
                 <p className="mt-3 flex flex-wrap gap-x-4 gap-y-2">
                   <OdontogramLink toothNumber={item.toothNumber} href={odontogramHref} />
-                  {implantLink ? <RegisterImplantLink item={item} href={implantLink} /> : null}
+                  {implantLink && item.toothNumber ? <RegisterImplantLink item={item} href={implantLink} /> : null}
                 </p>
               ) : null}
             </li>
@@ -1019,6 +1023,7 @@ export function TreatmentPlansTab({
   // Plans list + catalog (loaded together).
   const [plans, setPlans] = useState<TreatmentPlan[]>([]);
   const [catalogItems, setCatalogItems] = useState<DentalCatalogItem[]>([]);
+  const [allCatalogItems, setAllCatalogItems] = useState<DentalCatalogItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -1183,11 +1188,16 @@ export function TreatmentPlansTab({
       try {
         const [plansData, catalogData] = await Promise.all([
           listPlans(token, patientId),
-          listCatalogItems(token, { kind: 'PROCEDURE', activeOnly: true }),
+          // Todos (también los inactivos): un ítem ya dado de alta conserva su
+          // nombre aunque el procedimiento se retire (p. ej. el cargo por
+          // inasistencia de DX-291, inactivo a propósito). El selector solo
+          // ofrece los activos.
+          listCatalogItems(token, { kind: 'PROCEDURE' }),
         ]);
         if (cancelled) return;
         setPlans(plansData);
-        setCatalogItems(catalogData);
+        setAllCatalogItems(catalogData);
+        setCatalogItems(catalogData.filter((item) => item.active));
         setLoadError(null);
         setHasLoadedOnce(true);
       } catch (err) {
@@ -1293,7 +1303,7 @@ export function TreatmentPlansTab({
     setAddPaymentError(null);
   }
 
-  const catalogById = new Map(catalogItems.map((item) => [item.id, item]));
+  const catalogById = new Map(allCatalogItems.map((item) => [item.id, item]));
 
   // DX-105: el precio resuelto de la prestación elegida para ESTE paciente
   // (convenio > lista de la sede > catálogo). Precarga el campo; si falla,

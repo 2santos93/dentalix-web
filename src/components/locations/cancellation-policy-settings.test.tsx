@@ -5,6 +5,7 @@ import { listLocations, type ClinicLocation } from '@/lib/locations/locations-ap
 import {
   createCancellationPolicyVersion,
   getCancellationPolicy,
+  getReminderEmailPreview,
   type CancellationPolicyVersion,
 } from '@/lib/cancellations/cancellation-policy-api';
 import { listCurrencies } from '@/lib/reference/currencies-api';
@@ -18,6 +19,7 @@ jest.mock('../../lib/cancellations/cancellation-policy-api', () => ({
   ...jest.requireActual('../../lib/cancellations/cancellation-policy-api'),
   getCancellationPolicy: jest.fn(),
   createCancellationPolicyVersion: jest.fn(),
+  getReminderEmailPreview: jest.fn(),
 }));
 jest.mock('../../lib/reference/currencies-api', () => ({
   listCurrencies: jest.fn(),
@@ -29,6 +31,7 @@ const mockedGet = getCancellationPolicy as jest.MockedFunction<typeof getCancell
 const mockedCreate = createCancellationPolicyVersion as jest.MockedFunction<
   typeof createCancellationPolicyVersion
 >;
+const mockedPreview = getReminderEmailPreview as jest.MockedFunction<typeof getReminderEmailPreview>;
 const mockedCurrencies = listCurrencies as jest.MockedFunction<typeof listCurrencies>;
 
 const SEDE: ClinicLocation = {
@@ -117,12 +120,15 @@ describe('CancellationPolicySettings (DX-279)', () => {
     await user.clear(text);
     await user.type(text, 'Avísanos');
     expect(within(dialog).getByText('8/1000')).toBeInTheDocument();
+    // DX-291: recepción puede cobrar.
+    await user.click(within(dialog).getByLabelText('Recepción puede generar o condonar el cargo'));
     await user.click(within(dialog).getByRole('button', { name: 'Guardar versión nueva' }));
     expect(mockedCreate).toHaveBeenCalledWith('tok', 'loc-1', {
       noticeHours: 12,
       suggestedFee: 30000,
       currency: 'COP',
       patientText: 'Avísanos',
+      receptionCanCharge: true,
     });
     expect(await screen.findByTestId('policy-summary-loc-1')).toHaveTextContent('12 h de aviso · versión 2');
   });
@@ -154,5 +160,30 @@ describe('CancellationPolicySettings (DX-279)', () => {
     expect(
       await screen.findByText('Sin política: ninguna cancelación cuenta como tardía.'),
     ).toBeInTheDocument();
+  });
+
+  it('DX-291: «Vista previa del email» muestra el recordatorio en un iframe sin permisos', async () => {
+    const user = userEvent.setup();
+    mockedGet.mockResolvedValue({ locationId: 'loc-1', current: version(1), versions: [version(1)] });
+    mockedPreview.mockResolvedValue({
+      subject: 'Recordatorio de tu cita en Clínica Sonrisa',
+      html: '<p>Política de cancelación: avísanos con 24 h</p>',
+      text: 'Política de cancelación',
+    });
+    render(<CancellationPolicySettings token="tok" />);
+    await user.click(await screen.findByRole('button', { name: 'Vista previa del recordatorio de Sede principal' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Recordatorio por email · Sede principal' });
+    expect(await within(dialog).findByText('Asunto: Recordatorio de tu cita en Clínica Sonrisa')).toBeInTheDocument();
+    const frame = within(dialog).getByTitle('Contenido del email de recordatorio');
+    expect(frame).toHaveAttribute('sandbox', '');
+    expect(frame.getAttribute('srcdoc')).toContain('Política de cancelación');
+    expect(mockedPreview).toHaveBeenCalledWith('tok', 'loc-1');
+  });
+
+  it('DX-291: sin política no hay vista previa', async () => {
+    mockedGet.mockResolvedValue({ locationId: 'loc-1', current: null, versions: [] });
+    render(<CancellationPolicySettings token="tok" />);
+    await screen.findByRole('button', { name: 'Configurar la política de Sede principal' });
+    expect(screen.queryByRole('button', { name: /Vista previa/ })).not.toBeInTheDocument();
   });
 });

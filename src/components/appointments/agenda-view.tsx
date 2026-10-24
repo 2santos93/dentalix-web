@@ -52,6 +52,7 @@ import { MonthAgenda } from '@/components/appointments/month-agenda';
 import { AppointmentForm } from '@/components/appointments/appointment-form';
 import { AppointmentMedicalAlerts } from '@/components/clinical/appointment-medical-alerts';
 import { ConfirmationLinkPanel } from '@/components/appointments/confirmation-link-panel';
+import { CancellationFeePanel } from '@/components/appointments/cancellation-fee-panel';
 import { AppointmentRemindersPanel } from '@/components/reminders/appointment-reminders-panel';
 import { AppointmentPostOpPanel } from '@/components/postop/appointment-postop-panel';
 import { AnamnesisLinkPanel } from '@/components/anamnesis/anamnesis-link-panel';
@@ -1523,6 +1524,19 @@ export function AgendaView({ token }: AgendaViewProps) {
                     <NotebookPen aria-hidden />
                     {copy.registerEvolution}
                   </Button>
+                ) : null}
+                {/* DX-291: «Generar cargo» y «Condonar» en una inasistencia o
+                    una cancelación tardía (ADMIN y RECEPTION; el servidor
+                    dice si este usuario puede decidir). */}
+                {(role === 'ADMIN' || role === 'RECEPTION') &&
+                (liveDetailAppointment.status === 'NO_SHOW' ||
+                  (liveDetailAppointment.status === 'CANCELLED' &&
+                    liveDetailAppointment.lateCancellation === true)) ? (
+                  <CancellationFeePanel
+                    key={`fee-${liveDetailAppointment.id}-${liveDetailAppointment.status}`}
+                    token={token}
+                    appointmentId={liveDetailAppointment.id}
+                  />
                 ) : null}
                 {/* `key`: el enlace generado vive solo en este panel (el backend
                     guarda únicamente su hash); al cambiar de cita se descarta. */}
