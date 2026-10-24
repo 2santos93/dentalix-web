@@ -1,5 +1,6 @@
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
 import { CancellationFeePanel } from './cancellation-fee-panel';
+import { ApiError } from '../../lib/api/api-error';
 import {
   chargeCancellationFee,
   getCancellationFee,
@@ -53,6 +54,7 @@ const charged = view({
     currency: 'COP',
     planId: 'plan-1',
     planItemId: 'i-1',
+    planItemRemoved: false,
     waiveReason: null,
     policyVersionId: 'v1',
     createdAt: '2026-10-24T10:00:00.000Z',
@@ -98,6 +100,13 @@ describe('CancellationFeePanel (DX-291)', () => {
     );
   });
 
+  it('si el ítem del cargo se quitó del plan, lo dice y no ofrece cobrarlo', async () => {
+    get.mockResolvedValueOnce({ ...charged, fee: { ...charged.fee!, planItemRemoved: true } });
+    render(<CancellationFeePanel token="t" appointmentId="a-1" />);
+    expect(await screen.findByText(/Cargo anulado: .*40\.000/)).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Cobrar en el estado de cuenta' })).not.toBeInTheDocument();
+  });
+
   it('el importe sugerido se envía sin `amount`', async () => {
     get.mockResolvedValueOnce(view());
     charge.mockResolvedValueOnce(charged);
@@ -106,6 +115,35 @@ describe('CancellationFeePanel (DX-291)', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Generar cargo' });
     fireEvent.click(within(dialog).getByRole('button', { name: 'Generar cargo' }));
     await waitFor(() => expect(charge).toHaveBeenCalledWith('t', 'a-1', undefined));
+  });
+
+  it('un sugerido con céntimos (19,99 USD) se precarga legible y se envía sin `amount`', async () => {
+    get.mockResolvedValueOnce(
+      view({
+        communicated: { policyVersionId: 'v1', version: 1, noticeHours: 24, suggestedFee: 19.99, currency: 'USD' },
+      }),
+    );
+    charge.mockResolvedValueOnce(charged);
+    render(<CancellationFeePanel token="t" appointmentId="a-1" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Generar cargo' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Generar cargo' });
+    expect(within(dialog).getByLabelText('Importe')).toHaveValue('19,99');
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Generar cargo' }));
+    await waitFor(() => expect(charge).toHaveBeenCalledWith('t', 'a-1', undefined));
+    expect(within(dialog).queryByText(/no puede superar/i)).not.toBeInTheDocument();
+  });
+
+  it('si otra persona ya lo generó (409), muestra el error y el panel se pone al día', async () => {
+    get.mockResolvedValueOnce(view()).mockResolvedValueOnce(charged);
+    charge.mockRejectedValueOnce(new ApiError(409, 'Esta cita ya tiene su cargo generado.'));
+    render(<CancellationFeePanel token="t" appointmentId="a-1" />);
+    fireEvent.click(await screen.findByRole('button', { name: 'Generar cargo' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Generar cargo' });
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Generar cargo' }));
+    expect(await within(dialog).findByText('Esta cita ya tiene su cargo generado.')).toBeInTheDocument();
+    await waitFor(() => expect(get).toHaveBeenCalledTimes(2));
+    fireEvent.click(within(dialog).getByRole('button', { name: 'Cancelar' }));
+    expect(await screen.findByText(/Cargo generado: .*40\.000/)).toBeInTheDocument();
   });
 
   it('sin política comunicada: explica el bloqueo y no ofrece cobrar', async () => {

@@ -4,6 +4,7 @@ import { useEffect, useId, useState } from 'react';
 import Link from 'next/link';
 import { Ban, Receipt } from 'lucide-react';
 import { toast } from 'sonner';
+import { ApiError } from '@/lib/api/api-error';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import {
   WAIVE_REASON_MAX,
@@ -14,7 +15,7 @@ import {
   type CancellationFeeView,
 } from '@/lib/cancellations/cancellation-fee-api';
 import { formatCurrency } from '@/lib/format/currency';
-import { parseMoneyInput } from '@/lib/format/money';
+import { moneyInputText, parseMoneyInput } from '@/lib/format/money';
 import { FormModal } from '@/components/shared/form-modal';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { MoneyInput } from '@/components/shared/money-input';
@@ -36,6 +37,8 @@ export const cancellationFeeCopy = {
   charged: (amount: string) => `Cargo generado: ${amount}.`,
   chargedHint: 'Está en el plan «Cargos administrativos» y se cobra con un abono desde el estado de cuenta.',
   goToStatement: 'Cobrar en el estado de cuenta',
+  removed: (amount: string) => `Cargo anulado: ${amount}.`,
+  removedHint: 'Se quitó el ítem del plan «Cargos administrativos»: no hay nada que cobrar.',
   waived: 'Cargo condonado.',
   waivedReason: (reason: string) => `Motivo: ${reason}`,
   by: (name: string) => `Por ${name}.`,
@@ -130,7 +133,12 @@ export function CancellationFeePanel({ token, appointmentId }: { token: string; 
       <h3 id={`fee-${appointmentId}`} className="font-semibold text-ink">
         {copy.heading}
       </h3>
-      {view.status === 'CHARGED' && fee ? (
+      {view.status === 'CHARGED' && fee?.planItemRemoved ? (
+        <div className="flex flex-col gap-1">
+          <p className="tabular-nums text-ink">{copy.removed(money(fee.amount, fee.currency) ?? '')}</p>
+          <p className="text-muted">{copy.removedHint}</p>
+        </div>
+      ) : view.status === 'CHARGED' && fee ? (
         <div className="flex flex-col gap-1">
           <p className="tabular-nums text-ink">{copy.charged(money(fee.amount, fee.currency) ?? '')}</p>
           <p className="text-muted">{copy.chargedHint}</p>
@@ -193,6 +201,7 @@ export function CancellationFeePanel({ token, appointmentId }: { token: string; 
             setDialog(null);
             setView(next);
           }}
+          onStale={() => setReloadKey((k) => k + 1)}
         />
       ) : null}
       {dialog === 'waive' ? (
@@ -204,6 +213,7 @@ export function CancellationFeePanel({ token, appointmentId }: { token: string; 
             setDialog(null);
             setView(next);
           }}
+          onStale={() => setReloadKey((k) => k + 1)}
         />
       ) : null}
     </section>
@@ -217,6 +227,7 @@ function ChargeFeeModal({
   currency,
   onClose,
   onDone,
+  onStale,
 }: {
   token: string;
   appointmentId: string;
@@ -224,11 +235,13 @@ function ChargeFeeModal({
   currency: string;
   onClose: () => void;
   onDone: (view: CancellationFeeView) => void;
+  /** 409: otra persona ya decidió; el panel se relee por debajo. */
+  onStale: () => void;
 }) {
   const id = useId();
   const amountId = `${id}-amount`;
   const max = formatCurrency(suggested, currency);
-  const [amountText, setAmountText] = useState(String(suggested));
+  const [amountText, setAmountText] = useState(moneyInputText(suggested));
   const [fieldError, setFieldError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -260,6 +273,7 @@ function ChargeFeeModal({
       onDone(next);
     } catch (err) {
       setError(apiErrorMessage(err, copy.chargeError));
+      if (err instanceof ApiError && err.status === 409) onStale();
     } finally {
       setSubmitting(false);
     }
@@ -308,11 +322,14 @@ function WaiveFeeModal({
   appointmentId,
   onClose,
   onDone,
+  onStale,
 }: {
   token: string;
   appointmentId: string;
   onClose: () => void;
   onDone: (view: CancellationFeeView) => void;
+  /** 409: otra persona ya decidió; el panel se relee por debajo. */
+  onStale: () => void;
 }) {
   const id = useId();
   const reasonId = `${id}-reason`;
@@ -337,6 +354,7 @@ function WaiveFeeModal({
       onDone(next);
     } catch (err) {
       setError(apiErrorMessage(err, copy.waiveError));
+      if (err instanceof ApiError && err.status === 409) onStale();
     } finally {
       setSubmitting(false);
     }
