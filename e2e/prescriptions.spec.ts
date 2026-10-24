@@ -89,10 +89,13 @@ test('emitir con alerta de alergia, imprimir en A4, anular; recepción sin pesta
   await dialog.getByLabel('Cantidad total').fill('21');
   await dialog.getByLabel('Unidad').fill('cápsulas');
 
-  await expect(dialog.getByText('Alergia registrada en la anamnesis: Penicilina.')).toBeVisible();
+  // DX-300: el aviso lo calcula el servidor y exige confirmación y motivo.
+  await expect(dialog.getByText('Requieren confirmación (1)')).toBeVisible();
+  await expect(dialog.getByText(/alergia a Penicilina/)).toBeVisible();
   const submit = dialog.getByRole('button', { name: 'Emitir receta' });
   await expect(submit).toBeDisabled();
-  await dialog.getByRole('checkbox', { name: /Confirmo que conozco la alergia/ }).check();
+  await dialog.getByRole('checkbox', { name: /Confirmo que conozco los avisos/ }).check();
+  await dialog.getByLabel('Motivo para emitir pese a los avisos').fill('Prueba cutánea negativa');
   await expect(submit).toBeEnabled();
   await submit.click();
   await expect(dialog).toBeHidden();
@@ -115,7 +118,10 @@ test('emitir con alerta de alergia, imprimir en A4, anular; recepción sin pesta
   await expect(printPage.getByText('21 (veintiuno) cápsulas')).toBeVisible();
   await expect(printPage.getByText('TP-12345')).toBeVisible();
   await expect(printPage.getByText(`RX${suffix}`.slice(0, 20)).first()).toBeVisible();
-  await expect(printPage.getByText(/alergia registrada a: Penicilina/)).toBeVisible();
+  // DX-300: el aviso confirmado y su motivo salen en el documento.
+  const confirmedAlerts = printPage.getByRole('region', { name: 'Avisos de seguridad confirmados' });
+  await expect(confirmedAlerts).toContainText(/alergia a Penicilina/);
+  await expect(confirmedAlerts).toContainText('Motivo: Prueba cutánea negativa');
   await printPage.emulateMedia({ media: 'print' });
   await expect(printPage.getByRole('toolbar', { name: 'Acciones de la receta' })).toBeHidden();
   const pdf = (await printPage.pdf({ preferCSSPageSize: true })).toString('latin1');

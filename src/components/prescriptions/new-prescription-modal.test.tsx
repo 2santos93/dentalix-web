@@ -1,24 +1,23 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import { NewPrescriptionModal } from './new-prescription-modal';
 import {
+  checkPrescriptionSafety,
   getPrescriptionIssuer,
   issuePrescription,
   listPrescriptionTemplates,
+  type PrescriptionSafetyPreview,
+  type SafetyAlert,
 } from '@/lib/prescriptions/prescriptions-api';
-import { getMedicalHistory } from '@/lib/patients/clinical-api';
 import { ApiError } from '@/lib/api/client';
 import { setupUser } from '@/lib/test/user';
 import { makeIssuer, makePrescription, postExodoncia } from '@/lib/test/prescriptions';
-import type { MedicalHistory } from '@/lib/clinical/clinical-types';
 
 jest.mock('../../lib/prescriptions/prescriptions-api', () => ({
   ...jest.requireActual('../../lib/prescriptions/prescriptions-api'),
   getPrescriptionIssuer: jest.fn(),
   issuePrescription: jest.fn(),
   listPrescriptionTemplates: jest.fn(),
-}));
-jest.mock('../../lib/patients/clinical-api', () => ({
-  getMedicalHistory: jest.fn(),
+  checkPrescriptionSafety: jest.fn(),
 }));
 
 const mockedIssuer = getPrescriptionIssuer as jest.MockedFunction<typeof getPrescriptionIssuer>;
@@ -26,12 +25,39 @@ const mockedIssue = issuePrescription as jest.MockedFunction<typeof issuePrescri
 const mockedTemplates = listPrescriptionTemplates as jest.MockedFunction<
   typeof listPrescriptionTemplates
 >;
-const mockedHistory = getMedicalHistory as jest.MockedFunction<typeof getMedicalHistory>;
+const mockedCheck = checkPrescriptionSafety as jest.MockedFunction<typeof checkPrescriptionSafety>;
 
-function historyWith(alergeno: string): MedicalHistory {
+function preview(alerts: SafetyAlert[] = [], anamnesis: 'PRESENT' | 'MISSING' = 'PRESENT'): PrescriptionSafetyPreview {
   return {
-    allergies: [{ alergeno, tipo: 'MEDICAMENTO', severidad: 'ANAFILAXIA', esAlerta: true }],
-  } as unknown as MedicalHistory;
+    rulesVersion: 'RX_SAFETY_V1',
+    anamnesis,
+    hasBlocking: alerts.some((a) => a.severity === 'BLOCKING'),
+    alerts,
+  };
+}
+
+const allergyAlert: SafetyAlert = {
+  rule: 'ALLERGY',
+  code: 'ALLERGY_MATCH',
+  severity: 'BLOCKING',
+  activeIngredient: 'Amoxicilina',
+  message: 'Alergia: el paciente tiene registrada alergia a penicilina y Amoxicilina puede causarla.',
+  source: 'Anamnesis: alergias registradas',
+};
+const antiresorptiveAlert: SafetyAlert = {
+  rule: 'ANTIRESORPTIVE',
+  code: 'ANTIRESORPTIVE_MRONJ',
+  severity: 'INFO',
+  activeIngredient: null,
+  message: 'El paciente toma antirresortivos (bifosfonatos o denosumab).',
+  source: 'SDCEP',
+};
+
+/** Espera a que la comprobación de avisos termine y emite. */
+async function submit(user: ReturnType<typeof setupUser>) {
+  const button = screen.getByRole('button', { name: 'Emitir receta' });
+  await waitFor(() => expect(button).toBeEnabled());
+  await user.click(button);
 }
 
 function renderModal(onIssued = jest.fn(), onOpenChange = jest.fn()) {
@@ -70,7 +96,7 @@ describe('NewPrescriptionModal', () => {
     mockedIssuer.mockReset().mockResolvedValue(makeIssuer());
     mockedIssue.mockReset();
     mockedTemplates.mockReset().mockResolvedValue([postExodoncia]);
-    mockedHistory.mockReset().mockResolvedValue(null);
+    mockedCheck.mockReset().mockResolvedValue(preview());
   });
 
   it('dice desde qué sede y país se emite, y emite con los datos del formulario', async () => {
@@ -81,7 +107,7 @@ describe('NewPrescriptionModal', () => {
       await screen.findByText(/Se emite desde Sede Principal \(Colombia\) · validez de 30 días/),
     ).toBeInTheDocument();
     await fillAmoxicilina(user);
-    await user.click(screen.getByRole('button', { name: 'Emitir receta' }));
+    await submit(user);
     await waitFor(() =>
       expect(mockedIssue).toHaveBeenCalledWith('tok', 'p1', {
         items: [
@@ -116,74 +142,134 @@ describe('NewPrescriptionModal', () => {
     expect(screen.getByRole('group', { name: 'Medicamento 2' })).toBeInTheDocument();
   });
 
-  it('alerta de alergia en vivo: bloquea hasta confirmar y manda allergyOverride', async () => {
+  it('aviso bloqueante del servidor: agrupado por gravedad, exige confirmación y motivo, y los manda', async () => {
     const user = setupUser();
-    mockedHistory.mockResolvedValue(historyWith('Penicilina'));
-    mockedIssue.mockResolvedValue(makePrescription({ allergyOverride: true }));
+    mockedCheck.mockResolvedValue(preview([allergyAlert, antiresorptiveAlert]));
+    mockedIssue.mockResolvedValue(makePrescription());
     renderModal();
     await screen.findByText(/Se emite desde/);
+    expect(screen.getByText(/no sustituye tu juicio clínico/)).toBeInTheDocument();
     await fillAmoxicilina(user);
-    expect(
-      screen.getByText('Alergia registrada en la anamnesis: Penicilina.'),
-    ).toBeInTheDocument();
-    const alert = screen.getByText('Alerta de alergia').closest('[role="alert"]') as HTMLElement;
-    expect(alert).toHaveTextContent('Penicilina (Amoxicilina)');
-    const submit = screen.getByRole('button', { name: 'Emitir receta' });
-    expect(submit).toBeDisabled();
-    await user.click(within(alert).getByRole('checkbox', { name: /confirmo que conozco la alergia/i }));
-    expect(submit).toBeEnabled();
-    await user.click(submit);
+    const blocking = (await screen.findByText('Requieren confirmación (1)')).closest(
+      '[role="alert"]',
+    ) as HTMLElement;
+    expect(blocking).toHaveTextContent('alergia a penicilina');
+    expect(screen.getByText('Informativos (1)')).toBeInTheDocument();
+    expect(mockedCheck).toHaveBeenLastCalledWith('tok', 'p1', [
+      {
+        activeIngredient: 'Amoxicilina',
+        concentration: '500 mg',
+        dose: '1 cápsula',
+        frequency: 'Cada 8 horas',
+      },
+    ]);
+    const button = screen.getByRole('button', { name: 'Emitir receta' });
+    expect(button).toBeDisabled();
+    await user.click(within(blocking).getByRole('checkbox', { name: /confirmo que conozco los avisos/i }));
+    expect(button).toBeEnabled();
+    await user.click(button);
+    const reason = screen.getByLabelText('Motivo para emitir pese a los avisos');
+    expect(reason).toHaveAccessibleDescription(/Escribe el motivo/);
+    expect(mockedIssue).not.toHaveBeenCalled();
+    await user.type(reason, 'Prueba cutánea negativa');
+    await user.click(button);
     await waitFor(() =>
       expect(mockedIssue).toHaveBeenCalledWith(
         'tok',
         'p1',
-        expect.objectContaining({ allergyOverride: true }),
+        expect.objectContaining({
+          safetyOverride: true,
+          safetyOverrideReason: 'Prueba cutánea negativa',
+        }),
       ),
     );
   });
 
-  it('si la API detecta la alergia (409), pide la confirmación con su mensaje', async () => {
+  it('mientras se calculan los avisos no se emite: estado de carga', async () => {
     const user = setupUser();
-    mockedIssue
-      .mockRejectedValueOnce(new ApiError(409, 'Alerta de alergia: el paciente tiene registrada alergia a Penicilina (Amoxicilina).'))
-      .mockResolvedValueOnce(makePrescription());
+    mockedCheck.mockReturnValue(new Promise(() => {}));
     renderModal();
     await screen.findByText(/Se emite desde/);
     await fillAmoxicilina(user);
-    await user.click(screen.getByRole('button', { name: 'Emitir receta' }));
-    const checkbox = await screen.findByRole('checkbox', { name: /confirmo que conozco la alergia/i });
-    expect(screen.getByText(/Alerta de alergia: el paciente tiene registrada/)).toBeInTheDocument();
-    await user.click(checkbox);
-    await user.click(screen.getByRole('button', { name: 'Emitir receta' }));
-    await waitFor(() =>
-      expect(mockedIssue).toHaveBeenLastCalledWith(
-        'tok',
-        'p1',
-        expect.objectContaining({ allergyOverride: true }),
-      ),
-    );
+    expect(await screen.findByRole('status', { name: 'Comprobando avisos de seguridad' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Emitir receta' })).toBeDisabled();
   });
 
-  // Revisión D-1: con varios alérgenos el mensaje pasa de 240 caracteres; quien
-  // prescribe tiene que ver a qué es alérgico el paciente antes de confirmar.
-  it('si la alerta de la API pasa de 240 caracteres, se ve entera con sus alérgenos', async () => {
+  it('si la comprobación falla: error con Reintentar y sin poder emitir', async () => {
     const user = setupUser();
-    const allergens = [
-      'Penicilina (Amoxicilina, Ampicilina)',
-      'Cefalosporinas de primera generación (Cefalexina)',
-      'Antiinflamatorios no esteroideos (Ibuprofeno, Naproxeno)',
-      'Sulfonamidas (Sulfametoxazol con trimetoprima)',
-    ].join(', ');
-    const msg = `Alerta de alergia: el paciente tiene registrada alergia a ${allergens}. Confirma que prescribes igualmente.`;
+    mockedCheck.mockRejectedValueOnce(new ApiError(500, 'Caída')).mockResolvedValue(preview());
+    mockedIssue.mockResolvedValue(makePrescription());
+    renderModal();
+    await screen.findByText(/Se emite desde/);
+    await user.type(screen.getByLabelText(/principio activo/i), 'Amoxicilina');
+    expect(await screen.findByText('No se pudieron comprobar los avisos')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Emitir receta' })).toBeDisabled();
+    await user.click(screen.getByRole('button', { name: 'Reintentar' }));
+    expect(await screen.findByText('Sin avisos para estos medicamentos.')).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Emitir receta' })).toBeEnabled());
+  });
+
+  it('sin anamnesis vigente: lo dice como aviso informativo y deja emitir', async () => {
+    const user = setupUser();
+    mockedCheck.mockResolvedValue(
+      preview(
+        [
+          {
+            rule: 'NO_ANAMNESIS',
+            code: 'NO_ANAMNESIS',
+            severity: 'INFO',
+            activeIngredient: null,
+            message: 'Sin anamnesis vigente: no se han podido comprobar alergias ni interacciones',
+            source: 'Anamnesis',
+          },
+        ],
+        'MISSING',
+      ),
+    );
+    mockedIssue.mockResolvedValue(makePrescription());
+    renderModal();
+    await screen.findByText(/Se emite desde/);
+    await fillAmoxicilina(user);
+    expect(
+      await screen.findByText('Sin anamnesis vigente: no se han podido comprobar alergias ni interacciones'),
+    ).toBeInTheDocument();
+    await submit(user);
+    await waitFor(() => expect(mockedIssue).toHaveBeenCalled());
+    expect(mockedIssue.mock.calls[0][2]).not.toHaveProperty('safetyOverride');
+  });
+
+  // Revisión D-1: el 409 lista los avisos; con varios pasa de 240 caracteres y
+  // quien prescribe tiene que verlos enteros. Además se vuelven a pedir.
+  it('409 de la API (la anamnesis cambió): mensaje entero y nueva comprobación', async () => {
+    const user = setupUser();
+    const msg = `Avisos de seguridad sin confirmar: ${'Interacción grave: el paciente toma Warfarina y Ibuprofeno es un AINE. '.repeat(4)}Confirma y escribe el motivo para emitir igualmente.`;
     expect(msg.length).toBeGreaterThan(240);
     mockedIssue.mockRejectedValueOnce(new ApiError(409, msg));
     renderModal();
     await screen.findByText(/Se emite desde/);
     await fillAmoxicilina(user);
-    await user.click(screen.getByRole('button', { name: 'Emitir receta' }));
-    await screen.findByRole('checkbox', { name: /confirmo que conozco la alergia/i });
-    expect(screen.getByText(msg)).toBeInTheDocument();
+    await submit(user);
+    expect(await screen.findByText(msg)).toBeInTheDocument();
+    await waitFor(() => expect(mockedCheck.mock.calls.length).toBeGreaterThanOrEqual(2));
     expect(screen.queryByText(/datos cambiaron|choca con el estado/i)).not.toBeInTheDocument();
+  });
+
+  it('España: enlace a la ficha técnica de la CIMA solo con nº de registro y sin datos del paciente', async () => {
+    const user = setupUser();
+    mockedIssuer.mockResolvedValue(makeIssuer({ country: 'ES', validityDays: 10, maxItems: 1 }));
+    renderModal();
+    await screen.findByText(/\(España\)/);
+    expect(screen.queryByRole('link', { name: /CIMA/ })).not.toBeInTheDocument();
+    await user.type(screen.getByLabelText('Nº de registro del medicamento (opcional)'), '62985');
+    const link = screen.getByRole('link', { name: /Ficha técnica en la CIMA/ });
+    expect(link).toHaveAttribute('href', 'https://cima.aemps.es/cima/dochtml/ft/62985/FT_62985.html');
+    expect(link.getAttribute('href')).not.toMatch(/p1|Ana/);
+  });
+
+  it('Colombia: sin campo de la CIMA', async () => {
+    renderModal();
+    await screen.findByText(/Se emite desde/);
+    expect(screen.queryByLabelText(/Nº de registro del medicamento/)).not.toBeInTheDocument();
   });
 
   it('400 de la API: el resumen del error queda en el modal, visible y con el foco', async () => {
@@ -196,7 +282,7 @@ describe('NewPrescriptionModal', () => {
     const { onOpenChange } = renderModal();
     await screen.findByText(/Se emite desde/);
     await fillAmoxicilina(user);
-    await user.click(screen.getByRole('button', { name: 'Emitir receta' }));
+    await submit(user);
     const alert = (await screen.findByText(/Falta el número de historia clínica/)).closest(
       '[role="alert"]',
     ) as HTMLElement;
@@ -211,7 +297,7 @@ describe('NewPrescriptionModal', () => {
     renderModal();
     await screen.findByText(/Se emite desde/);
     await user.type(screen.getByLabelText(/principio activo/i), 'Amoxicilina');
-    await user.click(screen.getByRole('button', { name: 'Emitir receta' }));
+    await submit(user);
 
     const concentration = screen.getByLabelText(/^concentración/i);
     expect(concentration).toHaveAttribute('aria-invalid', 'true');
@@ -239,7 +325,7 @@ describe('NewPrescriptionModal', () => {
     renderModal();
     await screen.findByText(/\(España\)/);
     await fillAmoxicilina(user);
-    await user.click(screen.getByRole('button', { name: 'Emitir receta' }));
+    await submit(user);
     const packages = screen.getByLabelText('Nº de envases');
     expect(packages).toHaveAttribute('aria-invalid', 'true');
     expect(packages).toHaveFocus();
@@ -256,11 +342,11 @@ describe('NewPrescriptionModal', () => {
     renderModal();
     const select = await screen.findByLabelText('Partir de una plantilla');
     await waitFor(() => expect(select).not.toBeDisabled());
-    await user.click(screen.getByRole('button', { name: 'Emitir receta' }));
+    await submit(user);
     expect(screen.getByLabelText(/^concentración/i)).toHaveAttribute('aria-invalid', 'true');
 
     await fillAmoxicilina(user);
-    await user.click(screen.getByRole('button', { name: 'Emitir receta' }));
+    await submit(user);
     expect(await screen.findByText('Falta el número de historia clínica.')).toBeInTheDocument();
 
     await user.selectOptions(select, 'tpl1');
@@ -275,7 +361,7 @@ describe('NewPrescriptionModal', () => {
     renderModal();
     await screen.findByText(/Se emite desde/);
     await fillAmoxicilina(user);
-    await user.click(screen.getByRole('button', { name: 'Emitir receta' }));
+    await submit(user);
     expect(await screen.findByText('Falta el número de historia clínica.')).toBeInTheDocument();
     await user.type(screen.getByLabelText(/indicaciones generales/i), 'x');
     expect(screen.queryByText('Falta el número de historia clínica.')).not.toBeInTheDocument();
@@ -288,7 +374,7 @@ describe('NewPrescriptionModal', () => {
     renderModal();
     await user.type(await screen.findByLabelText('Tu registro profesional'), 'TP-55');
     await fillAmoxicilina(user);
-    await user.click(screen.getByRole('button', { name: 'Emitir receta' }));
+    await submit(user);
     await waitFor(() =>
       expect(mockedIssue).toHaveBeenCalledWith(
         'tok',
