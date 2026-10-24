@@ -3396,6 +3396,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/patients/{patientId}/prescriptions/safety-check": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post: operations["PatientPrescriptionsController_safetyCheck"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/prescriptions/issuer": {
         parameters: {
             query?: never;
@@ -11147,6 +11163,29 @@ export interface components {
              */
             allergen: string;
         };
+        /** @enum {string} */
+        PrescriptionSafetyRule: "ALLERGY" | "INTERACTION" | "PREGNANCY" | "ANTIRESORPTIVE" | "PEDIATRIC_DOSE" | "NO_ANAMNESIS";
+        /**
+         * @description BLOCKING exige confirmación y motivo para emitir
+         * @enum {string}
+         */
+        PrescriptionSafetySeverity: "BLOCKING" | "INFO";
+        SafetyAlertDto: {
+            rule: components["schemas"]["PrescriptionSafetyRule"];
+            /**
+             * @description Referencia estable de la regla (prescription-safety.ts)
+             * @example INTERACTION_ANTICOAGULANT_NSAID
+             */
+            code: string;
+            /** @description BLOCKING exige confirmación y motivo para emitir */
+            severity: components["schemas"]["PrescriptionSafetySeverity"];
+            /** @description Principio activo que lo dispara; null si es general */
+            activeIngredient: string | null;
+            /** @description Texto en español para quien prescribe */
+            message: string;
+            /** @example SDCEP, Drug Prescribing for Dentistry */
+            source: string;
+        };
         PrescriptionItemDto: {
             /** Format: uuid */
             id: string;
@@ -11210,6 +11249,12 @@ export interface components {
             /** @description El profesional confirmó una alerta de alergia */
             allergyOverride: boolean;
             allergyMatches: components["schemas"]["AllergyMatchDto"][];
+            /** @description Versión de las reglas de la receta segura (DX-300); null en recetas anteriores */
+            safetyRulesVersion: string | null;
+            /** @description Avisos calculados al emitir (dentro del hash); null en recetas anteriores a DX-300 */
+            safetyAlerts: components["schemas"]["SafetyAlertDto"][] | null;
+            /** @description Motivo con el que se confirmaron los avisos bloqueantes */
+            safetyOverrideReason: string | null;
             /** @description SHA-256 (hex) del contenido emitido */
             contentHash: string;
             /** Format: date-time */
@@ -11219,6 +11264,32 @@ export interface components {
             voidedByName: string | null;
             voidReason: string | null;
             items: components["schemas"]["PrescriptionItemDto"][];
+        };
+        SafetyCheckItemDto: {
+            /** @example Ibuprofeno */
+            activeIngredient: string;
+            /** @example 400 mg */
+            concentration?: string;
+            /** @example 1 comprimido */
+            dose?: string;
+            /** @example Cada 8 horas */
+            frequency?: string;
+        };
+        PrescriptionSafetyCheckDto: {
+            /** @description 0 a 10 */
+            items: components["schemas"]["SafetyCheckItemDto"][];
+        };
+        PrescriptionSafetyPreviewDto: {
+            /** @example RX_SAFETY_V1 */
+            rulesVersion: string;
+            /**
+             * @description MISSING = el paciente no tiene anamnesis
+             * @enum {string}
+             */
+            anamnesis: "PRESENT" | "MISSING";
+            /** @description Hay avisos que exigen confirmación y motivo */
+            hasBlocking: boolean;
+            alerts: components["schemas"]["SafetyAlertDto"][];
         };
         PrescriptionItemInputDto: {
             /**
@@ -11265,14 +11336,26 @@ export interface components {
             notes?: string;
             /** @description Registro profesional (CO) / nº de colegiado (ES) si tu perfil aún no lo tiene; queda guardado en la receta y en tu perfil de la clínica. Si el perfil ya lo tiene, se ignora (lo cambia un ADMIN en Personal). */
             professionalLicense?: string;
-            /** @description Confirmación explícita del profesional ante una alerta de alergia. Sin ella, una coincidencia con la anamnesis da 409. */
+            /**
+             * @deprecated
+             * @description Clientes anteriores a DX-300: confirmación ante una alerta de alergia. Cuenta como `safetyOverride`; el motivo sigue siendo obligatorio.
+             */
             allergyOverride?: boolean;
+            /** @description DX-300: confirmación explícita de los avisos bloqueantes (alergia, interacción, embarazo, dosis infantil). Sin ella, o sin `safetyOverrideReason`, la API responde 409 con los avisos. */
+            safetyOverride?: boolean;
+            /**
+             * @description DX-300: motivo de la confirmación. Queda en la receta (dentro del hash). Se ignora si no hay avisos bloqueantes.
+             * @example INR estable; pauta corta acordada con hematología
+             */
+            safetyOverrideReason?: string;
         };
-        AllergyConflictDto: {
+        SafetyConflictDto: {
             /** @example 409 */
             statusCode: number;
+            /** @description Mensaje en español con los avisos */
             message: string;
             allergyMatches: components["schemas"]["AllergyMatchDto"][];
+            safetyAlerts: components["schemas"]["SafetyAlertDto"][];
         };
         PrescriptionIssuerDto: {
             country: components["schemas"]["ClinicCountry"];
@@ -11333,6 +11416,12 @@ export interface components {
             /** @description El profesional confirmó una alerta de alergia */
             allergyOverride: boolean;
             allergyMatches: components["schemas"]["AllergyMatchDto"][];
+            /** @description Versión de las reglas de la receta segura (DX-300); null en recetas anteriores */
+            safetyRulesVersion: string | null;
+            /** @description Avisos calculados al emitir (dentro del hash); null en recetas anteriores a DX-300 */
+            safetyAlerts: components["schemas"]["SafetyAlertDto"][] | null;
+            /** @description Motivo con el que se confirmaron los avisos bloqueantes */
+            safetyOverrideReason: string | null;
             /** @description SHA-256 (hex) del contenido emitido */
             contentHash: string;
             /** Format: date-time */
@@ -21350,14 +21439,64 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Alerta de alergia: un principio activo coincide con una alergia de la anamnesis y no se envió allergyOverride=true */
+            /** @description Avisos de seguridad bloqueantes (DX-300: alergia —lista o casillas de la anamnesis—, interacción grave, embarazo, dosis infantil) sin `safetyOverride=true` y `safetyOverrideReason`; mensaje en español con los avisos */
             409: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["AllergyConflictDto"];
+                    "application/json": components["schemas"]["SafetyConflictDto"];
                 };
+            };
+        };
+    };
+    PatientPrescriptionsController_safetyCheck: {
+        parameters: {
+            query?: never;
+            header?: {
+                /** @description Sede desde la que se emite (da el país y la dirección). Sin ella, la sede principal. */
+                "X-Location-Id"?: string;
+            };
+            path: {
+                patientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PrescriptionSafetyCheckDto"];
+            };
+        };
+        responses: {
+            /** @description Avisos de seguridad que daría la emisión con estos medicamentos (alergias con las casillas de la anamnesis, interacciones, embarazo, antirresortivos, dosis infantil por peso, sin anamnesis). Solo una vista previa: no guarda nada y la emisión los vuelve a calcular. Es una ayuda: no sustituye el juicio clínico. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrescriptionSafetyPreviewDto"];
+                };
+            };
+            /** @description Cuerpo inválido (en español) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo DENTIST y ADMIN emiten recetas */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente no encontrado en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

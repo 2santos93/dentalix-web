@@ -17,6 +17,9 @@ export type CreatePrescriptionTemplateInput =
 export type UpdatePrescriptionTemplateInput =
   components['schemas']['UpdatePrescriptionTemplateDto'];
 export type ClinicCountry = components['schemas']['ClinicCountry'];
+export type SafetyAlert = components['schemas']['SafetyAlertDto'];
+export type SafetyCheckItem = components['schemas']['SafetyCheckItemDto'];
+export type PrescriptionSafetyPreview = components['schemas']['PrescriptionSafetyPreviewDto'];
 export type PrescriptionStatus = components['schemas']['PrescriptionStatus'];
 
 export const COUNTRY_LABELS: Record<ClinicCountry, string> = {
@@ -74,7 +77,8 @@ export async function listPatientPrescriptions(
 
 /**
  * `POST /patients/:id/prescriptions`. 400 si falta un campo legal del país;
- * 409 si hay alerta de alergia y no se envió `allergyOverride: true`.
+ * 409 si hay avisos de seguridad bloqueantes y no se enviaron
+ * `safetyOverride: true` y `safetyOverrideReason` (DX-300).
  */
 export async function issuePrescription(
   token: string,
@@ -82,6 +86,36 @@ export async function issuePrescription(
   input: IssuePrescriptionInput,
 ): Promise<Prescription> {
   return apiFetch<Prescription>(patientPath(patientId), { method: 'POST', body: input, token });
+}
+
+/**
+ * `POST /patients/:id/prescriptions/safety-check` (DX-300) — avisos de
+ * seguridad que daría la emisión, calculados en el servidor con la anamnesis
+ * vigente. Solo una vista previa: la emisión los vuelve a calcular.
+ */
+export async function checkPrescriptionSafety(
+  token: string,
+  patientId: string,
+  items: SafetyCheckItem[],
+): Promise<PrescriptionSafetyPreview> {
+  return apiFetch<PrescriptionSafetyPreview>(`${patientPath(patientId)}/safety-check`, {
+    method: 'POST',
+    body: { items },
+    token,
+  });
+}
+
+/**
+ * Enlace a la ficha técnica de la CIMA (AEMPS) por nº de registro del
+ * medicamento, para revisar 4.3 (contraindicaciones), 4.5 (interacciones) y
+ * 4.6 (embarazo). Solo lleva el nº de registro: ningún dato del paciente.
+ * `null` si el nº no tiene forma de nº de registro.
+ */
+export function cimaTechnicalSheetUrl(registrationNumber: string): string | null {
+  const nregistro = registrationNumber.trim();
+  if (!/^\d{4,10}(IP\d{0,4})?$/i.test(nregistro)) return null;
+  const n = encodeURIComponent(nregistro.toUpperCase());
+  return `https://cima.aemps.es/cima/dochtml/ft/${n}/FT_${n}.html`;
 }
 
 /** `GET /prescriptions/:id` — documento completo con `integrityOk`. */

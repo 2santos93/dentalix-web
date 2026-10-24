@@ -3,9 +3,7 @@ import * as React from 'react';
 import { Trash2 } from 'lucide-react';
 import type { ItemDraft, ItemDraftErrors } from '@/lib/prescriptions/prescription-draft';
 import type { ClinicCountry } from '@/lib/prescriptions/prescriptions-api';
-import type { AllergyMatch } from '@/lib/prescriptions/allergy-match';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
-import { InlineError } from '@/components/errors/inline-error';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 
@@ -26,7 +24,6 @@ const copy = {
   packages: 'Nº de envases',
   instructions: 'Indicaciones',
   totalQuantityHint: 'Se imprime también en letras.',
-  allergy: (allergens: string) => `Alergia registrada en la anamnesis: ${allergens}.`,
 };
 
 /**
@@ -44,7 +41,6 @@ interface PrescriptionItemFieldsProps {
   onRemove?: () => void;
   mode: ItemFieldsMode;
   idPrefix: string;
-  allergyMatches?: AllergyMatch[];
   /** Validación en el cliente: el mensaje va junto a cada campo. */
   errors?: ItemDraftErrors;
 }
@@ -62,11 +58,10 @@ export function PrescriptionItemFields({
   onRemove,
   mode,
   idPrefix,
-  allergyMatches = [],
   errors = {},
 }: PrescriptionItemFieldsProps) {
   const n = index + 1;
-  const id = (field: keyof ItemDraft | 'allergy') => `${idPrefix}-${index}-${field}`;
+  const id = (field: keyof ItemDraft) => `${idPrefix}-${index}-${field}`;
   const template = mode.kind === 'template';
   const label = (text: string, alwaysRequired = false) =>
     template && !alwaysRequired ? copy.optional(text) : text;
@@ -119,8 +114,6 @@ export function PrescriptionItemFields({
     );
   }
 
-  const allergens = [...new Set(allergyMatches.map((m) => m.allergen))].join(', ');
-
   return (
     <fieldset className="flex min-w-0 flex-col gap-3 rounded-lg border border-border p-4">
       <legend className="px-1 text-sm font-semibold text-ink">{copy.legend(n)}</legend>
@@ -148,22 +141,12 @@ export function PrescriptionItemFields({
             value={item.activeIngredient}
             placeholder="Amoxicilina"
             maxLength={200}
-            aria-invalid={allergyMatches.length > 0 || !!errors.activeIngredient || undefined}
+            aria-invalid={errors.activeIngredient ? true : undefined}
             aria-describedby={
-              [
-                errors.activeIngredient ? fieldErrorId(id('activeIngredient')) : null,
-                allergyMatches.length > 0 ? id('allergy') : null,
-              ]
-                .filter(Boolean)
-                .join(' ') || undefined
+              errors.activeIngredient ? fieldErrorId(id('activeIngredient')) : undefined
             }
             onChange={(e) => onChange({ activeIngredient: e.target.value })}
           />
-          {allergyMatches.length > 0 ? (
-            <InlineError id={id('allergy')} className="text-xs">
-              {copy.allergy(allergens)}
-            </InlineError>
-          ) : null}
         </FormField>
         {text('brandName', copy.brandName, undefined, false)}
         {text('concentration', copy.concentration, '500 mg')}
