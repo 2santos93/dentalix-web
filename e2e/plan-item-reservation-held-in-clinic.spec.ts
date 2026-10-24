@@ -214,7 +214,7 @@ test('1440 px: «Llegó» con la reserva en otra cita de hoy en la clínica, sin
   await expect(toast.getByRole('button', { name: CLAIM })).toHaveCount(0);
 
   const panel = page.getByRole('region', { name: 'En clínica' });
-  const notice = panel.getByRole('group', { name: NOTICE });
+  const notice = panel.getByTestId('in-clinic-item').filter({ hasText: s.name }).getByRole('group', { name: NOTICE });
   await expect(notice).toContainText(s.itemLabel, { timeout: 10_000 });
   await expect(notice.getByRole('button', { name: CLAIM })).toHaveCount(0);
   await expectFullyReadable(page, notice, s.message);
@@ -242,7 +242,11 @@ test('390 px: el aviso en la hoja «En clínica» se lee completo y sin «Traer 
   await expectNoHorizontalScroll(page);
 
   await page.getByRole('button', { name: /^En clínica/ }).click();
-  const notice = page.getByRole('dialog').getByRole('group', { name: NOTICE });
+  const notice = page
+    .getByRole('dialog')
+    .getByTestId('in-clinic-item')
+    .filter({ hasText: s.name })
+    .getByRole('group', { name: NOTICE });
   await expect(notice).toContainText(s.itemLabel, { timeout: 10_000 });
   await expect(notice.getByRole('button', { name: CLAIM })).toHaveCount(0);
   await expectFullyReadable(page, notice, s.message);
