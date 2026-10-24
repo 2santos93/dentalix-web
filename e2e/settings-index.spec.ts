@@ -77,12 +77,25 @@ async function openSettings(page: Page, fullName: string): Promise<void> {
   await expect(page.getByRole('heading', { level: 1, name: 'Ajustes' })).toBeVisible();
 }
 
+/**
+ * Abre el menú y lo deja EN REPOSO antes de medir. El panel entra con una
+ * animación de 120 ms que lo escala de 0,96 a 1 (`dm-content-in`, globals.css)
+ * y `getBoundingClientRect` mide la caja transformada: en la CI (modo
+ * producción) la medida caía siempre en el mismo fotograma, con el panel a
+ * escala 0,99929, y un ítem de 44 px de alto real (`offsetHeight` 44, clase
+ * `min-h-11`) salía de 43,97 px (DX-292, TST-033). Se termina la animación
+ * (`finish()`, como `expectDialogInsideViewport` en support/layout.ts) en vez
+ * de esperar, así la medida no depende de la velocidad de la máquina.
+ */
 async function openAccountMenu(page: Page, fullName: string): Promise<Locator> {
   const trigger = accountTrigger(page, fullName);
   await expect(trigger).toBeVisible({ timeout: 15_000 });
   await trigger.click();
   const menu = page.getByRole('menu');
   await expect(menu).toBeVisible();
+  await menu.evaluate((el) => {
+    for (const animation of el.getAnimations({ subtree: true })) animation.finish();
+  });
   return menu;
 }
 
@@ -118,12 +131,18 @@ async function expectEveryItemReachable(page: Page, menu: Locator, moment: strin
   }
 }
 
+/** Alto real (layout) y alto en pantalla de cada ítem: los dos ≥ 44 px. */
 async function expectTouchTargets(items: Locator, moment: string) {
   const heights = await items.evaluateAll((els) =>
-    els.map((el) => ({ text: el.textContent ?? '', height: el.getBoundingClientRect().height })),
+    els.map((el) => ({
+      text: el.textContent ?? '',
+      height: el.getBoundingClientRect().height,
+      layout: (el as HTMLElement).offsetHeight,
+    })),
   );
   expect(heights.length, `${moment}: hay ítems`).toBeGreaterThan(0);
-  for (const { text, height } of heights) {
+  for (const { text, height, layout } of heights) {
+    expect(layout, `${moment}: «${text}» tiene ${layout}px de alto real`).toBeGreaterThanOrEqual(44);
     expect(height, `${moment}: «${text}» mide ${height}px`).toBeGreaterThanOrEqual(44);
   }
 }
@@ -267,6 +286,16 @@ test('axe: /settings y el menú abierto, a 390 y 1440 px, en claro y oscuro', as
 
   const axeSource = readFileSync(require.resolve('axe-core/axe.min.js'), 'utf8');
   async function serious(surface: string) {
+    // Colores EN REPOSO. Al pasar de oscuro a claro, los enlaces de la barra
+    // (`transition-colors`, 150 ms; `reducedMotion` solo apaga las animaciones
+    // con keyframes) siguen a medio camino entre los dos temas, y axe medía
+    // ese contraste intermedio: en la CI (run 40036584441) salían 44 enlaces
+    // con «color-contrast» en «/settings 1440 light», en el intento y en el
+    // reintento (DX-292). Se terminan transiciones y animaciones antes de
+    // medir, sin esperar: no depende de la velocidad de la máquina.
+    await page.evaluate(() => {
+      for (const animation of document.getAnimations()) animation.finish();
+    });
     await page.evaluate(axeSource);
     const results = await page.evaluate(async () => {
       const axe = (window as unknown as { axe: { run: () => Promise<AxeResults> } }).axe;
