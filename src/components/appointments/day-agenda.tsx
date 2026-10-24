@@ -61,7 +61,11 @@ interface DayAgendaProps {
    * see `AgendaView.handleStatusChange`. When omitted, rows render the
    * badge only (read-only) — existing callers/tests are unaffected.
    */
-  onStatusChange?: (appointmentId: string, status: AppointmentStatus) => void;
+  onStatusChange?: (
+    appointmentId: string,
+    status: AppointmentStatus,
+    trigger?: HTMLElement | null,
+  ) => void;
   /** The `id` of the appointment currently being updated, if any — disables that row's status select and shows a small "Actualizando…" hint next to it. */
   updatingId?: string | null;
   /**
@@ -103,7 +107,11 @@ function DetailButton({
 interface StatusSelectProps {
   appointment: Appointment;
   timeRange: string;
-  onStatusChange: (appointmentId: string, status: AppointmentStatus) => void;
+  onStatusChange: (
+    appointmentId: string,
+    status: AppointmentStatus,
+    trigger?: HTMLElement | null,
+  ) => void;
   updating: boolean;
   role?: ClinicRole | null;
 }
@@ -126,7 +134,7 @@ function StatusSelect({ appointment, timeRange, onStatusChange, updating, role }
         value={appointment.status}
         options={statusOptionsFor(appointment.status, role)}
         disabled={updating}
-        onChange={(status) => onStatusChange(appointment.id, status)}
+        onChange={(status, trigger) => onStatusChange(appointment.id, status, trigger)}
       />
       {updating && (
         <span role="status" className="text-xs text-muted">

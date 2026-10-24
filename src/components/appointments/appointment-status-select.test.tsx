@@ -72,7 +72,8 @@ describe('AppointmentStatusSelect (DX-295)', () => {
     expect(screen.getByRole('option', { name: 'Confirmada' })).toHaveFocus();
     await user.keyboard('{Enter}');
     expect(onChange).toHaveBeenCalledTimes(1);
-    expect(onChange).toHaveBeenCalledWith('CONFIRMED');
+    // DX-279: con el propio control, para devolverle el foco si se abre un diálogo.
+    expect(onChange).toHaveBeenCalledWith('CONFIRMED', trigger);
     expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
   });
 
@@ -81,7 +82,7 @@ describe('AppointmentStatusSelect (DX-295)', () => {
     await user.click(trigger);
     await user.click(screen.getByRole('option', { name: 'No asistió' }));
     expect(onChange).toHaveBeenCalledTimes(1);
-    expect(onChange).toHaveBeenCalledWith('NO_SHOW');
+    expect(onChange).toHaveBeenCalledWith('NO_SHOW', trigger);
   });
 
   it('elegir el estado que ya tiene no envía nada', async () => {

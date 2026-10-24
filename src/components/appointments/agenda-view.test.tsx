@@ -1221,6 +1221,27 @@ describe('AgendaView', () => {
       });
       await waitFor(() => expect(mockedListWaitlist.mock.calls.length).toBeGreaterThan(before));
     });
+
+    it('con el teclado, Enter sobre «Cancelada» abre el diálogo y Esc lo cierra sin cambiar nada, con el foco en el selector (QA 14)', async () => {
+      const apt = appointment({ id: 'apt-k', start: new Date(`${today}T09:00:00`).toISOString(), end: new Date(`${today}T09:30:00`).toISOString() });
+      mockedListAppointments.mockResolvedValue([apt]);
+      const user = userEvent.setup();
+      render(<AgendaView token={tokenFor('RECEPTION')} />);
+      await user.click(screen.getByRole('button', { name: /^día$/i }));
+      await user.click(screen.getByRole('button', { name: 'Lista' }));
+      const [select] = await screen.findAllByTestId('appointment-status-select');
+      select.focus();
+      await user.keyboard('{ArrowDown}');
+      const option = await screen.findByRole('option', { name: 'Cancelada' });
+      option.focus();
+      await user.keyboard('{Enter}');
+      const dialog = await screen.findByRole('dialog', { name: /Cancelar la cita de/ });
+      await user.keyboard('{Escape}');
+      await waitFor(() => expect(dialog).not.toBeInTheDocument());
+      await waitFor(() => expect(select).toHaveFocus());
+      expect(select).toHaveTextContent('Agendada');
+      expect(mockedUpdateAppointment).not.toHaveBeenCalled();
+    });
   });
   // DX-170: la evolución se registra desde la tarjeta de la cita.
   describe('«Registrar evolución» (DX-170)', () => {

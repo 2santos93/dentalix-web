@@ -73,6 +73,8 @@ interface CancelAppointmentDialogProps {
    * ya vino (en la clínica o completada), la cancelación nunca es tardía.
    */
   fromStatus: AppointmentStatus;
+  /** Dónde queda el foco al cerrar (por defecto, donde estaba al abrir). */
+  onCloseAutoFocus?: (event: Event) => void;
   onDone: (result: AppointmentWriteDetail) => void;
 }
 
@@ -90,6 +92,7 @@ export function CancelAppointmentDialog({
   appointmentId,
   patientName,
   fromStatus,
+  onCloseAutoFocus,
   onDone,
 }: CancelAppointmentDialogProps) {
   const fromCompleted = fromStatus === 'COMPLETED';
@@ -183,6 +186,7 @@ export function CancelAppointmentDialog({
       cancelLabel={copy.back}
       submitting={submitting}
       error={error}
+      onCloseAutoFocus={onCloseAutoFocus}
     >
       <fieldset
         role="radiogroup"

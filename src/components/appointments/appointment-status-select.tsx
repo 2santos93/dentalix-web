@@ -11,8 +11,13 @@ interface AppointmentStatusSelectProps {
   value: AppointmentStatus;
   /** Estados que se pueden elegir (ver `statusOptionsFor`), en su orden. */
   options: AppointmentStatus[];
-  /** Solo se llama con una acción explícita (Enter o clic en una opción) y con un estado distinto del actual. */
-  onChange: (status: AppointmentStatus) => void;
+  /**
+   * Solo se llama con una acción explícita (Enter o clic en una opción) y con
+   * un estado distinto del actual. `trigger` es el propio control: si el padre
+   * abre un diálogo en vez de guardar (p. ej. cancelar, DX-279), le devuelve
+   * ahí el foco al cerrarlo.
+   */
+  onChange: (status: AppointmentStatus, trigger: HTMLButtonElement | null) => void;
   disabled?: boolean;
   id?: string;
   /** `chip`: píldora tintada de la fila de la agenda. `field`: campo de formulario del detalle. */
@@ -67,7 +72,7 @@ export function AppointmentStatusSelect({
       onValueChange={(next) => {
         if (next === value) return;
         refocusAfterSave.current = true;
-        onChange(next as AppointmentStatus);
+        onChange(next as AppointmentStatus, triggerRef.current);
       }}
     >
       <SelectTrigger

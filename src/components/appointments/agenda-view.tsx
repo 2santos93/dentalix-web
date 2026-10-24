@@ -481,6 +481,9 @@ export function AgendaView({ token }: AgendaViewProps) {
   } | null>(null);
   // DX-279: cancelar pide quién cancela y el motivo (modal), y avisa si es tardía.
   const [cancelling, setCancelling] = useState<Appointment | null>(null);
+  // El selector de estado desde el que se abrió: al cerrar el diálogo el foco
+  // vuelve ahí (Radix lo devolvería a la opción de la lista, que ya no existe).
+  const cancelReturnFocus = useRef<HTMLElement | null>(null);
 
   // Fetch active staff once (retriable) — feeds the provider selector.
   useEffect(() => {
@@ -897,12 +900,17 @@ export function AgendaView({ token }: AgendaViewProps) {
    * otherwise the select would briefly re-enable showing the stale
    * pre-change status (review fix).
    */
-  async function handleStatusChange(id: string, status: AppointmentStatus) {
+  async function handleStatusChange(
+    id: string,
+    status: AppointmentStatus,
+    trigger?: HTMLElement | null,
+  ) {
     if (!token) return;
     const before = appointments.find((a) => a.id === id);
     // DX-279: cancelar va por el modal de origen y motivo (también desde
     // «Completada», que pide además el motivo de esa salida).
     if (status === 'CANCELLED' && before && before.status !== 'CANCELLED') {
+      cancelReturnFocus.current = trigger ?? null;
       setCancelling(before);
       return;
     }
@@ -1319,6 +1327,13 @@ export function AgendaView({ token }: AgendaViewProps) {
             appointmentId={cancelling.id}
             patientName={patientLabel(cancelling)}
             fromStatus={cancelling.status}
+            onCloseAutoFocus={(event) => {
+              const trigger = cancelReturnFocus.current;
+              cancelReturnFocus.current = null;
+              if (!trigger?.isConnected) return;
+              event.preventDefault();
+              trigger.focus();
+            }}
             onDone={() => void handleCancelled(cancelling)}
           />
         ) : null}
@@ -1444,8 +1459,8 @@ export function AgendaView({ token }: AgendaViewProps) {
                     value={liveDetailAppointment.status}
                     options={statusOptionsFor(liveDetailAppointment.status, role)}
                     disabled={updatingId === liveDetailAppointment.id}
-                    onChange={(status) => {
-                      void handleStatusChange(liveDetailAppointment.id, status);
+                    onChange={(status, trigger) => {
+                      void handleStatusChange(liveDetailAppointment.id, status, trigger);
                     }}
                   />
                 </FormField>

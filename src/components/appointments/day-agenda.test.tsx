@@ -207,7 +207,7 @@ describe('DayAgenda', () => {
       await user.click(within(table).getByRole('combobox'));
       await user.click(screen.getByRole('option', { name: 'Confirmada' }));
 
-      expect(onStatusChange).toHaveBeenCalledWith('apt-1', 'CONFIRMED');
+      expect(onStatusChange).toHaveBeenCalledWith('apt-1', 'CONFIRMED', expect.any(HTMLButtonElement));
     });
 
     it('DX-295: ↑/↓ en el selector de la fila no cambian la cita; Enter sí', async () => {
@@ -224,7 +224,7 @@ describe('DayAgenda', () => {
 
       await user.keyboard('{Enter}');
       expect(onStatusChange).toHaveBeenCalledTimes(1);
-      expect(onStatusChange).toHaveBeenCalledWith('apt-1', 'CONFIRMED');
+      expect(onStatusChange).toHaveBeenCalledWith('apt-1', 'CONFIRMED', expect.any(HTMLButtonElement));
     });
 
     it('disables the status select (both desktop and mobile) only for the row matching updatingId', () => {
