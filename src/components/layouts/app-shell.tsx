@@ -13,6 +13,7 @@ import {
   HandCoins,
   BadgePercent,
   History,
+  ChartColumn,
   FileClock,
   ClipboardCheck,
   PanelLeftClose,
@@ -70,6 +71,9 @@ const NAV: NavItem[] = [
   // Informe de descuentos (DX-204): DISCOUNT_REPORT_ROLES en la API. Junto a
   // la cartera, bajo /caja.
   { href: '/caja/descuentos', label: 'Descuentos', icon: BadgePercent, roles: ['ADMIN'] },
+  // Reportes (DX-014): REPORT_ROLES en la API. «Comparar sedes» y los que
+  // vengan, en pestañas.
+  { href: '/reportes', label: 'Reportes', icon: ChartColumn, roles: ['ADMIN'] },
   // Presupuestos por seguir (DX-040): TREATMENT_PLAN_FOLLOW_UP_ROLES en la API.
   {
     href: '/presupuestos',

@@ -78,7 +78,7 @@ describe('AppShell', () => {
   // Cada entrada copia el `@Roles(...)` del endpoint de su pantalla (DX-070):
   // DASHBOARD_ROLES, CATALOG_READ_ROLES, INVENTORY_ROLES, STAFF_WRITE_ROLES,
   // AUDIT_READ_ROLES (DX-009), TREATMENT_PLAN_FOLLOW_UP_ROLES (Presupuestos, DX-040)
-  // y RECEIVABLES_ROLES (Cartera, DX-145).
+  // RECEIVABLES_ROLES (Cartera, DX-145) y REPORT_ROLES (Reportes, DX-014).
   const ROLE_NAV: Record<string, { visible: string[]; hidden: string[] }> = {
     ADMIN: {
       visible: [
@@ -92,20 +92,21 @@ describe('AppShell', () => {
         'Inventario',
         'Personal',
         'Auditoría',
+        'Reportes',
       ],
       hidden: [],
     },
     DENTIST: {
       visible: ['Pacientes', 'Agenda', 'Catálogo'],
-      hidden: ['Dashboard', 'Caja', 'Cartera', 'Presupuestos', 'Inventario', 'Personal', 'Auditoría'],
+      hidden: ['Dashboard', 'Caja', 'Cartera', 'Presupuestos', 'Inventario', 'Personal', 'Auditoría', 'Reportes'],
     },
     ASSISTANT: {
       visible: ['Pacientes', 'Agenda', 'Catálogo', 'Inventario'],
-      hidden: ['Dashboard', 'Caja', 'Cartera', 'Presupuestos', 'Personal', 'Auditoría'],
+      hidden: ['Dashboard', 'Caja', 'Cartera', 'Presupuestos', 'Personal', 'Auditoría', 'Reportes'],
     },
     RECEPTION: {
       visible: ['Pacientes', 'Agenda', 'Caja', 'Cartera', 'Presupuestos'],
-      hidden: ['Dashboard', 'Catálogo', 'Inventario', 'Personal', 'Auditoría'],
+      hidden: ['Dashboard', 'Catálogo', 'Inventario', 'Personal', 'Auditoría', 'Reportes'],
     },
   };
   it.each(Object.keys(ROLE_NAV))('el menú de %s solo enseña lo que su rol puede abrir', async (role) => {
