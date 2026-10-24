@@ -2,6 +2,7 @@
 import * as React from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { CheckCircle2 } from 'lucide-react';
+import { ApiError } from '@/lib/api/api-error';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import {
   HEALTH_REGISTRATION_NUMBER_MAX_LENGTH,
@@ -120,9 +121,10 @@ function LocationHealthRegistrationRow({
   const [value, setValue] = useState(current);
   const [show, setShow] = useState(currentShow);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<{ text: string; field: boolean } | null>(null);
   const [saved, setSaved] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
+  const saveRef = useRef<HTMLButtonElement>(null);
   const inputId = `health-registration-${location.id}`;
   const hintId = `${inputId}-hint`;
   const errorId = `${inputId}-error`;
@@ -131,11 +133,15 @@ function LocationHealthRegistrationRow({
   const name = `${location.name}${location.isActive ? '' : ` (${copy.inactive})`}`;
   const dirty = value.trim() !== current || show !== currentShow;
 
-  // Tras un error, el foco va al campo que hay que corregir, ya con el error
-  // enlazado (se lee al recibir el foco).
+  // Tras un error, el foco va a donde se actúa, ya con el error enlazado (se
+  // lee al recibir el foco): al campo si la API lo rechazó (400); si no
+  // (permiso, servidor, red), a «Guardar» para reintentar.
   useEffect(() => {
-    if (error) inputRef.current?.focus();
+    if (!error) return;
+    if (error.field) inputRef.current?.focus();
+    else saveRef.current?.focus();
   }, [error]);
+  const fieldError = error?.field ? error : null;
 
   async function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -152,7 +158,10 @@ function LocationHealthRegistrationRow({
       setShow(updated.showHealthRegistrationNumber ?? false);
       setSaved(true);
     } catch (err) {
-      setError(apiErrorMessage(err, copy.saveError));
+      setError({
+        text: apiErrorMessage(err, copy.saveError),
+        field: err instanceof ApiError && err.status === 400,
+      });
     } finally {
       setSaving(false);
     }
@@ -192,9 +201,9 @@ function LocationHealthRegistrationRow({
             setValue(e.target.value);
             setSaved(false);
           }}
-          aria-invalid={error ? true : undefined}
-          aria-describedby={error ? `${hintId} ${errorId}` : hintId}
-          className={cn(error && 'border-danger')}
+          aria-invalid={fieldError ? true : undefined}
+          aria-describedby={fieldError ? `${hintId} ${errorId}` : hintId}
+          className={cn(fieldError && 'border-danger')}
         />
         <p id={hintId} className="text-xs text-muted">
           {copy.hint}
@@ -218,25 +227,31 @@ function LocationHealthRegistrationRow({
           {copy.showHint}
         </p>
         <Button
+          ref={saveRef}
           type="submit"
           variant="secondary"
           className="self-start sm:self-end"
           disabled={saving || !dirty}
           aria-busy={saving || undefined}
           aria-label={copy.saveFor(location.name)}
+          aria-describedby={error && !error.field ? errorId : undefined}
         >
           {copy.save}
         </Button>
         {error ? (
           <InlineError id={errorId} className="text-xs">
-            {error}
+            {error.text}
           </InlineError>
-        ) : saved ? (
-          <p role="status" className="flex items-center gap-1 text-xs text-success">
-            <CheckCircle2 aria-hidden className="size-3.5" />
-            {copy.saved}
-          </p>
         ) : null}
+        {/* Siempre montada: un lector de pantalla anuncia el cambio de texto. */}
+        <p role="status" className="flex items-center gap-1 text-xs text-success">
+          {saved ? (
+            <>
+              <CheckCircle2 aria-hidden className="size-3.5" />
+              {copy.saved}
+            </>
+          ) : null}
+        </p>
       </div>
     </form>
   );

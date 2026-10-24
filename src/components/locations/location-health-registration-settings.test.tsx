@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { LocationHealthRegistrationSettings } from './location-health-registration-settings';
 import {
@@ -6,7 +6,7 @@ import {
   updateLocationHealthRegistration,
   type ClinicLocation,
 } from '@/lib/locations/locations-api';
-import { ApiError } from '@/lib/api/api-error';
+import { ApiError, NetworkError } from '@/lib/api/api-error';
 
 jest.mock('../../lib/locations/locations-api', () => ({
   ...jest.requireActual('../../lib/locations/locations-api'),
@@ -33,6 +33,9 @@ const madrid: ClinicLocation = { ...base, id: 'l2', name: 'Madrid', country: 'ES
 
 const field = () => screen.findByLabelText(/Nº de registro sanitario · Sede principal/);
 const toggle = () => screen.getByRole('checkbox', { name: /Mostrar en los documentos · Sede principal/ });
+/** La región de estado de la fila de la sede principal (cada fila tiene la suya). */
+const principalStatus = async () =>
+  within((await field()).closest('form') as HTMLFormElement).getByRole('status');
 const save = () =>
   screen.getByRole('button', { name: 'Guardar el nº de registro sanitario de Sede principal' });
 
@@ -80,7 +83,8 @@ describe('LocationHealthRegistrationSettings (DX-319)', () => {
         showHealthRegistrationNumber: true,
       }),
     );
-    expect(await screen.findByRole('status')).toHaveTextContent('Guardado');
+    const status = await principalStatus();
+    await waitFor(() => expect(status).toHaveTextContent('Guardado'));
     expect(await field()).toHaveValue('NRS 28/1234-AB');
     expect(save()).toBeDisabled();
   });
@@ -116,6 +120,35 @@ describe('LocationHealthRegistrationSettings (DX-319)', () => {
     expect(input).toHaveAttribute('aria-invalid', 'true');
     expect(input).toHaveAccessibleDescription(expect.stringContaining('admite hasta 64 caracteres'));
     expect(input).toHaveFocus();
+  });
+
+  it.each([
+    ['403', new ApiError(403, 'Forbidden')],
+    ['503', new ApiError(503, 'Service Unavailable')],
+    ['red', new NetworkError(new TypeError('Failed to fetch'))],
+  ])('si falla por %s (no es del campo): error visible y foco en «Guardar», el campo no queda inválido', async (_, err) => {
+    mockedUpdate.mockRejectedValue(err);
+    const user = userEvent.setup();
+    render(<LocationHealthRegistrationSettings token="tok" canEdit />);
+    const input = await field();
+    await user.type(input, 'NRS-1');
+    await user.click(save());
+    expect(await screen.findByRole('alert')).toBeInTheDocument();
+    expect(input).not.toHaveAttribute('aria-invalid');
+    expect(save()).toHaveFocus();
+    expect(save()).toHaveAccessibleDescription(expect.stringMatching(/\S/));
+  });
+
+  it('la región de estado está siempre montada y solo cambia su texto', async () => {
+    mockedUpdate.mockResolvedValue({ ...base, healthRegistrationNumber: 'NRS-1' });
+    const user = userEvent.setup();
+    render(<LocationHealthRegistrationSettings token="tok" canEdit />);
+    await user.type(await field(), 'NRS-1');
+    const status = await principalStatus();
+    expect(status).toHaveTextContent('');
+    await user.click(save());
+    await waitFor(() => expect(status).toHaveTextContent('Guardado'));
+    expect(await principalStatus()).toBe(status);
   });
 
   it('sin ser ADMIN: solo lectura, sin campo, casilla ni botón', async () => {

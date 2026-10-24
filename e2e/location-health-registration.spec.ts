@@ -8,8 +8,8 @@ import { API_URL } from './support/urls';
  *
  * Una clínica nueva: la tarjeta ya no habla del REPS; el ADMIN escribe un nº
  * libre (sin formato por país), activa «Mostrar en los documentos» y guarda;
- * al recargar sigue ahí y la API lo devuelve. Un fallo del guardado deja el
- * error junto al campo con el foco en él. En escritorio (1440px) y móvil
+ * al recargar sigue ahí y la API lo devuelve. Un 503 deja el error con el foco
+ * en «Guardar»; un 400, el campo inválido con el foco en él. En escritorio (1440px) y móvil
  * (390px), sin scroll horizontal ni errores en la consola.
  */
 const rawSuffix = process.env.E2E_RUN_SUFFIX ?? randomUUID();
@@ -59,15 +59,26 @@ for (const viewport of VIEWPORTS) {
     await expect(save).toBeDisabled();
     await expectNoHorizontalScroll(page);
 
-    // Un fallo del guardado: error junto al campo y el foco en él.
-    await page.route('**/locations/*', (route) =>
-      route.request().method() === 'PATCH'
-        ? route.fulfill({ status: 503, contentType: 'application/json', body: '{"message":"QA"}' })
-        : route.fallback(),
-    );
+    // Un fallo del guardado que no es del campo (503): error visible y foco en
+    // «Guardar»; el campo no queda inválido.
+    const failWith = (status: number, message: string) =>
+      page.route('**/locations/*', (route) =>
+        route.request().method() === 'PATCH'
+          ? route.fulfill({ status, contentType: 'application/json', body: JSON.stringify({ message }) })
+          : route.fallback(),
+      );
+    await failWith(503, 'QA');
     await field.fill('NRS 28/1234-AB');
     await save.click();
     await expect(section.getByRole('alert')).toBeVisible();
+    await expect(field).not.toHaveAttribute('aria-invalid', 'true');
+    await expect(save).toBeFocused();
+    await page.unroute('**/locations/*');
+
+    // Un 400 de la API sí es del campo: inválido y con el foco en él.
+    await failWith(400, 'El nº de registro sanitario no admite saltos de línea ni caracteres de control.');
+    await save.click();
+    await expect(section.getByRole('alert')).toContainText('no admite saltos de línea');
     await expect(field).toHaveAttribute('aria-invalid', 'true');
     await expect(field).toBeFocused();
     await page.unroute('**/locations/*');
@@ -94,7 +105,7 @@ for (const viewport of VIEWPORTS) {
     });
     expect(principal).not.toHaveProperty('repsHabilitationCode');
 
-    // El 503 simulado deja su error en la consola; nada más.
-    expect(consoleErrors.filter((e) => !/503|Service Unavailable/.test(e))).toEqual([]);
+    // El 503 y el 400 simulados dejan su error en la consola; nada más.
+    expect(consoleErrors.filter((e) => !/503|400|Service Unavailable|Bad Request/.test(e))).toEqual([]);
   });
 }
