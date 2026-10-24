@@ -620,9 +620,6 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
                 onChange={(e) => setCategory(e.target.value)}
               />
             </FormField>
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-2">
             <FormField
               htmlFor="catalog-color"
               label={copy.colorLabel}
