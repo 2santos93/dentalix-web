@@ -20,7 +20,7 @@ import { cn } from '@/lib/utils';
 export const locationRepsCopy = {
   heading: 'Código de habilitación (REPS)',
   support:
-    'El código con el que la sede está inscrita en el REPS (12 dígitos). Lo pide el Resumen Digital de Atención (Res. 1888/2025) en las sedes de Colombia.',
+    'El código con el que la sede está inscrita en el REPS (12 dígitos).',
   label: 'Código de habilitación (REPS)',
   labelFor: (name: string) => `Código de habilitación (REPS) de ${name}`,
   placeholder: '12 dígitos',
