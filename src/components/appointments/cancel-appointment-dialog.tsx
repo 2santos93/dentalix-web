@@ -135,7 +135,16 @@ export function CancelAppointmentDialog({
     if (!reasonCode) next.reason = copy.reasonRequired;
     if (fromCompleted && !validStatusReason(exitReason)) next.exit = completedExitCopy.tooShort;
     setErrors(next);
-    if (!byKind || !reasonCode || Object.keys(next).length > 0) return;
+    if (!byKind || !reasonCode || Object.keys(next).length > 0) {
+      // Foco al primer campo con error (el primer radio, el motivo o la salida).
+      const firstInvalid = next.origin
+        ? `${originName}-${STAFF_CANCELLATION_KINDS[0]}`
+        : next.reason
+          ? reasonId
+          : exitId;
+      document.getElementById(firstInvalid)?.focus();
+      return;
+    }
     setSubmitting(true);
     setError(null);
     try {
@@ -169,7 +178,9 @@ export function CancelAppointmentDialog({
       error={error}
     >
       <fieldset
+        role="radiogroup"
         className="flex flex-col gap-2"
+        aria-invalid={errors.origin ? true : undefined}
         aria-describedby={errors.origin ? fieldErrorId(originName) : undefined}
       >
         <legend className="mb-1.5 text-sm font-medium text-ink">{copy.origin}</legend>
@@ -192,7 +203,9 @@ export function CancelAppointmentDialog({
                 checked={byKind === kind}
                 disabled={submitting}
                 onChange={() => chooseOrigin(kind)}
-                aria-describedby={`${optionId}-hint`}
+                aria-describedby={
+                  errors.origin ? `${optionId}-hint ${fieldErrorId(originName)}` : `${optionId}-hint`
+                }
                 className="mt-0.5 size-5 shrink-0 accent-[var(--color-primary)]"
               />
               <span className="flex min-w-0 flex-col gap-0.5">

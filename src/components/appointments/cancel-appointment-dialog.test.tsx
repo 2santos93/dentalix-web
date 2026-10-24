@@ -55,6 +55,25 @@ describe('CancelAppointmentDialog (DX-279)', () => {
     expect(screen.getByText('Elige quién cancela.')).toBeInTheDocument();
     expect(screen.getByText('Elige el motivo.')).toBeInTheDocument();
     expect(mockedUpdate).not.toHaveBeenCalled();
+    // B5: el grupo se marca inválido, cada radio apunta al error y el foco va al primero.
+    expect(screen.getByRole('radiogroup', { name: 'Quién cancela' })).toHaveAttribute(
+      'aria-invalid',
+      'true',
+    );
+    const patientRadio = screen.getByLabelText(/El paciente avisa/);
+    expect(patientRadio).toHaveAccessibleDescription(/Elige quién cancela\./);
+    expect(patientRadio).toHaveFocus();
+  });
+
+  it('con origen pero sin motivo, el foco va al motivo', async () => {
+    const user = userEvent.setup();
+    mockedPreview.mockResolvedValue(LATE);
+    renderDialog();
+    await user.click(screen.getByLabelText(/La clínica/));
+    await user.selectOptions(screen.getByLabelText('Motivo'), '');
+    await user.click(submit());
+    expect(screen.getByLabelText('Motivo')).toHaveFocus();
+    expect(screen.getByRole('radiogroup', { name: 'Quién cancela' })).not.toHaveAttribute('aria-invalid');
   });
 
   it('avisa de la cancelación tardía antes de confirmar y envía origen, motivo y detalle', async () => {
