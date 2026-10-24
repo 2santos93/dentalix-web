@@ -305,7 +305,8 @@ describe('Tratamiento reservado en otra cita (DX-273)', () => {
         ['Implante · diente 36', HIDDEN],
       ]);
       for (const [, options] of calls) {
-        expect(options.action).toBeUndefined();
+        // Explícito: sonner fusiona con un aviso abierto con el mismo id.
+        expect(options).toHaveProperty('action', undefined);
         expect(options.duration).not.toBe(Infinity);
       }
       expect(mockedClaim).not.toHaveBeenCalled();
