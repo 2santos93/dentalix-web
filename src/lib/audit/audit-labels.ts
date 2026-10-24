@@ -356,6 +356,10 @@ const CANCELLATION_REASON_AUDIT: Record<string, string> = {
  */
 export function cancellationDetail(metadata: AuditMetadata): string | null {
   if (metadata.reason === 'CANCELLATION_POLICY_CHANGED') return 'Nueva versión de la política de cancelación';
+  // DX-291: cargo por inasistencia o cancelación tardía y su condonación
+  // (el motivo de la condonación nunca viaja en la metadata).
+  if (metadata.reason === 'CANCELLATION_FEE_CHARGED') return 'Cargo por inasistencia o cancelación tardía';
+  if (metadata.reason === 'CANCELLATION_FEE_WAIVED') return 'Cargo por inasistencia condonado';
   if (metadata.reason !== 'APPOINTMENT_CANCELLED') return null;
   const c = metadata.cancellation;
   if (!c) return 'Cita cancelada';

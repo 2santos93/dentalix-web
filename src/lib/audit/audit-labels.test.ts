@@ -225,6 +225,10 @@ describe('cancellationDetail (DX-279)', () => {
   });
 
   it('nombra el cambio de política y nada en otros eventos', () => {
+    expect(cancellationDetail({ reason: 'CANCELLATION_FEE_CHARGED' })).toBe(
+      'Cargo por inasistencia o cancelación tardía',
+    );
+    expect(cancellationDetail({ reason: 'CANCELLATION_FEE_WAIVED' })).toBe('Cargo por inasistencia condonado');
     expect(cancellationDetail({ reason: 'CANCELLATION_POLICY_CHANGED' })).toBe(
       'Nueva versión de la política de cancelación',
     );
