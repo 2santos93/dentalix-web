@@ -11,8 +11,112 @@ import { API_URL, tenantOrigin } from "./support/urls";
 import { loginAs, accessTokenOf } from "./support/auth";
 import { atSede, sedeDayFromToday } from "./support/clock";
 import { chooseAppointmentStatus } from "./support/appointment-status";
+import type { ApiSession } from "./support/api";
+import {
+  demoAdminSession,
+  retireDemoLocation,
+  reuseDemoLocation,
+} from "./support/demo";
 const origin = tenantOrigin("demo");
 const password = "DemoDentalix2026!";
+/**
+ * DX-337: la clínica demo es compartida con otros specs («Comparar sedes»
+ * lista todas sus sedes). Los tests usan UNA sede de pruebas con nombre fijo,
+ * que se reutiliza entre ejecuciones y se desactiva en `afterAll`, y cada test
+ * retira en `afterEach` lo que creó (citas, plan, paciente y tratamiento del
+ * catálogo): así la lista «Aceptado sin agendar» de esa sede empieza vacía.
+ */
+const QA_LOCATION = "QA visitas e2e";
+let locationId: string;
+interface Created {
+  patientId?: string;
+  planId?: string;
+  catalogId?: string;
+  appointmentIds: string[];
+}
+let created: Created = { appointmentIds: [] };
+test.beforeAll(async ({ playwright }) => {
+  const api = await playwright.request.newContext();
+  try {
+    const admin = await demoAdminSession(api);
+    locationId = await reuseDemoLocation(api, admin, QA_LOCATION);
+    const schedule = await api.put(`${API_URL}/locations/schedule`, {
+      headers: { ...admin.headers, "X-Location-Id": locationId },
+      data: { timezone: "America/Bogota", ranges: [] },
+    });
+    expect(schedule.ok(), await schedule.text()).toBeTruthy();
+  } finally {
+    await api.dispose();
+  }
+});
+test.afterEach(async ({ request }) => {
+  const leftovers = created;
+  created = { appointmentIds: [] };
+  const admin = await demoAdminSession(request);
+  await retire(
+    request,
+    {
+      headers: { ...admin.headers, "X-Location-Id": locationId },
+      origin: admin.origin,
+    },
+    leftovers,
+  );
+});
+test.afterAll(async ({ playwright }) => {
+  const api = await playwright.request.newContext();
+  try {
+    await retireDemoLocation(api, await demoAdminSession(api), locationId);
+  } finally {
+    await api.dispose();
+  }
+});
+async function retire(
+  request: APIRequestContext,
+  admin: ApiSession,
+  { patientId, planId, catalogId, appointmentIds }: Created,
+) {
+  const { headers } = admin;
+  for (const id of appointmentIds) {
+    const current = await request.get(`${API_URL}/appointments/${id}`, {
+      headers,
+    });
+    expect(current.ok(), await current.text()).toBeTruthy();
+    const { status } = (await current.json()) as { status: string };
+    if (["CANCELLED", "COMPLETED", "NO_SHOW"].includes(status)) continue;
+    const cancelled = await request.patch(`${API_URL}/appointments/${id}`, {
+      headers,
+      data: {
+        status: "CANCELLED",
+        cancelledByKind: "CLINIC",
+        cancelReasonCode: "CLINIC_RESCHEDULE",
+      },
+    });
+    expect(cancelled.ok(), await cancelled.text()).toBeTruthy();
+  }
+  if (planId) {
+    const plan = await request.patch(`${API_URL}/treatment-plans/${planId}`, {
+      headers,
+      data: { status: "CANCELLED" },
+    });
+    expect(plan.ok(), await plan.text()).toBeTruthy();
+  }
+  if (patientId) {
+    const archived = await request.delete(`${API_URL}/patients/${patientId}`, {
+      headers,
+    });
+    expect(archived.status(), await archived.text()).toBe(204);
+  }
+  if (catalogId) {
+    const catalog = await request.patch(
+      `${API_URL}/catalog/items/${catalogId}`,
+      {
+        headers,
+        data: { active: false },
+      },
+    );
+    expect(catalog.ok(), await catalog.text()).toBeTruthy();
+  }
+}
 async function seed(request: APIRequestContext, tag: string) {
   const host = new URL(origin).host;
   const login = await request.post(`${API_URL}/auth/login`, {
@@ -30,16 +134,7 @@ async function seed(request: APIRequestContext, tag: string) {
     expect(r.ok(), await r.text()).toBeTruthy();
     return (await r.json()) as T;
   }
-  const location = await post<{ id: string }>("/locations", {
-    name: `QA visitas ${tag}`,
-    country: "CO",
-  });
-  Object.assign(headers, { "X-Location-Id": location.id });
-  const schedule = await request.put(`${API_URL}/locations/schedule`, {
-    headers,
-    data: { timezone: "America/Bogota", ranges: [] },
-  });
-  expect(schedule.ok(), await schedule.text()).toBeTruthy();
+  Object.assign(headers, { "X-Location-Id": locationId });
   const patient = await post<{ id: string }>("/patients", {
     firstName: "Visitas",
     lastName: tag,
@@ -49,6 +144,7 @@ async function seed(request: APIRequestContext, tag: string) {
     phone: "3001234567",
     countryCode: "CO",
   });
+  created.patientId = patient.id;
   const catalog = await post<{ id: string }>("/catalog/items", {
     code: tag,
     kind: "PROCEDURE",
@@ -56,10 +152,12 @@ async function seed(request: APIRequestContext, tag: string) {
     color: "#3366CC",
     defaultPrice: 100000,
   });
+  created.catalogId = catalog.id;
   const plan = await post<{ id: string }>(
     `/patients/${patient.id}/treatment-plans`,
     { currency: "COP" },
   );
+  created.planId = plan.id;
   const itemIds: string[] = [];
   for (let n = 0; n < 3; n++) {
     const item = await post<{ id: string }>(
@@ -72,7 +170,7 @@ async function seed(request: APIRequestContext, tag: string) {
     itemIds.push(item.id);
   }
   return {
-    locationId: location.id,
+    locationId,
     itemIds,
     patientId: patient.id,
     planId: plan.id,
@@ -356,6 +454,7 @@ for (const width of [390, 1440])
         },
       });
       expect(first.ok(), await first.text()).toBeTruthy();
+      created.appointmentIds.push(((await first.json()) as { id: string }).id);
       await page.context().clearCookies();
       await login(page, "recepcion@demo.dentalix.app");
       const receptionHeaders = {
@@ -465,6 +564,7 @@ for (const width of [390, 1440])
         reason: string;
         locationId: string;
       };
+      created.appointmentIds.push(appointment.id);
       expect(appointment.planItemIds.sort()).toEqual(
         data.itemIds.slice(1).sort(),
       );

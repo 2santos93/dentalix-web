@@ -26,6 +26,8 @@ if (webServerMode !== 'none' && !webServerCommand[webServerMode]) {
 
 export default defineConfig({
   testDir: './e2e',
+  // DX-337: rojo si la suite deja sedes o personal de más en la clínica demo.
+  globalTeardown: './e2e/support/global-teardown.ts',
   fullyParallel: false,
   forbidOnly: isCI,
   // Un reintento solo en CI, para no esconder en local un test inestable; el
