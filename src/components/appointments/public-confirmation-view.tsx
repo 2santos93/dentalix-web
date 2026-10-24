@@ -1,14 +1,27 @@
 'use client';
-import { useEffect, useState } from 'react';
-import { CalendarCheck, CalendarX, Clock, LinkIcon, MapPin, Phone, UserRound } from 'lucide-react';
+import { useEffect, useId, useRef, useState } from 'react';
+import {
+  AlertTriangle,
+  CalendarCheck,
+  CalendarX,
+  Clock,
+  FileText,
+  LinkIcon,
+  MapPin,
+  Phone,
+  UserRound,
+} from 'lucide-react';
 import { ApiError } from '@/lib/api/client';
+import { apiErrorMessage } from '@/lib/api/error-message';
 import {
   getPublicConfirmation,
   respondPublicConfirmation,
   type ConfirmationAction,
   type ConfirmationAppointment,
+  type PublicCancellationPolicy,
   type PublicConfirmation,
 } from '@/lib/appointments/confirmations-api';
+import { formatCurrency } from '@/lib/format/currency';
 import { longAppointmentDay } from '@/lib/appointments/confirmation-message';
 import { formatTimeRange } from '@/components/appointments/appointment-display';
 import { PublicNotice as Notice, publicBrandStyle } from '@/components/shared/public-page';
@@ -46,6 +59,16 @@ const copy = {
   invalidMessage:
     'No encontramos este enlace. Revisa que esté completo o pide a la clínica que te lo envíe de nuevo.',
   fallbackClinic: 'Tu clínica',
+  // DX-291: la política de cancelación de la sede.
+  policyTitle: 'Política de cancelación',
+  policyNotice: (hours: number) => `Si no puedes asistir, avísanos con al menos ${hours} h de antelación.`,
+  policyFee: (amount: string) => `Cargo por inasistencia o cancelación tardía: ${amount}.`,
+  lateTitle: (hours: number) => `Cancelación con menos de ${hours} h de aviso`,
+  lateMessage:
+    'Si cancelas ahora, cuenta como cancelación tardía según la política de la clínica. Si prefieres, pide que te llamemos para buscar otra hora.',
+  acknowledge: 'He leído y acepto la política de cancelación de la clínica',
+  acknowledgeRequired: (hours: number) =>
+    `Para cancelar con menos de ${hours} h de aviso, marca que aceptas la política de cancelación.`,
 };
 
 type LoadState =
@@ -90,6 +113,55 @@ function AppointmentSummary({ appointment }: { appointment: ConfirmationAppointm
 }
 
 /**
+ * DX-291: la política de la sede tal como la lee el paciente (horas, texto de
+ * la clínica e importe) y, si cancelar ahora sería tardío, el aviso. Va en
+ * tinta sobre tintes neutros o de aviso: el color de la clínica solo marca
+ * los botones (AA con cualquier marca).
+ */
+function CancellationPolicyNotice({
+  policy,
+  isLate,
+}: {
+  policy: PublicCancellationPolicy;
+  isLate: boolean;
+}) {
+  const fee =
+    policy.suggestedFee !== null && policy.suggestedFee > 0 && policy.currency
+      ? formatCurrency(policy.suggestedFee, policy.currency)
+      : null;
+  return (
+    <section
+      aria-labelledby="cancellation-policy-title"
+      data-testid="public-cancellation-policy"
+      className="flex flex-col gap-3 rounded-xl border border-border bg-surface px-4 py-4"
+    >
+      <h2 id="cancellation-policy-title" className="flex items-center gap-2 text-base font-semibold text-ink">
+        <FileText aria-hidden className="size-4 shrink-0 text-muted" />
+        {copy.policyTitle}
+      </h2>
+      <div className="flex flex-col gap-2 text-sm text-ink">
+        <p>{copy.policyNotice(policy.noticeHours)}</p>
+        {policy.text ? <p className="whitespace-pre-line break-words">{policy.text}</p> : null}
+        {fee ? <p className="tabular-nums">{copy.policyFee(fee)}</p> : null}
+      </div>
+      {isLate ? (
+        <div
+          role="note"
+          data-testid="public-late-cancellation"
+          className="flex items-start gap-2 rounded-lg bg-warning/15 px-3 py-2 text-sm text-ink"
+        >
+          <AlertTriangle aria-hidden className="mt-0.5 size-4 shrink-0 text-warning" />
+          <div className="flex min-w-0 flex-col gap-0.5">
+            <p className="font-semibold">{copy.lateTitle(policy.noticeHours)}</p>
+            <p>{copy.lateMessage}</p>
+          </div>
+        </div>
+      ) : null}
+    </section>
+  );
+}
+
+/**
  * Página pública `/confirmar/[token]` (DX-005): el paciente ve su cita y, con
  * un SEGUNDO clic, confirma, cancela o pide que lo llamen. Abrir el enlace
  * solo lee (los previsualizadores de WhatsApp lo abren solos). Móvil primero:
@@ -99,7 +171,12 @@ export function PublicConfirmationView({ confirmationToken }: { confirmationToke
   const [state, setState] = useState<LoadState>({ kind: 'loading' });
   const [reloadKey, setReloadKey] = useState(0);
   const [pending, setPending] = useState<ConfirmationAction | null>(null);
-  const [respondError, setRespondError] = useState(false);
+  const [respondError, setRespondError] = useState<string | null>(null);
+  // DX-291: aceptación de la política al cancelar tarde.
+  const [acknowledged, setAcknowledged] = useState(false);
+  const [ackError, setAckError] = useState(false);
+  const ackRef = useRef<HTMLInputElement>(null);
+  const ackId = useId();
 
   useEffect(() => {
     let cancelled = false;
@@ -118,21 +195,37 @@ export function PublicConfirmationView({ confirmationToken }: { confirmationToke
 
   async function handleRespond(action: ConfirmationAction) {
     if (state.kind !== 'ready') return;
+    const policy = state.data.cancellationPolicy;
+    const mustAcknowledge = action === 'cancel' && state.data.isLate && policy !== null;
+    if (mustAcknowledge && !acknowledged) {
+      setAckError(true);
+      ackRef.current?.focus();
+      return;
+    }
     setPending(action);
-    setRespondError(false);
+    setRespondError(null);
     try {
-      const data = await respondPublicConfirmation(confirmationToken, action);
+      const data = await respondPublicConfirmation(confirmationToken, action, {
+        policyVersionId: policy?.policyVersionId ?? null,
+        acknowledgePolicy: mustAcknowledge ? true : undefined,
+      });
       setState({ kind: 'ready', data });
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) {
-        // Otro clic (u otro dispositivo) ya respondió: se muestra lo registrado.
+        // Otro clic (u otro dispositivo) ya respondió, o la política cambió:
+        // se relee y se muestra lo vigente.
+        setAcknowledged(false);
         setReloadKey((k) => k + 1);
       } else if (err instanceof ApiError && err.status === 410) {
         setState({ kind: 'ready', data: { ...state.data, status: 'EXPIRED', appointment: null } });
       } else if (err instanceof ApiError && err.status === 404) {
         setState({ kind: 'invalid' });
+      } else if (err instanceof ApiError && err.status === 400) {
+        // La política exige aceptarla (la hora cambió mientras leía): se relee.
+        setRespondError(apiErrorMessage(err, copy.respondError));
+        setReloadKey((k) => k + 1);
       } else {
-        setRespondError(true);
+        setRespondError(copy.respondError);
       }
     } finally {
       setPending(null);
@@ -212,6 +305,12 @@ export function PublicConfirmationView({ confirmationToken }: { confirmationToke
                   {copy.pendingLead}
                 </p>
                 <AppointmentSummary appointment={state.data.appointment} />
+                {state.data.cancellationPolicy ? (
+                  <CancellationPolicyNotice
+                    policy={state.data.cancellationPolicy}
+                    isLate={state.data.isLate}
+                  />
+                ) : null}
                 <div className="flex flex-col gap-3">
                   <Button
                     type="button"
@@ -234,6 +333,34 @@ export function PublicConfirmationView({ confirmationToken }: { confirmationToke
                   >
                     <Phone aria-hidden /> {copy.callMe}
                   </Button>
+                  {state.data.isLate && state.data.cancellationPolicy ? (
+                    <div className="flex flex-col gap-1.5">
+                      <div className="flex items-start gap-3 rounded-lg border border-border bg-surface px-3 py-3">
+                        <input
+                          ref={ackRef}
+                          id={ackId}
+                          type="checkbox"
+                          checked={acknowledged}
+                          disabled={pending !== null}
+                          onChange={(e) => {
+                            setAcknowledged(e.target.checked);
+                            if (e.target.checked) setAckError(false);
+                          }}
+                          aria-invalid={ackError ? true : undefined}
+                          aria-describedby={ackError ? `${ackId}-error` : undefined}
+                          className="mt-0.5 size-5 shrink-0 accent-[var(--color-primary)]"
+                        />
+                        <label htmlFor={ackId} className="text-sm font-medium text-ink">
+                          {copy.acknowledge}
+                        </label>
+                      </div>
+                      {ackError ? (
+                        <InlineError id={`${ackId}-error`}>
+                          {copy.acknowledgeRequired(state.data.cancellationPolicy.noticeHours)}
+                        </InlineError>
+                      ) : null}
+                    </div>
+                  ) : null}
                   <Button
                     type="button"
                     size="lg"
@@ -245,7 +372,7 @@ export function PublicConfirmationView({ confirmationToken }: { confirmationToke
                   >
                     <CalendarX aria-hidden /> {copy.cancel}
                   </Button>
-                  {respondError && <InlineError>{copy.respondError}</InlineError>}
+                  {respondError && <InlineError>{respondError}</InlineError>}
                 </div>
               </section>
             )}
