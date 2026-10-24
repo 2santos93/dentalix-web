@@ -17,6 +17,12 @@ import { getLocationSchedule } from '@/lib/locations/schedule-api';
 import { listOpeningCandidates } from '@/lib/appointments/opening-candidates';
 import { getRoster } from '@/lib/locations/provider-schedule-api';
 
+/** DX-295: el estado se elige abriendo la lista y pulsando una opción. */
+async function pickStatus(user: ReturnType<typeof userEvent.setup>, trigger: HTMLElement, label: string) {
+  await user.click(trigger);
+  await user.click(screen.getByRole('option', { name: label }));
+}
+
 // NOTE: jest.mock's string literal is not alias-rewritten by the SWC
 // transform (only real `import`/`require` specifiers are) — use a relative
 // path here, matching odontogram-tab.test.tsx's / appointment-form.test.tsx's
@@ -361,10 +367,10 @@ describe('AgendaView', () => {
     await user.click(screen.getByRole('button', { name: /^día$/i }));
     await user.click(screen.getByRole('button', { name: /^lista$/i }));
     const table = await screen.findByRole('table', { name: /agenda del día/i });
-    const statusSelect = within(table).getByRole<HTMLSelectElement>('combobox');
-    expect(statusSelect.value).toBe('SCHEDULED');
+    const statusSelect = within(table).getByRole('combobox');
+    expect(statusSelect).toHaveTextContent('Agendada');
 
-    await user.selectOptions(statusSelect, 'CONFIRMED');
+    await pickStatus(user, statusSelect, 'Confirmada');
 
     await waitFor(() =>
       expect(mockedUpdateAppointment).toHaveBeenCalledWith('tok', 'apt-1', { status: 'CONFIRMED' }),
@@ -378,7 +384,7 @@ describe('AgendaView', () => {
     refetch.resolve([{ ...apt1, status: 'CONFIRMED' }]);
 
     await waitFor(() =>
-      expect(within(table).getByRole<HTMLSelectElement>('combobox').value).toBe('CONFIRMED'),
+      expect(within(table).getByRole('combobox')).toHaveTextContent('Confirmada'),
     );
     expect(screen.getByRole('table', { name: /agenda del día/i })).toBe(table);
   });
@@ -413,11 +419,11 @@ describe('AgendaView', () => {
     await user.click(screen.getByRole('button', { name: /^día$/i }));
     await user.click(screen.getByRole('button', { name: /^lista$/i }));
     const table = await screen.findByRole('table', { name: /agenda del día/i });
-    const statusSelect = within(table).getByRole<HTMLSelectElement>('combobox');
-    expect(statusSelect.value).toBe('SCHEDULED');
+    const statusSelect = within(table).getByRole('combobox');
+    expect(statusSelect).toHaveTextContent('Agendada');
     expect(statusSelect).not.toBeDisabled();
 
-    await user.selectOptions(statusSelect, 'CONFIRMED');
+    await pickStatus(user, statusSelect, 'Confirmada');
     // Selecting a new value while disabled-testing must not race ahead:
     // the PATCH is in flight, so the select is already disabled.
     expect(statusSelect).toBeDisabled();
@@ -432,17 +438,17 @@ describe('AgendaView', () => {
     // since `appointments` hasn't been updated yet). Against the old
     // fire-and-forget code, `updatingId` was already cleared here (its
     // `.finally` ran off the PATCH promise alone), so this assertion fails.
-    expect(within(table).getByRole<HTMLSelectElement>('combobox')).toBeDisabled();
-    expect(within(table).getByRole<HTMLSelectElement>('combobox').value).toBe('SCHEDULED');
+    expect(within(table).getByRole('combobox')).toBeDisabled();
+    expect(within(table).getByRole('combobox')).toHaveTextContent('Agendada');
 
     // Now resolve the refresh — only now should the select re-enable, showing
     // the new status.
     refetch.resolve([{ ...apt1, status: 'CONFIRMED' }]);
 
     await waitFor(() =>
-      expect(within(table).getByRole<HTMLSelectElement>('combobox')).not.toBeDisabled(),
+      expect(within(table).getByRole('combobox')).not.toBeDisabled(),
     );
-    expect(within(table).getByRole<HTMLSelectElement>('combobox').value).toBe('CONFIRMED');
+    expect(within(table).getByRole('combobox')).toHaveTextContent('Confirmada');
   });
 
   it('el reintento del toast de refresh usa el filtro vigente al pulsar "Reintentar", no el capturado cuando el refresh falló (fix ronda 1: closure obsoleto)', async () => {
@@ -477,9 +483,9 @@ describe('AgendaView', () => {
     await user.click(screen.getByRole('button', { name: /^día$/i }));
     await user.click(screen.getByRole('button', { name: /^lista$/i }));
     const table = await screen.findByRole('table', { name: /agenda del día/i });
-    const statusSelect = within(table).getByRole<HTMLSelectElement>('combobox');
+    const statusSelect = within(table).getByRole('combobox');
 
-    await user.selectOptions(statusSelect, 'CONFIRMED');
+    await pickStatus(user, statusSelect, 'Confirmada');
 
     // The failed in-place refresh surfaces as a toast with a retry action.
     const retryButton = await screen.findByRole('button', { name: 'Reintentar' });
@@ -712,14 +718,14 @@ describe('AgendaView', () => {
 
     await user.click(screen.getByTestId('week-grid-appointment'));
 
-    const statusSelect = await screen.findByLabelText<HTMLSelectElement>(/^estado$/i);
-    expect(statusSelect.value).toBe('SCHEDULED');
+    const statusSelect = await screen.findByRole('combobox', { name: /^Estado: / });
+    expect(statusSelect).toHaveTextContent('Agendada');
 
-    await user.selectOptions(statusSelect, 'CONFIRMED');
+    await pickStatus(user, statusSelect, 'Confirmada');
 
     // PATCH is in flight: the select stays bound to the (unchanged)
     // server-confirmed status from `appointments`, and is disabled.
-    expect(statusSelect.value).toBe('SCHEDULED');
+    expect(statusSelect).toHaveTextContent('Agendada');
     expect(statusSelect).toBeDisabled();
 
     rejectPatch(new Error('boom'));
@@ -731,7 +737,7 @@ describe('AgendaView', () => {
     // After the failure: re-enabled, and still showing the real status —
     // no optimistic leak.
     expect(statusSelect).not.toBeDisabled();
-    expect(statusSelect.value).toBe('SCHEDULED');
+    expect(statusSelect).toHaveTextContent('Agendada');
   });
 
   // DX-153: la línea de cobertura del detalle (nunca el número de afiliado).
@@ -1188,7 +1194,7 @@ describe('AgendaView', () => {
       const before = mockedListWaitlist.mock.calls.length;
 
       const [select] = await screen.findAllByTestId('appointment-status-select');
-      await user.selectOptions(select, 'CANCELLED');
+      await pickStatus(user, select, 'Cancelada');
       await waitFor(() => expect(mockedListWaitlist.mock.calls.length).toBeGreaterThan(before));
     });
   });
@@ -1229,6 +1235,70 @@ describe('AgendaView', () => {
     it('RECEPTION no ve el botón', async () => {
       await openDetail(tokenFor('RECEPTION'));
       expect(screen.queryByRole('button', { name: 'Registrar evolución' })).toBeNull();
+    });
+  });
+  // DX-295: el selector de estado del detalle no cambia la cita al moverse con
+  // las flechas; solo con Enter o con un clic en una opción.
+  describe('selector de estado del detalle con teclado (DX-295)', () => {
+    const tokenFor = (role: string) =>
+      `h.${btoa(JSON.stringify({ sub: 'staff-1', tenantId: 't1', role }))}.s`;
+
+    async function openDetail(token: string, apt: ReturnType<typeof appointment>) {
+      mockedListStaff.mockResolvedValue(staff);
+      mockedListAppointments.mockResolvedValue([apt]);
+      const user = userEvent.setup();
+      render(<AgendaView token={token} />);
+      await waitFor(() => expect(mockedListAppointments).toHaveBeenCalled());
+      const dateInput = screen.getByLabelText<HTMLInputElement>(/^fecha$/i);
+      await user.clear(dateInput);
+      await user.type(dateInput, '2026-03-11');
+      await user.click(screen.getByRole('button', { name: /^semana$/i }));
+      await screen.findByLabelText(/agenda de la semana/i);
+      await user.click(screen.getByTestId('week-grid-appointment'));
+      const trigger = await screen.findByRole('combobox', { name: /^Estado: / });
+      return { user, trigger };
+    }
+
+    it('↑/↓ no envían ningún PATCH; Enter aplica la opción enfocada', async () => {
+      mockedUpdateAppointment.mockResolvedValue({ ...apt1, status: 'CONFIRMED' });
+      const { user, trigger } = await openDetail(tokenFor('RECEPTION'), apt1);
+      expect(trigger).toHaveAccessibleName('Estado: Agendada');
+
+      trigger.focus();
+      await user.keyboard('{ArrowDown}{ArrowDown}{ArrowDown}{ArrowUp}{ArrowDown}{ArrowUp}');
+      expect(screen.getByRole('option', { name: 'Confirmada' })).toHaveFocus();
+      expect(mockedUpdateAppointment).not.toHaveBeenCalled();
+
+      await user.keyboard('{Enter}');
+      await waitFor(() =>
+        expect(mockedUpdateAppointment).toHaveBeenCalledWith(tokenFor('RECEPTION'), 'apt-1', {
+          status: 'CONFIRMED',
+        }),
+      );
+      expect(mockedUpdateAppointment).toHaveBeenCalledTimes(1);
+    });
+
+    it('Esc tras recorrer la lista no cambia nada', async () => {
+      const { user, trigger } = await openDetail(tokenFor('RECEPTION'), apt1);
+      trigger.focus();
+      await user.keyboard('{ArrowDown}{ArrowDown}{ArrowDown}{Escape}');
+      expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+      expect(trigger).toHaveTextContent('Agendada');
+      expect(mockedUpdateAppointment).not.toHaveBeenCalled();
+    });
+
+    it('salir de «Completada» con Enter sigue abriendo el diálogo del motivo, sin PATCH', async () => {
+      const completed = appointment({ id: 'apt-done', status: 'COMPLETED' });
+      const { user, trigger } = await openDetail(tokenFor('ADMIN'), completed);
+      trigger.focus();
+      // La lista abre en «Completada»; ↑ lleva a «Confirmada».
+      await user.keyboard('{ArrowDown}{ArrowUp}');
+      expect(mockedUpdateAppointment).not.toHaveBeenCalled();
+      await user.keyboard('{Enter}');
+      expect(
+        await screen.findByRole('dialog', { name: '¿Pasar la cita completada a «Confirmada»?' }),
+      ).toBeInTheDocument();
+      expect(mockedUpdateAppointment).not.toHaveBeenCalled();
     });
   });
   // DX-210: cableado de «Ocupar este hueco» en la vista Día.
