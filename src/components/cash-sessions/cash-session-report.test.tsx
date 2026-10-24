@@ -103,7 +103,30 @@ describe('CashSessionReport (DX-027)', () => {
       expect(annulled).toHaveTextContent('Café');
       expect(annulled).toHaveTextContent('Motivo: Se devolvió el dinero');
       expect(within(annulled).getByText(/5\.?000,00/)).toHaveClass('line-through');
+      expect(within(annulled).getByText(/Café/)).not.toHaveClass('line-through');
       expect(annulled).toHaveTextContent(/ajuste en otra caja/);
+      expect(screen.getByRole('heading', { name: 'Salidas anuladas' })).toBeVisible();
+    });
+
+    it('un esperado negativo (las salidas superan el efectivo) sale en rojo', () => {
+      const closed = closedCashSessionFixture();
+      const [cashLine, cardLine] = closed.closing!.lines;
+      render(
+        <CashSessionReport
+          session={closedCashSessionFixture({
+            expected: [{ ...cash, outflows: 100_000, outflowsCount: 1, expected: -20_000 }, card],
+            closing: {
+              ...closed.closing!,
+              lines: [{ ...cashLine, expected: -20_000, counted: 0, difference: 20_000 }, cardLine],
+            },
+          })}
+        />,
+      );
+      const arqueo = screen.getByRole('table', { name: 'Arqueo por moneda y método' });
+      const [, cashRow, cardRow] = within(arqueo).getAllByRole('row');
+      expect(within(cashRow).getAllByRole('cell')[5]).toHaveTextContent(/-20\.?000,00/);
+      expect(within(cashRow).getAllByRole('cell')[5]).toHaveClass('text-danger');
+      expect(within(cardRow).getAllByRole('cell')[5]).not.toHaveClass('text-danger');
     });
 
     it('la anulación de una salida de una caja cerrada es un ajuste «Anulación de salida» con su gasto', () => {

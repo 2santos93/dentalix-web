@@ -443,12 +443,13 @@ function outflowSubject(outflow: { category: string; supplier: string | null }):
 
 /**
  * Salidas de caja menor del turno (DX-274): se ven también con arqueo ciego
- * (R6), porque no dicen cuánto se espera. Las anuladas van aparte, tachadas y
- * con su motivo.
+ * (R6), porque no dicen cuánto se espera. Las anuladas van aparte, con su
+ * título, el importe tachado (como los abonos anulados) y su motivo.
  */
 function OutflowList({ session, when }: { session: CashSessionDetail; when: (iso: string) => string }) {
   const zone = session.timeZone;
   const { outflows, voidedOutflows } = session;
+  const voidedId = React.useId();
   if (outflows.length === 0 && voidedOutflows.length === 0) return <p className="text-muted">{copy.noOutflows}</p>;
   return (
     <div className="flex flex-col gap-2">
@@ -483,26 +484,31 @@ function OutflowList({ session, when }: { session: CashSessionDetail; when: (iso
         </div>
       ) : null}
       {voidedOutflows.length > 0 ? (
-        <ul className="divide-y divide-hairline rounded-lg border border-border" aria-label={copy.voidedOutflowsLabel}>
-          {voidedOutflows.map((o) => (
-            <li key={o.id} className="cash-report-row flex flex-col gap-1 px-3 py-2">
-              <div className="flex flex-wrap items-baseline justify-between gap-2">
-                <span className="font-medium line-through decoration-1">
-                  {formatTimeInZone(o.createdAt, zone)} · {outflowSubject(o)}
-                </span>
-                <span className="font-medium tabular-nums line-through decoration-1">
-                  {formatCurrency(o.amount, o.currency)}
-                </span>
-              </div>
-              <p className="text-xs text-muted">
-                {copy.colReason}: {o.voidReason ?? '—'} · {copy.colBy}: {o.createdBy.fullName ?? '—'} ·{' '}
-                {copy.colVoidedBy}: {o.voidedBy?.fullName ?? '—'}
-                {o.voidedAt ? ` · ${when(o.voidedAt)}` : ''}
-              </p>
-              {o.bookedAsAdjustment ? <p className="text-xs text-warning">{copy.outflowBookedElsewhere}</p> : null}
-            </li>
-          ))}
-        </ul>
+        <>
+          <h3 id={voidedId} className="t-label mt-1 text-muted">
+            {copy.voidedOutflowsLabel}
+          </h3>
+          <ul className="divide-y divide-hairline rounded-lg border border-border" aria-labelledby={voidedId}>
+            {voidedOutflows.map((o) => (
+              <li key={o.id} className="cash-report-row flex flex-col gap-1 px-3 py-2">
+                <div className="flex flex-wrap items-baseline justify-between gap-2">
+                  <span className="font-medium">
+                    {formatTimeInZone(o.createdAt, zone)} · {outflowSubject(o)}
+                  </span>
+                  <span className="font-medium tabular-nums line-through decoration-1">
+                    {formatCurrency(o.amount, o.currency)}
+                  </span>
+                </div>
+                <p className="text-xs text-muted">
+                  {copy.colReason}: {o.voidReason ?? '—'} · {copy.colBy}: {o.createdBy.fullName ?? '—'} ·{' '}
+                  {copy.colVoidedBy}: {o.voidedBy?.fullName ?? '—'}
+                  {o.voidedAt ? ` · ${when(o.voidedAt)}` : ''}
+                </p>
+                {o.bookedAsAdjustment ? <p className="text-xs text-warning">{copy.outflowBookedElsewhere}</p> : null}
+              </li>
+            ))}
+          </ul>
+        </>
       ) : null}
     </div>
   );

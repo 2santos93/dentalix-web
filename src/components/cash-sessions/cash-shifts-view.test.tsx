@@ -81,6 +81,7 @@ describe('CashShiftsView (DX-027)', () => {
     expect(await screen.findByText('No tienes la caja abierta en esta sede.')).toBeInTheDocument();
     expect(screen.getByRole('heading', { name: 'Mi caja en Sede principal' })).toBeInTheDocument();
     expect(screen.getByText(/exige caja abierta/)).toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Salida de caja' })).not.toBeInTheDocument();
     expect(await screen.findByText('Aún no hay turnos de caja.')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: 'Abrir caja' }));
@@ -202,5 +203,6 @@ describe('CashShiftsView (DX-027)', () => {
     render(<CashShiftsView token={token} />);
     expect(await screen.findByText('Tu rol no tiene acceso a la caja.')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Reintentar' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Salida de caja' })).not.toBeInTheDocument();
   });
 });

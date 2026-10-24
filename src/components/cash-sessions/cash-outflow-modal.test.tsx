@@ -64,18 +64,25 @@ describe('CashOutflowModal (DX-274)', () => {
     mockedUpload.mockReset().mockResolvedValue('up-1');
   });
 
-  it('registra la salida desde la caja de su sede (X-Location-Id) con solo lo escrito', async () => {
+  it('registra la salida desde la caja de su sede (X-Location-Id) con lo escrito, recortado', async () => {
     const user = setupUser();
     const { onCreated, onOpenChange } = renderModal();
     expect(screen.getByRole('dialog', { name: 'Salida de caja' })).toHaveTextContent('Sede norte');
     await fillRequired(user);
     await user.type(screen.getByLabelText('Proveedor'), '  Mensajeros   Ya ');
+    await user.type(screen.getByLabelText('Descripción'), '  Envío de muestras ');
     await user.click(screen.getByRole('button', { name: 'Registrar salida' }));
 
     await waitFor(() => expect(mockedCreate).toHaveBeenCalledTimes(1));
     const [token, body, key, locationId] = mockedCreate.mock.calls[0];
     expect(token).toBe('tok');
-    expect(body).toEqual({ category: 'Mensajería', supplier: 'Mensajeros Ya', amount: 8_000, currency: 'COP' });
+    expect(body).toEqual({
+      category: 'Mensajería',
+      supplier: 'Mensajeros Ya',
+      description: 'Envío de muestras',
+      amount: 8_000,
+      currency: 'COP',
+    });
     expect(key).toEqual(expect.any(String));
     expect(locationId).toBe('loc-2');
     expect(onCreated).toHaveBeenCalledWith(expect.anything(), expect.stringMatching(/^Salida de caja de 8\.?000,00\sCOP registrada\.$/));
