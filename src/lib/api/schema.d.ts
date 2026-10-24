@@ -5420,7 +5420,7 @@ export interface components {
             /** Format: uuid */
             payerId: string;
             planName?: string;
-            /** @description SEC-049: obligatorio con un pagador externo (EPS, prepagada, mutua, empresa), con formato por tipo; opcional con OTRO. */
+            /** @description SEC-049: obligatorio con un pagador externo (todo tipo salvo OTRO), con la misma regla para todos: tras normalizar, de 4 a 40 caracteres (letras, dígitos, espacio, `-`, `.` o `/`), al menos un dígito y no un mismo carácter repetido; opcional con OTRO. */
             memberNumber?: string;
             policyHolderName?: string;
             /** @example 2026-01-01 */
@@ -5446,7 +5446,7 @@ export interface components {
             notes?: string | null;
         };
         VerifyPatientCoverageDto: {
-            /** @description El nº de afiliado que el administrador comprobó. Si ya no es el guardado (otra petición lo cambió), 409. */
+            /** @description El nº de afiliado que el administrador comprobó. Si ya no es el guardado, o cambió el pagador (otra petición los cambió), 409. */
             checkedMemberNumber: string;
         };
         PayerDto: {
@@ -13876,7 +13876,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description El nº de afiliado cambió mientras el administrador lo revisaba */
+            /** @description El pagador o el nº de afiliado cambió mientras el administrador lo revisaba */
             409: {
                 headers: {
                     [name: string]: unknown;

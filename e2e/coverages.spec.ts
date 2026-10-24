@@ -212,7 +212,7 @@ test('390 px: la ficha con cobertura no se desplaza y el diálogo cabe en la pan
   await expect(dialog).toBeHidden();
 });
 
-test('SEC-049: recepción ve «Sin verificar», no puede verificar y sin nº no añade la cobertura de una EPS', async ({
+test('SEC-049: recepción ve «Sin verificar», no puede verificar y sin nº no añade la cobertura de un pagador externo', async ({
   page,
 }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
@@ -227,13 +227,13 @@ test('SEC-049: recepción ve «Sin verificar», no puede verificar y sin nº no 
   // Recepción no verifica.
   await expect(section.getByRole('button', { name: /^Verificar/ })).toHaveCount(0);
 
-  // Sin nº de afiliado, el formulario no deja añadir otra cobertura de la EPS.
+  // Sin nº de afiliado, el formulario no deja añadir otra cobertura del pagador.
   await section.getByRole('button', { name: 'Añadir cobertura' }).click();
   const dialog = page.getByRole('dialog', { name: 'Añadir cobertura' });
   await dialog.getByLabel('Pagador').selectOption({ label: payerOption });
   await dialog.getByRole('button', { name: 'Añadir', exact: true }).click();
   await expect(
-    dialog.getByText('En una EPS, el nº de afiliado es obligatorio: es el documento del afiliado.'),
+    dialog.getByText('El nº de afiliado o póliza es obligatorio con un pagador externo.'),
   ).toBeVisible();
   await expect(dialog.getByLabel('Nº de afiliado o póliza')).toBeFocused();
   await dialog.getByRole('button', { name: 'Cancelar' }).click();

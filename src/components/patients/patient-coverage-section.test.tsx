@@ -344,7 +344,7 @@ describe('PatientCoverageSection (DX-153)', () => {
       mockedVerify.mockRejectedValue(
         new ApiError(
           409,
-          'El nº de afiliado de esta cobertura cambió mientras lo revisabas: vuelve a abrirla y compruébalo.',
+          'El pagador o el nº de afiliado de esta cobertura cambió mientras lo revisabas: vuelve a abrirla y compruébalo.',
         ),
       );
       renderSection();
@@ -356,9 +356,46 @@ describe('PatientCoverageSection (DX-153)', () => {
       await user.click(within(dialog).getByRole('button', { name: 'Verificar' }));
       expect(
         await within(dialog).findByText(
-          'El nº de afiliado de esta cobertura cambió mientras lo revisabas: vuelve a abrirla y compruébalo.',
+          'El pagador o el nº de afiliado de esta cobertura cambió mientras lo revisabas: vuelve a abrirla y compruébalo.',
         ),
       ).toBeInTheDocument();
+    });
+
+    it('tras un 409 recarga la lista: al reabrir enseña y verifica el nº nuevo', async () => {
+      mockRole = 'ADMIN';
+      const changed = coverage({ memberNumber: '88123499' });
+      mockedList.mockResolvedValueOnce([coverage()]).mockResolvedValue([changed]);
+      mockedVerify
+        .mockRejectedValueOnce(
+          new ApiError(
+            409,
+            'El pagador o el nº de afiliado de esta cobertura cambió mientras lo revisabas: vuelve a abrirla y compruébalo.',
+          ),
+        )
+        .mockResolvedValueOnce({ ...changed, verifiedAt: '2026-10-20T15:00:00.000Z' });
+      renderSection();
+      const user = setupUser();
+      await user.click(
+        await screen.findByRole('button', { name: 'Verificar la cobertura de Sanitas' }),
+      );
+      let dialog = await screen.findByRole('dialog', { name: 'Verificar cobertura' });
+      await user.click(within(dialog).getByRole('button', { name: 'Verificar' }));
+      await within(dialog).findByText(/cambió mientras lo revisabas/);
+      await waitFor(() => expect(mockedList).toHaveBeenCalledTimes(2));
+      await user.keyboard('{Escape}');
+      await waitFor(() =>
+        expect(screen.queryByRole('dialog', { name: 'Verificar cobertura' })).not.toBeInTheDocument(),
+      );
+
+      await user.click(
+        await screen.findByRole('button', { name: 'Verificar la cobertura de Sanitas' }),
+      );
+      dialog = await screen.findByRole('dialog', { name: 'Verificar cobertura' });
+      expect(dialog).toHaveTextContent('el nº de afiliado 88123499 es de este paciente');
+      await user.click(within(dialog).getByRole('button', { name: 'Verificar' }));
+      await waitFor(() =>
+        expect(mockedVerify).toHaveBeenLastCalledWith('tok', 'p1', 'c1', '88123499'),
+      );
     });
 
     it('sin nº no ofrece verificar', async () => {

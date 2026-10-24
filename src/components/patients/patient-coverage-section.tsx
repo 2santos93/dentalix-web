@@ -2,6 +2,7 @@
 import * as React from 'react';
 import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { Plus, ShieldCheck } from 'lucide-react';
+import { ApiError } from '@/lib/api/client';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { getTokenRole } from '@/lib/auth/token-role';
 import {
@@ -152,6 +153,9 @@ export function PatientCoverageSection({
       onChanged?.();
     } catch (err) {
       setVerifyError(apiErrorMessage(err, { fallback: copy.verifyError }));
+      // 409: otra petición cambió el pagador o el nº; la lista se relee para
+      // que, al reabrir, el ADMIN vea y verifique lo que hay guardado.
+      if (err instanceof ApiError && err.status === 409) reload();
     } finally {
       setVerifyBusy(false);
     }

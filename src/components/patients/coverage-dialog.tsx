@@ -209,8 +209,8 @@ export function CoverageDialog({
   const memberHint =
     editing && coverage.verifiedAt
       ? copy.memberNumberVerifiedHint
-      : payerType && requiresMemberNumber(payerType)
-        ? memberNumberCopy.hint[payerType]
+      : memberRequired
+        ? memberNumberCopy.hint
         : undefined;
   const toId = `${ids}-to`;
   const primaryId = `${ids}-primary`;

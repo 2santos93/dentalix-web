@@ -58,6 +58,7 @@ async function shot(page: Page, name: string, fullPage = false) {
 let session: ApiSession;
 let patientId = '';
 let priceListId = '';
+let payerId = '';
 
 test.describe.configure({ mode: 'serial' });
 
@@ -76,6 +77,7 @@ test.beforeAll(async ({ request }) => {
     type: 'EPS_CO',
     country: 'CO',
   });
+  payerId = payer.id;
   await apiPost(request, session, '/catalog/items', {
     code: `dx105-${suffix}`.slice(0, 30),
     kind: 'PROCEDURE',
@@ -92,8 +94,8 @@ test.beforeAll(async ({ request }) => {
   }));
   // SEC-047: el convenio de un pagador exige una cobertura vigente del
   // paciente con ese pagador; el diálogo la elige sola si es la única.
-  // SEC-049: con el nº de afiliado (obligatorio en una EPS); la registra el
-  // ADMIN, así que recepción puede asignar el convenio con ella.
+  // SEC-049: con el nº de afiliado (obligatorio con un pagador externo); la
+  // registra el ADMIN, así que recepción puede asignar el convenio con ella.
   await apiPost(request, session, `/patients/${patientId}/coverages`, {
     payerId: payer.id,
     planName: 'Plan Sura',
@@ -346,11 +348,11 @@ test('SEC-049: la cobertura que registra RECEPCIÓN no habilita su convenio hast
   await loginAs(page, origin, reception.email, password);
   await page.goto(`${origin}/patients/${secondPatient}`);
 
-  // Recepción registra la cobertura de la EPS con su nº de afiliado…
+  // Recepción registra la cobertura del pagador con su nº de afiliado…
   const coverages = page.getByTestId('patient-coverage');
   await coverages.getByRole('button', { name: 'Añadir cobertura' }).click({ timeout: 15_000 });
   const add = page.getByRole('dialog', { name: 'Añadir cobertura' });
-  await add.getByLabel('Pagador').selectOption({ label: `${payerName} · EPS (Colombia)` });
+  await add.getByLabel('Pagador').selectOption(payerId);
   await add.getByLabel('Nº de afiliado o póliza').fill('5544332211');
   await add.getByRole('button', { name: 'Añadir', exact: true }).click();
   await expect(add).toBeHidden({ timeout: 10_000 });
