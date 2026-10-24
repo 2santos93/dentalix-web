@@ -98,14 +98,16 @@ function AppointmentSummary({ appointment }: { appointment: ConfirmationAppointm
   ];
   return (
     <dl className="divide-y divide-hairline rounded-xl border border-border bg-surface">
+      {/* Cada grupo solo lleva dt/dd (axe definition-list): el icono va
+          dentro del dt, colocado a la izquierda. */}
       {rows.map(({ icon: Icon, label, value, sub }) => (
-        <div key={label} className="flex items-start gap-3 px-4 py-3">
-          <Icon aria-hidden className="mt-0.5 size-5 shrink-0 text-muted" />
-          <div className="min-w-0">
-            <dt className="text-xs font-medium tracking-wide text-muted">{label}</dt>
-            <dd className="break-words font-medium tabular-nums text-ink first-letter:uppercase">{value}</dd>
-            {sub && <dd className="break-words text-sm text-muted">{sub}</dd>}
-          </div>
+        <div key={label} className="relative min-w-0 py-3 pl-12 pr-4">
+          <dt className="text-xs font-medium tracking-wide text-muted">
+            <Icon aria-hidden className="absolute left-4 top-3.5 size-5 text-muted" />
+            {label}
+          </dt>
+          <dd className="break-words font-medium tabular-nums text-ink first-letter:uppercase">{value}</dd>
+          {sub && <dd className="break-words text-sm text-muted">{sub}</dd>}
         </div>
       ))}
     </dl>
