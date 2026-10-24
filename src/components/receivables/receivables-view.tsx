@@ -105,7 +105,6 @@ function parseMinBalance(text: string, currency: string): number | undefined {
   return parsed.ok ? parsed.value : undefined;
 }
 
-
 /**
  * Cartera por antigüedad (DX-145): la lista de cobro de la sede activa. Mismo
  * patrón de lista que la caja y «Presupuestos por seguir»: filtros en la barra

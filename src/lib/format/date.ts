@@ -213,3 +213,8 @@ export function civilDateInZone(
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${String(p.year).padStart(4, '0')}-${pad(p.month)}-${pad(p.day)}`;
 }
+
+/** Primer día del mes de `day` (`YYYY-MM-DD`): el «desde» por defecto de un periodo. */
+export function firstOfMonth(day: string): string {
+  return `${day.slice(0, 8)}01`;
+}

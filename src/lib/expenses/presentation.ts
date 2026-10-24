@@ -62,8 +62,3 @@ export function isImageReceipt(mimeType: string): boolean {
 export function expensesCsvFileName(from: string | undefined, to: string | undefined): string {
   return from && to ? `gastos-${from}-${to}.csv` : 'gastos.csv';
 }
-
-/** Primer día del mes de `day` (`AAAA-MM-DD`). */
-export function firstOfMonth(day: string): string {
-  return `${day.slice(0, 8)}01`;
-}

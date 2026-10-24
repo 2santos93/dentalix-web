@@ -12,13 +12,13 @@ export const expenseVoidCopy = {
   expense: {
     title: '¿Anular este gasto?',
     description:
-      'El gasto y todos sus pagos dejan de contar, pero siguen en la lista, tachados, con quién lo anuló y por qué. Las salidas de una caja ya cerrada se devuelven como ajuste en tu caja abierta.',
+      'El gasto y todos sus pagos dejan de contar, pero siguen en la lista, tachados, con quién lo anuló y por qué. Las salidas de una caja ya cerrada se devuelven como ajuste en tu caja abierta o, si no tienes una, en la próxima caja de la sede.',
     submit: 'Anular gasto',
   },
   payment: {
     title: '¿Anular este pago?',
     description:
-      'El pago deja de contar y lo pendiente del gasto vuelve a subir. Si salió de una caja abierta, deja de restar en su arqueo; si la caja ya cerró, se devuelve como ajuste en tu caja abierta.',
+      'El pago deja de contar y lo pendiente del gasto vuelve a subir. Si salió de una caja abierta, deja de restar en su arqueo; si la caja ya cerró, se devuelve como ajuste en tu caja abierta o, si no tienes una, en la próxima caja de la sede.',
     submit: 'Anular pago',
   },
   reasonLabel: 'Motivo de la anulación',
@@ -37,6 +37,8 @@ interface ExpenseVoidModalProps {
   onConfirm: (reason: string) => void;
   submitting: boolean;
   error: string | null;
+  /** A dónde va el foco al cerrar si el botón que abrió el modal ya no está. */
+  onCloseAutoFocus?: (event: Event) => void;
 }
 
 /**
@@ -52,6 +54,7 @@ export function ExpenseVoidModal({
   onConfirm,
   submitting,
   error,
+  onCloseAutoFocus,
 }: ExpenseVoidModalProps) {
   const fieldId = useId();
   const hintId = `${fieldId}-hint`;
@@ -82,6 +85,7 @@ export function ExpenseVoidModal({
       submitting={submitting}
       error={error}
       destructive
+      onCloseAutoFocus={onCloseAutoFocus}
     >
       <p className="rounded-lg bg-surface-2 px-3 py-2 text-sm font-medium text-ink tabular-nums [overflow-wrap:anywhere]">
         {subject}

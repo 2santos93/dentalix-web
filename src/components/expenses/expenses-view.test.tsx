@@ -1,19 +1,27 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import { ExpensesView } from './expenses-view';
 import { ApiError } from '@/lib/api/client';
 import { getTokenRole } from '@/lib/auth/token-role';
-import { downloadExpensesCsv, listExpenses, type ExpensePage } from '@/lib/expenses/expenses-api';
+import {
+  downloadExpensesCsv,
+  getExpense,
+  listExpenses,
+  voidExpense,
+  type ExpensePage,
+} from '@/lib/expenses/expenses-api';
 import { listExpenseCategories } from '@/lib/expenses/expense-categories-api';
 import { saveCsv } from '@/lib/files/save-csv';
 import { getActiveLocationId } from '@/lib/locations/location-store';
 import { notifyError } from '@/components/errors/notify';
-import { expenseFixture, expenseLocations } from '@/lib/test/expenses';
+import { expenseDetailFixture, expenseFixture, expenseLocations } from '@/lib/test/expenses';
 import { setupUser } from '@/lib/test/user';
 
 jest.mock('../../lib/expenses/expenses-api', () => ({
   ...jest.requireActual('../../lib/expenses/expenses-api'),
   listExpenses: jest.fn(),
   downloadExpensesCsv: jest.fn(),
+  getExpense: jest.fn(),
+  voidExpense: jest.fn(),
   suggestExpenseSuppliers: jest.fn().mockResolvedValue([]),
 }));
 jest.mock('../../lib/expenses/expense-categories-api', () => ({
@@ -157,5 +165,85 @@ describe('ExpensesView (DX-274)', () => {
     await screen.findByTestId('expense-row');
     await user.click(screen.getByRole('button', { name: 'Nuevo gasto' }));
     expect(await screen.findByRole('dialog', { name: 'Nuevo gasto' })).toBeInTheDocument();
+  });
+
+  it('si las sedes no cargan, el alta lo dice en el campo Sede y deja reintentar', async () => {
+    const user = setupUser();
+    mockRequestLocations.mockRejectedValueOnce(new Error('red'));
+    render(<ExpensesView token="tok" />);
+    await screen.findByTestId('expense-row');
+    await user.click(screen.getByRole('button', { name: 'Nuevo gasto' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Nuevo gasto' });
+    expect(within(dialog).getByText('Sedes no disponibles')).toBeInTheDocument();
+    await user.click(within(dialog).getAllByRole('button', { name: 'Reintentar' })[0]);
+    expect(await within(dialog).findByRole('combobox', { name: 'Sede' })).toHaveValue('loc-1');
+  });
+
+  it('si las categorías no cargan, el filtro falla en su sitio con reintento', async () => {
+    mockedCategories.mockRejectedValueOnce(new Error('red'));
+    render(<ExpensesView token="tok" />);
+    expect(await screen.findByText('Categorías no disponibles')).toBeInTheDocument();
+    expect(screen.queryByRole('combobox', { name: 'Categoría' })).not.toBeInTheDocument();
+  });
+
+  it('el filtro de categoría incluye las de la página (también una retirada)', async () => {
+    mockedList.mockResolvedValue(page([expenseFixture({ category: 'Categoría retirada' })]));
+    render(<ExpensesView token="tok" />);
+    const select = await screen.findByRole('combobox', { name: 'Categoría' });
+    await waitFor(() => expect(within(select).getByRole('option', { name: 'Categoría retirada' })).toBeInTheDocument());
+  });
+
+  it('un gasto de una sede inactiva dice su sede, pero el filtro solo ofrece las activas', async () => {
+    mockRequestLocations.mockResolvedValue([
+      ...expenseLocations,
+      { ...expenseLocations[1], id: 'loc-3', name: 'Sede cerrada', isActive: false },
+    ]);
+    mockedList.mockResolvedValue(page([expenseFixture({ locationId: 'loc-3' })]));
+    render(<ExpensesView token="tok" />);
+    const row = await screen.findByTestId('expense-row');
+    expect(await within(row).findByText('Sede cerrada')).toBeInTheDocument();
+    const filter = screen.getByRole('combobox', { name: 'Sede' });
+    expect(within(filter).queryByRole('option', { name: 'Sede cerrada' })).not.toBeInTheDocument();
+  });
+
+  async function voidFromDetail(user: ReturnType<typeof setupUser>) {
+    jest.mocked(getExpense).mockResolvedValue(expenseDetailFixture());
+    jest.mocked(voidExpense).mockResolvedValue(
+      expenseDetailFixture({ status: 'VOIDED', voidedAt: '2026-10-24T10:00:00.000Z', voidReason: 'Duplicado sí' }),
+    );
+    const trigger = within(await screen.findByTestId('expense-row')).getByRole('button', { name: /Ver el gasto/ });
+    await user.click(trigger);
+    await user.click(await screen.findByRole('button', { name: 'Anular gasto' }));
+    const modal = await screen.findByRole('dialog', { name: '¿Anular este gasto?' });
+    await user.type(within(modal).getByLabelText('Motivo de la anulación'), 'Duplicado sí');
+    await user.click(within(modal).getByRole('button', { name: 'Anular gasto' }));
+    await waitFor(() => expect(screen.getAllByText('Gasto anulado.')).toHaveLength(2));
+    return trigger;
+  }
+
+  it('tras un cambio en el detalle la lista se recarga sin quitar las filas y el foco vuelve a la fila', async () => {
+    const user = setupUser();
+    render(<ExpensesView token="tok" />);
+    let finish: (value: ExpensePage) => void = () => undefined;
+    mockedList.mockImplementation(() => new Promise((resolve) => (finish = resolve)));
+    const trigger = await voidFromDetail(user);
+    // Mientras recarga, la fila sigue (marcada como ocupada), no el esqueleto.
+    expect(trigger).toBeInTheDocument();
+    expect(trigger.closest('[aria-busy="true"]')).not.toBeNull();
+    await act(async () => finish(page()));
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    await waitFor(() => expect(document.activeElement).toBe(trigger));
+  });
+
+  it('si la fila ya no está al cerrar el detalle, el foco va a «Nuevo gasto»', async () => {
+    const user = setupUser();
+    render(<ExpensesView token="tok" />);
+    await screen.findByTestId('expense-row');
+    mockedList.mockResolvedValue(page([expenseFixture({ id: 'exp-2' })]));
+    await voidFromDetail(user);
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Nuevo gasto' })));
   });
 });

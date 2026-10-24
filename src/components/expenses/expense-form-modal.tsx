@@ -21,6 +21,7 @@ import {
 import type { SingleFileUploadRequest } from '@/lib/files/upload-single-file';
 import { formatCurrency } from '@/lib/format/currency';
 import { moneyInputText, parseMoneyInput } from '@/lib/format/money';
+import { collapseSpaces } from '@/lib/format/text';
 import { COUNTRY_CURRENCY } from '@/lib/locations/clinic-currency';
 import type { ClinicLocation } from '@/lib/locations/locations-api';
 import { sedeToday } from '@/lib/locations/use-sede-time-zone';
@@ -55,6 +56,7 @@ export const expenseFormCopy = {
   categoryPlaceholder: 'Elige una categoría',
   categoriesLoading: 'Cargando categorías…',
   categoriesError: 'Categorías no disponibles',
+  locationsError: 'Sedes no disponibles',
   manageCategories: 'Gestionar categorías',
   supplier: 'Proveedor',
   supplierHint: 'Opcional. Te sugerimos los que ya usaste.',
@@ -136,17 +138,15 @@ function initialState(locations: ClinicLocation[], defaultLocationId: string | n
   };
 }
 
-/** Texto libre recortado, con los espacios repetidos juntos, como la API. */
-function clean(text: string): string {
-  return text.trim().replace(/\s+/g, ' ');
-}
-
 interface ExpenseFormModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   token: string;
-  /** Sedes activas de la clínica, la principal primero. */
+  /** Sedes de la clínica, la principal primero; se ofrecen las activas. */
   locations: ClinicLocation[];
+  /** La lista de sedes no cargó: el campo Sede lo dice y deja reintentar. */
+  locationsFailed?: boolean;
+  onRetryLocations?: () => void;
   /** La sede activa del selector, o null en «Todas las sedes». */
   defaultLocationId: string | null;
   categories: ExpenseCategoriesState;
@@ -154,6 +154,8 @@ interface ExpenseFormModalProps {
   /** Para editar; sin él, alta. */
   expense?: ExpenseDetail;
   onSaved: (expense: ExpenseDetail, notice: string) => void;
+  /** A dónde va el foco al cerrar si el botón que abrió el modal ya no está. */
+  onCloseAutoFocus?: (event: Event) => void;
 }
 
 /**
@@ -167,13 +169,18 @@ export function ExpenseFormModal({
   open,
   onOpenChange,
   token,
-  locations,
+  locations: allLocations,
+  locationsFailed = false,
+  onRetryLocations,
   defaultLocationId,
   categories,
   onManageCategories,
   expense,
   onSaved,
+  onCloseAutoFocus,
 }: ExpenseFormModalProps) {
+  // Se elige entre las activas; editando, sigue elegible la sede del gasto.
+  const locations = allLocations.filter((l) => l.isActive || l.id === expense?.locationId);
   const editing = expense !== undefined;
   const hasPayments = (expense?.payments.length ?? 0) > 0;
   const [form, setForm] = useState<FormState>(() => initialState(locations, defaultLocationId, expense));
@@ -191,9 +198,9 @@ export function ExpenseFormModal({
   const upload = useSingleFileUpload(EXPENSE_RECEIPT_RULES, requestTicket);
 
   // Las sedes llegan después de abrir: sin sede elegida, la propuesta.
-  const [prevLocations, setPrevLocations] = useState(locations);
-  if (locations !== prevLocations) {
-    setPrevLocations(locations);
+  const [prevLocations, setPrevLocations] = useState(allLocations);
+  if (allLocations !== prevLocations) {
+    setPrevLocations(allLocations);
     if (!form.locationId && locations.length > 0) {
       // Solo lo que depende de la sede: lo ya escrito se queda.
       const proposed = initialState(locations, defaultLocationId, expense);
@@ -211,7 +218,7 @@ export function ExpenseFormModal({
   const today = sedeToday(location?.timeZone ?? null);
 
   // Sugerencias de proveedor al teclear; si fallan, el campo sigue siendo libre.
-  const supplierQuery = clean(form.supplier);
+  const supplierQuery = collapseSpaces(form.supplier);
   useEffect(() => {
     if (!open || !token) return;
     let cancelled = false;
@@ -266,7 +273,7 @@ export function ExpenseFormModal({
     if (form.dueDate && form.invoiceDate && form.dueDate < form.invoiceDate) {
       next.dueDate = expenseFormCopy.dueBeforeInvoice;
     }
-    if (clean(form.supplier).length > EXPENSE_SUPPLIER_MAX) next.supplier = expenseFormCopy.supplierTooLong;
+    if (collapseSpaces(form.supplier).length > EXPENSE_SUPPLIER_MAX) next.supplier = expenseFormCopy.supplierTooLong;
     if (form.description.trim().length > EXPENSE_DESCRIPTION_MAX) {
       next.description = expenseFormCopy.descriptionTooLong;
     }
@@ -287,7 +294,7 @@ export function ExpenseFormModal({
       setError(expenseFormCopy.receiptPending);
       return;
     }
-    const supplier = clean(form.supplier);
+    const supplier = collapseSpaces(form.supplier);
     const description = form.description.trim();
     setSubmitting(true);
     try {
@@ -346,6 +353,7 @@ export function ExpenseFormModal({
       submitDisabled={upload.busy || !form.locationId}
       error={error}
       size="lg"
+      onCloseAutoFocus={onCloseAutoFocus}
     >
       <div className="grid gap-4 sm:grid-cols-2">
         <FormField
@@ -354,20 +362,29 @@ export function ExpenseFormModal({
           hint={hasPayments ? expenseFormCopy.lockedByPayments : undefined}
           hintId="expense-location-hint"
         >
-          <select
-            id="expense-location"
-            value={form.locationId}
-            disabled={submitting || hasPayments || locations.length <= 1}
-            onChange={(e) => changeLocation(e.target.value)}
-            aria-describedby={hasPayments ? 'expense-location-hint' : undefined}
-            className={cn(fieldClass, 'h-10')}
-          >
-            {locations.map((l) => (
-              <option key={l.id} value={l.id}>
-                {l.name}
-              </option>
-            ))}
-          </select>
+          {locationsFailed && locations.length === 0 ? (
+            <FieldError
+              label={expenseFormCopy.locationsError}
+              onRetry={onRetryLocations}
+              className="h-10 w-full"
+              retryId="expense-location"
+            />
+          ) : (
+            <select
+              id="expense-location"
+              value={form.locationId}
+              disabled={submitting || hasPayments || locations.length <= 1}
+              onChange={(e) => changeLocation(e.target.value)}
+              aria-describedby={hasPayments ? 'expense-location-hint' : undefined}
+              className={cn(fieldClass, 'h-10')}
+            >
+              {locations.map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.name}
+                </option>
+              ))}
+            </select>
+          )}
         </FormField>
         <FormField htmlFor="expense-category" label={expenseFormCopy.category} error={errors.category}>
           {categories.failed ? (
@@ -480,6 +497,7 @@ export function ExpenseFormModal({
             token={token}
             value={form.currency}
             disabled={submitting || hasPayments}
+            ariaDescribedBy={hasPayments ? 'expense-location-hint' : undefined}
             onChange={(currency) => {
               setCurrencyTouched(true);
               patch({ currency });

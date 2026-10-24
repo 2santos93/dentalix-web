@@ -4,7 +4,7 @@ import { useEffect, useState } from 'react';
 import { ExternalLink } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { useMediaQuery } from '@/lib/hooks/use-media-query';
-import { notifyError } from '@/components/errors/notify';
+import { InlineError } from '@/components/errors/inline-error';
 import { SectionError } from '@/components/errors/section-error';
 import { Button } from '@/components/ui/button';
 import {
@@ -23,7 +23,9 @@ const copy = {
   open: 'Abrir',
   pdfOnMobile: 'En el teléfono el PDF se lee mejor a pantalla completa.',
   frameTitle: (name: string) => `Vista previa de ${name}`,
-  openError: 'No pudimos abrir el documento en otra pestaña.',
+  // Dentro del visor, sin toast (quedaría debajo del modal) ni botón propio:
+  // el enlace es el reintento.
+  openError: 'No pudimos abrir el documento en otra pestaña. Intenta de nuevo.',
 };
 
 interface SignedFileViewerDialogProps {
@@ -41,6 +43,8 @@ interface SignedFileViewerDialogProps {
    * vuelve a pedirla cuando cambia.
    */
   loadUrl: () => Promise<{ url: string }>;
+  /** A dónde va el foco al cerrar si el botón que abrió el visor ya no está. */
+  onCloseAutoFocus?: (event: Event) => void;
 }
 
 /**
@@ -58,10 +62,12 @@ export function SignedFileViewerDialog({
   description,
   image,
   loadUrl,
+  onCloseAutoFocus,
 }: SignedFileViewerDialogProps) {
   const wide = useMediaQuery('(min-width: 640px)');
   const [url, setUrl] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [openError, setOpenError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
 
   useEffect(() => {
@@ -98,13 +104,14 @@ export function SignedFileViewerDialog({
   async function openInNewTab() {
     const tab = window.open('', '_blank');
     if (tab) tab.opener = null;
+    setOpenError(null);
     try {
       const fresh = await loadUrl();
       if (tab) tab.location.replace(fresh.url);
       else window.open(fresh.url, '_blank', 'noopener,noreferrer');
     } catch (err) {
       tab?.close();
-      notifyError(apiErrorMessage(err, copy.openError), { onRetry: () => void openInNewTab() });
+      setOpenError(apiErrorMessage(err, copy.openError));
     }
   }
 
@@ -156,11 +163,12 @@ export function SignedFileViewerDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-4xl">
+      <DialogContent className="max-w-4xl" onCloseAutoFocus={onCloseAutoFocus}>
         <DialogHeader className="min-w-0 pr-8">
           <DialogTitle className="break-words [overflow-wrap:anywhere]">{name}</DialogTitle>
           <DialogDescription>{description}</DialogDescription>
         </DialogHeader>
+        {openError ? <InlineError variant="summary">{openError}</InlineError> : null}
         <div className="min-w-0">{body}</div>
         {url && (image || wide) ? (
           <a

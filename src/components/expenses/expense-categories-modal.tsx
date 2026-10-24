@@ -8,6 +8,7 @@ import {
   retireExpenseCategory,
   type ExpenseCategory,
 } from '@/lib/expenses/expense-categories-api';
+import { collapseSpaces } from '@/lib/format/text';
 import { EXPENSE_CATEGORY_NAME_MAX, EXPENSE_CATEGORY_NAME_MIN } from '@/lib/expenses/presentation';
 import { SectionError } from '@/components/errors/section-error';
 import { InlineError } from '@/components/errors/inline-error';
@@ -75,7 +76,7 @@ export function ExpenseCategoriesModal({ open, onOpenChange, token, categories }
 
   async function add(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
-    const trimmed = name.trim().replace(/\s+/g, ' ');
+    const trimmed = collapseSpaces(name);
     if (trimmed.length < EXPENSE_CATEGORY_NAME_MIN || trimmed.length > EXPENSE_CATEGORY_NAME_MAX) {
       setNameError(expenseCategoriesCopy.nameLength);
       return;

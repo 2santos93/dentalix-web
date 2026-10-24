@@ -1,5 +1,6 @@
 import {
   civilDateInZone,
+  firstOfMonth,
   zoneCityLabel,
   formatCivilDate,
   formatDate,
@@ -148,5 +149,12 @@ describe('civilDateInZone (DX-097)', () => {
   it('null con un instante o una zona inválidos', () => {
     expect(civilDateInZone('no-es-fecha', 'America/Bogota')).toBeNull();
     expect(civilDateInZone('2026-10-17T01:00:00.000Z', 'Mars/Olympus')).toBeNull();
+  });
+});
+
+describe('firstOfMonth', () => {
+  it('da el día 1 del mes del día dado', () => {
+    expect(firstOfMonth('2026-10-24')).toBe('2026-10-01');
+    expect(firstOfMonth('2026-02-01')).toBe('2026-02-01');
   });
 });

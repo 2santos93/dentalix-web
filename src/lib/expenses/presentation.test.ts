@@ -3,7 +3,6 @@ import { expenseFixture } from '@/lib/test/expenses';
 import {
   EXPENSE_RECEIPT_RULES,
   expensesCsvFileName,
-  firstOfMonth,
   isExpenseOverdue,
   isImageReceipt,
 } from './presentation';
@@ -32,9 +31,8 @@ describe('presentación de gastos (DX-274)', () => {
     expect(isImageReceipt('application/pdf')).toBe(false);
   });
 
-  it('nombre del CSV y primer día del mes', () => {
+  it('nombre del CSV', () => {
     expect(expensesCsvFileName('2026-10-01', '2026-10-24')).toBe('gastos-2026-10-01-2026-10-24.csv');
     expect(expensesCsvFileName(undefined, undefined)).toBe('gastos.csv');
-    expect(firstOfMonth('2026-10-24')).toBe('2026-10-01');
   });
 });

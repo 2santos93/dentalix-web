@@ -1,6 +1,6 @@
 'use client';
 import * as React from 'react';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Download, Eye, Pencil, Plus, Wallet } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/error-message';
@@ -97,6 +97,8 @@ interface ExpenseDetailModalProps {
   onManageCategories: () => void;
   /** Tras cualquier cambio, con el aviso: la lista se recarga. */
   onChanged: (notice: string) => void;
+  /** A dónde va el foco al cerrar si la fila que abrió el detalle ya no está. */
+  onCloseAutoFocus?: (event: Event) => void;
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
@@ -123,6 +125,7 @@ export function ExpenseDetailModal({
   categories,
   onManageCategories,
   onChanged,
+  onCloseAutoFocus,
 }: ExpenseDetailModalProps) {
   const [detail, setDetail] = useState<ExpenseDetail | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -134,6 +137,10 @@ export function ExpenseDetailModal({
   const [actionError, setActionError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [attaching, setAttaching] = useState(false);
+  // Tras anular un pago, anular el gasto o pagarlo del todo, el botón que abrió
+  // el modal desaparece: el foco vuelve entonces al título del detalle.
+  const titleRef = useRef<HTMLHeadingElement>(null);
+  const subTriggerRef = useRef<HTMLElement | null>(null);
 
   const requestTicket = useCallback(
     (request: SingleFileUploadRequest) => requestExpenseReceiptUpload(token, request),
@@ -159,10 +166,18 @@ export function ExpenseDetailModal({
   const loadUrl = useCallback(() => getExpenseReceiptUrl(token, expenseId, 'inline'), [token, expenseId]);
 
   function openSub(next: SubDialog) {
+    const active = document.activeElement;
+    subTriggerRef.current = active instanceof HTMLElement ? active : null;
     setActionError(null);
     setVoidError(null);
     setSubKey((k) => k + 1);
     setSub(next);
+  }
+
+  function focusAfterSub(event: Event) {
+    if (subTriggerRef.current?.isConnected) return;
+    event.preventDefault();
+    titleRef.current?.focus();
   }
 
   function applyChange(saved: ExpenseDetail, message: string) {
@@ -197,6 +212,8 @@ export function ExpenseDetailModal({
       const saved = await attachExpenseReceipt(token, expenseId, upload.uploadId);
       upload.clear();
       applyChange(saved, expenseDetailCopy.attached);
+      // «Guardar soporte» desaparece al guardarlo.
+      titleRef.current?.focus();
     } catch (err) {
       setActionError(apiErrorMessage(err, { fallback: expenseDetailCopy.attachError }));
     } finally {
@@ -371,9 +388,15 @@ export function ExpenseDetailModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-2xl" onCloseAutoFocus={onCloseAutoFocus}>
         <DialogHeader className="min-w-0 pr-8">
-          <DialogTitle className="[overflow-wrap:anywhere]">{title}</DialogTitle>
+          <DialogTitle
+            ref={titleRef}
+            tabIndex={-1}
+            className="[overflow-wrap:anywhere] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          >
+            {title}
+          </DialogTitle>
           <DialogDescription>
             {detail ? `${formatCivilDate(detail.invoiceDate)} · ${money(detail.amount)}` : expenseDetailCopy.loading}
           </DialogDescription>
@@ -389,6 +412,7 @@ export function ExpenseDetailModal({
             key={subKey}
             open
             onOpenChange={(next) => !next && setSub(null)}
+            onCloseAutoFocus={focusAfterSub}
             token={token}
             expense={detail}
             today={sedeToday(location?.timeZone ?? null)}
@@ -400,6 +424,7 @@ export function ExpenseDetailModal({
             key={subKey}
             open
             onOpenChange={(next) => !next && setSub(null)}
+            onCloseAutoFocus={focusAfterSub}
             token={token}
             locations={locations}
             defaultLocationId={detail.locationId}
@@ -414,6 +439,7 @@ export function ExpenseDetailModal({
             key={subKey}
             open
             onOpenChange={(next) => !next && setSub(null)}
+            onCloseAutoFocus={focusAfterSub}
             kind={sub.kind === 'void-expense' ? 'expense' : 'payment'}
             subject={
               sub.kind === 'void-expense'
@@ -430,6 +456,7 @@ export function ExpenseDetailModal({
             key={subKey}
             open
             onOpenChange={(next) => !next && setSub(null)}
+            onCloseAutoFocus={focusAfterSub}
             name={detail.attachment.name}
             description={title}
             image={isImageReceipt(detail.attachment.mimeType)}

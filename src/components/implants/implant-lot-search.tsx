@@ -56,7 +56,6 @@ const copy = {
   tooth: (t: string) => `Diente ${t}`,
 };
 
-
 /**
  * Ajustes → Implantes (DX-191): búsqueda por lote/REF y su CSV, solo ADMIN.
  * Siempre en toda la clínica (la API no la acota a la sede activa): una

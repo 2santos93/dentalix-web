@@ -1,6 +1,6 @@
 'use client';
 import * as React from 'react';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Building2, Download, Lock, Plus } from 'lucide-react';
 import { ApiError } from '@/lib/api/client';
 import { apiErrorMessage } from '@/lib/api/error-message';
@@ -14,14 +14,13 @@ import {
   type ExpensePage,
   type ExpenseStatusFilter,
 } from '@/lib/expenses/expenses-api';
-import { EXPENSE_STATUS_FILTERS, expensesCsvFileName, firstOfMonth } from '@/lib/expenses/presentation';
+import { EXPENSE_STATUS_FILTERS, expensesCsvFileName } from '@/lib/expenses/presentation';
 import { saveCsv } from '@/lib/files/save-csv';
 import { formatCurrency } from '@/lib/format/currency';
-import { formatCivilDate } from '@/lib/format/date';
+import { firstOfMonth, formatCivilDate } from '@/lib/format/date';
 import { getActiveLocationId } from '@/lib/locations/location-store';
-import type { ClinicLocation } from '@/lib/locations/locations-api';
-import { useSessionLocations } from '@/lib/locations/session-locations';
 import { sedeToday, useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
+import { FieldError } from '@/components/errors/field-error';
 import { notifyError } from '@/components/errors/notify';
 import { AsyncSection, TableSkeleton } from '@/components/shared/async-section';
 import { EmptyState } from '@/components/shared/empty-state';
@@ -38,6 +37,7 @@ import { ExpenseDetailModal } from './expense-detail-modal';
 import { ExpenseFormModal } from './expense-form-modal';
 import { ExpenseStatusBadges } from './expense-status-badges';
 import { useExpenseCategories } from './use-expense-categories';
+import { useExpenseLocations } from './use-expense-locations';
 
 export const expensesCopy = {
   title: 'Gastos',
@@ -53,6 +53,8 @@ export const expensesCopy = {
   toLabel: 'Hasta',
   categoryLabel: 'Categoría',
   categoryAll: 'Todas las categorías',
+  // Escalón 2 (FieldError): ≤4 palabras, el filtro da el contexto.
+  categoriesError: 'Categorías no disponibles',
   statusLabel: 'Estado',
   overdueLabel: 'Vencidos',
   create: 'Nuevo gasto',
@@ -94,9 +96,8 @@ export function ExpensesView({ token }: { token: string }) {
   const isAdmin = canManageExpenses(getTokenRole(token));
   const timeZone = useSedeTimeZone(token);
   const today = timeZone ? sedeToday(timeZone) : null;
-  const requestLocations = useSessionLocations(token);
   const [activeLocationId] = useState<string | null>(() => getActiveLocationId());
-  const [locations, setLocations] = useState<ClinicLocation[]>([]);
+  const sedes = useExpenseLocations(token);
   const [from, setFrom] = useState<string | null>(null);
   const [to, setTo] = useState<string | null>(null);
   const [locationId, setLocationId] = useState('ALL');
@@ -118,21 +119,10 @@ export function ExpensesView({ token }: { token: string }) {
   const [detailId, setDetailId] = useState<string | null>(null);
   const [categoriesOpen, setCategoriesOpen] = useState(false);
   const categories = useExpenseCategories(token, isAdmin);
-
-  useEffect(() => {
-    if (!token) return;
-    let cancelled = false;
-    requestLocations()
-      .then((all) => {
-        if (!cancelled) setLocations(all.filter((l) => l.isActive));
-      })
-      .catch(() => {
-        /* sin sedes: sin filtro de sede ni nombre de sede en las filas */
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [token, requestLocations]);
+  // El foco al cerrar el detalle: vuelve a la fila que lo abrió; si la fila ya
+  // no está (el gasto salió del filtro), a «Nuevo gasto».
+  const detailTriggerRef = useRef<HTMLElement | null>(null);
+  const createButtonRef = useRef<HTMLButtonElement>(null);
 
   // La búsqueda se aplica al dejar de teclear.
   useEffect(() => {
@@ -181,6 +171,7 @@ export function ExpensesView({ token }: { token: string }) {
         setForbidden(false);
       } catch (err) {
         if (cancelled) return;
+        setData(null);
         setForbidden(err instanceof ApiError && err.status === 403);
         setLoadError(
           apiErrorMessage(err, { fallback: expensesCopy.loadError, byStatus: { 400: expensesCopy.badRequest } }),
@@ -217,6 +208,17 @@ export function ExpensesView({ token }: { token: string }) {
     setFormOpen(true);
   }
 
+  function openDetail(id: string, trigger: HTMLElement) {
+    detailTriggerRef.current = trigger;
+    setDetailId(id);
+  }
+
+  function focusAfterDetail(event: Event) {
+    if (detailTriggerRef.current?.isConnected) return;
+    event.preventDefault();
+    createButtonRef.current?.focus();
+  }
+
   function changed(message: string) {
     setNotice(message);
     setReloadKey((k) => k + 1);
@@ -230,10 +232,21 @@ export function ExpensesView({ token }: { token: string }) {
   }
 
   const items = data?.items ?? [];
-  const showLoading = loading || !filters;
+  // Con filas en pantalla, una recarga (tras un cambio en el detalle o un
+  // filtro) las deja puestas y marcadas como ocupadas: cambiarlas por el
+  // esqueleto desmontaría el botón que abrió el detalle y el foco caería en
+  // <body> al cerrarlo.
+  const showLoading = (loading && data === null) || !filters;
+  const refreshing = loading && data !== null;
+  const { locations } = sedes;
+  const activeLocations = locations.filter((l) => l.isActive);
   const activeLocation = locations.find((l) => l.id === activeLocationId) ?? null;
   const locationName = (id: string) => locations.find((l) => l.id === id)?.name ?? '—';
-  const showLocationFilter = activeLocationId === null && locations.length > 1;
+  const showLocationFilter = activeLocationId === null && activeLocations.length > 1;
+  // Las categorías de la página también, para encontrar las de una retirada.
+  const categoryNames = [
+    ...new Set([...(categories.categories ?? []).map((c) => c.name), ...items.map((e) => e.category)]),
+  ];
 
   return (
     <>
@@ -266,7 +279,7 @@ export function ExpensesView({ token }: { token: string }) {
                   <Download aria-hidden />
                   {exporting ? expensesCopy.exporting : expensesCopy.export}
                 </Button>
-                <Button type="button" onClick={openCreate} className="max-sm:mt-2">
+                <Button ref={createButtonRef} type="button" onClick={openCreate} className="max-sm:mt-2">
                   <Plus aria-hidden />
                   {expensesCopy.create}
                 </Button>
@@ -281,7 +294,7 @@ export function ExpensesView({ token }: { token: string }) {
                 className={cn(toolbarFieldClass, 'sm:w-48')}
               >
                 <option value="ALL">{expensesCopy.locationAll}</option>
-                {locations.map((l) => (
+                {activeLocations.map((l) => (
                   <option key={l.id} value={l.id}>
                     {l.name}
                   </option>
@@ -310,19 +323,27 @@ export function ExpensesView({ token }: { token: string }) {
                 />
               </label>
             </div>
-            <select
-              aria-label={expensesCopy.categoryLabel}
-              value={category}
-              onChange={(e) => resetPage(setCategory)(e.target.value)}
-              className={cn(toolbarFieldClass, 'sm:w-52')}
-            >
-              <option value="ALL">{expensesCopy.categoryAll}</option>
-              {(categories.categories ?? []).map((c) => (
-                <option key={c.name} value={c.name}>
-                  {c.name}
-                </option>
-              ))}
-            </select>
+            {categories.failed ? (
+              <FieldError
+                label={expensesCopy.categoriesError}
+                onRetry={categories.reload}
+                className="h-10 w-full sm:w-52"
+              />
+            ) : (
+              <select
+                aria-label={expensesCopy.categoryLabel}
+                value={category}
+                onChange={(e) => resetPage(setCategory)(e.target.value)}
+                className={cn(toolbarFieldClass, 'sm:w-52')}
+              >
+                <option value="ALL">{expensesCopy.categoryAll}</option>
+                {categoryNames.map((name) => (
+                  <option key={name} value={name}>
+                    {name}
+                  </option>
+                ))}
+              </select>
+            )}
             <select
               aria-label={expensesCopy.statusLabel}
               value={status}
@@ -374,7 +395,7 @@ export function ExpensesView({ token }: { token: string }) {
               skeleton={<TableSkeleton rows={5} />}
             >
               {/* Escritorio: una tabla. */}
-              <Card className="overflow-hidden p-0 max-md:hidden">
+              <Card aria-busy={refreshing || undefined} className="overflow-hidden p-0 max-md:hidden">
                 <Table aria-label={expensesCopy.tableLabel}>
                   <caption className="sr-only">{expensesCopy.tableLabel}</caption>
                   <TableHeader>
@@ -397,7 +418,7 @@ export function ExpensesView({ token }: { token: string }) {
                       <TableRow key={expense.id} data-testid="expense-row">
                         <TableCell className="tabular-nums">{formatCivilDate(expense.invoiceDate)}</TableCell>
                         <TableCell>
-                          <OpenExpenseButton expense={expense} onOpen={setDetailId} />
+                          <OpenExpenseButton expense={expense} onOpen={openDetail} />
                           {expense.description ? (
                             <span className="block max-w-[28ch] truncate text-xs text-muted">{expense.description}</span>
                           ) : null}
@@ -424,10 +445,10 @@ export function ExpensesView({ token }: { token: string }) {
               </Card>
 
               {/* Móvil y tablet estrecha: una tarjeta por gasto, sin scroll lateral. */}
-              <ul aria-label={expensesCopy.listLabel} className="flex flex-col gap-3 md:hidden">
+              <ul aria-label={expensesCopy.listLabel} aria-busy={refreshing || undefined} className="flex flex-col gap-3 md:hidden">
                 {items.map((expense) => (
                   <li key={expense.id}>
-                    <ExpenseCard expense={expense} locationName={locationName(expense.locationId)} onOpen={setDetailId} />
+                    <ExpenseCard expense={expense} locationName={locationName(expense.locationId)} onOpen={openDetail} />
                   </li>
                 ))}
               </ul>
@@ -452,6 +473,8 @@ export function ExpensesView({ token }: { token: string }) {
         onOpenChange={setFormOpen}
         token={token}
         locations={locations}
+        locationsFailed={sedes.failed}
+        onRetryLocations={sedes.reload}
         defaultLocationId={activeLocationId}
         categories={categories}
         onManageCategories={() => setCategoriesOpen(true)}
@@ -464,6 +487,7 @@ export function ExpensesView({ token }: { token: string }) {
           onOpenChange={(open) => {
             if (!open) setDetailId(null);
           }}
+          onCloseAutoFocus={focusAfterDetail}
           token={token}
           expenseId={detailId}
           locations={locations}
@@ -482,11 +506,13 @@ export function ExpensesView({ token }: { token: string }) {
   );
 }
 
-function OpenExpenseButton({ expense, onOpen }: { expense: Expense; onOpen: (id: string) => void }) {
+type OpenExpense = (id: string, trigger: HTMLElement) => void;
+
+function OpenExpenseButton({ expense, onOpen }: { expense: Expense; onOpen: OpenExpense }) {
   return (
     <button
       type="button"
-      onClick={() => onOpen(expense.id)}
+      onClick={(e) => onOpen(expense.id, e.currentTarget)}
       aria-label={expensesCopy.open(expense.category, formatCivilDate(expense.invoiceDate))}
       className="text-left font-medium text-ink underline-offset-4 hover:text-primary hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
     >
@@ -502,7 +528,7 @@ function ExpenseCard({
 }: {
   expense: Expense;
   locationName: string;
-  onOpen: (id: string) => void;
+  onOpen: OpenExpense;
 }) {
   return (
     <Card className="flex flex-col gap-2 p-4">

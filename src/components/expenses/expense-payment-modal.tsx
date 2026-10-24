@@ -34,6 +34,8 @@ interface ExpensePaymentModalProps {
   /** Hoy en la sede del gasto. */
   today: string;
   onSaved: (expense: ExpenseDetail, notice: string) => void;
+  /** A dónde va el foco al cerrar si el botón que abrió el modal ya no está. */
+  onCloseAutoFocus?: (event: Event) => void;
 }
 
 /**
@@ -42,7 +44,15 @@ interface ExpensePaymentModalProps {
  * `key` por apertura: clave de idempotencia nueva cada vez y la misma en cada
  * reintento del mismo envío.
  */
-export function ExpensePaymentModal({ open, onOpenChange, token, expense, today, onSaved }: ExpensePaymentModalProps) {
+export function ExpensePaymentModal({
+  open,
+  onOpenChange,
+  token,
+  expense,
+  today,
+  onSaved,
+  onCloseAutoFocus,
+}: ExpensePaymentModalProps) {
   const [amount, setAmount] = useState(() => moneyInputText(expense.pendingAmount));
   const [payment, setPayment] = useState<ExpensePaymentValue>({ method: 'CASH', paidOn: today, fromCashSession: false });
   const [amountError, setAmountError] = useState<string | null>(null);
@@ -93,6 +103,7 @@ export function ExpensePaymentModal({ open, onOpenChange, token, expense, today,
       submitLabel={expensePaymentCopy.submit}
       submitting={submitting}
       error={error}
+      onCloseAutoFocus={onCloseAutoFocus}
     >
       <FormField htmlFor="expense-pay-amount" label={expensePaymentCopy.amount(expense.currency)} error={amountError}>
         <MoneyInput

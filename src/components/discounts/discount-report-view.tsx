@@ -7,7 +7,7 @@ import { ApiError } from '@/lib/api/client';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { getTokenRole } from '@/lib/auth/token-role';
 import { formatCurrency } from '@/lib/format/currency';
-import { formatCivilDate } from '@/lib/format/date';
+import { firstOfMonth, formatCivilDate } from '@/lib/format/date';
 import { sedeToday, useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
 import { listStaff, type StaffMember } from '@/lib/appointments/staff-api';
 import {
@@ -85,11 +85,6 @@ export const discountReportCopy = {
   emptyHint: 'Prueba con otras fechas, otra sede u otro miembro del equipo.',
   statement: (name: string) => `Abrir la ficha de ${name}`,
 };
-
-function firstOfMonth(day: string): string {
-  return `${day.slice(0, 8)}01`;
-}
-
 
 /** SEC-047: línea que solo tiene rebaja de convenio (sin descuento propio). */
 function agreementOnly(item: DiscountReportItem): boolean {
