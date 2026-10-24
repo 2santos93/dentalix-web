@@ -2456,6 +2456,46 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/reports/locations-comparison": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Comparar sedes: indicadores por sede frente a otro período
+         * @description Una fila por sede que ve quien consulta (DX-089: un miembro restringido solo ve las suyas, y el total solo las suma a ellas) y «Total clínica». La cabecera X-Location-Id no acota la comparación: siempre salen todas las sedes visibles. Indicadores (ver `kpis`, la definición de cada uno con su dirección): producción, cobrado, % de cobro, citas atendidas, no-show %, pacientes nuevos, ticket medio y ocupación %, en días civiles de la zona de cada sede (DX-097). Importes por moneda, sin convertir ni sumar monedas distintas. Con `compare`, cada valor trae el del período anterior, su variación % y si mejora o empeora.
+         */
+        get: operations["LocationsComparisonController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/reports/locations-comparison.csv": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Comparar sedes en CSV (mismos filtros)
+         * @description Una fila por sede que ve quien consulta (DX-089: un miembro restringido solo ve las suyas, y el total solo las suma a ellas) y «Total clínica». La cabecera X-Location-Id no acota la comparación: siempre salen todas las sedes visibles. Indicadores (ver `kpis`, la definición de cada uno con su dirección): producción, cobrado, % de cobro, citas atendidas, no-show %, pacientes nuevos, ticket medio y ocupación %, en días civiles de la zona de cada sede (DX-097). Importes por moneda, sin convertir ni sumar monedas distintas. Con `compare`, cada valor trae el del período anterior, su variación % y si mejora o empeora. Una línea por sede, indicador y moneda; UTF-8 con BOM; celdas protegidas contra fórmulas.
+         */
+        get: operations["LocationsComparisonController_csv"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/cash-sessions/settings": {
         parameters: {
             query?: never;
@@ -9348,6 +9388,107 @@ export interface components {
             pageSize: number;
             /** @description Por moneda, de TODAS las filas filtradas (no solo la página) */
             totals: components["schemas"]["AgingTotalDto"][];
+        };
+        KpiDefinitionDto: {
+            /** @enum {string} */
+            key: "production" | "collected" | "collectionRate" | "completedAppointments" | "noShowRate" | "newPatients" | "averageTicket" | "occupancy";
+            /** @example Producción */
+            label: string;
+            /** @enum {string} */
+            unit: "MONEY" | "PERCENT" | "COUNT";
+            /** @description true = un valor por moneda (lista), nunca sumados */
+            perCurrency: boolean;
+            /**
+             * @description Hacia dónde mejora: el no-show mejora al bajar
+             * @enum {string}
+             */
+            direction: "HIGHER_IS_BETTER" | "LOWER_IS_BETTER";
+            /**
+             * @description Unidad de `change`: PERCENT = % relativo ((valor − anterior) ÷ |anterior|); POINTS = puntos porcentuales (valor − anterior), en los indicadores que ya son un %
+             * @enum {string}
+             */
+            changeUnit: "PERCENT" | "POINTS";
+            /** @description Texto de «Cómo se calcula» */
+            howItIsCalculated: string;
+        };
+        CurrencyMetricDto: {
+            /** @description Valor del período. Porcentajes en % con 2 decimales; null = no se puede calcular (sin base) */
+            value: number | null;
+            /** @description Valor del período de comparación (null sin comparación) */
+            previous: number | null;
+            /** @description Variación frente al anterior, 1 decimal, en la unidad `changeUnit` del indicador: % relativo ((valor − anterior) ÷ |anterior|; null con anterior 0) o puntos porcentuales en % de cobro, no-show % y ocupación % (valor − anterior: 8 % → 10 % = 2). null sin anterior */
+            change: number | null;
+            /**
+             * @description Lectura de la variación según la dirección del indicador
+             * @enum {string|null}
+             */
+            trend: "BETTER" | "WORSE" | "EQUAL" | null;
+            /** @example COP */
+            currency: string;
+        };
+        MetricDto: {
+            /** @description Valor del período. Porcentajes en % con 2 decimales; null = no se puede calcular (sin base) */
+            value: number | null;
+            /** @description Valor del período de comparación (null sin comparación) */
+            previous: number | null;
+            /** @description Variación frente al anterior, 1 decimal, en la unidad `changeUnit` del indicador: % relativo ((valor − anterior) ÷ |anterior|; null con anterior 0) o puntos porcentuales en % de cobro, no-show % y ocupación % (valor − anterior: 8 % → 10 % = 2). null sin anterior */
+            change: number | null;
+            /**
+             * @description Lectura de la variación según la dirección del indicador
+             * @enum {string|null}
+             */
+            trend: "BETTER" | "WORSE" | "EQUAL" | null;
+        };
+        ComparisonMetricsDto: {
+            production: components["schemas"]["CurrencyMetricDto"][];
+            collected: components["schemas"]["CurrencyMetricDto"][];
+            collectionRate: components["schemas"]["CurrencyMetricDto"][];
+            completedAppointments: components["schemas"]["MetricDto"];
+            noShowRate: components["schemas"]["MetricDto"];
+            newPatients: components["schemas"]["MetricDto"];
+            averageTicket: components["schemas"]["CurrencyMetricDto"][];
+            occupancy: components["schemas"]["MetricDto"];
+        };
+        ComparisonRowDto: {
+            /**
+             * Format: uuid
+             * @description null en «Total clínica»
+             */
+            locationId: string | null;
+            /** @example Sede Norte */
+            name: string;
+            /** @description false = sede desactivada (sigue saliendo) */
+            isActive: boolean;
+            /**
+             * @description Zona con la que la sede corta sus días (null en el total)
+             * @example America/Bogota
+             */
+            timeZone: string | null;
+            /** @description ¿Hubo producción, cobros o citas (atendidas o no-show) en el período? */
+            hasActivity: boolean;
+            metrics: components["schemas"]["ComparisonMetricsDto"];
+        };
+        LocationsComparisonDto: {
+            /** @example 2026-10-01 */
+            from: string;
+            /** @example 2026-10-31 */
+            to: string;
+            /** @enum {string} */
+            compare: "previous" | "previous_year" | "none";
+            /** @example 2026-08-31 */
+            previousFrom: string | null;
+            /** @example 2026-09-30 */
+            previousTo: string | null;
+            /** @description Moneda del filtro; null = todas, por separado */
+            currency: string | null;
+            /** @description Los indicadores, en el orden de las columnas */
+            kpis: components["schemas"]["KpiDefinitionDto"][];
+            /** @description Una fila por sede visible, en orden de creación */
+            locations: components["schemas"]["ComparisonRowDto"][];
+            /** @description «Total clínica»: solo las sedes de `locations`; importes por moneda */
+            total: components["schemas"]["ComparisonRowDto"];
+            /** @description ¿Alguna sede tuvo actividad en el período? */
+            hasActivity: boolean;
         };
         CashSettingsDto: {
             /** @description «Exigir caja abierta»: sin caja abierta en la sede no se registra un abono en efectivo (409). */
@@ -18699,6 +18840,91 @@ export interface operations {
                 content?: never;
             };
             /** @description Solo la administración puede exportar la cartera. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    LocationsComparisonController_get: {
+        parameters: {
+            query: {
+                /** @description Primer día del período (AAAA-MM-DD, en la zona de cada sede). Como mucho 366 días. */
+                from: string;
+                /** @description Último día (inclusive) */
+                to: string;
+                /** @description `previous`: los mismos días inmediatamente antes; `previous_year`: las mismas fechas un año antes; `none`: sin comparación. */
+                compare?: "previous" | "previous_year" | "none";
+                /** @description Solo los importes en esta moneda (ISO 4217). Sin él, todas, cada una por separado: nunca se suman monedas distintas ni se convierten. */
+                currency?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocationsComparisonDto"];
+                };
+            };
+            /** @description Período inválido o de más de 366 días, `compare` o `currency` inválidos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo la administración ve los reportes de la clínica. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    LocationsComparisonController_csv: {
+        parameters: {
+            query: {
+                /** @description Primer día del período (AAAA-MM-DD, en la zona de cada sede). Como mucho 366 días. */
+                from: string;
+                /** @description Último día (inclusive) */
+                to: string;
+                /** @description `previous`: los mismos días inmediatamente antes; `previous_year`: las mismas fechas un año antes; `none`: sin comparación. */
+                compare?: "previous" | "previous_year" | "none";
+                /** @description Solo los importes en esta moneda (ISO 4217). Sin él, todas, cada una por separado: nunca se suman monedas distintas ni se convierten. */
+                currency?: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Fichero CSV */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "text/csv": string;
+                };
+            };
+            /** @description Período inválido o de más de 366 días, `compare` o `currency` inválidos */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo la administración ve los reportes de la clínica. */
             403: {
                 headers: {
                     [name: string]: unknown;
