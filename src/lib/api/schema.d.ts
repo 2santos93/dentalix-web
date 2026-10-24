@@ -6828,7 +6828,10 @@ export interface components {
             noShows: number;
             /** @example 1 */
             lateCancellations: number;
-            /** @example 6 */
+            /**
+             * @description Citas que ya empezaron. Las cancelaciones tardías pueden incluir citas futuras: no se lea como ratio.
+             * @example 6
+             */
             appointments: number;
         };
         LocationAttendanceDto: {
@@ -6841,7 +6844,7 @@ export interface components {
             /** @example Sede principal */
             locationName: string;
             /**
-             * @description Citas de la ventana que ya empezaron (cualquier estado).
+             * @description Citas de la ventana que ya empezaron (cualquier estado). No es el denominador de las incidencias: una cancelación tardía puede ser de una cita futura.
              * @example 6
              */
             appointments: number;
