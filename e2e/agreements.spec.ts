@@ -12,7 +12,8 @@ import { API_URL, tenantOrigin } from './support/urls';
  *
  * ADMIN crea (por la UI) la lista «Tarifa» en COP y le pone precio a un
  * procedimiento («Editar precio»), y el convenio «Sura −20 %» (el pagador se
- * crea por la API). RECEPCIÓN asigna el convenio en la ficha y ve el chip
+ * crea por la API, con la cobertura del paciente: SEC-047). RECEPCIÓN asigna
+ * el convenio en la ficha —el diálogo elige la cobertura vigente— y ve el chip
  * «Convenio: Sura −20 %». El DENTISTA abre la pestaña Plan, crea un plan en
  * COP, elige el procedimiento y el precio llega precargado con el −20 % y la
  * línea de origen «Convenio · Sura −20 %»; la fila del plan y el presupuesto
@@ -70,7 +71,11 @@ test.beforeAll(async ({ request }) => {
   });
   await addStaffViaApi(request, session, { ...reception, role: 'RECEPTION', password });
   await addStaffViaApi(request, session, { ...dentist, role: 'DENTIST', password });
-  await apiPost(request, session, '/payers', { name: payerName, type: 'EPS_CO', country: 'CO' });
+  const payer = await apiPost<{ id: string }>(request, session, '/payers', {
+    name: payerName,
+    type: 'EPS_CO',
+    country: 'CO',
+  });
   await apiPost(request, session, '/catalog/items', {
     code: `dx105-${suffix}`.slice(0, 30),
     kind: 'PROCEDURE',
@@ -85,6 +90,12 @@ test.beforeAll(async ({ request }) => {
     docNumber: `CV${suffix}`.slice(0, 20),
     sex: 'F',
   }));
+  // SEC-047: el convenio de un pagador exige una cobertura vigente del
+  // paciente con ese pagador; el diálogo la elige sola si es la única.
+  await apiPost(request, session, `/patients/${patientId}/coverages`, {
+    payerId: payer.id,
+    planName: 'Plan Sura',
+  });
 });
 
 test('ADMIN crea la lista «Tarifa» en COP y le pone precio a un procedimiento; a 390 px sin scroll horizontal', async ({
@@ -214,6 +225,7 @@ test('RECEPCIÓN asigna el convenio en la ficha: sección y chip «Convenio: Sur
   await section.getByRole('button', { name: 'Asignar convenio' }).click();
   const dialog = page.getByRole('dialog', { name: 'Asignar convenio' });
   await dialog.getByLabel('Convenio', { exact: true }).selectOption({ label: `${agreementName} · ${payerName}` });
+  await expect(dialog.getByLabel('Cobertura del pagador')).toHaveValue(/.+/);
   await dialog.getByRole('button', { name: 'Asignar', exact: true }).click();
   await expect(dialog).toBeHidden({ timeout: 10_000 });
 

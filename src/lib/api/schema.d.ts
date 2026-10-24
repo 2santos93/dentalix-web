@@ -660,7 +660,7 @@ export interface paths {
         get: operations["PatientAgreementsController_get"];
         /**
          * Asignar un convenio al paciente, sustituyendo el vigente (DX-105)
-         * @description La asignación anterior queda en el historial. Un convenio desactivado se acepta y la asignación sale con estado INACTIVE.
+         * @description La asignación anterior queda en el historial. Un convenio desactivado se acepta y la asignación sale con estado INACTIVE. SEC-047: un convenio de pagador externo exige `coverageId` con una cobertura vigente del paciente con ese pagador (cualquier rol); uno de pagador OTRO (cortesía, empleados…) solo lo asigna ADMIN, con la cobertura opcional.
          */
         put: operations["PatientAgreementsController_put"];
         post?: never;
@@ -5250,6 +5250,8 @@ export interface components {
             validTo: string | null;
             isPrimary: boolean;
             notes: string | null;
+            /** @description Copiada de la aseguradora en texto libre de la ficha (DX-153); la API no la crea. SEC-047: habilita a cualquier rol a asignar un convenio de pagador OTRO. */
+            migratedFromInsurerEps: boolean;
             /**
              * @description Calculado a hoy en la zona de la sede.
              * @enum {string}
@@ -5322,6 +5324,7 @@ export interface components {
             id: string;
             /** @example Sanitas */
             name: string;
+            type: components["schemas"]["PayerType"];
         };
         AssignedAgreementDto: {
             /** Format: uuid */
@@ -5390,6 +5393,8 @@ export interface components {
             id: string;
             /** @example Sanitas */
             name: string;
+            /** @description SEC-047: con un pagador externo, asignar el convenio exige una cobertura viva del paciente con él; OTRO (cortesía, empleados…) solo lo asigna ADMIN. */
+            type: components["schemas"]["PayerType"];
         };
         AgreementPriceListDto: {
             /** Format: uuid */
@@ -8152,6 +8157,14 @@ export interface components {
             /** @description Descuento sobre el bruto, en % (2 decimales) */
             percentOfGross: number;
         };
+        AgreementReductionTotalDto: {
+            /** @example COP */
+            currency: string;
+            /** @description Líneas con rebaja de convenio en esta moneda */
+            items: number;
+            /** @description Suma de las rebajas de convenio (precio de catálogo − precio del convenio) */
+            reduction: number;
+        };
         DiscountReportItemDto: {
             /** Format: uuid */
             itemId: string;
@@ -8209,6 +8222,31 @@ export interface components {
             /** Format: uuid */
             locationId: string | null;
             locationName: string | null;
+            /**
+             * @description DX-105: de dónde salió el precio de referencia (null en ítems anteriores)
+             * @enum {string|null}
+             */
+            priceSource: "CATALOG" | "PRICE_LIST" | "AGREEMENT_PERCENT" | "AGREEMENT_PRICE_LIST" | null;
+            /** @description Convenio con el que se resolvió el precio al dar de alta el ítem */
+            agreementName: string | null;
+            /** @description DX-105: precio de catálogo al dar de alta el ítem (sin convenio) */
+            basePrice: number | null;
+            /** @description SEC-047: rebaja de convenio (precio de catálogo − precio del convenio; 0 sin convenio). Aparte del descuento total */
+            agreementReduction: number;
+            /** @description SEC-047: % de la rebaja de convenio sobre el precio de catálogo, 2 decimales */
+            agreementPercent: number;
+            /**
+             * Format: uuid
+             * @description SEC-047: quién asignó el convenio al paciente
+             */
+            agreementAssignedById: string | null;
+            agreementAssignedByName: string | null;
+            /**
+             * Format: uuid
+             * @description SEC-047: quién dio de alta el ítem (null en los anteriores a SEC-047)
+             */
+            createdById: string | null;
+            createdByName: string | null;
         };
         DiscountReportDto: {
             /** @example 2026-10-01 */
@@ -8218,9 +8256,11 @@ export interface components {
             scope: components["schemas"]["DiscountReportScopeDto"];
             /** @description Por moneda, sin convertir */
             totals: components["schemas"]["DiscountReportTotalDto"][];
+            /** @description SEC-047: rebajas de convenio por moneda. Van aparte: `totals` solo cuenta los descuentos (como en DX-204) */
+            agreementTotals: components["schemas"]["AgreementReductionTotalDto"][];
             /** @description Página de ítems, más recientes primero */
             items: components["schemas"]["DiscountReportItemDto"][];
-            /** @description Ítems del periodo (todas las páginas) */
+            /** @description Líneas del periodo (todas las páginas): descuentos y rebajas de convenio */
             total: number;
             page: number;
             pageSize: number;
@@ -13574,8 +13614,15 @@ export interface operations {
                     "application/json": components["schemas"]["PatientAgreementDto"];
                 };
             };
-            /** @description Validación, convenio inexistente o retirado, vigencia inválida, o cobertura que no es del paciente ni del pagador del convenio */
+            /** @description Validación, convenio inexistente o retirado, vigencia inválida, convenio de pagador sin cobertura, o cobertura que no es del paciente, ni del pagador del convenio, o no está vigente */
             400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Convenio sin pagador externo (pagador OTRO) asignado por un rol distinto de ADMIN */
+            403: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -47,6 +47,7 @@ const existing: PatientCoverage = {
   validTo: null,
   isPrimary: false,
   notes: null,
+  migratedFromInsurerEps: false,
   status: 'ACTIVE',
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-01T00:00:00.000Z',
@@ -174,6 +175,8 @@ describe('CoverageDialog (DX-153)', () => {
     await user.click(screen.getByRole('button', { name: '¿No está en la lista? Crear pagador' }));
     const payerDialog = await screen.findByRole('dialog', { name: 'Nuevo pagador' });
     await user.type(within(payerDialog).getByLabelText('Nombre'), 'Nueva EPS');
+    // SEC-047: el tipo de pagador ya no viene preseleccionado.
+    await user.selectOptions(within(payerDialog).getByLabelText('Tipo'), 'EMPRESA');
     await user.click(within(payerDialog).getByRole('button', { name: 'Crear pagador' }));
 
     await waitFor(() => expect(onPayerCreated).toHaveBeenCalledWith(created));

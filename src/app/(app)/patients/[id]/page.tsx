@@ -386,6 +386,7 @@ function PatientDetailView() {
               token={accessToken}
               patientId={patientId}
               onChanged={onAgreementChanged}
+              role={getTokenRole(accessToken)}
             />
           </TabPanel>
 

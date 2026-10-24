@@ -5,7 +5,7 @@ export const PAYER_TYPE_LABELS: Record<PayerType, string> = {
   PREPAGADA_CO: 'Prepagada (Colombia)',
   EPS_CO: 'EPS (Colombia)',
   EMPRESA: 'Empresa',
-  OTRO: 'Otro / sin clasificar',
+  OTRO: 'Otro / interno (cortesía, empleados)',
 };
 
 export const PAYER_COUNTRY_LABELS: Record<PayerCountry, string> = {

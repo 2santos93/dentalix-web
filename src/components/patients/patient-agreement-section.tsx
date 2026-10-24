@@ -22,6 +22,7 @@ import { SectionError } from '@/components/errors/section-error';
 import { EmptyState } from '@/components/shared/empty-state';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { AgreementDialog } from './agreement-dialog';
+import type { ClinicRole } from '@/lib/me/me-api';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the app.
 export const agreementCopy = {
@@ -52,6 +53,8 @@ interface PatientAgreementSectionProps {
   patientId: string;
   /** Tras asignar, cambiar o quitar: la ficha relee el resumen de la cabecera. */
   onChanged?: () => void;
+  /** Rol de la sesión (SEC-047: un convenio interno solo lo asigna ADMIN). */
+  role: ClinicRole | null;
 }
 
 /**
@@ -64,6 +67,7 @@ export function PatientAgreementSection({
   token,
   patientId,
   onChanged,
+  role,
 }: PatientAgreementSectionProps) {
   const ids = useId();
   const [data, setData] = useState<PatientAgreementResponse | null>(null);
@@ -301,6 +305,7 @@ export function PatientAgreementSection({
           token={token}
           patientId={patientId}
           current={current}
+          role={role}
           onSaved={() => {
             announce(copy.saved);
             reload();
