@@ -26,6 +26,7 @@ import {
   cashSessionDetail,
   scheduleChangeDetail,
   cancellationDetail,
+  healthRegistrationDetail,
   patientFlowDetail,
   importBatchDetail,
   planItemAttributionDetail,
@@ -429,6 +430,7 @@ function AuditRow({ event, showPatient }: { event: AuditEvent; showPatient: bool
     patientFlowDetail(event.metadata) ??
     planItemAttributionDetail(event.metadata) ??
     importBatchDetail(event.metadata) ??
+    healthRegistrationDetail(event.metadata) ??
     anamnesisDetail(event.metadata);
   return (
     <TableRow>

@@ -4247,6 +4247,15 @@ export interface components {
             noticeMinutes: number;
             lateCancellation: boolean;
         };
+        AuditHealthRegistrationSideDto: {
+            number: string | null;
+            /** @description Si el nº sale en los documentos de la sede. */
+            shown: boolean;
+        };
+        AuditHealthRegistrationChangeDto: {
+            before: components["schemas"]["AuditHealthRegistrationSideDto"];
+            after: components["schemas"]["AuditHealthRegistrationSideDto"];
+        };
         AuditMetadataDto: {
             /** @description UPDATE: nombres de los campos enviados (nunca sus valores). */
             changedFields?: string[];
@@ -4274,6 +4283,8 @@ export interface components {
             attribution?: components["schemas"]["AuditAttributionChangeDto"];
             /** @description DX-279: cita cancelada desde la agenda, en su único evento (`reason` APPOINTMENT_CANCELLED; PATIENT_FLOW si estaba en la clínica; COMPLETED_EXIT si estaba completada): quién, código del motivo, minutos de aviso y si fue tardía. Nunca el texto libre del motivo. */
             cancellation?: components["schemas"]["AuditCancellationDto"];
+            /** @description DX-319: nº de registro sanitario de una sede y si sale en los documentos, antes y después (dato público de la sede, nunca de un paciente). */
+            healthRegistration?: components["schemas"]["AuditHealthRegistrationChangeDto"];
         };
         AuditEventDto: {
             /** Format: uuid */
@@ -5711,8 +5722,10 @@ export interface components {
             name: string;
             address: string | null;
             country: components["schemas"]["ClinicCountry"];
-            /** @description DX-212: código de habilitación REPS (12 dígitos) o null. */
-            repsHabilitationCode: string | null;
+            /** @description DX-319: nº de registro sanitario (texto libre) o null. */
+            healthRegistrationNumber: string | null;
+            /** @description DX-319: si el nº de registro sanitario aparece en los documentos de la sede (por defecto no). */
+            showHealthRegistrationNumber: boolean;
             /** @description DX-222: teléfono de la sede o null. */
             phone: string | null;
             isActive: boolean;
@@ -5743,10 +5756,12 @@ export interface components {
             /** @description País de la sede: decide los campos legales obligatorios de la receta (CO o ES). Por defecto CO. */
             country?: components["schemas"]["ClinicCountry"];
             /**
-             * @description DX-212: código de habilitación REPS de la sede (Colombia), 12 dígitos (400 con el formato esperado si no). Vacío o null lo quita. Solo ADMIN; queda auditado.
-             * @example 110010123401
+             * @description DX-319: nº de registro sanitario de la sede, texto libre sin formato ni validación por país (hasta 64 caracteres, se recorta). Solo ADMIN; queda auditado con su antes y después. Vacío o null lo quita; sin el campo no cambia.
+             * @example NRS 28/1234-AB
              */
-            repsHabilitationCode?: string | null;
+            healthRegistrationNumber?: string | null;
+            /** @description DX-319: si el nº de registro sanitario aparece en los documentos de la sede (por defecto no). */
+            showHealthRegistrationNumber?: boolean;
             /**
              * @description DX-222: teléfono de la sede que ven los pacientes en las indicaciones postoperatorias ({{telefono_sede}}). Hasta 40 caracteres. Vacío o null lo quita; sin el campo no cambia.
              * @example +57 601 555 0101

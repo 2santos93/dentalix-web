@@ -14,7 +14,7 @@ import { API_URL } from './support/urls';
  *     relacionado K05.1 en el 36: la evolución los muestra con código y texto;
  *   - DX-318: no hay chip «RDA» ni la ficha pide datos del RDA a la API;
  *   - DX-320: el catálogo no tiene columna ni campo «Código CUPS»;
- *   - el REPS se sigue guardando en Ajustes › Sedes.
+ *   - DX-319: la sede ya no tiene REPS (ver location-health-registration.spec).
  * En escritorio (1440px) y móvil (390px), sin scroll horizontal ni errores en
  * la consola del navegador.
  */
@@ -138,14 +138,6 @@ for (const viewport of VIEWPORTS) {
     await expect(page.getByRole('columnheader', { name: /CUPS/i })).toHaveCount(0);
     await expectNoHorizontalScroll(page);
     await shot('catalogo');
-
-    // 4. REPS en Ajustes › Sedes (no cambia con DX-318).
-    await page.goto(`${origin}/settings/sedes`);
-    const reps = page.getByLabel(/Código de habilitación \(REPS\) · Sede principal/);
-    await reps.fill('110010123401');
-    await page.getByRole('button', { name: 'Guardar el código REPS de Sede principal' }).click();
-    await expect(page.getByText('Guardado')).toBeVisible();
-    await expectNoHorizontalScroll(page);
 
     expect(rdaRequests, 'la web ya no pide datos del RDA').toEqual([]);
     expect(consoleErrors, 'errores en la consola del navegador').toEqual([]);

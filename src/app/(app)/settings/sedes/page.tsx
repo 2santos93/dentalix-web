@@ -5,7 +5,7 @@ import { useAuthStore } from '@/lib/auth/auth-store';
 import { getTokenRole } from '@/lib/auth/token-role';
 import { PageHeader } from '@/components/shared/page-header';
 import { SETTINGS_BACK } from '@/components/settings/settings-sections';
-import { LocationRepsSettings } from '@/components/locations/location-reps-settings';
+import { LocationHealthRegistrationSettings } from '@/components/locations/location-health-registration-settings';
 import { LocationPhoneSettings } from '@/components/locations/location-phone-settings';
 import { CancellationPolicySettings } from '@/components/locations/cancellation-policy-settings';
 
@@ -18,8 +18,8 @@ const copy = {
 };
 
 /**
- * DX-212: datos legales de las sedes (código REPS). Todos los roles lo leen;
- * solo ADMIN lo cambia.
+ * Datos legales de las sedes (DX-319: nº de registro sanitario; DX-222:
+ * teléfono). Todos los roles los leen; solo ADMIN los cambia.
  */
 export default function LocationSettingsPage() {
   const router = useRouter();
@@ -44,7 +44,7 @@ export default function LocationSettingsPage() {
   return (
     <>
       <PageHeader back={SETTINGS_BACK} title={copy.title} description={copy.description(isAdmin)} />
-      <LocationRepsSettings
+      <LocationHealthRegistrationSettings
         token={accessToken}
         canEdit={isAdmin}
       />
