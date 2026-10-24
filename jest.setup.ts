@@ -17,6 +17,12 @@ if (typeof Element !== 'undefined') {
   if (!Element.prototype.releasePointerCapture) {
     Element.prototype.releasePointerCapture = () => {};
   }
+  // jsdom tampoco implementa `scrollIntoView`. El `Select` de Radix lo llama al
+  // abrir la lista para dejar a la vista la opción enfocada (DX-295: selector
+  // de estado de la cita). Stub de API del DOM, no un parche de tiempos.
+  if (!Element.prototype.scrollIntoView) {
+    Element.prototype.scrollIntoView = () => {};
+  }
 }
 
 // jsdom no implementa ResizeObserver. `Table` lo usa para saber si su marco se

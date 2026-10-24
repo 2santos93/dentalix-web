@@ -38,6 +38,7 @@ import { DayColumns } from '@/components/appointments/day-columns';
 import { announceAppointmentWarnings } from '@/components/appointments/appointment-warnings';
 import { MoveAppointmentDialog } from '@/components/appointments/move-appointment-dialog';
 import { CompletedExitModal } from '@/components/appointments/completed-exit-modal';
+import { AppointmentStatusSelect } from '@/components/appointments/appointment-status-select';
 import { completedExitSummary } from '@/lib/appointments/plan-item-reservations';
 import {
   MAX_PROVIDER_COLUMNS,
@@ -885,7 +886,7 @@ export function AgendaView({ token }: AgendaViewProps) {
    * `handleAppointmentCreated`) so the badge reflects the new status without
    * losing scroll/focus. `refreshAppointmentsInPlace()` is `await`ed (not
    * fire-and-forget) so `updatingId` — and therefore the row's disabled
-   * `<select>` — stays set for the *whole* window until the refetched
+   * status selector — stays set for the *whole* window until the refetched
    * `appointments` state actually lands, not just until the PATCH settles;
    * otherwise the select would briefly re-enable showing the stale
    * pre-change status (review fix).
@@ -967,7 +968,7 @@ export function AgendaView({ token }: AgendaViewProps) {
 
   // The detail panel's displayed appointment, kept in sync with the
   // server-confirmed `appointments` array (same pattern as `DayAgenda`'s row
-  // `<select>`, whose `value` is also read off `appointments`, not local
+  // status selector, whose `value` is also read off `appointments`, not local
   // state) — so a failed status PATCH leaves the real, unchanged status
   // showing instead of the optimistic one (review fix). Falls back to
   // `detailAppointment` itself if it's since dropped out of `appointments`
@@ -1389,24 +1390,17 @@ export function AgendaView({ token }: AgendaViewProps) {
                 )}
                 <CoverageDetailLine coverage={liveDetailAppointment.coverage} />
                 <FormField htmlFor="detail-status" label={copy.statusLabel}>
-                  <select
+                  {/* DX-295: las flechas no cambian la cita; solo Enter o un clic. */}
+                  <AppointmentStatusSelect
                     id="detail-status"
-                    className={fieldClass}
+                    label={copy.statusLabel}
                     value={liveDetailAppointment.status}
+                    options={statusOptionsFor(liveDetailAppointment.status, role)}
                     disabled={updatingId === liveDetailAppointment.id}
-                    onChange={(e) => {
-                      void handleStatusChange(
-                        liveDetailAppointment.id,
-                        e.target.value as AppointmentStatus,
-                      );
+                    onChange={(status) => {
+                      void handleStatusChange(liveDetailAppointment.id, status);
                     }}
-                  >
-                    {statusOptionsFor(liveDetailAppointment.status, role).map((s) => (
-                      <option key={s} value={s}>
-                        {STATUS_LABELS[s]}
-                      </option>
-                    ))}
-                  </select>
+                  />
                 </FormField>
                 {renderFlowActions(liveDetailAppointment, '')}
                 {canChangeWantsEarlier(role) &&

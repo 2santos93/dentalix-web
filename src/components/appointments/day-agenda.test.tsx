@@ -170,8 +170,8 @@ describe('DayAgenda', () => {
   });
 
   it('does NOT render a status select when onStatusChange is not provided (backward compatible, read-only badge only)', () => {
-    const { container } = render(<DayAgenda appointments={[earlier]} loading={false} />);
-    expect(container.querySelectorAll('select')).toHaveLength(0);
+    render(<DayAgenda appointments={[earlier]} loading={false} />);
+    expect(screen.queryAllByRole('combobox')).toHaveLength(0);
   });
 
   describe('status-change control (onStatusChange provided)', () => {
@@ -182,16 +182,17 @@ describe('DayAgenda', () => {
       );
 
       const table = container.querySelector('table') as HTMLElement;
-      const desktopSelects = within(table).getAllByRole<HTMLSelectElement>('combobox');
+      const desktopSelects = within(table).getAllByRole('combobox');
       expect(desktopSelects).toHaveLength(2);
-      expect(desktopSelects[0].value).toBe('SCHEDULED');
-      expect(desktopSelects[1].value).toBe('CONFIRMED');
+      expect(desktopSelects[0]).toHaveTextContent('Agendada');
+      expect(desktopSelects[1]).toHaveTextContent('Confirmada');
+      // DX-295: el nombre lleva el estado actual para el lector de pantalla.
       expect(desktopSelects[0]).toHaveAccessibleName(
-        new RegExp(`Estado de la cita de ${timeLabel(earlier.start, earlier.end)}`, 'i'),
+        `Estado de la cita de ${timeLabel(earlier.start, earlier.end)}: Agendada`,
       );
 
       const mobileList = screen.getAllByRole('list').find((l) => l.tagName === 'UL') as HTMLElement;
-      const mobileSelects = within(mobileList).getAllByRole<HTMLSelectElement>('combobox');
+      const mobileSelects = within(mobileList).getAllByRole('combobox');
       expect(mobileSelects).toHaveLength(2);
     });
 
@@ -203,9 +204,26 @@ describe('DayAgenda', () => {
       );
 
       const table = container.querySelector('table') as HTMLElement;
-      const select = within(table).getByRole<HTMLSelectElement>('combobox');
-      await user.selectOptions(select, 'CONFIRMED');
+      await user.click(within(table).getByRole('combobox'));
+      await user.click(screen.getByRole('option', { name: 'Confirmada' }));
 
+      expect(onStatusChange).toHaveBeenCalledWith('apt-1', 'CONFIRMED');
+    });
+
+    it('DX-295: ↑/↓ en el selector de la fila no cambian la cita; Enter sí', async () => {
+      const onStatusChange = jest.fn();
+      const user = userEvent.setup();
+      const { container } = render(
+        <DayAgenda appointments={[earlier]} loading={false} onStatusChange={onStatusChange} />,
+      );
+
+      const table = container.querySelector('table') as HTMLElement;
+      within(table).getByRole('combobox').focus();
+      await user.keyboard('{ArrowDown}{ArrowDown}{ArrowDown}{ArrowUp}');
+      expect(onStatusChange).not.toHaveBeenCalled();
+
+      await user.keyboard('{Enter}');
+      expect(onStatusChange).toHaveBeenCalledTimes(1);
       expect(onStatusChange).toHaveBeenCalledWith('apt-1', 'CONFIRMED');
     });
 
@@ -221,7 +239,7 @@ describe('DayAgenda', () => {
       );
 
       const table = container.querySelector('table') as HTMLElement;
-      const desktopSelects = within(table).getAllByRole<HTMLSelectElement>('combobox');
+      const desktopSelects = within(table).getAllByRole('combobox');
       expect(desktopSelects[0]).toBeDisabled();
       expect(desktopSelects[1]).not.toBeDisabled();
     });
@@ -273,7 +291,7 @@ describe('DayAgenda', () => {
     });
   });
 
-  it('DX-200: en el flujo el selector solo ofrece su estado y la salida, y la fila lleva sus botones', () => {
+  it('DX-200: en el flujo el selector solo ofrece su estado y la salida, y la fila lleva sus botones', async () => {
     const arrived: Appointment = { ...later, status: 'ARRIVED', arrivedAt: '2026-07-23T13:55:00.000Z' };
     render(
       <DayAgenda
@@ -283,13 +301,14 @@ describe('DayAgenda', () => {
         renderActions={(a) => <button type="button">{`Acción ${a.id}`}</button>}
       />,
     );
+    expect(screen.getAllByRole('button', { name: 'Acción apt-2' }).length).toBeGreaterThan(0);
     const [select] = screen.getAllByTestId('appointment-status-select');
-    expect(within(select).getAllByRole('option').map((o) => o.textContent)).toEqual([
+    await userEvent.click(select);
+    expect(screen.getAllByRole('option').map((o) => o.textContent)).toEqual([
       'En espera',
       'Completada',
       'Cancelada',
     ]);
-    expect(screen.getAllByRole('button', { name: 'Acción apt-2' }).length).toBeGreaterThan(0);
   });
 });
 

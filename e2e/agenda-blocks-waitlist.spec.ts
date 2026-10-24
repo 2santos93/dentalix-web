@@ -4,6 +4,7 @@ import { addStaffViaApi, apiPost, registerClinicViaApi, type ApiSession } from '
 import { loginAs } from './support/auth';
 import { atSede, sedeDayFromToday } from './support/clock';
 import { API_URL, tenantOrigin } from './support/urls';
+import { chooseAppointmentStatus } from './support/appointment-status';
 
 /**
  * e2e DX-122: bloqueos de agenda y «Pendientes por agendar».
@@ -159,16 +160,16 @@ test('cancelar una cita la deja en «Pendientes» y reactivarla la saca; «Busca
 
   await page.getByRole('button', { name: 'Lista', exact: true }).click();
   const status = page.getByTestId('appointment-status-select').filter({ visible: true }).first();
-  await status.selectOption('CANCELLED');
+  await chooseAppointmentStatus(status, 'Cancelada');
   const entry = panel.getByTestId('waitlist-entry').filter({ hasText: `Bruno ${brunoLast}` });
   await expect(entry).toBeVisible({ timeout: 10_000 });
   await expect(entry).toContainText('Canceló la cita del');
 
   // Si la cita vuelve a estar activa, el paciente sale solo de la lista (H1);
   // si se cancela otra vez, vuelve.
-  await status.selectOption('SCHEDULED');
+  await chooseAppointmentStatus(status, 'Agendada');
   await expect(panel.getByText('No hay pacientes pendientes por agendar')).toBeVisible({ timeout: 10_000 });
-  await status.selectOption('CANCELLED');
+  await chooseAppointmentStatus(status, 'Cancelada');
   await expect(entry).toBeVisible({ timeout: 10_000 });
 
   await entry.getByRole('button', { name: `Buscar hueco para Bruno ${brunoLast}` }).click();

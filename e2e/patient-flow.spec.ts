@@ -176,7 +176,7 @@ test('1440 px: llegó → en sillón → listo para cobrar → completada', asyn
   await openTodayList(page);
   await expect(
     page.getByRole('row').filter({ hasText: `Ana ${last}` }).getByTestId('appointment-status-select'),
-  ).toHaveValue('COMPLETED');
+  ).toHaveText('Completada');
 });
 
 test('390 px: «Deshacer llegada» devuelve la cita a la agenda', async ({ page }) => {
