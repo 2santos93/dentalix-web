@@ -14,6 +14,7 @@ import {
 } from '@/lib/appointments/patient-flow';
 import type { ClinicRole } from '@/lib/me/me-api';
 import {
+  canClaimReserved,
   claimPlanItem,
   reservationCopy,
   reservedElsewhereMessage,
@@ -88,6 +89,20 @@ function modalOpen(): boolean {
  */
 const RESERVED_ACTION_CLASS = '!min-h-11 !min-w-11 !px-3 sm:!min-h-9';
 
+/**
+ * Revisión DX-293: sonner fusiona las opciones con las del toast abierto
+ * con el mismo id. Un aviso sin acción tiene que borrar la acción (y las
+ * demás opciones) de un aviso anterior con «Traer a esta cita» que siga
+ * abierto (p. ej. «Llegó», «Deshacer llegada» y otra vez «Llegó» con la
+ * titular ya en la clínica), o seguiría ofreciendo un botón que da 409.
+ */
+const TRANSIENT_TOAST = {
+  action: undefined,
+  duration: undefined,
+  onDismiss: undefined,
+  classNames: undefined,
+} as const;
+
 /** Clave de un «Traer a esta cita» en curso. */
 export function claimKey(appointmentId: string, planItemId: string): string {
   return `${appointmentId}:${planItemId}`;
@@ -148,9 +163,22 @@ export function usePatientFlow(token: string, onChanged: () => void): PatientFlo
         const inModal = modalOpen();
         for (const item of reserved) {
           const id = reservedToastId(appointmentId, item.planItemId);
-          if (inModal) {
+          // DX-293: la reserva la tiene otra cita de hoy con el paciente en
+          // la clínica: «Traer» daría 409. Solo explica dónde está.
+          if (!canClaimReserved(item)) {
+            openReservedToasts.delete(id);
             toast.warning(reservedItemLabel(item), {
               id,
+              ...TRANSIENT_TOAST,
+              description: reservedElsewhereMessage(item),
+            });
+            continue;
+          }
+          if (inModal) {
+            openReservedToasts.delete(id);
+            toast.warning(reservedItemLabel(item), {
+              id,
+              ...TRANSIENT_TOAST,
               description: `${reservedElsewhereMessage(item)} ${reservationCopy.claimFromPanel}`,
             });
             continue;
