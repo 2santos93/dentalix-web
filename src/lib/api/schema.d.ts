@@ -2826,6 +2826,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/appointments/{id}/cancellation-fee/void": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Anular un cargo ya generado, con motivo (SEC-050)
+         * @description La única forma de dejar sin efecto un cargo generado: desde el plan, su ítem no cambia de precio, descuento ni estado ni se quita (409 a todo rol). En una transacción, con la cita y el cargo bloqueados, guarda en el cargo quién, cuándo y el motivo (3–500) y retira su ítem del plan «Cargos administrativos» (deja de salir en el estado de cuenta). Una vez por cargo. Si los abonos vivos de ese plan ya cubren el cargo, 409: se anula antes el abono. Auditado (VOID APPOINTMENT, CANCELLATION_FEE_VOIDED, estado CHARGED → VOIDED, sin el texto del motivo). Sin Idempotency-Key, como condonar: repetirla da 409 «ya se anuló».
+         */
+        post: operations["CancellationFeeController_voidFee"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/platform/tenants": {
         parameters: {
             query?: never;
@@ -7942,6 +7962,11 @@ export interface components {
              * @description DX-050: cuándo se realizó (hora del servidor al marcarlo)
              */
             completedAt: string | null;
+            /**
+             * Format: uuid
+             * @description SEC-050: el ítem es el cargo vigente por inasistencia o cancelación tardía de esta cita (DX-291). Su precio, descuento y estado no cambian ni se quita del plan (409 a todo rol): se anula con `POST /appointments/{id}/cancellation-fee/void`, con motivo. null en cualquier otro ítem.
+             */
+            cancellationFeeAppointmentId: string | null;
             notes: string | null;
             /** Format: date-time */
             createdAt: string;
@@ -10151,8 +10176,20 @@ export interface components {
             planId: string | null;
             /** Format: uuid */
             planItemId: string | null;
-            /** @description El ítem del cargo se quitó del plan («Quitar»): el cargo quedó anulado y no hay nada que cobrar. El ítem no admite descuento; así se anula un cargo generado por error. La cita sigue con su única decisión (otro cargo o condonar: 409). */
+            /** @description El ítem del cargo ya no está en el plan: no hay nada que cobrar. Desde SEC-050 solo pasa al anular el cargo (`voidedAt`); un cargo con el ítem retirado y sin anular es anterior a SEC-050 (se quitó con «Quitar»). La cita sigue con su única decisión (otro cargo o condonar: 409). */
             planItemRemoved: boolean;
+            /** @description SEC-050: lo que cobra hoy el ítem del cargo (precio − descuento); null sin ítem o con el ítem retirado. */
+            itemAmount: number | null;
+            /** @description SEC-050: el ítem vivo no cobra lo que dice el cargo (`amount`): se cambió por fuera de este flujo. La vista debe avisarlo. */
+            itemMismatch: boolean;
+            /**
+             * Format: date-time
+             * @description SEC-050: cuándo se anuló el cargo (null = sin anular).
+             */
+            voidedAt: string | null;
+            voidedByName: string | null;
+            /** @description SEC-050: motivo de la anulación. */
+            voidReason: string | null;
             waiveReason: string | null;
             /** Format: uuid */
             policyVersionId: string | null;
@@ -10167,15 +10204,18 @@ export interface components {
             patientId: string;
             /** @description NO_SHOW o cancelación tardía. */
             eligible: boolean;
-            /** @enum {string} */
-            status: "NONE" | "CHARGED" | "WAIVED";
+            /**
+             * @description VOIDED (SEC-050): el cargo se generó y después se anuló con motivo.
+             * @enum {string}
+             */
+            status: "NONE" | "CHARGED" | "WAIVED" | "VOIDED";
             /**
              * @description Por qué no se puede generar el cargo ahora: no es inasistencia ni tardía, no consta la política comunicada, la versión comunicada no tiene importe, EPS_CO activa en Colombia, o ya cobrado/condonado.
              * @enum {string|null}
              */
             chargeBlock: "NOT_ELIGIBLE" | "NOT_INFORMED" | "NO_FEE" | "EPS_CO" | "ALREADY_CHARGED" | "ALREADY_WAIVED" | null;
             chargeBlockMessage: string | null;
-            /** @description El usuario puede generar o condonar: ADMIN, o RECEPTION si la política vigente de la sede lo permite. */
+            /** @description El usuario puede generar, condonar o anular: ADMIN, o RECEPTION si la política vigente de la sede lo permite. */
             canManage: boolean;
             communicated: components["schemas"]["CommunicatedPolicyDto"] | null;
             fee: components["schemas"]["CancellationFeeRecordDto"] | null;
@@ -10191,6 +10231,13 @@ export interface components {
             /**
              * @description Motivo de la condonación (3–500 caracteres). Queda en la cita; la auditoría registra la condonación sin el texto.
              * @example Hospitalización documentada
+             */
+            reason: string;
+        };
+        VoidCancellationFeeDto: {
+            /**
+             * @description Motivo de la anulación (3–500 caracteres). Queda en el cargo con quién y cuándo; la auditoría registra la anulación sin el texto.
+             * @example Cargo generado por error: el paciente avisó a tiempo por teléfono
              */
             reason: string;
         };
@@ -17535,7 +17582,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Transición de estado no permitida por la máquina de estados (DX-040: DRAFT → PRESENTED → ACCEPTED | REJECTED; DRAFT → ACCEPTED; ACCEPTED → COMPLETED; cualquiera salvo COMPLETED → CANCELLED); plan aceptado con firma: no cambia de moneda ni vuelve atrás (DX-012); otra opción del grupo ya aceptada; la moneda no cambia si el plan tiene abonos vivos, un plan de cuotas activo o está cerrado (DX-109). Aceptar pasa los ítems propuestos a aceptados, igual que la aceptación firmada, y cancela el plan de cuotas activo de las hermanas que rechaza; cancelar cancela también el plan de cuotas activo */
+            /** @description Transición de estado no permitida por la máquina de estados (DX-040: DRAFT → PRESENTED → ACCEPTED | REJECTED; DRAFT → ACCEPTED; ACCEPTED → COMPLETED; cualquiera salvo COMPLETED → CANCELLED); plan aceptado con firma: no cambia de moneda ni vuelve atrás (DX-012); otra opción del grupo ya aceptada; la moneda no cambia si el plan tiene abonos vivos, un plan de cuotas activo o está cerrado (DX-109). SEC-050: el plan que lleva un cargo vigente por inasistencia no se cancela ni cambia de moneda (completarlo sí). Aceptar pasa los ítems propuestos a aceptados, igual que la aceptación firmada, y cancela el plan de cuotas activo de las hermanas que rechaza; cancelar cancela también el plan de cuotas activo */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -17812,7 +17859,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Plan aceptado con firma: sus ítems quedan congelados (DX-012); o el plan está cancelado, rechazado o completado (DX-109) */
+            /** @description Plan aceptado con firma: sus ítems quedan congelados (DX-012); o el plan está cancelado, rechazado o completado (DX-109); SEC-050: el ítem es el cargo vigente por inasistencia o cancelación tardía de una cita (`cancellationFeeAppointmentId`): su precio, descuento y estado no cambian ni se quita, sea cual sea el rol; se anula con POST /appointments/{id}/cancellation-fee/void */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -17868,7 +17915,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Plan aceptado con firma: sus ítems quedan congelados (DX-012); o el plan está cancelado, rechazado o completado (DX-109); o el descuento (también una rebaja del precio frente al de catálogo) cambia en un plan ya aceptado (DX-204, SEC-041). El estado del plan se comprueba con su fila bloqueada, dentro de la transacción (BE-036); firmado: solo admite avanzar el estado (no volver a PROPOSED); completado: solo admite marcar como DONE un ítem ACCEPTED sin otro cambio; cerrado: DX-050 admite además corregir quién o cuándo de un ítem DONE, sin otro cambio */
+            /** @description Plan aceptado con firma: sus ítems quedan congelados (DX-012); o el plan está cancelado, rechazado o completado (DX-109); o el descuento (también una rebaja del precio frente al de catálogo) cambia en un plan ya aceptado (DX-204, SEC-041). El estado del plan se comprueba con su fila bloqueada, dentro de la transacción (BE-036); SEC-050: el ítem es el cargo vigente por inasistencia o cancelación tardía de una cita (`cancellationFeeAppointmentId`): su precio, descuento y estado no cambian ni se quita, sea cual sea el rol; se anula con POST /appointments/{id}/cancellation-fee/void; firmado: solo admite avanzar el estado (no volver a PROPOSED); completado: solo admite marcar como DONE un ítem ACCEPTED sin otro cambio; cerrado: DX-050 admite además corregir quién o cuándo de un ítem DONE, sin otro cambio */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -20131,6 +20178,59 @@ export interface operations {
                 content?: never;
             };
             /** @description No es inasistencia ni tardía, ya cobrado o condonado, o la cita cambió */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    CancellationFeeController_voidFee: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VoidCancellationFeeDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CancellationFeeViewDto"];
+                };
+            };
+            /** @description Motivo vacío o de más de 500 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ni ADMIN ni RECEPTION con permiso de la política; o sede no permitida (DX-089) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Cita no encontrada en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sin cargo generado (o condonado), ya anulado, ya cobrado (anula antes el abono), o la cita cambió */
             409: {
                 headers: {
                     [name: string]: unknown;
