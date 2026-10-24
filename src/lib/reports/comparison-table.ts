@@ -9,7 +9,6 @@ export interface SortState {
   direction: SortDirection;
 }
 
-
 /** Un indicador como lista de valores (uno por moneda, o uno solo). */
 export function metricValues(row: ComparisonRow, key: KpiKey): (Metric & { currency?: string })[] {
   const value: Metric | CurrencyMetric[] = row.metrics[key];
@@ -76,11 +75,21 @@ export function formatMetric(unit: KpiDefinition['unit'], value: number | null, 
   return numberFormat.format(value);
 }
 
-/** «+20 %», «−25 %», «0 %» (signo menos tipográfico). */
-export function formatChange(change: number): string {
-  if (change === 0) return '0 %';
+const CHANGE_SUFFIX: Record<KpiDefinition['changeUnit'], string> = {
+  PERCENT: '%',
+  POINTS: 'p.p.',
+};
+
+/**
+ * La variación en la unidad del indicador (`changeUnit` de la API): «+20 %»
+ * relativo, o «+2 p.p.» en los que ya son un % (no-show 8 % → 10 %). Signo
+ * menos tipográfico.
+ */
+export function formatChange(change: number, unit: KpiDefinition['changeUnit']): string {
+  const suffix = CHANGE_SUFFIX[unit];
+  if (change === 0) return `0 ${suffix}`;
   const sign = change > 0 ? '+' : '−';
-  return `${sign}${changeFormat.format(Math.abs(change))} %`;
+  return `${sign}${changeFormat.format(Math.abs(change))} ${suffix}`;
 }
 
 export const TREND_LABELS: Record<NonNullable<Metric['trend']>, string> = {

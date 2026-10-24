@@ -9403,6 +9403,11 @@ export interface components {
              * @enum {string}
              */
             direction: "HIGHER_IS_BETTER" | "LOWER_IS_BETTER";
+            /**
+             * @description Unidad de `change`: PERCENT = % relativo ((valor − anterior) ÷ |anterior|); POINTS = puntos porcentuales (valor − anterior), en los indicadores que ya son un %
+             * @enum {string}
+             */
+            changeUnit: "PERCENT" | "POINTS";
             /** @description Texto de «Cómo se calcula» */
             howItIsCalculated: string;
         };
@@ -9411,8 +9416,8 @@ export interface components {
             value: number | null;
             /** @description Valor del período de comparación (null sin comparación) */
             previous: number | null;
-            /** @description Variación % frente al anterior, 1 decimal: (valor − anterior) ÷ |anterior|. null sin anterior o con anterior 0 */
-            changePercent: number | null;
+            /** @description Variación frente al anterior, 1 decimal, en la unidad `changeUnit` del indicador: % relativo ((valor − anterior) ÷ |anterior|; null con anterior 0) o puntos porcentuales en % de cobro, no-show % y ocupación % (valor − anterior: 8 % → 10 % = 2). null sin anterior */
+            change: number | null;
             /**
              * @description Lectura de la variación según la dirección del indicador
              * @enum {string|null}
@@ -9426,8 +9431,8 @@ export interface components {
             value: number | null;
             /** @description Valor del período de comparación (null sin comparación) */
             previous: number | null;
-            /** @description Variación % frente al anterior, 1 decimal: (valor − anterior) ÷ |anterior|. null sin anterior o con anterior 0 */
-            changePercent: number | null;
+            /** @description Variación frente al anterior, 1 decimal, en la unidad `changeUnit` del indicador: % relativo ((valor − anterior) ÷ |anterior|; null con anterior 0) o puntos porcentuales en % de cobro, no-show % y ocupación % (valor − anterior: 8 % → 10 % = 2). null sin anterior */
+            change: number | null;
             /**
              * @description Lectura de la variación según la dirección del indicador
              * @enum {string|null}

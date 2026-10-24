@@ -12,7 +12,8 @@ const GUTTER = 8;
 /**
  * «Cómo se calcula» de una columna (DX-014): un botón con icono que enseña la
  * definición del indicador al pasar el ratón, al enfocarlo con el teclado o al
- * tocarlo, y la anuncia como su descripción (`aria-describedby`, también
+ * tocarlo (el toque ya la abre con el foco: el clic no la alterna, o se
+ * cerraría en el mismo toque; se cierra al salir o con Escape), y la anuncia como su descripción (`aria-describedby`, también
  * oculta). Escape la cierra. La burbuja va en `position: fixed` junto al botón
  * —la tabla recorta lo que se sale de su marco—, sin salirse de la ventana.
  */
@@ -50,7 +51,7 @@ export function HowCalculated({ column, text }: { column: string; text: string }
         onMouseLeave={hide}
         onFocus={show}
         onBlur={hide}
-        onClick={() => (position ? hide() : show())}
+        onClick={show}
         onKeyDown={(event) => {
           if (event.key === 'Escape') hide();
         }}

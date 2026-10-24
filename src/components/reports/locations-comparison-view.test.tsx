@@ -41,13 +41,14 @@ const KPIS: KpiDefinition[] = [
   unit: unit as KpiDefinition['unit'],
   perCurrency: perCurrency as boolean,
   direction: direction as KpiDefinition['direction'],
+  changeUnit: (unit === 'PERCENT' ? 'POINTS' : 'PERCENT') as KpiDefinition['changeUnit'],
   howItIsCalculated: `Definición de ${label as string}.`,
 }));
 
 const m = (value: number | null, previous: number | null = null, change: number | null = null, trend: Metric['trend'] = null): Metric => ({
   value,
   previous,
-  changePercent: change,
+  change,
   trend,
 });
 
@@ -82,7 +83,7 @@ function report(overrides: Partial<LocationsComparison> = {}): LocationsComparis
     currency: null,
     kpis: KPIS,
     locations: [
-      row('Sede principal', 'l1', [['COP', m(12, 10, 20, 'BETTER')]], m(10, 8, 25, 'WORSE')),
+      row('Sede principal', 'l1', [['COP', m(12, 10, 20, 'BETTER')]], m(10, 8, 2, 'WORSE')),
       row('Sede Norte', 'l2', [['USD', m(300, 300, 0, 'EQUAL')]], m(5, 5, 0, 'EQUAL')),
     ],
     total: row(
@@ -92,7 +93,7 @@ function report(overrides: Partial<LocationsComparison> = {}): LocationsComparis
         ['COP', m(12, 10, 20, 'BETTER')],
         ['USD', m(300, 300, 0, 'EQUAL')],
       ],
-      m(7.5, 6.5, 15.4, 'WORSE'),
+      m(7.5, 6.5, 1, 'WORSE'),
     ),
     hasActivity: true,
     ...overrides,
@@ -130,7 +131,7 @@ describe('LocationsComparisonView (DX-014)', () => {
     expect(production).toHaveTextContent(/300,00/);
   });
 
-  it('variación con flecha, color y texto accesible: +20 % mejora, no-show +25 % empeora', async () => {
+  it('variación con flecha, color y texto accesible: +20 % mejora, no-show +2 p.p. empeora', async () => {
     render(<LocationsComparisonView token="t" />);
     await screen.findByRole('table');
     const principal = screen.getAllByTestId('comparison-row')[0];
@@ -139,10 +140,14 @@ describe('LocationsComparisonView (DX-014)', () => {
     expect(better).toHaveClass('text-success');
     expect(better.querySelector('svg')).not.toBeNull();
     expect(within(principal).getAllByText(/^Mejora: \+20 % frente a/)[0]).toHaveClass('sr-only');
-    const worse = within(principal).getByText('+25 %').parentElement!;
+    // Los porcentajes varían en puntos (8 % → 10 % = +2 p.p.), no en % relativo.
+    expect(within(principal).queryByText('+25 %')).not.toBeInTheDocument();
+    const worse = within(principal).getByText('+2 p.p.').parentElement!;
     expect(worse).toHaveAttribute('data-trend', 'WORSE');
     expect(worse).toHaveClass('text-danger');
-    expect(within(principal).getByText('Empeora: +25 % frente a 8 %')).toBeInTheDocument();
+    expect(worse.querySelector('svg')).not.toBeNull();
+    expect(within(principal).getByText('Empeora: +2 p.p. frente a 8 %')).toBeInTheDocument();
+    expect(within(screen.getByTestId('comparison-total')).getByText('+1 p.p.')).toBeInTheDocument();
   });
 
   it('ordena por columna con aria-sort y el total sigue abajo', async () => {
@@ -172,6 +177,17 @@ describe('LocationsComparisonView (DX-014)', () => {
     expect(button).toHaveAccessibleDescription('Definición de Producción.');
     await userEvent.hover(button);
     expect(screen.getAllByRole('tooltip').find((t) => !t.hidden)).toHaveTextContent('Definición de Producción.');
+  });
+
+  it('«Cómo se calcula» se abre al tocarlo y no se cierra en el mismo toque', async () => {
+    render(<LocationsComparisonView token="t" />);
+    await screen.findByRole('table');
+    const button = within(table()).getByRole('button', { name: 'Cómo se calcula: No-show %' });
+    await userEvent.click(button);
+    const open = () => screen.queryAllByRole('tooltip').find((t) => !t.hidden);
+    expect(open()).toHaveTextContent('Definición de No-show %.');
+    await userEvent.keyboard('{Escape}');
+    expect(open()).toBeUndefined();
   });
 
   it('cambiar período y comparación vuelve a pedir el reporte', async () => {

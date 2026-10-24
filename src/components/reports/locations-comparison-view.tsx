@@ -49,7 +49,8 @@ export const locationsComparisonCopy = {
   scope: 'Todas tus sedes · importes por moneda, sin convertir',
   periodLine: (from: string, to: string) => `Del ${from} al ${to}`,
   comparedWith: (from: string, to: string) => `comparado con ${from} – ${to}`,
-  legend: 'Verde: mejora · rojo: empeora frente al período comparado. La flecha dice si el valor subió o bajó.',
+  legend:
+    'Verde: mejora · rojo: empeora frente al período comparado. La flecha dice si el valor subió o bajó. En los porcentajes, la variación va en puntos (p.p.).',
   tableLabel: 'Indicadores por sede y total de la clínica',
   cardsLabel: 'Indicadores por sede',
   location: 'Sede',
@@ -97,6 +98,7 @@ function MetricCell({ def, row, compare }: { def: KpiDefinition; row: Comparison
         <MetricValue
           key={m.currency ?? def.key}
           unit={def.unit}
+          changeUnit={def.changeUnit}
           metric={compare ? m : { ...m, trend: null }}
           currency={m.currency}
         />
@@ -480,6 +482,7 @@ function MobileMetric({ def, row, compare }: { def: KpiDefinition; row: Comparis
         <MetricValue
           key={m.currency ?? def.key}
           unit={def.unit}
+          changeUnit={def.changeUnit}
           metric={compare ? m : { ...m, trend: null }}
           currency={m.currency}
           align="start"

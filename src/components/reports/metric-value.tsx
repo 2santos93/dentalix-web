@@ -22,21 +22,25 @@ const TREND_CLASS = {
  * con una flecha que dice hacia dónde se movió (arriba, abajo o igual) y un
  * color que dice si eso es bueno según el indicador (`trend`). El color nunca va
  * solo: la flecha y el signo dan la dirección, y el lector de pantalla oye
- * «Mejora: +20 % frente a 100.000,00 COP».
+ * «Mejora: +20 % frente a 100.000,00 COP». Los indicadores que ya son un %
+ * varían en puntos: «Empeora: +2 p.p. frente a 8 %».
  */
 export function MetricValue({
   unit,
+  changeUnit,
   metric,
   currency,
   align = 'end',
 }: {
   unit: KpiDefinition['unit'];
+  changeUnit: KpiDefinition['changeUnit'];
   metric: Metric;
   currency?: string;
   align?: 'start' | 'end';
 }) {
   const value = formatMetric(unit, metric.value, currency);
-  const { trend, previous, changePercent } = metric;
+  const { trend, previous, change } = metric;
+  const changeText = change === null ? null : formatChange(change, changeUnit);
   const showChange = trend !== null && previous !== null;
   const previousText = previous === null ? '' : formatMetric(unit, previous, currency);
   const up = metric.value !== null && previous !== null && metric.value > previous;
@@ -50,10 +54,10 @@ export function MetricValue({
           className={cn('inline-flex items-center gap-0.5 whitespace-nowrap text-xs font-medium tabular-nums', TREND_CLASS[trend])}
         >
           <Icon aria-hidden className="size-3.5 shrink-0" />
-          <span aria-hidden>{changePercent !== null ? formatChange(changePercent) : copy.previous(previousText)}</span>
+          <span aria-hidden>{changeText ?? copy.previous(previousText)}</span>
           <span className="sr-only">
-            {changePercent !== null
-              ? copy.against(TREND_LABELS[trend], formatChange(changePercent), previousText)
+            {changeText !== null
+              ? copy.against(TREND_LABELS[trend], changeText, previousText)
               : copy.againstNoBase(TREND_LABELS[trend], previousText)}
           </span>
         </span>

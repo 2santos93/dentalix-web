@@ -1,7 +1,7 @@
 import { formatChange, formatMetric, nextSort, sortRows, type SortState } from './comparison-table';
 import type { ComparisonRow, LocationsComparison, Metric } from './reports-api';
 
-const metric = (value: number | null): Metric => ({ value, previous: null, changePercent: null, trend: null });
+const metric = (value: number | null): Metric => ({ value, previous: null, change: null, trend: null });
 
 function row(name: string, production: number | null, noShow: number | null): ComparisonRow {
   const money = production === null ? [] : [{ currency: 'COP', ...metric(production) }];
@@ -65,8 +65,12 @@ describe('tabla de «Comparar sedes» (DX-014)', () => {
     expect(formatMetric('COUNT', 1234)).toBe('1234');
     expect(formatMetric('PERCENT', null)).toBe('—');
     expect(formatMetric('MONEY', 120000, 'COP')).toMatch(/120\.000,00/);
-    expect(formatChange(20)).toBe('+20 %');
-    expect(formatChange(-2.25)).toBe('−2,3 %');
-    expect(formatChange(0)).toBe('0 %');
+    expect(formatChange(20, 'PERCENT')).toBe('+20 %');
+    expect(formatChange(-2.25, 'PERCENT')).toBe('−2,3 %');
+    expect(formatChange(0, 'PERCENT')).toBe('0 %');
+    // Los indicadores que ya son un % varían en puntos porcentuales.
+    expect(formatChange(2, 'POINTS')).toBe('+2 p.p.');
+    expect(formatChange(-1.25, 'POINTS')).toBe('−1,3 p.p.');
+    expect(formatChange(0, 'POINTS')).toBe('0 p.p.');
   });
 });
