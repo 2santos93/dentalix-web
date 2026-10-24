@@ -2,8 +2,8 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import type { AxeResults } from 'axe-core';
 import { test, expect, type Page } from './support/test';
-import { loginAs } from './support/auth';
-import { tenantOrigin } from './support/urls';
+import { accessTokenOf, loginAs } from './support/auth';
+import { API_URL, tenantOrigin } from './support/urls';
 import { expectNoHorizontalScroll, expectNoHorizontalScrollIn } from './support/layout';
 
 /**
@@ -28,12 +28,37 @@ const SEDES = ['Sede principal', 'Sede Norte'];
 
 const origin = tenantOrigin(DEMO_SUBDOMAIN);
 
-async function openReports(page: Page): Promise<void> {
+async function openReports(page: Page): Promise<string[]> {
   await loginAs(page, origin, ADMIN_EMAIL, DEMO_PASSWORD);
   await page.getByRole('link', { name: 'Reportes' }).filter({ visible: true }).first().click();
   await expect(page).toHaveURL(`${origin}/reportes`);
   await expect(page.getByRole('heading', { level: 1, name: 'Reportes' })).toBeVisible();
   await expect(page.getByRole('tab', { name: 'Comparar sedes', selected: true })).toBeVisible();
+  // Otras pruebas crean sedes en la demo: el reporte debe incluirlas todas.
+  const inventory = await page.request.get(`${API_URL}/locations`, {
+    headers: {
+      'X-Tenant-Host': new URL(origin).host,
+      Authorization: `Bearer ${await accessTokenOf(page)}`,
+    },
+  });
+  expect(inventory.ok()).toBeTruthy();
+  const locations = await inventory.json() as { name: string }[];
+  const names = locations.map((location) => location.name).sort();
+  for (const name of SEDES) expect(names).toContain(name);
+  return names;
+}
+
+async function expectLocations(page: Page, kind: 'row' | 'card', names: string[]): Promise<void> {
+  const items = page.getByTestId(`comparison-${kind}`);
+  await expect(items).toHaveCount(names.length, { timeout: 30_000 });
+  const headings = items.getByRole(kind === 'row' ? 'rowheader' : 'heading');
+  // El nombre es el primer nodo; una sede desactivada añade su propia etiqueta.
+  await expect.poll(() => headings.evaluateAll((nodes) => nodes
+    .map((node) => node.firstChild?.textContent?.trim() ?? '').sort())).toEqual(names);
+  const seeded = items.filter({ has: page.getByRole(kind === 'row' ? 'rowheader' : 'heading', {
+    name: /^(Sede principal|Sede Norte)$/,
+  }) });
+  await expect(seeded).toHaveCount(2);
 }
 
 test.describe.configure({ mode: 'serial' });
@@ -41,7 +66,7 @@ test.describe.configure({ mode: 'serial' });
 test('ADMIN a 1440 px: una fila por sede y el total, con variaciones, orden y CSV', async ({ page }) => {
   test.setTimeout(120_000);
   await page.setViewportSize({ width: 1440, height: 900 });
-  await openReports(page);
+  const locationNames = await openReports(page);
 
   const table = page.getByRole('table', { name: 'Indicadores por sede y total de la clínica' });
   await expect(table).toBeVisible({ timeout: 30_000 });
@@ -49,7 +74,7 @@ test('ADMIN a 1440 px: una fila por sede y el total, con variaciones, orden y CS
   await expect(page.getByLabel('Comparar con')).toHaveValue('previous');
 
   const rows = page.getByTestId('comparison-row');
-  await expect(rows).toHaveCount(2);
+  await expectLocations(page, 'row', locationNames);
   for (const name of SEDES) {
     await expect(table.getByRole('rowheader', { name })).toBeVisible();
   }
@@ -112,9 +137,8 @@ test('ADMIN a 1440 px: una fila por sede y el total, con variaciones, orden y CS
 test('ADMIN a 390 px: tarjetas por sede sin scroll horizontal', async ({ page }) => {
   test.setTimeout(120_000);
   await page.setViewportSize({ width: 390, height: 844 });
-  await openReports(page);
-  const cards = page.getByTestId('comparison-card');
-  await expect(cards).toHaveCount(2, { timeout: 30_000 });
+  const locationNames = await openReports(page);
+  await expectLocations(page, 'card', locationNames);
   await expect(page.getByTestId('comparison-total-card')).toContainText('Total clínica');
   await expect(page.getByRole('table')).toBeHidden();
   await page.getByLabel('Ordenar por').selectOption('production');
@@ -137,8 +161,8 @@ test('axe: /reportes a 390 y 1440 px, en claro y oscuro', async ({ page }, testI
   const evidence = process.env.DX014_QA_DIR ?? testInfo.outputPath('qa');
   mkdirSync(evidence, { recursive: true });
   await page.setViewportSize({ width: 1440, height: 900 });
-  await openReports(page);
-  await expect(page.getByTestId('comparison-row')).toHaveCount(2, { timeout: 30_000 });
+  const locationNames = await openReports(page);
+  await expectLocations(page, 'row', locationNames);
 
   const axeSource = readFileSync(require.resolve('axe-core/axe.min.js'), 'utf8');
   async function serious(surface: string) {
@@ -163,6 +187,7 @@ test('axe: /reportes a 390 y 1440 px, en claro y oscuro', async ({ page }, testI
       await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
       await expect(page.locator('html')).toHaveClass(new RegExp(`\\b${colorScheme}\\b`));
       const shown = width < 768 ? page.getByTestId('comparison-card') : page.getByTestId('comparison-row');
+      await expectLocations(page, width < 768 ? 'card' : 'row', locationNames);
       await expect(shown.first()).toBeVisible();
       expect.soft(await serious(`reportes-${width}-${colorScheme}`), `/reportes ${width} ${colorScheme}`).toEqual([]);
     }
