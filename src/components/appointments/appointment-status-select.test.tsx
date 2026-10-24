@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { render, screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AppointmentStatusSelect } from './appointment-status-select';
@@ -106,5 +107,58 @@ describe('AppointmentStatusSelect (DX-295)', () => {
     await user.click(trigger);
     expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
     expect(onChange).not.toHaveBeenCalled();
+  });
+
+  // QA DX-295 (DEF-1): mientras se guarda el control queda deshabilitado y el
+  // navegador le quita el foco; al terminar se le devuelve.
+  function SavingHarness() {
+    const [value, setValue] = useState<AppointmentStatus>('SCHEDULED');
+    const [saving, setSaving] = useState(false);
+    return (
+      <>
+        <AppointmentStatusSelect
+          label="Estado de la cita de 09:00–09:30"
+          value={value}
+          options={OPTIONS}
+          disabled={saving}
+          onChange={(next) => {
+            setSaving(true);
+            setValue(next);
+          }}
+        />
+        <button type="button">Motivo</button>
+        <button type="button" onClick={() => setSaving(false)}>
+          Terminar guardado
+        </button>
+      </>
+    );
+  }
+
+  it('al terminar el guardado devuelve el foco al control', async () => {
+    const user = userEvent.setup();
+    render(<SavingHarness />);
+    const trigger = screen.getByRole('combobox', { name: /Estado de la cita/ });
+    trigger.focus();
+    await user.keyboard('{ArrowDown}{ArrowDown}{Enter}');
+    // jsdom no quita el foco a un botón deshabilitado; el navegador sí.
+    trigger.blur();
+
+    screen.getByText('Terminar guardado').click();
+    expect(await screen.findByRole('combobox', { name: /Confirmada/ })).toHaveFocus();
+  });
+
+  it('no roba el foco si quedó en otro control (p. ej. un diálogo de motivo)', async () => {
+    const user = userEvent.setup();
+    render(<SavingHarness />);
+    const trigger = screen.getByRole('combobox', { name: /Estado de la cita/ });
+    trigger.focus();
+    await user.keyboard('{ArrowDown}{ArrowDown}{Enter}');
+    const motivo = screen.getByText('Motivo');
+    motivo.focus();
+    expect(motivo).toHaveFocus();
+
+    screen.getByText('Terminar guardado').click();
+    await screen.findByRole('combobox', { name: /Confirmada/ });
+    expect(motivo).toHaveFocus();
   });
 });

@@ -1,5 +1,5 @@
 'use client';
-import type { KeyboardEvent } from 'react';
+import { useEffect, useRef, type KeyboardEvent } from 'react';
 import type { AppointmentStatus } from '@/lib/appointments/appointments-api';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { cn } from '@/lib/utils';
@@ -38,6 +38,20 @@ export function AppointmentStatusSelect({
   variant = 'field',
   'data-testid': testId,
 }: AppointmentStatusSelectProps) {
+  const triggerRef = useRef<HTMLButtonElement>(null);
+  // Mientras se guarda, el control queda `disabled` y el navegador le quita el
+  // foco: quien va con teclado perdía su sitio. Al terminar se le devuelve.
+  const refocusAfterSave = useRef(false);
+  useEffect(() => {
+    if (disabled || !refocusAfterSave.current) return;
+    refocusAfterSave.current = false;
+    // Solo si el foco cayó en un ancestro (body o el contenedor del diálogo de
+    // la cita); si está en otro sitio, p. ej. el diálogo de motivo, no se roba.
+    const trigger = triggerRef.current;
+    const active = document.activeElement;
+    if (trigger && (!active || active.contains(trigger))) trigger.focus();
+  }, [disabled]);
+
   // Radix cambia el valor al teclear una letra con el control cerrado (busca
   // la opción que empieza por ella): otro cambio sin confirmar. Se corta antes
   // de que llegue a Radix; Espacio sigue abriendo la lista.
@@ -51,10 +65,13 @@ export function AppointmentStatusSelect({
       value={value}
       disabled={disabled}
       onValueChange={(next) => {
-        if (next !== value) onChange(next as AppointmentStatus);
+        if (next === value) return;
+        refocusAfterSave.current = true;
+        onChange(next as AppointmentStatus);
       }}
     >
       <SelectTrigger
+        ref={triggerRef}
         id={id}
         aria-label={`${label}: ${STATUS_LABELS[value]}`}
         data-testid={testId}
