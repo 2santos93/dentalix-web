@@ -5,6 +5,7 @@ import { loginAs } from './support/auth';
 import { atSede, sedeDayFromToday } from './support/clock';
 import { expectNoHorizontalScroll } from './support/layout';
 import { API_URL, tenantOrigin } from './support/urls';
+import { chooseAppointmentStatus } from './support/appointment-status';
 
 /**
  * e2e DX-210: «Ocupar este hueco».
@@ -136,7 +137,7 @@ test('1440 px: cancelar una cita → «Ocupar este hueco» → «Asignar» → l
     .getByRole('button', { name: new RegExp(`Detalle de la cita de 10:00–10:30 · Gabi ${last}`) })
     .click();
   const detail = page.getByRole('dialog').filter({ hasText: 'Estado' });
-  await detail.getByLabel('Estado', { exact: true }).selectOption('CANCELLED');
+  await chooseAppointmentStatus(detail.getByRole('combobox', { name: /^Estado: / }), 'Cancelada');
   // El detalle (y el aviso de «Cita cancelada.») ofrecen ocupar el hueco.
   await detail.getByRole('button', { name: 'Ocupar este hueco', exact: true }).click();
 
