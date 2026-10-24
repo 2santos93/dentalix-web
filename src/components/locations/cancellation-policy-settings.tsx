@@ -284,7 +284,11 @@ export function CancellationPolicyModal({
       else next.fee = parsed.message;
     }
     setErrors(next);
-    if (Object.keys(next).length > 0) return;
+    if (Object.keys(next).length > 0) {
+      // Foco al primer campo con error, como el diálogo de cancelar.
+      document.getElementById(next.hours ? hoursId : feeId)?.focus();
+      return;
+    }
     setSubmitting(true);
     setError(null);
     try {

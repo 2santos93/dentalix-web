@@ -11,8 +11,9 @@ import { CancellationPolicySettings } from '@/components/locations/cancellation-
 
 const copy = {
   title: 'Sedes',
-  description:
-    'Datos legales de cada sede y su política de cancelación. El código de habilitación (REPS) lo pide el Resumen Digital de Atención en Colombia.',
+  // DX-279: la política de cancelación solo la ve ADMIN; al resto no se le anuncia.
+  description: (isAdmin: boolean) =>
+    `${isAdmin ? 'Datos legales de cada sede y su política de cancelación.' : 'Datos legales de cada sede.'} El código de habilitación (REPS) lo pide el Resumen Digital de Atención en Colombia.`,
   checkingSession: 'Verificando sesión…',
 };
 
@@ -42,7 +43,7 @@ export default function LocationSettingsPage() {
 
   return (
     <>
-      <PageHeader back={SETTINGS_BACK} title={copy.title} description={copy.description} />
+      <PageHeader back={SETTINGS_BACK} title={copy.title} description={copy.description(isAdmin)} />
       <LocationRepsSettings
         token={accessToken}
         canEdit={isAdmin}

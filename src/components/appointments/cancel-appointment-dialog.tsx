@@ -5,8 +5,10 @@ import { AlertTriangle } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import {
   updateAppointment,
+  type AppointmentStatus,
   type AppointmentWriteDetail,
 } from '@/lib/appointments/appointments-api';
+import { isInClinic } from '@/lib/appointments/patient-flow';
 import {
   CANCEL_REASON_TEXT_MAX,
   CANCELLATION_KIND_HINTS,
@@ -49,6 +51,8 @@ export const cancelAppointmentCopy = {
   previewFailed: 'Aviso sin calcular',
   noPolicy: 'La sede no tiene política de cancelación: no cuenta como tardía.',
   onTime: (hours: number) => `Con aviso suficiente (la política pide ${hours} h).`,
+  attended: 'El paciente ya vino a la cita: esta cancelación no cuenta como tardía.',
+  exitReason: 'Por qué se deshace la cita completada',
   clinicNeverLate: 'Una cancelación de la clínica nunca cuenta como tardía.',
   submit: 'Cancelar la cita',
   back: 'Volver',
@@ -64,10 +68,11 @@ interface CancelAppointmentDialogProps {
   appointmentId: string;
   patientName: string;
   /**
-   * DX-273: la cita está completada; sacarla a «Cancelada» pide además el
-   * motivo de esa salida (solo odontólogo y administración).
+   * Estado actual de la cita. Desde «Completada» (DX-273) pide además el
+   * motivo de esa salida (solo odontólogo y administración). Si el paciente
+   * ya vino (en la clínica o completada), la cancelación nunca es tardía.
    */
-  fromCompleted?: boolean;
+  fromStatus: AppointmentStatus;
   onDone: (result: AppointmentWriteDetail) => void;
 }
 
@@ -84,9 +89,11 @@ export function CancelAppointmentDialog({
   token,
   appointmentId,
   patientName,
-  fromCompleted = false,
+  fromStatus,
   onDone,
 }: CancelAppointmentDialogProps) {
+  const fromCompleted = fromStatus === 'COMPLETED';
+  const attended = fromCompleted || isInClinic(fromStatus);
   const id = useId();
   const originName = `${id}-origin`;
   const reasonId = `${id}-reason`;
@@ -229,6 +236,7 @@ export function CancelAppointmentDialog({
         preview={preview}
         failed={previewFailed}
         warning={warning}
+        attended={attended}
         onRetry={() => {
           setPreviewFailed(false);
           setPreviewKey((k) => k + 1);
@@ -279,7 +287,7 @@ export function CancelAppointmentDialog({
 
       {fromCompleted ? (
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor={exitId}>{completedExitCopy.reason}</Label>
+          <Label htmlFor={exitId}>{copy.exitReason}</Label>
           <textarea
             id={exitId}
             rows={2}
@@ -313,12 +321,14 @@ function NoticeLine({
   preview,
   failed,
   warning,
+  attended,
   onRetry,
 }: {
   byKind: StaffCancellationKind | null;
   preview: CancellationPreview | null;
   failed: boolean;
   warning: string | null;
+  attended: boolean;
   onRetry: () => void;
 }) {
   if (byKind === 'CLINIC') {
@@ -347,6 +357,7 @@ function NoticeLine({
     );
   }
   if (byKind === null) return null;
+  if (attended) return <p className="text-sm text-muted">{copy.attended}</p>;
   return (
     <p className="text-sm text-muted">
       {preview.policy ? copy.onTime(preview.policy.noticeHours) : copy.noPolicy}

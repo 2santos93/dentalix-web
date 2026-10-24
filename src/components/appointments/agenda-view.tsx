@@ -1318,7 +1318,7 @@ export function AgendaView({ token }: AgendaViewProps) {
             token={token}
             appointmentId={cancelling.id}
             patientName={patientLabel(cancelling)}
-            fromCompleted={cancelling.status === 'COMPLETED'}
+            fromStatus={cancelling.status}
             onDone={() => void handleCancelled(cancelling)}
           />
         ) : null}

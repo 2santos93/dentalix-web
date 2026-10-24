@@ -107,6 +107,8 @@ describe('CancellationPolicySettings (DX-279)', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Guardar versión nueva' }));
     expect(within(dialog).getByText('Escribe un número entero de 0 a 168.')).toBeInTheDocument();
     expect(mockedCreate).not.toHaveBeenCalled();
+    // QA D3: el foco va al campo inválido.
+    expect(hours).toHaveFocus();
 
     await user.clear(hours);
     await user.type(hours, '12');

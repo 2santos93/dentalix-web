@@ -4,6 +4,7 @@ import { CancelAppointmentDialog } from './cancel-appointment-dialog';
 import { updateAppointment } from '@/lib/appointments/appointments-api';
 import { getCancellationPreview } from '@/lib/cancellations/cancellation';
 import { ApiError } from '@/lib/api/client';
+import type { AppointmentStatus } from '@/lib/appointments/appointments-api';
 
 jest.mock('../../lib/appointments/appointments-api', () => ({
   ...jest.requireActual('../../lib/appointments/appointments-api'),
@@ -23,7 +24,7 @@ const LATE = {
   policy: { id: 'p1', version: 1, noticeHours: 24 },
 };
 
-function renderDialog(fromCompleted = false) {
+function renderDialog(fromStatus: AppointmentStatus = 'SCHEDULED') {
   const onDone = jest.fn();
   render(
     <CancelAppointmentDialog
@@ -32,7 +33,7 @@ function renderDialog(fromCompleted = false) {
       token="tok"
       appointmentId="a-1"
       patientName="Ana Pérez"
-      fromCompleted={fromCompleted}
+      fromStatus={fromStatus}
       onDone={onDone}
     />,
   );
@@ -133,12 +134,14 @@ describe('CancelAppointmentDialog (DX-279)', () => {
     const user = userEvent.setup();
     mockedPreview.mockResolvedValue(LATE);
     mockedUpdate.mockResolvedValue({ id: 'a-1' } as Awaited<ReturnType<typeof updateAppointment>>);
-    renderDialog(true);
+    renderDialog('COMPLETED');
     await user.click(screen.getByLabelText(/La clínica/));
     await user.click(submit());
     expect(screen.getByText('Escribe el motivo (al menos 3 caracteres).')).toBeInTheDocument();
     expect(mockedUpdate).not.toHaveBeenCalled();
-    await user.type(screen.getByLabelText('Motivo', { selector: 'textarea' }), 'Se marcó por error');
+    // QA D2: el motivo de la salida no se llama igual que el del catálogo.
+    expect(screen.getAllByLabelText('Motivo')).toHaveLength(1);
+    await user.type(screen.getByLabelText('Por qué se deshace la cita completada'), 'Se marcó por error');
     await user.click(submit());
     expect(mockedUpdate).toHaveBeenCalledWith('tok', 'a-1', {
       status: 'CANCELLED',
@@ -147,6 +150,20 @@ describe('CancelAppointmentDialog (DX-279)', () => {
       statusReason: 'Se marcó por error',
     });
   });
+
+  it.each(['ARRIVED', 'COMPLETED'] as const)(
+    'si el paciente ya vino (%s) no dice «Con aviso suficiente» sino por qué no es tardía (QA D1)',
+    async (status) => {
+      const user = userEvent.setup();
+      mockedPreview.mockResolvedValue({ ...LATE, noticeMinutes: 0, lateCancellation: false });
+      renderDialog(status);
+      await user.click(screen.getByLabelText(/El paciente avisa/));
+      expect(
+        await screen.findByText('El paciente ya vino a la cita: esta cancelación no cuenta como tardía.'),
+      ).toBeInTheDocument();
+      expect(screen.queryByText(/Con aviso suficiente/)).not.toBeInTheDocument();
+    },
+  );
 
   it('un 400 de la API se muestra en el formulario', async () => {
     const user = userEvent.setup();
