@@ -36,6 +36,7 @@ import { ExpenseCategoriesModal } from './expense-categories-modal';
 import { ExpenseDetailModal } from './expense-detail-modal';
 import { ExpenseFormModal } from './expense-form-modal';
 import { ExpenseStatusBadges } from './expense-status-badges';
+import { expensesPanelProps, type ExpensesViewTabs } from './expenses-tabs';
 import { useExpenseCategories } from './use-expense-categories';
 import { useExpenseLocations } from './use-expense-locations';
 
@@ -92,7 +93,7 @@ const SEARCH_DEBOUNCE_MS = 300;
  * defecto. Filtros en la barra con «Nuevo gasto» a la derecha; en escritorio
  * una tabla y bajo `sm` una tarjeta por gasto. Cada gasto abre su detalle.
  */
-export function ExpensesView({ token }: { token: string }) {
+export function ExpensesView({ token, tabs }: { token: string; tabs?: ExpensesViewTabs }) {
   const isAdmin = canManageExpenses(getTokenRole(token));
   const timeZone = useSedeTimeZone(token);
   const today = timeZone ? sedeToday(timeZone) : null;
@@ -261,7 +262,8 @@ export function ExpensesView({ token }: { token: string }) {
         }
       />
 
-      <div className="flex flex-col gap-3">
+      {tabs?.nav}
+      <div className="flex flex-col gap-3" {...expensesPanelProps(tabs)}>
         {!forbidden ? (
           <ListToolbar
             searchLabel={expensesCopy.searchLabel}
