@@ -83,11 +83,11 @@ function report(items: DiscountReportItem[], overrides: Partial<DiscountReport> 
             items: items.length,
             gross: 1200000,
             discount: 180000,
-            agreementReduction: 0,
             percentOfGross: 15,
           },
         ]
       : [],
+    agreementTotals: [],
     items,
     total: items.length,
     page: 1,
@@ -107,7 +107,11 @@ describe('DiscountReportView (DX-204)', () => {
     mockedReport.mockResolvedValue(report([row()]));
     render(<DiscountReportView token="tok" />);
     await waitFor(() =>
-      expect(mockedReport).toHaveBeenCalledWith('tok', { from: '2026-10-01', to: '2026-10-17', page: 1 }),
+      expect(mockedReport).toHaveBeenCalledWith('tok', {
+        from: '2026-10-01',
+        to: '2026-10-17',
+        page: 1,
+      }),
     );
     const summary = await screen.findByTestId('discount-total-COP');
     expect(within(summary).getByText('15 %')).toBeInTheDocument();
@@ -163,33 +167,57 @@ describe('DiscountReportView (DX-204)', () => {
     });
     mockedReport.mockResolvedValue(
       report([agreed], {
-        totals: [
-          {
-            currency: 'COP',
-            items: 1,
-            gross: 0,
-            discount: 0,
-            agreementReduction: 2000000,
-            percentOfGross: 0,
-          },
-        ],
+        totals: [],
+        agreementTotals: [{ currency: 'COP', items: 1, reduction: 2000000 }],
       }),
     );
     render(<DiscountReportView token="tok" />);
-    const summary = await screen.findByTestId('discount-total-COP');
-    expect(within(summary).getByText('Rebaja por convenio')).toBeInTheDocument();
+    // M1: las rebajas de convenio tienen su propio total, aparte de DX-204.
+    const summary = await screen.findByTestId('agreement-total-COP');
+    expect(within(summary).getByText('1 ítem con rebaja de convenio')).toBeInTheDocument();
     expect(within(summary).getByText(/2\.000\.000,00/)).toBeInTheDocument();
+    expect(screen.queryByTestId('discount-total-COP')).not.toBeInTheDocument();
     const tableRow = screen.getByTestId('discount-row');
-    expect(within(tableRow).getByText(/Convenio «Cortesía socios»/)).toHaveTextContent(
-      /−\s?2\.000\.000,00.*100 %/,
-    );
+    expect(within(tableRow).getByText(/Convenio «Cortesía socios»/)).toHaveTextContent(/−\s?2\.000\.000,00.*100 %/);
     expect(within(tableRow).getByText('Convenio asignado por Dr. Owner')).toBeInTheDocument();
     expect(within(tableRow).getByText('Ítem creado por Dra. Ríos')).toBeInTheDocument();
+    // B5: motivo «Convenio …» y el autor real, no «Sin registrar».
+    expect(within(tableRow).getByText('Convenio Cortesía socios')).toBeInTheDocument();
+    expect(within(tableRow).queryByText('Sin motivo')).not.toBeInTheDocument();
+    expect(within(tableRow).queryByText('Sin registrar')).not.toBeInTheDocument();
+    expect(within(tableRow).getByTestId('discount-author')).toHaveTextContent('Dr. Owner');
     // Sin descuento propio: no se pinta un «−0» como si lo hubiera.
     expect(within(tableRow).queryByText(/^−\s?0,00/)).not.toBeInTheDocument();
     const card = screen.getByTestId('discount-card');
     expect(within(card).getByText(/Convenio «Cortesía socios»/)).toBeInTheDocument();
     expect(within(card).getByText(/Convenio asignado por Dr\. Owner/)).toBeInTheDocument();
+    expect(within(card).queryByText(/Sin registrar/)).not.toBeInTheDocument();
+  });
+
+  it('B5: sin quien asignó el convenio, el autor es quien creó el ítem', async () => {
+    mockedReport.mockResolvedValue(
+      report(
+        [
+          row({
+            agreementName: 'Sura',
+            basePrice: 100000,
+            itemDiscount: 0,
+            discount: 0,
+            reason: null,
+            reasonNote: null,
+            discountByName: null,
+            agreementReduction: 10000,
+            agreementPercent: 10,
+            agreementAssignedByName: null,
+            createdByName: 'Dra. Ríos',
+          }),
+        ],
+        { totals: [], agreementTotals: [{ currency: 'COP', items: 1, reduction: 10000 }] },
+      ),
+    );
+    render(<DiscountReportView token="tok" />);
+    const tableRow = await screen.findByTestId('discount-row');
+    expect(within(tableRow).getByTestId('discount-author')).toHaveTextContent('Dra. Ríos');
   });
 
   it('en móvil, cada descuento es una tarjeta (lista apilada)', async () => {
