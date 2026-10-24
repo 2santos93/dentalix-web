@@ -360,6 +360,8 @@ export function cancellationDetail(metadata: AuditMetadata): string | null {
   // (el motivo de la condonación nunca viaja en la metadata).
   if (metadata.reason === 'CANCELLATION_FEE_CHARGED') return 'Cargo por inasistencia o cancelación tardía';
   if (metadata.reason === 'CANCELLATION_FEE_WAIVED') return 'Cargo por inasistencia condonado';
+  // SEC-050: anulación con motivo de un cargo ya generado (sin el texto).
+  if (metadata.reason === 'CANCELLATION_FEE_VOIDED') return 'Cargo por inasistencia anulado';
   if (metadata.reason !== 'APPOINTMENT_CANCELLED') return null;
   const c = metadata.cancellation;
   if (!c) return 'Cita cancelada';
