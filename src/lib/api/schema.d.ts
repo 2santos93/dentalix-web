@@ -10151,6 +10151,8 @@ export interface components {
             planId: string | null;
             /** Format: uuid */
             planItemId: string | null;
+            /** @description El ítem del cargo se quitó del plan («Quitar»): el cargo quedó anulado y no hay nada que cobrar. El ítem no admite descuento; así se anula un cargo generado por error. La cita sigue con su única decisión (otro cargo o condonar: 409). */
+            planItemRemoved: boolean;
             waiveReason: string | null;
             /** Format: uuid */
             policyVersionId: string | null;
