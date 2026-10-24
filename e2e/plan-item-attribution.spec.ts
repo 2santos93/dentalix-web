@@ -278,6 +278,27 @@ for (const width of [390, 1440]) {
     await expect(unattributed).toBeVisible();
     await unattributed.scrollIntoViewIfNeeded();
     await noOverflow(admin.page);
+
+    // DX-305: atribuirlo pide quién, cuándo y en qué sede. Se abre y se cancela
+    // (la demo conserva su «Sin atribuir» para «Comparar sedes»).
+    await admin.page
+      .getByRole('button', { name: /^Atribuir quién, cuándo y dónde se realizó el ítem del diente/ })
+      .locator('visible=true')
+      .first()
+      .click();
+    const attribute = admin.page.getByRole('dialog', { name: 'Atribuir el procedimiento' });
+    await expect(attribute.getByLabel('Sede donde se realizó')).toBeVisible();
+    await expect(attribute.getByLabel('Fecha en que se realizó')).toBeVisible();
+    await expect(attribute.getByLabel('Profesional que lo realizó')).toBeVisible();
+    await noOverflow(admin.page);
+    await attribute.getByRole('button', { name: 'Guardar' }).click();
+    // Sin sede activa falta la sede; con ella, la fecha.
+    await expect(
+      attribute.getByText(/^(Elige la sede donde se realizó\.|Indica la fecha en que se realizó \(no puede ser futura\)\.)$/),
+    ).toBeVisible();
+    await attribute.getByRole('button', { name: 'Cancelar' }).click();
+    await expect(attribute).toBeHidden();
+    await expect(unattributed).toBeVisible();
     expect(admin.problems).toEqual([]);
     await admin.context.close();
   });

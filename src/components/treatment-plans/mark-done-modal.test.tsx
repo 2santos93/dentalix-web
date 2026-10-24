@@ -1,10 +1,11 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { MarkDoneModal } from './mark-done-modal';
 import { listStaff } from '@/lib/appointments/staff-api';
 import { updateItem, type TreatmentPlanItem } from '@/lib/treatment-plans/treatment-plans-api';
 import { ApiError } from '@/lib/api/client';
 import { getTokenUserId } from '@/lib/auth/token-role';
+import type { ClinicLocation } from '@/lib/locations/locations-api';
 
 jest.mock('../../lib/appointments/staff-api', () => ({ listStaff: jest.fn() }));
 jest.mock('../../lib/treatment-plans/treatment-plans-api', () => ({
@@ -189,5 +190,86 @@ describe('MarkDoneModal (DX-050)', () => {
         performedById: 'owner',
       }),
     );
+  });
+
+  describe('atribuir un «Sin atribuir» (DX-305)', () => {
+    const LOCATIONS = [
+      { id: 'loc-main', name: 'Sede Principal', isActive: true, timeZone: 'America/Bogota' },
+      { id: 'loc-norte', name: 'Sede Norte', isActive: true, timeZone: 'America/Bogota' },
+      { id: 'loc-off', name: 'Sede Cerrada', isActive: false, timeZone: 'America/Bogota' },
+    ] as ClinicLocation[];
+    const unattributed = {
+      ...item,
+      status: 'DONE',
+      performedById: null,
+      performedLocationId: null,
+      completedAt: null,
+    } as TreatmentPlanItem;
+
+    beforeEach(() => {
+      jest.useFakeTimers({ now: new Date('2026-10-24T20:00:00Z'), advanceTimers: true });
+    });
+    afterEach(() => jest.useRealTimers());
+
+    it('pide sede, fecha y profesional; los profesionales son los de la sede elegida', async () => {
+      const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
+      mockedMe.mockReturnValue('owner');
+      mockedUpdate.mockResolvedValue({ ...unattributed, performedById: 'norte' });
+      const props = renderModal({ mode: 'correct', item: unattributed, locations: LOCATIONS, activeLocationId: null });
+      expect(screen.getByRole('dialog', { name: 'Atribuir el procedimiento' })).toBeInTheDocument();
+      const location = screen.getByRole('combobox', { name: 'Sede donde se realizó' });
+      // Solo las sedes activas.
+      expect(within(location).getAllByRole('option').map((o) => o.textContent)).toEqual([
+        'Elige una sede',
+        'Sede Principal',
+        'Sede Norte',
+      ]);
+      const performer = await screen.findByRole('combobox', { name: 'Profesional que lo realizó' });
+      expect(performer).toHaveValue('');
+
+      // Sin sede: se dice junto al formulario y no se envía.
+      await user.click(screen.getByRole('button', { name: 'Guardar' }));
+      expect(await screen.findByText('Elige la sede donde se realizó.')).toBeInTheDocument();
+      expect(mockedUpdate).not.toHaveBeenCalled();
+
+      await user.selectOptions(location, 'loc-main');
+      expect(within(performer).getAllByRole('option').map((o) => o.textContent)).toEqual([
+        'Elige un profesional',
+        'Dr. Owner',
+        'Dra. Laura Gómez',
+      ]);
+      await user.selectOptions(location, 'loc-norte');
+      expect(within(performer).getAllByRole('option').map((o) => o.textContent)).toContain('Berta Norte');
+      await user.selectOptions(performer, 'norte');
+
+      // Sin fecha, tampoco.
+      await user.click(screen.getByRole('button', { name: 'Guardar' }));
+      expect(await screen.findByText('Indica la fecha en que se realizó (no puede ser futura).')).toBeInTheDocument();
+
+      const date = screen.getByLabelText('Fecha en que se realizó');
+      expect(date).toHaveAttribute('max', '2026-10-24');
+      fireEvent.change(date, { target: { value: '2026-09-14' } });
+      await user.click(screen.getByRole('button', { name: 'Guardar' }));
+      await waitFor(() =>
+        expect(mockedUpdate).toHaveBeenCalledWith('tok', 'plan-1', 'item-1', {
+          performedById: 'norte',
+          performedLocationId: 'loc-norte',
+          // Mediodía del 14/09 en Bogotá.
+          completedAt: '2026-09-14T17:00:00.000Z',
+        }),
+      );
+      expect(props.onSaved).toHaveBeenCalled();
+    });
+
+    it('al cambiar a una sede donde no atiende, el profesional elegido se quita', async () => {
+      const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
+      renderModal({ mode: 'correct', item: unattributed, locations: LOCATIONS, activeLocationId: 'loc-norte' });
+      const location = screen.getByRole('combobox', { name: 'Sede donde se realizó' });
+      expect(location).toHaveValue('loc-norte');
+      const performer = await screen.findByRole('combobox', { name: 'Profesional que lo realizó' });
+      await user.selectOptions(performer, 'norte');
+      await user.selectOptions(location, 'loc-main');
+      expect(performer).toHaveValue('');
+    });
   });
 });

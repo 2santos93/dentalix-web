@@ -8136,6 +8136,11 @@ export interface components {
              * @description DX-050: SOLO para que un ADMIN corrija la fecha de un ítem ya DONE (403 a otro rol, 400 si es futura). Al pasar a DONE la pone el servidor (400 si llega)
              */
             completedAt?: string;
+            /**
+             * Format: uuid
+             * @description DX-305: SOLO para que un ADMIN corrija la sede donde se realizó un ítem ya DONE (403 a otro rol; 403 si no es de sus sedes permitidas, DX-089; 400 si no es de esta clínica). Obligatoria, junto con `performedById` y `completedAt`, al atribuir un ítem «Sin atribuir» (400 si falta alguno). Al pasar a DONE la pone la sede del request (400 si llega). Auditado con el antes y el después
+             */
+            performedLocationId?: string;
             surfaces?: ("MESIAL" | "DISTAL" | "OCCLUSAL" | "VESTIBULAR" | "LINGUAL")[];
             notes?: string;
         };
@@ -9538,7 +9543,7 @@ export interface components {
             howItIsCalculated: string;
         };
         CurrencyMetricDto: {
-            /** @description Valor del período. Porcentajes en % con 2 decimales; null = no se puede calcular (sin base) */
+            /** @description Valor del período. Porcentajes en % con 2 decimales (la ocupación, con tope de 100); null = no se puede calcular (sin base) */
             value: number | null;
             /** @description Valor del período de comparación (null sin comparación) */
             previous: number | null;
@@ -9551,9 +9556,14 @@ export interface components {
             trend: "BETTER" | "WORSE" | "EQUAL" | null;
             /** @example COP */
             currency: string;
+            /**
+             * @description BE-045: solo en producción y % de cobro, y solo cuando la producción del período comparado en esta moneda no es base (empieza antes de DX-050 con realizados «Sin atribuir», o tuvo cobros sin producción): `change` y `trend` van a null
+             * @enum {boolean}
+             */
+            previousUnattributed?: true;
         };
         MetricDto: {
-            /** @description Valor del período. Porcentajes en % con 2 decimales; null = no se puede calcular (sin base) */
+            /** @description Valor del período. Porcentajes en % con 2 decimales (la ocupación, con tope de 100); null = no se puede calcular (sin base) */
             value: number | null;
             /** @description Valor del período de comparación (null sin comparación) */
             previous: number | null;
@@ -9592,6 +9602,8 @@ export interface components {
             timeZone: string | null;
             /** @description ¿Hubo producción, cobros o citas (atendidas o no-show) en el período? */
             hasActivity: boolean;
+            /** @description BE-045: el período comparado no tiene toda su producción atribuida: alguna moneda de producción y % de cobro sale sin variación (`previousUnattributed`) */
+            previousPeriodUnattributed: boolean;
             metrics: components["schemas"]["ComparisonMetricsDto"];
         };
         LocationsComparisonDto: {
@@ -9615,6 +9627,8 @@ export interface components {
             total: components["schemas"]["ComparisonRowDto"];
             /** @description ¿Alguna sede tuvo actividad en el período? */
             hasActivity: boolean;
+            /** @description ¿Alguna fila (o el total) tiene `previousPeriodUnattributed`? La pantalla lo explica junto a «Producción» y «% de cobro» */
+            previousPeriodUnattributed: boolean;
         };
         CashSettingsDto: {
             /** @description «Exigir caja abierta»: sin caja abierta en la sede no se registra un abono en efectivo (409). */
@@ -17915,7 +17929,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Plan aceptado con firma: sus ítems quedan congelados (DX-012); o el plan está cancelado, rechazado o completado (DX-109); o el descuento (también una rebaja del precio frente al de catálogo) cambia en un plan ya aceptado (DX-204, SEC-041). El estado del plan se comprueba con su fila bloqueada, dentro de la transacción (BE-036); SEC-050: el ítem es el cargo vigente por inasistencia o cancelación tardía de una cita (`cancellationFeeAppointmentId`): su precio, descuento y estado no cambian ni se quita, sea cual sea el rol; se anula con POST /appointments/{id}/cancellation-fee/void; firmado: solo admite avanzar el estado (no volver a PROPOSED); completado: solo admite marcar como DONE un ítem ACCEPTED sin otro cambio; cerrado: DX-050 admite además corregir quién o cuándo de un ítem DONE, sin otro cambio */
+            /** @description Plan aceptado con firma: sus ítems quedan congelados (DX-012); o el plan está cancelado, rechazado o completado (DX-109); o el descuento (también una rebaja del precio frente al de catálogo) cambia en un plan ya aceptado (DX-204, SEC-041). El estado del plan se comprueba con su fila bloqueada, dentro de la transacción (BE-036); SEC-050: el ítem es el cargo vigente por inasistencia o cancelación tardía de una cita (`cancellationFeeAppointmentId`): su precio, descuento y estado no cambian ni se quita, sea cual sea el rol; se anula con POST /appointments/{id}/cancellation-fee/void; firmado: solo admite avanzar el estado (no volver a PROPOSED); completado: solo admite marcar como DONE un ítem ACCEPTED sin otro cambio; cerrado: DX-050 admite además corregir quién, cuándo o dónde (DX-305) de un ítem DONE, sin otro cambio */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -18130,7 +18144,7 @@ export interface operations {
     DiscountReportController_list: {
         parameters: {
             query: {
-                /** @description Primer día del periodo (AAAA-MM-DD, en la zona de cada sede). Como mucho 366 días. */
+                /** @description Primer día del periodo (AAAA-MM-DD, en la zona de cada sede). Como mucho 366 días; las dos fechas entre 2000-01-01 y 2100-12-31 (400 si no). */
                 from: string;
                 /** @description Último día (inclusive) */
                 to: string;
@@ -18178,7 +18192,7 @@ export interface operations {
     DiscountReportController_csv: {
         parameters: {
             query: {
-                /** @description Primer día del periodo (AAAA-MM-DD, en la zona de cada sede). Como mucho 366 días. */
+                /** @description Primer día del periodo (AAAA-MM-DD, en la zona de cada sede). Como mucho 366 días; las dos fechas entre 2000-01-01 y 2100-12-31 (400 si no). */
                 from: string;
                 /** @description Último día (inclusive) */
                 to: string;
@@ -18511,7 +18525,7 @@ export interface operations {
             query: {
                 /** @description Primer día del período (YYYY-MM-DD), inclusive, en la zona horaria de la sede de cada abono (la de su horario; con varias sedes en zonas distintas, cada una corta el día a su medianoche). */
                 from: string;
-                /** @description Último día del período (YYYY-MM-DD), inclusive (hasta la medianoche del día siguiente en la zona de la sede). Debe ser >= from; el período no puede superar 366 días. */
+                /** @description Último día del período (YYYY-MM-DD), inclusive (hasta la medianoche del día siguiente en la zona de la sede). Debe ser >= from; el período no puede superar 366 días. Las dos fechas, entre 2000-01-01 y 2100-12-31 (400 si no). */
                 to: string;
                 /** @description Solo abonos de este método. Sin él, todos los métodos. */
                 method?: "CASH" | "CARD" | "TRANSFER" | "OTHER";
@@ -19153,7 +19167,7 @@ export interface operations {
     LocationsComparisonController_get: {
         parameters: {
             query: {
-                /** @description Primer día del período (AAAA-MM-DD, en la zona de cada sede). Como mucho 366 días. */
+                /** @description Primer día del período (AAAA-MM-DD, en la zona de cada sede). Como mucho 366 días; las dos fechas entre 2000-01-01 y 2100-12-31 (400 si no). */
                 from: string;
                 /** @description Último día (inclusive) */
                 to: string;
@@ -19195,7 +19209,7 @@ export interface operations {
     LocationsComparisonController_csv: {
         parameters: {
             query: {
-                /** @description Primer día del período (AAAA-MM-DD, en la zona de cada sede). Como mucho 366 días. */
+                /** @description Primer día del período (AAAA-MM-DD, en la zona de cada sede). Como mucho 366 días; las dos fechas entre 2000-01-01 y 2100-12-31 (400 si no). */
                 from: string;
                 /** @description Último día (inclusive) */
                 to: string;
