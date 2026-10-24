@@ -1,7 +1,7 @@
 'use client';
 import * as React from 'react';
 import { useEffect, useId, useState } from 'react';
-import { History, Pencil } from 'lucide-react';
+import { History, Mail, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { listLocations, type ClinicLocation } from '@/lib/locations/locations-api';
@@ -11,8 +11,10 @@ import {
   PATIENT_TEXT_MAX,
   createCancellationPolicyVersion,
   getCancellationPolicy,
+  getReminderEmailPreview,
   type CancellationPolicy,
   type CancellationPolicyVersion,
+  type ReminderEmailPreview,
 } from '@/lib/cancellations/cancellation-policy-api';
 import { formatCurrency } from '@/lib/format/currency';
 import { formatDateTime } from '@/lib/format/date';
@@ -25,6 +27,16 @@ import { MoneyInput } from '@/components/shared/money-input';
 import { CurrencySelect } from '@/components/shared/currency-select';
 import { FieldError } from '@/components/errors/field-error';
 import { Button } from '@/components/ui/button';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+  DialogClose,
+} from '@/components/ui/dialog';
+import { SectionError } from '@/components/errors/section-error';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { fieldClass } from '@/lib/ui/field-class';
@@ -64,6 +76,21 @@ export const cancellationPolicyCopy = {
   save: 'Guardar versión nueva',
   saved: (name: string, version: number) => `Política de ${name} guardada (versión ${version}).`,
   saveError: 'No pudimos guardar la política. Intenta de nuevo.',
+  // DX-291: quién cobra y vista previa del recordatorio.
+  receptionCanCharge: 'Recepción puede generar o condonar el cargo',
+  receptionCanChargeHint:
+    'Si no, solo un administrador cobra o condona las inasistencias y cancelaciones tardías.',
+  receptionCharges: 'Recepción puede generar el cargo',
+  preview: 'Vista previa del email',
+  previewFor: (name: string) => `Vista previa del recordatorio de ${name}`,
+  previewTitle: (name: string) => `Recordatorio por email · ${name}`,
+  previewDescription:
+    'Así le llega el recordatorio al paciente con la política vigente. El paciente y el profesional son de ejemplo.',
+  previewSubject: (subject: string) => `Asunto: ${subject}`,
+  previewFrame: 'Contenido del email de recordatorio',
+  previewLoading: 'Cargando la vista previa…',
+  previewError: 'No pudimos cargar la vista previa.',
+  close: 'Cerrar',
 };
 
 const copy = cancellationPolicyCopy;
@@ -133,6 +160,7 @@ function LocationPolicyRow({ token, location }: { token: string; location: Clini
   const [failed, setFailed] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const [editing, setEditing] = useState(false);
+  const [previewing, setPreviewing] = useState(false);
   const name = `${location.name}${location.isActive ? '' : ` (${copy.inactive})`}`;
 
   useEffect(() => {
@@ -178,22 +206,37 @@ function LocationPolicyRow({ token, location }: { token: string; location: Clini
                 {copy.summary(current.noticeHours, current.version)}
               </span>
               {fee ? <span className="tabular-nums text-muted">{copy.fee(fee)}</span> : null}
+              {current.receptionCanCharge ? <span className="text-muted">{copy.receptionCharges}</span> : null}
             </>
           ) : (
             <span className="text-muted">{copy.none}</span>
           )}
         </div>
         {policy !== null ? (
-          <Button
-            type="button"
-            variant="secondary"
-            className="min-h-11 w-full sm:min-h-0 sm:w-auto"
-            aria-label={current ? copy.changeFor(location.name) : copy.configureFor(location.name)}
-            onClick={() => setEditing(true)}
-          >
-            <Pencil aria-hidden />
-            {current ? copy.change : copy.configure}
-          </Button>
+          <div className="flex flex-col gap-2 sm:flex-row">
+            {current ? (
+              <Button
+                type="button"
+                variant="secondary"
+                className="min-h-11 w-full sm:min-h-0 sm:w-auto"
+                aria-label={copy.previewFor(location.name)}
+                onClick={() => setPreviewing(true)}
+              >
+                <Mail aria-hidden />
+                {copy.preview}
+              </Button>
+            ) : null}
+            <Button
+              type="button"
+              variant="secondary"
+              className="min-h-11 w-full sm:min-h-0 sm:w-auto"
+              aria-label={current ? copy.changeFor(location.name) : copy.configureFor(location.name)}
+              onClick={() => setEditing(true)}
+            >
+              <Pencil aria-hidden />
+              {current ? copy.change : copy.configure}
+            </Button>
+          </div>
         ) : null}
       </div>
       {policy && policy.versions.length > 0 ? (
@@ -236,7 +279,91 @@ function LocationPolicyRow({ token, location }: { token: string; location: Clini
           }}
         />
       ) : null}
+      {previewing ? (
+        <ReminderPreviewDialog token={token} location={location} onClose={() => setPreviewing(false)} />
+      ) : null}
     </div>
+  );
+}
+
+/**
+ * DX-291: el recordatorio por email tal como lo renderiza la API (con la marca
+ * de la clínica y `{politica_cancelacion}`), en un iframe SIN permisos: el
+ * HTML del email no ejecuta nada ni navega desde aquí.
+ */
+function ReminderPreviewDialog({
+  token,
+  location,
+  onClose,
+}: {
+  token: string;
+  location: ClinicLocation;
+  onClose: () => void;
+}) {
+  const [preview, setPreview] = useState<ReminderEmailPreview | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
+
+  useEffect(() => {
+    let cancelled = false;
+    getReminderEmailPreview(token, location.id)
+      .then((res) => {
+        if (!cancelled) setPreview(res);
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) setError(apiErrorMessage(err, copy.previewError));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token, location.id, reloadKey]);
+
+  return (
+    <Dialog
+      open
+      onOpenChange={(open) => {
+        if (!open) onClose();
+      }}
+    >
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>{copy.previewTitle(location.name)}</DialogTitle>
+          <DialogDescription>{copy.previewDescription}</DialogDescription>
+        </DialogHeader>
+        {error ? (
+          <SectionError
+            description={error}
+            onRetry={() => {
+              setError(null);
+              setReloadKey((k) => k + 1);
+            }}
+          />
+        ) : preview === null ? (
+          <div role="status" className="flex flex-col gap-2">
+            <span className="sr-only">{copy.previewLoading}</span>
+            <span className="h-5 w-64 max-w-full animate-pulse rounded bg-surface-2" />
+            <span className="h-64 w-full animate-pulse rounded bg-surface-2" />
+          </div>
+        ) : (
+          <div className="flex min-w-0 flex-col gap-2">
+            <p className="break-words text-sm font-medium text-ink">{copy.previewSubject(preview.subject)}</p>
+            <iframe
+              title={copy.previewFrame}
+              sandbox=""
+              srcDoc={preview.html}
+              className="h-[55vh] w-full rounded-lg border border-border bg-white"
+            />
+          </div>
+        )}
+        <DialogFooter>
+          <DialogClose asChild>
+            <Button type="button" variant="secondary">
+              {copy.close}
+            </Button>
+          </DialogClose>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -266,6 +393,7 @@ export function CancellationPolicyModal({
   );
   const [currency, setCurrency] = useState(current?.currency ?? 'COP');
   const [patientText, setPatientText] = useState(current?.patientText ?? '');
+  const [receptionCanCharge, setReceptionCanCharge] = useState(current?.receptionCanCharge ?? false);
   const [errors, setErrors] = useState<{ hours?: string; fee?: string }>({});
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -297,6 +425,7 @@ export function CancellationPolicyModal({
         suggestedFee: fee,
         currency: fee === null ? null : currency,
         patientText: patientText.trim(),
+        receptionCanCharge,
       });
       onSaved(saved);
     } catch (err) {
@@ -376,6 +505,23 @@ export function CancellationPolicyModal({
           <p id={`${textId}-hint`}>{copy.textHint}</p>
           <p id={`${textId}-counter`} className="shrink-0 tabular-nums">
             {copy.counter(patientText.length)}
+          </p>
+        </div>
+      </div>
+      <div className="flex items-start gap-3">
+        <input
+          id={`${id}-reception`}
+          type="checkbox"
+          checked={receptionCanCharge}
+          disabled={submitting}
+          onChange={(e) => setReceptionCanCharge(e.target.checked)}
+          aria-describedby={`${id}-reception-hint`}
+          className="mt-0.5 size-5 shrink-0 accent-[var(--color-primary)]"
+        />
+        <div className="flex flex-col gap-0.5">
+          <Label htmlFor={`${id}-reception`}>{copy.receptionCanCharge}</Label>
+          <p id={`${id}-reception-hint`} className="text-xs text-muted">
+            {copy.receptionCanChargeHint}
           </p>
         </div>
       </div>
