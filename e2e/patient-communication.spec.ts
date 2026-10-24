@@ -144,7 +144,7 @@ test('390 px: la página pública de baja con un enlace inventado lo explica en 
 }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto(`${origin}/baja/${'Z'.repeat(43)}`);
-  await expect(page.getByRole('heading', { name: 'Enlace no válido' })).toBeVisible({
+  await expect(page.getByRole('heading', { name: 'Este enlace caducó' })).toBeVisible({
     timeout: 15_000,
   });
   await expectNoHorizontalScroll(page);

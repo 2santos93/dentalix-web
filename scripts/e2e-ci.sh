@@ -85,6 +85,8 @@ load_env() {
   export CORS_ORIGINS="$WEB_URL"
   export CORS_ROOT_DOMAIN=localhost
   export TRUST_PROXY=false
+  # Importaciones (DX-107/262): la suite ejercita trabajos en segundo plano.
+  export APP_ROLE=all
   export STORAGE_DIR="$STATE_DIR/storage"
   export FILES_PUBLIC_BASE_URL="${API_URL}/files"
   export LOG_FORMAT=json
