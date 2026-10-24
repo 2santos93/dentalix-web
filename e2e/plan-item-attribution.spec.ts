@@ -274,7 +274,12 @@ for (const width of [390, 1440]) {
     const patient = items.find((p) => p.lastName.startsWith('Salcedo'));
     expect(patient, 'la demo trae a Ricardo Salcedo con un realizado sin atribuir').toBeTruthy();
     await admin.page.goto(`${origin}/patients/${patient!.id}?tab=treatment-plans`);
-    const unattributed = admin.page.getByText('Sin atribuir', { exact: true }).locator('visible=true');
+    const legacyItem = admin.page.getByRole('row').or(admin.page.getByRole('listitem'))
+      .filter({ has: admin.page.getByText('Consulta de urgencia', { exact: true }) })
+      .filter({ has: admin.page.getByRole('combobox', { name: 'Estado del ítem del diente 21', exact: true }) })
+      .locator('visible=true');
+    await expect(legacyItem).toHaveCount(1);
+    const unattributed = legacyItem.getByText('Sin atribuir', { exact: true });
     await expect(unattributed).toBeVisible();
     await unattributed.scrollIntoViewIfNeeded();
     await noOverflow(admin.page);
