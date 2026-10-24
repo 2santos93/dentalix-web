@@ -1,5 +1,6 @@
 'use client';
 import type { ReactNode } from 'react';
+import { AttendanceBadge } from '@/components/appointments/attendance-badge';
 import { OverdueChip } from '@/components/collections/overdue-chip';
 import { CoverageChip } from '@/components/patients/coverage-chip';
 import { MedicalAlertIndicator } from '@/components/clinical/medical-alert-indicator';
@@ -60,7 +61,11 @@ interface DayAgendaProps {
    * see `AgendaView.handleStatusChange`. When omitted, rows render the
    * badge only (read-only) — existing callers/tests are unaffected.
    */
-  onStatusChange?: (appointmentId: string, status: AppointmentStatus) => void;
+  onStatusChange?: (
+    appointmentId: string,
+    status: AppointmentStatus,
+    trigger?: HTMLElement | null,
+  ) => void;
   /** The `id` of the appointment currently being updated, if any — disables that row's status select and shows a small "Actualizando…" hint next to it. */
   updatingId?: string | null;
   /**
@@ -102,7 +107,11 @@ function DetailButton({
 interface StatusSelectProps {
   appointment: Appointment;
   timeRange: string;
-  onStatusChange: (appointmentId: string, status: AppointmentStatus) => void;
+  onStatusChange: (
+    appointmentId: string,
+    status: AppointmentStatus,
+    trigger?: HTMLElement | null,
+  ) => void;
   updating: boolean;
   role?: ClinicRole | null;
 }
@@ -125,7 +134,7 @@ function StatusSelect({ appointment, timeRange, onStatusChange, updating, role }
         value={appointment.status}
         options={statusOptionsFor(appointment.status, role)}
         disabled={updating}
-        onChange={(status) => onStatusChange(appointment.id, status)}
+        onChange={(status, trigger) => onStatusChange(appointment.id, status, trigger)}
       />
       {updating && (
         <span role="status" className="text-xs text-muted">
@@ -250,6 +259,7 @@ export function DayAgenda({
                       <ConfirmationBadge appointment={appointment} />
                       <OverdueChip balance={appointment.balance} />
                       <CoverageChip coverage={appointment.coverage} compact />
+                      <AttendanceBadge counts={appointment.attendance} />
                     </span>
                     {renderActions?.(appointment)}
                   </td>
@@ -315,6 +325,7 @@ export function DayAgenda({
               <ConfirmationBadge appointment={appointment} className="mt-2" />
               <OverdueChip balance={appointment.balance} className="mt-2" />
               <CoverageChip coverage={appointment.coverage} compact className="mt-2" />
+              <AttendanceBadge counts={appointment.attendance} className="mt-2" />
               {renderActions?.(appointment)}
               {(onStatusChange || onSelectAppointment) && (
                 <div className="mt-3 flex items-center justify-between gap-2">

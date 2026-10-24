@@ -34,6 +34,16 @@ jest.mock('../../lib/appointments/appointments-api', () => ({
   listAppointments: jest.fn(),
   updateAppointment: jest.fn(),
 }));
+// DX-279: la vista previa del aviso del diálogo de cancelar.
+jest.mock('../../lib/cancellations/cancellation', () => ({
+  ...jest.requireActual('../../lib/cancellations/cancellation'),
+  getCancellationPreview: jest.fn().mockResolvedValue({
+    appointmentId: 'apt-c',
+    noticeMinutes: 300,
+    lateCancellation: true,
+    policy: { id: 'p1', version: 1, noticeHours: 24 },
+  }),
+}));
 jest.mock('../../lib/appointments/appointment-types-api', () => ({
   listAppointmentTypes: jest.fn().mockResolvedValue([]),
 }));
@@ -1195,7 +1205,42 @@ describe('AgendaView', () => {
 
       const [select] = await screen.findAllByTestId('appointment-status-select');
       await pickStatus(user, select, 'Cancelada');
+      // DX-279: cancelar pide origen y motivo, y avisa si es tardía.
+      const dialog = await screen.findByRole('dialog', { name: /Cancelar la cita de/ });
+      expect(mockedUpdateAppointment).not.toHaveBeenCalled();
+      await user.click(within(dialog).getByLabelText(/El paciente avisa/));
+      expect(await within(dialog).findByTestId('late-cancellation-warning')).toHaveTextContent(
+        'Cancelación tardía: aviso de 5 h, la política pide 24 h',
+      );
+      await user.selectOptions(within(dialog).getByLabelText('Motivo'), 'ILLNESS');
+      await user.click(within(dialog).getByRole('button', { name: 'Cancelar la cita' }));
+      expect(mockedUpdateAppointment).toHaveBeenCalledWith(expect.any(String), 'apt-c', {
+        status: 'CANCELLED',
+        cancelledByKind: 'STAFF_FOR_PATIENT',
+        cancelReasonCode: 'ILLNESS',
+      });
       await waitFor(() => expect(mockedListWaitlist.mock.calls.length).toBeGreaterThan(before));
+    });
+
+    it('con el teclado, Enter sobre «Cancelada» abre el diálogo y Esc lo cierra sin cambiar nada, con el foco en el selector (QA 14)', async () => {
+      const apt = appointment({ id: 'apt-k', start: new Date(`${today}T09:00:00`).toISOString(), end: new Date(`${today}T09:30:00`).toISOString() });
+      mockedListAppointments.mockResolvedValue([apt]);
+      const user = userEvent.setup();
+      render(<AgendaView token={tokenFor('RECEPTION')} />);
+      await user.click(screen.getByRole('button', { name: /^día$/i }));
+      await user.click(screen.getByRole('button', { name: 'Lista' }));
+      const [select] = await screen.findAllByTestId('appointment-status-select');
+      select.focus();
+      await user.keyboard('{ArrowDown}');
+      const option = await screen.findByRole('option', { name: 'Cancelada' });
+      option.focus();
+      await user.keyboard('{Enter}');
+      const dialog = await screen.findByRole('dialog', { name: /Cancelar la cita de/ });
+      await user.keyboard('{Escape}');
+      await waitFor(() => expect(dialog).not.toBeInTheDocument());
+      await waitFor(() => expect(select).toHaveFocus());
+      expect(select).toHaveTextContent('Agendada');
+      expect(mockedUpdateAppointment).not.toHaveBeenCalled();
     });
   });
   // DX-170: la evolución se registra desde la tarjeta de la cita.

@@ -1222,6 +1222,22 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/appointments/{id}/cancellation-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["AppointmentsController_cancellationPreview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/appointments/{id}": {
         parameters: {
             query?: never;
@@ -1284,6 +1300,26 @@ export interface paths {
         options?: never;
         head?: never;
         patch: operations["AppointmentsController_moveToOpening"];
+        trace?: never;
+    };
+    "/api/v1/patients/{id}/attendance-summary": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Citas, inasistencias y cancelaciones tardías de 12 meses
+         * @description Calculado al pedirlo (sin contador guardado): citas que ya empezaron, inasistencias (NO_SHOW) y cancelaciones tardías (nunca las de la clínica) cuyo inicio cae en los últimos 12 meses, por sede y en total. Un miembro restringido a sedes (DX-089) solo cuenta las suyas, sin mirar la sede activa de la cabecera.
+         */
+        get: operations["PatientAttendanceController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/staff": {
@@ -2668,6 +2704,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/locations/{id}/cancellation-policy": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Política de cancelación de la sede: la vigente y su historial */
+        get: operations["CancellationPolicyController_get"];
+        put?: never;
+        /**
+         * Guardar la política de la sede (crea la versión siguiente)
+         * @description La versión anterior no cambia: queda en el historial como prueba de lo que se comunicó al paciente. Horas de aviso 0–168; importe sugerido ≥ 0 con su moneda (los dos o ninguno); texto para el paciente de hasta 1000 caracteres. Queda en la auditoría (CANCELLATION_POLICY, CANCELLATION_POLICY_CHANGED, con los campos enviados).
+         */
+        post: operations["CancellationPolicyController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/platform/tenants": {
         parameters: {
             query?: never;
@@ -3932,7 +3989,7 @@ export interface components {
         /** @enum {string} */
         AuditAction: "VIEW" | "CREATE" | "UPDATE" | "DELETE" | "SIGN" | "VOID" | "LOGIN" | "LOGIN_FAILED" | "PASSWORD_RESET" | "EXPORT" | "PRINT" | "SEND";
         /** @enum {string} */
-        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION" | "POSTOP_TEMPLATE" | "POSTOP_DELIVERY" | "PATIENT_DOCUMENT" | "MEDICAL_HISTORY_SUBMISSION" | "AGREEMENT" | "PRICE_LIST" | "PROVIDER_SCHEDULE" | "PATIENT_IMPORT_BATCH";
+        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION" | "POSTOP_TEMPLATE" | "POSTOP_DELIVERY" | "PATIENT_DOCUMENT" | "MEDICAL_HISTORY_SUBMISSION" | "AGREEMENT" | "PRICE_LIST" | "PROVIDER_SCHEDULE" | "PATIENT_IMPORT_BATCH" | "CANCELLATION_POLICY";
         /**
          * @description Rol con el que actuó (del token). `null` en un login fallido.
          * @enum {string}
@@ -4056,6 +4113,17 @@ export interface components {
             before: components["schemas"]["AuditAttributionSideDto"];
             after: components["schemas"]["AuditAttributionSideDto"];
         };
+        /** @enum {string} */
+        AuditCancellationKind: "PATIENT_LINK" | "STAFF_FOR_PATIENT" | "CLINIC";
+        /** @enum {string} */
+        AuditCancellationReason: "ILLNESS" | "FORGOT" | "COST" | "TRANSPORT" | "WORK" | "CLINIC_RESCHEDULE" | "OTHER";
+        AuditCancellationDto: {
+            byKind: components["schemas"]["AuditCancellationKind"];
+            reasonCode: components["schemas"]["AuditCancellationReason"] | null;
+            /** @example 300 */
+            noticeMinutes: number;
+            lateCancellation: boolean;
+        };
         AuditMetadataDto: {
             /** @description UPDATE: nombres de los campos enviados (nunca sus valores). */
             changedFields?: string[];
@@ -4081,6 +4149,8 @@ export interface components {
             importBatch?: components["schemas"]["AuditImportBatchDto"];
             /** @description DX-050: quién realizó un ítem del plan, en qué sede y cuándo, antes y después (`reason` PLAN_ITEM_ATTRIBUTION_CORRECTED o PLAN_ITEM_DONE_REVERTED). Solo ids e instantes. */
             attribution?: components["schemas"]["AuditAttributionChangeDto"];
+            /** @description DX-279: cita cancelada desde la agenda, en su único evento (`reason` APPOINTMENT_CANCELLED; PATIENT_FLOW si estaba en la clínica; COMPLETED_EXIT si estaba completada): quién, código del motivo, minutos de aviso y si fue tardía. Nunca el texto libre del motivo. */
+            cancellation?: components["schemas"]["AuditCancellationDto"];
         };
         AuditEventDto: {
             /** Format: uuid */
@@ -6214,6 +6284,16 @@ export interface components {
             color: string;
         };
         /**
+         * @description DX-279: quién canceló — PATIENT_LINK (enlace del paciente), STAFF_FOR_PATIENT (el personal por el paciente) o CLINIC (la clínica; nunca tardía).
+         * @enum {string}
+         */
+        CancellationByKind: "PATIENT_LINK" | "STAFF_FOR_PATIENT" | "CLINIC";
+        /**
+         * @description DX-279: motivo del catálogo cerrado.
+         * @enum {string}
+         */
+        CancellationReasonCode: "ILLNESS" | "FORGOT" | "COST" | "TRANSPORT" | "WORK" | "CLINIC_RESCHEDULE" | "OTHER";
+        /**
          * @description DX-233: código de cada aviso, en el mismo orden que `warnings`: SCHEDULE_BLOCK (bloqueo que deja agendar, DX-122) o PROVIDER_OFF_SCHEDULE (fuera del horario del profesional en la sede).
          * @enum {string}
          */
@@ -6349,6 +6429,31 @@ export interface components {
              * @description DX-200: cuándo quedó listo para cobrar.
              */
             readyForCheckoutAt: string | null;
+            /**
+             * Format: date-time
+             * @description DX-279: cuándo se canceló (reloj del servidor). Solo en CANCELLED; null en las canceladas antiguas.
+             */
+            cancelledAt: string | null;
+            /** @description DX-279: quién canceló — PATIENT_LINK (enlace del paciente), STAFF_FOR_PATIENT (el personal por el paciente) o CLINIC (la clínica; nunca tardía). */
+            cancelledByKind: components["schemas"]["CancellationByKind"] | null;
+            /** @description DX-279: motivo del catálogo cerrado. */
+            cancelReasonCode: components["schemas"]["CancellationReasonCode"] | null;
+            /** @description DX-279: detalle opcional del motivo (≤ 500). No sale en GET /appointments (como las notas). */
+            cancelReasonText: string | null;
+            /** @description DX-279: minutos de aviso entre la cancelación y el inicio (0 si ya había empezado). */
+            noticeMinutes: number | null;
+            /** @description DX-279: con menos aviso que el que pedía la política vigente de la sede. */
+            lateCancellation: boolean | null;
+            /**
+             * Format: date-time
+             * @description DX-279: cuándo se marcó la inasistencia (solo en NO_SHOW).
+             */
+            noShowMarkedAt: string | null;
+            /**
+             * Format: uuid
+             * @description DX-279: versión de la política comunicada al paciente (la rellena DX-291; hoy null).
+             */
+            policyVersionId: string | null;
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
@@ -6361,6 +6466,12 @@ export interface components {
             planItemsReservedElsewhere: components["schemas"]["PlanItemReservedElsewhereDto"][];
             /** @description DX-273: solo al sacar la cita de COMPLETED. El motivo y cómo queda el mínimo de la visita siguiente de cada plan afectado. */
             completedExit?: components["schemas"]["CompletedExitDto"];
+        };
+        PatientIncidentCountsDto: {
+            /** @example 2 */
+            noShows: number;
+            /** @example 1 */
+            lateCancellations: number;
         };
         MedicalAlertFlagsDto: {
             /** @description La versión vigente de la anamnesis tiene alguna alerta (derivada en el servidor). false sin anamnesis. */
@@ -6435,10 +6546,35 @@ export interface components {
              * @description DX-200: cuándo quedó listo para cobrar.
              */
             readyForCheckoutAt: string | null;
+            /**
+             * Format: date-time
+             * @description DX-279: cuándo se canceló (reloj del servidor). Solo en CANCELLED; null en las canceladas antiguas.
+             */
+            cancelledAt: string | null;
+            /** @description DX-279: quién canceló — PATIENT_LINK (enlace del paciente), STAFF_FOR_PATIENT (el personal por el paciente) o CLINIC (la clínica; nunca tardía). */
+            cancelledByKind: components["schemas"]["CancellationByKind"] | null;
+            /** @description DX-279: motivo del catálogo cerrado. */
+            cancelReasonCode: components["schemas"]["CancellationReasonCode"] | null;
+            /** @description DX-279: minutos de aviso entre la cancelación y el inicio (0 si ya había empezado). */
+            noticeMinutes: number | null;
+            /** @description DX-279: con menos aviso que el que pedía la política vigente de la sede. */
+            lateCancellation: boolean | null;
+            /**
+             * Format: date-time
+             * @description DX-279: cuándo se marcó la inasistencia (solo en NO_SHOW).
+             */
+            noShowMarkedAt: string | null;
+            /**
+             * Format: uuid
+             * @description DX-279: versión de la política comunicada al paciente (la rellena DX-291; hoy null).
+             */
+            policyVersionId: string | null;
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
             updatedAt: string;
+            /** @description DX-279: inasistencias y cancelaciones tardías del paciente en los últimos 12 meses, en las sedes permitidas al usuario (DX-089), calculadas para todo el lote en una consulta (sin N+1). Las de la clínica no cuentan. */
+            attendance: components["schemas"]["PatientIncidentCountsDto"];
             balance: components["schemas"]["OverdueBalanceDto"];
             coverage: components["schemas"]["CoverageSummaryDto"];
             /** @description DX-247: banderas médicas del paciente (alerta, premedicación, anamnesis al día / caducada / ausente). Sin alérgenos, condiciones, medicamentos ni notas. */
@@ -6524,6 +6660,27 @@ export interface components {
             /** @description Listo para cobrar (READY_FOR_CHECKOUT). */
             readyForCheckout: components["schemas"]["InClinicItemDto"][];
         };
+        CancellationPolicyRefDto: {
+            /** Format: uuid */
+            id: string;
+            /** @example 3 */
+            version: number;
+            /** @example 24 */
+            noticeHours: number;
+        };
+        CancellationPreviewDto: {
+            /** Format: uuid */
+            appointmentId: string;
+            /**
+             * @description Minutos que faltan para el inicio (0 si ya empezó), en UTC.
+             * @example 300
+             */
+            noticeMinutes: number;
+            /** @description Si el paciente cancelara ahora, sería tardía (menos aviso que la política). Una cancelación de la clínica nunca lo es. */
+            lateCancellation: boolean;
+            /** @description Política vigente de la sede de la cita; null = sin política. */
+            policy: components["schemas"]["CancellationPolicyRefDto"] | null;
+        };
         AppointmentDto: {
             planItemIds: string[];
             /** Format: uuid */
@@ -6583,6 +6740,31 @@ export interface components {
              * @description DX-200: cuándo quedó listo para cobrar.
              */
             readyForCheckoutAt: string | null;
+            /**
+             * Format: date-time
+             * @description DX-279: cuándo se canceló (reloj del servidor). Solo en CANCELLED; null en las canceladas antiguas.
+             */
+            cancelledAt: string | null;
+            /** @description DX-279: quién canceló — PATIENT_LINK (enlace del paciente), STAFF_FOR_PATIENT (el personal por el paciente) o CLINIC (la clínica; nunca tardía). */
+            cancelledByKind: components["schemas"]["CancellationByKind"] | null;
+            /** @description DX-279: motivo del catálogo cerrado. */
+            cancelReasonCode: components["schemas"]["CancellationReasonCode"] | null;
+            /** @description DX-279: detalle opcional del motivo (≤ 500). No sale en GET /appointments (como las notas). */
+            cancelReasonText: string | null;
+            /** @description DX-279: minutos de aviso entre la cancelación y el inicio (0 si ya había empezado). */
+            noticeMinutes: number | null;
+            /** @description DX-279: con menos aviso que el que pedía la política vigente de la sede. */
+            lateCancellation: boolean | null;
+            /**
+             * Format: date-time
+             * @description DX-279: cuándo se marcó la inasistencia (solo en NO_SHOW).
+             */
+            noShowMarkedAt: string | null;
+            /**
+             * Format: uuid
+             * @description DX-279: versión de la política comunicada al paciente (la rellena DX-291; hoy null).
+             */
+            policyVersionId: string | null;
             /** Format: date-time */
             createdAt: string;
             /** Format: date-time */
@@ -6610,6 +6792,18 @@ export interface components {
              * @example La cirugía no se hizo: se marcó completada por error.
              */
             statusReason?: string;
+            /**
+             * @description DX-279: quién cancela, OBLIGATORIO al pasar a CANCELLED (400 sin él): STAFF_FOR_PATIENT (el paciente lo comunica al personal) o CLINIC (la clínica cancela o reprograma; nunca cuenta como tardía). El enlace público (PATIENT_LINK) no pasa por aquí. En cualquier otro cambio se ignora.
+             * @enum {string}
+             */
+            cancelledByKind?: "STAFF_FOR_PATIENT" | "CLINIC";
+            /**
+             * @description DX-279: motivo del catálogo cerrado, OBLIGATORIO al pasar a CANCELLED (400 sin él). El servidor guarda la hora (UTC), los minutos de aviso y si es tardía según la política vigente de la sede de la cita; queda auditado (APPOINTMENT_CANCELLED, sin el texto libre).
+             * @enum {string}
+             */
+            cancelReasonCode?: "ILLNESS" | "FORGOT" | "COST" | "TRANSPORT" | "WORK" | "CLINIC_RESCHEDULE" | "OTHER";
+            /** @description DX-279: detalle opcional del motivo (hasta 500 caracteres; vacío = sin detalle). No pidas datos de salud. Solo al pasar a CANCELLED. */
+            cancelReasonText?: string;
             reason?: string;
             notes?: string;
             /** @description DX-210: «Adelantar si hay hueco». La cita sale como candidata para los huecos libres de días anteriores de su sede y profesional. Solo RECEPTION, DENTIST y ADMIN (403 para ASSISTANT); queda auditado. */
@@ -6628,6 +6822,49 @@ export interface components {
              * @description Profesional del hueco; si falta, el de la cita.
              */
             providerId?: string;
+        };
+        AttendanceTotalsDto: {
+            /** @example 2 */
+            noShows: number;
+            /** @example 1 */
+            lateCancellations: number;
+            /**
+             * @description Citas que ya empezaron. Las cancelaciones tardías pueden incluir citas futuras: no se lea como ratio.
+             * @example 6
+             */
+            appointments: number;
+        };
+        LocationAttendanceDto: {
+            /** @example 2 */
+            noShows: number;
+            /** @example 1 */
+            lateCancellations: number;
+            /** Format: uuid */
+            locationId: string;
+            /** @example Sede principal */
+            locationName: string;
+            /**
+             * @description Citas de la ventana que ya empezaron (cualquier estado). No es el denominador de las incidencias: una cancelación tardía puede ser de una cita futura.
+             * @example 6
+             */
+            appointments: number;
+        };
+        PatientAttendanceSummaryDto: {
+            /** Format: uuid */
+            patientId: string;
+            /**
+             * Format: date-time
+             * @description Hace 12 meses (UTC).
+             */
+            since: string;
+            /**
+             * Format: date-time
+             * @description Instante del cálculo.
+             */
+            until: string;
+            totals: components["schemas"]["AttendanceTotalsDto"];
+            /** @description Solo las sedes con citas en la ventana y permitidas al usuario (DX-089), por nombre. */
+            byLocation: components["schemas"]["LocationAttendanceDto"][];
         };
         StaffMemberDto: {
             /** Format: uuid */
@@ -9541,6 +9778,65 @@ export interface components {
              */
             quantity: number;
             reason?: string;
+        };
+        CancellationPolicyVersionDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            locationId: string;
+            /**
+             * @description Número de versión en la sede (1, 2, 3…)
+             * @example 2
+             */
+            version: number;
+            /**
+             * @description Horas de aviso que pide la sede. Con menos, la cancelación es tardía.
+             * @example 24
+             */
+            noticeHours: number;
+            /**
+             * @description Importe sugerido del cargo (lo usará DX-291); null = sin importe
+             * @example 50000
+             */
+            suggestedFee: number | null;
+            /** @example COP */
+            currency: string | null;
+            /** @description Texto para el paciente */
+            patientText: string;
+            /** @description RECEPTION también podrá generar el cargo (DX-291). Por defecto, no. */
+            receptionCanCharge: boolean;
+            /** Format: date-time */
+            createdAt: string;
+            /** Format: uuid */
+            createdById: string;
+            /** @example Dra. Ana Gómez */
+            createdByName: string | null;
+        };
+        CancellationPolicyDto: {
+            /** Format: uuid */
+            locationId: string;
+            /** @description La versión vigente (la de mayor número); null si nunca se configuró */
+            current: components["schemas"]["CancellationPolicyVersionDto"] | null;
+            /** @description Historial de versiones, de la más nueva a la más antigua */
+            versions: components["schemas"]["CancellationPolicyVersionDto"][];
+        };
+        CreateCancellationPolicyDto: {
+            /** @example 24 */
+            noticeHours: number;
+            /**
+             * @description Importe sugerido ≥ 0, con 2 decimales como mucho. Exige `currency`.
+             * @example 50000
+             */
+            suggestedFee?: number | null;
+            /**
+             * @description ISO 4217 del importe sugerido (obligatoria con importe)
+             * @example COP
+             */
+            currency?: string | null;
+            /** @example Si no puedes venir, avísanos con 24 horas de antelación. */
+            patientText?: string;
+            /** @description RECEPTION también podrá generar el cargo (DX-291). Si falta, no. */
+            receptionCanCharge?: boolean;
         };
         PlatformTenantDto: {
             /** Format: uuid */
@@ -14742,7 +15038,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Cada cita con `balance` (DX-150): marca «Saldo vencido» de su paciente, calculada para todo el lote en un número fijo de consultas (sin N+1). El importe, solo ADMIN y RECEPTION. Con `coverage` (DX-153): resumen de la cobertura principal del paciente, también por lote. Y con `medicalAlerts` (DX-247): SOLO banderas de la anamnesis (alerta, premedicación, al día / caducada / ausente el día civil de la cita en la zona de su sede, y los códigos de alerta), nunca la historia médica ni las notas de la cita (disponibles en GET /appointments/:id). */
+            /** @description Cada cita con `balance` (DX-150): marca «Saldo vencido» de su paciente, calculada para todo el lote en un número fijo de consultas (sin N+1). El importe, solo ADMIN y RECEPTION. Con `coverage` (DX-153): resumen de la cobertura principal del paciente, también por lote. Y con `medicalAlerts` (DX-247): SOLO banderas de la anamnesis (alerta, premedicación, al día / caducada / ausente el día civil de la cita en la zona de su sede, y los códigos de alerta), nunca la historia médica ni las notas de la cita (disponibles en GET /appointments/:id). Con `attendance` (DX-279): inasistencias y cancelaciones tardías del paciente en 12 meses, por lote; sin el detalle libre del motivo de cancelación (`cancelReasonText`, en GET /appointments/:id). */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -14887,6 +15183,49 @@ export interface operations {
             };
         };
     };
+    AppointmentsController_cancellationPreview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description DX-279: antes de confirmar la cancelación en la agenda, los minutos de aviso si se cancelara AHORA (reloj del servidor, UTC) y si sería tardía para el paciente según la política vigente de la sede de la cita. Mismo cálculo que el PATCH a CANCELLED; la de la clínica nunca es tardía. */
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CancellationPreviewDto"];
+                };
+            };
+            /** @description Id que no es UUID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La cita es de una sede no permitida al usuario (DX-089) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Cita no encontrada en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     AppointmentsController_get: {
         parameters: {
             query?: never;
@@ -14932,7 +15271,7 @@ export interface operations {
                     "application/json": components["schemas"]["AppointmentWriteDto"];
                 };
             };
-            /** @description Datos inválidos o al pasado, o salida de COMPLETED sin `statusReason` válido (DX-273) */
+            /** @description Datos inválidos o al pasado, salida de COMPLETED sin `statusReason` válido (DX-273), o cancelar sin `cancelledByKind` o sin `cancelReasonCode` (DX-279), con el mensaje en español */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -15117,6 +15456,48 @@ export interface operations {
             };
             /** @description Fuera del horario de atención de la sede de la cita */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientAttendanceController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PatientAttendanceSummaryDto"];
+                };
+            };
+            /** @description El identificador del paciente no es válido. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Rol sin acceso a la agenda */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente no encontrado en esta clínica */
+            404: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -18949,6 +19330,94 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["InventoryMovementDto"];
                 };
+            };
+        };
+    };
+    CancellationPolicyController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CancellationPolicyDto"];
+                };
+            };
+            /** @description El identificador de la sede no es válido. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo un administrador puede ver y cambiar la política de cancelación. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sede no encontrada en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    CancellationPolicyController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateCancellationPolicyDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CancellationPolicyVersionDto"];
+                };
+            };
+            /** @description Horas fuera de 0–168, importe negativo o sin moneda, moneda desconocida o texto de más de 1000 caracteres (mensaje en español) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo un administrador puede ver y cambiar la política de cancelación. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sede no encontrada en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

@@ -85,6 +85,24 @@ export interface Appointment {
    */
   medicalAlerts?: MedicalAlertFlags;
   /**
+   * DX-279: cancelación (solo en CANCELLED; null en las antiguas): quién, el
+   * motivo del catálogo, los minutos de aviso y si fue tardía. El detalle libre
+   * del motivo (`cancelReasonText`) solo llega en el detalle y en el PATCH.
+   */
+  cancelledAt?: string | null;
+  cancelledByKind?: components['schemas']['CancellationByKind'] | null;
+  cancelReasonCode?: components['schemas']['CancellationReasonCode'] | null;
+  cancelReasonText?: string | null;
+  noticeMinutes?: number | null;
+  lateCancellation?: boolean | null;
+  /** DX-279: cuándo se marcó la inasistencia (solo en NO_SHOW). */
+  noShowMarkedAt?: string | null;
+  /**
+   * DX-279: solo en `GET /appointments` — inasistencias y cancelaciones
+   * tardías del paciente en 12 meses (en las sedes del usuario), por lote.
+   */
+  attendance?: components['schemas']['PatientIncidentCountsDto'];
+  /**
    * DX-122: solo en la respuesta de crear o mover — avisos que no impidieron la
    * operación (p. ej. «La cita cae en un bloqueo que permite agendar…»).
    */

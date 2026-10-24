@@ -39,6 +39,9 @@ import { announceAppointmentWarnings } from '@/components/appointments/appointme
 import { MoveAppointmentDialog } from '@/components/appointments/move-appointment-dialog';
 import { CompletedExitModal } from '@/components/appointments/completed-exit-modal';
 import { AppointmentStatusSelect } from '@/components/appointments/appointment-status-select';
+import { CancelAppointmentDialog } from '@/components/appointments/cancel-appointment-dialog';
+import { AttendanceBadge } from '@/components/appointments/attendance-badge';
+import { cancellationSummary } from '@/lib/cancellations/cancellation';
 import { completedExitSummary } from '@/lib/appointments/plan-item-reservations';
 import {
   MAX_PROVIDER_COLUMNS,
@@ -165,6 +168,7 @@ const copy = {
   moved: 'Cita movida.',
   // DX-210: «Ocupar este hueco» tras cancelar.
   cancelled: 'Cita cancelada.',
+  cancelledBy: 'Canceló:',
   completedExitDone: (status: string) => `La cita pasó a «${status}».`,
   fillOpening: 'Ocupar este hueco',
   filled: 'La agenda ya muestra al paciente en el hueco.',
@@ -475,6 +479,11 @@ export function AgendaView({ token }: AgendaViewProps) {
     id: string;
     to: AppointmentStatus;
   } | null>(null);
+  // DX-279: cancelar pide quién cancela y el motivo (modal), y avisa si es tardía.
+  const [cancelling, setCancelling] = useState<Appointment | null>(null);
+  // El selector de estado desde el que se abrió: al cerrar el diálogo el foco
+  // vuelve ahí (Radix lo devolvería a la opción de la lista, que ya no existe).
+  const cancelReturnFocus = useRef<HTMLElement | null>(null);
 
   // Fetch active staff once (retriable) — feeds the provider selector.
   useEffect(() => {
@@ -891,9 +900,20 @@ export function AgendaView({ token }: AgendaViewProps) {
    * otherwise the select would briefly re-enable showing the stale
    * pre-change status (review fix).
    */
-  async function handleStatusChange(id: string, status: AppointmentStatus) {
+  async function handleStatusChange(
+    id: string,
+    status: AppointmentStatus,
+    trigger?: HTMLElement | null,
+  ) {
     if (!token) return;
     const before = appointments.find((a) => a.id === id);
+    // DX-279: cancelar va por el modal de origen y motivo (también desde
+    // «Completada», que pide además el motivo de esa salida).
+    if (status === 'CANCELLED' && before && before.status !== 'CANCELLED') {
+      cancelReturnFocus.current = trigger ?? null;
+      setCancelling(before);
+      return;
+    }
     // DX-273: la salida de «Completada» va por el modal del motivo.
     if (before?.status === 'COMPLETED' && status !== 'COMPLETED') {
       setCompletedExit({ id, to: status });
@@ -902,32 +922,7 @@ export function AgendaView({ token }: AgendaViewProps) {
     setUpdatingId(id);
     try {
       await updateAppointment(token, id, { status });
-      // DX-210: la cita recién cancelada deja un hueco: se ofrece ocuparlo.
-      if (
-        status === 'CANCELLED' &&
-        before &&
-        new Date(before.end).getTime() > Date.now() &&
-        canSeeOpeningCandidates(role, getTokenUserId(token), before.providerId)
-      ) {
-        toast.success(copy.cancelled, {
-          action: {
-            label: copy.fillOpening,
-            onClick: () =>
-              openFillOpening(
-                before.providerId,
-                { start: before.start, end: before.end },
-                before.locationId,
-              ),
-          },
-        });
-      }
-      // DX-122: cancelar o no-show deja al paciente en «Pendientes por
-      // agendar», y reactivar la cita lo saca (revisión H1): se recarga siempre.
-      setWaitlistReloadKey((k) => k + 1);
-      // DX-200: completar o cancelar a alguien en la clínica lo saca del panel.
-      setInClinicReloadKey((k) => k + 1);
-      notifyInClinicChanged();
-      await refreshAppointmentsInPlace();
+      await afterStatusChange();
     } catch (err) {
       notifyError(apiErrorMessage(err, copy.genericStatusChangeError), {
         onRetry: () => handleStatusChange(id, status),
@@ -935,6 +930,44 @@ export function AgendaView({ token }: AgendaViewProps) {
     } finally {
       setUpdatingId(null);
     }
+  }
+
+  /**
+   * Tras cambiar el estado: DX-122 cancelar o no-show deja al paciente en
+   * «Pendientes por agendar» y reactivar lo saca (revisión H1); DX-200
+   * completar o cancelar a alguien en la clínica lo saca del panel.
+   */
+  async function afterStatusChange() {
+    setWaitlistReloadKey((k) => k + 1);
+    setInClinicReloadKey((k) => k + 1);
+    notifyInClinicChanged();
+    await refreshAppointmentsInPlace();
+  }
+
+  /** DX-279: la cita quedó cancelada con su origen y motivo. */
+  async function handleCancelled(before: Appointment) {
+    setCancelling(null);
+    // DX-210: la cita recién cancelada deja un hueco: se ofrece ocuparlo.
+    const offersOpening =
+      new Date(before.end).getTime() > Date.now() &&
+      canSeeOpeningCandidates(role, getTokenUserId(token), before.providerId);
+    toast.success(
+      copy.cancelled,
+      offersOpening
+        ? {
+            action: {
+              label: copy.fillOpening,
+              onClick: () =>
+                openFillOpening(
+                  before.providerId,
+                  { start: before.start, end: before.end },
+                  before.locationId,
+                ),
+            },
+          }
+        : undefined,
+    );
+    await afterStatusChange();
   }
 
   /** DX-273: la cita salió de «Completada»: aviso con el mínimo recalculado. */
@@ -1284,6 +1317,27 @@ export function AgendaView({ token }: AgendaViewProps) {
           />
         ) : null}
 
+        {cancelling && token ? (
+          <CancelAppointmentDialog
+            open
+            onOpenChange={(open) => {
+              if (!open) setCancelling(null);
+            }}
+            token={token}
+            appointmentId={cancelling.id}
+            patientName={patientLabel(cancelling)}
+            fromStatus={cancelling.status}
+            onCloseAutoFocus={(event) => {
+              const trigger = cancelReturnFocus.current;
+              cancelReturnFocus.current = null;
+              if (!trigger?.isConnected) return;
+              event.preventDefault();
+              trigger.focus();
+            }}
+            onDone={() => void handleCancelled(cancelling)}
+          />
+        ) : null}
+
         {movingAppointment && (
           <MoveAppointmentDialog
             key={movingAppointment.id}
@@ -1385,6 +1439,14 @@ export function AgendaView({ token }: AgendaViewProps) {
               <SheetBody className="flex flex-col gap-4">
                 {/* DX-247: «Requiere premedicación» y las alertas, primero. */}
                 <AppointmentMedicalAlerts flags={liveDetailAppointment.medicalAlerts} />
+                {/* DX-279: inasistencias y cancelaciones tardías del paciente (12 meses). */}
+                <AttendanceBadge counts={liveDetailAppointment.attendance} className="self-start" />
+                {liveDetailAppointment.status === 'CANCELLED' &&
+                cancellationSummary(liveDetailAppointment) ? (
+                  <p className="text-sm text-muted" data-testid="cancellation-summary">
+                    {copy.cancelledBy} {cancellationSummary(liveDetailAppointment)}
+                  </p>
+                ) : null}
                 {liveDetailAppointment.reason && (
                   <p className="text-sm text-ink">{liveDetailAppointment.reason}</p>
                 )}
@@ -1397,8 +1459,8 @@ export function AgendaView({ token }: AgendaViewProps) {
                     value={liveDetailAppointment.status}
                     options={statusOptionsFor(liveDetailAppointment.status, role)}
                     disabled={updatingId === liveDetailAppointment.id}
-                    onChange={(status) => {
-                      void handleStatusChange(liveDetailAppointment.id, status);
+                    onChange={(status, trigger) => {
+                      void handleStatusChange(liveDetailAppointment.id, status, trigger);
                     }}
                   />
                 </FormField>

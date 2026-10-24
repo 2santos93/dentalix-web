@@ -1,4 +1,5 @@
 import {
+  cancellationDetail,
   importBatchDetail,
   AUDIT_ACTION_LABELS,
   AUDIT_ACTION_OPTIONS,
@@ -205,5 +206,28 @@ describe('planItemAttributionDetail (DX-050)', () => {
   it('null fuera de la atribución', () => {
     expect(planItemAttributionDetail({ reason: 'PATIENT_FLOW' })).toBeNull();
     expect(planItemAttributionDetail({ changedFields: ['performedById'] })).toBeNull();
+  });
+});
+
+describe('cancellationDetail (DX-279)', () => {
+  it('describe la cancelación con origen, motivo, aviso y si fue tardía', () => {
+    expect(
+      cancellationDetail({
+        reason: 'APPOINTMENT_CANCELLED',
+        cancellation: {
+          byKind: 'STAFF_FOR_PATIENT',
+          reasonCode: 'TRANSPORT',
+          noticeMinutes: 300,
+          lateCancellation: true,
+        },
+      }),
+    ).toBe('Cita cancelada · el paciente avisó · Transporte · aviso de 300 min · tardía');
+  });
+
+  it('nombra el cambio de política y nada en otros eventos', () => {
+    expect(cancellationDetail({ reason: 'CANCELLATION_POLICY_CHANGED' })).toBe(
+      'Nueva versión de la política de cancelación',
+    );
+    expect(cancellationDetail({ reason: 'PATIENT_FLOW' })).toBeNull();
   });
 });

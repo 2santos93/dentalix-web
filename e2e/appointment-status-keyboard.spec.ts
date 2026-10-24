@@ -13,8 +13,10 @@ import { API_URL, tenantOrigin } from './support/urls';
  * Una clínica nueva por corrida con un odontólogo, recepción, un paciente y una
  * cita agendada. Se cuentan los PATCH a `/appointments/:id` que salen del
  * navegador:
- * 1. 1440 px, fila de la agenda (Día → Lista): ↑/↓ y Esc → 0 PATCH, y tras
- *    recargar sigue «Agendada»; Enter sobre «Confirmada» → 1 PATCH y la fila
+ * 1. 1440 px, fila de la agenda (Día → Lista): ↑/↓ y Esc → 0 PATCH; Enter
+ *    sobre «Cancelada» abre el diálogo de cancelar (DX-279) y Esc lo cierra
+ *    sin PATCH, con el foco de vuelta en el selector; tras recargar sigue
+ *    «Agendada»; Enter sobre «Confirmada» → 1 PATCH y la fila
  *    lo refleja (también tras recargar);
  * 2. 390 px, detalle de la cita: ↑/↓ → 0 PATCH; Enter sobre «No asistió» →
  *    1 PATCH; el control mide al menos 44 px y no hay scroll horizontal.
@@ -129,6 +131,25 @@ test('1440 px: en la fila, ↑/↓ no envían nada y Enter aplica el estado', as
   // Una letra con el control cerrado tampoco cambia nada.
   await page.keyboard.press('c');
   await expect(status).toHaveText('Agendada');
+  expect(patches.count).toBe(0);
+
+  // DX-279: Enter sobre «Cancelada» no cancela: abre el diálogo de origen y
+  // motivo. Esc lo cierra sin cambiar nada y el foco vuelve al selector.
+  await page.keyboard.press('ArrowDown');
+  await expect(listbox).toBeVisible();
+  await walkOptions(page, [
+    ['ArrowDown', 'Confirmada'],
+    ['ArrowDown', 'Completada'],
+    ['ArrowDown', 'Cancelada'],
+  ]);
+  await page.keyboard.press('Enter');
+  const cancelDialog = page.getByRole('dialog', { name: `Cancelar la cita de Sara ${patientLast}` });
+  await expect(cancelDialog).toBeVisible();
+  await expect(cancelDialog.getByLabel(/El paciente avisa/)).toBeFocused();
+  await page.keyboard.press('Escape');
+  await expect(cancelDialog).toBeHidden();
+  await expect(status).toHaveText('Agendada');
+  await expect(status).toBeFocused();
   expect(patches.count).toBe(0);
 
   await page.reload();
