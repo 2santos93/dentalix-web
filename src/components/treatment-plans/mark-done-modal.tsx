@@ -4,8 +4,11 @@ import { useCallback, useEffect, useId, useState } from 'react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { listStaff, type StaffMember } from '@/lib/appointments/staff-api';
 import { getTokenUserId } from '@/lib/auth/token-role';
+import type { ClinicLocation } from '@/lib/locations/locations-api';
+import { sedeToday } from '@/lib/locations/use-sede-time-zone';
 import { updateItem, type TreatmentPlanItem } from '@/lib/treatment-plans/treatment-plans-api';
-import { attendsAt, isAttendingRole } from '@/lib/treatment-plans/item-attribution';
+import { attendsAt, attributionInstant, isAttendingRole } from '@/lib/treatment-plans/item-attribution';
+import { Input } from '@/components/ui/input';
 import { FormModal } from '@/components/shared/form-modal';
 import { FieldError } from '@/components/errors/field-error';
 import { Label } from '@/components/ui/label';
@@ -30,6 +33,17 @@ const copy = {
   correctSubmit: 'Guardar',
   doneError: 'No pudimos marcar el procedimiento como realizado. Intenta de nuevo.',
   correctError: 'No pudimos corregir quién lo realizó. Intenta de nuevo.',
+  // DX-305: un realizado «Sin atribuir» se atribuye entero (quién, cuándo y
+  // dónde) o no cuenta en la producción de «Comparar sedes».
+  attributeTitle: 'Atribuir el procedimiento',
+  attributeDescription:
+    'Está «Sin atribuir»: indica quién lo realizó, cuándo y en qué sede para que cuente en la producción. Solo la administración puede hacerlo y queda en el registro de auditoría.',
+  locationLabel: 'Sede donde se realizó',
+  locationPlaceholder: 'Elige una sede',
+  locationRequired: 'Elige la sede donde se realizó.',
+  dateLabel: 'Fecha en que se realizó',
+  dateRequired: 'Indica la fecha en que se realizó (no puede ser futura).',
+  attributeError: 'No pudimos atribuir el procedimiento. Intenta de nuevo.',
 };
 
 export interface MarkDoneModalProps {
@@ -45,6 +59,11 @@ export interface MarkDoneModalProps {
   /** Sede activa de la sesión (la que la API sella al marcar); `null` = todas. */
   activeLocationId: string | null;
   locationName: string | null;
+  /**
+   * Sedes de la clínica: al atribuir un «Sin atribuir» (DX-305) se elige en
+   * cuál se realizó.
+   */
+  locations?: readonly ClinicLocation[];
   onSaved: (item: TreatmentPlanItem) => void;
 }
 
@@ -53,6 +72,8 @@ export interface MarkDoneModalProps {
  * los miembros que atienden (DENTIST y ADMIN) en la sede activa. Viene elegido
  * quien marca si atiende; si no (la asistente), el único posible si solo hay
  * uno; si no, hay que elegir. La sede y la hora las pone el servidor.
+ * Corregir un realizado «Sin atribuir» (DX-305) pide además la sede y la fecha:
+ * los profesionales que se ofrecen son los que atienden en la sede elegida.
  * El estado vive aquí: quien lo usa lo monta con una `key` por ítem.
  */
 export function MarkDoneModal({
@@ -65,10 +86,23 @@ export function MarkDoneModal({
   mode,
   activeLocationId,
   locationName,
+  locations = [],
   onSaved,
 }: MarkDoneModalProps) {
   const selectId = useId();
-  const [staff, setStaff] = useState<StaffMember[] | null>(null);
+  const locationSelectId = useId();
+  const dateId = useId();
+  const attribute = mode === 'correct' && item.performedLocationId === null;
+  const pickable = locations.filter((l) => l.isActive);
+  const [locationId, setLocationId] = useState(
+    attribute && pickable.some((l) => l.id === activeLocationId) ? (activeLocationId ?? '') : '',
+  );
+  const [day, setDay] = useState('');
+  const chosenLocation = pickable.find((l) => l.id === locationId) ?? null;
+  const today = sedeToday(chosenLocation?.timeZone ?? null);
+  // Al atribuir, quien lo realizó tiene que atender en la sede elegida.
+  const scopeLocationId = attribute ? locationId || null : activeLocationId;
+  const [members, setMembers] = useState<StaffMember[] | null>(null);
   const [loadFailed, setLoadFailed] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const [performerId, setPerformerId] = useState('');
@@ -79,13 +113,15 @@ export function MarkDoneModal({
     if (!open) return;
     let cancelled = false;
     listStaff(token)
-      .then((members) => {
+      .then((list) => {
         if (cancelled) return;
-        const candidates = members
-          .filter((m) => isAttendingRole(m.role) && attendsAt(m.locationIds, activeLocationId))
+        const attending = list
+          .filter((m) => isAttendingRole(m.role))
           .sort((x, y) => x.fullName.localeCompare(y.fullName, 'es'));
-        setStaff(candidates);
+        setMembers(attending);
         setLoadFailed(false);
+        // Al atribuir no se preselecciona a nadie (el ítem no tiene a quién).
+        const candidates = attending.filter((m) => attendsAt(m.locationIds, activeLocationId));
         const me = getTokenUserId(token);
         const preferred =
           mode === 'correct'
@@ -105,14 +141,25 @@ export function MarkDoneModal({
     };
   }, [open, token, mode, item.performedById, activeLocationId, reloadKey]);
 
+  // La sede elegida al atribuir filtra la lista ya cargada, sin volver a pedirla.
+  const staff = members === null ? null : members.filter((m) => attendsAt(m.locationIds, scopeLocationId));
+
   const retry = useCallback(() => {
     setLoadFailed(false);
-    setStaff(null);
+    setMembers(null);
     setReloadKey((k) => k + 1);
   }, []);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (attribute && !chosenLocation) {
+      setError(copy.locationRequired);
+      return;
+    }
+    if (attribute && (!day || day > today)) {
+      setError(copy.dateRequired);
+      return;
+    }
     if (!performerId) {
       setError(copy.performerRequired);
       return;
@@ -120,28 +167,38 @@ export function MarkDoneModal({
     setError(null);
     setSubmitting(true);
     try {
-      const saved = await updateItem(
-        token,
-        planId,
-        item.id,
-        mode === 'done' ? { status: 'DONE', performedById: performerId } : { performedById: performerId },
-      );
+      const patch =
+        mode === 'done'
+          ? { status: 'DONE' as const, performedById: performerId }
+          : attribute && chosenLocation
+            ? {
+                performedById: performerId,
+                performedLocationId: chosenLocation.id,
+                completedAt: attributionInstant(day, chosenLocation.timeZone),
+              }
+            : { performedById: performerId };
+      const saved = await updateItem(token, planId, item.id, patch);
       onSaved(saved);
     } catch (err) {
-      setError(apiErrorMessage(err, mode === 'done' ? copy.doneError : copy.correctError));
+      setError(
+        apiErrorMessage(err, mode === 'done' ? copy.doneError : attribute ? copy.attributeError : copy.correctError),
+      );
     } finally {
       setSubmitting(false);
     }
   }
 
-  const unchanged = mode === 'correct' && performerId === (item.performedById ?? '');
+  const unchanged = mode === 'correct' && !attribute && performerId === (item.performedById ?? '');
+  const title = mode === 'done' ? copy.doneTitle : attribute ? copy.attributeTitle : copy.correctTitle;
+  const description =
+    mode === 'done' ? copy.doneDescription : attribute ? copy.attributeDescription : copy.correctDescription;
 
   return (
     <FormModal
       open={open}
       onOpenChange={onOpenChange}
-      title={mode === 'done' ? copy.doneTitle : copy.correctTitle}
-      description={mode === 'done' ? copy.doneDescription : copy.correctDescription}
+      title={title}
+      description={description}
       onSubmit={handleSubmit}
       submitLabel={mode === 'done' ? copy.doneSubmit : copy.correctSubmit}
       submitting={submitting}
@@ -149,6 +206,57 @@ export function MarkDoneModal({
       error={error}
     >
       <p className="rounded-lg bg-surface-2 px-3 py-2 text-sm font-medium text-ink">{subject}</p>
+      {attribute ? (
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div className="flex min-w-0 flex-col gap-1.5">
+            <Label htmlFor={locationSelectId}>{copy.locationLabel}</Label>
+            <select
+              id={locationSelectId}
+              value={locationId}
+              disabled={submitting}
+              aria-required
+              aria-invalid={error === copy.locationRequired || undefined}
+              onChange={(e) => {
+                const next = e.target.value;
+                setLocationId(next);
+                setError(null);
+                // Quien no atiende en la nueva sede deja de estar elegido.
+                const stillThere = members?.some(
+                  (m) => m.userId === performerId && attendsAt(m.locationIds, next || null),
+                );
+                if (!stillThere) setPerformerId('');
+              }}
+              className={cn(fieldClass, 'h-11 md:h-10', error === copy.locationRequired && 'border-danger')}
+            >
+              <option value="" disabled>
+                {copy.locationPlaceholder}
+              </option>
+              {pickable.map((l) => (
+                <option key={l.id} value={l.id}>
+                  {l.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="flex min-w-0 flex-col gap-1.5">
+            <Label htmlFor={dateId}>{copy.dateLabel}</Label>
+            <Input
+              id={dateId}
+              type="date"
+              value={day}
+              max={today}
+              disabled={submitting}
+              aria-required
+              aria-invalid={error === copy.dateRequired || undefined}
+              onChange={(e) => {
+                setDay(e.target.value);
+                setError(null);
+              }}
+              className={cn('h-11 tabular-nums md:h-10', error === copy.dateRequired && 'border-danger')}
+            />
+          </div>
+        </div>
+      ) : null}
       <div className="flex flex-col gap-1.5">
         <Label htmlFor={selectId}>{copy.performerLabel}</Label>
         {loadFailed ? (

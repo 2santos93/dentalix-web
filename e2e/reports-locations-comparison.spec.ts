@@ -98,6 +98,15 @@ test('ADMIN a 1440 px: una fila por sede y el total, con variaciones, orden y CS
   // Con comparación hay variaciones (mejora/empeora/igual) con su flecha.
   await expect(table.locator('[data-trend] svg').first()).toBeVisible();
 
+  // DX-305 (BE-045): la demo tiene un realizado «Sin atribuir» (Ricardo
+  // Salcedo) y el mes anterior empieza antes de que esta base registrara la
+  // sede de cada procedimiento: «Producción» y «% de cobro» no se comparan, y
+  // la pantalla lo dice en una línea.
+  await expect(page.getByRole('note')).toContainText('no se comparan donde dice «Sin comparar»');
+  await expect(table.getByRole('columnheader', { name: /^Producción/ }).getByTestId('unattributed-mark')).toBeVisible();
+  await expect(table.getByRole('columnheader', { name: /^Cobrado/ }).getByTestId('unattributed-mark')).toHaveCount(0);
+  await expect(page.getByTestId('comparison-total').getByTestId('not-compared').first()).toBeVisible();
+
   // «Cómo se calcula» al enfocar.
   await table.getByRole('button', { name: 'Cómo se calcula: Producción' }).focus();
   await expect(page.getByRole('tooltip').filter({ visible: true })).toContainText('precio neto');

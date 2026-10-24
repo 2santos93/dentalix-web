@@ -2761,6 +2761,26 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/locations/{id}/cancellation-policy/email-preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Vista previa del recordatorio por email con la política vigente (DX-291)
+         * @description El email `appointment-reminder` tal como saldría desde esta sede, con la marca de la clínica y la política vigente en `{politica_cancelacion}` (horas, texto e importe). Paciente y profesional son de ejemplo. No envía ni registra nada.
+         */
+        get: operations["CancellationPolicyController_emailPreview"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/locations/{id}/cancellation-policy": {
         parameters: {
             query?: never;
@@ -2776,6 +2796,67 @@ export interface paths {
          * @description La versión anterior no cambia: queda en el historial como prueba de lo que se comunicó al paciente. Horas de aviso 0–168; importe sugerido ≥ 0 con su moneda (los dos o ninguno); texto para el paciente de hasta 1000 caracteres. Queda en la auditoría (CANCELLATION_POLICY, CANCELLATION_POLICY_CHANGED, con los campos enviados).
          */
         post: operations["CancellationPolicyController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/appointments/{id}/cancellation-fee": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Estado del cargo por inasistencia o cancelación tardía de la cita */
+        get: operations["CancellationFeeController_get"];
+        put?: never;
+        /**
+         * Generar el cargo (ítem DONE en el plan «Cargos administrativos»)
+         * @description Solo una cita NO_SHOW o cancelada tarde con la política comunicada al paciente (`policyVersionId`). Crea o reutiliza el plan ACCEPTED «Cargos administrativos» del paciente en la moneda de esa versión y le añade un ítem DONE con el importe (el sugerido, o menos); sale en el estado de cuenta y se cobra con un abono y su recibo (DX-136). Idempotente: una sola decisión por cita (índice único y cita bloqueada). Auditado (APPOINTMENT, CANCELLATION_FEE_CHARGED).
+         */
+        post: operations["CancellationFeeController_charge"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/appointments/{id}/cancellation-fee/waive": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Condonar el cargo con motivo (no se cobrará)
+         * @description Solo una cita NO_SHOW o cancelada tarde, antes de cobrar y una vez. El motivo (3–500) queda con la decisión; la auditoría registra la condonación (APPOINTMENT, CANCELLATION_FEE_WAIVED) sin el texto.
+         */
+        post: operations["CancellationFeeController_waive"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/appointments/{id}/cancellation-fee/void": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Anular un cargo ya generado, con motivo (SEC-050)
+         * @description La única forma de dejar sin efecto un cargo generado: desde el plan, su ítem no cambia de precio, descuento ni estado ni se quita (409 a todo rol). En una transacción, con la cita y el cargo bloqueados, guarda en el cargo quién, cuándo y el motivo (3–500) y retira su ítem del plan «Cargos administrativos» (deja de salir en el estado de cuenta). Una vez por cargo. Si los abonos vivos de ese plan ya cubren el cargo, 409: se anula antes el abono. Auditado (VOID APPOINTMENT, CANCELLATION_FEE_VOIDED, estado CHARGED → VOIDED, sin el texto del motivo). Sin Idempotency-Key, como condonar: repetirla da 409 «ya se anuló».
+         */
+        post: operations["CancellationFeeController_voidFee"];
         delete?: never;
         options?: never;
         head?: never;
@@ -7666,6 +7747,19 @@ export interface components {
             primaryColor: string;
             logoUrl: string | null;
         };
+        PublicCancellationPolicyDto: {
+            /**
+             * Format: uuid
+             * @description Versión mostrada: la página la devuelve en `policyVersionId` al responder.
+             */
+            policyVersionId: string;
+            noticeHours: number;
+            /** @description Texto de la clínica (puede ir vacío). */
+            text: string;
+            suggestedFee: number | null;
+            /** @example COP */
+            currency: string | null;
+        };
         PublicAppointmentConfirmationDto: {
             /**
              * @description PENDING: puede responder. RESPONDED: ya respondió (ver `response`). EXPIRED: caducado o sin efecto.
@@ -7679,10 +7773,21 @@ export interface components {
             response: "confirm" | "cancel" | "call_me" | null;
             /** Format: date-time */
             respondedAt: string | null;
+            /** @description DX-291: política vigente de la sede (solo con el enlace PENDING; null sin política). */
+            cancellationPolicy: components["schemas"]["PublicCancellationPolicyDto"] | null;
+            /** @description DX-291: cancelar ahora tendría menos aviso que la política: cancelar exige `acknowledgePolicy`. */
+            isLate: boolean;
         };
         RespondAppointmentConfirmationDto: {
             /** @enum {string} */
             action: "confirm" | "cancel" | "call_me";
+            /** @description DX-291: el paciente acepta la política de cancelación. Obligatorio (true) para cancelar con menos aviso que la política (400 sin él). */
+            acknowledgePolicy?: boolean;
+            /**
+             * Format: uuid
+             * @description DX-291: versión de la política que mostró la página (null = ninguna). Si ya no es la vigente: 409 y la página se recarga.
+             */
+            policyVersionId?: string | null;
         };
         UnscheduledPlanDto: {
             /** Format: uuid */
@@ -7882,6 +7987,11 @@ export interface components {
              * @description DX-050: cuándo se realizó (hora del servidor al marcarlo)
              */
             completedAt: string | null;
+            /**
+             * Format: uuid
+             * @description SEC-050: el ítem es el cargo vigente por inasistencia o cancelación tardía de esta cita (DX-291). Su precio, descuento y estado no cambian ni se quita del plan (409 a todo rol): se anula con `POST /appointments/{id}/cancellation-fee/void`, con motivo. null en cualquier otro ítem.
+             */
+            cancellationFeeAppointmentId: string | null;
             notes: string | null;
             /** Format: date-time */
             createdAt: string;
@@ -8051,6 +8161,11 @@ export interface components {
              * @description DX-050: SOLO para que un ADMIN corrija la fecha de un ítem ya DONE (403 a otro rol, 400 si es futura). Al pasar a DONE la pone el servidor (400 si llega)
              */
             completedAt?: string;
+            /**
+             * Format: uuid
+             * @description DX-305: SOLO para que un ADMIN corrija la sede donde se realizó un ítem ya DONE (403 a otro rol; 403 si no es de sus sedes permitidas, DX-089; 400 si no es de esta clínica). Obligatoria, junto con `performedById` y `completedAt`, al atribuir un ítem «Sin atribuir» (400 si falta alguno). Al pasar a DONE la pone la sede del request (400 si llega). Auditado con el antes y el después
+             */
+            performedLocationId?: string;
             surfaces?: ("MESIAL" | "DISTAL" | "OCCLUSAL" | "VESTIBULAR" | "LINGUAL")[];
             notes?: string;
         };
@@ -9453,7 +9568,7 @@ export interface components {
             howItIsCalculated: string;
         };
         CurrencyMetricDto: {
-            /** @description Valor del período. Porcentajes en % con 2 decimales; null = no se puede calcular (sin base) */
+            /** @description Valor del período. Porcentajes en % con 2 decimales (la ocupación, con tope de 100); null = no se puede calcular (sin base) */
             value: number | null;
             /** @description Valor del período de comparación (null sin comparación) */
             previous: number | null;
@@ -9466,9 +9581,14 @@ export interface components {
             trend: "BETTER" | "WORSE" | "EQUAL" | null;
             /** @example COP */
             currency: string;
+            /**
+             * @description BE-045: solo en producción y % de cobro, y solo cuando la producción del período comparado en esta moneda no es base (empieza antes de DX-050 con realizados «Sin atribuir», o tuvo cobros sin producción): `change` y `trend` van a null
+             * @enum {boolean}
+             */
+            previousUnattributed?: true;
         };
         MetricDto: {
-            /** @description Valor del período. Porcentajes en % con 2 decimales; null = no se puede calcular (sin base) */
+            /** @description Valor del período. Porcentajes en % con 2 decimales (la ocupación, con tope de 100); null = no se puede calcular (sin base) */
             value: number | null;
             /** @description Valor del período de comparación (null sin comparación) */
             previous: number | null;
@@ -9507,6 +9627,8 @@ export interface components {
             timeZone: string | null;
             /** @description ¿Hubo producción, cobros o citas (atendidas o no-show) en el período? */
             hasActivity: boolean;
+            /** @description BE-045: el período comparado no tiene toda su producción atribuida: alguna moneda de producción y % de cobro sale sin variación (`previousUnattributed`) */
+            previousPeriodUnattributed: boolean;
             metrics: components["schemas"]["ComparisonMetricsDto"];
         };
         LocationsComparisonDto: {
@@ -9530,6 +9652,8 @@ export interface components {
             total: components["schemas"]["ComparisonRowDto"];
             /** @description ¿Alguna sede tuvo actividad en el período? */
             hasActivity: boolean;
+            /** @description ¿Alguna fila (o el total) tiene `previousPeriodUnattributed`? La pantalla lo explica junto a «Producción» y «% de cobro» */
+            previousPeriodUnattributed: boolean;
         };
         CashSettingsDto: {
             /** @description «Exigir caja abierta»: sin caja abierta en la sede no se registra un abono en efectivo (409). */
@@ -10001,6 +10125,14 @@ export interface components {
             quantity: number;
             reason?: string;
         };
+        ReminderEmailPreviewDto: {
+            /** @example Recordatorio de tu cita en Clínica Sonrisa */
+            subject: string;
+            /** @description HTML completo del email (con la marca de la clínica). Muéstralo en un iframe con sandbox. */
+            html: string;
+            /** @description Versión en texto plano. */
+            text: string;
+        };
         CancellationPolicyVersionDto: {
             /** Format: uuid */
             id: string;
@@ -10059,6 +10191,94 @@ export interface components {
             patientText?: string;
             /** @description RECEPTION también podrá generar el cargo (DX-291). Si falta, no. */
             receptionCanCharge?: boolean;
+        };
+        CommunicatedPolicyDto: {
+            /** Format: uuid */
+            policyVersionId: string;
+            version: number;
+            noticeHours: number;
+            suggestedFee: number | null;
+            /** @example COP */
+            currency: string | null;
+        };
+        CancellationFeeRecordDto: {
+            /** Format: uuid */
+            id: string;
+            /** @enum {string} */
+            status: "CHARGED" | "WAIVED";
+            amount: number | null;
+            currency: string | null;
+            /**
+             * Format: uuid
+             * @description Plan «Cargos administrativos» donde se cobra con un abono.
+             */
+            planId: string | null;
+            /** Format: uuid */
+            planItemId: string | null;
+            /** @description El ítem del cargo ya no está en el plan: no hay nada que cobrar. Desde SEC-050 solo pasa al anular el cargo (`voidedAt`); un cargo con el ítem retirado y sin anular es anterior a SEC-050 (se quitó con «Quitar»). La cita sigue con su única decisión (otro cargo o condonar: 409). */
+            planItemRemoved: boolean;
+            /** @description SEC-050: lo que cobra hoy el ítem del cargo (precio − descuento); null sin ítem o con el ítem retirado. */
+            itemAmount: number | null;
+            /** @description SEC-050: el ítem vivo no cobra lo que dice el cargo (`amount`): se cambió por fuera de este flujo. La vista debe avisarlo. */
+            itemMismatch: boolean;
+            /**
+             * Format: date-time
+             * @description SEC-050: cuándo se anuló el cargo (null = sin anular).
+             */
+            voidedAt: string | null;
+            voidedByName: string | null;
+            /** @description SEC-050: motivo de la anulación. */
+            voidReason: string | null;
+            waiveReason: string | null;
+            /** Format: uuid */
+            policyVersionId: string | null;
+            /** Format: date-time */
+            createdAt: string;
+            createdByName: string | null;
+        };
+        CancellationFeeViewDto: {
+            /** Format: uuid */
+            appointmentId: string;
+            /** Format: uuid */
+            patientId: string;
+            /** @description NO_SHOW o cancelación tardía. */
+            eligible: boolean;
+            /**
+             * @description VOIDED (SEC-050): el cargo se generó y después se anuló con motivo.
+             * @enum {string}
+             */
+            status: "NONE" | "CHARGED" | "WAIVED" | "VOIDED";
+            /**
+             * @description Por qué no se puede generar el cargo ahora: no es inasistencia ni tardía, no consta la política comunicada, la versión comunicada no tiene importe, EPS_CO activa en Colombia, o ya cobrado/condonado.
+             * @enum {string|null}
+             */
+            chargeBlock: "NOT_ELIGIBLE" | "NOT_INFORMED" | "NO_FEE" | "EPS_CO" | "ALREADY_CHARGED" | "ALREADY_WAIVED" | null;
+            chargeBlockMessage: string | null;
+            /** @description El usuario puede generar, condonar o anular: ADMIN, o RECEPTION si la política vigente de la sede lo permite. */
+            canManage: boolean;
+            communicated: components["schemas"]["CommunicatedPolicyDto"] | null;
+            fee: components["schemas"]["CancellationFeeRecordDto"] | null;
+        };
+        ChargeCancellationFeeDto: {
+            /**
+             * @description Importe del cargo en la moneda de la política comunicada. Sin él, el sugerido. Editable a la baja: por encima del sugerido es 400.
+             * @example 50000
+             */
+            amount?: number;
+        };
+        WaiveCancellationFeeDto: {
+            /**
+             * @description Motivo de la condonación (3–500 caracteres). Queda en la cita; la auditoría registra la condonación sin el texto.
+             * @example Hospitalización documentada
+             */
+            reason: string;
+        };
+        VoidCancellationFeeDto: {
+            /**
+             * @description Motivo de la anulación (3–500 caracteres). Queda en el cargo con quién y cuándo; la auditoría registra la anulación sin el texto.
+             * @example Cargo generado por error: el paciente avisó a tiempo por teléfono
+             */
+            reason: string;
         };
         PlatformTenantDto: {
             /** Format: uuid */
@@ -17189,6 +17409,13 @@ export interface operations {
                     "application/json": components["schemas"]["PublicAppointmentConfirmationDto"];
                 };
             };
+            /** @description DX-291: cancelar con menos aviso que la política sin `acknowledgePolicy: true` (mensaje en español). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
             /** @description Token desconocido o de otra clínica. */
             404: {
                 headers: {
@@ -17196,7 +17423,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description El enlace ya se usó para responder. */
+            /** @description El enlace ya se usó para responder, o (DX-291) la política vigente no es la que mostró la página. */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -17429,7 +17656,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Transición de estado no permitida por la máquina de estados (DX-040: DRAFT → PRESENTED → ACCEPTED | REJECTED; DRAFT → ACCEPTED; ACCEPTED → COMPLETED; cualquiera salvo COMPLETED → CANCELLED); plan aceptado con firma: no cambia de moneda ni vuelve atrás (DX-012); otra opción del grupo ya aceptada; la moneda no cambia si el plan tiene abonos vivos, un plan de cuotas activo o está cerrado (DX-109). Aceptar pasa los ítems propuestos a aceptados, igual que la aceptación firmada, y cancela el plan de cuotas activo de las hermanas que rechaza; cancelar cancela también el plan de cuotas activo */
+            /** @description Transición de estado no permitida por la máquina de estados (DX-040: DRAFT → PRESENTED → ACCEPTED | REJECTED; DRAFT → ACCEPTED; ACCEPTED → COMPLETED; cualquiera salvo COMPLETED → CANCELLED); plan aceptado con firma: no cambia de moneda ni vuelve atrás (DX-012); otra opción del grupo ya aceptada; la moneda no cambia si el plan tiene abonos vivos, un plan de cuotas activo o está cerrado (DX-109). SEC-050: el plan que lleva un cargo vigente por inasistencia no se cancela ni cambia de moneda (completarlo sí). Aceptar pasa los ítems propuestos a aceptados, igual que la aceptación firmada, y cancela el plan de cuotas activo de las hermanas que rechaza; cancelar cancela también el plan de cuotas activo */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -17706,7 +17933,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Plan aceptado con firma: sus ítems quedan congelados (DX-012); o el plan está cancelado, rechazado o completado (DX-109) */
+            /** @description Plan aceptado con firma: sus ítems quedan congelados (DX-012); o el plan está cancelado, rechazado o completado (DX-109); SEC-050: el ítem es el cargo vigente por inasistencia o cancelación tardía de una cita (`cancellationFeeAppointmentId`): su precio, descuento y estado no cambian ni se quita, sea cual sea el rol; se anula con POST /appointments/{id}/cancellation-fee/void */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -17762,7 +17989,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Plan aceptado con firma: sus ítems quedan congelados (DX-012); o el plan está cancelado, rechazado o completado (DX-109); o el descuento (también una rebaja del precio frente al de catálogo) cambia en un plan ya aceptado (DX-204, SEC-041). El estado del plan se comprueba con su fila bloqueada, dentro de la transacción (BE-036); firmado: solo admite avanzar el estado (no volver a PROPOSED); completado: solo admite marcar como DONE un ítem ACCEPTED sin otro cambio; cerrado: DX-050 admite además corregir quién o cuándo de un ítem DONE, sin otro cambio */
+            /** @description Plan aceptado con firma: sus ítems quedan congelados (DX-012); o el plan está cancelado, rechazado o completado (DX-109); o el descuento (también una rebaja del precio frente al de catálogo) cambia en un plan ya aceptado (DX-204, SEC-041). El estado del plan se comprueba con su fila bloqueada, dentro de la transacción (BE-036); SEC-050: el ítem es el cargo vigente por inasistencia o cancelación tardía de una cita (`cancellationFeeAppointmentId`): su precio, descuento y estado no cambian ni se quita, sea cual sea el rol; se anula con POST /appointments/{id}/cancellation-fee/void; firmado: solo admite avanzar el estado (no volver a PROPOSED); completado: solo admite marcar como DONE un ítem ACCEPTED sin otro cambio; cerrado: DX-050 admite además corregir quién, cuándo o dónde (DX-305) de un ítem DONE, sin otro cambio */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -17977,7 +18204,7 @@ export interface operations {
     DiscountReportController_list: {
         parameters: {
             query: {
-                /** @description Primer día del periodo (AAAA-MM-DD, en la zona de cada sede). Como mucho 366 días. */
+                /** @description Primer día del periodo (AAAA-MM-DD, en la zona de cada sede). Como mucho 366 días; las dos fechas entre 2000-01-01 y 2100-12-31 (400 si no). */
                 from: string;
                 /** @description Último día (inclusive) */
                 to: string;
@@ -18025,7 +18252,7 @@ export interface operations {
     DiscountReportController_csv: {
         parameters: {
             query: {
-                /** @description Primer día del periodo (AAAA-MM-DD, en la zona de cada sede). Como mucho 366 días. */
+                /** @description Primer día del periodo (AAAA-MM-DD, en la zona de cada sede). Como mucho 366 días; las dos fechas entre 2000-01-01 y 2100-12-31 (400 si no). */
                 from: string;
                 /** @description Último día (inclusive) */
                 to: string;
@@ -18358,7 +18585,7 @@ export interface operations {
             query: {
                 /** @description Primer día del período (YYYY-MM-DD), inclusive, en la zona horaria de la sede de cada abono (la de su horario; con varias sedes en zonas distintas, cada una corta el día a su medianoche). */
                 from: string;
-                /** @description Último día del período (YYYY-MM-DD), inclusive (hasta la medianoche del día siguiente en la zona de la sede). Debe ser >= from; el período no puede superar 366 días. */
+                /** @description Último día del período (YYYY-MM-DD), inclusive (hasta la medianoche del día siguiente en la zona de la sede). Debe ser >= from; el período no puede superar 366 días. Las dos fechas, entre 2000-01-01 y 2100-12-31 (400 si no). */
                 to: string;
                 /** @description Solo abonos de este método. Sin él, todos los métodos. */
                 method?: "CASH" | "CARD" | "TRANSFER" | "OTHER";
@@ -19000,7 +19227,7 @@ export interface operations {
     LocationsComparisonController_get: {
         parameters: {
             query: {
-                /** @description Primer día del período (AAAA-MM-DD, en la zona de cada sede). Como mucho 366 días. */
+                /** @description Primer día del período (AAAA-MM-DD, en la zona de cada sede). Como mucho 366 días; las dos fechas entre 2000-01-01 y 2100-12-31 (400 si no). */
                 from: string;
                 /** @description Último día (inclusive) */
                 to: string;
@@ -19042,7 +19269,7 @@ export interface operations {
     LocationsComparisonController_csv: {
         parameters: {
             query: {
-                /** @description Primer día del período (AAAA-MM-DD, en la zona de cada sede). Como mucho 366 días. */
+                /** @description Primer día del período (AAAA-MM-DD, en la zona de cada sede). Como mucho 366 días; las dos fechas entre 2000-01-01 y 2100-12-31 (400 si no). */
                 from: string;
                 /** @description Último día (inclusive) */
                 to: string;
@@ -19755,6 +19982,48 @@ export interface operations {
             };
         };
     };
+    CancellationPolicyController_emailPreview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReminderEmailPreviewDto"];
+                };
+            };
+            /** @description El identificador de la sede no es válido. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo un administrador puede ver y cambiar la política de cancelación. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sede no encontrada en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
     CancellationPolicyController_get: {
         parameters: {
             query?: never;
@@ -19836,6 +20105,207 @@ export interface operations {
             };
             /** @description Sede no encontrada en esta clínica */
             404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    CancellationFeeController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CancellationFeeViewDto"];
+                };
+            };
+            /** @description Id que no es UUID */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Rol sin permiso, o sede de la cita no permitida al usuario (DX-089) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Cita no encontrada en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    CancellationFeeController_charge: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ChargeCancellationFeeDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CancellationFeeViewDto"];
+                };
+            };
+            /** @description Importe no válido o por encima del sugerido por la versión comunicada */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ni ADMIN ni RECEPTION con permiso de la política; o sede no permitida */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Cita no encontrada en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No es inasistencia ni tardía, «No consta que el paciente fuera informado de la política», la versión comunicada no tiene importe, cobertura EPS_CO activa en una sede de Colombia (Ley 1438 art. 55), ya cobrado o condonado, o la cita cambió mientras tanto */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    CancellationFeeController_waive: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["WaiveCancellationFeeDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CancellationFeeViewDto"];
+                };
+            };
+            /** @description Motivo vacío o de más de 500 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ni ADMIN ni RECEPTION con permiso de la política; o sede no permitida */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Cita no encontrada en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No es inasistencia ni tardía, ya cobrado o condonado, o la cita cambió */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    CancellationFeeController_voidFee: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VoidCancellationFeeDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CancellationFeeViewDto"];
+                };
+            };
+            /** @description Motivo vacío o de más de 500 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ni ADMIN ni RECEPTION con permiso de la política; o sede no permitida (DX-089) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Cita no encontrada en esta clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sin cargo generado (o condonado), ya anulado, ya cobrado (anula antes el abono), o la cita cambió */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

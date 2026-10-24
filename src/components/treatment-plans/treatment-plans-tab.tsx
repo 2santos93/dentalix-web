@@ -105,6 +105,7 @@ import { usePriceQuote } from '@/lib/treatment-plans/use-price-quote';
 import { FieldError } from '@/components/errors/field-error';
 import { PriceQuoteLine, itemPriceOriginText } from './price-quote-line';
 import { MarkDoneModal } from './mark-done-modal';
+import { VoidCancellationFeeModal, voidFeeCopy } from '@/components/appointments/fee-reason-modal';
 import { attributionText } from '@/lib/treatment-plans/item-attribution';
 
 // Copy as constants (i18n-ready, es-first) — matches odontogram-tab.tsx /
@@ -154,6 +155,9 @@ const copy = {
   genericPlanStatusError: 'No pudimos actualizar el estado del plan. Intenta de nuevo.',
   itemsTableCaption: 'Ítems del plan de tratamiento',
   colTooth: 'Diente',
+  // DX-291: un cargo administrativo (inasistencia) no es de ningún diente.
+  noTooth: 'Sin diente',
+  noSurfaces: '—',
   colProcedure: 'Procedimiento',
   colSurfaces: 'Caras',
   colPrice: 'Precio',
@@ -164,6 +168,11 @@ const copy = {
   emptyItemsDescription: 'Agrega un procedimiento con el formulario de abajo.',
   totalLabel: 'Total',
   remove: 'Quitar',
+  // SEC-050: el ítem de un cargo por inasistencia vigente.
+  feeItemNote: 'Cargo por inasistencia o cancelación tardía: su importe y su estado no se cambian aquí.',
+  feeItemNoteAdmin:
+    'Cargo por inasistencia o cancelación tardía: su importe y su estado no se cambian aquí; si se generó por error, anúlalo con motivo.',
+  voidFeeFor: (tooth: string) => (tooth ? `Anular el cargo del ítem del diente ${tooth}` : 'Anular cargo'),
   removing: 'Quitando…',
   removeConfirmTitle: '¿Quitar este ítem del plan?',
   // El backend hace soft-delete (`deletedAt`) y `getPlan` incluye los ítems
@@ -181,6 +190,9 @@ const copy = {
   // DX-050: quién lo realizó. Corregirlo es solo de la administración.
   correctAttribution: 'Corregir',
   correctAttributionFor: (tooth: string) => `Corregir quién realizó el ítem del diente ${tooth}`,
+  // DX-305: un realizado «Sin atribuir» se atribuye con quién, cuándo y dónde.
+  attributeItem: 'Atribuir',
+  attributeItemFor: (tooth: string) => `Atribuir quién, cuándo y dónde se realizó el ítem del diente ${tooth}`,
   markDoneSubject: (procedure: string, tooth: string) => `${procedure} · diente ${tooth}`,
   addItemHeading: 'Agregar ítem',
   invalidToothNumber: 'Número de diente inválido. Usa la notación FDI (ej. 11, 26, 55).',
@@ -389,6 +401,11 @@ interface ItemsTableProps {
   /** DX-050: ADMIN corrige quién realizó un ítem (sin ella, no se ofrece). */
   onCorrectAttribution?: (itemId: string) => void;
   /**
+   * SEC-050: anular el cargo por inasistencia de un ítem que lo es (solo
+   * ADMIN: recepción no ve el plan). Sin ella, el ítem solo lo explica.
+   */
+  onVoidFee?: (item: TreatmentPlanItem) => void;
+  /**
    * Plan aceptado con firma (DX-012): sus ítems no se quitan ni vuelven a
    * «Propuesto» (la API responde 409); el tratamiento sí avanza.
    */
@@ -435,10 +452,40 @@ function ItemAttributionLine({
           variant="ghost"
           size="sm"
           className="h-11 px-2 text-xs md:h-7"
-          aria-label={copy.correctAttributionFor(item.toothNumber)}
+          aria-label={
+            item.performedLocationId === null
+              ? copy.attributeItemFor(item.toothNumber)
+              : copy.correctAttributionFor(item.toothNumber)
+          }
           onClick={() => onCorrect(item.id)}
         >
-          {copy.correctAttribution}
+          {item.performedLocationId === null ? copy.attributeItem : copy.correctAttribution}
+        </Button>
+      ) : null}
+    </span>
+  );
+}
+
+/**
+ * SEC-050: el ítem de un cargo por inasistencia vigente no se quita ni cambia
+ * de estado (la API responde 409 a todo rol): lo dice y, a un ADMIN, le ofrece
+ * anularlo con motivo.
+ */
+function FeeItemLine({ item, onVoid }: { item: TreatmentPlanItem; onVoid?: (item: TreatmentPlanItem) => void }) {
+  if (!item.cancellationFeeAppointmentId) return null;
+  return (
+    <span className="flex flex-col items-start gap-1 text-xs text-muted">
+      <span>{onVoid ? copy.feeItemNoteAdmin : copy.feeItemNote}</span>
+      {onVoid ? (
+        <Button
+          type="button"
+          variant="outline"
+          size="sm"
+          className="h-11 md:h-8"
+          aria-label={item.toothNumber ? copy.voidFeeFor(item.toothNumber) : undefined}
+          onClick={() => onVoid(item)}
+        >
+          {voidFeeCopy.action}
         </Button>
       ) : null}
     </span>
@@ -500,7 +547,8 @@ function OdontogramLink({
   toothNumber: string;
   href?: (toothNumber: string) => string;
 }) {
-  if (!href) return null;
+  // DX-291: un cargo administrativo no tiene diente al que volver.
+  if (!href || !toothNumber) return null;
   return (
     <Link
       href={href(toothNumber)}
@@ -612,9 +660,9 @@ function procedureName(item: TreatmentPlanItem, catalogById: Map<string, DentalC
 }
 
 function surfacesLabel(item: TreatmentPlanItem): string {
-  return item.surfaces.length > 0
-    ? item.surfaces.map((s) => SURFACE_LABELS[s]).join(', ')
-    : copy.wholeToothFallback;
+  if (item.surfaces.length > 0) return item.surfaces.map((s) => SURFACE_LABELS[s]).join(', ');
+  // DX-291: un cargo administrativo no tiene diente ni caras.
+  return item.toothNumber ? copy.wholeToothFallback : copy.noSurfaces;
 }
 
 function ItemsTable({
@@ -629,11 +677,16 @@ function ItemsTable({
   onRemove,
   canLeaveDone = () => true,
   onCorrectAttribution,
+  onVoidFee,
   locked = false,
   closed = false,
   markDoneOnly = false,
   selection,
 }: ItemsTableProps) {
+  // SEC-050: el ítem de un cargo vigente no se quita, no cambia de estado ni
+  // entra en «Descuento %».
+  const isFee = (item: TreatmentPlanItem) => Boolean(item.cancellationFeeAppointmentId);
+  const removable = (item: TreatmentPlanItem) => !locked && !closed && !isFee(item);
   // DX-191: el implante se registra al ejecutar un ítem aceptado (o ya
   // realizado); no en uno solo propuesto ni en un plan cancelado o rechazado.
   const implantLinkFor = (item: TreatmentPlanItem) =>
@@ -643,7 +696,7 @@ function ItemsTable({
   // Plan cerrado: el estado no se toca, salvo en uno completado marcar como
   // realizado lo que quedó aceptado (misma regla que la API).
   const statusFrozen = (item: TreatmentPlanItem) =>
-    closed && !(markDoneOnly && item.status === 'ACCEPTED');
+    isFee(item) || (closed && !(markDoneOnly && item.status === 'ACCEPTED'));
   const optionDisabled = (item: TreatmentPlanItem, status: TreatmentPlanItemStatus) =>
     (locked && status === 'PROPOSED') ||
     (closed && status !== item.status && status !== 'DONE') ||
@@ -689,10 +742,10 @@ function ItemsTable({
                 >
                   {selection ? (
                     <TableCell className="w-10">
-                      <ItemSelectBox item={item} selection={selection} />
+                      {isFee(item) ? null : <ItemSelectBox item={item} selection={selection} />}
                     </TableCell>
                   ) : null}
-                  <TableCell className="font-medium tabular-nums">{item.toothNumber}</TableCell>
+                  <TableCell className="font-medium tabular-nums">{item.toothNumber || copy.noTooth}</TableCell>
                   <TableCell>{procedureName(item, catalogById)}</TableCell>
                   <TableCell className="text-muted">{surfacesLabel(item)}</TableCell>
                   <TableCell className="tabular-nums">
@@ -725,6 +778,7 @@ function ItemsTable({
                         )}
                       </span>
                       <ItemAttributionLine item={item} onCorrect={onCorrectAttribution} />
+                      <FeeItemLine item={item} onVoid={onVoidFee} />
                     </div>
                   </TableCell>
                   <TableCell>
@@ -733,9 +787,9 @@ function ItemsTable({
                         toque. */}
                     <div className="flex flex-wrap items-center gap-3">
                       <OdontogramLink toothNumber={item.toothNumber} href={odontogramHref} />
-                      {implantLink ? <RegisterImplantLink item={item} href={implantLink} /> : null}
-                      {odontogramHref && !locked && !closed ? <Separator orientation="vertical" className="h-5" /> : null}
-                      {locked || closed ? null : (
+                      {implantLink && item.toothNumber ? <RegisterImplantLink item={item} href={implantLink} /> : null}
+                      {item.toothNumber && odontogramHref && removable(item) ? <Separator orientation="vertical" className="h-5" /> : null}
+                      {!removable(item) ? null : (
                         <Button
                           type="button"
                           variant="outline"
@@ -772,8 +826,8 @@ function ItemsTable({
             >
               <div className="flex items-center justify-between gap-2">
                 <span className="flex items-center gap-3 font-medium text-ink tabular-nums">
-                  {selection ? <ItemSelectBox item={item} selection={selection} /> : null}
-                  {copy.colTooth} {item.toothNumber}
+                  {selection && !isFee(item) ? <ItemSelectBox item={item} selection={selection} /> : null}
+                  {item.toothNumber ? `${copy.colTooth} ${item.toothNumber}` : copy.noTooth}
                 </span>
                 <Badge variant={ITEM_STATUS_BADGE_VARIANT[item.status]}>
                   {ITEM_STATUS_LABELS[item.status]}
@@ -788,6 +842,11 @@ function ItemsTable({
               <div className="mt-1">
                 <ItemAttributionLine item={item} onCorrect={onCorrectAttribution} />
               </div>
+              {isFee(item) ? (
+                <div className="mt-2">
+                  <FeeItemLine item={item} onVoid={onVoidFee} />
+                </div>
+              ) : null}
               <div className="mt-3 flex items-center justify-between gap-2">
                 <select
                   aria-label={copy.itemStatusSelectLabel(item.toothNumber)}
@@ -802,7 +861,7 @@ function ItemsTable({
                     </option>
                   ))}
                 </select>
-                {locked || closed ? null : (
+                {!removable(item) ? null : (
                   <Button
                     type="button"
                     variant="outline"
@@ -814,10 +873,10 @@ function ItemsTable({
                   </Button>
                 )}
               </div>
-              {odontogramHref || implantLink ? (
+              {item.toothNumber && (odontogramHref || implantLink) ? (
                 <p className="mt-3 flex flex-wrap gap-x-4 gap-y-2">
                   <OdontogramLink toothNumber={item.toothNumber} href={odontogramHref} />
-                  {implantLink ? <RegisterImplantLink item={item} href={implantLink} /> : null}
+                  {implantLink && item.toothNumber ? <RegisterImplantLink item={item} href={implantLink} /> : null}
                 </p>
               ) : null}
             </li>
@@ -1019,6 +1078,7 @@ export function TreatmentPlansTab({
   // Plans list + catalog (loaded together).
   const [plans, setPlans] = useState<TreatmentPlan[]>([]);
   const [catalogItems, setCatalogItems] = useState<DentalCatalogItem[]>([]);
+  const [allCatalogItems, setAllCatalogItems] = useState<DentalCatalogItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [hasLoadedOnce, setHasLoadedOnce] = useState(false);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -1061,6 +1121,8 @@ export function TreatmentPlansTab({
   // que se confirma o se cancela. El error va al diálogo, no a la línea
   // inline de arriba, que es la del cambio de estado.
   const [itemToRemove, setItemToRemove] = useState<string | null>(null);
+  // SEC-050: el ítem cuyo cargo por inasistencia se está anulando.
+  const [feeToVoid, setFeeToVoid] = useState<TreatmentPlanItem | null>(null);
   // DX-050: el ítem que se marca como realizado (eligiendo quién lo hizo) o
   // cuya atribución corrige un ADMIN.
   const [markDone, setMarkDone] = useState<{ itemId: string; mode: 'done' | 'correct' } | null>(null);
@@ -1183,11 +1245,16 @@ export function TreatmentPlansTab({
       try {
         const [plansData, catalogData] = await Promise.all([
           listPlans(token, patientId),
-          listCatalogItems(token, { kind: 'PROCEDURE', activeOnly: true }),
+          // Todos (también los inactivos): un ítem ya dado de alta conserva su
+          // nombre aunque el procedimiento se retire (p. ej. el cargo por
+          // inasistencia de DX-291, inactivo a propósito). El selector solo
+          // ofrece los activos.
+          listCatalogItems(token, { kind: 'PROCEDURE' }),
         ]);
         if (cancelled) return;
         setPlans(plansData);
-        setCatalogItems(catalogData);
+        setAllCatalogItems(catalogData);
+        setCatalogItems(catalogData.filter((item) => item.active));
         setLoadError(null);
         setHasLoadedOnce(true);
       } catch (err) {
@@ -1293,7 +1360,7 @@ export function TreatmentPlansTab({
     setAddPaymentError(null);
   }
 
-  const catalogById = new Map(catalogItems.map((item) => [item.id, item]));
+  const catalogById = new Map(allCatalogItems.map((item) => [item.id, item]));
 
   // DX-105: el precio resuelto de la prestación elegida para ESTE paciente
   // (convenio > lista de la sede > catálogo). Precarga el campo; si falla,
@@ -2170,6 +2237,7 @@ export function TreatmentPlansTab({
                   onCorrectAttribution={
                     role === 'ADMIN' ? (itemId) => setMarkDone({ itemId, mode: 'correct' }) : undefined
                   }
+                  onVoidFee={role === 'ADMIN' ? setFeeToVoid : undefined}
                   locked={signed}
                   closed={closed}
                   markDoneOnly={planDetail?.status === 'COMPLETED'}
@@ -2608,7 +2676,23 @@ export function TreatmentPlansTab({
           // sede que el cliente HTTP manda en `X-Location-Id`.
           activeLocationId={getActiveLocationId()}
           locationName={locations.find((l) => l.id === getActiveLocationId())?.name ?? null}
+          locations={locations}
           onSaved={handleMarkDoneSaved}
+        />
+      ) : null}
+
+      {feeToVoid?.cancellationFeeAppointmentId ? (
+        <VoidCancellationFeeModal
+          key={feeToVoid.id}
+          token={token}
+          appointmentId={feeToVoid.cancellationFeeAppointmentId}
+          onClose={() => setFeeToVoid(null)}
+          onDone={() => {
+            setFeeToVoid(null);
+            // El ítem sale del plan y deja de ser facturable.
+            void Promise.all([refreshPlanDetail(), refreshBalanceAndPayments()]);
+          }}
+          onStale={() => void refreshPlanDetail()}
         />
       ) : null}
 

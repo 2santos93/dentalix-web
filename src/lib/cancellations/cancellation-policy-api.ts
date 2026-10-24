@@ -4,6 +4,7 @@ import type { components } from '@/lib/api/schema';
 export type CancellationPolicyVersion = components['schemas']['CancellationPolicyVersionDto'];
 export type CancellationPolicy = components['schemas']['CancellationPolicyDto'];
 export type CancellationPolicyInput = components['schemas']['CreateCancellationPolicyDto'];
+export type ReminderEmailPreview = components['schemas']['ReminderEmailPreviewDto'];
 
 /** Límites de la API (DX-279): horas de aviso 0–168 y texto de 1000. */
 export const NOTICE_HOURS_MIN = 0;
@@ -30,5 +31,16 @@ export function createCancellationPolicyVersion(
   return apiFetch<CancellationPolicyVersion>(
     `/locations/${encodeURIComponent(locationId)}/cancellation-policy`,
     { method: 'POST', body: input, token },
+  );
+}
+
+/**
+ * DX-291: `GET /locations/:id/cancellation-policy/email-preview` — el
+ * recordatorio tal como saldría, con la política vigente (solo ADMIN).
+ */
+export function getReminderEmailPreview(token: string, locationId: string): Promise<ReminderEmailPreview> {
+  return apiFetch<ReminderEmailPreview>(
+    `/locations/${encodeURIComponent(locationId)}/cancellation-policy/email-preview`,
+    { token },
   );
 }
