@@ -928,23 +928,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/patients/{patientId}/clinical-entries/rda-readiness": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Datos RDA de hasta50 evoluciones del paciente, con una auditoría */
-        get: operations["ClinicalEntriesController_readiness"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/patients/{patientId}/clinical-entries/{entryId}/addenda": {
         parameters: {
             query?: never;
@@ -983,26 +966,6 @@ export interface paths {
         head?: never;
         /** No permitido: una evolución no se edita (DX-038) */
         patch: operations["ClinicalEntriesController_rejectPatch"];
-        trace?: never;
-    };
-    "/api/v1/clinical-entries/{id}/rda-readiness": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Datos del RDA que faltan en la atención de una evolución
-         * @description Comprueba documento del paciente, diagnóstico principal CIE-10, CUPS de los procedimientos realizados ese día (odontograma), REPS de la sede (la de la cita o, sin cita, la principal) y registro profesional del autor. El NIT de la clínica sale en `pending` hasta DX-019. Sede fuera de Colombia: `notApplicable: true`.
-         */
-        get: operations["ClinicalEntryRdaController_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
         trace?: never;
     };
     "/api/v1/clinical-note-templates": {
@@ -5628,11 +5591,6 @@ export interface components {
             /** @description At most 2 decimal places */
             defaultPrice?: number;
             /**
-             * @description DX-212: código CUPS del procedimiento, 6 caracteres alfanuméricos (400 con el formato esperado si no). Vacío o null lo quita. Solo ADMIN.
-             * @example 890203
-             */
-            cupsCode?: string | null;
-            /**
              * @description DX-105: false = la prestación no admite descuentos. Por defecto true.
              * @default true
              */
@@ -5654,8 +5612,6 @@ export interface components {
             labelPt: string | null;
             color: string;
             defaultPrice: number | null;
-            /** @description DX-212: código CUPS (6 alfanuméricos) o null. */
-            cupsCode: string | null;
             /** @description DX-105: false = la prestación no admite descuentos (ni % de convenio ni discrecionales). */
             allowDiscount: boolean;
             active: boolean;
@@ -5683,11 +5639,6 @@ export interface components {
             color?: string;
             /** @description At most 2 decimal places */
             defaultPrice?: number;
-            /**
-             * @description DX-212: código CUPS del procedimiento, 6 caracteres alfanuméricos (400 con el formato esperado si no). Vacío o null lo quita. Solo ADMIN.
-             * @example 890203
-             */
-            cupsCode?: string | null;
             /** @description DX-105: false = la prestación no admite descuentos. */
             allowDiscount?: boolean;
             active?: boolean;
@@ -6083,52 +6034,11 @@ export interface components {
             /** @description DX-212: diagnósticos CIE-10, el principal primero (vacío en las evoluciones sin diagnóstico) */
             diagnoses: components["schemas"]["ClinicalEntryDiagnosisDto"][];
         };
-        /** @enum {string} */
-        RdaMissingCode: "PATIENT_DOCUMENT" | "PRINCIPAL_DIAGNOSIS" | "PROCEDURE_CUPS" | "LOCATION_REPS" | "AUTHOR_LICENSE";
-        RdaMissingItemDto: {
-            code: components["schemas"]["RdaMissingCode"];
-            /** @example Código CUPS de «Profilaxis» */
-            label: string;
-            /**
-             * Format: uuid
-             * @description Dónde completarlo: paciente (PATIENT_DOCUMENT), ítem del catálogo (PROCEDURE_CUPS), sede (LOCATION_REPS) o usuario autor (AUTHOR_LICENSE); null si no aplica.
-             */
-            resourceId: string | null;
-        };
-        /** @enum {string} */
-        RdaPendingCode: "CLINIC_TAX_ID";
-        RdaPendingItemDto: {
-            code: components["schemas"]["RdaPendingCode"];
-            /** @example NIT de la clínica */
-            label: string;
-            /** @example pendiente de DX-019 */
-            reason: string;
-        };
-        BatchRdaReadinessDto: {
-            /** @description true en una sede fuera de Colombia: el RDA no aplica (ready=false, listas vacías). */
-            notApplicable: boolean;
-            /** @description Sin faltantes (los pendientes no cuentan). */
-            ready: boolean;
-            missing: components["schemas"]["RdaMissingItemDto"][];
-            /** @description Datos que aún no existen en Dentalix y no bloquean. */
-            pending: components["schemas"]["RdaPendingItemDto"][];
-            /** Format: uuid */
-            entryId: string;
-        };
         CreateClinicalEntryAddendumDto: {
             /** @description Motivo de la corrección (p. ej. «pieza dental mal transcrita») */
             reason: string;
             /** @description Texto aclaratorio que corrige o completa la evolución */
             text: string;
-        };
-        RdaReadinessDto: {
-            /** @description true en una sede fuera de Colombia: el RDA no aplica (ready=false, listas vacías). */
-            notApplicable: boolean;
-            /** @description Sin faltantes (los pendientes no cuentan). */
-            ready: boolean;
-            missing: components["schemas"]["RdaMissingItemDto"][];
-            /** @description Datos que aún no existen en Dentalix y no bloquean. */
-            pending: components["schemas"]["RdaPendingItemDto"][];
         };
         /** @enum {string} */
         ClinicalNotePromptType: "ONE" | "MULTI" | "TEXT";
@@ -14868,44 +14778,6 @@ export interface operations {
             };
         };
     };
-    ClinicalEntriesController_readiness: {
-        parameters: {
-            query: {
-                /** @description De 1 a 50 UUID de evoluciones separados por comas. */
-                ids: string;
-            };
-            header?: never;
-            path: {
-                patientId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["BatchRdaReadinessDto"][];
-                };
-            };
-            /** @description Envía entre1 y50 UUID separados por comas. */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Paciente o alguna evolución no encontrados en esta clínica y paciente. */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
     ClinicalEntriesController_addenda: {
         parameters: {
             query?: never;
@@ -15031,34 +14903,6 @@ export interface operations {
         responses: {
             /** @description Una evolución de la historia clínica no se puede modificar ni borrar (Res. 1995 de 1999, art. 18). Para corregirla, añade una adenda: POST /patients/{patientId}/clinical-entries/{entryId}/addenda */
             405: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    ClinicalEntryRdaController_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RdaReadinessDto"];
-                };
-            };
-            /** @description Evolución inexistente o de otra clínica. */
-            404: {
                 headers: {
                     [name: string]: unknown;
                 };
