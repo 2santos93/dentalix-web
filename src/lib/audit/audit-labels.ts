@@ -81,8 +81,8 @@ export const AUDIT_RESOURCE_LABELS: Record<AuditResourceType, string> = {
   // DX-210: oferta de un hueco libre a un candidato.
   WAITLIST_OFFER: 'Oferta de hueco',
   CASH_SESSION: 'Caja por turno',
-  // DX-212: código CUPS de un ítem del catálogo; DX-319: cambios de una sede
-  // (nº de registro sanitario con su antes y después).
+  // DX-212: ítems del catálogo; DX-319: cambios de una sede (nº de registro
+  // sanitario con su antes y después).
   DENTAL_CATALOG_ITEM: 'Ítem del catálogo',
   LOCATION: 'Sede',
   // DX-107: lote de importación de pacientes (validar, confirmar, deshacer, informe).
@@ -361,6 +361,8 @@ export function cancellationDetail(metadata: AuditMetadata): string | null {
   // (el motivo de la condonación nunca viaja en la metadata).
   if (metadata.reason === 'CANCELLATION_FEE_CHARGED') return 'Cargo por inasistencia o cancelación tardía';
   if (metadata.reason === 'CANCELLATION_FEE_WAIVED') return 'Cargo por inasistencia condonado';
+  // SEC-050: anulación con motivo de un cargo ya generado (sin el texto).
+  if (metadata.reason === 'CANCELLATION_FEE_VOIDED') return 'Cargo por inasistencia anulado';
   if (metadata.reason !== 'APPOINTMENT_CANCELLED') return null;
   const c = metadata.cancellation;
   if (!c) return 'Cita cancelada';

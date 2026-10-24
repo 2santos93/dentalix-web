@@ -31,6 +31,7 @@ import { ITEM_WITHOUT_DISCOUNT, PLAN_WITHOUT_OPTIONS } from './plan-fixture';
 import { getPriceQuote, type PriceQuote } from '@/lib/patients/patient-agreement-api';
 import { applyBulkDiscount, getDiscountPolicy } from '@/lib/discounts/discounts-api';
 import { listStaff } from '@/lib/appointments/staff-api';
+import { voidCancellationFee } from '@/lib/cancellations/cancellation-fee-api';
 
 // NOTE: jest.mock's string literal is not alias-rewritten by the SWC
 // transform (only real `import`/`require` specifiers are) — use a relative
@@ -60,6 +61,11 @@ jest.mock('../../lib/discounts/discounts-api', () => ({
 // convenio); los tests de convenio lo sustituyen.
 jest.mock('../../lib/patients/patient-agreement-api', () => ({
   getPriceQuote: jest.fn(),
+}));
+// SEC-050: «Anular cargo» del ítem de un cargo por inasistencia.
+jest.mock('../../lib/cancellations/cancellation-fee-api', () => ({
+  ...jest.requireActual('../../lib/cancellations/cancellation-fee-api'),
+  voidCancellationFee: jest.fn(),
 }));
 jest.mock('../../lib/payments/payments-api', () => ({
   getPlanBalance: jest.fn(),
@@ -962,6 +968,65 @@ describe('TreatmentPlansTab', () => {
     });
   });
 
+  describe('SEC-050 · ítem de un cargo por inasistencia', () => {
+    const adminToken = `h.${btoa(JSON.stringify({ sub: 'u-admin', tenantId: 't1', role: 'ADMIN' }))}.s`;
+    const dentistToken = `h.${btoa(JSON.stringify({ sub: 'u-den', tenantId: 't1', role: 'DENTIST' }))}.s`;
+    const feeItem: TreatmentPlanItem = {
+      ...item1,
+      id: 'item-fee',
+      toothNumber: '',
+      status: 'DONE',
+      cancellationFeeAppointmentId: 'appt-1',
+    };
+    const feePlan = { ...plan1, status: 'ACCEPTED' as const, optionLabel: 'Cargos administrativos' };
+
+    function renderFeePlan(token: string) {
+      mockedListPlans.mockResolvedValue([feePlan]);
+      mockedGetPlan.mockResolvedValue({ ...feePlan, items: [feeItem, item2], total: feeItem.price + item2.price });
+      render(<TreatmentPlansTab patientId="pat-1" token={token} />);
+    }
+
+    it.each([
+      ['DENTIST', dentistToken],
+      ['ADMIN', adminToken],
+    ])('%s: sin «Quitar» ni cambio de estado en el ítem del cargo; el ítem normal, como hoy', async (_role, token) => {
+      renderFeePlan(token);
+      const table = await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+      const rows = within(table).getAllByRole('row').slice(1);
+      const feeRow = rows.find((r) => within(r).queryByText(/Cargo por inasistencia/))!;
+      const normalRow = rows.find((r) => r !== feeRow)!;
+      expect(within(feeRow).queryByRole('button', { name: 'Quitar' })).not.toBeInTheDocument();
+      expect(within(feeRow).getByRole('combobox')).toBeDisabled();
+      expect(within(normalRow).getByRole('button', { name: 'Quitar' })).toBeInTheDocument();
+      expect(within(normalRow).getByRole('combobox')).toBeEnabled();
+      // La lista móvil tampoco lo ofrece: un solo «Quitar» (el del ítem normal) por vista.
+      expect(screen.getAllByRole('button', { name: 'Quitar' })).toHaveLength(2);
+    });
+
+    it('DENTIST no ve «Anular cargo»', async () => {
+      renderFeePlan(dentistToken);
+      await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+      expect(screen.queryByRole('button', { name: /Anular cargo/ })).not.toBeInTheDocument();
+    });
+
+    it('ADMIN anula el cargo con motivo y el plan se refresca', async () => {
+      jest.mocked(voidCancellationFee).mockResolvedValue({} as never);
+      const user = userEvent.setup();
+      renderFeePlan(adminToken);
+      const table = await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+      await user.click(within(table).getByRole('button', { name: 'Anular cargo' }));
+      const dialog = await screen.findByRole('dialog', { name: 'Anular el cargo' });
+      await user.type(within(dialog).getByLabelText('Motivo'), 'Cargo generado por error');
+      const calls = mockedGetPlan.mock.calls.length;
+      await user.click(within(dialog).getByRole('button', { name: 'Anular cargo' }));
+      await waitFor(() =>
+        expect(voidCancellationFee).toHaveBeenCalledWith(adminToken, 'appt-1', 'Cargo generado por error'),
+      );
+      await waitFor(() => expect(mockedGetPlan.mock.calls.length).toBeGreaterThan(calls));
+      expect(mockedRemoveItem).not.toHaveBeenCalled();
+    });
+  });
+
   describe('DX-050 · quién realizó cada ítem', () => {
     const adminToken = `h.${btoa(JSON.stringify({ sub: 'u-admin', tenantId: 't1', role: 'ADMIN' }))}.s`;
     const otherDentistToken = `h.${btoa(JSON.stringify({ sub: 'u-otra', tenantId: 't1', role: 'DENTIST' }))}.s`;
@@ -1021,6 +1086,24 @@ describe('TreatmentPlansTab', () => {
           performedById: 'u-admin',
         }),
       );
+    });
+
+    it('un ADMIN atribuye un «Sin atribuir»: el modal pide sede y fecha (DX-305)', async () => {
+      mockedListPlans.mockResolvedValue([plan1]);
+      mockedGetPlan.mockResolvedValue({ ...plan1, items: [legacyDone], total: 0 });
+      jest.mocked(listStaff).mockResolvedValue([
+        { userId: 'u-laura', fullName: 'Dra. Laura Gómez', role: 'DENTIST', locationIds: null },
+      ]);
+      const user = userEvent.setup();
+      render(<TreatmentPlansTab patientId="pat-1" token={adminToken} />);
+      const table = await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+      expect(within(table).queryByRole('button', { name: /corregir quién/i })).not.toBeInTheDocument();
+      await user.click(
+        within(table).getByRole('button', { name: 'Atribuir quién, cuándo y dónde se realizó el ítem del diente 47' }),
+      );
+      const dialog = await screen.findByRole('dialog', { name: 'Atribuir el procedimiento' });
+      expect(within(dialog).getByRole('combobox', { name: 'Sede donde se realizó' })).toBeInTheDocument();
+      expect(within(dialog).getByLabelText('Fecha en que se realizó')).toBeInTheDocument();
     });
 
     it('volver de «Realizado» a aceptado no pide profesional', async () => {

@@ -7,11 +7,8 @@ import {
   listCatalogItems,
   createCatalogItem,
   updateCatalogItem,
-  canEditCatalog,
-  CUPS_PATTERN,
   type DentalCatalogItem,
   type CreateCatalogItemInput,
-  type UpdateCatalogItemInput,
 } from '@/lib/odontogram/catalog-api';
 import { Plus, Pencil, Eye, EyeOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -39,7 +36,6 @@ import { ClinicWideNote } from '@/components/locations/clinic-wide-note';
 import { cn } from '@/lib/utils';
 import { formatAmount, formatCurrency } from '@/lib/format/currency';
 import { useClinicCurrency } from '@/lib/locations/clinic-currency';
-import { getTokenRole } from '@/lib/auth/token-role';
 import {
   Table,
   TableBody,
@@ -96,16 +92,9 @@ const copy = {
   colorHint: 'Se usa para distinguirlo en el odontograma.',
   categoryLabel: 'Categoría',
   categoryHint: 'Opcional (ej. Preventiva, Restauradora, Endodoncia).',
-  // DX-212: código CUPS que piden el RDA y el RIPS en Colombia.
-  cupsLabel: 'Código CUPS',
-  cupsHint: '6 caracteres alfanuméricos (ej. 890203). Lo piden el RDA y el RIPS en Colombia.',
-  cupsReadOnly: 'Solo un administrador puede cambiarlo.',
-  cupsInvalid: 'El código CUPS debe tener 6 caracteres alfanuméricos (ej. 890203).',
   allowDiscountLabel: 'Admite descuentos',
   allowDiscountHint:
     'Si lo desmarcas, este procedimiento no recibe descuentos de convenio ni descuentos en el plan: se cobra al precio que corresponda.',
-  colCups: 'CUPS',
-  cupsFallback: '—',
   submit: 'Crear',
   editSubmit: 'Guardar',
   retry: 'Reintentar',
@@ -191,10 +180,7 @@ const SEARCH_DEBOUNCE_MS = 300;
 
 interface CatalogViewProps {
   token: string;
-  /**
-   * DX-212: ítem a abrir en edición al llegar (`/catalog?item=<id>`, el enlace
-   * «Completar» del chip RDA cuando falta su CUPS).
-   */
+  /** DX-212: ítem a abrir en edición al llegar (`/catalog?item=<id>`). */
   initialItemId?: string | null;
 }
 
@@ -212,9 +198,6 @@ interface CatalogViewProps {
  */
 export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
   const currency = useClinicCurrency(token);
-  // DX-212: el CUPS (como el resto del catálogo) solo lo edita ADMIN; para los
-  // demás el campo es de solo lectura.
-  const canEdit = canEditCatalog(getTokenRole(token));
   const [items, setItems] = useState<DentalCatalogItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -231,8 +214,6 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
   const [price, setPrice] = useState('');
   const [color, setColor] = useState(DEFAULT_COLOR);
   const [category, setCategory] = useState('');
-  const [cups, setCups] = useState('');
-  const [cupsError, setCupsError] = useState<string | null>(null);
   const [allowDiscount, setAllowDiscount] = useState(true);
   const [priceError, setPriceError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
@@ -369,8 +350,6 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
     setPrice('');
     setColor(DEFAULT_COLOR);
     setCategory('');
-    setCups('');
-    setCupsError(null);
     setPriceError(null);
     setAllowDiscount(true);
   }
@@ -389,9 +368,7 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
     setPrice(item.defaultPrice == null ? '' : moneyInputText(item.defaultPrice));
     setColor(item.color);
     setCategory(item.category ?? '');
-    setCups(item.cupsCode ?? '');
     setAllowDiscount(item.allowDiscount ?? true);
-    setCupsError(null);
     setEditingItem(item);
     setFormError(null);
     setShowForm(true);
@@ -424,7 +401,6 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
   // from the UI (the backend partial DTO rejects null for those).
   function buildPayload(defaultPrice: number | undefined): CreateCatalogItemInput {
     const trimmedCategory = category.trim();
-    const trimmedCups = cups.trim().toUpperCase();
     return {
       code: code.trim(),
       kind,
@@ -433,14 +409,12 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
       allowDiscount,
       ...(defaultPrice !== undefined ? { defaultPrice } : {}),
       ...(trimmedCategory ? { category: trimmedCategory } : {}),
-      ...(canEdit && trimmedCups ? { cupsCode: trimmedCups } : {}),
     };
   }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setFormError(null);
-    setCupsError(null);
     setPriceError(null);
     // DX-241: la lectura común de los campos de dinero, en la moneda de la
     // clínica (la de los precios del catálogo).
@@ -449,21 +423,11 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
       setPriceError(parsedPrice.message);
       return;
     }
-    const trimmedCups = cups.trim().toUpperCase();
-    if (canEdit && trimmedCups && !CUPS_PATTERN.test(trimmedCups)) {
-      setCupsError(copy.cupsInvalid);
-      return;
-    }
     setSaving(true);
     try {
       const payload = buildPayload(parsedPrice?.ok ? parsedPrice.value : undefined);
       if (editingItem) {
-        // Editar con el campo vacío QUITA el CUPS (la API acepta null).
-        const patch: UpdateCatalogItemInput = {
-          ...payload,
-          ...(canEdit && !trimmedCups && editingItem.cupsCode ? { cupsCode: null } : {}),
-        };
-        await updateCatalogItem(token, editingItem.id, patch);
+        await updateCatalogItem(token, editingItem.id, payload);
       } else {
         await createCatalogItem(token, payload);
       }
@@ -657,30 +621,6 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
               />
             </FormField>
             <FormField
-              htmlFor="catalog-cups"
-              label={copy.cupsLabel}
-              hint={canEdit ? copy.cupsHint : copy.cupsReadOnly}
-              error={cupsError}
-            >
-              <Input
-                id="catalog-cups"
-                type="text"
-                inputMode="text"
-                autoComplete="off"
-                maxLength={6}
-                readOnly={!canEdit}
-                aria-readonly={!canEdit || undefined}
-                aria-invalid={cupsError ? true : undefined}
-                aria-describedby={cupsError ? 'catalog-cups-error' : undefined}
-                value={cups}
-                onChange={(e) => setCups(e.target.value.toUpperCase())}
-                className={cn('uppercase tabular-nums', !canEdit && 'bg-surface-2 text-muted')}
-              />
-            </FormField>
-          </div>
-
-          <div className="grid gap-4 sm:grid-cols-2">
-            <FormField
               htmlFor="catalog-color"
               label={copy.colorLabel}
               hint={copy.colorHint}
@@ -754,7 +694,6 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
                   <TableHead>{copy.colName}</TableHead>
                   <TableHead>{copy.colKind}</TableHead>
                   <TableHead>{copy.colCode}</TableHead>
-                  <TableHead>{copy.colCups}</TableHead>
                   <TableHead className="text-right">{copy.colPrice}</TableHead>
                   <TableHead>{copy.colStatus}</TableHead>
                   <TableHead className="w-px text-right">
@@ -787,9 +726,6 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
                     </TableCell>
                     <TableCell className="text-muted tabular-nums" data-label={copy.colCode}>
                       {item.code}
-                    </TableCell>
-                    <TableCell className="tabular-nums" data-label={copy.colCups}>
-                      {item.cupsCode ?? <span className="text-muted">{copy.cupsFallback}</span>}
                     </TableCell>
                     <TableCell className="text-right tabular-nums" data-label={copy.colPrice}>
                       {formatPrice(item.defaultPrice, currency)}

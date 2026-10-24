@@ -2,13 +2,11 @@
 import * as React from 'react';
 import { useEffect, useId, useState } from 'react';
 import Link from 'next/link';
-import { Ban, Receipt } from 'lucide-react';
+import { Ban, Receipt, Undo2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { ApiError } from '@/lib/api/api-error';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import {
-  WAIVE_REASON_MAX,
-  WAIVE_REASON_MIN,
   chargeCancellationFee,
   getCancellationFee,
   waiveCancellationFee,
@@ -21,9 +19,7 @@ import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { MoneyInput } from '@/components/shared/money-input';
 import { FieldError } from '@/components/errors/field-error';
 import { Button } from '@/components/ui/button';
-import { Label } from '@/components/ui/label';
-import { fieldClass } from '@/lib/ui/field-class';
-import { cn } from '@/lib/utils';
+import { FeeReasonModal, VoidCancellationFeeModal, feeReasonCopy, voidFeeCopy } from './fee-reason-modal';
 
 export const cancellationFeeCopy = {
   heading: 'Cargo por inasistencia o cancelación tardía',
@@ -39,6 +35,11 @@ export const cancellationFeeCopy = {
   goToStatement: 'Cobrar en el estado de cuenta',
   removed: (amount: string) => `Cargo anulado: ${amount}.`,
   removedHint: 'Se quitó el ítem del plan «Cargos administrativos»: no hay nada que cobrar.',
+  voided: (amount: string) => `Cargo anulado: ${amount}.`,
+  voidedReason: (reason: string) => `Motivo: ${reason}`,
+  mismatch: (itemAmount: string, amount: string) =>
+    `El ítem del plan cobra ${itemAmount}, no lo que dice el cargo (${amount}). Se cambió por fuera de este flujo: revísalo antes de cobrar.`,
+  voidAction: voidFeeCopy.action,
   waived: 'Cargo condonado.',
   waivedReason: (reason: string) => `Motivo: ${reason}`,
   by: (name: string) => `Por ${name}.`,
@@ -54,9 +55,7 @@ export const cancellationFeeCopy = {
   chargeError: 'No pudimos generar el cargo. Intenta de nuevo.',
   waiveTitle: 'Condonar el cargo',
   waiveDescription: 'No se cobrará. El motivo queda con la cita y la condonación, en la auditoría.',
-  reason: 'Motivo',
-  reasonError: `Escribe el motivo (de ${WAIVE_REASON_MIN} a ${WAIVE_REASON_MAX} caracteres).`,
-  counter: (n: number) => `${n}/${WAIVE_REASON_MAX}`,
+  ...feeReasonCopy,
   waiveSubmit: 'Condonar',
   waiveDone: 'Cargo condonado.',
   waiveError: 'No pudimos condonar el cargo. Intenta de nuevo.',
@@ -70,7 +69,8 @@ function money(amount: number | null | undefined, currency: string | null | unde
 
 /**
  * DX-291: en el detalle de una cita NO_SHOW o cancelada tarde, el estado del
- * cargo y las acciones «Generar cargo» y «Condonar» (ADMIN, o RECEPTION si la
+ * cargo y las acciones «Generar cargo» y «Condonar» (y, ya generado, «Anular
+ * cargo» con motivo, SEC-050) (ADMIN, o RECEPTION si la
  * política de la sede lo permite; el servidor decide y lo dice en
  * `canManage`). Los 409 del servidor («No consta que el paciente fuera
  * informado…», EPS_CO) salen tal cual, sin botón de cobrar.
@@ -79,7 +79,7 @@ export function CancellationFeePanel({ token, appointmentId }: { token: string; 
   const [view, setView] = useState<CancellationFeeView | null>(null);
   const [failed, setFailed] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
-  const [dialog, setDialog] = useState<'charge' | 'waive' | null>(null);
+  const [dialog, setDialog] = useState<'charge' | 'waive' | 'void' | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -133,7 +133,15 @@ export function CancellationFeePanel({ token, appointmentId }: { token: string; 
       <h3 id={`fee-${appointmentId}`} className="font-semibold text-ink">
         {copy.heading}
       </h3>
-      {view.status === 'CHARGED' && fee?.planItemRemoved ? (
+      {view.status === 'VOIDED' && fee ? (
+        <div className="flex flex-col gap-1">
+          <p className="tabular-nums text-ink">{copy.voided(money(fee.amount, fee.currency) ?? '')}</p>
+          {fee.voidReason ? (
+            <p className="whitespace-pre-line break-words text-muted">{copy.voidedReason(fee.voidReason)}</p>
+          ) : null}
+          {fee.voidedByName ? <p className="text-muted">{copy.by(fee.voidedByName)}</p> : null}
+        </div>
+      ) : view.status === 'CHARGED' && fee?.planItemRemoved ? (
         <div className="flex flex-col gap-1">
           <p className="tabular-nums text-ink">{copy.removed(money(fee.amount, fee.currency) ?? '')}</p>
           <p className="text-muted">{copy.removedHint}</p>
@@ -142,6 +150,11 @@ export function CancellationFeePanel({ token, appointmentId }: { token: string; 
         <div className="flex flex-col gap-1">
           <p className="tabular-nums text-ink">{copy.charged(money(fee.amount, fee.currency) ?? '')}</p>
           <p className="text-muted">{copy.chargedHint}</p>
+          {fee.itemMismatch && fee.itemAmount !== null ? (
+            <p role="status" className="text-warning">
+              {copy.mismatch(money(fee.itemAmount, fee.currency) ?? '', money(fee.amount, fee.currency) ?? '')}
+            </p>
+          ) : null}
           <Link
             href={`/patients/${view.patientId}?tab=account-statement`}
             className="inline-flex min-h-11 items-center gap-1.5 self-start font-medium text-primary underline-offset-4 hover:underline sm:min-h-0"
@@ -149,6 +162,17 @@ export function CancellationFeePanel({ token, appointmentId }: { token: string; 
             <Receipt aria-hidden className="size-4" />
             {copy.goToStatement}
           </Link>
+          {view.canManage ? (
+            <Button
+              type="button"
+              variant="secondary"
+              className="w-full self-start sm:w-auto"
+              onClick={() => setDialog('void')}
+            >
+              <Undo2 aria-hidden />
+              {copy.voidAction}
+            </Button>
+          ) : null}
         </div>
       ) : view.status === 'WAIVED' && fee ? (
         <div className="flex flex-col gap-1">
@@ -196,6 +220,18 @@ export function CancellationFeePanel({ token, appointmentId }: { token: string; 
           appointmentId={appointmentId}
           suggested={view.communicated.suggestedFee}
           currency={view.communicated.currency}
+          onClose={() => setDialog(null)}
+          onDone={(next) => {
+            setDialog(null);
+            setView(next);
+          }}
+          onStale={() => setReloadKey((k) => k + 1)}
+        />
+      ) : null}
+      {dialog === 'void' ? (
+        <VoidCancellationFeeModal
+          token={token}
+          appointmentId={appointmentId}
           onClose={() => setDialog(null)}
           onDone={(next) => {
             setDialog(null);
@@ -331,77 +367,17 @@ function WaiveFeeModal({
   /** 409: otra persona ya decidió; el panel se relee por debajo. */
   onStale: () => void;
 }) {
-  const id = useId();
-  const reasonId = `${id}-reason`;
-  const [reason, setReason] = useState('');
-  const [fieldError, setFieldError] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
-    e.preventDefault();
-    const trimmed = reason.trim();
-    if (trimmed.length < WAIVE_REASON_MIN || trimmed.length > WAIVE_REASON_MAX) {
-      setFieldError(copy.reasonError);
-      document.getElementById(reasonId)?.focus();
-      return;
-    }
-    setSubmitting(true);
-    setError(null);
-    try {
-      const next = await waiveCancellationFee(token, appointmentId, trimmed);
-      toast.success(copy.waiveDone);
-      onDone(next);
-    } catch (err) {
-      setError(apiErrorMessage(err, copy.waiveError));
-      if (err instanceof ApiError && err.status === 409) onStale();
-    } finally {
-      setSubmitting(false);
-    }
-  }
-
   return (
-    <FormModal
-      open
-      onOpenChange={(open) => {
-        if (!open) onClose();
-      }}
+    <FeeReasonModal
       title={copy.waiveTitle}
       description={copy.waiveDescription}
-      onSubmit={handleSubmit}
       submitLabel={copy.waiveSubmit}
-      submitting={submitting}
-      error={error}
-    >
-      <div className="flex flex-col gap-1.5">
-        <Label htmlFor={reasonId}>{copy.reason}</Label>
-        <textarea
-          id={reasonId}
-          rows={3}
-          maxLength={WAIVE_REASON_MAX}
-          value={reason}
-          disabled={submitting}
-          onChange={(e) => {
-            setReason(e.target.value);
-            setFieldError(null);
-          }}
-          aria-invalid={fieldError ? true : undefined}
-          aria-describedby={`${fieldError ? `${fieldErrorId(reasonId)} ` : ''}${reasonId}-counter`}
-          className={cn(fieldClass, fieldError && 'border-danger')}
-        />
-        <div className="flex items-start justify-between gap-3 text-xs">
-          {fieldError ? (
-            <p id={fieldErrorId(reasonId)} role="alert" className="text-sm text-danger">
-              {fieldError}
-            </p>
-          ) : (
-            <span />
-          )}
-          <p id={`${reasonId}-counter`} className="shrink-0 tabular-nums text-muted">
-            {copy.counter(reason.length)}
-          </p>
-        </div>
-      </div>
-    </FormModal>
+      submit={(reason) => waiveCancellationFee(token, appointmentId, reason)}
+      doneMessage={copy.waiveDone}
+      errorMessage={copy.waiveError}
+      onClose={onClose}
+      onDone={onDone}
+      onStale={onStale}
+    />
   );
 }

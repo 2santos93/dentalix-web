@@ -1,4 +1,4 @@
-import { attendsAt, attributionText, isAttendingRole } from './item-attribution';
+import { attendsAt, attributionInstant, attributionText, isAttendingRole } from './item-attribution';
 
 describe('atribución del ítem realizado (DX-050)', () => {
   it('atienden DENTIST y ADMIN', () => {
@@ -49,5 +49,18 @@ describe('atribución del ítem realizado (DX-050)', () => {
         performedLocationName: null,
       }),
     ).toBeNull();
+  });
+});
+
+describe('attributionInstant (DX-305)', () => {
+  const now = new Date('2026-10-24T15:00:00.000Z'); // 10:00 en Bogotá
+
+  it('el mediodía del día en la zona de la sede', () => {
+    expect(attributionInstant('2026-09-14', 'America/Bogota', now)).toBe('2026-09-14T17:00:00.000Z');
+    expect(attributionInstant('2026-09-14', 'Europe/Madrid', now)).toBe('2026-09-14T10:00:00.000Z');
+  });
+
+  it('hoy antes del mediodía: ahora (la API no admite una fecha futura)', () => {
+    expect(attributionInstant('2026-10-24', 'America/Bogota', now)).toBe(now.toISOString());
   });
 });

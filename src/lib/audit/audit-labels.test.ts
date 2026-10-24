@@ -230,6 +230,8 @@ describe('cancellationDetail (DX-279)', () => {
       'Cargo por inasistencia o cancelación tardía',
     );
     expect(cancellationDetail({ reason: 'CANCELLATION_FEE_WAIVED' })).toBe('Cargo por inasistencia condonado');
+    // SEC-050: la anulación de un cargo ya generado.
+    expect(cancellationDetail({ reason: 'CANCELLATION_FEE_VOIDED' })).toBe('Cargo por inasistencia anulado');
     expect(cancellationDetail({ reason: 'CANCELLATION_POLICY_CHANGED' })).toBe(
       'Nueva versión de la política de cancelación',
     );
