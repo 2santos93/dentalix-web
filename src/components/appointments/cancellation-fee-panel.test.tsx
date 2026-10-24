@@ -4,6 +4,7 @@ import { ApiError } from '../../lib/api/api-error';
 import {
   chargeCancellationFee,
   getCancellationFee,
+  voidCancellationFee,
   waiveCancellationFee,
   type CancellationFeeView,
 } from '../../lib/cancellations/cancellation-fee-api';
@@ -13,6 +14,7 @@ jest.mock('../../lib/cancellations/cancellation-fee-api', () => ({
   getCancellationFee: jest.fn(),
   chargeCancellationFee: jest.fn(),
   waiveCancellationFee: jest.fn(),
+  voidCancellationFee: jest.fn(),
 }));
 jest.mock('sonner', () => ({ toast: { success: jest.fn(), error: jest.fn() } }));
 jest.mock('next/link', () => ({
@@ -27,6 +29,7 @@ jest.mock('next/link', () => ({
 const get = getCancellationFee as jest.Mock;
 const charge = chargeCancellationFee as jest.Mock;
 const waive = waiveCancellationFee as jest.Mock;
+const voidFee = voidCancellationFee as jest.Mock;
 
 function view(over: Partial<CancellationFeeView> = {}): CancellationFeeView {
   return {
@@ -59,6 +62,24 @@ const charged = view({
     policyVersionId: 'v1',
     createdAt: '2026-10-24T10:00:00.000Z',
     createdByName: 'Ana',
+    itemAmount: 40000,
+    itemMismatch: false,
+    voidedAt: null,
+    voidedByName: null,
+    voidReason: null,
+  },
+});
+
+const voided = view({
+  ...charged,
+  status: 'VOIDED',
+  fee: {
+    ...charged.fee!,
+    planItemRemoved: true,
+    itemAmount: null,
+    voidedAt: '2026-10-24T12:00:00.000Z',
+    voidedByName: 'Dr. Owner',
+    voidReason: 'Cargo generado por error',
   },
 });
 
@@ -67,6 +88,7 @@ describe('CancellationFeePanel (DX-291)', () => {
     get.mockReset();
     charge.mockReset();
     waive.mockReset();
+    voidFee.mockReset();
   });
 
   it('muestra el importe sugerido y las dos acciones', async () => {
@@ -192,5 +214,57 @@ describe('CancellationFeePanel (DX-291)', () => {
     render(<CancellationFeePanel token="t" appointmentId="a-1" />);
     fireEvent.click(await screen.findByRole('button', { name: /reintentar|cargo sin cargar/i }));
     expect(await screen.findByRole('button', { name: 'Generar cargo' })).toBeInTheDocument();
+  });
+
+  describe('anular un cargo generado (SEC-050)', () => {
+    it('quien puede gestionar el cargo lo anula con motivo y el panel lo dice', async () => {
+      get.mockResolvedValueOnce(charged);
+      voidFee.mockResolvedValueOnce(voided);
+      render(<CancellationFeePanel token="t" appointmentId="a-1" />);
+      fireEvent.click(await screen.findByRole('button', { name: 'Anular cargo' }));
+      const dialog = await screen.findByRole('dialog', { name: 'Anular el cargo' });
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Anular cargo' }));
+      expect(await within(dialog).findByRole('alert')).toHaveTextContent(/Escribe el motivo/);
+      expect(within(dialog).getByLabelText('Motivo')).toHaveFocus();
+      expect(voidFee).not.toHaveBeenCalled();
+      fireEvent.change(within(dialog).getByLabelText('Motivo'), {
+        target: { value: ' Cargo generado por error ' },
+      });
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Anular cargo' }));
+      await waitFor(() => expect(voidFee).toHaveBeenCalledWith('t', 'a-1', 'Cargo generado por error'));
+      expect(await screen.findByText(/Cargo anulado: .*40\.000/)).toBeInTheDocument();
+      expect(screen.getByText('Motivo: Cargo generado por error')).toBeInTheDocument();
+      expect(screen.getByText('Por Dr. Owner.')).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Anular cargo' })).not.toBeInTheDocument();
+    });
+
+    it('sin permiso no se ofrece anular', async () => {
+      get.mockResolvedValueOnce({ ...charged, canManage: false });
+      render(<CancellationFeePanel token="t" appointmentId="a-1" />);
+      expect(await screen.findByText(/Cargo generado: .*40\.000/)).toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: 'Anular cargo' })).not.toBeInTheDocument();
+    });
+
+    it('un 409 (ya cobrado) sale en el diálogo y el panel se relee', async () => {
+      get.mockResolvedValueOnce(charged).mockResolvedValueOnce(charged);
+      voidFee.mockRejectedValueOnce(
+        new ApiError(409, 'El cargo ya está cobrado: los abonos de «Cargos administrativos» lo cubren. Anula antes el abono y después el cargo.'),
+      );
+      render(<CancellationFeePanel token="t" appointmentId="a-1" />);
+      fireEvent.click(await screen.findByRole('button', { name: 'Anular cargo' }));
+      const dialog = await screen.findByRole('dialog', { name: 'Anular el cargo' });
+      fireEvent.change(within(dialog).getByLabelText('Motivo'), { target: { value: 'Error' } });
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Anular cargo' }));
+      expect(await within(dialog).findByText(/Anula antes el abono/)).toBeInTheDocument();
+      await waitFor(() => expect(get).toHaveBeenCalledTimes(2));
+    });
+
+    it('avisa si el ítem del plan no cobra lo que dice el cargo', async () => {
+      get.mockResolvedValueOnce({ ...charged, fee: { ...charged.fee!, itemAmount: 1, itemMismatch: true } });
+      render(<CancellationFeePanel token="t" appointmentId="a-1" />);
+      expect(
+        await screen.findByText(/El ítem del plan cobra .*1.*, no lo que dice el cargo/),
+      ).toBeInTheDocument();
+    });
   });
 });
