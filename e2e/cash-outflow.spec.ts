@@ -20,7 +20,14 @@ import { expectDialogInsideViewport, expectNoHorizontalScroll } from './support/
  *   - recepción cierra cuadrando y el informe de cierre imprimible tiene la
  *     columna «Salidas», la sección «Salidas de caja» con la anulada tachada,
  *     y a 1440 px el PDF sale en UNA hoja A4 con tres salidas;
- *   - con arqueo ciego la tarjeta cuenta las salidas sin enseñar lo esperado.
+ *   - con arqueo ciego la tarjeta cuenta las salidas sin enseñar lo esperado;
+ *   - la administradora registra en «Gastos» un gasto ya pagado «Desde mi caja
+ *     abierta»: su esperado en efectivo baja en ese importe y el pago enlaza
+ *     con su caja;
+ *   - la administradora anula en «Gastos» una salida de una caja de recepción
+ *     ya cerrada: el arqueo de esa caja no cambia (la salida sigue restando y
+ *     sale como anulada «con la caja ya cerrada») y la devolución es un ajuste
+ *     «Anulación de salida» en la caja abierta de la administradora.
  * A 1440 y 390 px (sin scroll horizontal), con axe y capturas en claro y
  * oscuro (DX274_QA_DIR o test-results).
  */
@@ -37,8 +44,47 @@ function figure(amount: number): string {
   return cop.format(amount).split(/\s/)[0];
 }
 
+interface ExpectedLine {
+  currency: string;
+  method: string;
+  expected: number;
+  outflows?: number;
+  outflowsCount?: number;
+}
+
+interface SessionAdjustment {
+  kind: string;
+  amount: number;
+  reason: string | null;
+}
+
 interface CurrentSession {
-  session: { id: string; expected: { currency: string; method: string; expected: number }[] | null } | null;
+  session: { id: string; expected: ExpectedLine[] | null; adjustments: SessionAdjustment[] } | null;
+}
+
+interface SessionDetail {
+  id: string;
+  status: string;
+  expected: ExpectedLine[];
+  closing: unknown;
+  voidedOutflows: { id: string; voidReason: string | null; bookedAsAdjustment: boolean }[];
+  laterAdjustments: SessionAdjustment[];
+}
+
+const rawSuffix = process.env.E2E_RUN_SUFFIX ?? randomUUID();
+const suffix = rawSuffix
+  .replace(/[^a-z0-9]/gi, '')
+  .toLowerCase()
+  .slice(0, 8);
+
+function cashLine(lines: ExpectedLine[] | null | undefined): ExpectedLine | undefined {
+  return (lines ?? []).find((l) => l.currency === 'COP' && l.method === 'CASH');
+}
+
+async function sessionDetail(request: APIRequestContext, session: ApiSession, id: string): Promise<SessionDetail> {
+  const res = await request.get(`${API_URL}/cash-sessions/${id}`, { headers: session.headers });
+  expect(res.ok(), await res.text()).toBeTruthy();
+  return (await res.json()) as SessionDetail;
 }
 
 async function currentSession(request: APIRequestContext, session: ApiSession): Promise<CurrentSession['session']> {
@@ -74,16 +120,35 @@ async function startClean(request: APIRequestContext) {
   return { admin, reception };
 }
 
-function outflowViaApi(request: APIRequestContext, reception: ApiSession, category: string, amount: number) {
+function outflowViaApi(
+  request: APIRequestContext,
+  reception: ApiSession,
+  category: string,
+  amount: number,
+  supplier?: string,
+) {
   return request
     .post(`${API_URL}/cash-sessions/current/outflows`, {
       headers: { ...reception.headers, 'Idempotency-Key': randomUUID() },
-      data: { category, amount, currency: 'COP' },
+      data: { category, amount, currency: 'COP', ...(supplier ? { supplier } : {}) },
     })
     .then(async (res) => {
       expect(res.ok(), `salida por la API falló: ${await res.text()}`).toBeTruthy();
       return (await res.json()) as { id: string };
     });
+}
+
+/** «Gastos» como administradora, con la lista del mes ya cargada. */
+async function openExpenses(page: Page): Promise<void> {
+  await loginAs(page, origin, ADMIN_EMAIL, DEMO_PASSWORD);
+  await page.goto(`${origin}/caja/gastos`);
+  await expect(page.getByRole('heading', { name: 'Gastos', level: 1 })).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByText(/^\d+ gastos?$/)).toBeVisible({ timeout: 15_000 });
+}
+
+/** La lista visible de «Gastos»: la tabla en escritorio, las tarjetas en móvil. */
+function expensesListing(page: Page, narrow: boolean): Locator {
+  return narrow ? page.getByRole('list', { name: 'Gastos' }) : page.getByRole('table', { name: /^Gastos del periodo/ });
 }
 
 /** Pestaña «Turnos» de la Caja con la caja de recepción ya abierta (por la API). */
@@ -247,3 +312,174 @@ test('arqueo ciego: la tarjeta cuenta las salidas sin enseñar lo esperado', asy
     await closeOwnSession(page.request, reception);
   }
 });
+
+for (const viewport of [
+  { name: 'escritorio', width: 1440, height: 900 },
+  { name: 'móvil', width: 390, height: 844 },
+]) {
+  test(`ADMIN paga un gasto «Desde mi caja abierta» y su esperado baja (${viewport.name})`, async ({ page }) => {
+    test.setTimeout(120_000);
+    const narrow = viewport.width === 390;
+    const supplier = `Mensajeros Express ${suffix}${viewport.width}`;
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    const { admin } = await startClean(page.request);
+    await closeOwnSession(page.request, admin);
+
+    try {
+      await apiPost(page.request, admin, '/cash-sessions/open', { floats: [{ currency: 'COP', amount: 100_000 }] });
+      await openExpenses(page);
+
+      await page.getByRole('button', { name: 'Nuevo gasto' }).click();
+      const form = page.getByRole('dialog', { name: 'Nuevo gasto' });
+      await expect(form.getByRole('option', { name: 'Mensajería' })).toBeAttached({ timeout: 15_000 });
+      await form.getByLabel('Categoría').selectOption('Mensajería');
+      await form.getByLabel('Proveedor').fill(supplier);
+      await form.getByLabel('Importe').fill('30000');
+      await form.getByLabel('Ya está pagado').check();
+      await expect(form.getByLabel('Medio de pago')).toHaveValue('CASH');
+      await form.getByLabel('Desde mi caja abierta').check();
+      // Desde la caja el pago es de hoy: la fecha no se edita.
+      await expect(form.getByLabel('Fecha del pago')).toBeDisabled();
+      if (narrow) await expectDialogInsideViewport(page, form);
+      await form.getByRole('button', { name: 'Registrar gasto' }).click();
+      await expect(form).toBeHidden({ timeout: 15_000 });
+      await expect(page.getByText('Gasto registrado.')).toBeVisible();
+
+      await page.getByLabel('Buscar por proveedor o descripción').fill(supplier);
+      await expect(page.getByText('1 gasto', { exact: true })).toBeVisible({ timeout: 15_000 });
+      const listing = expensesListing(page, narrow);
+      await expect(listing).toContainText(supplier, { timeout: 15_000 });
+      await expect(listing).toContainText('Pagado');
+
+      // El pago enlaza con la caja de la que salió.
+      await listing.getByRole('button', { name: /^Ver el gasto de Mensajería del / }).click();
+      const detail = page.getByRole('dialog', { name: `Mensajería · ${supplier}` });
+      const mine = await currentSession(page.request, admin);
+      await expect(detail.getByRole('link', { name: /Salida de caja/ })).toHaveAttribute(
+        'href',
+        `/caja/turnos/${mine!.id}`,
+        { timeout: 15_000 },
+      );
+      await page.keyboard.press('Escape');
+
+      // El esperado en efectivo de su caja baja en el importe.
+      const line = cashLine(mine!.expected);
+      expect(line?.expected).toBe(70_000);
+      expect(line?.outflowsCount).toBe(1);
+      await page.goto(`${origin}/caja?tab=turnos`);
+      const card = page.getByRole('region', { name: /^Mi caja en / });
+      await expect(card.getByText('Salidas del turno: 1')).toBeVisible({ timeout: 15_000 });
+      await expect(card.getByText(figure(70_000)).first()).toBeVisible();
+      if (narrow) await expectNoHorizontalScroll(page);
+    } finally {
+      await closeOwnSession(page.request, admin);
+    }
+  });
+}
+
+for (const viewport of [
+  { name: 'escritorio', width: 1440, height: 900 },
+  { name: 'móvil', width: 390, height: 844 },
+]) {
+  test(`ADMIN anula una salida de una caja cerrada: el cierre no cambia y el ajuste va a su caja (${viewport.name})`, async ({
+    page,
+  }, testInfo) => {
+    test.setTimeout(150_000);
+    const evidence = process.env.DX274_QA_DIR ?? testInfo.outputPath('qa');
+    mkdirSync(evidence, { recursive: true });
+    const narrow = viewport.width === 390;
+    const tag = `${suffix}${viewport.width}`;
+    const supplier = `Papelería del Centro ${tag}`;
+    const reason = `Se devolvió el dinero ${tag}`;
+    await page.setViewportSize({ width: viewport.width, height: viewport.height });
+    const { admin, reception } = await startClean(page.request);
+    await closeOwnSession(page.request, admin);
+
+    try {
+      // Recepción: un turno con una salida de 15.000, cerrado cuadrando.
+      const shift = await apiPost<{ id: string }>(page.request, reception, '/cash-sessions/open', {
+        floats: [{ currency: 'COP', amount: FLOAT }],
+      });
+      await outflowViaApi(page.request, reception, 'Papelería', 15_000, supplier);
+      await apiPost(page.request, reception, `/cash-sessions/${shift.id}/close`, {
+        counts: [{ currency: 'COP', method: 'CASH', counted: FLOAT - 15_000 }],
+      });
+      const before = await sessionDetail(page.request, admin, shift.id);
+      expect(before.status).toBe('CLOSED');
+      expect(cashLine(before.expected)?.expected).toBe(FLOAT - 15_000);
+
+      // La caja de la administradora, donde cuenta la devolución.
+      const own = await apiPost<{ id: string }>(page.request, admin, '/cash-sessions/open', { floats: [] });
+
+      // Anula la salida (su gasto) desde «Gastos».
+      await openExpenses(page);
+      await page.getByLabel('Buscar por proveedor o descripción').fill(supplier);
+      await expect(page.getByText('1 gasto', { exact: true })).toBeVisible({ timeout: 15_000 });
+      const listing = expensesListing(page, narrow);
+      await expect(listing).toContainText(supplier, { timeout: 15_000 });
+      await listing.getByRole('button', { name: /^Ver el gasto de Papelería del / }).click();
+      const detail = page.getByRole('dialog', { name: `Papelería · ${supplier}` });
+      await expect(detail.getByRole('link', { name: /Salida de caja/ })).toHaveAttribute('href', `/caja/turnos/${shift.id}`, {
+        timeout: 15_000,
+      });
+      await detail.getByRole('button', { name: 'Anular gasto' }).click();
+      const confirm = page.getByRole('dialog', { name: '¿Anular este gasto?' });
+      await expect(confirm).toContainText('Las salidas de una caja ya cerrada se devuelven como ajuste en tu caja abierta');
+      await confirm.getByLabel('Motivo de la anulación').fill(reason);
+      await confirm.getByRole('button', { name: 'Anular gasto' }).click();
+      await expect(confirm).toBeHidden({ timeout: 15_000 });
+      await expect(detail.getByText('Gasto anulado.')).toBeVisible();
+      await page.keyboard.press('Escape');
+
+      // El cierre de recepción no cambia: misma línea esperada y mismo cierre.
+      const after = await sessionDetail(page.request, admin, shift.id);
+      expect(after.expected).toEqual(before.expected);
+      expect(after.closing).toEqual(before.closing);
+      expect(after.voidedOutflows).toEqual([
+        expect.objectContaining({ voidReason: reason, bookedAsAdjustment: true }),
+      ]);
+      expect(after.laterAdjustments).toEqual([
+        expect.objectContaining({ kind: 'OUTFLOW_VOID', amount: 15_000, reason }),
+      ]);
+
+      // La devolución cuenta en la caja abierta de la administradora.
+      const mine = await currentSession(page.request, admin);
+      expect(mine?.id).toBe(own.id);
+      expect(mine?.adjustments).toEqual([expect.objectContaining({ kind: 'OUTFLOW_VOID', amount: 15_000, reason })]);
+      expect(cashLine(mine?.expected)?.expected).toBe(15_000);
+
+      // El informe del turno cerrado lo dice sin tocar su arqueo.
+      await page.goto(`${origin}/caja/turnos/${shift.id}`);
+      const report = page.getByTestId('cash-session-report');
+      await expect(report).toContainText('Informe de cierre de caja', { timeout: 15_000 });
+      await expect(report.getByRole('list', { name: 'Salidas anuladas' })).toContainText(reason);
+      await expect(report).toContainText('Anulada con la caja ya cerrada: aquí sigue restando');
+      await expect(report).toContainText('Ajustes posteriores a este cierre');
+      await expect(report).toContainText('Anulación de salida');
+      await expect(report).toContainText(figure(FLOAT - 15_000));
+      if (narrow) await expectNoHorizontalScroll(page);
+      // axe sobre lo que pinta DX-274 (las salidas anuladas): el enlace «Otra
+      // caja de la sede» de los ajustes posteriores (DX-252) ya tenía poco
+      // contraste en oscuro.
+      for (const colorScheme of ['light', 'dark'] as const) {
+        await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
+        await expect(page.locator('html')).toHaveClass(new RegExp(`\\b${colorScheme}\\b`));
+        const voided = report.getByRole('list', { name: 'Salidas anuladas' });
+        expect
+          .soft(await audit(page, evidence, `closed-void-report-${viewport.width}-${colorScheme}`, voided))
+          .toEqual([]);
+      }
+      await page.emulateMedia({ colorScheme: 'light' });
+
+      // Y en la caja de la administradora, como ajuste de este turno.
+      await page.goto(`${origin}/caja/turnos/${own.id}`);
+      const ownReport = page.getByTestId('cash-session-report');
+      await expect(ownReport).toContainText('Ajustes en este turno', { timeout: 15_000 });
+      await expect(ownReport).toContainText('Anulación de salida');
+      await expect(ownReport).toContainText(reason);
+    } finally {
+      await closeOwnSession(page.request, admin);
+      await closeOwnSession(page.request, reception);
+    }
+  });
+}

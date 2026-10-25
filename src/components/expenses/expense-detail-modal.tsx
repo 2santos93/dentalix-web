@@ -101,9 +101,9 @@ interface ExpenseDetailModalProps {
   onCloseAutoFocus?: (event: Event) => void;
 }
 
-function Field({ label, children }: { label: string; children: React.ReactNode }) {
+function Field({ label, className, children }: { label: string; className?: string; children: React.ReactNode }) {
   return (
-    <div className="flex min-w-0 flex-col gap-0.5">
+    <div className={cn('flex min-w-0 flex-col gap-0.5', className)}>
       <dt className="t-label text-muted">{label}</dt>
       <dd className="text-sm text-ink [overflow-wrap:anywhere]">{children}</dd>
     </div>
@@ -281,9 +281,9 @@ export function ExpenseDetailModal({
             <Field label={expenseDetailCopy.location}>{location?.name ?? '—'}</Field>
             <Field label={expenseDetailCopy.supplier}>{detail.supplier ?? expenseDetailCopy.noSupplier}</Field>
             {detail.description ? (
-              <div className="col-span-2 sm:col-span-3">
-                <Field label={expenseDetailCopy.description}>{detail.description}</Field>
-              </div>
+              <Field label={expenseDetailCopy.description} className="col-span-2 sm:col-span-3">
+                {detail.description}
+              </Field>
             ) : null}
           </dl>
           <p className="text-xs text-muted tabular-nums">

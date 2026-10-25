@@ -109,6 +109,19 @@ describe('ExpenseDetailModal (DX-274)', () => {
     expect(within(dialog).getByLabelText('Adjuntar soporte')).toBeInTheDocument();
   });
 
+  it('los datos son una lista de definiciones válida: cada par dt/dd en un div hijo directo del dl', async () => {
+    renderDetail();
+    const dialog = await screen.findByRole('dialog', { name: 'Laboratorio · Lab Dental SAS' });
+    const list = dialog.querySelector('dl');
+    expect(list).not.toBeNull();
+    // axe (definition-list, dlitem): un <div> dentro de otro rompe la lista.
+    for (const child of Array.from(list!.children)) {
+      expect(child.tagName).toBe('DIV');
+      expect(Array.from(child.children).map((c) => c.tagName)).toEqual(['DT', 'DD']);
+    }
+    expect(within(list as HTMLElement).getByText('Coronas de octubre').tagName).toBe('DD');
+  });
+
   it('anular un pago exige motivo y actualiza el detalle', async () => {
     const user = setupUser();
     const voided = expenseDetailFixture({ status: 'PENDING', paidAmount: 0, pendingAmount: 150_000 }, [
