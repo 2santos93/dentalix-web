@@ -29,7 +29,7 @@ import {
   diagnosesPayload,
   emptyDiagnosesDraft,
   type DiagnosesDraft,
-} from '@/lib/rda/diagnoses-draft';
+} from '@/lib/clinical-notes/diagnoses-draft';
 
 export const newEvolutionCopy = {
   title: 'Nueva evolución',

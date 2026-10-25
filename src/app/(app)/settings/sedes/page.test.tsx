@@ -5,8 +5,8 @@ import { getTokenRole } from '@/lib/auth/token-role';
 
 jest.mock('next/navigation', () => ({ useRouter: () => ({ replace: jest.fn() }) }));
 jest.mock('../../../../lib/auth/token-role', () => ({ getTokenRole: jest.fn() }));
-jest.mock('../../../../components/locations/location-reps-settings', () => ({
-  LocationRepsSettings: () => null,
+jest.mock('../../../../components/locations/location-health-registration-settings', () => ({
+  LocationHealthRegistrationSettings: () => <section aria-label="Nº de registro sanitario" />,
 }));
 jest.mock('../../../../components/locations/location-phone-settings', () => ({
   LocationPhoneSettings: () => null,
@@ -16,7 +16,7 @@ jest.mock('../../../../components/locations/cancellation-policy-settings', () =>
 }));
 const mockedRole = getTokenRole as jest.MockedFunction<typeof getTokenRole>;
 
-describe('Ajustes → Sedes (DX-212, DX-279)', () => {
+describe('Ajustes → Sedes (DX-279, DX-319)', () => {
   beforeEach(() => {
     useAuthStore.setState({ accessToken: 'tok', _hasHydrated: true });
   });
@@ -27,6 +27,16 @@ describe('Ajustes → Sedes (DX-212, DX-279)', () => {
     expect(screen.getByText(/Datos legales de cada sede y su política de cancelación\./)).toBeInTheDocument();
     expect(screen.getByRole('region', { name: 'Política de cancelación' })).toBeInTheDocument();
   });
+
+  it.each(['ADMIN', 'RECEPTION'] as const)(
+    'a %s le muestra el nº de registro sanitario y ya no habla del REPS (DX-319)',
+    (role) => {
+      mockedRole.mockReturnValue(role);
+      render(<LocationSettingsPage />);
+      expect(screen.getByRole('region', { name: 'Nº de registro sanitario' })).toBeInTheDocument();
+      expect(screen.queryByText(/REPS|Resumen Digital/)).not.toBeInTheDocument();
+    },
+  );
 
   it.each(['RECEPTION', 'DENTIST', 'ASSISTANT'] as const)(
     'a %s no le promete la política que no ve (QA D4)',

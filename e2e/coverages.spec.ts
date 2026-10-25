@@ -143,7 +143,7 @@ test('RECEPCIÓN añade una cobertura vencida: fila «Vencida» y chip en la cab
   const dialog = page.getByRole('dialog', { name: 'Añadir cobertura' });
   await dialog.getByLabel('Pagador').selectOption({ label: payerOption });
   await dialog.getByLabel('Plan').fill('Plan Complementario');
-  await dialog.getByLabel('Número de afiliado').fill('987654');
+  await dialog.getByLabel('Nº de afiliado o póliza').fill('987654');
   await dialog.getByLabel('Vigente hasta').fill(twoDaysAgo);
   await shot(page, 'dialogo-cobertura-1440');
   await dialog.getByRole('button', { name: 'Añadir', exact: true }).click();
@@ -210,6 +210,62 @@ test('390 px: la ficha con cobertura no se desplaza y el diálogo cabe en la pan
   await expectNoHorizontalScroll(page);
   await dialog.getByRole('button', { name: 'Cancelar' }).click();
   await expect(dialog).toBeHidden();
+});
+
+test('SEC-049: recepción ve «Sin verificar», no puede verificar y sin nº no añade la cobertura de un pagador externo', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.emulateMedia({ colorScheme: 'light' });
+  await loginAs(page, origin, reception.email, password);
+  await page.goto(`${origin}/patients/${patientId}`);
+  const section = coverageSection(page);
+  const row = section.getByTestId('coverage-row');
+  await expect(row.getByTestId('coverage-verification')).toHaveText('Sin verificar', {
+    timeout: 15_000,
+  });
+  // Recepción no verifica.
+  await expect(section.getByRole('button', { name: /^Verificar/ })).toHaveCount(0);
+
+  // Sin nº de afiliado, el formulario no deja añadir otra cobertura del pagador.
+  await section.getByRole('button', { name: 'Añadir cobertura' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Añadir cobertura' });
+  await dialog.getByLabel('Pagador').selectOption({ label: payerOption });
+  await dialog.getByRole('button', { name: 'Añadir', exact: true }).click();
+  await expect(
+    dialog.getByText('El nº de afiliado o póliza es obligatorio con un pagador externo.'),
+  ).toBeVisible();
+  await expect(dialog.getByLabel('Nº de afiliado o póliza')).toBeFocused();
+  await dialog.getByRole('button', { name: 'Cancelar' }).click();
+  await expect(dialog).toBeHidden();
+});
+
+test('SEC-049: el ADMIN verifica la cobertura y queda «Verificada» con quién y cuándo, a 1440 y 390 px', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.emulateMedia({ colorScheme: 'light' });
+  await loginAs(page, origin, admin.email, password);
+  await page.goto(`${origin}/patients/${patientId}`);
+  const section = coverageSection(page);
+  const row = section.getByTestId('coverage-row');
+  await section
+    .getByRole('button', { name: `Verificar la cobertura de ${payerName}` })
+    .click({ timeout: 15_000 });
+  const confirm = page.getByRole('dialog', { name: 'Verificar cobertura' });
+  await expect(confirm).toContainText('el nº de afiliado 987654 es de este paciente');
+  await shot(page, 'verificar-cobertura-1440');
+  await confirm.getByRole('button', { name: 'Verificar', exact: true }).click();
+  await expect(confirm).toBeHidden({ timeout: 10_000 });
+  await expect(row.getByTestId('coverage-verification')).toHaveText('Verificada');
+  await expect(row).toContainText(`Verificada por ${admin.fullName} el `);
+  await expect(section.getByRole('button', { name: /^Verificar/ })).toHaveCount(0);
+  await shot(page, 'ficha-cobertura-verificada-1440', true);
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await expect(row.getByTestId('coverage-verification')).toBeVisible();
+  await expectNoHorizontalScroll(page);
+  await shot(page, 'ficha-cobertura-verificada-390', true);
 });
 
 test('una cita corta de hoy con cobertura vencida muestra la marca en la agenda y en el detalle', async ({ page, request }) => {

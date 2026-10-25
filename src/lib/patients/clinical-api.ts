@@ -75,11 +75,7 @@ export type ClinicalEntryDiagnosisInput =
   components['schemas']['ClinicalEntryDiagnosisInputDto'];
 export type DiagnosisKind = components['schemas']['ClinicalDiagnosisKind'];
 
-/** DX-212: lo que falta para el Resumen Digital de Atención (solo sedes CO). */
-export type RdaReadiness = components['schemas']['RdaReadinessDto'];
-export type RdaMissingItem = components['schemas']['RdaMissingItemDto'];
-
-/** Topes del RDA/RIPS que repite la API: 1 principal y hasta 3 relacionados. */
+/** Topes por evolución que repite la API: 1 principal y hasta 3 relacionados. */
 export const MAX_RELATED_DIAGNOSES = 3;
 
 /**
@@ -149,19 +145,3 @@ export async function createClinicalEntryAddendum(
   );
 }
 
-/**
- * DX-212: `GET /clinical-entries/:id/rda-readiness`. Solo comprueba datos;
- * nada sale de Dentalix. Recepción no tiene acceso (403), como a la historia.
- */
-export async function getRdaReadiness(token: string, entryId: string): Promise<RdaReadiness> {
-  return apiFetch<RdaReadiness>(
-    `/clinical-entries/${encodeURIComponent(entryId)}/rda-readiness`,
-    { token },
-  );
-}
-
-/** DX-232: una comprobación auditada por lote, máximo50 evoluciones. */
-export async function getRdaReadinessBatch(token: string, patientId: string, entryIds: readonly string[]): Promise<components['schemas']['BatchRdaReadinessDto'][]> {
-  const query = new URLSearchParams({ ids: entryIds.join(',') });
-  return apiFetch(`/patients/${encodeURIComponent(patientId)}/clinical-entries/rda-readiness?${query}`, { token });
-}

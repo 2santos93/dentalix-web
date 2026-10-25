@@ -48,6 +48,10 @@ const existing: PatientCoverage = {
   isPrimary: false,
   notes: null,
   migratedFromInsurerEps: false,
+  declaredById: null,
+  verifiedAt: null,
+  verifiedById: null,
+  verifiedByName: null,
   status: 'ACTIVE',
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-01T00:00:00.000Z',
@@ -186,5 +190,113 @@ describe('CoverageDialog (DX-153)', () => {
     );
     // Crear el pagador no guarda la cobertura.
     expect(mockedCreate).not.toHaveBeenCalled();
+  });
+
+  describe('nº de afiliado (SEC-049)', () => {
+    const external: Payer = { ...payer('pay-ext', 'Aseguradora Norte'), type: 'EMPRESA' };
+
+    it('con un pagador externo es obligatorio: error en el campo, foco y nada enviado', async () => {
+      setup({ payers: [external, sanitas] });
+      const user = setupUser();
+      await user.selectOptions(screen.getByLabelText('Pagador'), 'pay-ext');
+      const member = screen.getByLabelText('Nº de afiliado o póliza');
+      expect(member).toHaveAttribute('aria-required', 'true');
+      expect(member).toHaveAccessibleDescription(
+        'El número que figura en la tarjeta o póliza del paciente.',
+      );
+      await user.click(screen.getByRole('button', { name: 'Añadir' }));
+      expect(
+        await screen.findByText('El nº de afiliado o póliza es obligatorio con un pagador externo.'),
+      ).toBeInTheDocument();
+      expect(member).toHaveFocus();
+      expect(member).toHaveAttribute('aria-invalid', 'true');
+      expect(mockedCreate).not.toHaveBeenCalled();
+    });
+
+    it('con un formato no válido avisa sin repetir el número; con uno válido guarda', async () => {
+      mockedCreate.mockResolvedValue({ ...existing, id: 'c9' });
+      const props = setup({ payers: [external] });
+      const user = setupUser();
+      await user.selectOptions(screen.getByLabelText('Pagador'), 'pay-ext');
+      const member = screen.getByLabelText('Nº de afiliado o póliza');
+      await user.type(member, 'AF#12');
+      await user.click(screen.getByRole('button', { name: 'Añadir' }));
+      const error = await screen.findByText(
+        'El nº de afiliado o póliza debe tener entre 4 y 40 caracteres: letras, números, espacios, guiones, puntos o barras.',
+      );
+      expect(error).not.toHaveTextContent('AF#12');
+      expect(member).toHaveAccessibleDescription(error.textContent ?? '');
+      await user.clear(member);
+      await user.type(member, '1020304050');
+      await user.click(screen.getByRole('button', { name: 'Añadir' }));
+      await waitFor(() =>
+        expect(mockedCreate).toHaveBeenCalledWith(
+          'tok',
+          'p1',
+          expect.objectContaining({ payerId: 'pay-ext', memberNumber: '1020304050' }),
+        ),
+      );
+      expect(props.onSaved).toHaveBeenCalled();
+    });
+
+    it('con un pagador interno (OTRO) sigue siendo opcional', async () => {
+      mockedCreate.mockResolvedValue({ ...existing, id: 'c9' });
+      setup();
+      const user = setupUser();
+      await user.selectOptions(screen.getByLabelText('Pagador'), 'pay-1');
+      expect(screen.getByLabelText('Número de afiliado')).not.toHaveAttribute('aria-required');
+      await user.click(screen.getByRole('button', { name: 'Añadir' }));
+      await waitFor(() => expect(mockedCreate).toHaveBeenCalledTimes(1));
+    });
+
+    it('una cobertura anterior sin nº se edita en lo demás sin pedirlo', async () => {
+      const legacy: PatientCoverage = {
+        ...existing,
+        payer: {
+          id: 'pay-ext',
+          name: 'Aseguradora Norte',
+          type: 'EMPRESA',
+          country: null,
+          active: true,
+        },
+        migratedFromInsurerEps: true,
+      };
+      mockedUpdate.mockResolvedValue(legacy);
+      setup({ coverage: legacy, payers: [external] });
+      const user = setupUser();
+      await user.type(screen.getByLabelText('Notas'), 'Pedir el carné');
+      await user.click(screen.getByRole('button', { name: 'Guardar' }));
+      await waitFor(() =>
+        expect(mockedUpdate).toHaveBeenCalledWith(
+          'tok',
+          'p1',
+          'c1',
+          expect.objectContaining({ memberNumber: null, notes: 'Pedir el carné' }),
+        ),
+      );
+    });
+
+    it('al editar una verificada avisa de que cambiar el nº quita la verificación', () => {
+      setup({
+        coverage: {
+          ...existing,
+          payer: {
+            id: 'pay-ext',
+            name: 'Aseguradora Norte',
+            type: 'EMPRESA',
+            country: null,
+            active: true,
+          },
+          memberNumber: '1020304050',
+          verifiedAt: '2026-10-20T15:00:00.000Z',
+          verifiedById: 'admin-1',
+          verifiedByName: 'Ana Gómez',
+        },
+        payers: [external],
+      });
+      expect(screen.getByLabelText('Nº de afiliado o póliza')).toHaveAccessibleDescription(
+        'Cambiarlo quita la verificación del administrador.',
+      );
+    });
   });
 });

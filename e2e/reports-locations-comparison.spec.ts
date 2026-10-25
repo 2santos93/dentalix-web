@@ -2,8 +2,8 @@ import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import type { AxeResults } from 'axe-core';
 import { test, expect, type Page } from './support/test';
-import { accessTokenOf, loginAs } from './support/auth';
-import { API_URL, tenantOrigin } from './support/urls';
+import { loginAs } from './support/auth';
+import { tenantOrigin } from './support/urls';
 import { expectNoHorizontalScroll, expectNoHorizontalScrollIn } from './support/layout';
 
 /**
@@ -11,14 +11,19 @@ import { expectNoHorizontalScroll, expectNoHorizontalScrollIn } from './support/
  * (`npm run seed:demo` en la API), que tiene actividad en sus dos sedes en el
  * mes actual y en el anterior.
  *
- *  1. La administración entra por el menú lateral, ve una fila por sede y el
- *     «Total clínica» de «Este mes» frente al período anterior, con flechas de
+ *  1. La administración entra por el menú lateral, ve la fila de cada sede
+ *     sembrada y el «Total clínica» de «Este mes» frente al período anterior, con flechas de
  *     variación; ordena por una columna (aria-sort) y exporta el CSV con los
  *     filtros activos («Mes anterior», «Mismo período del año anterior»).
- *  2. A 390 px, una tarjeta por sede, sin scroll horizontal.
+ *  2. A 390 px, la tarjeta de cada sede, sin scroll horizontal.
  *  3. Un odontólogo no ve la entrada y, si abre la URL, ve el aviso (403).
  *  4. axe sin violaciones serias en claro y oscuro, a 390 y 1440 px. Las
  *     capturas y los JSON de axe van a DX014_QA_DIR (o a test-results).
+ *
+ * DX-337: las sedes se buscan por su nombre, sin contar filas ni tarjetas.
+ * La comparación también lista las sedes retiradas, y otra suite o una
+ * prueba a mano sobre la misma base pueden haber añadido alguna: eso no
+ * cambia lo que este spec comprueba de las dos sembradas.
  */
 const DEMO_SUBDOMAIN = process.env.E2E_DEMO_SUBDOMAIN ?? 'demo';
 const DEMO_PASSWORD = process.env.E2E_DEMO_PASSWORD ?? 'DemoDentalix2026!';
@@ -26,39 +31,24 @@ const ADMIN_EMAIL = process.env.E2E_DEMO_ADMIN_EMAIL ?? 'admin@demo.dentalix.app
 const DENTIST_EMAIL = process.env.E2E_DEMO_DENTIST_EMAIL ?? 'dentista@demo.dentalix.app';
 const SEDES = ['Sede principal', 'Sede Norte'];
 
+/** Fila (1440 px) o tarjeta (390 px) de la sede `name`, por su nombre exacto. */
+function sedeRow(page: Page, name: string) {
+  return page
+    .getByTestId('comparison-row')
+    .filter({ has: page.getByRole('rowheader', { name, exact: true }) });
+}
+function sedeCard(page: Page, name: string) {
+  return page.getByTestId('comparison-card').filter({ has: page.getByRole('heading', { name, exact: true }) });
+}
+
 const origin = tenantOrigin(DEMO_SUBDOMAIN);
 
-async function openReports(page: Page): Promise<string[]> {
+async function openReports(page: Page): Promise<void> {
   await loginAs(page, origin, ADMIN_EMAIL, DEMO_PASSWORD);
   await page.getByRole('link', { name: 'Reportes' }).filter({ visible: true }).first().click();
   await expect(page).toHaveURL(`${origin}/reportes`);
   await expect(page.getByRole('heading', { level: 1, name: 'Reportes' })).toBeVisible();
   await expect(page.getByRole('tab', { name: 'Comparar sedes', selected: true })).toBeVisible();
-  // Otras pruebas crean sedes en la demo: el reporte debe incluirlas todas.
-  const inventory = await page.request.get(`${API_URL}/locations`, {
-    headers: {
-      'X-Tenant-Host': new URL(origin).host,
-      Authorization: `Bearer ${await accessTokenOf(page)}`,
-    },
-  });
-  expect(inventory.ok()).toBeTruthy();
-  const locations = await inventory.json() as { name: string }[];
-  const names = locations.map((location) => location.name).sort();
-  for (const name of SEDES) expect(names).toContain(name);
-  return names;
-}
-
-async function expectLocations(page: Page, kind: 'row' | 'card', names: string[]): Promise<void> {
-  const items = page.getByTestId(`comparison-${kind}`);
-  await expect(items).toHaveCount(names.length, { timeout: 30_000 });
-  const headings = items.getByRole(kind === 'row' ? 'rowheader' : 'heading');
-  // El nombre es el primer nodo; una sede desactivada añade su propia etiqueta.
-  await expect.poll(() => headings.evaluateAll((nodes) => nodes
-    .map((node) => node.firstChild?.textContent?.trim() ?? '').sort())).toEqual(names);
-  const seeded = items.filter({ has: page.getByRole(kind === 'row' ? 'rowheader' : 'heading', {
-    name: /^(Sede principal|Sede Norte)$/,
-  }) });
-  await expect(seeded).toHaveCount(2);
 }
 
 test.describe.configure({ mode: 'serial' });
@@ -66,7 +56,7 @@ test.describe.configure({ mode: 'serial' });
 test('ADMIN a 1440 px: una fila por sede y el total, con variaciones, orden y CSV', async ({ page }) => {
   test.setTimeout(120_000);
   await page.setViewportSize({ width: 1440, height: 900 });
-  const locationNames = await openReports(page);
+  await openReports(page);
 
   const table = page.getByRole('table', { name: 'Indicadores por sede y total de la clínica' });
   await expect(table).toBeVisible({ timeout: 30_000 });
@@ -74,9 +64,9 @@ test('ADMIN a 1440 px: una fila por sede y el total, con variaciones, orden y CS
   await expect(page.getByLabel('Comparar con')).toHaveValue('previous');
 
   const rows = page.getByTestId('comparison-row');
-  await expectLocations(page, 'row', locationNames);
   for (const name of SEDES) {
-    await expect(table.getByRole('rowheader', { name })).toBeVisible();
+    await expect(sedeRow(page, name)).toHaveCount(1);
+    await expect(sedeRow(page, name)).toBeVisible();
   }
   const total = page.getByTestId('comparison-total');
   await expect(total.getByRole('rowheader', { name: 'Total clínica' })).toBeVisible();
@@ -117,10 +107,16 @@ test('ADMIN a 1440 px: una fila por sede y el total, con variaciones, orden y CS
   await expect(collected).toHaveAttribute('aria-sort', 'none');
   await table.getByRole('button', { name: 'Cobrado', exact: true }).click();
   await expect(collected).toHaveAttribute('aria-sort', 'descending');
-  const firstDesc = await rows.first().getByRole('rowheader').textContent();
+  // Las dos sedes sembradas cambian de orden entre sí (puede haber otras).
+  const sedeOrder = async () => {
+    const names = (await rows.getByRole('rowheader').allTextContents()).map((n) => n.trim());
+    return SEDES.filter((name) => names.includes(name)).sort((a, b) => names.indexOf(a) - names.indexOf(b));
+  };
+  const desc = await sedeOrder();
+  expect(desc).toHaveLength(SEDES.length);
   await table.getByRole('button', { name: 'Cobrado', exact: true }).click();
   await expect(collected).toHaveAttribute('aria-sort', 'ascending');
-  await expect(rows.first().getByRole('rowheader')).not.toHaveText(firstDesc ?? '');
+  await expect.poll(sedeOrder).toEqual([...desc].reverse());
   await expect(page.getByTestId('comparison-total')).toBeVisible();
 
   // CSV con los filtros activos.
@@ -146,8 +142,10 @@ test('ADMIN a 1440 px: una fila por sede y el total, con variaciones, orden y CS
 test('ADMIN a 390 px: tarjetas por sede sin scroll horizontal', async ({ page }) => {
   test.setTimeout(120_000);
   await page.setViewportSize({ width: 390, height: 844 });
-  const locationNames = await openReports(page);
-  await expectLocations(page, 'card', locationNames);
+  await openReports(page);
+  for (const name of SEDES) {
+    await expect(sedeCard(page, name)).toHaveCount(1, { timeout: 30_000 });
+  }
   await expect(page.getByTestId('comparison-total-card')).toContainText('Total clínica');
   await expect(page.getByRole('table')).toBeHidden();
   await page.getByLabel('Ordenar por').selectOption('production');
@@ -170,8 +168,10 @@ test('axe: /reportes a 390 y 1440 px, en claro y oscuro', async ({ page }, testI
   const evidence = process.env.DX014_QA_DIR ?? testInfo.outputPath('qa');
   mkdirSync(evidence, { recursive: true });
   await page.setViewportSize({ width: 1440, height: 900 });
-  const locationNames = await openReports(page);
-  await expectLocations(page, 'row', locationNames);
+  await openReports(page);
+  for (const name of SEDES) {
+    await expect(sedeRow(page, name)).toHaveCount(1, { timeout: 30_000 });
+  }
 
   const axeSource = readFileSync(require.resolve('axe-core/axe.min.js'), 'utf8');
   async function serious(surface: string) {
@@ -196,7 +196,6 @@ test('axe: /reportes a 390 y 1440 px, en claro y oscuro', async ({ page }, testI
       await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
       await expect(page.locator('html')).toHaveClass(new RegExp(`\\b${colorScheme}\\b`));
       const shown = width < 768 ? page.getByTestId('comparison-card') : page.getByTestId('comparison-row');
-      await expectLocations(page, width < 768 ? 'card' : 'row', locationNames);
       await expect(shown.first()).toBeVisible();
       expect.soft(await serious(`reportes-${width}-${colorScheme}`), `/reportes ${width} ${colorScheme}`).toEqual([]);
     }

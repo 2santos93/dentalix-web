@@ -603,7 +603,7 @@ export interface paths {
         put?: never;
         /**
          * Añadir una cobertura al paciente (DX-153)
-         * @description La primera cobertura viva es la principal aunque no se pida. `isPrimary: true` en otra desmarca la anterior.
+         * @description La primera cobertura viva es la principal aunque no se pida. `isPrimary: true` en otra desmarca la anterior. SEC-049: con un pagador externo el nº de afiliado es obligatorio; la cobertura queda declarada por quien la crea y sin verificar.
          */
         post: operations["PatientCoveragesController_create"];
         delete?: never;
@@ -626,8 +626,31 @@ export interface paths {
         delete: operations["PatientCoveragesController_remove"];
         options?: never;
         head?: never;
-        /** Editar una cobertura; null vacía los campos opcionales (DX-153) */
+        /**
+         * Editar una cobertura; null vacía los campos opcionales (DX-153)
+         * @description SEC-049: cambiar el pagador o el nº de afiliado borra la verificación y deja la cobertura declarada por quien la edita.
+         */
         patch: operations["PatientCoveragesController_update"];
+        trace?: never;
+    };
+    "/api/v1/patients/{patientId}/coverages/{coverageId}/verification": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Verificar el nº de afiliado de una cobertura de un pagador externo; solo ADMIN (SEC-049)
+         * @description Marca quién y cuándo. Con ella verificada, cualquier rol puede asignar el convenio de ese pagador con esta cobertura. Volver a verificar actualiza quién y cuándo.
+         */
+        post: operations["PatientCoveragesController_verify"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
         trace?: never;
     };
     "/api/v1/payers": {
@@ -945,23 +968,6 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
-    "/api/v1/patients/{patientId}/clinical-entries/rda-readiness": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /** Datos RDA de hasta50 evoluciones del paciente, con una auditoría */
-        get: operations["ClinicalEntriesController_readiness"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
     "/api/v1/patients/{patientId}/clinical-entries/{entryId}/addenda": {
         parameters: {
             query?: never;
@@ -1000,26 +1006,6 @@ export interface paths {
         head?: never;
         /** No permitido: una evolución no se edita (DX-038) */
         patch: operations["ClinicalEntriesController_rejectPatch"];
-        trace?: never;
-    };
-    "/api/v1/clinical-entries/{id}/rda-readiness": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        /**
-         * Datos del RDA que faltan en la atención de una evolución
-         * @description Comprueba documento del paciente, diagnóstico principal CIE-10, CUPS de los procedimientos realizados ese día (odontograma), REPS de la sede (la de la cita o, sin cita, la principal) y registro profesional del autor. El NIT de la clínica sale en `pending` hasta DX-019. Sede fuera de Colombia: `notApplicable: true`.
-         */
-        get: operations["ClinicalEntryRdaController_get"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
         trace?: never;
     };
     "/api/v1/clinical-note-templates": {
@@ -4278,6 +4264,15 @@ export interface components {
             noticeMinutes: number;
             lateCancellation: boolean;
         };
+        AuditHealthRegistrationSideDto: {
+            number: string | null;
+            /** @description Si el nº sale en los documentos de la sede. */
+            shown: boolean;
+        };
+        AuditHealthRegistrationChangeDto: {
+            before: components["schemas"]["AuditHealthRegistrationSideDto"];
+            after: components["schemas"]["AuditHealthRegistrationSideDto"];
+        };
         AuditMetadataDto: {
             /** @description UPDATE: nombres de los campos enviados (nunca sus valores). */
             changedFields?: string[];
@@ -4305,6 +4300,8 @@ export interface components {
             attribution?: components["schemas"]["AuditAttributionChangeDto"];
             /** @description DX-279: cita cancelada desde la agenda, en su único evento (`reason` APPOINTMENT_CANCELLED; PATIENT_FLOW si estaba en la clínica; COMPLETED_EXIT si estaba completada): quién, código del motivo, minutos de aviso y si fue tardía. Nunca el texto libre del motivo. */
             cancellation?: components["schemas"]["AuditCancellationDto"];
+            /** @description DX-319: nº de registro sanitario de una sede y si sale en los documentos, antes y después (dato público de la sede, nunca de un paciente). */
+            healthRegistration?: components["schemas"]["AuditHealthRegistrationChangeDto"];
         };
         AuditEventDto: {
             /** Format: uuid */
@@ -5415,6 +5412,20 @@ export interface components {
             /** @description Copiada de la aseguradora en texto libre de la ficha (DX-153); la API no la crea. SEC-047: habilita a cualquier rol a asignar un convenio de pagador OTRO. */
             migratedFromInsurerEps: boolean;
             /**
+             * Format: uuid
+             * @description SEC-049: quién puso por última vez el pagador o el nº de afiliado (en las anteriores, quien la creó). Un rol que no es ADMIN no puede asignar un convenio con una cobertura que declaró él y nadie verificó.
+             */
+            declaredById: string | null;
+            /**
+             * Format: date-time
+             * @description SEC-049: cuándo la verificó un ADMIN; null = sin verificar. Cambiar el pagador o el nº de afiliado la borra.
+             */
+            verifiedAt: string | null;
+            /** Format: uuid */
+            verifiedById: string | null;
+            /** @example Ana Gómez */
+            verifiedByName: string | null;
+            /**
              * @description Calculado a hoy en la zona de la sede.
              * @enum {string}
              */
@@ -5428,6 +5439,7 @@ export interface components {
             /** Format: uuid */
             payerId: string;
             planName?: string;
+            /** @description SEC-049: obligatorio con un pagador externo (todo tipo salvo OTRO), con la misma regla para todos: tras normalizar, de 4 a 40 caracteres (letras, dígitos, espacio, `-`, `.` o `/`), al menos un dígito y no un mismo carácter repetido; opcional con OTRO. */
             memberNumber?: string;
             policyHolderName?: string;
             /** @example 2026-01-01 */
@@ -5451,6 +5463,10 @@ export interface components {
             /** @description true la hace principal (desmarca la anterior); false sobre la única principal se rechaza. */
             isPrimary?: boolean;
             notes?: string | null;
+        };
+        VerifyPatientCoverageDto: {
+            /** @description El nº de afiliado que el administrador comprobó. Si ya no es el guardado, o cambió el pagador (otra petición los cambió), 409. */
+            checkedMemberNumber: string;
         };
         PayerDto: {
             /** Format: uuid */
@@ -5673,11 +5689,6 @@ export interface components {
             /** @description At most 2 decimal places */
             defaultPrice?: number;
             /**
-             * @description DX-212: código CUPS del procedimiento, 6 caracteres alfanuméricos (400 con el formato esperado si no). Vacío o null lo quita. Solo ADMIN.
-             * @example 890203
-             */
-            cupsCode?: string | null;
-            /**
              * @description DX-105: false = la prestación no admite descuentos. Por defecto true.
              * @default true
              */
@@ -5699,8 +5710,6 @@ export interface components {
             labelPt: string | null;
             color: string;
             defaultPrice: number | null;
-            /** @description DX-212: código CUPS (6 alfanuméricos) o null. */
-            cupsCode: string | null;
             /** @description DX-105: false = la prestación no admite descuentos (ni % de convenio ni discrecionales). */
             allowDiscount: boolean;
             active: boolean;
@@ -5728,11 +5737,6 @@ export interface components {
             color?: string;
             /** @description At most 2 decimal places */
             defaultPrice?: number;
-            /**
-             * @description DX-212: código CUPS del procedimiento, 6 caracteres alfanuméricos (400 con el formato esperado si no). Vacío o null lo quita. Solo ADMIN.
-             * @example 890203
-             */
-            cupsCode?: string | null;
             /** @description DX-105: false = la prestación no admite descuentos. */
             allowDiscount?: boolean;
             active?: boolean;
@@ -5743,8 +5747,10 @@ export interface components {
             name: string;
             address: string | null;
             country: components["schemas"]["ClinicCountry"];
-            /** @description DX-212: código de habilitación REPS (12 dígitos) o null. */
-            repsHabilitationCode: string | null;
+            /** @description DX-319: nº de registro sanitario (texto libre) o null. */
+            healthRegistrationNumber: string | null;
+            /** @description DX-319: si el nº de registro sanitario aparece en los documentos de la sede (por defecto no). */
+            showHealthRegistrationNumber: boolean;
             /** @description DX-222: teléfono de la sede o null. */
             phone: string | null;
             isActive: boolean;
@@ -5775,10 +5781,12 @@ export interface components {
             /** @description País de la sede: decide los campos legales obligatorios de la receta (CO o ES). Por defecto CO. */
             country?: components["schemas"]["ClinicCountry"];
             /**
-             * @description DX-212: código de habilitación REPS de la sede (Colombia), 12 dígitos (400 con el formato esperado si no). Vacío o null lo quita. Solo ADMIN; queda auditado.
-             * @example 110010123401
+             * @description DX-319: nº de registro sanitario de la sede, texto libre sin formato ni validación por país (hasta 64 caracteres, se recorta). Solo ADMIN; queda auditado con su antes y después. Vacío o null lo quita; sin el campo no cambia.
+             * @example NRS 28/1234-AB
              */
-            repsHabilitationCode?: string | null;
+            healthRegistrationNumber?: string | null;
+            /** @description DX-319: si el nº de registro sanitario aparece en los documentos de la sede (por defecto no). */
+            showHealthRegistrationNumber?: boolean;
             /**
              * @description DX-222: teléfono de la sede que ven los pacientes en las indicaciones postoperatorias ({{telefono_sede}}). Hasta 40 caracteres. Vacío o null lo quita; sin el campo no cambia.
              * @example +57 601 555 0101
@@ -6128,52 +6136,11 @@ export interface components {
             /** @description DX-212: diagnósticos CIE-10, el principal primero (vacío en las evoluciones sin diagnóstico) */
             diagnoses: components["schemas"]["ClinicalEntryDiagnosisDto"][];
         };
-        /** @enum {string} */
-        RdaMissingCode: "PATIENT_DOCUMENT" | "PRINCIPAL_DIAGNOSIS" | "PROCEDURE_CUPS" | "LOCATION_REPS" | "AUTHOR_LICENSE";
-        RdaMissingItemDto: {
-            code: components["schemas"]["RdaMissingCode"];
-            /** @example Código CUPS de «Profilaxis» */
-            label: string;
-            /**
-             * Format: uuid
-             * @description Dónde completarlo: paciente (PATIENT_DOCUMENT), ítem del catálogo (PROCEDURE_CUPS), sede (LOCATION_REPS) o usuario autor (AUTHOR_LICENSE); null si no aplica.
-             */
-            resourceId: string | null;
-        };
-        /** @enum {string} */
-        RdaPendingCode: "CLINIC_TAX_ID";
-        RdaPendingItemDto: {
-            code: components["schemas"]["RdaPendingCode"];
-            /** @example NIT de la clínica */
-            label: string;
-            /** @example pendiente de DX-019 */
-            reason: string;
-        };
-        BatchRdaReadinessDto: {
-            /** @description true en una sede fuera de Colombia: el RDA no aplica (ready=false, listas vacías). */
-            notApplicable: boolean;
-            /** @description Sin faltantes (los pendientes no cuentan). */
-            ready: boolean;
-            missing: components["schemas"]["RdaMissingItemDto"][];
-            /** @description Datos que aún no existen en Dentalix y no bloquean. */
-            pending: components["schemas"]["RdaPendingItemDto"][];
-            /** Format: uuid */
-            entryId: string;
-        };
         CreateClinicalEntryAddendumDto: {
             /** @description Motivo de la corrección (p. ej. «pieza dental mal transcrita») */
             reason: string;
             /** @description Texto aclaratorio que corrige o completa la evolución */
             text: string;
-        };
-        RdaReadinessDto: {
-            /** @description true en una sede fuera de Colombia: el RDA no aplica (ready=false, listas vacías). */
-            notApplicable: boolean;
-            /** @description Sin faltantes (los pendientes no cuentan). */
-            ready: boolean;
-            missing: components["schemas"]["RdaMissingItemDto"][];
-            /** @description Datos que aún no existen en Dentalix y no bloquean. */
-            pending: components["schemas"]["RdaPendingItemDto"][];
         };
         /** @enum {string} */
         ClinicalNotePromptType: "ONE" | "MULTI" | "TEXT";
@@ -13812,7 +13779,7 @@ export interface operations {
                     "application/json": components["schemas"]["PatientCoverageDto"];
                 };
             };
-            /** @description Validación, pagador inexistente o desactivado, vigencia inválida o más de 5 coberturas */
+            /** @description Validación, pagador inexistente o desactivado, vigencia inválida, nº de afiliado ausente o sin formato con un pagador externo, o más de 5 coberturas */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -13887,7 +13854,7 @@ export interface operations {
                     "application/json": components["schemas"]["PatientCoverageDto"];
                 };
             };
-            /** @description Validación, pagador inexistente o desactivado, vigencia inválida o dejar al paciente sin principal */
+            /** @description Validación, pagador inexistente o desactivado, vigencia inválida, nº de afiliado ausente o sin formato con un pagador externo, o dejar al paciente sin principal */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -13903,6 +13870,60 @@ export interface operations {
             };
             /** @description Otra petición cambió la cobertura principal a la vez */
             422: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientCoveragesController_verify: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+                coverageId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["VerifyPatientCoverageDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PatientCoverageDto"];
+                };
+            };
+            /** @description Validación, cobertura sin nº de afiliado o de un pagador interno (OTRO) */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo un administrador */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Paciente o cobertura no encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El pagador o el nº de afiliado cambió mientras el administrador lo revisaba */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };
@@ -14989,44 +15010,6 @@ export interface operations {
             };
         };
     };
-    ClinicalEntriesController_readiness: {
-        parameters: {
-            query: {
-                /** @description De 1 a 50 UUID de evoluciones separados por comas. */
-                ids: string;
-            };
-            header?: never;
-            path: {
-                patientId: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["BatchRdaReadinessDto"][];
-                };
-            };
-            /** @description Envía entre1 y50 UUID separados por comas. */
-            400: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-            /** @description Paciente o alguna evolución no encontrados en esta clínica y paciente. */
-            404: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
     ClinicalEntriesController_addenda: {
         parameters: {
             query?: never;
@@ -15152,34 +15135,6 @@ export interface operations {
         responses: {
             /** @description Una evolución de la historia clínica no se puede modificar ni borrar (Res. 1995 de 1999, art. 18). Para corregirla, añade una adenda: POST /patients/{patientId}/clinical-entries/{entryId}/addenda */
             405: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content?: never;
-            };
-        };
-    };
-    ClinicalEntryRdaController_get: {
-        parameters: {
-            query?: never;
-            header?: never;
-            path: {
-                id: string;
-            };
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RdaReadinessDto"];
-                };
-            };
-            /** @description Evolución inexistente o de otra clínica. */
-            404: {
                 headers: {
                     [name: string]: unknown;
                 };

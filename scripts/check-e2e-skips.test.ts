@@ -83,7 +83,7 @@ function run(rep: object, env: Record<string, string> = {}, list: object = allow
 }
 
 const ok = (title: string): FakeTest => ({ file: 'agenda.spec.ts', title, status: 'expected' });
-const flaky = (title: string): FakeTest => ({ file: 'rda-codes.spec.ts', title, status: 'flaky' });
+const flaky = (title: string): FakeTest => ({ file: 'clinical-codes.spec.ts', title, status: 'flaky' });
 
 /** Corre la guardia con `GITHUB_STEP_SUMMARY` apuntando a un fichero y lo devuelve. */
 function runWithSummary(rep: object, env: Record<string, string> = {}) {
@@ -167,8 +167,8 @@ describe('scripts/check-e2e-skips.mjs (DX-252)', () => {
       const res = run(report([ok('crea una cita'), flaky('guarda el REPS'), flaky('valida el código')]));
       expect(res.code).toBe(0);
       expect(res.out).toContain('2 flaky');
-      expect(res.out).toContain('e2e/rda-codes.spec.ts:7 «guarda el REPS»');
-      expect(res.out).toContain('e2e/rda-codes.spec.ts:7 «valida el código»');
+      expect(res.out).toContain('e2e/clinical-codes.spec.ts:7 «guarda el REPS»');
+      expect(res.out).toContain('e2e/clinical-codes.spec.ts:7 «valida el código»');
     });
 
     it('más de 2: 1, y los nombra todos', () => {
@@ -176,13 +176,13 @@ describe('scripts/check-e2e-skips.mjs (DX-252)', () => {
       expect(res.code).toBe(1);
       expect(res.out).toContain('3 flaky');
       expect(res.out).toContain('más de 2');
-      for (const t of ['a', 'b', 'c']) expect(res.out).toContain(`e2e/rda-codes.spec.ts:7 «${t}»`);
+      for (const t of ['a', 'b', 'c']) expect(res.out).toContain(`e2e/clinical-codes.spec.ts:7 «${t}»`);
     });
 
     it('en GitHub Actions cada flaky es un aviso anotado en el fichero', () => {
       const res = run(report([flaky('guarda el REPS')]), { GITHUB_ACTIONS: 'true' });
       expect(res.code).toBe(0);
-      expect(res.out).toContain('::warning file=e2e/rda-codes.spec.ts,line=7,title=Test flaky::');
+      expect(res.out).toContain('::warning file=e2e/clinical-codes.spec.ts,line=7,title=Test flaky::');
     });
   });
 
@@ -199,7 +199,7 @@ describe('scripts/check-e2e-skips.mjs (DX-252)', () => {
       expect(res.code).toBe(1);
       expect(res.summary).toContain('4 tests');
       expect(res.summary).toMatch(/1 passed · 1 failed · 1 flaky · 1 skipped/);
-      expect(res.summary).toContain('`e2e/rda-codes.spec.ts:7` «guarda el REPS»');
+      expect(res.summary).toContain('`e2e/clinical-codes.spec.ts:7` «guarda el REPS»');
       expect(res.summary).toContain('`e2e/settings-index.spec.ts:7` «Mi perfil mide 44 px»');
       expect(res.summary).toContain('`e2e/patient-flow.spec.ts:7` «llegó» — Motivo');
     });

@@ -1,5 +1,11 @@
 /** Comprueba rutas, métodos y cuerpos del cliente de coberturas (DX-153). */
-import { createCoverage, deleteCoverage, listCoverages, updateCoverage } from './coverages-api';
+import {
+  createCoverage,
+  deleteCoverage,
+  listCoverages,
+  updateCoverage,
+  verifyCoverage,
+} from './coverages-api';
 
 describe('coverages-api', () => {
   const realFetch = global.fetch;
@@ -45,6 +51,16 @@ describe('coverages-api', () => {
     expect(call(spy, 2).path).toMatch(/\/patients\/pat-1\/coverages\/cov-1$/);
     expect(call(spy, 3)).toMatchObject({ method: 'DELETE' });
     expect(call(spy, 3).path).toMatch(/\/patients\/pat-1\/coverages\/cov-1$/);
+  });
+
+  it('verificar (SEC-049) manda el nº que el ADMIN comprobó', async () => {
+    const spy = mockFetch({});
+    await verifyCoverage('tok', 'pat-1', 'cov-1', '1020304050');
+    expect(call(spy)).toMatchObject({
+      method: 'POST',
+      body: { checkedMemberNumber: '1020304050' },
+    });
+    expect(call(spy).path).toMatch(/\/patients\/pat-1\/coverages\/cov-1\/verification$/);
   });
 
   it('quitar tolera el 204 sin cuerpo', async () => {

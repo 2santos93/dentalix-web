@@ -34,6 +34,22 @@ export function updateCoverage(
   });
 }
 
+/**
+ * SEC-049: el ADMIN verifica la cobertura. `checkedMemberNumber` es el nº que
+ * tenía delante; si otra petición lo cambió, la API responde 409.
+ */
+export function verifyCoverage(
+  token: string,
+  patientId: string,
+  id: string,
+  checkedMemberNumber: string,
+): Promise<PatientCoverage> {
+  return apiFetch<PatientCoverage>(
+    `${base(patientId)}/${encodeURIComponent(id)}/verification`,
+    { method: 'POST', body: { checkedMemberNumber }, token },
+  );
+}
+
 /** Quita la cobertura (204 sin cuerpo). */
 export async function deleteCoverage(
   token: string,

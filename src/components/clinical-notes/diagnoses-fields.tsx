@@ -2,7 +2,7 @@
 import * as React from 'react';
 import { useId } from 'react';
 import { Info, Plus, X } from 'lucide-react';
-import type { DiagnosesDraft, DiagnosisRowDraft } from '@/lib/rda/diagnoses-draft';
+import type { DiagnosesDraft, DiagnosisRowDraft } from '@/lib/clinical-notes/diagnoses-draft';
 import { MAX_RELATED_DIAGNOSES } from '@/lib/patients/clinical-api';
 import { Icd10Combobox } from './icd10-combobox';
 import { Input } from '@/components/ui/input';
@@ -18,7 +18,7 @@ export const diagnosesFieldsCopy = {
   toothOf: (label: string) => ` · ${label}`,
   toothPlaceholder: 'Opcional',
   noPrincipal:
-    'Opcional, pero sin diagnóstico principal la atención queda con «RDA: faltan datos». Puedes guardarla igual.',
+    'Opcional: puedes guardar la evolución sin diagnóstico.',
   addRelated: 'Añadir relacionado',
   maxRelated: `Como máximo ${MAX_RELATED_DIAGNOSES} relacionados.`,
   remove: (n: number) => `Quitar el diagnóstico relacionado ${n}`,
