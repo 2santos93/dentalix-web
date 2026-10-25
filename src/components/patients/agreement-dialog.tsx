@@ -14,6 +14,7 @@ import { Input } from '@/components/ui/input';
 import { InlineError } from '@/components/errors/inline-error';
 import type { ClinicRole } from '@/lib/me/me-api';
 import { agreementEligibility } from '@/lib/patients/agreement-eligibility';
+import { getTokenUserId } from '@/lib/auth/token-role';
 import { fieldClass } from '@/lib/ui/field-class';
 import { cn } from '@/lib/utils';
 
@@ -85,6 +86,9 @@ interface AgreementDialogProps {
  * del paciente con ese pagador (si solo hay una, va elegida); sin ninguna, el
  * modal explica por qué no se puede y no deja guardar. Un convenio interno
  * (pagador OTRO) solo lo asigna ADMIN, con la cobertura opcional.
+ *
+ * SEC-049: a quien no es ADMIN no se le ofrecen las coberturas que registró él
+ * y nadie verificó; si solo tiene esas, el modal dice que falta la verificación.
  */
 export function AgreementDialog({
   open,
@@ -145,7 +149,10 @@ export function AgreementDialog({
   // Convenios y coberturas llegan juntos: hasta entonces no se decide nada
   // (B4: ni un bloqueo falso mientras carga).
   const loading = agreements === null;
-  const eligibility = chosen && !loading ? agreementEligibility(chosen, coverages, role) : null;
+  const eligibility =
+    chosen && !loading
+      ? agreementEligibility(chosen, coverages, role, getTokenUserId(token))
+      : null;
   const notice = eligibility?.kind === 'optional-coverage' ? eligibility.notice : null;
   const coverageOptions =
     eligibility && eligibility.kind !== 'blocked' ? eligibility.coverages : [];

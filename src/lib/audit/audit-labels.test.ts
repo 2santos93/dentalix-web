@@ -14,6 +14,7 @@ import {
   scheduleChangeDetail,
   patientFlowDetail,
   planItemAttributionDetail,
+  healthRegistrationDetail,
 } from './audit-labels';
 
 describe('etiquetas de auditoría', () => {
@@ -229,9 +230,40 @@ describe('cancellationDetail (DX-279)', () => {
       'Cargo por inasistencia o cancelación tardía',
     );
     expect(cancellationDetail({ reason: 'CANCELLATION_FEE_WAIVED' })).toBe('Cargo por inasistencia condonado');
+    // SEC-050: la anulación de un cargo ya generado.
+    expect(cancellationDetail({ reason: 'CANCELLATION_FEE_VOIDED' })).toBe('Cargo por inasistencia anulado');
     expect(cancellationDetail({ reason: 'CANCELLATION_POLICY_CHANGED' })).toBe(
       'Nueva versión de la política de cancelación',
     );
     expect(cancellationDetail({ reason: 'PATIENT_FLOW' })).toBeNull();
+  });
+});
+
+describe('healthRegistrationDetail (DX-319)', () => {
+  const side = (number: string | null, shown: boolean) => ({ number, shown });
+
+  it('dice el nº y si sale en los documentos, antes y después', () => {
+    expect(
+      healthRegistrationDetail({
+        healthRegistration: { before: side(null, false), after: side('NRS-7', true) },
+      }),
+    ).toBe('Nº de registro sanitario: sin nº → «NRS-7» · En los documentos: no → sí');
+  });
+
+  it('solo lo que cambió', () => {
+    expect(
+      healthRegistrationDetail({
+        healthRegistration: { before: side('NRS-7', true), after: side(null, true) },
+      }),
+    ).toBe('Nº de registro sanitario: «NRS-7» → sin nº');
+    expect(
+      healthRegistrationDetail({
+        healthRegistration: { before: side('NRS-7', true), after: side('NRS-7', false) },
+      }),
+    ).toBe('En los documentos: sí → no');
+  });
+
+  it('null sin el cambio', () => {
+    expect(healthRegistrationDetail({})).toBeNull();
   });
 });

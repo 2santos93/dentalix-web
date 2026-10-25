@@ -26,8 +26,6 @@ export interface DentalCatalogItem {
   labelPt: string | null;
   color: string;
   defaultPrice: number | null;
-  /** DX-212: código CUPS (6 alfanuméricos) o null. */
-  cupsCode?: string | null;
   /** DX-105: false = la prestación no admite descuentos (ni de convenio ni discrecionales). */
   allowDiscount?: boolean;
   active: boolean;
@@ -111,8 +109,6 @@ export interface CreateCatalogItemInput {
   labelEn?: string;
   labelPt?: string;
   defaultPrice?: number;
-  /** DX-212: código CUPS (6 alfanuméricos). Solo ADMIN. */
-  cupsCode?: string;
   /** DX-105: por defecto true. */
   allowDiscount?: boolean;
   active?: boolean;
@@ -146,18 +142,8 @@ export interface UpdateCatalogItemInput {
   labelEn?: string;
   labelPt?: string;
   defaultPrice?: number;
-  /** DX-212: código CUPS; `null` lo quita. Solo ADMIN (queda auditado). */
-  cupsCode?: string | null;
   allowDiscount?: boolean;
   active?: boolean;
-}
-
-/** DX-212: el formato que valida la API (6 caracteres alfanuméricos). */
-export const CUPS_PATTERN = /^[A-Z0-9]{6}$/;
-
-/** `true` si la sesión puede editar el catálogo (CUPS incluido): solo ADMIN. */
-export function canEditCatalog(role: string | null): boolean {
-  return role === 'ADMIN';
 }
 
 export async function updateCatalogItem(

@@ -60,6 +60,7 @@ function row(name: string, id: string | null, production: [string, Metric][], no
     isActive: true,
     timeZone: id ? 'America/Bogota' : null,
     hasActivity: true,
+    previousPeriodUnattributed: false,
     metrics: {
       production: money,
       collected: money,
@@ -96,6 +97,7 @@ function report(overrides: Partial<LocationsComparison> = {}): LocationsComparis
       m(7.5, 6.5, 1, 'WORSE'),
     ),
     hasActivity: true,
+    previousPeriodUnattributed: false,
     ...overrides,
   };
 }
@@ -221,6 +223,42 @@ describe('LocationsComparisonView (DX-014)', () => {
     expect(screen.queryByRole('table')).not.toBeInTheDocument();
     expect(screen.getByRole('button', { name: 'Exportar CSV' })).toBeDisabled();
     expect(mockedGet).not.toHaveBeenCalled();
+  });
+
+  it('período comparado sin producción atribuida: aviso de una línea, «*» en Producción y % de cobro y «Sin comparar» (BE-045)', async () => {
+    const unattributed = { ...m(12, 10), previousUnattributed: true as const };
+    const flagged = row('Sede principal', 'l1', [['COP', unattributed]], m(10, 8, 2, 'WORSE'));
+    mockedGet.mockResolvedValue(
+      report({
+        previousPeriodUnattributed: true,
+        locations: [{ ...flagged, previousPeriodUnattributed: true }],
+        total: { ...row('Total clínica', null, [['COP', unattributed]], m(10, 8, 2, 'WORSE')), previousPeriodUnattributed: true },
+      }),
+    );
+    render(<LocationsComparisonView token="t" />);
+    await screen.findByRole('table');
+    expect(screen.getByRole('note')).toHaveTextContent(
+      '«Producción» y «% de cobro» no se comparan donde dice «Sin comparar»: el período comparado tiene procedimientos realizados antes de registrar su sede («Sin atribuir») o cobros sin producción.',
+    );
+    const headers = within(table()).getAllByRole('columnheader');
+    const marked = headers.filter((h) => within(h).queryByTestId('unattributed-mark'));
+    expect(marked.map((h) => within(h).getAllByRole('button')[0].textContent?.replace('*', ''))).toEqual([
+      'Producción',
+      '% de cobro',
+    ]);
+    const [production] = within(screen.getByTestId('comparison-total')).getAllByRole('cell');
+    expect(within(production).getByTestId('not-compared')).toHaveTextContent(
+      'Sin comparar con 10,00 COP: el período comparado no tiene toda su producción atribuida a una sede.',
+    );
+    // Sin flecha ni color de mejora en esa celda.
+    expect(production.querySelector('[data-trend]')).toBeNull();
+  });
+
+  it('sin la bandera no hay aviso ni marca', async () => {
+    render(<LocationsComparisonView token="t" />);
+    await screen.findByRole('table');
+    expect(screen.queryByRole('note')).not.toBeInTheDocument();
+    expect(screen.queryAllByTestId('unattributed-mark')).toHaveLength(0);
   });
 
   it('sin comparación no pinta variaciones', async () => {

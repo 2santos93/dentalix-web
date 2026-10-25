@@ -576,60 +576,47 @@ describe('CatalogView', () => {
   });
 });
 
-describe('CatalogView · código CUPS (DX-212)', () => {
+// DX-320 (decisión D4): el catálogo se identifica por su código interno; no
+// hay código CUPS ni ningún «código externo» del procedimiento.
+describe('CatalogView · sin código CUPS (DX-320)', () => {
   const admin = tokenFor('ADMIN', 'u-admin');
-  const dentist = tokenFor('DENTIST');
-  const withCups: DentalCatalogItem = { ...item1, cupsCode: '997002' };
 
   beforeEach(() => {
-    mockedList.mockReset().mockResolvedValue(page([withCups, { ...item1, id: 'c2', code: 'RES', labelEs: 'Resina', cupsCode: null }]));
-    mockedUpdate.mockReset().mockResolvedValue(withCups);
+    mockedList.mockReset().mockResolvedValue(page([item1]));
+    mockedUpdate.mockReset().mockResolvedValue(item1);
+    mockedCreate.mockReset().mockResolvedValue(item1);
     mockedLocations.mockReset().mockResolvedValue(clinicIn('CO'));
-    (listCatalogItems as jest.Mock).mockReset().mockResolvedValue([withCups]);
+    (listCatalogItems as jest.Mock).mockReset().mockResolvedValue([item1]);
     window.localStorage.clear();
   });
 
-  it('muestra la columna CUPS («—» si no tiene)', async () => {
+  it('la tabla no tiene columna CUPS', async () => {
     render(<CatalogView token={admin} />);
     const table = await screen.findByRole('table', { name: /catálogo/i });
-    expect(within(table).getByRole('columnheader', { name: 'CUPS' })).toBeInTheDocument();
-    expect(within(table).getByText('997002')).toBeInTheDocument();
-    expect(within(table).getByText('—')).toBeInTheDocument();
+    expect(within(table).queryByRole('columnheader', { name: /CUPS/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/CUPS/i)).not.toBeInTheDocument();
   });
 
-  it('ADMIN cambia el CUPS (en mayúsculas) y vacío lo quita', async () => {
+  it('el formulario de edición no pide CUPS ni otro código externo, y no lo envía', async () => {
     const user = setupUser();
     render(<CatalogView token={admin} initialItemId="c1" />);
-    const field = await screen.findByLabelText('Código CUPS');
-    expect(field).toHaveValue('997002');
-    await user.clear(field);
-    await user.click(screen.getByRole('button', { name: 'Guardar' }));
-    await waitFor(() =>
-      expect(mockedUpdate).toHaveBeenCalledWith(admin, 'c1', expect.objectContaining({ cupsCode: null })),
-    );
+    const dialog = await screen.findByRole('dialog', { name: 'Editar ítem' });
+    expect(within(dialog).queryByLabelText(/CUPS/i)).not.toBeInTheDocument();
+    expect(within(dialog).queryByLabelText(/código externo/i)).not.toBeInTheDocument();
+    expect(within(dialog).queryByText(/CUPS/i)).not.toBeInTheDocument();
+    await user.click(within(dialog).getByRole('button', { name: 'Guardar' }));
+    await waitFor(() => expect(mockedUpdate).toHaveBeenCalledTimes(1));
+    expect(mockedUpdate.mock.calls[0][2]).not.toHaveProperty('cupsCode');
   });
 
-  it('formato inválido: error en el campo y no se envía', async () => {
+  it('el alta no pide CUPS', async () => {
     const user = setupUser();
-    render(<CatalogView token={admin} initialItemId="c1" />);
-    const field = await screen.findByLabelText('Código CUPS');
-    await user.clear(field);
-    await user.type(field, '89-20');
-    await user.click(screen.getByRole('button', { name: 'Guardar' }));
-    expect(
-      await screen.findByText('El código CUPS debe tener 6 caracteres alfanuméricos (ej. 890203).'),
-    ).toBeInTheDocument();
-    expect(mockedUpdate).not.toHaveBeenCalled();
-  });
-
-  it('DENTIST lo ve de solo lectura', async () => {
-    render(<CatalogView token={dentist} initialItemId="c1" />);
-    const field = await screen.findByLabelText('Código CUPS');
-    expect(field).toHaveAttribute('readonly');
-    expect(screen.getByText('Solo un administrador puede cambiarlo.')).toBeInTheDocument();
+    render(<CatalogView token={admin} />);
+    await screen.findByRole('table', { name: /catálogo/i });
+    await user.click(screen.getByRole('button', { name: /agregar ítem/i }));
+    expect(screen.queryByLabelText(/CUPS/i)).not.toBeInTheDocument();
   });
 });
-
 
 describe('CatalogView · admite descuentos (DX-105)', () => {
   const admin = tokenFor('ADMIN', 'u-admin');

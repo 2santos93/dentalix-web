@@ -45,6 +45,7 @@ describe('ConsentDocument', () => {
       'src',
       'https://cdn.example.com/logo.png',
     );
+    expect(within(header).getByRole('img', { name: 'Clínica Sonrisas' })).toHaveAttribute('referrerpolicy', 'no-referrer');
     expect(within(header).getByRole('heading', { name: 'Consentimiento de exodoncia' })).toBeInTheDocument();
     expect(screen.getByText(/Yo, Ana Pérez, autorizo\./)).toBeInTheDocument();
     expect(screen.getByRole('img', { name: 'Firma de Ana Pérez' })).toHaveAttribute(

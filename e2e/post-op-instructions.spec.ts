@@ -193,6 +193,7 @@ for (const viewport of VIEWPORTS) {
 
     await page.getByRole('button', { name: 'Nueva plantilla' }).click();
     const form = page.getByRole('dialog', { name: 'Nueva plantilla de indicaciones' });
+    await expect(form.getByLabel('Código')).toHaveAccessibleDescription('Corto y único, p. ej. EXO o CIR-3M. No se puede cambiar después.');
     await form.getByLabel('Código').fill('POI-EXO');
     await form.getByLabel('Título').fill(TITLE);
     await form.getByLabel('Indicaciones', { exact: true }).fill(BODY_V1);
@@ -246,13 +247,23 @@ for (const viewport of VIEWPORTS) {
     await expectNoHorizontalScroll(page);
     await shoot(page, `panel-cita-${vw}`);
 
+    // DX-246: el refetch tras entregar puede fallar sin perder el panel.
+    await page.route('**/appointments/*/post-op-instructions', (route) =>
+      route.fulfill({ status: 503, contentType: 'application/json', body: JSON.stringify({ message: 'Servicio temporalmente no disponible.' }) }),
+      { times: 1 },
+    );
+    // El radio y las acciones siguen el orden visual con teclado.
+    await suggested.focus();
+    await page.keyboard.press('Tab');
+    await expect(panel.getByRole('button', { name: 'Imprimir' })).toBeFocused();
+
     // «Imprimir»: registra la entrega y abre la vista imprimible.
     await page.context().addInitScript(() => {
       window.print = () => {};
     });
     const [printPage] = await Promise.all([
       page.context().waitForEvent('page'),
-      panel.getByRole('button', { name: 'Imprimir' }).click(),
+      page.keyboard.press('Enter'),
     ]);
     await printPage.waitForURL(new RegExp(`/print/patients/${patient.id}/indicaciones/`));
     await printPage.setViewportSize({ width: viewport.width, height: viewport.height });
@@ -267,6 +278,15 @@ for (const viewport of VIEWPORTS) {
     await shoot(printPage, `impresion-${vw}`);
     await printPage.close();
     await expect(panel.getByText(/^POI-EXO v1 · Impresas · /)).toBeVisible({ timeout: 10_000 });
+
+    await expect(panel.getByText(/No pudimos actualizar las indicaciones/)).toBeVisible();
+    await expect(suggested).toBeChecked();
+    await panel.getByText(/No pudimos actualizar las indicaciones/).scrollIntoViewIfNeeded();
+    await shoot(page, `panel-recarga-fallida-${vw}`);
+    await panel.getByRole('button', { name: 'Reintentar' }).focus();
+    await page.keyboard.press('Enter');
+    await expect(panel.getByText(/No pudimos actualizar las indicaciones/)).toHaveCount(0);
+    await expect(panel.getByText(/^POI-EXO v1 · Impresas · /)).toBeVisible();
 
     // «Enviar por email»: confirma el destinatario; el asunto no lleva el procedimiento.
     await panel.getByRole('button', { name: 'Enviar por email' }).click();

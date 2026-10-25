@@ -7,8 +7,10 @@ export interface ClinicLocation {
   address: string | null;
   /** País de la sede (DX-013): decide los campos legales de la receta. */
   country: 'CO' | 'ES';
-  /** DX-212: código de habilitación REPS (12 dígitos) o null. */
-  repsHabilitationCode?: string | null;
+  /** DX-319: nº de registro sanitario (texto libre, sin formato por país) o null. */
+  healthRegistrationNumber?: components['schemas']['LocationDto']['healthRegistrationNumber'];
+  /** DX-319: si el nº sale en los documentos de la sede (por defecto no). */
+  showHealthRegistrationNumber?: components['schemas']['LocationDto']['showHealthRegistrationNumber'];
   /**
    * DX-222: teléfono de la sede para las indicaciones postoperatorias, con
    * indicativo de país.
@@ -28,21 +30,27 @@ export async function listLocations(token: string): Promise<ClinicLocation[]> {
   return apiFetch<ClinicLocation[]>('/locations', { token });
 }
 
-/** DX-212: 12 dígitos, el formato que valida la API. */
-export const REPS_PATTERN = /^\d{12}$/;
+/** DX-319: el nº de registro sanitario admite hasta 64 caracteres (límite de la API). */
+export const HEALTH_REGISTRATION_NUMBER_MAX_LENGTH = 64;
+
+type HealthRegistrationPatch = Pick<
+  components['schemas']['UpdateLocationDto'],
+  'healthRegistrationNumber' | 'showHealthRegistrationNumber'
+>;
 
 /**
- * `PATCH /locations/:id` — código de habilitación REPS (solo ADMIN; queda
- * auditado). `null` lo quita.
+ * `PATCH /locations/:id` — nº de registro sanitario (texto libre, `null` lo
+ * quita) y si sale en los documentos. Solo ADMIN; queda auditado con su antes
+ * y después.
  */
-export async function updateLocationReps(
+export async function updateLocationHealthRegistration(
   token: string,
   locationId: string,
-  repsHabilitationCode: string | null,
+  patch: Required<HealthRegistrationPatch>,
 ): Promise<ClinicLocation> {
   return apiFetch<ClinicLocation>(`/locations/${encodeURIComponent(locationId)}`, {
     method: 'PATCH',
-    body: { repsHabilitationCode },
+    body: patch,
     token,
   });
 }

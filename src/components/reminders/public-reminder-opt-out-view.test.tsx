@@ -61,10 +61,10 @@ describe('PublicReminderOptOutView (DX-128)', () => {
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 
-  it('un enlace desconocido explica que no es válido', async () => {
+  it('un enlace caducado o desconocido muestra el mismo estado sin revelar datos', async () => {
     mockedGet.mockRejectedValue(new ApiError(404, 'Enlace de baja no encontrado'));
     render(<PublicReminderOptOutView optOutToken="tok" />);
-    expect(await screen.findByRole('heading', { name: 'Enlace no válido' })).toBeInTheDocument();
+    expect(await screen.findByRole('heading', { name: 'Este enlace caducó' })).toBeInTheDocument();
   });
 
   it('error de red al cargar: sección con reintento', async () => {
@@ -86,4 +86,14 @@ describe('PublicReminderOptOutView (DX-128)', () => {
     );
     expect(screen.getByRole('button', { name: 'Dejar de recibir recordatorios' })).toBeEnabled();
   });
+});
+
+it('un404 al confirmar muestra enlace caducado sin permitir otra baja', async () => {
+  mockedGet.mockResolvedValue(view());
+  mockedConfirm.mockRejectedValue(new ApiError(404, 'Enlace de baja no encontrado'));
+  const user = setupUser();
+  render(<PublicReminderOptOutView optOutToken="expired" />);
+  await user.click(await screen.findByRole('button', { name: 'Dejar de recibir recordatorios' }));
+  expect(await screen.findByRole('heading', { name: 'Este enlace caducó' })).toBeInTheDocument();
+  expect(screen.queryByRole('button', { name: 'Dejar de recibir recordatorios' })).not.toBeInTheDocument();
 });

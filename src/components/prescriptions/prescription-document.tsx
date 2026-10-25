@@ -79,6 +79,7 @@ export function PrescriptionDocument({ prescription: rx }: PrescriptionDocumentP
             <img
               src={rx.clinicLogoUrl}
               alt={rx.clinicName}
+              referrerPolicy="no-referrer"
               className="h-12 w-auto max-w-[160px] object-contain"
             />
           ) : null}

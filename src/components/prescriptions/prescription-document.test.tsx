@@ -3,6 +3,11 @@ import { PrescriptionDocument } from './prescription-document';
 import { makePrescriptionDocument } from '@/lib/test/prescriptions';
 
 describe('PrescriptionDocument (A4)', () => {
+  it('el logo no filtra la URL de la receta al host de la imagen', () => {
+    render(<PrescriptionDocument prescription={makePrescriptionDocument({ clinicLogoUrl: 'https://cdn.example.com/logo.png' })} />);
+    expect(screen.getByRole('img', { name: 'Clínica Demo' })).toHaveAttribute('referrerpolicy', 'no-referrer');
+  });
+
   it('CO: clínica, paciente con nº de HC, profesional con registro, cantidad en letras y validez', () => {
     render(<PrescriptionDocument prescription={makePrescriptionDocument()} />);
     expect(screen.getByRole('heading', { name: 'Fórmula médica' })).toBeInTheDocument();

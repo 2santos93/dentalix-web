@@ -5,6 +5,7 @@ import type { Patient } from './patients-api';
 
 // DX-128: la API documenta el bloque con @ApiProperty, así que los tipos salen
 // tal cual del contrato generado.
+export type PatientOptOutMatchWarning = components['schemas']['PatientOptOutMatchWarningDto'];
 export type PatientCommunication = components['schemas']['PatientCommunicationDto'];
 export type UpdatePatientCommunicationInput =
   components['schemas']['UpdatePatientCommunicationDto'];
@@ -93,4 +94,15 @@ export function withCommunication(patient: Patient, c: PatientCommunication): Pa
     reminderOptOutAt: c.reminderOptOut?.at ?? null,
     reminderOptOutSource: c.reminderOptOut?.source ?? null,
   };
+}
+
+/** Solo recepción y ADMIN; últimos 20 avisos bajo RLS del paciente. */
+export function getPatientOptOutWarnings(
+  token: string,
+  patientId: string,
+): Promise<PatientOptOutMatchWarning[]> {
+  return apiFetch<PatientOptOutMatchWarning[]>(
+    `/patients/${encodeURIComponent(patientId)}/communication/opt-out-warnings`,
+    { token },
+  );
 }

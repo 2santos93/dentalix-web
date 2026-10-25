@@ -302,4 +302,55 @@ describe('AppointmentPostOpPanel', () => {
     expect(await screen.findByRole('radio', { name: /Tras una extracción/ })).toBeChecked();
     expect(mockedGet).toHaveBeenCalledTimes(2);
   });
+  it('el reintento del toast comparte la guarda incluso antes de renderizar busy', async () => {
+    const { open } = fakeWindow();
+    mockedGet.mockResolvedValue(suggestions());
+    mockedDeliver.mockRejectedValueOnce(new NetworkError(new TypeError('fetch failed')));
+    renderPanel();
+    await userEvent.click(await screen.findByRole('button', { name: 'Imprimir' }));
+    await waitFor(() => expect(toast.error).toHaveBeenCalled());
+    const [, opts] = (toast.error as jest.Mock).mock.calls[0];
+    let finish!: (value: PostOpDeliveryCreated) => void;
+    mockedDeliver.mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }));
+    act(() => { opts.action.onClick(); opts.action.onClick(); });
+    expect(mockedDeliver).toHaveBeenCalledTimes(2);
+    expect(open).toHaveBeenCalledTimes(2);
+    await act(async () => finish(created()));
+  });
+
+  it('una recarga fallida conserva selección, datos y entrega nueva con aviso recuperable', async () => {
+    mockedGet.mockResolvedValueOnce(suggestions())
+      .mockRejectedValueOnce(new NetworkError(new TypeError('fetch failed')))
+      .mockResolvedValueOnce(suggestions({ deliveries: [deliverySummary({ channel: 'EMAIL' })] }));
+    mockedDeliver.mockResolvedValue(created({ delivery: deliverySummary({ channel: 'EMAIL' }) }));
+    renderPanel();
+    await userEvent.click(await screen.findByRole('radio', { name: /Tras un blanqueamiento/ }));
+    await userEvent.click(screen.getByRole('button', { name: 'Enviar por email' }));
+    const warning = await screen.findByText(/No pudimos actualizar las indicaciones/);
+    expect(warning).toBeInTheDocument();
+    expect(screen.getByRole('radio', { name: /Tras un blanqueamiento/ })).toBeChecked();
+    expect(screen.getByRole('list', { name: 'Entregadas en esta cita' })).toHaveTextContent('EXO v2 · Email');
+    await userEvent.click(screen.getByRole('button', { name: 'Reintentar' }));
+    await waitFor(() => expect(screen.queryByText(/No pudimos actualizar las indicaciones/)).not.toBeInTheDocument());
+    expect(mockedGet).toHaveBeenCalledTimes(3);
+  });
+
+  it('el vacío no anuncia al montar; anuncia tras elegir unas indicaciones', async () => {
+    mockedGet.mockResolvedValue(suggestions({ suggested: [], others: [ENDO] }));
+    renderPanel();
+    const empty = await screen.findByText('No hay indicaciones para esta cita');
+    expect(empty).not.toHaveAttribute('role', 'status');
+    await userEvent.selectOptions(screen.getByRole('combobox'), ENDO.id);
+    expect(empty).toHaveAttribute('role', 'status');
+  });
+
+  it('dos paneles tienen nombres ligados a sus propios encabezados únicos', async () => {
+    mockedGet.mockResolvedValue(suggestions());
+    render(<><AppointmentPostOpPanel token="tok" appointmentId="a" /><AppointmentPostOpPanel token="tok" appointmentId="b" /></>);
+    const panels = await screen.findAllByRole('region', { name: 'Indicaciones' });
+    const ids = panels.map((p) => p.getAttribute('aria-labelledby'));
+    expect(new Set(ids).size).toBe(2);
+    panels.forEach((p, i) => expect(within(p).getByRole('heading', { name: 'Indicaciones' }).id).toBe(ids[i]));
+  });
+
 });

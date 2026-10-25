@@ -123,7 +123,10 @@ export function PostOpTemplateFormModal({
         ]);
         if (cancelled) return;
         setOptions({
-          procedures: withLinked<CatalogMultiPickerItem>(procedures, template?.catalogItems ?? []),
+          procedures: withLinked<CatalogMultiPickerItem>(
+            procedures,
+            (template?.catalogItems ?? []).map((item) => ({ ...item, retired: true })),
+          ),
           types: withLinked(
             types.map((t) => ({ id: t.id, name: t.name })),
             template?.appointmentTypes ?? [],
@@ -162,7 +165,10 @@ export function PostOpTemplateFormModal({
     if (title.trim() !== current.title) input.title = title.trim();
     if (body.trim() !== current.body) input.body = body.trim();
     if (!sameIds(catalogItemIds, current.catalogItems.map((i) => i.id))) {
-      input.catalogItemIds = catalogItemIds;
+      // La API solo acepta procedimientos activos. Los vínculos retirados
+      // se muestran como contexto, pero no se reenvían al reemplazar la lista.
+      const active = new Set(options?.procedures.filter((item) => !item.retired).map((item) => item.id));
+      input.catalogItemIds = catalogItemIds.filter((id) => active.has(id));
     }
     if (!sameIds(appointmentTypeIds, current.appointmentTypes.map((t) => t.id))) {
       input.appointmentTypeIds = appointmentTypeIds;
@@ -226,6 +232,7 @@ export function PostOpTemplateFormModal({
           htmlFor="postop-template-code"
           label={copy.codeLabel}
           hint={editing ? copy.codeHintEdit : copy.codeHintCreate}
+          hintId="postop-template-code-hint"
           error={codeError}
         >
           <Input
@@ -241,7 +248,9 @@ export function PostOpTemplateFormModal({
             autoComplete="off"
             spellCheck={false}
             aria-invalid={codeError ? true : undefined}
-            aria-describedby={codeError ? fieldErrorId('postop-template-code') : undefined}
+            aria-describedby={
+              codeError ? fieldErrorId('postop-template-code') : 'postop-template-code-hint'
+            }
             className={cn('font-mono uppercase', editing && 'bg-surface-2 text-muted')}
           />
         </FormField>

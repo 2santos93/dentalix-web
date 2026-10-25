@@ -1,4 +1,4 @@
-import { formatChange, formatMetric, nextSort, sortRows, type SortState } from './comparison-table';
+import { formatChange, formatMetric, metricValues, nextSort, sortRows, type SortState } from './comparison-table';
 import type { ComparisonRow, LocationsComparison, Metric } from './reports-api';
 
 const metric = (value: number | null): Metric => ({ value, previous: null, change: null, trend: null });
@@ -11,6 +11,7 @@ function row(name: string, production: number | null, noShow: number | null): Co
     isActive: true,
     timeZone: 'America/Bogota',
     hasActivity: true,
+    previousPeriodUnattributed: false,
     metrics: {
       production: money,
       collected: money,
@@ -72,5 +73,14 @@ describe('tabla de «Comparar sedes» (DX-014)', () => {
     expect(formatChange(2, 'POINTS')).toBe('+2 p.p.');
     expect(formatChange(-1.25, 'POINTS')).toBe('−1,3 p.p.');
     expect(formatChange(0, 'POINTS')).toBe('0 p.p.');
+  });
+});
+
+describe('metricValues (BE-042)', () => {
+  it('la ocupación nunca pasa del 100 % en pantalla', () => {
+    const r = row('Norte', 1, 1);
+    expect(metricValues({ ...r, metrics: { ...r.metrics, occupancy: metric(300) } }, 'occupancy')[0].value).toBe(100);
+    expect(metricValues({ ...r, metrics: { ...r.metrics, occupancy: metric(66.67) } }, 'occupancy')[0].value).toBe(66.67);
+    expect(metricValues({ ...r, metrics: { ...r.metrics, occupancy: metric(null) } }, 'occupancy')[0].value).toBeNull();
   });
 });

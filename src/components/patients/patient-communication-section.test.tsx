@@ -2,6 +2,7 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import { PatientCommunicationSection } from './patient-communication-section';
 import {
   getPatientCommunication,
+  getPatientOptOutWarnings,
   updatePatientCommunication,
   type PatientCommunication,
 } from '@/lib/patients/communication-api';
@@ -11,6 +12,7 @@ import { setupUser } from '@/lib/test/user';
 jest.mock('../../lib/patients/communication-api', () => ({
   ...jest.requireActual('../../lib/patients/communication-api'),
   getPatientCommunication: jest.fn(),
+  getPatientOptOutWarnings: jest.fn(),
   updatePatientCommunication: jest.fn(),
 }));
 
@@ -57,7 +59,10 @@ function renderSection(canEdit = true, onChanged?: (c: PatientCommunication) => 
 }
 
 describe('PatientCommunicationSection (DX-128)', () => {
-  beforeEach(() => jest.clearAllMocks());
+  beforeEach(() => {
+    jest.clearAllMocks();
+    jest.mocked(getPatientOptOutWarnings).mockResolvedValue([]);
+  });
 
   it('carga con skeleton y muestra canal, móvil validado, WhatsApp y recordatorios', async () => {
     mockedGet.mockResolvedValue(
@@ -263,4 +268,12 @@ describe('PatientCommunicationSection (DX-128)', () => {
       'El paciente: es menor de edad y no tiene responsable ni contacto registrado',
     );
   });
+});
+
+it('no consulta avisos si el rol no puede editar comunicaciones', async () => {
+  jest.clearAllMocks();
+  mockedGet.mockResolvedValue(comms());
+  renderSection(false);
+  await screen.findByText('Activos');
+  expect(getPatientOptOutWarnings).not.toHaveBeenCalled();
 });

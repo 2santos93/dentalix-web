@@ -28,9 +28,9 @@ const copy = {
   doneTitle: 'Listo: ya no recibirás recordatorios',
   doneSince: (at: string) =>
     `Desde el ${at} no te enviamos avisos automáticos de tus citas. Si quieres volver a recibirlos, pídeselo a la clínica.`,
-  invalidTitle: 'Enlace no válido',
+  invalidTitle: 'Este enlace caducó',
   invalidMessage:
-    'No encontramos este enlace. Revisa que esté completo o comunícate con la clínica para dejar de recibir recordatorios.',
+    'Este enlace ya no está disponible. Comunícate con la clínica para dejar de recibir recordatorios.',
   fallbackClinic: 'Tu clínica',
 };
 

@@ -2,6 +2,7 @@ import {
   canEditCommunication,
   formatE164,
   getPatientCommunication,
+  getPatientOptOutWarnings,
   phoneCountryName,
   updatePatientCommunication,
   withCommunication,
@@ -91,4 +92,10 @@ describe('communication-api (DX-128)', () => {
       reminderOptOutSource: 'STAFF',
     });
   });
+});
+
+it('consulta avisos con paciente codificado y token de clínica', async () => {
+  mockedFetch.mockResolvedValue([]);
+  await getPatientOptOutWarnings('tok', 'p 1');
+  expect(mockedFetch).toHaveBeenCalledWith('/patients/p%201/communication/opt-out-warnings', { token: 'tok' });
 });

@@ -157,10 +157,29 @@ test('DX-264 Mes: tres alertas, +1 más, teclado y toque a 390/1440 claro y oscu
   await expect(page.getByLabel('Calendario del mes')).toBeVisible();
   // Seleccionar mañana también resuelve el cambio de mes en su último día.
   await openDay(page, tomorrow);
-  const listed = page.waitForResponse((r) => r.url().includes('/api/v1/appointments?') && r.request().method() === 'GET');
+  // El cambio de Día/fecha puede dejar respuestas pendientes. Esperar el
+  // rango mensual exacto, en la zona del navegador, evita leer la de hoy.
+  const monthRange = await page.evaluate((date) => {
+    const first = new Date(`${date.slice(0, 7)}-01T00:00:00`);
+    const start = new Date(first);
+    start.setDate(first.getDate() - ((first.getDay() + 6) % 7));
+    const end = new Date(start);
+    end.setDate(start.getDate() + 41);
+    end.setHours(23, 59, 59, 999);
+    return { from: start.toISOString(), to: end.toISOString() };
+  }, tomorrow);
+  const listed = page.waitForResponse((response) => {
+    const url = new URL(response.url());
+    return response.request().method() === 'GET'
+      && url.pathname === '/api/v1/appointments'
+      && url.searchParams.get('from') === monthRange.from
+      && url.searchParams.get('to') === monthRange.to;
+  });
   await page.getByRole('button', { name: 'Mes', exact: true }).click();
-  const body = await (await listed).json() as Record<string, unknown>[];
-  expect(body.length).toBeGreaterThan(0);
+  const response = await listed;
+  expect(response.status()).toBe(200);
+  const body = await response.json() as Record<string, unknown>[];
+  expect(body).toHaveLength(4);
   for (const appointment of body) expect(appointment).not.toHaveProperty('notes');
   expect(JSON.stringify(body)).not.toContain('Nota privada de cita DX264');
   const day = page.getByTestId('calendar-day').filter({ has: page.locator(`[data-testid="month-appointment"]`) }).and(page.locator(`[data-date="${tomorrow}"]`));

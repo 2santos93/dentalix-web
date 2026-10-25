@@ -81,7 +81,8 @@ export const AUDIT_RESOURCE_LABELS: Record<AuditResourceType, string> = {
   // DX-210: oferta de un hueco libre a un candidato.
   WAITLIST_OFFER: 'Oferta de hueco',
   CASH_SESSION: 'Caja por turno',
-  // DX-212: código CUPS de un ítem del catálogo y REPS de una sede.
+  // DX-212: ítems del catálogo; DX-319: cambios de una sede (nº de registro
+  // sanitario con su antes y después).
   DENTAL_CATALOG_ITEM: 'Ítem del catálogo',
   LOCATION: 'Sede',
   // DX-107: lote de importación de pacientes (validar, confirmar, deshacer, informe).
@@ -362,6 +363,8 @@ export function cancellationDetail(metadata: AuditMetadata): string | null {
   // (el motivo de la condonación nunca viaja en la metadata).
   if (metadata.reason === 'CANCELLATION_FEE_CHARGED') return 'Cargo por inasistencia o cancelación tardía';
   if (metadata.reason === 'CANCELLATION_FEE_WAIVED') return 'Cargo por inasistencia condonado';
+  // SEC-050: anulación con motivo de un cargo ya generado (sin el texto).
+  if (metadata.reason === 'CANCELLATION_FEE_VOIDED') return 'Cargo por inasistencia anulado';
   if (metadata.reason !== 'APPOINTMENT_CANCELLED') return null;
   const c = metadata.cancellation;
   if (!c) return 'Cita cancelada';
@@ -370,4 +373,25 @@ export function cancellationDetail(metadata: AuditMetadata): string | null {
   parts.push(`aviso de ${c.noticeMinutes} min`);
   if (c.lateCancellation) parts.push('tardía');
   return parts.join(' · ');
+}
+
+/**
+ * DX-319: el nº de registro sanitario de una sede y si sale en los documentos,
+ * antes y después («Nº de registro sanitario: sin nº → «NRS-7» · En los
+ * documentos: no → sí»). Solo lo que cambió. null si el evento no lo trae.
+ */
+export function healthRegistrationDetail(metadata: AuditMetadata): string | null {
+  const change = metadata.healthRegistration;
+  if (!change) return null;
+  const { before, after } = change;
+  const number = (n: string | null) => (n === null ? 'sin nº' : `«${n}»`);
+  const shown = (s: boolean) => (s ? 'sí' : 'no');
+  const parts: string[] = [];
+  if (before.number !== after.number) {
+    parts.push(`Nº de registro sanitario: ${number(before.number)} → ${number(after.number)}`);
+  }
+  if (before.shown !== after.shown) {
+    parts.push(`En los documentos: ${shown(before.shown)} → ${shown(after.shown)}`);
+  }
+  return parts.length > 0 ? parts.join(' · ') : null;
 }
