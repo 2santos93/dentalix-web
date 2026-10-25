@@ -7,12 +7,14 @@ import { getActiveLocationId } from '@/lib/locations/location-store';
 import { notifyError } from '@/components/errors/notify';
 import { expenseLocations } from '@/lib/test/expenses';
 import { setupUser } from '@/lib/test/user';
+import { getLocationSchedule } from '@/lib/locations/schedule-api';
 
 jest.mock('../../lib/expenses/expenses-api', () => ({
   ...jest.requireActual('../../lib/expenses/expenses-api'),
   getExpenseSummary: jest.fn(),
   downloadExpenseSummaryCsv: jest.fn(),
 }));
+jest.mock('../../lib/locations/schedule-api', () => ({ getLocationSchedule: jest.fn() }));
 jest.mock('../../lib/files/save-csv', () => ({ saveCsv: jest.fn() }));
 jest.mock('../errors/notify', () => ({ notifyError: jest.fn() }));
 jest.mock('../../lib/locations/location-store', () => ({
@@ -22,13 +24,7 @@ jest.mock('../../lib/locations/location-store', () => ({
 jest.mock('../../lib/locations/session-locations', () => ({
   useSessionLocations: () => mockRequestLocations,
 }));
-jest.mock('../../lib/locations/use-sede-time-zone', () => ({
-  useSedeTimeZone: () => zone.value,
-  sedeToday: () => '2026-10-24',
-}));
-
 const mockRequestLocations = jest.fn();
-const zone: { value: string | null } = { value: 'America/Bogota' };
 const mockedSummary = getExpenseSummary as jest.MockedFunction<typeof getExpenseSummary>;
 const mockedCsv = downloadExpenseSummaryCsv as jest.MockedFunction<typeof downloadExpenseSummaryCsv>;
 
@@ -56,6 +52,7 @@ describe('ExpensesSummaryView (DX-274)', () => {
     mockedCsv.mockReset().mockResolvedValue('csv');
     (getActiveLocationId as jest.Mock).mockReturnValue(null);
     mockRequestLocations.mockReset().mockResolvedValue(expenseLocations);
+    jest.mocked(getLocationSchedule).mockReset().mockResolvedValue({ timezone: 'Pacific/Auckland', ranges: [] });
     jest.mocked(saveCsv).mockReset();
     jest.mocked(notifyError).mockReset();
   });
@@ -239,21 +236,80 @@ describe('ExpensesSummaryView (DX-274)', () => {
     await waitFor(() => expect(mockedSummary).toHaveBeenCalledWith('t', { from: '2026-08-01', to: '2026-10-31' }));
   });
 
-  it('si la zona de la sede no llega, sigue con la de por defecto en vez de quedarse cargando', async () => {
+  it('elige el mes según la zona guardada en el horario, no la inferida del país', async () => {
+    jest.useFakeTimers();
+    jest.setSystemTime(new Date('2026-10-31T12:00:00Z'));
+    try {
+      // Auckland ya está en noviembre; el listado fixture sigue indicando Bogotá.
+      render(<ExpensesSummaryView token="t" />);
+      await act(async () => {});
+      expect(mockedSummary).toHaveBeenCalledWith('t', { from: '2026-06-01', to: '2026-11-30' });
+    } finally { jest.useRealTimers(); }
+  });
+
+  it('preserva el aviso de configuración de la API y permite reintentar tras configurarla', async () => {
+    const user = setupUser();
+    const message = 'Configura una zona horaria válida para la sede y vuelve a intentarlo.';
+    mockedSummary.mockRejectedValueOnce(new ApiError(409, message));
+    render(<ExpensesSummaryView token="t" />);
+    expect(await screen.findByText(message)).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: /reintentar/i }));
+    expect(await screen.findByTestId('summary-row')).toBeInTheDocument();
+  });
+
+  it('si la configuración tarda, ofrece reintentar sin inventar zona ni consultar un periodo', async () => {
     jest.useFakeTimers();
     try {
-      zone.value = null;
+      mockRequestLocations.mockReturnValue(new Promise(() => undefined));
       render(<ExpensesSummaryView token="t" />);
-      expect(screen.getByRole('status', { name: 'Cargando' })).toBeInTheDocument();
+      await act(async () => { jest.advanceTimersByTime(8000); });
+      expect(screen.getByText(/No pudimos obtener la zona horaria de la sede/)).toBeInTheDocument();
       expect(mockedSummary).not.toHaveBeenCalled();
+      expect(screen.getByRole('button', { name: /reintentar/i })).toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Exportar CSV' })).toBeDisabled();
+    } finally { jest.useRealTimers(); }
+  });
 
-      await act(async () => {
-        jest.advanceTimersByTime(8000);
-      });
-      expect(mockedSummary).toHaveBeenCalledWith('t', { from: '2026-05-01', to: '2026-10-31' });
-    } finally {
-      zone.value = 'America/Bogota';
-      jest.useRealTimers();
-    }
+  it('si falla la carga de sedes, reintenta y obtiene el periodo de la configuración real', async () => {
+    const user = setupUser();
+    mockRequestLocations.mockRejectedValueOnce(new Error('offline'));
+    render(<ExpensesSummaryView token="t" />);
+    expect(await screen.findByText(/No pudimos obtener la zona horaria de la sede/)).toBeInTheDocument();
+    expect(mockedSummary).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: /reintentar/i }));
+    expect(await screen.findByTestId('summary-row')).toBeInTheDocument();
+    expect(mockRequestLocations).toHaveBeenCalledTimes(2);
+  });
+
+  it('una zona inválida no tiene respaldo y deja consultar un rango manual explícito', async () => {
+    jest.mocked(getLocationSchedule).mockResolvedValue({ timezone: 'Invalid/Zone', ranges: [] });
+    render(<ExpensesSummaryView token="t" />);
+    expect(await screen.findByText(/No pudimos obtener la zona horaria de la sede/)).toBeInTheDocument();
+    expect(mockedSummary).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByLabelText('Desde'), { target: { value: '2026-08' } });
+    expect(mockedSummary).not.toHaveBeenCalled();
+    fireEvent.change(screen.getByLabelText('Hasta'), { target: { value: '2026-09' } });
+    expect(await screen.findByTestId('summary-row')).toBeInTheDocument();
+    expect(mockedSummary).toHaveBeenCalledWith('t', { from: '2026-08-01', to: '2026-09-30' });
+  });
+
+  it('sin horario configurado no usa la zona inferida por país del listado de sedes', async () => {
+    jest.mocked(getLocationSchedule).mockResolvedValue(null);
+    render(<ExpensesSummaryView token="t" />);
+    expect(await screen.findByText(/No pudimos obtener la zona horaria de la sede/)).toBeInTheDocument();
+    expect(mockedSummary).not.toHaveBeenCalled();
+  });
+
+  it('la zona real que llega tarde no cambia el rango que la persona ya eligió', async () => {
+    let resolveLocations!: (value: typeof expenseLocations) => void;
+    mockRequestLocations.mockReturnValue(new Promise((resolve) => { resolveLocations = resolve; }));
+    render(<ExpensesSummaryView token="t" />);
+    fireEvent.change(screen.getByLabelText('Desde'), { target: { value: '2026-08' } });
+    fireEvent.change(screen.getByLabelText('Hasta'), { target: { value: '2026-09' } });
+    await screen.findByTestId('summary-row');
+    await act(async () => resolveLocations(expenseLocations));
+    expect(mockedSummary).toHaveBeenCalledTimes(1);
+    expect(screen.getByLabelText('Desde')).toHaveValue('2026-08');
+    expect(screen.getByLabelText('Hasta')).toHaveValue('2026-09');
   });
 });

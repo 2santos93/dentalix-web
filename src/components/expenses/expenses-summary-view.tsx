@@ -23,7 +23,8 @@ import {
 } from '@/lib/expenses/presentation';
 import { saveCsv } from '@/lib/files/save-csv';
 import { formatCurrency } from '@/lib/format/currency';
-import { sedeToday, useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
+import { civilDateInZone } from '@/lib/format/date';
+import { getLocationSchedule } from '@/lib/locations/schedule-api';
 import { getActiveLocationId } from '@/lib/locations/location-store';
 import { notifyError } from '@/components/errors/notify';
 import { AsyncSection, TableSkeleton } from '@/components/shared/async-section';
@@ -70,6 +71,7 @@ export const expensesSummaryCopy = {
   currencyNote: 'Cada moneda va por separado: nunca se suman ni se convierten.',
   // Sin «Intenta de nuevo.»: AsyncSection → SectionError trae «Reintentar».
   loadError: 'No pudimos cargar el resumen.',
+  zoneError: 'No pudimos obtener la zona horaria de la sede. Reintenta o elige un rango de meses.',
   badRequest: 'El periodo no es válido. Revisa «Desde» y «Hasta».',
   forbiddenTitle: 'Tu rol no tiene acceso al resumen de gastos.',
   forbiddenHint: 'Los gastos de la sede son para la administración de la clínica.',
@@ -89,19 +91,36 @@ const rowKey = (row: ExpenseSummaryRow) => `${row.month}|${row.locationId}|${row
  * la pantalla antes de pedir nada.
  */
 export function ExpensesSummaryView({ token, tabs }: { token: string; tabs?: ExpensesViewTabs }) {
-  const timeZone = useSedeTimeZone(token);
-  // Si la zona de la sede no llega, tras un tiempo se sigue con la zona por
-  // defecto: la pantalla no se queda en el esqueleto.
+  const [activeLocationId] = useState<string | null>(() => getActiveLocationId());
+  const { locations, failed: locationsFailed, reload: reloadLocations } = useExpenseLocations(token);
+  const reference = activeLocationId ? locations.find((location) => location.id === activeLocationId) : locations[0];
+  // Un rango automático requiere una zona explícita y válida de la sede.
+  // Los meses manuales son fechas civiles: no requieren inventar una zona.
+  const [zoneState, setZoneState] = useState<{ identity: string; timeZone: string | null } | null>(null);
+  const zoneIdentity = `${token}|${reference?.id ?? ''}`;
+  const configuredZone = zoneState?.identity === zoneIdentity ? zoneState.timeZone : null;
+  const today = configuredZone ? civilDateInZone(new Date(), configuredZone) : null;
+  const currentMonth = today?.slice(0, 7) ?? null;
   const [zoneTimedOut, setZoneTimedOut] = useState(false);
+  const [zoneAttempt, setZoneAttempt] = useState(0);
   useEffect(() => {
-    if (timeZone) return;
+    if (!reference?.id || !token) return;
+    let cancelled = false;
+    void getLocationSchedule(token, reference.id).then(
+      (schedule) => {
+        if (!cancelled) setZoneState({ identity: zoneIdentity, timeZone: schedule?.timezone ?? null });
+      },
+      () => {
+        if (!cancelled) setZoneState({ identity: zoneIdentity, timeZone: null });
+      },
+    );
+    return () => { cancelled = true; };
+  }, [token, reference?.id, zoneIdentity, zoneAttempt]);
+  useEffect(() => {
+    if (currentMonth) return;
     const timer = setTimeout(() => setZoneTimedOut(true), ZONE_TIMEOUT_MS);
     return () => clearTimeout(timer);
-  }, [timeZone]);
-  const today = timeZone || zoneTimedOut ? sedeToday(timeZone) : null;
-  const currentMonth = today ? today.slice(0, 7) : null;
-  const [activeLocationId] = useState<string | null>(() => getActiveLocationId());
-  const { locations } = useExpenseLocations(token);
+  }, [currentMonth, zoneAttempt]);
   const [fromMonth, setFromMonth] = useState<string | null>(null);
   const [toMonth, setToMonth] = useState<string | null>(null);
   const [locationId, setLocationId] = useState('ALL');
@@ -190,7 +209,18 @@ export function ExpensesSummaryView({ token, tabs }: { token: string; tabs?: Exp
   }
 
   const rows = data?.rows ?? [];
-  const showLoading = !rangeError && ((loading && data === null) || !query);
+  const zoneError = !query && (locationsFailed || zoneTimedOut || (zoneState?.identity === zoneIdentity && !currentMonth))
+    ? expensesSummaryCopy.zoneError
+    : null;
+  const showLoading = !rangeError && !zoneError && ((loading && data === null) || !query);
+  function retry() {
+    if (zoneError) {
+      setZoneTimedOut(false);
+      setZoneState(null);
+      setZoneAttempt((attempt) => attempt + 1);
+      reloadLocations();
+    } else setReloadKey((key) => key + 1);
+  }
   const activeLocations = locations.filter((l) => l.isActive);
   const showLocationFilter = activeLocationId === null && activeLocations.length > 1;
   // Los meses que ofrecen los selectores caben siempre en 366 días.
@@ -241,7 +271,7 @@ export function ExpensesSummaryView({ token, tabs }: { token: string; tabs?: Exp
               type="button"
               variant="secondary"
               onClick={() => void exportCsv()}
-              disabled={exporting || showLoading || Boolean(loadError) || Boolean(rangeError) || rows.length === 0}
+              disabled={exporting || !query || showLoading || Boolean(loadError) || Boolean(rangeError) || rows.length === 0}
               className="max-sm:mt-1"
             >
               <Download aria-hidden />
@@ -270,8 +300,8 @@ export function ExpensesSummaryView({ token, tabs }: { token: string; tabs?: Exp
         ) : rangeError ? null : (
           <AsyncSection
             loading={showLoading}
-            error={loadError}
-            onRetry={() => setReloadKey((k) => k + 1)}
+            error={zoneError ?? loadError}
+            onRetry={retry}
             isEmpty={rows.length === 0}
             emptyTitle={expensesSummaryCopy.empty}
             emptyDescription={expensesSummaryCopy.emptyHint}
