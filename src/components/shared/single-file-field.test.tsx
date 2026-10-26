@@ -101,6 +101,18 @@ describe('SingleFileField', () => {
     expect(await screen.findByText('Subido')).toBeInTheDocument();
   });
 
+  it('tras fallar la conversión HEIC permite quitar el archivo y elegir de nuevo', async () => {
+    const user = setupUser();
+    mockedPrepare.mockRejectedValueOnce(new HeicConversionError(new Error('wasm')));
+    render(<Harness />);
+    await user.upload(screen.getByLabelText('Soporte'), new File(['x'], 'IMG_1.heic', { type: 'image/heic' }));
+    await screen.findByText('No pudimos convertir la foto HEIC; expórtala como JPG.');
+    await user.click(screen.getByRole('button', { name: 'Quitar el archivo' }));
+    expect(screen.queryByText('IMG_1.heic')).not.toBeInTheDocument();
+    expect(screen.getByTestId('upload-id')).toBeEmptyDOMElement();
+    expect(screen.getByRole('button', { name: 'Elegir archivo' })).toBeInTheDocument();
+  });
+
   it('un fallo de red o del almacén deja reintentar', async () => {
     const user = setupUser();
     mockedUpload.mockRejectedValueOnce(new TypeError('boom'));

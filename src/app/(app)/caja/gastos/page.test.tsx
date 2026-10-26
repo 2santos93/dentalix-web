@@ -55,6 +55,34 @@ describe('/caja/gastos (DX-274)', () => {
     expect(mockReplace).toHaveBeenCalledWith('/caja/gastos?tab=resumen', { scroll: false });
   });
 
+  it('al activar con teclado y cambiar realmente searchParams conserva el foco en la pestaña elegida', async () => {
+    const user = setupUser();
+    const view = render(<GastosPage />);
+    screen.getByRole('tab', { name: 'Gastos' }).focus();
+    await user.keyboard('{ArrowRight}{Enter}');
+    expect(mockReplace).toHaveBeenCalledWith('/caja/gastos?tab=resumen', { scroll: false });
+    mockSearch = 'tab=resumen';
+    view.rerender(<GastosPage />);
+    expect(screen.getByText('vista de resumen')).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Resumen' })).toHaveFocus();
+    await user.keyboard('{ArrowLeft} ');
+    expect(mockReplace).toHaveBeenLastCalledWith('/caja/gastos', { scroll: false });
+    mockSearch = '';
+    view.rerender(<GastosPage />);
+    expect(screen.getByText('vista de gastos')).toBeInTheDocument();
+    expect(screen.getByRole('tab', { name: 'Gastos' })).toHaveFocus();
+  });
+
+  it('no roba el foco si la persona pasó a otro control antes de terminar la navegación', async () => {
+    const user = setupUser();
+    const view = render(<><GastosPage /><button>Otro control</button></>);
+    await user.click(screen.getByRole('tab', { name: 'Resumen' }));
+    screen.getByRole('button', { name: 'Otro control' }).focus();
+    mockSearch = 'tab=resumen';
+    view.rerender(<><GastosPage /><button>Otro control</button></>);
+    expect(screen.getByRole('button', { name: 'Otro control' })).toHaveFocus();
+  });
+
   it('volver a «Gastos» quita el parámetro', async () => {
     const user = setupUser();
     mockSearch = 'tab=resumen';

@@ -110,6 +110,28 @@ describe('CashOutflowModal (DX-274)', () => {
     expect(mockedCreate.mock.calls[0][1].attachmentUploadId).toBe('up-1');
   });
 
+  it('tras fallar el soporte puede quitarlo y guardar sin adjunto manteniendo datos, sede y clave', async () => {
+    const user = setupUser();
+    mockedUpload.mockRejectedValueOnce(new ApiError(503, 'El almacén no responde.'));
+    mockedCreate.mockRejectedValueOnce(new ApiError(409, 'Confirma que la caja sigue abierta.'));
+    renderModal();
+    await fillRequired(user);
+    await user.type(screen.getByLabelText('Proveedor'), 'Proveedor conservado');
+    await user.upload(screen.getByLabelText('Soporte'), new File(['%PDF-'], 'recibo.pdf', { type: 'application/pdf' }));
+    await screen.findByText(/El almacén de archivos no responde/);
+    await user.click(screen.getByRole('button', { name: 'Registrar salida' }));
+    expect(mockedCreate).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: 'Quitar el archivo' }));
+    await user.click(screen.getByRole('button', { name: 'Registrar salida' }));
+    await screen.findByText('Confirma que la caja sigue abierta.');
+    expect(mockedCreate.mock.calls[0][1]).toEqual(expect.objectContaining({ amount: 8000, supplier: 'Proveedor conservado' }));
+    expect(mockedCreate.mock.calls[0][1]).not.toHaveProperty('attachmentUploadId');
+    expect(mockedCreate.mock.calls[0][3]).toBe('loc-2');
+    await user.click(screen.getByRole('button', { name: 'Registrar salida' }));
+    await waitFor(() => expect(mockedCreate).toHaveBeenCalledTimes(2));
+    expect(mockedCreate.mock.calls[1]).toEqual(mockedCreate.mock.calls[0]);
+  });
+
   it('el 409 sin caja abierta sale con el texto de la API y el reintento reusa la clave', async () => {
     const user = setupUser();
     mockedCreate.mockRejectedValueOnce(

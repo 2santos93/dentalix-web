@@ -201,6 +201,28 @@ describe('ExpenseFormModal (DX-274)', () => {
     expect(await screen.findByText('Subido')).toBeInTheDocument();
   });
 
+  it('tras fallar el soporte permite quitarlo y guardar sin adjunto conservando datos y clave de reintento', async () => {
+    const user = setupUser();
+    mockedUpload.mockRejectedValueOnce(new ApiError(503, 'El almacén no responde.'));
+    mockedCreate.mockRejectedValueOnce(new ApiError(409, 'Confirma que la caja sigue abierta.'));
+    renderModal();
+    await fillRequired(user);
+    await user.type(screen.getByLabelText('Proveedor'), 'Proveedor conservado');
+    await user.upload(screen.getByLabelText('Soporte'), new File(['%PDF-'], 'luz.pdf', { type: 'application/pdf' }));
+    await screen.findByText(/El almacén de archivos no responde/);
+    await user.click(screen.getByRole('button', { name: 'Registrar gasto' }));
+    expect(mockedCreate).not.toHaveBeenCalled();
+    await user.click(screen.getByRole('button', { name: 'Quitar el archivo' }));
+    expect(screen.queryByText('luz.pdf')).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Registrar gasto' }));
+    await screen.findByText('Confirma que la caja sigue abierta.');
+    expect(mockedCreate.mock.calls[0][1]).toEqual(expect.objectContaining({ amount: 150000, supplier: 'Proveedor conservado' }));
+    expect(mockedCreate.mock.calls[0][1]).not.toHaveProperty('attachmentUploadId');
+    await user.click(screen.getByRole('button', { name: 'Registrar gasto' }));
+    await waitFor(() => expect(mockedCreate).toHaveBeenCalledTimes(2));
+    expect(mockedCreate.mock.calls[1]).toEqual(mockedCreate.mock.calls[0]);
+  });
+
   it('un tipo no admitido se dice junto al campo, sin pedir nada a la API', async () => {
     const user = userEvent.setup({ pointerEventsCheck: 0, applyAccept: false });
     renderModal();

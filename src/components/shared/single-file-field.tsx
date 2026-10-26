@@ -254,7 +254,7 @@ export function SingleFileField({ id, label, hint, accept, upload, disabled = fa
             </Button>
           </>
         ) : null}
-        {state.status === 'done' ? (
+        {state.status === 'done' || (state.status === 'error' && state.file) ? (
           <Button type="button" variant="ghost" size="sm" onClick={upload.clear} disabled={disabled} className="max-sm:min-h-11">
             <X aria-hidden />
             {singleFileFieldCopy.remove}
