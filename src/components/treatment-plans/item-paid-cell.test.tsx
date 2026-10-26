@@ -53,13 +53,13 @@ describe('ItemPaidCell', () => {
     for (const cell of cells) {
       expect(within(cell).getByLabelText('Sin importe a cobrar')).toHaveTextContent('—');
     }
-    expect(screen.queryByText('Pagado')).not.toBeInTheDocument();
+    expect(screen.queryByText('Cubierto')).not.toBeInTheDocument();
   });
 
-  it('pending 0 shows Pagado badge', () => {
+  it('pending 0 shows Cubierto badge', () => {
     const [paid, pending] = renderCells(balanceOf({ paid: 100, balance: 0 }));
     expect(paid).toHaveTextContent(money(100, 'EUR'));
-    expect(within(pending).getByText('Pagado')).toBeInTheDocument();
+    expect(within(pending).getByText('Cubierto')).toBeInTheDocument();
   });
 
   it('an item the balance does not know yet shows empty cells, not a zero', () => {
@@ -77,9 +77,9 @@ describe('ItemPaidLine', () => {
     );
   });
 
-  it('pending 0 shows the Pagado badge, PROPOSED the dash', () => {
+  it('pending 0 shows the Cubierto badge, PROPOSED the dash', () => {
     const { rerender } = render(<ItemPaidLine item={balanceOf({ paid: 100, balance: 0 })} currency="EUR" />);
-    expect(screen.getByText('Pagado')).toBeInTheDocument();
+    expect(screen.getByText('Cubierto')).toBeInTheDocument();
     rerender(<ItemPaidLine item={balanceOf({ status: 'PROPOSED', billable: 0, paid: 0, balance: 0 })} currency="EUR" />);
     expect(screen.getByLabelText('Sin importe a cobrar')).toHaveTextContent('—');
   });

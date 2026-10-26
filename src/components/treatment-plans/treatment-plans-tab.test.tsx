@@ -33,6 +33,7 @@ import { applyBulkDiscount, getDiscountPolicy } from '@/lib/discounts/discounts-
 import { listStaff } from '@/lib/appointments/staff-api';
 import { voidCancellationFee } from '@/lib/cancellations/cancellation-fee-api';
 import { getPaymentAllocations, replacePaymentAllocations } from '@/lib/payments/payment-allocations-api';
+import { presentPlan } from '@/lib/treatment-plans/plan-options-api';
 
 // NOTE: jest.mock's string literal is not alias-rewritten by the SWC
 // transform (only real `import`/`require` specifiers are) — use a relative
@@ -78,6 +79,11 @@ jest.mock('../../lib/payments/payments-api', () => ({
 jest.mock('../../lib/payments/payment-allocations-api', () => ({
   getPaymentAllocations: jest.fn(),
   replacePaymentAllocations: jest.fn(),
+}));
+// DX-040: presentar un plan (DX-051: tras hacerlo también se relee el saldo).
+jest.mock('../../lib/treatment-plans/plan-options-api', () => ({
+  ...jest.requireActual('../../lib/treatment-plans/plan-options-api'),
+  presentPlan: jest.fn(),
 }));
 // DX-050: los profesionales que pueden figurar como quien realizó un ítem.
 jest.mock('../../lib/appointments/staff-api', () => ({
@@ -2302,21 +2308,101 @@ describe('TreatmentPlansTab', () => {
       expect(screen.getAllByText('Fijada a mano')).toHaveLength(2);
     });
 
+    describe('las mutaciones de ítems releen el saldo por ítem (I-1)', () => {
+      /** Espera a que el saldo se pida una vez más que `before`. */
+      async function expectBalanceReloaded(before: number) {
+        await waitFor(() => expect(mockedGetPlanBalance.mock.calls.length).toBe(before + 1));
+        expect(mockedListPayments.mock.calls.length).toBeGreaterThanOrEqual(before + 1);
+      }
+
+      beforeEach(() => {
+        mockedGetPlanBalance.mockResolvedValue(balanceWithItems);
+      });
+
+      it('after removing an item', async () => {
+        mockedRemoveItem.mockResolvedValue(undefined);
+        const user = userEvent.setup();
+        render(<TreatmentPlansTab patientId="pat-1" token={adminToken} />);
+        const table = await itemsTable();
+        await within(table).findAllByText('Cobrado');
+        const before = mockedGetPlanBalance.mock.calls.length;
+
+        const row = within(table).getByText('26').closest('tr') as HTMLTableRowElement;
+        await user.click(within(row).getByRole('button', { name: /quitar/i }));
+        const confirm = await screen.findByRole('dialog', { name: /quitar este ítem del plan/i });
+        await user.click(within(confirm).getByRole('button', { name: 'Quitar ítem' }));
+
+        await waitFor(() => expect(mockedRemoveItem).toHaveBeenCalled());
+        await expectBalanceReloaded(before);
+      });
+
+      it('after adding an item', async () => {
+        mockedAddItem.mockResolvedValue({ ...item1, id: 'item-3' });
+        const user = userEvent.setup();
+        render(<TreatmentPlansTab patientId="pat-1" token={adminToken} />);
+        const table = await itemsTable();
+        await within(table).findAllByText('Cobrado');
+        const before = mockedGetPlanBalance.mock.calls.length;
+
+        await user.type(screen.getByLabelText(/código fdi/i), '16');
+        await user.click(screen.getByRole('radio', { name: /resina/i }));
+        await user.click(screen.getByRole('button', { name: /^agregar ítem$/i }));
+
+        await waitFor(() => expect(mockedAddItem).toHaveBeenCalled());
+        await expectBalanceReloaded(before);
+      });
+
+      it('after a bulk discount', async () => {
+        mockedGetDiscountPolicy.mockResolvedValue(DISCOUNT_POLICY);
+        mockedApplyBulkDiscount.mockResolvedValue({ items: [{ ...item2, discount: 4000 }], skippedNoDiscount: 0 });
+        const user = userEvent.setup();
+        render(<TreatmentPlansTab patientId="pat-1" token={adminToken} />);
+        const table = await itemsTable();
+        await within(table).findAllByText('Cobrado');
+        await waitFor(() => expect(mockedGetDiscountPolicy).toHaveBeenCalled());
+        const before = mockedGetPlanBalance.mock.calls.length;
+
+        await user.click(within(table).getByRole('checkbox', { name: 'Seleccionar el ítem del diente 26' }));
+        await user.click(screen.getByRole('button', { name: 'Descuento %' }));
+        const dialog = await screen.findByRole('dialog');
+        await user.type(within(dialog).getByLabelText('Porcentaje de descuento'), '5');
+        await user.click(within(dialog).getByRole('button', { name: 'Aplicar descuento' }));
+
+        await waitFor(() => expect(mockedApplyBulkDiscount).toHaveBeenCalled());
+        await expectBalanceReloaded(before);
+      });
+
+      it('after presenting the plan (plan options)', async () => {
+        jest.mocked(presentPlan).mockResolvedValue({ ...plan1, status: 'PRESENTED' });
+        const user = userEvent.setup();
+        render(<TreatmentPlansTab patientId="pat-1" token={adminToken} />);
+        const table = await itemsTable();
+        await within(table).findAllByText('Cobrado');
+        const before = mockedGetPlanBalance.mock.calls.length;
+
+        await user.click(screen.getByRole('button', { name: 'Presentar al paciente' }));
+
+        await waitFor(() => expect(presentPlan).toHaveBeenCalled());
+        await expectBalanceReloaded(before);
+      });
+    });
+
     it('Imputación action only for ADMIN', async () => {
       mockedGetPlanBalance.mockResolvedValue(balanceWithItems);
       const user = userEvent.setup();
       const { unmount } = render(<TreatmentPlansTab patientId="pat-1" token={adminToken} />);
       const payments = await openPaymentsTable(user);
       const row = within(payments).getByText('PRI-000001').closest('tr') as HTMLTableRowElement;
-      expect(within(row).getByRole('button', { name: 'Imputación' })).toBeInTheDocument();
+      // El nombre dice de qué abono es: con varios, «Imputación» a secas no distingue.
+      expect(within(row).getByRole('button', { name: 'Imputación del abono PRI-000001' })).toBeInTheDocument();
       // Tabla de escritorio y tarjeta móvil.
-      expect(screen.getAllByRole('button', { name: 'Imputación' })).toHaveLength(2);
+      expect(screen.getAllByRole('button', { name: /^Imputación/ })).toHaveLength(2);
       unmount();
 
       const receptionToken = `h.${btoa(JSON.stringify({ sub: 'u-r', tenantId: 't1', role: 'RECEPTION' }))}.s`;
       render(<TreatmentPlansTab patientId="pat-1" token={receptionToken} />);
       await openPaymentsTable(user);
-      expect(screen.queryByRole('button', { name: 'Imputación' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /^Imputación/ })).not.toBeInTheDocument();
     });
 
     it('no Imputación action on a cancelled plan: its payments are not allocated', async () => {
@@ -2327,7 +2413,7 @@ describe('TreatmentPlansTab', () => {
       const user = userEvent.setup();
       render(<TreatmentPlansTab patientId="pat-1" token={adminToken} />);
       await openPaymentsTable(user);
-      expect(screen.queryByRole('button', { name: 'Imputación' })).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /^Imputación/ })).not.toBeInTheDocument();
     });
 
     it('saving the allocation closes the modal and refreshes balance and payments', async () => {
@@ -2371,7 +2457,7 @@ describe('TreatmentPlansTab', () => {
       );
       const payments = await openPaymentsTable(user);
       const row = within(payments).getByText('PRI-000001').closest('tr') as HTMLTableRowElement;
-      const trigger = within(row).getByRole('button', { name: 'Imputación' });
+      const trigger = within(row).getByRole('button', { name: /^Imputación/ });
       await user.click(trigger);
 
       const modal = await screen.findByRole('dialog', { name: 'Imputar abono' });
@@ -2398,7 +2484,7 @@ describe('TreatmentPlansTab', () => {
       render(<TreatmentPlansTab patientId="pat-1" token={adminToken} />);
       const payments = await openPaymentsTable(user);
       const row = within(payments).getByText('PRI-000001').closest('tr') as HTMLTableRowElement;
-      await user.click(within(row).getByRole('button', { name: 'Imputación' }));
+      await user.click(within(row).getByRole('button', { name: /^Imputación/ }));
       const modal = await screen.findByRole('dialog', { name: 'Imputar abono' });
       expect(await within(modal).findByText('Abono no encontrado.')).toBeInTheDocument();
 

@@ -14,6 +14,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { formatCurrency } from '@/lib/format/currency';
 import { formatCivilDate } from '@/lib/format/date';
 import { moneyInputText, parseMoneyInput } from '@/lib/format/money';
+import { allocationCopy } from '@/lib/payments/allocation-copy';
 import type { PaymentAllocations, ReplacePaymentAllocationsInput } from '@/lib/payments/payment-allocations-api';
 import { ITEM_STATUS_BADGE_VARIANT, ITEM_STATUS_LABELS } from '@/lib/treatment-plans/item-status';
 import { PLAN_STATUS_LABELS, isPlanBillable } from '@/lib/treatment-plans/plan-status';
@@ -21,7 +22,7 @@ import { cn } from '@/lib/utils';
 import { usePaymentAllocations } from './use-payment-allocations';
 
 // Copy como constantes (i18n-ready), igual que el resto de vistas.
-export const reallocateCopy = {
+const copy = {
   title: 'Imputar abono',
   available: (amount: string) => `Disponible para imputar: ${amount}`,
   converted: (amount: string, date: string) => `Convertido de ${amount} con la tasa del ${date}.`,
@@ -31,15 +32,10 @@ export const reallocateCopy = {
   modeManual: 'Fijar a mano',
   modeManualHelp: 'Tú decides cuánto cubre de cada ítem; el reparto automático no lo toca.',
   table: 'Ítems imputables del plan',
-  colProcedure: 'Procedimiento',
-  colTooth: 'Diente',
-  colStatus: 'Estado',
   // Lo que este abono todavía puede cubrir del ítem (facturable − lo de otros
   // abonos); no es el «Pendiente» del plan, que descuenta también este abono.
   colFree: 'Libre para este abono',
   colAmount: 'Importe',
-  // DX-291: un cargo administrativo no tiene diente.
-  noTooth: 'Sin diente',
   amountLabel: (procedure: string, tooth: string) =>
     tooth ? `Importe para ${procedure} del diente ${tooth}` : `Importe para ${procedure}`,
   footer: (allocated: string, unallocated: string) => `Imputado ${allocated} · Sin imputar ${unallocated}`,
@@ -52,15 +48,15 @@ export const reallocateCopy = {
   noRate: 'No hay tasa de cambio para la fecha de este abono: todavía no se puede imputar.',
   notBillable: (status: string) => `El plan está «${status}»: sus abonos no se imputan a ítems.`,
   noItems: 'Este plan no tiene ítems aceptados ni realizados: el abono queda sin imputar.',
+  noItemsPinned: 'Está fijado a mano: al guardar vuelve al reparto automático y cubrirá los ítems que se acepten.',
   saved: 'Imputación guardada.',
 };
 
-const copy = reallocateCopy;
 
 type Mode = ReplacePaymentAllocationsInput['mode'];
 
 /** Recibo · importe · fecha civil; sin serie (abonos anteriores a DX-136), solo importe y fecha. */
-export function allocationSubject(data: PaymentAllocations): string {
+function allocationSubject(data: PaymentAllocations): string {
   return [data.receiptNumber, formatCurrency(data.paymentAmount, data.paymentCurrency), formatCivilDate(data.paidOn)]
     .filter(Boolean)
     .join(' · ');
@@ -138,7 +134,13 @@ export function ReallocatePaymentModal({
   }
 
   const billable = data ? isPlanBillable(data.planStatus) : false;
-  const canSave = !loading && data !== null && billable && data.planAmount !== null;
+  // Sin ítems imputables, fijar a mano solo dejaría el abono fijado con nada
+  // (y el reparto ya no lo tocaría al aceptar ítems): no se ofrece. Lo único
+  // que se puede hacer es devolver al automático uno que ya estaba fijado.
+  const noItems = data !== null && data.items.length === 0;
+  const effectiveMode: Mode = noItems ? 'AUTO' : mode;
+  const canSave =
+    !loading && data !== null && billable && data.planAmount !== null && (!noItems || data.manual);
 
   const parsed = data
     ? data.items.map((item) => {
@@ -170,7 +172,7 @@ export function ReallocatePaymentModal({
     if (!data || !canSave || saving) return;
 
     let body: ReplacePaymentAllocationsInput;
-    if (mode === 'AUTO') {
+    if (effectiveMode === 'AUTO') {
       body = { expectedVersion: data.version, mode: 'AUTO' };
     } else {
       const errors: Record<string, string> = {};
@@ -219,195 +221,201 @@ export function ReallocatePaymentModal({
         </div>
       ) : null}
       <div ref={bodyRef} className="contents">
-      <AsyncSection
-        loading={loading}
-        error={error}
-        onRetry={reloadAndRefocus}
-        skeleton={
-          <div className="flex flex-col gap-3" role="status" aria-label="Cargando">
-            <Skeleton className="h-5 w-1/2" />
-            <Skeleton className="h-16 w-full" />
-            <Skeleton className="h-24 w-full" />
-          </div>
-        }
-      >
-        {data ? (
-          !billable ? (
-            <p className="text-sm text-muted">{copy.notBillable(PLAN_STATUS_LABELS[data.planStatus])}</p>
-          ) : data.planAmount === null ? (
-            <p className="text-sm text-muted">{copy.noRate}</p>
-          ) : (
-            <div className="flex flex-col gap-4">
-              <div className="flex flex-col gap-0.5">
-                <p className="font-medium text-ink tabular-nums">
-                  {copy.available(formatCurrency(data.planAmount, data.planCurrency))}
-                </p>
-                {data.paymentCurrency !== data.planCurrency ? (
-                  <p className="text-sm text-muted tabular-nums">
-                    {copy.converted(
-                      formatCurrency(data.paymentAmount, data.paymentCurrency),
-                      formatCivilDate(data.paidOn),
-                    )}
+        <AsyncSection
+          loading={loading}
+          error={error}
+          onRetry={reloadAndRefocus}
+          skeleton={
+            <div className="flex flex-col gap-3" role="status" aria-label="Cargando">
+              <Skeleton className="h-5 w-1/2" />
+              <Skeleton className="h-16 w-full" />
+              <Skeleton className="h-24 w-full" />
+            </div>
+          }
+        >
+          {data ? (
+            !billable ? (
+              <p className="text-sm text-muted">{copy.notBillable(PLAN_STATUS_LABELS[data.planStatus])}</p>
+            ) : data.planAmount === null ? (
+              <p className="text-sm text-muted">{copy.noRate}</p>
+            ) : (
+              <div className="flex flex-col gap-4">
+                <div className="flex flex-col gap-0.5">
+                  <p className="font-medium text-ink tabular-nums">
+                    {copy.available(formatCurrency(data.planAmount, data.planCurrency))}
                   </p>
+                  {data.paymentCurrency !== data.planCurrency ? (
+                    <p className="text-sm text-muted tabular-nums">
+                      {copy.converted(
+                        formatCurrency(data.paymentAmount, data.paymentCurrency),
+                        formatCivilDate(data.paidOn),
+                      )}
+                    </p>
+                  ) : null}
+                </div>
+
+                {noItems ? (
+                  <div className="flex flex-col gap-1 text-sm text-muted">
+                    <p>{copy.noItems}</p>
+                    {data.manual ? <p>{copy.noItemsPinned}</p> : null}
+                  </div>
+                ) : (
+                  <fieldset className="flex min-w-0 flex-col gap-2" disabled={saving}>
+                    <legend className="t-label mb-1 text-muted">{copy.modeLegend}</legend>
+                    <div className="grid gap-2 sm:grid-cols-2">
+                      {(
+                        [
+                          ['AUTO', copy.modeAuto, copy.modeAutoHelp],
+                          ['MANUAL', copy.modeManual, copy.modeManualHelp],
+                        ] as const
+                      ).map(([value, label, help]) => {
+                        const id = `${baseId}-mode-${value}`;
+                        return (
+                          <label
+                            key={value}
+                            htmlFor={id}
+                            className={cn(
+                              'flex min-h-11 cursor-pointer items-start gap-2 rounded-lg border border-border bg-surface px-3 py-2.5 transition-colors hover:bg-surface-2',
+                              'has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-primary',
+                              mode === value && 'border-primary',
+                            )}
+                          >
+                            <input
+                              id={id}
+                              type="radio"
+                              name={`${baseId}-mode`}
+                              value={value}
+                              checked={mode === value}
+                              onChange={() => setMode(value)}
+                              // Nombre = solo la etiqueta; la explicación, como descripción.
+                              aria-labelledby={`${id}-label`}
+                              aria-describedby={`${id}-help`}
+                              className="mt-1 accent-[var(--color-primary)] focus-visible:outline-none"
+                            />
+                            <span className="flex flex-col gap-0.5">
+                              <span id={`${id}-label`} className="text-sm font-medium text-ink">
+                                {label}
+                              </span>
+                              <span id={`${id}-help`} className="text-xs text-muted">
+                                {help}
+                              </span>
+                            </span>
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </fieldset>
+                )}
+
+                {!noItems && mode === 'MANUAL' ? (
+                  <div className="flex flex-col gap-3">
+                    <div className="overflow-hidden rounded-lg border border-border bg-surface">
+                      <Table aria-label={copy.table}>
+                        <TableHeader>
+                          <TableRow className="hover:bg-transparent">
+                            <TableHead scope="col">{allocationCopy.colProcedure}</TableHead>
+                            <TableHead scope="col">{allocationCopy.colTooth}</TableHead>
+                            <TableHead scope="col">{allocationCopy.colStatus}</TableHead>
+                            <TableHead scope="col" className="whitespace-nowrap text-right">
+                              {copy.colFree}
+                            </TableHead>
+                            <TableHead scope="col">{copy.colAmount}</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {parsed.map(({ item, text, result }) => {
+                            const fieldId = `${baseId}-amount-${item.itemId}`;
+                            const fieldError = fieldErrors[item.itemId];
+                            // Cortesía, como el pie: la línea por encima de lo libre es la
+                            // que el servidor rechazaría con «Un ítem admite como máximo…».
+                            const overItem =
+                              !fieldError && result?.ok === true && toCents(result.value) > toCents(item.free);
+                            const overItemId = `${fieldId}-over`;
+                            return (
+                              <TableRow key={item.itemId} className="hover:bg-transparent">
+                                <TableCell className="font-medium break-words" data-label={allocationCopy.colProcedure}>
+                                  {item.procedureName}
+                                </TableCell>
+                                <TableCell className="tabular-nums" data-label={allocationCopy.colTooth}>
+                                  {item.toothNumber || <span className="text-muted">{allocationCopy.noTooth}</span>}
+                                </TableCell>
+                                <TableCell data-label={allocationCopy.colStatus}>
+                                  <Badge variant={ITEM_STATUS_BADGE_VARIANT[item.status]}>
+                                    {ITEM_STATUS_LABELS[item.status]}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell className="text-right tabular-nums" data-label={copy.colFree}>
+                                  {formatCurrency(item.free, data.planCurrency)}
+                                </TableCell>
+                                <TableCell className="sm:w-56" data-label={copy.colAmount}>
+                                  <label htmlFor={fieldId} className="sr-only">
+                                    {copy.amountLabel(item.procedureName, item.toothNumber)}
+                                  </label>
+                                  <MoneyInput
+                                    id={fieldId}
+                                    value={text}
+                                    onValueChange={(next) => setAmount(item.itemId, next)}
+                                    currency={data.planCurrency}
+                                    disabled={saving}
+                                    aria-invalid={fieldError ? true : undefined}
+                                    aria-describedby={
+                                      fieldError ? fieldErrorId(fieldId) : overItem ? overItemId : undefined
+                                    }
+                                  />
+                                  {fieldError ? (
+                                    <InlineError id={fieldErrorId(fieldId)} className="text-xs">
+                                      {fieldError}
+                                    </InlineError>
+                                  ) : overItem ? (
+                                    <p id={overItemId} className="text-xs text-danger tabular-nums">
+                                      {copy.overItem(formatCurrency(item.free, data.planCurrency))}
+                                    </p>
+                                  ) : null}
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                    </div>
+
+                    <div className="flex flex-wrap items-start justify-between gap-3">
+                      <div
+                        className={cn('flex flex-col gap-0.5 text-sm tabular-nums', over ? 'text-danger' : 'text-ink')}
+                      >
+                        <p className="font-medium">
+                          {copy.footer(
+                            formatCurrency(allocatedCents / 100, data.planCurrency),
+                            // Nunca negativo: cuánto se pasa lo dice el aviso de abajo.
+                            formatCurrency(Math.max(0, planCents - allocatedCents) / 100, data.planCurrency),
+                          )}
+                        </p>
+                        {/* Solo el aviso es alerta: el Σ cambia con cada tecla y no debe leerse cada vez. */}
+                        {over ? (
+                          <p role="alert">
+                            {copy.over(formatCurrency((allocatedCents - planCents) / 100, data.planCurrency))}
+                          </p>
+                        ) : null}
+                      </div>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        disabled={saving}
+                        onClick={() => {
+                          setAmounts({});
+                          setFieldErrors({});
+                        }}
+                      >
+                        {copy.clear}
+                      </Button>
+                    </div>
+                  </div>
                 ) : null}
               </div>
-
-              <fieldset className="flex min-w-0 flex-col gap-2" disabled={saving}>
-                <legend className="t-label mb-1 text-muted">{copy.modeLegend}</legend>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  {(
-                    [
-                      ['AUTO', copy.modeAuto, copy.modeAutoHelp],
-                      ['MANUAL', copy.modeManual, copy.modeManualHelp],
-                    ] as const
-                  ).map(([value, label, help]) => {
-                    const id = `${baseId}-mode-${value}`;
-                    return (
-                      <label
-                        key={value}
-                        htmlFor={id}
-                        className={cn(
-                          'flex min-h-11 cursor-pointer items-start gap-2 rounded-lg border border-border bg-surface px-3 py-2.5 transition-colors hover:bg-surface-2',
-                          'has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-primary',
-                          mode === value && 'border-primary',
-                        )}
-                      >
-                        <input
-                          id={id}
-                          type="radio"
-                          name={`${baseId}-mode`}
-                          value={value}
-                          checked={mode === value}
-                          onChange={() => setMode(value)}
-                          // Nombre = solo la etiqueta; la explicación, como descripción.
-                          aria-labelledby={`${id}-label`}
-                          aria-describedby={`${id}-help`}
-                          className="mt-1 accent-[var(--color-primary)] focus-visible:outline-none"
-                        />
-                        <span className="flex flex-col gap-0.5">
-                          <span id={`${id}-label`} className="text-sm font-medium text-ink">
-                            {label}
-                          </span>
-                          <span id={`${id}-help`} className="text-xs text-muted">
-                            {help}
-                          </span>
-                        </span>
-                      </label>
-                    );
-                  })}
-                </div>
-              </fieldset>
-
-              {data.items.length === 0 ? (
-                <p className="text-sm text-muted">{copy.noItems}</p>
-              ) : mode === 'MANUAL' ? (
-                <div className="flex flex-col gap-3">
-                  <div className="overflow-hidden rounded-lg border border-border bg-surface">
-                    <Table aria-label={copy.table}>
-                      <TableHeader>
-                        <TableRow className="hover:bg-transparent">
-                          <TableHead scope="col">{copy.colProcedure}</TableHead>
-                          <TableHead scope="col">{copy.colTooth}</TableHead>
-                          <TableHead scope="col">{copy.colStatus}</TableHead>
-                          <TableHead scope="col" className="text-right">
-                            {copy.colFree}
-                          </TableHead>
-                          <TableHead scope="col">{copy.colAmount}</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {parsed.map(({ item, text, result }) => {
-                          const fieldId = `${baseId}-amount-${item.itemId}`;
-                          const fieldError = fieldErrors[item.itemId];
-                          // Cortesía, como el pie: la línea por encima de lo libre es la
-                          // que el servidor rechazaría con «Un ítem admite como máximo…».
-                          const overItem =
-                            !fieldError && result?.ok === true && toCents(result.value) > toCents(item.free);
-                          const overItemId = `${fieldId}-over`;
-                          return (
-                            <TableRow key={item.itemId} className="hover:bg-transparent">
-                              <TableCell className="font-medium break-words" data-label={copy.colProcedure}>
-                                {item.procedureName}
-                              </TableCell>
-                              <TableCell className="tabular-nums" data-label={copy.colTooth}>
-                                {item.toothNumber || <span className="text-muted">{copy.noTooth}</span>}
-                              </TableCell>
-                              <TableCell data-label={copy.colStatus}>
-                                <Badge variant={ITEM_STATUS_BADGE_VARIANT[item.status]}>
-                                  {ITEM_STATUS_LABELS[item.status]}
-                                </Badge>
-                              </TableCell>
-                              <TableCell className="text-right tabular-nums" data-label={copy.colFree}>
-                                {formatCurrency(item.free, data.planCurrency)}
-                              </TableCell>
-                              <TableCell className="sm:w-44" data-label={copy.colAmount}>
-                                <label htmlFor={fieldId} className="sr-only">
-                                  {copy.amountLabel(item.procedureName, item.toothNumber)}
-                                </label>
-                                <MoneyInput
-                                  id={fieldId}
-                                  value={text}
-                                  onValueChange={(next) => setAmount(item.itemId, next)}
-                                  currency={data.planCurrency}
-                                  disabled={saving}
-                                  aria-invalid={fieldError ? true : undefined}
-                                  aria-describedby={
-                                    fieldError ? fieldErrorId(fieldId) : overItem ? overItemId : undefined
-                                  }
-                                />
-                                {fieldError ? (
-                                  <InlineError id={fieldErrorId(fieldId)} className="text-xs">
-                                    {fieldError}
-                                  </InlineError>
-                                ) : overItem ? (
-                                  <p id={overItemId} className="text-xs text-danger tabular-nums">
-                                    {copy.overItem(formatCurrency(item.free, data.planCurrency))}
-                                  </p>
-                                ) : null}
-                              </TableCell>
-                            </TableRow>
-                          );
-                        })}
-                      </TableBody>
-                    </Table>
-                  </div>
-
-                  <div className="flex flex-wrap items-start justify-between gap-3">
-                    <div
-                      className={cn('flex flex-col gap-0.5 text-sm tabular-nums', over ? 'text-danger' : 'text-ink')}
-                    >
-                      <p className="font-medium">
-                        {copy.footer(
-                          formatCurrency(allocatedCents / 100, data.planCurrency),
-                          formatCurrency((planCents - allocatedCents) / 100, data.planCurrency),
-                        )}
-                      </p>
-                      {/* Solo el aviso es alerta: el Σ cambia con cada tecla y no debe leerse cada vez. */}
-                      {over ? (
-                        <p role="alert">
-                          {copy.over(formatCurrency((allocatedCents - planCents) / 100, data.planCurrency))}
-                        </p>
-                      ) : null}
-                    </div>
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      disabled={saving}
-                      onClick={() => {
-                        setAmounts({});
-                        setFieldErrors({});
-                      }}
-                    >
-                      {copy.clear}
-                    </Button>
-                  </div>
-                </div>
-              ) : null}
-            </div>
-          )
-        ) : null}
-      </AsyncSection>
+            )
+          ) : null}
+        </AsyncSection>
       </div>
     </FormModal>
   );

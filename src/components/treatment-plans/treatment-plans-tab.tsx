@@ -318,6 +318,10 @@ const copy = {
   manualAllocation: 'Fijada a mano',
   // DX-051: abre «Imputar abono» (solo ADMIN).
   allocationAction: 'Imputación',
+  // Con varios abonos, «Imputación, Imputación…» no dice de cuál: el lector
+  // oye también el recibo (o el importe, si no tiene serie).
+  allocationActionContext: (payment: Payment) =>
+    ` del abono ${payment.receiptNumber ?? formatCurrency(payment.amount, payment.currency)}`,
   emptyPaymentsTitle: 'Este plan todavía no tiene abonos.',
   emptyPaymentsDescription: 'Registra el primer abono con el formulario de arriba.',
 
@@ -1013,6 +1017,7 @@ function PaymentsList({
                           onClick={(e) => onAllocate(payment.id, e.currentTarget)}
                         >
                           {copy.allocationAction}
+                          <span className="sr-only">{copy.allocationActionContext(payment)}</span>
                         </Button>
                       ) : null}
                       <Separator orientation="vertical" className="h-5" />
@@ -1063,22 +1068,26 @@ function PaymentsList({
               <p className="mt-1 text-sm text-muted">{payment.notes ?? copy.paymentNotesFallback}</p>
               {/* Mismo aislamiento del destructivo que en la tabla de
                   escritorio — en móvil el riesgo de mal toque es mayor, no
-                  menor. */}
-              <div className="mt-3 flex flex-wrap items-center gap-3">
-                <Button type="button" variant="outline" size="sm" onClick={() => onReceipt(payment.id)}>
-                  {copy.receiptAction}
-                </Button>
-                {onAllocate ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={(e) => onAllocate(payment.id, e.currentTarget)}
-                  >
-                    {copy.allocationAction}
+                  menor. Dos grupos en los extremos en vez de un separador:
+                  con «Imputación» la fila se parte a 390 px y el separador
+                  quedaba colgando al final de la primera línea. */}
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex flex-wrap items-center gap-3">
+                  <Button type="button" variant="outline" size="sm" onClick={() => onReceipt(payment.id)}>
+                    {copy.receiptAction}
                   </Button>
-                ) : null}
-                <Separator orientation="vertical" className="h-5" />
+                  {onAllocate ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={(e) => onAllocate(payment.id, e.currentTarget)}
+                    >
+                      {copy.allocationAction}
+                      <span className="sr-only">{copy.allocationActionContext(payment)}</span>
+                    </Button>
+                  ) : null}
+                </div>
                 <Button
                   type="button"
                   variant="outline"
@@ -1887,7 +1896,8 @@ export function TreatmentPlansTab({
     try {
       await removeItem(token, selectedPlanId, itemId);
       setItemToRemove(null);
-      await refreshPlanDetail();
+      // DX-051: quitar un ítem libera lo que tenía imputado y lo reparte.
+      await Promise.all([refreshPlanDetail(), refreshBalanceAndPayments()]);
     } catch (err) {
       setRemoveItemError(apiErrorMessage(err, copy.genericRemoveItemError));
     } finally {
@@ -1907,10 +1917,10 @@ export function TreatmentPlansTab({
   /**
    * Presentar, rechazar o crear una alternativa (DX-040) cambian el estado del
    * plan y, con una alternativa nueva, la lista de planes: se refrescan los
-   * dos en su sitio.
+   * dos en su sitio. Y el saldo: rechazar libera todo lo imputado (DX-051).
    */
   async function handlePlanOptionsChanged(): Promise<void> {
-    await Promise.all([refreshPlanDetail(), refreshPlansInPlace()]);
+    await Promise.all([refreshPlanDetail(), refreshPlansInPlace(), refreshBalanceAndPayments()]);
   }
 
   function handleProcedureChange(nextCatalogItemId: string) {
@@ -2021,7 +2031,8 @@ export function TreatmentPlansTab({
       setAddReason(EMPTY_REASON);
       setSurfaces(emptySurfacesState());
       setNotes('');
-      await refreshPlanDetail();
+      // DX-051: un ítem aceptado nuevo recibe los sobrantes del reparto.
+      await Promise.all([refreshPlanDetail(), refreshBalanceAndPayments()]);
     } catch (err) {
       // Un 400 (FDI inválido / precio obligatorio si el ítem del catálogo no
       // tiene defaultPrice) llega en inglés: apiErrorMessage lo dice en español.
@@ -2743,7 +2754,8 @@ export function TreatmentPlansTab({
                 .filter(Boolean)
                 .join(' '),
             );
-            void refreshPlanDetail();
+            // DX-051: el descuento baja lo facturable y libera lo imputado de más.
+            void Promise.all([refreshPlanDetail(), refreshBalanceAndPayments()]);
           }}
         />
       ) : null}

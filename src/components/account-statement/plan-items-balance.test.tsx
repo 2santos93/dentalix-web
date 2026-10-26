@@ -81,11 +81,14 @@ it('loads on open and shows procedure, tooth, status, A pagar, Cobrado, Pendient
   const first = within(rows[0])
     .getAllByRole('cell')
     .map((c) => (c.textContent ?? '').replace(/\u00A0/g, ' '));
-  expect(first).toEqual(['Resina', '11', 'Realizado', money(100, 'EUR'), money(100, 'EUR'), money(0, 'EUR')]);
+  // Mismas reglas que el plan: pendiente 0 es «Cubierto», no «0,00».
+  expect(first).toEqual(['Resina', '11', 'Realizado', money(100, 'EUR'), money(100, 'EUR'), 'Cubierto']);
   expect(within(rows[1]).getAllByRole('cell')[5]).toHaveTextContent(money(30, 'EUR'));
   // Un cargo sin diente (DX-291) no deja la celda vacía.
   expect(within(rows[2]).getAllByRole('cell')[1]).toHaveTextContent('Sin diente');
   expect(within(rows[2]).getAllByRole('cell')[2]).toHaveTextContent('Propuesto');
+  // Un propuesto no tiene importe a cobrar: «—» con nombre, no una fila de ceros.
+  expect(within(rows[2]).getAllByLabelText('Sin importe a cobrar')).toHaveLength(3);
 
   // Todo imputado: no hay «Sin imputar»; todos con tasa: no hay aviso.
   expect(screen.queryByText('Sin imputar')).not.toBeInTheDocument();
@@ -117,7 +120,7 @@ it('unconverted notice explains abonos without a rate, in singular or plural', a
   ).toBeInTheDocument();
 });
 
-it('cancelled plan shows zeros and unallocated', async () => {
+it('cancelled plan shows no amounts to charge and the unallocated figure', async () => {
   mockedBalance.mockResolvedValue(
     balanceFixture({
       billable: 0,
@@ -133,7 +136,7 @@ it('cancelled plan shows zeros and unallocated', async () => {
   const table = await screen.findByRole('table', { name: /por ítem/i });
   for (const row of within(table).getAllByRole('row').slice(1)) {
     const cells = within(row).getAllByRole('cell');
-    for (const cell of cells.slice(3)) expect(cell).toHaveTextContent(money(0, 'EUR'));
+    for (const cell of cells.slice(3)) expect(within(cell).getByLabelText('Sin importe a cobrar')).toBeInTheDocument();
   }
   const unallocated = screen.getByText('Sin imputar').closest('div') as HTMLElement;
   expect(unallocated).toHaveTextContent(money(50, 'EUR'));

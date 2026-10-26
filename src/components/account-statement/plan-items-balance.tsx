@@ -7,17 +7,17 @@ import { formatCurrency } from '@/lib/format/currency';
 import { AsyncSection, TableSkeleton } from '@/components/shared/async-section';
 import { Badge } from '@/components/ui/badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { ItemBillableValue, ItemPaidValue, ItemPendingValue } from '@/components/treatment-plans/item-paid-cell';
 
-export const planItemsBalanceCopy = {
+const planItemsBalanceCopy = {
   table: 'Cobrado por ítem del plan',
-  colProcedure: 'Procedimiento',
-  colTooth: 'Diente',
-  colStatus: 'Estado',
+  colProcedure: allocationCopy.colProcedure,
+  colTooth: allocationCopy.colTooth,
+  colStatus: allocationCopy.colStatus,
   colBillable: 'A pagar',
   colPaid: 'Cobrado',
   colPending: 'Pendiente',
-  // DX-291: un cargo administrativo no tiene diente.
-  noTooth: 'Sin diente',
+  noTooth: allocationCopy.noTooth,
   empty: 'Este plan todavía no tiene ítems.',
   // Sin "Intenta de nuevo.": SectionError trae su propio botón.
   loadError: 'No pudimos cargar el detalle por ítem.',
@@ -104,13 +104,13 @@ export function PlanItemsBalance({ token, planId }: { token: string; planId: str
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right tabular-nums" data-label={copy.colBillable}>
-                        {formatCurrency(item.billable, balance.planCurrency)}
+                        <ItemBillableValue item={item} currency={balance.planCurrency} />
                       </TableCell>
                       <TableCell className="text-right tabular-nums" data-label={copy.colPaid}>
-                        {formatCurrency(item.paid, balance.planCurrency)}
+                        <ItemPaidValue item={item} currency={balance.planCurrency} />
                       </TableCell>
                       <TableCell className="text-right font-medium tabular-nums" data-label={copy.colPending}>
-                        {formatCurrency(item.balance, balance.planCurrency)}
+                        <ItemPendingValue item={item} currency={balance.planCurrency} />
                       </TableCell>
                     </TableRow>
                   ))}

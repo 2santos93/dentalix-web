@@ -223,7 +223,8 @@ describe('ReallocatePaymentModal (DX-051)', () => {
 
     await user.type(screen.getByLabelText('Importe para Resina del diente 11'), '50,25');
     const over = await screen.findByText(
-      `Imputado ${money(110.25, 'EUR')} · Sin imputar ${money(-1.75, 'EUR')}`,
+      // Nunca un «Sin imputar» negativo: cuánto se pasa lo dice el aviso.
+      `Imputado ${money(110.25, 'EUR')} · Sin imputar ${money(0, 'EUR')}`,
     );
     // Solo el aviso es alerta; el Σ, que cambia con cada tecla, no.
     expect(over.closest('[role="alert"]')).toBeNull();
@@ -389,14 +390,33 @@ describe('ReallocatePaymentModal (DX-051)', () => {
     expect(within(modal).queryByRole('button', { name: 'Guardar imputación' })).not.toBeInTheDocument();
   });
 
-  it('empty items shows empty-state copy', async () => {
+  it('empty items shows empty-state copy, without mode choice nor save', async () => {
     mockedGet.mockResolvedValue({ ...DATA, items: [], allocations: [], manual: false });
     renderModal();
-    await screen.findByRole('radio', { name: /reparto automático/i });
     expect(
-      screen.getByText('Este plan no tiene ítems aceptados ni realizados: el abono queda sin imputar.'),
+      await screen.findByText('Este plan no tiene ítems aceptados ni realizados: el abono queda sin imputar.'),
     ).toBeInTheDocument();
+    // Fijar a mano con nada que fijar dejaría el abono fuera del reparto sin decirlo.
+    expect(screen.queryByRole('radio')).not.toBeInTheDocument();
     expect(screen.queryByRole('table')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: 'Guardar imputación' })).not.toBeInTheDocument();
+  });
+
+  it('empty items on a pinned payment: saving returns it to the automatic distribution', async () => {
+    mockedGet.mockResolvedValue({ ...DATA, items: [], allocations: [], manual: true });
+    mockedPut.mockResolvedValue({ ...DATA, items: [], allocations: [], manual: false, previous: [] });
+    const user = userEvent.setup();
+    renderModal();
+    expect(
+      await screen.findByText(
+        'Está fijado a mano: al guardar vuelve al reparto automático y cubrirá los ítems que se acepten.',
+      ),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole('radio')).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole('button', { name: 'Guardar imputación' }));
+    await waitFor(() => expect(mockedPut).toHaveBeenCalledTimes(1));
+    expect(mockedPut.mock.calls[0][2]).toEqual({ expectedVersion: VERSION, mode: 'AUTO' });
   });
 
   it('a failed load is a section error with retry, and nothing to save', async () => {

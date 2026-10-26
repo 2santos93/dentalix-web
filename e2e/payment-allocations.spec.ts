@@ -119,7 +119,7 @@ async function expectItem(panel: Locator, mobile: boolean, procedure: string, ex
       return;
     }
     await expect(paid).toHaveText(money(expected.paid));
-    await expect(pending).toHaveText(expected.pending === 0 ? 'Pagado' : money(expected.pending));
+    await expect(pending).toHaveText(expected.pending === 0 ? 'Cubierto' : money(expected.pending));
     return;
   }
   const card = panel.locator('li').filter({ hasText: procedure }).locator('visible=true');
@@ -129,7 +129,7 @@ async function expectItem(panel: Locator, mobile: boolean, procedure: string, ex
   }
   if (expected.pending === 0) {
     await expect(card).toContainText(`Cobrado ${money(expected.paid)} ·`);
-    await expect(card.getByText('Pagado', { exact: true })).toBeVisible();
+    await expect(card.getByText('Cubierto', { exact: true })).toBeVisible();
   } else {
     await expect(card).toContainText(`Cobrado ${money(expected.paid)} · Pendiente ${money(expected.pending)}`);
   }
