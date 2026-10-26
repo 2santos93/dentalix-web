@@ -7,10 +7,10 @@ import {
   inspectFile,
   listImports,
   removeBalances,
-  saveCsv,
   uploadBalances,
   validateImport,
 } from '@/lib/patient-imports/patient-imports-api';
+import { saveCsv } from '@/lib/files/save-csv';
 import { balancesFixture, batchFixture, inspectFixture } from '@/lib/test/patient-imports';
 import { ImportProgress } from './import-progress';
 import { PatientImportWizard } from './patient-import-wizard';
@@ -37,8 +37,8 @@ jest.mock('../../lib/patient-imports/patient-imports-api', () => ({
   downloadBalanceErrorsCsv: jest.fn().mockResolvedValue('csv'),
   uploadBalances: jest.fn(),
   removeBalances: jest.fn(),
-  saveCsv: jest.fn(),
 }));
+jest.mock('../../lib/files/save-csv', () => ({ saveCsv: jest.fn() }));
 
 const mockedInspect = inspectFile as jest.MockedFunction<typeof inspectFile>;
 const mockedValidate = validateImport as jest.MockedFunction<typeof validateImport>;
@@ -216,7 +216,7 @@ it('paso 2: valida con el mapeo elegido y muestra totales, errores por fila y vi
   expect(result).toHaveTextContent('Ana Pérez');
 
   await user.click(within(result).getByRole('button', { name: /descargar informe/i }));
-  await waitFor(() => expect(saveCsv).toHaveBeenCalledWith('csv', 'errores-pacientes.csv'));
+  await waitFor(() => expect(saveCsv).toHaveBeenCalledWith('csv', 'errores-pacientes.csv', { bom: true }));
 });
 
 it('paso 3: confirma con «actualizar vacíos» y sigue el avance hasta terminar', async () => {

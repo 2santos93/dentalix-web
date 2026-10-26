@@ -85,4 +85,19 @@ describe('DocumentViewerDialog (DX-151)', () => {
     expect(fakeTab.location.replace).toHaveBeenCalledWith('http://files/fresca');
     openSpy.mockRestore();
   });
+
+  it('si no puede abrir la otra pestaña lo dice dentro del visor (un toast quedaría debajo)', async () => {
+    const user = setupUser();
+    const fakeTab = { opener: {} as unknown, location: { replace: jest.fn() }, close: jest.fn() };
+    const openSpy = jest.spyOn(window, 'open').mockReturnValue(fakeTab as unknown as Window);
+    renderViewer();
+    await screen.findByTitle('Vista previa de panoramica.pdf');
+    mockedUrl.mockRejectedValueOnce(new ApiError(500, 'boom'));
+    await user.click(screen.getByRole('link', { name: 'Abrir en otra pestaña' }));
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      'No pudimos abrir el documento en otra pestaña. Intenta de nuevo.',
+    );
+    expect(fakeTab.close).toHaveBeenCalled();
+    openSpy.mockRestore();
+  });
 });

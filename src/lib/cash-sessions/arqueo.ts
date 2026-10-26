@@ -23,6 +23,7 @@ export const ADJUSTMENT_KIND_LABELS: Record<CashAdjustmentKind, string> = {
   VOID: 'Anulación posterior al cierre',
   LATE_PAYMENT: 'Abono con fecha de un día cerrado',
   CORRECTION: 'Corrección de un cierre',
+  OUTFLOW_VOID: 'Anulación de salida',
 };
 
 const cents = (amount: number) => Math.round(amount * 100);

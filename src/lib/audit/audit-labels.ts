@@ -101,6 +101,8 @@ export const AUDIT_RESOURCE_LABELS: Record<AuditResourceType, string> = {
   MEDICAL_HISTORY_SUBMISSION: 'Anamnesis por enlace',
   // DX-279: nueva versión de la política de cancelación de una sede.
   CANCELLATION_POLICY: 'Política de cancelación',
+  // DX-274: gastos de la sede, sus pagos y su soporte.
+  EXPENSE: 'Gasto',
 };
 
 export const AUDIT_RESOURCE_OPTIONS = Object.keys(AUDIT_RESOURCE_LABELS) as AuditResourceType[];

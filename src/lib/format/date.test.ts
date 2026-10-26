@@ -1,11 +1,13 @@
 import {
   civilDateInZone,
+  firstOfMonth,
   zoneCityLabel,
   formatCivilDate,
   formatDate,
   formatDateLabel,
   formatDateTime,
   formatDateTimeInZone,
+  formatTimeInZone,
   formatTime,
   zonedDayStart,
 } from './date';
@@ -61,6 +63,14 @@ describe('formatDateTime (local)', () => {
   it('joins date and time', () => {
     const d = new Date(2026, 6, 3, 8, 0);
     expect(formatDateTime(d)).toBe('03/07/2026 08:00');
+  });
+});
+
+describe('formatTimeInZone', () => {
+  it('renders HH:mm in the zone', () => {
+    expect(formatTimeInZone('2026-10-16T03:30:00.000Z', 'America/Bogota')).toBe('22:30');
+    expect(formatTimeInZone('2026-10-16T05:00:00.000Z', 'America/Bogota')).toBe('00:00');
+    expect(formatTimeInZone(null, 'America/Bogota')).toBe('—');
   });
 });
 
@@ -148,5 +158,12 @@ describe('civilDateInZone (DX-097)', () => {
   it('null con un instante o una zona inválidos', () => {
     expect(civilDateInZone('no-es-fecha', 'America/Bogota')).toBeNull();
     expect(civilDateInZone('2026-10-17T01:00:00.000Z', 'Mars/Olympus')).toBeNull();
+  });
+});
+
+describe('firstOfMonth', () => {
+  it('da el día 1 del mes del día dado', () => {
+    expect(firstOfMonth('2026-10-24')).toBe('2026-10-01');
+    expect(firstOfMonth('2026-02-01')).toBe('2026-02-01');
   });
 });

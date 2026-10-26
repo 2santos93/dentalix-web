@@ -10,13 +10,13 @@ import {
   type Metric,
 } from '@/lib/reports/reports-api';
 import { ApiError } from '@/lib/api/client';
-import { saveCsv } from '@/lib/patient-imports/patient-imports-api';
+import { saveCsv } from '@/lib/files/save-csv';
 
 jest.mock('../../lib/reports/reports-api', () => ({
   getLocationsComparison: jest.fn(),
   downloadLocationsComparisonCsv: jest.fn(),
 }));
-jest.mock('../../lib/patient-imports/patient-imports-api', () => ({ saveCsv: jest.fn() }));
+jest.mock('../../lib/files/save-csv', () => ({ saveCsv: jest.fn() }));
 jest.mock('../errors/notify', () => ({ notifyError: jest.fn() }));
 jest.mock('../../lib/locations/use-sede-time-zone', () => ({
   useSedeTimeZone: () => 'America/Bogota',
@@ -279,7 +279,7 @@ describe('LocationsComparisonView (DX-014)', () => {
     await waitFor(() =>
       expect(mockedCsv).toHaveBeenCalledWith('t', { from: '2026-10-01', to: '2026-10-24', compare: 'none' }),
     );
-    expect(saveCsv).toHaveBeenCalledWith('csv', 'comparar-sedes-2026-10-01-2026-10-24.csv');
+    expect(saveCsv).toHaveBeenCalledWith('csv', 'comparar-sedes-2026-10-01-2026-10-24.csv', { bom: true });
     expect(await screen.findByText('Reporte exportado.')).toBeInTheDocument();
   });
 

@@ -186,6 +186,28 @@ test('ADMIN: el menú de cuenta cabe en 1366×768, 1440×900 y 390×844, tambié
     await expectEveryItemReachable(page, menu, moment);
     await page.keyboard.press('Escape');
     await expect(menu).toBeHidden();
+    // También se alcanzan con Tab todas las entradas del rail largo; el
+    // desplazamiento pertenece al nav y deja marca/cuenta dentro de la ventana.
+    const sidebarLinks = page.locator('aside > nav').getByRole('link');
+    const linkCount = await sidebarLinks.count();
+    expect(linkCount).toBeGreaterThanOrEqual(14);
+    await sidebarLinks.first().focus();
+    for (let index = 0; index < linkCount; index++) {
+      const link = sidebarLinks.nth(index);
+      await expect(link).toBeFocused();
+      const geometry = await link.evaluate((element) => {
+        const rect = element.getBoundingClientRect();
+        const navRect = element.closest('nav')!.getBoundingClientRect();
+        return { top: rect.top, bottom: rect.bottom, navTop: navRect.top, navBottom: navRect.bottom,
+          pageScroll: document.scrollingElement?.scrollTop ?? 0 };
+      });
+      expect(geometry.top).toBeGreaterThanOrEqual(geometry.navTop);
+      expect(geometry.bottom).toBeLessThanOrEqual(geometry.navBottom);
+      expect(geometry.pageScroll, `${moment}: Tab en el rail no desplaza la página`).toBe(0);
+      if (index < linkCount - 1) await page.keyboard.press('Tab');
+    }
+    const avatarBox = await accountTrigger(page, admin.fullName).boundingBox();
+    expect(avatarBox!.y + avatarBox!.height).toBeLessThanOrEqual(viewport.height);
   }
   await page.getByRole('button', { name: 'Expandir menú' }).click();
 });

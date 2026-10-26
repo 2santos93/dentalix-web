@@ -127,6 +127,19 @@ export function formatDateTimeInZone(
   return `${pad(p.day)}/${pad(p.month)}/${p.year} ${pad(p.hour)}:${pad(p.minute)}`;
 }
 
+/** `HH:mm` of a genuine instant in a given IANA zone (unknown zone: local time). */
+export function formatTimeInZone(
+  value: string | number | Date | null | undefined,
+  timeZone: string,
+  fallback: string = FALLBACK,
+): string {
+  const d = toDate(value);
+  if (!d) return fallback;
+  const p = zonedParts(d, timeZone);
+  if (!p) return formatTime(d, fallback);
+  return `${String(p.hour).padStart(2, '0')}:${String(p.minute).padStart(2, '0')}`;
+}
+
 /**
  * The UTC instant (ISO) at which the civil day `YYYY-MM-DD` starts in
  * `timeZone` — to turn a date-picker day into the API's `from`/`to` instants
@@ -212,4 +225,9 @@ export function civilDateInZone(
   if (!p) return null;
   const pad = (n: number) => String(n).padStart(2, '0');
   return `${String(p.year).padStart(4, '0')}-${pad(p.month)}-${pad(p.day)}`;
+}
+
+/** Primer día del mes de `day` (`YYYY-MM-DD`): el «desde» por defecto de un periodo. */
+export function firstOfMonth(day: string): string {
+  return `${day.slice(0, 8)}01`;
 }

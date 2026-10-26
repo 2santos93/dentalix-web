@@ -16,11 +16,11 @@ import {
   isInProgress,
   errorsFileName,
   listImports,
-  saveCsv,
   undoBalances,
   undoImport,
   type ImportBatch,
 } from '@/lib/patient-imports/patient-imports-api';
+import { saveCsv } from '@/lib/files/save-csv';
 import { STATUS_VARIANT } from './import-progress';
 
 const HISTORY_POLL_MS = 3000;
@@ -160,7 +160,7 @@ export function ImportHistory({ token, reloadKey }: { token: string; reloadKey: 
 
   async function report(batch: ImportBatch) {
     try {
-      saveCsv(await downloadErrorsCsv(token, batch.id), errorsFileName(batch.fileName));
+      saveCsv(await downloadErrorsCsv(token, batch.id), errorsFileName(batch.fileName), { bom: true });
     } catch (err) {
       notifyError(apiErrorMessage(err, historyCopy.reportError), {
         onRetry: () => void report(batch),

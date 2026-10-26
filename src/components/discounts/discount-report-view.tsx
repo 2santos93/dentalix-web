@@ -7,7 +7,7 @@ import { ApiError } from '@/lib/api/client';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { getTokenRole } from '@/lib/auth/token-role';
 import { formatCurrency } from '@/lib/format/currency';
-import { formatCivilDate } from '@/lib/format/date';
+import { firstOfMonth, formatCivilDate } from '@/lib/format/date';
 import { sedeToday, useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
 import { listStaff, type StaffMember } from '@/lib/appointments/staff-api';
 import {
@@ -20,6 +20,7 @@ import {
   type AgreementReductionTotal,
 } from '@/lib/discounts/discounts-api';
 import { DISCOUNT_REASON_LABELS, type DiscountReasonCode } from '@/lib/discounts/discount-rules';
+import { saveCsv } from '@/lib/files/save-csv';
 import { notifyError } from '@/components/errors/notify';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
@@ -84,21 +85,6 @@ export const discountReportCopy = {
   emptyHint: 'Prueba con otras fechas, otra sede u otro miembro del equipo.',
   statement: (name: string) => `Abrir la ficha de ${name}`,
 };
-
-function firstOfMonth(day: string): string {
-  return `${day.slice(0, 8)}01`;
-}
-
-function saveCsv(text: string, fileName: string): void {
-  const url = URL.createObjectURL(new Blob([text], { type: 'text/csv;charset=utf-8' }));
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = fileName;
-  document.body.append(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
-}
 
 /** SEC-047: línea que solo tiene rebaja de convenio (sin descuento propio). */
 function agreementOnly(item: DiscountReportItem): boolean {

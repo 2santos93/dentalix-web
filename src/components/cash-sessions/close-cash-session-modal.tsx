@@ -82,16 +82,17 @@ export function CloseCashSessionModal({
   const baseId = useId();
   const blind = session.blindHidden;
   // Con arqueo ciego no se sabe qué monedas se cobraron: las del fondo, la de
-  // la sede y las de los ajustes que entraron en la caja (esos sí se ven), y
-  // quien cuenta puede añadir otra que tenga en el cajón.
+  // la sede y las de los ajustes y salidas de caja de este turno (esos sí se
+  // ven), y quien cuenta puede añadir otra que tenga en el cajón.
   const initialRows = useMemo(
     () =>
       countRows(blind ? null : session.expected, [
         ...session.floats.map((f) => f.currency),
         ...session.adjustments.map((a) => a.currency),
+        ...session.outflows.map((o) => o.currency),
         defaultCurrency,
       ]),
-    [blind, session.expected, session.floats, session.adjustments, defaultCurrency],
+    [blind, session.expected, session.floats, session.adjustments, session.outflows, defaultCurrency],
   );
   const [rows, setRows] = useState<CountRow[]>(initialRows);
   const [extraCurrency, setExtraCurrency] = useState(defaultCurrency);

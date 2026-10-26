@@ -157,22 +157,6 @@ export function undoImport(token: string, id: string): Promise<ImportBatchDetail
   return apiFetch<ImportBatchDetail>(`/patient-imports/${id}/undo`, { method: 'POST', token });
 }
 
-/**
- * Guarda un CSV de la API con su BOM (Excel lo necesita para leer bien las
- * tildes; `fetch().text()` lo quita al decodificar).
- */
-export function saveCsv(text: string, fileName: string): void {
-  const withBom = text.startsWith('﻿') ? text : `﻿${text}`;
-  const url = URL.createObjectURL(new Blob([withBom], { type: 'text/csv;charset=utf-8' }));
-  const link = document.createElement('a');
-  link.href = url;
-  link.download = fileName;
-  document.body.append(link);
-  link.click();
-  link.remove();
-  URL.revokeObjectURL(url);
-}
-
 /** Nombre del informe de errores a partir del archivo subido. */
 export function errorsFileName(fileName: string): string {
   const base = fileName.replace(/\.[^.]*$/, '').replace(/[^\w.-]+/g, '_').slice(0, 80) || 'pacientes';

@@ -1,5 +1,22 @@
 import type { CashSessionDetail } from '@/lib/cash-sessions/cash-sessions-api';
 
+type CashOutflow = CashSessionDetail['outflows'][number];
+
+/** Una salida de caja menor (DX-274): 8.000 COP de mensajería a las 11:30 de Bogotá. */
+export function outflowFixture(overrides: Partial<CashOutflow> = {}): CashOutflow {
+  return {
+    id: 'ep-1',
+    expenseId: 'exp-9',
+    category: 'Mensajería',
+    supplier: 'Mensajeros Ya',
+    amount: 8_000,
+    currency: 'COP',
+    createdAt: '2026-10-17T16:30:00.000Z',
+    createdBy: { id: 'u-recep', fullName: 'Paola Martínez' },
+    ...overrides,
+  };
+}
+
 /** Turno de caja de prueba (DX-027): abierto, con fondo, un cobro y lo esperado. */
 export function cashSessionFixture(overrides: Partial<CashSessionDetail> = {}): CashSessionDetail {
   return {
@@ -25,6 +42,8 @@ export function cashSessionFixture(overrides: Partial<CashSessionDetail> = {}): 
         payments: 30_000,
         paymentsCount: 1,
         adjustments: 0,
+        outflows: 0,
+        outflowsCount: 0,
         expected: 80_000,
       },
       {
@@ -34,6 +53,8 @@ export function cashSessionFixture(overrides: Partial<CashSessionDetail> = {}): 
         payments: 25_000,
         paymentsCount: 1,
         adjustments: 0,
+        outflows: 0,
+        outflowsCount: 0,
         expected: 25_000,
       },
     ],
@@ -51,6 +72,8 @@ export function cashSessionFixture(overrides: Partial<CashSessionDetail> = {}): 
       },
     ],
     voidedPayments: [],
+    outflows: [],
+    voidedOutflows: [],
     adjustments: [],
     laterAdjustments: [],
     closing: null,

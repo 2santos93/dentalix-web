@@ -1,5 +1,5 @@
 import { ApiError, NetworkError } from './api-error';
-import { apiErrorFromBody } from './client';
+import { apiErrorFromBody, apiFetch } from './client';
 
 /**
  * Formulario de subida directa al almacén que da la API (DX-259): el POST
@@ -152,4 +152,19 @@ export function uploadToStorage(
     armWatchdog();
     xhr.send(form);
   });
+}
+
+/**
+ * QA D1: si el almacén cortó la subida, se pregunta a la API (`/health`): si
+ * tampoco responde, el problema es la conexión de la clínica (`NetworkError`);
+ * si responde, es el almacén (el 503 tal cual).
+ */
+export async function storageOrNetwork(err: unknown): Promise<unknown> {
+  if (!(err instanceof ApiError && err.code === STORAGE_UNREACHABLE_CODE)) return err;
+  try {
+    await apiFetch<unknown>('/health');
+    return err;
+  } catch (probe) {
+    return probe instanceof NetworkError ? probe : err;
+  }
 }

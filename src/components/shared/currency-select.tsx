@@ -22,9 +22,22 @@ interface CurrencySelectProps {
   className?: string;
   /** Accessible name for call sites with no adjacent `<label>` (e.g. a `FormField`-less select next to a button). Optional — omit when a `<label htmlFor>` already provides one. */
   ariaLabel?: string;
+  /** p. ej. la razón de que esté deshabilitado. */
+  ariaDescribedBy?: string;
+  placeholder?: string;
 }
 
-export function CurrencySelect({ id, token, value, onChange, disabled, className, ariaLabel }: CurrencySelectProps) {
+export function CurrencySelect({
+  id,
+  token,
+  value,
+  onChange,
+  disabled,
+  className,
+  ariaLabel,
+  ariaDescribedBy,
+  placeholder,
+}: CurrencySelectProps) {
   const [currencies, setCurrencies] = useState<Currency[]>([]);
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
@@ -72,8 +85,10 @@ export function CurrencySelect({ id, token, value, onChange, disabled, className
       onChange={(e) => onChange(e.target.value)}
       className={cn(fieldClass, className)}
       aria-label={ariaLabel}
+      aria-describedby={ariaDescribedBy}
     >
-      {options.map((c) => (
+      {placeholder ? <option value="">{placeholder}</option> : null}
+      {options.filter((c) => !placeholder || c.code).map((c) => (
         <option key={c.code} value={c.code}>
           {c.symbol ? `${c.name} (${c.symbol})` : c.name}
         </option>

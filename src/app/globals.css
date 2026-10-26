@@ -439,4 +439,17 @@
   .cash-report-print-root .cash-report-signatures {
     break-inside: avoid;
   }
+  /* En papel, más apretado que en pantalla: el arqueo (ocho columnas con las
+     salidas de DX-274) cabe a lo ancho sin recortar «Contado» ni «Diferencia»
+     y un turno normal, con sus salidas, sigue en una hoja. */
+  .cash-report-print-root table {
+    font-size: 8.5pt;
+  }
+  .cash-report-print-root :is(th, td) {
+    height: auto;
+    padding: 3pt 5pt;
+  }
+  .cash-report-print-root .cash-report-section {
+    padding-block: 8pt;
+  }
 }

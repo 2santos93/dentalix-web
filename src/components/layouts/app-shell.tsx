@@ -12,6 +12,7 @@ import {
   Wallet,
   HandCoins,
   BadgePercent,
+  ReceiptText,
   History,
   ChartColumn,
   FileClock,
@@ -71,6 +72,9 @@ const NAV: NavItem[] = [
   // Informe de descuentos (DX-204): DISCOUNT_REPORT_ROLES en la API. Junto a
   // la cartera, bajo /caja.
   { href: '/caja/descuentos', label: 'Descuentos', icon: BadgePercent, roles: ['ADMIN'] },
+  // Gastos de la sede (DX-274): EXPENSE_ROLES en la API. Junto a cartera y
+  // descuentos, bajo /caja.
+  { href: '/caja/gastos', label: 'Gastos', icon: ReceiptText, roles: ['ADMIN'] },
   // Reportes (DX-014): REPORT_ROLES en la API. «Comparar sedes» y los que
   // vengan, en pestañas.
   { href: '/reportes', label: 'Reportes', icon: ChartColumn, roles: ['ADMIN'] },
@@ -261,7 +265,9 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
         </div>
         <nav
           className={cn(
-            'flex flex-1 flex-col gap-1 py-2',
+            // El menú largo cede altura y se desplaza dentro del sidebar;
+            // la marca y la cuenta permanecen dentro de la ventana.
+            'flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto py-2',
             collapsed ? 'px-2' : 'px-3',
           )}
         >

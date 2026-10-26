@@ -27,6 +27,7 @@ const adjustment: CashAdjustment = {
   createdBy: { id: 'u-admin', fullName: 'Admin' },
   sessionId: 'cs-2',
   payment: null,
+  expensePayment: null,
   originalSession: null,
 };
 
