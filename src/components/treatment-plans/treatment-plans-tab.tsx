@@ -1235,7 +1235,9 @@ export function TreatmentPlansTab({
   const [paymentToVoid, setPaymentToVoid] = useState<string | null>(null);
   // DX-051: el abono cuya imputación edita un ADMIN, y el botón que lo abrió
   // (para devolverle el foco, o llevarlo al pliegue si la fila ya no está).
-  const [allocationPaymentId, setAllocationPaymentId] = useState<string | null>(null);
+  // `open` aparte del abono, para que el modal se cierre con su animación;
+  // `seq` lo remonta (y relee) en cada apertura, aunque sea el mismo abono.
+  const [allocation, setAllocation] = useState<{ paymentId: string; open: boolean; seq: number } | null>(null);
   const allocationTriggerRef = useRef<HTMLElement | null>(null);
   const [paymentActionError, setPaymentActionError] = useState<string | null>(null);
 
@@ -1792,7 +1794,7 @@ export function TreatmentPlansTab({
 
   function openAllocation(paymentId: string, trigger: HTMLElement) {
     allocationTriggerRef.current = trigger;
-    setAllocationPaymentId(paymentId);
+    setAllocation((prev) => ({ paymentId, open: true, seq: (prev?.seq ?? 0) + 1 }));
   }
 
   /** Si la fila del abono ya no está (p. ej. lo anuló otra persona), el foco va al pliegue de abonos. */
@@ -2803,14 +2805,14 @@ export function TreatmentPlansTab({
         error={removeItemError}
       />
 
-      {allocationPaymentId ? (
+      {allocation ? (
         <ReallocatePaymentModal
-          key={allocationPaymentId}
-          open
+          key={allocation.seq}
+          open={allocation.open}
           onOpenChange={(open) => {
-            if (!open) setAllocationPaymentId(null);
+            if (!open) setAllocation((prev) => (prev ? { ...prev, open: false } : prev));
           }}
-          paymentId={allocationPaymentId}
+          paymentId={allocation.paymentId}
           token={token}
           onSaved={() => void refreshBalanceAndPayments()}
           onCloseAutoFocus={focusAfterAllocation}

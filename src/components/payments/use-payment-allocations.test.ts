@@ -97,9 +97,27 @@ describe('usePaymentAllocations (DX-051)', () => {
     expect(ok).toBe(false);
     expect(result.current.saveError).toEqual({ message, stale: true });
 
-    // Volver a cargar limpia el error.
+    // Volver a cargar con otra versión: el error ya no aplica.
+    mockedGet.mockResolvedValueOnce({ ...DATA, version: 'c'.repeat(64) });
     act(() => result.current.reload());
+    await waitFor(() => expect(result.current.data?.version).toBe('c'.repeat(64)));
     expect(result.current.saveError).toBeNull();
+  });
+
+  it('a reload that brings the same allocation keeps the explanation, without reload', async () => {
+    mockedGet.mockResolvedValue(DATA);
+    const message = 'Este abono es de un saldo migrado: no se imputa a ítems de un plan.';
+    mockedPut.mockRejectedValue(new ApiError(409, message));
+    const { result } = renderHook(() => usePaymentAllocations('tok', 'pay-1'));
+    await waitFor(() => expect(result.current.data).not.toBeNull());
+    await act(async () => {
+      await result.current.save({ expectedVersion: DATA.version, mode: 'AUTO' });
+    });
+
+    act(() => result.current.reload());
+    await waitFor(() => expect(mockedGet).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(result.current.loading).toBe(false));
+    expect(result.current.saveError).toEqual({ message, stale: false });
   });
 
   it('a 400 on save keeps the server message (one-element validation list) and is not stale', async () => {

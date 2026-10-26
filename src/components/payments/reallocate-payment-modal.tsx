@@ -1,6 +1,6 @@
 'use client';
 import * as React from 'react';
-import { useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { toast } from 'sonner';
 import { FormModal } from '@/components/shared/form-modal';
 import { AsyncSection } from '@/components/shared/async-section';
@@ -34,7 +34,9 @@ export const reallocateCopy = {
   colProcedure: 'Procedimiento',
   colTooth: 'Diente',
   colStatus: 'Estado',
-  colPending: 'Pendiente',
+  // Lo que este abono todavía puede cubrir del ítem (facturable − lo de otros
+  // abonos); no es el «Pendiente» del plan, que descuenta también este abono.
+  colFree: 'Libre para este abono',
   colAmount: 'Importe',
   // DX-291: un cargo administrativo no tiene diente.
   noTooth: 'Sin diente',
@@ -42,6 +44,7 @@ export const reallocateCopy = {
     tooth ? `Importe para ${procedure} del diente ${tooth}` : `Importe para ${procedure}`,
   footer: (allocated: string, unallocated: string) => `Imputado ${allocated} · Sin imputar ${unallocated}`,
   over: (excess: string) => `La suma supera el abono en ${excess}.`,
+  overItem: (free: string) => `Este ítem admite como máximo ${free}.`,
   clear: 'Dejar sin imputar',
   submit: 'Guardar imputación',
   submitting: 'Guardando…',
@@ -98,6 +101,26 @@ export function ReallocatePaymentModal({
 }: ReallocatePaymentModalProps) {
   const { data, loading, error, reload, save, saving, saveError } = usePaymentAllocations(token, paymentId);
   const baseId = useId();
+  const bodyRef = useRef<HTMLDivElement>(null);
+  // «Volver a cargar» y «Reintentar» sustituyen el contenido por el esqueleto:
+  // al terminar, el foco va al primer control de la lectura nueva.
+  const refocusAfterLoadRef = useRef(false);
+
+  function reloadAndRefocus() {
+    refocusAfterLoadRef.current = true;
+    reload();
+  }
+
+  useEffect(() => {
+    if (loading || !refocusAfterLoadRef.current) return;
+    refocusAfterLoadRef.current = false;
+    const body = bodyRef.current;
+    const target =
+      body?.querySelector<HTMLElement>('input[type="text"]:not(:disabled)') ??
+      body?.querySelector<HTMLElement>('input:checked') ??
+      body?.querySelector<HTMLElement>('button');
+    target?.focus();
+  }, [loading, data]);
 
   // El formulario se rehace cada vez que llega una lectura nueva (al abrir y
   // con «Volver a cargar»): lo escrito sobre una versión vieja no vale.
@@ -159,7 +182,11 @@ export function ReallocatePaymentModal({
         else if (result.value > 0) allocations.push({ treatmentPlanItemId: item.itemId, amount: result.value });
       }
       setFieldErrors(errors);
-      if (Object.keys(errors).length > 0) return;
+      const firstInvalid = Object.keys(errors)[0];
+      if (firstInvalid) {
+        document.getElementById(`${baseId}-amount-${firstInvalid}`)?.focus();
+        return;
+      }
       body = { expectedVersion: data.version, mode: 'MANUAL', allocations };
     }
 
@@ -186,15 +213,16 @@ export function ReallocatePaymentModal({
     >
       {saveError?.stale ? (
         <div>
-          <Button type="button" variant="secondary" size="sm" onClick={reload}>
+          <Button type="button" variant="secondary" size="sm" onClick={reloadAndRefocus} disabled={loading}>
             {copy.reload}
           </Button>
         </div>
       ) : null}
+      <div ref={bodyRef} className="contents">
       <AsyncSection
         loading={loading}
         error={error}
-        onRetry={reload}
+        onRetry={reloadAndRefocus}
         skeleton={
           <div className="flex flex-col gap-3" role="status" aria-label="Cargando">
             <Skeleton className="h-5 w-1/2" />
@@ -282,15 +310,20 @@ export function ReallocatePaymentModal({
                           <TableHead scope="col">{copy.colTooth}</TableHead>
                           <TableHead scope="col">{copy.colStatus}</TableHead>
                           <TableHead scope="col" className="text-right">
-                            {copy.colPending}
+                            {copy.colFree}
                           </TableHead>
                           <TableHead scope="col">{copy.colAmount}</TableHead>
                         </TableRow>
                       </TableHeader>
                       <TableBody>
-                        {parsed.map(({ item, text }) => {
+                        {parsed.map(({ item, text, result }) => {
                           const fieldId = `${baseId}-amount-${item.itemId}`;
                           const fieldError = fieldErrors[item.itemId];
+                          // Cortesía, como el pie: la línea por encima de lo libre es la
+                          // que el servidor rechazaría con «Un ítem admite como máximo…».
+                          const overItem =
+                            !fieldError && result?.ok === true && toCents(result.value) > toCents(item.free);
+                          const overItemId = `${fieldId}-over`;
                           return (
                             <TableRow key={item.itemId} className="hover:bg-transparent">
                               <TableCell className="font-medium break-words" data-label={copy.colProcedure}>
@@ -304,7 +337,7 @@ export function ReallocatePaymentModal({
                                   {ITEM_STATUS_LABELS[item.status]}
                                 </Badge>
                               </TableCell>
-                              <TableCell className="text-right tabular-nums" data-label={copy.colPending}>
+                              <TableCell className="text-right tabular-nums" data-label={copy.colFree}>
                                 {formatCurrency(item.free, data.planCurrency)}
                               </TableCell>
                               <TableCell className="sm:w-44" data-label={copy.colAmount}>
@@ -318,12 +351,18 @@ export function ReallocatePaymentModal({
                                   currency={data.planCurrency}
                                   disabled={saving}
                                   aria-invalid={fieldError ? true : undefined}
-                                  aria-describedby={fieldError ? fieldErrorId(fieldId) : undefined}
+                                  aria-describedby={
+                                    fieldError ? fieldErrorId(fieldId) : overItem ? overItemId : undefined
+                                  }
                                 />
                                 {fieldError ? (
                                   <InlineError id={fieldErrorId(fieldId)} className="text-xs">
                                     {fieldError}
                                   </InlineError>
+                                ) : overItem ? (
+                                  <p id={overItemId} className="text-xs text-danger tabular-nums">
+                                    {copy.overItem(formatCurrency(item.free, data.planCurrency))}
+                                  </p>
                                 ) : null}
                               </TableCell>
                             </TableRow>
@@ -334,10 +373,7 @@ export function ReallocatePaymentModal({
                   </div>
 
                   <div className="flex flex-wrap items-start justify-between gap-3">
-                    {/* Remontado (key) al pasarse, para que el lector anuncie la alerta. */}
                     <div
-                      key={over ? 'over' : 'ok'}
-                      role={over ? 'alert' : undefined}
                       className={cn('flex flex-col gap-0.5 text-sm tabular-nums', over ? 'text-danger' : 'text-ink')}
                     >
                       <p className="font-medium">
@@ -346,8 +382,11 @@ export function ReallocatePaymentModal({
                           formatCurrency((planCents - allocatedCents) / 100, data.planCurrency),
                         )}
                       </p>
+                      {/* Solo el aviso es alerta: el Σ cambia con cada tecla y no debe leerse cada vez. */}
                       {over ? (
-                        <p>{copy.over(formatCurrency((allocatedCents - planCents) / 100, data.planCurrency))}</p>
+                        <p role="alert">
+                          {copy.over(formatCurrency((allocatedCents - planCents) / 100, data.planCurrency))}
+                        </p>
                       ) : null}
                     </div>
                     <Button
@@ -369,6 +408,7 @@ export function ReallocatePaymentModal({
           )
         ) : null}
       </AsyncSection>
+      </div>
     </FormModal>
   );
 }

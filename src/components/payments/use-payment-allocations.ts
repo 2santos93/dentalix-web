@@ -1,5 +1,5 @@
 'use client';
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { ApiError } from '@/lib/api/client';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import {
@@ -41,6 +41,8 @@ export function usePaymentAllocations(token: string, paymentId: string) {
   const [reloadKey, setReloadKey] = useState(0);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<AllocationSaveError | null>(null);
+  // La última lectura, para saber si «Volver a cargar» trajo algo distinto.
+  const lastDataRef = useRef<PaymentAllocations | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -49,6 +51,17 @@ export function usePaymentAllocations(token: string, paymentId: string) {
       try {
         const next = await getPaymentAllocations(token, paymentId);
         if (cancelled) return;
+        const prev = lastDataRef.current;
+        // Si la relectura es la misma imputación, el 409 no era por algo que
+        // cambió: su explicación se queda (sin «Volver a cargar», que no
+        // arreglaría nada). Si cambió, el error ya no aplica.
+        const unchanged =
+          prev !== null &&
+          prev.version === next.version &&
+          prev.planStatus === next.planStatus &&
+          prev.planAmount === next.planAmount;
+        setSaveError((current) => (current && unchanged ? { ...current, stale: false } : null));
+        lastDataRef.current = next;
         setData(next);
         setError(null);
       } catch (err) {
@@ -66,7 +79,6 @@ export function usePaymentAllocations(token: string, paymentId: string) {
   }, [token, paymentId, reloadKey]);
 
   const reload = useCallback(() => {
-    setSaveError(null);
     setReloadKey((k) => k + 1);
   }, []);
 
@@ -74,7 +86,9 @@ export function usePaymentAllocations(token: string, paymentId: string) {
     setSaving(true);
     setSaveError(null);
     try {
-      setData(await replacePaymentAllocations(token, paymentId, body));
+      const next = await replacePaymentAllocations(token, paymentId, body);
+      lastDataRef.current = next;
+      setData(next);
       return true;
     } catch (err) {
       setSaveError({

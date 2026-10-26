@@ -180,12 +180,12 @@ describe('ReallocatePaymentModal (DX-051)', () => {
     const row = within(table).getByText('Resina').closest('tr') as HTMLTableRowElement;
     expect(within(row).getByText('11')).toBeInTheDocument();
     expect(within(row).getByText('Realizado')).toBeInTheDocument();
-    // «Pendiente»: lo que este abono todavía puede cubrir del ítem.
+    // «Libre para este abono»: lo que este abono todavía puede cubrir del ítem.
     expect(within(row).getByText(money(70, 'EUR'))).toBeInTheDocument();
     const headers = within(table)
       .getAllByRole('columnheader')
       .map((h) => h.textContent);
-    expect(headers).toEqual(['Procedimiento', 'Diente', 'Estado', 'Pendiente', 'Importe']);
+    expect(headers).toEqual(['Procedimiento', 'Diente', 'Estado', 'Libre para este abono', 'Importe']);
   });
 
   it('a fee item without tooth is labelled by its procedure alone', async () => {
@@ -225,9 +225,23 @@ describe('ReallocatePaymentModal (DX-051)', () => {
     const over = await screen.findByText(
       `Imputado ${money(110.25, 'EUR')} · Sin imputar ${money(-1.75, 'EUR')}`,
     );
-    const alert = over.closest('[role="alert"]') as HTMLElement;
-    expect(alert).not.toBeNull();
-    expect(alert).toHaveTextContent(`La suma supera el abono en ${money(1.75, 'EUR')}.`);
+    // Solo el aviso es alerta; el Σ, que cambia con cada tecla, no.
+    expect(over.closest('[role="alert"]')).toBeNull();
+    expect(screen.getByRole('alert')).toHaveTextContent(`La suma supera el abono en ${money(1.75, 'EUR')}.`);
+  });
+
+  it('a line above what the item admits says so on its own row', async () => {
+    const user = userEvent.setup();
+    renderModal();
+    await loaded();
+    const field = screen.getByLabelText('Importe para Resina del diente 11');
+    await user.type(field, '70');
+    expect(screen.queryByText(`Este ítem admite como máximo ${money(70, 'EUR')}.`)).not.toBeInTheDocument();
+
+    await user.type(field, ',01');
+    const hint = screen.getByText(`Este ítem admite como máximo ${money(70, 'EUR')}.`);
+    expect(hint.closest('tr')).toBe(within(screen.getByRole('table')).getByText('Resina').closest('tr'));
+    expect((field.getAttribute('aria-describedby') ?? '').split(' ')).toContain(hint.id);
   });
 
   it('submits expectedVersion and the manual lines in plan order', async () => {
@@ -282,6 +296,20 @@ describe('ReallocatePaymentModal (DX-051)', () => {
     expect(mockedPut).not.toHaveBeenCalled();
   });
 
+  it('a failed validation moves focus to the first invalid field', async () => {
+    const user = userEvent.setup();
+    renderModal();
+    await loaded();
+    const limpieza = screen.getByLabelText('Importe para Limpieza del diente 26');
+    await user.clear(limpieza);
+    await user.type(limpieza, '1.50.0');
+    await user.type(screen.getByLabelText('Importe para Resina del diente 11'), 'abc');
+    await user.click(screen.getByRole('button', { name: 'Guardar imputación' }));
+
+    // En el orden del plan: Resina va antes que Limpieza.
+    expect(screen.getByLabelText('Importe para Resina del diente 11')).toHaveFocus();
+  });
+
   it('409 version shows server message and Volver a cargar reloads', async () => {
     const message =
       'La imputación de este abono cambió mientras la editabas. Revisa los importes y vuelve a guardar.';
@@ -306,6 +334,23 @@ describe('ReallocatePaymentModal (DX-051)', () => {
     expect(screen.getByLabelText('Importe para Limpieza del diente 26')).toHaveValue('');
     expect(screen.queryByText(message)).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Volver a cargar' })).not.toBeInTheDocument();
+    // El foco no se pierde: va al primer campo de la lectura nueva.
+    await waitFor(() => expect(screen.getByLabelText('Importe para Resina del diente 11')).toHaveFocus());
+  });
+
+  it('a 409 whose reload brings the same allocation keeps its explanation', async () => {
+    const message = 'Este abono es de un saldo migrado: no se imputa a ítems de un plan.';
+    mockedPut.mockRejectedValue(new ApiError(409, message));
+    const user = userEvent.setup();
+    renderModal();
+    await loaded();
+    await user.click(screen.getByRole('button', { name: 'Guardar imputación' }));
+    await user.click(await screen.findByRole('button', { name: 'Volver a cargar' }));
+
+    await waitFor(() => expect(mockedGet).toHaveBeenCalledTimes(2));
+    await waitFor(() => expect(screen.queryByRole('button', { name: 'Volver a cargar' })).not.toBeInTheDocument());
+    expect(screen.getByText(message)).toBeInTheDocument();
+    await waitFor(() => expect(screen.getByLabelText('Importe para Resina del diente 11')).toHaveFocus());
   });
 
   it('a 400 from the server is shown as is and offers no reload', async () => {
