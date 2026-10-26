@@ -12,14 +12,16 @@ export type VoidPaymentInput = components['schemas']['VoidPaymentDto'];
 export type PaymentMethod = NonNullable<RecordPaymentInput['method']>;
 
 /**
- * `PaymentDto`/`PlanBalanceDto` are fully `@ApiProperty()`-decorated response
- * DTOs on the backend (`PaymentsController` uses `@ApiOkResponse`/
+ * `PaymentDto`/`PlanBalanceWithItemsDto` are fully `@ApiProperty()`-decorated
+ * response DTOs on the backend (`PaymentsController` uses `@ApiOkResponse`/
  * `@ApiCreatedResponse` with them on every route), so the generated
  * `schema.d.ts` already carries the exact wire shape — unlike
  * `TreatmentPlan`, there is no need to hand-type these.
  */
 export type Payment = components['schemas']['PaymentDto'];
-export type PlanBalance = components['schemas']['PlanBalanceDto'];
+export type PlanBalance = components['schemas']['PlanBalanceWithItemsDto'];
+/** Cobrado y pendiente de un ítem del plan (DX-051), en la moneda del plan. */
+export type PlanItemBalance = components['schemas']['PlanItemBalanceDto'];
 
 /**
  * `POST /treatment-plans/:id/payments` — records an abono (`createdById` is
@@ -75,7 +77,9 @@ export async function listPayments(token: string, planId: string): Promise<Payme
 /**
  * `GET /treatment-plans/:id/balance` — `billable`/`paid`/`balance`, always in
  * `planCurrency` (the backend converts each abono at its own `paidAt` rate
- * when it was recorded in a different currency).
+ * when it was recorded in a different currency). Desde DX-051 trae también lo
+ * imputado por ítem (`items[]`), lo «sin imputar» y los abonos sin convertir o
+ * fijados a mano. Solo ADMIN y recepción: al resto, 403.
  */
 export async function getPlanBalance(token: string, planId: string): Promise<PlanBalance> {
   return apiFetch<PlanBalance>(`/treatment-plans/${planId}/balance`, {

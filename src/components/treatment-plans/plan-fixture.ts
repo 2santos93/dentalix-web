@@ -1,3 +1,5 @@
+import type { PlanBalance } from '@/lib/payments/payments-api';
+
 /**
  * Campos de opción, presentación y rechazo (DX-040) de un plan suelto, para los
  * planes de ejemplo de los tests.
@@ -38,3 +40,18 @@ export const ITEM_WITHOUT_DISCOUNT = {
   // SEC-050: no es el ítem de un cargo por inasistencia.
   cancellationFeeAppointmentId: null,
 } as const;
+
+/**
+ * Campos de la imputación (DX-051) de un saldo sin abonos imputados ni ítems,
+ * para los saldos de ejemplo de los tests.
+ */
+export const BALANCE_WITHOUT_ALLOCATIONS: Pick<
+  PlanBalance,
+  'allocated' | 'unallocated' | 'unconvertedPaymentsCount' | 'manualPaymentIds' | 'items'
+> = {
+  allocated: 0,
+  unallocated: 0,
+  unconvertedPaymentsCount: 0,
+  manualPaymentIds: [],
+  items: [],
+};

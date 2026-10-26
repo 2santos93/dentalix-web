@@ -1,9 +1,10 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AccountStatementView } from './account-statement-view';
+import { AccountStatementPrintView } from './account-statement-print-view';
 import { ApiError } from '@/lib/api/client';
 import { getAccountStatement } from '@/lib/account-statement/account-statement-api';
-import { recordPayment, voidPayment } from '@/lib/payments/payments-api';
+import { getPlanBalance, recordPayment, voidPayment } from '@/lib/payments/payments-api';
 import { listBillablePlans, type BillablePlan } from '@/lib/payments/billable-plans-api';
 import { createPaymentPlan } from '@/lib/payment-plans/payment-plan-api';
 import { getPaymentReceipt } from '@/lib/payments/payment-receipts-api';
@@ -18,6 +19,7 @@ import { tokenForRole } from '@/lib/test/data-consents';
 jest.mock('../../lib/payments/payments-api', () => ({
   voidPayment: jest.fn(),
   recordPayment: jest.fn(),
+  getPlanBalance: jest.fn(),
 }));
 jest.mock('../../lib/payments/billable-plans-api', () => ({
   ...jest.requireActual('../../lib/payments/billable-plans-api'),
@@ -47,6 +49,7 @@ const mockedVoid = voidPayment as jest.MockedFunction<typeof voidPayment>;
 const mockedRecord = recordPayment as jest.MockedFunction<typeof recordPayment>;
 const mockedBillable = listBillablePlans as jest.MockedFunction<typeof listBillablePlans>;
 const mockedCreatePlan = createPaymentPlan as jest.MockedFunction<typeof createPaymentPlan>;
+const mockedPlanBalance = getPlanBalance as jest.MockedFunction<typeof getPlanBalance>;
 
 // Normaliza los espacios duros de Intl (es: "1.800.000,00 COP" lleva U+00A0).
 function money(text: string | null | undefined): string {
@@ -59,6 +62,7 @@ beforeEach(() => {
   mockedRecord.mockReset();
   mockedBillable.mockReset();
   mockedCreatePlan.mockReset();
+  mockedPlanBalance.mockReset();
 });
 
 it('pide el estado de cuenta del paciente y pinta el resumen por moneda', async () => {
@@ -442,4 +446,83 @@ it('QA D3: sin ninguna fila aproximada, la nota no habla de «aprox.»; QA D5: s
   expect(screen.queryByText(/aprox\./)).not.toBeInTheDocument();
   const cop = screen.getByRole('region', { name: /resumen en COP/i });
   expect(within(cop).queryByTestId('opening')).not.toBeInTheDocument();
+});
+
+describe('cobrado por ítem de cada plan (DX-051)', () => {
+  const planBalance = {
+    planCurrency: 'COP',
+    billable: 3000000,
+    paid: 1200000,
+    balance: 1800000,
+    paymentsCount: 2,
+    allocated: 1200000,
+    unallocated: 0,
+    unconvertedPaymentsCount: 0,
+    manualPaymentIds: [],
+    items: [
+      {
+        itemId: 'item-1',
+        toothNumber: '11',
+        procedureName: 'Resina',
+        status: 'DONE' as const,
+        billable: 3000000,
+        paid: 1200000,
+        balance: 1800000,
+      },
+    ],
+  };
+
+  it('each plan offers Ver por ítem with aria-expanded and a full-width detail row', async () => {
+    const user = userEvent.setup();
+    mockedGet.mockResolvedValue(accountStatementFixture());
+    mockedPlanBalance.mockResolvedValue(planBalance);
+    render(<AccountStatementView token={tokenForRole('RECEPTION')} patientId="pat-1" />);
+
+    const table = await screen.findByRole('table', { name: /planes/i });
+    const toggles = within(table).getAllByRole('button', { name: /ver por ítem/i });
+    expect(toggles).toHaveLength(2);
+    for (const toggle of toggles) expect(toggle).toHaveAttribute('aria-expanded', 'false');
+    // Carga al abrirse, no al pintar el estado de cuenta.
+    expect(mockedPlanBalance).not.toHaveBeenCalled();
+
+    const [first] = toggles;
+    const detail = document.getElementById(first.getAttribute('aria-controls') ?? '') as HTMLElement;
+    expect(detail.tagName).toBe('TR');
+    expect(detail).not.toBeVisible();
+
+    await user.click(first);
+    expect(first).toHaveAttribute('aria-expanded', 'true');
+    expect(detail).toBeVisible();
+    // La fila siguiente a la del plan, a todo el ancho de la tabla.
+    expect(first.closest('tr')?.nextElementSibling).toBe(detail);
+    const cell = detail.querySelector('td') as HTMLTableCellElement;
+    const planHeaders = within(table.querySelector('thead') as HTMLElement).getAllByRole('columnheader');
+    expect(cell.colSpan).toBe(planHeaders.length);
+    expect(await within(detail).findByRole('table', { name: /por ítem/i })).toHaveTextContent('Resina');
+    expect(mockedPlanBalance).toHaveBeenCalledWith(expect.any(String), 'plan-1');
+
+    // Plegar y volver a abrir no vuelve a pedir el detalle.
+    await user.click(first);
+    expect(first).toHaveAttribute('aria-expanded', 'false');
+    expect(detail).not.toBeVisible();
+    await user.click(first);
+    expect(detail).toBeVisible();
+    expect(mockedPlanBalance).toHaveBeenCalledTimes(1);
+  });
+
+  it('not rendered in the print view', async () => {
+    const printSpy = jest.spyOn(window, 'print').mockImplementation(() => undefined);
+    mockedGet.mockResolvedValue(accountStatementFixture());
+    render(<AccountStatementPrintView token="tok" patientId="pat-1" />);
+
+    expect(await screen.findByRole('heading', { level: 1, name: /estado de cuenta/i })).toBeInTheDocument();
+    // Los planes sí salen impresos (si dejaran de salir, esta prueba no
+    // probaría nada); su detalle por ítem, no.
+    const plans = screen.getByRole('table', { name: /planes del paciente/i });
+    expect(within(plans).getAllByRole('row').slice(1)).toHaveLength(accountStatementFixture().plans.length);
+    expect(screen.queryByRole('button', { name: /ver por ítem/i })).not.toBeInTheDocument();
+    expect(screen.queryByText(/ver por ítem/i)).not.toBeInTheDocument();
+    expect(mockedPlanBalance).not.toHaveBeenCalled();
+    printSpy.mockRestore();
+  });
 });

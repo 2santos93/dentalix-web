@@ -27,11 +27,13 @@ import { getPaymentReceipt } from '@/lib/payments/payment-receipts-api';
 import { paymentReceiptFixture } from '@/lib/test/payment-receipt';
 import { listCurrencies } from '@/lib/reference/currencies-api';
 import { getPaymentPlan } from '@/lib/payment-plans/payment-plan-api';
-import { ITEM_WITHOUT_DISCOUNT, PLAN_WITHOUT_OPTIONS } from './plan-fixture';
+import { BALANCE_WITHOUT_ALLOCATIONS, ITEM_WITHOUT_DISCOUNT, PLAN_WITHOUT_OPTIONS } from './plan-fixture';
 import { getPriceQuote, type PriceQuote } from '@/lib/patients/patient-agreement-api';
 import { applyBulkDiscount, getDiscountPolicy } from '@/lib/discounts/discounts-api';
 import { listStaff } from '@/lib/appointments/staff-api';
 import { voidCancellationFee } from '@/lib/cancellations/cancellation-fee-api';
+import { getPaymentAllocations, replacePaymentAllocations } from '@/lib/payments/payment-allocations-api';
+import { presentPlan } from '@/lib/treatment-plans/plan-options-api';
 
 // NOTE: jest.mock's string literal is not alias-rewritten by the SWC
 // transform (only real `import`/`require` specifiers are) — use a relative
@@ -72,6 +74,16 @@ jest.mock('../../lib/payments/payments-api', () => ({
   listPayments: jest.fn(),
   recordPayment: jest.fn(),
   voidPayment: jest.fn(),
+}));
+// DX-051: la imputación de un abono (modal «Imputar abono», solo ADMIN).
+jest.mock('../../lib/payments/payment-allocations-api', () => ({
+  getPaymentAllocations: jest.fn(),
+  replacePaymentAllocations: jest.fn(),
+}));
+// DX-040: presentar un plan (DX-051: tras hacerlo también se relee el saldo).
+jest.mock('../../lib/treatment-plans/plan-options-api', () => ({
+  ...jest.requireActual('../../lib/treatment-plans/plan-options-api'),
+  presentPlan: jest.fn(),
 }));
 // DX-050: los profesionales que pueden figurar como quien realizó un ítem.
 jest.mock('../../lib/appointments/staff-api', () => ({
@@ -251,11 +263,12 @@ const balance1: PlanBalance = {
   paid: 50000,
   balance: 80000,
   paymentsCount: 1,
+  ...BALANCE_WITHOUT_ALLOCATIONS,
 };
 
 /** Empty balance/payments — the default for tests that don't exercise the abonos block. */
 function emptyBalance(): PlanBalance {
-  return { planCurrency: 'USD', billable: 0, paid: 0, balance: 0, paymentsCount: 0 };
+  return { planCurrency: 'USD', billable: 0, paid: 0, balance: 0, paymentsCount: 0, ...BALANCE_WITHOUT_ALLOCATIONS };
 }
 
 /**
@@ -2150,6 +2163,337 @@ describe('TreatmentPlansTab', () => {
       expect(
         await screen.findByText('Descuento aplicado a 1 ítem. 2 prestaciones no admiten descuento y se dejaron igual.'),
       ).toBeInTheDocument();
+    });
+  });
+
+  // DX-051: cobrado y pendiente por ítem (ADMIN; DENTIST y ASSISTANT reciben
+  // 403 del saldo y no ven nada nuevo).
+  describe('cobrado por ítem (DX-051)', () => {
+    const adminToken = `h.${btoa(JSON.stringify({ sub: 'u-admin', tenantId: 't1', role: 'ADMIN' }))}.s`;
+    const balanceWithItems: PlanBalance = {
+      ...balance1,
+      allocated: 50000,
+      items: [
+        {
+          itemId: item1.id,
+          toothNumber: '11',
+          procedureName: 'Resina',
+          status: 'PROPOSED',
+          billable: 0,
+          paid: 0,
+          balance: 0,
+        },
+        {
+          itemId: item2.id,
+          toothNumber: '26',
+          procedureName: 'Limpieza',
+          status: 'ACCEPTED',
+          billable: 80000,
+          paid: 50000,
+          balance: 30000,
+        },
+      ],
+    };
+
+    async function itemsTable() {
+      return screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+    }
+
+    /** El `<dl>` de cifras del plan: «Sin imputar» vive ahí, junto a «Pagado». */
+    function moneySummary(): HTMLElement {
+      return screen.getByText('A pagar').closest('dl') as HTMLElement;
+    }
+
+    beforeEach(() => {
+      mockedListPlans.mockResolvedValue([plan1]);
+      mockedGetPlan.mockResolvedValue(plan1Detail);
+      mockedListPayments.mockResolvedValue([payment1]);
+    });
+
+    it('renders Cobrado/Pendiente when balance has items', async () => {
+      mockedGetPlanBalance.mockResolvedValue(balanceWithItems);
+      render(<TreatmentPlansTab patientId="pat-1" token={adminToken} />);
+
+      const table = await itemsTable();
+      const headers = await within(table).findAllByRole('columnheader');
+      const names = headers.map((h) => h.textContent);
+      // Tras el importe, antes del estado.
+      expect(names.indexOf('Cobrado')).toBe(names.indexOf('Precio') + 1);
+      expect(names.indexOf('Pendiente')).toBe(names.indexOf('Precio') + 2);
+
+      const accepted = within(table).getByText('26').closest('tr') as HTMLTableRowElement;
+      expect(within(accepted).getByText(expectedCurrencyText(50000))).toBeInTheDocument();
+      expect(within(accepted).getByText(expectedCurrencyText(30000))).toBeInTheDocument();
+      const proposed = within(table).getByText('11').closest('tr') as HTMLTableRowElement;
+      expect(within(proposed).getAllByLabelText('Sin importe a cobrar')).toHaveLength(2);
+
+      // Tarjetas móviles: «Cobrado {x} · Pendiente {y}».
+      expect(
+        screen.getByText(`Cobrado ${expectedCurrencyText(50000)} · Pendiente ${expectedCurrencyText(30000)}`),
+      ).toBeInTheDocument();
+    });
+
+    it('Sin imputar only when unallocated > 0', async () => {
+      mockedGetPlanBalance.mockResolvedValue(balanceWithItems);
+      const { unmount } = render(<TreatmentPlansTab patientId="pat-1" token={adminToken} />);
+      await itemsTable();
+      await within(await itemsTable()).findAllByText('Cobrado');
+      expect(within(moneySummary()).queryByText('Sin imputar')).not.toBeInTheDocument();
+      unmount();
+
+      mockedGetPlanBalance.mockResolvedValue({ ...balanceWithItems, unallocated: 12500 });
+      render(<TreatmentPlansTab patientId="pat-1" token={adminToken} />);
+      await within(await itemsTable()).findAllByText('Cobrado');
+      const figure = within(moneySummary()).getByText('Sin imputar').closest('div') as HTMLElement;
+      expect(within(figure).getByText(expectedCurrencyText(12500))).toBeInTheDocument();
+      expect(figure).toHaveTextContent('Abonos que todavía no cubren ningún ítem.');
+    });
+
+    it('unconverted notice reads «{n} abono(s) todavía sin convertir a la moneda del plan: no se imputan a ítems.»', async () => {
+      mockedGetPlanBalance.mockResolvedValue({ ...balanceWithItems, unconvertedPaymentsCount: 2 });
+      render(<TreatmentPlansTab patientId="pat-1" token={adminToken} />);
+
+      expect(
+        await screen.findByText('2 abonos todavía sin convertir a la moneda del plan: no se imputan a ítems.'),
+      ).toBeInTheDocument();
+    });
+
+    it('unconverted notice for a single abono reads in singular, and is absent at 0', async () => {
+      mockedGetPlanBalance.mockResolvedValue({ ...balanceWithItems, unconvertedPaymentsCount: 1 });
+      const { unmount } = render(<TreatmentPlansTab patientId="pat-1" token={adminToken} />);
+      expect(
+        await screen.findByText('1 abono todavía sin convertir a la moneda del plan: no se imputa a ítems.'),
+      ).toBeInTheDocument();
+      unmount();
+
+      mockedGetPlanBalance.mockResolvedValue(balanceWithItems);
+      render(<TreatmentPlansTab patientId="pat-1" token={adminToken} />);
+      await within(await itemsTable()).findAllByText('Cobrado');
+      expect(screen.queryByText(/todavía sin convertir/)).not.toBeInTheDocument();
+    });
+
+    it('no new columns when balance is 403', async () => {
+      const dentistToken = `h.${btoa(JSON.stringify({ sub: 'u-d', tenantId: 't1', role: 'DENTIST' }))}.s`;
+      mockedGetPlanBalance.mockRejectedValue(new ApiError(403, 'Forbidden'));
+      mockedListPayments.mockRejectedValue(new ApiError(403, 'Forbidden'));
+      render(<TreatmentPlansTab patientId="pat-1" token={dentistToken} />);
+
+      const table = await itemsTable();
+      // El 403 del saldo ya se pintó (su propio aviso en «Abonos y saldo»).
+      await screen.findByRole('button', { name: /reintentar/i });
+      const names = within(table)
+        .getAllByRole('columnheader')
+        .map((h) => h.textContent);
+      expect(names).not.toContain('Cobrado');
+      expect(names).not.toContain('Pendiente');
+      expect(screen.queryByText(/^Cobrado /)).not.toBeInTheDocument();
+      expect(screen.queryByLabelText('Sin importe a cobrar')).not.toBeInTheDocument();
+      expect(screen.queryByText('Sin imputar')).not.toBeInTheDocument();
+    });
+
+    it('Fijada a mano badge for ids in manualPaymentIds', async () => {
+      const payment2: Payment = { ...payment1, id: 'pay-2', amount: 20000, receiptNumber: 'PRI-000002' };
+      mockedListPayments.mockResolvedValue([payment1, payment2]);
+      mockedGetPlanBalance.mockResolvedValue({ ...balanceWithItems, manualPaymentIds: ['pay-2'] });
+
+      const user = userEvent.setup();
+      render(<TreatmentPlansTab patientId="pat-1" token={adminToken} />);
+      const payments = await openPaymentsTable(user);
+
+      const pinned = within(payments).getByText('PRI-000002').closest('tr') as HTMLTableRowElement;
+      expect(within(pinned).getByText('Fijada a mano')).toBeInTheDocument();
+      const auto = within(payments).getByText('PRI-000001').closest('tr') as HTMLTableRowElement;
+      expect(within(auto).queryByText('Fijada a mano')).not.toBeInTheDocument();
+      // También en la tarjeta móvil del abono, solo una vez.
+      expect(screen.getAllByText('Fijada a mano')).toHaveLength(2);
+    });
+
+    describe('las mutaciones de ítems releen el saldo por ítem (I-1)', () => {
+      /** Espera a que el saldo se pida una vez más que `before`. */
+      async function expectBalanceReloaded(before: number) {
+        await waitFor(() => expect(mockedGetPlanBalance.mock.calls.length).toBe(before + 1));
+        expect(mockedListPayments.mock.calls.length).toBeGreaterThanOrEqual(before + 1);
+      }
+
+      beforeEach(() => {
+        mockedGetPlanBalance.mockResolvedValue(balanceWithItems);
+      });
+
+      it('after removing an item', async () => {
+        mockedRemoveItem.mockResolvedValue(undefined);
+        const user = userEvent.setup();
+        render(<TreatmentPlansTab patientId="pat-1" token={adminToken} />);
+        const table = await itemsTable();
+        await within(table).findAllByText('Cobrado');
+        const before = mockedGetPlanBalance.mock.calls.length;
+
+        const row = within(table).getByText('26').closest('tr') as HTMLTableRowElement;
+        await user.click(within(row).getByRole('button', { name: /quitar/i }));
+        const confirm = await screen.findByRole('dialog', { name: /quitar este ítem del plan/i });
+        await user.click(within(confirm).getByRole('button', { name: 'Quitar ítem' }));
+
+        await waitFor(() => expect(mockedRemoveItem).toHaveBeenCalled());
+        await expectBalanceReloaded(before);
+      });
+
+      it('after adding an item', async () => {
+        mockedAddItem.mockResolvedValue({ ...item1, id: 'item-3' });
+        const user = userEvent.setup();
+        render(<TreatmentPlansTab patientId="pat-1" token={adminToken} />);
+        const table = await itemsTable();
+        await within(table).findAllByText('Cobrado');
+        const before = mockedGetPlanBalance.mock.calls.length;
+
+        await user.type(screen.getByLabelText(/código fdi/i), '16');
+        await user.click(screen.getByRole('radio', { name: /resina/i }));
+        await user.click(screen.getByRole('button', { name: /^agregar ítem$/i }));
+
+        await waitFor(() => expect(mockedAddItem).toHaveBeenCalled());
+        await expectBalanceReloaded(before);
+      });
+
+      it('after a bulk discount', async () => {
+        mockedGetDiscountPolicy.mockResolvedValue(DISCOUNT_POLICY);
+        mockedApplyBulkDiscount.mockResolvedValue({ items: [{ ...item2, discount: 4000 }], skippedNoDiscount: 0 });
+        const user = userEvent.setup();
+        render(<TreatmentPlansTab patientId="pat-1" token={adminToken} />);
+        const table = await itemsTable();
+        await within(table).findAllByText('Cobrado');
+        await waitFor(() => expect(mockedGetDiscountPolicy).toHaveBeenCalled());
+        const before = mockedGetPlanBalance.mock.calls.length;
+
+        await user.click(within(table).getByRole('checkbox', { name: 'Seleccionar el ítem del diente 26' }));
+        await user.click(screen.getByRole('button', { name: 'Descuento %' }));
+        const dialog = await screen.findByRole('dialog');
+        await user.type(within(dialog).getByLabelText('Porcentaje de descuento'), '5');
+        await user.click(within(dialog).getByRole('button', { name: 'Aplicar descuento' }));
+
+        await waitFor(() => expect(mockedApplyBulkDiscount).toHaveBeenCalled());
+        await expectBalanceReloaded(before);
+      });
+
+      it('after presenting the plan (plan options)', async () => {
+        jest.mocked(presentPlan).mockResolvedValue({ ...plan1, status: 'PRESENTED' });
+        const user = userEvent.setup();
+        render(<TreatmentPlansTab patientId="pat-1" token={adminToken} />);
+        const table = await itemsTable();
+        await within(table).findAllByText('Cobrado');
+        const before = mockedGetPlanBalance.mock.calls.length;
+
+        await user.click(screen.getByRole('button', { name: 'Presentar al paciente' }));
+
+        await waitFor(() => expect(presentPlan).toHaveBeenCalled());
+        await expectBalanceReloaded(before);
+      });
+    });
+
+    it('Imputación action only for ADMIN', async () => {
+      mockedGetPlanBalance.mockResolvedValue(balanceWithItems);
+      const user = userEvent.setup();
+      const { unmount } = render(<TreatmentPlansTab patientId="pat-1" token={adminToken} />);
+      const payments = await openPaymentsTable(user);
+      const row = within(payments).getByText('PRI-000001').closest('tr') as HTMLTableRowElement;
+      // El nombre dice de qué abono es: con varios, «Imputación» a secas no distingue.
+      expect(within(row).getByRole('button', { name: 'Imputación del abono PRI-000001' })).toBeInTheDocument();
+      // Tabla de escritorio y tarjeta móvil.
+      expect(screen.getAllByRole('button', { name: /^Imputación/ })).toHaveLength(2);
+      unmount();
+
+      const receptionToken = `h.${btoa(JSON.stringify({ sub: 'u-r', tenantId: 't1', role: 'RECEPTION' }))}.s`;
+      render(<TreatmentPlansTab patientId="pat-1" token={receptionToken} />);
+      await openPaymentsTable(user);
+      expect(screen.queryByRole('button', { name: /^Imputación/ })).not.toBeInTheDocument();
+    });
+
+    it('no Imputación action on a cancelled plan: its payments are not allocated', async () => {
+      const cancelled = plan({ id: 'plan-1', status: 'CANCELLED' });
+      mockedListPlans.mockResolvedValue([cancelled]);
+      mockedGetPlan.mockResolvedValue({ ...plan1Detail, ...cancelled });
+      mockedGetPlanBalance.mockResolvedValue(balanceWithItems);
+      const user = userEvent.setup();
+      render(<TreatmentPlansTab patientId="pat-1" token={adminToken} />);
+      await openPaymentsTable(user);
+      expect(screen.queryByRole('button', { name: /^Imputación/ })).not.toBeInTheDocument();
+    });
+
+    it('saving the allocation closes the modal and refreshes balance and payments', async () => {
+      mockedGetPlanBalance.mockResolvedValue(balanceWithItems);
+      const allocations = {
+        paymentId: 'pay-1',
+        receiptNumber: 'PRI-000001',
+        treatmentPlanId: 'plan-1',
+        paymentAmount: 50000,
+        paymentCurrency: 'USD',
+        paidOn: '2026-01-05',
+        planCurrency: 'USD',
+        planStatus: 'DRAFT' as const,
+        planAmount: 50000,
+        manual: false,
+        allocated: 50000,
+        unallocated: 0,
+        version: 'a'.repeat(64),
+        allocations: [{ treatmentPlanItemId: item2.id, amount: 50000, source: 'AUTO' as const }],
+        items: [
+          {
+            itemId: item2.id,
+            toothNumber: '26',
+            procedureName: 'Limpieza',
+            status: 'ACCEPTED' as const,
+            billable: 80000,
+            paidByOthers: 0,
+            free: 80000,
+          },
+        ],
+      };
+      jest.mocked(getPaymentAllocations).mockResolvedValue(allocations);
+      jest.mocked(replacePaymentAllocations).mockResolvedValue({ ...allocations, manual: true, previous: [] });
+
+      const user = userEvent.setup();
+      render(
+        <>
+          <TreatmentPlansTab patientId="pat-1" token={adminToken} />
+          <Toaster />
+        </>,
+      );
+      const payments = await openPaymentsTable(user);
+      const row = within(payments).getByText('PRI-000001').closest('tr') as HTMLTableRowElement;
+      const trigger = within(row).getByRole('button', { name: /^Imputación/ });
+      await user.click(trigger);
+
+      const modal = await screen.findByRole('dialog', { name: 'Imputar abono' });
+      expect(jest.mocked(getPaymentAllocations)).toHaveBeenCalledWith(adminToken, 'pay-1');
+      await within(modal).findByRole('radio', { name: /fijar a mano/i });
+      const balanceCalls = mockedGetPlanBalance.mock.calls.length;
+      const paymentsCalls = mockedListPayments.mock.calls.length;
+
+      await user.click(within(modal).getByRole('radio', { name: /fijar a mano/i }));
+      await user.click(within(modal).getByRole('button', { name: 'Guardar imputación' }));
+
+      expect(await screen.findByText('Imputación guardada.')).toBeInTheDocument();
+      await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Imputar abono' })).not.toBeInTheDocument());
+      await waitFor(() => expect(mockedGetPlanBalance.mock.calls.length).toBe(balanceCalls + 1));
+      expect(mockedListPayments.mock.calls.length).toBe(paymentsCalls + 1);
+      // El foco vuelve al botón que abrió el modal (sigue en la fila).
+      await waitFor(() => expect(trigger).toHaveFocus());
+    });
+
+    it('if the row is gone when the modal closes, focus goes to the payments fold', async () => {
+      mockedGetPlanBalance.mockResolvedValue(balanceWithItems);
+      jest.mocked(getPaymentAllocations).mockRejectedValue(new ApiError(404, 'Abono no encontrado.'));
+      const user = userEvent.setup();
+      render(<TreatmentPlansTab patientId="pat-1" token={adminToken} />);
+      const payments = await openPaymentsTable(user);
+      const row = within(payments).getByText('PRI-000001').closest('tr') as HTMLTableRowElement;
+      await user.click(within(row).getByRole('button', { name: /^Imputación/ }));
+      const modal = await screen.findByRole('dialog', { name: 'Imputar abono' });
+      expect(await within(modal).findByText('Abono no encontrado.')).toBeInTheDocument();
+
+      // Otra persona anuló el abono: la fila ya no está al cerrar.
+      row.remove();
+      await user.keyboard('{Escape}');
+      await waitFor(() =>
+        expect(screen.getByRole('button', { name: /abonos y saldo/i })).toHaveFocus(),
+      );
     });
   });
 });

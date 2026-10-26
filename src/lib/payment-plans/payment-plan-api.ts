@@ -4,7 +4,7 @@ import type { components } from '@/lib/api/schema';
 // Response DTOs are fully @ApiProperty-decorated on the backend
 // (PaymentPlansController uses @ApiOkResponse/@ApiCreatedResponse with
 // PaymentPlanDto on every route), so the generated schema carries the exact
-// wire shape — same convention as PaymentDto/PlanBalanceDto in payments-api.ts.
+// wire shape — same convention as PaymentDto/PlanBalanceWithItemsDto in payments-api.ts.
 export type PaymentPlan = components['schemas']['PaymentPlanDto'];
 export type Installment = components['schemas']['DerivedInstallmentDto'];
 export type CreatePaymentPlanInput = components['schemas']['CreatePaymentPlanDto'];

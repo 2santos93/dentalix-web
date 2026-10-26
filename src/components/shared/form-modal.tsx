@@ -28,6 +28,12 @@ interface FormModalProps {
   /** Independent of `submitting` — e.g. required fields missing. */
   submitDisabled?: boolean;
   /**
+   * Nothing can be saved in the current state (e.g. the data it edits failed
+   * to load, or the record does not admit the change): the footer keeps only
+   * the way out.
+   */
+  hideSubmit?: boolean;
+  /**
    * Top-of-form error banner (names the problem). When it appears it is
    * scrolled into view and focused: in a long form the submit button sits far
    * below it, and an off-screen banner reads as "nothing happened".
@@ -62,6 +68,7 @@ export function FormModal({
   cancelLabel = 'Cancelar',
   submitting = false,
   submitDisabled = false,
+  hideSubmit = false,
   error,
   size = 'default',
   destructive = false,
@@ -100,14 +107,16 @@ export function FormModal({
                 {cancelLabel}
               </Button>
             </DialogClose>
-            <Button
-              type="submit"
-              variant={destructive ? 'destructive' : 'default'}
-              loading={submitting}
-              disabled={submitDisabled}
-            >
-              {submitLabel}
-            </Button>
+            {hideSubmit ? null : (
+              <Button
+                type="submit"
+                variant={destructive ? 'destructive' : 'default'}
+                loading={submitting}
+                disabled={submitDisabled}
+              >
+                {submitLabel}
+              </Button>
+            )}
           </DialogFooter>
         </form>
       </DialogContent>

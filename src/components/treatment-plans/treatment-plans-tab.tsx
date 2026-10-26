@@ -22,6 +22,7 @@ import {
   isPlanBillable,
   isPlanClosed,
 } from '@/lib/treatment-plans/plan-status';
+import { ITEM_STATUS_BADGE_VARIANT, ITEM_STATUS_LABELS } from '@/lib/treatment-plans/item-status';
 import {
   getPlanBalance,
   listPayments,
@@ -30,8 +31,10 @@ import {
   type Payment,
   type PaymentMethod,
   type PlanBalance,
+  type PlanItemBalance,
   type RecordPaymentInput,
 } from '@/lib/payments/payments-api';
+import { allocationCopy } from '@/lib/payments/allocation-copy';
 import { listCatalogItems, type DentalCatalogItem } from '@/lib/odontogram/catalog-api';
 import { isFdiToothNumber } from '@/lib/odontogram/fdi';
 import type { ToothSurface } from '@/lib/odontogram/odontogram-api';
@@ -42,7 +45,7 @@ import Link from 'next/link';
 import { formatCurrency } from '@/lib/format/currency';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Badge, type BadgeProps } from '@/components/ui/badge';
+import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Separator } from '@/components/ui/separator';
@@ -65,11 +68,13 @@ import {
 import { PaymentReceiptDialog } from '@/components/payments/payment-receipt-dialog';
 import { VoidPaymentModal } from '@/components/payments/void-payment-modal';
 import { voidPaymentErrorMessage } from '@/components/payments/use-void-payment';
+import { ReallocatePaymentModal } from '@/components/payments/reallocate-payment-modal';
 import { getTokenAllowedLocationIds, getTokenRole, getTokenUserId } from '@/lib/auth/token-role';
 import { PaymentPlanSection } from './payment-plan-section';
 import { PlanVisitsBoard } from './plan-visits-board';
 import { PlanQuoteActions } from './plan-quote-actions';
 import { PlanOptionsPanel } from './plan-options-panel';
+import { ItemPaidCell, ItemPaidLine, itemPaidCopy } from './item-paid-cell';
 import { optionGroupOf, patchableStatuses } from '@/lib/treatment-plans/plan-options';
 import { SectionError } from '@/components/errors/section-error';
 import { InlineError } from '@/components/errors/inline-error';
@@ -107,6 +112,10 @@ import { PriceQuoteLine, itemPriceOriginText } from './price-quote-line';
 import { MarkDoneModal } from './mark-done-modal';
 import { VoidCancellationFeeModal, voidFeeCopy } from '@/components/appointments/fee-reason-modal';
 import { attributionText } from '@/lib/treatment-plans/item-attribution';
+
+// El pliegue «Abonos y saldo»: destino estable del foco cuando un modal de un
+// abono se cierra y la fila que lo abrió ya no existe.
+const PAYMENTS_TRIGGER_ID = 'tp-payments-trigger';
 
 // Copy as constants (i18n-ready, es-first) — matches odontogram-tab.tsx /
 // agenda-view.tsx convention until next-intl wiring lands.
@@ -305,6 +314,14 @@ const copy = {
   paymentReceiptLegacy: 'Sin serie',
   paymentReceiptMobile: (receiptNumber: string | null) =>
     `Recibo ${receiptNumber ?? 'sin serie'}`,
+  // DX-051: un ADMIN fijó a mano a qué ítems va este abono.
+  manualAllocation: 'Fijada a mano',
+  // DX-051: abre «Imputar abono» (solo ADMIN).
+  allocationAction: 'Imputación',
+  // Con varios abonos, «Imputación, Imputación…» no dice de cuál: el lector
+  // oye también el recibo (o el importe, si no tiene serie).
+  allocationActionContext: (payment: Payment) =>
+    ` del abono ${payment.receiptNumber ?? formatCurrency(payment.amount, payment.currency)}`,
   emptyPaymentsTitle: 'Este plan todavía no tiene abonos.',
   emptyPaymentsDescription: 'Registra el primer abono con el formulario de arriba.',
 
@@ -317,22 +334,6 @@ const copy = {
 };
 
 const ITEM_STATUS_OPTIONS: TreatmentPlanItemStatus[] = ['PROPOSED', 'ACCEPTED', 'DONE'];
-
-const ITEM_STATUS_LABELS: Record<TreatmentPlanItemStatus, string> = {
-  PROPOSED: 'Propuesto',
-  ACCEPTED: 'Aceptado',
-  DONE: 'Realizado',
-};
-
-// Semantic Badge variants (never raw color utilities) — PROPOSED is neutral
-// (nothing has happened yet), ACCEPTED maps to the brand/primary token
-// (acknowledged), DONE to success; the plan-level map lives in
-// `@/lib/treatment-plans/plan-status` — same convention as `day-agenda.tsx`.
-const ITEM_STATUS_BADGE_VARIANT: Record<TreatmentPlanItemStatus, BadgeProps['variant']> = {
-  PROPOSED: 'muted',
-  ACCEPTED: 'default',
-  DONE: 'success',
-};
 
 /**
  * Un importe opcional de un campo de dinero (DX-241): `undefined` si está
@@ -420,6 +421,11 @@ interface ItemsTableProps {
    * realizado (y llega al odontograma).
    */
   markDoneOnly?: boolean;
+  /**
+   * DX-051: cobrado y pendiente de cada ítem, por id. Sin ella (el saldo aún
+   * no llegó, o el rol no ve pagos: 403) no hay columnas de cobro.
+   */
+  itemBalances?: ReadonlyMap<string, PlanItemBalance>;
   /**
    * DX-204: ítems marcados para «Descuento %». Sin ella (plan aceptado,
    * firmado o cerrado: no se vuelve a descontar) no hay casillas.
@@ -610,7 +616,7 @@ function PlanMoneySummary({
   currency: string;
   balance: PlanBalance | null;
 }) {
-  const figures: { key: string; label: string; value: string; strong?: boolean }[] = [
+  const figures: { key: string; label: string; value: string; strong?: boolean; help?: string }[] = [
     { key: 'total', label: copy.totalLabel, value: formatCurrency(total, currency) },
   ];
   if (balance) {
@@ -632,26 +638,41 @@ function PlanMoneySummary({
         strong: true,
       },
     );
+    // DX-051: solo cuando hay algo por imputar; un cero aquí sería ruido.
+    if (balance.unallocated > 0) {
+      figures.push({
+        key: 'unallocated',
+        label: allocationCopy.unallocated,
+        value: formatCurrency(balance.unallocated, balance.planCurrency),
+        help: allocationCopy.unallocatedHelp,
+      });
+    }
   }
 
   return (
-    // `<dl>` y no divs: son pares etiqueta/valor, y así un lector de pantalla
-    // los anuncia emparejados en vez de como ocho textos sueltos.
-    <dl className="flex flex-wrap gap-x-8 gap-y-3">
-      {figures.map((figure) => (
-        <div key={figure.key} className="min-w-0">
-          <dt className="t-label text-muted">{figure.label}</dt>
-          <dd
-            className={cn(
-              'mt-0.5 tabular-nums',
-              figure.strong ? 'text-lg font-semibold text-ink' : 'text-base text-muted',
-            )}
-          >
-            {figure.value}
-          </dd>
-        </div>
-      ))}
-    </dl>
+    <>
+      {/* `<dl>` y no divs: son pares etiqueta/valor, y así un lector de
+          pantalla los anuncia emparejados en vez de como ocho textos sueltos. */}
+      <dl className="flex flex-wrap gap-x-8 gap-y-3">
+        {figures.map((figure) => (
+          <div key={figure.key} className="min-w-0">
+            <dt className="t-label text-muted">{figure.label}</dt>
+            <dd
+              className={cn(
+                'mt-0.5 tabular-nums',
+                figure.strong ? 'text-lg font-semibold text-ink' : 'text-base text-muted',
+              )}
+            >
+              {figure.value}
+            </dd>
+            {figure.help ? <dd className="mt-0.5 max-w-[28ch] text-xs text-muted">{figure.help}</dd> : null}
+          </div>
+        ))}
+      </dl>
+      {balance && balance.unconvertedPaymentsCount > 0 ? (
+        <p className="text-sm text-muted">{allocationCopy.unconvertedNotice(balance.unconvertedPaymentsCount)}</p>
+      ) : null}
+    </>
   );
 }
 
@@ -681,6 +702,7 @@ function ItemsTable({
   locked = false,
   closed = false,
   markDoneOnly = false,
+  itemBalances,
   selection,
 }: ItemsTableProps) {
   // SEC-050: el ítem de un cargo vigente no se quita, no cambia de estado ni
@@ -722,6 +744,12 @@ function ItemsTable({
               <TableHead>{copy.colProcedure}</TableHead>
               <TableHead>{copy.colSurfaces}</TableHead>
               <TableHead>{copy.colPrice}</TableHead>
+              {itemBalances ? (
+                <>
+                  <TableHead className="text-right">{itemPaidCopy.colPaid}</TableHead>
+                  <TableHead className="text-right">{itemPaidCopy.colPending}</TableHead>
+                </>
+              ) : null}
               <TableHead>{copy.colStatus}</TableHead>
               <TableHead className="sr-only">{copy.colActions}</TableHead>
             </TableRow>
@@ -752,6 +780,7 @@ function ItemsTable({
                     {formatCurrency(item.price, currency)}
                     <ItemDiscountLine item={item} currency={currency} />
                   </TableCell>
+                  {itemBalances ? <ItemPaidCell item={itemBalances.get(item.id)} currency={currency} /> : null}
                   <TableCell>
                     <div className="flex flex-col items-start gap-1.5">
                       <Badge variant={ITEM_STATUS_BADGE_VARIANT[item.status]}>
@@ -839,6 +868,11 @@ function ItemsTable({
                 {formatCurrency(item.price, currency)}
                 <ItemDiscountLine item={item} currency={currency} />
               </p>
+              {itemBalances?.has(item.id) ? (
+                <div className="mt-1">
+                  <ItemPaidLine item={itemBalances.get(item.id)} currency={currency} />
+                </div>
+              ) : null}
               <div className="mt-1">
                 <ItemAttributionLine item={item} onCorrect={onCorrectAttribution} />
               </div>
@@ -895,10 +929,22 @@ interface PaymentsListProps {
   onReceipt: (paymentId: string) => void;
   /** Plan rechazado o cancelado (DX-109): el vacío no invita a registrar un abono. */
   billable?: boolean;
+  /** DX-051: abonos cuya imputación fijó un ADMIN a mano (`balance.manualPaymentIds`). */
+  manualPaymentIds?: ReadonlySet<string>;
+  /** DX-051: abre «Imputar abono»; solo ADMIN y en un plan que se cobra. */
+  onAllocate?: (paymentId: string, trigger: HTMLElement) => void;
 }
 
 /** Desktop table + mobile cards for the abonos list — same responsive split as `ItemsTable`. */
-function PaymentsList({ payments, voidingPaymentId, onVoid, onReceipt, billable = true }: PaymentsListProps) {
+function PaymentsList({
+  payments,
+  voidingPaymentId,
+  onVoid,
+  onReceipt,
+  billable = true,
+  manualPaymentIds,
+  onAllocate,
+}: PaymentsListProps) {
   if (payments.length === 0) {
     return (
       <EmptyState
@@ -937,7 +983,12 @@ function PaymentsList({ payments, voidingPaymentId, onVoid, onReceipt, billable 
                     )}
                   </TableCell>
                   <TableCell className="font-medium">
-                    {formatCurrency(payment.amount, payment.currency)}
+                    <span className="inline-flex flex-wrap items-center gap-2">
+                      {formatCurrency(payment.amount, payment.currency)}
+                      {manualPaymentIds?.has(payment.id) ? (
+                        <Badge variant="muted">{copy.manualAllocation}</Badge>
+                      ) : null}
+                    </span>
                   </TableCell>
                   <TableCell>
                     {payment.method ? (
@@ -958,6 +1009,17 @@ function PaymentsList({ payments, voidingPaymentId, onVoid, onReceipt, billable 
                       <Button type="button" variant="outline" size="sm" onClick={() => onReceipt(payment.id)}>
                         {copy.receiptAction}
                       </Button>
+                      {onAllocate ? (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={(e) => onAllocate(payment.id, e.currentTarget)}
+                        >
+                          {copy.allocationAction}
+                          <span className="sr-only">{copy.allocationActionContext(payment)}</span>
+                        </Button>
+                      ) : null}
                       <Separator orientation="vertical" className="h-5" />
                       <Button
                         type="button"
@@ -994,8 +1056,11 @@ function PaymentsList({ payments, voidingPaymentId, onVoid, onReceipt, billable 
                   <span className="text-sm text-muted">{copy.paymentMethodFallback}</span>
                 )}
               </div>
-              <p className="mt-2 font-medium text-ink tabular-nums">
+              <p className="mt-2 flex flex-wrap items-center gap-2 font-medium text-ink tabular-nums">
                 {formatCurrency(payment.amount, payment.currency)}
+                {manualPaymentIds?.has(payment.id) ? (
+                  <Badge variant="muted">{copy.manualAllocation}</Badge>
+                ) : null}
               </p>
               <p className="mt-1 text-sm text-muted tabular-nums">
                 {copy.paymentReceiptMobile(payment.receiptNumber)}
@@ -1003,12 +1068,26 @@ function PaymentsList({ payments, voidingPaymentId, onVoid, onReceipt, billable 
               <p className="mt-1 text-sm text-muted">{payment.notes ?? copy.paymentNotesFallback}</p>
               {/* Mismo aislamiento del destructivo que en la tabla de
                   escritorio — en móvil el riesgo de mal toque es mayor, no
-                  menor. */}
-              <div className="mt-3 flex items-center gap-3">
-                <Button type="button" variant="outline" size="sm" onClick={() => onReceipt(payment.id)}>
-                  {copy.receiptAction}
-                </Button>
-                <Separator orientation="vertical" className="h-5" />
+                  menor. Dos grupos en los extremos en vez de un separador:
+                  con «Imputación» la fila se parte a 390 px y el separador
+                  quedaba colgando al final de la primera línea. */}
+              <div className="mt-3 flex flex-wrap items-center justify-between gap-3">
+                <div className="flex flex-wrap items-center gap-3">
+                  <Button type="button" variant="outline" size="sm" onClick={() => onReceipt(payment.id)}>
+                    {copy.receiptAction}
+                  </Button>
+                  {onAllocate ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={(e) => onAllocate(payment.id, e.currentTarget)}
+                    >
+                      {copy.allocationAction}
+                      <span className="sr-only">{copy.allocationActionContext(payment)}</span>
+                    </Button>
+                  ) : null}
+                </div>
                 <Button
                   type="button"
                   variant="outline"
@@ -1163,6 +1242,12 @@ export function TreatmentPlansTab({
   // Igual que `itemToRemove`: anular mueve dinero en el saldo y no tiene
   // deshacer, así que pasa por confirmación y su fallo se queda en el diálogo.
   const [paymentToVoid, setPaymentToVoid] = useState<string | null>(null);
+  // DX-051: el abono cuya imputación edita un ADMIN, y el botón que lo abrió
+  // (para devolverle el foco, o llevarlo al pliegue si la fila ya no está).
+  // `open` aparte del abono, para que el modal se cierre con su animación;
+  // `seq` lo remonta (y relee) en cada apertura, aunque sea el mismo abono.
+  const [allocation, setAllocation] = useState<{ paymentId: string; open: boolean; seq: number } | null>(null);
+  const allocationTriggerRef = useRef<HTMLElement | null>(null);
   const [paymentActionError, setPaymentActionError] = useState<string | null>(null);
 
   // Bumped whenever the balance/abonos refresh, so the payment-plan section
@@ -1716,6 +1801,18 @@ export function TreatmentPlansTab({
     }
   }
 
+  function openAllocation(paymentId: string, trigger: HTMLElement) {
+    allocationTriggerRef.current = trigger;
+    setAllocation((prev) => ({ paymentId, open: true, seq: (prev?.seq ?? 0) + 1 }));
+  }
+
+  /** Si la fila del abono ya no está (p. ej. lo anuló otra persona), el foco va al pliegue de abonos. */
+  function focusAfterAllocation(event: Event) {
+    if (allocationTriggerRef.current?.isConnected) return;
+    event.preventDefault();
+    document.getElementById(PAYMENTS_TRIGGER_ID)?.focus();
+  }
+
   /** La fila ya no anula: abre la confirmación. */
   function openVoidConfirm(paymentId: string) {
     setPaymentActionError(null);
@@ -1799,7 +1896,8 @@ export function TreatmentPlansTab({
     try {
       await removeItem(token, selectedPlanId, itemId);
       setItemToRemove(null);
-      await refreshPlanDetail();
+      // DX-051: quitar un ítem libera lo que tenía imputado y lo reparte.
+      await Promise.all([refreshPlanDetail(), refreshBalanceAndPayments()]);
     } catch (err) {
       setRemoveItemError(apiErrorMessage(err, copy.genericRemoveItemError));
     } finally {
@@ -1819,10 +1917,10 @@ export function TreatmentPlansTab({
   /**
    * Presentar, rechazar o crear una alternativa (DX-040) cambian el estado del
    * plan y, con una alternativa nueva, la lista de planes: se refrescan los
-   * dos en su sitio.
+   * dos en su sitio. Y el saldo: rechazar libera todo lo imputado (DX-051).
    */
   async function handlePlanOptionsChanged(): Promise<void> {
-    await Promise.all([refreshPlanDetail(), refreshPlansInPlace()]);
+    await Promise.all([refreshPlanDetail(), refreshPlansInPlace(), refreshBalanceAndPayments()]);
   }
 
   function handleProcedureChange(nextCatalogItemId: string) {
@@ -1933,7 +2031,8 @@ export function TreatmentPlansTab({
       setAddReason(EMPTY_REASON);
       setSurfaces(emptySurfacesState());
       setNotes('');
-      await refreshPlanDetail();
+      // DX-051: un ítem aceptado nuevo recibe los sobrantes del reparto.
+      await Promise.all([refreshPlanDetail(), refreshBalanceAndPayments()]);
     } catch (err) {
       // Un 400 (FDI inválido / precio obligatorio si el ítem del catálogo no
       // tiene defaultPrice) llega en inglés: apiErrorMessage lo dice en español.
@@ -1965,6 +2064,10 @@ export function TreatmentPlansTab({
   const billable = planDetail ? isPlanBillable(planDetail.status) : true;
   const role = getTokenRole(token);
   const sessionUserId = getTokenUserId(token);
+  // DX-051: cobrado por ítem y abonos fijados a mano. Solo existen si el saldo
+  // respondió: DENTIST y ASSISTANT (403) no ven nada nuevo.
+  const itemBalances = planBalance ? new Map(planBalance.items.map((item) => [item.itemId, item])) : undefined;
+  const manualPaymentIds = planBalance ? new Set(planBalance.manualPaymentIds) : undefined;
   // DX-050: el ítem del modal «Marcar como realizado» / «Corregir».
   const markDoneItem = markDone ? (planDetail?.items?.find((i) => i.id === markDone.itemId) ?? null) : null;
   // DX-204: un presupuesto aceptado (firmado o no) o cerrado no se vuelve a
@@ -2238,6 +2341,7 @@ export function TreatmentPlansTab({
                     role === 'ADMIN' ? (itemId) => setMarkDone({ itemId, mode: 'correct' }) : undefined
                   }
                   onVoidFee={role === 'ADMIN' ? setFeeToVoid : undefined}
+                  itemBalances={itemBalances}
                   locked={signed}
                   closed={closed}
                   markDoneOnly={planDetail?.status === 'COMPLETED'}
@@ -2402,6 +2506,7 @@ export function TreatmentPlansTab({
                           para que el estado vacío enseñe el siguiente paso en
                           vez de esconderlo tras un plegado. */}
                       <Disclosure
+                        triggerId={PAYMENTS_TRIGGER_ID}
                         summary={copy.paymentsHeading}
                         meta={copy.paymentsDisclosureMeta(payments.length)}
                         defaultOpen={payments.length === 0}
@@ -2412,6 +2517,8 @@ export function TreatmentPlansTab({
                           onVoid={openVoidConfirm}
                           onReceipt={setReceiptPaymentId}
                           billable={billable}
+                          manualPaymentIds={manualPaymentIds}
+                          onAllocate={role === 'ADMIN' && billable ? openAllocation : undefined}
                         />
                       </Disclosure>
 
@@ -2647,7 +2754,8 @@ export function TreatmentPlansTab({
                 .filter(Boolean)
                 .join(' '),
             );
-            void refreshPlanDetail();
+            // DX-051: el descuento baja lo facturable y libera lo imputado de más.
+            void Promise.all([refreshPlanDetail(), refreshBalanceAndPayments()]);
           }}
         />
       ) : null}
@@ -2708,6 +2816,20 @@ export function TreatmentPlansTab({
         confirming={updatingItemId !== null && updatingItemId === itemToRemove}
         error={removeItemError}
       />
+
+      {allocation ? (
+        <ReallocatePaymentModal
+          key={allocation.seq}
+          open={allocation.open}
+          onOpenChange={(open) => {
+            if (!open) setAllocation((prev) => (prev ? { ...prev, open: false } : prev));
+          }}
+          paymentId={allocation.paymentId}
+          token={token}
+          onSaved={() => void refreshBalanceAndPayments()}
+          onCloseAutoFocus={focusAfterAllocation}
+        />
+      ) : null}
 
       {/* `key` por abono: cada anulación empieza con el motivo en blanco. */}
       <VoidPaymentModal
