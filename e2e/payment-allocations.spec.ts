@@ -320,7 +320,8 @@ const axeSource = readFileSync(require.resolve('axe-core/axe.min.js'), 'utf8');
 
 /**
  * Un abono en EUR a un plan en USD: sin tasa (la e2e no tiene proveedor de
- * tasas), así que no tiene base y no se imputa.
+ * tasas ni tasa guardada para ese día), así que no tiene base, no se imputa y
+ * `GET …/balance` lo cuenta en `unconvertedPaymentsCount`.
  */
 async function seedUnconverted(
   page: Page,
@@ -362,42 +363,6 @@ async function seedUnconverted(
     method: 'CARD',
   });
   return { patientId: patient.id, planId: plan.id, itemId: item.id, procedure };
-}
-
-/**
- * Sin proveedor de tasas, `GET …/balance` de ese plan responde 500 (convierte
- * cada abono al vuelo desde antes de DX-051) y la pestaña no llega a listar
- * los abonos. Solo para ver el modal «sin tasa», el saldo de ESE plan se sirve
- * con la forma real de la API y sin nada imputado; el modal lee de verdad
- * `GET /payments/:id/allocations`, que no convierte.
- */
-async function stubUnconvertedBalance(page: Page, plan: { planId: string; itemId: string; procedure: string }) {
-  await page.route(`**/treatment-plans/${plan.planId}/balance`, (route) =>
-    route.fulfill({
-      json: {
-        planCurrency: 'USD',
-        billable: 60,
-        paid: 0,
-        balance: 60,
-        paymentsCount: 1,
-        allocated: 0,
-        unallocated: 0,
-        unconvertedPaymentsCount: 1,
-        manualPaymentIds: [],
-        items: [
-          {
-            itemId: plan.itemId,
-            toothNumber: '21',
-            procedureName: plan.procedure,
-            status: 'ACCEPTED',
-            billable: 60,
-            paid: 0,
-            balance: 60,
-          },
-        ],
-      },
-    }),
-  );
 }
 
 /** Otra sesión cambia la imputación por la API: la versión que tiene el modal queda vieja. */
@@ -447,8 +412,9 @@ test('DX-051 axe: ítems del plan, «Ver por ítem» y el modal «Imputar abono�
     password,
   });
   const data = await seed(page, origin, tag);
+  // Sin stub: el saldo de ese plan cuenta el abono sin tasa en
+  // `unconvertedPaymentsCount` (antes respondía 500).
   const unconverted = await seedUnconverted(page, data.admin, tag);
-  await stubUnconvertedBalance(page, unconverted);
 
   for (const width of [390, 1440]) {
     for (const colorScheme of ['light', 'dark'] as const) {

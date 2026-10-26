@@ -122,7 +122,7 @@ describe('usePaymentAllocations (DX-051)', () => {
 
   it('a 400 on save keeps the server message (one-element validation list) and is not stale', async () => {
     mockedGet.mockResolvedValue(DATA);
-    const message = 'Un ítem admite como máximo 70.00 USD: el resto ya lo cubren otros abonos.';
+    const message = 'Un ítem admite como máximo 70.00 USD: es lo que le queda por cubrir.';
     mockedPut.mockRejectedValue(new ApiError(400, 'Bad Request', { messages: [message] }));
     const { result } = renderHook(() => usePaymentAllocations('tok', 'pay-1'));
     await waitFor(() => expect(result.current.data).not.toBeNull());

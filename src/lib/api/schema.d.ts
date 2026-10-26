@@ -9054,6 +9054,8 @@ export interface components {
              */
             receiptNumber: string | null;
         };
+        /** @enum {string} */
+        TreatmentPlanItemStatus: "PROPOSED" | "ACCEPTED" | "DONE";
         PlanItemBalanceDto: {
             /** Format: uuid */
             itemId: string;
@@ -9064,8 +9066,7 @@ export interface components {
              * @example Resina
              */
             procedureName: string;
-            /** @enum {string} */
-            status: "PROPOSED" | "ACCEPTED" | "DONE";
+            status: components["schemas"]["TreatmentPlanItemStatus"];
             /**
              * @description price - discount si el ítem es ACCEPTED|DONE y el plan es cobrable; si no, 0
              * @example 100
@@ -9264,6 +9265,11 @@ export interface components {
             /** @description DX-203: salió al email del responsable (un menor o un paciente sin email). */
             sentToResponsible: boolean;
         };
+        /**
+         * @description Estado del plan: rechazado o cancelado no admite reasignar (409 en el PUT) y sus `items` vienen vacíos
+         * @enum {string}
+         */
+        TreatmentPlanStatus: "DRAFT" | "PRESENTED" | "ACCEPTED" | "REJECTED" | "COMPLETED" | "CANCELLED";
         PaymentAllocationLineDto: {
             /** Format: uuid */
             treatmentPlanItemId: string;
@@ -9324,11 +9330,8 @@ export interface components {
             paidOn: string;
             /** @example EUR */
             planCurrency: string;
-            /**
-             * @description Estado del plan: rechazado o cancelado no admite reasignar (409 en el PUT) y sus `items` vienen vacíos
-             * @enum {string}
-             */
-            planStatus: "DRAFT" | "PRESENTED" | "ACCEPTED" | "REJECTED" | "COMPLETED" | "CANCELLED";
+            /** @description Estado del plan: rechazado o cancelado no admite reasignar (409 en el PUT) y sus `items` vienen vacíos */
+            planStatus: components["schemas"]["TreatmentPlanStatus"];
             /**
              * @description El abono convertido a la moneda del plan con la tasa de su paidOn; null si aún no hay tasa
              * @example 90
@@ -9396,11 +9399,8 @@ export interface components {
             paidOn: string;
             /** @example EUR */
             planCurrency: string;
-            /**
-             * @description Estado del plan: rechazado o cancelado no admite reasignar (409 en el PUT) y sus `items` vienen vacíos
-             * @enum {string}
-             */
-            planStatus: "DRAFT" | "PRESENTED" | "ACCEPTED" | "REJECTED" | "COMPLETED" | "CANCELLED";
+            /** @description Estado del plan: rechazado o cancelado no admite reasignar (409 en el PUT) y sus `items` vienen vacíos */
+            planStatus: components["schemas"]["TreatmentPlanStatus"];
             /**
              * @description El abono convertido a la moneda del plan con la tasa de su paidOn; null si aún no hay tasa
              * @example 90

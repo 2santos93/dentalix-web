@@ -355,7 +355,7 @@ describe('ReallocatePaymentModal (DX-051)', () => {
   });
 
   it('a 400 from the server is shown as is and offers no reload', async () => {
-    const message = 'Un ítem admite como máximo 70.00 EUR: el resto ya lo cubren otros abonos.';
+    const message = 'Un ítem admite como máximo 70.00 EUR: es lo que le queda por cubrir.';
     mockedPut.mockRejectedValue(new ApiError(400, 'Bad Request', { messages: [message] }));
     const user = userEvent.setup();
     renderModal();
