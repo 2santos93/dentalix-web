@@ -265,7 +265,9 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
         </div>
         <nav
           className={cn(
-            'flex flex-1 flex-col gap-1 py-2',
+            // El menú largo cede altura y se desplaza dentro del sidebar;
+            // la marca y la cuenta permanecen dentro de la ventana.
+            'flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto py-2',
             collapsed ? 'px-2' : 'px-3',
           )}
         >
