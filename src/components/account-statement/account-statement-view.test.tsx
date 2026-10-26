@@ -516,6 +516,10 @@ describe('cobrado por ítem de cada plan (DX-051)', () => {
     render(<AccountStatementPrintView token="tok" patientId="pat-1" />);
 
     expect(await screen.findByRole('heading', { level: 1, name: /estado de cuenta/i })).toBeInTheDocument();
+    // Los planes sí salen impresos (si dejaran de salir, esta prueba no
+    // probaría nada); su detalle por ítem, no.
+    const plans = screen.getByRole('table', { name: /planes del paciente/i });
+    expect(within(plans).getAllByRole('row').slice(1)).toHaveLength(accountStatementFixture().plans.length);
     expect(screen.queryByRole('button', { name: /ver por ítem/i })).not.toBeInTheDocument();
     expect(screen.queryByText(/ver por ítem/i)).not.toBeInTheDocument();
     expect(mockedPlanBalance).not.toHaveBeenCalled();

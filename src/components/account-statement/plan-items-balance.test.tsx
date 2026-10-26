@@ -65,7 +65,7 @@ beforeEach(() => {
 
 it('loads on open and shows procedure, tooth, status, A pagar, Cobrado, Pendiente', async () => {
   mockedBalance.mockResolvedValue(balanceFixture());
-  render(<PlanItemsBalance token="tok" planId="plan-1" currency="EUR" />);
+  render(<PlanItemsBalance token="tok" planId="plan-1" />);
 
   expect(screen.getByRole('status', { name: /cargando/i })).toBeInTheDocument();
   const table = await screen.findByRole('table', { name: /por ítem/i });
@@ -87,8 +87,34 @@ it('loads on open and shows procedure, tooth, status, A pagar, Cobrado, Pendient
   expect(within(rows[2]).getAllByRole('cell')[1]).toHaveTextContent('Sin diente');
   expect(within(rows[2]).getAllByRole('cell')[2]).toHaveTextContent('Propuesto');
 
-  // Todo imputado: no hay «Sin imputar».
+  // Todo imputado: no hay «Sin imputar»; todos con tasa: no hay aviso.
   expect(screen.queryByText('Sin imputar')).not.toBeInTheDocument();
+  expect(screen.queryByText(/todavía sin convertir/)).not.toBeInTheDocument();
+});
+
+it('formats with the currency of the balance itself', async () => {
+  mockedBalance.mockResolvedValue({ ...balanceFixture(), planCurrency: 'MXN', unallocated: 7.5 });
+  render(<PlanItemsBalance token="tok" planId="plan-1" />);
+
+  const table = await screen.findByRole('table', { name: /por ítem/i });
+  const firstRow = within(table).getAllByRole('row')[1];
+  expect(within(firstRow).getAllByRole('cell')[3]).toHaveTextContent(money(100, 'MXN'));
+  expect(screen.getByText('Sin imputar').closest('div')).toHaveTextContent(money(7.5, 'MXN'));
+});
+
+it('unconverted notice explains abonos without a rate, in singular or plural', async () => {
+  mockedBalance.mockResolvedValue(balanceFixture({ unconvertedPaymentsCount: 2 }));
+  const { unmount } = render(<PlanItemsBalance token="tok" planId="plan-1" />);
+  expect(
+    await screen.findByText('2 abonos todavía sin convertir a la moneda del plan: no se imputan a ítems.'),
+  ).toBeInTheDocument();
+  unmount();
+
+  mockedBalance.mockResolvedValue(balanceFixture({ unconvertedPaymentsCount: 1 }));
+  render(<PlanItemsBalance token="tok" planId="plan-1" />);
+  expect(
+    await screen.findByText('1 abono todavía sin convertir a la moneda del plan: no se imputa a ítems.'),
+  ).toBeInTheDocument();
 });
 
 it('cancelled plan shows zeros and unallocated', async () => {
@@ -102,7 +128,7 @@ it('cancelled plan shows zeros and unallocated', async () => {
       items: balanceFixture().items.map((item) => ({ ...item, billable: 0, paid: 0, balance: 0 })),
     }),
   );
-  render(<PlanItemsBalance token="tok" planId="plan-2" currency="EUR" />);
+  render(<PlanItemsBalance token="tok" planId="plan-2" />);
 
   const table = await screen.findByRole('table', { name: /por ítem/i });
   for (const row of within(table).getAllByRole('row').slice(1)) {
@@ -118,7 +144,7 @@ it('error shows No pudimos cargar el detalle por ítem. with retry', async () =>
   mockedBalance.mockRejectedValueOnce(new ApiError(500, 'boom'));
   mockedBalance.mockResolvedValueOnce(balanceFixture());
   const user = userEvent.setup();
-  render(<PlanItemsBalance token="tok" planId="plan-1" currency="EUR" />);
+  render(<PlanItemsBalance token="tok" planId="plan-1" />);
 
   const alert = await screen.findByRole('alert');
   expect(alert).toHaveTextContent('No pudimos cargar el detalle por ítem.');
@@ -130,7 +156,7 @@ it('error shows No pudimos cargar el detalle por ítem. with retry', async () =>
 
 it('a plan without items says so instead of an empty table', async () => {
   mockedBalance.mockResolvedValue(balanceFixture({ items: [], billable: 0, paid: 0, balance: 0, allocated: 0 }));
-  render(<PlanItemsBalance token="tok" planId="plan-1" currency="EUR" />);
+  render(<PlanItemsBalance token="tok" planId="plan-1" />);
 
   expect(await screen.findByText('Este plan todavía no tiene ítems.')).toBeInTheDocument();
   expect(screen.queryByRole('table')).not.toBeInTheDocument();

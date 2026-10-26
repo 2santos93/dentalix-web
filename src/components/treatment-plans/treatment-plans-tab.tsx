@@ -34,6 +34,7 @@ import {
   type PlanItemBalance,
   type RecordPaymentInput,
 } from '@/lib/payments/payments-api';
+import { allocationCopy } from '@/lib/payments/allocation-copy';
 import { listCatalogItems, type DentalCatalogItem } from '@/lib/odontogram/catalog-api';
 import { isFdiToothNumber } from '@/lib/odontogram/fdi';
 import type { ToothSurface } from '@/lib/odontogram/odontogram-api';
@@ -272,13 +273,6 @@ const copy = {
   billableLabel: 'A pagar',
   paidLabel: 'Pagado',
   balanceLabel: 'Saldo',
-  // DX-051: lo cobrado que todavía no cubre ningún ítem del plan.
-  unallocatedLabel: 'Sin imputar',
-  unallocatedHelp: 'Abonos que todavía no cubren ningún ítem.',
-  unconvertedNotice: (n: number) =>
-    n === 1
-      ? '1 abono todavía sin convertir a la moneda del plan: no se imputa a ítems.'
-      : `${n} abonos todavía sin convertir a la moneda del plan: no se imputan a ítems.`,
   registerPayment: 'Registrar abono',
   notBillableHint: (status: string) =>
     `Este plan está «${status}»: no admite abonos ni planes de cuotas.`,
@@ -637,9 +631,9 @@ function PlanMoneySummary({
     if (balance.unallocated > 0) {
       figures.push({
         key: 'unallocated',
-        label: copy.unallocatedLabel,
+        label: allocationCopy.unallocated,
         value: formatCurrency(balance.unallocated, balance.planCurrency),
-        help: copy.unallocatedHelp,
+        help: allocationCopy.unallocatedHelp,
       });
     }
   }
@@ -665,7 +659,7 @@ function PlanMoneySummary({
         ))}
       </dl>
       {balance && balance.unconvertedPaymentsCount > 0 ? (
-        <p className="text-sm text-muted">{copy.unconvertedNotice(balance.unconvertedPaymentsCount)}</p>
+        <p className="text-sm text-muted">{allocationCopy.unconvertedNotice(balance.unconvertedPaymentsCount)}</p>
       ) : null}
     </>
   );

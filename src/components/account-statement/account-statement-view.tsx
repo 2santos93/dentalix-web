@@ -681,7 +681,9 @@ function PlanRows({
         >
           {formatCurrency(plan.balance, plan.currency)}
         </TableCell>
-        <TableCell className="text-right" data-label={copy.colItems}>
+        {/* Sin `data-label`: en la tarjeta móvil, «Por ítem» encima de «Ver
+            por ítem» repetiría lo mismo. */}
+        <TableCell className="text-right">
           <Button
             type="button"
             variant="ghost"
@@ -716,7 +718,7 @@ function PlanRows({
         {/* `max-sm:block`: sin `data-label`, la celda no lleva etiqueta en
             móvil; el detalle ocupa la tarjeta entera. */}
         <TableCell colSpan={PLAN_COLUMNS} className="max-sm:block max-sm:py-2">
-          {opened ? <PlanItemsBalance token={token} planId={plan.id} currency={plan.currency} /> : null}
+          {opened ? <PlanItemsBalance token={token} planId={plan.id} /> : null}
         </TableCell>
       </TableRow>
     </>

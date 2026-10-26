@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { getPlanBalance, type PlanBalance } from '@/lib/payments/payments-api';
+import { allocationCopy } from '@/lib/payments/allocation-copy';
 import { ITEM_STATUS_BADGE_VARIANT, ITEM_STATUS_LABELS } from '@/lib/treatment-plans/item-status';
 import { formatCurrency } from '@/lib/format/currency';
 import { AsyncSection, TableSkeleton } from '@/components/shared/async-section';
@@ -17,8 +18,6 @@ export const planItemsBalanceCopy = {
   colPending: 'Pendiente',
   // DX-291: un cargo administrativo no tiene diente.
   noTooth: 'Sin diente',
-  unallocated: 'Sin imputar',
-  unallocatedHelp: 'Abonos que todavía no cubren ningún ítem.',
   empty: 'Este plan todavía no tiene ítems.',
   // Sin "Intenta de nuevo.": SectionError trae su propio botón.
   loadError: 'No pudimos cargar el detalle por ítem.',
@@ -31,9 +30,10 @@ const copy = planItemsBalanceCopy;
  * recepción no abre el plan de tratamiento (clínico), así que aquí ve qué
  * cubre lo cobrado, ítem por ítem, y lo que queda «sin imputar». Solo lectura:
  * reasignar es del ADMIN, desde el plan. Se monta al abrirse el desplegable,
- * así que carga entonces (`GET /treatment-plans/:id/balance`) y no antes.
+ * así que carga entonces (`GET /treatment-plans/:id/balance`) y no antes. Las
+ * cifras van en la moneda que dice el propio saldo (`planCurrency`).
  */
-export function PlanItemsBalance({ token, planId, currency }: { token: string; planId: string; currency: string }) {
+export function PlanItemsBalance({ token, planId }: { token: string; planId: string }) {
   const [balance, setBalance] = useState<PlanBalance | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -104,13 +104,13 @@ export function PlanItemsBalance({ token, planId, currency }: { token: string; p
                         </Badge>
                       </TableCell>
                       <TableCell className="text-right tabular-nums" data-label={copy.colBillable}>
-                        {formatCurrency(item.billable, currency)}
+                        {formatCurrency(item.billable, balance.planCurrency)}
                       </TableCell>
                       <TableCell className="text-right tabular-nums" data-label={copy.colPaid}>
-                        {formatCurrency(item.paid, currency)}
+                        {formatCurrency(item.paid, balance.planCurrency)}
                       </TableCell>
                       <TableCell className="text-right font-medium tabular-nums" data-label={copy.colPending}>
-                        {formatCurrency(item.balance, currency)}
+                        {formatCurrency(item.balance, balance.planCurrency)}
                       </TableCell>
                     </TableRow>
                   ))}
@@ -123,11 +123,18 @@ export function PlanItemsBalance({ token, planId, currency }: { token: string; p
           {balance.unallocated > 0 ? (
             <dl>
               <div className="flex flex-wrap items-baseline gap-x-3 gap-y-0.5">
-                <dt className="t-label text-muted">{copy.unallocated}</dt>
-                <dd className="font-medium text-ink tabular-nums">{formatCurrency(balance.unallocated, currency)}</dd>
-                <dd className="w-full text-xs text-muted">{copy.unallocatedHelp}</dd>
+                <dt className="t-label text-muted">{allocationCopy.unallocated}</dt>
+                <dd className="font-medium text-ink tabular-nums">
+                  {formatCurrency(balance.unallocated, balance.planCurrency)}
+                </dd>
+                <dd className="w-full text-xs text-muted">{allocationCopy.unallocatedHelp}</dd>
               </div>
             </dl>
+          ) : null}
+          {/* Sin él, Cobrado + Sin imputar no llega a lo «Abonado» del plan y
+              nada lo explica. */}
+          {balance.unconvertedPaymentsCount > 0 ? (
+            <p className="text-sm text-muted">{allocationCopy.unconvertedNotice(balance.unconvertedPaymentsCount)}</p>
           ) : null}
         </div>
       ) : null}
