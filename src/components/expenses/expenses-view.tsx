@@ -19,7 +19,7 @@ import { saveCsv } from '@/lib/files/save-csv';
 import { formatCurrency } from '@/lib/format/currency';
 import { firstOfMonth, formatCivilDate } from '@/lib/format/date';
 import { getActiveLocationId } from '@/lib/locations/location-store';
-import { sedeToday, useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
+import { expenseZoneError, useExpenseToday } from './use-expense-today';
 import { FieldError } from '@/components/errors/field-error';
 import { notifyError } from '@/components/errors/notify';
 import { AsyncSection, TableSkeleton } from '@/components/shared/async-section';
@@ -95,10 +95,10 @@ const SEARCH_DEBOUNCE_MS = 300;
  */
 export function ExpensesView({ token, tabs }: { token: string; tabs?: ExpensesViewTabs }) {
   const isAdmin = canManageExpenses(getTokenRole(token));
-  const timeZone = useSedeTimeZone(token);
-  const today = timeZone ? sedeToday(timeZone) : null;
   const [activeLocationId] = useState<string | null>(() => getActiveLocationId());
   const sedes = useExpenseLocations(token);
+  const reference = activeLocationId ? sedes.locations.find((location) => location.id === activeLocationId) : sedes.locations[0];
+  const { today, error: scheduleError, retry: retrySchedule } = useExpenseToday(token, reference?.id);
   const [from, setFrom] = useState<string | null>(null);
   const [to, setTo] = useState<string | null>(null);
   const [locationId, setLocationId] = useState('ALL');
@@ -237,7 +237,8 @@ export function ExpensesView({ token, tabs }: { token: string; tabs?: ExpensesVi
   // filtro) las deja puestas y marcadas como ocupadas: cambiarlas por el
   // esqueleto desmontaría el botón que abrió el detalle y el foco caería en
   // <body> al cerrarlo.
-  const showLoading = (loading && data === null) || !filters;
+  const zoneError = !filters && (sedes.failed || scheduleError) ? expenseZoneError : null;
+  const showLoading = !zoneError && ((loading && data === null) || !filters);
   const refreshing = loading && data !== null;
   const { locations } = sedes;
   const activeLocations = locations.filter((l) => l.isActive);
@@ -276,7 +277,7 @@ export function ExpensesView({ token, tabs }: { token: string; tabs?: ExpensesVi
                   type="button"
                   variant="secondary"
                   onClick={() => void exportCsv()}
-                  disabled={exporting || showLoading || Boolean(loadError)}
+                  disabled={exporting || !filters || showLoading || Boolean(loadError)}
                 >
                   <Download aria-hidden />
                   {exporting ? expensesCopy.exporting : expensesCopy.export}
@@ -389,8 +390,11 @@ export function ExpensesView({ token, tabs }: { token: string; tabs?: ExpensesVi
 
             <AsyncSection
               loading={showLoading}
-              error={loadError}
-              onRetry={() => setReloadKey((k) => k + 1)}
+              error={zoneError ?? loadError}
+              onRetry={() => {
+                if (zoneError) { retrySchedule(); sedes.reload(); }
+                else setReloadKey((k) => k + 1);
+              }}
               isEmpty={items.length === 0}
               emptyTitle={expensesCopy.empty}
               emptyDescription={expensesCopy.emptyHint}

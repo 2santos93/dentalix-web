@@ -24,6 +24,7 @@ interface CurrencySelectProps {
   ariaLabel?: string;
   /** p. ej. la razón de que esté deshabilitado. */
   ariaDescribedBy?: string;
+  placeholder?: string;
 }
 
 export function CurrencySelect({
@@ -35,6 +36,7 @@ export function CurrencySelect({
   className,
   ariaLabel,
   ariaDescribedBy,
+  placeholder,
 }: CurrencySelectProps) {
   const [currencies, setCurrencies] = useState<Currency[]>([]);
   const [failed, setFailed] = useState(false);
@@ -85,7 +87,8 @@ export function CurrencySelect({
       aria-label={ariaLabel}
       aria-describedby={ariaDescribedBy}
     >
-      {options.map((c) => (
+      {placeholder ? <option value="">{placeholder}</option> : null}
+      {options.filter((c) => !placeholder || c.code).map((c) => (
         <option key={c.code} value={c.code}>
           {c.symbol ? `${c.name} (${c.symbol})` : c.name}
         </option>

@@ -16,9 +16,9 @@ import type { SingleFileUploadRequest } from '@/lib/files/upload-single-file';
 import { formatCurrency } from '@/lib/format/currency';
 import { moneyInputText } from '@/lib/format/money';
 import { collapseSpaces } from '@/lib/format/text';
-import { COUNTRY_CURRENCY } from '@/lib/locations/clinic-currency';
 import type { ClinicLocation } from '@/lib/locations/locations-api';
-import { sedeToday } from '@/lib/locations/use-sede-time-zone';
+import { useExpenseToday } from './use-expense-today';
+import { SectionError } from '@/components/errors/section-error';
 import { FieldError } from '@/components/errors/field-error';
 import { CurrencySelect } from '@/components/shared/currency-select';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
@@ -65,6 +65,7 @@ export const expenseFormCopy = {
   lockedByPayments: 'Con pagos registrados, la sede y la moneda no cambian.',
   amountMin: (paid: string) => `No puede ser menor que lo ya pagado (${paid}).`,
   invoiceDateRequired: 'Elige la fecha de la factura.',
+  currencyRequired: 'Elige la moneda del gasto.',
   invoiceDateFuture: 'La fecha de la factura no puede ser futura.',
   dueBeforeInvoice: 'El vencimiento no puede ser anterior a la fecha de la factura.',
   createError: 'No pudimos registrar el gasto. Intenta de nuevo.',
@@ -86,11 +87,7 @@ interface FormState {
   payment: ExpensePaymentValue;
 }
 
-type FieldErrors = Partial<Record<'category' | 'amount' | 'invoiceDate' | 'dueDate' | 'supplier' | 'description' | 'paidOn', string>>;
-
-function currencyOf(location: ClinicLocation | undefined): string {
-  return location ? COUNTRY_CURRENCY[location.country] : '';
-}
+type FieldErrors = Partial<Record<'category' | 'amount' | 'currency' | 'invoiceDate' | 'dueDate' | 'supplier' | 'description' | 'paidOn', string>>;
 
 function initialState(locations: ClinicLocation[], defaultLocationId: string | null, expense?: ExpenseDetail): FormState {
   if (expense) {
@@ -108,18 +105,17 @@ function initialState(locations: ClinicLocation[], defaultLocationId: string | n
     };
   }
   const location = locations.find((l) => l.id === defaultLocationId) ?? locations[0];
-  const today = sedeToday(location?.timeZone ?? null);
   return {
     locationId: location?.id ?? '',
     category: '',
     supplier: '',
     description: '',
     amount: '',
-    currency: currencyOf(location),
-    invoiceDate: today,
+    currency: '',
+    invoiceDate: '',
     dueDate: '',
     paid: false,
-    payment: { method: 'CASH', paidOn: today, fromCashSession: false },
+    payment: { method: 'CASH', paidOn: '', fromCashSession: false },
   };
 }
 
@@ -169,7 +165,6 @@ export function ExpenseFormModal({
   const editing = expense !== undefined;
   const hasPayments = (expense?.payments.length ?? 0) > 0;
   const [form, setForm] = useState<FormState>(() => initialState(locations, defaultLocationId, expense));
-  const [currencyTouched, setCurrencyTouched] = useState(editing);
   const [errors, setErrors] = useState<FieldErrors>({});
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -191,15 +186,18 @@ export function ExpenseFormModal({
       setForm((f) => ({
         ...f,
         locationId: proposed.locationId,
-        currency: currencyTouched ? f.currency : proposed.currency,
-        invoiceDate: proposed.invoiceDate,
-        payment: { ...f.payment, paidOn: proposed.payment.paidOn },
+
       }));
     }
   }
 
-  const location = locations.find((l) => l.id === form.locationId);
-  const today = sedeToday(location?.timeZone ?? null);
+  const { today, error: zoneError, retry: retryZone } = useExpenseToday(token, form.locationId, open);
+  const [lastToday, setLastToday] = useState<string | null>(null);
+  if (today && today !== lastToday) {
+    setLastToday(today);
+    setForm((value) => ({ ...value, invoiceDate: value.invoiceDate || today,
+      payment: { ...value.payment, paidOn: value.payment.paidOn || today } }));
+  }
 
   function patch(next: Partial<FormState>) {
     setForm((f) => ({ ...f, ...next }));
@@ -210,31 +208,24 @@ export function ExpenseFormModal({
   }
 
   function changeLocation(locationId: string) {
-    const next = locations.find((l) => l.id === locationId);
-    const nextToday = sedeToday(next?.timeZone ?? null);
-    setForm((f) => ({
-      ...f,
-      locationId,
-      // La moneda sigue a la sede mientras nadie la haya elegido a mano.
-      currency: currencyTouched ? f.currency : currencyOf(next) || f.currency,
-      payment: f.payment.paidOn > nextToday ? { ...f.payment, paidOn: nextToday } : f.payment,
-    }));
+    setForm((value) => ({ ...value, locationId }));
   }
 
   function validate(): { next: FieldErrors; amount: number | null } {
     const next: FieldErrors = expenseTextErrors(form);
+    if (!form.currency) next.currency = expenseFormCopy.currencyRequired;
     const { amount, error: amountError } = parseExpenseAmount(form.amount, form.currency);
     if (amountError) next.amount = amountError;
     if (amount !== null && expense && Math.round(amount * 100) < Math.round(expense.paidAmount * 100)) {
       next.amount = expenseFormCopy.amountMin(formatCurrency(expense.paidAmount, expense.currency));
     }
     if (!form.invoiceDate) next.invoiceDate = expenseFormCopy.invoiceDateRequired;
-    else if (form.invoiceDate > today) next.invoiceDate = expenseFormCopy.invoiceDateFuture;
+    else if (today && form.invoiceDate > today) next.invoiceDate = expenseFormCopy.invoiceDateFuture;
     if (form.dueDate && form.invoiceDate && form.dueDate < form.invoiceDate) {
       next.dueDate = expenseFormCopy.dueBeforeInvoice;
     }
     if (!editing && form.paid) {
-      const paidOn = paidOnError(form.payment, today);
+      const paidOn = paidOnError(form.payment, today ?? '');
       if (paidOn) next.paidOn = paidOn;
     }
     return { next, amount };
@@ -243,6 +234,7 @@ export function ExpenseFormModal({
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
+    if (!today) return;
     const { next, amount } = validate();
     setErrors(next);
     if (Object.values(next).some(Boolean) || amount === null) return;
@@ -301,11 +293,12 @@ export function ExpenseFormModal({
       onSubmit={(e) => void handleSubmit(e)}
       submitLabel={editing ? expenseFormCopy.save : expenseFormCopy.create}
       submitting={submitting}
-      submitDisabled={upload.busy || !form.locationId}
+      submitDisabled={upload.busy || !form.locationId || !today}
       error={error}
       size="lg"
       onCloseAutoFocus={onCloseAutoFocus}
     >
+      {zoneError ? <SectionError description={zoneError} onRetry={retryZone} /> : null}
       <div className="grid gap-4 sm:grid-cols-2">
         <FormField
           htmlFor="expense-location"
@@ -401,15 +394,16 @@ export function ExpenseFormModal({
             aria-describedby={errors.amount ? fieldErrorId('expense-amount') : undefined}
           />
         </FormField>
-        <FormField htmlFor="expense-currency" label={expenseFormCopy.currency}>
+        <FormField htmlFor="expense-currency" label={expenseFormCopy.currency} error={errors.currency}>
           <CurrencySelect
             id="expense-currency"
+            placeholder="Elige moneda"
             token={token}
             value={form.currency}
             disabled={submitting || hasPayments}
             ariaDescribedBy={hasPayments ? 'expense-location-hint' : undefined}
             onChange={(currency) => {
-              setCurrencyTouched(true);
+              clearError('currency');
               patch({ currency });
             }}
           />
@@ -421,7 +415,7 @@ export function ExpenseFormModal({
           <Input
             id="expense-invoice-date"
             type="date"
-            max={today}
+            max={today ?? undefined}
             value={form.invoiceDate}
             disabled={submitting}
             onChange={(e) => {
@@ -498,7 +492,7 @@ export function ExpenseFormModal({
                   patch({ payment });
                   clearError('paidOn');
                 }}
-                today={today}
+                today={today ?? ''}
                 paidOnErrorText={errors.paidOn}
                 disabled={submitting}
               />

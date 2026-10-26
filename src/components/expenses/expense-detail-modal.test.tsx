@@ -15,6 +15,7 @@ import { expenseDetailFixture, expenseLocations, expensePaymentFixture } from '@
 import { setupUser } from '@/lib/test/user';
 import type { ExpenseCategoriesState } from './use-expense-categories';
 
+jest.mock('./use-expense-today', () => ({ useExpenseToday: () => ({ today: '2026-10-24', error: null, retry: jest.fn() }) }));
 jest.mock('../../lib/expenses/expenses-api', () => ({
   ...jest.requireActual('../../lib/expenses/expenses-api'),
   getExpense: jest.fn(),
@@ -32,7 +33,6 @@ jest.mock('../../lib/files/upload-single-file', () => ({
 }));
 jest.mock('../../lib/patient-documents/download', () => ({ startDownload: jest.fn() }));
 jest.mock('../../lib/hooks/use-media-query', () => ({ useMediaQuery: () => true }));
-jest.mock('../../lib/locations/use-sede-time-zone', () => ({ sedeToday: () => '2026-10-24' }));
 jest.mock('../../lib/reference/currencies-api', () => ({
   listCurrencies: jest.fn().mockResolvedValue([{ code: 'COP', name: 'Peso colombiano', symbol: '$' }]),
 }));

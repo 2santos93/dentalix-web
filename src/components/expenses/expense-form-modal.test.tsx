@@ -8,6 +8,8 @@ import { expenseDetailFixture, expenseLocations, expensePaymentFixture } from '@
 import { setupUser } from '@/lib/test/user';
 import type { ExpenseCategoriesState } from './use-expense-categories';
 
+const mockExpenseToday: { today: string | null; error: string | null; retry: jest.Mock } = { today: '2026-10-24', error: null, retry: jest.fn() };
+jest.mock('./use-expense-today', () => ({ useExpenseToday: () => mockExpenseToday }));
 jest.mock('../../lib/expenses/expenses-api', () => ({
   ...jest.requireActual('../../lib/expenses/expenses-api'),
   createExpense: jest.fn(),
@@ -18,9 +20,6 @@ jest.mock('../../lib/expenses/expenses-api', () => ({
 jest.mock('../../lib/files/upload-single-file', () => ({
   ...jest.requireActual('../../lib/files/upload-single-file'),
   uploadSingleFile: jest.fn(),
-}));
-jest.mock('../../lib/locations/use-sede-time-zone', () => ({
-  sedeToday: () => '2026-10-24',
 }));
 jest.mock('../../lib/reference/currencies-api', () => ({
   listCurrencies: jest.fn().mockResolvedValue([
@@ -65,19 +64,45 @@ function renderModal(props: Partial<React.ComponentProps<typeof ExpenseFormModal
 }
 
 async function fillRequired(user: ReturnType<typeof setupUser>) {
+  await screen.findByRole('option', { name: 'Peso colombiano ($)' });
+  await user.selectOptions(screen.getByLabelText('Moneda'), 'COP');
   await user.selectOptions(screen.getByLabelText('Categoría'), 'Laboratorio');
   await user.type(screen.getByLabelText('Importe'), '150.000');
 }
 
 describe('ExpenseFormModal (DX-274)', () => {
   beforeEach(() => {
+    Object.assign(mockExpenseToday, { today: '2026-10-24', error: null });
+    mockExpenseToday.retry.mockReset();
     mockedCreate.mockReset().mockResolvedValue(expenseDetailFixture());
     mockedUpdate.mockReset().mockResolvedValue(expenseDetailFixture());
     mockedSuppliers.mockReset().mockResolvedValue(['Lab Dental SAS', 'Mensajeros Ya']);
     mockedUpload.mockReset().mockResolvedValue('up-1');
   });
 
-  it('alta: la sede principal, su moneda y hoy por defecto; manda solo lo escrito', async () => {
+  it('sin zona configurada no propone fecha ni permite guardar y ofrece reintentar', async () => {
+    const user = setupUser();
+    Object.assign(mockExpenseToday, { today: null, error: 'Configura la zona horaria de esta sede.' });
+    renderModal();
+    expect(screen.getByLabelText('Fecha de factura')).toHaveValue('');
+    expect(screen.getByRole('button', { name: 'Registrar gasto' })).toBeDisabled();
+    await user.click(screen.getByRole('button', { name: 'Reintentar' }));
+    expect(mockExpenseToday.retry).toHaveBeenCalledTimes(1);
+    expect(mockedCreate).not.toHaveBeenCalled();
+  });
+
+  it('sin moneda explícita no presupone una por país ni permite enviar el gasto', async () => {
+    const user = setupUser();
+    renderModal();
+    await waitFor(() => expect(screen.getByLabelText('Moneda')).toHaveValue(''));
+    await user.selectOptions(screen.getByLabelText('Categoría'), 'Laboratorio');
+    await user.type(screen.getByLabelText('Importe'), '100');
+    await user.click(screen.getByRole('button', { name: 'Registrar gasto' }));
+    expect(await screen.findByText('Elige la moneda del gasto.')).toBeInTheDocument();
+    expect(mockedCreate).not.toHaveBeenCalled();
+  });
+
+  it('alta: sede y fecha configuradas, moneda elegida explícitamente; manda solo lo escrito', async () => {
     const user = setupUser();
     const { onSaved, onOpenChange } = renderModal();
     expect(screen.getByLabelText('Sede')).toHaveValue('loc-1');

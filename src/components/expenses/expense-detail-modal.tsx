@@ -20,7 +20,6 @@ import type { SingleFileUploadRequest } from '@/lib/files/upload-single-file';
 import { formatCurrency } from '@/lib/format/currency';
 import { formatCivilDate, formatDateTime } from '@/lib/format/date';
 import type { ClinicLocation } from '@/lib/locations/locations-api';
-import { sedeToday } from '@/lib/locations/use-sede-time-zone';
 import { startDownload } from '@/lib/patient-documents/download';
 import { formatFileSize } from '@/lib/patient-documents/patient-documents-api';
 import { PAYMENT_METHOD_LABELS } from '@/lib/payments/payment-method';
@@ -415,7 +414,6 @@ export function ExpenseDetailModal({
             onCloseAutoFocus={focusAfterSub}
             token={token}
             expense={detail}
-            today={sedeToday(location?.timeZone ?? null)}
             onSaved={applyChange}
           />
         ) : null}

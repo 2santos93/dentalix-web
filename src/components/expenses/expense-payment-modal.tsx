@@ -5,6 +5,8 @@ import { apiErrorMessage } from '@/lib/api/error-message';
 import { addExpensePayment, type ExpenseDetail } from '@/lib/expenses/expenses-api';
 import { formatCurrency } from '@/lib/format/currency';
 import { moneyInputText, parseMoneyInput } from '@/lib/format/money';
+import { useExpenseToday } from './use-expense-today';
+import { SectionError } from '@/components/errors/section-error';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { FormModal } from '@/components/shared/form-modal';
 import { MoneyInput } from '@/components/shared/money-input';
@@ -32,7 +34,7 @@ interface ExpensePaymentModalProps {
   token: string;
   expense: ExpenseDetail;
   /** Hoy en la sede del gasto. */
-  today: string;
+  today?: string;
   onSaved: (expense: ExpenseDetail, notice: string) => void;
   /** A dónde va el foco al cerrar si el botón que abrió el modal ya no está. */
   onCloseAutoFocus?: (event: Event) => void;
@@ -49,22 +51,30 @@ export function ExpensePaymentModal({
   onOpenChange,
   token,
   expense,
-  today,
+  today: suppliedToday,
   onSaved,
   onCloseAutoFocus,
 }: ExpensePaymentModalProps) {
+  const configured = useExpenseToday(token, expense.locationId, open && !suppliedToday);
+  const today = suppliedToday ?? configured.today;
   const [amount, setAmount] = useState(() => moneyInputText(expense.pendingAmount));
-  const [payment, setPayment] = useState<ExpensePaymentValue>({ method: 'CASH', paidOn: today, fromCashSession: false });
+  const [payment, setPayment] = useState<ExpensePaymentValue>({ method: 'CASH', paidOn: today ?? '', fromCashSession: false });
   const [amountError, setAmountError] = useState<string | null>(null);
   const [paidOnErrorText, setPaidOnErrorText] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [idempotencyKey] = useState(() => crypto.randomUUID());
+  const [lastToday, setLastToday] = useState<string | null>(null);
+  if (today && today !== lastToday) {
+    setLastToday(today);
+    setPayment((value) => ({ ...value, paidOn: value.paidOn || today }));
+  }
   const pending = formatCurrency(expense.pendingAmount, expense.currency);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
+    if (!today) return;
     const parsed = parseMoneyInput(amount, expense.currency);
     let nextAmountError: string | null = null;
     if (!parsed.ok) nextAmountError = parsed.reason === 'empty' ? expensePaymentCopy.amountRequired : parsed.message;
@@ -102,9 +112,11 @@ export function ExpensePaymentModal({
       onSubmit={(e) => void handleSubmit(e)}
       submitLabel={expensePaymentCopy.submit}
       submitting={submitting}
+      submitDisabled={!today}
       error={error}
       onCloseAutoFocus={onCloseAutoFocus}
     >
+      {configured.error ? <SectionError description={configured.error} onRetry={configured.retry} /> : null}
       <FormField htmlFor="expense-pay-amount" label={expensePaymentCopy.amount(expense.currency)} error={amountError}>
         <MoneyInput
           id="expense-pay-amount"
@@ -127,7 +139,7 @@ export function ExpensePaymentModal({
           setPayment(next);
           setPaidOnErrorText(null);
         }}
-        today={today}
+        today={today ?? ''}
         paidOnErrorText={paidOnErrorText}
         disabled={submitting}
       />

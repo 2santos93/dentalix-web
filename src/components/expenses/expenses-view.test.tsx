@@ -15,7 +15,9 @@ import { getActiveLocationId } from '@/lib/locations/location-store';
 import { notifyError } from '@/components/errors/notify';
 import { expenseDetailFixture, expenseFixture, expenseLocations } from '@/lib/test/expenses';
 import { setupUser } from '@/lib/test/user';
+import { getLocationSchedule } from '@/lib/locations/schedule-api';
 
+jest.mock('../../lib/format/date', () => ({ ...jest.requireActual('../../lib/format/date'), civilDateInZone: () => '2026-10-24' }));
 jest.mock('../../lib/expenses/expenses-api', () => ({
   ...jest.requireActual('../../lib/expenses/expenses-api'),
   listExpenses: jest.fn(),
@@ -37,10 +39,7 @@ jest.mock('../../lib/locations/location-store', () => ({
 jest.mock('../../lib/locations/session-locations', () => ({
   useSessionLocations: () => mockRequestLocations,
 }));
-jest.mock('../../lib/locations/use-sede-time-zone', () => ({
-  useSedeTimeZone: () => 'America/Bogota',
-  sedeToday: () => '2026-10-24',
-}));
+jest.mock('../../lib/locations/schedule-api', () => ({ getLocationSchedule: jest.fn().mockResolvedValue({ timezone: 'Pacific/Auckland', ranges: [] }) }));
 jest.mock('../../lib/reference/currencies-api', () => ({
   listCurrencies: jest.fn().mockResolvedValue([{ code: 'COP', name: 'Peso colombiano', symbol: '$' }]),
 }));
@@ -71,8 +70,16 @@ describe('ExpensesView (DX-274)', () => {
     mockedRole.mockReturnValue('ADMIN');
     mockedActive.mockReturnValue(null);
     mockRequestLocations.mockReset().mockResolvedValue(expenseLocations);
+    jest.mocked(getLocationSchedule).mockReset().mockResolvedValue({ timezone: 'Pacific/Auckland', ranges: [] });
     jest.mocked(saveCsv).mockReset();
     jest.mocked(notifyError).mockReset();
+  });
+
+  it('sin horario explícito ofrece recuperar configuración y no consulta fechas inferidas del país', async () => {
+    jest.mocked(getLocationSchedule).mockResolvedValueOnce(null);
+    render(<ExpensesView token="tok" />);
+    expect(await screen.findByText(/No pudimos obtener la zona horaria de la sede/)).toBeInTheDocument();
+    expect(mockedList).not.toHaveBeenCalled();
   });
 
   it('carga el mes en curso hasta hoy y pinta la fila con su estado y el recuento', async () => {
@@ -171,7 +178,8 @@ describe('ExpensesView (DX-274)', () => {
     const user = setupUser();
     mockRequestLocations.mockRejectedValueOnce(new Error('red'));
     render(<ExpensesView token="tok" />);
-    await screen.findByTestId('expense-row');
+    await screen.findByText(/No pudimos obtener la zona horaria de la sede/);
+    expect(mockedList).not.toHaveBeenCalled();
     await user.click(screen.getByRole('button', { name: 'Nuevo gasto' }));
     const dialog = await screen.findByRole('dialog', { name: 'Nuevo gasto' });
     expect(within(dialog).getByText('Sedes no disponibles')).toBeInTheDocument();
@@ -224,6 +232,7 @@ describe('ExpensesView (DX-274)', () => {
   it('tras un cambio en el detalle la lista se recarga sin quitar las filas y el foco vuelve a la fila', async () => {
     const user = setupUser();
     render(<ExpensesView token="tok" />);
+    await screen.findByTestId('expense-row');
     let finish: (value: ExpensePage) => void = () => undefined;
     mockedList.mockImplementation(() => new Promise((resolve) => (finish = resolve)));
     const trigger = await voidFromDetail(user);

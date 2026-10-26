@@ -332,6 +332,7 @@ for (const viewport of [
       await page.getByRole('button', { name: 'Nuevo gasto' }).click();
       const form = page.getByRole('dialog', { name: 'Nuevo gasto' });
       await expect(form.getByRole('option', { name: 'Mensajería' })).toBeAttached({ timeout: 15_000 });
+      await form.getByLabel('Moneda').selectOption('COP');
       await form.getByLabel('Categoría').selectOption('Mensajería');
       await form.getByLabel('Proveedor').fill(supplier);
       await form.getByLabel('Importe').fill('30000');

@@ -165,6 +165,7 @@ for (const viewport of [
     await expect(form.getByRole('option', { name: 'Laboratorio' })).toBeAttached({ timeout: 15_000 });
     await form.getByRole('button', { name: 'Registrar gasto' }).click();
     await expect(form.getByText('Elige una categoría.')).toBeVisible();
+    await form.getByLabel('Moneda').selectOption('COP');
     await form.getByLabel('Categoría').selectOption('Laboratorio');
     await form.getByLabel('Proveedor').fill(supplier);
     await form.getByLabel('Descripción').fill('Coronas de zirconio, paciente de prueba');
