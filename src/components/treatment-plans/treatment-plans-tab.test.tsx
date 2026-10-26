@@ -32,6 +32,7 @@ import { getPriceQuote, type PriceQuote } from '@/lib/patients/patient-agreement
 import { applyBulkDiscount, getDiscountPolicy } from '@/lib/discounts/discounts-api';
 import { listStaff } from '@/lib/appointments/staff-api';
 import { voidCancellationFee } from '@/lib/cancellations/cancellation-fee-api';
+import { getPaymentAllocations, replacePaymentAllocations } from '@/lib/payments/payment-allocations-api';
 
 // NOTE: jest.mock's string literal is not alias-rewritten by the SWC
 // transform (only real `import`/`require` specifiers are) — use a relative
@@ -72,6 +73,11 @@ jest.mock('../../lib/payments/payments-api', () => ({
   listPayments: jest.fn(),
   recordPayment: jest.fn(),
   voidPayment: jest.fn(),
+}));
+// DX-051: la imputación de un abono (modal «Imputar abono», solo ADMIN).
+jest.mock('../../lib/payments/payment-allocations-api', () => ({
+  getPaymentAllocations: jest.fn(),
+  replacePaymentAllocations: jest.fn(),
 }));
 // DX-050: los profesionales que pueden figurar como quien realizó un ítem.
 jest.mock('../../lib/appointments/staff-api', () => ({
@@ -2294,6 +2300,114 @@ describe('TreatmentPlansTab', () => {
       expect(within(auto).queryByText('Fijada a mano')).not.toBeInTheDocument();
       // También en la tarjeta móvil del abono, solo una vez.
       expect(screen.getAllByText('Fijada a mano')).toHaveLength(2);
+    });
+
+    it('Imputación action only for ADMIN', async () => {
+      mockedGetPlanBalance.mockResolvedValue(balanceWithItems);
+      const user = userEvent.setup();
+      const { unmount } = render(<TreatmentPlansTab patientId="pat-1" token={adminToken} />);
+      const payments = await openPaymentsTable(user);
+      const row = within(payments).getByText('PRI-000001').closest('tr') as HTMLTableRowElement;
+      expect(within(row).getByRole('button', { name: 'Imputación' })).toBeInTheDocument();
+      // Tabla de escritorio y tarjeta móvil.
+      expect(screen.getAllByRole('button', { name: 'Imputación' })).toHaveLength(2);
+      unmount();
+
+      const receptionToken = `h.${btoa(JSON.stringify({ sub: 'u-r', tenantId: 't1', role: 'RECEPTION' }))}.s`;
+      render(<TreatmentPlansTab patientId="pat-1" token={receptionToken} />);
+      await openPaymentsTable(user);
+      expect(screen.queryByRole('button', { name: 'Imputación' })).not.toBeInTheDocument();
+    });
+
+    it('no Imputación action on a cancelled plan: its payments are not allocated', async () => {
+      const cancelled = plan({ id: 'plan-1', status: 'CANCELLED' });
+      mockedListPlans.mockResolvedValue([cancelled]);
+      mockedGetPlan.mockResolvedValue({ ...plan1Detail, ...cancelled });
+      mockedGetPlanBalance.mockResolvedValue(balanceWithItems);
+      const user = userEvent.setup();
+      render(<TreatmentPlansTab patientId="pat-1" token={adminToken} />);
+      await openPaymentsTable(user);
+      expect(screen.queryByRole('button', { name: 'Imputación' })).not.toBeInTheDocument();
+    });
+
+    it('saving the allocation closes the modal and refreshes balance and payments', async () => {
+      mockedGetPlanBalance.mockResolvedValue(balanceWithItems);
+      const allocations = {
+        paymentId: 'pay-1',
+        receiptNumber: 'PRI-000001',
+        treatmentPlanId: 'plan-1',
+        paymentAmount: 50000,
+        paymentCurrency: 'USD',
+        paidOn: '2026-01-05',
+        planCurrency: 'USD',
+        planStatus: 'DRAFT' as const,
+        planAmount: 50000,
+        manual: false,
+        allocated: 50000,
+        unallocated: 0,
+        version: 'a'.repeat(64),
+        allocations: [{ treatmentPlanItemId: item2.id, amount: 50000, source: 'AUTO' as const }],
+        items: [
+          {
+            itemId: item2.id,
+            toothNumber: '26',
+            procedureName: 'Limpieza',
+            status: 'ACCEPTED' as const,
+            billable: 80000,
+            paidByOthers: 0,
+            free: 80000,
+          },
+        ],
+      };
+      jest.mocked(getPaymentAllocations).mockResolvedValue(allocations);
+      jest.mocked(replacePaymentAllocations).mockResolvedValue({ ...allocations, manual: true, previous: [] });
+
+      const user = userEvent.setup();
+      render(
+        <>
+          <TreatmentPlansTab patientId="pat-1" token={adminToken} />
+          <Toaster />
+        </>,
+      );
+      const payments = await openPaymentsTable(user);
+      const row = within(payments).getByText('PRI-000001').closest('tr') as HTMLTableRowElement;
+      const trigger = within(row).getByRole('button', { name: 'Imputación' });
+      await user.click(trigger);
+
+      const modal = await screen.findByRole('dialog', { name: 'Imputar abono' });
+      expect(jest.mocked(getPaymentAllocations)).toHaveBeenCalledWith(adminToken, 'pay-1');
+      await within(modal).findByRole('radio', { name: /fijar a mano/i });
+      const balanceCalls = mockedGetPlanBalance.mock.calls.length;
+      const paymentsCalls = mockedListPayments.mock.calls.length;
+
+      await user.click(within(modal).getByRole('radio', { name: /fijar a mano/i }));
+      await user.click(within(modal).getByRole('button', { name: 'Guardar imputación' }));
+
+      expect(await screen.findByText('Imputación guardada.')).toBeInTheDocument();
+      await waitFor(() => expect(screen.queryByRole('dialog', { name: 'Imputar abono' })).not.toBeInTheDocument());
+      await waitFor(() => expect(mockedGetPlanBalance.mock.calls.length).toBe(balanceCalls + 1));
+      expect(mockedListPayments.mock.calls.length).toBe(paymentsCalls + 1);
+      // El foco vuelve al botón que abrió el modal (sigue en la fila).
+      await waitFor(() => expect(trigger).toHaveFocus());
+    });
+
+    it('if the row is gone when the modal closes, focus goes to the payments fold', async () => {
+      mockedGetPlanBalance.mockResolvedValue(balanceWithItems);
+      jest.mocked(getPaymentAllocations).mockRejectedValue(new ApiError(404, 'Abono no encontrado.'));
+      const user = userEvent.setup();
+      render(<TreatmentPlansTab patientId="pat-1" token={adminToken} />);
+      const payments = await openPaymentsTable(user);
+      const row = within(payments).getByText('PRI-000001').closest('tr') as HTMLTableRowElement;
+      await user.click(within(row).getByRole('button', { name: 'Imputación' }));
+      const modal = await screen.findByRole('dialog', { name: 'Imputar abono' });
+      expect(await within(modal).findByText('Abono no encontrado.')).toBeInTheDocument();
+
+      // Otra persona anuló el abono: la fila ya no está al cerrar.
+      row.remove();
+      await user.keyboard('{Escape}');
+      await waitFor(() =>
+        expect(screen.getByRole('button', { name: /abonos y saldo/i })).toHaveFocus(),
+      );
     });
   });
 });

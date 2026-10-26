@@ -68,6 +68,7 @@ import {
 import { PaymentReceiptDialog } from '@/components/payments/payment-receipt-dialog';
 import { VoidPaymentModal } from '@/components/payments/void-payment-modal';
 import { voidPaymentErrorMessage } from '@/components/payments/use-void-payment';
+import { ReallocatePaymentModal } from '@/components/payments/reallocate-payment-modal';
 import { getTokenAllowedLocationIds, getTokenRole, getTokenUserId } from '@/lib/auth/token-role';
 import { PaymentPlanSection } from './payment-plan-section';
 import { PlanVisitsBoard } from './plan-visits-board';
@@ -111,6 +112,10 @@ import { PriceQuoteLine, itemPriceOriginText } from './price-quote-line';
 import { MarkDoneModal } from './mark-done-modal';
 import { VoidCancellationFeeModal, voidFeeCopy } from '@/components/appointments/fee-reason-modal';
 import { attributionText } from '@/lib/treatment-plans/item-attribution';
+
+// El pliegue «Abonos y saldo»: destino estable del foco cuando un modal de un
+// abono se cierra y la fila que lo abrió ya no existe.
+const PAYMENTS_TRIGGER_ID = 'tp-payments-trigger';
 
 // Copy as constants (i18n-ready, es-first) — matches odontogram-tab.tsx /
 // agenda-view.tsx convention until next-intl wiring lands.
@@ -311,6 +316,8 @@ const copy = {
     `Recibo ${receiptNumber ?? 'sin serie'}`,
   // DX-051: un ADMIN fijó a mano a qué ítems va este abono.
   manualAllocation: 'Fijada a mano',
+  // DX-051: abre «Imputar abono» (solo ADMIN).
+  allocationAction: 'Imputación',
   emptyPaymentsTitle: 'Este plan todavía no tiene abonos.',
   emptyPaymentsDescription: 'Registra el primer abono con el formulario de arriba.',
 
@@ -920,6 +927,8 @@ interface PaymentsListProps {
   billable?: boolean;
   /** DX-051: abonos cuya imputación fijó un ADMIN a mano (`balance.manualPaymentIds`). */
   manualPaymentIds?: ReadonlySet<string>;
+  /** DX-051: abre «Imputar abono»; solo ADMIN y en un plan que se cobra. */
+  onAllocate?: (paymentId: string, trigger: HTMLElement) => void;
 }
 
 /** Desktop table + mobile cards for the abonos list — same responsive split as `ItemsTable`. */
@@ -930,6 +939,7 @@ function PaymentsList({
   onReceipt,
   billable = true,
   manualPaymentIds,
+  onAllocate,
 }: PaymentsListProps) {
   if (payments.length === 0) {
     return (
@@ -995,6 +1005,16 @@ function PaymentsList({
                       <Button type="button" variant="outline" size="sm" onClick={() => onReceipt(payment.id)}>
                         {copy.receiptAction}
                       </Button>
+                      {onAllocate ? (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={(e) => onAllocate(payment.id, e.currentTarget)}
+                        >
+                          {copy.allocationAction}
+                        </Button>
+                      ) : null}
                       <Separator orientation="vertical" className="h-5" />
                       <Button
                         type="button"
@@ -1044,10 +1064,20 @@ function PaymentsList({
               {/* Mismo aislamiento del destructivo que en la tabla de
                   escritorio — en móvil el riesgo de mal toque es mayor, no
                   menor. */}
-              <div className="mt-3 flex items-center gap-3">
+              <div className="mt-3 flex flex-wrap items-center gap-3">
                 <Button type="button" variant="outline" size="sm" onClick={() => onReceipt(payment.id)}>
                   {copy.receiptAction}
                 </Button>
+                {onAllocate ? (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={(e) => onAllocate(payment.id, e.currentTarget)}
+                  >
+                    {copy.allocationAction}
+                  </Button>
+                ) : null}
                 <Separator orientation="vertical" className="h-5" />
                 <Button
                   type="button"
@@ -1203,6 +1233,10 @@ export function TreatmentPlansTab({
   // Igual que `itemToRemove`: anular mueve dinero en el saldo y no tiene
   // deshacer, así que pasa por confirmación y su fallo se queda en el diálogo.
   const [paymentToVoid, setPaymentToVoid] = useState<string | null>(null);
+  // DX-051: el abono cuya imputación edita un ADMIN, y el botón que lo abrió
+  // (para devolverle el foco, o llevarlo al pliegue si la fila ya no está).
+  const [allocationPaymentId, setAllocationPaymentId] = useState<string | null>(null);
+  const allocationTriggerRef = useRef<HTMLElement | null>(null);
   const [paymentActionError, setPaymentActionError] = useState<string | null>(null);
 
   // Bumped whenever the balance/abonos refresh, so the payment-plan section
@@ -1754,6 +1788,18 @@ export function TreatmentPlansTab({
     } finally {
       setAddPaymentSubmitting(false);
     }
+  }
+
+  function openAllocation(paymentId: string, trigger: HTMLElement) {
+    allocationTriggerRef.current = trigger;
+    setAllocationPaymentId(paymentId);
+  }
+
+  /** Si la fila del abono ya no está (p. ej. lo anuló otra persona), el foco va al pliegue de abonos. */
+  function focusAfterAllocation(event: Event) {
+    if (allocationTriggerRef.current?.isConnected) return;
+    event.preventDefault();
+    document.getElementById(PAYMENTS_TRIGGER_ID)?.focus();
   }
 
   /** La fila ya no anula: abre la confirmación. */
@@ -2447,6 +2493,7 @@ export function TreatmentPlansTab({
                           para que el estado vacío enseñe el siguiente paso en
                           vez de esconderlo tras un plegado. */}
                       <Disclosure
+                        triggerId={PAYMENTS_TRIGGER_ID}
                         summary={copy.paymentsHeading}
                         meta={copy.paymentsDisclosureMeta(payments.length)}
                         defaultOpen={payments.length === 0}
@@ -2458,6 +2505,7 @@ export function TreatmentPlansTab({
                           onReceipt={setReceiptPaymentId}
                           billable={billable}
                           manualPaymentIds={manualPaymentIds}
+                          onAllocate={role === 'ADMIN' && billable ? openAllocation : undefined}
                         />
                       </Disclosure>
 
@@ -2754,6 +2802,20 @@ export function TreatmentPlansTab({
         confirming={updatingItemId !== null && updatingItemId === itemToRemove}
         error={removeItemError}
       />
+
+      {allocationPaymentId ? (
+        <ReallocatePaymentModal
+          key={allocationPaymentId}
+          open
+          onOpenChange={(open) => {
+            if (!open) setAllocationPaymentId(null);
+          }}
+          paymentId={allocationPaymentId}
+          token={token}
+          onSaved={() => void refreshBalanceAndPayments()}
+          onCloseAutoFocus={focusAfterAllocation}
+        />
+      ) : null}
 
       {/* `key` por abono: cada anulación empieza con el motivo en blanco. */}
       <VoidPaymentModal
