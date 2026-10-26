@@ -37,6 +37,11 @@ describe('etiquetas de auditoría', () => {
     expect(AUDIT_RESOURCE_LABELS.PATIENT_DOCUMENT).toBe('Documento del paciente');
   });
 
+  it('labels PAYMENT_ALLOCATION as Imputación de abono', () => {
+    // DX-051: un ADMIN reasigna a qué ítems va un abono.
+    expect(AUDIT_RESOURCE_LABELS.PAYMENT_ALLOCATION).toBe('Imputación de abono');
+  });
+
   it('las opciones no repiten valores', () => {
     expect(new Set(AUDIT_ACTION_OPTIONS).size).toBe(AUDIT_ACTION_OPTIONS.length);
     expect(new Set(AUDIT_RESOURCE_OPTIONS).size).toBe(AUDIT_RESOURCE_OPTIONS.length);

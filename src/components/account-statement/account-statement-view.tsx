@@ -1,13 +1,14 @@
 'use client';
 import * as React from 'react';
 import { useEffect, useState } from 'react';
-import { CalendarClock, FileText, HandCoins, Lock, Printer, Wallet } from 'lucide-react';
+import { CalendarClock, ChevronDown, FileText, HandCoins, Lock, Printer, Wallet } from 'lucide-react';
 import { ApiError } from '@/lib/api/client';
 import {
   accountStatementPrintHref,
   getAccountStatement,
   type AccountStatement,
   type AccountStatementMovement,
+  type AccountStatementPlan,
   type AccountStatementSummary,
 } from '@/lib/account-statement/account-statement-api';
 import {
@@ -52,6 +53,7 @@ import {
 } from '@/components/payments/use-void-payment';
 import { RecordPaymentModal } from '@/components/payments/record-payment-modal';
 import { StatementPaymentPlanModal } from './statement-payment-plan-modal';
+import { PlanItemsBalance } from './plan-items-balance';
 import { canRecordPayments } from '@/lib/payments/billable-plans-api';
 import { getTokenRole } from '@/lib/auth/token-role';
 import { cn } from '@/lib/utils';
@@ -93,6 +95,10 @@ const copy = {
   colQuote: 'Presupuesto',
   quoteLink: 'Presupuesto',
   quoteLinkSuffix: (plan: string) => ` · ${plan} (se abre en otra pestaña)`,
+  // DX-051: cobrado y pendiente de cada ítem del plan, sin entrar al plan.
+  colItems: 'Por ítem',
+  itemsToggle: 'Ver por ítem',
+  itemsToggleSuffix: (plan: string) => ` · ${plan}`,
   colDate: 'Fecha',
   colMethod: 'Método',
   colLocation: 'Sede',
@@ -267,6 +273,7 @@ export function AccountStatementView({ token, patientId, onChanged }: AccountSta
         >
           {data ? (
             <StatementBody
+              token={token}
               statement={data}
               onVoid={voiding.request}
               onReceipt={setReceiptPaymentId}
@@ -331,10 +338,12 @@ export function AccountStatementView({ token, patientId, onChanged }: AccountSta
 }
 
 function StatementBody({
+  token,
   statement,
   onVoid,
   onReceipt,
 }: {
+  token: string;
   statement: AccountStatement;
   onVoid: (target: VoidPaymentTarget) => void;
   /** Abre el recibo de caja del abono (DX-136). */
@@ -424,56 +433,22 @@ function StatementBody({
                     {copy.colBalance}
                   </TableHead>
                   <TableHead scope="col">
+                    <span className="sr-only">{copy.colItems}</span>
+                  </TableHead>
+                  <TableHead scope="col">
                     <span className="sr-only">{copy.colQuote}</span>
                   </TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {statement.plans.map((plan) => (
-                  <TableRow key={plan.id}>
-                    <TableCell className="font-medium" data-label={copy.colPlan}>
-                      {planName(plan.id)}
-                    </TableCell>
-                    <TableCell data-label={copy.colStatus}>
-                      <span className="inline-flex flex-wrap items-center gap-2">
-                        <Badge variant={PLAN_STATUS_BADGE_VARIANT[plan.status]}>
-                          {PLAN_STATUS_LABELS[plan.status]}
-                        </Badge>
-                        {!plan.countsTowardsBalance ? (
-                          <span className="text-xs text-muted">{statementCopy.notCounted}</span>
-                        ) : null}
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums" data-label={copy.colBudgeted}>
-                      {formatCurrency(plan.budgeted, plan.currency)}
-                    </TableCell>
-                    <TableCell className="text-right tabular-nums" data-label={copy.colPaid}>
-                      {formatCurrency(plan.paid, plan.currency)}
-                      {plan.paidOtherCurrencies.map((o) => (
-                        <span key={o.currency} className="block text-xs text-muted">
-                          + {formatCurrency(o.amount, o.currency)}
-                        </span>
-                      ))}
-                    </TableCell>
-                    <TableCell
-                      className="text-right font-medium tabular-nums"
-                      data-label={copy.colBalance}
-                    >
-                      {formatCurrency(plan.balance, plan.currency)}
-                    </TableCell>
-                    <TableCell className="text-right" data-label={copy.colQuote}>
-                      <a
-                        href={planQuotePrintHref(statement.patient.id, plan.id)}
-                        target="_blank"
-                        rel="noopener"
-                        className="inline-flex min-h-11 items-center gap-1.5 text-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary sm:min-h-0"
-                      >
-                        <FileText aria-hidden className="size-4" />
-                        {copy.quoteLink}
-                        <span className="sr-only">{copy.quoteLinkSuffix(planName(plan.id))}</span>
-                      </a>
-                    </TableCell>
-                  </TableRow>
+                  <PlanRows
+                    key={plan.id}
+                    token={token}
+                    plan={plan}
+                    planName={planName(plan.id)}
+                    quoteHref={planQuotePrintHref(statement.patient.id, plan.id)}
+                  />
                 ))}
               </TableBody>
             </Table>
@@ -636,6 +611,115 @@ function StatementBody({
 
       <p className="max-w-[68ch] text-xs text-muted">{statementCopy.footnote}</p>
     </div>
+  );
+}
+
+/** Columnas de la tabla de planes: la fila del detalle por ítem las abarca todas. */
+const PLAN_COLUMNS = 7;
+
+/**
+ * La fila de un plan y, justo debajo, su detalle «Ver por ítem» (DX-051).
+ *
+ * Un `<details>` no puede vivir dentro de un `<tr>`: el desplegable es un
+ * botón con `aria-expanded`/`aria-controls` en la fila del plan y una fila
+ * siguiente de ancho completo (`colSpan`) que, a 390 px, la tabla apila como
+ * una tarjeta bajo la del plan. La fila existe siempre (a `aria-controls` no
+ * le falta su destino) y se oculta con `hidden`; el detalle se monta la
+ * primera vez que se abre —es entonces cuando carga— y se queda montado al
+ * plegarlo, para no volver a pedirlo.
+ */
+function PlanRows({
+  token,
+  plan,
+  planName,
+  quoteHref,
+}: {
+  token: string;
+  plan: AccountStatementPlan;
+  planName: string;
+  quoteHref: string;
+}) {
+  const [open, setOpen] = useState(false);
+  const [opened, setOpened] = useState(false);
+  const detailId = React.useId();
+
+  function toggle() {
+    setOpen((o) => !o);
+    setOpened(true);
+  }
+
+  return (
+    <>
+      <TableRow>
+        <TableCell className="font-medium" data-label={copy.colPlan}>
+          {planName}
+        </TableCell>
+        <TableCell data-label={copy.colStatus}>
+          <span className="inline-flex flex-wrap items-center gap-2">
+            <Badge variant={PLAN_STATUS_BADGE_VARIANT[plan.status]}>
+              {PLAN_STATUS_LABELS[plan.status]}
+            </Badge>
+            {!plan.countsTowardsBalance ? (
+              <span className="text-xs text-muted">{statementCopy.notCounted}</span>
+            ) : null}
+          </span>
+        </TableCell>
+        <TableCell className="text-right tabular-nums" data-label={copy.colBudgeted}>
+          {formatCurrency(plan.budgeted, plan.currency)}
+        </TableCell>
+        <TableCell className="text-right tabular-nums" data-label={copy.colPaid}>
+          {formatCurrency(plan.paid, plan.currency)}
+          {plan.paidOtherCurrencies.map((o) => (
+            <span key={o.currency} className="block text-xs text-muted">
+              + {formatCurrency(o.amount, o.currency)}
+            </span>
+          ))}
+        </TableCell>
+        <TableCell
+          className="text-right font-medium tabular-nums"
+          data-label={copy.colBalance}
+        >
+          {formatCurrency(plan.balance, plan.currency)}
+        </TableCell>
+        <TableCell className="text-right" data-label={copy.colItems}>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            aria-expanded={open}
+            aria-controls={detailId}
+            onClick={toggle}
+            className="max-sm:min-h-11"
+          >
+            {copy.itemsToggle}
+            <span className="sr-only">{copy.itemsToggleSuffix(planName)}</span>
+            <ChevronDown
+              aria-hidden
+              className={cn('size-4 transition-transform motion-reduce:transition-none', open && 'rotate-180')}
+            />
+          </Button>
+        </TableCell>
+        <TableCell className="text-right" data-label={copy.colQuote}>
+          <a
+            href={quoteHref}
+            target="_blank"
+            rel="noopener"
+            className="inline-flex min-h-11 items-center gap-1.5 text-sm font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary sm:min-h-0"
+          >
+            <FileText aria-hidden className="size-4" />
+            {copy.quoteLink}
+            <span className="sr-only">{copy.quoteLinkSuffix(planName)}</span>
+          </a>
+        </TableCell>
+      </TableRow>
+      <TableRow id={detailId} hidden={!open} className="bg-bg/40 hover:bg-bg/40">
+        {/* `max-sm:block`: sin `data-label`, la celda no lleva etiqueta en
+            móvil; el detalle ocupa la tarjeta entera. */}
+        <TableCell colSpan={PLAN_COLUMNS} className="max-sm:block max-sm:py-2">
+          {opened ? <PlanItemsBalance token={token} planId={plan.id} currency={plan.currency} /> : null}
+        </TableCell>
+      </TableRow>
+    </>
   );
 }
 

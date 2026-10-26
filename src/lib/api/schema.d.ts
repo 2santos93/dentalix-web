@@ -2030,6 +2030,38 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/exchange/rates": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ExchangeController_rates"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/exchange/convert": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get: operations["ExchangeController_convert"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/domains": {
         parameters: {
             query?: never;
@@ -2089,38 +2121,6 @@ export interface paths {
             cookie?: never;
         };
         get: operations["PublicBrandingController_branding"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/exchange/rates": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["ExchangeController_rates"];
-        put?: never;
-        post?: never;
-        delete?: never;
-        options?: never;
-        head?: never;
-        patch?: never;
-        trace?: never;
-    };
-    "/api/v1/exchange/convert": {
-        parameters: {
-            query?: never;
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        get: operations["ExchangeController_convert"];
         put?: never;
         post?: never;
         delete?: never;
@@ -2337,6 +2337,30 @@ export interface paths {
          * @description Encola el email (outbox, DX-088) con el MISMO recibo al email de la ficha del paciente, con el documento enmascarado. DX-203: el de un menor o de un paciente sin email va al responsable que recibe avisos (`sentToResponsible`).
          */
         post: operations["PaymentReceiptsController_email"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/payments/{id}/allocations": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * A qué ítems del plan va un abono (DX-051)
+         * @description Las líneas vivas del abono, los ítems imputables del plan con lo que admite cada uno sin contar este abono, y la `version` que el PUT reenvía.
+         */
+        get: operations["PaymentAllocationsController_get"];
+        /**
+         * Reasignar la imputación de un abono (solo ADMIN, DX-051)
+         * @description MANUAL sustituye todas las imputaciones del abono por `allocations` (vacío = todo sin imputar) y lo fija: el reparto automático ya no lo usa. AUTO borra sus imputaciones, lo desfija y lo reparte como un abono más (solo llena lo libre). `expectedVersion` es la `version` leída con GET. La respuesta se lee tras el reparto y trae `previous`.
+         */
+        put: operations["PaymentAllocationsController_replace"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -4420,7 +4444,7 @@ export interface components {
         /** @enum {string} */
         AuditAction: "VIEW" | "CREATE" | "UPDATE" | "DELETE" | "SIGN" | "VOID" | "LOGIN" | "LOGIN_FAILED" | "PASSWORD_RESET" | "EXPORT" | "PRINT" | "SEND";
         /** @enum {string} */
-        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION" | "POSTOP_TEMPLATE" | "POSTOP_DELIVERY" | "PATIENT_DOCUMENT" | "MEDICAL_HISTORY_SUBMISSION" | "AGREEMENT" | "PRICE_LIST" | "PROVIDER_SCHEDULE" | "PATIENT_IMPORT_BATCH" | "EXPENSE" | "CANCELLATION_POLICY";
+        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION" | "POSTOP_TEMPLATE" | "POSTOP_DELIVERY" | "PATIENT_DOCUMENT" | "MEDICAL_HISTORY_SUBMISSION" | "AGREEMENT" | "PRICE_LIST" | "PROVIDER_SCHEDULE" | "PATIENT_IMPORT_BATCH" | "EXPENSE" | "CANCELLATION_POLICY" | "PAYMENT_ALLOCATION";
         /**
          * @description Rol con el que actuó (del token). `null` en un login fallido.
          * @enum {string}
@@ -8719,6 +8743,37 @@ export interface components {
             page: number;
             pageSize: number;
         };
+        RatesResponseDto: {
+            /** @enum {string} */
+            base: "USD";
+            /**
+             * @description Units of each currency per 1 USD, for the requested date.
+             * @example {
+             *       "COP": 4000,
+             *       "EUR": 0.92
+             *     }
+             */
+            rates: {
+                [key: string]: number;
+            };
+        };
+        ConvertResponseDto: {
+            /** @example 100 */
+            amount: number;
+            /** @example USD */
+            from: string;
+            /** @example COP */
+            to: string;
+            /** @example 2026-07-01 */
+            date: string;
+            /** @example 400000 */
+            result: number;
+            /**
+             * @description Effective from→to rate actually applied.
+             * @example 4000
+             */
+            rateUsed: number;
+        };
         CreateDomainDto: {
             /**
              * @description Dominio propio de la clínica (no un subdominio de la plataforma).
@@ -8778,37 +8833,6 @@ export interface components {
             name: string;
             primaryColor: string;
             logoUrl: string | null;
-        };
-        RatesResponseDto: {
-            /** @enum {string} */
-            base: "USD";
-            /**
-             * @description Units of each currency per 1 USD, for the requested date.
-             * @example {
-             *       "COP": 4000,
-             *       "EUR": 0.92
-             *     }
-             */
-            rates: {
-                [key: string]: number;
-            };
-        };
-        ConvertResponseDto: {
-            /** @example 100 */
-            amount: number;
-            /** @example USD */
-            from: string;
-            /** @example COP */
-            to: string;
-            /** @example 2026-07-01 */
-            date: string;
-            /** @example 400000 */
-            result: number;
-            /**
-             * @description Effective from→to rate actually applied.
-             * @example 4000
-             */
-            rateUsed: number;
         };
         CurrencyDto: {
             /** @example USD */
@@ -9030,7 +9054,35 @@ export interface components {
              */
             receiptNumber: string | null;
         };
-        PlanBalanceDto: {
+        PlanItemBalanceDto: {
+            /** Format: uuid */
+            itemId: string;
+            /** @example 11 */
+            toothNumber: string;
+            /**
+             * @description Rótulo en español del catálogo (`labelEs`); la selección de idioma es una mejora futura
+             * @example Resina
+             */
+            procedureName: string;
+            /** @enum {string} */
+            status: "PROPOSED" | "ACCEPTED" | "DONE";
+            /**
+             * @description price - discount si el ítem es ACCEPTED|DONE y el plan es cobrable; si no, 0
+             * @example 100
+             */
+            billable: number;
+            /**
+             * @description Σ de lo imputado al ítem
+             * @example 60
+             */
+            paid: number;
+            /**
+             * @description billable - paid
+             * @example 40
+             */
+            balance: number;
+        };
+        PlanBalanceWithItemsDto: {
             /**
              * @description ISO 4217 currency code
              * @example USD
@@ -9053,6 +9105,24 @@ export interface components {
             balance: number;
             /** @example 1 */
             paymentsCount: number;
+            /**
+             * @description Σ de lo imputado a los ítems
+             * @example 150
+             */
+            allocated: number;
+            /**
+             * @description Cobrado (con base) que aún no está imputado a ningún ítem
+             * @example 30
+             */
+            unallocated: number;
+            /**
+             * @description Abonos vivos sin base (sin tasa): no se imputan
+             * @example 0
+             */
+            unconvertedPaymentsCount: number;
+            /** @description Abonos cuya imputación fijó un ADMIN a mano */
+            manualPaymentIds: string[];
+            items: components["schemas"]["PlanItemBalanceDto"][];
         };
         VoidPaymentDto: {
             /**
@@ -9193,6 +9263,162 @@ export interface components {
             sentTo: string;
             /** @description DX-203: salió al email del responsable (un menor o un paciente sin email). */
             sentToResponsible: boolean;
+        };
+        PaymentAllocationLineDto: {
+            /** Format: uuid */
+            treatmentPlanItemId: string;
+            /**
+             * @description En la moneda del plan
+             * @example 50
+             */
+            amount: number;
+            /** @enum {string} */
+            source: "AUTO" | "MANUAL";
+        };
+        AllocationItemOptionDto: {
+            /** Format: uuid */
+            itemId: string;
+            /** @example 11 */
+            toothNumber: string;
+            /** @example Resina */
+            procedureName: string;
+            /** @enum {string} */
+            status: "ACCEPTED" | "DONE";
+            /**
+             * @description price − discount
+             * @example 100
+             */
+            billable: number;
+            /**
+             * @description Lo que le imputan otros abonos
+             * @example 30
+             */
+            paidByOthers: number;
+            /**
+             * @description Lo que este abono puede imputarle: billable − paidByOthers
+             * @example 70
+             */
+            free: number;
+        };
+        PaymentAllocationsDto: {
+            /** Format: uuid */
+            paymentId: string;
+            /**
+             * @description Null en los abonos anteriores a la numeración (DX-136)
+             * @example NOR-000123
+             */
+            receiptNumber: string | null;
+            /** Format: uuid */
+            treatmentPlanId: string;
+            /**
+             * @description En la moneda del abono
+             * @example 100
+             */
+            paymentAmount: number;
+            /** @example USD */
+            paymentCurrency: string;
+            /**
+             * @description Día civil del abono en su sede: la fecha de la tasa
+             * @example 2026-10-20
+             */
+            paidOn: string;
+            /** @example EUR */
+            planCurrency: string;
+            /**
+             * @description Estado del plan: rechazado o cancelado no admite reasignar (409 en el PUT) y sus `items` vienen vacíos
+             * @enum {string}
+             */
+            planStatus: "DRAFT" | "PRESENTED" | "ACCEPTED" | "REJECTED" | "COMPLETED" | "CANCELLED";
+            /**
+             * @description El abono convertido a la moneda del plan con la tasa de su paidOn; null si aún no hay tasa
+             * @example 90
+             */
+            planAmount: number | null;
+            /** @description Imputación fijada a mano por un ADMIN */
+            manual: boolean;
+            /** @example 70 */
+            allocated: number;
+            /** @example 20 */
+            unallocated: number | null;
+            /** @description Versión de la imputación: se reenvía como expectedVersion */
+            version: string;
+            allocations: components["schemas"]["PaymentAllocationLineDto"][];
+            /** @description Ítems imputables del plan, en el orden del plan */
+            items: components["schemas"]["AllocationItemOptionDto"][];
+        };
+        ReplaceAllocationLineDto: {
+            /** Format: uuid */
+            treatmentPlanItemId: string;
+            /**
+             * @description En la moneda del plan; > 0 y 2 decimales como máximo
+             * @example 50
+             */
+            amount: number;
+        };
+        ReplacePaymentAllocationsDto: {
+            /** @description La `version` leída con GET; si cambió, 409 */
+            expectedVersion: string;
+            /**
+             * @description MANUAL fija la imputación a las líneas enviadas; AUTO la devuelve al reparto automático
+             * @enum {string}
+             */
+            mode: "MANUAL" | "AUTO";
+            /** @description Obligatorio con MANUAL (vacío = todo sin imputar); prohibido con AUTO */
+            allocations?: components["schemas"]["ReplaceAllocationLineDto"][];
+        };
+        PreviousAllocationLineDto: {
+            /** Format: uuid */
+            treatmentPlanItemId: string;
+            /** @example 50 */
+            amount: number;
+        };
+        ReplacedPaymentAllocationsDto: {
+            /** Format: uuid */
+            paymentId: string;
+            /**
+             * @description Null en los abonos anteriores a la numeración (DX-136)
+             * @example NOR-000123
+             */
+            receiptNumber: string | null;
+            /** Format: uuid */
+            treatmentPlanId: string;
+            /**
+             * @description En la moneda del abono
+             * @example 100
+             */
+            paymentAmount: number;
+            /** @example USD */
+            paymentCurrency: string;
+            /**
+             * @description Día civil del abono en su sede: la fecha de la tasa
+             * @example 2026-10-20
+             */
+            paidOn: string;
+            /** @example EUR */
+            planCurrency: string;
+            /**
+             * @description Estado del plan: rechazado o cancelado no admite reasignar (409 en el PUT) y sus `items` vienen vacíos
+             * @enum {string}
+             */
+            planStatus: "DRAFT" | "PRESENTED" | "ACCEPTED" | "REJECTED" | "COMPLETED" | "CANCELLED";
+            /**
+             * @description El abono convertido a la moneda del plan con la tasa de su paidOn; null si aún no hay tasa
+             * @example 90
+             */
+            planAmount: number | null;
+            /** @description Imputación fijada a mano por un ADMIN */
+            manual: boolean;
+            /** @example 70 */
+            allocated: number;
+            /** @example 20 */
+            unallocated: number | null;
+            /** @description Versión de la imputación: se reenvía como expectedVersion */
+            version: string;
+            allocations: components["schemas"]["PaymentAllocationLineDto"][];
+            /** @description Ítems imputables del plan, en el orden del plan */
+            items: components["schemas"]["AllocationItemOptionDto"][];
+            /** @description Las líneas de antes de guardar */
+            previous: components["schemas"]["PreviousAllocationLineDto"][];
         };
         CreatePaymentPlanDto: {
             /**
@@ -18956,6 +19182,55 @@ export interface operations {
             };
         };
     };
+    ExchangeController_rates: {
+        parameters: {
+            query: {
+                /** @description Historical day to fetch USD-base rates for (YYYY-MM-DD). */
+                date: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["RatesResponseDto"];
+                };
+            };
+        };
+    };
+    ExchangeController_convert: {
+        parameters: {
+            query: {
+                amount: number;
+                /** @description ISO 4217 currency code */
+                from: string;
+                /** @description ISO 4217 currency code */
+                to: string;
+                /** @description Historical day whose rate applies to this conversion (YYYY-MM-DD). */
+                date: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ConvertResponseDto"];
+                };
+            };
+        };
+    };
     DomainsController_list: {
         parameters: {
             query?: never;
@@ -19103,55 +19378,6 @@ export interface operations {
                 };
                 content: {
                     "application/json": components["schemas"]["BrandingDto"];
-                };
-            };
-        };
-    };
-    ExchangeController_rates: {
-        parameters: {
-            query: {
-                /** @description Historical day to fetch USD-base rates for (YYYY-MM-DD). */
-                date: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["RatesResponseDto"];
-                };
-            };
-        };
-    };
-    ExchangeController_convert: {
-        parameters: {
-            query: {
-                amount: number;
-                /** @description ISO 4217 currency code */
-                from: string;
-                /** @description ISO 4217 currency code */
-                to: string;
-                /** @description Historical day whose rate applies to this conversion (YYYY-MM-DD). */
-                date: string;
-            };
-            header?: never;
-            path?: never;
-            cookie?: never;
-        };
-        requestBody?: never;
-        responses: {
-            200: {
-                headers: {
-                    [name: string]: unknown;
-                };
-                content: {
-                    "application/json": components["schemas"]["ConvertResponseDto"];
                 };
             };
         };
@@ -19404,13 +19630,13 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Saldo del plan. Un plan rechazado o cancelado tiene `billable` 0 (misma regla que el estado de cuenta, DX-109); sus abonos siguen en `paid`. */
+            /** @description Saldo del plan. Un plan rechazado o cancelado tiene `billable` 0 (misma regla que el estado de cuenta, DX-109); sus abonos siguen en `paid`. Añade, por ítem, lo cobrado y lo pendiente (DX-051), y en el plan lo imputado y lo sin imputar. Solo ADMIN y recepción. */
             200: {
                 headers: {
                     [name: string]: unknown;
                 };
                 content: {
-                    "application/json": components["schemas"]["PlanBalanceDto"];
+                    "application/json": components["schemas"]["PlanBalanceWithItemsDto"];
                 };
             };
         };
@@ -19572,6 +19798,101 @@ export interface operations {
             };
             /** @description Topes de envío de la clínica */
             429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PaymentAllocationsController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentAllocationsDto"];
+                };
+            };
+            /** @description Rol sin acceso a pagos */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El abono no existe, está anulado o es de otra clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Abono a un saldo migrado */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PaymentAllocationsController_replace: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["ReplacePaymentAllocationsDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ReplacedPaymentAllocationsDto"];
+                };
+            };
+            /** @description Líneas inválidas: importe, ítem repetido, más de 200, modo, ítem de otro plan o propuesto, por encima de lo libre o de la base */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo ADMIN reasigna */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El abono no existe, está anulado o es de otra clínica */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Saldo migrado, plan rechazado o cancelado, sin tasa para la fecha del abono, o la imputación cambió (expectedVersion) */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

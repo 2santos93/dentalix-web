@@ -27,7 +27,7 @@ import { getPaymentReceipt } from '@/lib/payments/payment-receipts-api';
 import { paymentReceiptFixture } from '@/lib/test/payment-receipt';
 import { listCurrencies } from '@/lib/reference/currencies-api';
 import { getPaymentPlan } from '@/lib/payment-plans/payment-plan-api';
-import { ITEM_WITHOUT_DISCOUNT, PLAN_WITHOUT_OPTIONS } from './plan-fixture';
+import { BALANCE_WITHOUT_ALLOCATIONS, ITEM_WITHOUT_DISCOUNT, PLAN_WITHOUT_OPTIONS } from './plan-fixture';
 import { getPriceQuote, type PriceQuote } from '@/lib/patients/patient-agreement-api';
 import { applyBulkDiscount, getDiscountPolicy } from '@/lib/discounts/discounts-api';
 import { listStaff } from '@/lib/appointments/staff-api';
@@ -251,11 +251,12 @@ const balance1: PlanBalance = {
   paid: 50000,
   balance: 80000,
   paymentsCount: 1,
+  ...BALANCE_WITHOUT_ALLOCATIONS,
 };
 
 /** Empty balance/payments — the default for tests that don't exercise the abonos block. */
 function emptyBalance(): PlanBalance {
-  return { planCurrency: 'USD', billable: 0, paid: 0, balance: 0, paymentsCount: 0 };
+  return { planCurrency: 'USD', billable: 0, paid: 0, balance: 0, paymentsCount: 0, ...BALANCE_WITHOUT_ALLOCATIONS };
 }
 
 /**
@@ -2150,6 +2151,149 @@ describe('TreatmentPlansTab', () => {
       expect(
         await screen.findByText('Descuento aplicado a 1 ítem. 2 prestaciones no admiten descuento y se dejaron igual.'),
       ).toBeInTheDocument();
+    });
+  });
+
+  // DX-051: cobrado y pendiente por ítem (ADMIN; DENTIST y ASSISTANT reciben
+  // 403 del saldo y no ven nada nuevo).
+  describe('cobrado por ítem (DX-051)', () => {
+    const adminToken = `h.${btoa(JSON.stringify({ sub: 'u-admin', tenantId: 't1', role: 'ADMIN' }))}.s`;
+    const balanceWithItems: PlanBalance = {
+      ...balance1,
+      allocated: 50000,
+      items: [
+        {
+          itemId: item1.id,
+          toothNumber: '11',
+          procedureName: 'Resina',
+          status: 'PROPOSED',
+          billable: 0,
+          paid: 0,
+          balance: 0,
+        },
+        {
+          itemId: item2.id,
+          toothNumber: '26',
+          procedureName: 'Limpieza',
+          status: 'ACCEPTED',
+          billable: 80000,
+          paid: 50000,
+          balance: 30000,
+        },
+      ],
+    };
+
+    async function itemsTable() {
+      return screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+    }
+
+    /** El `<dl>` de cifras del plan: «Sin imputar» vive ahí, junto a «Pagado». */
+    function moneySummary(): HTMLElement {
+      return screen.getByText('A pagar').closest('dl') as HTMLElement;
+    }
+
+    beforeEach(() => {
+      mockedListPlans.mockResolvedValue([plan1]);
+      mockedGetPlan.mockResolvedValue(plan1Detail);
+      mockedListPayments.mockResolvedValue([payment1]);
+    });
+
+    it('renders Cobrado/Pendiente when balance has items', async () => {
+      mockedGetPlanBalance.mockResolvedValue(balanceWithItems);
+      render(<TreatmentPlansTab patientId="pat-1" token={adminToken} />);
+
+      const table = await itemsTable();
+      const headers = await within(table).findAllByRole('columnheader');
+      const names = headers.map((h) => h.textContent);
+      // Tras el importe, antes del estado.
+      expect(names.indexOf('Cobrado')).toBe(names.indexOf('Precio') + 1);
+      expect(names.indexOf('Pendiente')).toBe(names.indexOf('Precio') + 2);
+
+      const accepted = within(table).getByText('26').closest('tr') as HTMLTableRowElement;
+      expect(within(accepted).getByText(expectedCurrencyText(50000))).toBeInTheDocument();
+      expect(within(accepted).getByText(expectedCurrencyText(30000))).toBeInTheDocument();
+      const proposed = within(table).getByText('11').closest('tr') as HTMLTableRowElement;
+      expect(within(proposed).getAllByLabelText('Sin importe a cobrar')).toHaveLength(2);
+
+      // Tarjetas móviles: «Cobrado {x} · Pendiente {y}».
+      expect(
+        screen.getByText(`Cobrado ${expectedCurrencyText(50000)} · Pendiente ${expectedCurrencyText(30000)}`),
+      ).toBeInTheDocument();
+    });
+
+    it('Sin imputar only when unallocated > 0', async () => {
+      mockedGetPlanBalance.mockResolvedValue(balanceWithItems);
+      const { unmount } = render(<TreatmentPlansTab patientId="pat-1" token={adminToken} />);
+      await itemsTable();
+      await within(await itemsTable()).findAllByText('Cobrado');
+      expect(within(moneySummary()).queryByText('Sin imputar')).not.toBeInTheDocument();
+      unmount();
+
+      mockedGetPlanBalance.mockResolvedValue({ ...balanceWithItems, unallocated: 12500 });
+      render(<TreatmentPlansTab patientId="pat-1" token={adminToken} />);
+      await within(await itemsTable()).findAllByText('Cobrado');
+      const figure = within(moneySummary()).getByText('Sin imputar').closest('div') as HTMLElement;
+      expect(within(figure).getByText(expectedCurrencyText(12500))).toBeInTheDocument();
+      expect(figure).toHaveTextContent('Abonos que todavía no cubren ningún ítem.');
+    });
+
+    it('unconverted notice reads «{n} abono(s) todavía sin convertir a la moneda del plan: no se imputan a ítems.»', async () => {
+      mockedGetPlanBalance.mockResolvedValue({ ...balanceWithItems, unconvertedPaymentsCount: 2 });
+      render(<TreatmentPlansTab patientId="pat-1" token={adminToken} />);
+
+      expect(
+        await screen.findByText('2 abonos todavía sin convertir a la moneda del plan: no se imputan a ítems.'),
+      ).toBeInTheDocument();
+    });
+
+    it('unconverted notice for a single abono reads in singular, and is absent at 0', async () => {
+      mockedGetPlanBalance.mockResolvedValue({ ...balanceWithItems, unconvertedPaymentsCount: 1 });
+      const { unmount } = render(<TreatmentPlansTab patientId="pat-1" token={adminToken} />);
+      expect(
+        await screen.findByText('1 abono todavía sin convertir a la moneda del plan: no se imputa a ítems.'),
+      ).toBeInTheDocument();
+      unmount();
+
+      mockedGetPlanBalance.mockResolvedValue(balanceWithItems);
+      render(<TreatmentPlansTab patientId="pat-1" token={adminToken} />);
+      await within(await itemsTable()).findAllByText('Cobrado');
+      expect(screen.queryByText(/todavía sin convertir/)).not.toBeInTheDocument();
+    });
+
+    it('no new columns when balance is 403', async () => {
+      const dentistToken = `h.${btoa(JSON.stringify({ sub: 'u-d', tenantId: 't1', role: 'DENTIST' }))}.s`;
+      mockedGetPlanBalance.mockRejectedValue(new ApiError(403, 'Forbidden'));
+      mockedListPayments.mockRejectedValue(new ApiError(403, 'Forbidden'));
+      render(<TreatmentPlansTab patientId="pat-1" token={dentistToken} />);
+
+      const table = await itemsTable();
+      // El 403 del saldo ya se pintó (su propio aviso en «Abonos y saldo»).
+      await screen.findByRole('button', { name: /reintentar/i });
+      const names = within(table)
+        .getAllByRole('columnheader')
+        .map((h) => h.textContent);
+      expect(names).not.toContain('Cobrado');
+      expect(names).not.toContain('Pendiente');
+      expect(screen.queryByText(/^Cobrado /)).not.toBeInTheDocument();
+      expect(screen.queryByLabelText('Sin importe a cobrar')).not.toBeInTheDocument();
+      expect(screen.queryByText('Sin imputar')).not.toBeInTheDocument();
+    });
+
+    it('Fijada a mano badge for ids in manualPaymentIds', async () => {
+      const payment2: Payment = { ...payment1, id: 'pay-2', amount: 20000, receiptNumber: 'PRI-000002' };
+      mockedListPayments.mockResolvedValue([payment1, payment2]);
+      mockedGetPlanBalance.mockResolvedValue({ ...balanceWithItems, manualPaymentIds: ['pay-2'] });
+
+      const user = userEvent.setup();
+      render(<TreatmentPlansTab patientId="pat-1" token={adminToken} />);
+      const payments = await openPaymentsTable(user);
+
+      const pinned = within(payments).getByText('PRI-000002').closest('tr') as HTMLTableRowElement;
+      expect(within(pinned).getByText('Fijada a mano')).toBeInTheDocument();
+      const auto = within(payments).getByText('PRI-000001').closest('tr') as HTMLTableRowElement;
+      expect(within(auto).queryByText('Fijada a mano')).not.toBeInTheDocument();
+      // También en la tarjeta móvil del abono, solo una vez.
+      expect(screen.getAllByText('Fijada a mano')).toHaveLength(2);
     });
   });
 });
