@@ -119,6 +119,27 @@
       "annotation": "E2E_DATABASE_URL no definido: no se puede mover a hoy la cita que ya empezó",
       "requiresUnset": "E2E_DATABASE_URL",
       "reason": "Sin E2E_DATABASE_URL no se pueden mover a hoy (ya empezadas) las dos citas del paciente."
+    },
+    {
+      "file": "e2e/regional-format.spec.ts",
+      "title": "panel «En clínica»: 12 h en A, 24 h en B, y la reserva en otra cita con la fecha en el orden de cada sede",
+      "annotation": "E2E_DATABASE_URL no definido: no se pueden mover a hoy las citas ni quitar el reloj de una sede",
+      "requiresUnset": "E2E_DATABASE_URL",
+      "reason": "Sin E2E_DATABASE_URL no se pueden mover a hoy (ya empezadas) las citas de las sedes ni dejar el reloj de una sede en NULL."
+    },
+    {
+      "file": "e2e/regional-format.spec.ts",
+      "title": "modal de sede: reloj bajo la vista previa; A pasa a 24 h y el panel lo pinta sin recargar",
+      "annotation": "E2E_DATABASE_URL no definido: no se pueden mover a hoy las citas ni quitar el reloj de una sede",
+      "requiresUnset": "E2E_DATABASE_URL",
+      "reason": "Sin E2E_DATABASE_URL no se pueden mover a hoy (ya empezadas) las citas de las sedes ni dejar el reloj de una sede en NULL."
+    },
+    {
+      "file": "e2e/regional-format.spec.ts",
+      "title": "una sede con el reloj en NULL: el aviso de formato de sede en la importación y el 409 de la API en el panel, nunca otro reloj",
+      "annotation": "E2E_DATABASE_URL no definido: no se pueden mover a hoy las citas ni quitar el reloj de una sede",
+      "requiresUnset": "E2E_DATABASE_URL",
+      "reason": "Sin E2E_DATABASE_URL no se pueden mover a hoy (ya empezadas) las citas de las sedes ni dejar el reloj de una sede en NULL."
     }
   ]
 }
