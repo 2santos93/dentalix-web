@@ -102,7 +102,12 @@ interface NewPrescriptionModalProps {
  *
  * El padre lo monta con una `key` nueva en cada apertura.
  */
-export function NewPrescriptionModal({
+export function NewPrescriptionModal(props: NewPrescriptionModalProps) {
+  // Un cambio de paciente no puede reutilizar datos ni confirmaciones.
+  return <NewPrescriptionForm key={props.patientId} {...props} />;
+}
+
+function NewPrescriptionForm({
   open,
   onOpenChange,
   token,
@@ -183,7 +188,7 @@ export function NewPrescriptionModal({
         })),
     [items],
   );
-  const safetyKey = JSON.stringify(safetyItems);
+  const safetyKey = JSON.stringify([token, safetyRetry, safetyItems]);
 
   useEffect(() => {
     if (!open) return;
@@ -196,8 +201,10 @@ export function NewPrescriptionModal({
     }
     let cancelled = false;
     const id = setTimeout(() => {
-      setSafety({ kind: 'loading' });
-      setSafetyFor(null);
+      setSafety((previous) => ({
+        kind: 'loading',
+        ...(previous.kind !== 'idle' && previous.preview ? { preview: previous.preview } : {}),
+      }));
       checkPrescriptionSafety(token, patientId, safetyItems)
         .then((preview) => {
           if (cancelled) return;
@@ -205,7 +212,13 @@ export function NewPrescriptionModal({
           setSafetyFor(safetyKey);
         })
         .catch(() => {
-          if (!cancelled) setSafety({ kind: 'error' });
+          if (!cancelled) {
+            setSafety((previous) => ({
+              kind: 'error',
+              ...(previous.kind !== 'idle' && previous.preview ? { preview: previous.preview } : {}),
+            }));
+            setSafetyFor(safetyKey);
+          }
         });
     }, SAFETY_CHECK_DEBOUNCE_MS);
     return () => {
@@ -216,8 +229,15 @@ export function NewPrescriptionModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, token, patientId, safetyKey, safetyRetry]);
 
-  const blockingAlerts =
-    safety.kind === 'ready' ? safety.preview.alerts.filter((a) => a.severity === 'BLOCKING') : [];
+  const safetyPreview = safety.kind === 'idle' ? undefined : safety.preview;
+  const visibleSafety: SafetyState = safetyItems.length === 0
+    ? { kind: 'idle' }
+    : safetyFor !== safetyKey
+      ? { kind: 'loading', preview: safetyPreview }
+      : safety;
+  const blockingAlerts = safetyItems.length > 0
+    ? safetyPreview?.alerts.filter((a) => a.severity === 'BLOCKING') ?? []
+    : [];
   const alertKey =
     blockingAlerts.length > 0
       ? blockingAlerts.map((a) => `${a.code}|${a.activeIngredient ?? ''}|${a.message}`).join(';')
@@ -225,8 +245,16 @@ export function NewPrescriptionModal({
   const confirmed = alertKey !== null && confirmedKey === alertKey;
   // Comprobación al día con lo escrito: sin ella no se emite.
   const safetyReady = safetyFor === safetyKey && safety.kind !== 'loading' && safety.kind !== 'error';
-  // Sin motivo el botón sigue activo: al pulsarlo, el campo dice qué falta.
-  const safetyBlocksSubmit = !safetyReady || (alertKey !== null && !confirmed);
+  const safetyBlocksSubmit = !safetyReady || (alertKey !== null && (!confirmed || !reason.trim()));
+  const submitHint = !safetyReady
+    ? safety.kind === 'error' && safetyFor === safetyKey
+      ? 'Reintenta la comprobación de seguridad antes de emitir.'
+      : 'Espera a que termine la comprobación de seguridad para emitir.'
+    : alertKey !== null && !confirmed
+      ? 'Confirma los avisos de seguridad para emitir.'
+      : alertKey !== null && !reason.trim()
+        ? copy.reasonMissing
+        : null;
 
   const country = issuer?.country ?? 'CO';
   const maxItems = issuer?.maxItems ?? 10;
@@ -349,6 +377,7 @@ export function NewPrescriptionModal({
       submitLabel={copy.submit}
       submitting={submitting}
       submitDisabled={!ready || tooMany || safetyBlocksSubmit}
+      submitHint={submitHint}
       error={error}
       size="lg"
     >
@@ -475,7 +504,7 @@ export function NewPrescriptionModal({
           </FormField>
 
           <PrescriptionSafetyPanel
-            state={safety}
+            state={visibleSafety}
             country={country}
             onRetry={() => setSafetyRetry((k) => k + 1)}
             confirmed={confirmed}
