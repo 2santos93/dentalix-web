@@ -1,0 +1,24 @@
+{
+  "scrollbar": 15,
+  "badge": {
+    "left": 176.40625,
+    "right": 200,
+    "top": 421,
+    "bottom": 437
+  },
+  "width": 200,
+  "left": 12,
+  "right": 212,
+  "top": 593,
+  "bottom": 633,
+  "navLeft": 0,
+  "navRight": 224,
+  "navTop": 64,
+  "navBottom": 641,
+  "navScroll": 67,
+  "documentScroll": 0,
+  "outline": "auto",
+  "outlineWidth": "1px",
+  "outlineOffset": "1px",
+  "railWidth": 240
+}

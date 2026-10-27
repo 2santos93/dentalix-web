@@ -5,7 +5,6 @@ import { ExternalLink, Info, ShieldAlert } from 'lucide-react';
 import { SectionError } from '@/components/errors/section-error';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { Input } from '@/components/ui/input';
-import { Skeleton } from '@/components/ui/skeleton';
 import { fieldClass } from '@/lib/ui/field-class';
 import { cn } from '@/lib/utils';
 import {
@@ -39,8 +38,8 @@ export const SAFETY_REASON_MAX = 500;
 
 export type SafetyState =
   | { kind: 'idle' }
-  | { kind: 'loading' }
-  | { kind: 'error' }
+  | { kind: 'loading'; preview?: PrescriptionSafetyPreview }
+  | { kind: 'error'; preview?: PrescriptionSafetyPreview }
   | { kind: 'ready'; preview: PrescriptionSafetyPreview };
 
 interface PrescriptionSafetyPanelProps {
@@ -74,7 +73,7 @@ function AlertList({ alerts, tone }: { alerts: SafetyAlert[]; tone: 'blocking' |
           />
           <div className="min-w-0 flex-1">
             <p className="break-words">{alert.message}</p>
-            <p className="mt-1 break-words text-xs text-muted">
+            <p className="mt-1 break-words text-xs text-ink">
               {alert.source} · <span className="font-mono">{alert.code}</span>
             </p>
           </div>
@@ -103,9 +102,21 @@ export function PrescriptionSafetyPanel({
   const titleId = useId();
   const [registration, setRegistration] = useState('');
   const cimaUrl = country === 'ES' ? cimaTechnicalSheetUrl(registration) : null;
-  const alerts = state.kind === 'ready' ? state.preview.alerts : [];
-  const blocking = alerts.filter((a) => a.severity === 'BLOCKING');
-  const info = alerts.filter((a) => a.severity === 'INFO');
+  const preview = state.kind === 'idle' ? undefined : state.preview;
+  const alerts = preview?.alerts ?? [];
+  // El texto permanece idéntico si la respuesta no cambia; los controles
+  // nunca pertenecen a la región viva.
+  const announcement = preview && state.kind !== 'error'
+    ? alerts.length > 0
+      ? `Avisos actualizados: ${alerts.map((alert) => `${alert.severity === 'BLOCKING' ? 'Requiere confirmación' : 'Informativo'}: ${alert.message}`).join(' ')}`
+      : `Comprobación terminada: ${safetyCopy.none}`
+    : '';
+  // Si la comprobación falló, el resultado anterior no describe lo escrito:
+  // solo queda el error. Durante la carga se conservan los bloques (sin
+  // desmontar casilla ni motivo), pero «Sin avisos» no se afirma.
+  const shown = state.kind === 'error' ? [] : alerts;
+  const blocking = shown.filter((a) => a.severity === 'BLOCKING');
+  const info = shown.filter((a) => a.severity === 'INFO');
 
   return (
     <section
@@ -119,14 +130,15 @@ export function PrescriptionSafetyPanel({
         <p className="text-xs text-muted">{safetyCopy.disclaimer}</p>
       </div>
 
-      {state.kind === 'idle' ? <p className="text-sm text-muted">{safetyCopy.idle}</p> : null}
+      <p role="status" aria-label="Resultado de seguridad" aria-live="polite" aria-atomic="true" className="sr-only">
+        {announcement}
+      </p>
 
-      {state.kind === 'loading' ? (
-        <div role="status" aria-label={safetyCopy.loading} className="flex flex-col gap-2">
-          <Skeleton className="h-12 w-full" />
-          <Skeleton className="h-12 w-2/3" />
-        </div>
-      ) : null}
+      <p aria-hidden="true" className="min-h-5 text-xs text-muted">
+        {state.kind === 'loading' ? safetyCopy.loading : '\u00a0'}
+      </p>
+
+      {state.kind === 'idle' ? <p className="text-sm text-muted">{safetyCopy.idle}</p> : null}
 
       {state.kind === 'error' ? (
         <SectionError
@@ -137,12 +149,16 @@ export function PrescriptionSafetyPanel({
         />
       ) : null}
 
-      {state.kind === 'ready' && alerts.length === 0 ? (
+      {preview && alerts.length === 0 && state.kind === 'ready' ? (
         <p className="text-sm text-muted">{safetyCopy.none}</p>
+      ) : null}
+      {/* Mismo alto que «Sin avisos» mientras se recomprueba: no salta. */}
+      {preview && alerts.length === 0 && state.kind === 'loading' ? (
+        <p aria-hidden="true" className="text-sm">{'\u00a0'}</p>
       ) : null}
 
       {blocking.length > 0 ? (
-        <div role="alert" className="flex flex-col gap-2">
+        <div className="flex flex-col gap-2">
           <h4 className="text-sm font-semibold text-danger">{safetyCopy.blocking(blocking.length)}</h4>
           <AlertList alerts={blocking} tone="blocking" />
           <label className="flex items-start gap-2 text-sm text-ink">
@@ -158,6 +174,7 @@ export function PrescriptionSafetyPanel({
             htmlFor="rx-safety-reason"
             label={safetyCopy.reasonLabel}
             hint={safetyCopy.reasonHint}
+            hintId="rx-safety-reason-hint"
             error={reasonError}
           >
             <textarea
@@ -166,7 +183,7 @@ export function PrescriptionSafetyPanel({
               value={reason}
               maxLength={SAFETY_REASON_MAX}
               aria-invalid={reasonError ? true : undefined}
-              aria-describedby={reasonError ? fieldErrorId('rx-safety-reason') : undefined}
+              aria-describedby={reasonError ? fieldErrorId('rx-safety-reason') : 'rx-safety-reason-hint'}
               onChange={(e) => onReasonChange(e.target.value)}
               className={cn(fieldClass, 'h-auto font-[inherit]')}
             />

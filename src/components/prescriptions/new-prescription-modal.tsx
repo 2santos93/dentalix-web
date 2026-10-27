@@ -15,6 +15,7 @@ import {
   type Prescription,
   type PrescriptionIssuer,
   type PrescriptionTemplate,
+  type SafetyAlert,
 } from '@/lib/prescriptions/prescriptions-api';
 import {
   draftFromTemplateItem,
@@ -76,6 +77,17 @@ const SERVER_SAFETY_MAX_LENGTH = 2000;
 /** Espera tras la última tecla antes de pedir los avisos al servidor. */
 export const SAFETY_CHECK_DEBOUNCE_MS = 400;
 
+/**
+ * Identifica UN conjunto de avisos bloqueantes: la confirmación vale para esa
+ * clave y se invalida en cuanto otra respuesta trae otra (o ninguna).
+ */
+function blockingKey(alerts: readonly SafetyAlert[]): string | null {
+  const blocking = alerts.filter((alert) => alert.severity === 'BLOCKING');
+  return blocking.length > 0
+    ? blocking.map((alert) => `${alert.code}|${alert.activeIngredient ?? ''}|${alert.message}`).join(';')
+    : null;
+}
+
 interface NewPrescriptionModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -102,7 +114,12 @@ interface NewPrescriptionModalProps {
  *
  * El padre lo monta con una `key` nueva en cada apertura.
  */
-export function NewPrescriptionModal({
+export function NewPrescriptionModal(props: NewPrescriptionModalProps) {
+  // Un cambio de paciente no puede reutilizar datos ni confirmaciones.
+  return <NewPrescriptionForm key={props.patientId} {...props} />;
+}
+
+function NewPrescriptionForm({
   open,
   onOpenChange,
   token,
@@ -183,29 +200,40 @@ export function NewPrescriptionModal({
         })),
     [items],
   );
-  const safetyKey = JSON.stringify(safetyItems);
+  const safetyKey = JSON.stringify([token, safetyRetry, safetyItems]);
 
   useEffect(() => {
     if (!open) return;
     if (safetyItems.length === 0) {
       const id = setTimeout(() => {
         setSafety({ kind: 'idle' });
+        setConfirmedKey(null);
         setSafetyFor(safetyKey);
       }, 0);
       return () => clearTimeout(id);
     }
     let cancelled = false;
     const id = setTimeout(() => {
-      setSafety({ kind: 'loading' });
-      setSafetyFor(null);
+      setSafety((previous) => ({
+        kind: 'loading',
+        ...(previous.kind !== 'idle' && previous.preview ? { preview: previous.preview } : {}),
+      }));
       checkPrescriptionSafety(token, patientId, safetyItems)
         .then((preview) => {
           if (cancelled) return;
+          const resolvedKey = blockingKey(preview.alerts);
+          setConfirmedKey((previous) => previous === resolvedKey ? previous : null);
           setSafety({ kind: 'ready', preview });
           setSafetyFor(safetyKey);
         })
         .catch(() => {
-          if (!cancelled) setSafety({ kind: 'error' });
+          if (!cancelled) {
+            setSafety((previous) => ({
+              kind: 'error',
+              ...(previous.kind !== 'idle' && previous.preview ? { preview: previous.preview } : {}),
+            }));
+            setSafetyFor(safetyKey);
+          }
         });
     }, SAFETY_CHECK_DEBOUNCE_MS);
     return () => {
@@ -216,17 +244,25 @@ export function NewPrescriptionModal({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, token, patientId, safetyKey, safetyRetry]);
 
-  const blockingAlerts =
-    safety.kind === 'ready' ? safety.preview.alerts.filter((a) => a.severity === 'BLOCKING') : [];
-  const alertKey =
-    blockingAlerts.length > 0
-      ? blockingAlerts.map((a) => `${a.code}|${a.activeIngredient ?? ''}|${a.message}`).join(';')
-      : null;
+  const safetyPreview = safety.kind === 'idle' ? undefined : safety.preview;
+  const visibleSafety: SafetyState = safetyItems.length === 0
+    ? { kind: 'idle' }
+    : safetyFor !== safetyKey
+      ? { kind: 'loading', preview: safetyPreview }
+      : safety;
+  const alertKey = safetyItems.length > 0 ? blockingKey(safetyPreview?.alerts ?? []) : null;
   const confirmed = alertKey !== null && confirmedKey === alertKey;
   // Comprobación al día con lo escrito: sin ella no se emite.
   const safetyReady = safetyFor === safetyKey && safety.kind !== 'loading' && safety.kind !== 'error';
   // Sin motivo el botón sigue activo: al pulsarlo, el campo dice qué falta.
   const safetyBlocksSubmit = !safetyReady || (alertKey !== null && !confirmed);
+  const submitHint = !safetyReady
+    ? safety.kind === 'error' && safetyFor === safetyKey
+      ? 'Reintenta la comprobación de seguridad antes de emitir.'
+      : 'Espera a que termine la comprobación de seguridad para emitir.'
+    : alertKey !== null && !confirmed
+      ? 'Confirma los avisos de seguridad para emitir.'
+      : null;
 
   const country = issuer?.country ?? 'CO';
   const maxItems = issuer?.maxItems ?? 10;
@@ -349,6 +385,7 @@ export function NewPrescriptionModal({
       submitLabel={copy.submit}
       submitting={submitting}
       submitDisabled={!ready || tooMany || safetyBlocksSubmit}
+      submitHint={submitHint}
       error={error}
       size="lg"
     >
@@ -475,7 +512,7 @@ export function NewPrescriptionModal({
           </FormField>
 
           <PrescriptionSafetyPanel
-            state={safety}
+            state={visibleSafety}
             country={country}
             onRetry={() => setSafetyRetry((k) => k + 1)}
             confirmed={confirmed}

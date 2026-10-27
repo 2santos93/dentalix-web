@@ -267,8 +267,10 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
           className={cn(
             // El menú largo cede altura y se desplaza dentro del sidebar;
             // la marca y la cuenta permanecen dentro de la ventana.
-            'flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto py-2',
-            collapsed ? 'px-2' : 'px-3',
+            'flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto scroll-py-2 py-2',
+            // 63 px interiores − 15 px de barra clásica − 4 px de padding = 44 px útiles;
+            // con h-11, cada enlace del carril es un objetivo táctil de 44×44.
+            collapsed ? 'px-0.5' : 'px-3',
           )}
         >
           {nav.map(({ href, label, icon: Icon }) => (
@@ -282,7 +284,7 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
               title={collapsed ? navLabel(href, label) : undefined}
               className={cn(
                 'relative flex items-center rounded-lg text-sm font-medium transition-colors',
-                collapsed ? 'h-10 w-full justify-center' : 'min-w-0 flex-1 gap-3 px-3 py-2',
+                collapsed ? 'h-11 w-full justify-center' : 'min-h-10 min-w-0 flex-1 gap-3 px-3 py-2',
                 isActive(href)
                   ? 'bg-primary/10 text-primary'
                   : 'text-muted hover:bg-bg hover:text-ink',
@@ -294,7 +296,7 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
                 <InboxCount count={anamnesisCount} variant={collapsed ? 'rail' : 'full'} />
               )}
             </Link>
-            {href === '/agenda' && waitingForYou > 0 && <Link href="/agenda/en-clinica" aria-label={waitingForYouLabel(waitingForYou)} className={cn('rounded-full focus-visible:outline-2 focus-visible:outline-primary', collapsed && 'absolute -right-1 -top-1')}>
+            {href === '/agenda' && waitingForYou > 0 && <Link href="/agenda/en-clinica" aria-label={waitingForYouLabel(waitingForYou)} className={cn('rounded-full focus-visible:outline-2 focus-visible:outline-primary', collapsed && 'absolute right-0 -top-1')}>
               <WaitingForYouCount count={waitingForYou} variant={collapsed ? 'rail' : 'full'} />
             </Link>}
             </div>
@@ -413,9 +415,9 @@ function InboxCount({ count, variant }: { count: number; variant: 'full' | 'rail
       aria-hidden
       data-testid="anamnesis-inbox-count"
       className={cn(
-        'inline-flex min-w-5 items-center justify-center rounded-full bg-warning/15 px-1.5 text-xs font-semibold tabular-nums text-warning',
+        'inline-flex min-w-5 items-center justify-center rounded-full bg-warning/15 px-1.5 text-xs font-semibold tabular-nums text-ink',
         variant === 'full' && 'ml-auto',
-        variant === 'rail' && 'absolute -right-1 -top-1',
+        variant === 'rail' && 'absolute right-0 -top-1',
       )}
     >
       {count}

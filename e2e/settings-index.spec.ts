@@ -186,6 +186,8 @@ test('ADMIN: el menú de cuenta cabe en 1366×768, 1440×900 y 390×844, tambié
     await expectEveryItemReachable(page, menu, moment);
     await page.keyboard.press('Escape');
     await expect(menu).toBeHidden();
+    // Radix restaura el foco al cerrar; esperar antes de moverlo al nav.
+    await expect(accountTrigger(page, admin.fullName)).toBeFocused();
     // También se alcanzan con Tab todas las entradas del rail largo; el
     // desplazamiento pertenece al nav y deja marca/cuenta dentro de la ventana.
     const sidebarLinks = page.locator('aside > nav').getByRole('link');

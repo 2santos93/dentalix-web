@@ -1,5 +1,13 @@
 import { test, expect, type APIRequestContext } from './support/test';
 import { randomUUID } from 'node:crypto';
+import { readFileSync, mkdirSync, writeFileSync } from 'node:fs';
+import path from 'node:path';
+import type { AxeResults } from 'axe-core';
+
+// Capturas y axe crudo solo cuando se piden para QA (DX344_QA_DIR): una
+// ejecución normal o de CI no escribe en el árbol versionado.
+const evidence = process.env.DX344_QA_DIR;
+const axeSource = readFileSync(require.resolve('axe-core/axe.min.js'), 'utf8');
 import { accessTokenOf, registerAndLogin } from './support/auth';
 import { API_URL } from './support/urls';
 import { expectNoHorizontalScroll } from './support/layout';
@@ -74,28 +82,115 @@ test('receta con aviso bloqueante (warfarina + ibuprofeno): 390/1440, claro/oscu
 
   const blocking = dialog.getByText('Requieren confirmación (1)');
   await expect(blocking).toBeVisible({ timeout: 15_000 });
-  await expect(dialog.getByText(/Interacción grave: el paciente toma Warfarina 5 mg/)).toBeVisible();
+  await expect(dialog.locator('li').getByText(/Interacción grave: el paciente toma Warfarina 5 mg/)).toBeVisible();
   await expect(dialog.getByText(/no sustituye tu juicio clínico/)).toBeVisible();
   const submit = dialog.getByRole('button', { name: 'Emitir receta' });
   await expect(submit).toBeDisabled();
 
+  const checkbox = dialog.getByRole('checkbox', { name: /Confirmo que conozco los avisos/ });
+  const reason = dialog.getByLabel('Motivo para emitir pese a los avisos');
+  await expect(submit).toHaveAccessibleDescription('Confirma los avisos de seguridad para emitir.');
+  // Sin saltos: la explicación cambia o se vacía sin cambiar la altura del
+  // diálogo. Se mide scrollHeight, no la caja de Emitir: el scroll anchoring
+  // de Chromium compensa el salto dentro de un diálogo con scroll.
+  const dialogHeight = () => dialog.evaluate((element) => element.scrollHeight);
+  const blockedHeight = await dialogHeight();
+  await checkbox.check();
+  // Sin motivo el botón sigue activo: al pulsarlo, el campo dice qué falta.
+  await expect(submit).toBeEnabled();
+  await expect(submit).not.toHaveAttribute('aria-describedby');
+  expect(await dialogHeight(), 'el diálogo no cambia de alto al quitar la explicación').toBe(blockedHeight);
+  await expect(reason).toHaveAccessibleDescription('Queda en la receta y no se puede cambiar.');
+  await submit.click();
+  await expect(reason).toHaveAttribute('aria-invalid', 'true');
+  await expect(reason).toHaveAccessibleDescription('Escribe el motivo para emitir pese a los avisos.');
+  await expect(reason).toBeFocused();
+  await reason.fill('INR estable; pauta de 2 días');
+  await expect(reason).not.toHaveAttribute('aria-invalid');
+  await expect(submit).toBeEnabled();
+
+  // API real: solo retenemos su respuesta para poder observar el estado pendiente.
+  for (const focus of [reason, checkbox]) {
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    let requested!: () => void;
+    const requestSeen = new Promise<void>((resolve) => { requested = resolve; });
+    await page.route('**/prescriptions/safety-check', async (route) => {
+      const response = await route.fetch();
+      requested();
+      await gate;
+      await route.fulfill({ response });
+    });
+    const node = await focus.elementHandle();
+    await page.evaluate(() => {
+      const status = document.querySelector('[aria-label="Resultado de seguridad"]')!;
+      const observed = window as unknown as { safetyMutations: number; safetyObserver: MutationObserver };
+      observed.safetyMutations = 0;
+      observed.safetyObserver = new MutationObserver(() => { observed.safetyMutations++; });
+      observed.safetyObserver.observe(status, { childList: true, characterData: true, subtree: true });
+    });
+    const dose = dialog.getByLabel('Dosis', { exact: true });
+    await dose.fill((await dose.inputValue()) === '1 comprimido' ? '2 comprimidos' : '1 comprimido');
+    await focus.focus();
+    const before = await focus.boundingBox();
+    await expect(submit).toBeDisabled();
+    await requestSeen;
+    await expect(dialog.getByText('Comprobando avisos de seguridad')).toBeVisible();
+    await expect(submit).toHaveAccessibleDescription('Espera a que termine la comprobación de seguridad para emitir.');
+    const pendingHeight = await dialogHeight();
+    await expect(focus).toBeFocused();
+    expect(await node!.evaluate((element) => element === document.activeElement)).toBeTruthy();
+    expect(await focus.boundingBox()).toEqual(before);
+    await expect(checkbox).toBeChecked();
+    await expect(reason).toHaveValue('INR estable; pauta de 2 días');
+    release();
+    await expect(submit).toBeEnabled();
+    await expect(focus).toBeFocused();
+    expect(await dialogHeight(), 'el diálogo no cambia de alto al terminar la comprobación').toBe(pendingHeight);
+    expect(await page.evaluate(() => {
+      const observed = window as unknown as { safetyMutations: number; safetyObserver: MutationObserver };
+      observed.safetyObserver.disconnect();
+      return observed.safetyMutations;
+    })).toBe(0);
+    await page.unroute('**/prescriptions/safety-check');
+  }
+  if (evidence) mkdirSync(evidence, { recursive: true });
   for (const width of [390, 1440]) {
     for (const colorScheme of ['light', 'dark'] as const) {
       await page.setViewportSize({ width, height: 900 });
       await page.emulateMedia({ colorScheme });
+      await expect.poll(() => page.evaluate(() => document.documentElement.classList.contains('dark'))).toBe(colorScheme === 'dark');
+      // Espera el fin de las transiciones de color antes de medir contraste.
+      await dialog.evaluate(async (element) => {
+        await Promise.all(element.getAnimations({ subtree: true }).map((animation) => animation.finished.catch(() => {})));
+      });
       await blocking.scrollIntoViewIfNeeded();
       await expect(blocking).toBeVisible();
       await expectNoHorizontalScroll(page);
       const box = await dialog.boundingBox();
       expect(box, `${width}/${colorScheme}: diálogo`).not.toBeNull();
       expect(box!.x + box!.width, `${width}/${colorScheme}: borde derecho`).toBeLessThanOrEqual(width);
-      await page.screenshot({ path: test.info().outputPath(`receta-segura-${width}-${colorScheme}.png`) });
+      await page.evaluate(axeSource);
+      const results = await page.evaluate(async () => {
+        const axe = (window as unknown as { axe: { run: (context: string) => Promise<AxeResults> } }).axe;
+        return axe.run('[role="dialog"]');
+      });
+      if (evidence) writeFileSync(path.join(evidence, `axe-${width}-${colorScheme}.json`), JSON.stringify({
+        violations: results.violations.map(({ id, impact, description, nodes }) => ({ id, impact, description, targets: nodes.map((node) => node.target) })),
+        passes: results.passes.length,
+      }, null, 2));
+      expect(results.violations).toEqual([]);
+      if (evidence) await page.screenshot({ path: path.join(evidence, `receta-segura-${width}-${colorScheme}.png`) });
+      await checkbox.uncheck();
+      await expect(submit).toHaveAccessibleDescription('Confirma los avisos de seguridad para emitir.');
+      await expect(submit).toBeDisabled();
+      await submit.scrollIntoViewIfNeeded();
+      if (evidence) await page.screenshot({ path: path.join(evidence, `emitir-bloqueado-${width}-${colorScheme}.png`) });
+      await checkbox.check();
     }
   }
   await page.emulateMedia({ colorScheme: 'light' });
 
-  await dialog.getByRole('checkbox', { name: /Confirmo que conozco los avisos/ }).check();
-  await dialog.getByLabel('Motivo para emitir pese a los avisos').fill('INR estable; pauta de 2 días');
   await submit.click();
   await expect(dialog).toBeHidden();
   await expect(panel.getByText('Ibuprofeno 400 mg · 6 comprimidos').first()).toBeVisible();

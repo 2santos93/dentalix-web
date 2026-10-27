@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { NewPrescriptionModal } from './new-prescription-modal';
 import {
   checkPrescriptionSafety,
@@ -151,7 +151,7 @@ describe('NewPrescriptionModal', () => {
     expect(screen.getByText(/no sustituye tu juicio clínico/)).toBeInTheDocument();
     await fillAmoxicilina(user);
     const blocking = (await screen.findByText('Requieren confirmación (1)')).closest(
-      '[role="alert"]',
+      'div',
     ) as HTMLElement;
     expect(blocking).toHaveTextContent('alergia a penicilina');
     expect(screen.getByText('Informativos (1)')).toBeInTheDocument();
@@ -166,12 +166,18 @@ describe('NewPrescriptionModal', () => {
     const button = screen.getByRole('button', { name: 'Emitir receta' });
     expect(button).toBeDisabled();
     await user.click(within(blocking).getByRole('checkbox', { name: /confirmo que conozco los avisos/i }));
+    // Sin motivo el botón sigue activo: al pulsarlo, el campo dice qué falta.
     expect(button).toBeEnabled();
-    await user.click(button);
+    expect(button).not.toHaveAttribute('aria-describedby');
     const reason = screen.getByLabelText('Motivo para emitir pese a los avisos');
-    expect(reason).toHaveAccessibleDescription(/Escribe el motivo/);
+    expect(reason).toHaveAccessibleDescription('Queda en la receta y no se puede cambiar.');
+    await user.click(button);
+    expect(reason).toHaveAttribute('aria-invalid', 'true');
+    expect(reason).toHaveAccessibleDescription(/Escribe el motivo para emitir pese a los avisos/);
+    expect(reason).toHaveFocus();
     expect(mockedIssue).not.toHaveBeenCalled();
     await user.type(reason, 'Prueba cutánea negativa');
+    expect(reason).not.toHaveAttribute('aria-invalid');
     await user.click(button);
     await waitFor(() =>
       expect(mockedIssue).toHaveBeenCalledWith(
@@ -185,13 +191,162 @@ describe('NewPrescriptionModal', () => {
     );
   });
 
+  it('conserva nodos, foco, confirmación y motivo durante un recheck idéntico; no emite pendiente', async () => {
+    const user = setupUser();
+    mockedCheck.mockResolvedValue(preview([allergyAlert]));
+    renderModal();
+    await screen.findByText(/Se emite desde/);
+    await fillAmoxicilina(user);
+    const checkbox = await screen.findByRole('checkbox', { name: /Confirmo/ });
+    const reason = screen.getByLabelText('Motivo para emitir pese a los avisos');
+    await user.click(checkbox);
+    await user.type(reason, 'Prueba cutánea negativa');
+    const button = screen.getByRole('button', { name: 'Emitir receta' });
+    await waitFor(() => expect(button).toBeEnabled());
+    let resolve!: (value: PrescriptionSafetyPreview) => void;
+    mockedCheck.mockReturnValueOnce(new Promise((done) => { resolve = done; }));
+    fireEvent.change(screen.getByLabelText(/^dosis/i), { target: { value: '2 cápsulas' } });
+    reason.focus();
+    expect(button).toBeDisabled();
+    const calls = mockedCheck.mock.calls.length;
+    await waitFor(() => expect(mockedCheck.mock.calls.length).toBe(calls + 1));
+    expect(screen.getByLabelText('Motivo para emitir pese a los avisos')).toBe(reason);
+    expect(reason).toHaveFocus();
+    expect(reason).toHaveValue('Prueba cutánea negativa');
+    expect(checkbox).toBeChecked();
+    expect(checkbox.closest('[aria-live], [role="alert"], [role="status"]')).toBeNull();
+    fireEvent.submit(button.closest('form')!);
+    expect(mockedIssue).not.toHaveBeenCalled();
+    await act(async () => resolve(preview([allergyAlert])));
+    await waitFor(() => expect(button).toBeEnabled());
+    expect(reason).toHaveFocus();
+    expect(screen.getByRole('status', { name: 'Resultado de seguridad' })).not.toContainElement(reason);
+  });
+
+  it('al cambiar de paciente oculta el resultado anterior e ignora una respuesta atrasada', async () => {
+    const user = setupUser();
+    mockedCheck.mockResolvedValueOnce(preview([allergyAlert]));
+    const props = { open: true, token: 'tok', patientId: 'p1', onOpenChange: jest.fn(), onIssued: jest.fn() };
+    const { rerender } = render(<NewPrescriptionModal {...props} />);
+    await screen.findByText(/Se emite desde/);
+    await fillAmoxicilina(user);
+    await user.click(await screen.findByRole('checkbox', { name: /Confirmo/ }));
+    await user.type(screen.getByLabelText('Motivo para emitir pese a los avisos'), 'Motivo p1');
+    let resolve!: (value: PrescriptionSafetyPreview) => void;
+    mockedCheck.mockReturnValueOnce(new Promise((done) => { resolve = done; }));
+    fireEvent.change(screen.getByLabelText(/^dosis/i), { target: { value: '2 cápsulas' } });
+    await waitFor(() => expect(mockedCheck.mock.calls.length).toBe(2));
+    rerender(<NewPrescriptionModal {...props} patientId="p2" />);
+    expect(screen.queryByText(allergyAlert.message)).not.toBeInTheDocument();
+    await act(async () => resolve(preview([allergyAlert])));
+    expect(screen.queryByText(allergyAlert.message)).not.toBeInTheDocument();
+    await screen.findByText(/Se emite desde/);
+    expect(screen.queryByRole('checkbox', { name: /Confirmo/ })).not.toBeInTheDocument();
+    expect(screen.getByLabelText(/principio activo/i)).toHaveValue('');
+    expect(mockedIssue).not.toHaveBeenCalled();
+  });
+
+  it('renovar el token conserva el borrador y bloquea hasta comprobar de nuevo', async () => {
+    const user = setupUser();
+    mockedCheck.mockResolvedValue(preview([allergyAlert]));
+    const props = { open: true, token: 'tok', patientId: 'p1', onOpenChange: jest.fn(), onIssued: jest.fn() };
+    const { rerender } = render(<NewPrescriptionModal {...props} />);
+    await screen.findByText(/Se emite desde/);
+    await fillAmoxicilina(user);
+    await user.click(await screen.findByRole('checkbox', { name: /Confirmo/ }));
+    const reason = screen.getByLabelText('Motivo para emitir pese a los avisos');
+    await user.type(reason, 'Motivo conservado');
+    const button = screen.getByRole('button', { name: 'Emitir receta' });
+    await waitFor(() => expect(button).toBeEnabled());
+    let resolve!: (value: PrescriptionSafetyPreview) => void;
+    mockedCheck.mockReturnValueOnce(new Promise((done) => { resolve = done; }));
+    rerender(<NewPrescriptionModal {...props} token="tok-renovado" />);
+    expect(button).toBeDisabled();
+    expect(screen.getByLabelText(/principio activo/i)).toHaveValue('Amoxicilina');
+    expect(reason).toHaveValue('Motivo conservado');
+    await waitFor(() => expect(mockedCheck).toHaveBeenLastCalledWith('tok-renovado', 'p1', expect.any(Array)));
+    fireEvent.submit(button.closest('form')!);
+    expect(mockedIssue).not.toHaveBeenCalled();
+    await act(async () => resolve(preview([allergyAlert])));
+    await waitFor(() => expect(button).toBeEnabled());
+    expect(screen.getByLabelText('Motivo para emitir pese a los avisos')).toBe(reason);
+  });
+
+  it('un aviso bloqueante nuevo exige volver a confirmar y anuncia el cambio fuera de los controles', async () => {
+    const user = setupUser();
+    mockedCheck.mockResolvedValueOnce(preview([allergyAlert]));
+    renderModal();
+    await screen.findByText(/Se emite desde/);
+    await fillAmoxicilina(user);
+    await user.click(await screen.findByRole('checkbox', { name: /Confirmo/ }));
+    await user.type(screen.getByLabelText('Motivo para emitir pese a los avisos'), 'Motivo');
+    mockedCheck.mockResolvedValueOnce(preview([{ ...allergyAlert, message: 'Otro aviso bloqueante del servidor.' }]));
+    fireEvent.change(screen.getByLabelText(/^dosis/i), { target: { value: '2 cápsulas' } });
+    await waitFor(() => expect(screen.getByRole('status', { name: 'Resultado de seguridad' })).toHaveTextContent('Otro aviso bloqueante del servidor.'));
+    expect(screen.getByRole('checkbox', { name: /Confirmo/ })).not.toBeChecked();
+    expect(screen.getByRole('button', { name: 'Emitir receta' })).toBeDisabled();
+  });
+
+  it.each(['otro aviso', 'sin avisos'])('exige reconfirmar si A cambia a %s y vuelve A', async (intermediate) => {
+    const user = setupUser();
+    mockedCheck.mockResolvedValue(preview([allergyAlert]));
+    renderModal();
+    await screen.findByText(/Se emite desde/);
+    await fillAmoxicilina(user);
+    await user.click(await screen.findByRole('checkbox', { name: /Confirmo/ }));
+    await user.type(screen.getByLabelText('Motivo para emitir pese a los avisos'), 'Motivo');
+    const button = screen.getByRole('button', { name: 'Emitir receta' });
+    await waitFor(() => expect(button).toBeEnabled());
+    const next = intermediate === 'otro aviso'
+      ? preview([{ ...allergyAlert, message: 'Otro aviso bloqueante.' }])
+      : preview();
+    mockedCheck.mockResolvedValueOnce(next);
+    fireEvent.change(screen.getByLabelText(/^dosis/i), { target: { value: '2 cápsulas' } });
+    if (intermediate === 'otro aviso') {
+      await screen.findByText('Otro aviso bloqueante.');
+    } else {
+      await screen.findByText('Sin avisos para estos medicamentos.');
+    }
+    mockedCheck.mockResolvedValueOnce(preview([allergyAlert]));
+    fireEvent.change(screen.getByLabelText(/^dosis/i), { target: { value: '3 cápsulas' } });
+    await screen.findByText(allergyAlert.message);
+    expect(screen.getByRole('checkbox', { name: /Confirmo/ })).not.toBeChecked();
+    expect(button).toBeDisabled();
+    fireEvent.submit(button.closest('form')!);
+    expect(mockedIssue).not.toHaveBeenCalled();
+  });
+
   it('mientras se calculan los avisos no se emite: estado de carga', async () => {
     const user = setupUser();
     mockedCheck.mockReturnValue(new Promise(() => {}));
     renderModal();
     await screen.findByText(/Se emite desde/);
     await fillAmoxicilina(user);
-    expect(await screen.findByRole('status', { name: 'Comprobando avisos de seguridad' })).toBeInTheDocument();
+    expect(await screen.findByText('Comprobando avisos de seguridad')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Emitir receta' })).toBeDisabled();
+  });
+
+  it.each([
+    ['sin avisos', () => preview(), 'Sin avisos para estos medicamentos.'],
+    ['con un aviso bloqueante', () => preview([allergyAlert]), allergyAlert.message],
+  ])('recomprobación tras un resultado %s: en carga no afirma «Sin avisos» y en error no enseña lo anterior', async (_, first, shownText) => {
+    const user = setupUser();
+    mockedCheck.mockResolvedValueOnce(first());
+    renderModal();
+    await screen.findByText(/Se emite desde/);
+    await fillAmoxicilina(user);
+    expect(await screen.findByText(shownText)).toBeInTheDocument();
+    let reject!: (reason: unknown) => void;
+    mockedCheck.mockReturnValueOnce(new Promise((_, fail) => { reject = fail; }));
+    fireEvent.change(screen.getByLabelText(/^dosis/i), { target: { value: '2 cápsulas' } });
+    await waitFor(() => expect(screen.getByText('Comprobando avisos de seguridad')).toBeInTheDocument());
+    expect(screen.queryByText('Sin avisos para estos medicamentos.')).not.toBeInTheDocument();
+    await act(async () => reject(new ApiError(500, 'Caída')));
+    expect(await screen.findByText('No se pudieron comprobar los avisos')).toBeInTheDocument();
+    expect(screen.queryByText('Sin avisos para estos medicamentos.')).not.toBeInTheDocument();
+    expect(screen.queryByText(allergyAlert.message)).not.toBeInTheDocument();
+    expect(screen.queryByRole('checkbox', { name: /Confirmo/ })).not.toBeInTheDocument();
+    expect(screen.getByRole('status', { name: 'Resultado de seguridad' })).toBeEmptyDOMElement();
     expect(screen.getByRole('button', { name: 'Emitir receta' })).toBeDisabled();
   });
 
