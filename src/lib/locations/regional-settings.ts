@@ -1,18 +1,20 @@
-import type { HourCycle } from '@/lib/format/regional-format';
+import { regionalFormat, type HourCycle } from '@/lib/format/regional-format';
 import type { ClinicCountry } from '@/lib/prescriptions/prescriptions-api';
 import ianaZoneNames from './iana-zone-names.json';
 import { isUsableTimeZone } from './location-settings';
 
 /**
  * G1 (DX-317): país, moneda, zona horaria y formato regional de una sede, tal
- * como los edita el formulario (alta, edición y registro). Vacío = sin elegir:
- * ninguno tiene valor por defecto (R1, R10) y nada se deduce del país (R2).
+ * como los edita el formulario (alta, edición y registro); G1-B (DX-350) añade
+ * su reloj. Vacío = sin elegir: ninguno tiene valor por defecto (R1, R10) y
+ * nada se deduce del país (R2) ni el reloj del formato.
  */
 export interface RegionalSettingsValues {
   country: ClinicCountry | '';
   currency: string;
   timeZone: string;
   locale: string;
+  hourCycle: HourCycle | '';
 }
 
 export type RegionalSettingsField = keyof RegionalSettingsValues;
@@ -24,9 +26,18 @@ export const REGIONAL_SETTINGS_FIELDS: readonly RegionalSettingsField[] = [
   'currency',
   'timeZone',
   'locale',
+  'hourCycle',
 ];
 
-/** Los mismos textos que la API (spec G1 §3.1), para que el error no cambie según quién lo detecte. */
+/** Cómo se nombra cada reloj en pantalla (opciones del campo, lista de sedes, aviso). */
+export const HOUR_CYCLE_LABELS: Record<HourCycle, string> = { h12: '12 h', h23: '24 h' };
+
+/** `true` si es uno de los dos relojes que admite la API. */
+export function isHourCycle(value: unknown): value is HourCycle {
+  return value === 'h12' || value === 'h23';
+}
+
+/** Los mismos textos que la API (spec G1 §3.1, G1-B §4.1), para que el error no cambie según quién lo detecte. */
 export const regionalSettingsMessages = {
   countryMissing: 'Elige el país de la sede.',
   currencyMissing: 'Elige la moneda de la sede.',
@@ -34,6 +45,8 @@ export const regionalSettingsMessages = {
   timeZoneUnknown: (zone: string) => `La zona horaria «${zone}» no existe.`,
   localeMissing: 'Elige el formato regional de la sede.',
   localeInvalid: (locale: string) => `El formato regional «${locale}» no es válido.`,
+  hourCycleMissing: 'Elige el reloj de la sede: 12 h o 24 h.',
+  hourCycleInvalid: (hourCycle: string) => `El reloj «${hourCycle}» no es válido: elige 12 h o 24 h.`,
 };
 
 /**
@@ -166,26 +179,35 @@ export function timeZoneOptions(extra: readonly (string | null | undefined)[] = 
 }
 
 /**
- * Vista previa «12.345,67 · 26/10/2026 16:30» (cinco cifras: con cuatro, `es`
- * no agrupa y «1234,56» parecería un separador perdido) del formato regional en la zona
- * elegida, o `null` si falta alguno de los dos o no es válido.
+ * Vista previa «12.345,67 · 26.10.2026 16:30» (cinco cifras: con cuatro, `es`
+ * no agrupa y «1234,56» parecería un separador perdido) con el helper de
+ * formato, en la zona y con el reloj elegidos. Sin reloj elegido, la fecha va
+ * sin hora: nunca un reloj deducido del formato. `null` si falta el formato o
+ * la zona, o alguno no es válido.
  */
-export function regionalPreview(locale: string, timeZone: string, at: Date): string | null {
+export function regionalPreview(locale: string, timeZone: string, hourCycle: HourCycle | '', at: Date): string | null {
   const canonical = canonicalLocale(locale);
-  if (!canonical || !isUsableTimeZone(timeZone.trim())) return null;
-  const number = new Intl.NumberFormat(canonical, {
-    minimumFractionDigits: 2,
-    maximumFractionDigits: 2,
-  }).format(12345.67);
-  const date = new Intl.DateTimeFormat(canonical, {
-    timeZone: timeZone.trim(),
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(at);
-  return `${number} · ${date}`;
+  const zone = timeZone.trim();
+  if (!canonical || !isUsableTimeZone(zone)) return null;
+  // Sin reloj, el helper se construye con uno cualquiera solo para la fecha y el número, que no dependen de él.
+  const fmt = regionalFormat({ locale: canonical, hourCycle: hourCycle || 'h23' });
+  const number = fmt.number(12345.67, { min: 2, max: 2 });
+  return `${number} · ${hourCycle ? fmt.dateTime(at, zone) : fmt.date(at, zone)}`;
+}
+
+/**
+ * La hora de `at` en la zona elegida con cada reloj, para el ejemplo de cada
+ * opción del campo «Reloj» («3:05 p. m.» / «15:05»), o `null` si falta el
+ * formato o la zona, o alguno no es válido.
+ */
+export function hourCycleExamples(locale: string, timeZone: string, at: Date): Record<HourCycle, string> | null {
+  const canonical = canonicalLocale(locale);
+  const zone = timeZone.trim();
+  if (!canonical || !isUsableTimeZone(zone)) return null;
+  return {
+    h12: regionalFormat({ locale: canonical, hourCycle: 'h12' }).time(at, zone),
+    h23: regionalFormat({ locale: canonical, hourCycle: 'h23' }).time(at, zone),
+  };
 }
 
 /** Validación en cliente con los mensajes de la API. Sin errores = `{}`. */
@@ -199,6 +221,8 @@ export function validateRegionalSettings(values: RegionalSettingsValues): Region
   const locale = values.locale.trim();
   if (locale === '') errors.locale = regionalSettingsMessages.localeMissing;
   else if (!canonicalLocale(locale)) errors.locale = regionalSettingsMessages.localeInvalid(locale);
+  if (values.hourCycle === '') errors.hourCycle = regionalSettingsMessages.hourCycleMissing;
+  else if (!isHourCycle(values.hourCycle)) errors.hourCycle = regionalSettingsMessages.hourCycleInvalid(values.hourCycle);
   return errors;
 }
 

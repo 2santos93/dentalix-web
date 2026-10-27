@@ -2,7 +2,7 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import { LocationFormModal } from './location-form-modal';
 import { createLocation, updateLocationSettings, type ClinicLocation } from '@/lib/locations/locations-api';
 import { listCurrencies } from '@/lib/reference/currencies-api';
-import { browserLocale, browserTimeZone } from '@/lib/locations/regional-settings';
+import { browserHourCycle, browserLocale, browserTimeZone } from '@/lib/locations/regional-settings';
 import { ApiError } from '@/lib/api/api-error';
 import { clinicLocation } from '@/lib/test/locations';
 import { setupUser } from '@/lib/test/user';
@@ -18,6 +18,7 @@ jest.mock('../../lib/locations/regional-settings', () => ({
   ...jest.requireActual('../../lib/locations/regional-settings'),
   browserTimeZone: jest.fn(),
   browserLocale: jest.fn(),
+  browserHourCycle: jest.fn(),
 }));
 
 const mockedCreate = jest.mocked(createLocation);
@@ -34,7 +35,12 @@ beforeEach(() => {
   jest.mocked(listCurrencies).mockResolvedValue(CURRENCIES);
   jest.mocked(browserTimeZone).mockReturnValue('Asia/Tokyo');
   jest.mocked(browserLocale).mockReturnValue('ja-JP');
+  jest.mocked(browserHourCycle).mockReturnValue('h23');
 });
+
+const clockGroup = (dialog: HTMLElement) => within(dialog).getByRole('radiogroup', { name: 'Reloj' });
+const clockOption = (dialog: HTMLElement, name: '12 h' | '24 h') =>
+  within(clockGroup(dialog)).getByRole('radio', { name });
 
 function setup(location: ClinicLocation | null = null) {
   const onSaved = jest.fn();
@@ -51,9 +57,10 @@ async function currenciesLoaded(dialog: HTMLElement) {
 }
 
 describe('LocationFormModal (G1, spec §6.2)', () => {
-  it('does not save without the four fields; each error by its field', async () => {
+  it('does not save without the five fields; each error by its field', async () => {
     jest.mocked(browserTimeZone).mockReturnValue(null);
     jest.mocked(browserLocale).mockReturnValue(null);
+    jest.mocked(browserHourCycle).mockReturnValue(null);
     const { dialog, user } = setup();
     await user.type(within(dialog).getByLabelText('Nombre'), 'Sede Norte');
     await user.click(within(dialog).getByRole('button', { name: 'Crear sede' }));
@@ -66,6 +73,7 @@ describe('LocationFormModal (G1, spec §6.2)', () => {
     expect(within(dialog).getByLabelText('Formato regional')).toHaveAccessibleDescription(
       'Elige el formato regional de la sede.',
     );
+    expect(clockGroup(dialog)).toHaveAccessibleDescription('Elige el reloj de la sede: 12 h o 24 h.');
     // El foco va al primer campo que hay que corregir.
     expect(within(dialog).getByLabelText('País')).toHaveFocus();
     expect(mockedCreate).not.toHaveBeenCalled();
@@ -92,7 +100,7 @@ describe('LocationFormModal (G1, spec §6.2)', () => {
     expect(mockedCreate).not.toHaveBeenCalled();
   });
 
-  it('browser suggestions for zone and format are visible and the POST equals what is shown', async () => {
+  it('create modal suggests locale and hour cycle from the browser and posts exactly what it shows', async () => {
     mockedCreate.mockResolvedValue(clinicLocation({ id: 'tokyo' }));
     const { dialog, user, onSaved } = setup();
     const zone = within(dialog).getByLabelText('Zona horaria');
@@ -101,6 +109,8 @@ describe('LocationFormModal (G1, spec §6.2)', () => {
     expect(locale).toHaveValue('ja-JP');
     expect(zone).toHaveAccessibleDescription(expect.stringContaining('Sugerido por tu navegador.'));
     expect(locale).toHaveAccessibleDescription(expect.stringContaining('Sugerido por tu navegador.'));
+    expect(clockOption(dialog, '24 h')).toBeChecked();
+    expect(clockGroup(dialog)).toHaveAccessibleDescription(expect.stringContaining('Sugerido por tu navegador.'));
 
     await currenciesLoaded(dialog);
     await user.type(within(dialog).getByLabelText('Nombre'), '  Sede Tokio ');
@@ -115,6 +125,8 @@ describe('LocationFormModal (G1, spec §6.2)', () => {
       currency: (within(dialog).getByLabelText('Moneda') as HTMLSelectElement).value,
       timeZone: (zone as HTMLInputElement).value,
       locale: (locale as HTMLInputElement).value,
+      hourCycle: (within(clockGroup(dialog)).getAllByRole('radio') as HTMLInputElement[]).find((r) => r.checked)
+        ?.value,
     };
     expect(mockedCreate).toHaveBeenCalledWith('tok', shown);
     expect(mockedCreate.mock.calls[0][1]).toEqual({
@@ -123,8 +135,83 @@ describe('LocationFormModal (G1, spec §6.2)', () => {
       currency: 'JPY',
       timeZone: 'Asia/Tokyo',
       locale: 'ja-JP',
+      hourCycle: 'h23',
     });
     await waitFor(() => expect(onSaved).toHaveBeenCalled());
+  });
+
+  it('no browser hour cycle leaves the clock empty and required', async () => {
+    jest.mocked(browserHourCycle).mockReturnValue(null);
+    mockedCreate.mockResolvedValue(clinicLocation({ id: 'tokyo' }));
+    const { dialog, user } = setup();
+    // Nunca se adivina: ni del formato sugerido ni de ningún otro dato.
+    expect(clockOption(dialog, '12 h')).not.toBeChecked();
+    expect(clockOption(dialog, '24 h')).not.toBeChecked();
+    expect(clockGroup(dialog)).toHaveAttribute('aria-required', 'true');
+    expect(clockGroup(dialog)).not.toHaveAccessibleDescription(expect.stringContaining('Sugerido'));
+
+    await currenciesLoaded(dialog);
+    await user.type(within(dialog).getByLabelText('Nombre'), 'Sede Tokio');
+    await user.selectOptions(within(dialog).getByLabelText('País'), 'ES');
+    await user.selectOptions(within(dialog).getByLabelText('Moneda'), 'JPY');
+    await user.click(within(dialog).getByRole('button', { name: 'Crear sede' }));
+
+    // missing clock shows the §4.1 message next to the field
+    expect(clockGroup(dialog)).toHaveAccessibleDescription('Elige el reloj de la sede: 12 h o 24 h.');
+    expect(clockGroup(dialog)).toHaveAttribute('aria-invalid', 'true');
+    expect(clockOption(dialog, '12 h')).toHaveFocus();
+    expect(mockedCreate).not.toHaveBeenCalled();
+
+    // Elegirlo quita el error y se envía.
+    await user.click(clockOption(dialog, '12 h'));
+    expect(clockGroup(dialog)).not.toHaveAccessibleDescription(expect.stringContaining('Elige el reloj'));
+    await user.click(within(dialog).getByRole('button', { name: 'Crear sede' }));
+    await waitFor(() => expect(mockedCreate).toHaveBeenCalledTimes(1));
+    expect(mockedCreate.mock.calls[0][1]).toMatchObject({ locale: 'ja-JP', hourCycle: 'h12' });
+  });
+
+  it('editing a configured location suggests nothing', async () => {
+    const sede = clinicLocation({ currency: 'USD', timeZone: 'America/New_York', locale: 'en-US', hourCycle: 'h12' });
+    mockedUpdate.mockResolvedValue(sede);
+    const { dialog, user } = setup(sede);
+    expect(within(dialog).getByLabelText('Formato regional')).toHaveValue('en-US');
+    expect(clockOption(dialog, '12 h')).toBeChecked();
+    expect(within(dialog).getByLabelText('Formato regional')).not.toHaveAccessibleDescription(
+      expect.stringContaining('Sugerido'),
+    );
+    expect(clockGroup(dialog)).not.toHaveAccessibleDescription(expect.stringContaining('Sugerido'));
+    await currenciesLoaded(dialog);
+    await user.click(within(dialog).getByRole('button', { name: 'Guardar sede' }));
+    await waitFor(() => expect(mockedUpdate).toHaveBeenCalledTimes(1));
+    expect(mockedUpdate.mock.calls[0][2]).toMatchObject({ locale: 'en-US', hourCycle: 'h12' });
+  });
+
+  it('configuring a location with NULL hourCycle suggests only the clock', async () => {
+    const sede = clinicLocation({
+      currency: 'EUR',
+      timeZone: 'Europe/Berlin',
+      locale: 'de-DE',
+      hourCycle: null,
+      regionalSettingsReviewedAt: null,
+    });
+    mockedUpdate.mockResolvedValue(clinicLocation({ ...sede, hourCycle: 'h23' }));
+    const { dialog, user } = setup(sede);
+    // El formato guardado se queda, sin marca; el reloj vacío toma la sugerencia.
+    expect(within(dialog).getByLabelText('Formato regional')).toHaveValue('de-DE');
+    expect(within(dialog).getByLabelText('Formato regional')).not.toHaveAccessibleDescription(
+      expect.stringContaining('Sugerido'),
+    );
+    expect(within(dialog).getByLabelText('Zona horaria')).toHaveValue('Europe/Berlin');
+    expect(clockOption(dialog, '24 h')).toBeChecked();
+    expect(clockGroup(dialog)).toHaveAccessibleDescription(expect.stringContaining('Sugerido por tu navegador.'));
+    await currenciesLoaded(dialog);
+    await user.click(within(dialog).getByRole('button', { name: 'Guardar sede' }));
+    await waitFor(() => expect(mockedUpdate).toHaveBeenCalledTimes(1));
+    expect(mockedUpdate.mock.calls[0][2]).toMatchObject({
+      locale: 'de-DE',
+      hourCycle: 'h23',
+      confirmRegionalSettings: true,
+    });
   });
 
   it('an edited suggestion loses the «Sugerido» mark and the preview follows it', async () => {
@@ -197,6 +284,7 @@ describe('LocationFormModal (G1, spec §6.2)', () => {
       currency: 'COP',
       timeZone: 'America/Bogota',
       locale: 'es-CO',
+      hourCycle: 'h12',
       confirmRegionalSettings: true,
     });
     await waitFor(() => expect(onSaved).toHaveBeenCalledWith(sede));
@@ -265,13 +353,21 @@ describe('LocationFormModal (G1, spec §6.2)', () => {
     );
   });
 
-  it('a location with null regional fields is completed with all three in one PATCH', async () => {
-    const legacy = clinicLocation({ currency: null, timeZone: null, locale: null, regionalSettingsReviewedAt: null });
+  it('a location with null regional fields is completed in one PATCH; only format and clock are suggested', async () => {
+    jest.mocked(browserLocale).mockReturnValue(null);
+    const legacy = clinicLocation({
+      currency: null,
+      timeZone: null,
+      locale: null,
+      hourCycle: null,
+      regionalSettingsReviewedAt: null,
+    });
     mockedUpdate.mockResolvedValue(clinicLocation({ currency: 'JPY', timeZone: 'Asia/Tokyo', locale: 'ja-JP' }));
     const { dialog, user } = setup(legacy);
-    // Sin sugerencias en la edición: los tres campos empiezan vacíos.
+    // Configurar: la zona no se sugiere (G1); formato y reloj vacíos, sí (G1-B §9).
     expect(within(dialog).getByLabelText('Zona horaria')).toHaveValue('');
     expect(within(dialog).getByLabelText('Formato regional')).toHaveValue('');
+    expect(clockOption(dialog, '24 h')).toBeChecked();
     await currenciesLoaded(dialog);
     await user.click(within(dialog).getByRole('button', { name: 'Guardar sede' }));
     expect(mockedUpdate).not.toHaveBeenCalled();
@@ -285,6 +381,7 @@ describe('LocationFormModal (G1, spec §6.2)', () => {
       currency: 'JPY',
       timeZone: 'Asia/Tokyo',
       locale: 'ja-JP',
+      hourCycle: 'h23',
       confirmRegionalSettings: true,
     });
     // Lo enviado es lo que se ve: el formato queda canónico en el campo.

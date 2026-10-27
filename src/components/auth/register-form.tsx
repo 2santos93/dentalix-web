@@ -7,6 +7,7 @@ import { apiErrorMessage } from '@/lib/api/error-message';
 import { REGISTER_LOCATION_FIELDS, registerClinic } from '@/lib/auth/register-api';
 import { listPublicCurrencies } from '@/lib/reference/currencies-api';
 import {
+  browserHourCycle,
   browserLocale,
   browserTimeZone,
   canonicalLocale,
@@ -17,7 +18,11 @@ import {
   type RegionalSettingsField,
   type RegionalSettingsValues,
 } from '@/lib/locations/regional-settings';
-import { RegionalSettingsFields, regionalFieldId } from '@/components/locations/regional-settings-fields';
+import {
+  RegionalSettingsFields,
+  regionalFieldId,
+  type RegionalSuggestions,
+} from '@/components/locations/regional-settings-fields';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { FormField } from '@/components/shared/form-field';
@@ -45,13 +50,13 @@ const copy = {
   sentSpam: 'Si no lo ves en unos minutos, revisa la carpeta de spam.',
   locationLegend: 'Tu sede',
   locationIntro:
-    'La primera sede de tu clínica. La zona y el formato se sugieren desde tu navegador: revísalos. Podrás cambiarlos y añadir más sedes en Ajustes → Sedes.',
+    'La primera sede de tu clínica. La zona, el formato y el reloj se sugieren desde tu navegador: revísalos. Podrás cambiarlos y añadir más sedes en Ajustes → Sedes.',
 };
 
 const ERROR_ID = 'register-error';
 const LOCATION_ID = 'register-location';
 
-const EMPTY_REGIONAL: RegionalSettingsValues = { country: '', currency: '', timeZone: '', locale: '' };
+const EMPTY_REGIONAL: RegionalSettingsValues = { country: '', currency: '', timeZone: '', locale: '', hourCycle: '' };
 
 export function RegisterForm({ tenant }: { tenant: string | null }) {
   const [sentTo, setSentTo] = useState<string | null>(null);
@@ -63,22 +68,24 @@ export function RegisterForm({ tenant }: { tenant: string | null }) {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  // G1 (spec §6.7): la primera sede. País y moneda empiezan vacíos; zona y
-  // formato se sugieren desde el navegador, a la vista y editables (R10).
+  // G1 (spec §6.7): la primera sede. País y moneda empiezan vacíos; zona,
+  // formato y reloj (G1-B §9) se sugieren desde el navegador, a la vista y
+  // editables (R10). Sin reloj del navegador, vacío y obligatorio.
   const [regional, setRegional] = useState<RegionalSettingsValues>(EMPTY_REGIONAL);
-  const [suggestions, setSuggestions] = useState<{ timeZone: string | null; locale: string | null }>();
+  const [suggestions, setSuggestions] = useState<RegionalSuggestions>();
   const [regionalErrors, setRegionalErrors] = useState<RegionalSettingsErrors>({});
 
   // Tras montar: el formulario también se pinta en el servidor, que no sabe la
   // zona ni el idioma del navegador.
   useEffect(() => {
     function suggest() {
-      const suggested = { timeZone: browserTimeZone(), locale: browserLocale() };
+      const suggested = { timeZone: browserTimeZone(), locale: browserLocale(), hourCycle: browserHourCycle() };
       setSuggestions(suggested);
       setRegional((prev) => ({
         ...prev,
         timeZone: prev.timeZone || suggested.timeZone || '',
         locale: prev.locale || suggested.locale || '',
+        hourCycle: prev.hourCycle || suggested.hourCycle || '',
       }));
     }
     suggest();
@@ -119,6 +126,7 @@ export function RegisterForm({ tenant }: { tenant: string | null }) {
         locationCurrency: regional.currency,
         locationTimeZone: timeZone,
         locationLocale: locale,
+        locationHourCycle: regional.hourCycle as Exclude<RegionalSettingsValues['hourCycle'], ''>,
       });
       setSentTo(email.trim());
     } catch (err) {

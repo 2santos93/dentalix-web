@@ -2,6 +2,7 @@ import { render, screen, fireEvent, waitFor, within } from '@testing-library/rea
 import { RegisterForm } from './register-form';
 import { apiFetch, ApiError } from '../../lib/api/client';
 import { setupUser } from '@/lib/test/user';
+import { browserHourCycle, browserLocale } from '@/lib/locations/regional-settings';
 
 jest.mock('next/navigation', () => ({ useRouter: () => ({ push: jest.fn() }) }));
 // NOTE: jest.mock's string literal is not alias-rewritten by the SWC
@@ -10,6 +11,13 @@ jest.mock('../../lib/api/client', () => ({
   apiFetch: jest.fn(),
   // La clase real: `apiErrorMessage` la reconoce con `instanceof`.
   ApiError: jest.requireActual('../../lib/api/api-error').ApiError,
+}));
+
+// La sugerencia del navegador se fija en cada test (nunca se espía `Intl`).
+jest.mock('../../lib/locations/regional-settings', () => ({
+  ...jest.requireActual('../../lib/locations/regional-settings'),
+  browserLocale: jest.fn(),
+  browserHourCycle: jest.fn(),
 }));
 
 const mockedFetch = jest.mocked(apiFetch);
@@ -45,6 +53,8 @@ async function fillRequiredFields() {
 
 beforeEach(() => {
   mockedFetch.mockReset();
+  jest.mocked(browserLocale).mockReturnValue('en-US');
+  jest.mocked(browserHourCycle).mockReturnValue('h12');
 });
 
 describe('RegisterForm', () => {
@@ -127,7 +137,8 @@ describe('RegisterForm', () => {
     expect(within(group).getByLabelText('Moneda')).toHaveValue('');
   });
 
-  it('register form does not submit without the four fields and the body equals what is shown', async () => {
+  it('register form does not submit without the five fields and the body equals what is shown', async () => {
+    jest.mocked(browserHourCycle).mockReturnValue(null);
     mockApi(() => Promise.resolve({ message: 'genérico' }));
     const user = setupUser();
     render(<RegisterForm tenant={null} />);
@@ -138,7 +149,7 @@ describe('RegisterForm', () => {
     fireEvent.change(screen.getByLabelText(/nombre completo/i), { target: { value: 'Ana Ruiz' } });
     fireEvent.change(screen.getByLabelText(/correo/i), { target: { value: 'ana@example.com' } });
     fireEvent.change(screen.getByLabelText(/contraseña/i), { target: { value: 'secret123' } });
-    // Sin las sugerencias del navegador, los cuatro campos quedan vacíos.
+    // Sin las sugerencias del navegador, los cinco campos quedan vacíos.
     await user.clear(within(group).getByLabelText('Zona horaria'));
     await user.clear(within(group).getByLabelText('Formato regional'));
 
@@ -152,12 +163,16 @@ describe('RegisterForm', () => {
     expect(within(group).getByLabelText('Formato regional')).toHaveAccessibleDescription(
       'Elige el formato regional de la sede.',
     );
+    expect(within(group).getByRole('radiogroup', { name: 'Reloj' })).toHaveAccessibleDescription(
+      'Elige el reloj de la sede: 12 h o 24 h.',
+    );
     expect(within(group).getByLabelText('País')).toHaveFocus();
 
     await user.selectOptions(within(group).getByLabelText('País'), 'ES');
     await user.selectOptions(within(group).getByLabelText('Moneda'), 'JPY');
     await user.type(within(group).getByLabelText('Zona horaria'), 'Asia/Tokyo');
     await user.type(within(group).getByLabelText('Formato regional'), 'ja-jp');
+    await user.click(within(group).getByRole('radio', { name: '24 h' }));
     await user.click(screen.getByRole('button', { name: /crear cuenta/i }));
 
     await waitFor(() => expect(registerCalls()).toHaveLength(1));
@@ -174,8 +189,40 @@ describe('RegisterForm', () => {
       locationTimeZone: 'Asia/Tokyo',
       // Lo enviado es lo que se ve: el formato, en su forma canónica.
       locationLocale: 'ja-JP',
+      locationHourCycle: 'h23',
     });
     expect(await screen.findByRole('heading', { name: 'Revisa tu correo' })).toBeInTheDocument();
+  });
+
+  it('register form sends locationHourCycle from the visible suggestion', async () => {
+    mockApi(() => Promise.resolve({ message: 'genérico' }));
+    render(<RegisterForm tenant={null} />);
+    const group = screen.getByRole('group', { name: 'Tu sede' });
+    const clock = within(group).getByRole('radiogroup', { name: 'Reloj' });
+    await waitFor(() => expect(within(clock).getByRole('radio', { name: '12 h' })).toBeChecked());
+    expect(clock).toHaveAccessibleDescription(expect.stringContaining('Sugerido por tu navegador.'));
+    expect(within(group).getByLabelText('Formato regional')).toHaveValue('en-US');
+    await fillRequiredFields();
+    fireEvent.change(screen.getByLabelText('Formato regional'), { target: { value: 'en-US' } });
+    fireEvent.click(screen.getByRole('button', { name: /crear cuenta/i }));
+    await waitFor(() => expect(registerCalls()).toHaveLength(1));
+    expect(registerCalls()[0][1]?.body).toMatchObject({ locationLocale: 'en-US', locationHourCycle: 'h12' });
+    await screen.findByRole('heading', { name: 'Revisa tu correo' });
+  });
+
+  it('a 400 about the clock from the API shows next to the clock', async () => {
+    mockApi(() =>
+      Promise.reject(
+        new ApiError(400, 'El reloj «h11» no es válido: elige 12 h o 24 h.', { field: 'locationHourCycle' }),
+      ),
+    );
+    render(<RegisterForm tenant={null} />);
+    await fillRequiredFields();
+    fireEvent.click(screen.getByRole('button', { name: /crear cuenta/i }));
+    const clock = screen.getByRole('radiogroup', { name: 'Reloj' });
+    await waitFor(() =>
+      expect(clock).toHaveAccessibleDescription('El reloj «h11» no es válido: elige 12 h o 24 h.'),
+    );
   });
 
   it('the typed format is shown in canonical form when it is sent', async () => {
@@ -202,7 +249,7 @@ describe('RegisterForm', () => {
     expect(within(group).getByLabelText('Zona horaria')).toHaveAccessibleDescription(
       /Sugerido por tu navegador\./,
     );
-    expect(within(group).getByLabelText('Formato regional')).not.toHaveValue('');
+    expect(within(group).getByLabelText('Formato regional')).toHaveValue('en-US');
     await within(group).findByRole('option', { name: 'Euro (€)' });
   });
 
