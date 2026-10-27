@@ -15,3 +15,28 @@ describe('FormModal submitHint', () => {
     expect(screen.queryByText('Confirma los avisos.')).not.toBeInTheDocument();
   });
 });
+
+describe('FormModal submitHint: hueco estable', () => {
+  const props = { open: true, onOpenChange: jest.fn(), title: 'Receta', onSubmit: jest.fn() };
+
+  it('con submitHint (aunque sea null) conserva el mismo hueco reservado y solo asocia texto real', () => {
+    const { rerender } = render(<FormModal {...props} submitDisabled submitHint="Espera la comprobación.">Campos</FormModal>);
+    const hint = screen.getByText('Espera la comprobación.');
+    // Reserva dos líneas en móvil y una desde sm: aparecer o vaciarse no mueve el pie.
+    expect(hint).toHaveClass('min-h-10', 'sm:min-h-5');
+    rerender(<FormModal {...props} submitHint={null}>Campos</FormModal>);
+    expect(hint).toBeInTheDocument();
+    expect(hint).toBeEmptyDOMElement();
+    expect(hint).toHaveAttribute('aria-hidden', 'true');
+    expect(screen.getByRole('button', { name: 'Guardar' })).not.toHaveAttribute('aria-describedby');
+    rerender(<FormModal {...props} submitDisabled submitHint="Confirma los avisos.">Campos</FormModal>);
+    expect(hint).toHaveTextContent('Confirma los avisos.');
+    expect(hint).not.toHaveAttribute('aria-hidden');
+    expect(screen.getByRole('button', { name: 'Guardar' })).toHaveAccessibleDescription('Confirma los avisos.');
+  });
+
+  it('sin la prop no reserva hueco: los demás formularios no cambian', () => {
+    render(<FormModal {...props}>Campos</FormModal>);
+    expect(screen.getByRole('dialog').querySelector('form > div:last-child > p')).toBeNull();
+  });
+});

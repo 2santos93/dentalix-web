@@ -27,7 +27,10 @@ interface FormModalProps {
   submitting?: boolean;
   /** Independent of `submitting` — e.g. required fields missing. */
   submitDisabled?: boolean;
-  /** Explica junto a la acción qué falta para poder enviar. */
+  /**
+   * Explica junto a la acción qué falta para poder enviar. `null` = nada que
+   * explicar ahora, pero el hueco se conserva; `undefined` = sin hueco.
+   */
   submitHint?: string | null;
   /**
    * Nothing can be saved in the current state (e.g. the data it edits failed
@@ -106,7 +109,18 @@ export function FormModal({
           ) : null}
           {children}
           <div className="flex flex-col gap-2">
-            {submitHint ? <p id={submitHintId} className="text-sm text-muted">{submitHint}</p> : null}
+            {/* Con la prop (aunque valga null) el hueco queda reservado —dos
+                líneas en móvil, una desde sm— para que la explicación cambie o
+                se vacíe sin mover el pie ni el resto del diálogo. */}
+            {submitHint !== undefined ? (
+              <p
+                id={submitHintId}
+                aria-hidden={submitHint ? undefined : true}
+                className="min-h-10 text-sm text-muted sm:min-h-5"
+              >
+                {submitHint}
+              </p>
+            ) : null}
             <DialogFooter>
               <DialogClose asChild>
                 <Button type="button" variant="secondary" disabled={submitting}>
