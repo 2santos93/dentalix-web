@@ -4,6 +4,7 @@ import {
   completedExitSummary,
   reservedAt,
   reservedElsewhereMessage,
+  reservedElsewhereToast,
   reservedItemLabel,
   reservedNeedsFormat,
   reservationCopy,
@@ -120,6 +121,12 @@ describe('plan-item-reservations: titular de hoy en la clínica (DX-293)', () =>
     const future = { ...item, locale: null, hourCycle: null };
     expect(reservedElsewhereMessage(future)).toBe('Este tratamiento está reservado en la cita del — (Sede Norte).');
     expect(reservedNeedsFormat(future)).toBe(true);
+    // El toast no tiene sitio para el aviso: lleva la pista en el texto.
+    expect(reservedElsewhereToast(unconfigured)).toBe(
+      'Reservado en la cita de hoy a las — (Sede Norte), con el paciente en la clínica. Falta el formato regional de esa sede: revísalo en Ajustes → Sedes.',
+    );
+    expect(reservedElsewhereToast(item)).toBe(reservedElsewhereMessage(item));
+    expect(reservedElsewhereToast(hidden)).toBe(reservationCopy.heldInClinicHidden);
     // Un formato que el navegador no soporta tampoco se sustituye por otro.
     expect(reservedNeedsFormat({ ...item, locale: 'xx-INVALID-' })).toBe(true);
     // Formatear no decide la lógica: «Traer» sigue disponible (R11).

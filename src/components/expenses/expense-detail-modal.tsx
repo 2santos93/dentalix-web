@@ -36,7 +36,7 @@ import { ExpensePaymentModal } from './expense-payment-modal';
 import { ExpenseStatusBadges } from './expense-status-badges';
 import { ExpenseVoidModal } from './expense-void-modal';
 import type { ExpenseCategoriesState } from './use-expense-categories';
-import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
+import { locationRegionalFormat } from '@/lib/locations/location-settings';
 import { SedeConfigError } from '@/components/locations/sede-config-error';
 
 export const expenseDetailCopy = {
@@ -94,6 +94,8 @@ interface ExpenseDetailModalProps {
   token: string;
   expenseId: string;
   locations: ClinicLocation[];
+  /** Vuelve a leer las sedes (el soporte de una sede sin formato lo ofrece en su aviso). */
+  onRetryLocations: () => void;
   categories: ExpenseCategoriesState;
   onManageCategories: () => void;
   /** Tras cualquier cambio, con el aviso: la lista se recarga. */
@@ -123,6 +125,7 @@ export function ExpenseDetailModal({
   token,
   expenseId,
   locations,
+  onRetryLocations,
   categories,
   onManageCategories,
   onChanged,
@@ -148,9 +151,6 @@ export function ExpenseDetailModal({
     [token],
   );
   const upload = useSingleFileUpload(EXPENSE_RECEIPT_RULES, requestTicket);
-  // G1-B: el tamaño del recibo con el formato de la sede de la pantalla; sin él, «—» y el aviso.
-  const sedeFormat = useSedeFormat(token);
-  const fmt = readyFormat(sedeFormat);
 
   useEffect(() => {
     if (!open) return;
@@ -236,6 +236,8 @@ export function ExpenseDetailModal({
   }
 
   const location = detail ? locations.find((l) => l.id === detail.locationId) : undefined;
+  // G1-B (R12): el tamaño del recibo con el formato de la sede del gasto, como en el alta; sin él, «—» y el aviso.
+  const fmt = locationRegionalFormat(location);
   const live = detail !== null && detail.status !== 'VOIDED';
   const money = (amount: number) => (detail ? formatCurrency(amount, detail.currency) : '');
 
@@ -307,8 +309,8 @@ export function ExpenseDetailModal({
           <h3 id="expense-receipt-title" className="t-title text-ink">
             {expenseDetailCopy.receipt}
           </h3>
-          {sedeFormat.status === 'error' && (attachment || live) ? (
-            <SedeConfigError kind="locale" variant="note" onRetry={sedeFormat.retry} description={sedeFormat.message} />
+          {!fmt && (attachment || live) ? (
+            <SedeConfigError kind="locale" variant="note" onRetry={onRetryLocations} locationId={detail.locationId} />
           ) : null}
           {attachment ? (
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">

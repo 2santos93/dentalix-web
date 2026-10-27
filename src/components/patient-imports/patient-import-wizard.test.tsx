@@ -288,6 +288,24 @@ it('confirmar falla con 409: el motivo de la API junto al botón', async () => {
   expect(await screen.findByRole('alert')).toHaveTextContent(/en curso/);
 });
 
+it('mientras carga el formato de la sede: aviso de subida en esqueleto e «Importar» esperando, nunca «— pacientes»', async () => {
+  mockedInspect.mockResolvedValue(inspectFixture());
+  mockedValidate.mockResolvedValue(batchFixture());
+  const user = userEvent.setup();
+  render(<PatientImportWizard token="tok" onBatchChange={jest.fn()} fmt={null} formatLoading />);
+  expect(screen.getByRole('status', { name: 'Cargando el aviso de subida…' })).toBeInTheDocument();
+  expect(screen.queryByText(/— pacientes/)).not.toBeInTheDocument();
+  await upload(user);
+  await user.click(await screen.findByRole('button', { name: 'Validar archivo' }));
+  await user.click(await screen.findByRole('button', { name: 'Continuar' }));
+  await user.click(await screen.findByRole('button', { name: 'Continuar sin saldos' }));
+  const confirm = screen.getByRole('button', { name: 'Importar' });
+  expect(confirm).toBeDisabled();
+  expect(confirm).toHaveAttribute('aria-busy', 'true');
+  expect(screen.queryByRole('button', { name: /—/ })).not.toBeInTheDocument();
+  expect(mockedConfirm).not.toHaveBeenCalled();
+});
+
 it('sin filas que importar (y el lote caducado) no deja continuar', async () => {
   mockedInspect.mockResolvedValue(inspectFixture());
   mockedValidate.mockResolvedValue(

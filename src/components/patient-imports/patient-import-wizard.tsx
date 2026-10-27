@@ -3,6 +3,7 @@ import * as React from 'react';
 import { Download, FileSpreadsheet, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Wizard } from '@/components/ui/wizard';
 import { InlineError } from '@/components/errors/inline-error';
 import { notifyError } from '@/components/errors/notify';
@@ -41,6 +42,7 @@ export const wizardCopy = {
   mappingTitle: 'Revisa las columnas y valida',
   uploadHint: (maxRows: string) =>
     `CSV o Excel (.xlsx) de hasta 5 MB y ${maxRows} pacientes. Si vienes de otro programa, exporta su lista de pacientes; si empiezas de cero, usa la plantilla (borra sus dos filas de ejemplo).`,
+  hintLoading: 'Cargando el aviso de subida…',
   chooseFile: 'Elegir archivo',
   fileLabel: 'Archivo de pacientes (CSV o .xlsx)',
   template: 'Descargar plantilla',
@@ -85,6 +87,8 @@ export const wizardCopy = {
   backgroundNote:
     'La importación corre en segundo plano: puedes seguir trabajando y volver a esta pantalla para ver el avance.',
   confirm: (n: number, shown: string) => `Importar ${shown} ${n === 1 ? 'paciente' : 'pacientes'}`,
+  /** Mientras carga el formato de la sede: sin el número, que aún no se puede pintar. */
+  confirmLoading: 'Importar',
   confirmExistingOnly: 'Procesar los pacientes que ya existen',
   confirmError: 'No se pudo iniciar la importación. Intenta de nuevo.',
   balancesNote: (count: number, shown: string, totals: string) =>
@@ -114,6 +118,11 @@ interface PatientImportWizardProps {
   onBatchChange: () => void;
   /** Formato de la sede de la pantalla para los recuentos; sin él, «—» (el aviso lo pone la pantalla). */
   fmt: RegionalFormat | null;
+  /**
+   * El formato de la sede aún carga: el aviso de subida va como esqueleto y
+   * «Importar…» espera, en vez de pintar «— pacientes» un instante.
+   */
+  formatLoading?: boolean;
 }
 
 /**
@@ -153,7 +162,7 @@ function UploadStatus({ uploaded, done }: { uploaded: number | null; done: strin
   );
 }
 
-export function PatientImportWizard({ token, onBatchChange, fmt }: PatientImportWizardProps) {
+export function PatientImportWizard({ token, onBatchChange, fmt, formatLoading = false }: PatientImportWizardProps) {
   const n = (value: number) => sedeNumber(value, fmt);
   const id = React.useId();
   const inputRef = React.useRef<HTMLInputElement>(null);
@@ -391,7 +400,14 @@ export function PatientImportWizard({ token, onBatchChange, fmt }: PatientImport
           <h2 id={`${id}-upload`} tabIndex={-1} className="text-lg font-semibold text-ink focus:outline-none">
             {wizardCopy.uploadTitle}
           </h2>
-          <p className="max-w-prose text-sm text-muted">{wizardCopy.uploadHint(n(MAX_IMPORT_ROWS))}</p>
+          {formatLoading ? (
+            <div role="status" aria-label={wizardCopy.hintLoading} className="flex max-w-prose flex-col gap-1.5">
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-4 w-2/3" />
+            </div>
+          ) : (
+            <p className="max-w-prose text-sm text-muted">{wizardCopy.uploadHint(n(MAX_IMPORT_ROWS))}</p>
+          )}
           <div className="flex flex-col gap-2 sm:flex-row">
             <input
               ref={inputRef}
@@ -532,17 +548,24 @@ export function PatientImportWizard({ token, onBatchChange, fmt }: PatientImport
             <Button type="button" variant="outline" onClick={() => setStep(2)} className="w-full sm:w-auto">
               {wizardCopy.back}
             </Button>
-            <Button type="button" loading={confirming} onClick={() => void onConfirm()} className="w-full sm:w-auto">
-              {dryRun.totals.validRows > 0
-                ? wizardCopy.confirm(dryRun.totals.validRows, n(dryRun.totals.validRows))
-                : // Sin pacientes nuevos y saltando los existentes, solo se importan saldos.
-                  (dryRun.progress.preparedRows === 0 || mode === 'SKIP') &&
-                    (dryRun.balances?.preparedCount ?? 0) > 0
-                  ? wizardCopy.confirmBalances(
-                      dryRun.balances?.preparedCount ?? 0,
-                      n(dryRun.balances?.preparedCount ?? 0),
-                    )
-                  : wizardCopy.confirmExistingOnly}
+            <Button
+              type="button"
+              loading={confirming || formatLoading}
+              onClick={() => void onConfirm()}
+              className="w-full sm:w-auto"
+            >
+              {formatLoading
+                ? wizardCopy.confirmLoading
+                : dryRun.totals.validRows > 0
+                  ? wizardCopy.confirm(dryRun.totals.validRows, n(dryRun.totals.validRows))
+                  : // Sin pacientes nuevos y saltando los existentes, solo se importan saldos.
+                    (dryRun.progress.preparedRows === 0 || mode === 'SKIP') &&
+                      (dryRun.balances?.preparedCount ?? 0) > 0
+                    ? wizardCopy.confirmBalances(
+                        dryRun.balances?.preparedCount ?? 0,
+                        n(dryRun.balances?.preparedCount ?? 0),
+                      )
+                    : wizardCopy.confirmExistingOnly}
             </Button>
           </div>
         </section>

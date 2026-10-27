@@ -39,6 +39,14 @@ describe('PatientImportScreen: formato de la sede (G1-B)', () => {
     expect(screen.getByText(/hasta 5 MB y 10,000 pacientes/)).toBeInTheDocument();
   });
 
+  it('mientras cargan las sedes, el aviso de subida es un esqueleto, no «— pacientes»', async () => {
+    mockedLocations.mockReset().mockReturnValue(new Promise(() => {}));
+    render(<PatientImportScreen token="tok" allowed />);
+    expect(screen.getByRole('status', { name: 'Cargando el aviso de subida…' })).toBeInTheDocument();
+    expect(screen.queryByText(/pacientes\. Si vienes/)).not.toBeInTheDocument();
+    await screen.findByText(/creados · .* actualizados/);
+  });
+
   it('import screens without format show — and the notice', async () => {
     mockedLocations.mockReset().mockResolvedValue([clinicLocation({ locale: null, hourCycle: null })]);
     render(<PatientImportScreen token="tok" allowed />);

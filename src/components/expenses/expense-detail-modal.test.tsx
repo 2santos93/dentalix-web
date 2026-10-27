@@ -66,7 +66,7 @@ const partial = expenseDetailFixture({ status: 'PARTIAL', paidAmount: 50_000, pe
   voidedPayment,
 ]);
 
-function renderDetail() {
+function renderDetail(locations = expenseLocations, onRetryLocations = jest.fn()) {
   const onChanged = jest.fn();
   render(
     <ExpenseDetailModal
@@ -74,7 +74,8 @@ function renderDetail() {
       onOpenChange={jest.fn()}
       token="tok"
       expenseId="exp-1"
-      locations={expenseLocations}
+      locations={locations}
+      onRetryLocations={onRetryLocations}
       categories={categories}
       onManageCategories={jest.fn()}
       onChanged={onChanged}
@@ -276,6 +277,32 @@ describe('ExpenseDetailModal (DX-274)', () => {
     expect(mockedUrl).toHaveBeenLastCalledWith('tok', 'exp-1', 'attachment');
   });
 
+  it('el tamaño del soporte va con el formato de la sede del gasto, no con el de la pantalla (R12)', async () => {
+    mockedGet.mockResolvedValue({
+      ...expenseDetailFixture({ locationId: 'loc-2' }),
+      attachment: { name: 'luz.pdf', mimeType: 'application/pdf', sizeBytes: 1.5 * 1024 * 1024, sha256: 'ab' },
+    });
+    renderDetail([
+      { ...expenseLocations[0], locale: 'de-DE', hourCycle: 'h23' },
+      { ...expenseLocations[1], locale: 'en-US', hourCycle: 'h12' },
+    ]);
+    expect(await screen.findByText('1.5 MB')).toBeInTheDocument();
+  });
+
+  it('sede del gasto sin formato: tamaño «—» y el aviso, cuyo Reintentar relee las sedes', async () => {
+    const user = setupUser();
+    const retry = jest.fn();
+    mockedGet.mockResolvedValue({
+      ...expenseDetailFixture({ locationId: 'loc-2' }),
+      attachment: { name: 'luz.pdf', mimeType: 'application/pdf', sizeBytes: 1.5 * 1024 * 1024, sha256: 'ab' },
+    });
+    renderDetail([expenseLocations[0], { ...expenseLocations[1], locale: null, hourCycle: null }], retry);
+    expect(await screen.findByText(/No se pudo saber el formato regional o el reloj de la sede/)).toBeInTheDocument();
+    expect(screen.queryByText(/MB$/)).not.toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Reintentar' }));
+    expect(retry).toHaveBeenCalled();
+  });
+
   it('un gasto de una sede inactiva sigue diciendo de cuál es', async () => {
     mockedGet.mockResolvedValue(expenseDetailFixture({ locationId: 'loc-3' }));
     render(
@@ -289,6 +316,7 @@ describe('ExpenseDetailModal (DX-274)', () => {
           { ...expenseLocations[1], id: 'loc-3', name: 'Sede cerrada', isActive: false },
         ]}
         categories={categories}
+        onRetryLocations={jest.fn()}
         onManageCategories={jest.fn()}
         onChanged={jest.fn()}
       />,

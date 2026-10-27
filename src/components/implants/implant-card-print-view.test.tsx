@@ -1,4 +1,4 @@
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import { ImplantCardPrintView } from './implant-card-print-view';
 import { getImplantCard, printImplantCard } from '@/lib/implants/implants-api';
 import { ApiError } from '@/lib/api/client';
@@ -50,6 +50,27 @@ describe('ImplantCardPrintView (DX-191)', () => {
     expect(items[0]).toHaveTextContent('—');
   });
 
+  it('sin formato de la sede no se imprime ni se registra la entrega (las medidas saldrían «—»)', async () => {
+    const user = setupUser();
+    mockedLocations.mockResolvedValue([clinicLocation({ locale: null, hourCycle: null })]);
+    mockedGet.mockResolvedValue(makeImplantCard());
+    render(<ImplantCardPrintView token={RECEPTION} patientId="p1" date="2026-10-10" />);
+    await screen.findByText(/No se pudo saber el formato regional o el reloj de la sede/);
+    const print = screen.getByRole('button', { name: /imprimir y registrar la entrega/i });
+    expect(print).toBeDisabled();
+    await user.click(print);
+    expect(mockedPrint).not.toHaveBeenCalled();
+    expect(window.print).not.toHaveBeenCalled();
+  });
+
+  it('mientras carga el formato de la sede, «Imprimir» espera', async () => {
+    mockedLocations.mockReturnValue(new Promise(() => {}));
+    mockedGet.mockResolvedValue(makeImplantCard());
+    render(<ImplantCardPrintView token={RECEPTION} patientId="p1" date="2026-10-10" />);
+    await screen.findByRole('article');
+    expect(screen.getByRole('button', { name: /imprimir y registrar la entrega/i })).toBeDisabled();
+  });
+
   it('la tarjeta lleva nombre y documento, centro, fecha y los dos componentes; el anulado, marcado', async () => {
     mockedGet.mockResolvedValue(makeImplantCard());
     render(<ImplantCardPrintView token={RECEPTION} patientId="p1" date="2026-10-10" />);
@@ -78,7 +99,9 @@ describe('ImplantCardPrintView (DX-191)', () => {
     mockedPrint.mockResolvedValue(makeImplantCard({ deliveredAt: '2026-10-17T15:00:00.000Z' }));
     render(<ImplantCardPrintView token={RECEPTION} patientId="p1" date="2026-10-10" />);
     await screen.findByRole('article');
-    await user.click(screen.getByRole('button', { name: /imprimir y registrar la entrega/i }));
+    const print = screen.getByRole('button', { name: /imprimir y registrar la entrega/i });
+    await waitFor(() => expect(print).toBeEnabled());
+    await user.click(print);
     expect(mockedPrint).toHaveBeenCalledWith(RECEPTION, 'p1', '2026-10-10');
     expect(await screen.findByText(/Tarjeta entregada al paciente el/)).toBeInTheDocument();
     expect(window.print).toHaveBeenCalledTimes(1);

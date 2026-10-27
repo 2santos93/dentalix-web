@@ -41,7 +41,12 @@ export function PatientImportScreen({ token, allowed }: { token: string; allowed
         <SedeConfigError kind="locale" variant="note" onRetry={sedeFormat.retry} description={sedeFormat.message} />
       ) : null}
       <div className="rounded-xl border border-border bg-surface p-4 sm:p-6">
-        <PatientImportWizard token={token} onBatchChange={reloadHistory} fmt={fmt} />
+        <PatientImportWizard
+          token={token}
+          onBatchChange={reloadHistory}
+          fmt={fmt}
+          formatLoading={sedeFormat.status === 'loading'}
+        />
       </div>
       <ImportHistory token={token} reloadKey={historyKey} fmt={fmt} />
     </div>

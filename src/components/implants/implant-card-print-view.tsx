@@ -77,7 +77,11 @@ export function ImplantCardPrintView({ token, patientId, date }: ImplantCardPrin
     }
   }, [card]);
 
+  // I1: sin el formato de la sede, las medidas saldrían «—» en una tarjeta que se entrega al paciente.
+  const formatReady = sedeFormat.status === 'ready';
+
   async function handlePrint() {
+    if (!formatReady) return;
     setPrinting(true);
     try {
       const delivered = await printImplantCard(token, patientId, date);
@@ -108,7 +112,7 @@ export function ImplantCardPrintView({ token, patientId, date }: ImplantCardPrin
             {copy.back}
           </Link>
         </Button>
-        <Button type="button" onClick={() => void handlePrint()} disabled={!card} loading={printing}>
+        <Button type="button" onClick={() => void handlePrint()} disabled={!card || !formatReady} loading={printing}>
           <Printer aria-hidden />
           {printing ? copy.printing : copy.print}
         </Button>

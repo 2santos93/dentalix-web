@@ -345,6 +345,9 @@ function ReservedElsewhereNotice({
 }) {
   const reserved = item.planItemsReservedElsewhere ?? [];
   if (reserved.length === 0) return null;
+  // I4: sede permitida sin formato: fecha y hora «—» y un aviso por sede (no uno por tratamiento),
+  // nunca el texto de la sede no permitida.
+  const unconfigured = [...new Set(reserved.filter(reservedNeedsFormat).map((r) => r.locationId))];
   return (
     <div
       role="group"
@@ -364,16 +367,6 @@ function ReservedElsewhereNotice({
               <div className="min-w-0">
                 <p className="text-sm font-medium break-words">{label}</p>
                 <p className="text-xs break-words">{reservedElsewhereMessage(r)}</p>
-                {/* I4: sede permitida sin formato: fecha y hora «—» y el aviso, nunca el texto de la sede no permitida. */}
-                {reservedNeedsFormat(r) ? (
-                  <SedeConfigError
-                    kind="locale"
-                    variant="note"
-                    onRetry={onRetry}
-                    locationId={r.locationId}
-                    className="mt-2"
-                  />
-                ) : null}
               </div>
             </div>
             {runner.claim && claimable ? (
@@ -393,6 +386,9 @@ function ReservedElsewhereNotice({
           </div>
         );
       })}
+      {unconfigured.map((locationId) => (
+        <SedeConfigError key={locationId} kind="locale" variant="note" onRetry={onRetry} locationId={locationId} />
+      ))}
     </div>
   );
 }

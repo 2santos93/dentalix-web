@@ -32,6 +32,8 @@ export const reservationCopy = {
   claimFromPanel: 'Puedes traerlo a esta cita desde «En clínica».',
   /** DX-293: la titular es de otra sede no permitida: sin hora ni sede. */
   heldInClinicHidden: 'Reservado en otra cita de hoy, con el paciente en la clínica.',
+  /** G1-B: la titular es de una sede permitida sin formato o sin reloj (su fecha y hora salen «—»). */
+  missingFormat: 'Falta el formato regional de esa sede: revísalo en Ajustes → Sedes.',
 };
 
 /** «30/10/2026 a las 09:00», en la zona, el formato y el reloj de la sede de ESA cita. */
@@ -86,6 +88,15 @@ export function reservedElsewhereMessage(item: PlanItemReservedElsewhere): strin
   }
   const at = fmt ? reservedAt(item, fmt) : NO_SEDE_FORMAT;
   return `Este tratamiento está reservado en la cita del ${at} (${item.locationName}).`;
+}
+
+/**
+ * El aviso para un toast, que no tiene sitio para `SedeConfigError`: si la
+ * titular es de una sede sin formato, añade por qué su fecha y hora salen «—».
+ */
+export function reservedElsewhereToast(item: PlanItemReservedElsewhere): string {
+  const message = reservedElsewhereMessage(item);
+  return reservedNeedsFormat(item) ? `${message} ${reservationCopy.missingFormat}` : message;
 }
 
 /**

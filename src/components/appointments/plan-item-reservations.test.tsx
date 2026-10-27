@@ -307,6 +307,31 @@ describe('Tratamiento reservado en otra cita (DX-273)', () => {
       expect(within(notice).getByRole('button', { name: 'Reintentar' })).toBeInTheDocument();
     });
 
+    it('«Llegó» con la titular en una sede sin formato: el toast dice por qué la hora sale «—»', async () => {
+      const unconfigured = { ...held, planItemId: 'i4', locale: null, hourCycle: null };
+      mockedUpdate.mockResolvedValue({ id: 'a1', planItemsReservedElsewhere: [unconfigured] } as never);
+      render(<Arrive />);
+      await userEvent.click(screen.getByRole('button', { name: 'Llegó' }));
+      expect(toast.warning).toHaveBeenCalledWith(
+        'Implante · diente 36',
+        expect.objectContaining({
+          description:
+            'Reservado en la cita de hoy a las — (Sede Norte), con el paciente en la clínica. Falta el formato regional de esa sede: revísalo en Ajustes → Sedes.',
+        }),
+      );
+    });
+
+    it('varias reservas en la misma sede sin formato: un solo aviso de esa sede (M7)', async () => {
+      const a = { ...held, planItemId: 'i4', locale: null, hourCycle: null };
+      const b = { ...reserved, planItemId: 'i5', name: 'Corona', locale: null, hourCycle: null };
+      const other = { ...reserved, planItemId: 'i6', name: 'Puente', locationId: 'loc-9', locale: null, hourCycle: null };
+      mockedGet.mockResolvedValue(view([item({ planItemsReservedElsewhere: [a, b, other] })]));
+      render(<Harness />);
+      const notice = await screen.findByRole('group', { name: 'Tratamiento reservado en otra cita' });
+      expect(within(notice).getAllByText(/No se pudo saber el formato regional o el reloj de la sede/)).toHaveLength(2);
+      expect(within(notice).getAllByRole('button', { name: 'Reintentar' })).toHaveLength(2);
+    });
+
     it('con una reserva futura y otra en la clínica, «Traer» solo para la futura', async () => {
       mockedGet.mockResolvedValue(view([item({ planItemsReservedElsewhere: [reserved, held] })]));
       render(<Harness />);
