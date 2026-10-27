@@ -330,4 +330,30 @@ describe('LocationFormModal (G1, spec §6.2)', () => {
       expect(select.className).toContain('aria-[invalid=true]:border-danger');
     }
   });
+
+  it.each(['Asia/Kolkata', 'Europe/Kyiv', 'Asia/Ho_Chi_Minh'])(
+    'a location in %s saved unchanged keeps its zone and is not a zone change',
+    async (zone) => {
+      const sede = clinicLocation({ timeZone: zone });
+      mockedUpdate.mockResolvedValue(sede);
+      const { dialog, user } = setup(sede);
+      await currenciesLoaded(dialog);
+      await user.click(within(dialog).getByRole('button', { name: 'Guardar sede' }));
+      await waitFor(() => expect(mockedUpdate).toHaveBeenCalledTimes(1));
+      expect(mockedUpdate.mock.calls[0][2]).toMatchObject({ timeZone: zone });
+      expect(mockedUpdate.mock.calls[0][2]).not.toHaveProperty('confirmRegionalChange');
+      expect(within(dialog).getByLabelText('Zona horaria')).toHaveValue(zone);
+    },
+  );
+
+  it('a stored lowercase zone saved unchanged is not a move: CASH_OPEN does not land on the zone', async () => {
+    const message = 'Cierra la caja abierta de la sede antes de cambiar su moneda o su zona horaria.';
+    mockedUpdate.mockRejectedValue(new ApiError(409, message, { code: 'LOCATION_REGIONAL_CASH_OPEN' }));
+    const { dialog, user } = setup(clinicLocation({ timeZone: 'asia/tokyo' }));
+    await currenciesLoaded(dialog);
+    await user.click(within(dialog).getByRole('button', { name: 'Guardar sede' }));
+    await waitFor(() => expect(mockedUpdate).toHaveBeenCalledTimes(1));
+    expect(mockedUpdate.mock.calls[0][2]).toMatchObject({ timeZone: 'Asia/Tokyo' });
+    expect(within(dialog).getByLabelText('Zona horaria')).not.toHaveAccessibleDescription(message);
+  });
 });

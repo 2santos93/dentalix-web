@@ -121,8 +121,11 @@ export function LocationFormModal({ open, onOpenChange, token, location, onSaved
     if (!location) return [];
     return (['currency', 'timeZone'] as const).filter((field) => {
       const before = location[field];
-      const now = field === 'timeZone' ? (canonicalTimeZone(regional.timeZone) ?? regional.timeZone.trim()) : regional.currency;
-      return before !== null && before !== now;
+      if (before === null) return false;
+      if (field === 'currency') return before !== regional.currency;
+      // Las dos con la misma forma: una zona guardada sin canonicalizar no es un cambio.
+      const zone = (value: string) => canonicalTimeZone(value) ?? value.trim();
+      return zone(before) !== zone(regional.timeZone);
     });
   }
 

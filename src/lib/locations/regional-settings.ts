@@ -54,18 +54,27 @@ export function canonicalLocale(raw: string | null | undefined): string | null {
 }
 
 /**
- * Forma canónica de una zona IANA (`asia/tokyo` → `Asia/Tokyo`), o `null` si
- * este navegador no la reconoce. Lo enviado y lo comparado con la zona guardada
- * es siempre esta forma, no lo tecleado.
+ * La zona IANA con su mayúscula canónica (`asia/tokyo` → `Asia/Tokyo`), o
+ * `null` si este navegador no la reconoce. Solo corrige la CAPITALIZACIÓN:
+ * nunca cambia el nombre. `resolvedOptions().timeZone` de V8 (Chrome, Node)
+ * además resuelve los enlaces al nombre viejo de ICU (`Asia/Kolkata` →
+ * `Asia/Calcutta`, `Europe/Kyiv` → `Europe/Kiev`); usarlo tal cual haría que
+ * guardar una sede sin tocar nada contara como un cambio de zona. Lo enviado y
+ * lo comparado con la zona guardada es siempre esta forma.
  */
 export function canonicalTimeZone(raw: string | null | undefined): string | null {
   const text = raw?.trim();
-  if (!text) return null;
+  if (!text || !isUsableTimeZone(text)) return null;
+  const lower = text.toLowerCase();
   try {
-    return new Intl.DateTimeFormat('en', { timeZone: text }).resolvedOptions().timeZone;
+    const resolved = new Intl.DateTimeFormat('en', { timeZone: text }).resolvedOptions().timeZone;
+    if (resolved.toLowerCase() === lower) return resolved; // solo cambiaba la capitalización
   } catch {
-    return null;
+    // `isUsableTimeZone` ya la comprobó.
   }
+  // Un enlace (Asia/Kolkata, Europe/Kyiv, Etc/UTC) se conserva; solo se corrige
+  // su capitalización si la lista del navegador lo tiene.
+  return timeZoneOptions().find((zone) => zone.toLowerCase() === lower) ?? text;
 }
 
 /** Zona del navegador, para sugerirla en el alta; `null` si no la da o no es válida. */

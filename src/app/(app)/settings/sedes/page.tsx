@@ -65,11 +65,11 @@ function LocationSettingsRoute() {
         <div className="flex flex-col gap-4">
           <RegionalReviewNotice token={accessToken} showReviewLink={false} />
           <LocationsList
-          token={accessToken}
-          canEdit={isAdmin}
-          initialEditId={editId}
-          onInitialEditConsumed={() => router.replace('/settings/sedes')}
-        />
+            token={accessToken}
+            canEdit={isAdmin}
+            initialEditId={editId}
+            onInitialEditConsumed={() => router.replace('/settings/sedes')}
+          />
         </div>
         <LocationHealthRegistrationSettings
           token={accessToken}

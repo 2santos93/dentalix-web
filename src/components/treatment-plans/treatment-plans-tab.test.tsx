@@ -1826,6 +1826,16 @@ describe('TreatmentPlansTab', () => {
       expect(screen.queryByRole('heading', { name: 'Abonos y saldo' })).not.toBeInTheDocument();
     });
 
+    it('a token without a readable role is not a billing role: no balance requests, no «Abonos y saldo»', async () => {
+      mockedListPlans.mockResolvedValue([plan1]);
+      mockedGetPlan.mockResolvedValue(plan1Detail);
+      render(<TreatmentPlansTab patientId="pat-1" token="tok-sin-rol" />);
+      await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+      expect(mockedGetPlanBalance).not.toHaveBeenCalled();
+      expect(mockedListPayments).not.toHaveBeenCalled();
+      expect(screen.queryByRole('heading', { name: 'Abonos y saldo' })).not.toBeInTheDocument();
+    });
+
     it.each([['ADMIN'], ['RECEPTION']])('%s sigue leyendo saldo y abonos y ve «Abonos y saldo»', async (role) => {
       mockedListPlans.mockResolvedValue([plan1]);
       mockedGetPlan.mockResolvedValue(plan1Detail);
