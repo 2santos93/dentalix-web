@@ -21,6 +21,8 @@ import {
 } from '@/lib/patient-imports/patient-imports-api';
 import { saveCsv } from '@/lib/files/save-csv';
 import { ImportIssuesTable } from './import-issues-table';
+import type { RegionalFormat } from '@/lib/format/regional-format';
+import { sedeNumber } from '@/lib/format/sede-number';
 
 export const balancesCopy = {
   title: 'Saldos de los pacientes (opcional)',
@@ -37,7 +39,8 @@ export const balancesCopy = {
   error: 'No se pudo validar la hoja de saldos. Intenta de nuevo.',
   remove: 'Quitar la hoja de saldos',
   removeError: 'No se pudo quitar la hoja de saldos.',
-  summary: (name: string, rows: number) => `${name} · ${rows.toLocaleString('es-CO')} ${rows === 1 ? 'fila' : 'filas'}`,
+  // El número llega ya formateado con el formato de la sede (G1-B); el plural sale del número.
+  summary: (name: string, rows: number, shown: string) => `${name} · ${shown} ${rows === 1 ? 'fila' : 'filas'}`,
   rows: 'Filas de la hoja',
   toImport: 'Saldos a crear',
   merged: 'Filas sumadas',
@@ -72,6 +75,8 @@ interface BalancesStepProps {
   onBatch: (batch: ImportBatchDetail) => void;
   onBack: () => void;
   onContinue: () => void;
+  /** Formato de la sede de la pantalla para los recuentos; sin él, «—». */
+  fmt: RegionalFormat | null;
 }
 
 /**
@@ -79,7 +84,8 @@ interface BalancesStepProps {
  * (dry-run, sin escribir) con el total por moneda del archivo y de lo que se
  * importará, y los errores por fila. Es opcional: se puede seguir sin ella.
  */
-export function BalancesStep({ token, headingId, batch, onBatch, onBack, onContinue }: BalancesStepProps) {
+export function BalancesStep({ token, headingId, batch, onBatch, onBack, onContinue, fmt }: BalancesStepProps) {
+  const n = (value: number) => sedeNumber(value, fmt);
   const id = React.useId();
   const inputRef = React.useRef<HTMLInputElement>(null);
   const [busy, setBusy] = React.useState(false);
@@ -233,7 +239,7 @@ export function BalancesStep({ token, headingId, batch, onBatch, onBack, onConti
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <p className="flex min-w-0 items-center gap-2 text-sm text-ink">
               <FileSpreadsheet aria-hidden className="size-4 shrink-0 text-muted" />
-              <span className="truncate">{balancesCopy.summary(sheet.fileName, sheet.totalRows)}</span>
+              <span className="truncate">{balancesCopy.summary(sheet.fileName, sheet.totalRows, n(sheet.totalRows))}</span>
             </p>
             <Button type="button" variant="ghost" size="sm" loading={removing} onClick={() => void onRemove()}>
               <Trash2 aria-hidden />
@@ -251,7 +257,7 @@ export function BalancesStep({ token, headingId, batch, onBatch, onBack, onConti
             ).map(([label, value]) => (
               <div key={label} className="flex flex-col gap-0.5 border-l border-border pl-3">
                 <dt className="text-xs font-medium text-muted">{label}</dt>
-                <dd className="text-base font-semibold tabular-nums text-ink">{value.toLocaleString('es-CO')}</dd>
+                <dd className="text-base font-semibold tabular-nums text-ink">{n(value)}</dd>
               </div>
             ))}
           </dl>

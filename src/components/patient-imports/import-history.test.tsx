@@ -6,6 +6,10 @@ import { balancesFixture, batchFixture } from '@/lib/test/patient-imports';
 import { notifyError } from '@/components/errors/notify';
 import { toast } from 'sonner';
 import { ImportHistory } from './import-history';
+import { regionalFormat } from '@/lib/format/regional-format';
+
+/** Sede de prueba con ajustes explícitos (los recuentos de estos tests no llegan a mil). */
+const FMT = regionalFormat({ locale: 'de-DE', hourCycle: 'h23' });
 
 jest.mock('../errors/notify', () => ({
   notifyError: jest.fn(() => 'toast-poll'),
@@ -45,7 +49,7 @@ beforeEach(() => jest.clearAllMocks());
 
 it('carga con esqueleto y luego lista cada lote con su estado y resultado', async () => {
   mockedList.mockResolvedValue(page());
-  render(<ImportHistory token="tok" reloadKey={0} />);
+  render(<ImportHistory token="tok" reloadKey={0} fmt={FMT} />);
   expect(screen.getByRole('status', { name: /cargando/i })).toBeInTheDocument();
   const list = await screen.findByRole('list', {
     name: /importaciones de la clínica/i,
@@ -58,14 +62,14 @@ it('carga con esqueleto y luego lista cada lote con su estado y resultado', asyn
 
 it('vacío: lo explica', async () => {
   mockedList.mockResolvedValue(page([]));
-  render(<ImportHistory token="tok" reloadKey={0} />);
+  render(<ImportHistory token="tok" reloadKey={0} fmt={FMT} />);
   expect(await screen.findByText('Aún no has importado pacientes')).toBeInTheDocument();
 });
 
 it('error: sección con «Reintentar» que vuelve a cargar', async () => {
   mockedList.mockRejectedValueOnce(new Error('red')).mockResolvedValueOnce(page());
   const user = userEvent.setup();
-  render(<ImportHistory token="tok" reloadKey={0} />);
+  render(<ImportHistory token="tok" reloadKey={0} fmt={FMT} />);
   const alert = await screen.findByRole('alert');
   expect(alert).toHaveTextContent(/historial de importaciones/);
   await user.click(within(alert).getByRole('button', { name: 'Reintentar' }));
@@ -83,7 +87,7 @@ it('deshacer: pide confirmación y deja el lote como deshecho', async () => {
     undoneFilled: 1,
   });
   const user = userEvent.setup();
-  render(<ImportHistory token="tok" reloadKey={0} />);
+  render(<ImportHistory token="tok" reloadKey={0} fmt={FMT} />);
   await user.click(
     await screen.findByRole('button', {
       name: /deshacer el lote pacientes\.csv/i,
@@ -104,7 +108,7 @@ it('deshacer rechazado (409): el motivo en el diálogo y el lote intacto', async
     new ApiError(409, 'Conflict', { messages: ['No se puede deshacer: 1 paciente de este lote ya tiene citas, historia clínica, planes, pagos u otros datos registrados. Corrígelo desde su ficha.'] }),
   );
   const user = userEvent.setup();
-  render(<ImportHistory token="tok" reloadKey={0} />);
+  render(<ImportHistory token="tok" reloadKey={0} fmt={FMT} />);
   await user.click(await screen.findByRole('button', { name: /deshacer el lote/i }));
   await user.click(
     within(screen.getByRole('dialog')).getByRole('button', {
@@ -122,7 +126,7 @@ it('paginado: «Siguiente» pide la página 2', async () => {
     pageSize: 20,
   });
   const user = userEvent.setup();
-  render(<ImportHistory token="tok" reloadKey={0} />);
+  render(<ImportHistory token="tok" reloadKey={0} fmt={FMT} />);
   await screen.findByText('pacientes.csv');
   await user.click(screen.getByRole('button', { name: /siguiente/i }));
   await waitFor(() => expect(mockedList).toHaveBeenLastCalledWith('tok', 2));
@@ -133,7 +137,7 @@ it('un lote importando se refresca solo hasta terminar', async () => {
   try {
     const running = { ...completed, status: 'RUNNING' as const, canUndo: false, progress: { ...completed.progress, processedRows: 1, percent: 50 } };
     mockedList.mockResolvedValueOnce(page([running])).mockResolvedValue(page());
-    render(<ImportHistory token="tok" reloadKey={0} />);
+    render(<ImportHistory token="tok" reloadKey={0} fmt={FMT} />);
     expect(await screen.findByText('1 de 2 filas procesadas')).toBeInTheDocument();
     await act(async () => {
       jest.advanceTimersByTime(3100);
@@ -152,7 +156,7 @@ it('«Informe» solo si sigue disponible (revisión: tras la purga daría 410)',
     reportAvailable: false,
   };
   mockedList.mockResolvedValue(page([completed, purged]));
-  render(<ImportHistory token="tok" reloadKey={0} />);
+  render(<ImportHistory token="tok" reloadKey={0} fmt={FMT} />);
   await screen.findByText('viejo.csv');
   expect(screen.getByRole('button', { name: /informe.*pacientes\.csv/i })).toBeInTheDocument();
   expect(screen.queryByRole('button', { name: /informe.*viejo\.csv/i })).not.toBeInTheDocument();
@@ -167,7 +171,7 @@ it('Way-Out Rule: el aviso de fallo del refresco trae «Reintentar»', async () 
       canUndo: false,
     };
     mockedList.mockResolvedValueOnce(page([running])).mockRejectedValue(new Error('red'));
-    render(<ImportHistory token="tok" reloadKey={0} />);
+    render(<ImportHistory token="tok" reloadKey={0} fmt={FMT} />);
     await screen.findByText('pacientes.csv');
     await act(async () => {
       jest.advanceTimersByTime(3100);
@@ -193,7 +197,7 @@ it('el aviso del refresco se cierra solo cuando el refresco vuelve a ir bien', a
       .mockResolvedValueOnce(page([running]))
       .mockRejectedValueOnce(new Error('red'))
       .mockResolvedValue(page([running]));
-    render(<ImportHistory token="tok" reloadKey={0} />);
+    render(<ImportHistory token="tok" reloadKey={0} fmt={FMT} />);
     await screen.findByText('pacientes.csv');
     await act(async () => {
       jest.advanceTimersByTime(3100);
@@ -227,7 +231,7 @@ it('DX-262: con saldos migrados, el deshacer avisa de que también se retiran y 
     balances: balancesFixture({ imported: [], undoneCount: 3 }),
   });
   const user = userEvent.setup();
-  render(<ImportHistory token="tok" reloadKey={0} />);
+  render(<ImportHistory token="tok" reloadKey={0} fmt={FMT} />);
   await user.click(
     await screen.findByRole('button', {
       name: /deshacer el lote pacientes\.csv/i,
@@ -254,7 +258,7 @@ it('DX-262: «Retirar saldos migrados» retira solo los saldos (aunque los pacie
     balances: balancesFixture({ imported: [], undoneCount: 2, canUndo: false }),
   });
   const user = userEvent.setup();
-  render(<ImportHistory token="tok" reloadKey={0} />);
+  render(<ImportHistory token="tok" reloadKey={0} fmt={FMT} />);
   await user.click(
     await screen.findByRole('button', {
       name: /retirar los saldos migrados de pacientes\.csv/i,

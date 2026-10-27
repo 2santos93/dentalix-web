@@ -4,6 +4,7 @@ import { SingleFileField, useSingleFileUpload } from './single-file-field';
 import { prepareSingleFile, uploadSingleFile, type SingleFileRules } from '@/lib/files/upload-single-file';
 import { HeicConversionError } from '@/lib/patient-documents/heic';
 import { setupUser } from '@/lib/test/user';
+import { regionalFormat, type RegionalFormat } from '@/lib/format/regional-format';
 
 jest.mock('../../lib/files/upload-single-file', () => ({
   ...jest.requireActual('../../lib/files/upload-single-file'),
@@ -21,15 +22,21 @@ const RULES: SingleFileRules = {
   messages: { tooLarge: 'Demasiado grande.', empty: 'Vacío.', unsupported: 'Tipo no admitido.' },
 };
 
-function Harness() {
+function Harness({
+  fmt = regionalFormat({ locale: 'en-US', hourCycle: 'h12' }),
+  rules = RULES,
+}: {
+  fmt?: RegionalFormat | null;
+  rules?: SingleFileRules;
+}) {
   const requestTicket = useCallback(
     async () => ({ uploadId: 'never', target: { method: 'POST' as const, url: '', fields: {} } }),
     [],
   );
-  const upload = useSingleFileUpload(RULES, requestTicket);
+  const upload = useSingleFileUpload(rules, requestTicket);
   return (
     <>
-      <SingleFileField id="receipt" label="Soporte" hint="PDF o JPG." accept=".pdf,.jpg,.heic" upload={upload} />
+      <SingleFileField id="receipt" label="Soporte" hint="PDF o JPG." accept=".pdf,.jpg,.heic" upload={upload} fmt={fmt} />
       <output data-testid="upload-id">{upload.uploadId ?? ''}</output>
     </>
   );
@@ -41,6 +48,21 @@ describe('SingleFileField', () => {
   beforeEach(() => {
     mockedPrepare.mockReset().mockImplementation(async (file) => file);
     mockedUpload.mockReset().mockResolvedValue('up-1');
+  });
+
+  it('el tamaño va con el formato de la sede; sin formato, «—»', async () => {
+    const user = setupUser();
+    const big = new File([new Uint8Array(1536)], 'luz.pdf', { type: 'application/pdf' });
+    const rules = { ...RULES, maxBytes: 4096 };
+    const { unmount } = render(<Harness rules={rules} fmt={regionalFormat({ locale: 'de-DE', hourCycle: 'h23' })} />);
+    await user.upload(screen.getByLabelText('Soporte'), big);
+    expect(await screen.findByText('1,5 KB')).toBeInTheDocument();
+    unmount();
+    render(<Harness rules={rules} fmt={null} />);
+    await user.upload(screen.getByLabelText('Soporte'), big);
+    expect(await screen.findByText('luz.pdf')).toBeInTheDocument();
+    expect(screen.queryByText(/KB/)).not.toBeInTheDocument();
+    expect(screen.getByText('—')).toBeInTheDocument();
   });
 
   it('sube al elegir, con progreso, y deja el uploadId', async () => {

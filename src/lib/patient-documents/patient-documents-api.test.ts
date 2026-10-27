@@ -1,3 +1,4 @@
+import { regionalFormat } from '@/lib/format/regional-format';
 import {
   canUploadPatientDocuments,
   canVoidPatientDocument,
@@ -224,10 +225,18 @@ describe('patient-documents-api (DX-151)', () => {
     expect(PATIENT_DOCUMENT_ACCEPT).toContain('application/pdf');
   });
 
-  it('tamaños legibles', () => {
-    expect(formatFileSize(512)).toBe('512 B');
-    expect(formatFileSize(2048)).toBe('2 KB');
-    expect(formatFileSize(1.5 * MB)).toBe('1,5 MB');
+  it('formatFileSize en-US is 1.5 MB', () => {
+    expect(formatFileSize(1.5 * MB, regionalFormat({ locale: 'en-US', hourCycle: 'h12' }))).toBe('1.5 MB');
+  });
+
+  it('tamaños legibles con el formato de la sede', () => {
+    const enUS = regionalFormat({ locale: 'en-US', hourCycle: 'h12' });
+    const deDE = regionalFormat({ locale: 'de-DE', hourCycle: 'h23' });
+    expect(formatFileSize(512, enUS)).toBe('512 B');
+    expect(formatFileSize(2048, enUS)).toBe('2 KB');
+    expect(formatFileSize(1.5 * MB, enUS)).toBe('1.5 MB');
+    expect(formatFileSize(1.5 * MB, deDE)).toBe('1,5 MB');
+    expect(formatFileSize(1.5 * MB, null)).toBe('—');
   });
 
   it('roles: los cuatro suben; anula el autor o ADMIN, y solo uno vivo', () => {

@@ -204,10 +204,8 @@ export function hourCycleExamples(locale: string, timeZone: string, at: Date): R
   const canonical = canonicalLocale(locale);
   const zone = timeZone.trim();
   if (!canonical || !isUsableTimeZone(zone)) return null;
-  return {
-    h12: regionalFormat({ locale: canonical, hourCycle: 'h12' }).time(at, zone),
-    h23: regionalFormat({ locale: canonical, hourCycle: 'h23' }).time(at, zone),
-  };
+  const example = (hourCycle: HourCycle) => regionalFormat({ locale: canonical, hourCycle }).time(at, zone);
+  return { h12: example('h12'), h23: example('h23') };
 }
 
 /** Validación en cliente con los mensajes de la API. Sin errores = `{}`. */

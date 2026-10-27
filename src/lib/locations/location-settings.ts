@@ -1,5 +1,5 @@
 import { civilDateInZone } from '@/lib/format/date';
-import { regionalFormat, type RegionalSettingsForFormat } from '@/lib/format/regional-format';
+import { regionalFormat, type RegionalFormat, type RegionalSettingsForFormat } from '@/lib/format/regional-format';
 import type { ClinicLocation } from './locations-api';
 
 /**
@@ -48,6 +48,14 @@ export function locationFormat(
     return null;
   }
   return { locale, hourCycle };
+}
+
+/** El helper de formato con los ajustes de la sede, o `null` en los mismos casos que {@link locationFormat}. */
+export function locationRegionalFormat(
+  location: Pick<ClinicLocation, 'locale' | 'hourCycle'> | null | undefined,
+): RegionalFormat | null {
+  const settings = locationFormat(location);
+  return settings ? regionalFormat(settings) : null;
 }
 
 /**

@@ -6,6 +6,7 @@ import type { ClinicRole } from '@/lib/me/me-api';
 import {
   PUNCTUALITY_CLASSES,
   inClinicCount,
+  inClinicFormat,
   punctualityLabel,
   timeInZone,
   type FlowAction,
@@ -23,7 +24,10 @@ import {
   reservationCopy,
   reservedElsewhereMessage,
   reservedItemLabel,
+  reservedNeedsFormat,
 } from '@/lib/appointments/plan-item-reservations';
+import type { RegionalFormat } from '@/lib/format/regional-format';
+import { SedeConfigError } from '@/components/locations/sede-config-error';
 import { Button } from '@/components/ui/button';
 import { EmptyState } from '@/components/shared/empty-state';
 import { SectionError } from '@/components/errors/section-error';
@@ -96,6 +100,8 @@ export function InClinicPanel({
   const { view, loading, error, noLocation, reload } = state;
   const mine = view?.scope === 'MINE' || (view === null && role === 'DENTIST');
   const total = view ? inClinicCount(view) : null;
+  // G1-B: las horas se pintan con el formato y el reloj que manda la vista; sin ellos, ninguno.
+  const fmt = view ? inClinicFormat(view) : null;
   const panelRef = useRef<HTMLElement>(null);
   const pendingFocus = useRef<{
     id: string;
@@ -200,6 +206,8 @@ export function InClinicPanel({
             </div>
           ))}
         </div>
+      ) : !fmt ? (
+        <SedeConfigError kind="locale" onRetry={reload} locationId={view.locationId} />
       ) : (
         <div className="flex flex-col gap-4">
           {inClinicCount(view) === 0 && <EmptyState role="status" icon={<Armchair aria-hidden />} title={inClinicCopy.emptyTitle} description={inClinicCopy.emptyHint} />}
@@ -210,7 +218,9 @@ export function InClinicPanel({
               title={group === 'waiting' && mine ? inClinicCopy.titleMine : inClinicCopy.groups[group]}
               items={view[group]}
               view={view}
+              fmt={fmt}
               role={role}
+              onRetry={reload}
               runner={panelRunner}
               showEmptyHint={inClinicCount(view) > 0}
             />
@@ -227,7 +237,9 @@ function InClinicGroup({
   title,
   items,
   view,
+  fmt,
   role,
+  onRetry,
   runner,
   showEmptyHint,
 }: {
@@ -235,7 +247,10 @@ function InClinicGroup({
   title: string;
   items: InClinicItem[];
   view: InClinicView;
+  fmt: RegionalFormat;
   role: ClinicRole | null;
+  /** Vuelve a leer el panel (aviso de una reserva en una sede sin formato). */
+  onRetry: () => void;
   runner: PatientFlowRunner;
   showEmptyHint: boolean;
 }) {
@@ -274,13 +289,13 @@ function InClinicGroup({
                       <MedicalAlertIndicator flags={item.medicalAlerts} patientName={name} size="default" />
                     </p>
                     <p className="text-xs tabular-nums text-muted">
-                      {inClinicCopy.appointmentAt(timeInZone(item.start, tz))}
+                      {inClinicCopy.appointmentAt(timeInZone(item.start, tz, fmt))}
                       {item.providerName ? ` · ${item.providerName}` : ''}
                     </p>
                     {item.arrivedAt ? (
                       <p className="text-xs tabular-nums text-muted">
                         {inClinicCopy.arrivedAt(
-                          timeInZone(item.arrivedAt, tz),
+                          timeInZone(item.arrivedAt, tz, fmt),
                           punctualityLabel(item.punctuality),
                         )}
                       </p>
@@ -295,7 +310,7 @@ function InClinicGroup({
                     {inClinicCopy.minutes[group](item.minutesInStatus)}
                   </span>
                 </div>
-                <ReservedElsewhereNotice item={item} runner={runner} />
+                <ReservedElsewhereNotice item={item} runner={runner} onRetry={onRetry} />
                 <PatientFlowActions
                   appointmentId={item.appointmentId}
                   status={item.status}
@@ -319,7 +334,15 @@ function InClinicGroup({
  * cita» por tratamiento; nada si no hay. DX-293: si la tiene otra cita de
  * hoy con el paciente en la clínica, sin botón: el texto dice dónde está.
  */
-function ReservedElsewhereNotice({ item, runner }: { item: InClinicItem; runner: PatientFlowRunner }) {
+function ReservedElsewhereNotice({
+  item,
+  runner,
+  onRetry,
+}: {
+  item: InClinicItem;
+  runner: PatientFlowRunner;
+  onRetry: () => void;
+}) {
   const reserved = item.planItemsReservedElsewhere ?? [];
   if (reserved.length === 0) return null;
   return (
@@ -341,6 +364,16 @@ function ReservedElsewhereNotice({ item, runner }: { item: InClinicItem; runner:
               <div className="min-w-0">
                 <p className="text-sm font-medium break-words">{label}</p>
                 <p className="text-xs break-words">{reservedElsewhereMessage(r)}</p>
+                {/* I4: sede permitida sin formato: fecha y hora «—» y el aviso, nunca el texto de la sede no permitida. */}
+                {reservedNeedsFormat(r) ? (
+                  <SedeConfigError
+                    kind="locale"
+                    variant="note"
+                    onRetry={onRetry}
+                    locationId={r.locationId}
+                    className="mt-2"
+                  />
+                ) : null}
               </div>
             </div>
             {runner.claim && claimable ? (

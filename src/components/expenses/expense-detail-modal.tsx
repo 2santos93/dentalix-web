@@ -36,6 +36,8 @@ import { ExpensePaymentModal } from './expense-payment-modal';
 import { ExpenseStatusBadges } from './expense-status-badges';
 import { ExpenseVoidModal } from './expense-void-modal';
 import type { ExpenseCategoriesState } from './use-expense-categories';
+import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
+import { SedeConfigError } from '@/components/locations/sede-config-error';
 
 export const expenseDetailCopy = {
   title: 'Gasto',
@@ -146,6 +148,9 @@ export function ExpenseDetailModal({
     [token],
   );
   const upload = useSingleFileUpload(EXPENSE_RECEIPT_RULES, requestTicket);
+  // G1-B: el tamaño del recibo con el formato de la sede de la pantalla; sin él, «—» y el aviso.
+  const sedeFormat = useSedeFormat(token);
+  const fmt = readyFormat(sedeFormat);
 
   useEffect(() => {
     if (!open) return;
@@ -302,11 +307,14 @@ export function ExpenseDetailModal({
           <h3 id="expense-receipt-title" className="t-title text-ink">
             {expenseDetailCopy.receipt}
           </h3>
+          {sedeFormat.status === 'error' && (attachment || live) ? (
+            <SedeConfigError kind="locale" variant="note" onRetry={sedeFormat.retry} description={sedeFormat.message} />
+          ) : null}
           {attachment ? (
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <span className="min-w-0 text-sm text-ink [overflow-wrap:anywhere]">
                 {attachment.name}{' '}
-                <span className="text-xs tabular-nums text-muted">{formatFileSize(attachment.sizeBytes)}</span>
+                <span className="text-xs tabular-nums text-muted">{formatFileSize(attachment.sizeBytes, fmt)}</span>
               </span>
               <div className="flex gap-2">
                 <Button type="button" variant="secondary" size="sm" onClick={() => openSub({ kind: 'viewer' })} className="max-sm:min-h-11 max-sm:flex-1">
@@ -328,6 +336,7 @@ export function ExpenseDetailModal({
                 accept={EXPENSE_RECEIPT_ACCEPT}
                 upload={upload}
                 disabled={attaching}
+                fmt={fmt}
               />
               {upload.uploadId ? (
                 <Button type="button" size="sm" loading={attaching} onClick={() => void attach()} className="self-start max-sm:min-h-11">

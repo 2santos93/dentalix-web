@@ -23,7 +23,7 @@ import {
 } from '@/lib/cash-sessions/presentation';
 import { listLocations, type ClinicLocation } from '@/lib/locations/locations-api';
 import { onLocationChange } from '@/lib/locations/location-store';
-import { locationCurrency, locationTimeZone } from '@/lib/locations/location-settings';
+import { locationCurrency, locationRegionalFormat, locationTimeZone } from '@/lib/locations/location-settings';
 import { SedeConfigError } from '@/components/locations/sede-config-error';
 import { PAYMENT_METHOD_LABELS } from '@/lib/payments/payment-method';
 import { formatCurrency } from '@/lib/format/currency';
@@ -436,6 +436,7 @@ export function CashShiftsView({ token, tabs }: CashShiftsViewProps) {
           locationId={current.locationId}
           sedeName={sedeName}
           defaultCurrency={defaultCurrency}
+          fmt={locationRegionalFormat(sede)}
           onCreated={(_expense, notice) => afterChange(notice)}
         />
       ) : null}

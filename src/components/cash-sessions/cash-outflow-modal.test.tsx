@@ -30,6 +30,8 @@ const mockedSuppliers = suggestExpenseSuppliers as jest.MockedFunction<typeof su
 const mockedCategories = listExpenseCategories as jest.MockedFunction<typeof listExpenseCategories>;
 const mockedUpload = uploadSingleFile as jest.MockedFunction<typeof uploadSingleFile>;
 
+import { regionalFormat } from '@/lib/format/regional-format';
+
 function renderModal() {
   const onCreated = jest.fn();
   const onOpenChange = jest.fn();
@@ -41,6 +43,7 @@ function renderModal() {
       locationId="loc-2"
       sedeName="Sede norte"
       defaultCurrency="COP"
+      fmt={regionalFormat({ locale: 'fr-FR', hourCycle: 'h12' })}
       onCreated={onCreated}
     />,
   );

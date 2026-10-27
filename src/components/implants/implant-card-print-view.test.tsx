@@ -4,6 +4,8 @@ import { getImplantCard, printImplantCard } from '@/lib/implants/implants-api';
 import { ApiError } from '@/lib/api/client';
 import { setupUser } from '@/lib/test/user';
 import { makeImplantCard, tokenFor } from '@/lib/test/implants';
+import { listLocations } from '@/lib/locations/locations-api';
+import { clinicLocation } from '@/lib/test/locations';
 
 jest.mock('../../lib/implants/implants-api', () => ({
   ...jest.requireActual('../../lib/implants/implants-api'),
@@ -11,6 +13,8 @@ jest.mock('../../lib/implants/implants-api', () => ({
   printImplantCard: jest.fn(),
 }));
 
+jest.mock('../../lib/locations/locations-api', () => ({ listLocations: jest.fn() }));
+const mockedLocations = listLocations as jest.MockedFunction<typeof listLocations>;
 const mockedGet = getImplantCard as jest.MockedFunction<typeof getImplantCard>;
 const mockedPrint = printImplantCard as jest.MockedFunction<typeof printImplantCard>;
 const RECEPTION = tokenFor('RECEPTION', 'u-rec');
@@ -20,10 +24,30 @@ describe('ImplantCardPrintView (DX-191)', () => {
   beforeEach(() => {
     mockedGet.mockReset();
     mockedPrint.mockReset();
+    mockedLocations.mockReset().mockResolvedValue([clinicLocation({ locale: 'de-DE', hourCycle: 'h23' })]);
     window.print = jest.fn();
   });
   afterAll(() => {
     window.print = realPrint;
+  });
+
+  it('formatImplantSize en-US is 4.1 × 10 mm: la medida con el formato de la sede de la pantalla', async () => {
+    mockedLocations.mockResolvedValue([clinicLocation({ locale: 'en-US', hourCycle: 'h12' })]);
+    mockedGet.mockResolvedValue(makeImplantCard());
+    render(<ImplantCardPrintView token={RECEPTION} patientId="p1" date="2026-10-10" />);
+    const card = await screen.findByRole('article');
+    expect(await within(card).findByText('4.1 × 10 mm')).toBeInTheDocument();
+  });
+
+  it('sin formato de la sede: la medida «—» y el aviso, fuera de la impresión', async () => {
+    mockedLocations.mockResolvedValue([clinicLocation({ locale: null, hourCycle: null })]);
+    mockedGet.mockResolvedValue(makeImplantCard());
+    render(<ImplantCardPrintView token={RECEPTION} patientId="p1" date="2026-10-10" />);
+    const note = await screen.findByText(/No se pudo saber el formato regional o el reloj de la sede/);
+    expect(note.closest('[role="status"]')).toHaveClass('print:hidden');
+    const items = within(screen.getByRole('article')).getAllByRole('listitem');
+    expect(items[0]).not.toHaveTextContent('mm');
+    expect(items[0]).toHaveTextContent('—');
   });
 
   it('la tarjeta lleva nombre y documento, centro, fecha y los dos componentes; el anulado, marcado', async () => {
@@ -40,7 +64,7 @@ describe('ImplantCardPrintView (DX-191)', () => {
     expect(items[0]).toHaveTextContent('Implante · Diente 36');
     expect(items[0]).toHaveTextContent('021.5310');
     expect(items[0]).toHaveTextContent('LOT-AB12');
-    expect(items[0]).toHaveTextContent('4,1 × 10 mm');
+    expect(await within(items[0]).findByText('4,1 × 10 mm')).toBeInTheDocument();
     expect(items[1]).toHaveAttribute('data-voided', 'true');
     expect(items[1]).toHaveTextContent('ANULADO');
     expect(card).toHaveTextContent('Entrega pendiente de registrar.');

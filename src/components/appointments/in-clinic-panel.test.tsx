@@ -66,8 +66,8 @@ function view(overrides: Partial<InClinicView> = {}): InClinicView {
     date: '2026-10-19',
     locationId: 'loc-1',
     timeZone: 'America/Bogota',
-    locale: 'es-CO',
-    hourCycle: 'h12',
+    locale: 'de-DE',
+    hourCycle: 'h23',
     now: '2026-10-19T14:02:00.000Z',
     scope: 'LOCATION',
     waiting: [],
@@ -130,6 +130,48 @@ describe('InClinicPanel (DX-200)', () => {
       within(screen.getByTestId('in-clinic-group-readyForCheckout')).getByText('Por cobrar 7 min'),
     ).toBeInTheDocument();
     expect(screen.getByText('4 pacientes')).toBeInTheDocument();
+  });
+
+  it('in-clinic panel shows 12 h for an h12 location and 24 h for an h23 location', () => {
+    const waiting = [item({ appointmentId: 'a1', start: '2026-10-19T19:00:00.000Z', arrivedAt: '2026-10-19T18:55:00.000Z' })];
+    const { unmount } = render(
+      <InClinicPanel
+        state={staticState({ view: view({ timeZone: 'America/New_York', locale: 'en-US', hourCycle: 'h12', waiting }) })}
+        role="RECEPTION"
+        runner={noRunner}
+      />,
+    );
+    expect(screen.getByText('Cita 3:00 p. m. · Dra. Lina')).toBeInTheDocument();
+    expect(screen.getByText('Llegó 2:55 p. m. · a tiempo')).toBeInTheDocument();
+    unmount();
+    render(
+      <InClinicPanel
+        state={staticState({ view: view({ timeZone: 'Asia/Tokyo', locale: 'ja-JP', hourCycle: 'h23', waiting }) })}
+        role="RECEPTION"
+        runner={noRunner}
+      />,
+    );
+    expect(screen.getByText('Cita 04:00 · Dra. Lina')).toBeInTheDocument();
+    expect(screen.getByText('Llegó 03:55 · a tiempo')).toBeInTheDocument();
+  });
+
+  it('in-clinic panel without format shows SedeConfigError locale', async () => {
+    const reload = jest.fn();
+    const noFormat = view({
+      locale: null as unknown as string,
+      hourCycle: null as unknown as 'h23',
+      waiting: [item({ appointmentId: 'a1' })],
+    });
+    render(<InClinicPanel state={staticState({ view: noFormat, reload })} role="RECEPTION" runner={noRunner} />);
+    const alert = screen.getByRole('alert');
+    expect(alert).toHaveTextContent('Falta un dato de la sede');
+    expect(alert).toHaveTextContent(
+      'No se pudo saber el formato regional o el reloj de la sede. Vuelve a intentarlo o revisa la sede en Ajustes → Sedes.',
+    );
+    // Ninguna hora con otro formato ni otro reloj.
+    expect(screen.queryByTestId('in-clinic-item')).not.toBeInTheDocument();
+    await userEvent.click(within(alert).getByRole('button', { name: 'Reintentar' }));
+    expect(reload).toHaveBeenCalled();
   });
 
   it('vacío: «Nadie en espera»', async () => {

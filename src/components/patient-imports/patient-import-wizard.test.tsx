@@ -16,6 +16,10 @@ import { ImportProgress } from './import-progress';
 import { PatientImportWizard } from './patient-import-wizard';
 import { notifyError } from '@/components/errors/notify';
 import { toast } from 'sonner';
+import { regionalFormat } from '@/lib/format/regional-format';
+
+/** Sede de prueba con ajustes explícitos (los recuentos de estos tests no llegan a mil). */
+const FMT = regionalFormat({ locale: 'de-DE', hourCycle: 'h23' });
 
 jest.mock('../errors/notify', () => ({
   notifyError: jest.fn(() => 'toast-poll'),
@@ -62,7 +66,7 @@ async function upload(user: ReturnType<typeof userEvent.setup>) {
 it('paso 1 → 2: lee el archivo y propone el mapeo de columnas con su ejemplo', async () => {
   mockedInspect.mockResolvedValue(inspectFixture());
   const user = userEvent.setup();
-  render(<PatientImportWizard token="tok" onBatchChange={jest.fn()} />);
+  render(<PatientImportWizard token="tok" onBatchChange={jest.fn()} fmt={FMT} />);
 
   await upload(user);
   expect(mockedInspect).toHaveBeenCalledWith('tok', expect.any(File), expect.any(Function));
@@ -75,7 +79,7 @@ it('paso 1 → 2: lee el archivo y propone el mapeo de columnas con su ejemplo',
 
 it('un archivo de más de 5 MB se rechaza sin subirlo', async () => {
   const user = userEvent.setup();
-  render(<PatientImportWizard token="tok" onBatchChange={jest.fn()} />);
+  render(<PatientImportWizard token="tok" onBatchChange={jest.fn()} fmt={FMT} />);
   const big = new File([new Uint8Array(5 * 1024 * 1024 + 1)], 'grande.csv', {
     type: 'text/csv',
   });
@@ -91,7 +95,7 @@ it('el error del archivo sale en español junto a la subida', async () => {
     }),
   );
   const user = userEvent.setup();
-  render(<PatientImportWizard token="tok" onBatchChange={jest.fn()} />);
+  render(<PatientImportWizard token="tok" onBatchChange={jest.fn()} fmt={FMT} />);
   await upload(user);
   expect(await screen.findByRole('alert')).toHaveTextContent(/Excel antiguo/);
 });
@@ -107,7 +111,7 @@ describe('SEC-046: la API está leyendo otro archivo (503)', () => {
   it('al leer el archivo, el aviso en español junto a la subida', async () => {
     mockedInspect.mockRejectedValue(busy());
     const user = userEvent.setup();
-    render(<PatientImportWizard token="tok" onBatchChange={jest.fn()} />);
+    render(<PatientImportWizard token="tok" onBatchChange={jest.fn()} fmt={FMT} />);
     await upload(user);
     expect(await screen.findByRole('alert')).toHaveTextContent(busyText);
   });
@@ -116,7 +120,7 @@ describe('SEC-046: la API está leyendo otro archivo (503)', () => {
     mockedInspect.mockResolvedValue(inspectFixture());
     mockedValidate.mockRejectedValue(busy());
     const user = userEvent.setup();
-    render(<PatientImportWizard token="tok" onBatchChange={jest.fn()} />);
+    render(<PatientImportWizard token="tok" onBatchChange={jest.fn()} fmt={FMT} />);
     await upload(user);
     await user.click(await screen.findByRole('button', { name: 'Validar archivo' }));
     expect(await screen.findByRole('alert')).toHaveTextContent(busyText);
@@ -127,7 +131,7 @@ describe('SEC-046: la API está leyendo otro archivo (503)', () => {
     mockedValidate.mockResolvedValue(batchFixture());
     mockedBalances.mockRejectedValue(busy());
     const user = userEvent.setup();
-    render(<PatientImportWizard token="tok" onBatchChange={jest.fn()} />);
+    render(<PatientImportWizard token="tok" onBatchChange={jest.fn()} fmt={FMT} />);
     await upload(user);
     await user.click(await screen.findByRole('button', { name: 'Validar archivo' }));
     await user.click(await screen.findByRole('button', { name: 'Continuar' }));
@@ -149,7 +153,7 @@ it('DX-107 × DX-259: mientras sube el archivo enseña el progreso y, subido, qu
     });
   });
   const user = userEvent.setup();
-  render(<PatientImportWizard token="tok" onBatchChange={jest.fn()} />);
+  render(<PatientImportWizard token="tok" onBatchChange={jest.fn()} fmt={FMT} />);
   await upload(user);
 
   act(() => report?.(0.42));
@@ -174,7 +178,7 @@ it('DX-107 × DX-259: al validar vuelve a enseñar el progreso de la subida', as
     return new Promise(() => {});
   });
   const user = userEvent.setup();
-  render(<PatientImportWizard token="tok" onBatchChange={jest.fn()} />);
+  render(<PatientImportWizard token="tok" onBatchChange={jest.fn()} fmt={FMT} />);
   await upload(user);
   await user.click(await screen.findByRole('button', { name: 'Validar archivo' }));
 
@@ -189,7 +193,7 @@ it('paso 2: valida con el mapeo elegido y muestra totales, errores por fila y vi
   mockedInspect.mockResolvedValue(inspectFixture());
   mockedValidate.mockResolvedValue(batchFixture());
   const user = userEvent.setup();
-  render(<PatientImportWizard token="tok" onBatchChange={jest.fn()} />);
+  render(<PatientImportWizard token="tok" onBatchChange={jest.fn()} fmt={FMT} />);
   await upload(user);
   await screen.findByLabelText(/número de documento/i);
 
@@ -243,7 +247,7 @@ it('paso 3: confirma con «actualizar vacíos» y sigue el avance hasta terminar
     );
     const onBatchChange = jest.fn();
     const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
-    render(<PatientImportWizard token="tok" onBatchChange={onBatchChange} />);
+    render(<PatientImportWizard token="tok" onBatchChange={onBatchChange} fmt={FMT} />);
     await upload(user);
     await user.click(await screen.findByRole('button', { name: 'Validar archivo' }));
     await user.click(await screen.findByRole('button', { name: 'Continuar' }));
@@ -275,7 +279,7 @@ it('confirmar falla con 409: el motivo de la API junto al botón', async () => {
     new ApiError(409, 'Conflict', { messages: ['Ya hay una importación de pacientes en curso en la clínica: espera a que termine.'] }),
   );
   const user = userEvent.setup();
-  render(<PatientImportWizard token="tok" onBatchChange={jest.fn()} />);
+  render(<PatientImportWizard token="tok" onBatchChange={jest.fn()} fmt={FMT} />);
   await upload(user);
   await user.click(await screen.findByRole('button', { name: 'Validar archivo' }));
   await user.click(await screen.findByRole('button', { name: 'Continuar' }));
@@ -294,7 +298,7 @@ it('sin filas que importar (y el lote caducado) no deja continuar', async () => 
     }),
   );
   const user = userEvent.setup();
-  render(<PatientImportWizard token="tok" onBatchChange={jest.fn()} />);
+  render(<PatientImportWizard token="tok" onBatchChange={jest.fn()} fmt={FMT} />);
   await upload(user);
   await user.click(await screen.findByRole('button', { name: 'Validar archivo' }));
   expect(await screen.findByText(/No hay filas que importar/)).toBeInTheDocument();
@@ -314,7 +318,7 @@ it('al volver con una importación en marcha, enseña su avance', async () => {
     pageSize: 20,
   });
   mockedGet.mockResolvedValue(running);
-  render(<PatientImportWizard token="tok" onBatchChange={jest.fn()} />);
+  render(<PatientImportWizard token="tok" onBatchChange={jest.fn()} fmt={FMT} />);
   expect(await screen.findByText('4 de 10 filas procesadas')).toBeInTheDocument();
   expect(screen.getByText('Importando')).toBeInTheDocument();
 });
@@ -330,7 +334,7 @@ it('si el avance falla varias veces seguidas, un solo aviso', async () => {
       pageSize: 20,
     });
     mockedGet.mockResolvedValueOnce(running).mockRejectedValue(new Error('red'));
-    render(<PatientImportWizard token="tok" onBatchChange={jest.fn()} />);
+    render(<PatientImportWizard token="tok" onBatchChange={jest.fn()} fmt={FMT} />);
     expect(await screen.findByText('Importando')).toBeInTheDocument();
     for (let i = 0; i < 3; i += 1) {
       await act(async () => {
@@ -347,14 +351,14 @@ it('si el avance falla varias veces seguidas, un solo aviso', async () => {
 it('tras un error del archivo, el campo se vacía para volver a elegirlo', async () => {
   mockedInspect.mockRejectedValue(new ApiError(400, 'Bad Request', { messages: ['El archivo está vacío.'] }));
   const user = userEvent.setup();
-  render(<PatientImportWizard token="tok" onBatchChange={jest.fn()} />);
+  render(<PatientImportWizard token="tok" onBatchChange={jest.fn()} fmt={FMT} />);
   await upload(user);
   expect(await screen.findByRole('alert')).toHaveTextContent('El archivo está vacío.');
   expect((screen.getByLabelText('Archivo de pacientes (CSV o .xlsx)') as HTMLInputElement).value).toBe('');
 });
 
 it('QA D3: el campo de archivo oculto no es una parada de Tab; «Elegir archivo» sí', () => {
-  render(<PatientImportWizard token="tok" onBatchChange={jest.fn()} />);
+  render(<PatientImportWizard token="tok" onBatchChange={jest.fn()} fmt={FMT} />);
   expect(screen.getByLabelText('Archivo de pacientes (CSV o .xlsx)')).toHaveAttribute('tabindex', '-1');
   expect(screen.getByRole('button', { name: 'Elegir archivo' })).not.toHaveAttribute('tabindex', '-1');
 });
@@ -363,7 +367,7 @@ it('QA O1: al avanzar, el foco va al título del paso nuevo (no se pierde en <bo
   mockedInspect.mockResolvedValue(inspectFixture());
   mockedValidate.mockResolvedValue(batchFixture());
   const user = userEvent.setup();
-  render(<PatientImportWizard token="tok" onBatchChange={jest.fn()} />);
+  render(<PatientImportWizard token="tok" onBatchChange={jest.fn()} fmt={FMT} />);
   await upload(user);
   await waitFor(() => expect(screen.getByRole('heading', { name: 'Revisa las columnas y valida' })).toHaveFocus());
   await user.click(screen.getByRole('button', { name: 'Validar archivo' }));
@@ -389,7 +393,7 @@ describe('DX-262: hoja de saldos «Saldo migrado»', () => {
   async function toBalances(user: ReturnType<typeof userEvent.setup>) {
     mockedInspect.mockResolvedValue(inspectFixture());
     mockedValidate.mockResolvedValue(batchFixture());
-    render(<PatientImportWizard token="tok" onBatchChange={jest.fn()} />);
+    render(<PatientImportWizard token="tok" onBatchChange={jest.fn()} fmt={FMT} />);
     await upload(user);
     await user.click(await screen.findByRole('button', { name: 'Validar archivo' }));
     await user.click(await screen.findByRole('button', { name: 'Continuar' }));
@@ -501,6 +505,7 @@ describe('DX-262: hoja de saldos «Saldo migrado»', () => {
     render(
       <ImportProgress
         headingId="h"
+        fmt={FMT}
         onReport={jest.fn()}
         batch={batchFixture({
           status: 'COMPLETED',
@@ -557,7 +562,7 @@ describe('DX-262: hoja de saldos «Saldo migrado»', () => {
     });
     mockedConfirm.mockResolvedValue(batchFixture({ status: 'QUEUED', canConfirm: false }));
     const user = userEvent.setup();
-    render(<PatientImportWizard token="tok" onBatchChange={jest.fn()} />);
+    render(<PatientImportWizard token="tok" onBatchChange={jest.fn()} fmt={FMT} />);
     await upload(user);
     await user.click(await screen.findByRole('button', { name: 'Validar archivo' }));
     expect(await screen.findByText(/No hay pacientes nuevos: puedes importar solo sus saldos/)).toBeInTheDocument();
@@ -583,7 +588,7 @@ describe('DX-262: hoja de saldos «Saldo migrado»', () => {
     mockedBalances.mockResolvedValue({ ...existing, balances: balancesFixture({ preparedCount: 1 }) });
     mockedConfirm.mockResolvedValue(batchFixture({ status: 'QUEUED', canConfirm: false }));
     const user = userEvent.setup();
-    render(<PatientImportWizard token="tok" onBatchChange={jest.fn()} />);
+    render(<PatientImportWizard token="tok" onBatchChange={jest.fn()} fmt={FMT} />);
     await upload(user);
     await user.click(await screen.findByRole('button', { name: 'Validar archivo' }));
     await user.click(await screen.findByRole('button', { name: 'Continuar' }));
@@ -601,6 +606,7 @@ describe('DX-262: hoja de saldos «Saldo migrado»', () => {
     render(
       <ImportProgress
         headingId="h"
+        fmt={FMT}
         onReport={jest.fn()}
         batch={batchFixture({
           status: 'COMPLETED',
@@ -618,6 +624,7 @@ describe('DX-262: hoja de saldos «Saldo migrado»', () => {
     render(
       <ImportProgress
         headingId="h"
+        fmt={FMT}
         onReport={jest.fn()}
         batch={batchFixture({
           status: 'COMPLETED',
@@ -647,7 +654,7 @@ it('Way-Out Rule: el aviso de fallo del avance trae «Reintentar»', async () =>
       pageSize: 20,
     });
     mockedGet.mockResolvedValueOnce(running).mockRejectedValue(new Error('red'));
-    render(<PatientImportWizard token="tok" onBatchChange={jest.fn()} />);
+    render(<PatientImportWizard token="tok" onBatchChange={jest.fn()} fmt={FMT} />);
     expect(await screen.findByText('Importando')).toBeInTheDocument();
     await act(async () => {
       jest.advanceTimersByTime(1600);
@@ -668,9 +675,9 @@ it('sin informe disponible (caducado o purgado) no ofrece descargarlo', async ()
     canUndo: true,
     reportAvailable: false,
   });
-  render(<ImportProgress batch={done} headingId="h" onReport={jest.fn()} />);
+  render(<ImportProgress batch={done} headingId="h" fmt={FMT} onReport={jest.fn()} />);
   expect(screen.queryByRole('button', { name: /informe de errores/i })).not.toBeInTheDocument();
-  render(<ImportProgress batch={{ ...done, reportAvailable: true }} headingId="h2" onReport={jest.fn()} />);
+  render(<ImportProgress batch={{ ...done, reportAvailable: true }} headingId="h2" fmt={FMT} onReport={jest.fn()} />);
   expect(screen.getByRole('button', { name: /informe de errores/i })).toBeInTheDocument();
 });
 
@@ -685,7 +692,7 @@ it('el aviso del avance se cierra solo cuando la consulta vuelve a ir bien', asy
       pageSize: 20,
     });
     mockedGet.mockResolvedValueOnce(running).mockRejectedValueOnce(new Error('red')).mockResolvedValue(running);
-    render(<PatientImportWizard token="tok" onBatchChange={jest.fn()} />);
+    render(<PatientImportWizard token="tok" onBatchChange={jest.fn()} fmt={FMT} />);
     expect(await screen.findByText('Importando')).toBeInTheDocument();
     await act(async () => {
       jest.advanceTimersByTime(1600);

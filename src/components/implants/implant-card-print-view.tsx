@@ -10,6 +10,8 @@ import { SectionError } from '@/components/errors/section-error';
 import { EmptyState } from '@/components/shared/empty-state';
 import { Button } from '@/components/ui/button';
 import { ImplantCardDocument } from './implant-card-document';
+import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
+import { SedeConfigError } from '@/components/locations/sede-config-error';
 
 const copy = {
   toolbar: 'Acciones de la tarjeta de implante',
@@ -43,6 +45,8 @@ export function ImplantCardPrintView({ token, patientId, date }: ImplantCardPrin
   const [reloadKey, setReloadKey] = useState(0);
   const [printing, setPrinting] = useState(false);
   const pendingPrint = useRef(false);
+  // G1-B: la sede de la pantalla hasta G1-C (la tarjeta aún no trae la suya).
+  const sedeFormat = useSedeFormat(token);
 
   useEffect(() => {
     let cancelled = false;
@@ -112,8 +116,19 @@ export function ImplantCardPrintView({ token, patientId, date }: ImplantCardPrin
 
       <main className="flex-1 px-0 py-0 sm:px-4 sm:py-8 print:p-0">
         {card ? (
-          <div className="mx-auto w-full max-w-[180mm] shadow-sm print:max-w-none print:shadow-none">
-            <ImplantCardDocument card={card} />
+          <div className="mx-auto flex w-full max-w-[180mm] flex-col gap-3 print:max-w-none">
+            {sedeFormat.status === 'error' ? (
+              <SedeConfigError
+                kind="locale"
+                variant="note"
+                onRetry={sedeFormat.retry}
+                description={sedeFormat.message}
+                className="mx-4 sm:mx-0 print:hidden"
+              />
+            ) : null}
+            <div className="shadow-sm print:shadow-none">
+              <ImplantCardDocument card={card} fmt={readyFormat(sedeFormat)} />
+            </div>
           </div>
         ) : notFound ? (
           <div className="mx-auto max-w-xl px-4 py-8">

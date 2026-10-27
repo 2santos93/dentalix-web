@@ -52,3 +52,8 @@ export function useSedeFormat(token: string): SedeFormatState {
   const fmt = pickSedeFormat(state.locations, state.activeLocationId);
   return fmt ? { status: 'ready', fmt } : { status: 'error', message: SEDE_LOCALE_ERROR, retry: state.retry };
 }
+
+/** El formato con el que pintar, o `null` mientras carga o en error (los valores salen «—»). */
+export function readyFormat(state: SedeFormatState): RegionalFormat | null {
+  return state.status === 'ready' ? state.fmt : null;
+}

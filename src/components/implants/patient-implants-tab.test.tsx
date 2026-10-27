@@ -9,6 +9,8 @@ import {
 import { ApiError } from '@/lib/api/client';
 import { setupUser } from '@/lib/test/user';
 import { makeImplant, tokenFor } from '@/lib/test/implants';
+import { listLocations } from '@/lib/locations/locations-api';
+import { clinicLocation } from '@/lib/test/locations';
 
 jest.mock('../../lib/implants/implants-api', () => ({
   ...jest.requireActual('../../lib/implants/implants-api'),
@@ -18,6 +20,8 @@ jest.mock('../../lib/implants/implants-api', () => ({
   getImplantCatalog: jest.fn(),
 }));
 
+jest.mock('../../lib/locations/locations-api', () => ({ listLocations: jest.fn() }));
+const mockedLocations = listLocations as jest.MockedFunction<typeof listLocations>;
 const mockedList = listPatientImplants as jest.MockedFunction<typeof listPatientImplants>;
 const mockedRegister = registerImplant as jest.MockedFunction<typeof registerImplant>;
 const mockedVoid = voidImplant as jest.MockedFunction<typeof voidImplant>;
@@ -33,6 +37,27 @@ describe('PatientImplantsTab (DX-191)', () => {
     mockedVoid.mockReset();
     mockedCatalog.mockReset();
     mockedCatalog.mockResolvedValue([{ manufacturer: 'Straumann', systems: ['BLT'] }]);
+    mockedLocations.mockReset().mockResolvedValue([clinicLocation({ locale: 'de-DE', hourCycle: 'h23' })]);
+  });
+
+  it('la medida va con el formato de la sede: en-US «4.1 × 10 mm», de-DE «4,1 × 10 mm»', async () => {
+    mockedList.mockResolvedValue([makeImplant()]);
+    const { unmount } = render(<PatientImplantsTab token={DENTIST} patientId="p1" />);
+    expect(await screen.findByText('4,1 × 10 mm')).toBeInTheDocument();
+    unmount();
+    mockedLocations.mockResolvedValue([clinicLocation({ locale: 'en-US', hourCycle: 'h12' })]);
+    render(<PatientImplantsTab token={DENTIST} patientId="p1" />);
+    expect(await screen.findByText('4.1 × 10 mm')).toBeInTheDocument();
+  });
+
+  it('sin formato de la sede: la medida «—» y el aviso con Reintentar', async () => {
+    mockedList.mockResolvedValue([makeImplant()]);
+    mockedLocations.mockResolvedValue([clinicLocation({ locale: null, hourCycle: null })]);
+    render(<PatientImplantsTab token={DENTIST} patientId="p1" />);
+    expect(await screen.findByText(/No se pudo saber el formato regional o el reloj de la sede/)).toBeInTheDocument();
+    const list = await screen.findByRole('list', { name: 'Implantes del diente 36' });
+    expect(list).not.toHaveTextContent('× 10 mm');
+    expect(within(list).getByText('—')).toBeInTheDocument();
   });
 
   it('carga con esqueleto anunciado', () => {

@@ -17,6 +17,7 @@ import { InlineError } from '@/components/errors/inline-error';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { cn } from '@/lib/utils';
+import type { RegionalFormat } from '@/lib/format/regional-format';
 
 export const singleFileFieldCopy = {
   choose: 'Elegir archivo',
@@ -136,6 +137,8 @@ interface SingleFileFieldProps {
   accept: string;
   upload: SingleFileUpload;
   disabled?: boolean;
+  /** Formato de la sede de la pantalla, para el tamaño del fichero; sin él, «—». */
+  fmt: RegionalFormat | null;
 }
 
 /**
@@ -143,7 +146,7 @@ interface SingleFileFieldProps {
  * elegido su nombre, la barra de progreso y «Cancelar», «Quitar» o
  * «Reintentar». El error va junto al campo (escalón 4).
  */
-export function SingleFileField({ id, label, hint, accept, upload, disabled = false }: SingleFileFieldProps) {
+export function SingleFileField({ id, label, hint, accept, upload, disabled = false, fmt }: SingleFileFieldProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const { state } = upload;
   const labelId = `${id}-label`;
@@ -187,7 +190,7 @@ export function SingleFileField({ id, label, hint, accept, upload, disabled = fa
               <span className="min-w-0 [overflow-wrap:anywhere]">{file.name}</span>
             </span>
             <span className="flex shrink-0 items-center gap-2 text-xs tabular-nums text-muted">
-              {formatFileSize(file.size)}
+              {formatFileSize(file.size, fmt)}
               {state.status === 'done' ? (
                 <span className="inline-flex items-center gap-1 text-success">
                   <CheckCircle2 aria-hidden className="size-3.5" />

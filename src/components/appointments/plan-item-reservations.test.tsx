@@ -40,10 +40,10 @@ const reserved = {
   locationId: 'loc-1',
   locationName: 'Sede Norte',
   timeZone: 'America/Bogota',
-  locale: 'es-CO',
-  hourCycle: 'h12' as const,
+  locale: 'de-DE',
+  hourCycle: 'h23' as const,
 };
-const MESSAGE = 'Este tratamiento está reservado en la cita del 30/10/2026 a las 09:00 (Sede Norte).';
+const MESSAGE = 'Este tratamiento está reservado en la cita del 30.10.2026 a las 09:00 (Sede Norte).';
 
 function item(overrides: Partial<InClinicItem> = {}): InClinicItem {
   return {
@@ -79,8 +79,8 @@ function view(waiting: InClinicItem[]): InClinicView {
     date: '2026-10-19',
     locationId: 'loc-1',
     timeZone: 'America/Bogota',
-    locale: 'es-CO',
-    hourCycle: 'h12',
+    locale: 'de-DE',
+    hourCycle: 'h23',
     now: '2026-10-19T14:02:00.000Z',
     scope: 'LOCATION',
     waiting,
@@ -290,6 +290,21 @@ describe('Tratamiento reservado en otra cita (DX-273)', () => {
       expect(within(notice).getByText(HIDDEN)).toBeInTheDocument();
       expect(notice).not.toHaveTextContent(/Sede|\d{2}:\d{2}/);
       expect(within(notice).queryByRole('button')).not.toBeInTheDocument();
+    });
+
+    it('sede permitida sin formato: fecha y hora «—» con el aviso de la sede, nunca el texto genérico (I4)', async () => {
+      const unconfigured = { ...held, planItemId: 'i4', locale: null, hourCycle: null };
+      mockedGet.mockResolvedValue(view([item({ planItemsReservedElsewhere: [unconfigured] })]));
+      render(<Harness />);
+      const notice = await screen.findByRole('group', { name: 'Tratamiento reservado en otra cita' });
+      expect(
+        within(notice).getByText('Reservado en la cita de hoy a las — (Sede Norte), con el paciente en la clínica.'),
+      ).toBeInTheDocument();
+      expect(within(notice).queryByText(HIDDEN)).not.toBeInTheDocument();
+      expect(within(notice).getByRole('status')).toHaveTextContent(
+        'No se pudo saber el formato regional o el reloj de la sede.',
+      );
+      expect(within(notice).getByRole('button', { name: 'Reintentar' })).toBeInTheDocument();
     });
 
     it('con una reserva futura y otra en la clínica, «Traer» solo para la futura', async () => {
