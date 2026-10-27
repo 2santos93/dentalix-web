@@ -217,6 +217,7 @@ test('ADMIN: el menú de cuenta cabe en 1366×768, 1440×900 y 390×844, tambié
 // DX-347: macOS usa barras overlay. La pseudo-barra fuerza un gutter real
 // de 15 px solo en esta página de QA, sin cambiar preferencias del sistema.
 // Playwright oculta las barras por defecto; aquí deben poder ocupar espacio.
+// Afecta a todo el fichero: Playwright no admite launchOptions en un describe.
 test.use({ launchOptions: {
   ignoreDefaultArgs: ['--hide-scrollbars'],
   ...(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE ? { executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE } : {}),
