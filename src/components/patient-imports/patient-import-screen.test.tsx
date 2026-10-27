@@ -1,4 +1,6 @@
 import { render, screen } from '@testing-library/react';
+import { useAuthStore } from '@/lib/auth/auth-store';
+import { tokenFor } from '@/lib/test/prescriptions';
 import { PatientImportScreen } from './patient-import-screen';
 import { listImports } from '@/lib/patient-imports/patient-imports-api';
 import { listLocations } from '@/lib/locations/locations-api';
@@ -45,6 +47,20 @@ describe('PatientImportScreen: formato de la sede (G1-B)', () => {
     expect(screen.getByRole('status', { name: 'Cargando el aviso de subida…' })).toBeInTheDocument();
     expect(screen.queryByText(/pacientes\. Si vienes/)).not.toBeInTheDocument();
     await screen.findByText(/creados · .* actualizados/);
+  });
+
+  it('«Configurar sede» abre la sede sin formato o sin reloj, no la lista', async () => {
+    useAuthStore.setState({ accessToken: tokenFor('ADMIN') });
+    try {
+      mockedLocations.mockReset().mockResolvedValue([clinicLocation({ id: 'sede-sin-reloj', locale: 'en-US', hourCycle: null })]);
+      render(<PatientImportScreen token="tok" allowed />);
+      expect(await screen.findByRole('link', { name: 'Configurar sede' })).toHaveAttribute(
+        'href',
+        '/settings/sedes?sede=sede-sin-reloj',
+      );
+    } finally {
+      useAuthStore.setState({ accessToken: null });
+    }
   });
 
   it('import screens without format show — and the notice', async () => {

@@ -490,14 +490,24 @@ test('una sede con el reloj en NULL: el aviso de formato de sede en la importaci
       'No se pudo saber el formato regional o el reloj de la sede. Vuelve a intentarlo o revisa la sede en Ajustes → Sedes.',
       { timeout: 15_000 },
     );
-    await expect(main.getByRole('link', { name: 'Configurar sede' })).toHaveAttribute('href', /^\/settings\/sedes/);
+    // «Configurar sede» abre esa sede, no la lista.
+    await expect(main.getByRole('link', { name: 'Configurar sede' })).toHaveAttribute(
+      'href',
+      `/settings/sedes?sede=${encodeURIComponent(ids.C)}`,
+    );
     if (viewport.width === 390) await expectNoHorizontalScroll(page);
     await shoot(page, 'sede-sin-reloj-importacion', viewport.width);
-    // El panel pide sus horas a la API, que responde 409 LOCATION_LOCALE_REQUIRED.
+    // El panel pide sus horas a la API, que responde 409 LOCATION_LOCALE_REQUIRED:
+    // SedeConfigError en su variante de sección, con el texto de la API y la sede.
     const panel = await openInClinic(page);
-    await expect(panel).toContainText('Configura el formato regional y el reloj de la sede y vuelve a intentarlo.', {
-      timeout: 15_000,
-    });
+    const sectionError = panel.getByRole('alert');
+    await expect(sectionError).toContainText('Falta un dato de la sede', { timeout: 15_000 });
+    await expect(sectionError).toContainText('Configura el formato regional y el reloj de la sede y vuelve a intentarlo.');
+    await expect(sectionError).not.toContainText('No se pudo cargar');
+    await expect(sectionError.getByRole('link', { name: 'Configurar sede' })).toHaveAttribute(
+      'href',
+      `/settings/sedes?sede=${encodeURIComponent(ids.C)}`,
+    );
     await expect(panel.locator('[data-appointment-id]')).toHaveCount(0);
     if (viewport.width === 390) await expectNoHorizontalScroll(page);
     await shoot(page, 'sede-sin-reloj-panel', viewport.width);

@@ -1,4 +1,5 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
+import { useAuthStore } from '@/lib/auth/auth-store';
 import { ImplantCardPrintView } from './implant-card-print-view';
 import { getImplantCard, printImplantCard } from '@/lib/implants/implants-api';
 import { ApiError } from '@/lib/api/client';
@@ -37,6 +38,21 @@ describe('ImplantCardPrintView (DX-191)', () => {
     render(<ImplantCardPrintView token={RECEPTION} patientId="p1" date="2026-10-10" />);
     const card = await screen.findByRole('article');
     expect(await within(card).findByText('4.1 × 10 mm')).toBeInTheDocument();
+  });
+
+  it('«Configurar sede» abre la sede sin formato o sin reloj, no la lista', async () => {
+    useAuthStore.setState({ accessToken: tokenFor('ADMIN') });
+    try {
+      mockedLocations.mockResolvedValue([clinicLocation({ id: 'sede-sin-reloj', locale: 'en-US', hourCycle: null })]);
+      mockedGet.mockResolvedValue(makeImplantCard());
+      render(<ImplantCardPrintView token={RECEPTION} patientId="p1" date="2026-10-10" />);
+      expect(await screen.findByRole('link', { name: 'Configurar sede' })).toHaveAttribute(
+        'href',
+        '/settings/sedes?sede=sede-sin-reloj',
+      );
+    } finally {
+      useAuthStore.setState({ accessToken: null });
+    }
   });
 
   it('sin formato de la sede: la medida «—» y el aviso, fuera de la impresión', async () => {

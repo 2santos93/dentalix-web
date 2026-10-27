@@ -277,13 +277,15 @@ export function apiErrorFromBody(
   let messages: string[] = [];
   let code: string | null = null;
   let field: string | null = null;
+  let locationId: string | null = null;
   if (body && typeof body === 'object') {
-    const data = body as { message?: unknown; code?: unknown; field?: unknown };
+    const data = body as { message?: unknown; code?: unknown; field?: unknown; locationId?: unknown };
     const raw = data.message;
     if (typeof raw === 'string' && raw) messages = [raw];
     else if (Array.isArray(raw)) messages = raw.filter((m): m is string => typeof m === 'string');
     if (typeof data.code === 'string' && data.code) code = data.code;
     if (typeof data.field === 'string' && data.field) field = data.field;
+    if (typeof data.locationId === 'string' && data.locationId) locationId = data.locationId;
   }
   const message = messages.length > 0 ? messages.join('; ') : `HTTP ${status}`;
   return new ApiError(status, message, {
@@ -291,6 +293,7 @@ export function apiErrorFromBody(
     retryAfterSeconds: parseRetryAfter(retryAfterHeader),
     code,
     field,
+    locationId,
   });
 }
 

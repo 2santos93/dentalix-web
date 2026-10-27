@@ -437,6 +437,7 @@ export function CashShiftsView({ token, tabs }: CashShiftsViewProps) {
           sedeName={sedeName}
           defaultCurrency={defaultCurrency}
           fmt={locationRegionalFormat(sede)}
+          onRetryFormat={() => setCurrentKey((k) => k + 1)}
           onCreated={(_expense, notice) => afterChange(notice)}
         />
       ) : null}

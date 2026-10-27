@@ -456,6 +456,7 @@ export function PerioExamEditor({
                 variant="note"
                 onRetry={sedeFormat.retry}
                 description={sedeFormat.message}
+                locationId={sedeFormat.locationId}
               />
             ) : null}
             <IndicesPanel

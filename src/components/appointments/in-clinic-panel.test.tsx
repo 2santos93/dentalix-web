@@ -6,7 +6,9 @@ import { PatientFlowActions, usePatientFlow } from './patient-flow-actions';
 import { useInClinic, type InClinicState } from './use-in-clinic';
 import { getInClinic, undoArrival, type InClinicItem, type InClinicView } from '@/lib/appointments/patient-flow';
 import { updateAppointment } from '@/lib/appointments/appointments-api';
-import { ApiError } from '@/lib/api/client';
+import { ApiError, apiErrorFromBody } from '@/lib/api/client';
+import { useAuthStore } from '@/lib/auth/auth-store';
+import { tokenFor } from '@/lib/test/prescriptions';
 import { setActiveLocationId } from '@/lib/locations/location-store';
 import type { ClinicRole } from '@/lib/me/me-api';
 import { listLocations, type ClinicLocation } from '@/lib/locations/locations-api';
@@ -85,7 +87,7 @@ function Harness({ role }: { role: ClinicRole }) {
 }
 
 function staticState(overrides: Partial<InClinicState>): InClinicState {
-  return { view: null, loading: false, error: null, noLocation: false, reload: jest.fn(), ...overrides };
+  return { view: null, loading: false, error: null, localeMissing: null, noLocation: false, reload: jest.fn(), ...overrides };
 }
 const noRunner = { pendingId: null, run: jest.fn() };
 
@@ -172,6 +174,48 @@ describe('InClinicPanel (DX-200)', () => {
     expect(screen.queryByTestId('in-clinic-item')).not.toBeInTheDocument();
     await userEvent.click(within(alert).getByRole('button', { name: 'Reintentar' }));
     expect(reload).toHaveBeenCalled();
+  });
+
+  it('a 409 LOCATION_LOCALE_REQUIRED is the location section, not «No se pudo cargar»', async () => {
+    useAuthStore.setState({ accessToken: tokenFor('ADMIN') });
+    try {
+      mockedGet.mockRejectedValue(
+        apiErrorFromBody(
+          409,
+          {
+            statusCode: 409,
+            error: 'Conflict',
+            code: 'LOCATION_LOCALE_REQUIRED',
+            message: 'Configura el formato regional y el reloj de la sede y vuelve a intentarlo.',
+            locationId: 'sede-sin-reloj',
+          },
+          null,
+        ),
+      );
+      render(<Harness role="ADMIN" />);
+      const alert = await screen.findByRole('alert');
+      expect(alert).toHaveTextContent('Falta un dato de la sede');
+      // El texto es el de la API (spec §10); nunca el genérico de carga.
+      expect(alert).toHaveTextContent('Configura el formato regional y el reloj de la sede y vuelve a intentarlo.');
+      expect(alert).not.toHaveTextContent('No se pudo cargar');
+      expect(within(alert).getByRole('link', { name: 'Configurar sede' })).toHaveAttribute(
+        'href',
+        '/settings/sedes?sede=sede-sin-reloj',
+      );
+      mockedGet.mockResolvedValue(view());
+      await userEvent.click(within(alert).getByRole('button', { name: 'Reintentar' }));
+      expect(await screen.findByText('Nadie en espera')).toBeInTheDocument();
+    } finally {
+      useAuthStore.setState({ accessToken: null });
+    }
+  });
+
+  it('another load error keeps the generic section', async () => {
+    mockedGet.mockRejectedValue(new ApiError(500, 'boom'));
+    render(<Harness role="ADMIN" />);
+    const alert = await screen.findByRole('alert');
+    expect(alert).not.toHaveTextContent('Falta un dato de la sede');
+    expect(within(alert).queryByRole('link', { name: 'Configurar sede' })).not.toBeInTheDocument();
   });
 
   it('vacío: «Nadie en espera»', async () => {

@@ -69,6 +69,30 @@ describe('useSedeFormat', () => {
     }
   });
 
+  it('the error names the failing location so «Configurar sede» opens it', async () => {
+    const sinReloj = sede('sin-reloj', 'en-US', null);
+    listLocationsMock.mockResolvedValue([sinReloj, principal]);
+    act(() => setActiveLocationId('sin-reloj'));
+    const active = renderHook(() => useSedeFormat('tok'));
+    await waitFor(() => expect(active.result.current.status).toBe('error'));
+    expect(active.result.current).toMatchObject({ locationId: 'sin-reloj' });
+    active.unmount();
+
+    // «Todas las sedes»: la principal (la activa más antigua) es la que falla.
+    act(() => setActiveLocationId(null));
+    listLocationsMock.mockResolvedValue([sinReloj, principal]);
+    const all = renderHook(() => useSedeFormat('tok'));
+    await waitFor(() => expect(all.result.current.status).toBe('error'));
+    expect(all.result.current).toMatchObject({ locationId: 'sin-reloj' });
+    all.unmount();
+
+    // Sin lista no se sabe cuál: sin id (la lista de sedes).
+    listLocationsMock.mockRejectedValue(new Error('500'));
+    const failed = renderHook(() => useSedeFormat('tok'));
+    await waitFor(() => expect(failed.result.current.status).toBe('error'));
+    expect(failed.result.current).toMatchObject({ locationId: null });
+  });
+
   it('no active location: the API message (create one in Ajustes → Sedes)', async () => {
     listLocationsMock.mockResolvedValue([clinicLocation({ isActive: false })]);
     const { result } = renderHook(() => useSedeFormat('tok'));

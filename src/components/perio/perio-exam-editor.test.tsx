@@ -9,6 +9,8 @@ import {
 } from '@/lib/perio/perio-api';
 import { ApiError } from '@/lib/api/client';
 import { setupUser } from '@/lib/test/user';
+import { useAuthStore } from '@/lib/auth/auth-store';
+import { tokenFor } from '@/lib/test/prescriptions';
 import { regionalFormat } from '@/lib/format/regional-format';
 import type { SedeFormatState } from '@/lib/locations/use-sede-format';
 
@@ -379,12 +381,27 @@ describe('PerioExamEditor', () => {
   it('sin formato de la sede: índices «—» y el aviso con Reintentar', async () => {
     const retry = jest.fn();
     mockedGet.mockResolvedValue(exam());
-    renderEditor(null, { status: 'error', message: 'No se pudo saber el formato regional o el reloj de la sede. Vuelve a intentarlo o revisa la sede en Ajustes → Sedes.', retry });
+    renderEditor(null, { status: 'error', message: 'No se pudo saber el formato regional o el reloj de la sede. Vuelve a intentarlo o revisa la sede en Ajustes → Sedes.', retry, locationId: 'sede-sin-reloj' });
     const indices = await screen.findByRole('region', { name: 'Índices' });
     expect(indices).not.toHaveTextContent('%');
     expect(indices).toHaveTextContent('—');
     expect(screen.getByText(/No se pudo saber el formato regional o el reloj de la sede/)).toBeInTheDocument();
     await setupUser().click(screen.getByRole('button', { name: 'Reintentar' }));
     expect(retry).toHaveBeenCalled();
+  });
+
+  it('«Configurar sede» abre la sede sin formato o sin reloj, no la lista', async () => {
+    useAuthStore.setState({ accessToken: tokenFor('ADMIN') });
+    try {
+      mockedGet.mockResolvedValue(exam());
+      const message = 'No se pudo saber el formato regional o el reloj de la sede. Vuelve a intentarlo o revisa la sede en Ajustes → Sedes.';
+      renderEditor(null, { status: 'error', message, retry: jest.fn(), locationId: 'sede-sin-reloj' });
+      expect(await screen.findByRole('link', { name: 'Configurar sede' })).toHaveAttribute(
+        'href',
+        '/settings/sedes?sede=sede-sin-reloj',
+      );
+    } finally {
+      useAuthStore.setState({ accessToken: null });
+    }
   });
 });

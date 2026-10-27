@@ -123,9 +123,13 @@ describe('plan-item-reservations: titular de hoy en la clínica (DX-293)', () =>
     expect(reservedNeedsFormat(future)).toBe(true);
     // El toast no tiene sitio para el aviso: lleva la pista en el texto.
     expect(reservedElsewhereToast(unconfigured)).toBe(
-      'Reservado en la cita de hoy a las — (Sede Norte), con el paciente en la clínica. Falta el formato regional de esa sede: revísalo en Ajustes → Sedes.',
+      'Reservado en la cita de hoy a las — (Sede Norte), con el paciente en la clínica. Falta el formato regional o el reloj de esa sede: revísalo en Ajustes → Sedes.',
     );
     expect(reservedElsewhereToast(item)).toBe(reservedElsewhereMessage(item));
+    // Sede con formato y sin reloj (la réplica de G1): el toast nombra los dos, no solo el formato.
+    expect(reservedElsewhereToast({ ...held, hourCycle: null })).toBe(
+      'Reservado en la cita de hoy a las — (Sede Norte), con el paciente en la clínica. Falta el formato regional o el reloj de esa sede: revísalo en Ajustes → Sedes.',
+    );
     expect(reservedElsewhereToast(hidden)).toBe(reservationCopy.heldInClinicHidden);
     // Un formato que el navegador no soporta tampoco se sustituye por otro.
     expect(reservedNeedsFormat({ ...item, locale: 'xx-INVALID-' })).toBe(true);

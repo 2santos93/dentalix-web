@@ -192,6 +192,14 @@ describe('regional-settings helpers', () => {
     expect(regionalPreview('', 'UTC', 'h23', at)).toBeNull();
   });
 
+  it('regionalPreview with a stored clock that is not valid shows no time and does not throw', () => {
+    const at = new Date('2026-10-26T15:30:00Z');
+    // Un reloj guardado fuera de h12/h23 (API inesperada): ni se adivina otro ni rompe el modal.
+    expect(() => regionalPreview('en-US', 'UTC', 'h11', at)).not.toThrow();
+    expect(regionalPreview('en-US', 'UTC', 'h11', at)).toBe('12,345.67 · 10/26/2026');
+    expect(regionalPreview('de-DE', 'UTC', 'cualquiera', at)).toBe('12.345,67 · 26.10.2026');
+  });
+
   it('validateRegionalSettings uses the API messages', () => {
     expect(validateRegionalSettings(EMPTY)).toEqual({
       country: 'Elige el país de la sede.',

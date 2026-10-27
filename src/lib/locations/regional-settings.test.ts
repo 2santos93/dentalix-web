@@ -14,6 +14,20 @@ describe('canonicalTimeZone (solo la capitalización, nunca el nombre)', () => {
     expect(canonicalTimeZone('utc')).toBe('UTC');
   });
 
+  it('a zone this browser accepts but the shared list lacks is null (spec §7: newer tzdata)', () => {
+    // La lista compartida con la API manda: una zona que el navegador ya conoce
+    // y la lista todavía no, no se ofrece ni se envía.
+    jest.isolateModules(() => {
+      jest.doMock('./iana-zone-names.json', () => ['Asia/Tokyo']);
+      const isolated = jest.requireActual<typeof import('./regional-settings')>('./regional-settings');
+      const { isUsableTimeZone } = jest.requireActual<typeof import('./location-settings')>('./location-settings');
+      expect(isUsableTimeZone('Europe/Paris')).toBe(true);
+      expect(isolated.canonicalTimeZone('Europe/Paris')).toBeNull();
+      expect(isolated.canonicalTimeZone('asia/tokyo')).toBe('Asia/Tokyo');
+    });
+    jest.dontMock('./iana-zone-names.json');
+  });
+
   it('an unknown zone is null', () => {
     expect(canonicalTimeZone('Marte/Olimpo')).toBeNull();
     expect(canonicalTimeZone('')).toBeNull();

@@ -28,6 +28,7 @@ import {
 } from '@/components/expenses/expense-fields';
 import { useExpenseCategories } from '@/components/expenses/use-expense-categories';
 import type { RegionalFormat } from '@/lib/format/regional-format';
+import { SedeConfigError } from '@/components/locations/sede-config-error';
 
 export const cashOutflowCopy = {
   title: 'Salida de caja',
@@ -51,6 +52,8 @@ interface CashOutflowModalProps {
   defaultCurrency: string;
   /** Formato de la sede de la caja, para el tamaño del recibo; sin él, «—». */
   fmt: RegionalFormat | null;
+  /** Vuelve a leer la sede de la caja (el aviso de una sede sin formato lo ofrece). */
+  onRetryFormat: () => void;
   onCreated: (expense: ExpenseDetail, notice: string) => void;
 }
 
@@ -69,6 +72,7 @@ export function CashOutflowModal({
   sedeName,
   defaultCurrency,
   fmt,
+  onRetryFormat,
   onCreated,
 }: CashOutflowModalProps) {
   const categories = useExpenseCategories(token, open);
@@ -211,6 +215,7 @@ export function CashOutflowModal({
         upload={upload}
         disabled={submitting}
         fmt={fmt}
+        formatNotice={<SedeConfigError kind="locale" variant="note" onRetry={onRetryFormat} locationId={locationId} />}
       />
     </FormModal>
   );

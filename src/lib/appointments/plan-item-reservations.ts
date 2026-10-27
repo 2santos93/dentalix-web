@@ -33,7 +33,7 @@ export const reservationCopy = {
   /** DX-293: la titular es de otra sede no permitida: sin hora ni sede. */
   heldInClinicHidden: 'Reservado en otra cita de hoy, con el paciente en la clínica.',
   /** G1-B: la titular es de una sede permitida sin formato o sin reloj (su fecha y hora salen «—»). */
-  missingFormat: 'Falta el formato regional de esa sede: revísalo en Ajustes → Sedes.',
+  missingFormat: 'Falta el formato regional o el reloj de esa sede: revísalo en Ajustes → Sedes.',
 };
 
 /** «30/10/2026 a las 09:00», en la zona, el formato y el reloj de la sede de ESA cita. */

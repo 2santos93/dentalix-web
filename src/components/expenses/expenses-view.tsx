@@ -497,6 +497,7 @@ export function ExpensesView({ token, tabs }: { token: string; tabs?: ExpensesVi
           token={token}
           expenseId={detailId}
           locations={locations}
+          locationsSettled={sedes.loaded || sedes.failed}
           onRetryLocations={sedes.reload}
           categories={categories}
           onManageCategories={() => setCategoriesOpen(true)}

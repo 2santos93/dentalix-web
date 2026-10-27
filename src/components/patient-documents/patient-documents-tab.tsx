@@ -800,7 +800,7 @@ export function PatientDocumentsTab({
         </div>
 
         {sedeFormat.status === 'error' ? (
-          <SedeConfigError kind="locale" variant="note" onRetry={sedeFormat.retry} description={sedeFormat.message} />
+          <SedeConfigError kind="locale" variant="note" onRetry={sedeFormat.retry} description={sedeFormat.message} locationId={sedeFormat.locationId} />
         ) : null}
 
         <AsyncSection

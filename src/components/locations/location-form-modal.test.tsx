@@ -214,6 +214,36 @@ describe('LocationFormModal (G1, spec §6.2)', () => {
     });
   });
 
+  it('configuring a location with NULL locale suggests the format, keeps the stored zone and clock', async () => {
+    const sede = clinicLocation({
+      currency: 'EUR',
+      timeZone: 'Europe/Berlin',
+      locale: null,
+      hourCycle: 'h12',
+      regionalSettingsReviewedAt: null,
+    });
+    mockedUpdate.mockResolvedValue(clinicLocation({ ...sede, locale: 'ja-JP' }));
+    const { dialog, user } = setup(sede);
+    // Solo el campo vacío toma la sugerencia del navegador; lo guardado se queda, sin marca.
+    const locale = within(dialog).getByLabelText('Formato regional');
+    expect(locale).toHaveValue('ja-JP');
+    expect(locale).toHaveAccessibleDescription(expect.stringContaining('Sugerido por tu navegador.'));
+    expect(within(dialog).getByLabelText('Zona horaria')).toHaveValue('Europe/Berlin');
+    expect(within(dialog).getByLabelText('Zona horaria')).not.toHaveAccessibleDescription(
+      expect.stringContaining('Sugerido'),
+    );
+    expect(clockOption(dialog, '12 h')).toBeChecked();
+    expect(clockGroup(dialog)).not.toHaveAccessibleDescription(expect.stringContaining('Sugerido'));
+    await currenciesLoaded(dialog);
+    await user.click(within(dialog).getByRole('button', { name: 'Guardar sede' }));
+    await waitFor(() => expect(mockedUpdate).toHaveBeenCalledTimes(1));
+    expect(mockedUpdate.mock.calls[0][2]).toMatchObject({
+      locale: 'ja-JP',
+      hourCycle: 'h12',
+      confirmRegionalSettings: true,
+    });
+  });
+
   it('an edited suggestion loses the «Sugerido» mark and the preview follows it', async () => {
     const { dialog, user } = setup();
     const zone = within(dialog).getByLabelText('Zona horaria');

@@ -1,4 +1,5 @@
 import { render, screen, within } from '@testing-library/react';
+import { useAuthStore } from '@/lib/auth/auth-store';
 import { PatientImplantsTab } from './patient-implants-tab';
 import {
   getImplantCatalog,
@@ -48,6 +49,21 @@ describe('PatientImplantsTab (DX-191)', () => {
     mockedLocations.mockResolvedValue([clinicLocation({ locale: 'en-US', hourCycle: 'h12' })]);
     render(<PatientImplantsTab token={DENTIST} patientId="p1" />);
     expect(await screen.findByText('4.1 × 10 mm')).toBeInTheDocument();
+  });
+
+  it('«Configurar sede» abre la sede sin formato o sin reloj, no la lista', async () => {
+    useAuthStore.setState({ accessToken: tokenFor('ADMIN') });
+    try {
+      mockedList.mockResolvedValue([makeImplant()]);
+      mockedLocations.mockResolvedValue([clinicLocation({ id: 'sede-sin-reloj', locale: 'en-US', hourCycle: null })]);
+      render(<PatientImplantsTab token={DENTIST} patientId="p1" />);
+      expect(await screen.findByRole('link', { name: 'Configurar sede' })).toHaveAttribute(
+        'href',
+        '/settings/sedes?sede=sede-sin-reloj',
+      );
+    } finally {
+      useAuthStore.setState({ accessToken: null });
+    }
   });
 
   it('sin formato de la sede: la medida «—» y el aviso con Reintentar', async () => {

@@ -38,7 +38,7 @@ export function PatientImportScreen({ token, allowed }: { token: string; allowed
   return (
     <div className="flex flex-col gap-10">
       {sedeFormat.status === 'error' ? (
-        <SedeConfigError kind="locale" variant="note" onRetry={sedeFormat.retry} description={sedeFormat.message} />
+        <SedeConfigError kind="locale" variant="note" onRetry={sedeFormat.retry} description={sedeFormat.message} locationId={sedeFormat.locationId} />
       ) : null}
       <div className="rounded-xl border border-border bg-surface p-4 sm:p-6">
         <PatientImportWizard

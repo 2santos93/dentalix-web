@@ -127,6 +127,7 @@ export function ImplantCardPrintView({ token, patientId, date }: ImplantCardPrin
                 variant="note"
                 onRetry={sedeFormat.retry}
                 description={sedeFormat.message}
+                locationId={sedeFormat.locationId}
                 className="mx-4 sm:mx-0 print:hidden"
               />
             ) : null}

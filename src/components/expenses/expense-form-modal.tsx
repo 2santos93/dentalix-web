@@ -45,6 +45,7 @@ import {
 } from './expense-payment-fields';
 import type { ExpenseCategoriesState } from './use-expense-categories';
 import { locationRegionalFormat } from '@/lib/locations/location-settings';
+import { SedeConfigError } from '@/components/locations/sede-config-error';
 
 export const expenseFormCopy = {
   ...expenseFieldsCopy,
@@ -463,6 +464,11 @@ export function ExpenseFormModal({
             upload={upload}
             disabled={submitting}
             fmt={receiptFormat}
+            formatNotice={
+              form.locationId && onRetryLocations ? (
+                <SedeConfigError kind="locale" variant="note" onRetry={onRetryLocations} locationId={form.locationId} />
+              ) : null
+            }
           />
 
           <div className="flex flex-col gap-4 border-t border-hairline pt-4">

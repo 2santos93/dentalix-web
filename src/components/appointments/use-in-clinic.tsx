@@ -5,6 +5,8 @@ import { getActiveLocationId, onLocationChange } from '@/lib/locations/location-
 import { useSessionLocations } from '@/lib/locations/session-locations';
 import { IN_CLINIC_POLL_MS, getInClinic, onInClinicChanged, type InClinicView } from '@/lib/appointments/patient-flow';
 import { notifyError } from '@/components/errors/notify';
+import { ApiError } from '@/lib/api/api-error';
+import { LOCATION_LOCALE_REQUIRED } from '@/lib/locations/use-sede-format';
 
 export const IN_CLINIC_LOAD_ERROR = 'No pudimos cargar quién está en la clínica.';
 export const IN_CLINIC_REFRESH_ERROR = 'No pudimos actualizar el panel «En clínica».';
@@ -13,6 +15,12 @@ export interface InClinicState {
   view: InClinicView | null;
   loading: boolean;
   error: string | null;
+  /**
+   * G1-B §10: la primera carga respondió 409 `LOCATION_LOCALE_REQUIRED` (la
+   * sede no tiene formato o reloj): el panel muestra `SedeConfigError` con
+   * `error` (el texto de la API) y esta sede, no un fallo de carga.
+   */
+  localeMissing: { locationId: string } | null;
   noLocation: boolean;
   reload: () => void;
 }
@@ -43,7 +51,13 @@ export function useInClinic(token: string | null, options: UseInClinicOptions = 
 function useInClinicSource(token: string | null, { reloadKey = 0, enabled = true, silent = false, followChanges = false }: UseInClinicOptions): InClinicState {
   const [activeLocationId, setActiveLocationId] = useState(getActiveLocationId);
   const key = `${token ?? ''}:${activeLocationId ?? ''}`;
-  const [result, setResult] = useState<{ key: string; view: InClinicView | null; error: string | null; noLocation: boolean } | null>(null);
+  const [result, setResult] = useState<{
+    key: string;
+    view: InClinicView | null;
+    error: string | null;
+    localeMissing?: InClinicState['localeMissing'];
+    noLocation: boolean;
+  } | null>(null);
   const requestLocations = useSessionLocations(token);
   const refreshRef = useRef<() => void>(() => {});
   const reload = useCallback(() => refreshRef.current(), []);
@@ -67,8 +81,9 @@ function useInClinicSource(token: string | null, { reloadKey = 0, enabled = true
     async function load(invalidate = false) {
       if (running) { if (invalidate) queued = true; return; }
       running = true;
+      let location: string | null = null;
       try {
-        const location = await resolveLocation();
+        location = await resolveLocation();
         if (cancelled) return;
         if (location === null) {
           setResult({ key, view: null, error: null, noLocation: true });
@@ -85,7 +100,17 @@ function useInClinicSource(token: string | null, { reloadKey = 0, enabled = true
         if (shown) {
           if (!silent) notifyError(IN_CLINIC_REFRESH_ERROR, { onRetry: reload });
         } else {
-          setResult({ key, view: null, error: apiErrorMessage(error, IN_CLINIC_LOAD_ERROR), noLocation: false });
+          // La sede que nombra la API; si no la nombra, la que se pidió.
+          const missing = error instanceof ApiError && error.code === LOCATION_LOCALE_REQUIRED
+            ? error.locationId ?? location
+            : null;
+          setResult({
+            key,
+            view: null,
+            error: apiErrorMessage(error, IN_CLINIC_LOAD_ERROR),
+            localeMissing: missing ? { locationId: missing } : null,
+            noLocation: false,
+          });
         }
       } finally {
         running = false;
@@ -115,6 +140,7 @@ function useInClinicSource(token: string | null, { reloadKey = 0, enabled = true
     view: current?.view ?? null,
     loading: Boolean(token && enabled && !current),
     error: current?.error ?? null,
+    localeMissing: current?.localeMissing ?? null,
     noLocation: current?.noLocation ?? false,
     reload,
   };

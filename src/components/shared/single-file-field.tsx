@@ -139,6 +139,12 @@ interface SingleFileFieldProps {
   disabled?: boolean;
   /** Formato de la sede de la pantalla, para el tamaño del fichero; sin él, «—». */
   fmt: RegionalFormat | null;
+  /**
+   * El aviso que acompaña al «—» cuando no hay `fmt` (G1-B R11: nunca «—» sin
+   * aviso), p. ej. `SedeConfigError kind="locale" variant="note"`. Se muestra
+   * solo con un fichero elegido, que es cuando hay un tamaño que pintar.
+   */
+  formatNotice?: React.ReactNode;
 }
 
 /**
@@ -146,7 +152,16 @@ interface SingleFileFieldProps {
  * elegido su nombre, la barra de progreso y «Cancelar», «Quitar» o
  * «Reintentar». El error va junto al campo (escalón 4).
  */
-export function SingleFileField({ id, label, hint, accept, upload, disabled = false, fmt }: SingleFileFieldProps) {
+export function SingleFileField({
+  id,
+  label,
+  hint,
+  accept,
+  upload,
+  disabled = false,
+  fmt,
+  formatNotice,
+}: SingleFileFieldProps) {
   const inputRef = useRef<HTMLInputElement>(null);
   const { state } = upload;
   const labelId = `${id}-label`;
@@ -222,6 +237,7 @@ export function SingleFileField({ id, label, hint, accept, upload, disabled = fa
           ) : null}
         </div>
       ) : null}
+      {file && !fmt ? formatNotice : null}
 
       {state.status === 'error' ? (
         <InlineError id={errorId} className="text-xs">

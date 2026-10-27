@@ -97,7 +97,7 @@ export function InClinicPanel({
   showTitle = true,
 }: InClinicPanelProps) {
   const titleId = useId();
-  const { view, loading, error, noLocation, reload } = state;
+  const { view, loading, error, localeMissing, noLocation, reload } = state;
   const mine = view?.scope === 'MINE' || (view === null && role === 'DENTIST');
   const total = view ? inClinicCount(view) : null;
   // G1-B: las horas se pintan con el formato y el reloj que manda la vista; sin ellos, ninguno.
@@ -191,6 +191,9 @@ export function InClinicPanel({
           title={inClinicCopy.noLocationTitle}
           description={inClinicCopy.noLocationHint}
         />
+      ) : view === null && error && localeMissing ? (
+        // 409 LOCATION_LOCALE_REQUIRED: falta un dato de la sede, no es un fallo de carga (G1-B §10).
+        <SedeConfigError kind="locale" description={error} onRetry={reload} locationId={localeMissing.locationId} />
       ) : view === null && error ? (
         <SectionError description={error} onRetry={reload} retryLabel={inClinicCopy.retry} />
       ) : loading || view === null ? (

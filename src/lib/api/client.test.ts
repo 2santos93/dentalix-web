@@ -101,6 +101,24 @@ describe('apiFetch', () => {
     }) as unknown as typeof fetch;
     const err = await apiFetch('/locations', { method: 'POST', body: {} }).catch((e: unknown) => e);
     expect((err as ApiError).field).toBe('timeZone');
+    expect((err as ApiError).locationId).toBeNull();
+  });
+
+  it('G1-B: expone el `locationId` del 409 LOCATION_LOCALE_REQUIRED', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 409,
+      headers: { get: () => null },
+      json: async () => ({
+        statusCode: 409,
+        code: 'LOCATION_LOCALE_REQUIRED',
+        message: 'Configura el formato regional y el reloj de la sede y vuelve a intentarlo.',
+        locationId: 'sede-1',
+      }),
+    }) as unknown as typeof fetch;
+    const err = await apiFetch('/appointments/in-clinic', {}).catch((e: unknown) => e);
+    expect((err as ApiError).code).toBe('LOCATION_LOCALE_REQUIRED');
+    expect((err as ApiError).locationId).toBe('sede-1');
   });
 });
 

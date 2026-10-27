@@ -1,5 +1,8 @@
 import { regionalFormat, type HourCycle } from '@/lib/format/regional-format';
 import type { ClinicCountry } from '@/lib/prescriptions/prescriptions-api';
+// Copia byte a byte de `prisma/reference/iana-zone-names.json` de la API: no se edita aquí.
+// La fuente es la API; `scripts/check-api-reference-sync.mjs` (CI) falla si
+// divergen. Ver src/lib/money/README.md.
 import ianaZoneNames from './iana-zone-names.json';
 import { isUsableTimeZone } from './location-settings';
 
@@ -181,18 +184,27 @@ export function timeZoneOptions(extra: readonly (string | null | undefined)[] = 
 /**
  * Vista previa «12.345,67 · 26.10.2026 16:30» (cinco cifras: con cuatro, `es`
  * no agrupa y «1234,56» parecería un separador perdido) con el helper de
- * formato, en la zona y con el reloj elegidos. Sin reloj elegido, la fecha va
- * sin hora: nunca un reloj deducido del formato. `null` si falta el formato o
- * la zona, o alguno no es válido.
+ * formato, en la zona y con el reloj elegidos. Sin reloj elegido (o con uno
+ * guardado que no es h12/h23), la fecha va sin hora: nunca un reloj deducido
+ * del formato ni uno de reserva. `null` si falta el formato o la zona, o
+ * alguno no es válido.
  */
-export function regionalPreview(locale: string, timeZone: string, hourCycle: HourCycle | '', at: Date): string | null {
+export function regionalPreview(locale: string, timeZone: string, hourCycle: string, at: Date): string | null {
   const canonical = canonicalLocale(locale);
   const zone = timeZone.trim();
   if (!canonical || !isUsableTimeZone(zone)) return null;
-  // Sin reloj, el helper se construye con uno cualquiera solo para la fecha y el número, que no dependen de él.
-  const fmt = regionalFormat({ locale: canonical, hourCycle: hourCycle || 'h23' });
-  const number = fmt.number(12345.67, { min: 2, max: 2 });
-  return `${number} · ${hourCycle ? fmt.dateTime(at, zone) : fmt.date(at, zone)}`;
+  if (isHourCycle(hourCycle)) {
+    const fmt = regionalFormat({ locale: canonical, hourCycle });
+    return `${fmt.number(12345.67, { min: 2, max: 2 })} · ${fmt.dateTime(at, zone)}`;
+  }
+  // Sin reloj válido no se pinta ninguna hora. Fecha y número no dependen del
+  // reloj: salen iguales con cualquiera de los dos, así que se piden con cada
+  // uno y solo se pinta lo que coincide (nunca se elige uno por la sede).
+  const [first, ...rest] = (Object.keys(HOUR_CYCLE_LABELS) as HourCycle[]).map((cycle) => {
+    const fmt = regionalFormat({ locale: canonical, hourCycle: cycle });
+    return `${fmt.number(12345.67, { min: 2, max: 2 })} · ${fmt.date(at, zone)}`;
+  });
+  return rest.every((text) => text === first) ? first : null;
 }
 
 /**

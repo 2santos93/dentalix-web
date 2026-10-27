@@ -94,6 +94,11 @@ interface ExpenseDetailModalProps {
   token: string;
   expenseId: string;
   locations: ClinicLocation[];
+  /**
+   * La lista de sedes ya cargó o falló. Mientras carga no se sabe si la sede
+   * del gasto tiene formato: el tamaño sale «—» sin aviso, para que no destelle.
+   */
+  locationsSettled: boolean;
   /** Vuelve a leer las sedes (el soporte de una sede sin formato lo ofrece en su aviso). */
   onRetryLocations: () => void;
   categories: ExpenseCategoriesState;
@@ -125,6 +130,7 @@ export function ExpenseDetailModal({
   token,
   expenseId,
   locations,
+  locationsSettled,
   onRetryLocations,
   categories,
   onManageCategories,
@@ -309,7 +315,7 @@ export function ExpenseDetailModal({
           <h3 id="expense-receipt-title" className="t-title text-ink">
             {expenseDetailCopy.receipt}
           </h3>
-          {!fmt && (attachment || live) ? (
+          {!fmt && locationsSettled && (attachment || live) ? (
             <SedeConfigError kind="locale" variant="note" onRetry={onRetryLocations} locationId={detail.locationId} />
           ) : null}
           {attachment ? (

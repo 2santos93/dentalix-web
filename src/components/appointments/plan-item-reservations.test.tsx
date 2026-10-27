@@ -316,7 +316,7 @@ describe('Tratamiento reservado en otra cita (DX-273)', () => {
         'Implante · diente 36',
         expect.objectContaining({
           description:
-            'Reservado en la cita de hoy a las — (Sede Norte), con el paciente en la clínica. Falta el formato regional de esa sede: revísalo en Ajustes → Sedes.',
+            'Reservado en la cita de hoy a las — (Sede Norte), con el paciente en la clínica. Falta el formato regional o el reloj de esa sede: revísalo en Ajustes → Sedes.',
         }),
       );
     });

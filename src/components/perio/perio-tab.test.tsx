@@ -1,4 +1,6 @@
 import { render, screen, within } from '@testing-library/react';
+import { useAuthStore } from '@/lib/auth/auth-store';
+import { tokenFor } from '@/lib/test/prescriptions';
 import { PerioTab } from './perio-tab';
 import { getPerioExam, listPerioExams } from '@/lib/perio/perio-api';
 import { ApiError } from '@/lib/api/client';
@@ -105,6 +107,21 @@ describe('PerioTab', () => {
     const row = within(table).getAllByRole('row')[1];
     expect(await within(row).findByText('62.5%')).toBeInTheDocument();
     expect(row).toHaveTextContent('12.5%');
+  });
+
+  it('«Configurar sede» abre la sede sin formato o sin reloj, no la lista', async () => {
+    useAuthStore.setState({ accessToken: tokenFor('ADMIN') });
+    try {
+      mockedLocations.mockResolvedValue([clinicLocation({ id: 'sede-sin-reloj', locale: 'en-US', hourCycle: null })]);
+      mockedList.mockResolvedValue([summary('e1', '2026-04-15', 'FINAL', 62.5)]);
+      render(<PerioTab token="tok" patientId="p1" />);
+      expect(await screen.findByRole('link', { name: 'Configurar sede' })).toHaveAttribute(
+        'href',
+        '/settings/sedes?sede=sede-sin-reloj',
+      );
+    } finally {
+      useAuthStore.setState({ accessToken: null });
+    }
   });
 
   it('sin formato de la sede: porcentajes «—» y el aviso', async () => {
