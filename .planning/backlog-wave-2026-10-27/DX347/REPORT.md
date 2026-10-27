@@ -13,3 +13,15 @@ Base `a02b70df36e5b57e7a018f50c337118230d0690b`. El carril colapsado reduce su p
 ## Historial y límites
 
 Las pruebas iniciales detectaron pérdida de anchura y recorte del foco/badge antes del ajuste. Un intento final falló en dos casos porque la aserción esperaba exactamente una incidencia histórica de contraste ya corregida; su log y trazas se conservaron en `/tmp/dx347-failure-preserved-20261027`. Se sustituyó por una exigencia de cero incidencias, sin exclusiones, y se repitió la suite completa. Las capturas y logs de QA están conservados fuera del repositorio en `/tmp/dx347-evidence-20261027`; las mediciones JSON finales están junto a este informe. No se han probado barras nativas de Windows/Linux.
+
+## Diagnóstico del fallo «native light» (cierre en loop/DX-344-347-final)
+
+**Causa:** era una aserción obsoleta, no un fallo de producto ni de la barra. El intento final aún exigía exactamente una incidencia axe de contraste en el contador de anamnesis en claro (`toHaveLength(colorScheme === 'light' ? 1 : 0)`), pero el mismo cambio ya pasaba el contador a `text-ink`, y axe devolvía 0. Por eso fallaron exactamente los dos casos claros (native y classic) y pasaron los oscuros.
+
+Se reprodujo en ambos sentidos sobre esta rama (build de producción, API real):
+- **Mutación A**, la aserción antigua con el producto actual: falla native light y classic light con `Expected length: 1 / Received length: 0`, idéntico al log conservado; los oscuros pasan.
+- **Mutación B**, la aserción actual (cero violaciones, sin exclusiones) con el contador devuelto a `text-warning`: falla native light y classic light con `color-contrast` (serious) en el contador. La prueba vigente detecta el defecto real.
+
+La aserción actual no excluye nada: los specs del sidebar no usan `exclude` ni `disableRules`. `test.use({ launchOptions })` afecta a todo el fichero porque Playwright no lo admite dentro de un `describe` (comprobado: «Cannot use({ launchOptions }) in a describe group»); se documenta en el spec.
+
+Capturas adicionales en `final/`: `qa-1440-{light,dark}-{expanded,rail}`, `qa-390-{light,dark}` y la barra clásica `qa-1440-{light,dark}-classic-{rail,expanded}` (1440×640, nav con scroll). En el carril con barra overlay de headless la barra se dibuja sobre el contador; en macOS real se oculta. Es la misma posición que antes del cambio.
