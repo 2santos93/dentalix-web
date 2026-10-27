@@ -49,6 +49,7 @@ const copy = {
   invalidCounts: 'Hay importes que no se entienden: revisa los marcados.',
   otherCurrency: 'Otra moneda para contar',
   addCurrency: 'Contar esta moneda',
+  chooseCurrency: 'Elige una moneda',
   notes: 'Notas del cierre (opcional)',
   submit: 'Cerrar caja',
   genericError: 'No pudimos cerrar la caja. Intenta de nuevo.',
@@ -59,8 +60,12 @@ interface CloseCashSessionModalProps {
   onOpenChange: (open: boolean) => void;
   token: string;
   session: CashSessionDetail;
-  /** Moneda de la sede: la del arqueo ciego si el fondo no lleva ninguna. */
-  defaultCurrency: string;
+  /**
+   * Moneda de la sede: la del arqueo ciego si el fondo no lleva ninguna.
+   * `null` si no se sabe (sede sin configurar): no se añade ninguna fila por
+   * ella y «Otra moneda» empieza vacía (GLOBAL-G1: nunca otra moneda).
+   */
+  defaultCurrency: string | null;
   onClosed: (session: CashSessionDetail) => void;
 }
 
@@ -90,12 +95,12 @@ export function CloseCashSessionModal({
         ...session.floats.map((f) => f.currency),
         ...session.adjustments.map((a) => a.currency),
         ...session.outflows.map((o) => o.currency),
-        defaultCurrency,
+        ...(defaultCurrency ? [defaultCurrency] : []),
       ]),
     [blind, session.expected, session.floats, session.adjustments, session.outflows, defaultCurrency],
   );
   const [rows, setRows] = useState<CountRow[]>(initialRows);
-  const [extraCurrency, setExtraCurrency] = useState(defaultCurrency);
+  const [extraCurrency, setExtraCurrency] = useState(defaultCurrency ?? '');
   // La API recalcula el esperado con la caja bloqueada: si entró un abono
   // después de abrir este modal, puede no cuadrar aunque aquí sí. Su 400 abre
   // el campo del motivo para poder reenviar.
@@ -235,12 +240,13 @@ export function CloseCashSessionModal({
                 onChange={setExtraCurrency}
                 disabled={submitting}
                 ariaLabel={copy.otherCurrency}
+                placeholder={extraCurrency ? undefined : copy.chooseCurrency}
               />
             </div>
             <Button
               type="button"
               variant="outline"
-              disabled={submitting || counting.has(extraCurrency)}
+              disabled={submitting || !extraCurrency || counting.has(extraCurrency)}
               onClick={() => setRows((current) => [...current, ...countRows(null, [extraCurrency])])}
             >
               {copy.addCurrency}

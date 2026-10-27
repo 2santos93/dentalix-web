@@ -29,7 +29,8 @@ export type TreatmentPlanItem = components['schemas']['TreatmentPlanItemDto'];
  * — `createPlan`/`listPlans`/`updatePlan` return the bare plan, so both
  * fields are optional here (see `TreatmentPlanDto` on the backend).
  *
- * `currency` (PAY-T1, default `"USD"` at the DB level) is genuinely returned
+ * `currency` (PAY-T1; since GLOBAL-G1 it has no DB default: the plan takes
+ * the one sent, or the active location's) is genuinely returned
  * by the backend on every route — `TreatmentPlansController` returns the raw
  * `TreatmentPlan`/`TreatmentPlanDetail` entity, with no `@Exclude`/serializer
  * stripping — but the presentation `TreatmentPlanDto` class used purely for

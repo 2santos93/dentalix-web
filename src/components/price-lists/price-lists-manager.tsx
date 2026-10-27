@@ -324,6 +324,13 @@ export function PriceListsManager({ token, allowed }: PriceListsManagerProps) {
         priceList={editing}
         locations={locations}
         onSaved={upsert}
+        onRetryLocations={() => {
+          // Solo relee las sedes (la elegida no tenía moneda); el formulario
+          // sigue abierto. Si vuelve a fallar, el campo conserva su reintento.
+          listLocations(token)
+            .then(setLocations)
+            .catch(() => {});
+        }}
       />
 
       <ConfirmDialog

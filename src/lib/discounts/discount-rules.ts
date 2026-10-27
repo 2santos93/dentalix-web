@@ -1,4 +1,5 @@
 import type { ClinicRole } from '@/lib/me/me-api';
+import iso4217ZeroDecimal from '@/lib/money/iso4217-zero-decimal.json';
 
 /**
  * Reglas de descuento de la clínica en la web (DX-204). Son un AVISO antes de
@@ -135,11 +136,16 @@ export function discountPercent(price: number, discount: number): number {
 
 /**
  * Unidad a la que se redondea un descuento en bloque: la misma lista que usa
- * la API en `discount-policy.ts` (COP sin decimales, EUR a céntimos). Es solo
- * para el redondeo del descuento: los campos de importe admiten 2 decimales en
- * cualquier moneda, como la API (DX-241).
+ * la API (`shared/money/currency-decimals.ts`, R7): el conjunto anterior más
+ * todas las monedas ISO 4217 sin decimales, copiadas en
+ * `lib/money/iso4217-zero-decimal.json`. Es solo para el redondeo del
+ * descuento: los campos de importe admiten 2 decimales en cualquier moneda,
+ * como la API (DX-241).
  */
-const ZERO_DECIMAL_CURRENCIES = new Set(['COP', 'CLP', 'JPY', 'KRW', 'PYG']);
+export const ZERO_DECIMAL_CURRENCIES: ReadonlySet<string> = new Set([
+  ...iso4217ZeroDecimal.previousSet,
+  ...iso4217ZeroDecimal.minorUnitsZero,
+]);
 
 export function currencyDecimals(currency: string): 0 | 2 {
   return ZERO_DECIMAL_CURRENCIES.has(currency.toUpperCase()) ? 0 : 2;

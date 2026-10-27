@@ -469,7 +469,7 @@ describe('DashboardView · días de la sede (DX-097)', () => {
   });
 
   it('consumers render SedeConfigError without a zone', async () => {
-    mockedListLocations.mockResolvedValueOnce([clinicLocation({ timeZone: null })]);
+    mockedListLocations.mockResolvedValue([clinicLocation({ timeZone: null })]);
     render(<DashboardView token="tok" />);
 
     expect(
@@ -479,9 +479,93 @@ describe('DashboardView · días de la sede (DX-097)', () => {
     expect(mockedGetDashboard).not.toHaveBeenCalled();
     expect(screen.queryByTestId('dashboard-zone-note')).not.toBeInTheDocument();
 
-    mockedListLocations.mockResolvedValueOnce([sede('Europe/Madrid')]);
+    mockedListLocations.mockResolvedValue([sede('Europe/Madrid')]);
     await userEvent.click(screen.getByRole('button', { name: 'Reintentar' }));
     await waitFor(() => expect(mockedGetDashboard).toHaveBeenCalledTimes(1));
   });
 });
 
+
+describe('DashboardView · moneda de la sede (GLOBAL-G1)', () => {
+  beforeAll(() => {
+    jest.useFakeTimers({ now: new Date('2026-10-15T15:00:00.000Z'), advanceTimers: true });
+  });
+  afterAll(() => {
+    jest.useRealTimers();
+  });
+
+  beforeEach(() => {
+    window.localStorage.clear();
+    mockedGetDashboard.mockReset();
+    mockedGetDashboard.mockResolvedValue(emptyDashboard());
+    mockedListCurrencies.mockReset();
+    mockedListCurrencies.mockResolvedValue([
+      { code: 'JPY', name: 'Yen japonés', symbol: '¥' },
+      { code: 'EUR', name: 'Euro', symbol: '€' },
+    ]);
+    mockedListStaff.mockReset();
+    mockedListStaff.mockResolvedValue(staff);
+    mockedListLocations.mockReset();
+  });
+
+  it('JPY location shows JPY without decimals', async () => {
+    window.localStorage.setItem('dentalix.activeLocationId', 'loc-jp');
+    mockedListLocations.mockResolvedValue([
+      clinicLocation({ id: 'loc-jp', currency: 'JPY', timeZone: 'Asia/Tokyo', locale: 'ja-JP' }),
+      clinicLocation({ id: 'loc-es', currency: 'EUR', timeZone: 'Europe/Madrid' }),
+    ]);
+    mockedGetDashboard.mockResolvedValue(
+      dashboard({
+        incomes: { ...emptyDashboard().incomes, currency: 'JPY', totalConverted: 1500, count: 1, byCurrency: { JPY: 1500 } },
+        upcomingAppointments: [],
+      }),
+    );
+    render(<DashboardView token="tok" />);
+
+    await waitFor(() => expect(mockedGetDashboard).toHaveBeenCalledTimes(1));
+    expect(mockedGetDashboard.mock.calls[0][1]).toMatchObject({ currency: 'JPY' });
+    // «1500 JPY», sin «,00»: el yen no tiene decimales.
+    expect((await screen.findAllByText(/^1500\sJPY$/)).length).toBeGreaterThan(0);
+    expect(screen.queryByText(/1500,00/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/COP/)).not.toBeInTheDocument();
+  });
+
+  it('location without currency shows SedeConfigError and never COP', async () => {
+    window.localStorage.setItem('dentalix.activeLocationId', 'loc-1');
+    mockedListLocations.mockResolvedValue([clinicLocation({ id: 'loc-1', currency: null })]);
+    render(<DashboardView token="tok" />);
+
+    expect(
+      await screen.findByText(
+        'No se pudo saber la moneda de la sede. Vuelve a intentarlo o revisa la sede en Ajustes → Sedes.',
+      ),
+    ).toBeInTheDocument();
+    expect(mockedGetDashboard).not.toHaveBeenCalled();
+    expect((screen.getByLabelText('Moneda') as HTMLSelectElement).value).toBe('');
+    expect(screen.queryByText(/COP|USD/)).not.toBeInTheDocument();
+
+    // Reintentar relee las sedes; ya configurada, el panel carga en su moneda.
+    mockedListLocations.mockResolvedValue([clinicLocation({ id: 'loc-1', currency: 'JPY' })]);
+    await userEvent.click(screen.getByRole('button', { name: 'Reintentar' }));
+    await waitFor(() => expect(mockedGetDashboard).toHaveBeenCalledTimes(1));
+    expect(mockedGetDashboard.mock.calls[0][1]).toMatchObject({ currency: 'JPY' });
+  });
+
+  it('dashboard with mixed currencies on «Todas» has no currency selected', async () => {
+    mockedListLocations.mockResolvedValue([
+      clinicLocation({ id: 'loc-jp', currency: 'JPY', timeZone: 'Asia/Tokyo' }),
+      clinicLocation({ id: 'loc-es', currency: 'EUR', timeZone: 'Asia/Tokyo' }),
+    ]);
+    render(<DashboardView token="tok" />);
+
+    expect(await screen.findByText(/Tus sedes usan monedas distintas/)).toBeInTheDocument();
+    const select = screen.getByLabelText('Moneda') as HTMLSelectElement;
+    expect(select.value).toBe('');
+    expect(mockedGetDashboard).not.toHaveBeenCalled();
+
+    await waitFor(() => expect(select.querySelector('option[value="EUR"]')).not.toBeNull());
+    await userEvent.selectOptions(select, 'EUR');
+    await waitFor(() => expect(mockedGetDashboard).toHaveBeenCalledTimes(1));
+    expect(mockedGetDashboard.mock.calls[0][1]).toMatchObject({ currency: 'EUR' });
+  });
+});

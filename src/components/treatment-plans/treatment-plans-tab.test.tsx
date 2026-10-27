@@ -34,6 +34,8 @@ import { listStaff } from '@/lib/appointments/staff-api';
 import { voidCancellationFee } from '@/lib/cancellations/cancellation-fee-api';
 import { getPaymentAllocations, replacePaymentAllocations } from '@/lib/payments/payment-allocations-api';
 import { presentPlan } from '@/lib/treatment-plans/plan-options-api';
+import { listLocations } from '@/lib/locations/locations-api';
+import { clinicLocation } from '@/lib/test/locations';
 
 // NOTE: jest.mock's string literal is not alias-rewritten by the SWC
 // transform (only real `import`/`require` specifiers are) — use a relative
@@ -396,9 +398,10 @@ describe('TreatmentPlansTab', () => {
 
     await user.click(screen.getByRole('button', { name: /nuevo plan/i }));
 
-    // The "Nuevo plan" currency select defaults to USD (Task 11).
+    // GLOBAL-G1 (R14): sin sede activa, la moneda común de la clínica (la del
+    // fixture de sede, COP), nunca USD por defecto.
     await waitFor(() =>
-      expect(mockedCreatePlan).toHaveBeenCalledWith('tok', 'pat-1', { currency: 'USD' }),
+      expect(mockedCreatePlan).toHaveBeenCalledWith('tok', 'pat-1', { currency: 'COP' }),
     );
     await waitFor(() => expect(mockedListPlans).toHaveBeenCalledTimes(2));
     // The new plan is auto-selected -> its (empty) detail is fetched.
@@ -2499,6 +2502,84 @@ describe('TreatmentPlansTab', () => {
       await waitFor(() =>
         expect(screen.getByRole('button', { name: /abonos y saldo/i })).toHaveFocus(),
       );
+    });
+  });
+  describe('moneda del plan (GLOBAL-G1, R14)', () => {
+    const mockedLocations = jest.mocked(listLocations);
+    const tokyo = clinicLocation({ id: 'loc-jp', name: 'Tokio', country: 'CO', currency: 'JPY', timeZone: 'Asia/Tokyo' });
+    const madrid = clinicLocation({ id: 'loc-es', name: 'Madrid', country: 'ES', currency: 'EUR', timeZone: 'Europe/Madrid' });
+
+    beforeEach(() => {
+      window.localStorage.clear();
+      mockedListCurrencies.mockResolvedValue([
+        { code: 'JPY', name: 'Yen japonés', symbol: '¥' },
+        { code: 'EUR', name: 'Euro', symbol: '€' },
+      ]);
+      mockedListPlans.mockResolvedValue([]);
+    });
+    afterEach(() => {
+      window.localStorage.clear();
+      mockedLocations.mockResolvedValue([clinicLocation()]);
+    });
+
+    it('new plan at a JPY location is created in JPY', async () => {
+      window.localStorage.setItem('dentalix.activeLocationId', 'loc-jp');
+      mockedLocations.mockResolvedValue([tokyo, madrid]);
+      mockedCreatePlan.mockResolvedValue(plan({ id: 'plan-jp', currency: 'JPY' }));
+      const user = userEvent.setup();
+      render(<TreatmentPlansTab patientId="pat-1" token="tok" />);
+
+      const select = await screen.findByLabelText<HTMLSelectElement>('Moneda del nuevo plan');
+      await waitFor(() => expect(select.value).toBe('JPY'));
+      await user.click(screen.getByRole('button', { name: /^nuevo plan$/i }));
+      await waitFor(() => expect(mockedCreatePlan).toHaveBeenCalledWith('tok', 'pat-1', { currency: 'JPY' }));
+    });
+
+    it('mixed currencies and no location leaves the plan currency empty and required', async () => {
+      mockedLocations.mockResolvedValue([tokyo, madrid]);
+      mockedCreatePlan.mockResolvedValue(plan({ id: 'plan-es', currency: 'EUR' }));
+      const user = userEvent.setup();
+      render(<TreatmentPlansTab patientId="pat-1" token="tok" />);
+      await screen.findByText(/todavía no tiene un plan de tratamiento/i);
+      await waitFor(() => expect(mockedLocations).toHaveBeenCalled());
+
+      const select = screen.getByLabelText<HTMLSelectElement>('Moneda del nuevo plan');
+      expect(select.value).toBe('');
+      await user.click(screen.getByRole('button', { name: /^nuevo plan$/i }));
+      expect(await screen.findByText('Elige la moneda del nuevo plan.')).toBeInTheDocument();
+      expect(mockedCreatePlan).not.toHaveBeenCalled();
+
+      await waitFor(() => expect(select.querySelector('option[value="EUR"]')).not.toBeNull());
+      await user.selectOptions(select, 'EUR');
+      await user.click(screen.getByRole('button', { name: /^nuevo plan$/i }));
+      await waitFor(() => expect(mockedCreatePlan).toHaveBeenCalledWith('tok', 'pat-1', { currency: 'EUR' }));
+    });
+
+    it('location without currency leaves the plan currency empty, never COP or USD', async () => {
+      window.localStorage.setItem('dentalix.activeLocationId', 'loc-1');
+      mockedLocations.mockResolvedValue([clinicLocation({ id: 'loc-1', country: 'CO', currency: null })]);
+      const user = userEvent.setup();
+      render(<TreatmentPlansTab patientId="pat-1" token="tok" />);
+      await screen.findByText(/todavía no tiene un plan de tratamiento/i);
+      await waitFor(() => expect(mockedLocations).toHaveBeenCalled());
+
+      expect(screen.getByLabelText<HTMLSelectElement>('Moneda del nuevo plan').value).toBe('');
+      await user.click(screen.getByRole('button', { name: /^nuevo plan$/i }));
+      expect(await screen.findByText('Elige la moneda del nuevo plan.')).toBeInTheDocument();
+      expect(mockedCreatePlan).not.toHaveBeenCalled();
+    });
+
+    it('payment currency is the plan currency', async () => {
+      const jpyPlan = plan({ id: 'plan-1', currency: 'JPY' });
+      mockedListPlans.mockResolvedValue([jpyPlan]);
+      mockedGetPlan.mockResolvedValue({ ...plan1Detail, currency: 'JPY' });
+      mockedGetPlanBalance.mockResolvedValue({ ...balance1, planCurrency: 'JPY' });
+      mockedListPayments.mockResolvedValue([]);
+      const user = userEvent.setup();
+      render(<TreatmentPlansTab patientId="pat-1" token="tok" />);
+      await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+      await user.click(await screen.findByRole('button', { name: /^registrar abono$/i }));
+      expect(screen.getByLabelText<HTMLSelectElement>(/^moneda$/i).value).toBe('JPY');
     });
   });
 });

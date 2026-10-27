@@ -566,6 +566,35 @@ describe('CatalogView', () => {
     expect(within(table).queryByText(/US\$/)).not.toBeInTheDocument();
   });
 
+  it('JPY location shows JPY without decimals', async () => {
+    // País CO a propósito: la moneda sale de la sede, nunca del país.
+    mockedLocations.mockResolvedValue([clinicLocation({ id: 'l1', country: 'CO', currency: 'JPY' })]);
+    mockedList.mockResolvedValue(page([{ ...item1, defaultPrice: 8000 }]));
+    render(<CatalogView token="tok" />);
+    const table = await screen.findByRole('table', { name: /catálogo/i });
+    await waitFor(() => expect(within(table).getByText(/^8000\sJPY$/)).toBeInTheDocument());
+    expect(within(table).queryByText(/COP|,00/)).not.toBeInTheDocument();
+  });
+
+  it('location without currency shows SedeConfigError and never COP', async () => {
+    const user = setupUser();
+    mockedLocations.mockResolvedValue([clinicLocation({ id: 'l1', country: 'CO', currency: null })]);
+    mockedList.mockResolvedValue(page([item1]));
+    render(<CatalogView token="tok" />);
+    const table = await screen.findByRole('table', { name: /catálogo/i });
+    expect(
+      await screen.findByText(
+        'No se pudo saber la moneda de la sede. Vuelve a intentarlo o revisa la sede en Ajustes → Sedes.',
+      ),
+    ).toBeInTheDocument();
+    expect(within(table).getByText('80.000,00')).toBeInTheDocument();
+    expect(within(table).queryByText(/COP|US\$/)).not.toBeInTheDocument();
+
+    mockedLocations.mockResolvedValue([clinicLocation({ id: 'l1', currency: 'EUR' })]);
+    await user.click(screen.getByRole('button', { name: 'Reintentar' }));
+    await waitFor(() => expect(within(table).getByText('80.000,00 €')).toBeInTheDocument());
+  });
+
   // DX-063: un 500 de la API no llega a la pantalla como «Internal server error».
   it('un 500 al cargar muestra texto en español con reintento', async () => {
     const user = setupUser();

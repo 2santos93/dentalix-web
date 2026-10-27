@@ -45,3 +45,28 @@ export function clinicBaseCurrency(locations: readonly ClinicLocation[]): string
   const distinct = new Set(currencies);
   return distinct.size === 1 ? [...distinct][0] : null;
 }
+
+/**
+ * La moneda que toca a lo nuevo que se crea o se consulta «en la sede» (un plan,
+ * el panel): con una sede activa, la suya; en «Todas las sedes» (o con una sede
+ * activa que ya no está en la lista), la común de la clínica.
+ * - `scope: 'sede'` con `currency: null`: la sede activa no tiene moneda (sin
+ *   configurar). Quien la usa muestra `SedeConfigError`.
+ * - `scope: 'clinic'` con `currency: null`: no hay una moneda común. El campo
+ *   queda vacío y hay que elegirla.
+ * Nunca otra moneda en su lugar (R5, R14).
+ */
+export function activeSedeCurrency(
+  locations: readonly ClinicLocation[],
+  activeLocationId: string | null,
+): { scope: 'sede' | 'clinic'; currency: string | null } {
+  const active = activeLocationId ? locations.find((l) => l.id === activeLocationId) : undefined;
+  return active
+    ? { scope: 'sede', currency: locationCurrency(active) }
+    : { scope: 'clinic', currency: clinicBaseCurrency(locations) };
+}
+
+/** `true` si alguna sede activa no tiene moneda (sin configurar). */
+export function hasActiveLocationWithoutCurrency(locations: readonly ClinicLocation[]): boolean {
+  return locations.some((l) => l.isActive && locationCurrency(l) === null);
+}

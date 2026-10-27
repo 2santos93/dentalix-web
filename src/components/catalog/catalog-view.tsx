@@ -35,7 +35,9 @@ import { notifyError } from '@/components/errors/notify';
 import { ClinicWideNote } from '@/components/locations/clinic-wide-note';
 import { cn } from '@/lib/utils';
 import { formatAmount, formatCurrency } from '@/lib/format/currency';
-import { useClinicCurrency } from '@/lib/locations/clinic-currency';
+import { useLocationsState } from '@/lib/locations/use-locations-state';
+import { clinicBaseCurrency, hasActiveLocationWithoutCurrency } from '@/lib/locations/location-settings';
+import { SedeConfigError } from '@/components/locations/sede-config-error';
 import {
   Table,
   TableBody,
@@ -197,7 +199,15 @@ interface CatalogViewProps {
  * history in `ToothRecord` / plan items that reference it is preserved.
  */
 export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
-  const currency = useClinicCurrency(token);
+  // Moneda base de la clínica (la común de sus sedes activas, GLOBAL-G1). Con
+  // sedes en monedas distintas, el importe va sin símbolo. Si las sedes no
+  // cargaron o alguna no tiene moneda tampoco lleva símbolo, y además se dice
+  // con `SedeConfigError`: nunca una moneda de reserva.
+  const locationsState = useLocationsState(token);
+  const currency = locationsState.status === 'ready' ? clinicBaseCurrency(locationsState.locations) : null;
+  const currencyUnknown =
+    locationsState.status === 'error' ||
+    (locationsState.status === 'ready' && hasActiveLocationWithoutCurrency(locationsState.locations));
   const [items, setItems] = useState<DentalCatalogItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -653,6 +663,10 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
             <p className="text-xs text-muted">{copy.allowDiscountHint}</p>
           </div>
         </FormModal>
+
+        {currencyUnknown ? (
+          <SedeConfigError kind="currency" onRetry={locationsState.retry} />
+        ) : null}
 
         {!loading && !loadError && hasAny ? (
           <ResultCount

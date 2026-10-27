@@ -40,6 +40,7 @@ import { isFdiToothNumber } from '@/lib/odontogram/fdi';
 import type { ToothSurface } from '@/lib/odontogram/odontogram-api';
 import { listLocations, type ClinicLocation } from '@/lib/locations/locations-api';
 import { getActiveLocationId } from '@/lib/locations/location-store';
+import { activeSedeCurrency } from '@/lib/locations/location-settings';
 import { paymentLocationHint } from '@/lib/payments/payment-location';
 import Link from 'next/link';
 import { formatCurrency } from '@/lib/format/currency';
@@ -133,6 +134,10 @@ const copy = {
   // button, not in a `FormField`) — passed as `CurrencySelect`'s `ariaLabel`
   // so it still has an accessible name (WCAG 4.1.2).
   newPlanCurrencyLabel: 'Moneda del nuevo plan',
+  newPlanCurrencyPlaceholder: 'Elige la moneda',
+  // GLOBAL-G1 (R14): sin sede activa y con sedes en monedas distintas (o una
+  // sede sin moneda) no hay moneda que suponer.
+  newPlanCurrencyRequired: 'Elige la moneda del nuevo plan.',
   creatingPlan: 'Creando…',
   planCreated: 'Plan creado y seleccionado abajo.',
   // Reuse path (dup guard): an empty DRAFT already existed, so "Nuevo plan"
@@ -1176,7 +1181,10 @@ export function TreatmentPlansTab({
   // Distinct from `planCreated`: set when "Nuevo plan" reused an existing empty
   // DRAFT (no POST) instead of creating one. Cleared at the next create attempt.
   const [planReused, setPlanReused] = useState(false);
-  const [newPlanCurrency, setNewPlanCurrency] = useState('USD');
+  // GLOBAL-G1 (R14): la moneda de un plan nuevo empieza vacía y se sugiere con
+  // la de la sede activa o, sin sede activa, la común de la clínica (más abajo,
+  // al tener las sedes). Si no hay ninguna, hay que elegirla. Nunca USD.
+  const [newPlanCurrencyChoice, setNewPlanCurrency] = useState('');
 
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
 
@@ -1268,13 +1276,15 @@ export function TreatmentPlansTab({
   // foto inmutable), así que aquí no hace falta nada más del paciente.
   const [receiptPaymentId, setReceiptPaymentId] = useState<string | null>(null);
 
-  // Sedes de la clínica + sede activa, solo para decir a qué sede quedará
-  // atribuido un abono nuevo. Se piden una vez y fallan en silencio: si no
-  // se sabe la sede, la
-  // línea no aparece — nunca bloquea ni rompe el formulario.
+  // Sedes de la clínica + sede activa: para decir a qué sede quedará
+  // atribuido un abono nuevo y para sugerir la moneda de un plan nuevo. Se
+  // piden una vez y fallan en silencio: si no se sabe la sede, la línea no
+  // aparece y la moneda del plan nuevo queda por elegir.
   const [locations, setLocations] = useState<ClinicLocation[]>([]);
   const [locationsReloadKey, setLocationsReloadKey] = useState(0);
   const [activeLocationId, setActiveLocationId] = useState<string | null>(null);
+  const newPlanCurrency =
+    newPlanCurrencyChoice || activeSedeCurrency(locations, activeLocationId).currency || '';
 
   // Add-item form state.
   const [toothNumber, setToothNumber] = useState('');
@@ -1546,6 +1556,11 @@ export function TreatmentPlansTab({
         setPlanReused(true);
         return;
       }
+      if (!newPlanCurrency) {
+        setCreatePlanError(copy.newPlanCurrencyRequired);
+        document.getElementById('tp-new-plan-currency')?.focus();
+        return;
+      }
       const created = await createPlan(token, patientId, { currency: newPlanCurrency });
       await refreshPlansInPlace();
       setSelectedPlanId(created.id);
@@ -1739,7 +1754,8 @@ export function TreatmentPlansTab({
   function openPaymentForm() {
     paymentIdempotencyKeyRef.current = crypto.randomUUID();
     setPaymentAmount('');
-    setPaymentCurrency(planDetail?.currency ?? 'USD');
+    // GLOBAL-G1 (R14): la del plan, sin moneda de reserva.
+    setPaymentCurrency(planDetail?.currency ?? '');
     // DX-097: hoy en la zona de la sede, no en la del navegador.
     setPaymentDate(sedeTimeZone ? sedeToday(sedeTimeZone) : '');
     setPaymentMethod('');
@@ -2122,7 +2138,11 @@ export function TreatmentPlansTab({
               id="tp-new-plan-currency"
               token={token}
               value={newPlanCurrency}
-              onChange={setNewPlanCurrency}
+              onChange={(code) => {
+                setNewPlanCurrency(code);
+                setCreatePlanError(null);
+              }}
+              placeholder={newPlanCurrency ? undefined : copy.newPlanCurrencyPlaceholder}
               className="min-w-0 flex-1 sm:w-44 sm:flex-none"
               ariaLabel={copy.newPlanCurrencyLabel}
             />

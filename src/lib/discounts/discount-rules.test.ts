@@ -2,6 +2,7 @@ import {
   DISCOUNT_REASON_OPTIONS,
   capFor,
   currencyDecimals,
+  ZERO_DECIMAL_CURRENCIES,
   discountForPercent,
   discountPercent,
   exceedsCap,
@@ -14,6 +15,10 @@ import {
   priceBelowCatalogCapMessage,
   type DiscountRules,
 } from './discount-rules';
+// Copia de la lista de la API: `dentalix-api/prisma/reference/iso4217.ts`
+// (generada) y `src/shared/money/currency-decimals.ts`. Si la API la regenera,
+// se copia aquí el mismo conjunto `minorUnits = 0` (R7).
+import iso4217ZeroDecimal from '@/lib/money/iso4217-zero-decimal.json';
 
 const RULES: DiscountRules = {
   maxPercentByRole: { ADMIN: 100, DENTIST: 10, ASSISTANT: 0, RECEPTION: 0 },
@@ -116,5 +121,25 @@ describe('referencia del descuento y prestaciones sin descuento (DX-105)', () =>
     expect(noDiscountAllowed(null)).toBe(false);
     expect(noDiscountAllowed(undefined)).toBe(false);
     expect(NO_DISCOUNT_ALLOWED_NOTICE).toBe('Esta prestación no admite descuentos.');
+  });
+});
+
+describe('ZERO_DECIMAL_CURRENCIES (GLOBAL-G1, R7)', () => {
+  it('zero-decimal set matches the ISO snapshot', () => {
+    const expected = new Set([...iso4217ZeroDecimal.previousSet, ...iso4217ZeroDecimal.minorUnitsZero]);
+    expect([...ZERO_DECIMAL_CURRENCIES].sort()).toEqual([...expected].sort());
+    // El conjunto anterior sigue dentro, y el de la API tiene 29 códigos.
+    for (const code of ['COP', 'CLP', 'JPY', 'KRW', 'PYG', 'VND', 'XAF']) {
+      expect(ZERO_DECIMAL_CURRENCIES.has(code)).toBe(true);
+    }
+    expect(ZERO_DECIMAL_CURRENCIES.size).toBe(29);
+    // La copia coincide con CLDR (la fuente de `minorUnits` en la API).
+    for (const code of iso4217ZeroDecimal.minorUnitsZero) {
+      const digits = new Intl.NumberFormat('en', { style: 'currency', currency: code }).resolvedOptions()
+        .maximumFractionDigits;
+      expect([code, digits]).toEqual([code, 0]);
+    }
+    expect(currencyDecimals('vnd')).toBe(0);
+    expect(currencyDecimals('EUR')).toBe(2);
   });
 });

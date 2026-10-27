@@ -30,7 +30,10 @@ jest.mock('../../lib/expenses/expenses-api', () => ({
 jest.mock('../../lib/expenses/expense-categories-api', () => ({ listExpenseCategories: jest.fn() }));
 // La moneda del fondo sale del catálogo; aquí basta una.
 jest.mock('../../lib/reference/currencies-api', () => ({
-  listCurrencies: jest.fn().mockResolvedValue([{ code: 'COP', name: 'Peso colombiano', symbol: '$' }]),
+  listCurrencies: jest.fn().mockResolvedValue([
+    { code: 'COP', name: 'Peso colombiano', symbol: '$' },
+    { code: 'JPY', name: 'Yen japonés', symbol: '¥' },
+  ]),
 }));
 
 const mockedCurrent = getCurrentCashSession as jest.MockedFunction<typeof getCurrentCashSession>;
@@ -205,5 +208,61 @@ describe('CashShiftsView (DX-027)', () => {
     expect(await screen.findByText('Tu rol no tiene acceso a la caja.')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Reintentar' })).not.toBeInTheDocument();
     expect(screen.queryByRole('button', { name: 'Salida de caja' })).not.toBeInTheDocument();
+  });
+});
+
+describe('CashShiftsView: moneda y zona de la sede (GLOBAL-G1)', () => {
+  it('JPY location shows JPY without decimals', async () => {
+    const user = userEvent.setup();
+    mockedLocations.mockResolvedValue([
+      clinicLocation({ id: 'loc-1', country: 'CO', currency: 'JPY', timeZone: 'Asia/Tokyo' }),
+    ]);
+    mockedCurrent.mockResolvedValue({ locationId: 'loc-1', settings, session: null });
+    mockedList.mockResolvedValue(page([]));
+    mockedOpen.mockResolvedValue(cashSessionFixture());
+    render(<CashShiftsView token={token} />);
+
+    await user.click(await screen.findByRole('button', { name: 'Abrir caja' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Abrir caja' });
+    await user.type(within(dialog).getByLabelText('Importe del fondo 1'), '5000');
+    await user.click(within(dialog).getByRole('button', { name: 'Abrir caja' }));
+    await waitFor(() =>
+      expect(mockedOpen).toHaveBeenCalledWith(token, { floats: [{ currency: 'JPY', amount: 5_000 }], notes: undefined }),
+    );
+  });
+
+  it('location without currency shows SedeConfigError and never COP', async () => {
+    const user = userEvent.setup();
+    mockedLocations.mockResolvedValue([clinicLocation({ id: 'loc-1', country: 'CO', currency: null })]);
+    mockedCurrent.mockResolvedValue({ locationId: 'loc-1', settings, session: null });
+    mockedList.mockResolvedValue(page([]));
+    render(<CashShiftsView token={token} />);
+
+    expect(
+      await screen.findByText(
+        'No se pudo saber la moneda de la sede. Vuelve a intentarlo o revisa la sede en Ajustes → Sedes.',
+      ),
+    ).toBeInTheDocument();
+    // Abrir caja empezaría el fondo en una moneda supuesta: no se ofrece.
+    expect(screen.queryByRole('button', { name: 'Abrir caja' })).not.toBeInTheDocument();
+    expect(screen.queryByText(/COP/)).not.toBeInTheDocument();
+
+    mockedLocations.mockResolvedValue([clinicLocation({ id: 'loc-1', currency: 'JPY' })]);
+    await user.click(screen.getByRole('button', { name: 'Reintentar' }));
+    expect(await screen.findByRole('button', { name: 'Abrir caja' })).toBeInTheDocument();
+  });
+
+  it('a shift at a location without zone shows «Por configurar», never a bare dash', async () => {
+    mockedLocations.mockResolvedValue([clinicLocation({ id: 'loc-1', timeZone: null })]);
+    mockedCurrent.mockResolvedValue({ locationId: 'loc-1', settings, session: cashSessionFixture() });
+    mockedList.mockResolvedValue(page([closedCashSessionFixture({ id: 'cs-0' })]));
+    render(<CashShiftsView token={token} />);
+
+    const table = await screen.findByRole('table', { name: 'Turnos de caja' });
+    const row = within(table).getAllByRole('row')[1];
+    expect(within(row).getByText('Por configurar')).toBeInTheDocument();
+    expect(within(row).getByText(/no tiene zona horaria/)).toBeInTheDocument();
+    expect(within(row).getByRole('link', { name: 'Ver el turno de Sede principal (hora por configurar)' })).toBeInTheDocument();
+    expect(screen.getByText(/hora por configurar: la sede no tiene zona horaria/)).toBeInTheDocument();
   });
 });

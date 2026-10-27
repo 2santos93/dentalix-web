@@ -9,6 +9,8 @@ import { addOneDayIso } from '@/lib/dashboard/date-range';
 import { presetRange } from '@/lib/payments/cash-period';
 import { readyTimeZone, useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
 import { SedeConfigError } from '@/components/locations/sede-config-error';
+import { useLocationsState } from '@/lib/locations/use-locations-state';
+import { activeSedeCurrency, hasActiveLocationWithoutCurrency } from '@/lib/locations/location-settings';
 import { formatCurrency } from '@/lib/format/currency';
 import { listStaff } from '@/lib/appointments/staff-api';
 import { formatTime, zoneCityLabel } from '@/lib/format/date';
@@ -30,6 +32,10 @@ const copy = {
   fromLabel: 'Desde',
   toLabel: 'Hasta',
   currencyLabel: 'Moneda',
+  currencyPlaceholder: 'Elige una moneda',
+  // GLOBAL-G1 §5: en «Todas las sedes» con monedas distintas no hay una
+  // moneda que suponer; se pide en el selector.
+  chooseCurrency: 'Tus sedes usan monedas distintas: elige en «Moneda» en cuál ver los ingresos.',
   loading: 'Cargando panel…',
   forbidden: 'No tienes acceso a este panel.',
   genericError: 'No pudimos cargar el panel.',
@@ -78,7 +84,8 @@ interface DashboardViewProps {
 /**
  * `'use client'` view for the `/dashboard` page — owner/admin-only read-only
  * summary. Owns its own from/to/currency controls (defaulting to the
- * current month..today / COP) and re-fetches `getDashboard` whenever any of
+ * current month..today and to the currency of the active location, or the
+ * clinic's common one on «Todas las sedes»; never a fixed currency) and re-fetches `getDashboard` whenever any of
  * them change, mirroring `AgendaView`'s selector-driven refetch shape (day +
  * provider there, date range + currency here). Unlike `AgendaView` /
  * `TreatmentPlansTab` there is no "refresh in place while keeping stale data
@@ -111,7 +118,22 @@ export function DashboardView({ token }: DashboardViewProps) {
   const [toInput, setTo] = useState<string | null>(null);
   const from = fromInput ?? defaults?.from ?? '';
   const to = toInput ?? defaults?.to ?? '';
-  const [currency, setCurrency] = useState('COP');
+  // GLOBAL-G1: la moneda del panel es la de la sede activa (en «Todas», la
+  // común de la clínica) hasta que se elija otra. Sin ella no hay consulta:
+  // una sede sin moneda muestra `SedeConfigError`; monedas distintas, el
+  // selector vacío para elegir.
+  const locations = useLocationsState(token);
+  const sedeCurrency =
+    locations.status === 'ready' ? activeSedeCurrency(locations.locations, locations.activeLocationId) : null;
+  const [currencyChoice, setCurrency] = useState('');
+  const currency = currencyChoice || sedeCurrency?.currency || '';
+  // Sin moneda por un dato que falta (lista sin cargar, sede sin configurar) es
+  // un error con reintento; con monedas distintas, solo hay que elegir.
+  const currencyUnknown =
+    locations.status === 'error' ||
+    (locations.status === 'ready' &&
+      sedeCurrency?.currency === null &&
+      (sedeCurrency.scope === 'sede' || hasActiveLocationWithoutCurrency(locations.locations)));
 
   const [data, setData] = useState<Dashboard | null>(null);
   const [loading, setLoading] = useState(true);
@@ -150,7 +172,7 @@ export function DashboardView({ token }: DashboardViewProps) {
   const rangeInvalid = from !== '' && to !== '' && from > to;
 
   useEffect(() => {
-    if (!token || !from || !to) return;
+    if (!token || !from || !to || !currency) return;
     // `rangeInvalid` is derived straight from `from`/`to` at render time (see
     // above), so the guard message below already renders ahead of
     // `loading`/`error`/`data` in the JSX regardless of what they hold here —
@@ -210,7 +232,13 @@ export function DashboardView({ token }: DashboardViewProps) {
             />
           </FormField>
           <FormField htmlFor="dashboard-currency" label={copy.currencyLabel} className="w-44">
-            <CurrencySelect id="dashboard-currency" token={token} value={currency} onChange={setCurrency} />
+            <CurrencySelect
+              id="dashboard-currency"
+              token={token}
+              value={currency}
+              onChange={setCurrency}
+              placeholder={currency ? undefined : copy.currencyPlaceholder}
+            />
           </FormField>
           {timeZone ? (
             <p className="basis-full text-sm text-muted" data-testid="dashboard-zone-note" title={timeZone}>
@@ -224,6 +252,12 @@ export function DashboardView({ token }: DashboardViewProps) {
         <InlineError>{copy.rangeInvalid}</InlineError>
       ) : zone.status === 'error' && (!from || !to) ? (
         <SedeConfigError kind="timeZone" onRetry={zone.retry} />
+      ) : !currency && currencyUnknown ? (
+        <SedeConfigError kind="currency" onRetry={locations.retry} />
+      ) : !currency && sedeCurrency?.scope === 'clinic' ? (
+        <p role="status" className="text-sm text-muted">
+          {copy.chooseCurrency}
+        </p>
       ) : loading ? (
         <div className="grid gap-4 sm:grid-cols-2">
           <Skeleton className="h-40" role="status" aria-label={copy.loading} />
