@@ -1,4 +1,4 @@
-import { clinicBaseCurrency, locationCurrency, locationTimeZone } from './location-settings';
+import { clinicBaseCurrency, locationCurrency, locationFormat, locationTimeZone } from './location-settings';
 import { clinicLocation } from '@/lib/test/locations';
 
 describe('locationCurrency', () => {
@@ -24,6 +24,28 @@ describe('locationTimeZone', () => {
     expect(locationTimeZone(clinicLocation({ country: 'CO', timeZone: null }))).toBeNull();
     expect(locationTimeZone(clinicLocation({ timeZone: 'Mars/Olympus' }))).toBeNull();
     expect(locationTimeZone(undefined)).toBeNull();
+  });
+});
+
+describe('locationFormat', () => {
+  it('the locale and hourCycle of the location, whatever its country', () => {
+    expect(locationFormat(clinicLocation({ country: 'CO', locale: 'en-US', hourCycle: 'h23' }))).toEqual({
+      locale: 'en-US',
+      hourCycle: 'h23',
+    });
+    expect(locationFormat(clinicLocation({ locale: 'ja-JP', hourCycle: 'h12' }))).toEqual({
+      locale: 'ja-JP',
+      hourCycle: 'h12',
+    });
+  });
+
+  it('without locale or hourCycle, or with an unusable one → null, never another value', () => {
+    expect(locationFormat(clinicLocation({ locale: null }))).toBeNull();
+    expect(locationFormat(clinicLocation({ hourCycle: null }))).toBeNull();
+    expect(locationFormat(clinicLocation({ locale: 'not a locale' }))).toBeNull();
+    expect(locationFormat(clinicLocation({ hourCycle: 'h11' as unknown as 'h12' }))).toBeNull();
+    expect(locationFormat(null)).toBeNull();
+    expect(locationFormat(undefined)).toBeNull();
   });
 });
 

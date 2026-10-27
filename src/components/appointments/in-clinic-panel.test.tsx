@@ -66,6 +66,8 @@ function view(overrides: Partial<InClinicView> = {}): InClinicView {
     date: '2026-10-19',
     locationId: 'loc-1',
     timeZone: 'America/Bogota',
+    locale: 'es-CO',
+    hourCycle: 'h12',
     now: '2026-10-19T14:02:00.000Z',
     scope: 'LOCATION',
     waiting: [],

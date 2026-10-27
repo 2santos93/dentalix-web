@@ -3,9 +3,11 @@ import type { components } from '@/lib/api/schema';
 
 /**
  * Sede de la clínica tal como la devuelve la API (`LocationDto`). G1: moneda
- * (ISO 4217), zona IANA y formato regional (BCP 47) son datos de la sede; en
- * esta fase pueden llegar `null` = sede sin configurar, que la web trata como
- * error recuperable (`SedeConfigError`) y nunca rellena con otro valor.
+ * (ISO 4217), zona IANA y formato regional (BCP 47) son datos de la sede; G1-B
+ * añade su reloj, `hourCycle` (`h12` | `h23`), que nunca se deduce del formato
+ * ni del país. En esta fase pueden llegar `null` = sede sin configurar, que la
+ * web trata como error recuperable (`SedeConfigError`) y nunca rellena con
+ * otro valor.
  * `regionalSettingsReviewedAt` null = asignados al actualizar Dentalix, por
  * revisar (aviso D5).
  */

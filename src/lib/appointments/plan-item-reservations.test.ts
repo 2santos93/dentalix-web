@@ -18,6 +18,8 @@ const item = {
   locationId: 'l1',
   locationName: 'Sede Norte',
   timeZone: 'America/Bogota',
+  locale: 'es-CO',
+  hourCycle: 'h12' as const,
 };
 
 describe('plan-item-reservations (DX-273)', () => {
@@ -73,6 +75,8 @@ describe('plan-item-reservations: titular de hoy en la clínica (DX-293)', () =>
     locationId: null,
     locationName: null,
     timeZone: null,
+    locale: null,
+    hourCycle: null,
   };
 
   it('dice la hora (en la zona de su sede) y la sede, con el paciente en la clínica', () => {

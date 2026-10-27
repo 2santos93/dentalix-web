@@ -78,4 +78,23 @@ describe('SedeConfigError', () => {
     await setupUser().click(screen.getByRole('button', { name: 'Reintentar' }));
     expect(onRetry).toHaveBeenCalledTimes(1);
   });
+
+  it('locale: section copy of spec §10 with Reintentar, field label «Sin formato de sede»', () => {
+    const { unmount } = render(<SedeConfigError kind="locale" onRetry={jest.fn()} />);
+    expect(screen.getByRole('alert')).toHaveTextContent(
+      'No se pudo saber el formato regional o el reloj de la sede. Vuelve a intentarlo o revisa la sede en Ajustes → Sedes.',
+    );
+    expect(screen.getByRole('button', { name: 'Reintentar' })).toBeInTheDocument();
+    unmount();
+
+    render(<SedeConfigError kind="locale" variant="field" onRetry={jest.fn()} />);
+    expect(screen.getByRole('status')).toHaveTextContent('Sin formato de sede');
+  });
+
+  it('locale: ADMIN gets «Configurar sede»', () => {
+    useAuthStore.setState({ accessToken: tokenFor('ADMIN') });
+    render(<SedeConfigError kind="locale" onRetry={jest.fn()} locationId="loc-1" />);
+    expect(screen.getByRole('link', { name: 'Configurar sede' })).toHaveAttribute('href', '/settings/sedes?sede=loc-1');
+    useAuthStore.setState({ accessToken: null });
+  });
 });

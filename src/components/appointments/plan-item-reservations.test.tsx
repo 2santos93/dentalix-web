@@ -40,6 +40,8 @@ const reserved = {
   locationId: 'loc-1',
   locationName: 'Sede Norte',
   timeZone: 'America/Bogota',
+  locale: 'es-CO',
+  hourCycle: 'h12' as const,
 };
 const MESSAGE = 'Este tratamiento está reservado en la cita del 30/10/2026 a las 09:00 (Sede Norte).';
 
@@ -77,6 +79,8 @@ function view(waiting: InClinicItem[]): InClinicView {
     date: '2026-10-19',
     locationId: 'loc-1',
     timeZone: 'America/Bogota',
+    locale: 'es-CO',
+    hourCycle: 'h12',
     now: '2026-10-19T14:02:00.000Z',
     scope: 'LOCATION',
     waiting,
@@ -258,6 +262,8 @@ describe('Tratamiento reservado en otra cita (DX-273)', () => {
       locationId: null,
       locationName: null,
       timeZone: null,
+      locale: null,
+      hourCycle: null,
     };
     const HIDDEN = 'Reservado en otra cita de hoy, con el paciente en la clínica.';
     function Arrive() {
