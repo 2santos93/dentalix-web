@@ -286,9 +286,8 @@ for (const viewport of [
  * crítica sí.
  */
 const PREEXISTING_CONTRAST: { matches: (node: { html: string }) => boolean; why: string }[] = [
-  // Badge tintado (`bg-success/15 text-success`, etc.): 4.08–4.09:1 en claro,
-  // como «Realizado» en los ítems del plan o «Efectivo» en los movimientos.
-  { matches: (n) => /class="[^"]*\bbg-(success|warning|danger)\/15\b/.test(n.html), why: 'Badge tintado del sistema' },
+  // DX346: éxito ya cumple AA y no se excluye. Se conservan warning/danger históricos.
+  { matches: (n) => /class="[^"]*\bbg-(warning|danger)\/15\b/.test(n.html), why: 'Badge tintado warning/danger del sistema' },
 ];
 
 function isPreexisting(id: string, node: { html: string }): boolean {

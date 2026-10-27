@@ -1,0 +1,18 @@
+==> Playwright
+
+Running 9 tests using 1 worker
+
+(node:79620) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✓  1 [chromium] › e2e/cash-shifts.spec.ts:127:7 › recepción abre su caja, cobra, cierra con arqueo y saca el informe A4 (escritorio) (2.2s)
+  ✓  2 [chromium] › e2e/cash-shifts.spec.ts:127:7 › recepción abre su caja, cobra, cierra con arqueo y saca el informe A4 (móvil) (1.5s)
+  ✓  3 [chromium] › e2e/cash-shifts.spec.ts:231:5 › abrir otra caja en la misma sede es 409 y un dentista no tiene acceso (403 en español) (221ms)
+  ✓  4 [chromium] › e2e/cash-shifts.spec.ts:250:7 › ADMIN reabre una caja cerrada y la corrige con un ajuste (escritorio) (1.4s)
+  ✓  5 [chromium] › e2e/cash-shifts.spec.ts:250:7 › ADMIN reabre una caja cerrada y la corrige con un ajuste (móvil) (1.1s)
+  ✓  6 [chromium] › e2e/payment-allocations.spec.ts:196:7 › DX-051: el abono se imputa a los ítems, se fija a mano, vuelve al automático y recepción lo ve por ítem (escritorio) (3.6s)
+  ✓  7 [chromium] › e2e/payment-allocations.spec.ts:196:7 › DX-051: el abono se imputa a los ítems, se fija a mano, vuelve al automático y recepción lo ve por ítem (móvil) (3.3s)
+  ✓  8 [chromium] › e2e/payment-allocations.spec.ts:399:5 › DX-051 axe: ítems del plan, «Ver por ítem» y el modal «Imputar abono» (normal, 400, 409 y sin tasa), a 390 y 1440 px, en claro y oscuro (16.3s)
+  ✓  9 [chromium] › e2e/success-badge-contrast.spec.ts:73:5 › DX346: success badges and covered items meet AA on cash shifts, plan and statement, 390/1440 light/dark (7.4s)
+
+  9 passed (38.0s)
+Playwright terminó con código 0 en 39 s

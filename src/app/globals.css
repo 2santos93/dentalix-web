@@ -21,6 +21,7 @@
   --color-border: var(--color-border);
   --color-hairline: var(--color-hairline);
   --color-success: var(--color-success);
+  --color-success-text: var(--color-success-text);
   --color-warning: var(--color-warning);
   --color-danger: var(--color-danger);
 
@@ -419,6 +420,7 @@
   --color-danger: #BE123C;
   --color-warning: #B45309;
   --color-success: #15803D;
+  --color-success-text: #166534;
 }
 @page cash-report {
   size: A4;

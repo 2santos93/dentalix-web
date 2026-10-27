@@ -1,0 +1,12 @@
+
+> dentalix-web@0.1.0 test
+> jest --runInBand src/components/cash-sessions src/components/account-statement src/components/treatment-plans/item-paid-cell.test.tsx src/lib/payments/payment-allocations-api.test.ts src/components/payments/use-payment-allocations.test.ts
+
+(node:77914) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+
+Test Suites: 20 passed, 20 total
+Tests:       123 passed, 123 total
+Snapshots:   0 total
+Time:        9.159 s
+Ran all test suites matching src/components/cash-sessions|src/components/account-statement|src/components/treatment-plans/item-paid-cell.test.tsx|src/lib/payments/payment-allocations-api.test.ts|src/components/payments/use-payment-allocations.test.ts.

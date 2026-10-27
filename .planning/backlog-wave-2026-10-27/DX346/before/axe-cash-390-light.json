@@ -1,0 +1,63 @@
+[
+  {
+    "id": "color-contrast",
+    "impact": "serious",
+    "tags": [
+      "cat.color",
+      "wcag2aa",
+      "wcag143",
+      "TTv5",
+      "TT13.c",
+      "EN-301-549",
+      "EN-9.1.4.3",
+      "ACT",
+      "RGAAv4",
+      "RGAA-3.2.1"
+    ],
+    "description": "Ensure the contrast between foreground and background colors meets WCAG 2 AA minimum contrast ratio thresholds",
+    "help": "Elements must meet minimum color contrast ratio thresholds",
+    "helpUrl": "https://dequeuniversity.com/rules/axe/4.12/color-contrast?application=axeAPI",
+    "nodes": [
+      {
+        "any": [
+          {
+            "id": "color-contrast",
+            "data": {
+              "fgColor": "#15803d",
+              "bgColor": "#dcece2",
+              "contrastRatio": 4.09,
+              "fontSize": "9.0pt (12px)",
+              "fontWeight": "normal",
+              "messageKey": null,
+              "expectedContrastRatio": "4.5:1"
+            },
+            "relatedNodes": [
+              {
+                "html": "<div class=\"inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors border-transparent bg-success/15 text-success\">Abierta</div>",
+                "target": [
+                  ".py-0\\.5"
+                ]
+              },
+              {
+                "html": "<div class=\"rounded-xl border border-border bg-surface text-ink shadow-sm overflow-hidden p-0\">",
+                "target": [
+                  ".overflow-hidden"
+                ]
+              }
+            ],
+            "impact": "serious",
+            "message": "Element has insufficient color contrast of 4.09 (foreground color: #15803d, background color: #dcece2, font size: 9.0pt (12px), font weight: normal). Expected contrast ratio of 4.5:1"
+          }
+        ],
+        "all": [],
+        "none": [],
+        "impact": "serious",
+        "html": "<div class=\"inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium transition-colors border-transparent bg-success/15 text-success\">Abierta</div>",
+        "target": [
+          ".py-0\\.5"
+        ],
+        "failureSummary": "Fix any of the following:\n  Element has insufficient color contrast of 4.09 (foreground color: #15803d, background color: #dcece2, font size: 9.0pt (12px), font weight: normal). Expected contrast ratio of 4.5:1"
+      }
+    ]
+  }
+]

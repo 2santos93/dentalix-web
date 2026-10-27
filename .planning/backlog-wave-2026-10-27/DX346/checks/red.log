@@ -1,0 +1,334 @@
+
+Running 1 test using 1 worker
+
+(node:73196) Warning: The 'NO_COLOR' env is ignored due to the 'FORCE_COLOR' env being set.
+(Use `node --trace-warnings ...` to show where the warning was created)
+  ✘  1 [chromium] › e2e/success-badge-contrast.spec.ts:73:5 › DX346: success badges and covered items meet AA on cash shifts, plan and statement, 390/1440 light/dark (12.7s)
+
+
+  1) [chromium] › e2e/success-badge-contrast.spec.ts:73:5 › DX346: success badges and covered items meet AA on cash shifts, plan and statement, 390/1440 light/dark 
+
+    Error: cash Abierta 390 light
+
+    expect(received).toBeGreaterThanOrEqual(expected)
+
+    Expected: >= 4.5
+    Received:    4.095314793300129
+
+      115 |         measurements.push({ surface, width, colorScheme, ...measured });
+      116 |         writeFileSync(path.join(evidence, 'contrast.json'), JSON.stringify(measurements, null, 2));
+    > 117 |         expect.soft(measured.ratio, `${surface} ${text} ${width} ${colorScheme}`).toBeGreaterThanOrEqual(4.5);
+          |                                                                                   ^
+      118 |       }
+      119 |       await expectNoHorizontalScroll(page);
+      120 |       await audit(page, scope, evidence, `${surface}-${width}-${colorScheme}`);
+        at /Users/ncaicedo/Desktop/dentalix/dentalix-web-wave20261027-dx346/e2e/success-badge-contrast.spec.ts:117:83
+
+    Error: cash-390-light
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  -  1
+    + Received  + 10
+
+    - Array []
+    + Array [
+    +   Object {
+    +     "id": "color-contrast",
+    +     "nodes": Array [
+    +       Array [
+    +         ".py-0\\.5",
+    +       ],
+    +     ],
+    +   },
+    + ]
+
+      68 |       /class="[^"]*\bbg-(warning|danger)\/15\b/.test(n.html))).map((n) => n.target) }))
+      69 |     .filter((v) => v.nodes.length);
+    > 70 |   expect.soft(violations, label).toEqual([]);
+         |                                  ^
+      71 | }
+      72 |
+      73 | test('DX346: success badges and covered items meet AA on cash shifts, plan and statement, 390/1440 light/dark', async ({ page }, testInfo) => {
+        at audit (/Users/ncaicedo/Desktop/dentalix/dentalix-web-wave20261027-dx346/e2e/success-badge-contrast.spec.ts:70:34)
+        at /Users/ncaicedo/Desktop/dentalix/dentalix-web-wave20261027-dx346/e2e/success-badge-contrast.spec.ts:120:7
+
+    Error: plan Realizado 390 light
+
+    expect(received).toBeGreaterThanOrEqual(expected)
+
+    Expected: >= 4.5
+    Received:    4.095314793300129
+
+      115 |         measurements.push({ surface, width, colorScheme, ...measured });
+      116 |         writeFileSync(path.join(evidence, 'contrast.json'), JSON.stringify(measurements, null, 2));
+    > 117 |         expect.soft(measured.ratio, `${surface} ${text} ${width} ${colorScheme}`).toBeGreaterThanOrEqual(4.5);
+          |                                                                                   ^
+      118 |       }
+      119 |       await expectNoHorizontalScroll(page);
+      120 |       await audit(page, scope, evidence, `${surface}-${width}-${colorScheme}`);
+        at /Users/ncaicedo/Desktop/dentalix/dentalix-web-wave20261027-dx346/e2e/success-badge-contrast.spec.ts:117:83
+
+    Error: plan-390-light
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  -  1
+    + Received  + 10
+
+    - Array []
+    + Array [
+    +   Object {
+    +     "id": "color-contrast",
+    +     "nodes": Array [
+    +       Array [
+    +         ".justify-between.gap-2.items-center:nth-child(1) > .bg-success\\/15.text-success.py-0\\.5",
+    +       ],
+    +     ],
+    +   },
+    + ]
+
+      68 |       /class="[^"]*\bbg-(warning|danger)\/15\b/.test(n.html))).map((n) => n.target) }))
+      69 |     .filter((v) => v.nodes.length);
+    > 70 |   expect.soft(violations, label).toEqual([]);
+         |                                  ^
+      71 | }
+      72 |
+      73 | test('DX346: success badges and covered items meet AA on cash shifts, plan and statement, 390/1440 light/dark', async ({ page }, testInfo) => {
+        at audit (/Users/ncaicedo/Desktop/dentalix/dentalix-web-wave20261027-dx346/e2e/success-badge-contrast.spec.ts:70:34)
+        at /Users/ncaicedo/Desktop/dentalix/dentalix-web-wave20261027-dx346/e2e/success-badge-contrast.spec.ts:120:7
+
+    Error: statement Realizado 390 light
+
+    expect(received).toBeGreaterThanOrEqual(expected)
+
+    Expected: >= 4.5
+    Received:    4.095314793300129
+
+      115 |         measurements.push({ surface, width, colorScheme, ...measured });
+      116 |         writeFileSync(path.join(evidence, 'contrast.json'), JSON.stringify(measurements, null, 2));
+    > 117 |         expect.soft(measured.ratio, `${surface} ${text} ${width} ${colorScheme}`).toBeGreaterThanOrEqual(4.5);
+          |                                                                                   ^
+      118 |       }
+      119 |       await expectNoHorizontalScroll(page);
+      120 |       await audit(page, scope, evidence, `${surface}-${width}-${colorScheme}`);
+        at /Users/ncaicedo/Desktop/dentalix/dentalix-web-wave20261027-dx346/e2e/success-badge-contrast.spec.ts:117:83
+
+    Error: statement Efectivo 390 light
+
+    expect(received).toBeGreaterThanOrEqual(expected)
+
+    Expected: >= 4.5
+    Received:    4.095314793300129
+
+      115 |         measurements.push({ surface, width, colorScheme, ...measured });
+      116 |         writeFileSync(path.join(evidence, 'contrast.json'), JSON.stringify(measurements, null, 2));
+    > 117 |         expect.soft(measured.ratio, `${surface} ${text} ${width} ${colorScheme}`).toBeGreaterThanOrEqual(4.5);
+          |                                                                                   ^
+      118 |       }
+      119 |       await expectNoHorizontalScroll(page);
+      120 |       await audit(page, scope, evidence, `${surface}-${width}-${colorScheme}`);
+        at /Users/ncaicedo/Desktop/dentalix/dentalix-web-wave20261027-dx346/e2e/success-badge-contrast.spec.ts:117:83
+
+    Error: statement-390-light
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  -  1
+    + Received  + 13
+
+    - Array []
+    + Array [
+    +   Object {
+    +     "id": "color-contrast",
+    +     "nodes": Array [
+    +       Array [
+    +         ".max-sm\\:flex.max-sm\\:py-1\\.5[data-label=\"Estado\"] > .bg-success\\/15.text-success.py-0\\.5",
+    +       ],
+    +       Array [
+    +         "td[data-label=\"Método\"] > .bg-success\\/15.text-success.py-0\\.5",
+    +       ],
+    +     ],
+    +   },
+    + ]
+
+      68 |       /class="[^"]*\bbg-(warning|danger)\/15\b/.test(n.html))).map((n) => n.target) }))
+      69 |     .filter((v) => v.nodes.length);
+    > 70 |   expect.soft(violations, label).toEqual([]);
+         |                                  ^
+      71 | }
+      72 |
+      73 | test('DX346: success badges and covered items meet AA on cash shifts, plan and statement, 390/1440 light/dark', async ({ page }, testInfo) => {
+        at audit (/Users/ncaicedo/Desktop/dentalix/dentalix-web-wave20261027-dx346/e2e/success-badge-contrast.spec.ts:70:34)
+        at /Users/ncaicedo/Desktop/dentalix/dentalix-web-wave20261027-dx346/e2e/success-badge-contrast.spec.ts:120:7
+
+    Error: cash Abierta 1440 light
+
+    expect(received).toBeGreaterThanOrEqual(expected)
+
+    Expected: >= 4.5
+    Received:    4.095314793300129
+
+      115 |         measurements.push({ surface, width, colorScheme, ...measured });
+      116 |         writeFileSync(path.join(evidence, 'contrast.json'), JSON.stringify(measurements, null, 2));
+    > 117 |         expect.soft(measured.ratio, `${surface} ${text} ${width} ${colorScheme}`).toBeGreaterThanOrEqual(4.5);
+          |                                                                                   ^
+      118 |       }
+      119 |       await expectNoHorizontalScroll(page);
+      120 |       await audit(page, scope, evidence, `${surface}-${width}-${colorScheme}`);
+        at /Users/ncaicedo/Desktop/dentalix/dentalix-web-wave20261027-dx346/e2e/success-badge-contrast.spec.ts:117:83
+
+    Error: cash-1440-light
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  -  1
+    + Received  + 10
+
+    - Array []
+    + Array [
+    +   Object {
+    +     "id": "color-contrast",
+    +     "nodes": Array [
+    +       Array [
+    +         ".py-0\\.5",
+    +       ],
+    +     ],
+    +   },
+    + ]
+
+      68 |       /class="[^"]*\bbg-(warning|danger)\/15\b/.test(n.html))).map((n) => n.target) }))
+      69 |     .filter((v) => v.nodes.length);
+    > 70 |   expect.soft(violations, label).toEqual([]);
+         |                                  ^
+      71 | }
+      72 |
+      73 | test('DX346: success badges and covered items meet AA on cash shifts, plan and statement, 390/1440 light/dark', async ({ page }, testInfo) => {
+        at audit (/Users/ncaicedo/Desktop/dentalix/dentalix-web-wave20261027-dx346/e2e/success-badge-contrast.spec.ts:70:34)
+        at /Users/ncaicedo/Desktop/dentalix/dentalix-web-wave20261027-dx346/e2e/success-badge-contrast.spec.ts:120:7
+
+    Error: plan Realizado 1440 light
+
+    expect(received).toBeGreaterThanOrEqual(expected)
+
+    Expected: >= 4.5
+    Received:    4.095314793300129
+
+      115 |         measurements.push({ surface, width, colorScheme, ...measured });
+      116 |         writeFileSync(path.join(evidence, 'contrast.json'), JSON.stringify(measurements, null, 2));
+    > 117 |         expect.soft(measured.ratio, `${surface} ${text} ${width} ${colorScheme}`).toBeGreaterThanOrEqual(4.5);
+          |                                                                                   ^
+      118 |       }
+      119 |       await expectNoHorizontalScroll(page);
+      120 |       await audit(page, scope, evidence, `${surface}-${width}-${colorScheme}`);
+        at /Users/ncaicedo/Desktop/dentalix/dentalix-web-wave20261027-dx346/e2e/success-badge-contrast.spec.ts:117:83
+
+    Error: plan-1440-light
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  -  1
+    + Received  + 10
+
+    - Array []
+    + Array [
+    +   Object {
+    +     "id": "color-contrast",
+    +     "nodes": Array [
+    +       Array [
+    +         ".items-start.gap-1\\.5.flex-col > .bg-success\\/15.text-success.py-0\\.5",
+    +       ],
+    +     ],
+    +   },
+    + ]
+
+      68 |       /class="[^"]*\bbg-(warning|danger)\/15\b/.test(n.html))).map((n) => n.target) }))
+      69 |     .filter((v) => v.nodes.length);
+    > 70 |   expect.soft(violations, label).toEqual([]);
+         |                                  ^
+      71 | }
+      72 |
+      73 | test('DX346: success badges and covered items meet AA on cash shifts, plan and statement, 390/1440 light/dark', async ({ page }, testInfo) => {
+        at audit (/Users/ncaicedo/Desktop/dentalix/dentalix-web-wave20261027-dx346/e2e/success-badge-contrast.spec.ts:70:34)
+        at /Users/ncaicedo/Desktop/dentalix/dentalix-web-wave20261027-dx346/e2e/success-badge-contrast.spec.ts:120:7
+
+    Error: statement Realizado 1440 light
+
+    expect(received).toBeGreaterThanOrEqual(expected)
+
+    Expected: >= 4.5
+    Received:    4.095314793300129
+
+      115 |         measurements.push({ surface, width, colorScheme, ...measured });
+      116 |         writeFileSync(path.join(evidence, 'contrast.json'), JSON.stringify(measurements, null, 2));
+    > 117 |         expect.soft(measured.ratio, `${surface} ${text} ${width} ${colorScheme}`).toBeGreaterThanOrEqual(4.5);
+          |                                                                                   ^
+      118 |       }
+      119 |       await expectNoHorizontalScroll(page);
+      120 |       await audit(page, scope, evidence, `${surface}-${width}-${colorScheme}`);
+        at /Users/ncaicedo/Desktop/dentalix/dentalix-web-wave20261027-dx346/e2e/success-badge-contrast.spec.ts:117:83
+
+    Error: statement Efectivo 1440 light
+
+    expect(received).toBeGreaterThanOrEqual(expected)
+
+    Expected: >= 4.5
+    Received:    4.095314793300129
+
+      115 |         measurements.push({ surface, width, colorScheme, ...measured });
+      116 |         writeFileSync(path.join(evidence, 'contrast.json'), JSON.stringify(measurements, null, 2));
+    > 117 |         expect.soft(measured.ratio, `${surface} ${text} ${width} ${colorScheme}`).toBeGreaterThanOrEqual(4.5);
+          |                                                                                   ^
+      118 |       }
+      119 |       await expectNoHorizontalScroll(page);
+      120 |       await audit(page, scope, evidence, `${surface}-${width}-${colorScheme}`);
+        at /Users/ncaicedo/Desktop/dentalix/dentalix-web-wave20261027-dx346/e2e/success-badge-contrast.spec.ts:117:83
+
+    Error: statement-1440-light
+
+    expect(received).toEqual(expected) // deep equality
+
+    - Expected  -  1
+    + Received  + 13
+
+    - Array []
+    + Array [
+    +   Object {
+    +     "id": "color-contrast",
+    +     "nodes": Array [
+    +       Array [
+    +         ".max-sm\\:flex.max-sm\\:py-1\\.5[data-label=\"Estado\"] > .bg-success\\/15.text-success.py-0\\.5",
+    +       ],
+    +       Array [
+    +         "td[data-label=\"Método\"] > .bg-success\\/15.text-success.py-0\\.5",
+    +       ],
+    +     ],
+    +   },
+    + ]
+
+      68 |       /class="[^"]*\bbg-(warning|danger)\/15\b/.test(n.html))).map((n) => n.target) }))
+      69 |     .filter((v) => v.nodes.length);
+    > 70 |   expect.soft(violations, label).toEqual([]);
+         |                                  ^
+      71 | }
+      72 |
+      73 | test('DX346: success badges and covered items meet AA on cash shifts, plan and statement, 390/1440 light/dark', async ({ page }, testInfo) => {
+        at audit (/Users/ncaicedo/Desktop/dentalix/dentalix-web-wave20261027-dx346/e2e/success-badge-contrast.spec.ts:70:34)
+        at /Users/ncaicedo/Desktop/dentalix/dentalix-web-wave20261027-dx346/e2e/success-badge-contrast.spec.ts:120:7
+
+    attachment #1: screenshot (image/png) ──────────────────────────────────────────────────────────
+    test-results/success-badge-contrast-DX3-5ab31-atement-390-1440-light-dark-chromium/test-failed-1.png
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+    Error Context: test-results/success-badge-contrast-DX3-5ab31-atement-390-1440-light-dark-chromium/error-context.md
+
+    attachment #3: trace (application/zip) ─────────────────────────────────────────────────────────
+    test-results/success-badge-contrast-DX3-5ab31-atement-390-1440-light-dark-chromium/trace.zip
+    Usage:
+
+        npx playwright show-trace test-results/success-badge-contrast-DX3-5ab31-atement-390-1440-light-dark-chromium/trace.zip
+
+    ────────────────────────────────────────────────────────────────────────────────────────────────
+
+  1 failed
+    [chromium] › e2e/success-badge-contrast.spec.ts:73:5 › DX346: success badges and covered items meet AA on cash shifts, plan and statement, 390/1440 light/dark 
