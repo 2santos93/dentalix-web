@@ -1,3 +1,4 @@
+import { regionalFormat } from '@/lib/format/regional-format';
 import {
   FLOW_ACTION_LABELS,
   flowActions,
@@ -89,8 +90,10 @@ describe('patient-flow (DX-200)', () => {
     expect(waitingForYouLabel(3)).toBe('Te esperan 3 pacientes');
   });
 
-  it('la hora se muestra en la zona de la sede', () => {
-    expect(timeInZone('2026-10-19T14:05:00.000Z', 'America/Bogota')).toBe('09:05');
-    expect(timeInZone('2026-10-19T14:05:00.000Z', 'Europe/Madrid')).toBe('16:05');
+  it('la hora se muestra en la zona y con el reloj de la sede', () => {
+    const h12 = regionalFormat({ locale: 'en-US', hourCycle: 'h12' });
+    const h23 = regionalFormat({ locale: 'ja-JP', hourCycle: 'h23' });
+    expect(timeInZone('2026-10-19T14:05:00.000Z', 'America/New_York', h12)).toBe('10:05 a. m.');
+    expect(timeInZone('2026-10-19T14:05:00.000Z', 'Asia/Tokyo', h23)).toBe('23:05');
   });
 });

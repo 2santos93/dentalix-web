@@ -1,4 +1,5 @@
 import { civilDateInZone } from '@/lib/format/date';
+import { regionalFormat, type RegionalFormat, type RegionalSettingsForFormat } from '@/lib/format/regional-format';
 import type { ClinicLocation } from './locations-api';
 
 /**
@@ -28,6 +29,33 @@ export function isUsableTimeZone(timeZone: string | null | undefined): timeZone 
 export function locationTimeZone(location: Pick<ClinicLocation, 'timeZone'> | null | undefined): string | null {
   const zone = location?.timeZone;
   return isUsableTimeZone(zone) ? zone : null;
+}
+
+/**
+ * Formato regional y reloj de la sede (G1-B), o `null` si le falta alguno o
+ * este navegador no sabe formatear con ellos. Nunca otro valor en su lugar: ni
+ * el del navegador, ni el de otra sede, ni uno deducido del país (spec §10).
+ */
+export function locationFormat(
+  location: Pick<ClinicLocation, 'locale' | 'hourCycle'> | null | undefined,
+): RegionalSettingsForFormat | null {
+  const locale = location?.locale;
+  const hourCycle = location?.hourCycle;
+  if (!locale || !hourCycle) return null;
+  try {
+    regionalFormat({ locale, hourCycle });
+  } catch {
+    return null;
+  }
+  return { locale, hourCycle };
+}
+
+/** El helper de formato con los ajustes de la sede, o `null` en los mismos casos que {@link locationFormat}. */
+export function locationRegionalFormat(
+  location: Pick<ClinicLocation, 'locale' | 'hourCycle'> | null | undefined,
+): RegionalFormat | null {
+  const settings = locationFormat(location);
+  return settings ? regionalFormat(settings) : null;
 }
 
 /**

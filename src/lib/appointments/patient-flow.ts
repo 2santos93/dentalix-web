@@ -1,4 +1,6 @@
 import { apiFetch } from '@/lib/api/client';
+import type { RegionalFormat } from '@/lib/format/regional-format';
+import { locationRegionalFormat } from '@/lib/locations/location-settings';
 import type { components } from '@/lib/api/schema';
 import type { ClinicRole } from '@/lib/me/me-api';
 import type { Appointment, AppointmentStatus } from './appointments-api';
@@ -151,21 +153,18 @@ export function waitingForYouLabel(n: number): string {
   return n === 1 ? 'Te espera 1 paciente' : `Te esperan ${n} pacientes`;
 }
 
-const timeFormatters = new Map<string, Intl.DateTimeFormat>();
+/** La hora de un instante en la zona y con el reloj de la sede (todos ven la hora de la clínica). */
+export function timeInZone(iso: string, timeZone: string, fmt: RegionalFormat): string {
+  return fmt.time(new Date(iso), timeZone);
+}
 
-/** `HH:mm` de un instante en la zona de la sede (todos ven la hora de la clínica). */
-export function timeInZone(iso: string, timeZone: string): string {
-  let f = timeFormatters.get(timeZone);
-  if (!f) {
-    f = new Intl.DateTimeFormat('es-CO', {
-      hour: '2-digit',
-      minute: '2-digit',
-      hourCycle: 'h23',
-      timeZone,
-    });
-    timeFormatters.set(timeZone, f);
-  }
-  return f.format(new Date(iso));
+/**
+ * El formato con el que se pinta el panel: el `locale` y el reloj que la API
+ * manda en la vista (G1-B). `null` si faltan o no son válidos (API antigua,
+ * sede sin configurar): el panel muestra `SedeConfigError`, nunca otro formato.
+ */
+export function inClinicFormat(view: Pick<InClinicView, 'locale' | 'hourCycle'>): RegionalFormat | null {
+  return locationRegionalFormat(view);
 }
 
 /**

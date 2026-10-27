@@ -27,6 +27,11 @@ export class ApiError extends Error {
    * el mensaje junto a ese campo.
    */
   public readonly field: string | null;
+  /**
+   * La sede a la que le falta un dato, cuando la API la nombra (p. ej. el 409
+   * `LOCATION_LOCALE_REQUIRED`, G1-B §10): «Configurar sede» abre esa sede.
+   */
+  public readonly locationId: string | null;
 
   constructor(
     public readonly status: number,
@@ -36,6 +41,7 @@ export class ApiError extends Error {
       retryAfterSeconds?: number | null;
       code?: string | null;
       field?: string | null;
+      locationId?: string | null;
     } = {},
   ) {
     super(message);
@@ -44,6 +50,7 @@ export class ApiError extends Error {
     this.retryAfterSeconds = details.retryAfterSeconds ?? null;
     this.code = details.code ?? null;
     this.field = details.field ?? null;
+    this.locationId = details.locationId ?? null;
   }
 }
 

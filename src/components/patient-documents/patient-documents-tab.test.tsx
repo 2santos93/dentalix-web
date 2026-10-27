@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useAuthStore } from '@/lib/auth/auth-store';
 import { act, fireEvent, render, screen, within } from '@testing-library/react';
 import { PatientDocumentsTab } from './patient-documents-tab';
 import { PatientTabPanel } from '@/components/patients/patient-tab-panel';
@@ -15,6 +16,8 @@ import { notifyError } from '@/components/errors/notify';
 import { ApiError } from '@/lib/api/client';
 import { setupUser } from '@/lib/test/user';
 import { makeDocument, tokenFor } from '@/lib/test/patient-documents';
+import { listLocations } from '@/lib/locations/locations-api';
+import { clinicLocation } from '@/lib/test/locations';
 
 jest.mock('../../lib/patient-documents/patient-documents-api', () => ({
   ...jest.requireActual('../../lib/patient-documents/patient-documents-api'),
@@ -30,6 +33,8 @@ jest.mock('../../lib/patient-documents/heic', () => ({
 jest.mock('../../lib/patient-documents/download', () => ({ startDownload: jest.fn() }));
 jest.mock('../errors/notify', () => ({ notifyError: jest.fn() }));
 
+jest.mock('../../lib/locations/locations-api', () => ({ listLocations: jest.fn() }));
+const mockedLocations = listLocations as jest.MockedFunction<typeof listLocations>;
 const mockedList = listPatientDocuments as jest.MockedFunction<typeof listPatientDocuments>;
 const mockedUpload = uploadPatientDocument as jest.MockedFunction<typeof uploadPatientDocument>;
 const mockedUrl = getPatientDocumentUrl as jest.MockedFunction<typeof getPatientDocumentUrl>;
@@ -63,12 +68,43 @@ function dropFiles(files: File[]) {
 describe('PatientDocumentsTab (DX-151)', () => {
   beforeEach(() => {
     mockedList.mockReset().mockResolvedValue([]);
+    mockedLocations.mockReset().mockResolvedValue([clinicLocation({ locale: 'de-DE', hourCycle: 'h23' })]);
     mockedUpload.mockReset();
     mockedUrl.mockReset();
     mockedVoid.mockReset();
     mockedHeic.mockReset();
     mockedDownload.mockReset();
     mockedNotify.mockReset();
+  });
+
+  it('formatFileSize en-US is 1.5 MB: el tamaño con el formato de la sede de la pantalla', async () => {
+    mockedLocations.mockResolvedValue([clinicLocation({ locale: 'en-US', hourCycle: 'h12' })]);
+    mockedList.mockResolvedValue([makeDocument()]);
+    render(<PatientDocumentsTab token={DENTIST} patientId="p1" />);
+    expect(await screen.findByText('1.5 MB')).toBeInTheDocument();
+  });
+
+  it('«Configurar sede» abre la sede sin formato o sin reloj, no la lista', async () => {
+    useAuthStore.setState({ accessToken: tokenFor('ADMIN') });
+    try {
+      mockedLocations.mockResolvedValue([clinicLocation({ id: 'sede-sin-reloj', locale: 'en-US', hourCycle: null })]);
+      mockedList.mockResolvedValue([makeDocument()]);
+      render(<PatientDocumentsTab token={DENTIST} patientId="p1" />);
+      expect(await screen.findByRole('link', { name: 'Configurar sede' })).toHaveAttribute(
+        'href',
+        '/settings/sedes?sede=sede-sin-reloj',
+      );
+    } finally {
+      useAuthStore.setState({ accessToken: null });
+    }
+  });
+
+  it('sin formato de la sede: tamaño «—» y el aviso con Reintentar', async () => {
+    mockedLocations.mockResolvedValue([clinicLocation({ locale: null, hourCycle: null })]);
+    mockedList.mockResolvedValue([makeDocument()]);
+    render(<PatientDocumentsTab token={DENTIST} patientId="p1" />);
+    expect(await screen.findByText(/No se pudo saber el formato regional o el reloj de la sede/)).toBeInTheDocument();
+    expect(screen.queryByText(/MB$/)).not.toBeInTheDocument();
   });
 
   it('carga con esqueleto anunciado', () => {
@@ -529,6 +565,7 @@ function TabsHarness({ active }: { active: PatientDetailTabKey }) {
 describe('PatientDocumentsTab dentro de la ficha: cambiar de pestaña (DX-151)', () => {
   beforeEach(() => {
     mockedList.mockReset().mockResolvedValue([]);
+    mockedLocations.mockReset().mockResolvedValue([clinicLocation({ locale: 'de-DE', hourCycle: 'h23' })]);
     mockedUpload.mockReset();
     mockedNotify.mockReset();
   });

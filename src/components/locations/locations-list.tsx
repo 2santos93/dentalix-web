@@ -6,7 +6,7 @@ import type { ClinicLocation } from '@/lib/locations/locations-api';
 import { useSessionLocations } from '@/lib/locations/session-locations';
 import { COUNTRY_LABELS } from '@/lib/prescriptions/prescriptions-api';
 import { locationCurrency, locationTimeZone } from '@/lib/locations/location-settings';
-import { canonicalLocale } from '@/lib/locations/regional-settings';
+import { canonicalLocale, HOUR_CYCLE_LABELS, isHourCycle } from '@/lib/locations/regional-settings';
 import { AsyncSection } from '@/components/shared/async-section';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -16,7 +16,7 @@ import { needsRegionalReview } from './regional-review-notice';
 export const locationsListCopy = {
   // La página ya se titula «Sedes»: la sección no lo repite.
   heading: 'Sedes de la clínica',
-  support: 'País, moneda, zona horaria y formato de cada sede. Deciden la caja, la agenda y los documentos.',
+  support: 'País, moneda, zona horaria, formato y reloj de cada sede. Deciden la caja, la agenda y los documentos.',
   create: 'Nueva sede',
   edit: 'Editar',
   editFor: (name: string) => `Editar ${name}`,
@@ -27,6 +27,7 @@ export const locationsListCopy = {
   currency: 'Moneda',
   timeZone: 'Zona horaria',
   locale: 'Formato regional',
+  hourCycle: 'Reloj',
   missing: 'Por configurar',
   unusable: (value: string) => `${value} (no válido)`,
   linkNotFound: 'No encontramos la sede del enlace: elígela en la lista.',
@@ -40,15 +41,16 @@ export const locationsListCopy = {
 const copy = locationsListCopy;
 
 /**
- * Una sede sin moneda, zona o formato utilizables: le falta alguno (fila de
- * una réplica antigua) o el navegador no lo reconoce (zona de otro ICU, spec
- * §5). La misma regla que las pantallas que muestran `SedeConfigError`.
+ * Una sede sin moneda, zona, formato o reloj utilizables: le falta alguno
+ * (fila de una réplica antigua) o el navegador no lo reconoce (zona de otro
+ * ICU, spec §5). La misma regla que las pantallas que muestran `SedeConfigError`.
  */
 export function isUnconfigured(location: ClinicLocation): boolean {
   return (
     locationCurrency(location) === null ||
     locationTimeZone(location) === null ||
-    canonicalLocale(location.locale) === null
+    canonicalLocale(location.locale) === null ||
+    !isHourCycle(location.hourCycle)
   );
 }
 
@@ -184,11 +186,15 @@ export function LocationsList({
                   {isUnconfigured(location) ? <Badge variant="warning">{copy.unconfigured}</Badge> : null}
                   {needsRegionalReview(location) ? <Badge variant="outline">{copy.pendingReview}</Badge> : null}
                 </div>
-                <dl className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm sm:grid-cols-4">
+                <dl className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm sm:grid-cols-3 lg:grid-cols-5">
                   <Detail label={copy.country} value={COUNTRY_LABELS[location.country]} />
                   <Detail label={copy.currency} value={location.currency} usable={locationCurrency(location) !== null} />
                   <Detail label={copy.timeZone} value={location.timeZone} usable={locationTimeZone(location) !== null} />
                   <Detail label={copy.locale} value={location.locale} usable={canonicalLocale(location.locale) !== null} />
+                  <Detail
+                    label={copy.hourCycle}
+                    value={isHourCycle(location.hourCycle) ? HOUR_CYCLE_LABELS[location.hourCycle] : null}
+                  />
                 </dl>
               </div>
               {canEdit ? (

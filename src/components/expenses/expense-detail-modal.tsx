@@ -36,6 +36,8 @@ import { ExpensePaymentModal } from './expense-payment-modal';
 import { ExpenseStatusBadges } from './expense-status-badges';
 import { ExpenseVoidModal } from './expense-void-modal';
 import type { ExpenseCategoriesState } from './use-expense-categories';
+import { locationRegionalFormat } from '@/lib/locations/location-settings';
+import { SedeConfigError } from '@/components/locations/sede-config-error';
 
 export const expenseDetailCopy = {
   title: 'Gasto',
@@ -92,6 +94,13 @@ interface ExpenseDetailModalProps {
   token: string;
   expenseId: string;
   locations: ClinicLocation[];
+  /**
+   * La lista de sedes ya cargó o falló. Mientras carga no se sabe si la sede
+   * del gasto tiene formato: el tamaño sale «—» sin aviso, para que no destelle.
+   */
+  locationsSettled: boolean;
+  /** Vuelve a leer las sedes (el soporte de una sede sin formato lo ofrece en su aviso). */
+  onRetryLocations: () => void;
   categories: ExpenseCategoriesState;
   onManageCategories: () => void;
   /** Tras cualquier cambio, con el aviso: la lista se recarga. */
@@ -121,6 +130,8 @@ export function ExpenseDetailModal({
   token,
   expenseId,
   locations,
+  locationsSettled,
+  onRetryLocations,
   categories,
   onManageCategories,
   onChanged,
@@ -231,6 +242,8 @@ export function ExpenseDetailModal({
   }
 
   const location = detail ? locations.find((l) => l.id === detail.locationId) : undefined;
+  // G1-B (R12): el tamaño del recibo con el formato de la sede del gasto, como en el alta; sin él, «—» y el aviso.
+  const fmt = locationRegionalFormat(location);
   const live = detail !== null && detail.status !== 'VOIDED';
   const money = (amount: number) => (detail ? formatCurrency(amount, detail.currency) : '');
 
@@ -302,11 +315,14 @@ export function ExpenseDetailModal({
           <h3 id="expense-receipt-title" className="t-title text-ink">
             {expenseDetailCopy.receipt}
           </h3>
+          {!fmt && locationsSettled && (attachment || live) ? (
+            <SedeConfigError kind="locale" variant="note" onRetry={onRetryLocations} locationId={detail.locationId} />
+          ) : null}
           {attachment ? (
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <span className="min-w-0 text-sm text-ink [overflow-wrap:anywhere]">
                 {attachment.name}{' '}
-                <span className="text-xs tabular-nums text-muted">{formatFileSize(attachment.sizeBytes)}</span>
+                <span className="text-xs tabular-nums text-muted">{formatFileSize(attachment.sizeBytes, fmt)}</span>
               </span>
               <div className="flex gap-2">
                 <Button type="button" variant="secondary" size="sm" onClick={() => openSub({ kind: 'viewer' })} className="max-sm:min-h-11 max-sm:flex-1">
@@ -328,6 +344,7 @@ export function ExpenseDetailModal({
                 accept={EXPENSE_RECEIPT_ACCEPT}
                 upload={upload}
                 disabled={attaching}
+                fmt={fmt}
               />
               {upload.uploadId ? (
                 <Button type="button" size="sm" loading={attaching} onClick={() => void attach()} className="self-start max-sm:min-h-11">

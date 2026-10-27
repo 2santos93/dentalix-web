@@ -13,6 +13,7 @@ import { useAuthStore } from '@/lib/auth/auth-store';
 import { clinicLocation } from '@/lib/test/locations';
 import { tokenFor } from '@/lib/test/prescriptions';
 import { setupUser } from '@/lib/test/user';
+import { browserHourCycle } from '@/lib/locations/regional-settings';
 
 jest.mock('../../lib/locations/locations-api', () => ({
   ...jest.requireActual('../../lib/locations/locations-api'),
@@ -21,6 +22,11 @@ jest.mock('../../lib/locations/locations-api', () => ({
   updateLocationSettings: jest.fn(),
 }));
 jest.mock('../../lib/reference/currencies-api', () => ({ listCurrencies: jest.fn() }));
+// El reloj sugerido se fija aquí: los tests no dependen del `Intl` del entorno.
+jest.mock('../../lib/locations/regional-settings', () => ({
+  ...jest.requireActual('../../lib/locations/regional-settings'),
+  browserHourCycle: jest.fn(),
+}));
 
 const mockedList = jest.mocked(listLocations);
 const ADMIN = tokenFor('ADMIN', 'u-admin');
@@ -33,12 +39,14 @@ const legacy = clinicLocation({
   currency: null,
   timeZone: null,
   locale: null,
+  hourCycle: null,
   regionalSettingsReviewedAt: null,
 });
 
 beforeEach(() => {
   jest.clearAllMocks();
   window.localStorage.clear();
+  jest.mocked(browserHourCycle).mockReturnValue('h23');
   jest
     .mocked(listCurrencies)
     .mockResolvedValue([
@@ -59,6 +67,26 @@ describe('LocationsList (G1, spec §6.3)', () => {
     expect(row).toHaveTextContent('Activa');
   });
 
+  it('lists the clock of each location; a location without one is «Por configurar»', async () => {
+    const tokyo = clinicLocation({ id: 'tokyo', name: 'Sede Tokio', currency: 'JPY', timeZone: 'Asia/Tokyo', locale: 'ja-JP', hourCycle: 'h23' });
+    const paris = clinicLocation({ id: 'paris', name: 'Sede París', currency: 'EUR', timeZone: 'Europe/Paris', locale: 'fr-FR', hourCycle: 'h12' });
+    const noClock = clinicLocation({ id: 'ny', name: 'Sede Nueva York', currency: 'USD', timeZone: 'America/New_York', locale: 'en-US', hourCycle: null });
+    mockedList.mockResolvedValue([tokyo, paris, noClock]);
+    render(<LocationsList token={ADMIN} canEdit />);
+    const clockOf = (name: string) => {
+      const row = screen.getByText(name).closest('li')!;
+      return within(row).getByText('Reloj').nextElementSibling;
+    };
+    await screen.findByText('Sede Tokio');
+    expect(clockOf('Sede Tokio')).toHaveTextContent('24 h');
+    expect(clockOf('Sede París')).toHaveTextContent('12 h');
+    expect(clockOf('Sede Nueva York')).toHaveTextContent('Por configurar');
+    // Sin reloj la sede está sin configurar, como en las pantallas que pintan horas.
+    const ny = screen.getByText('Sede Nueva York').closest('li')!;
+    expect(within(ny).getAllByText('Por configurar')).toHaveLength(2);
+    expect(within(screen.getByText('Sede Tokio').closest('li')!).queryByText('Por configurar')).not.toBeInTheDocument();
+  });
+
   it('only ADMIN sees Nueva sede/Editar', async () => {
     mockedList.mockResolvedValue([norte]);
     const { unmount } = render(<LocationsList token={RECEPTIONIST} canEdit={false} />);
@@ -75,7 +103,7 @@ describe('LocationsList (G1, spec §6.3)', () => {
 
   it('a location with null regional fields is listed «Por configurar» and the modal completes it', async () => {
     mockedList.mockResolvedValue([legacy]);
-    const completed = { ...legacy, currency: 'JPY', timeZone: 'Asia/Tokyo', locale: 'ja-JP', regionalSettingsReviewedAt: '2026-10-27T10:00:00.000Z' };
+    const completed = { ...legacy, currency: 'JPY', timeZone: 'Asia/Tokyo', locale: 'ja-JP', hourCycle: 'h23' as const, regionalSettingsReviewedAt: '2026-10-27T10:00:00.000Z' };
     jest.mocked(updateLocationSettings).mockResolvedValue(completed);
     const user = setupUser();
     render(<LocationsList token={ADMIN} canEdit />);
@@ -88,7 +116,9 @@ describe('LocationsList (G1, spec §6.3)', () => {
     await within(dialog).findByRole('option', { name: 'Yen japonés (¥)' });
     await user.selectOptions(within(dialog).getByLabelText('Moneda'), 'JPY');
     await user.type(within(dialog).getByLabelText('Zona horaria'), 'Asia/Tokyo');
+    await user.clear(within(dialog).getByLabelText('Formato regional'));
     await user.type(within(dialog).getByLabelText('Formato regional'), 'ja-JP');
+    await user.click(within(dialog).getByRole('radio', { name: '24 h' }));
     await user.click(within(dialog).getByRole('button', { name: 'Guardar sede' }));
 
     await waitFor(() => expect(updateLocationSettings).toHaveBeenCalledTimes(1));
@@ -96,6 +126,7 @@ describe('LocationsList (G1, spec §6.3)', () => {
       currency: 'JPY',
       timeZone: 'Asia/Tokyo',
       locale: 'ja-JP',
+      hourCycle: 'h23',
       confirmRegionalSettings: true,
     });
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());

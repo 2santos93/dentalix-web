@@ -13,6 +13,7 @@ import {
 } from '@/lib/locations/locations-api';
 import { useSessionLocations } from '@/lib/locations/session-locations';
 import {
+  browserHourCycle,
   browserLocale,
   browserTimeZone,
   canonicalLocale,
@@ -27,15 +28,15 @@ import { FormModal } from '@/components/shared/form-modal';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { Input } from '@/components/ui/input';
-import { RegionalSettingsFields, regionalFieldId } from './regional-settings-fields';
+import { RegionalSettingsFields, regionalFieldId, type RegionalSuggestions } from './regional-settings-fields';
 
 export const locationFormCopy = {
   createTitle: 'Nueva sede',
   editTitle: 'Editar sede',
   createDescription:
-    'País, moneda, zona horaria y formato son obligatorios. La zona y el formato se sugieren desde tu navegador: revísalos.',
+    'País, moneda, zona horaria, formato y reloj son obligatorios. La zona, el formato y el reloj se sugieren desde tu navegador: revísalos.',
   editDescription:
-    'Guardar confirma la moneda, la zona horaria y el formato de la sede, aunque no cambies nada.',
+    'Guardar confirma la moneda, la zona horaria, el formato y el reloj de la sede, aunque no cambies nada.',
   name: 'Nombre',
   namePlaceholder: 'Por ejemplo, Sede Norte',
   nameMissing: 'Escribe el nombre de la sede.',
@@ -73,17 +74,33 @@ interface LocationFormModalProps {
   onSaved: (saved: ClinicLocation) => void;
 }
 
-function initialRegional(location: ClinicLocation | null): RegionalSettingsValues {
-  if (location) {
-    return {
-      country: location.country,
-      currency: location.currency ?? '',
-      timeZone: location.timeZone ?? '',
-      locale: location.locale ?? '',
-    };
+/**
+ * Lo que el navegador propone al abrir el modal (spec G1 R10, G1-B §9):
+ * - alta: zona, formato y reloj;
+ * - sede por configurar: formato y reloj, solo los que están vacíos (el valor
+ *   guardado se muestra siempre, nunca la sugerencia);
+ * - sede configurada: nada.
+ */
+function initialSuggestions(location: ClinicLocation | null): RegionalSuggestions {
+  if (!location) {
+    return { timeZone: browserTimeZone(), locale: browserLocale(), hourCycle: browserHourCycle() };
   }
-  // R10: en el alta solo se sugieren zona y formato, a la vista y editables.
-  return { country: '', currency: '', timeZone: browserTimeZone() ?? '', locale: browserLocale() ?? '' };
+  return {
+    timeZone: null,
+    locale: location.locale ? null : browserLocale(),
+    hourCycle: location.hourCycle ? null : browserHourCycle(),
+  };
+}
+
+function initialRegional(location: ClinicLocation | null, suggested: RegionalSuggestions): RegionalSettingsValues {
+  return {
+    country: location?.country ?? '',
+    currency: location?.currency ?? '',
+    timeZone: location?.timeZone ?? suggested.timeZone ?? '',
+    locale: location?.locale ?? suggested.locale ?? '',
+    // Sin reloj del navegador, vacío y obligatorio: nunca se adivina.
+    hourCycle: location?.hourCycle ?? suggested.hourCycle ?? '',
+  };
 }
 
 /**
@@ -101,10 +118,8 @@ export function LocationFormModal({ open, onOpenChange, token, location, onSaved
   const [name, setName] = useState(location?.name ?? '');
   const [address, setAddress] = useState(location?.address ?? '');
   const [phone, setPhone] = useState(location?.phone ?? '');
-  const [regional, setRegional] = useState<RegionalSettingsValues>(() => initialRegional(location));
-  const [suggestions] = useState(() =>
-    editing ? undefined : { timeZone: regional.timeZone || null, locale: regional.locale || null },
-  );
+  const [suggestions] = useState(() => initialSuggestions(location));
+  const [regional, setRegional] = useState<RegionalSettingsValues>(() => initialRegional(location, suggestions));
   const [errors, setErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
@@ -151,6 +166,8 @@ export function LocationFormModal({ open, onOpenChange, token, location, onSaved
       currency: regional.currency,
       timeZone: canonicalTimeZone(regional.timeZone) ?? regional.timeZone.trim(),
       locale: canonicalLocale(regional.locale) ?? regional.locale.trim(),
+      // Siempre, en el alta y en la edición: la validación ya exige uno de los dos.
+      hourCycle: regional.hourCycle as CreateLocationInput['hourCycle'],
     };
   }
 

@@ -2,6 +2,7 @@ import { expect, type Page } from '@playwright/test';
 import { tenantOrigin } from './urls';
 import { registrationTokenFor } from './mail';
 import { E2E_REGION, type RegionalSettings } from './regional';
+import { HOUR_CYCLE_LABELS } from '../../src/lib/locations/regional-settings';
 
 /** Cookie HttpOnly del refresh token (DX-062), del host de la clínica. */
 export const SESSION_COOKIE = 'dentalix_rt';
@@ -142,15 +143,23 @@ export async function registerAndLogin(
 
 /**
  * «Tu sede» del formulario de registro (G1, spec §6.7): país y moneda empiezan
- * vacíos; zona y formato traen la sugerencia del navegador y se sobrescriben
- * para que la sede no dependa de la máquina. La moneda espera a que cargue la
- * lista pública (`GET /public/currencies`, sin sesión).
+ * vacíos; zona, formato y reloj traen la sugerencia del navegador y se
+ * sobrescriben para que la sede no dependa de la máquina. La moneda espera a
+ * que cargue la lista pública (`GET /public/currencies`, sin sesión). El reloj
+ * se elige explícitamente (G1-B, I8): con `h23`, «24 h», lo que la suite
+ * mostraba; sin `hourCycle`, se deja la sugerencia del navegador.
  */
-export async function fillRegistrationLocation(page: Page, region: RegionalSettings): Promise<void> {
+export async function fillRegistrationLocation(
+  page: Page,
+  region: Omit<RegionalSettings, 'hourCycle'> & { hourCycle?: RegionalSettings['hourCycle'] },
+): Promise<void> {
   await page.getByLabel('País', { exact: true }).selectOption(region.country);
   await page.getByLabel('Moneda', { exact: true }).selectOption(region.currency);
   await page.getByLabel('Zona horaria', { exact: true }).fill(region.timeZone);
   await page.getByLabel('Formato regional', { exact: true }).fill(region.locale);
+  if (region.hourCycle) {
+    await page.getByRole('radio', { name: HOUR_CYCLE_LABELS[region.hourCycle], exact: true }).check();
+  }
 }
 
 /**

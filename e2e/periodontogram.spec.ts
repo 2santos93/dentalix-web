@@ -2,6 +2,8 @@ import { test, expect, type APIRequestContext } from './support/test';
 import { randomUUID } from 'node:crypto';
 import { accessTokenOf, registerAndLogin } from './support/auth';
 import { API_URL } from './support/urls';
+import { E2E_REGION } from './support/regional';
+import { regionalFormat } from '../src/lib/format/regional-format';
 
 /**
  * e2e (DX-007): periodontograma.
@@ -103,8 +105,9 @@ test('crear examen, cargar con teclado, guardar, recargar y finalizar', async ({
   await page.reload();
   const table = panel.getByRole('table', { name: 'Histórico de exámenes periodontales' });
   await expect(table).toBeVisible({ timeout: 15_000 });
-  // 3 sitios examinados, 1 con sangrado → 33,3 %; dos ≥4 mm y uno ≥6 mm.
-  await expect(table).toContainText('33,3 %');
+  // 3 sitios examinados, 1 con sangrado → 33,3 % (G1-B: con el formato de la
+  // sede, el mismo helper que la web); dos ≥4 mm y uno ≥6 mm.
+  await expect(table).toContainText(regionalFormat(E2E_REGION).percent(33.3));
   await expect(table).toContainText('2 / 1');
   await table.getByRole('button', { name: /Abrir examen del/ }).click();
   const reopened = panel.getByRole('table', { name: 'Arcada superior' });

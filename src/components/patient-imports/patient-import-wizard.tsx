@@ -3,6 +3,7 @@ import * as React from 'react';
 import { Download, FileSpreadsheet, Upload } from 'lucide-react';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Wizard } from '@/components/ui/wizard';
 import { InlineError } from '@/components/errors/inline-error';
 import { notifyError } from '@/components/errors/notify';
@@ -32,13 +33,16 @@ import { ColumnMappingFields } from './column-mapping-fields';
 import { formatCurrency } from '@/lib/format/currency';
 import { ImportIssuesTable } from './import-issues-table';
 import { ImportProgress } from './import-progress';
+import type { RegionalFormat } from '@/lib/format/regional-format';
+import { sedeNumber } from '@/lib/format/sede-number';
 
 export const wizardCopy = {
   steps: ['Subir archivo', 'Columnas y validación', 'Saldos', 'Confirmar'],
   uploadTitle: 'Sube el archivo de pacientes',
   mappingTitle: 'Revisa las columnas y valida',
-  uploadHint:
-    'CSV o Excel (.xlsx) de hasta 5 MB y 10.000 pacientes. Si vienes de otro programa, exporta su lista de pacientes; si empiezas de cero, usa la plantilla (borra sus dos filas de ejemplo).',
+  uploadHint: (maxRows: string) =>
+    `CSV o Excel (.xlsx) de hasta 5 MB y ${maxRows} pacientes. Si vienes de otro programa, exporta su lista de pacientes; si empiezas de cero, usa la plantilla (borra sus dos filas de ejemplo).`,
+  hintLoading: 'Cargando el aviso de subida…',
   chooseFile: 'Elegir archivo',
   fileLabel: 'Archivo de pacientes (CSV o .xlsx)',
   template: 'Descargar plantilla',
@@ -48,8 +52,8 @@ export const wizardCopy = {
   uploadProgress: 'Subida del archivo',
   tooBig: 'El archivo pesa más de 5 MB. Divídelo en varios archivos más pequeños.',
   readError: 'No se pudo leer el archivo. Intenta de nuevo.',
-  fileSummary: (name: string, rows: number) =>
-    `${name} · ${rows.toLocaleString('es-CO')} ${rows === 1 ? 'fila' : 'filas'}`,
+  // Los números llegan ya formateados con el formato de la sede (G1-B); el plural sale del número.
+  fileSummary: (name: string, rows: number, shown: string) => `${name} · ${shown} ${rows === 1 ? 'fila' : 'filas'}`,
   otherFile: 'Elegir otro archivo',
   validate: 'Validar archivo',
   revalidate: 'Volver a validar',
@@ -70,8 +74,8 @@ export const wizardCopy = {
   nothingToImport: 'No hay filas que importar: corrige el archivo y vuelve a subirlo.',
   // DX-262 (I2): sin pacientes nuevos, aún se pueden importar sus saldos.
   onlyBalances: 'No hay pacientes nuevos: puedes importar solo sus saldos en el paso siguiente.',
-  confirmBalances: (n: number) =>
-    `Importar ${n.toLocaleString('es-CO')} ${n === 1 ? 'saldo migrado' : 'saldos migrados'}`,
+  confirmBalances: (n: number, shown: string) =>
+    `Importar ${shown} ${n === 1 ? 'saldo migrado' : 'saldos migrados'}`,
   continue: 'Continuar',
   back: 'Atrás',
   confirmTitle: 'Confirmar la importación',
@@ -82,17 +86,21 @@ export const wizardCopy = {
     'Los pacientes importados quedan con la autorización de datos (Ley 1581) pendiente: pídela en su próxima visita desde su ficha.',
   backgroundNote:
     'La importación corre en segundo plano: puedes seguir trabajando y volver a esta pantalla para ver el avance.',
-  confirm: (n: number) => `Importar ${n.toLocaleString('es-CO')} ${n === 1 ? 'paciente' : 'pacientes'}`,
+  confirm: (n: number, shown: string) => `Importar ${shown} ${n === 1 ? 'paciente' : 'pacientes'}`,
+  /** Mientras carga el formato de la sede: sin el número, que aún no se puede pintar. */
+  confirmLoading: 'Importar',
   confirmExistingOnly: 'Procesar los pacientes que ya existen',
   confirmError: 'No se pudo iniciar la importación. Intenta de nuevo.',
-  balancesNote: (count: number, totals: string) =>
-    `También se crearán ${count.toLocaleString('es-CO')} ${count === 1 ? 'saldo migrado' : 'saldos migrados'} (${totals}), después de los pacientes.`,
+  balancesNote: (count: number, shown: string, totals: string) =>
+    `También se crearán ${shown} ${count === 1 ? 'saldo migrado' : 'saldos migrados'} (${totals}), después de los pacientes.`,
   started: 'Importación en marcha.',
   progressError: 'No se pudo actualizar el avance de la importación.',
   another: 'Importar otro archivo',
 };
 
 const POLL_MS = 1500;
+/** Pacientes por archivo, el tope de la API. */
+const MAX_IMPORT_ROWS = 10_000;
 /** Lo que vale un dry-run sin confirmar (VALIDATION_TTL_HOURS de la API). */
 const VALIDATION_TTL_MS = 24 * 3_600_000;
 
@@ -108,6 +116,13 @@ interface PatientImportWizardProps {
   token: string;
   /** El historial se recarga cuando un lote cambia de estado. */
   onBatchChange: () => void;
+  /** Formato de la sede de la pantalla para los recuentos; sin él, «—» (el aviso lo pone la pantalla). */
+  fmt: RegionalFormat | null;
+  /**
+   * El formato de la sede aún carga: el aviso de subida va como esqueleto y
+   * «Importar…» espera, en vez de pintar «— pacientes» un instante.
+   */
+  formatLoading?: boolean;
 }
 
 /**
@@ -147,7 +162,8 @@ function UploadStatus({ uploaded, done }: { uploaded: number | null; done: strin
   );
 }
 
-export function PatientImportWizard({ token, onBatchChange }: PatientImportWizardProps) {
+export function PatientImportWizard({ token, onBatchChange, fmt, formatLoading = false }: PatientImportWizardProps) {
+  const n = (value: number) => sedeNumber(value, fmt);
   const id = React.useId();
   const inputRef = React.useRef<HTMLInputElement>(null);
   const [step, setStep] = React.useState(0);
@@ -351,6 +367,7 @@ export function PatientImportWizard({ token, onBatchChange }: PatientImportWizar
         <ImportProgress
           headingId={`${id}-progress`}
           batch={running}
+          fmt={fmt}
           onReport={() => void onReport(running.id, running.fileName)}
         />
         {!isInProgress(running.status) ? (
@@ -383,7 +400,14 @@ export function PatientImportWizard({ token, onBatchChange }: PatientImportWizar
           <h2 id={`${id}-upload`} tabIndex={-1} className="text-lg font-semibold text-ink focus:outline-none">
             {wizardCopy.uploadTitle}
           </h2>
-          <p className="max-w-prose text-sm text-muted">{wizardCopy.uploadHint}</p>
+          {formatLoading ? (
+            <div role="status" aria-label={wizardCopy.hintLoading} className="flex max-w-prose flex-col gap-1.5">
+              <Skeleton className="h-4 w-full" />
+              <Skeleton className="h-4 w-2/3" />
+            </div>
+          ) : (
+            <p className="max-w-prose text-sm text-muted">{wizardCopy.uploadHint(n(MAX_IMPORT_ROWS))}</p>
+          )}
           <div className="flex flex-col gap-2 sm:flex-row">
             <input
               ref={inputRef}
@@ -423,7 +447,7 @@ export function PatientImportWizard({ token, onBatchChange }: PatientImportWizar
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <p className="flex min-w-0 items-center gap-2 text-sm text-ink">
               <FileSpreadsheet aria-hidden className="size-4 shrink-0 text-muted" />
-              <span className="truncate">{wizardCopy.fileSummary(inspect.fileName, inspect.totalRows)}</span>
+              <span className="truncate">{wizardCopy.fileSummary(inspect.fileName, inspect.totalRows, n(inspect.totalRows))}</span>
             </p>
             <Button type="button" variant="ghost" size="sm" onClick={reset}>
               {wizardCopy.otherFile}
@@ -456,6 +480,7 @@ export function PatientImportWizard({ token, onBatchChange }: PatientImportWizar
             <DryRunResult
               headingId={`${id}-dry-run`}
               batch={dryRun}
+              fmt={fmt}
               onReport={() => void onReport(dryRun.id, dryRun.fileName)}
               onContinue={() => {
                 setStep(2);
@@ -471,6 +496,7 @@ export function PatientImportWizard({ token, onBatchChange }: PatientImportWizar
           token={token}
           headingId={`${id}-balances`}
           batch={dryRun}
+          fmt={fmt}
           onBatch={setDryRun}
           onBack={() => setStep(1)}
           onContinue={() => {
@@ -485,7 +511,7 @@ export function PatientImportWizard({ token, onBatchChange }: PatientImportWizar
           <h2 id={`${id}-confirm`} tabIndex={-1} className="text-lg font-semibold text-ink focus:outline-none">
             {wizardCopy.confirmTitle}
           </h2>
-          <Totals batch={dryRun} />
+          <Totals batch={dryRun} fmt={fmt} />
           {existing ? (
             <fieldset className="flex flex-col gap-2">
               <legend className="mb-1 text-sm font-medium text-ink">{wizardCopy.duplicatesLegend}</legend>
@@ -511,6 +537,7 @@ export function PatientImportWizard({ token, onBatchChange }: PatientImportWizar
               <li>
                 {wizardCopy.balancesNote(
                   dryRun.balances.preparedCount,
+                  n(dryRun.balances.preparedCount),
                   dryRun.balances.validTotals.map((t) => formatCurrency(t.amount, t.currency)).join(' · '),
                 )}
               </li>
@@ -521,14 +548,24 @@ export function PatientImportWizard({ token, onBatchChange }: PatientImportWizar
             <Button type="button" variant="outline" onClick={() => setStep(2)} className="w-full sm:w-auto">
               {wizardCopy.back}
             </Button>
-            <Button type="button" loading={confirming} onClick={() => void onConfirm()} className="w-full sm:w-auto">
-              {dryRun.totals.validRows > 0
-                ? wizardCopy.confirm(dryRun.totals.validRows)
-                : // Sin pacientes nuevos y saltando los existentes, solo se importan saldos.
-                  (dryRun.progress.preparedRows === 0 || mode === 'SKIP') &&
-                    (dryRun.balances?.preparedCount ?? 0) > 0
-                  ? wizardCopy.confirmBalances(dryRun.balances?.preparedCount ?? 0)
-                  : wizardCopy.confirmExistingOnly}
+            <Button
+              type="button"
+              loading={confirming || formatLoading}
+              onClick={() => void onConfirm()}
+              className="w-full sm:w-auto"
+            >
+              {formatLoading
+                ? wizardCopy.confirmLoading
+                : dryRun.totals.validRows > 0
+                  ? wizardCopy.confirm(dryRun.totals.validRows, n(dryRun.totals.validRows))
+                  : // Sin pacientes nuevos y saltando los existentes, solo se importan saldos.
+                    (dryRun.progress.preparedRows === 0 || mode === 'SKIP') &&
+                      (dryRun.balances?.preparedCount ?? 0) > 0
+                    ? wizardCopy.confirmBalances(
+                        dryRun.balances?.preparedCount ?? 0,
+                        n(dryRun.balances?.preparedCount ?? 0),
+                      )
+                    : wizardCopy.confirmExistingOnly}
             </Button>
           </div>
         </section>
@@ -537,7 +574,7 @@ export function PatientImportWizard({ token, onBatchChange }: PatientImportWizar
   );
 }
 
-function Totals({ batch }: { batch: ImportBatchDetail }) {
+function Totals({ batch, fmt }: { batch: ImportBatchDetail; fmt: RegionalFormat | null }) {
   const items: [string, number][] = [
     [wizardCopy.total, batch.totals.totalRows],
     [wizardCopy.valid, batch.totals.validRows],
@@ -549,7 +586,7 @@ function Totals({ batch }: { batch: ImportBatchDetail }) {
       {items.map(([label, value]) => (
         <div key={label} className="flex flex-col gap-0.5 border-l border-border pl-3">
           <dt className="text-xs font-medium text-muted">{label}</dt>
-          <dd className="text-base font-semibold tabular-nums text-ink">{value.toLocaleString('es-CO')}</dd>
+          <dd className="text-base font-semibold tabular-nums text-ink">{sedeNumber(value, fmt)}</dd>
         </div>
       ))}
     </dl>
@@ -559,11 +596,13 @@ function Totals({ batch }: { batch: ImportBatchDetail }) {
 function DryRunResult({
   headingId,
   batch,
+  fmt,
   onReport,
   onContinue,
 }: {
   headingId: string;
   batch: ImportBatchDetail;
+  fmt: RegionalFormat | null;
   onReport: () => void;
   onContinue: () => void;
 }) {
@@ -575,7 +614,7 @@ function DryRunResult({
         </h2>
         <p className="text-sm text-muted">{wizardCopy.dryRunHint}</p>
       </div>
-      <Totals batch={batch} />
+      <Totals batch={batch} fmt={fmt} />
       {batch.issuesTotal > 0 ? (
         <div className="flex flex-col gap-3">
           {batch.reportAvailable ? (

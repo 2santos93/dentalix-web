@@ -22,6 +22,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { RegisterImplantModal } from './register-implant-modal';
 import { VoidImplantModal } from './void-implant-modal';
+import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
+import { SedeConfigError } from '@/components/locations/sede-config-error';
 
 const copy = {
   heading: 'Implantes',
@@ -98,6 +100,9 @@ export function PatientImplantsTab({
     planItemId: shortcut ? registerPlanItemId : null,
   });
   const [voiding, setVoiding] = useState<PatientImplant | null>(null);
+  // G1-B: las medidas van con el formato de la sede de la pantalla; sin él, «—» y el aviso.
+  const sedeFormat = useSedeFormat(token);
+  const fmt = readyFormat(sedeFormat);
 
   useEffect(() => {
     let cancelled = false;
@@ -144,7 +149,7 @@ export function PatientImplantsTab({
     const voided = implant.voidedAt !== null;
     const kind = IMPLANT_KIND_LABELS[implant.kind];
     const placed = formatCivilDate(implant.placedOn);
-    const size = formatImplantSize(implant.diameterMm, implant.lengthMm);
+    const size = formatImplantSize(implant.diameterMm, implant.lengthMm, fmt);
     return (
       <li
         key={implant.id}
@@ -232,6 +237,10 @@ export function PatientImplantsTab({
           </Button>
         ) : null}
       </div>
+
+      {sedeFormat.status === 'error' ? (
+        <SedeConfigError kind="locale" variant="note" onRetry={sedeFormat.retry} description={sedeFormat.message} locationId={sedeFormat.locationId} />
+      ) : null}
 
       <AsyncSection
         loading={loading}

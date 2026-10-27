@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { formatCivilDate, formatDateTime } from '@/lib/format/date';
 import { formatImplantSize, type ImplantCard } from '@/lib/implants/implants-api';
+import type { RegionalFormat } from '@/lib/format/regional-format';
 
 const copy = {
   title: 'Tarjeta de implante',
@@ -39,7 +40,11 @@ const copy = {
  * hoja A4 o carta: identidad del portador, centro, fecha, profesional y cada
  * componente con fabricante, REF y lote. Sin diagnóstico ni notas clínicas.
  */
-export function ImplantCardDocument({ card }: { card: ImplantCard }) {
+/**
+ * `fmt`: el formato de la sede de la pantalla (hasta G1-C, la tarjeta no trae
+ * la suya); sin él, las medidas salen «—».
+ */
+export function ImplantCardDocument({ card, fmt }: { card: ImplantCard; fmt: RegionalFormat | null }) {
   const location = card.locations[0];
   return (
     <article className="implant-card-print-root flex min-w-0 flex-col gap-5 bg-white p-6 text-ink sm:p-8 print:p-0">
@@ -100,7 +105,7 @@ export function ImplantCardDocument({ card }: { card: ImplantCard }) {
         </h2>
         <ul className="flex flex-col divide-y divide-hairline rounded-lg border border-border">
           {card.items.map((item) => {
-            const size = formatImplantSize(item.diameterMm, item.lengthMm);
+            const size = formatImplantSize(item.diameterMm, item.lengthMm, fmt);
             return (
               <li
                 key={item.id}

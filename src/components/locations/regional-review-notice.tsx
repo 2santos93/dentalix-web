@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { Info } from 'lucide-react';
 import { getTokenRole } from '@/lib/auth/token-role';
 import type { ClinicLocation } from '@/lib/locations/locations-api';
+import { HOUR_CYCLE_LABELS, isHourCycle } from '@/lib/locations/regional-settings';
 import { useSessionLocations } from '@/lib/locations/session-locations';
 import { buttonVariants } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -11,9 +12,11 @@ import { cn } from '@/lib/utils';
 export const regionalReviewNoticeCopy = {
   label: 'Sedes por revisar',
   title: (count: number) =>
-    `Revisa la moneda, la zona horaria y el formato de ${count} ${count === 1 ? 'sede' : 'sedes'}.`,
+    `Revisa la moneda, la zona horaria, el formato y el reloj de ${count} ${count === 1 ? 'sede' : 'sedes'}.`,
+  // Sin «a partir del país»: el reloj lo asigna el barrido de G1-B (24 h, el de
+  // siempre), no el país, y nada se explica por país (G1-B R16).
   body: (summary: string) =>
-    `Al actualizar Dentalix se asignaron a partir del país de cada sede (${summary}). Confírmalos o cámbialos.`,
+    `Al actualizar Dentalix se asignaron automáticamente (${summary}). Confírmalos o cámbialos.`,
   missing: 'Por configurar',
   review: 'Revisar sedes',
 };
@@ -29,9 +32,10 @@ export function needsRegionalReview(location: ClinicLocation): boolean {
   return location.isActive && location.regionalSettingsReviewedAt === null;
 }
 
-/** «Sede Norte: COP · America/Bogota · es-CO»; un valor que falta, «Por configurar». */
+/** «Sede Norte: JPY · Asia/Tokyo · ja-JP · 24 h»; un valor que falta, «Por configurar». */
 function summarize(location: ClinicLocation): string {
-  const values = [location.currency, location.timeZone, location.locale].map((v) => v ?? copy.missing);
+  const clock = isHourCycle(location.hourCycle) ? HOUR_CYCLE_LABELS[location.hourCycle] : null;
+  const values = [location.currency, location.timeZone, location.locale, clock].map((v) => v ?? copy.missing);
   return `${location.name}: ${values.join(' · ')}`;
 }
 

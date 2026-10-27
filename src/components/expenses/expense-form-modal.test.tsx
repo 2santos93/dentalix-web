@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { ExpenseFormModal } from './expense-form-modal';
 import { ApiError } from '@/lib/api/client';
@@ -6,6 +6,8 @@ import { createExpense, suggestExpenseSuppliers, updateExpense } from '@/lib/exp
 import { uploadSingleFile } from '@/lib/files/upload-single-file';
 import { expenseDetailFixture, expenseLocations, expensePaymentFixture } from '@/lib/test/expenses';
 import { setupUser } from '@/lib/test/user';
+import { useAuthStore } from '@/lib/auth/auth-store';
+import { tokenFor } from '@/lib/test/prescriptions';
 import type { ExpenseCategoriesState } from './use-expense-categories';
 
 const mockExpenseToday: { today: string | null; error: string | null; retry: jest.Mock } = { today: '2026-10-24', error: null, retry: jest.fn() };
@@ -183,6 +185,41 @@ describe('ExpenseFormModal (DX-274)', () => {
     await user.click(screen.getByRole('button', { name: 'Registrar gasto' }));
     await waitFor(() => expect(mockedCreate).toHaveBeenCalled());
     expect(mockedCreate.mock.calls[0][1].attachmentUploadId).toBe('up-1');
+  });
+
+  it('sede del gasto sin formato: tamaño «—» con el aviso de esa sede y su Reintentar', async () => {
+    const user = setupUser();
+    const retry = jest.fn();
+    useAuthStore.setState({ accessToken: tokenFor('ADMIN') });
+    try {
+      renderModal({
+        locations: [{ ...expenseLocations[0], locale: 'en-US', hourCycle: null }, expenseLocations[1]],
+        onRetryLocations: retry,
+      });
+      expect(screen.queryByText(/No se pudo saber el formato regional/)).not.toBeInTheDocument();
+      await user.upload(screen.getByLabelText('Soporte'), new File(['%PDF-'], 'luz.pdf', { type: 'application/pdf' }));
+      const note = await screen.findByText(/No se pudo saber el formato regional o el reloj de la sede/);
+      const status = note.closest('[role="status"]') as HTMLElement;
+      expect(within(status).getByRole('link', { name: 'Configurar sede' })).toHaveAttribute(
+        'href',
+        '/settings/sedes?sede=loc-1',
+      );
+      await user.click(within(status).getByRole('button', { name: 'Reintentar' }));
+      expect(retry).toHaveBeenCalled();
+    } finally {
+      useAuthStore.setState({ accessToken: null });
+    }
+  });
+
+  it('sede del gasto con formato: el tamaño con su formato y sin aviso', async () => {
+    const user = setupUser();
+    renderModal({ locations: [{ ...expenseLocations[0], locale: 'en-US', hourCycle: 'h12' }, expenseLocations[1]] });
+    await user.upload(
+      screen.getByLabelText('Soporte'),
+      new File([new Uint8Array(1536)], 'luz.pdf', { type: 'application/pdf' }),
+    );
+    expect(await screen.findByText(/1\.5 KB/)).toBeInTheDocument();
+    expect(screen.queryByText(/No se pudo saber el formato regional/)).not.toBeInTheDocument();
   });
 
   it('si la subida falla no se guarda sin avisar: reintentar o quitar', async () => {

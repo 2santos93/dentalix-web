@@ -34,6 +34,10 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PerioChart } from './perio-chart';
+import type { RegionalFormat } from '@/lib/format/regional-format';
+import { readyFormat, type SedeFormatState } from '@/lib/locations/use-sede-format';
+import { perioPercent } from '@/lib/perio/perio-percent';
+import { SedeConfigError } from '@/components/locations/sede-config-error';
 
 const copy = {
   back: 'Volver al histórico',
@@ -89,6 +93,8 @@ interface PerioExamEditorProps {
   onChanged: () => void;
   /** El borrador se eliminó: volver al histórico. */
   onDeleted: () => void;
+  /** Formato de la sede de la pantalla (lo lee la pestaña): los porcentajes salen con él, o «—». */
+  sedeFormat: SedeFormatState;
 }
 
 function EditorSkeleton() {
@@ -123,6 +129,7 @@ export function PerioExamEditor({
   onBack,
   onChanged,
   onDeleted,
+  sedeFormat,
 }: PerioExamEditorProps) {
   const [exam, setExam] = useState<PerioExamDetail | null>(null);
   const [loading, setLoading] = useState(true);
@@ -443,9 +450,19 @@ export function PerioExamEditor({
               <InlineError variant="summary">{previousError}</InlineError>
             ) : null}
 
+            {sedeFormat.status === 'error' ? (
+              <SedeConfigError
+                kind="locale"
+                variant="note"
+                onRetry={sedeFormat.retry}
+                description={sedeFormat.message}
+                locationId={sedeFormat.locationId}
+              />
+            ) : null}
             <IndicesPanel
               current={indices}
               previous={comparing && previousExam ? previousExam.indices : null}
+              fmt={readyFormat(sedeFormat)}
             />
 
             <PerioChart
@@ -522,17 +539,19 @@ const INDEX_ROWS: {
   { key: 'sitesExamined', label: copy.examined, lowerIsBetter: false },
 ];
 
-function formatIndex(value: number, percent?: boolean): string {
-  return percent ? `${value.toLocaleString('es-CO')} %` : String(value);
+function formatIndex(value: number, fmt: RegionalFormat | null, percent?: boolean): string {
+  return percent ? perioPercent(value, fmt) : String(value);
 }
 
 /** Índices del examen en vivo; con comparación, también los del anterior. */
 function IndicesPanel({
   current,
   previous,
+  fmt,
 }: {
   current: DraftIndices;
   previous: DraftIndices | null;
+  fmt: RegionalFormat | null;
 }) {
   return (
     <section
@@ -550,7 +569,7 @@ function IndicesPanel({
             <div key={row.key} className="flex flex-col gap-0.5">
               <dt className="text-xs text-muted">{row.label}</dt>
               <dd className="text-lg font-semibold tabular-nums text-ink">
-                {formatIndex(now, row.percent)}
+                {formatIndex(now, fmt, row.percent)}
               </dd>
               {before !== null ? (
                 <dd
@@ -562,7 +581,7 @@ function IndicesPanel({
                         : 'text-xs text-danger'
                   }
                 >
-                  {copy.indicesPrevious}: {formatIndex(before, row.percent)}
+                  {copy.indicesPrevious}: {formatIndex(before, fmt, row.percent)}
                 </dd>
               ) : null}
             </div>

@@ -10,6 +10,9 @@ import {
   perioErrorMessage,
 } from '@/lib/perio/perio-api';
 import { formatCivilDate } from '@/lib/format/date';
+import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
+import { perioPercent } from '@/lib/perio/perio-percent';
+import { SedeConfigError } from '@/components/locations/sede-config-error';
 import { AsyncSection } from '@/components/shared/async-section';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -37,10 +40,6 @@ const copy = {
   openShort: 'Abrir',
   deep: (d4: number, d6: number) => `${d4} / ${d6}`,
 };
-
-function pct(value: number): string {
-  return `${value.toLocaleString('es-CO')} %`;
-}
 
 function ListSkeleton() {
   return (
@@ -71,6 +70,10 @@ export function PerioTab({ token, patientId }: PerioTabProps) {
   const [openExamId, setOpenExamId] = useState<string | null>(null);
   const [modalOpen, setModalOpen] = useState(false);
   const [modalKey, setModalKey] = useState(0);
+  // G1-B: los porcentajes van con el formato de la sede de la pantalla; sin él, «—» y el aviso.
+  const sedeFormat = useSedeFormat(token);
+  const fmt = readyFormat(sedeFormat);
+  const pct = (value: number) => perioPercent(value, fmt);
 
   useEffect(() => {
     let cancelled = false;
@@ -112,6 +115,7 @@ export function PerioTab({ token, patientId }: PerioTabProps) {
         patientId={patientId}
         examId={openExamId}
         previous={previous ? { id: previous.id, examDate: previous.examDate } : null}
+        sedeFormat={sedeFormat}
         onBack={() => setOpenExamId(null)}
         onChanged={() => setReloadKey((k) => k + 1)}
         onDeleted={() => {
@@ -164,6 +168,10 @@ export function PerioTab({ token, patientId }: PerioTabProps) {
           {copy.newExam}
         </Button>
       </div>
+
+      {sedeFormat.status === 'error' ? (
+        <SedeConfigError kind="locale" variant="note" onRetry={sedeFormat.retry} description={sedeFormat.message} locationId={sedeFormat.locationId} />
+      ) : null}
 
       <AsyncSection
         loading={loading}

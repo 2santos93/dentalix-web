@@ -51,14 +51,41 @@ describe('RegionalReviewNotice (aviso D5, spec §7)', () => {
     mockedList.mockResolvedValue([norte, reviewed]);
     render(<RegionalReviewNotice token={ADMIN} />);
     const notice = await screen.findByRole('region', { name: 'Sedes por revisar' });
-    expect(notice).toHaveTextContent('Revisa la moneda, la zona horaria y el formato de 1 sede.');
+    expect(notice).toHaveTextContent('Revisa la moneda, la zona horaria, el formato y el reloj de 1 sede.');
     expect(notice).toHaveTextContent(
-      'Al actualizar Dentalix se asignaron a partir del país de cada sede (Sede Norte: COP · America/Bogota · es-CO). Confírmalos o cámbialos.',
+      'Al actualizar Dentalix se asignaron automáticamente (Sede Norte: COP · America/Bogota · es-CO · 12 h). Confírmalos o cámbialos.',
     );
     expect(notice).not.toHaveTextContent('Sede Centro');
     expect(within(notice).getByRole('link', { name: 'Revisar sedes' })).toHaveAttribute('href', '/settings/sedes');
     // No se puede descartar sin confirmar (R12).
     expect(within(notice).queryByRole('button')).not.toBeInTheDocument();
+  });
+
+  it('review notice lists the clock', async () => {
+    const tokyo = clinicLocation({
+      id: 'tokyo',
+      name: 'Sede Tokio',
+      currency: 'JPY',
+      timeZone: 'Asia/Tokyo',
+      locale: 'ja-JP',
+      hourCycle: 'h23',
+      regionalSettingsReviewedAt: null,
+    });
+    const noClock = clinicLocation({
+      id: 'ny',
+      name: 'Sede Nueva York',
+      currency: 'USD',
+      timeZone: 'America/New_York',
+      locale: 'en-US',
+      hourCycle: null,
+      regionalSettingsReviewedAt: null,
+    });
+    mockedList.mockResolvedValue([tokyo, noClock]);
+    render(<RegionalReviewNotice token={ADMIN} />);
+    const notice = await screen.findByRole('region', { name: 'Sedes por revisar' });
+    expect(notice).toHaveTextContent(
+      '(Sede Tokio: JPY · Asia/Tokyo · ja-JP · 24 h; Sede Nueva York: USD · America/New_York · en-US · Por configurar)',
+    );
   });
 
   it('RECEPTIONIST does not', async () => {
@@ -87,9 +114,9 @@ describe('RegionalReviewNotice (aviso D5, spec §7)', () => {
     mockedList.mockResolvedValue([norte, reviewed, swept]);
     render(<RegionalReviewNotice token={ADMIN} />);
     const notice = await screen.findByRole('region', { name: 'Sedes por revisar' });
-    expect(notice).toHaveTextContent('el formato de 2 sedes.');
+    expect(notice).toHaveTextContent('el formato y el reloj de 2 sedes.');
     expect(notice).toHaveTextContent(
-      '(Sede Norte: COP · America/Bogota · es-CO; Sede Sur: EUR · Europe/Madrid · es-ES)',
+      '(Sede Norte: COP · America/Bogota · es-CO · 12 h; Sede Sur: EUR · Europe/Madrid · es-ES · 12 h)',
     );
   });
 
@@ -164,15 +191,15 @@ describe('RegionalReviewNotice (aviso D5, spec §7)', () => {
       </SessionLocationsProvider>,
     );
     const notice = await screen.findByRole('region', { name: 'Sedes por revisar' });
-    expect(notice).toHaveTextContent('el formato de 2 sedes.');
+    expect(notice).toHaveTextContent('el formato y el reloj de 2 sedes.');
 
     await user.click(await screen.findByRole('button', { name: 'Revisar Sede Norte' }));
     const dialog = await screen.findByRole('dialog', { name: 'Editar sede' });
     await within(dialog).findByRole('option', { name: 'Peso colombiano ($)' });
     await user.click(within(dialog).getByRole('button', { name: 'Guardar sede' }));
 
-    await waitFor(() => expect(notice).toHaveTextContent('el formato de 1 sede.'));
-    expect(notice).toHaveTextContent('(Sede Sur: EUR · Europe/Madrid · es-ES)');
+    await waitFor(() => expect(notice).toHaveTextContent('el formato y el reloj de 1 sede.'));
+    expect(notice).toHaveTextContent('(Sede Sur: EUR · Europe/Madrid · es-ES · 12 h)');
     expect(notice).not.toHaveTextContent('Sede Norte');
   });
 });

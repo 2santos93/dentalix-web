@@ -40,8 +40,10 @@ const reserved = {
   locationId: 'loc-1',
   locationName: 'Sede Norte',
   timeZone: 'America/Bogota',
+  locale: 'de-DE',
+  hourCycle: 'h23' as const,
 };
-const MESSAGE = 'Este tratamiento está reservado en la cita del 30/10/2026 a las 09:00 (Sede Norte).';
+const MESSAGE = 'Este tratamiento está reservado en la cita del 30.10.2026 a las 09:00 (Sede Norte).';
 
 function item(overrides: Partial<InClinicItem> = {}): InClinicItem {
   return {
@@ -77,6 +79,8 @@ function view(waiting: InClinicItem[]): InClinicView {
     date: '2026-10-19',
     locationId: 'loc-1',
     timeZone: 'America/Bogota',
+    locale: 'de-DE',
+    hourCycle: 'h23',
     now: '2026-10-19T14:02:00.000Z',
     scope: 'LOCATION',
     waiting,
@@ -258,6 +262,8 @@ describe('Tratamiento reservado en otra cita (DX-273)', () => {
       locationId: null,
       locationName: null,
       timeZone: null,
+      locale: null,
+      hourCycle: null,
     };
     const HIDDEN = 'Reservado en otra cita de hoy, con el paciente en la clínica.';
     function Arrive() {
@@ -284,6 +290,46 @@ describe('Tratamiento reservado en otra cita (DX-273)', () => {
       expect(within(notice).getByText(HIDDEN)).toBeInTheDocument();
       expect(notice).not.toHaveTextContent(/Sede|\d{2}:\d{2}/);
       expect(within(notice).queryByRole('button')).not.toBeInTheDocument();
+    });
+
+    it('sede permitida sin formato: fecha y hora «—» con el aviso de la sede, nunca el texto genérico (I4)', async () => {
+      const unconfigured = { ...held, planItemId: 'i4', locale: null, hourCycle: null };
+      mockedGet.mockResolvedValue(view([item({ planItemsReservedElsewhere: [unconfigured] })]));
+      render(<Harness />);
+      const notice = await screen.findByRole('group', { name: 'Tratamiento reservado en otra cita' });
+      expect(
+        within(notice).getByText('Reservado en la cita de hoy a las — (Sede Norte), con el paciente en la clínica.'),
+      ).toBeInTheDocument();
+      expect(within(notice).queryByText(HIDDEN)).not.toBeInTheDocument();
+      expect(within(notice).getByRole('status')).toHaveTextContent(
+        'No se pudo saber el formato regional o el reloj de la sede.',
+      );
+      expect(within(notice).getByRole('button', { name: 'Reintentar' })).toBeInTheDocument();
+    });
+
+    it('«Llegó» con la titular en una sede sin formato: el toast dice por qué la hora sale «—»', async () => {
+      const unconfigured = { ...held, planItemId: 'i4', locale: null, hourCycle: null };
+      mockedUpdate.mockResolvedValue({ id: 'a1', planItemsReservedElsewhere: [unconfigured] } as never);
+      render(<Arrive />);
+      await userEvent.click(screen.getByRole('button', { name: 'Llegó' }));
+      expect(toast.warning).toHaveBeenCalledWith(
+        'Implante · diente 36',
+        expect.objectContaining({
+          description:
+            'Reservado en la cita de hoy a las — (Sede Norte), con el paciente en la clínica. Falta el formato regional o el reloj de esa sede: revísalo en Ajustes → Sedes.',
+        }),
+      );
+    });
+
+    it('varias reservas en la misma sede sin formato: un solo aviso de esa sede (M7)', async () => {
+      const a = { ...held, planItemId: 'i4', locale: null, hourCycle: null };
+      const b = { ...reserved, planItemId: 'i5', name: 'Corona', locale: null, hourCycle: null };
+      const other = { ...reserved, planItemId: 'i6', name: 'Puente', locationId: 'loc-9', locale: null, hourCycle: null };
+      mockedGet.mockResolvedValue(view([item({ planItemsReservedElsewhere: [a, b, other] })]));
+      render(<Harness />);
+      const notice = await screen.findByRole('group', { name: 'Tratamiento reservado en otra cita' });
+      expect(within(notice).getAllByText(/No se pudo saber el formato regional o el reloj de la sede/)).toHaveLength(2);
+      expect(within(notice).getAllByRole('button', { name: 'Reintentar' })).toHaveLength(2);
     });
 
     it('con una reserva futura y otra en la clínica, «Traer» solo para la futura', async () => {

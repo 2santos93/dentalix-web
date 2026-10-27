@@ -9,6 +9,10 @@ import {
 } from '@/lib/perio/perio-api';
 import { ApiError } from '@/lib/api/client';
 import { setupUser } from '@/lib/test/user';
+import { useAuthStore } from '@/lib/auth/auth-store';
+import { tokenFor } from '@/lib/test/prescriptions';
+import { regionalFormat } from '@/lib/format/regional-format';
+import type { SedeFormatState } from '@/lib/locations/use-sede-format';
 
 jest.mock('../../lib/perio/perio-api', () => ({
   ...jest.requireActual('../../lib/perio/perio-api'),
@@ -78,7 +82,12 @@ function site(
   };
 }
 
-function renderEditor(previous: { id: string; examDate: string } | null = null) {
+const DE_DE: SedeFormatState = { status: 'ready', fmt: regionalFormat({ locale: 'de-DE', hourCycle: 'h23' }) };
+
+function renderEditor(
+  previous: { id: string; examDate: string } | null = null,
+  sedeFormat: SedeFormatState = DE_DE,
+) {
   const onChanged = jest.fn();
   const onBack = jest.fn();
   const onDeleted = jest.fn();
@@ -91,6 +100,7 @@ function renderEditor(previous: { id: string; examDate: string } | null = null) 
       onBack={onBack}
       onChanged={onChanged}
       onDeleted={onDeleted}
+      sedeFormat={sedeFormat}
     />,
   );
   return { onChanged, onBack, onDeleted };
@@ -358,5 +368,40 @@ describe('PerioExamEditor', () => {
     );
     const indices = screen.getByRole('region', { name: 'Índices' });
     expect(within(indices).getByText('Anterior: 60 %')).toBeInTheDocument();
+  });
+
+  it('perio percent en-US 12.5% and de-DE 12,5 % (índices con el formato de la sede)', async () => {
+    mockedGet.mockResolvedValue(exam());
+    renderEditor(null, { status: 'ready', fmt: regionalFormat({ locale: 'en-US', hourCycle: 'h12' }) });
+    const indices = await screen.findByRole('region', { name: 'Índices' });
+    expect(indices).toHaveTextContent(/\d%/);
+    expect(indices).not.toHaveTextContent(/\d\s%/);
+  });
+
+  it('sin formato de la sede: índices «—» y el aviso con Reintentar', async () => {
+    const retry = jest.fn();
+    mockedGet.mockResolvedValue(exam());
+    renderEditor(null, { status: 'error', message: 'No se pudo saber el formato regional o el reloj de la sede. Vuelve a intentarlo o revisa la sede en Ajustes → Sedes.', retry, locationId: 'sede-sin-reloj' });
+    const indices = await screen.findByRole('region', { name: 'Índices' });
+    expect(indices).not.toHaveTextContent('%');
+    expect(indices).toHaveTextContent('—');
+    expect(screen.getByText(/No se pudo saber el formato regional o el reloj de la sede/)).toBeInTheDocument();
+    await setupUser().click(screen.getByRole('button', { name: 'Reintentar' }));
+    expect(retry).toHaveBeenCalled();
+  });
+
+  it('«Configurar sede» abre la sede sin formato o sin reloj, no la lista', async () => {
+    useAuthStore.setState({ accessToken: tokenFor('ADMIN') });
+    try {
+      mockedGet.mockResolvedValue(exam());
+      const message = 'No se pudo saber el formato regional o el reloj de la sede. Vuelve a intentarlo o revisa la sede en Ajustes → Sedes.';
+      renderEditor(null, { status: 'error', message, retry: jest.fn(), locationId: 'sede-sin-reloj' });
+      expect(await screen.findByRole('link', { name: 'Configurar sede' })).toHaveAttribute(
+        'href',
+        '/settings/sedes?sede=sede-sin-reloj',
+      );
+    } finally {
+      useAuthStore.setState({ accessToken: null });
+    }
   });
 });
