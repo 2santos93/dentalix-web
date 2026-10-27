@@ -6,6 +6,7 @@ import {
   getActiveLocationId,
   setActiveLocationId,
 } from '@/lib/locations/location-store';
+import { clinicLocation } from '@/lib/test/locations';
 
 // NOTE: jest.mock's string literal is not alias-rewritten by the SWC transform
 // (only real `import`/`require` specifiers are) — relative path, misma
@@ -17,7 +18,7 @@ jest.mock('../../lib/locations/locations-api', () => ({
 const mockedList = listLocations as jest.MockedFunction<typeof listLocations>;
 
 function sede(id: string, name: string, isActive = true): ClinicLocation {
-  return {
+  return clinicLocation({
     id,
     name,
     address: null,
@@ -25,7 +26,7 @@ function sede(id: string, name: string, isActive = true): ClinicLocation {
     isActive,
     timeZone: 'America/Bogota',
     createdAt: '2026-01-01T00:00:00.000Z',
-  };
+  });
 }
 
 beforeEach(() => {

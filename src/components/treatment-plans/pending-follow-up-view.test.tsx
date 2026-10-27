@@ -11,6 +11,7 @@ import { getActiveLocationId } from '@/lib/locations/location-store';
 import { fetchClinicName } from '@/lib/clinic-branding';
 import { ApiError } from '@/lib/api/client';
 import { formatCurrency } from '@/lib/format/currency';
+import { clinicLocation } from '@/lib/test/locations';
 
 jest.mock('../../lib/treatment-plans/plan-options-api', () => ({
   listPendingFollowUp: jest.fn(),
@@ -59,9 +60,9 @@ describe('PendingFollowUpView (DX-040)', () => {
     mockedList.mockReset();
     mockedReject.mockReset();
     mockedLocations.mockResolvedValue([
-      { id: 'loc-1', name: 'Sede principal' },
-      { id: 'loc-2', name: 'Sede Norte' },
-    ] as never);
+      clinicLocation({ id: 'loc-1', name: 'Sede principal' }),
+      clinicLocation({ id: 'loc-2', name: 'Sede Norte' }),
+    ]);
     mockedActive.mockReturnValue(null);
     mockedClinic.mockResolvedValue('Clínica Demo');
   });

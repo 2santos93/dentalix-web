@@ -89,6 +89,18 @@ describe('apiFetch', () => {
     }) as unknown as typeof fetch;
     const plain = await apiFetch('/auth/login', { method: 'POST', body: {} }).catch((e: unknown) => e);
     expect((plain as ApiError).code).toBeNull();
+    expect((plain as ApiError).field).toBeNull();
+  });
+
+  it('G1: expone el `field` de un 400 de regla de negocio', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 400,
+      headers: { get: () => null },
+      json: async () => ({ statusCode: 400, field: 'timeZone', message: 'La zona horaria «X» no existe.' }),
+    }) as unknown as typeof fetch;
+    const err = await apiFetch('/locations', { method: 'POST', body: {} }).catch((e: unknown) => e);
+    expect((err as ApiError).field).toBe('timeZone');
   });
 });
 

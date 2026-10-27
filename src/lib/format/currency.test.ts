@@ -14,6 +14,14 @@ describe('formatCurrency', () => {
     expect(formatCurrency(1800000, 'COP').replace(/\s/g, ' ')).toMatch(/1\.800\.000,00/);
   });
 
+  it('JPY location shows JPY without decimals', () => {
+    // GLOBAL-G1: las monedas sin decimales en ISO 4217 se pintan sin ellos…
+    expect(formatCurrency(1500, 'JPY')).not.toMatch(/[.,]\d{2}\D*$/);
+    expect(formatCurrency(1500, 'JPY')).toMatch(/1500|1\.500/);
+    // …salvo un importe con céntimos, que nunca se redondea.
+    expect(formatCurrency(1500.5, 'JPY')).toMatch(/,50/);
+  });
+
   it('does not throw on an invalid code and falls back to "CODE amount"', () => {
     expect(() => formatCurrency(10, 'NOPE')).not.toThrow();
     expect(formatCurrency(10, 'NOPE')).toBe('NOPE 10.00');

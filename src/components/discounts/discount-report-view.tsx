@@ -8,7 +8,8 @@ import { apiErrorMessage } from '@/lib/api/error-message';
 import { getTokenRole } from '@/lib/auth/token-role';
 import { formatCurrency } from '@/lib/format/currency';
 import { firstOfMonth, formatCivilDate } from '@/lib/format/date';
-import { sedeToday, useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
+import { readyTimeZone, sedeToday, useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
+import { SedeConfigError } from '@/components/locations/sede-config-error';
 import { listStaff, type StaffMember } from '@/lib/appointments/staff-api';
 import {
   downloadDiscountReportCsv,
@@ -252,7 +253,9 @@ function ReasonCell({ item }: { item: DiscountReportItem }) {
  */
 export function DiscountReportView({ token }: { token: string }) {
   const isAdmin = getTokenRole(token) === 'ADMIN';
-  const timeZone = useSedeTimeZone(token);
+  // Sin zona de la sede no hay «hoy» ni período por defecto: `SedeConfigError`.
+  const zone = useSedeTimeZone(token);
+  const timeZone = readyTimeZone(zone);
   const today = timeZone ? sedeToday(timeZone) : null;
   const [from, setFrom] = useState<string | null>(null);
   const [to, setTo] = useState<string | null>(null);
@@ -446,6 +449,8 @@ export function DiscountReportView({ token }: { token: string }) {
             title={discountReportCopy.forbiddenTitle}
             description={discountReportCopy.forbiddenHint}
           />
+        ) : zone.status === 'error' && !filters ? (
+          <SedeConfigError kind="timeZone" description={zone.message} onRetry={zone.retry} />
         ) : (
           <>
             {!showLoading && !loadError && data ? (

@@ -2,6 +2,7 @@ import { test, expect, type Locator } from './support/test';
 import { randomUUID } from 'node:crypto';
 import { formatCurrency } from '../src/lib/format/currency';
 import { accessTokenOf, registerAndLogin } from './support/auth';
+import { E2E_REGION } from './support/regional';
 import { API_URL } from './support/urls';
 
 /**
@@ -65,11 +66,11 @@ const defaultPrice = 45_000;
 const tooth1 = '11';
 const tooth2 = '21';
 
-// El plan nace en la moneda por defecto del backend (`TreatmentPlan.currency`
-// = "USD") y la UI formatea con el MISMO helper que se importa aquí
+// El plan nace en la moneda de la sede (G1, DX-313: nunca un USD por defecto),
+// la que el registro le dio (`E2E_REGION`), y la UI formatea con el MISMO helper que se importa aquí
 // (`src/lib/format/currency.ts`, locale `es`), así las aserciones no dependen
 // de cómo el ICU de turno pinte el símbolo o los separadores.
-const planCurrency = 'USD';
+const planCurrency = E2E_REGION.currency;
 const money = (amount: number): string => formatCurrency(amount, planCurrency);
 
 test('treatment plan: create -> add item -> total -> status DONE -> remove -> total drops -> persists on reload', async ({

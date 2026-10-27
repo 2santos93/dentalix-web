@@ -23,7 +23,8 @@ import {
 } from '@/lib/cash-sessions/presentation';
 import { listLocations, type ClinicLocation } from '@/lib/locations/locations-api';
 import { onLocationChange } from '@/lib/locations/location-store';
-import { COUNTRY_CURRENCY } from '@/lib/locations/clinic-currency';
+import { locationCurrency, locationTimeZone } from '@/lib/locations/location-settings';
+import { SedeConfigError } from '@/components/locations/sede-config-error';
 import { PAYMENT_METHOD_LABELS } from '@/lib/payments/payment-method';
 import { formatCurrency } from '@/lib/format/currency';
 import { formatDateTimeInZone } from '@/lib/format/date';
@@ -62,6 +63,10 @@ const copy = {
   requireOpen: 'Esta clínica exige caja abierta para cobrar en efectivo.',
   blindNote: 'Arqueo ciego: cuenta antes de ver lo esperado; lo verás cuando cierres la caja.',
   openedAt: (when: string) => `Abierta el ${when}`,
+  // GLOBAL-G1: una caja cuya sede no tiene zona no pinta la hora en otra zona.
+  noZone: 'Por configurar',
+  noZoneHint: 'La sede no tiene zona horaria: se configura en Ajustes → Sedes.',
+  openedAtNoZone: 'Abierta (hora por configurar: la sede no tiene zona horaria)',
   float: 'Fondo',
   expectedTitle: 'Esperado hasta ahora',
   open: 'Abrir caja',
@@ -87,8 +92,10 @@ const copy = {
   colActions: 'Acciones',
   view: 'Ver',
   viewLabel: (when: string) => `Ver el turno del ${when}`,
+  viewLabelNoZone: (sede: string) => `Ver el turno de ${sede} (hora por configurar)`,
   print: 'Informe',
   printLabel: (when: string) => `Informe de cierre del turno del ${when}`,
+  printLabelNoZone: (sede: string) => `Informe de cierre del turno de ${sede} (hora por configurar)`,
   empty: 'Aún no hay turnos de caja.',
   emptyHint: 'Cuando alguien abra una caja aparecerá aquí, con su cierre.',
   listError: 'No pudimos cargar los turnos.',
@@ -189,10 +196,19 @@ export function CashShiftsView({ token, tabs }: CashShiftsViewProps) {
 
   const sede = locations.find((l) => l.id === current?.locationId);
   const sedeName = sede?.name ?? '';
-  const defaultCurrency = sede ? COUNTRY_CURRENCY[sede.country] : 'COP';
+  // La moneda de la sede de la caja (GLOBAL-G1), o `null` si no se sabe (sede
+  // sin configurar o sedes sin cargar): entonces no se abre caja ni se registra
+  // una salida (empezarían en una moneda supuesta) y se muestra `SedeConfigError`.
+  const defaultCurrency = locationCurrency(sede);
+  const currencyMissing = current !== null && defaultCurrency === null;
   const session = current?.session ?? null;
-  const zoneOf = (locationId: string) =>
-    locations.find((l) => l.id === locationId)?.timeZone ?? 'America/Bogota';
+  // La hora de apertura se lee en la zona de la sede de la caja; sin ella (sede
+  // sin configurar o sedes sin cargar) es `null` y se dice «Por configurar»,
+  // nunca en otra zona.
+  const openedAtIn = (instant: string, locationId: string): string | null => {
+    const zone = locationTimeZone(locations.find((l) => l.id === locationId));
+    return zone ? formatDateTimeInZone(instant, zone) : null;
+  };
 
   function afterChange(message: string) {
     setNotice(message);
@@ -240,7 +256,9 @@ export function CashShiftsView({ token, tabs }: CashShiftsViewProps) {
           <CurrentSessionCard
             current={current}
             sedeName={sedeName}
-            timeZone={zoneOf(current.locationId)}
+            openedAtIn={openedAtIn}
+            currencyMissing={currencyMissing}
+            onRetryLocations={() => setCurrentKey((k) => k + 1)}
             onOpen={() => {
               setModalKey((k) => k + 1);
               setOpening(true);
@@ -315,11 +333,11 @@ export function CashShiftsView({ token, tabs }: CashShiftsViewProps) {
                 </TableHeader>
                 <TableBody>
                   {(list?.items ?? []).map((item) => {
-                    const when = formatDateTimeInZone(item.openedAt, zoneOf(item.location.id));
+                    const when = openedAtIn(item.openedAt, item.location.id);
                     return (
                       <TableRow key={item.id}>
                         <TableCell className="tabular-nums" data-label={copy.colOpened}>
-                          {when}
+                          {when ?? <NoZoneLabel />}
                         </TableCell>
                         <TableCell data-label={copy.colLocation}>{item.location.name}</TableCell>
                         <TableCell data-label={copy.colOpenedBy}>{item.openedBy.fullName ?? '—'}</TableCell>
@@ -341,7 +359,10 @@ export function CashShiftsView({ token, tabs }: CashShiftsViewProps) {
                         <TableCell className="text-right" data-label={copy.colActions}>
                           <span className="inline-flex flex-wrap items-center justify-end gap-3">
                             <Button asChild variant="outline" size="sm">
-                              <Link href={cashSessionHref(item.id)} aria-label={copy.viewLabel(when)}>
+                              <Link
+                                href={cashSessionHref(item.id)}
+                                aria-label={when ? copy.viewLabel(when) : copy.viewLabelNoZone(item.location.name)}
+                              >
                                 {copy.view}
                               </Link>
                             </Button>
@@ -350,7 +371,7 @@ export function CashShiftsView({ token, tabs }: CashShiftsViewProps) {
                                 <Link
                                   href={cashSessionReportHref(item.id)}
                                   target="_blank"
-                                  aria-label={copy.printLabel(when)}
+                                  aria-label={when ? copy.printLabel(when) : copy.printLabelNoZone(item.location.name)}
                                 >
                                   {copy.print}
                                 </Link>
@@ -378,18 +399,20 @@ export function CashShiftsView({ token, tabs }: CashShiftsViewProps) {
         </section>
       </div>
 
-      <OpenCashSessionModal
-        key={`open-${modalKey}`}
-        open={opening}
-        onOpenChange={setOpening}
-        token={token}
-        sedeName={sedeName}
-        defaultCurrency={defaultCurrency}
-        onOpened={() => {
-          setOpening(false);
-          afterChange(copy.opened);
-        }}
-      />
+      {defaultCurrency ? (
+        <OpenCashSessionModal
+          key={`open-${modalKey}`}
+          open={opening}
+          onOpenChange={setOpening}
+          token={token}
+          sedeName={sedeName}
+          defaultCurrency={defaultCurrency}
+          onOpened={() => {
+            setOpening(false);
+            afterChange(copy.opened);
+          }}
+        />
+      ) : null}
       {session ? (
         <CloseCashSessionModal
           key={`close-${modalKey}`}
@@ -404,7 +427,7 @@ export function CashShiftsView({ token, tabs }: CashShiftsViewProps) {
           }}
         />
       ) : null}
-      {session && current ? (
+      {session && current && defaultCurrency ? (
         <CashOutflowModal
           key={`outflow-${modalKey}`}
           open={outflowing}
@@ -420,22 +443,38 @@ export function CashShiftsView({ token, tabs }: CashShiftsViewProps) {
   );
 }
 
+/** «Por configurar» con su explicación: la hora de una caja de una sede sin zona. */
+function NoZoneLabel() {
+  return (
+    <span className="flex flex-col">
+      <span className="font-medium text-ink">{copy.noZone}</span>
+      <span className="text-xs text-muted">{copy.noZoneHint}</span>
+    </span>
+  );
+}
+
 function CurrentSessionCard({
   current,
   sedeName,
-  timeZone,
+  openedAtIn,
+  currencyMissing,
+  onRetryLocations,
   onOpen,
   onClose,
   onOutflow,
 }: {
   current: CurrentCashSession;
   sedeName: string;
-  timeZone: string;
+  openedAtIn: (instant: string, locationId: string) => string | null;
+  /** La sede de la caja no tiene moneda (o las sedes no cargaron). */
+  currencyMissing: boolean;
+  onRetryLocations: () => void;
   onOpen: () => void;
   onClose: () => void;
   onOutflow: () => void;
 }) {
   const session: CashSessionDetail | null = current.session;
+  const openedAt = session ? openedAtIn(session.openedAt, current.locationId) : null;
   const headingId = React.useId();
   return (
     <section aria-labelledby={headingId} className="rounded-xl border border-border bg-surface">
@@ -446,7 +485,7 @@ function CurrentSessionCard({
           </h2>
           {session ? (
             <p className="text-sm text-muted tabular-nums">
-              {copy.openedAt(formatDateTimeInZone(session.openedAt, timeZone))} · {copy.float}{' '}
+              {openedAt ? copy.openedAt(openedAt) : copy.openedAtNoZone} · {copy.float}{' '}
               {moneyList(session.floats)}
             </p>
           ) : (
@@ -465,20 +504,27 @@ function CurrentSessionCard({
               <Button asChild variant="outline">
                 <Link href={cashSessionHref(session.id)}>{copy.viewShift}</Link>
               </Button>
-              <Button type="button" variant="outline" onClick={onOutflow}>
-                {copy.outflow}
-              </Button>
+              {currencyMissing ? null : (
+                <Button type="button" variant="outline" onClick={onOutflow}>
+                  {copy.outflow}
+                </Button>
+              )}
               <Button type="button" onClick={onClose}>
                 {copy.close}
               </Button>
             </>
-          ) : (
+          ) : currencyMissing ? null : (
             <Button type="button" onClick={onOpen}>
               {copy.open}
             </Button>
           )}
         </div>
       </div>
+      {currencyMissing ? (
+        <div className="px-4 pt-3 sm:px-6">
+          <SedeConfigError kind="currency" onRetry={onRetryLocations} locationId={current.locationId} />
+        </div>
+      ) : null}
       <div className="px-4 py-3 sm:px-6">
         {!session ? (
           <p className="text-sm text-muted">{copy.noSessionHint}</p>

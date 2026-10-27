@@ -1,3 +1,8 @@
+import iso4217ZeroDecimal from '@/lib/money/iso4217-zero-decimal.json';
+
+/** Monedas sin decimales según ISO 4217 (copia de la lista de la API, R7). */
+const ISO_ZERO_DECIMAL: ReadonlySet<string> = new Set(iso4217ZeroDecimal.minorUnitsZero);
+
 /**
  * Crash-safe currency formatter. `Intl.NumberFormat({ style:'currency' })`
  * throws a RangeError on an invalid/unknown ISO 4217 code — which, when called
@@ -10,18 +15,21 @@ export function formatCurrency(
   currency: string,
   locale = 'es',
 ): string {
+  // Dos decimales fijos: los importes se guardan con céntimos, y las
+  // versiones recientes de ICU/CLDR dan 0 decimales a COP, con lo que
+  // 150.000,50 se pintaría (redondeado) como 150.001. Las monedas que en ISO
+  // 4217 no tienen decimales (JPY, VND…: GLOBAL-G1) van sin ellos cuando el
+  // importe es entero; con céntimos conserva 2 decimales, nunca se redondea.
+  const digits = Number.isInteger(amount) && ISO_ZERO_DECIMAL.has(currency.toUpperCase()) ? 0 : 2;
   try {
-    // Dos decimales fijos: los importes se guardan con céntimos, y las
-    // versiones recientes de ICU/CLDR dan 0 decimales a COP, con lo que
-    // 150.000,50 se pintaría (redondeado) como 150.001.
     return new Intl.NumberFormat(locale, {
       style: 'currency',
       currency,
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
+      minimumFractionDigits: digits,
+      maximumFractionDigits: digits,
     }).format(amount);
   } catch {
-    return `${currency} ${amount.toFixed(2)}`;
+    return `${currency} ${amount.toFixed(digits)}`;
   }
 }
 

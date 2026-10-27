@@ -21,7 +21,8 @@ import { CurrencySelect } from '@/components/shared/currency-select';
 import { BillablePlanField, BillablePlansEmpty } from './billable-plan-field';
 import { useBillablePlans } from './use-billable-plans';
 import { usePaymentLocationHint } from './use-payment-location-hint';
-import { sedeToday, useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
+import { readyTimeZone, sedeToday, useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
+import { SedeConfigError } from '@/components/locations/sede-config-error';
 
 // Copy como constantes (i18n-ready).
 const copy = {
@@ -120,8 +121,12 @@ export function RecordPaymentModal({
 }: RecordPaymentModalProps) {
   const billable = useBillablePlans(token, patientId, open);
   const locationHint = usePaymentLocationHint(token, open);
-  const timeZone = useSedeTimeZone(token);
-  const [form, setForm] = useState<FormState>(() => initialForm(sedeToday(timeZone)));
+  // «Hoy» de la sede (DX-097). Sin su zona la fecha empieza vacía y, si la
+  // sede no tiene zona, el campo muestra `SedeConfigError`: nunca otra zona.
+  const zone = useSedeTimeZone(token);
+  const timeZone = readyTimeZone(zone);
+  const today = timeZone ? sedeToday(timeZone) : '';
+  const [form, setForm] = useState<FormState>(() => initialForm(today));
   const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -133,7 +138,7 @@ export function RecordPaymentModal({
   const [prevTimeZone, setPrevTimeZone] = useState(timeZone);
   if (timeZone !== prevTimeZone) {
     setPrevTimeZone(timeZone);
-    if (!dateTouched) setForm((f) => ({ ...f, date: sedeToday(timeZone) }));
+    if (!dateTouched) setForm((f) => ({ ...f, date: today }));
   }
 
   // Ajuste durante el render: cada apertura empieza de cero, con clave nueva.
@@ -141,7 +146,7 @@ export function RecordPaymentModal({
   if (open !== prevOpen) {
     setPrevOpen(open);
     if (open) {
-      setForm(initialForm(sedeToday(timeZone)));
+      setForm(initialForm(today));
       setDateTouched(false);
       setIdempotencyKey(crypto.randomUUID());
       setError(null);
@@ -337,16 +342,20 @@ export function RecordPaymentModal({
                   </select>
                 </FormField>
                 <FormField htmlFor="rp-date" label={copy.date}>
-                  <Input
-                    id="rp-date"
-                    type="date"
-                    value={form.date}
-                    onChange={(e) => {
-                      setDateTouched(true);
-                      patch({ date: e.target.value });
-                    }}
-                    className="tabular-nums"
-                  />
+                  {zone.status === 'error' && !dateTouched ? (
+                    <SedeConfigError kind="timeZone" variant="field" retryId="rp-date" onRetry={zone.retry} />
+                  ) : (
+                    <Input
+                      id="rp-date"
+                      type="date"
+                      value={form.date}
+                      onChange={(e) => {
+                        setDateTouched(true);
+                        patch({ date: e.target.value });
+                      }}
+                      className="tabular-nums"
+                    />
+                  )}
                 </FormField>
               </div>
             </>

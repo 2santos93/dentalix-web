@@ -1,6 +1,7 @@
 import { expect, type Page } from '@playwright/test';
 import { tenantOrigin } from './urls';
 import { registrationTokenFor } from './mail';
+import { E2E_REGION, type RegionalSettings } from './regional';
 
 /** Cookie HttpOnly del refresh token (DX-062), del host de la clínica. */
 export const SESSION_COOKIE = 'dentalix_rt';
@@ -58,6 +59,8 @@ export interface RegisterAndLoginParams {
    * que la web la rechaza con el error genérico (DX-029, R2).
    */
   tryWrongVerifyPassword?: boolean;
+  /** «Tu sede» del registro (G1); lo que falte sale de `E2E_REGION`. */
+  location?: Partial<RegionalSettings>;
 }
 
 /**
@@ -74,6 +77,7 @@ export async function registerAndLogin(
     email,
     password,
     tryWrongVerifyPassword = false,
+    location,
   }: RegisterAndLoginParams,
 ): Promise<string> {
   const origin = tenantOrigin(subdomain);
@@ -90,6 +94,7 @@ export async function registerAndLogin(
   // toggle whose accessible name would otherwise make a substring "Contraseña"
   // match resolve to 2 elements (strict-mode violation).
   await page.getByLabel('Contraseña', { exact: true }).fill(password);
+  await fillRegistrationLocation(page, { ...E2E_REGION, ...location });
 
   await page.getByRole('button', { name: 'Crear cuenta' }).click();
 
@@ -133,6 +138,19 @@ export async function registerAndLogin(
   await submitLogin(page, origin, email, password);
 
   return origin;
+}
+
+/**
+ * «Tu sede» del formulario de registro (G1, spec §6.7): país y moneda empiezan
+ * vacíos; zona y formato traen la sugerencia del navegador y se sobrescriben
+ * para que la sede no dependa de la máquina. La moneda espera a que cargue la
+ * lista pública (`GET /public/currencies`, sin sesión).
+ */
+export async function fillRegistrationLocation(page: Page, region: RegionalSettings): Promise<void> {
+  await page.getByLabel('País', { exact: true }).selectOption(region.country);
+  await page.getByLabel('Moneda', { exact: true }).selectOption(region.currency);
+  await page.getByLabel('Zona horaria', { exact: true }).fill(region.timeZone);
+  await page.getByLabel('Formato regional', { exact: true }).fill(region.locale);
 }
 
 /**

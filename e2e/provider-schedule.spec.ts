@@ -5,6 +5,7 @@ import { loginAs } from './support/auth';
 import { atSede, sedeDayFromToday } from './support/clock';
 import { expectNoHorizontalScroll } from './support/layout';
 import { API_URL, tenantOrigin } from './support/urls';
+import { E2E_REGION } from './support/regional';
 
 /**
  * e2e DX-233: horario de cada profesional por sede, con excepciones por fecha.
@@ -66,12 +67,12 @@ test.beforeAll(async ({ request }) => {
   const principal = ((await locations.json()) as { id: string; name: string }[])[0];
   sedeAId = principal.id;
   sedeAName = principal.name;
-  sedeBId = (await apiPost<{ id: string }>(request, session, '/locations', { name: sedeB, country: 'CO' })).id;
+  sedeBId = (await apiPost<{ id: string }>(request, session, '/locations', { name: sedeB, ...E2E_REGION })).id;
   const openWeek = [1, 2, 3, 4, 5, 6].map((weekday) => ({ weekday, startMinute: 7 * 60, endMinute: 20 * 60 }));
   for (const id of [sedeAId, sedeBId]) {
     const res = await request.put(`${API_URL}/locations/schedule`, {
       headers: { ...session.headers, 'X-Location-Id': id },
-      data: { timezone: 'America/Bogota', ranges: openWeek },
+      data: { ranges: openWeek },
     });
     expect(res.ok(), await res.text()).toBeTruthy();
   }

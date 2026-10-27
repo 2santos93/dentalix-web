@@ -6,6 +6,7 @@ import {
   updateLocationPhone,
   type ClinicLocation,
 } from '@/lib/locations/locations-api';
+import { clinicLocation } from '@/lib/test/locations';
 
 jest.mock('../../lib/locations/locations-api', () => ({
   ...jest.requireActual('../../lib/locations/locations-api'),
@@ -15,7 +16,7 @@ jest.mock('../../lib/locations/locations-api', () => ({
 const mockedList = listLocations as jest.MockedFunction<typeof listLocations>;
 const mockedUpdate = updateLocationPhone as jest.MockedFunction<typeof updateLocationPhone>;
 
-const base: ClinicLocation = {
+const base: ClinicLocation = clinicLocation({
   id: 'l1',
   name: 'Sede principal',
   address: null,
@@ -24,7 +25,7 @@ const base: ClinicLocation = {
   isActive: true,
   timeZone: 'America/Bogota',
   createdAt: '2026-01-01T00:00:00Z',
-};
+});
 
 describe('LocationPhoneSettings (DX-222)', () => {
   beforeEach(() => {

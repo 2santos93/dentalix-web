@@ -1,6 +1,7 @@
 import { expect, type APIRequestContext } from '@playwright/test';
 import { apiLogin, type ApiSession } from './api';
 import { API_URL, tenantOrigin } from './urls';
+import { E2E_REGION } from './regional';
 
 /**
  * La clínica DEMO (`npm run seed:demo` en la API) es estado compartido: la
@@ -67,7 +68,7 @@ export async function reuseDemoLocation(
     if (!existing.isActive) await setLocationActive(request, session, existing.id, true);
     return existing.id;
   }
-  const res = await request.post(`${API_URL}/locations`, { headers: session.headers, data: { name } });
+  const res = await request.post(`${API_URL}/locations`, { headers: session.headers, data: { name, ...E2E_REGION } });
   expect(res.ok(), `POST /locations falló: ${await res.text()}`).toBeTruthy();
   return ((await res.json()) as { id: string }).id;
 }

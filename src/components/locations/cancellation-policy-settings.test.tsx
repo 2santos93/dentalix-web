@@ -10,6 +10,7 @@ import {
 } from '@/lib/cancellations/cancellation-policy-api';
 import { listCurrencies } from '@/lib/reference/currencies-api';
 import { ApiError } from '@/lib/api/client';
+import { clinicLocation } from '@/lib/test/locations';
 
 jest.mock('../../lib/locations/locations-api', () => ({
   ...jest.requireActual('../../lib/locations/locations-api'),
@@ -34,7 +35,7 @@ const mockedCreate = createCancellationPolicyVersion as jest.MockedFunction<
 const mockedPreview = getReminderEmailPreview as jest.MockedFunction<typeof getReminderEmailPreview>;
 const mockedCurrencies = listCurrencies as jest.MockedFunction<typeof listCurrencies>;
 
-const SEDE: ClinicLocation = {
+const SEDE: ClinicLocation = clinicLocation({
   id: 'loc-1',
   name: 'Sede principal',
   address: null,
@@ -42,7 +43,7 @@ const SEDE: ClinicLocation = {
   isActive: true,
   timeZone: 'America/Bogota',
   createdAt: '2026-01-01T00:00:00.000Z',
-};
+});
 
 function version(n: number, overrides: Partial<CancellationPolicyVersion> = {}): CancellationPolicyVersion {
   return {
@@ -185,5 +186,53 @@ describe('CancellationPolicySettings (DX-279)', () => {
     render(<CancellationPolicySettings token="tok" />);
     await screen.findByRole('button', { name: 'Configurar la política de Sede principal' });
     expect(screen.queryByRole('button', { name: /Vista previa/ })).not.toBeInTheDocument();
+  });
+});
+
+describe('CancellationPolicySettings: moneda de la sede (GLOBAL-G1)', () => {
+  beforeEach(() => {
+    jest.clearAllMocks();
+    mockedCurrencies.mockResolvedValue([
+      { code: 'JPY', name: 'Yen japonés', symbol: '¥' },
+      { code: 'EUR', name: 'Euro', symbol: '€' },
+    ]);
+    mockedGet.mockResolvedValue({ locationId: 'loc-1', current: null, versions: [] });
+  });
+
+  it('JPY location shows JPY without decimals', async () => {
+    const user = userEvent.setup();
+    // País CO a propósito: la moneda del importe sale de la sede.
+    mockedLocations.mockResolvedValue([{ ...SEDE, currency: 'JPY', timeZone: 'Asia/Tokyo' }]);
+    mockedCreate.mockResolvedValue(version(1, { suggestedFee: 3000, currency: 'JPY' }));
+    render(<CancellationPolicySettings token="tok" />);
+    await user.click(await screen.findByRole('button', { name: 'Configurar la política de Sede principal' }));
+    const dialog = screen.getByRole('dialog', { name: 'Política de cancelación · Sede principal' });
+    expect(within(dialog).getByLabelText('Moneda')).toHaveValue('JPY');
+    await user.type(within(dialog).getByLabelText('Importe sugerido (opcional)'), '3000');
+    await user.click(within(dialog).getByRole('button', { name: 'Guardar versión nueva' }));
+    expect(mockedCreate).toHaveBeenCalledWith('tok', 'loc-1', expect.objectContaining({ suggestedFee: 3000, currency: 'JPY' }));
+    // «Importe sugerido: 3000 JPY», sin decimales.
+    expect(await screen.findByText(/Importe sugerido: 3000\sJPY$/)).toBeInTheDocument();
+  });
+
+  it('location without currency shows SedeConfigError and never COP', async () => {
+    const user = userEvent.setup();
+    mockedLocations.mockResolvedValue([{ ...SEDE, country: 'CO', currency: null }]);
+    render(<CancellationPolicySettings token="tok" />);
+    await user.click(await screen.findByRole('button', { name: 'Configurar la política de Sede principal' }));
+    const dialog = screen.getByRole('dialog', { name: 'Política de cancelación · Sede principal' });
+    expect(within(dialog).getByText('Sin moneda de sede')).toBeInTheDocument();
+    expect(within(dialog).queryByText(/COP/)).not.toBeInTheDocument();
+
+    // Un importe sin moneda no se envía…
+    await user.type(within(dialog).getByLabelText('Importe sugerido (opcional)'), '3000');
+    await user.click(within(dialog).getByRole('button', { name: 'Guardar versión nueva' }));
+    expect(within(dialog).getByText(/El importe necesita la moneda de la sede/)).toBeInTheDocument();
+    expect(mockedCreate).not.toHaveBeenCalled();
+
+    // …y Reintentar relee las sedes sin cerrar el modal.
+    mockedLocations.mockResolvedValue([{ ...SEDE, currency: 'EUR' }]);
+    await user.click(within(dialog).getByRole('button', { name: /reintentar/i }));
+    expect(await within(dialog).findByLabelText('Moneda')).toHaveValue('EUR');
   });
 });

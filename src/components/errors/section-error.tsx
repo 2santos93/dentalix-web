@@ -15,6 +15,8 @@ interface SectionErrorProps {
   description: string;
   onRetry?: () => void;
   retryLabel?: string;
+  /** Un camino más para arreglarlo, junto al reintento (p. ej. un enlace a Ajustes). */
+  secondaryAction?: React.ReactNode;
   className?: string;
 }
 
@@ -34,6 +36,7 @@ export function SectionError({
   description,
   onRetry,
   retryLabel = sectionErrorCopy.retry,
+  secondaryAction,
   className,
 }: SectionErrorProps) {
   return (
@@ -52,10 +55,15 @@ export function SectionError({
       </span>
       <p className="text-sm font-medium text-ink">{title}</p>
       <p className="max-w-sm text-sm text-muted">{description}</p>
-      {onRetry ? (
-        <Button type="button" onClick={onRetry} className="mt-3">
-          {retryLabel}
-        </Button>
+      {onRetry || secondaryAction ? (
+        <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+          {onRetry ? (
+            <Button type="button" onClick={onRetry}>
+              {retryLabel}
+            </Button>
+          ) : null}
+          {secondaryAction}
+        </div>
       ) : null}
     </div>
   );

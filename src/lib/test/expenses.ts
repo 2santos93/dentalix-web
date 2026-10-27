@@ -1,9 +1,10 @@
 import type { Expense, ExpenseDetail, ExpensePayment } from '@/lib/expenses/expenses-api';
 import type { ClinicLocation } from '@/lib/locations/locations-api';
+import { clinicLocation } from '@/lib/test/locations';
 
 /** Sedes de prueba (DX-274): la principal en Bogotá y otra en Medellín. */
 export const expenseLocations: ClinicLocation[] = [
-  {
+  clinicLocation({
     id: 'loc-1',
     name: 'Sede principal',
     address: null,
@@ -11,8 +12,8 @@ export const expenseLocations: ClinicLocation[] = [
     isActive: true,
     timeZone: 'America/Bogota',
     createdAt: '2026-01-01T00:00:00.000Z',
-  },
-  {
+  }),
+  clinicLocation({
     id: 'loc-2',
     name: 'Sede norte',
     address: null,
@@ -20,7 +21,7 @@ export const expenseLocations: ClinicLocation[] = [
     isActive: true,
     timeZone: 'America/Bogota',
     createdAt: '2026-02-01T00:00:00.000Z',
-  },
+  }),
 ];
 
 /** Un gasto pendiente de 150.000 COP en la sede principal. */

@@ -12,7 +12,8 @@ import { FormModal } from '@/components/shared/form-modal';
 import { FormField } from '@/components/shared/form-field';
 import { CurrencySelect } from '@/components/shared/currency-select';
 import { Input } from '@/components/ui/input';
-import { clinicBaseCurrency, COUNTRY_CURRENCY } from '@/lib/locations/clinic-currency';
+import { SedeConfigError } from '@/components/locations/sede-config-error';
+import { clinicBaseCurrency, locationCurrency } from '@/lib/locations/location-settings';
 
 const copy = {
   createTitle: 'Nueva lista de precios',
@@ -22,6 +23,8 @@ const copy = {
   name: 'Nombre',
   namePlaceholder: 'Por ejemplo, Tarifas Sede Norte',
   currency: 'Moneda',
+  currencyPlaceholder: 'Elige una moneda',
+  currencyRequired: 'Elige la moneda de la lista.',
   currencyLocked:
     'La lista ya tiene precios: para cambiar de moneda, quítalos primero o crea otra lista.',
   location: 'Sede',
@@ -46,6 +49,8 @@ interface PriceListFormModalProps {
   locations: ClinicLocation[];
   token: string;
   onSaved: (saved: PriceList) => void;
+  /** Vuelve a leer las sedes (la sede elegida no tenía moneda). */
+  onRetryLocations: () => void;
 }
 
 /**
@@ -60,6 +65,7 @@ export function PriceListFormModal({
   locations,
   token,
   onSaved,
+  onRetryLocations,
 }: PriceListFormModalProps) {
   const editing = priceList !== null;
   const [name, setName] = useState(priceList?.name ?? '');
@@ -67,17 +73,17 @@ export function PriceListFormModal({
   const [locationId, setLocationId] = useState(priceList?.locationId ?? '');
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [currencyError, setCurrencyError] = useState<string | null>(null);
 
   // Mientras no se elige otra, la moneda de la sede escogida; sin sede, la
-  // base de la clínica (o la de su primera sede activa si hay varios países).
+  // común de la clínica. Si no hay ninguna (sedes con monedas distintas), el
+  // campo queda vacío y hay que elegirla. Una sede elegida sin moneda (sin
+  // configurar) muestra `SedeConfigError`: nunca otra moneda (GLOBAL-G1).
   const chosenLocation = locations.find((l) => l.id === locationId);
-  const fallbackLocation = chosenLocation ?? locations.find((l) => l.isActive);
-  const currency =
-    currencyChoice ||
-    (chosenLocation ? COUNTRY_CURRENCY[chosenLocation.country] : null) ||
-    clinicBaseCurrency(locations) ||
-    (fallbackLocation ? COUNTRY_CURRENCY[fallbackLocation.country] : 'COP');
+  const suggested = chosenLocation ? locationCurrency(chosenLocation) : clinicBaseCurrency(locations);
+  const currency = currencyChoice || suggested || '';
   const currencyLocked = editing && priceList.itemCount > 0;
+  const sedeWithoutCurrency = !currencyChoice && chosenLocation !== undefined && suggested === null;
 
   // Una sede desactivada sigue ofreciéndose si es la de esta lista.
   const options = locations.filter((l) => l.isActive || l.id === priceList?.locationId);
@@ -87,6 +93,7 @@ export function PriceListFormModal({
     setError(null);
     const trimmed = name.trim().replace(/\s+/g, ' ');
     if (trimmed.length < 2 || trimmed.length > 120) return setError(copy.invalidName);
+    if (!currency) return setCurrencyError(copy.currencyRequired);
 
     setSubmitting(true);
     try {
@@ -135,14 +142,29 @@ export function PriceListFormModal({
         htmlFor="price-list-currency"
         label={copy.currency}
         hint={currencyLocked ? copy.currencyLocked : undefined}
+        error={sedeWithoutCurrency ? null : currencyError}
       >
-        <CurrencySelect
-          id="price-list-currency"
-          token={token}
-          value={currency}
-          onChange={setCurrencyChoice}
-          disabled={currencyLocked}
-        />
+        {sedeWithoutCurrency ? (
+          <SedeConfigError
+            kind="currency"
+            variant="field"
+            retryId="price-list-currency"
+            onRetry={onRetryLocations}
+            className="h-10 w-full"
+          />
+        ) : (
+          <CurrencySelect
+            id="price-list-currency"
+            token={token}
+            value={currency}
+            onChange={(code) => {
+              setCurrencyChoice(code);
+              setCurrencyError(null);
+            }}
+            disabled={currencyLocked}
+            placeholder={currency ? undefined : copy.currencyPlaceholder}
+          />
+        )}
       </FormField>
       <FormField htmlFor="price-list-location" label={copy.location} hint={copy.locationHint}>
         <select

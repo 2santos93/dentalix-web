@@ -4,7 +4,10 @@ import { useEffect, useId, useState } from 'react';
 import { History, Mail, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api/error-message';
-import { listLocations, type ClinicLocation } from '@/lib/locations/locations-api';
+import type { ClinicLocation } from '@/lib/locations/locations-api';
+import { useSessionLocations } from '@/lib/locations/session-locations';
+import { locationCurrency } from '@/lib/locations/location-settings';
+import { SedeConfigError } from '@/components/locations/sede-config-error';
 import {
   NOTICE_HOURS_MAX,
   NOTICE_HOURS_MIN,
@@ -70,6 +73,7 @@ export const cancellationPolicyCopy = {
   feeLabel: 'Importe sugerido (opcional)',
   feeHint: 'Lo que la clínica podría cobrar por una inasistencia o cancelación tardía.',
   currency: 'Moneda',
+  feeNeedsCurrency: 'El importe necesita la moneda de la sede: configúrala en Ajustes → Sedes.',
   text: 'Texto para el paciente',
   textHint: 'Lo verá el paciente al confirmar o cancelar su cita.',
   counter: (n: number) => `${n}/${PATIENT_TEXT_MAX}`,
@@ -106,13 +110,14 @@ export function CancellationPolicySettings({ token }: { token: string }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
-
+  // G1: la lectura de la sesión; el modal de sede la invalida y esta tarjeta
+  // relee sin vaciarse (la sede nueva o editada aparece sin recargar).
+  const requestLocations = useSessionLocations(token);
   useEffect(() => {
     let cancelled = false;
     async function load() {
-      setLoading(true);
       try {
-        const data = await listLocations(token);
+        const data = await requestLocations();
         if (cancelled) return;
         setLocations(data);
         setError(null);
@@ -126,7 +131,7 @@ export function CancellationPolicySettings({ token }: { token: string }) {
     return () => {
       cancelled = true;
     };
-  }, [token, reloadKey]);
+  }, [requestLocations, reloadKey]);
 
   return (
     <section aria-labelledby="cancellation-policy-heading" className="mt-8 flex flex-col gap-3">
@@ -136,11 +141,23 @@ export function CancellationPolicySettings({ token }: { token: string }) {
         </h2>
         <p className="max-w-[68ch] text-sm text-muted">{copy.support}</p>
       </div>
-      <AsyncSection loading={loading} error={error} onRetry={() => setReloadKey((k) => k + 1)}>
+      <AsyncSection loading={loading} error={error} onRetry={() => {
+          setLoading(true);
+          setReloadKey((k) => k + 1);
+        }}
+      >
         <ul className="flex flex-col divide-y divide-hairline rounded-lg border border-border bg-surface">
           {locations.map((location) => (
             <li key={location.id} className="px-4 py-3">
-              <LocationPolicyRow token={token} location={location} />
+              <LocationPolicyRow
+                token={token}
+                location={location}
+                onRetryLocations={() => {
+                  // Relee sin vaciar la lista (el modal abierto sigue abierto).
+                  requestLocations.invalidate();
+                  setReloadKey((k) => k + 1);
+                }}
+              />
             </li>
           ))}
         </ul>
@@ -155,7 +172,15 @@ function feeText(version: CancellationPolicyVersion): string | null {
     : null;
 }
 
-function LocationPolicyRow({ token, location }: { token: string; location: ClinicLocation }) {
+function LocationPolicyRow({
+  token,
+  location,
+  onRetryLocations,
+}: {
+  token: string;
+  location: ClinicLocation;
+  onRetryLocations: () => void;
+}) {
   const [policy, setPolicy] = useState<CancellationPolicy | null>(null);
   const [failed, setFailed] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
@@ -265,6 +290,7 @@ function LocationPolicyRow({ token, location }: { token: string; location: Clini
           token={token}
           location={location}
           current={current}
+          onRetryLocations={onRetryLocations}
           onOpenChange={(open) => {
             if (!open) setEditing(false);
           }}
@@ -373,12 +399,15 @@ export function CancellationPolicyModal({
   token,
   location,
   current,
+  onRetryLocations,
   onOpenChange,
   onSaved,
 }: {
   token: string;
   location: ClinicLocation;
   current: CancellationPolicyVersion | null;
+  /** Vuelve a leer las sedes (la sede no tenía moneda). */
+  onRetryLocations: () => void;
   onOpenChange: (open: boolean) => void;
   onSaved: (saved: CancellationPolicyVersion) => void;
 }) {
@@ -391,7 +420,10 @@ export function CancellationPolicyModal({
   const [feeTextValue, setFeeTextValue] = useState(
     current?.suggestedFee != null ? String(current.suggestedFee) : '',
   );
-  const [currency, setCurrency] = useState(current?.currency ?? 'COP');
+  // La moneda de la versión vigente o, si no tiene, la de la sede (GLOBAL-G1).
+  // Una sede sin moneda muestra `SedeConfigError` en el campo: nunca otra.
+  const [currencyChoice, setCurrency] = useState(current?.currency ?? '');
+  const currency = currencyChoice || locationCurrency(location) || '';
   const [patientText, setPatientText] = useState(current?.patientText ?? '');
   const [receptionCanCharge, setReceptionCanCharge] = useState(current?.receptionCanCharge ?? false);
   const [errors, setErrors] = useState<{ hours?: string; fee?: string }>({});
@@ -408,7 +440,8 @@ export function CancellationPolicyModal({
     let fee: number | null = null;
     if (feeTextValue.trim() !== '') {
       const parsed = parseMoneyInput(feeTextValue, currency);
-      if (parsed.ok) fee = parsed.value;
+      if (!currency) next.fee = copy.feeNeedsCurrency;
+      else if (parsed.ok) fee = parsed.value;
       else next.fee = parsed.message;
     }
     setErrors(next);
@@ -480,13 +513,23 @@ export function CancellationPolicyModal({
         </FormField>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor={currencyId}>{copy.currency}</Label>
-          <CurrencySelect
-            id={currencyId}
-            token={token}
-            value={currency}
-            onChange={setCurrency}
-            disabled={submitting}
-          />
+          {currency ? (
+            <CurrencySelect
+              id={currencyId}
+              token={token}
+              value={currency}
+              onChange={setCurrency}
+              disabled={submitting}
+            />
+          ) : (
+            <SedeConfigError
+              kind="currency"
+              variant="field"
+              retryId={currencyId}
+              onRetry={onRetryLocations}
+              className="h-10 w-full"
+            />
+          )}
         </div>
       </div>
       <div className="flex flex-col gap-1.5">

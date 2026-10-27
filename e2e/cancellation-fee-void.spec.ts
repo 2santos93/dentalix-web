@@ -40,7 +40,7 @@ test.beforeAll(async ({ request }) => {
   await addStaffViaApi(request, session, { ...dentist, role: 'DENTIST', password });
   const schedule = await request.put(`${API_URL}/locations/schedule`, {
     headers: session.headers,
-    data: { timezone: 'America/Bogota', ranges: [] },
+    data: { ranges: [] },
   });
   expect(schedule.ok()).toBeTruthy();
   const staff = await request.get(`${API_URL}/staff`, { headers: session.headers });

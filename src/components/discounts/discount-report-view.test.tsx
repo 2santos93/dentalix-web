@@ -9,6 +9,7 @@ import {
 } from '@/lib/discounts/discounts-api';
 import { getTokenRole } from '@/lib/auth/token-role';
 import { ApiError } from '@/lib/api/client';
+import { SEDE_TIME_ZONE_ERROR, useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
 
 jest.mock('../../lib/discounts/discounts-api', () => ({
   getDiscountReport: jest.fn(),
@@ -17,7 +18,8 @@ jest.mock('../../lib/discounts/discounts-api', () => ({
 jest.mock('../../lib/auth/token-role', () => ({ getTokenRole: jest.fn() }));
 jest.mock('../errors/notify', () => ({ notifyError: jest.fn() }));
 jest.mock('../../lib/locations/use-sede-time-zone', () => ({
-  useSedeTimeZone: () => 'America/Bogota',
+  ...jest.requireActual('../../lib/locations/use-sede-time-zone'),
+  useSedeTimeZone: jest.fn(() => ({ status: 'ready', timeZone: 'America/Bogota' })),
   sedeToday: () => '2026-10-17',
 }));
 jest.mock('../../lib/appointments/staff-api', () => ({
@@ -27,6 +29,7 @@ jest.mock('../../lib/appointments/staff-api', () => ({
   ]),
 }));
 
+const mockedZone = useSedeTimeZone as jest.MockedFunction<typeof useSedeTimeZone>;
 const mockedReport = getDiscountReport as jest.MockedFunction<typeof getDiscountReport>;
 const mockedCsv = downloadDiscountReportCsv as jest.MockedFunction<typeof downloadDiscountReportCsv>;
 const mockedRole = getTokenRole as jest.MockedFunction<typeof getTokenRole>;
@@ -99,6 +102,7 @@ function report(items: DiscountReportItem[], overrides: Partial<DiscountReport> 
 describe('DiscountReportView (DX-204)', () => {
   beforeEach(() => {
     mockedReport.mockReset();
+    mockedZone.mockReturnValue({ status: 'ready', timeZone: 'America/Bogota' });
     mockedCsv.mockReset();
     mockedRole.mockReturnValue('ADMIN');
   });
@@ -285,5 +289,18 @@ describe('DiscountReportView (DX-204)', () => {
       }),
     );
     expect(await screen.findByText('Informe exportado.')).toBeInTheDocument();
+  });
+
+  it('consumers render SedeConfigError without a zone', async () => {
+    const retry = jest.fn();
+    mockedZone.mockReturnValue({ status: 'error', message: SEDE_TIME_ZONE_ERROR, retry });
+    render(<DiscountReportView token="tok" />);
+    expect(
+      await screen.findByText('No se pudo saber la zona horaria de la sede. Vuelve a intentarlo.'),
+    ).toBeInTheDocument();
+    // Sin zona no hay período por defecto: no se consulta con otra zona.
+    expect(mockedReport).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole('button', { name: 'Reintentar' }));
+    expect(retry).toHaveBeenCalledTimes(1);
   });
 });

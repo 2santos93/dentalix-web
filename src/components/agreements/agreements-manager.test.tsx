@@ -14,6 +14,7 @@ import { listLocations, type ClinicLocation } from '@/lib/locations/locations-ap
 import { ApiError } from '@/lib/api/client';
 import { setupUser } from '@/lib/test/user';
 import { notifyError } from '../errors/notify';
+import { clinicLocation } from '@/lib/test/locations';
 
 jest.mock('../../lib/agreements/agreements-api', () => ({
   ...jest.requireActual('../../lib/agreements/agreements-api'),
@@ -56,7 +57,7 @@ const sanitasPayer: Payer = {
   createdAt: '2026-10-01T00:00:00.000Z',
   updatedAt: '2026-10-01T00:00:00.000Z',
 };
-const norte: ClinicLocation = {
+const norte: ClinicLocation = clinicLocation({
   id: 'loc-1',
   name: 'Sede Norte',
   address: null,
@@ -64,7 +65,7 @@ const norte: ClinicLocation = {
   isActive: true,
   timeZone: 'America/Bogota',
   createdAt: '2026-01-01T00:00:00Z',
-};
+});
 
 const porcentaje: Agreement = {
   id: 'ag-1',

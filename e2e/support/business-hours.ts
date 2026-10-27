@@ -14,7 +14,8 @@ import { API_URL } from './urls';
  * Un `PUT` con `ranges: []` es exactamente "esta sede no restringe horarios"
  * (misma semántica que una sede sin configurar), así que además documenta que
  * estos specs no son sobre el horario. Los que SÍ lo prueben deben configurar
- * tramos explícitos en vez de llamar a esto.
+ * tramos explícitos en vez de llamar a esto. Sin `timezone` (G1): el horario
+ * usa la zona de la sede.
  */
 export async function disableBusinessHours(page: Page, origin: string): Promise<void> {
   // Necesita una sesión ya iniciada en la página (cookie de refresh, DX-062).
@@ -25,7 +26,7 @@ export async function disableBusinessHours(page: Page, origin: string): Promise<
       Authorization: `Bearer ${accessToken}`,
       'X-Tenant-Host': new URL(origin).host,
     },
-    data: { timezone: 'America/Bogota', ranges: [] },
+    data: { ranges: [] },
   });
   expect(
     res.ok(),

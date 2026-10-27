@@ -26,7 +26,8 @@ import {
 } from '@/lib/payments/payment-method';
 import { formatCurrency } from '@/lib/format/currency';
 import { formatCivilDate, formatDate, zoneCityLabel } from '@/lib/format/date';
-import { useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
+import { readyTimeZone, useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
+import { SedeConfigError } from '@/components/locations/sede-config-error';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -157,9 +158,11 @@ interface CashRegisterViewProps {
  */
 export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
   // DX-097: «hoy», «esta semana» y «este mes» son los de la SEDE (su zona
-  // IANA, de la API), no los del navegador. `null` mientras se resuelve: no se
-  // consulta nada hasta saber qué día es en la sede.
-  const timeZone = useSedeTimeZone(token);
+  // IANA, de la API), no los del navegador. Mientras se resuelve no se
+  // consulta nada hasta saber qué día es en la sede; sin zona de la sede, los
+  // atajos muestran `SedeConfigError` (el rango personalizado no la necesita).
+  const zone = useSedeTimeZone(token);
+  const timeZone = readyTimeZone(zone);
   const [period, setPeriod] = useState<PeriodChoice>('today');
   // El rango que se CONSULTA. Con un atajo sale del día de la sede (y se
   // recalcula si cambia la sede); en personalizado se copia de los campos solo
@@ -395,7 +398,9 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
           />
         ) : null}
 
-        {showResults ? (
+        {showResults && zone.status === 'error' && period !== 'custom' ? (
+          <SedeConfigError kind="timeZone" description={zone.message} onRetry={zone.retry} />
+        ) : showResults ? (
           <>
             {!loading && !loadError && data ? (
               <ResultCount

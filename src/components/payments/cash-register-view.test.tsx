@@ -12,6 +12,7 @@ import { presetRange as presetRangeIn } from '@/lib/payments/cash-period';
 import { listLocations } from '@/lib/locations/locations-api';
 import { getPaymentReceipt } from '@/lib/payments/payment-receipts-api';
 import { paymentReceiptFixture } from '@/lib/test/payment-receipt';
+import { clinicLocation } from '@/lib/test/locations';
 
 jest.mock('../../lib/payments/payment-receipts-api', () => ({
   ...jest.requireActual('../../lib/payments/payment-receipts-api'),
@@ -107,7 +108,7 @@ beforeEach(() => {
   mockedVoid.mockReset();
   mockedLocations.mockReset();
   mockedLocations.mockResolvedValue([
-    {
+    clinicLocation({
       id: 'loc-1',
       name: 'Sede principal',
       address: null,
@@ -115,7 +116,7 @@ beforeEach(() => {
       isActive: true,
       timeZone: SEDE_ZONE,
       createdAt: '2026-01-01T00:00:00.000Z',
-    },
+    }),
   ]);
 });
 
@@ -633,15 +634,17 @@ describe('días de la sede (DX-097)', () => {
       advanceTimers: true,
     });
     mockedLocations.mockResolvedValue([
-      {
+      clinicLocation({
         id: 'mad',
         name: 'Madrid',
         address: null,
         country: 'ES',
         isActive: true,
+        currency: 'EUR',
         timeZone: 'Europe/Madrid',
+        locale: 'es-ES',
         createdAt: '2026-01-01T00:00:00.000Z',
-      },
+      }),
     ]);
     mockedList.mockResolvedValue(response());
     render(<CashRegisterView token="tok" />);
@@ -662,13 +665,29 @@ describe('días de la sede (DX-097)', () => {
     render(<CashRegisterView token="tok" />);
 
     expect(mockedList).not.toHaveBeenCalled();
-    resolveLocations([]);
-    // Sin sedes: la zona por defecto de la sede, nunca la del navegador.
+    resolveLocations([clinicLocation()]);
     await waitFor(() => expect(mockedList).toHaveBeenCalledTimes(1));
     expect(mockedList).toHaveBeenCalledWith('tok', {
       ...presetRange('today'),
       page: 1,
     });
+  });
+
+  it('consumers render SedeConfigError without a zone', async () => {
+    mockedLocations.mockResolvedValueOnce([clinicLocation({ timeZone: null })]);
+    mockedList.mockResolvedValue(response());
+    render(<CashRegisterView token="tok" />);
+
+    expect(
+      await screen.findByText('No se pudo saber la zona horaria de la sede. Vuelve a intentarlo.'),
+    ).toBeInTheDocument();
+    // Nunca se consulta «hoy» con otra zona (ni Bogotá ni la del navegador).
+    expect(mockedList).not.toHaveBeenCalled();
+
+    // Reintentar relee las sedes; ya configurada, la caja carga.
+    mockedLocations.mockResolvedValueOnce([clinicLocation()]);
+    await userEvent.click(screen.getByRole('button', { name: 'Reintentar' }));
+    await waitFor(() => expect(mockedList).toHaveBeenCalledWith('tok', { ...presetRange('today'), page: 1 }));
   });
 
   it('la fecha de cada fila es su día en la sede (paidOn): un abono de las 20:00 sale en su día', async () => {

@@ -5,6 +5,7 @@ import { getStaffLocations, replaceStaffLocations } from '@/lib/staff/staff-api'
 import { listLocations, type ClinicLocation } from '@/lib/locations/locations-api';
 import { ApiError } from '@/lib/api/client';
 import { Toaster } from '@/components/errors/toaster';
+import { clinicLocation } from '@/lib/test/locations';
 
 // NOTE: jest.mock's string literal is not alias-rewritten by the SWC
 // transform — relative path, misma convención que el resto de tests.
@@ -21,7 +22,7 @@ const mockedReplace = replaceStaffLocations as jest.MockedFunction<typeof replac
 const mockedList = listLocations as jest.MockedFunction<typeof listLocations>;
 
 function sede(id: string, name: string, isActive = true): ClinicLocation {
-  return {
+  return clinicLocation({
     id,
     name,
     address: null,
@@ -29,7 +30,7 @@ function sede(id: string, name: string, isActive = true): ClinicLocation {
     isActive,
     timeZone: 'America/Bogota',
     createdAt: '2026-01-01T00:00:00.000Z',
-  };
+  });
 }
 
 beforeEach(() => {

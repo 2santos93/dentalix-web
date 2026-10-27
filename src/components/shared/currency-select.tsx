@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { listCurrencies, type Currency } from '@/lib/reference/currencies-api';
 import { FieldError } from '@/components/errors/field-error';
+import { fieldClass } from '@/lib/ui/field-class';
 import { cn } from '@/lib/utils';
 
 const copy = {
@@ -9,13 +10,17 @@ const copy = {
   loadError: 'Monedas no disponibles',
 };
 
-// Same native-control fieldClass convention as patient-form.tsx / treatment-plans-tab.tsx.
-const fieldClass =
-  'flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-50';
+/**
+ * De dónde sale la lista, exactamente una fuente: con sesión, `GET /currencies`
+ * con el token; sin sesión (registro, R18), un `loader` como
+ * `listPublicCurrencies` (referencia estable).
+ */
+export type CurrencySource =
+  | { token: string; loader?: undefined }
+  | { loader: () => Promise<Currency[]>; token?: undefined };
 
-interface CurrencySelectProps {
+type CurrencySelectProps = CurrencySource & {
   id: string;
-  token: string;
   value: string;
   onChange: (code: string) => void;
   disabled?: boolean;
@@ -25,11 +30,15 @@ interface CurrencySelectProps {
   /** p. ej. la razón de que esté deshabilitado. */
   ariaDescribedBy?: string;
   placeholder?: string;
-}
+  /** Para `aria-invalid`/`aria-required` desde el `FormField` que lo envuelve. */
+  invalid?: boolean;
+  required?: boolean;
+};
 
 export function CurrencySelect({
   id,
   token,
+  loader,
   value,
   onChange,
   disabled,
@@ -37,6 +46,8 @@ export function CurrencySelect({
   ariaLabel,
   ariaDescribedBy,
   placeholder,
+  invalid,
+  required,
 }: CurrencySelectProps) {
   const [currencies, setCurrencies] = useState<Currency[]>([]);
   const [failed, setFailed] = useState(false);
@@ -44,7 +55,8 @@ export function CurrencySelect({
 
   useEffect(() => {
     let cancelled = false;
-    listCurrencies(token)
+    const request = loader ? loader() : listCurrencies(token);
+    request
       .then((data) => {
         if (!cancelled) setCurrencies(data);
       })
@@ -54,7 +66,7 @@ export function CurrencySelect({
     return () => {
       cancelled = true;
     };
-  }, [token, attempt]);
+  }, [token, loader, attempt]);
 
   // Escalón 2 de la escalera de errores (DX-063): sin la lista, el select solo
   // ofrecería la moneda actual con cara de normal. Se sustituye en su sitio por
@@ -83,11 +95,18 @@ export function CurrencySelect({
       value={value}
       disabled={disabled}
       onChange={(e) => onChange(e.target.value)}
-      className={cn(fieldClass, className)}
+      className={cn(fieldClass, 'h-10', className)}
       aria-label={ariaLabel}
       aria-describedby={ariaDescribedBy}
+      aria-invalid={invalid || undefined}
+      aria-required={required || undefined}
     >
-      {placeholder ? <option value="">{placeholder}</option> : null}
+      {/* Igual que el resto de selects obligatorios: el marcador no se puede volver a elegir. */}
+      {placeholder ? (
+        <option value="" disabled>
+          {placeholder}
+        </option>
+      ) : null}
       {options.filter((c) => !placeholder || c.code).map((c) => (
         <option key={c.code} value={c.code}>
           {c.symbol ? `${c.name} (${c.symbol})` : c.name}

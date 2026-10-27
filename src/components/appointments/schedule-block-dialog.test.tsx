@@ -7,6 +7,7 @@ import {
   listAffectedAppointments,
   type ScheduleBlock,
 } from '@/lib/appointments/schedule-blocks-api';
+import { clinicLocation } from '@/lib/test/locations';
 
 jest.mock('../../lib/appointments/schedule-blocks-api', () => ({
   createScheduleBlock: jest.fn(),
@@ -29,8 +30,8 @@ const staff = [
   { userId: 'prov-2', fullName: 'Dr. Luis Gómez', role: 'DENTIST' as const, locationIds: null },
 ];
 const locations = [
-  { id: 'loc-1', name: 'Sede principal', address: null, country: 'CO' as const, isActive: true, timeZone: 'America/Bogota', createdAt: '' },
-  { id: 'loc-2', name: 'Sede Norte', address: null, country: 'CO' as const, isActive: true, timeZone: 'America/Bogota', createdAt: '' },
+  clinicLocation({ id: 'loc-1', name: 'Sede principal', address: null, country: 'CO' as const, isActive: true, timeZone: 'America/Bogota', createdAt: '' }),
+  clinicLocation({ id: 'loc-2', name: 'Sede Norte', address: null, country: 'CO' as const, isActive: true, timeZone: 'America/Bogota', createdAt: '' }),
 ];
 const created = { id: 'b-1' } as ScheduleBlock;
 const local = (day: string, hhmm: string) => new Date(`${day}T${hhmm}:00`).toISOString();

@@ -10,6 +10,7 @@ import { ApiError } from '@/lib/api/client';
 import { setActiveLocationId } from '@/lib/locations/location-store';
 import type { ClinicRole } from '@/lib/me/me-api';
 import { listLocations, type ClinicLocation } from '@/lib/locations/locations-api';
+import { clinicLocation } from '@/lib/test/locations';
 
 jest.mock('../../lib/appointments/patient-flow', () => ({
   ...jest.requireActual('../../lib/appointments/patient-flow'),
@@ -30,7 +31,7 @@ const mockedGet = getInClinic as jest.MockedFunction<typeof getInClinic>;
 const mockedUndo = undoArrival as jest.MockedFunction<typeof undoArrival>;
 const mockedUpdate = updateAppointment as jest.MockedFunction<typeof updateAppointment>;
 const mockedLocations = listLocations as jest.MockedFunction<typeof listLocations>;
-const sede = (id: string) => ({ id, name: id, isActive: true }) as ClinicLocation;
+const sede = (id: string): ClinicLocation => clinicLocation({ id, name: id });
 
 function item(overrides: Partial<InClinicItem> & { appointmentId: string }): InClinicItem {
   return {

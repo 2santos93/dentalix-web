@@ -17,7 +17,6 @@ import {
   listPatientPrescriptions,
   listPrescriptionTemplates,
   prescriptionPrintHref,
-  updateLocationCountry,
   updatePrescriptionTemplate,
   voidPrescription,
 } from './prescriptions-api';
@@ -103,11 +102,6 @@ describe('prescriptions-api', () => {
     expect(call(spy, 1)).toMatchObject({ method: 'POST', body: { name: 'A' } });
     expect(call(spy, 2)).toMatchObject({ method: 'PATCH', body: { name: 'B' } });
     expect(call(spy2, 0)).toMatchObject({ method: 'DELETE' });
-
-    const spy3 = mockFetch({});
-    await updateLocationCountry('tok', 'loc1', 'ES');
-    expect(call(spy3, 0)).toMatchObject({ method: 'PATCH', body: { country: 'ES' } });
-    expect(call(spy3, 0).path).toMatch(/\/locations\/loc1$/);
   });
 
   it('ruta de la vista imprimible', () => {

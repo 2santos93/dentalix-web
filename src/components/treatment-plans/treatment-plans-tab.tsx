@@ -40,6 +40,7 @@ import { isFdiToothNumber } from '@/lib/odontogram/fdi';
 import type { ToothSurface } from '@/lib/odontogram/odontogram-api';
 import { listLocations, type ClinicLocation } from '@/lib/locations/locations-api';
 import { getActiveLocationId } from '@/lib/locations/location-store';
+import { activeSedeCurrency } from '@/lib/locations/location-settings';
 import { paymentLocationHint } from '@/lib/payments/payment-location';
 import Link from 'next/link';
 import { formatCurrency } from '@/lib/format/currency';
@@ -70,6 +71,7 @@ import { VoidPaymentModal } from '@/components/payments/void-payment-modal';
 import { voidPaymentErrorMessage } from '@/components/payments/use-void-payment';
 import { ReallocatePaymentModal } from '@/components/payments/reallocate-payment-modal';
 import { getTokenAllowedLocationIds, getTokenRole, getTokenUserId } from '@/lib/auth/token-role';
+import { canRecordPayments } from '@/lib/payments/billable-plans-api';
 import { PaymentPlanSection } from './payment-plan-section';
 import { PlanVisitsBoard } from './plan-visits-board';
 import { PlanQuoteActions } from './plan-quote-actions';
@@ -81,7 +83,8 @@ import { InlineError } from '@/components/errors/inline-error';
 import { notifyError } from '@/components/errors/notify';
 import { cn } from '@/lib/utils';
 import { formatCivilDate, formatDateTime } from '@/lib/format/date';
-import { sedeToday, useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
+import { readyTimeZone, sedeToday, useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
+import { SedeConfigError } from '@/components/locations/sede-config-error';
 import { SURFACE_LABELS, SURFACE_ORDER } from '@/lib/odontogram/surface-labels';
 import { getDiscountPolicy } from '@/lib/discounts/discounts-api';
 import {
@@ -132,6 +135,10 @@ const copy = {
   // button, not in a `FormField`) — passed as `CurrencySelect`'s `ariaLabel`
   // so it still has an accessible name (WCAG 4.1.2).
   newPlanCurrencyLabel: 'Moneda del nuevo plan',
+  newPlanCurrencyPlaceholder: 'Elige la moneda',
+  // GLOBAL-G1 (R14): sin sede activa y con sedes en monedas distintas (o una
+  // sede sin moneda) no hay moneda que suponer.
+  newPlanCurrencyRequired: 'Elige la moneda del nuevo plan.',
   creatingPlan: 'Creando…',
   planCreated: 'Plan creado y seleccionado abajo.',
   // Reuse path (dup guard): an empty DRAFT already existed, so "Nuevo plan"
@@ -1152,8 +1159,14 @@ export function TreatmentPlansTab({
   odontogramHref,
   implantHref,
 }: TreatmentPlansTabProps) {
-  // DX-097: la fecha por defecto del abono es hoy en la zona de la sede.
-  const sedeTimeZone = useSedeTimeZone(token);
+  // DX-097: la fecha por defecto del abono es hoy en la zona de la sede. Sin
+  // su zona, la fecha empieza vacía (nunca se cuenta en otra zona).
+  const sedeZone = useSedeTimeZone(token);
+  // DX-051: saldo y abonos solo para los roles de cobro (los mismos
+  // PAYMENT_ROLES que la API). DENTIST y ASSISTANT no ven datos de pago: ni se
+  // piden (serían 403 y un toast en cada acción) ni se pinta su sección.
+  const canSeeBilling = canRecordPayments(getTokenRole(token));
+  const sedeTimeZone = readyTimeZone(sedeZone);
   // Plans list + catalog (loaded together).
   const [plans, setPlans] = useState<TreatmentPlan[]>([]);
   const [catalogItems, setCatalogItems] = useState<DentalCatalogItem[]>([]);
@@ -1173,7 +1186,10 @@ export function TreatmentPlansTab({
   // Distinct from `planCreated`: set when "Nuevo plan" reused an existing empty
   // DRAFT (no POST) instead of creating one. Cleared at the next create attempt.
   const [planReused, setPlanReused] = useState(false);
-  const [newPlanCurrency, setNewPlanCurrency] = useState('USD');
+  // GLOBAL-G1 (R14): la moneda de un plan nuevo empieza vacía y se sugiere con
+  // la de la sede activa o, sin sede activa, la común de la clínica (más abajo,
+  // al tener las sedes). Si no hay ninguna, hay que elegirla. Nunca USD.
+  const [newPlanCurrencyChoice, setNewPlanCurrency] = useState('');
 
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
 
@@ -1230,6 +1246,12 @@ export function TreatmentPlansTab({
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentCurrency, setPaymentCurrency] = useState('');
   const [paymentDate, setPaymentDate] = useState('');
+  // La zona llega después de abrir el formulario: la fecha vacía pasa a «hoy».
+  const [prevSedeTimeZone, setPrevSedeTimeZone] = useState(sedeTimeZone);
+  if (sedeTimeZone !== prevSedeTimeZone) {
+    setPrevSedeTimeZone(sedeTimeZone);
+    if (sedeTimeZone && paymentDate === '') setPaymentDate(sedeToday(sedeTimeZone));
+  }
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | ''>('');
   const [paymentNotes, setPaymentNotes] = useState('');
   const [addPaymentSubmitting, setAddPaymentSubmitting] = useState(false);
@@ -1259,12 +1281,15 @@ export function TreatmentPlansTab({
   // foto inmutable), así que aquí no hace falta nada más del paciente.
   const [receiptPaymentId, setReceiptPaymentId] = useState<string | null>(null);
 
-  // Sedes de la clínica + sede activa, solo para decir a qué sede quedará
-  // atribuido un abono nuevo. Se piden una vez y fallan en silencio: si no
-  // se sabe la sede, la
-  // línea no aparece — nunca bloquea ni rompe el formulario.
+  // Sedes de la clínica + sede activa: para decir a qué sede quedará
+  // atribuido un abono nuevo y para sugerir la moneda de un plan nuevo. Se
+  // piden una vez y fallan en silencio: si no se sabe la sede, la línea no
+  // aparece y la moneda del plan nuevo queda por elegir.
   const [locations, setLocations] = useState<ClinicLocation[]>([]);
+  const [locationsReloadKey, setLocationsReloadKey] = useState(0);
   const [activeLocationId, setActiveLocationId] = useState<string | null>(null);
+  const newPlanCurrency =
+    newPlanCurrencyChoice || activeSedeCurrency(locations, activeLocationId).currency || '';
 
   // Add-item form state.
   const [toothNumber, setToothNumber] = useState('');
@@ -1395,7 +1420,7 @@ export function TreatmentPlansTab({
     return () => {
       cancelled = true;
     };
-  }, [token, patientId]);
+  }, [token, patientId, locationsReloadKey]);
 
   // Default the plan selector to the first plan once plans load, so the
   // detail shows without an extra click — adjusts state DURING render (the
@@ -1536,6 +1561,11 @@ export function TreatmentPlansTab({
         setPlanReused(true);
         return;
       }
+      if (!newPlanCurrency) {
+        setCreatePlanError(copy.newPlanCurrencyRequired);
+        document.getElementById('tp-new-plan-currency')?.focus();
+        return;
+      }
       const created = await createPlan(token, patientId, { currency: newPlanCurrency });
       await refreshPlansInPlace();
       setSelectedPlanId(created.id);
@@ -1643,7 +1673,7 @@ export function TreatmentPlansTab({
   // render, see the `prevSelectedPlanId` block) whenever `selectedPlanId`
   // changes, so this effect only needs to handle the "fetch" case.
   useEffect(() => {
-    if (!selectedPlanId) return;
+    if (!selectedPlanId || !canSeeBilling) return;
     let cancelled = false;
     const isInitialLoad = loadedPaymentsPlanIdRef.current !== selectedPlanId;
 
@@ -1691,7 +1721,7 @@ export function TreatmentPlansTab({
     };
     // `paymentsReloadKey` is a dep purely so the toast above can retry by
     // bumping it — same rationale as `planDetailReloadKey` above.
-  }, [token, selectedPlanId, paymentsReloadKey]);
+  }, [token, selectedPlanId, paymentsReloadKey, canSeeBilling]);
 
   /**
    * Re-fetches the balance + abonos list in place. Called directly by
@@ -1700,7 +1730,7 @@ export function TreatmentPlansTab({
    * re-enabling" fix as `refreshPlanDetail` above.
    */
   function refreshBalanceAndPayments(): Promise<void> {
-    if (!selectedPlanId) return Promise.resolve();
+    if (!selectedPlanId || !canSeeBilling) return Promise.resolve();
     setPaymentsRefreshing(true);
     return Promise.all([getPlanBalance(token, selectedPlanId), listPayments(token, selectedPlanId)])
       .then(([balanceData, paymentsData]) => {
@@ -1729,9 +1759,10 @@ export function TreatmentPlansTab({
   function openPaymentForm() {
     paymentIdempotencyKeyRef.current = crypto.randomUUID();
     setPaymentAmount('');
-    setPaymentCurrency(planDetail?.currency ?? 'USD');
+    // GLOBAL-G1 (R14): la del plan, sin moneda de reserva.
+    setPaymentCurrency(planDetail?.currency ?? '');
     // DX-097: hoy en la zona de la sede, no en la del navegador.
-    setPaymentDate(sedeToday(sedeTimeZone));
+    setPaymentDate(sedeTimeZone ? sedeToday(sedeTimeZone) : '');
     setPaymentMethod('');
     setPaymentNotes('');
     setAddPaymentValidationError(null);
@@ -2112,7 +2143,11 @@ export function TreatmentPlansTab({
               id="tp-new-plan-currency"
               token={token}
               value={newPlanCurrency}
-              onChange={setNewPlanCurrency}
+              onChange={(code) => {
+                setNewPlanCurrency(code);
+                setCreatePlanError(null);
+              }}
+              placeholder={newPlanCurrency ? undefined : copy.newPlanCurrencyPlaceholder}
               className="min-w-0 flex-1 sm:w-44 sm:flex-none"
               ariaLabel={copy.newPlanCurrencyLabel}
             />
@@ -2361,180 +2396,193 @@ export function TreatmentPlansTab({
                   }
                 />} />
 
-                <Separator />
+                {canSeeBilling ? (
+                  <>
+                    <Separator />
 
-                <div className="flex flex-col gap-4">
-                  <div className="flex flex-wrap items-center justify-between gap-3">
-                    {/* La nota de alcance NO se repite aquí: vive una sola vez
-                        pegada a `PlanMoneySummary`, que es donde está el Saldo
-                        que califica. Decirla dos veces en la misma pantalla la
-                        convierte en ruido y sugiere que son dos alcances. */}
-                    <h3 className="text-base font-semibold text-ink">{copy.paymentsHeading}</h3>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      onClick={openPaymentForm}
-                      disabled={!billable}
-                      aria-describedby={billable ? undefined : 'plan-not-billable-hint'}
-                    >
-                      {copy.registerPayment}
-                    </Button>
-                  </div>
-                  {!billable && planDetail && (
-                    <p id="plan-not-billable-hint" className="text-sm text-muted">
-                      {copy.notBillableHint(PLAN_STATUS_LABELS[planDetail.status])}
-                    </p>
-                  )}
-
-                  {paymentsLoading && (
-                    <p role="status" className="text-sm text-muted">
-                      {copy.loadingBalance}
-                    </p>
-                  )}
-                  {paymentsError && (
-                    // Misma razón que en `planDetailError` arriba: la reload
-                    // key mantiene el fallo en el escalón 1 en vez de apilarle
-                    // un toast de escalón 3.
-                    <SectionError
-                      description={paymentsError}
-                      onRetry={() => setPaymentsReloadKey((k) => k + 1)}
-                    />
-                  )}
-
-                  {!paymentsLoading && !paymentsError && planBalance && (
-                    <>
-                      {paymentsRefreshing && (
-                        <p role="status" aria-live="polite" className="text-xs font-medium text-muted">
-                          {copy.refreshing}
+                    <div className="flex flex-col gap-4">
+                      <div className="flex flex-wrap items-center justify-between gap-3">
+                        {/* La nota de alcance NO se repite aquí: vive una sola vez
+                            pegada a `PlanMoneySummary`, que es donde está el Saldo
+                            que califica. Decirla dos veces en la misma pantalla la
+                            convierte en ruido y sugiere que son dos alcances. */}
+                        <h3 className="text-base font-semibold text-ink">{copy.paymentsHeading}</h3>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={openPaymentForm}
+                          disabled={!billable}
+                          aria-describedby={billable ? undefined : 'plan-not-billable-hint'}
+                        >
+                          {copy.registerPayment}
+                        </Button>
+                      </div>
+                      {!billable && planDetail && (
+                        <p id="plan-not-billable-hint" className="text-sm text-muted">
+                          {copy.notBillableHint(PLAN_STATUS_LABELS[planDetail.status])}
                         </p>
                       )}
 
-                      {/* Las tres tarjetas que vivían aquí (A pagar / Pagado /
-                          Saldo) subieron a `PlanMoneySummary`, junto al Total
-                          del plan: son cifras del MISMO plan y separarlas en
-                          dos racimos era lo que producía seis números con
-                          alcances distintos en una pantalla. Ninguna
-                          desapareció. */}
-                      <FormModal
-                        open={showPaymentForm}
-                        onOpenChange={setShowPaymentForm}
-                        title={copy.registerPayment}
-                        onSubmit={handleAddPayment}
-                        submitLabel={copy.addPaymentSubmit}
-                        submitting={addPaymentSubmitting}
-                        error={addPaymentValidationError ?? addPaymentError}
-                        size="lg"
-                      >
-                        {/* Va antes de los campos: la sede a la que se
-                            atribuye el abono se lee ANTES de escribir el
-                            monto, no como una nota al pie ya con el dedo en
-                            «Registrar abono». */}
-                        {locationHint ? <p className="t-label text-muted">{locationHint}</p> : null}
-
-                        <div className="grid gap-4 sm:grid-cols-2">
-                          <FormField htmlFor="tp-payment-amount" label={copy.paymentAmountLabel} error={paymentAmountError}>
-                            <MoneyInput
-                              id="tp-payment-amount"
-                              currency={paymentCurrency}
-                              requirePositive
-                              value={paymentAmount}
-                              onValueChange={(text) => {
-                                setPaymentAmount(text);
-                                setPaymentAmountError(null);
-                              }}
-                              aria-invalid={paymentAmountError ? true : undefined}
-                              aria-describedby={paymentAmountError ? fieldErrorId('tp-payment-amount') : undefined}
-                            />
-                          </FormField>
-
-                          <FormField htmlFor="tp-payment-currency" label={copy.paymentCurrencyLabel}>
-                            <CurrencySelect
-                              id="tp-payment-currency"
-                              token={token}
-                              value={paymentCurrency}
-                              onChange={setPaymentCurrency}
-                            />
-                          </FormField>
-                        </div>
-
-                        <div className="grid gap-4 sm:grid-cols-2">
-                          <FormField htmlFor="tp-payment-date" label={copy.paymentDateLabel}>
-                            <Input
-                              id="tp-payment-date"
-                              type="date"
-                              value={paymentDate}
-                              onChange={(e) => setPaymentDate(e.target.value)}
-                            />
-                          </FormField>
-
-                          <FormField htmlFor="tp-payment-method" label={copy.paymentMethodLabel}>
-                            <select
-                              id="tp-payment-method"
-                              value={paymentMethod}
-                              onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod | '')}
-                              className={fieldClass}
-                            >
-                              <option value="">{copy.paymentMethodEmptyOption}</option>
-                              {PAYMENT_METHOD_OPTIONS.map((method) => (
-                                <option key={method} value={method}>
-                                  {PAYMENT_METHOD_LABELS[method]}
-                                </option>
-                              ))}
-                            </select>
-                          </FormField>
-                        </div>
-
-                        <FormField htmlFor="tp-payment-notes" label={copy.paymentNotesLabel}>
-                          <textarea
-                            id="tp-payment-notes"
-                            rows={2}
-                            value={paymentNotes}
-                            onChange={(e) => setPaymentNotes(e.target.value)}
-                            className={cn(fieldClass, 'h-auto')}
-                          />
-                        </FormField>
-                      </FormModal>
-
-                      {/* El detalle abono a abono se pliega; lo que decide si
-                          hace falta abrirlo —cuántos abonos hay— se queda
-                          leído en la propia fila, y el Saldo sigue arriba en
-                          `PlanMoneySummary`. En una pantalla financiera no se
-                          puede esconder una cifra que alguien necesita para
-                          decidir: se esconde la TABLA, nunca el número.
-                          Abierta por defecto cuando aún no hay ningún abono,
-                          para que el estado vacío enseñe el siguiente paso en
-                          vez de esconderlo tras un plegado. */}
-                      <Disclosure
-                        triggerId={PAYMENTS_TRIGGER_ID}
-                        summary={copy.paymentsHeading}
-                        meta={copy.paymentsDisclosureMeta(payments.length)}
-                        defaultOpen={payments.length === 0}
-                      >
-                        <PaymentsList
-                          payments={payments}
-                          voidingPaymentId={voidingPaymentId}
-                          onVoid={openVoidConfirm}
-                          onReceipt={setReceiptPaymentId}
-                          billable={billable}
-                          manualPaymentIds={manualPaymentIds}
-                          onAllocate={role === 'ADMIN' && billable ? openAllocation : undefined}
+                      {paymentsLoading && (
+                        <p role="status" className="text-sm text-muted">
+                          {copy.loadingBalance}
+                        </p>
+                      )}
+                      {paymentsError && (
+                        // Misma razón que en `planDetailError` arriba: la reload
+                        // key mantiene el fallo en el escalón 1 en vez de apilarle
+                        // un toast de escalón 3.
+                        <SectionError
+                          description={paymentsError}
+                          onRetry={() => setPaymentsReloadKey((k) => k + 1)}
                         />
-                      </Disclosure>
+                      )}
 
-                      <Separator />
+                      {!paymentsLoading && !paymentsError && planBalance && (
+                        <>
+                          {paymentsRefreshing && (
+                            <p role="status" aria-live="polite" className="text-xs font-medium text-muted">
+                              {copy.refreshing}
+                            </p>
+                          )}
 
-                      <PaymentPlanSection
-                        token={token}
-                        planId={selectedPlanId!}
-                        planCurrency={planBalance.planCurrency}
-                        billable={planBalance.billable}
-                        canCreate={billable}
-                        refreshSignal={paymentPlanRefreshSignal}
-                      />
-                    </>
-                  )}
-                </div>
+                          {/* Las tres tarjetas que vivían aquí (A pagar / Pagado /
+                              Saldo) subieron a `PlanMoneySummary`, junto al Total
+                              del plan: son cifras del MISMO plan y separarlas en
+                              dos racimos era lo que producía seis números con
+                              alcances distintos en una pantalla. Ninguna
+                              desapareció. */}
+                          <FormModal
+                            open={showPaymentForm}
+                            onOpenChange={setShowPaymentForm}
+                            title={copy.registerPayment}
+                            onSubmit={handleAddPayment}
+                            submitLabel={copy.addPaymentSubmit}
+                            submitting={addPaymentSubmitting}
+                            error={addPaymentValidationError ?? addPaymentError}
+                            size="lg"
+                          >
+                            {/* Va antes de los campos: la sede a la que se
+                                atribuye el abono se lee ANTES de escribir el
+                                monto, no como una nota al pie ya con el dedo en
+                                «Registrar abono». */}
+                            {locationHint ? <p className="t-label text-muted">{locationHint}</p> : null}
+
+                            <div className="grid gap-4 sm:grid-cols-2">
+                              <FormField htmlFor="tp-payment-amount" label={copy.paymentAmountLabel} error={paymentAmountError}>
+                                <MoneyInput
+                                  id="tp-payment-amount"
+                                  currency={paymentCurrency}
+                                  requirePositive
+                                  value={paymentAmount}
+                                  onValueChange={(text) => {
+                                    setPaymentAmount(text);
+                                    setPaymentAmountError(null);
+                                  }}
+                                  aria-invalid={paymentAmountError ? true : undefined}
+                                  aria-describedby={paymentAmountError ? fieldErrorId('tp-payment-amount') : undefined}
+                                />
+                              </FormField>
+
+                              <FormField htmlFor="tp-payment-currency" label={copy.paymentCurrencyLabel}>
+                                <CurrencySelect
+                                  id="tp-payment-currency"
+                                  token={token}
+                                  value={paymentCurrency}
+                                  onChange={setPaymentCurrency}
+                                />
+                              </FormField>
+                            </div>
+
+                            <div className="grid gap-4 sm:grid-cols-2">
+                              <FormField htmlFor="tp-payment-date" label={copy.paymentDateLabel}>
+                                {sedeZone.status === 'error' && paymentDate === '' ? (
+                                  <SedeConfigError
+                                    kind="timeZone"
+                                    variant="field"
+                                    retryId="tp-payment-date"
+                                    onRetry={sedeZone.retry}
+                                  />
+                                ) : (
+                                  <Input
+                                    id="tp-payment-date"
+                                    type="date"
+                                    value={paymentDate}
+                                    onChange={(e) => setPaymentDate(e.target.value)}
+                                  />
+                                )}
+                              </FormField>
+
+                              <FormField htmlFor="tp-payment-method" label={copy.paymentMethodLabel}>
+                                <select
+                                  id="tp-payment-method"
+                                  value={paymentMethod}
+                                  onChange={(e) => setPaymentMethod(e.target.value as PaymentMethod | '')}
+                                  className={fieldClass}
+                                >
+                                  <option value="">{copy.paymentMethodEmptyOption}</option>
+                                  {PAYMENT_METHOD_OPTIONS.map((method) => (
+                                    <option key={method} value={method}>
+                                      {PAYMENT_METHOD_LABELS[method]}
+                                    </option>
+                                  ))}
+                                </select>
+                              </FormField>
+                            </div>
+
+                            <FormField htmlFor="tp-payment-notes" label={copy.paymentNotesLabel}>
+                              <textarea
+                                id="tp-payment-notes"
+                                rows={2}
+                                value={paymentNotes}
+                                onChange={(e) => setPaymentNotes(e.target.value)}
+                                className={cn(fieldClass, 'h-auto')}
+                              />
+                            </FormField>
+                          </FormModal>
+
+                          {/* El detalle abono a abono se pliega; lo que decide si
+                              hace falta abrirlo —cuántos abonos hay— se queda
+                              leído en la propia fila, y el Saldo sigue arriba en
+                              `PlanMoneySummary`. En una pantalla financiera no se
+                              puede esconder una cifra que alguien necesita para
+                              decidir: se esconde la TABLA, nunca el número.
+                              Abierta por defecto cuando aún no hay ningún abono,
+                              para que el estado vacío enseñe el siguiente paso en
+                              vez de esconderlo tras un plegado. */}
+                          <Disclosure
+                            triggerId={PAYMENTS_TRIGGER_ID}
+                            summary={copy.paymentsHeading}
+                            meta={copy.paymentsDisclosureMeta(payments.length)}
+                            defaultOpen={payments.length === 0}
+                          >
+                            <PaymentsList
+                              payments={payments}
+                              voidingPaymentId={voidingPaymentId}
+                              onVoid={openVoidConfirm}
+                              onReceipt={setReceiptPaymentId}
+                              billable={billable}
+                              manualPaymentIds={manualPaymentIds}
+                              onAllocate={role === 'ADMIN' && billable ? openAllocation : undefined}
+                            />
+                          </Disclosure>
+
+                          <Separator />
+
+                          <PaymentPlanSection
+                            token={token}
+                            planId={selectedPlanId!}
+                            planCurrency={planBalance.planCurrency}
+                            billable={planBalance.billable}
+                            canCreate={billable}
+                            refreshSignal={paymentPlanRefreshSignal}
+                          />
+                        </>
+                      )}
+                    </div>
+                  </>
+                ) : null}
 
                 <Separator />
 
@@ -2785,6 +2833,7 @@ export function TreatmentPlansTab({
           activeLocationId={getActiveLocationId()}
           locationName={locations.find((l) => l.id === getActiveLocationId())?.name ?? null}
           locations={locations}
+          onRetryLocations={() => setLocationsReloadKey((k) => k + 1)}
           onSaved={handleMarkDoneSaved}
         />
       ) : null}

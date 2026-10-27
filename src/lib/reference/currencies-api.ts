@@ -7,3 +7,11 @@ export type Currency = components['schemas']['CurrencyDto'];
 export async function listCurrencies(token: string): Promise<Currency[]> {
   return apiFetch<Currency[]>('/currencies', { token });
 }
+
+/**
+ * `GET /public/currencies` — la misma lista, sin sesión: la usa el formulario
+ * de registro (R18).
+ */
+export async function listPublicCurrencies(): Promise<Currency[]> {
+  return apiFetch<Currency[]>('/public/currencies');
+}

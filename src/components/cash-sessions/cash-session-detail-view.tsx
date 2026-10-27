@@ -10,8 +10,9 @@ import {
   getCashSession,
   type CashSessionDetail,
 } from '@/lib/cash-sessions/cash-sessions-api';
-import { COUNTRY_CURRENCY } from '@/lib/locations/clinic-currency';
 import { listLocations } from '@/lib/locations/locations-api';
+import { locationCurrency } from '@/lib/locations/location-settings';
+import { SedeConfigError } from '@/components/locations/sede-config-error';
 import { PageHeader } from '@/components/shared/page-header';
 import { EmptyState } from '@/components/shared/empty-state';
 import { SectionError } from '@/components/errors/section-error';
@@ -55,7 +56,10 @@ export function CashSessionDetailView({ token, sessionId }: CashSessionDetailVie
   const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<number | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
-  const [currency, setCurrency] = useState('COP');
+  // Moneda de la sede del turno (GLOBAL-G1): `null` si las sedes no cargaron o
+  // la sede no tiene moneda. Sin ella no se ofrece ningún formulario que la
+  // necesite de partida (el ajuste); nunca otra moneda en su lugar.
+  const [currency, setCurrency] = useState<string | null>(null);
   const [modal, setModal] = useState<'close' | 'reopen' | 'adjust' | null>(null);
   const [modalKey, setModalKey] = useState(0);
   const [notice, setNotice] = useState('');
@@ -70,8 +74,7 @@ export function CashSessionDetailView({ token, sessionId }: CashSessionDetailVie
         ]);
         if (cancelled) return;
         setSession(res);
-        const sede = locations.find((l) => l.id === res.location.id);
-        if (sede) setCurrency(COUNTRY_CURRENCY[sede.country]);
+        setCurrency(locationCurrency(locations.find((l) => l.id === res.location.id)));
         setError(null);
         setStatus(null);
       } catch (err) {
@@ -146,7 +149,7 @@ export function CashSessionDetailView({ token, sessionId }: CashSessionDetailVie
                 {copy.reopen}
               </Button>
             ) : null}
-            {session.can.adjust ? (
+            {session.can.adjust && currency ? (
               <Button type="button" variant="outline" onClick={() => openModal('adjust')}>
                 {copy.adjust}
               </Button>
@@ -165,6 +168,14 @@ export function CashSessionDetailView({ token, sessionId }: CashSessionDetailVie
       <p role="status" className={notice ? 'mb-4 text-sm text-success' : 'sr-only'}>
         {notice}
       </p>
+      {currency === null && session.can.adjust ? (
+        <SedeConfigError
+          kind="currency"
+          onRetry={() => setReloadKey((k) => k + 1)}
+          locationId={session.location.id}
+          className="mb-4"
+        />
+      ) : null}
       <div className="overflow-hidden rounded-xl border border-border">
         <CashSessionReport session={session} />
       </div>
@@ -190,7 +201,7 @@ export function CashSessionDetailView({ token, sessionId }: CashSessionDetailVie
           onReopened={() => done(copy.reopened)}
         />
       ) : null}
-      {modal === 'adjust' ? (
+      {modal === 'adjust' && currency ? (
         <CashAdjustmentModal
           key={`adjust-${modalKey}`}
           open

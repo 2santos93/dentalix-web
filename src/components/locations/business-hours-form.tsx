@@ -1,6 +1,7 @@
 'use client';
 import * as React from 'react';
 import { useEffect, useState } from 'react';
+import Link from 'next/link';
 import { Plus, Trash2 } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import {
@@ -10,8 +11,12 @@ import {
   minutesToTime,
   WEEKDAY_LABELS,
   type BusinessHours,
+  type BusinessHoursInput,
 } from '@/lib/locations/schedule-api';
 import { onLocationChange } from '@/lib/locations/location-store';
+import { readyTimeZone, useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
+import { getTokenRole } from '@/lib/auth/token-role';
+import { SedeConfigError } from '@/components/locations/sede-config-error';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
@@ -22,9 +27,11 @@ import { Skeleton } from '@/components/ui/skeleton';
 
 // Copy as constants (i18n-ready, es-first), igual que el resto de la app.
 const copy = {
+  // G1 (spec §6.5): la zona es un dato de la sede; aquí solo se muestra.
   timezoneLabel: 'Zona horaria',
-  timezoneHint:
-    'Zona de la sede (IANA). Se usa para decidir si una cita cae dentro del horario.',
+  timezoneLoading: '…',
+  timezoneWhere: 'Se cambia en',
+  timezoneLink: 'Ajustes → Sedes',
   openLabel: 'Abierto',
   closedLabel: 'Cerrado',
   addRange: 'Agregar tramo',
@@ -41,7 +48,6 @@ const copy = {
   genericSaveError: 'No pudimos guardar el horario. Intenta de nuevo.',
   invalidRange: 'Cada tramo debe tener una hora de fin posterior a la de inicio.',
   overlapping: 'Hay tramos solapados en el mismo día; únelos en uno.',
-  emptyTimezone: 'Indica la zona horaria de la sede.',
 };
 
 /** Tramo en edición: horas como texto `HH:MM`, que es lo que usan los inputs. */
@@ -86,7 +92,15 @@ interface BusinessHoursFormProps {
  */
 export function BusinessHoursForm({ token }: BusinessHoursFormProps) {
   const [week, setWeek] = useState<DraftWeek>(EMPTY_WEEK);
-  const [timezone, setTimezone] = useState('America/Bogota');
+  // Zona del horario que dio la API (= la de la sede); sin horario, la de la
+  // sede leída de la lista de sedes. Nunca una zona de reserva.
+  const [scheduleZone, setScheduleZone] = useState<string | null>(null);
+  const sedeZone = useSedeTimeZone(token);
+  const timezone = scheduleZone ?? readyTimeZone(sedeZone);
+  // Sin zona en el horario ni en la sede (sin configurar o la lista no cargó):
+  // el error de la sede con su reintento, nunca otra zona.
+  const zoneError = timezone === null && sedeZone.status === 'error' ? sedeZone : null;
+  const isAdmin = getTokenRole(token) === 'ADMIN';
   const [hadSchedule, setHadSchedule] = useState(true);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -109,7 +123,7 @@ export function BusinessHoursForm({ token }: BusinessHoursFormProps) {
         const hours = await getLocationSchedule(token);
         if (cancelled) return;
         setWeek(toDraft(hours));
-        setTimezone(hours?.timezone ?? 'America/Bogota');
+        setScheduleZone(hours?.timezone ?? null);
         setHadSchedule(hours !== null && hours.ranges.length > 0);
         setLoadError(null);
       } catch (err) {
@@ -155,8 +169,7 @@ export function BusinessHoursForm({ token }: BusinessHoursFormProps) {
   }
 
   /** Valida y arma el payload, o devuelve el mensaje de error. */
-  function buildPayload(): BusinessHours | string {
-    if (timezone.trim() === '') return copy.emptyTimezone;
+  function buildPayload(): BusinessHoursInput | string {
     const ranges = [];
     for (let weekday = 0; weekday <= 6; weekday++) {
       const day = week[weekday]
@@ -177,7 +190,7 @@ export function BusinessHoursForm({ token }: BusinessHoursFormProps) {
       }
       ranges.push(...sorted.map((r) => ({ weekday, ...r })));
     }
-    return { timezone: timezone.trim(), ranges };
+    return { ranges };
   }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
@@ -193,7 +206,7 @@ export function BusinessHoursForm({ token }: BusinessHoursFormProps) {
     try {
       const updated = await replaceLocationSchedule(token, payload);
       setWeek(toDraft(updated));
-      setTimezone(updated.timezone);
+      setScheduleZone(updated.timezone);
       setHadSchedule(updated.ranges.length > 0);
       setSaved(true);
     } catch (err) {
@@ -218,19 +231,25 @@ export function BusinessHoursForm({ token }: BusinessHoursFormProps) {
           </p>
         )}
 
-        <FormField htmlFor="schedule-timezone" label={copy.timezoneLabel} hint={copy.timezoneHint}>
-          <Input
-            id="schedule-timezone"
-            type="text"
-            required
-            value={timezone}
-            onChange={(e) => {
-              setTimezone(e.target.value);
-              setSaved(false);
-            }}
-            className="max-w-xs"
-          />
-        </FormField>
+        <p className="text-sm text-muted">
+          {copy.timezoneLabel}:{' '}
+          {zoneError ? null : <span className="font-medium text-ink">{timezone ?? copy.timezoneLoading}</span>}
+          {' · '}
+          {copy.timezoneWhere}{' '}
+          {isAdmin ? (
+            <Link
+              href="/settings/sedes"
+              className="whitespace-nowrap font-medium text-primary underline-offset-4 hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            >
+              {copy.timezoneLink}
+            </Link>
+          ) : (
+            copy.timezoneLink
+          )}
+        </p>
+        {zoneError ? (
+          <SedeConfigError kind="timeZone" variant="field" onRetry={zoneError.retry} className="max-w-xs" />
+        ) : null}
 
         <div className="flex flex-col gap-3">
           {WEEKDAY_LABELS.map((label, weekday) => {

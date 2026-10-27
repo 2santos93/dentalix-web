@@ -29,7 +29,9 @@ jest.mock('../../lib/payment-plans/payment-plan-api', () => ({
   createPaymentPlan: jest.fn(),
 }));
 jest.mock('../../lib/locations/locations-api', () => ({
-  listLocations: jest.fn().mockResolvedValue([]),
+  listLocations: jest.fn().mockResolvedValue([
+    jest.requireActual('../../lib/test/locations').clinicLocation(),
+  ]),
 }));
 jest.mock('../../lib/reference/currencies-api', () => ({
   listCurrencies: jest.fn().mockResolvedValue([]),
