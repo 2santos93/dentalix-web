@@ -82,6 +82,10 @@ jobs:
           path: dentalix-api
           persist-credentials: false
 
+      - name: Referencias compartidas con la API
+        run: scripts/e2e-ci.sh sync
+        timeout-minutes: 1
+
       - uses: actions/setup-node@v4
         with:
           node-version: 22

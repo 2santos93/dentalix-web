@@ -5,7 +5,11 @@
 # propio paso y en local se corren todas con `all`.
 #
 #   scripts/e2e-ci.sh all                # todo, y para los servidores al final
-#   scripts/e2e-ci.sh setup|db|api|web|test|skips|stop   # una fase
+#   scripts/e2e-ci.sh setup|sync|db|api|web|test|skips|stop   # una fase
+#
+# `sync` (DX-350) falla si una lista que la API posee y la web copia byte a
+# byte (moneda sin decimales, zonas IANA, vectores de formato) diverge de la
+# de $API_DIR (scripts/check-api-reference-sync.mjs).
 #
 # `skips` (DX-252) falla si el informe de `test` tiene tests saltados fuera de
 # e2e/allowed-skips.json, y los nombra (scripts/check-e2e-skips.mjs).
@@ -178,6 +182,14 @@ phase_setup() {
   fi
 }
 
+phase_sync() {
+  group "Referencias compartidas con la API"
+  local status=0
+  node "$WEB_DIR/scripts/check-api-reference-sync.mjs" "$API_DIR" "$WEB_DIR" || status=$?
+  endgroup
+  return "$status"
+}
+
 phase_db() {
   load_env
   group "Base $E2E_DB_NAME: rol de la app, migraciones y siembra"
@@ -312,6 +324,7 @@ if [[ "$cmd" != stop && ! -f "$API_DIR/package.json" ]]; then
 fi
 case "$cmd" in
   setup) phase_setup ;;
+  sync) phase_sync ;;
   db) phase_db ;;
   api) phase_api ;;
   web) phase_web ;;
@@ -321,6 +334,7 @@ case "$cmd" in
   all)
     trap phase_stop EXIT
     phase_setup
+    phase_sync
     phase_db
     phase_api
     phase_web
@@ -332,7 +346,7 @@ case "$cmd" in
     exit "$st"
     ;;
   *)
-    echo "uso: $0 [all|setup|db|api|web|test|skips|stop] [args de playwright]" >&2
+    echo "uso: $0 [all|setup|sync|db|api|web|test|skips|stop] [args de playwright]" >&2
     exit 2
     ;;
 esac
