@@ -75,11 +75,11 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
     id: 'clinica',
     title: 'Clínica y sedes',
     entries: [
-      // Datos legales de las sedes (DX-319: nº de registro sanitario).
+      // G1: alta y edición de sedes (moneda, zona, formato); DX-319: datos legales.
       {
         href: '/settings/sedes',
         label: 'Sedes',
-        description: 'Datos legales de cada sede, su nº de registro sanitario y su política de cancelación.',
+        description: 'Alta de sedes, su país, moneda, zona horaria y formato, sus datos legales y su política de cancelación.',
         icon: Building2,
       },
       // SEC-009.
@@ -198,7 +198,7 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
       {
         href: '/settings/recetas',
         label: 'Recetas',
-        description: 'Plantillas de receta y país de las sedes.',
+        description: 'Plantillas para emitir recetas más rápido.',
         icon: Pill,
         visible: canManagePrescriptionTemplates,
       },

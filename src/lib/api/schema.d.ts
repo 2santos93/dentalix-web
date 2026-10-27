@@ -4690,17 +4690,17 @@ export interface components {
             locationCountry?: components["schemas"]["ClinicCountry"];
             /**
              * @description Moneda ISO 4217 de la primera sede (GET /public/currencies).
-             * @example COP
+             * @example EUR
              */
             locationCurrency?: string;
             /**
              * @description Zona horaria IANA de la primera sede.
-             * @example America/Bogota
+             * @example Europe/Madrid
              */
             locationTimeZone?: string;
             /**
              * @description Formato regional BCP 47 de la primera sede.
-             * @example es-CO
+             * @example es-ES
              */
             locationLocale?: string;
         };
@@ -6108,17 +6108,17 @@ export interface components {
             isActive: boolean;
             /**
              * @description G1: moneda ISO 4217 de la sede (3 letras; se pasa a mayúsculas). Tiene que estar en GET /currencies. null = sede sin configurar (fase 1).
-             * @example COP
+             * @example EUR
              */
             currency: string | null;
             /**
              * @description G1: zona horaria IANA de la sede. Define sus días civiles («hoy» en caja, informes y agenda) y cómo se leen sus horarios. null = sede sin configurar (fase 1).
-             * @example America/Bogota
+             * @example Europe/Madrid
              */
             timeZone: string | null;
             /**
              * @description G1: formato regional BCP 47 de la sede (fechas y números); se guarda canonicalizado (es-mx → es-MX). null = sede sin configurar (fase 1).
-             * @example es-CO
+             * @example es-ES
              */
             locale: string | null;
             /**
@@ -6138,17 +6138,17 @@ export interface components {
             country: components["schemas"]["ClinicCountry"];
             /**
              * @description G1: moneda ISO 4217 de la sede (3 letras; se pasa a mayúsculas). Tiene que estar en GET /currencies.
-             * @example COP
+             * @example EUR
              */
             currency: string;
             /**
              * @description G1: zona horaria IANA de la sede. Define sus días civiles («hoy» en caja, informes y agenda) y cómo se leen sus horarios.
-             * @example America/Bogota
+             * @example Europe/Madrid
              */
             timeZone: string;
             /**
              * @description G1: formato regional BCP 47 de la sede (fechas y números); se guarda canonicalizado (es-mx → es-MX).
-             * @example es-CO
+             * @example es-ES
              */
             locale: string;
             /**
@@ -6176,19 +6176,19 @@ export interface components {
             phone?: string | null;
             /**
              * @description G1: moneda ISO 4217 de la sede (3 letras; se pasa a mayúsculas). Tiene que estar en GET /currencies.
-             * @example COP
+             * @example EUR
              */
-            currency?: Record<string, never>;
+            currency?: string;
             /**
              * @description G1: zona horaria IANA de la sede. Define sus días civiles («hoy» en caja, informes y agenda) y cómo se leen sus horarios.
-             * @example America/Bogota
+             * @example Europe/Madrid
              */
-            timeZone?: Record<string, never>;
+            timeZone?: string;
             /**
              * @description G1: formato regional BCP 47 de la sede (fechas y números); se guarda canonicalizado (es-mx → es-MX).
-             * @example es-CO
+             * @example es-ES
              */
-            locale?: Record<string, never>;
+            locale?: string;
             /**
              * @description G1: marca la sede como revisada (moneda, zona y formato confirmados) aunque no cambie nada.
              * @enum {boolean}
@@ -7499,6 +7499,7 @@ export interface components {
             /**
              * @deprecated
              * @description Obsoleto (G1): la zona es un dato de la sede (PATCH /locations/:id) y nunca se guarda desde aquí. Solo se acepta, para una web antigua, si es igual a la zona de la sede; distinta (o sede sin zona) es 400.
+             * @example Europe/Madrid
              */
             timezone?: string;
             /** @description La semana COMPLETA. Un día sin tramos = cerrado. Lista vacía = sede sin restricción. */
@@ -7656,8 +7657,11 @@ export interface components {
             locationId: string;
             /** @example Sede Norte */
             locationName: string;
-            /** @example America/Bogota */
-            timeZone: string;
+            /**
+             * @description Zona IANA de la sede; null si la sede aún no tiene zona configurada (fase 1) o ya no existe.
+             * @example Europe/Madrid
+             */
+            timeZone: string | null;
             ranges: components["schemas"]["WeeklyRangeDto"][];
         };
         ProviderScheduleDto: {
@@ -8274,7 +8278,7 @@ export interface components {
         CreateTreatmentPlanDto: {
             /**
              * @description ISO 4217 (si se omite, la moneda de la sede activa o la común de la clínica)
-             * @example USD
+             * @example EUR
              */
             currency?: string;
             notes?: string;
@@ -8927,11 +8931,11 @@ export interface components {
             logoUrl: string | null;
         };
         CurrencyDto: {
-            /** @example USD */
+            /** @example EUR */
             code: string;
-            /** @example Dólar estadounidense */
+            /** @example Euro */
             name: string;
-            /** @example $ */
+            /** @example € */
             symbol: string;
         };
         CountryDto: {

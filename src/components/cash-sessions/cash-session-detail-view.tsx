@@ -169,7 +169,12 @@ export function CashSessionDetailView({ token, sessionId }: CashSessionDetailVie
         {notice}
       </p>
       {currency === null && session.can.adjust ? (
-        <SedeConfigError kind="currency" onRetry={() => setReloadKey((k) => k + 1)} className="mb-4" />
+        <SedeConfigError
+          kind="currency"
+          onRetry={() => setReloadKey((k) => k + 1)}
+          locationId={session.location.id}
+          className="mb-4"
+        />
       ) : null}
       <div className="overflow-hidden rounded-xl border border-border">
         <CashSessionReport session={session} />

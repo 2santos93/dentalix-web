@@ -9,8 +9,16 @@ export interface ScheduleRange {
 }
 
 export interface BusinessHours {
-  /** Zona IANA de la sede (ej. `America/Bogota`). */
-  timezone: string;
+  /**
+   * Zona IANA de la sede, de solo lectura: es `Location.timeZone` (G1, R4) y
+   * se cambia en Ajustes → Sedes. `null` si la sede aún no la tiene.
+   */
+  timezone: string | null;
+  ranges: ScheduleRange[];
+}
+
+/** Cuerpo de `PUT /locations/schedule`: solo los tramos; la zona nunca se envía (R15). */
+export interface BusinessHoursInput {
   ranges: ScheduleRange[];
 }
 
@@ -29,10 +37,11 @@ export async function getLocationSchedule(
 /**
  * `PUT /locations/schedule` — reemplaza la semana COMPLETA de la sede activa
  * (no hay parches por día: el cliente manda el horario entero). Solo ADMIN.
+ * Sin `timezone`: la zona es de la sede.
  */
 export async function replaceLocationSchedule(
   token: string,
-  input: BusinessHours,
+  input: BusinessHoursInput,
 ): Promise<BusinessHours> {
   return apiFetch<BusinessHours>('/locations/schedule', {
     method: 'PUT',

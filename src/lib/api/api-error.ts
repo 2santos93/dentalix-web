@@ -21,6 +21,12 @@ export class ApiError extends Error {
    * nunca como texto de pantalla.
    */
   public readonly code: string | null;
+  /**
+   * Campo del cuerpo al que se refiere un 400 de regla de negocio, cuando la
+   * API lo dice (p. ej. `currency` en el alta de sede, G1): sirve para poner
+   * el mensaje junto a ese campo.
+   */
+  public readonly field: string | null;
 
   constructor(
     public readonly status: number,
@@ -29,6 +35,7 @@ export class ApiError extends Error {
       messages?: readonly string[];
       retryAfterSeconds?: number | null;
       code?: string | null;
+      field?: string | null;
     } = {},
   ) {
     super(message);
@@ -36,6 +43,7 @@ export class ApiError extends Error {
     this.messages = details.messages ?? (message ? [message] : []);
     this.retryAfterSeconds = details.retryAfterSeconds ?? null;
     this.code = details.code ?? null;
+    this.field = details.field ?? null;
   }
 }
 

@@ -522,7 +522,7 @@ function CurrentSessionCard({
       </div>
       {currencyMissing ? (
         <div className="px-4 pt-3 sm:px-6">
-          <SedeConfigError kind="currency" onRetry={onRetryLocations} />
+          <SedeConfigError kind="currency" onRetry={onRetryLocations} locationId={current.locationId} />
         </div>
       ) : null}
       <div className="px-4 py-3 sm:px-6">

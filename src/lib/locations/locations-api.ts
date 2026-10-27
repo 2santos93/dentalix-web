@@ -70,19 +70,8 @@ export async function createLocation(token: string, input: CreateLocationInput):
   return apiFetch<ClinicLocation>('/locations', { method: 'POST', body: input, token });
 }
 
-/**
- * Campos de `PATCH /locations/:id` para el modal de sede. Moneda, zona y
- * formato se tipan aquí como texto: el `UpdateLocationDto` generado los deja
- * sin tipo (`Record<string, never>`).
- */
-export type UpdateLocationSettingsInput = Omit<
-  components['schemas']['UpdateLocationDto'],
-  'currency' | 'timeZone' | 'locale'
-> & {
-  currency?: string;
-  timeZone?: string;
-  locale?: string;
-};
+/** Campos de `PATCH /locations/:id` para el modal de sede. */
+export type UpdateLocationSettingsInput = components['schemas']['UpdateLocationDto'];
 
 /**
  * `PATCH /locations/:id` — datos de la sede, incluidos moneda, zona y formato

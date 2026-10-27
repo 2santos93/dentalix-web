@@ -13,13 +13,6 @@ const SRC = join(__dirname, '..');
 const FORBIDDEN = /COUNTRY_CURRENCY|DEFAULT_SEDE_TIME_ZONE|'America\/Bogota'|'COP'|'USD'/;
 const ZONE_LABEL_KEY = /^\s*'America\/Bogota':/;
 
-/**
- * Pendiente de la Task 10 de GLOBAL-G1, que quita el campo de zona del horario
- * (spec §6.5). La Task 10 borra esta entrada; el test falla si se queda
- * obsoleta (el fichero ya no tiene ninguna coincidencia).
- */
-const PENDING_TASK_10 = new Set(['components/locations/business-hours-form.tsx']);
-
 function sourceFiles(dir: string): string[] {
   return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
     const path = join(dir, entry.name);
@@ -48,16 +41,7 @@ describe('arquitectura: sin moneda ni zona de reserva (GLOBAL-G1)', () => {
   const files = sourceFiles(SRC).filter(scanned);
 
   it('src/ has no COUNTRY_CURRENCY, DEFAULT_SEDE_TIME_ZONE, Bogotá, COP or USD fallbacks', () => {
-    const found = files
-      .filter((f) => !PENDING_TASK_10.has(relative(SRC, f).split(sep).join('/')))
-      .flatMap(hits);
-    expect(found).toEqual([]);
-  });
-
-  it('the Task 10 allowance is not stale', () => {
-    for (const rel of PENDING_TASK_10) {
-      expect([rel, hits(join(SRC, rel)).length > 0]).toEqual([rel, true]);
-    }
+    expect(files.flatMap(hits)).toEqual([]);
   });
 
   it('the scan covers the screens of this unit and skips fixtures', () => {

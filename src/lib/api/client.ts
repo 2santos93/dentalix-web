@@ -276,18 +276,21 @@ export function apiErrorFromBody(
 ): ApiError {
   let messages: string[] = [];
   let code: string | null = null;
+  let field: string | null = null;
   if (body && typeof body === 'object') {
-    const data = body as { message?: unknown; code?: unknown };
+    const data = body as { message?: unknown; code?: unknown; field?: unknown };
     const raw = data.message;
     if (typeof raw === 'string' && raw) messages = [raw];
     else if (Array.isArray(raw)) messages = raw.filter((m): m is string => typeof m === 'string');
     if (typeof data.code === 'string' && data.code) code = data.code;
+    if (typeof data.field === 'string' && data.field) field = data.field;
   }
   const message = messages.length > 0 ? messages.join('; ') : `HTTP ${status}`;
   return new ApiError(status, message, {
     messages,
     retryAfterSeconds: parseRetryAfter(retryAfterHeader),
     code,
+    field,
   });
 }
 

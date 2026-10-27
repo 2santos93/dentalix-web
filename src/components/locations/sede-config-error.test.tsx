@@ -5,6 +5,8 @@ import type { ClinicLocation } from '@/lib/locations/locations-api';
 import { clinicLocation } from '@/lib/test/locations';
 import { formatCurrency } from '@/lib/format/currency';
 import { setupUser } from '@/lib/test/user';
+import { useAuthStore } from '@/lib/auth/auth-store';
+import { tokenFor } from '@/lib/test/prescriptions';
 
 /** Una pieza mínima que pinta un importe en la moneda de su sede. */
 function Amount({ location, onRetry }: { location: ClinicLocation; onRetry: () => void }) {
@@ -48,5 +50,17 @@ describe('SedeConfigError', () => {
     );
     expect(screen.getByRole('status')).toHaveTextContent('Sin zona de sede');
     expect(screen.getByLabelText('Fecha')).toBe(screen.getByRole('button', { name: 'Reintentar' }));
+  });
+
+  it('ADMIN gets «Configurar sede», which opens that location in Ajustes → Sedes', () => {
+    useAuthStore.setState({ accessToken: tokenFor('ADMIN') });
+    const { unmount } = render(<SedeConfigError kind="currency" onRetry={jest.fn()} locationId="loc 1" />);
+    expect(screen.getByRole('link', { name: 'Configurar sede' })).toHaveAttribute('href', '/settings/sedes?sede=loc%201');
+    unmount();
+
+    useAuthStore.setState({ accessToken: tokenFor('RECEPTIONIST') });
+    render(<SedeConfigError kind="currency" onRetry={jest.fn()} />);
+    expect(screen.queryByRole('link', { name: 'Configurar sede' })).not.toBeInTheDocument();
+    useAuthStore.setState({ accessToken: null });
   });
 });

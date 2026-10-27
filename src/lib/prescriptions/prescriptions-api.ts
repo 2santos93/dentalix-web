@@ -172,19 +172,6 @@ export async function deletePrescriptionTemplate(token: string, id: string): Pro
   });
 }
 
-/** `PATCH /locations/:id` — país de la sede (ADMIN). */
-export async function updateLocationCountry(
-  token: string,
-  locationId: string,
-  country: ClinicCountry,
-): Promise<void> {
-  await apiFetch<unknown>(`/locations/${encodeURIComponent(locationId)}`, {
-    method: 'PATCH',
-    body: { country },
-    token,
-  });
-}
-
 /** Ruta de la vista imprimible (fuera del shell). */
 export function prescriptionPrintHref(patientId: string, prescriptionId: string): string {
   return `/print/patients/${encodeURIComponent(patientId)}/prescriptions/${encodeURIComponent(prescriptionId)}`;

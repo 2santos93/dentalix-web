@@ -28,6 +28,14 @@ describe('CurrencySelect', () => {
     });
   });
 
+  it('with a loader (no session) reads the list from it and never from GET /currencies', async () => {
+    const loader = jest.fn().mockResolvedValue([{ code: 'JPY', name: 'Yen japonés', symbol: '¥' }]);
+    render(<CurrencySelect id="cur" loader={loader} value="" placeholder="Elige la moneda" onChange={() => {}} />);
+    expect(await screen.findByRole('option', { name: 'Yen japonés (¥)' })).toBeInTheDocument();
+    expect(loader).toHaveBeenCalledTimes(1);
+    expect(mocked).not.toHaveBeenCalled();
+  });
+
   // WCAG 4.1.2: call sites with no adjacent `<label>` (e.g. a select placed
   // next to a button rather than inside a `FormField`) must still expose an
   // accessible name — `ariaLabel` covers that case.

@@ -15,7 +15,13 @@ const fieldClass =
 
 interface CurrencySelectProps {
   id: string;
-  token: string;
+  /** Con sesión: la lista sale de `GET /currencies` con este token. */
+  token?: string;
+  /**
+   * Sin sesión (registro, R18): quien carga la lista, p. ej.
+   * `listPublicCurrencies`. Tiene que ser una referencia estable.
+   */
+  loader?: () => Promise<Currency[]>;
   value: string;
   onChange: (code: string) => void;
   disabled?: boolean;
@@ -25,11 +31,15 @@ interface CurrencySelectProps {
   /** p. ej. la razón de que esté deshabilitado. */
   ariaDescribedBy?: string;
   placeholder?: string;
+  /** Para `aria-invalid`/`aria-required` desde el `FormField` que lo envuelve. */
+  invalid?: boolean;
+  required?: boolean;
 }
 
 export function CurrencySelect({
   id,
   token,
+  loader,
   value,
   onChange,
   disabled,
@@ -37,6 +47,8 @@ export function CurrencySelect({
   ariaLabel,
   ariaDescribedBy,
   placeholder,
+  invalid,
+  required,
 }: CurrencySelectProps) {
   const [currencies, setCurrencies] = useState<Currency[]>([]);
   const [failed, setFailed] = useState(false);
@@ -44,7 +56,8 @@ export function CurrencySelect({
 
   useEffect(() => {
     let cancelled = false;
-    listCurrencies(token)
+    const request = loader ? loader() : token ? listCurrencies(token) : Promise.resolve<Currency[]>([]);
+    request
       .then((data) => {
         if (!cancelled) setCurrencies(data);
       })
@@ -54,7 +67,7 @@ export function CurrencySelect({
     return () => {
       cancelled = true;
     };
-  }, [token, attempt]);
+  }, [token, loader, attempt]);
 
   // Escalón 2 de la escalera de errores (DX-063): sin la lista, el select solo
   // ofrecería la moneda actual con cara de normal. Se sustituye en su sitio por
@@ -86,6 +99,8 @@ export function CurrencySelect({
       className={cn(fieldClass, className)}
       aria-label={ariaLabel}
       aria-describedby={ariaDescribedBy}
+      aria-invalid={invalid || undefined}
+      aria-required={required || undefined}
     >
       {placeholder ? <option value="">{placeholder}</option> : null}
       {options.filter((c) => !placeholder || c.code).map((c) => (
