@@ -91,7 +91,9 @@ test('emitir con alerta de alergia, imprimir en A4, anular; recepción sin pesta
 
   // DX-300: el aviso lo calcula el servidor y exige confirmación y motivo.
   await expect(dialog.getByText('Requieren confirmación (1)')).toBeVisible();
-  await expect(dialog.getByText(/alergia a Penicilina/)).toBeVisible();
+  // DX-344: el aviso se ve en la lista y la región viva (sr-only) lo anuncia.
+  await expect(dialog.getByRole('listitem').getByText(/alergia a Penicilina/)).toBeVisible();
+  await expect(dialog.getByRole('status', { name: 'Resultado de seguridad' })).toContainText(/alergia a Penicilina/);
   const submit = dialog.getByRole('button', { name: 'Emitir receta' });
   await expect(submit).toBeDisabled();
   await dialog.getByRole('checkbox', { name: /Confirmo que conozco los avisos/ }).check();
