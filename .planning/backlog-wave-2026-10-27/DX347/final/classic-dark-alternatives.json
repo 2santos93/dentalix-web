@@ -1,0 +1,17 @@
+[
+  {
+    "option": "auto",
+    "scrollbar": 15,
+    "linkWidth": 44
+  },
+  {
+    "option": "stable",
+    "scrollbar": 15,
+    "linkWidth": 44
+  },
+  {
+    "option": "thin",
+    "scrollbar": 0,
+    "linkWidth": 59
+  }
+]
