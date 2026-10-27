@@ -254,4 +254,11 @@ describe('regionalFormat', () => {
     expect(fmt.locale).toBe('fr-FR');
     expect(fmt.hourCycle).toBe('h12');
   });
+
+  it('canonicalises the locale: en-us and en-US share one cached format', () => {
+    const lower = regionalFormat({ locale: 'en-us', hourCycle: 'h12' });
+    const canonical = regionalFormat({ locale: 'en-US', hourCycle: 'h12' });
+    expect(lower).toBe(canonical);
+    expect(lower.locale).toBe('en-US');
+  });
 });

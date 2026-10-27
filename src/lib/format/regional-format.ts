@@ -38,7 +38,7 @@ export interface WallParts {
 export interface RegionalFormat {
   readonly locale: string;
   readonly hourCycle: HourCycle;
-  /** Por defecto min 0, max 2 decimales. */
+  /** Por defecto min 0 y max = max(2, min) decimales (nunca max < min). */
   number(value: number, digits?: { min?: number; max?: number }): string;
   /** 12.5 → «12.5%» / «12,5 %». Por defecto max 2 decimales. */
   percent(value: number, maxDigits?: number): string;
@@ -153,7 +153,8 @@ function clock(hourCycle: HourCycle, hour: number, minute: number): string {
   return `${parts.hour}:${mm} ${dayPeriod}`;
 }
 
-function assertSettings(settings: RegionalSettingsForFormat | undefined): void {
+/** Valida los ajustes y devuelve el locale canónico (`en-us` → `en-US`). */
+function assertSettings(settings: RegionalSettingsForFormat | undefined): string {
   const locale: unknown = settings?.locale;
   const hourCycle: unknown = settings?.hourCycle;
   if (typeof hourCycle !== 'string' || !HOUR_CYCLES.includes(hourCycle)) {
@@ -163,10 +164,11 @@ function assertSettings(settings: RegionalSettingsForFormat | undefined): void {
     throw new RangeError(`Locale no válido: ${String(locale)}`);
   }
   // `getCanonicalLocales` lanza RangeError si no es BCP 47.
-  Intl.getCanonicalLocales(locale);
-  if (Intl.DateTimeFormat.supportedLocalesOf(locale).length === 0) {
+  const [canonical] = Intl.getCanonicalLocales(locale);
+  if (Intl.DateTimeFormat.supportedLocalesOf(canonical).length === 0) {
     throw new RangeError(`Locale no soportado: ${locale}`);
   }
+  return canonical;
 }
 
 function build(locale: string, hourCycle: HourCycle): RegionalFormat {
@@ -267,14 +269,15 @@ function build(locale: string, hourCycle: HourCycle): RegionalFormat {
 
 /**
  * Formato con los ajustes de la sede. Lanza RangeError si el locale no es un
- * BCP 47 soportado o el reloj no es h12/h23. Cachea por (locale, hourCycle).
+ * BCP 47 soportado o el reloj no es h12/h23. Cachea por (locale canónico,
+ * hourCycle): `en-us` y `en-US` comparten entrada, y `locale` sale canónico.
  */
 export function regionalFormat(settings: RegionalSettingsForFormat): RegionalFormat {
-  assertSettings(settings);
-  const key = `${settings.locale}|${settings.hourCycle}`;
+  const locale = assertSettings(settings);
+  const key = `${locale}|${settings.hourCycle}`;
   let format = regionalFormats.get(key);
   if (!format) {
-    format = build(settings.locale, settings.hourCycle);
+    format = build(locale, settings.hourCycle);
     regionalFormats.set(key, format);
   }
   return format;
