@@ -1,4 +1,7 @@
 import { regionalFormat, UI_LANGUAGE, type HourCycle } from './regional-format';
+// Copia byte a byte de `src/shared/format/regional-format.cases.json` de la API: no se edita aquí.
+// La fuente es la API; `scripts/check-api-reference-sync.mjs` (CI) falla si
+// divergen. Ver src/lib/money/README.md.
 import goldenCases from './regional-format.cases.json';
 
 interface GoldenCase {

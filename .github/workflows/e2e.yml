@@ -32,8 +32,9 @@ jobs:
     # DX-292 (TST-033): cada paso lleva su propio tope y la suma cabe aquí.
     # Si un paso se pasa, falla ESE paso (la run queda `failure`) y el informe
     # se sube igual; si se pasara el job, GitHub la marcaría `cancelled` y el
-    # rojo no se vería. Pasos: ~3 min de checkout y Node + 10 + 5 + 5 + 8 +
-    # 35 + 2 + 2 + 5 = 75 (Playwright: ~17–20 min la suite entera).
+    # rojo no se vería. Pasos: ~3 min de checkout y Node + 1 (referencias
+    # compartidas con la API) + 10 + 5 + 5 + 8 + 35 + 2 + 2 + 5 = 76
+    # (Playwright: ~17–20 min la suite entera).
     timeout-minutes: 80
     services:
       postgres:

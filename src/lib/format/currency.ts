@@ -1,3 +1,6 @@
+// Copia byte a byte de `prisma/reference/iso4217-zero-decimal.json` de la API: no se edita aquí.
+// La fuente es la API; `scripts/check-api-reference-sync.mjs` (CI) falla si
+// divergen. Ver src/lib/money/README.md.
 import iso4217ZeroDecimal from '@/lib/money/iso4217-zero-decimal.json';
 
 /** Monedas sin decimales según ISO 4217 (copia de la lista de la API, R7). */

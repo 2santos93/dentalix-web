@@ -2,7 +2,7 @@
  * @jest-environment node
  */
 import { spawnSync } from 'node:child_process';
-import { mkdirSync, mkdtempSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
 
@@ -58,7 +58,17 @@ describe('check-api-reference-sync', () => {
     const { web, api } = trees({ 'src/shared/format/regional-format.cases.json': null });
     const r = run(api, web);
     expect(r.code).toBe(1);
-    expect(r.out).toContain(`falta ${path.join(api, 'src/shared/format/regional-format.cases.json')}`);
+    // Ruta relativa, como en la deriva: el directorio temporal no dice nada.
+    expect(r.out).toContain('falta src/shared/format/regional-format.cases.json en la API');
+    expect(r.out).not.toContain(api);
+  });
+
+  it('missing web copy fails with its relative path', () => {
+    const { web, api } = trees();
+    rmSync(path.join(web, 'src/lib/money/iso4217-zero-decimal.json'));
+    const r = run(api, web);
+    expect(r.code).toBe(1);
+    expect(r.out).toContain('falta src/lib/money/iso4217-zero-decimal.json en la web');
   });
 
   it('missing API_DIR fails with a clear message', () => {

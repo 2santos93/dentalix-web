@@ -7,7 +7,8 @@
 // El directorio de la API sale del primer argumento, de $API_DIR o de
 // ../dentalix-api. Sale con 1, nombrando cada copia, si una difiere
 // («<web> difiere de <api> (primer byte distinto: N)», N desde 0) o si falta
-// el fichero de la API («falta <ruta>»). Sale con 2 si no hay checkout de la API.
+// un fichero («falta <ruta> en la API» / «… en la web», ruta relativa). Sale
+// con 2 si no hay checkout de la API.
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -25,9 +26,8 @@ export function checkApiReferenceSync(apiDir, webDir) {
   for (const [apiRel, webRel] of PAIRS) {
     const apiFile = path.join(apiDir, apiRel);
     const webFile = path.join(webDir, webRel);
-    for (const file of [apiFile, webFile]) {
-      if (!existsSync(file)) problems.push(`falta ${file}`);
-    }
+    if (!existsSync(apiFile)) problems.push(`falta ${apiRel} en la API`);
+    if (!existsSync(webFile)) problems.push(`falta ${webRel} en la web`);
     if (!existsSync(apiFile) || !existsSync(webFile)) continue;
     const a = readFileSync(apiFile);
     const w = readFileSync(webFile);
