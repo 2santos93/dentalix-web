@@ -1,9 +1,12 @@
 import { test, expect, type APIRequestContext } from './support/test';
 import { randomUUID } from 'node:crypto';
 import { readFileSync, mkdirSync, writeFileSync } from 'node:fs';
+import path from 'node:path';
 import type { AxeResults } from 'axe-core';
 
-const evidence = '.planning/backlog-wave-2026-10-27/DX344';
+// Capturas y axe crudo solo cuando se piden para QA (DX344_QA_DIR): una
+// ejecución normal o de CI no escribe en el árbol versionado.
+const evidence = process.env.DX344_QA_DIR;
 const axeSource = readFileSync(require.resolve('axe-core/axe.min.js'), 'utf8');
 import { accessTokenOf, registerAndLogin } from './support/auth';
 import { API_URL } from './support/urls';
@@ -91,8 +94,14 @@ test('receta con aviso bloqueante (warfarina + ibuprofeno): 390/1440, claro/oscu
   await expect(submit).toBeDisabled();
   await expect(submit).toHaveAccessibleDescription('Escribe el motivo para emitir pese a los avisos.');
   await expect(reason).toHaveAccessibleDescription('Queda en la receta y no se puede cambiar.');
+  // Sin saltos: la explicación cambia o se vacía sin cambiar la altura del
+  // diálogo. Se mide scrollHeight, no la caja de Emitir: el scroll anchoring
+  // de Chromium compensa el salto dentro de un diálogo con scroll.
+  const dialogHeight = () => dialog.evaluate((element) => element.scrollHeight);
+  const blockedHeight = await dialogHeight();
   await reason.fill('INR estable; pauta de 2 días');
   await expect(submit).toBeEnabled();
+  expect(await dialogHeight(), 'el diálogo no cambia de alto al quitar la explicación').toBe(blockedHeight);
 
   // API real: solo retenemos su respuesta para poder observar el estado pendiente.
   for (const focus of [reason, checkbox]) {
@@ -121,6 +130,8 @@ test('receta con aviso bloqueante (warfarina + ibuprofeno): 390/1440, claro/oscu
     await expect(submit).toBeDisabled();
     await requestSeen;
     await expect(dialog.getByText('Comprobando avisos de seguridad')).toBeVisible();
+    await expect(submit).toHaveAccessibleDescription('Espera a que termine la comprobación de seguridad para emitir.');
+    const pendingHeight = await dialogHeight();
     await expect(focus).toBeFocused();
     expect(await node!.evaluate((element) => element === document.activeElement)).toBeTruthy();
     expect(await focus.boundingBox()).toEqual(before);
@@ -129,6 +140,7 @@ test('receta con aviso bloqueante (warfarina + ibuprofeno): 390/1440, claro/oscu
     release();
     await expect(submit).toBeEnabled();
     await expect(focus).toBeFocused();
+    expect(await dialogHeight(), 'el diálogo no cambia de alto al terminar la comprobación').toBe(pendingHeight);
     expect(await page.evaluate(() => {
       const observed = window as unknown as { safetyMutations: number; safetyObserver: MutationObserver };
       observed.safetyObserver.disconnect();
@@ -136,7 +148,7 @@ test('receta con aviso bloqueante (warfarina + ibuprofeno): 390/1440, claro/oscu
     })).toBe(0);
     await page.unroute('**/prescriptions/safety-check');
   }
-  mkdirSync(evidence, { recursive: true });
+  if (evidence) mkdirSync(evidence, { recursive: true });
   for (const width of [390, 1440]) {
     for (const colorScheme of ['light', 'dark'] as const) {
       await page.setViewportSize({ width, height: 900 });
@@ -157,17 +169,17 @@ test('receta con aviso bloqueante (warfarina + ibuprofeno): 390/1440, claro/oscu
         const axe = (window as unknown as { axe: { run: (context: string) => Promise<AxeResults> } }).axe;
         return axe.run('[role="dialog"]');
       });
-      writeFileSync(`${evidence}/axe-${width}-${colorScheme}.json`, JSON.stringify({
+      if (evidence) writeFileSync(path.join(evidence, `axe-${width}-${colorScheme}.json`), JSON.stringify({
         violations: results.violations.map(({ id, impact, description, nodes }) => ({ id, impact, description, targets: nodes.map((node) => node.target) })),
         passes: results.passes.length,
       }, null, 2));
       expect(results.violations).toEqual([]);
-      await page.screenshot({ path: `${evidence}/receta-segura-${width}-${colorScheme}.png` });
+      if (evidence) await page.screenshot({ path: path.join(evidence, `receta-segura-${width}-${colorScheme}.png`) });
       await checkbox.uncheck();
       await expect(submit).toHaveAccessibleDescription('Confirma los avisos de seguridad para emitir.');
       await expect(submit).toBeDisabled();
       await submit.scrollIntoViewIfNeeded();
-      await page.screenshot({ path: `${evidence}/emitir-bloqueado-${width}-${colorScheme}.png` });
+      if (evidence) await page.screenshot({ path: path.join(evidence, `emitir-bloqueado-${width}-${colorScheme}.png`) });
       await checkbox.check();
     }
   }
