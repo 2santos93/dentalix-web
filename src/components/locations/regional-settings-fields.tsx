@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { Currency } from '@/lib/reference/currencies-api';
 import { COUNTRY_LABELS, type ClinicCountry } from '@/lib/prescriptions/prescriptions-api';
 import {
@@ -51,6 +51,8 @@ interface RegionalSettingsFieldsProps {
    * el campo conserva la sugerencia lleva la marca «Sugerido por tu navegador».
    */
   suggestions?: { timeZone: string | null; locale: string | null };
+  /** Una columna siempre (el registro vive en un panel estrecho); por defecto, dos desde `sm`. */
+  stacked?: boolean;
 }
 
 /** `id` del control de un campo regional. */
@@ -71,28 +73,37 @@ export function RegionalSettingsFields({
   token,
   currencyLoader,
   suggestions,
+  stacked = false,
 }: RegionalSettingsFieldsProps) {
   // Un instante fijo por apertura: la vista previa cambia con el formato y la
   // zona, no con el reloj.
   const [previewAt] = useState(() => new Date());
-  const [localeOptions] = useState(browserLocales);
+  // Las listas del navegador se leen tras montar: el registro se pinta también
+  // en el servidor, cuyo `Intl`/`navigator` no son los del navegador, y unas
+  // opciones distintas romperían la hidratación.
+  const [browserLists, setBrowserLists] = useState<{ zones: string[]; locales: string[] }>({
+    zones: [],
+    locales: [],
+  });
+  useEffect(() => {
+    function hydrate() {
+      setBrowserLists({ zones: timeZoneOptions(), locales: browserLocales() });
+    }
+    hydrate();
+  }, []);
   const id = (field: RegionalSettingsField) => regionalFieldId(idPrefix, field);
   const invalid = (field: RegionalSettingsField) => (errors[field] ? true : undefined);
   const describedBy = (field: RegionalSettingsField, hintId?: string) =>
     errors[field] ? fieldErrorId(id(field)) : hintId;
 
-  const zones = timeZoneOptions([values.timeZone.trim(), suggestions?.timeZone]);
-  const locales = [
-    ...new Set(
-      [values.locale.trim(), suggestions?.locale, ...localeOptions].filter((l): l is string => Boolean(l)),
-    ),
-  ];
+  const zones = unique([values.timeZone.trim(), suggestions?.timeZone, ...browserLists.zones]);
+  const locales = unique([values.locale.trim(), suggestions?.locale, ...browserLists.locales]);
   const preview = regionalPreview(values.locale, values.timeZone, previewAt);
   const zoneSuggested = Boolean(suggestions?.timeZone) && values.timeZone === suggestions?.timeZone;
   const localeSuggested = Boolean(suggestions?.locale) && values.locale === suggestions?.locale;
 
   return (
-    <div className="grid gap-4 sm:grid-cols-2">
+    <div className={stacked ? 'flex flex-col gap-4' : 'grid gap-4 sm:grid-cols-2'}>
       <FormField htmlFor={id('country')} label={copy.country} error={errors.country} hint={copy.countryHint} hintId={`${id('country')}-hint`}>
         <select
           id={id('country')}
@@ -183,9 +194,13 @@ export function RegionalSettingsFields({
       </FormField>
 
       {/* Siempre montada: una región `aria-live` que aparece no se anuncia. */}
-      <p aria-live="polite" className="text-sm tabular-nums text-muted empty:hidden sm:col-span-2">
+      <p aria-live="polite" className={cn('text-sm tabular-nums text-muted empty:hidden', !stacked && 'sm:col-span-2')}>
         {preview ? copy.preview(preview) : null}
       </p>
     </div>
   );
+}
+
+function unique(values: readonly (string | null | undefined)[]): string[] {
+  return [...new Set(values.filter((v): v is string => Boolean(v)))];
 }

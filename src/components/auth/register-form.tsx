@@ -1,10 +1,22 @@
 'use client';
 import * as React from 'react';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Eye, EyeOff, Loader2, MailCheck } from 'lucide-react';
-import { apiFetch } from '@/lib/api/client';
-import type { components } from '@/lib/api/schema';
+import { ApiError } from '@/lib/api/api-error';
 import { apiErrorMessage } from '@/lib/api/error-message';
+import { REGISTER_LOCATION_FIELDS, registerClinic } from '@/lib/auth/register-api';
+import { listPublicCurrencies } from '@/lib/reference/currencies-api';
+import {
+  browserLocale,
+  browserTimeZone,
+  canonicalLocale,
+  REGIONAL_SETTINGS_FIELDS,
+  validateRegionalSettings,
+  type RegionalSettingsErrors,
+  type RegionalSettingsField,
+  type RegionalSettingsValues,
+} from '@/lib/locations/regional-settings';
+import { RegionalSettingsFields, regionalFieldId } from '@/components/locations/regional-settings-fields';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { FormField } from '@/components/shared/form-field';
@@ -30,13 +42,15 @@ const copy = {
   sentBody: (email: string) =>
     `Si ${email} puede registrar una clínica, te llegará un correo con un enlace para confirmarla. Ábrelo en las próximas 24 horas para activar tu clínica.`,
   sentSpam: 'Si no lo ves en unos minutos, revisa la carpeta de spam.',
+  locationLegend: 'Tu sede',
+  locationIntro:
+    'La primera sede de tu clínica. La zona y el formato se sugieren desde tu navegador: revísalos. Podrás cambiarlos y añadir más sedes en Ajustes → Sedes.',
 };
 
 const ERROR_ID = 'register-error';
+const LOCATION_ID = 'register-location';
 
-// DX-029: 202 con un mensaje genérico, exista o no el correo. La clínica se
-// crea al abrir el enlace del email (/register/verificar/[token]).
-type RegisterResponse = components['schemas']['RegisterAcceptedDto'];
+const EMPTY_REGIONAL: RegionalSettingsValues = { country: '', currency: '', timeZone: '', locale: '' };
 
 export function RegisterForm({ tenant }: { tenant: string | null }) {
   const [sentTo, setSentTo] = useState<string | null>(null);
@@ -48,18 +62,75 @@ export function RegisterForm({ tenant }: { tenant: string | null }) {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
+  // G1 (spec §6.7): la primera sede. País y moneda empiezan vacíos; zona y
+  // formato se sugieren desde el navegador, a la vista y editables (R10).
+  const [regional, setRegional] = useState<RegionalSettingsValues>(EMPTY_REGIONAL);
+  const [suggestions, setSuggestions] = useState<{ timeZone: string | null; locale: string | null }>();
+  const [regionalErrors, setRegionalErrors] = useState<RegionalSettingsErrors>({});
+
+  // Tras montar: el formulario también se pinta en el servidor, que no sabe la
+  // zona ni el idioma del navegador.
+  useEffect(() => {
+    function suggest() {
+      const suggested = { timeZone: browserTimeZone(), locale: browserLocale() };
+      setSuggestions(suggested);
+      setRegional((prev) => ({
+        ...prev,
+        timeZone: prev.timeZone || suggested.timeZone || '',
+        locale: prev.locale || suggested.locale || '',
+      }));
+    }
+    suggest();
+  }, []);
+
+  function changeRegional<F extends RegionalSettingsField>(field: F, value: RegionalSettingsValues[F]) {
+    setRegional((prev) => ({ ...prev, [field]: value }));
+    setRegionalErrors((prev) => ({ ...prev, [field]: undefined }));
+  }
+
+  function focusRegional(field: RegionalSettingsField) {
+    document.getElementById(regionalFieldId(LOCATION_ID, field))?.focus();
+  }
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
+    const found = validateRegionalSettings(regional);
+    setRegionalErrors(found);
+    const first = REGIONAL_SETTINGS_FIELDS.find((f) => found[f]);
+    if (first) {
+      focusRegional(first);
+      return;
+    }
+    // Lo que se envía es lo que se ve: el formato queda en su forma canónica.
+    const timeZone = regional.timeZone.trim();
+    const locale = canonicalLocale(regional.locale) ?? regional.locale.trim();
+    setRegional((prev) => ({ ...prev, timeZone, locale }));
     setSubmitting(true);
     try {
-      await apiFetch<RegisterResponse>('/auth/register', {
-        method: 'POST',
-        body: { clinicName, subdomain, fullName, email, password },
+      await registerClinic({
+        clinicName,
+        subdomain,
+        fullName,
+        email,
+        password,
+        locationCountry: regional.country as Exclude<RegionalSettingsValues['country'], ''>,
+        locationCurrency: regional.currency,
+        locationTimeZone: timeZone,
+        locationLocale: locale,
       });
       setSentTo(email.trim());
     } catch (err) {
+      // Un 400 de la sede (`field` = locationCurrency…) va junto a su campo.
+      const field =
+        err instanceof ApiError && err.status === 400 && err.field && err.field in REGISTER_LOCATION_FIELDS
+          ? REGISTER_LOCATION_FIELDS[err.field as keyof typeof REGISTER_LOCATION_FIELDS]
+          : null;
+      if (field) {
+        setRegionalErrors((prev) => ({ ...prev, [field]: apiErrorMessage(err, copy.genericError) }));
+        focusRegional(field);
+        return;
+      }
       setError(
         apiErrorMessage(err, {
           fallback: copy.genericError,
@@ -170,6 +241,20 @@ export function RegisterForm({ tenant }: { tenant: string | null }) {
           </button>
         </div>
       </FormField>
+
+      <fieldset className="flex flex-col gap-4 border-t border-hairline pt-4">
+        <legend className="float-left w-full text-sm font-semibold text-ink">{copy.locationLegend}</legend>
+        <p className="text-sm text-muted">{copy.locationIntro}</p>
+        <RegionalSettingsFields
+          idPrefix={LOCATION_ID}
+          values={regional}
+          onChange={changeRegional}
+          errors={regionalErrors}
+          currencyLoader={listPublicCurrencies}
+          suggestions={suggestions}
+          stacked
+        />
+      </fieldset>
 
       {error ? (
         <InlineError id={ERROR_ID} variant="summary">

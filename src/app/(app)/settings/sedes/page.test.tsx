@@ -13,6 +13,11 @@ jest.mock('../../../../components/locations/locations-list', () => ({
     <section aria-label="Sedes" data-can-edit={String(canEdit)} data-edit-id={initialEditId ?? ''} />
   ),
 }));
+jest.mock('../../../../components/locations/regional-review-notice', () => ({
+  RegionalReviewNotice: ({ showReviewLink }: { showReviewLink?: boolean }) => (
+    <aside aria-label="Sedes por revisar" data-link={String(showReviewLink ?? true)} />
+  ),
+}));
 jest.mock('../../../../lib/auth/token-role', () => ({ getTokenRole: jest.fn() }));
 jest.mock('../../../../components/locations/location-health-registration-settings', () => ({
   LocationHealthRegistrationSettings: () => <section aria-label="Nº de registro sanitario" />,
@@ -38,6 +43,10 @@ describe('Ajustes → Sedes (DX-279, DX-319)', () => {
     const list = screen.getByRole('region', { name: 'Sedes' });
     expect(list).toHaveAttribute('data-can-edit', 'true');
     expect(list).toHaveAttribute('data-edit-id', 'loc-9');
+    // Aviso D5 encima de la lista (él mismo decide si es ADMIN), sin enlace a esta misma página.
+    const notice = screen.getByRole('complementary', { name: 'Sedes por revisar' });
+    expect(notice.compareDocumentPosition(list) & Node.DOCUMENT_POSITION_FOLLOWING).toBeTruthy();
+    expect(notice).toHaveAttribute('data-link', 'false');
     unmount();
 
     mockedRole.mockReturnValue('RECEPTION');

@@ -6,6 +6,7 @@ import { getTokenRole } from '@/lib/auth/token-role';
 import { PageHeader } from '@/components/shared/page-header';
 import { SETTINGS_BACK } from '@/components/settings/settings-sections';
 import { LocationsList } from '@/components/locations/locations-list';
+import { RegionalReviewNotice } from '@/components/locations/regional-review-notice';
 import { LocationHealthRegistrationSettings } from '@/components/locations/location-health-registration-settings';
 import { LocationPhoneSettings } from '@/components/locations/location-phone-settings';
 import { CancellationPolicySettings } from '@/components/locations/cancellation-policy-settings';
@@ -60,7 +61,11 @@ function LocationSettingsRoute() {
     <>
       <PageHeader back={SETTINGS_BACK} title={copy.title} description={copy.description(isAdmin)} />
       <div className="flex flex-col gap-10">
-        <LocationsList token={accessToken} canEdit={isAdmin} initialEditId={editId} />
+        {/* Aviso D5 (solo ADMIN) pegado a la lista que lo resuelve. */}
+        <div className="flex flex-col gap-4">
+          <RegionalReviewNotice token={accessToken} showReviewLink={false} />
+          <LocationsList token={accessToken} canEdit={isAdmin} initialEditId={editId} />
+        </div>
         <LocationHealthRegistrationSettings
           token={accessToken}
           canEdit={isAdmin}

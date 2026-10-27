@@ -9,6 +9,7 @@ import { AsyncSection } from '@/components/shared/async-section';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { LocationFormModal } from './location-form-modal';
+import { needsRegionalReview } from './regional-review-notice';
 
 export const locationsListCopy = {
   heading: 'Sedes',
@@ -16,6 +17,9 @@ export const locationsListCopy = {
   create: 'Nueva sede',
   edit: 'Editar',
   editFor: (name: string) => `Editar ${name}`,
+  review: 'Revisar',
+  reviewFor: (name: string) => `Revisar ${name}`,
+  pendingReview: 'Por revisar',
   country: 'País',
   currency: 'Moneda',
   timeZone: 'Zona horaria',
@@ -49,7 +53,8 @@ type ModalTarget = null | 'new' | ClinicLocation;
 /**
  * Sección «Sedes» de Ajustes → Sedes (G1, spec §6.3): la lista con su país,
  * moneda, zona y formato, y para ADMIN «Nueva sede» y «Editar». Una sede sin
- * configurar sale «Por configurar» y su modal la completa.
+ * configurar sale «Por configurar» y su modal la completa; una activa sin
+ * confirmar (aviso D5) sale «Por revisar» y su botón «Revisar» abre el modal.
  */
 export function LocationsList({ token, canEdit, initialEditId = null }: LocationsListProps) {
   const requestLocations = useSessionLocations(token);
@@ -144,6 +149,7 @@ export function LocationsList({ token, canEdit, initialEditId = null }: Location
                     {location.isActive ? copy.active : copy.inactive}
                   </Badge>
                   {isUnconfigured(location) ? <Badge variant="warning">{copy.unconfigured}</Badge> : null}
+                  {needsRegionalReview(location) ? <Badge variant="outline">{copy.pendingReview}</Badge> : null}
                 </div>
                 <dl className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm sm:grid-cols-4">
                   <Detail label={copy.country} value={COUNTRY_LABELS[location.country]} />
@@ -153,15 +159,16 @@ export function LocationsList({ token, canEdit, initialEditId = null }: Location
                 </dl>
               </div>
               {canEdit ? (
+                // Aviso D5: guardar el modal, aunque no cambie nada, confirma la sede.
                 <Button
                   type="button"
                   variant="secondary"
                   size="sm"
                   onClick={() => openModal(location)}
-                  aria-label={copy.editFor(location.name)}
+                  aria-label={needsRegionalReview(location) ? copy.reviewFor(location.name) : copy.editFor(location.name)}
                   className="self-start sm:self-center"
                 >
-                  {copy.edit}
+                  {needsRegionalReview(location) ? copy.review : copy.edit}
                 </Button>
               ) : null}
             </li>

@@ -82,7 +82,7 @@ describe('LocationsList (G1, spec §6.3)', () => {
     expect(within(row).getAllByText('Por configurar').length).toBeGreaterThan(0);
     expect(row).not.toHaveTextContent(/COP|America\/Bogota|es-CO/);
 
-    await user.click(within(row).getByRole('button', { name: 'Editar Sede Antigua' }));
+    await user.click(within(row).getByRole('button', { name: 'Revisar Sede Antigua' }));
     const dialog = await screen.findByRole('dialog', { name: 'Editar sede' });
     await within(dialog).findByRole('option', { name: 'Yen japonés (¥)' });
     await user.selectOptions(within(dialog).getByLabelText('Moneda'), 'JPY');
