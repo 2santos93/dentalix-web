@@ -195,6 +195,7 @@ function NewPrescriptionForm({
     if (safetyItems.length === 0) {
       const id = setTimeout(() => {
         setSafety({ kind: 'idle' });
+        setConfirmedKey(null);
         setSafetyFor(safetyKey);
       }, 0);
       return () => clearTimeout(id);
@@ -208,6 +209,11 @@ function NewPrescriptionForm({
       checkPrescriptionSafety(token, patientId, safetyItems)
         .then((preview) => {
           if (cancelled) return;
+          const resolvedKey = preview.alerts
+            .filter((alert) => alert.severity === 'BLOCKING')
+            .map((alert) => `${alert.code}|${alert.activeIngredient ?? ''}|${alert.message}`)
+            .join(';') || null;
+          setConfirmedKey((previous) => previous === resolvedKey ? previous : null);
           setSafety({ kind: 'ready', preview });
           setSafetyFor(safetyKey);
         })
