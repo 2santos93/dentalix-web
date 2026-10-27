@@ -1,0 +1,11 @@
+
+> dentalix-web@0.1.0 test
+> jest --runInBand src/lib/branding.test.ts
+
+(node:86850) ExperimentalWarning: Type Stripping is an experimental feature and might change at any time
+(Use `node --trace-warnings ...` to show where the warning was created)
+Test Suites: 1 passed, 1 total
+Tests:       4 passed, 4 total
+Snapshots:   0 total
+Time:        0.734 s, estimated 1 s
+Ran all test suites matching src/lib/branding.test.ts.

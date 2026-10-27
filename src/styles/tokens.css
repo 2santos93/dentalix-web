@@ -19,6 +19,8 @@
   --color-border: #E2E8F0; /* standard 1px dividers and control strokes */
   --color-hairline: #EEF2F7; /* lightest rule — in-table / in-list separation */
   --color-success: #15803D;
+  /* Small text on the success tint needs a stronger ink than the fill. */
+  --color-success-text: #166534;
   --color-warning: #B45309;
   --color-danger: #BE123C;
 
@@ -38,6 +40,7 @@
   --color-border: #283549; /* 1px dividers and control strokes */
   --color-hairline: #1C2740; /* lightest rule on dark */
   --color-success: #4ADE80;
+  --color-success-text: #4ADE80;
   --color-warning: #FBBF24;
   --color-danger: #FB7185;
 
