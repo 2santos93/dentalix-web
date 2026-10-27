@@ -27,6 +27,8 @@ interface FormModalProps {
   submitting?: boolean;
   /** Independent of `submitting` — e.g. required fields missing. */
   submitDisabled?: boolean;
+  /** Explica junto a la acción qué falta para poder enviar. */
+  submitHint?: string | null;
   /**
    * Nothing can be saved in the current state (e.g. the data it edits failed
    * to load, or the record does not admit the change): the footer keeps only
@@ -68,12 +70,14 @@ export function FormModal({
   cancelLabel = 'Cancelar',
   submitting = false,
   submitDisabled = false,
+  submitHint,
   hideSubmit = false,
   error,
   size = 'default',
   destructive = false,
   onCloseAutoFocus,
 }: FormModalProps) {
+  const submitHintId = React.useId();
   const errorRef = React.useRef<HTMLDivElement>(null);
   React.useEffect(() => {
     if (!error) return;
@@ -101,23 +105,27 @@ export function FormModal({
             </div>
           ) : null}
           {children}
-          <DialogFooter>
-            <DialogClose asChild>
-              <Button type="button" variant="secondary" disabled={submitting}>
-                {cancelLabel}
-              </Button>
-            </DialogClose>
-            {hideSubmit ? null : (
-              <Button
-                type="submit"
-                variant={destructive ? 'destructive' : 'default'}
-                loading={submitting}
-                disabled={submitDisabled}
-              >
-                {submitLabel}
-              </Button>
-            )}
-          </DialogFooter>
+          <div className="flex flex-col gap-2">
+            {submitHint ? <p id={submitHintId} className="text-sm text-muted">{submitHint}</p> : null}
+            <DialogFooter>
+              <DialogClose asChild>
+                <Button type="button" variant="secondary" disabled={submitting}>
+                  {cancelLabel}
+                </Button>
+              </DialogClose>
+              {hideSubmit ? null : (
+                <Button
+                  type="submit"
+                  variant={destructive ? 'destructive' : 'default'}
+                  loading={submitting}
+                  disabled={submitDisabled}
+                  aria-describedby={submitHint ? submitHintId : undefined}
+                >
+                  {submitLabel}
+                </Button>
+              )}
+            </DialogFooter>
+          </div>
         </form>
       </DialogContent>
     </Dialog>

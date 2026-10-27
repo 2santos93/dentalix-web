@@ -1,0 +1,72 @@
+{
+  "task": "DX344",
+  "date": "2026-10-27",
+  "base": "a02b70df36e5b57e7a018f50c337118230d0690b",
+  "gates": {
+    "jest": {
+      "command": "npm test -- --runInBand src/components/prescriptions src/components/shared/form-modal.test.tsx",
+      "exitCode": 0,
+      "suitesPassed": 7,
+      "testsPassed": 46
+    },
+    "types": {
+      "command": "npx tsc --noEmit",
+      "exitCode": 0
+    },
+    "lint": {
+      "command": "npm run lint",
+      "exitCode": 0
+    },
+    "build": {
+      "command": "NEXT_PUBLIC_API_URL=http://localhost:3218/api/v1 npm run build",
+      "exitCode": 0,
+      "next": "16.4.2"
+    },
+    "playwright": {
+      "command": "E2E_WEB_SERVER=none E2E_WEB_PORT=3148 E2E_API_URL=http://localhost:3218/api/v1 E2E_MAIL_DIR=<own ephemeral mail directory> npx playwright test e2e/prescription-safety.spec.ts --project=chromium --trace=off",
+      "exitCode": 0,
+      "testsPassed": 1,
+      "durationSeconds": 6.7,
+      "viewports": [
+        390,
+        1440
+      ],
+      "themes": [
+        "light",
+        "dark"
+      ],
+      "axeViolations": 0,
+      "screenshots": 8
+    },
+    "diffCheck": {
+      "command": "git diff --check",
+      "exitCode": 0
+    }
+  },
+  "behaviorsVerified": [
+    "submit blocked during debounce and in-flight request",
+    "same DOM nodes, focus, checkbox and reason preserved during real pending responses",
+    "same-result live region mutations: 0",
+    "changed blocking alert requires fresh confirmation",
+    "new patient resets draft and ignores old pending response",
+    "token refresh preserves draft and requires new preview",
+    "reason help and inline error linked by aria-describedby",
+    "disabled submit explains pending, confirmation or missing reason",
+    "server seals original override reason and expected clinical warning",
+    "existing print/document tests passed"
+  ],
+  "resources": {
+    "apiBase": "e4068c56955cefc107e33393c8df4ee8eeeaed98",
+    "database": "dx344_20261027_test",
+    "postgresPort": 55521,
+    "postgresContainer": "dx346-db-20261027",
+    "apiPort": 3218,
+    "webPort": 3148,
+    "serversRunningAtFreeze": false,
+    "sharedContainerStopped": false
+  },
+  "limitations": [
+    "Automated browser verification uses Chromium; no manual screen-reader session.",
+    "Review subagent could not be started because all agent thread slots were occupied; coordinator review remains before integration."
+  ]
+}
