@@ -268,7 +268,8 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
             // El menú largo cede altura y se desplaza dentro del sidebar;
             // la marca y la cuenta permanecen dentro de la ventana.
             'flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto scroll-py-2 py-2',
-            // 63 px interiores − 15 px de barra clásica − 4 px de padding = 44 px útiles.
+            // 63 px interiores − 15 px de barra clásica − 4 px de padding = 44 px útiles;
+            // con h-11, cada enlace del carril es un objetivo táctil de 44×44.
             collapsed ? 'px-0.5' : 'px-3',
           )}
         >
@@ -283,7 +284,7 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
               title={collapsed ? navLabel(href, label) : undefined}
               className={cn(
                 'relative flex items-center rounded-lg text-sm font-medium transition-colors',
-                collapsed ? 'h-10 w-full justify-center' : 'min-h-10 min-w-0 flex-1 gap-3 px-3 py-2',
+                collapsed ? 'h-11 w-full justify-center' : 'min-h-10 min-w-0 flex-1 gap-3 px-3 py-2',
                 isActive(href)
                   ? 'bg-primary/10 text-primary'
                   : 'text-muted hover:bg-bg hover:text-ink',
