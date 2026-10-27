@@ -10,6 +10,8 @@ export interface ExpenseLocationsState {
    * ofrecen solo las activas.
    */
   locations: ClinicLocation[];
+  /** La lista cargó al menos una vez. */
+  loaded: boolean;
   failed: boolean;
   reload: () => void;
 }
@@ -18,6 +20,7 @@ export interface ExpenseLocationsState {
 export function useExpenseLocations(token: string): ExpenseLocationsState {
   const requestLocations = useSessionLocations(token);
   const [locations, setLocations] = useState<ClinicLocation[]>([]);
+  const [loaded, setLoaded] = useState(false);
   const [failed, setFailed] = useState(false);
   const [attempt, setAttempt] = useState(0);
 
@@ -28,6 +31,7 @@ export function useExpenseLocations(token: string): ExpenseLocationsState {
       .then((all) => {
         if (cancelled) return;
         setLocations(all);
+        setLoaded(true);
         setFailed(false);
       })
       .catch(() => {
@@ -43,5 +47,5 @@ export function useExpenseLocations(token: string): ExpenseLocationsState {
     setAttempt((n) => n + 1);
   }, []);
 
-  return { locations, failed, reload };
+  return { locations, loaded, failed, reload };
 }

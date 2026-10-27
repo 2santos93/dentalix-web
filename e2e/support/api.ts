@@ -38,8 +38,8 @@ export async function apiLogin(
  * Registra una clínica nueva por la API e inicia sesión con su dueño (ADMIN).
  * DX-029: el registro (202) no crea nada hasta abrir el enlace del email, así
  * que se lee del buzón de e2e y se confirma con `POST /auth/register/verify`.
- * G1 (DX-317): la primera sede nace con los cuatro valores regionales
- * (`clinic.location`, por defecto `E2E_REGION`).
+ * G1 (DX-317) y G1-B (DX-350): la primera sede nace con los cinco valores
+ * regionales, reloj incluido (`clinic.location`, por defecto `E2E_REGION`).
  */
 export async function registerClinicViaApi(
   request: APIRequestContext,
@@ -59,6 +59,7 @@ export async function registerClinicViaApi(
       locationCurrency: region.currency,
       locationTimeZone: region.timeZone,
       locationLocale: region.locale,
+      locationHourCycle: region.hourCycle,
     },
   });
   expect(res.status(), `registro por la API falló: ${await res.text()}`).toBe(202);
@@ -80,6 +81,18 @@ export async function apiPost<T>(
   const res = await request.post(`${API_URL}${path}`, { headers: session.headers, data });
   expect(res.ok(), `POST ${path} falló: ${await res.text()}`).toBeTruthy();
   return (await res.json()) as T;
+}
+
+/**
+ * Alta de una sede (`POST /locations`, ADMIN) con los cinco valores regionales
+ * explícitos (G1-B): país, moneda, zona, formato y reloj. Devuelve su `id`.
+ */
+export async function createLocationViaApi(
+  request: APIRequestContext,
+  session: ApiSession,
+  location: { name: string } & RegionalSettings,
+): Promise<string> {
+  return (await apiPost<{ id: string }>(request, session, '/locations', location)).id;
 }
 
 /**

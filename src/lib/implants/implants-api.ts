@@ -1,6 +1,8 @@
 import { apiFetch, apiFetchText } from '@/lib/api/client';
+import type { RegionalFormat } from '@/lib/format/regional-format';
 import type { components } from '@/lib/api/schema';
 import type { ClinicRole } from '@/lib/me/me-api';
+import { NO_SEDE_FORMAT } from '@/lib/format/sede-number';
 
 // Registro de implantes (DX-191). Las formas salen del Swagger de la API.
 export type PatientImplant = components['schemas']['PatientImplantDto'];
@@ -134,12 +136,18 @@ export function implantCardPrintHref(patientId: string, date: string): string {
   return `/print/patients/${encodeURIComponent(patientId)}/implant-card?date=${encodeURIComponent(date)}`;
 }
 
-/** «4,1 × 10 mm», «Ø 4,1 mm», «10 mm» o null. */
+/**
+ * «4,1 × 10 mm», «Ø 4,1 mm», «10 mm» o null, con los separadores del formato
+ * de la sede. Sin formato (cargando o sede sin configurar), «—» si hay medida.
+ */
 export function formatImplantSize(
   diameterMm: number | null,
   lengthMm: number | null,
+  fmt: RegionalFormat | null,
 ): string | null {
-  const n = (v: number) => v.toLocaleString('es-CO', { maximumFractionDigits: 2 });
+  if (diameterMm === null && lengthMm === null) return null;
+  if (!fmt) return NO_SEDE_FORMAT;
+  const n = (v: number) => fmt.number(v, { max: 2 });
   if (diameterMm !== null && lengthMm !== null) return `${n(diameterMm)} × ${n(lengthMm)} mm`;
   if (diameterMm !== null) return `Ø ${n(diameterMm)} mm`;
   if (lengthMm !== null) return `${n(lengthMm)} mm`;

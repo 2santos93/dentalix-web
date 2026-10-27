@@ -4703,6 +4703,12 @@ export interface components {
              * @example es-ES
              */
             locationLocale?: string;
+            /**
+             * @description Reloj de la primera sede: h12 (12 h) o h23 (24 h). Fase 1: sin él, con los otros cuatro location*, la sede recibe el reloj de la función de backfill; fase 2: obligatorio.
+             * @example h23
+             * @enum {string}
+             */
+            locationHourCycle?: "h12" | "h23";
         };
         RegisterAcceptedDto: {
             /** @example Te enviamos un correo para confirmar el registro. Abre el enlace para activar tu clínica. */
@@ -6117,13 +6123,19 @@ export interface components {
              */
             timeZone: string | null;
             /**
-             * @description G1: formato regional BCP 47 de la sede (fechas y números); se guarda canonicalizado (es-mx → es-MX). null = sede sin configurar (fase 1).
+             * @description G1: formato regional BCP 47 de la sede (fechas y números); se guarda canonicalizado (es-mx → es-MX) y sin la palabra clave -u-hc- (el reloj es su propio campo). null = sede sin configurar (fase 1).
              * @example es-ES
              */
             locale: string | null;
             /**
+             * @description G1-B: reloj de la sede, h12 (12 h) o h23 (24 h), en toda hora que se pinte para ella. Nunca se deduce del formato ni del país. null = sede sin reloj (fase 1, réplica anterior aún sin barrer).
+             * @example h23
+             * @enum {string|null}
+             */
+            hourCycle: "h12" | "h23" | null;
+            /**
              * Format: date-time
-             * @description D5: cuándo un ADMIN confirmó moneda, zona y formato; null = asignados al actualizar Dentalix, por revisar.
+             * @description D5: cuándo un ADMIN confirmó moneda, zona y formato (o cambió el reloj); null = asignados al actualizar Dentalix, por revisar.
              */
             regionalSettingsReviewedAt: string | null;
             /** Format: date-time */
@@ -6147,10 +6159,16 @@ export interface components {
              */
             timeZone: string;
             /**
-             * @description G1: formato regional BCP 47 de la sede (fechas y números); se guarda canonicalizado (es-mx → es-MX).
+             * @description G1: formato regional BCP 47 de la sede (fechas y números); se guarda canonicalizado (es-mx → es-MX) y sin la palabra clave -u-hc- (el reloj es su propio campo).
              * @example es-ES
              */
             locale: string;
+            /**
+             * @description G1-B: reloj de la sede, h12 (12 h) o h23 (24 h), en toda hora que se pinte para ella. Nunca se deduce del formato ni del país. Fase 1: sin él (forma de la web anterior) la sede se crea con el reloj que rellena la función de backfill; fase 2: obligatorio.
+             * @example h23
+             * @enum {string}
+             */
+            hourCycle?: "h12" | "h23";
             /**
              * @description DX-222: teléfono de la sede que ven los pacientes en las indicaciones postoperatorias ({{telefono_sede}}). Hasta 40 caracteres.
              * @example +57 601 555 0101
@@ -6185,10 +6203,16 @@ export interface components {
              */
             timeZone?: string;
             /**
-             * @description G1: formato regional BCP 47 de la sede (fechas y números); se guarda canonicalizado (es-mx → es-MX).
+             * @description G1: formato regional BCP 47 de la sede (fechas y números); se guarda canonicalizado (es-mx → es-MX) y sin la palabra clave -u-hc- (el reloj es su propio campo).
              * @example es-ES
              */
             locale?: string;
+            /**
+             * @description G1-B: reloj de la sede, h12 (12 h) o h23 (24 h), en toda hora que se pinte para ella. Nunca se deduce del formato ni del país. No pide confirmación ni mira la caja; cambiarlo marca la sede revisada. null es 400.
+             * @example h12
+             * @enum {string}
+             */
+            hourCycle?: "h12" | "h23";
             /**
              * @description G1: marca la sede como revisada (moneda, zona y formato confirmados) aunque no cambie nada.
              * @enum {boolean}
@@ -6879,6 +6903,17 @@ export interface components {
              * @example America/Bogota
              */
             timeZone: string | null;
+            /**
+             * @description G1-B: formato regional (BCP 47) de esa sede, en crudo: la fecha se pinta con él. null si la sede no está permitida y también si no lo tiene (sede por configurar: la web lo distingue por `locationId`).
+             * @example en-US
+             */
+            locale: string | null;
+            /**
+             * @description G1-B: reloj de esa sede (12 h o 24 h), en crudo. null si la sede no está permitida y también si no lo tiene.
+             * @example h12
+             * @enum {string|null}
+             */
+            hourCycle: "h12" | "h23" | null;
         };
         VisitMinimumChangeDto: {
             /** Format: uuid */
@@ -7184,6 +7219,16 @@ export interface components {
             locationId: string;
             /** @example America/Bogota */
             timeZone: string;
+            /**
+             * @description G1-B: formato regional (BCP 47) de la sede: las horas se pintan con él.
+             * @example en-US
+             */
+            locale: string;
+            /**
+             * @description G1-B: reloj de la sede (12 h o 24 h).
+             * @enum {string}
+             */
+            hourCycle: "h12" | "h23";
             /**
              * Format: date-time
              * @description Reloj del servidor con el que se calcularon los minutos.

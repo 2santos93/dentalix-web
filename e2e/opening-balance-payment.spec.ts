@@ -4,6 +4,8 @@ import { mkdir } from 'node:fs/promises';
 import { join } from 'node:path';
 import { sessionCookie, waitForHydratedForm } from './support/auth';
 import { tenantOrigin } from './support/urls';
+import { E2E_REGION } from './support/regional';
+import { regionalFormat } from '../src/lib/format/regional-format';
 import { expectNoHorizontalScroll, expectNoHorizontalScrollIn } from './support/layout';
 
 /**
@@ -137,7 +139,8 @@ for (const viewport of [
     // la misma hoja se vuelve a validar.
     const balanceIssues = page.getByRole('table', { name: 'Errores y avisos de la hoja de saldos' });
     await expect(balanceIssues).toContainText(
-      new RegExp(`ya tiene un saldo migrado vivo de 100\\.000,00\\sCOP \\(lote «${firstFile.replace(/[.]/g, '\\.')}» del \\d{2}/\\d{2}/\\d{4}`),
+      // G1-B (DX-350): el importe con el formato de la sede de la demo (el mismo helper que la API).
+      new RegExp(`ya tiene un saldo migrado vivo de ${escapeRegExp(regionalFormat(E2E_REGION).money(100_000, 'COP'))} \\(lote «${firstFile.replace(/[.]/g, '\\.')}» del \\d{2}/\\d{2}/\\d{4}`),
     );
     await expect(balanceIssues).toContainText('no se crea otro');
     await page.getByRole('checkbox', { name: 'Añadir aunque ya tenga saldo migrado' }).check();
@@ -219,4 +222,8 @@ for (const viewport of [
     await expect(page.getByText('Saldos migrados retirados.')).toBeVisible();
     await expect(secondRow.getByRole('button', { name: /Retirar los saldos migrados/ })).toHaveCount(0);
   });
+}
+
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s/g, '\\s');
 }

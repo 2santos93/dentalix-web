@@ -1,9 +1,12 @@
-import { render, screen, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
+import { useAuthStore } from '@/lib/auth/auth-store';
 import { ImplantCardPrintView } from './implant-card-print-view';
 import { getImplantCard, printImplantCard } from '@/lib/implants/implants-api';
 import { ApiError } from '@/lib/api/client';
 import { setupUser } from '@/lib/test/user';
 import { makeImplantCard, tokenFor } from '@/lib/test/implants';
+import { listLocations } from '@/lib/locations/locations-api';
+import { clinicLocation } from '@/lib/test/locations';
 
 jest.mock('../../lib/implants/implants-api', () => ({
   ...jest.requireActual('../../lib/implants/implants-api'),
@@ -11,6 +14,8 @@ jest.mock('../../lib/implants/implants-api', () => ({
   printImplantCard: jest.fn(),
 }));
 
+jest.mock('../../lib/locations/locations-api', () => ({ listLocations: jest.fn() }));
+const mockedLocations = listLocations as jest.MockedFunction<typeof listLocations>;
 const mockedGet = getImplantCard as jest.MockedFunction<typeof getImplantCard>;
 const mockedPrint = printImplantCard as jest.MockedFunction<typeof printImplantCard>;
 const RECEPTION = tokenFor('RECEPTION', 'u-rec');
@@ -20,10 +25,66 @@ describe('ImplantCardPrintView (DX-191)', () => {
   beforeEach(() => {
     mockedGet.mockReset();
     mockedPrint.mockReset();
+    mockedLocations.mockReset().mockResolvedValue([clinicLocation({ locale: 'de-DE', hourCycle: 'h23' })]);
     window.print = jest.fn();
   });
   afterAll(() => {
     window.print = realPrint;
+  });
+
+  it('formatImplantSize en-US is 4.1 × 10 mm: la medida con el formato de la sede de la pantalla', async () => {
+    mockedLocations.mockResolvedValue([clinicLocation({ locale: 'en-US', hourCycle: 'h12' })]);
+    mockedGet.mockResolvedValue(makeImplantCard());
+    render(<ImplantCardPrintView token={RECEPTION} patientId="p1" date="2026-10-10" />);
+    const card = await screen.findByRole('article');
+    expect(await within(card).findByText('4.1 × 10 mm')).toBeInTheDocument();
+  });
+
+  it('«Configurar sede» abre la sede sin formato o sin reloj, no la lista', async () => {
+    useAuthStore.setState({ accessToken: tokenFor('ADMIN') });
+    try {
+      mockedLocations.mockResolvedValue([clinicLocation({ id: 'sede-sin-reloj', locale: 'en-US', hourCycle: null })]);
+      mockedGet.mockResolvedValue(makeImplantCard());
+      render(<ImplantCardPrintView token={RECEPTION} patientId="p1" date="2026-10-10" />);
+      expect(await screen.findByRole('link', { name: 'Configurar sede' })).toHaveAttribute(
+        'href',
+        '/settings/sedes?sede=sede-sin-reloj',
+      );
+    } finally {
+      useAuthStore.setState({ accessToken: null });
+    }
+  });
+
+  it('sin formato de la sede: la medida «—» y el aviso, fuera de la impresión', async () => {
+    mockedLocations.mockResolvedValue([clinicLocation({ locale: null, hourCycle: null })]);
+    mockedGet.mockResolvedValue(makeImplantCard());
+    render(<ImplantCardPrintView token={RECEPTION} patientId="p1" date="2026-10-10" />);
+    const note = await screen.findByText(/No se pudo saber el formato regional o el reloj de la sede/);
+    expect(note.closest('[role="status"]')).toHaveClass('print:hidden');
+    const items = within(screen.getByRole('article')).getAllByRole('listitem');
+    expect(items[0]).not.toHaveTextContent('mm');
+    expect(items[0]).toHaveTextContent('—');
+  });
+
+  it('sin formato de la sede no se imprime ni se registra la entrega (las medidas saldrían «—»)', async () => {
+    const user = setupUser();
+    mockedLocations.mockResolvedValue([clinicLocation({ locale: null, hourCycle: null })]);
+    mockedGet.mockResolvedValue(makeImplantCard());
+    render(<ImplantCardPrintView token={RECEPTION} patientId="p1" date="2026-10-10" />);
+    await screen.findByText(/No se pudo saber el formato regional o el reloj de la sede/);
+    const print = screen.getByRole('button', { name: /imprimir y registrar la entrega/i });
+    expect(print).toBeDisabled();
+    await user.click(print);
+    expect(mockedPrint).not.toHaveBeenCalled();
+    expect(window.print).not.toHaveBeenCalled();
+  });
+
+  it('mientras carga el formato de la sede, «Imprimir» espera', async () => {
+    mockedLocations.mockReturnValue(new Promise(() => {}));
+    mockedGet.mockResolvedValue(makeImplantCard());
+    render(<ImplantCardPrintView token={RECEPTION} patientId="p1" date="2026-10-10" />);
+    await screen.findByRole('article');
+    expect(screen.getByRole('button', { name: /imprimir y registrar la entrega/i })).toBeDisabled();
   });
 
   it('la tarjeta lleva nombre y documento, centro, fecha y los dos componentes; el anulado, marcado', async () => {
@@ -40,7 +101,7 @@ describe('ImplantCardPrintView (DX-191)', () => {
     expect(items[0]).toHaveTextContent('Implante · Diente 36');
     expect(items[0]).toHaveTextContent('021.5310');
     expect(items[0]).toHaveTextContent('LOT-AB12');
-    expect(items[0]).toHaveTextContent('4,1 × 10 mm');
+    expect(await within(items[0]).findByText('4,1 × 10 mm')).toBeInTheDocument();
     expect(items[1]).toHaveAttribute('data-voided', 'true');
     expect(items[1]).toHaveTextContent('ANULADO');
     expect(card).toHaveTextContent('Entrega pendiente de registrar.');
@@ -54,7 +115,9 @@ describe('ImplantCardPrintView (DX-191)', () => {
     mockedPrint.mockResolvedValue(makeImplantCard({ deliveredAt: '2026-10-17T15:00:00.000Z' }));
     render(<ImplantCardPrintView token={RECEPTION} patientId="p1" date="2026-10-10" />);
     await screen.findByRole('article');
-    await user.click(screen.getByRole('button', { name: /imprimir y registrar la entrega/i }));
+    const print = screen.getByRole('button', { name: /imprimir y registrar la entrega/i });
+    await waitFor(() => expect(print).toBeEnabled());
+    await user.click(print);
     expect(mockedPrint).toHaveBeenCalledWith(RECEPTION, 'p1', '2026-10-10');
     expect(await screen.findByText(/Tarjeta entregada al paciente el/)).toBeInTheDocument();
     expect(window.print).toHaveBeenCalledTimes(1);

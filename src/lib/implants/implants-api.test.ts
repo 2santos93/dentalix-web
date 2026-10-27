@@ -1,3 +1,4 @@
+import { regionalFormat } from '@/lib/format/regional-format';
 /**
  * Mockea el `fetch` base y comprueba rutas, métodos y cuerpos de cada llamada,
  * más los permisos por rol y las utilidades de presentación (DX-191).
@@ -116,10 +117,19 @@ describe('implants-api', () => {
     );
   });
 
+  it('formatImplantSize en-US is 4.1 × 10 mm', () => {
+    expect(formatImplantSize(4.1, 10, regionalFormat({ locale: 'en-US', hourCycle: 'h12' }))).toBe('4.1 × 10 mm');
+  });
+
   it('presentación: medidas, agrupación por diente, enlaces y nombre del CSV', () => {
-    expect(formatImplantSize(4.1, 10)).toBe('4,1 × 10 mm');
-    expect(formatImplantSize(4.1, null)).toBe('Ø 4,1 mm');
-    expect(formatImplantSize(null, null)).toBeNull();
+    const enUS = regionalFormat({ locale: 'en-US', hourCycle: 'h12' });
+    const deDE = regionalFormat({ locale: 'de-DE', hourCycle: 'h23' });
+    expect(formatImplantSize(4.1, 10, enUS)).toBe('4.1 × 10 mm');
+    expect(formatImplantSize(4.1, null, deDE)).toBe('Ø 4,1 mm');
+    expect(formatImplantSize(null, null, enUS)).toBeNull();
+    // Sin formato de la sede: «—», nunca otro formato.
+    expect(formatImplantSize(4.1, 10, null)).toBe('—');
+    expect(formatImplantSize(null, null, null)).toBeNull();
     const implants = [
       { id: 'a', toothNumber: '46' },
       { id: 'b', toothNumber: '36' },

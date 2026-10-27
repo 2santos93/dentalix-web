@@ -37,6 +37,8 @@ import { cn } from '@/lib/utils';
 import { DocumentViewerDialog } from './document-viewer-dialog';
 import { ToothChipsInput } from './tooth-chips-input';
 import { VoidDocumentModal } from './void-document-modal';
+import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
+import { SedeConfigError } from '@/components/locations/sede-config-error';
 
 const copy = {
   heading: 'Documentos',
@@ -226,6 +228,9 @@ export function PatientDocumentsTab({
   const [downloading, setDownloading] = useState<ReadonlySet<string>>(new Set());
   const [announcement, setAnnouncement] = useState('');
   const [runLimited] = useState(() => createLimiter(MAX_PARALLEL_UPLOADS));
+  // G1-B: los tamaños con el formato de la sede de la pantalla; sin él, «—» y el aviso.
+  const sedeFormat = useSedeFormat(token);
+  const fmt = readyFormat(sedeFormat);
   /** El `AbortController` de cada subida en curso, para «Cancelar» (QA D2). */
   const uploadControllers = useRef(new Map<string, AbortController>());
 
@@ -418,7 +423,7 @@ export function PatientDocumentsTab({
         <div className="flex flex-wrap items-baseline justify-between gap-x-3 gap-y-1">
           <span className="min-w-0 font-medium text-ink [overflow-wrap:anywhere]">{name}</span>
           <span className="flex items-center gap-2 text-sm tabular-nums text-muted">
-            {formatFileSize(item.file.size)}
+            {formatFileSize(item.file.size, fmt)}
             {item.status === 'done' ? <Badge variant="success">{copy.uploaded}</Badge> : null}
             {item.status === 'error' ? <Badge variant="danger">{copy.failed}</Badge> : null}
           </span>
@@ -583,7 +588,7 @@ export function PatientDocumentsTab({
               </span>
               {voided ? <Badge variant="danger">{copy.voided}</Badge> : null}
             </div>
-            <span className="text-xs tabular-nums text-muted">{formatFileSize(doc.sizeBytes)}</span>
+            <span className="text-xs tabular-nums text-muted">{formatFileSize(doc.sizeBytes, fmt)}</span>
             {doc.notes ? <span className="text-xs text-muted [overflow-wrap:anywhere]">{doc.notes}</span> : null}
             {voided ? (
               <span className="text-xs text-ink [overflow-wrap:anywhere]">
@@ -793,6 +798,10 @@ export function PatientDocumentsTab({
             </select>
           </div>
         </div>
+
+        {sedeFormat.status === 'error' ? (
+          <SedeConfigError kind="locale" variant="note" onRetry={sedeFormat.retry} description={sedeFormat.message} locationId={sedeFormat.locationId} />
+        ) : null}
 
         <AsyncSection
           loading={loading}

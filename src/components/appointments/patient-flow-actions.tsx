@@ -17,7 +17,7 @@ import {
   canClaimReserved,
   claimPlanItem,
   reservationCopy,
-  reservedElsewhereMessage,
+  reservedElsewhereToast,
   reservedItemLabel,
   type PlanItemReservedElsewhere,
 } from '@/lib/appointments/plan-item-reservations';
@@ -170,7 +170,7 @@ export function usePatientFlow(token: string, onChanged: () => void): PatientFlo
             toast.warning(reservedItemLabel(item), {
               id,
               ...TRANSIENT_TOAST,
-              description: reservedElsewhereMessage(item),
+              description: reservedElsewhereToast(item),
             });
             continue;
           }
@@ -179,14 +179,14 @@ export function usePatientFlow(token: string, onChanged: () => void): PatientFlo
             toast.warning(reservedItemLabel(item), {
               id,
               ...TRANSIENT_TOAST,
-              description: `${reservedElsewhereMessage(item)} ${reservationCopy.claimFromPanel}`,
+              description: `${reservedElsewhereToast(item)} ${reservationCopy.claimFromPanel}`,
             });
             continue;
           }
           openReservedToasts.add(id);
           toast.warning(reservedItemLabel(item), {
             id,
-            description: reservedElsewhereMessage(item),
+            description: reservedElsewhereToast(item),
             duration: Infinity,
             onDismiss: () => openReservedToasts.delete(id),
             classNames: { actionButton: RESERVED_ACTION_CLASS },

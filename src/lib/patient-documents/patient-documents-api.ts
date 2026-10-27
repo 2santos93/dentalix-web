@@ -1,8 +1,10 @@
 import { apiFetch } from '@/lib/api/client';
+import type { RegionalFormat } from '@/lib/format/regional-format';
 import { ApiError } from '@/lib/api/api-error';
 import { storageOrNetwork, uploadToStorage } from '@/lib/api/upload';
 import type { components } from '@/lib/api/schema';
 import type { ClinicRole } from '@/lib/me/me-api';
+import { NO_SEDE_FORMAT } from '@/lib/format/sede-number';
 
 // Documentos del paciente (DX-151): radiografías, fotos, remisiones,
 // consentimientos firmados en papel e informes. Las formas salen del Swagger
@@ -83,10 +85,14 @@ export function validatePatientDocumentFile(file: { name: string; type: string; 
   return patientDocumentFileCopy.unsupported;
 }
 
-/** «512 KB», «1,5 MB». */
-export function formatFileSize(bytes: number): string {
-  const n = (v: number) => v.toLocaleString('es-CO', { maximumFractionDigits: 1 });
-  if (bytes < 1024) return `${bytes} B`;
+/**
+ * «512 KB», «1,5 MB», con los separadores del formato de la sede. Sin formato
+ * (cargando o sede sin configurar), «—».
+ */
+export function formatFileSize(bytes: number, fmt: RegionalFormat | null): string {
+  if (!fmt) return NO_SEDE_FORMAT;
+  const n = (v: number) => fmt.number(v, { max: 1 });
+  if (bytes < 1024) return `${n(bytes)} B`;
   if (bytes < 1024 * 1024) return `${n(bytes / 1024)} KB`;
   return `${n(bytes / (1024 * 1024))} MB`;
 }

@@ -7,18 +7,21 @@ import { cn } from '@/lib/utils';
 import { FieldError } from '@/components/errors/field-error';
 import { SectionError } from '@/components/errors/section-error';
 import { SEDE_TIME_ZONE_ERROR } from '@/lib/locations/use-sede-time-zone';
+import { SEDE_LOCALE_ERROR } from '@/lib/locations/use-sede-format';
 
-export type SedeConfigErrorKind = 'currency' | 'timeZone';
+export type SedeConfigErrorKind = 'currency' | 'timeZone' | 'locale';
 
-/** Textos de la spec G1 §5: la web nunca muestra otro valor en su lugar. */
+/** Textos de la spec G1 §5 y G1-B §10: la web nunca muestra otro valor en su lugar. */
 export const sedeConfigErrorCopy = {
   title: 'Falta un dato de la sede',
   currency:
     'No se pudo saber la moneda de la sede. Vuelve a intentarlo o revisa la sede en Ajustes → Sedes.',
   timeZone: SEDE_TIME_ZONE_ERROR,
+  locale: SEDE_LOCALE_ERROR,
   fieldLabel: {
     currency: 'Sin moneda de sede',
     timeZone: 'Sin zona de sede',
+    locale: 'Sin formato de sede',
   },
   configure: 'Configurar sede',
   retry: 'Reintentar',
@@ -30,7 +33,7 @@ export function sedeSettingsHref(locationId?: string | null): string {
 }
 
 interface SedeConfigErrorProps {
-  /** Qué dato de la sede falta: su moneda o su zona horaria. */
+  /** Qué dato de la sede falta: su moneda, su zona horaria o su formato regional y reloj. */
   kind: SedeConfigErrorKind;
   /** Vuelve a leer las sedes (la lista pudo fallar o la sede ya se configuró). */
   onRetry: () => void;
@@ -55,7 +58,7 @@ interface SedeConfigErrorProps {
 }
 
 /**
- * Una pieza que necesita la moneda o la zona de la sede y no la tiene (sede sin
+ * Una pieza que necesita la moneda, la zona o el formato de la sede y no la tiene (sede sin
  * configurar, lista de sedes que no cargó, API antigua). Sigue la escalera de
  * `src/components/errors`: siempre con Reintentar y sin ningún valor de
  * reserva (spec G1 §5, R5). Para ADMIN, la sección ofrece además «Configurar

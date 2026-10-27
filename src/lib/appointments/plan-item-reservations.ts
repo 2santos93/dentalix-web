@@ -1,6 +1,9 @@
 import { apiFetch } from '@/lib/api/client';
 import type { components } from '@/lib/api/schema';
+import type { RegionalFormat } from '@/lib/format/regional-format';
+import { locationRegionalFormat } from '@/lib/locations/location-settings';
 import type { ClinicRole } from '@/lib/me/me-api';
+import { NO_SEDE_FORMAT } from '@/lib/format/sede-number';
 
 /**
  * DX-273 (revisión DX-271, I2): tratamientos de una cita que siguen
@@ -12,7 +15,12 @@ import type { ClinicRole } from '@/lib/me/me-api';
 export type PlanItemReservedElsewhere = components['schemas']['PlanItemReservedElsewhereDto'];
 
 /** La cita titular con su hora y su sede (sede permitida al usuario). */
-type WithHolder = PlanItemReservedElsewhere & { start: string; timeZone: string; locationName: string };
+type WithHolder = PlanItemReservedElsewhere & {
+  locationId: string;
+  start: string;
+  timeZone: string;
+  locationName: string;
+};
 export type AppointmentWriteResult = components['schemas']['AppointmentWriteDto'];
 export type CompletedExit = components['schemas']['CompletedExitDto'];
 
@@ -24,32 +32,14 @@ export const reservationCopy = {
   claimFromPanel: 'Puedes traerlo a esta cita desde «En clínica».',
   /** DX-293: la titular es de otra sede no permitida: sin hora ni sede. */
   heldInClinicHidden: 'Reservado en otra cita de hoy, con el paciente en la clínica.',
+  /** G1-B: la titular es de una sede permitida sin formato o sin reloj (su fecha y hora salen «—»). */
+  missingFormat: 'Falta el formato regional o el reloj de esa sede: revísalo en Ajustes → Sedes.',
 };
 
-const formatters = new Map<string, Intl.DateTimeFormat>();
-
-/** Día y hora de la cita en la zona de la sede de ESA cita. */
-function wallParts(item: { start: string; timeZone: string }): Record<string, string> {
-  let f = formatters.get(item.timeZone);
-  if (!f) {
-    f = new Intl.DateTimeFormat('es-CO', {
-      timeZone: item.timeZone,
-      day: '2-digit',
-      month: '2-digit',
-      year: 'numeric',
-      hour: '2-digit',
-      minute: '2-digit',
-      hourCycle: 'h23',
-    });
-    formatters.set(item.timeZone, f);
-  }
-  return Object.fromEntries(f.formatToParts(new Date(item.start)).map((x) => [x.type, x.value]));
-}
-
-/** «30/10/2026 a las 09:00», en la zona de la sede de ESA cita. */
-export function reservedAt(item: { start: string; timeZone: string }): string {
-  const p = wallParts(item);
-  return `${p.day}/${p.month}/${p.year} a las ${p.hour}:${p.minute}`;
+/** «30/10/2026 a las 09:00», en la zona, el formato y el reloj de la sede de ESA cita. */
+export function reservedAt(item: { start: string; timeZone: string }, fmt: RegionalFormat): string {
+  const start = new Date(item.start);
+  return `${fmt.date(start, item.timeZone)} a las ${fmt.time(start, item.timeZone)}`;
 }
 
 /** «Implante · diente 36». */
@@ -57,23 +47,56 @@ export function reservedItemLabel(item: Pick<PlanItemReservedElsewhere, 'name' |
   return `${item.name} · diente ${item.toothNumber}`;
 }
 
+/**
+ * La titular está a la vista: su sede está permitida al usuario. Solo mira la
+ * cita y su sede, nunca el formato: una sede permitida sin formato o sin reloj
+ * (por configurar) sigue siendo una titular con datos, no la de una sede no
+ * permitida (I4).
+ */
 function hasHolder(item: PlanItemReservedElsewhere): item is WithHolder {
-  return item.start !== null && item.timeZone !== null && item.locationName !== null;
+  return item.locationId !== null && item.start !== null && item.timeZone !== null && item.locationName !== null;
+}
+
+/** Formato y reloj de la sede de ESA cita, o `null` si no los tiene o no son válidos. */
+function holderFormat(item: Pick<PlanItemReservedElsewhere, 'locale' | 'hourCycle'>): RegionalFormat | null {
+  return locationRegionalFormat(item);
+}
+
+/**
+ * La titular es de una sede permitida que no tiene formato o reloj: su fecha y
+ * su hora se pintan «—» y quien muestra el aviso añade `SedeConfigError
+ * kind="locale" variant="note"` (spec G1-B §11, I4).
+ */
+export function reservedNeedsFormat(item: PlanItemReservedElsewhere): boolean {
+  return hasHolder(item) && holderFormat(item) === null;
 }
 
 /**
  * «Este tratamiento está reservado en la cita del 30/10/2026 a las 09:00
  * (Sede Norte).» DX-293: con la titular de hoy con el paciente en la clínica,
  * «Reservado en la cita de hoy a las 09:05 (Sede Norte), con el paciente en
- * la clínica.»; sin sus datos (sede no permitida), el texto genérico.
+ * la clínica.»; sin sus datos (sede no permitida), el texto genérico. Fecha y
+ * hora con el formato y el reloj de la sede de ESA cita; si no los tiene, «—»
+ * (nunca el texto de la sede no permitida ni otro formato).
  */
 export function reservedElsewhereMessage(item: PlanItemReservedElsewhere): string {
   if (!hasHolder(item)) return reservationCopy.heldInClinicHidden;
+  const fmt = holderFormat(item);
   if (item.heldInClinic) {
-    const p = wallParts(item);
-    return `Reservado en la cita de hoy a las ${p.hour}:${p.minute} (${item.locationName}), con el paciente en la clínica.`;
+    const time = fmt ? fmt.time(new Date(item.start), item.timeZone) : NO_SEDE_FORMAT;
+    return `Reservado en la cita de hoy a las ${time} (${item.locationName}), con el paciente en la clínica.`;
   }
-  return `Este tratamiento está reservado en la cita del ${reservedAt(item)} (${item.locationName}).`;
+  const at = fmt ? reservedAt(item, fmt) : NO_SEDE_FORMAT;
+  return `Este tratamiento está reservado en la cita del ${at} (${item.locationName}).`;
+}
+
+/**
+ * El aviso para un toast, que no tiene sitio para `SedeConfigError`: si la
+ * titular es de una sede sin formato, añade por qué su fecha y hora salen «—».
+ */
+export function reservedElsewhereToast(item: PlanItemReservedElsewhere): string {
+  const message = reservedElsewhereMessage(item);
+  return reservedNeedsFormat(item) ? `${message} ${reservationCopy.missingFormat}` : message;
 }
 
 /**

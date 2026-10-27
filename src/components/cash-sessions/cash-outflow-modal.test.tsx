@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import { CashOutflowModal } from './cash-outflow-modal';
 import { ApiError } from '@/lib/api/client';
 import { createCashOutflow, suggestExpenseSuppliers } from '@/lib/expenses/expenses-api';
@@ -6,6 +6,8 @@ import { listExpenseCategories } from '@/lib/expenses/expense-categories-api';
 import { uploadSingleFile } from '@/lib/files/upload-single-file';
 import { expenseDetailFixture } from '@/lib/test/expenses';
 import { setupUser } from '@/lib/test/user';
+import { useAuthStore } from '@/lib/auth/auth-store';
+import { tokenFor } from '@/lib/test/prescriptions';
 
 jest.mock('../../lib/expenses/expenses-api', () => ({
   ...jest.requireActual('../../lib/expenses/expenses-api'),
@@ -30,7 +32,12 @@ const mockedSuppliers = suggestExpenseSuppliers as jest.MockedFunction<typeof su
 const mockedCategories = listExpenseCategories as jest.MockedFunction<typeof listExpenseCategories>;
 const mockedUpload = uploadSingleFile as jest.MockedFunction<typeof uploadSingleFile>;
 
-function renderModal() {
+import { regionalFormat, type RegionalFormat } from '@/lib/format/regional-format';
+
+function renderModal(
+  fmt: RegionalFormat | null = regionalFormat({ locale: 'fr-FR', hourCycle: 'h12' }),
+  onRetryFormat = jest.fn(),
+) {
   const onCreated = jest.fn();
   const onOpenChange = jest.fn();
   render(
@@ -41,6 +48,8 @@ function renderModal() {
       locationId="loc-2"
       sedeName="Sede norte"
       defaultCurrency="COP"
+      fmt={fmt}
+      onRetryFormat={onRetryFormat}
       onCreated={onCreated}
     />,
   );
@@ -108,6 +117,29 @@ describe('CashOutflowModal (DX-274)', () => {
     await user.click(screen.getByRole('button', { name: 'Registrar salida' }));
     await waitFor(() => expect(mockedCreate).toHaveBeenCalled());
     expect(mockedCreate.mock.calls[0][1].attachmentUploadId).toBe('up-1');
+  });
+
+  it('sede de la caja sin formato: tamaño «—» con el aviso de la sede, que abre esa sede y relee', async () => {
+    const user = setupUser();
+    const retry = jest.fn();
+    useAuthStore.setState({ accessToken: tokenFor('ADMIN') });
+    try {
+      renderModal(null, retry);
+      // Sin fichero no hay ningún valor con formato: sin aviso.
+      expect(screen.queryByText(/No se pudo saber el formato regional/)).not.toBeInTheDocument();
+      await user.upload(screen.getByLabelText('Soporte'), new File(['%PDF-'], 'recibo.pdf', { type: 'application/pdf' }));
+      const note = await screen.findByText(/No se pudo saber el formato regional o el reloj de la sede/);
+      const status = note.closest('[role="status"]') as HTMLElement;
+      expect(screen.getByText('recibo.pdf').parentElement?.parentElement).toHaveTextContent('—');
+      expect(within(status).getByRole('link', { name: 'Configurar sede' })).toHaveAttribute(
+        'href',
+        '/settings/sedes?sede=loc-2',
+      );
+      await user.click(within(status).getByRole('button', { name: 'Reintentar' }));
+      expect(retry).toHaveBeenCalled();
+    } finally {
+      useAuthStore.setState({ accessToken: null });
+    }
   });
 
   it('tras fallar el soporte puede quitarlo y guardar sin adjunto manteniendo datos, sede y clave', async () => {

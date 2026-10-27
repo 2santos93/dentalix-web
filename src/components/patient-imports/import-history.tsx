@@ -22,6 +22,8 @@ import {
 } from '@/lib/patient-imports/patient-imports-api';
 import { saveCsv } from '@/lib/files/save-csv';
 import { STATUS_VARIANT } from './import-progress';
+import type { RegionalFormat } from '@/lib/format/regional-format';
+import { sedeNumber } from '@/lib/format/sede-number';
 
 const HISTORY_POLL_MS = 3000;
 
@@ -35,16 +37,16 @@ export const historyCopy = {
   listLabel: 'Importaciones de la clínica',
   loadError: 'No se pudo cargar el historial de importaciones.',
   refreshError: 'No se pudo actualizar el historial de importaciones.',
-  progress: (b: ImportBatch) =>
-    `${b.progress.processedRows.toLocaleString('es-CO')} de ${b.progress.preparedRows.toLocaleString('es-CO')} filas procesadas`,
+  // Los recuentos llegan ya formateados con el formato de la sede (G1-B).
+  progress: (done: string, total: string) => `${done} de ${total} filas procesadas`,
   empty: 'Aún no has importado pacientes',
   emptyHint: 'Cuando confirmes una importación, aparecerá aquí con su resultado y la opción de deshacerla.',
   meta: (date: string, author: string | null) => `${date}${author ? ` · ${author}` : ''}`,
-  counts: (b: ImportBatch) =>
-    `${b.progress.createdCount.toLocaleString('es-CO')} creados · ${b.progress.updatedCount.toLocaleString('es-CO')} actualizados · ${(b.totals.duplicateRows + b.totals.errorRows).toLocaleString('es-CO')} duplicados o con error`,
-  undone: (b: ImportBatch) =>
-    `Deshecho: ${(b.undoneCreated ?? 0).toLocaleString('es-CO')} pacientes retirados, ${(b.undoneFilled ?? 0).toLocaleString('es-CO')} fichas revertidas${
-      b.balances?.undoneCount ? `, ${b.balances.undoneCount.toLocaleString('es-CO')} saldos migrados retirados` : ''
+  counts: (created: string, updated: string, rejected: string) =>
+    `${created} creados · ${updated} actualizados · ${rejected} duplicados o con error`,
+  undone: (created: string, filled: string, balances: string | null) =>
+    `Deshecho: ${created} pacientes retirados, ${filled} fichas revertidas${
+      balances ? `, ${balances} saldos migrados retirados` : ''
     }`,
   report: 'Informe',
   reportFor: (name: string) => `Descargar el informe de errores de ${name}`,
@@ -52,11 +54,9 @@ export const historyCopy = {
   undo: 'Deshacer lote',
   undoFor: (name: string) => `Deshacer el lote ${name}`,
   undoTitle: 'Deshacer este lote',
-  undoDescription: (b: ImportBatch) =>
-    `Se retirarán los ${b.progress.createdCount.toLocaleString('es-CO')} pacientes que creó este lote y se vaciarán los campos que rellenó (si nadie los cambió después)${
-      importedBalances(b) > 0
-        ? `; se retirarán también sus ${importedBalances(b).toLocaleString('es-CO')} saldos migrados`
-        : ''
+  undoDescription: (created: string, balances: string | null) =>
+    `Se retirarán los ${created} pacientes que creó este lote y se vaciarán los campos que rellenó (si nadie los cambió después)${
+      balances ? `; se retirarán también sus ${balances} saldos migrados` : ''
     }. No se puede si alguno ya tiene citas, historia clínica, planes o pagos, o si un saldo migrado tiene abonos.`,
   undoConfirm: 'Deshacer lote',
   undoError: 'No se pudo deshacer el lote.',
@@ -65,13 +65,13 @@ export const historyCopy = {
   undoBalances: 'Retirar saldos migrados',
   undoBalancesFor: (name: string) => `Retirar los saldos migrados de ${name}`,
   undoBalancesTitle: 'Retirar los saldos migrados',
-  undoBalancesDescription: (b: ImportBatch) =>
-    `Se retirarán sus ${importedBalances(b).toLocaleString('es-CO')} saldos migrados del estado de cuenta y de la cartera; los pacientes no se tocan. No se puede si algún saldo ya tiene abonos: anúlalos antes.`,
+  undoBalancesDescription: (balances: string) =>
+    `Se retirarán sus ${balances} saldos migrados del estado de cuenta y de la cartera; los pacientes no se tocan. No se puede si algún saldo ya tiene abonos: anúlalos antes.`,
   undoBalancesConfirm: 'Retirar saldos',
   undoBalancesError: 'No se pudieron retirar los saldos migrados.',
   undoBalancesDone: 'Saldos migrados retirados.',
-  ambiguous: (n: number) =>
-    `${n.toLocaleString('es-CO')} ${n === 1 ? 'saldo no se creó' : 'saldos no se crearon'}: su documento es de varios pacientes.`,
+  ambiguous: (n: number, shown: string) =>
+    `${shown} ${n === 1 ? 'saldo no se creó' : 'saldos no se crearon'}: su documento es de varios pacientes.`,
 };
 
 /**
@@ -79,7 +79,17 @@ export const historyCopy = {
  * informe de errores y «Deshacer lote». Estados de carga, vacío y error con
  * «Reintentar» (escalón 1).
  */
-export function ImportHistory({ token, reloadKey }: { token: string; reloadKey: number }) {
+export function ImportHistory({
+  token,
+  reloadKey,
+  fmt,
+}: {
+  token: string;
+  reloadKey: number;
+  /** Formato de la sede de la pantalla para los recuentos; sin él, «—» (el aviso lo pone la pantalla). */
+  fmt: RegionalFormat | null;
+}) {
+  const n = (value: number) => sedeNumber(value, fmt);
   const [items, setItems] = React.useState<ImportBatch[]>([]);
   const [page, setPage] = React.useState(1);
   const [total, setTotal] = React.useState(0);
@@ -211,14 +221,22 @@ export function ImportHistory({ token, reloadKey }: { token: string; reloadKey: 
                 {historyCopy.meta(formatDateTime(b.confirmedAt ?? b.createdAt), b.createdBy.fullName)}
               </p>
               {b.balances && b.balances.progress.ambiguous > 0 ? (
-                <p className="text-warning">{historyCopy.ambiguous(b.balances.progress.ambiguous)}</p>
+                <p className="text-warning">{historyCopy.ambiguous(b.balances.progress.ambiguous, n(b.balances.progress.ambiguous))}</p>
               ) : null}
               <p className="tabular-nums text-ink">
                 {b.status === 'UNDONE'
-                  ? historyCopy.undone(b)
+                  ? historyCopy.undone(
+                      n(b.undoneCreated ?? 0),
+                      n(b.undoneFilled ?? 0),
+                      b.balances?.undoneCount ? n(b.balances.undoneCount) : null,
+                    )
                   : isInProgress(b.status)
-                    ? historyCopy.progress(b)
-                    : historyCopy.counts(b)}
+                    ? historyCopy.progress(n(b.progress.processedRows), n(b.progress.preparedRows))
+                    : historyCopy.counts(
+                        n(b.progress.createdCount),
+                        n(b.progress.updatedCount),
+                        n(b.totals.duplicateRows + b.totals.errorRows),
+                      )}
               </p>
               <div className="flex flex-wrap gap-2 sm:justify-end">
                 {b.reportAvailable && b.totals.errorRows + b.totals.duplicateRows > 0 ? (
@@ -279,8 +297,11 @@ export function ImportHistory({ token, reloadKey }: { token: string; reloadKey: 
         description={
           undoing
             ? undoMode === 'balances'
-              ? historyCopy.undoBalancesDescription(undoing)
-              : historyCopy.undoDescription(undoing)
+              ? historyCopy.undoBalancesDescription(n(importedBalances(undoing)))
+              : historyCopy.undoDescription(
+                  n(undoing.progress.createdCount),
+                  importedBalances(undoing) > 0 ? n(importedBalances(undoing)) : null,
+                )
             : undefined
         }
         confirmLabel={undoMode === 'balances' ? historyCopy.undoBalancesConfirm : historyCopy.undoConfirm}

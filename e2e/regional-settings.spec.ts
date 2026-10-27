@@ -29,8 +29,8 @@ const suffix = (process.env.E2E_RUN_SUFFIX ?? randomUUID()).replace(/[^a-z0-9]/g
 const password = 'Password123!';
 const QA_DIR = process.env.E2E_QA_DIR;
 
-const TOKYO: RegionalSettings = { country: 'CO', currency: 'JPY', timeZone: 'Asia/Tokyo', locale: 'ja-JP' };
-const MADRID: RegionalSettings = { country: 'ES', currency: 'EUR', timeZone: 'Europe/Madrid', locale: 'es-ES' };
+const TOKYO: RegionalSettings = { country: 'CO', currency: 'JPY', timeZone: 'Asia/Tokyo', locale: 'ja-JP', hourCycle: 'h23' };
+const MADRID: RegionalSettings = { country: 'ES', currency: 'EUR', timeZone: 'Europe/Madrid', locale: 'es-ES', hourCycle: 'h23' };
 
 const VIEWPORTS = [
   { name: '1440', width: 1440, height: 900 },
@@ -44,6 +44,7 @@ interface LocationRow {
   currency: string | null;
   timeZone: string | null;
   locale: string | null;
+  hourCycle: string | null;
   regionalSettingsReviewedAt: string | null;
 }
 
@@ -148,6 +149,7 @@ for (const viewport of VIEWPORTS) {
       await dialog.getByLabel('Moneda', { exact: true }).selectOption(TOKYO.currency);
       await dialog.getByLabel('Zona horaria', { exact: true }).fill(TOKYO.timeZone);
       await dialog.getByLabel('Formato regional', { exact: true }).fill(TOKYO.locale);
+      await dialog.getByRole('radio', { name: '24 h', exact: true }).check();
       if (viewport.width === 390) await expectDialogInsideViewport(page, dialog);
       await shoot(page, 'e2e-sede-tokio-modal', viewport.width);
 
@@ -163,6 +165,7 @@ for (const viewport of VIEWPORTS) {
         currency: TOKYO.currency,
         timeZone: TOKYO.timeZone,
         locale: TOKYO.locale,
+        hourCycle: TOKYO.hourCycle,
       });
       await expect(dialog).toBeHidden({ timeout: 10_000 });
 
@@ -231,6 +234,7 @@ for (const viewport of VIEWPORTS) {
         locationCurrency: MADRID.currency,
         locationTimeZone: MADRID.timeZone,
         locationLocale: MADRID.locale,
+        locationHourCycle: MADRID.hourCycle,
       });
       await expect(page.getByRole('heading', { name: 'Revisa tu correo' })).toBeVisible({ timeout: 10_000 });
 
@@ -255,15 +259,22 @@ for (const viewport of VIEWPORTS) {
       });
       const [legacy] = await listLocations(request, session);
       // Fixture: la función D5 la rellenó por el país (CO) y la dejó sin revisar.
-      expect(legacy).toMatchObject({ country: 'CO', currency: 'COP', timeZone: 'America/Bogota', locale: 'es-CO' });
+      // G1-B: el reloj lo pone la función de G1-B, 24 h (el que la app mostraba).
+      expect(legacy).toMatchObject({
+        country: 'CO',
+        currency: 'COP',
+        timeZone: 'America/Bogota',
+        locale: 'es-CO',
+        hourCycle: 'h23',
+      });
       expect(legacy.regionalSettingsReviewedAt).toBeNull();
 
       await loginAs(page, session.origin, email, password);
       await page.goto(`${session.origin}/dashboard`);
       const notice = page.getByRole('region', { name: 'Sedes por revisar' });
       await expect(notice).toBeVisible({ timeout: 15_000 });
-      await expect(notice).toContainText('Revisa la moneda, la zona horaria y el formato de 1 sede.');
-      await expect(notice).toContainText(`${legacy.name}: COP · America/Bogota · es-CO`);
+      await expect(notice).toContainText('Revisa la moneda, la zona horaria, el formato y el reloj de 1 sede.');
+      await expect(notice).toContainText(`${legacy.name}: COP · America/Bogota · es-CO · 24 h`);
       if (viewport.width === 390) await expectNoHorizontalScroll(page);
       await shoot(page, 'e2e-d5-panel', viewport.width);
 

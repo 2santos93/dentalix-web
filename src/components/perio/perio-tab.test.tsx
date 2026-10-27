@@ -1,14 +1,21 @@
 import { render, screen, within } from '@testing-library/react';
+import { useAuthStore } from '@/lib/auth/auth-store';
+import { tokenFor } from '@/lib/test/prescriptions';
 import { PerioTab } from './perio-tab';
 import { getPerioExam, listPerioExams } from '@/lib/perio/perio-api';
 import { ApiError } from '@/lib/api/client';
 import { setupUser } from '@/lib/test/user';
+import { listLocations } from '@/lib/locations/locations-api';
+import { clinicLocation } from '@/lib/test/locations';
 
 jest.mock('../../lib/perio/perio-api', () => ({
   ...jest.requireActual('../../lib/perio/perio-api'),
   listPerioExams: jest.fn(),
   getPerioExam: jest.fn(),
 }));
+
+jest.mock('../../lib/locations/locations-api', () => ({ listLocations: jest.fn() }));
+const mockedLocations = listLocations as jest.MockedFunction<typeof listLocations>;
 
 const mockedList = listPerioExams as jest.MockedFunction<typeof listPerioExams>;
 const mockedGet = getPerioExam as jest.MockedFunction<typeof getPerioExam>;
@@ -40,6 +47,7 @@ describe('PerioTab', () => {
   beforeEach(() => {
     mockedList.mockReset();
     mockedGet.mockReset();
+    mockedLocations.mockReset().mockResolvedValue([clinicLocation({ locale: 'de-DE', hourCycle: 'h23' })]);
   });
 
   it('carga con esqueleto', () => {
@@ -86,9 +94,47 @@ describe('PerioTab', () => {
     expect(rows[2]).toHaveTextContent('15/04/2026');
     expect(rows[2]).toHaveTextContent('Dra. Laura Gómez');
     expect(rows[2]).toHaveTextContent('Finalizado');
-    expect(rows[2]).toHaveTextContent('62,5 %');
+    expect(await within(rows[2]).findByText('62,5 %')).toBeInTheDocument();
     expect(rows[2]).toHaveTextContent('12,5 %');
     expect(rows[2]).toHaveTextContent('18 / 4');
+  });
+
+  it('perio percent en-US 12.5% and de-DE 12,5 %: con una sede en-US, «12.5%»', async () => {
+    mockedLocations.mockResolvedValue([clinicLocation({ locale: 'en-US', hourCycle: 'h12' })]);
+    mockedList.mockResolvedValue([summary('e1', '2026-04-15', 'FINAL', 62.5)]);
+    render(<PerioTab token="tok" patientId="p1" />);
+    const table = await screen.findByRole('table', { name: /histórico/i });
+    const row = within(table).getAllByRole('row')[1];
+    expect(await within(row).findByText('62.5%')).toBeInTheDocument();
+    expect(row).toHaveTextContent('12.5%');
+  });
+
+  it('«Configurar sede» abre la sede sin formato o sin reloj, no la lista', async () => {
+    useAuthStore.setState({ accessToken: tokenFor('ADMIN') });
+    try {
+      mockedLocations.mockResolvedValue([clinicLocation({ id: 'sede-sin-reloj', locale: 'en-US', hourCycle: null })]);
+      mockedList.mockResolvedValue([summary('e1', '2026-04-15', 'FINAL', 62.5)]);
+      render(<PerioTab token="tok" patientId="p1" />);
+      expect(await screen.findByRole('link', { name: 'Configurar sede' })).toHaveAttribute(
+        'href',
+        '/settings/sedes?sede=sede-sin-reloj',
+      );
+    } finally {
+      useAuthStore.setState({ accessToken: null });
+    }
+  });
+
+  it('sin formato de la sede: porcentajes «—» y el aviso', async () => {
+    mockedLocations.mockResolvedValue([clinicLocation({ locale: null, hourCycle: null })]);
+    mockedList.mockResolvedValue([summary('e1', '2026-04-15', 'FINAL', 62.5)]);
+    render(<PerioTab token="tok" patientId="p1" />);
+    expect(
+      await screen.findByText(/No se pudo saber el formato regional o el reloj de la sede/),
+    ).toBeInTheDocument();
+    const table = await screen.findByRole('table', { name: /histórico/i });
+    const row = within(table).getAllByRole('row')[1];
+    expect(row).not.toHaveTextContent('%');
+    expect(row).toHaveTextContent('—');
   });
 
   it('compara con el FINAL anterior, saltando borradores intermedios', async () => {
