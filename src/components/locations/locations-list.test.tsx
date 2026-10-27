@@ -13,6 +13,7 @@ import { useAuthStore } from '@/lib/auth/auth-store';
 import { clinicLocation } from '@/lib/test/locations';
 import { tokenFor } from '@/lib/test/prescriptions';
 import { setupUser } from '@/lib/test/user';
+import { browserHourCycle } from '@/lib/locations/regional-settings';
 
 jest.mock('../../lib/locations/locations-api', () => ({
   ...jest.requireActual('../../lib/locations/locations-api'),
@@ -21,6 +22,11 @@ jest.mock('../../lib/locations/locations-api', () => ({
   updateLocationSettings: jest.fn(),
 }));
 jest.mock('../../lib/reference/currencies-api', () => ({ listCurrencies: jest.fn() }));
+// El reloj sugerido se fija aquí: los tests no dependen del `Intl` del entorno.
+jest.mock('../../lib/locations/regional-settings', () => ({
+  ...jest.requireActual('../../lib/locations/regional-settings'),
+  browserHourCycle: jest.fn(),
+}));
 
 const mockedList = jest.mocked(listLocations);
 const ADMIN = tokenFor('ADMIN', 'u-admin');
@@ -40,6 +46,7 @@ const legacy = clinicLocation({
 beforeEach(() => {
   jest.clearAllMocks();
   window.localStorage.clear();
+  jest.mocked(browserHourCycle).mockReturnValue('h23');
   jest
     .mocked(listCurrencies)
     .mockResolvedValue([

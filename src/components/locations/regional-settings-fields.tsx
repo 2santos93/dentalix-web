@@ -218,15 +218,24 @@ export function RegionalSettingsFields({
         </datalist>
       </FormField>
 
+      {/* Sin `aria-live` (anunciaría cada tecla): la describe el campo de formato. */}
+      <p
+        id={`${id('locale')}-preview`}
+        className={cn('text-sm tabular-nums text-muted empty:hidden', !stacked && 'sm:col-span-2')}
+      >
+        {preview ? copy.preview(preview) : null}
+      </p>
+
       <fieldset
         role="radiogroup"
         aria-required
         aria-invalid={invalid('hourCycle')}
         aria-describedby={errors.hourCycle ? fieldErrorId(id('hourCycle')) : hourCycleHintId}
-        className="flex min-w-0 flex-col gap-1.5"
+        className={cn('flex min-w-0 flex-col gap-1.5', !stacked && 'sm:col-span-2')}
       >
         <legend className="mb-1.5 text-sm font-medium text-ink">{copy.hourCycle}</legend>
-        <div className="grid grid-cols-2 gap-2">
+        {/* A dos columnas, las opciones caen bajo las columnas de los campos de arriba. */}
+        <div className={cn('grid grid-cols-2 gap-2', !stacked && 'sm:gap-4')}>
           {HOUR_CYCLES.map((cycle, index) => {
             // La primera opción lleva el id del campo: es la que se enfoca si falta el reloj.
             const optionId = index === 0 ? id('hourCycle') : `${id('hourCycle')}-${cycle}`;
@@ -249,7 +258,12 @@ export function RegionalSettingsFields({
                   onChange={() => onChange('hourCycle', cycle)}
                   // El nombre es solo «12 h»/«24 h»; el ejemplo lo describe.
                   aria-labelledby={`${optionId}-label`}
-                  aria-describedby={examples ? `${optionId}-example` : undefined}
+                  // El error también en cada opción (no todos los lectores anuncian el del grupo al entrar).
+                  aria-describedby={
+                    [examples ? `${optionId}-example` : null, errors.hourCycle ? fieldErrorId(id('hourCycle')) : null]
+                      .filter(Boolean)
+                      .join(' ') || undefined
+                  }
                   className="size-4 shrink-0 accent-[var(--color-primary)]"
                 />
                 <span className="flex min-w-0 flex-wrap items-baseline gap-x-2">
@@ -276,14 +290,6 @@ export function RegionalSettingsFields({
           </p>
         )}
       </fieldset>
-
-      {/* Sin `aria-live` (anunciaría cada tecla): la describe el campo de formato. */}
-      <p
-        id={`${id('locale')}-preview`}
-        className={cn('text-sm tabular-nums text-muted empty:hidden', !stacked && 'sm:col-span-2')}
-      >
-        {preview ? copy.preview(preview) : null}
-      </p>
     </div>
   );
 }

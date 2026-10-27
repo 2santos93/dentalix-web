@@ -136,6 +136,26 @@ describe('RegionalSettingsFields', () => {
     expect(clock).toHaveAccessibleDescription('Elige el reloj de la sede: 12 h o 24 h.');
     expect(clock).toHaveAttribute('aria-invalid', 'true');
     expect(within(clock).getByRole('alert')).toHaveTextContent('Elige el reloj de la sede: 12 h o 24 h.');
+    // También en cada opción: no todos los lectores anuncian la descripción del grupo.
+    for (const name of ['12 h', '24 h']) {
+      expect(within(clock).getByRole('radio', { name })).toHaveAccessibleDescription(
+        expect.stringContaining('Elige el reloj de la sede: 12 h o 24 h.'),
+      );
+    }
+  });
+
+  it('the preview follows the format field and the clock spans the row below it (no empty half-row)', async () => {
+    render(<Harness initial={{ ...EMPTY, timeZone: 'UTC', locale: 'en-US', hourCycle: 'h12' }} />);
+    await screen.findByRole('option', { name: 'Euro (€)' });
+    const preview = screen.getByText(/^Vista previa: /);
+    const clock = screen.getByRole('radiogroup', { name: 'Reloj' });
+    // Orden del DOM = orden de la rejilla: formato, vista previa, reloj.
+    expect(screen.getByLabelText('Formato regional').compareDocumentPosition(preview)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+    expect(preview.compareDocumentPosition(clock)).toBe(Node.DOCUMENT_POSITION_FOLLOWING);
+    expect(preview).toHaveClass('sm:col-span-2');
+    expect(clock).toHaveClass('sm:col-span-2');
   });
 
   it('without a session the currencies come from the loader (R18)', async () => {

@@ -12,9 +12,11 @@ import { cn } from '@/lib/utils';
 export const regionalReviewNoticeCopy = {
   label: 'Sedes por revisar',
   title: (count: number) =>
-    `Revisa la moneda, la zona horaria y el formato de ${count} ${count === 1 ? 'sede' : 'sedes'}.`,
+    `Revisa la moneda, la zona horaria, el formato y el reloj de ${count} ${count === 1 ? 'sede' : 'sedes'}.`,
+  // Sin «a partir del país»: el reloj lo asigna el barrido de G1-B (24 h, el de
+  // siempre), no el país, y nada se explica por país (G1-B R16).
   body: (summary: string) =>
-    `Al actualizar Dentalix se asignaron a partir del país de cada sede (${summary}). Confírmalos o cámbialos.`,
+    `Al actualizar Dentalix se asignaron automáticamente (${summary}). Confírmalos o cámbialos.`,
   missing: 'Por configurar',
   review: 'Revisar sedes',
 };
