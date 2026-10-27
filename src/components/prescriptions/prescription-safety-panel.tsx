@@ -106,13 +106,17 @@ export function PrescriptionSafetyPanel({
   const alerts = preview?.alerts ?? [];
   // El texto permanece idéntico si la respuesta no cambia; los controles
   // nunca pertenecen a la región viva.
-  const announcement = preview
+  const announcement = preview && state.kind !== 'error'
     ? alerts.length > 0
       ? `Avisos actualizados: ${alerts.map((alert) => `${alert.severity === 'BLOCKING' ? 'Requiere confirmación' : 'Informativo'}: ${alert.message}`).join(' ')}`
       : `Comprobación terminada: ${safetyCopy.none}`
     : '';
-  const blocking = alerts.filter((a) => a.severity === 'BLOCKING');
-  const info = alerts.filter((a) => a.severity === 'INFO');
+  // Si la comprobación falló, el resultado anterior no describe lo escrito:
+  // solo queda el error. Durante la carga se conservan los bloques (sin
+  // desmontar casilla ni motivo), pero «Sin avisos» no se afirma.
+  const shown = state.kind === 'error' ? [] : alerts;
+  const blocking = shown.filter((a) => a.severity === 'BLOCKING');
+  const info = shown.filter((a) => a.severity === 'INFO');
 
   return (
     <section
@@ -145,8 +149,12 @@ export function PrescriptionSafetyPanel({
         />
       ) : null}
 
-      {preview && alerts.length === 0 ? (
+      {preview && alerts.length === 0 && state.kind === 'ready' ? (
         <p className="text-sm text-muted">{safetyCopy.none}</p>
+      ) : null}
+      {/* Mismo alto que «Sin avisos» mientras se recomprueba: no salta. */}
+      {preview && alerts.length === 0 && state.kind === 'loading' ? (
+        <p aria-hidden="true" className="text-sm">{'\u00a0'}</p>
       ) : null}
 
       {blocking.length > 0 ? (

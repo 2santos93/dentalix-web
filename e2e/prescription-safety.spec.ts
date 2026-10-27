@@ -90,18 +90,24 @@ test('receta con aviso bloqueante (warfarina + ibuprofeno): 390/1440, claro/oscu
   const checkbox = dialog.getByRole('checkbox', { name: /Confirmo que conozco los avisos/ });
   const reason = dialog.getByLabel('Motivo para emitir pese a los avisos');
   await expect(submit).toHaveAccessibleDescription('Confirma los avisos de seguridad para emitir.');
-  await checkbox.check();
-  await expect(submit).toBeDisabled();
-  await expect(submit).toHaveAccessibleDescription('Escribe el motivo para emitir pese a los avisos.');
-  await expect(reason).toHaveAccessibleDescription('Queda en la receta y no se puede cambiar.');
   // Sin saltos: la explicación cambia o se vacía sin cambiar la altura del
   // diálogo. Se mide scrollHeight, no la caja de Emitir: el scroll anchoring
   // de Chromium compensa el salto dentro de un diálogo con scroll.
   const dialogHeight = () => dialog.evaluate((element) => element.scrollHeight);
   const blockedHeight = await dialogHeight();
-  await reason.fill('INR estable; pauta de 2 días');
+  await checkbox.check();
+  // Sin motivo el botón sigue activo: al pulsarlo, el campo dice qué falta.
   await expect(submit).toBeEnabled();
+  await expect(submit).not.toHaveAttribute('aria-describedby');
   expect(await dialogHeight(), 'el diálogo no cambia de alto al quitar la explicación').toBe(blockedHeight);
+  await expect(reason).toHaveAccessibleDescription('Queda en la receta y no se puede cambiar.');
+  await submit.click();
+  await expect(reason).toHaveAttribute('aria-invalid', 'true');
+  await expect(reason).toHaveAccessibleDescription('Escribe el motivo para emitir pese a los avisos.');
+  await expect(reason).toBeFocused();
+  await reason.fill('INR estable; pauta de 2 días');
+  await expect(reason).not.toHaveAttribute('aria-invalid');
+  await expect(submit).toBeEnabled();
 
   // API real: solo retenemos su respuesta para poder observar el estado pendiente.
   for (const focus of [reason, checkbox]) {

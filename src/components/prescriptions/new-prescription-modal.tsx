@@ -15,6 +15,7 @@ import {
   type Prescription,
   type PrescriptionIssuer,
   type PrescriptionTemplate,
+  type SafetyAlert,
 } from '@/lib/prescriptions/prescriptions-api';
 import {
   draftFromTemplateItem,
@@ -75,6 +76,17 @@ const copy = {
 const SERVER_SAFETY_MAX_LENGTH = 2000;
 /** Espera tras la última tecla antes de pedir los avisos al servidor. */
 export const SAFETY_CHECK_DEBOUNCE_MS = 400;
+
+/**
+ * Identifica UN conjunto de avisos bloqueantes: la confirmación vale para esa
+ * clave y se invalida en cuanto otra respuesta trae otra (o ninguna).
+ */
+function blockingKey(alerts: readonly SafetyAlert[]): string | null {
+  const blocking = alerts.filter((alert) => alert.severity === 'BLOCKING');
+  return blocking.length > 0
+    ? blocking.map((alert) => `${alert.code}|${alert.activeIngredient ?? ''}|${alert.message}`).join(';')
+    : null;
+}
 
 interface NewPrescriptionModalProps {
   open: boolean;
@@ -209,10 +221,7 @@ function NewPrescriptionForm({
       checkPrescriptionSafety(token, patientId, safetyItems)
         .then((preview) => {
           if (cancelled) return;
-          const resolvedKey = preview.alerts
-            .filter((alert) => alert.severity === 'BLOCKING')
-            .map((alert) => `${alert.code}|${alert.activeIngredient ?? ''}|${alert.message}`)
-            .join(';') || null;
+          const resolvedKey = blockingKey(preview.alerts);
           setConfirmedKey((previous) => previous === resolvedKey ? previous : null);
           setSafety({ kind: 'ready', preview });
           setSafetyFor(safetyKey);
@@ -241,26 +250,19 @@ function NewPrescriptionForm({
     : safetyFor !== safetyKey
       ? { kind: 'loading', preview: safetyPreview }
       : safety;
-  const blockingAlerts = safetyItems.length > 0
-    ? safetyPreview?.alerts.filter((a) => a.severity === 'BLOCKING') ?? []
-    : [];
-  const alertKey =
-    blockingAlerts.length > 0
-      ? blockingAlerts.map((a) => `${a.code}|${a.activeIngredient ?? ''}|${a.message}`).join(';')
-      : null;
+  const alertKey = safetyItems.length > 0 ? blockingKey(safetyPreview?.alerts ?? []) : null;
   const confirmed = alertKey !== null && confirmedKey === alertKey;
   // Comprobación al día con lo escrito: sin ella no se emite.
   const safetyReady = safetyFor === safetyKey && safety.kind !== 'loading' && safety.kind !== 'error';
-  const safetyBlocksSubmit = !safetyReady || (alertKey !== null && (!confirmed || !reason.trim()));
+  // Sin motivo el botón sigue activo: al pulsarlo, el campo dice qué falta.
+  const safetyBlocksSubmit = !safetyReady || (alertKey !== null && !confirmed);
   const submitHint = !safetyReady
     ? safety.kind === 'error' && safetyFor === safetyKey
       ? 'Reintenta la comprobación de seguridad antes de emitir.'
       : 'Espera a que termine la comprobación de seguridad para emitir.'
     : alertKey !== null && !confirmed
       ? 'Confirma los avisos de seguridad para emitir.'
-      : alertKey !== null && !reason.trim()
-        ? copy.reasonMissing
-        : null;
+      : null;
 
   const country = issuer?.country ?? 'CO';
   const maxItems = issuer?.maxItems ?? 10;
