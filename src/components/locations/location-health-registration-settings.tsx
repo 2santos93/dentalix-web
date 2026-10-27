@@ -6,10 +6,10 @@ import { ApiError } from '@/lib/api/api-error';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import {
   HEALTH_REGISTRATION_NUMBER_MAX_LENGTH,
-  listLocations,
   updateLocationHealthRegistration,
   type ClinicLocation,
 } from '@/lib/locations/locations-api';
+import { useSessionLocations } from '@/lib/locations/session-locations';
 import { AsyncSection } from '@/components/shared/async-section';
 import { InlineError } from '@/components/errors/inline-error';
 import { Input } from '@/components/ui/input';
@@ -54,13 +54,15 @@ export function LocationHealthRegistrationSettings({ token, canEdit }: LocationH
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
+  // G1: la lectura de la sesión; el modal de sede la invalida y esta tarjeta
+  // relee sin vaciarse (la sede nueva o editada aparece sin recargar).
+  const requestLocations = useSessionLocations(token);
 
   useEffect(() => {
     let cancelled = false;
     async function load() {
-      setLoading(true);
       try {
-        const data = await listLocations(token);
+        const data = await requestLocations();
         if (cancelled) return;
         setLocations(data);
         setError(null);
@@ -75,7 +77,7 @@ export function LocationHealthRegistrationSettings({ token, canEdit }: LocationH
     return () => {
       cancelled = true;
     };
-  }, [token, reloadKey]);
+  }, [requestLocations, reloadKey]);
 
   return (
     <section aria-labelledby="health-registration-heading" className="flex flex-col gap-3">
@@ -85,7 +87,11 @@ export function LocationHealthRegistrationSettings({ token, canEdit }: LocationH
         </h2>
         <p className="max-w-[68ch] text-sm text-muted">{copy.support}</p>
       </div>
-      <AsyncSection loading={loading} error={error} onRetry={() => setReloadKey((k) => k + 1)}>
+      <AsyncSection loading={loading} error={error} onRetry={() => {
+          setLoading(true);
+          setReloadKey((k) => k + 1);
+        }}
+      >
         <ul className="flex flex-col divide-y divide-hairline rounded-lg border border-border bg-surface">
           {locations.map((location) => (
             <li key={location.id} className="px-4 py-3">

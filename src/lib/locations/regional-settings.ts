@@ -53,6 +53,21 @@ export function canonicalLocale(raw: string | null | undefined): string | null {
   }
 }
 
+/**
+ * Forma canónica de una zona IANA (`asia/tokyo` → `Asia/Tokyo`), o `null` si
+ * este navegador no la reconoce. Lo enviado y lo comparado con la zona guardada
+ * es siempre esta forma, no lo tecleado.
+ */
+export function canonicalTimeZone(raw: string | null | undefined): string | null {
+  const text = raw?.trim();
+  if (!text) return null;
+  try {
+    return new Intl.DateTimeFormat('en', { timeZone: text }).resolvedOptions().timeZone;
+  } catch {
+    return null;
+  }
+}
+
 /** Zona del navegador, para sugerirla en el alta; `null` si no la da o no es válida. */
 export function browserTimeZone(): string | null {
   try {
@@ -92,7 +107,8 @@ export function timeZoneOptions(extra: readonly (string | null | undefined)[] = 
 }
 
 /**
- * Vista previa «1.234,56 · 26/10/2026 16:30» del formato regional en la zona
+ * Vista previa «12.345,67 · 26/10/2026 16:30» (cinco cifras: con cuatro, `es`
+ * no agrupa y «1234,56» parecería un separador perdido) del formato regional en la zona
  * elegida, o `null` si falta alguno de los dos o no es válido.
  */
 export function regionalPreview(locale: string, timeZone: string, at: Date): string | null {
@@ -101,7 +117,7 @@ export function regionalPreview(locale: string, timeZone: string, at: Date): str
   const number = new Intl.NumberFormat(canonical, {
     minimumFractionDigits: 2,
     maximumFractionDigits: 2,
-  }).format(1234.56);
+  }).format(12345.67);
   const date = new Intl.DateTimeFormat(canonical, {
     timeZone: timeZone.trim(),
     day: '2-digit',
@@ -127,6 +143,7 @@ export function validateRegionalSettings(values: RegionalSettingsValues): Region
   return errors;
 }
 
-function unique(values: readonly (string | null | undefined)[]): string[] {
+/** Sin vacíos ni repetidos, en el orden de llegada. */
+export function unique(values: readonly (string | null | undefined)[]): string[] {
   return [...new Set(values.filter((v): v is string => Boolean(v)))];
 }

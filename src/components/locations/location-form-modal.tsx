@@ -16,6 +16,7 @@ import {
   browserLocale,
   browserTimeZone,
   canonicalLocale,
+  canonicalTimeZone,
   REGIONAL_SETTINGS_FIELDS,
   validateRegionalSettings,
   type RegionalSettingsErrors,
@@ -57,7 +58,11 @@ const ID = 'location-form';
 const UNCONFIRMED = 'LOCATION_REGIONAL_CHANGE_UNCONFIRMED';
 const CASH_OPEN = 'LOCATION_REGIONAL_CASH_OPEN';
 
-type FieldErrors = RegionalSettingsErrors & { name?: string };
+type FieldErrors = RegionalSettingsErrors & { name?: string; phone?: string };
+
+/** Campos a los que la API puede referir un 400 (`field`): el mensaje va junto a ellos. */
+const API_FIELDS = ['name', 'phone', ...REGIONAL_SETTINGS_FIELDS] as const;
+type ApiField = (typeof API_FIELDS)[number];
 
 interface LocationFormModalProps {
   open: boolean;
@@ -116,12 +121,13 @@ export function LocationFormModal({ open, onOpenChange, token, location, onSaved
     if (!location) return [];
     return (['currency', 'timeZone'] as const).filter((field) => {
       const before = location[field];
-      return before !== null && before !== regional[field].trim();
+      const now = field === 'timeZone' ? (canonicalTimeZone(regional.timeZone) ?? regional.timeZone.trim()) : regional.currency;
+      return before !== null && before !== now;
     });
   }
 
-  function focusField(field: RegionalSettingsField | 'name') {
-    const id = field === 'name' ? `${ID}-name` : regionalFieldId(ID, field);
+  function focusField(field: ApiField) {
+    const id = field === 'name' || field === 'phone' ? `${ID}-${field}` : regionalFieldId(ID, field);
     document.getElementById(id)?.focus();
   }
 
@@ -140,7 +146,7 @@ export function LocationFormModal({ open, onOpenChange, token, location, onSaved
       ...(trimmedPhone ? { phone: trimmedPhone } : {}),
       country: regional.country as CreateLocationInput['country'],
       currency: regional.currency,
-      timeZone: regional.timeZone.trim(),
+      timeZone: canonicalTimeZone(regional.timeZone) ?? regional.timeZone.trim(),
       locale: canonicalLocale(regional.locale) ?? regional.locale.trim(),
     };
   }
@@ -196,9 +202,9 @@ export function LocationFormModal({ open, onOpenChange, token, location, onSaved
       err instanceof ApiError &&
       err.status === 400 &&
       err.field &&
-      (REGIONAL_SETTINGS_FIELDS as readonly string[]).includes(err.field)
+      (API_FIELDS as readonly string[]).includes(err.field)
     ) {
-      const field = err.field as RegionalSettingsField;
+      const field = err.field as ApiField;
       setErrors((prev) => ({ ...prev, [field]: text }));
       focusField(field);
       return;
@@ -216,9 +222,10 @@ export function LocationFormModal({ open, onOpenChange, token, location, onSaved
       focusField(first);
       return;
     }
-    // Lo que se envía es lo que se ve: el formato queda en su forma canónica.
-    const locale = canonicalLocale(regional.locale);
-    if (locale && locale !== regional.locale) setRegional((prev) => ({ ...prev, locale }));
+    // Lo que se envía es lo que se ve: zona y formato quedan en su forma canónica.
+    const timeZone = canonicalTimeZone(regional.timeZone) ?? regional.timeZone.trim();
+    const locale = canonicalLocale(regional.locale) ?? regional.locale.trim();
+    setRegional((prev) => ({ ...prev, timeZone, locale }));
     void save(false);
   }
 
@@ -253,13 +260,24 @@ export function LocationFormModal({ open, onOpenChange, token, location, onSaved
           <FormField htmlFor={`${ID}-address`} label={copy.address}>
             <Input id={`${ID}-address`} value={address} onChange={(e) => setAddress(e.target.value)} />
           </FormField>
-          <FormField htmlFor={`${ID}-phone`} label={copy.phone} hint={copy.phoneHint}>
+          <FormField
+            htmlFor={`${ID}-phone`}
+            label={copy.phone}
+            hint={copy.phoneHint}
+            hintId={`${ID}-phone-hint`}
+            error={errors.phone}
+          >
             <Input
               id={`${ID}-phone`}
               type="tel"
               value={phone}
               maxLength={LOCATION_PHONE_MAX_LENGTH}
-              onChange={(e) => setPhone(e.target.value)}
+              onChange={(e) => {
+                setPhone(e.target.value);
+                setErrors((prev) => ({ ...prev, phone: undefined }));
+              }}
+              aria-invalid={errors.phone ? true : undefined}
+              aria-describedby={errors.phone ? fieldErrorId(`${ID}-phone`) : `${ID}-phone-hint`}
             />
           </FormField>
         </div>

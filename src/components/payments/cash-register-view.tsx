@@ -399,7 +399,7 @@ export function CashRegisterView({ token, tabs }: CashRegisterViewProps) {
         ) : null}
 
         {showResults && zone.status === 'error' && period !== 'custom' ? (
-          <SedeConfigError kind="timeZone" onRetry={zone.retry} />
+          <SedeConfigError kind="timeZone" description={zone.message} onRetry={zone.retry} />
         ) : showResults ? (
           <>
             {!loading && !loadError && data ? (

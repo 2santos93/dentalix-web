@@ -64,7 +64,12 @@ function LocationSettingsRoute() {
         {/* Aviso D5 (solo ADMIN) pegado a la lista que lo resuelve. */}
         <div className="flex flex-col gap-4">
           <RegionalReviewNotice token={accessToken} showReviewLink={false} />
-          <LocationsList token={accessToken} canEdit={isAdmin} initialEditId={editId} />
+          <LocationsList
+          token={accessToken}
+          canEdit={isAdmin}
+          initialEditId={editId}
+          onInitialEditConsumed={() => router.replace('/settings/sedes')}
+        />
         </div>
         <LocationHealthRegistrationSettings
           token={accessToken}

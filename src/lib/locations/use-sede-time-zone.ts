@@ -1,18 +1,20 @@
 'use client';
-import { useSessionLocations } from '@/lib/locations/session-locations';
-import { useCallback, useEffect, useState } from 'react';
 import { civilDateInZone } from '@/lib/format/date';
 import type { ClinicLocation } from './locations-api';
-import { getActiveLocationId, onLocationChange } from './location-store';
 import { locationTimeZone } from './location-settings';
+import { useLocationsState } from './use-locations-state';
 
 /** El mismo texto que `SedeConfigError kind="timeZone"` (spec G1 §5). */
 export const SEDE_TIME_ZONE_ERROR = 'No se pudo saber la zona horaria de la sede. Vuelve a intentarlo.';
+
+/** Clínica sin ninguna sede activa (spec G1 §5, el mensaje de `LOCATION_REQUIRED`): reintentar no lo arregla. */
+export const NO_ACTIVE_LOCATION_ERROR = 'La clínica no tiene ninguna sede activa. Crea una en Ajustes → Sedes.';
 
 /**
  * Estado de la zona de la sede para una pantalla (GLOBAL-G1): cargando, lista,
  * o error con su reintento. En error no hay zona con la que contar «hoy»: la
  * pantalla muestra `SedeConfigError` en vez de calcular el día con otra zona.
+ * `message` dice qué pasó (sede sin zona utilizable, o ninguna sede activa).
  */
 export type SedeZoneState =
   | { status: 'loading' }
@@ -27,8 +29,8 @@ export function readyTimeZone(state: SedeZoneState): string | null {
 /**
  * La zona con la que se cuentan los días en pantalla (DX-097): la de la sede
  * activa; en «Todas las sedes» (o con una sede activa que ya no está), la de la
- * sede principal (la primera de `GET /locations`), que es la que la clínica
- * toma como referencia. Cada sede sigue cortando SU día en su zona en la API;
+ * sede principal (la activa más antigua: `GET /locations` va por `createdAt` e
+ * incluye las desactivadas), la misma regla que la API (R6). Cada sede sigue cortando SU día en su zona en la API;
  * esto solo decide qué día es «hoy» para los atajos y los rótulos. Sin zona
  * utilizable (sede sin configurar, sin sedes), `null`: nunca otra zona.
  */
@@ -37,7 +39,7 @@ export function pickSedeTimeZone(
   activeLocationId: string | null,
 ): string | null {
   const active = activeLocationId ? locations.find((l) => l.id === activeLocationId) : undefined;
-  return locationTimeZone(active ?? locations[0]);
+  return locationTimeZone(active ?? locations.find((l) => l.isActive));
 }
 
 /**
@@ -59,40 +61,14 @@ export function sedeToday(timeZone: string, now: Date = new Date()): string {
  * recalcula al cambiar de sede.
  */
 export function useSedeTimeZone(token: string): SedeZoneState {
-  const requestLocations = useSessionLocations(token);
-  // `undefined` = cargando; `null` = la lista no cargó.
-  const [locations, setLocations] = useState<ClinicLocation[] | null | undefined>(undefined);
-  const [activeId, setActiveId] = useState<string | null>(() => getActiveLocationId());
-  const [attempt, setAttempt] = useState(0);
-
-  useEffect(() => {
-    if (!token) return;
-    let cancelled = false;
-    requestLocations()
-      .then((data) => {
-        if (!cancelled) setLocations(data);
-      })
-      .catch(() => {
-        if (!cancelled) setLocations(null);
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [token, requestLocations, attempt]);
-
-  useEffect(() => onLocationChange(() => setActiveId(getActiveLocationId())), []);
-
-  const { invalidate } = requestLocations;
-  const retry = useCallback(() => {
-    setLocations(undefined);
-    // Con la caché de la sesión, invalidar ya relee; sin ella, el intento nuevo.
-    invalidate();
-    setAttempt((n) => n + 1);
-  }, [invalidate]);
-
-  if (locations === undefined) return { status: 'loading' };
-  const timeZone = locations ? pickSedeTimeZone(locations, activeId) : null;
+  const state = useLocationsState(token);
+  if (state.status === 'loading') return { status: 'loading' };
+  if (state.status === 'error') return { status: 'error', message: SEDE_TIME_ZONE_ERROR, retry: state.retry };
+  if (!state.locations.some((l) => l.isActive)) {
+    return { status: 'error', message: NO_ACTIVE_LOCATION_ERROR, retry: state.retry };
+  }
+  const timeZone = pickSedeTimeZone(state.locations, state.activeLocationId);
   return timeZone
     ? { status: 'ready', timeZone }
-    : { status: 'error', message: SEDE_TIME_ZONE_ERROR, retry };
+    : { status: 'error', message: SEDE_TIME_ZONE_ERROR, retry: state.retry };
 }

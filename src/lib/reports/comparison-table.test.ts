@@ -66,6 +66,8 @@ describe('tabla de «Comparar sedes» (DX-014)', () => {
     expect(formatMetric('COUNT', 1234)).toBe('1234');
     expect(formatMetric('PERCENT', null)).toBe('—');
     expect(formatMetric('MONEY', 120000, 'COP')).toMatch(/120\.000,00/);
+    // Sin moneda: el importe sin símbolo, sin espacio delante.
+    expect(formatMetric('MONEY', 120000)).toBe('120.000,00');
     expect(formatChange(20, 'PERCENT')).toBe('+20 %');
     expect(formatChange(-2.25, 'PERCENT')).toBe('−2,3 %');
     expect(formatChange(0, 'PERCENT')).toBe('0 %');

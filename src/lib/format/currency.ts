@@ -19,7 +19,7 @@ export function formatCurrency(
   // versiones recientes de ICU/CLDR dan 0 decimales a COP, con lo que
   // 150.000,50 se pintaría (redondeado) como 150.001. Las monedas que en ISO
   // 4217 no tienen decimales (JPY, VND…: GLOBAL-G1) van sin ellos cuando el
-  // importe es entero; uno con céntimos se pinta entero, nunca redondeado.
+  // importe es entero; con céntimos conserva 2 decimales, nunca se redondea.
   const digits = Number.isInteger(amount) && ISO_ZERO_DECIMAL.has(currency.toUpperCase()) ? 0 : 2;
   try {
     return new Intl.NumberFormat(locale, {

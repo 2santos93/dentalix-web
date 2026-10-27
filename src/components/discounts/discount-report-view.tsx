@@ -450,7 +450,7 @@ export function DiscountReportView({ token }: { token: string }) {
             description={discountReportCopy.forbiddenHint}
           />
         ) : zone.status === 'error' && !filters ? (
-          <SedeConfigError kind="timeZone" onRetry={zone.retry} />
+          <SedeConfigError kind="timeZone" description={zone.message} onRetry={zone.retry} />
         ) : (
           <>
             {!showLoading && !loadError && data ? (

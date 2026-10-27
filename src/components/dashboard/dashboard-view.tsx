@@ -254,7 +254,7 @@ export function DashboardView({ token }: DashboardViewProps) {
       {rangeInvalid ? (
         <InlineError>{copy.rangeInvalid}</InlineError>
       ) : zone.status === 'error' && (!from || !to) ? (
-        <SedeConfigError kind="timeZone" onRetry={zone.retry} />
+        <SedeConfigError kind="timeZone" description={zone.message} onRetry={zone.retry} />
       ) : !currency && currencyUnknown ? (
         <SedeConfigError kind="currency" onRetry={locations.retry} />
       ) : !currency && sedeCurrency?.scope === 'clinic' ? (

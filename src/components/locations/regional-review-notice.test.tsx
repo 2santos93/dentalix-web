@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import { RegionalReviewNotice } from './regional-review-notice';
 import { LocationsList } from './locations-list';
 import { listLocations, updateLocationSettings } from '@/lib/locations/locations-api';
@@ -64,8 +64,10 @@ describe('RegionalReviewNotice (aviso D5, spec §7)', () => {
   it('RECEPTIONIST does not', async () => {
     mockedList.mockResolvedValue([norte]);
     render(<RegionalReviewNotice token={RECEPTION} />);
-    // Ni siquiera pide las sedes: el aviso es solo de ADMIN.
-    await waitFor(() => expect(mockedList).not.toHaveBeenCalled());
+    // Ni siquiera pide las sedes: el aviso es solo de ADMIN. Se vacían antes los
+    // efectos y promesas pendientes, para que «no se llamó» no sea solo «aún no».
+    await act(async () => {});
+    expect(mockedList).not.toHaveBeenCalled();
     expect(screen.queryByRole('region', { name: 'Sedes por revisar' })).not.toBeInTheDocument();
   });
 
@@ -139,5 +141,38 @@ describe('RegionalReviewNotice (aviso D5, spec §7)', () => {
     expect(
       within(screen.getByText('Sede Norte').closest('li')!).getByRole('button', { name: 'Editar Sede Norte' }),
     ).toBeInTheDocument();
+  });
+
+  it('with 2 pending, saving one leaves the notice at 1 naming the other', async () => {
+    const sur = clinicLocation({
+      id: 'sur',
+      name: 'Sede Sur',
+      country: 'ES',
+      currency: 'EUR',
+      timeZone: 'Europe/Madrid',
+      locale: 'es-ES',
+      regionalSettingsReviewedAt: null,
+    });
+    const confirmed = { ...norte, regionalSettingsReviewedAt: '2026-10-27T10:00:00.000Z' };
+    mockedList.mockResolvedValueOnce([norte, sur]).mockResolvedValue([confirmed, sur]);
+    jest.mocked(updateLocationSettings).mockResolvedValue(confirmed);
+    const user = setupUser();
+    render(
+      <SessionLocationsProvider token={ADMIN}>
+        <RegionalReviewNotice token={ADMIN} showReviewLink={false} />
+        <LocationsList token={ADMIN} canEdit />
+      </SessionLocationsProvider>,
+    );
+    const notice = await screen.findByRole('region', { name: 'Sedes por revisar' });
+    expect(notice).toHaveTextContent('el formato de 2 sedes.');
+
+    await user.click(await screen.findByRole('button', { name: 'Revisar Sede Norte' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Editar sede' });
+    await within(dialog).findByRole('option', { name: 'Peso colombiano ($)' });
+    await user.click(within(dialog).getByRole('button', { name: 'Guardar sede' }));
+
+    await waitFor(() => expect(notice).toHaveTextContent('el formato de 1 sede.'));
+    expect(notice).toHaveTextContent('(Sede Sur: EUR · Europe/Madrid · es-ES)');
+    expect(notice).not.toHaveTextContent('Sede Norte');
   });
 });

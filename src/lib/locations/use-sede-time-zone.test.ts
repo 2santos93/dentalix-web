@@ -1,5 +1,11 @@
 import { act, renderHook, waitFor } from '@testing-library/react';
-import { pickSedeTimeZone, sedeToday, useSedeTimeZone, SEDE_TIME_ZONE_ERROR } from './use-sede-time-zone';
+import {
+  NO_ACTIVE_LOCATION_ERROR,
+  pickSedeTimeZone,
+  sedeToday,
+  useSedeTimeZone,
+  SEDE_TIME_ZONE_ERROR,
+} from './use-sede-time-zone';
 import { listLocations, type ClinicLocation } from './locations-api';
 import { setActiveLocationId } from './location-store';
 import { clinicLocation } from '@/lib/test/locations';
@@ -22,6 +28,11 @@ describe('pickSedeTimeZone', () => {
   it('sin sede activa (todas las sedes) o con una que ya no está: la principal', () => {
     expect(pickSedeTimeZone([tokyo, principal], null)).toBe('Asia/Tokyo');
     expect(pickSedeTimeZone([madrid, principal], 'retirada')).toBe('Europe/Madrid');
+  });
+
+  it('la principal es la activa más antigua: una desactivada primero no cuenta (R6)', () => {
+    const retirada = clinicLocation({ id: 'retirada', isActive: false, timeZone: null });
+    expect(pickSedeTimeZone([retirada, tokyo], null)).toBe('Asia/Tokyo');
   });
 
   it('no zone gives error state, never America/Bogota', () => {
@@ -66,6 +77,13 @@ describe('useSedeTimeZone', () => {
     await waitFor(() => expect(result.current.status).toBe('error'));
     expect(result.current).toMatchObject({ status: 'error', message: SEDE_TIME_ZONE_ERROR });
     expect(JSON.stringify(result.current)).not.toContain('America/Bogota');
+  });
+
+  it('sin ninguna sede activa: el mensaje de la API («Crea una en Ajustes → Sedes»)', async () => {
+    listLocationsMock.mockResolvedValue([clinicLocation({ isActive: false })]);
+    const { result } = renderHook(() => useSedeTimeZone('tok'));
+    await waitFor(() => expect(result.current.status).toBe('error'));
+    expect(result.current).toMatchObject({ message: NO_ACTIVE_LOCATION_ERROR });
   });
 
   it('si la lista de sedes falla, error; Reintentar vuelve a leer y se recupera', async () => {

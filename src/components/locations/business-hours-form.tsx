@@ -16,6 +16,7 @@ import {
 import { onLocationChange } from '@/lib/locations/location-store';
 import { readyTimeZone, useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
 import { getTokenRole } from '@/lib/auth/token-role';
+import { SedeConfigError } from '@/components/locations/sede-config-error';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
@@ -28,7 +29,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 const copy = {
   // G1 (spec §6.5): la zona es un dato de la sede; aquí solo se muestra.
   timezoneLabel: 'Zona horaria',
-  timezoneUnset: 'por configurar',
+  timezoneLoading: '…',
   timezoneWhere: 'Se cambia en',
   timezoneLink: 'Ajustes → Sedes',
   openLabel: 'Abierto',
@@ -94,8 +95,11 @@ export function BusinessHoursForm({ token }: BusinessHoursFormProps) {
   // Zona del horario que dio la API (= la de la sede); sin horario, la de la
   // sede leída de la lista de sedes. Nunca una zona de reserva.
   const [scheduleZone, setScheduleZone] = useState<string | null>(null);
-  const sedeZone = readyTimeZone(useSedeTimeZone(token));
-  const timezone = scheduleZone ?? sedeZone;
+  const sedeZone = useSedeTimeZone(token);
+  const timezone = scheduleZone ?? readyTimeZone(sedeZone);
+  // Sin zona en el horario ni en la sede (sin configurar o la lista no cargó):
+  // el error de la sede con su reintento, nunca otra zona.
+  const zoneError = timezone === null && sedeZone.status === 'error' ? sedeZone : null;
   const isAdmin = getTokenRole(token) === 'ADMIN';
   const [hadSchedule, setHadSchedule] = useState(true);
   const [loading, setLoading] = useState(true);
@@ -229,7 +233,7 @@ export function BusinessHoursForm({ token }: BusinessHoursFormProps) {
 
         <p className="text-sm text-muted">
           {copy.timezoneLabel}:{' '}
-          <span className="font-medium text-ink">{timezone ?? copy.timezoneUnset}</span>
+          {zoneError ? null : <span className="font-medium text-ink">{timezone ?? copy.timezoneLoading}</span>}
           {' · '}
           {copy.timezoneWhere}{' '}
           {isAdmin ? (
@@ -243,6 +247,9 @@ export function BusinessHoursForm({ token }: BusinessHoursFormProps) {
             copy.timezoneLink
           )}
         </p>
+        {zoneError ? (
+          <SedeConfigError kind="timeZone" variant="field" onRetry={zoneError.retry} className="max-w-xs" />
+        ) : null}
 
         <div className="flex flex-col gap-3">
           {WEEKDAY_LABELS.map((label, weekday) => {

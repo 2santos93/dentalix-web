@@ -36,6 +36,11 @@ describe('CurrencySelect', () => {
     expect(mocked).not.toHaveBeenCalled();
   });
 
+  it('the placeholder cannot be chosen again, like the other required selects', async () => {
+    render(<CurrencySelect id="cur" token="tok" value="" placeholder="Elige la moneda" onChange={() => {}} />);
+    expect(await screen.findByRole('option', { name: 'Elige la moneda' })).toBeDisabled();
+  });
+
   // WCAG 4.1.2: call sites with no adjacent `<label>` (e.g. a select placed
   // next to a button rather than inside a `FormField`) must still expose an
   // accessible name — `ariaLabel` covers that case.

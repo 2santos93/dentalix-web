@@ -290,4 +290,44 @@ describe('LocationFormModal (G1, spec §6.2)', () => {
     // Lo enviado es lo que se ve: el formato queda canónico en el campo.
     expect(within(dialog).getByLabelText('Formato regional')).toHaveValue('ja-JP');
   });
+
+  it('the zone is saved and shown in its canonical casing; unchanged in another case is not a move', async () => {
+    const sede = clinicLocation({ timeZone: 'Asia/Tokyo' });
+    mockedUpdate.mockResolvedValue(sede);
+    const { dialog, user } = setup(sede);
+    await currenciesLoaded(dialog);
+    const zone = within(dialog).getByLabelText('Zona horaria');
+    await user.clear(zone);
+    await user.type(zone, 'asia/tokyo');
+    await user.click(within(dialog).getByRole('button', { name: 'Guardar sede' }));
+    await waitFor(() => expect(mockedUpdate).toHaveBeenCalledTimes(1));
+    expect(mockedUpdate.mock.calls[0][2]).toMatchObject({ timeZone: 'Asia/Tokyo' });
+    expect(zone).toHaveValue('Asia/Tokyo');
+  });
+
+  it('a 400 about the phone goes next to the phone; its hint describes it otherwise', async () => {
+    mockedCreate.mockRejectedValue(new ApiError(400, 'El teléfono admite hasta 40 caracteres.', { field: 'phone' }));
+    const { dialog, user } = setup();
+    const phone = within(dialog).getByLabelText('Teléfono');
+    expect(phone).toHaveAccessibleDescription('Con indicativo internacional (+…).');
+    await currenciesLoaded(dialog);
+    await user.type(within(dialog).getByLabelText('Nombre'), 'Sede Norte');
+    await user.type(phone, '+34 600');
+    await user.selectOptions(within(dialog).getByLabelText('País'), 'ES');
+    await user.selectOptions(within(dialog).getByLabelText('Moneda'), 'EUR');
+    await user.click(within(dialog).getByRole('button', { name: 'Crear sede' }));
+    await waitFor(() => expect(phone).toHaveAccessibleDescription('El teléfono admite hasta 40 caracteres.'));
+    expect(phone).toHaveAttribute('aria-invalid', 'true');
+  });
+
+  it('invalid native selects get the danger border, like the inputs', async () => {
+    const { dialog, user } = setup();
+    await currenciesLoaded(dialog);
+    await user.click(within(dialog).getByRole('button', { name: 'Crear sede' }));
+    for (const label of ['País', 'Moneda']) {
+      const select = within(dialog).getByLabelText(label);
+      expect(select).toHaveAttribute('aria-invalid', 'true');
+      expect(select.className).toContain('aria-[invalid=true]:border-danger');
+    }
+  });
 });

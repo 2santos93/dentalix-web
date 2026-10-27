@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { listCurrencies, type Currency } from '@/lib/reference/currencies-api';
 import { FieldError } from '@/components/errors/field-error';
+import { fieldClass } from '@/lib/ui/field-class';
 import { cn } from '@/lib/utils';
 
 const copy = {
@@ -9,19 +10,17 @@ const copy = {
   loadError: 'Monedas no disponibles',
 };
 
-// Same native-control fieldClass convention as patient-form.tsx / treatment-plans-tab.tsx.
-const fieldClass =
-  'flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-50';
+/**
+ * De dónde sale la lista, exactamente una fuente: con sesión, `GET /currencies`
+ * con el token; sin sesión (registro, R18), un `loader` como
+ * `listPublicCurrencies` (referencia estable).
+ */
+export type CurrencySource =
+  | { token: string; loader?: undefined }
+  | { loader: () => Promise<Currency[]>; token?: undefined };
 
-interface CurrencySelectProps {
+type CurrencySelectProps = CurrencySource & {
   id: string;
-  /** Con sesión: la lista sale de `GET /currencies` con este token. */
-  token?: string;
-  /**
-   * Sin sesión (registro, R18): quien carga la lista, p. ej.
-   * `listPublicCurrencies`. Tiene que ser una referencia estable.
-   */
-  loader?: () => Promise<Currency[]>;
   value: string;
   onChange: (code: string) => void;
   disabled?: boolean;
@@ -34,7 +33,7 @@ interface CurrencySelectProps {
   /** Para `aria-invalid`/`aria-required` desde el `FormField` que lo envuelve. */
   invalid?: boolean;
   required?: boolean;
-}
+};
 
 export function CurrencySelect({
   id,
@@ -56,7 +55,7 @@ export function CurrencySelect({
 
   useEffect(() => {
     let cancelled = false;
-    const request = loader ? loader() : token ? listCurrencies(token) : Promise.resolve<Currency[]>([]);
+    const request = loader ? loader() : listCurrencies(token);
     request
       .then((data) => {
         if (!cancelled) setCurrencies(data);
@@ -96,13 +95,18 @@ export function CurrencySelect({
       value={value}
       disabled={disabled}
       onChange={(e) => onChange(e.target.value)}
-      className={cn(fieldClass, className)}
+      className={cn(fieldClass, 'h-10', className)}
       aria-label={ariaLabel}
       aria-describedby={ariaDescribedBy}
       aria-invalid={invalid || undefined}
       aria-required={required || undefined}
     >
-      {placeholder ? <option value="">{placeholder}</option> : null}
+      {/* Igual que el resto de selects obligatorios: el marcador no se puede volver a elegir. */}
+      {placeholder ? (
+        <option value="" disabled>
+          {placeholder}
+        </option>
+      ) : null}
       {options.filter((c) => !placeholder || c.code).map((c) => (
         <option key={c.code} value={c.code}>
           {c.symbol ? `${c.name} (${c.symbol})` : c.name}

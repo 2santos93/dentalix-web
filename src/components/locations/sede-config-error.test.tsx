@@ -63,4 +63,19 @@ describe('SedeConfigError', () => {
     expect(screen.queryByRole('link', { name: 'Configurar sede' })).not.toBeInTheDocument();
     useAuthStore.setState({ accessToken: null });
   });
+
+  it('section takes the caller description (no active location) and note is a status line with retry', async () => {
+    const { unmount } = render(
+      <SedeConfigError kind="timeZone" description="La clínica no tiene ninguna sede activa." onRetry={jest.fn()} />,
+    );
+    expect(screen.getByRole('alert')).toHaveTextContent('La clínica no tiene ninguna sede activa.');
+    unmount();
+
+    const onRetry = jest.fn();
+    render(<SedeConfigError kind="currency" variant="note" onRetry={onRetry} />);
+    expect(screen.queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('No se pudo saber la moneda de la sede.');
+    await setupUser().click(screen.getByRole('button', { name: 'Reintentar' }));
+    expect(onRetry).toHaveBeenCalledTimes(1);
+  });
 });

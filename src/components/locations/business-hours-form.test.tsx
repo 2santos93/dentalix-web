@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { BusinessHoursForm } from './business-hours-form';
 import { getLocationSchedule, replaceLocationSchedule } from '@/lib/locations/schedule-api';
@@ -134,14 +134,24 @@ describe('BusinessHoursForm', () => {
     expect(screen.queryByRole('link', { name: 'Ajustes → Sedes' })).not.toBeInTheDocument();
   });
 
-  it('a location without zone shows «por configurar», never Bogotá', async () => {
+  it('a location without zone shows the sede error with retry, never Bogotá', async () => {
     mockedGet.mockResolvedValue(null);
     jest.mocked(listLocations).mockResolvedValue([clinicLocation({ timeZone: null })]);
 
     render(<BusinessHoursForm token={tokenFor('ADMIN')} />);
     const form = await screen.findByRole('form', { name: 'Guardar horario' });
-    await waitFor(() => expect(listLocations).toHaveBeenCalled());
-    expect(form).toHaveTextContent('Zona horaria: por configurar');
+    expect(await within(form).findByText('Sin zona de sede')).toBeInTheDocument();
+    expect(within(form).getByRole('button', { name: 'Reintentar' })).toBeInTheDocument();
     expect(form).not.toHaveTextContent('Bogota');
+  });
+
+  it('while the location list loads the zone reads «…», not «por configurar»', async () => {
+    mockedGet.mockResolvedValue(null);
+    jest.mocked(listLocations).mockReturnValue(new Promise(() => {}));
+
+    render(<BusinessHoursForm token={tokenFor('ADMIN')} />);
+    const form = await screen.findByRole('form', { name: 'Guardar horario' });
+    expect(form).toHaveTextContent('Zona horaria: …');
+    expect(form).not.toHaveTextContent(/por configurar/i);
   });
 });

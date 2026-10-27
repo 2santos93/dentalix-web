@@ -665,7 +665,8 @@ export function CatalogView({ token, initialItemId = null }: CatalogViewProps) {
         </FormModal>
 
         {currencyUnknown ? (
-          <SedeConfigError kind="currency" onRetry={locationsState.retry} />
+          // Los precios siguen siendo correctos (sin símbolo): una nota, no una sección rota.
+          <SedeConfigError kind="currency" variant="note" onRetry={locationsState.retry} />
         ) : null}
 
         {!loading && !loadError && hasAny ? (

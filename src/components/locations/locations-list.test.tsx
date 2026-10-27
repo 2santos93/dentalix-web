@@ -1,6 +1,7 @@
 import { render, screen, waitFor, within } from '@testing-library/react';
 import { LocationsList } from './locations-list';
 import { LocationSwitcher } from './location-switcher';
+import { LocationPhoneSettings } from './location-phone-settings';
 import {
   createLocation,
   listLocations,
@@ -135,17 +136,66 @@ describe('LocationsList (G1, spec §6.3)', () => {
     // `invalidate()`: el selector vuelve a leer las sedes sin recargar la página.
     expect(await within(switcher).findByRole('option', { name: 'Sede Tokio' })).toBeInTheDocument();
     expect(mockedList).toHaveBeenCalledTimes(2);
-    const list = screen.getByRole('region', { name: 'Sedes' });
+    const list = screen.getByRole('region', { name: 'Sedes de la clínica' });
     expect(within(list).getByText('Sede Tokio').closest('li')).toHaveTextContent('JPY');
     unmount();
     useAuthStore.setState({ accessToken: null });
   });
 
-  it('?sede=<id> opens that location modal for ADMIN', async () => {
+  it('?sede=<id> opens that location modal for ADMIN and consumes the link', async () => {
     mockedList.mockResolvedValue([norte, legacy]);
-    render(<LocationsList token={ADMIN} canEdit initialEditId="legacy" />);
+    const consumed = jest.fn();
+    render(<LocationsList token={ADMIN} canEdit initialEditId="legacy" onInitialEditConsumed={consumed} />);
     const dialog = await screen.findByRole('dialog', { name: 'Editar sede' });
     expect(within(dialog).getByLabelText('Nombre')).toHaveValue('Sede Antigua');
     await within(dialog).findByRole('option', { name: 'Yen japonés (¥)' });
+    expect(consumed).toHaveBeenCalledTimes(1);
+  });
+
+  it('?sede=<id> of a location that does not exist says so and opens nothing', async () => {
+    mockedList.mockResolvedValue([norte]);
+    const consumed = jest.fn();
+    render(<LocationsList token={ADMIN} canEdit initialEditId="borrada" onInitialEditConsumed={consumed} />);
+    expect(await screen.findByText('No encontramos la sede del enlace: elígela en la lista.')).toBeInTheDocument();
+    expect(screen.queryByRole('dialog')).not.toBeInTheDocument();
+    expect(consumed).toHaveBeenCalledTimes(1);
+  });
+
+  it('a zone this browser does not know is «Por configurar», like the screens that need it (§5)', async () => {
+    mockedList.mockResolvedValue([clinicLocation({ id: 'icu', name: 'Sede ICU', timeZone: 'Marte/Olimpo' })]);
+    render(<LocationsList token={ADMIN} canEdit />);
+    const row = (await screen.findByText('Sede ICU')).closest('li')!;
+    expect(within(row).getByText('Por configurar')).toBeInTheDocument();
+    expect(within(row).getByText('Marte/Olimpo (no válido)')).toBeInTheDocument();
+  });
+
+  it('the other cards of the page read the same session list: a new location shows there without reload', async () => {
+    const tokyo = clinicLocation({ id: 'tokyo', name: 'Sede Tokio', currency: 'JPY', timeZone: 'Asia/Tokyo', locale: 'ja-JP' });
+    mockedList.mockResolvedValueOnce([norte]).mockResolvedValue([norte, tokyo]);
+    jest.mocked(createLocation).mockResolvedValue(tokyo);
+    const user = setupUser();
+    render(
+      <SessionLocationsProvider token={ADMIN}>
+        <LocationsList token={ADMIN} canEdit />
+        <LocationPhoneSettings token={ADMIN} canEdit />
+      </SessionLocationsProvider>,
+    );
+    const phones = await screen.findByRole('region', { name: 'Teléfono de la sede' });
+    await within(phones).findByRole('button', { name: 'Guardar el teléfono de Sede Norte' });
+    // Una sola lectura para las dos tarjetas.
+    expect(mockedList).toHaveBeenCalledTimes(1);
+
+    await user.click(screen.getByRole('button', { name: 'Nueva sede' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Nueva sede' });
+    await within(dialog).findByRole('option', { name: 'Yen japonés (¥)' });
+    await user.type(within(dialog).getByLabelText('Nombre'), 'Sede Tokio');
+    await user.selectOptions(within(dialog).getByLabelText('País'), 'ES');
+    await user.selectOptions(within(dialog).getByLabelText('Moneda'), 'JPY');
+    await user.click(within(dialog).getByRole('button', { name: 'Crear sede' }));
+
+    expect(
+      await within(phones).findByRole('button', { name: 'Guardar el teléfono de Sede Tokio' }),
+    ).toBeInTheDocument();
+    expect(mockedList).toHaveBeenCalledTimes(2);
   });
 });

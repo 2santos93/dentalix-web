@@ -9,7 +9,7 @@ import {
 } from '@/lib/discounts/discounts-api';
 import { getTokenRole } from '@/lib/auth/token-role';
 import { ApiError } from '@/lib/api/client';
-import { useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
+import { SEDE_TIME_ZONE_ERROR, useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
 
 jest.mock('../../lib/discounts/discounts-api', () => ({
   getDiscountReport: jest.fn(),
@@ -293,7 +293,7 @@ describe('DiscountReportView (DX-204)', () => {
 
   it('consumers render SedeConfigError without a zone', async () => {
     const retry = jest.fn();
-    mockedZone.mockReturnValue({ status: 'error', message: 'x', retry });
+    mockedZone.mockReturnValue({ status: 'error', message: SEDE_TIME_ZONE_ERROR, retry });
     render(<DiscountReportView token="tok" />);
     expect(
       await screen.findByText('No se pudo saber la zona horaria de la sede. Vuelve a intentarlo.'),

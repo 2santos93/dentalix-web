@@ -5,6 +5,8 @@ import { apiErrorMessage } from '@/lib/api/error-message';
 import type { ClinicLocation } from '@/lib/locations/locations-api';
 import { useSessionLocations } from '@/lib/locations/session-locations';
 import { COUNTRY_LABELS } from '@/lib/prescriptions/prescriptions-api';
+import { locationCurrency, locationTimeZone } from '@/lib/locations/location-settings';
+import { canonicalLocale } from '@/lib/locations/regional-settings';
 import { AsyncSection } from '@/components/shared/async-section';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -12,7 +14,8 @@ import { LocationFormModal } from './location-form-modal';
 import { needsRegionalReview } from './regional-review-notice';
 
 export const locationsListCopy = {
-  heading: 'Sedes',
+  // La página ya se titula «Sedes»: la sección no lo repite.
+  heading: 'Sedes de la clínica',
   support: 'País, moneda, zona horaria y formato de cada sede. Deciden la caja, la agenda y los documentos.',
   create: 'Nueva sede',
   edit: 'Editar',
@@ -23,8 +26,10 @@ export const locationsListCopy = {
   country: 'País',
   currency: 'Moneda',
   timeZone: 'Zona horaria',
-  locale: 'Formato',
+  locale: 'Formato regional',
   missing: 'Por configurar',
+  unusable: (value: string) => `${value} (no válido)`,
+  linkNotFound: 'No encontramos la sede del enlace: elígela en la lista.',
   unconfigured: 'Por configurar',
   active: 'Activa',
   inactive: 'Inactiva',
@@ -34,9 +39,17 @@ export const locationsListCopy = {
 
 const copy = locationsListCopy;
 
-/** Una sede a la que le falta moneda, zona o formato (fila de una réplica antigua, spec §5). */
+/**
+ * Una sede sin moneda, zona o formato utilizables: le falta alguno (fila de
+ * una réplica antigua) o el navegador no lo reconoce (zona de otro ICU, spec
+ * §5). La misma regla que las pantallas que muestran `SedeConfigError`.
+ */
 export function isUnconfigured(location: ClinicLocation): boolean {
-  return location.currency === null || location.timeZone === null || location.locale === null;
+  return (
+    locationCurrency(location) === null ||
+    locationTimeZone(location) === null ||
+    canonicalLocale(location.locale) === null
+  );
 }
 
 interface LocationsListProps {
@@ -45,6 +58,8 @@ interface LocationsListProps {
   canEdit: boolean;
   /** Abre el modal de esa sede al cargar (enlace «Configurar sede», solo ADMIN). */
   initialEditId?: string | null;
+  /** El enlace ya se usó: la página lo quita de la URL (volver atrás no reabre el modal). */
+  onInitialEditConsumed?: () => void;
 }
 
 /** Modal abierto: `null` = cerrado; `'new'` = alta; una sede = edición. */
@@ -56,7 +71,12 @@ type ModalTarget = null | 'new' | ClinicLocation;
  * configurar sale «Por configurar» y su modal la completa; una activa sin
  * confirmar (aviso D5) sale «Por revisar» y su botón «Revisar» abre el modal.
  */
-export function LocationsList({ token, canEdit, initialEditId = null }: LocationsListProps) {
+export function LocationsList({
+  token,
+  canEdit,
+  initialEditId = null,
+  onInitialEditConsumed,
+}: LocationsListProps) {
   const requestLocations = useSessionLocations(token);
   const [locations, setLocations] = useState<ClinicLocation[]>([]);
   const [loading, setLoading] = useState(true);
@@ -66,6 +86,11 @@ export function LocationsList({ token, canEdit, initialEditId = null }: Location
   // Cada apertura estrena el estado del modal.
   const [modalKey, setModalKey] = useState(0);
   const deepLinkUsed = useRef(false);
+  const [linkNotFound, setLinkNotFound] = useState(false);
+  const consumedRef = useRef(onInitialEditConsumed);
+  useEffect(() => {
+    consumedRef.current = onInitialEditConsumed;
+  });
 
   useEffect(() => {
     let cancelled = false;
@@ -82,7 +107,10 @@ export function LocationsList({ token, canEdit, initialEditId = null }: Location
           if (linked) {
             setModalKey((k) => k + 1);
             setTarget(linked);
+          } else {
+            setLinkNotFound(true);
           }
+          consumedRef.current?.();
         }
       } catch (err) {
         if (cancelled) return;
@@ -126,6 +154,11 @@ export function LocationsList({ token, canEdit, initialEditId = null }: Location
           </Button>
         ) : null}
       </div>
+      {linkNotFound ? (
+        <p role="status" className="text-sm text-muted">
+          {copy.linkNotFound}
+        </p>
+      ) : null}
       <AsyncSection
         loading={loading}
         error={error}
@@ -153,9 +186,9 @@ export function LocationsList({ token, canEdit, initialEditId = null }: Location
                 </div>
                 <dl className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm sm:grid-cols-4">
                   <Detail label={copy.country} value={COUNTRY_LABELS[location.country]} />
-                  <Detail label={copy.currency} value={location.currency} />
-                  <Detail label={copy.timeZone} value={location.timeZone} />
-                  <Detail label={copy.locale} value={location.locale} />
+                  <Detail label={copy.currency} value={location.currency} usable={locationCurrency(location) !== null} />
+                  <Detail label={copy.timeZone} value={location.timeZone} usable={locationTimeZone(location) !== null} />
+                  <Detail label={copy.locale} value={location.locale} usable={canonicalLocale(location.locale) !== null} />
                 </dl>
               </div>
               {canEdit ? (
@@ -191,11 +224,13 @@ export function LocationsList({ token, canEdit, initialEditId = null }: Location
   );
 }
 
-function Detail({ label, value }: { label: string; value: string | null }) {
+function Detail({ label, value, usable = true }: { label: string; value: string | null; usable?: boolean }) {
+  // Un valor guardado que no se puede usar se enseña tal cual, en tono de aviso.
+  const text = value === null ? copy.missing : usable ? value : copy.unusable(value);
   return (
     <div className="flex min-w-0 flex-col">
       <dt className="text-xs text-muted">{label}</dt>
-      <dd className={value ? 'truncate text-ink' : 'text-warning'}>{value ?? copy.missing}</dd>
+      <dd className={value !== null && usable ? 'truncate text-ink' : 'break-words text-warning'}>{text}</dd>
     </div>
   );
 }

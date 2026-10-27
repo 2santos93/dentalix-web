@@ -365,7 +365,7 @@ export function LocationsComparisonView({ token }: { token: string }) {
       ) : null}
 
       {invalidPeriod ? null : zone.status === 'error' && !period ? (
-        <SedeConfigError kind="timeZone" onRetry={zone.retry} />
+        <SedeConfigError kind="timeZone" description={zone.message} onRetry={zone.retry} />
       ) : (
         <AsyncSection
           loading={showLoading}

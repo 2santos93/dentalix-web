@@ -10,6 +10,7 @@ import {
   browserLocale,
   browserTimeZone,
   canonicalLocale,
+  canonicalTimeZone,
   REGIONAL_SETTINGS_FIELDS,
   validateRegionalSettings,
   type RegionalSettingsErrors,
@@ -102,8 +103,8 @@ export function RegisterForm({ tenant }: { tenant: string | null }) {
       focusRegional(first);
       return;
     }
-    // Lo que se envía es lo que se ve: el formato queda en su forma canónica.
-    const timeZone = regional.timeZone.trim();
+    // Lo que se envía es lo que se ve: zona y formato quedan en su forma canónica.
+    const timeZone = canonicalTimeZone(regional.timeZone) ?? regional.timeZone.trim();
     const locale = canonicalLocale(regional.locale) ?? regional.locale.trim();
     setRegional((prev) => ({ ...prev, timeZone, locale }));
     setSubmitting(true);
@@ -123,7 +124,7 @@ export function RegisterForm({ tenant }: { tenant: string | null }) {
     } catch (err) {
       // Un 400 de la sede (`field` = locationCurrency…) va junto a su campo.
       const field =
-        err instanceof ApiError && err.status === 400 && err.field && err.field in REGISTER_LOCATION_FIELDS
+        err instanceof ApiError && err.status === 400 && err.field && Object.hasOwn(REGISTER_LOCATION_FIELDS, err.field)
           ? REGISTER_LOCATION_FIELDS[err.field as keyof typeof REGISTER_LOCATION_FIELDS]
           : null;
       if (field) {

@@ -224,4 +224,39 @@ describe('RegisterForm', () => {
     expect(currency).toHaveFocus();
     expect(screen.queryByText('No pudimos crear la cuenta. Intenta de nuevo.')).not.toBeInTheDocument();
   });
+
+  it('if /public/currencies fails once, «Monedas no disponibles» retries and the form can still be sent', async () => {
+    let currencyCalls = 0;
+    mockedFetch.mockImplementation(((path: string) => {
+      if (path === '/public/currencies') {
+        currencyCalls += 1;
+        return currencyCalls === 1 ? Promise.reject(new ApiError(503, 'down')) : Promise.resolve(CURRENCIES);
+      }
+      return Promise.resolve({ message: 'genérico' });
+    }) as typeof apiFetch);
+    const user = setupUser();
+    render(<RegisterForm tenant={null} />);
+    expect(await screen.findByText('Monedas no disponibles')).toBeInTheDocument();
+    await user.click(screen.getByRole('button', { name: 'Reintentar' }));
+    expect(await screen.findByRole('option', { name: 'Euro (€)' })).toBeInTheDocument();
+
+    await fillRequiredFields();
+    fireEvent.click(screen.getByRole('button', { name: /crear cuenta/i }));
+    expect(await screen.findByRole('heading', { name: 'Revisa tu correo' })).toBeInTheDocument();
+    expect(registerCalls()[0][1]?.body).toMatchObject({ locationCurrency: 'EUR' });
+  });
+
+  it('the typed zone is sent and shown in its canonical casing', async () => {
+    let resolve: (value: unknown) => void = () => {};
+    mockApi(() => new Promise((r) => (resolve = r)));
+    render(<RegisterForm tenant={null} />);
+    await fillRequiredFields();
+    fireEvent.change(screen.getByLabelText('Zona horaria'), { target: { value: 'europe/madrid' } });
+    fireEvent.click(screen.getByRole('button', { name: /crear cuenta/i }));
+    await waitFor(() => expect(registerCalls()).toHaveLength(1));
+    expect(screen.getByLabelText('Zona horaria')).toHaveValue('Europe/Madrid');
+    expect(registerCalls()[0][1]?.body).toMatchObject({ locationTimeZone: 'Europe/Madrid' });
+    resolve({ message: 'genérico' });
+    await screen.findByRole('heading', { name: 'Revisa tu correo' });
+  });
 });

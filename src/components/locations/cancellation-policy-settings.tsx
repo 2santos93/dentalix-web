@@ -4,7 +4,8 @@ import { useEffect, useId, useState } from 'react';
 import { History, Mail, Pencil } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api/error-message';
-import { listLocations, type ClinicLocation } from '@/lib/locations/locations-api';
+import type { ClinicLocation } from '@/lib/locations/locations-api';
+import { useSessionLocations } from '@/lib/locations/session-locations';
 import { locationCurrency } from '@/lib/locations/location-settings';
 import { SedeConfigError } from '@/components/locations/sede-config-error';
 import {
@@ -109,31 +110,14 @@ export function CancellationPolicySettings({ token }: { token: string }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
-  // Relee las sedes sin vaciar la lista (un modal abierto sigue abierto): lo
-  // usa el reintento de una sede sin moneda.
-  const [refreshKey, setRefreshKey] = useState(0);
-
-  useEffect(() => {
-    if (refreshKey === 0) return;
-    let cancelled = false;
-    listLocations(token)
-      .then((data) => {
-        if (!cancelled) setLocations(data);
-      })
-      .catch(() => {
-        /* el campo sin moneda conserva su reintento */
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [token, refreshKey]);
-
+  // G1: la lectura de la sesión; el modal de sede la invalida y esta tarjeta
+  // relee sin vaciarse (la sede nueva o editada aparece sin recargar).
+  const requestLocations = useSessionLocations(token);
   useEffect(() => {
     let cancelled = false;
     async function load() {
-      setLoading(true);
       try {
-        const data = await listLocations(token);
+        const data = await requestLocations();
         if (cancelled) return;
         setLocations(data);
         setError(null);
@@ -147,7 +131,7 @@ export function CancellationPolicySettings({ token }: { token: string }) {
     return () => {
       cancelled = true;
     };
-  }, [token, reloadKey]);
+  }, [requestLocations, reloadKey]);
 
   return (
     <section aria-labelledby="cancellation-policy-heading" className="mt-8 flex flex-col gap-3">
@@ -157,14 +141,22 @@ export function CancellationPolicySettings({ token }: { token: string }) {
         </h2>
         <p className="max-w-[68ch] text-sm text-muted">{copy.support}</p>
       </div>
-      <AsyncSection loading={loading} error={error} onRetry={() => setReloadKey((k) => k + 1)}>
+      <AsyncSection loading={loading} error={error} onRetry={() => {
+          setLoading(true);
+          setReloadKey((k) => k + 1);
+        }}
+      >
         <ul className="flex flex-col divide-y divide-hairline rounded-lg border border-border bg-surface">
           {locations.map((location) => (
             <li key={location.id} className="px-4 py-3">
               <LocationPolicyRow
                 token={token}
                 location={location}
-                onRetryLocations={() => setRefreshKey((k) => k + 1)}
+                onRetryLocations={() => {
+                  // Relee sin vaciar la lista (el modal abierto sigue abierto).
+                  requestLocations.invalidate();
+                  setReloadKey((k) => k + 1);
+                }}
               />
             </li>
           ))}

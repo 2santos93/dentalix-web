@@ -1,4 +1,4 @@
-import { formatCurrency } from '@/lib/format/currency';
+import { formatAmount, formatCurrency } from '@/lib/format/currency';
 import type { ComparisonRow, CurrencyMetric, KpiDefinition, KpiKey, LocationsComparison, Metric } from './reports-api';
 
 /** Columna por la que se ordena: la sede o un indicador. */
@@ -77,7 +77,8 @@ const changeFormat = new Intl.NumberFormat('es', { maximumFractionDigits: 1 });
 /** Un valor según la unidad del indicador; «—» si no se puede calcular. */
 export function formatMetric(unit: KpiDefinition['unit'], value: number | null, currency?: string): string {
   if (value === null) return '—';
-  if (unit === 'MONEY') return formatCurrency(value, currency ?? '');
+  // Sin moneda, el importe sin símbolo (nunca una moneda de reserva).
+  if (unit === 'MONEY') return currency ? formatCurrency(value, currency) : formatAmount(value);
   if (unit === 'PERCENT') return `${percentFormat.format(value)} %`;
   return numberFormat.format(value);
 }

@@ -32,8 +32,7 @@ function Harness({
         values={values}
         onChange={(field, value) => setValues((prev) => ({ ...prev, [field]: value }))}
         errors={{}}
-        token={loader ? undefined : 'tok'}
-        currencyLoader={loader}
+        {...(loader ? { currencyLoader: loader } : { token: 'tok' })}
         suggestions={suggestions}
       />
     </form>
@@ -61,10 +60,12 @@ describe('RegionalSettingsFields', () => {
     const user = setupUser();
     render(<Harness initial={{ ...EMPTY, timeZone: 'UTC', locale: 'de-DE' }} />);
     await screen.findByRole('option', { name: 'Euro (€)' });
-    expect(screen.getByText(/^Vista previa: 1\.234,56 · /)).toBeInTheDocument();
+    expect(screen.getByText(/^Vista previa: 12\.345,67 · /)).toBeInTheDocument();
+    // Describe el campo de formato (sin `aria-live`, que anunciaría cada tecla).
+    expect(screen.getByLabelText('Formato regional')).toHaveAccessibleDescription(expect.stringContaining('Vista previa: 12.345,67'));
     await user.clear(screen.getByLabelText('Formato regional'));
     await user.type(screen.getByLabelText('Formato regional'), 'en-US');
-    expect(screen.getByText(/^Vista previa: 1,234\.56 · /)).toBeInTheDocument();
+    expect(screen.getByText(/^Vista previa: 12,345\.67 · /)).toBeInTheDocument();
   });
 
   it('without a session the currencies come from the loader (R18)', async () => {
@@ -91,8 +92,9 @@ describe('regional-settings helpers', () => {
 
   it('regionalPreview needs both a valid format and a valid zone', () => {
     const at = new Date('2026-10-26T15:30:00Z');
-    expect(regionalPreview('de-DE', 'UTC', at)).toBe('1.234,56 · 26.10.2026, 15:30');
-    expect(regionalPreview('de-DE', 'Asia/Tokyo', at)).toBe('1.234,56 · 27.10.2026, 00:30');
+    expect(regionalPreview('de-DE', 'UTC', at)).toBe('12.345,67 · 26.10.2026, 15:30');
+    expect(regionalPreview('de-DE', 'Asia/Tokyo', at)).toBe('12.345,67 · 27.10.2026, 00:30');
+    expect(regionalPreview('es-ES', 'UTC', at)).toBe('12.345,67 · 26/10/2026, 15:30');
     expect(regionalPreview('es-ES', 'Marte/Olimpo', at)).toBeNull();
     expect(regionalPreview('', 'UTC', at)).toBeNull();
   });

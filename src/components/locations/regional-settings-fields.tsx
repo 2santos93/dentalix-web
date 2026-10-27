@@ -6,6 +6,7 @@ import {
   browserLocales,
   regionalPreview,
   timeZoneOptions,
+  unique,
   type RegionalSettingsErrors,
   type RegionalSettingsField,
   type RegionalSettingsValues,
@@ -23,7 +24,7 @@ export const regionalSettingsFieldsCopy = {
   currency: 'Moneda',
   currencyPlaceholder: 'Elige la moneda',
   timeZone: 'Zona horaria',
-  timeZonePlaceholder: 'Escribe para buscar una zona IANA',
+  timeZonePlaceholder: 'Escribe una región o ciudad y elígela de la lista',
   timeZoneHint: 'Decide el «hoy» de la caja, la agenda y los informes.',
   locale: 'Formato regional',
   localePlaceholder: 'Código BCP 47 (idioma-región)',
@@ -36,16 +37,12 @@ const copy = regionalSettingsFieldsCopy;
 
 const COUNTRIES = Object.keys(COUNTRY_LABELS) as ClinicCountry[];
 
-interface RegionalSettingsFieldsProps {
+type RegionalSettingsFieldsProps = RegionalCurrencySource & {
   /** Prefijo de los `id` (`${idPrefix}-country`…): quien lo monta enfoca el primer campo con error. */
   idPrefix: string;
   values: RegionalSettingsValues;
   onChange: <F extends RegionalSettingsField>(field: F, value: RegionalSettingsValues[F]) => void;
   errors: RegionalSettingsErrors;
-  /** Con sesión, la lista de monedas sale de `GET /currencies`. */
-  token?: string;
-  /** Sin sesión (registro): quien carga las monedas (`listPublicCurrencies`). */
-  currencyLoader?: () => Promise<Currency[]>;
   /**
    * Sugerencias del navegador (solo en el alta). Se ven y se editan; mientras
    * el campo conserva la sugerencia lleva la marca «Sugerido por tu navegador».
@@ -53,7 +50,15 @@ interface RegionalSettingsFieldsProps {
   suggestions?: { timeZone: string | null; locale: string | null };
   /** Una columna siempre (el registro vive en un panel estrecho); por defecto, dos desde `sm`. */
   stacked?: boolean;
-}
+};
+
+/**
+ * Monedas: con sesión, `GET /currencies` con el token; sin sesión (registro),
+ * quien las carga (`listPublicCurrencies`).
+ */
+type RegionalCurrencySource =
+  | { token: string; currencyLoader?: undefined }
+  | { currencyLoader: () => Promise<Currency[]>; token?: undefined };
 
 /** `id` del control de un campo regional. */
 export function regionalFieldId(idPrefix: string, field: RegionalSettingsField): string {
@@ -128,8 +133,7 @@ export function RegionalSettingsFields({
       <FormField htmlFor={id('currency')} label={copy.currency} error={errors.currency}>
         <CurrencySelect
           id={id('currency')}
-          token={token}
-          loader={currencyLoader}
+          {...(currencyLoader ? { loader: currencyLoader } : { token: token as string })}
           value={values.currency}
           onChange={(code) => onChange('currency', code)}
           placeholder={copy.currencyPlaceholder}
@@ -184,7 +188,7 @@ export function RegionalSettingsFields({
           onChange={(e) => onChange('locale', e.target.value)}
           aria-required
           aria-invalid={invalid('locale')}
-          aria-describedby={describedBy('locale', `${id('locale')}-hint`)}
+          aria-describedby={describedBy('locale', `${id('locale')}-hint ${id('locale')}-preview`)}
         />
         <datalist id={`${id('locale')}-options`}>
           {locales.map((locale) => (
@@ -193,14 +197,13 @@ export function RegionalSettingsFields({
         </datalist>
       </FormField>
 
-      {/* Siempre montada: una región `aria-live` que aparece no se anuncia. */}
-      <p aria-live="polite" className={cn('text-sm tabular-nums text-muted empty:hidden', !stacked && 'sm:col-span-2')}>
+      {/* Sin `aria-live` (anunciaría cada tecla): la describe el campo de formato. */}
+      <p
+        id={`${id('locale')}-preview`}
+        className={cn('text-sm tabular-nums text-muted empty:hidden', !stacked && 'sm:col-span-2')}
+      >
         {preview ? copy.preview(preview) : null}
       </p>
     </div>
   );
-}
-
-function unique(values: readonly (string | null | undefined)[]): string[] {
-  return [...new Set(values.filter((v): v is string => Boolean(v)))];
 }
