@@ -13,6 +13,7 @@ import { createCashOutflow } from '@/lib/expenses/expenses-api';
 import { listExpenseCategories } from '@/lib/expenses/expense-categories-api';
 import { cashSessionFixture, closedCashSessionFixture, outflowFixture } from '@/lib/test/cash-session';
 import { expenseDetailFixture } from '@/lib/test/expenses';
+import { clinicLocation } from '@/lib/test/locations';
 
 jest.mock('../../lib/cash-sessions/cash-sessions-api', () => ({
   ...jest.requireActual('../../lib/cash-sessions/cash-sessions-api'),
@@ -54,7 +55,7 @@ const token = `x.${btoa(JSON.stringify({ role: 'RECEPTION', sub: 'u-recep' }))}.
 beforeEach(() => {
   jest.clearAllMocks();
   mockedLocations.mockResolvedValue([
-    {
+    clinicLocation({
       id: 'loc-1',
       name: 'Sede principal',
       address: null,
@@ -62,7 +63,7 @@ beforeEach(() => {
       isActive: true,
       timeZone: 'America/Bogota',
       createdAt: '2026-01-01T00:00:00.000Z',
-    },
+    }),
   ]);
 });
 

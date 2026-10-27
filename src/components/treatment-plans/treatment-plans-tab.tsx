@@ -81,7 +81,8 @@ import { InlineError } from '@/components/errors/inline-error';
 import { notifyError } from '@/components/errors/notify';
 import { cn } from '@/lib/utils';
 import { formatCivilDate, formatDateTime } from '@/lib/format/date';
-import { sedeToday, useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
+import { readyTimeZone, sedeToday, useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
+import { SedeConfigError } from '@/components/locations/sede-config-error';
 import { SURFACE_LABELS, SURFACE_ORDER } from '@/lib/odontogram/surface-labels';
 import { getDiscountPolicy } from '@/lib/discounts/discounts-api';
 import {
@@ -1152,8 +1153,10 @@ export function TreatmentPlansTab({
   odontogramHref,
   implantHref,
 }: TreatmentPlansTabProps) {
-  // DX-097: la fecha por defecto del abono es hoy en la zona de la sede.
-  const sedeTimeZone = useSedeTimeZone(token);
+  // DX-097: la fecha por defecto del abono es hoy en la zona de la sede. Sin
+  // su zona, la fecha empieza vacía (nunca se cuenta en otra zona).
+  const sedeZone = useSedeTimeZone(token);
+  const sedeTimeZone = readyTimeZone(sedeZone);
   // Plans list + catalog (loaded together).
   const [plans, setPlans] = useState<TreatmentPlan[]>([]);
   const [catalogItems, setCatalogItems] = useState<DentalCatalogItem[]>([]);
@@ -1230,6 +1233,12 @@ export function TreatmentPlansTab({
   const [paymentAmount, setPaymentAmount] = useState('');
   const [paymentCurrency, setPaymentCurrency] = useState('');
   const [paymentDate, setPaymentDate] = useState('');
+  // La zona llega después de abrir el formulario: la fecha vacía pasa a «hoy».
+  const [prevSedeTimeZone, setPrevSedeTimeZone] = useState(sedeTimeZone);
+  if (sedeTimeZone !== prevSedeTimeZone) {
+    setPrevSedeTimeZone(sedeTimeZone);
+    if (sedeTimeZone && paymentDate === '') setPaymentDate(sedeToday(sedeTimeZone));
+  }
   const [paymentMethod, setPaymentMethod] = useState<PaymentMethod | ''>('');
   const [paymentNotes, setPaymentNotes] = useState('');
   const [addPaymentSubmitting, setAddPaymentSubmitting] = useState(false);
@@ -1264,6 +1273,7 @@ export function TreatmentPlansTab({
   // se sabe la sede, la
   // línea no aparece — nunca bloquea ni rompe el formulario.
   const [locations, setLocations] = useState<ClinicLocation[]>([]);
+  const [locationsReloadKey, setLocationsReloadKey] = useState(0);
   const [activeLocationId, setActiveLocationId] = useState<string | null>(null);
 
   // Add-item form state.
@@ -1395,7 +1405,7 @@ export function TreatmentPlansTab({
     return () => {
       cancelled = true;
     };
-  }, [token, patientId]);
+  }, [token, patientId, locationsReloadKey]);
 
   // Default the plan selector to the first plan once plans load, so the
   // detail shows without an extra click — adjusts state DURING render (the
@@ -1731,7 +1741,7 @@ export function TreatmentPlansTab({
     setPaymentAmount('');
     setPaymentCurrency(planDetail?.currency ?? 'USD');
     // DX-097: hoy en la zona de la sede, no en la del navegador.
-    setPaymentDate(sedeToday(sedeTimeZone));
+    setPaymentDate(sedeTimeZone ? sedeToday(sedeTimeZone) : '');
     setPaymentMethod('');
     setPaymentNotes('');
     setAddPaymentValidationError(null);
@@ -2460,12 +2470,21 @@ export function TreatmentPlansTab({
 
                         <div className="grid gap-4 sm:grid-cols-2">
                           <FormField htmlFor="tp-payment-date" label={copy.paymentDateLabel}>
-                            <Input
-                              id="tp-payment-date"
-                              type="date"
-                              value={paymentDate}
-                              onChange={(e) => setPaymentDate(e.target.value)}
-                            />
+                            {sedeZone.status === 'error' && paymentDate === '' ? (
+                              <SedeConfigError
+                                kind="timeZone"
+                                variant="field"
+                                retryId="tp-payment-date"
+                                onRetry={sedeZone.retry}
+                              />
+                            ) : (
+                              <Input
+                                id="tp-payment-date"
+                                type="date"
+                                value={paymentDate}
+                                onChange={(e) => setPaymentDate(e.target.value)}
+                              />
+                            )}
                           </FormField>
 
                           <FormField htmlFor="tp-payment-method" label={copy.paymentMethodLabel}>
@@ -2785,6 +2804,7 @@ export function TreatmentPlansTab({
           activeLocationId={getActiveLocationId()}
           locationName={locations.find((l) => l.id === getActiveLocationId())?.name ?? null}
           locations={locations}
+          onRetryLocations={() => setLocationsReloadKey((k) => k + 1)}
           onSaved={handleMarkDoneSaved}
         />
       ) : null}

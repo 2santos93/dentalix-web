@@ -11,6 +11,7 @@ import {
 } from '@/lib/reports/reports-api';
 import { ApiError } from '@/lib/api/client';
 import { saveCsv } from '@/lib/files/save-csv';
+import { useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
 
 jest.mock('../../lib/reports/reports-api', () => ({
   getLocationsComparison: jest.fn(),
@@ -19,10 +20,12 @@ jest.mock('../../lib/reports/reports-api', () => ({
 jest.mock('../../lib/files/save-csv', () => ({ saveCsv: jest.fn() }));
 jest.mock('../errors/notify', () => ({ notifyError: jest.fn() }));
 jest.mock('../../lib/locations/use-sede-time-zone', () => ({
-  useSedeTimeZone: () => 'America/Bogota',
+  ...jest.requireActual('../../lib/locations/use-sede-time-zone'),
+  useSedeTimeZone: jest.fn(() => ({ status: 'ready', timeZone: 'America/Bogota' })),
   sedeToday: () => '2026-10-24',
 }));
 
+const mockedZone = useSedeTimeZone as jest.MockedFunction<typeof useSedeTimeZone>;
 const mockedGet = getLocationsComparison as jest.MockedFunction<typeof getLocationsComparison>;
 const mockedCsv = downloadLocationsComparisonCsv as jest.MockedFunction<typeof downloadLocationsComparisonCsv>;
 
@@ -107,6 +110,7 @@ const table = () => screen.getByRole('table', { name: 'Indicadores por sede y to
 describe('LocationsComparisonView (DX-014)', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockedZone.mockReturnValue({ status: 'ready', timeZone: 'America/Bogota' });
     mockedGet.mockResolvedValue(report());
   });
 
@@ -324,5 +328,18 @@ describe('LocationsComparisonView (DX-014)', () => {
       'Sede principal',
       'Sede Norte',
     ]);
+  });
+
+  it('consumers render SedeConfigError without a zone', async () => {
+    const retry = jest.fn();
+    mockedZone.mockReturnValue({ status: 'error', message: 'x', retry });
+    render(<LocationsComparisonView token="t" />);
+    expect(
+      await screen.findByText('No se pudo saber la zona horaria de la sede. Vuelve a intentarlo.'),
+    ).toBeInTheDocument();
+    // Sin zona no hay período por defecto: no se consulta con otra zona.
+    expect(mockedGet).not.toHaveBeenCalled();
+    await userEvent.click(screen.getByRole('button', { name: 'Reintentar' }));
+    expect(retry).toHaveBeenCalledTimes(1);
   });
 });

@@ -5,7 +5,8 @@ import { ArrowDown, ArrowUp, ArrowUpDown, Building2, Download, Lock } from 'luci
 import { ApiError } from '@/lib/api/client';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { formatCivilDate } from '@/lib/format/date';
-import { sedeToday, useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
+import { readyTimeZone, sedeToday, useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
+import { SedeConfigError } from '@/components/locations/sede-config-error';
 import { saveCsv } from '@/lib/files/save-csv';
 import { isValidPeriod, PERIOD_PRESETS, periodFor, type PeriodPresetKey } from '@/lib/reports/period-presets';
 import { metricValues, nextSort, sortRows, type SortKey, type SortState } from '@/lib/reports/comparison-table';
@@ -160,7 +161,9 @@ function ComparisonSkeleton() {
  * por sede, sin scroll lateral.
  */
 export function LocationsComparisonView({ token }: { token: string }) {
-  const timeZone = useSedeTimeZone(token);
+  // Sin zona de la sede no hay «hoy» ni período por defecto: `SedeConfigError`.
+  const zone = useSedeTimeZone(token);
+  const timeZone = readyTimeZone(zone);
   const today = timeZone ? sedeToday(timeZone) : null;
   const [preset, setPreset] = useState<PeriodPresetKey>('this_month');
   const [custom, setCustom] = useState<{ from: string; to: string } | null>(null);
@@ -361,7 +364,9 @@ export function LocationsComparisonView({ token }: { token: string }) {
         </p>
       ) : null}
 
-      {invalidPeriod ? null : (
+      {invalidPeriod ? null : zone.status === 'error' && !period ? (
+        <SedeConfigError kind="timeZone" onRetry={zone.retry} />
+      ) : (
         <AsyncSection
           loading={showLoading}
           error={loadError}

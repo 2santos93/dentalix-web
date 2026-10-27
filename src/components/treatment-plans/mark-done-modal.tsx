@@ -6,6 +6,8 @@ import { listStaff, type StaffMember } from '@/lib/appointments/staff-api';
 import { getTokenUserId } from '@/lib/auth/token-role';
 import type { ClinicLocation } from '@/lib/locations/locations-api';
 import { sedeToday } from '@/lib/locations/use-sede-time-zone';
+import { locationTimeZone } from '@/lib/locations/location-settings';
+import { SedeConfigError } from '@/components/locations/sede-config-error';
 import { updateItem, type TreatmentPlanItem } from '@/lib/treatment-plans/treatment-plans-api';
 import { attendsAt, attributionInstant, isAttendingRole } from '@/lib/treatment-plans/item-attribution';
 import { Input } from '@/components/ui/input';
@@ -64,6 +66,8 @@ export interface MarkDoneModalProps {
    * cuál se realizó.
    */
   locations?: readonly ClinicLocation[];
+  /** Vuelve a leer las sedes (la elegida no tenía zona horaria). */
+  onRetryLocations: () => void;
   onSaved: (item: TreatmentPlanItem) => void;
 }
 
@@ -87,6 +91,7 @@ export function MarkDoneModal({
   activeLocationId,
   locationName,
   locations = [],
+  onRetryLocations,
   onSaved,
 }: MarkDoneModalProps) {
   const selectId = useId();
@@ -99,7 +104,11 @@ export function MarkDoneModal({
   );
   const [day, setDay] = useState('');
   const chosenLocation = pickable.find((l) => l.id === locationId) ?? null;
-  const today = sedeToday(chosenLocation?.timeZone ?? null);
+  // El tope de la fecha es «hoy» en la zona de la sede elegida; sin sede
+  // elegida no hay tope, y una sede sin zona muestra `SedeConfigError`.
+  const chosenZone = locationTimeZone(chosenLocation);
+  const today = chosenZone ? sedeToday(chosenZone) : null;
+  const zoneMissing = chosenLocation !== null && chosenZone === null;
   // Al atribuir, quien lo realizó tiene que atender en la sede elegida.
   const scopeLocationId = attribute ? locationId || null : activeLocationId;
   const [members, setMembers] = useState<StaffMember[] | null>(null);
@@ -156,7 +165,7 @@ export function MarkDoneModal({
       setError(copy.locationRequired);
       return;
     }
-    if (attribute && (!day || day > today)) {
+    if (attribute && (!day || zoneMissing || (today !== null && day > today))) {
       setError(copy.dateRequired);
       return;
     }
@@ -170,11 +179,11 @@ export function MarkDoneModal({
       const patch =
         mode === 'done'
           ? { status: 'DONE' as const, performedById: performerId }
-          : attribute && chosenLocation
+          : attribute && chosenLocation && chosenZone
             ? {
                 performedById: performerId,
                 performedLocationId: chosenLocation.id,
-                completedAt: attributionInstant(day, chosenLocation.timeZone),
+                completedAt: attributionInstant(day, chosenZone),
               }
             : { performedById: performerId };
       const saved = await updateItem(token, planId, item.id, patch);
@@ -240,20 +249,30 @@ export function MarkDoneModal({
           </div>
           <div className="flex min-w-0 flex-col gap-1.5">
             <Label htmlFor={dateId}>{copy.dateLabel}</Label>
-            <Input
-              id={dateId}
-              type="date"
-              value={day}
-              max={today}
-              disabled={submitting}
-              aria-required
-              aria-invalid={error === copy.dateRequired || undefined}
-              onChange={(e) => {
-                setDay(e.target.value);
-                setError(null);
-              }}
-              className={cn('h-11 tabular-nums md:h-10', error === copy.dateRequired && 'border-danger')}
-            />
+            {zoneMissing ? (
+              <SedeConfigError
+                kind="timeZone"
+                variant="field"
+                retryId={dateId}
+                onRetry={onRetryLocations}
+                className="h-11 md:h-10"
+              />
+            ) : (
+              <Input
+                id={dateId}
+                type="date"
+                value={day}
+                max={today ?? undefined}
+                disabled={submitting}
+                aria-required
+                aria-invalid={error === copy.dateRequired || undefined}
+                onChange={(e) => {
+                  setDay(e.target.value);
+                  setError(null);
+                }}
+                className={cn('h-11 tabular-nums md:h-10', error === copy.dateRequired && 'border-danger')}
+              />
+            )}
           </div>
         </div>
       ) : null}

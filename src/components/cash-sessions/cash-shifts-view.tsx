@@ -23,6 +23,7 @@ import {
 } from '@/lib/cash-sessions/presentation';
 import { listLocations, type ClinicLocation } from '@/lib/locations/locations-api';
 import { onLocationChange } from '@/lib/locations/location-store';
+import { locationTimeZone } from '@/lib/locations/location-settings';
 import { COUNTRY_CURRENCY } from '@/lib/locations/clinic-currency';
 import { PAYMENT_METHOD_LABELS } from '@/lib/payments/payment-method';
 import { formatCurrency } from '@/lib/format/currency';
@@ -51,6 +52,9 @@ import { OpenCashSessionModal } from './open-cash-session-modal';
 import { CloseCashSessionModal } from './close-cash-session-modal';
 import { CashOutflowModal } from './cash-outflow-modal';
 import { cn } from '@/lib/utils';
+
+/** Hora de una caja cuya sede no tiene zona: no se pinta en otra zona. */
+const NO_ZONE_TIME = '—';
 
 const copy = {
   title: 'Caja',
@@ -191,8 +195,12 @@ export function CashShiftsView({ token, tabs }: CashShiftsViewProps) {
   const sedeName = sede?.name ?? '';
   const defaultCurrency = sede ? COUNTRY_CURRENCY[sede.country] : 'COP';
   const session = current?.session ?? null;
-  const zoneOf = (locationId: string) =>
-    locations.find((l) => l.id === locationId)?.timeZone ?? 'America/Bogota';
+  // La hora de apertura se lee en la zona de la sede de la caja; sin ella (sede
+  // sin configurar o sedes sin cargar) la hora no se pinta, nunca en otra zona.
+  const openedAtIn = (instant: string, locationId: string) => {
+    const zone = locationTimeZone(locations.find((l) => l.id === locationId));
+    return zone ? formatDateTimeInZone(instant, zone) : NO_ZONE_TIME;
+  };
 
   function afterChange(message: string) {
     setNotice(message);
@@ -240,7 +248,7 @@ export function CashShiftsView({ token, tabs }: CashShiftsViewProps) {
           <CurrentSessionCard
             current={current}
             sedeName={sedeName}
-            timeZone={zoneOf(current.locationId)}
+            openedAtIn={openedAtIn}
             onOpen={() => {
               setModalKey((k) => k + 1);
               setOpening(true);
@@ -315,7 +323,7 @@ export function CashShiftsView({ token, tabs }: CashShiftsViewProps) {
                 </TableHeader>
                 <TableBody>
                   {(list?.items ?? []).map((item) => {
-                    const when = formatDateTimeInZone(item.openedAt, zoneOf(item.location.id));
+                    const when = openedAtIn(item.openedAt, item.location.id);
                     return (
                       <TableRow key={item.id}>
                         <TableCell className="tabular-nums" data-label={copy.colOpened}>
@@ -423,14 +431,14 @@ export function CashShiftsView({ token, tabs }: CashShiftsViewProps) {
 function CurrentSessionCard({
   current,
   sedeName,
-  timeZone,
+  openedAtIn,
   onOpen,
   onClose,
   onOutflow,
 }: {
   current: CurrentCashSession;
   sedeName: string;
-  timeZone: string;
+  openedAtIn: (instant: string, locationId: string) => string;
   onOpen: () => void;
   onClose: () => void;
   onOutflow: () => void;
@@ -446,7 +454,7 @@ function CurrentSessionCard({
           </h2>
           {session ? (
             <p className="text-sm text-muted tabular-nums">
-              {copy.openedAt(formatDateTimeInZone(session.openedAt, timeZone))} · {copy.float}{' '}
+              {copy.openedAt(openedAtIn(session.openedAt, current.locationId))} · {copy.float}{' '}
               {moneyList(session.floats)}
             </p>
           ) : (

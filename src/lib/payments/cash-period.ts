@@ -1,4 +1,4 @@
-import { DEFAULT_SEDE_TIME_ZONE, civilDateInZone } from '@/lib/format/date';
+import { civilDateInZone } from '@/lib/format/date';
 
 /**
  * Períodos de la caja. La API recibe días civiles (`YYYY-MM-DD`, ambos
@@ -32,11 +32,12 @@ function utcCivil(year: number, monthIndex: number, day: number): string {
 
 /**
  * El rango de un atajo, relativo al día civil de `now` en `timeZone` (la zona
- * de la sede). La semana va de lunes a domingo —la semana laboral en LATAM—,
- * también cuando hoy es domingo.
+ * de la sede). La semana va de lunes a domingo, también cuando hoy es domingo.
+ * Con una zona que no existe lanza: el día no se cuenta en otra zona.
  */
 export function presetRange(preset: CashPreset, timeZone: string, now: Date = new Date()): CashRange {
-  const today = civilDateInZone(now, timeZone) ?? civilDateInZone(now, DEFAULT_SEDE_TIME_ZONE)!;
+  const today = civilDateInZone(now, timeZone);
+  if (today === null) throw new RangeError(`Zona horaria no válida: ${timeZone}`);
   if (preset === 'today') return { from: today, to: today };
   const [y, m, d] = today.split('-').map(Number);
   if (preset === 'week') {

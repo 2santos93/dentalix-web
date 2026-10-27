@@ -101,9 +101,6 @@ const copy = {
 };
 
 const PAGE_SIZE = 50;
-// Hasta que la API diga la zona de la clínica (llega con la primera página),
-// la de la sede que nace por defecto.
-const DEFAULT_TIME_ZONE = 'America/Bogota';
 
 interface Filters {
   actorUserId: string;
@@ -162,7 +159,10 @@ export function AuditLogView({ token, patientId, onClearPatient }: AuditLogViewP
   const [filters, setFilters] = useState<Filters>(NO_FILTERS);
   // Pila de cursores: el último es la página que se ve; `null` = la primera.
   const [cursors, setCursors] = useState<(string | null)[]>([null]);
-  const [timeZone, setTimeZone] = useState(DEFAULT_TIME_ZONE);
+  // La zona con la que se leen los días de los filtros la dice la API (llega
+  // con cada página). Hasta saberla, un filtro de fechas espera: nunca se
+  // convierte con otra zona.
+  const [timeZone, setTimeZone] = useState<string | null>(null);
   const [data, setData] = useState<AuditEventsPage | null>(null);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -176,20 +176,23 @@ export function AuditLogView({ token, patientId, onClearPatient }: AuditLogViewP
 
   // La query que sale hacia la API. Con el rango inválido no hay query: lo
   // último cargado se oculta y no se pide nada que se sabe que daría 400.
+  const needsZone = timeZone === null && (filters.from !== '' || filters.to !== '');
+  // Los instantes salen de la zona solo si hay fechas: así la zona que llega con
+  // cada página no cambia la consulta (ni la repite) cuando no hay fechas.
+  const fromInstant = filters.from && timeZone ? zonedDayStart(filters.from, timeZone) : null;
+  const toInstant = filters.to && timeZone ? zonedDayStart(nextDay(filters.to), timeZone) : null;
   const query = useMemo<AuditEventsQuery | null>(() => {
-    if (invalidRange) return null;
+    if (invalidRange || needsZone) return null;
     const q: AuditEventsQuery = { limit: PAGE_SIZE };
     if (patientId) q.patientId = patientId;
     if (filters.actorUserId) q.actorUserId = filters.actorUserId;
     if (filters.action) q.action = filters.action;
     if (filters.resourceType) q.resourceType = filters.resourceType;
-    const from = filters.from ? zonedDayStart(filters.from, timeZone) : null;
-    const to = filters.to ? zonedDayStart(nextDay(filters.to), timeZone) : null;
-    if (from) q.from = from;
-    if (to) q.to = to;
+    if (fromInstant) q.from = fromInstant;
+    if (toInstant) q.to = toInstant;
     if (cursor) q.cursor = cursor;
     return q;
-  }, [invalidRange, patientId, filters, timeZone, cursor]);
+  }, [invalidRange, needsZone, patientId, filters, fromInstant, toInstant, cursor]);
 
   useEffect(() => {
     if (!token || !query) return;
@@ -216,6 +219,25 @@ export function AuditLogView({ token, patientId, onClearPatient }: AuditLogViewP
       cancelled = true;
     };
   }, [token, query, reloadKey]);
+
+  // Fechas escritas antes de que llegue la primera página: se pide solo la
+  // zona (una página de un evento, que no se pinta) y luego la consulta real.
+  useEffect(() => {
+    if (!token || !needsZone) return;
+    let cancelled = false;
+    listAuditEvents(token, { limit: 1, ...(patientId ? { patientId } : {}) })
+      .then((res) => {
+        if (!cancelled) setTimeZone(res.timeZone);
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setLoadError(copy.loadError);
+        setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token, needsZone, patientId, reloadKey]);
 
   // Cada cambio de filtro vuelve a la primera página en el MISMO render.
   function changeFilters(patch: Partial<Filters>) {

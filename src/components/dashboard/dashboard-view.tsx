@@ -7,7 +7,8 @@ import { apiErrorMessage } from '@/lib/api/error-message';
 import { getDashboard, type Dashboard } from '@/lib/dashboard/dashboard-api';
 import { addOneDayIso } from '@/lib/dashboard/date-range';
 import { presetRange } from '@/lib/payments/cash-period';
-import { useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
+import { readyTimeZone, useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
+import { SedeConfigError } from '@/components/locations/sede-config-error';
 import { formatCurrency } from '@/lib/format/currency';
 import { listStaff } from '@/lib/appointments/staff-api';
 import { formatTime, zoneCityLabel } from '@/lib/format/date';
@@ -95,8 +96,10 @@ interface DashboardViewProps {
  */
 export function DashboardView({ token }: DashboardViewProps) {
   // DX-097: por defecto, del 1 del mes a hoy EN LA SEDE (su zona IANA, de la
-  // API), no en el navegador. Hasta saber la zona no hay período ni consulta.
-  const timeZone = useSedeTimeZone(token);
+  // API), no en el navegador. Hasta saber la zona no hay período ni consulta;
+  // sin zona de la sede, `SedeConfigError` (nunca otra zona).
+  const zone = useSedeTimeZone(token);
+  const timeZone = readyTimeZone(zone);
   const defaults = useMemo(
     () =>
       timeZone
@@ -219,6 +222,8 @@ export function DashboardView({ token }: DashboardViewProps) {
 
       {rangeInvalid ? (
         <InlineError>{copy.rangeInvalid}</InlineError>
+      ) : zone.status === 'error' && (!from || !to) ? (
+        <SedeConfigError kind="timeZone" onRetry={zone.retry} />
       ) : loading ? (
         <div className="grid gap-4 sm:grid-cols-2">
           <Skeleton className="h-40" role="status" aria-label={copy.loading} />

@@ -6,6 +6,7 @@ import { updateItem, type TreatmentPlanItem } from '@/lib/treatment-plans/treatm
 import { ApiError } from '@/lib/api/client';
 import { getTokenUserId } from '@/lib/auth/token-role';
 import type { ClinicLocation } from '@/lib/locations/locations-api';
+import { clinicLocation } from '@/lib/test/locations';
 
 jest.mock('../../lib/appointments/staff-api', () => ({ listStaff: jest.fn() }));
 jest.mock('../../lib/treatment-plans/treatment-plans-api', () => ({
@@ -61,6 +62,7 @@ function renderModal(overrides: Partial<React.ComponentProps<typeof MarkDoneModa
     open: true,
     onOpenChange: jest.fn(),
     onSaved: jest.fn(),
+    onRetryLocations: jest.fn(),
     token: 'tok',
     planId: 'plan-1',
     item,
@@ -193,11 +195,11 @@ describe('MarkDoneModal (DX-050)', () => {
   });
 
   describe('atribuir un «Sin atribuir» (DX-305)', () => {
-    const LOCATIONS = [
-      { id: 'loc-main', name: 'Sede Principal', isActive: true, timeZone: 'America/Bogota' },
-      { id: 'loc-norte', name: 'Sede Norte', isActive: true, timeZone: 'America/Bogota' },
-      { id: 'loc-off', name: 'Sede Cerrada', isActive: false, timeZone: 'America/Bogota' },
-    ] as ClinicLocation[];
+    const LOCATIONS: ClinicLocation[] = [
+      clinicLocation({ id: 'loc-main', name: 'Sede Principal' }),
+      clinicLocation({ id: 'loc-norte', name: 'Sede Norte' }),
+      clinicLocation({ id: 'loc-off', name: 'Sede Cerrada', isActive: false }),
+    ];
     const unattributed = {
       ...item,
       status: 'DONE',
@@ -210,6 +212,23 @@ describe('MarkDoneModal (DX-050)', () => {
       jest.useFakeTimers({ now: new Date('2026-10-24T20:00:00Z'), advanceTimers: true });
     });
     afterEach(() => jest.useRealTimers());
+
+    it('consumers render SedeConfigError without a zone', async () => {
+      const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
+      const props = renderModal({
+        mode: 'correct',
+        item: unattributed,
+        locations: [clinicLocation({ id: 'loc-main', name: 'Sede Principal', timeZone: null })],
+        activeLocationId: null,
+      });
+      await user.selectOptions(screen.getByRole('combobox', { name: 'Sede donde se realizó' }), 'loc-main');
+      // Sin zona de la sede no hay tope de «hoy»: la fecha se sustituye por el fallo y su reintento.
+      expect(screen.getByText('Sin zona de sede')).toBeInTheDocument();
+      await user.click(screen.getByRole('button', { name: 'Reintentar' }));
+      expect(props.onRetryLocations).toHaveBeenCalledTimes(1);
+      await user.click(screen.getByRole('button', { name: 'Guardar' }));
+      expect(mockedUpdate).not.toHaveBeenCalled();
+    });
 
     it('pide sede, fecha y profesional; los profesionales son los de la sede elegida', async () => {
       const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });

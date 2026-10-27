@@ -7,6 +7,7 @@ import {
   type ClinicLocation,
 } from '@/lib/locations/locations-api';
 import { ApiError, NetworkError } from '@/lib/api/api-error';
+import { clinicLocation } from '@/lib/test/locations';
 
 jest.mock('../../lib/locations/locations-api', () => ({
   ...jest.requireActual('../../lib/locations/locations-api'),
@@ -18,7 +19,7 @@ const mockedUpdate = updateLocationHealthRegistration as jest.MockedFunction<
   typeof updateLocationHealthRegistration
 >;
 
-const base: ClinicLocation = {
+const base: ClinicLocation = clinicLocation({
   id: 'l1',
   name: 'Sede principal',
   address: null,
@@ -28,7 +29,7 @@ const base: ClinicLocation = {
   isActive: true,
   timeZone: 'America/Bogota',
   createdAt: '2026-01-01T00:00:00Z',
-};
+});
 const madrid: ClinicLocation = { ...base, id: 'l2', name: 'Madrid', country: 'ES' };
 
 const field = () => screen.findByLabelText(/Nº de registro sanitario · Sede principal/);

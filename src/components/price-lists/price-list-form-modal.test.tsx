@@ -4,6 +4,7 @@ import { createPriceList, updatePriceList, type PriceList } from '@/lib/price-li
 import type { ClinicLocation } from '@/lib/locations/locations-api';
 import { listCurrencies } from '@/lib/reference/currencies-api';
 import { setupUser } from '@/lib/test/user';
+import { clinicLocation } from '@/lib/test/locations';
 
 jest.mock('../../lib/price-lists/price-lists-api', () => ({
   ...jest.requireActual('../../lib/price-lists/price-lists-api'),
@@ -16,7 +17,7 @@ const mockedCreate = createPriceList as jest.MockedFunction<typeof createPriceLi
 const mockedUpdate = updatePriceList as jest.MockedFunction<typeof updatePriceList>;
 const mockedCurrencies = listCurrencies as jest.MockedFunction<typeof listCurrencies>;
 
-const inactiveLocation: ClinicLocation = {
+const inactiveLocation: ClinicLocation = clinicLocation({
   id: 'loc-old',
   name: 'Sede cerrada',
   address: null,
@@ -24,7 +25,7 @@ const inactiveLocation: ClinicLocation = {
   isActive: false,
   timeZone: 'America/Bogota',
   createdAt: '2026-01-01T00:00:00Z',
-};
+});
 const activeLocation: ClinicLocation = { ...inactiveLocation, id: 'loc-1', name: 'Sede Norte', isActive: true };
 
 const saved: PriceList = {

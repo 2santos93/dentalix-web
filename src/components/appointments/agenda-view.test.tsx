@@ -16,6 +16,7 @@ import { listLocations } from '@/lib/locations/locations-api';
 import { getLocationSchedule } from '@/lib/locations/schedule-api';
 import { listOpeningCandidates } from '@/lib/appointments/opening-candidates';
 import { getRoster } from '@/lib/locations/provider-schedule-api';
+import { clinicLocation } from '@/lib/test/locations';
 
 /** DX-295: el estado se elige abriendo la lista y pulsando una opción. */
 async function pickStatus(user: ReturnType<typeof userEvent.setup>, trigger: HTMLElement, label: string) {
@@ -1400,7 +1401,7 @@ describe('AgendaView', () => {
     afterEach(() => {
       jest.useRealTimers();
       window.localStorage.clear();
-      mockedListLocations.mockResolvedValue([{ id: 'loc-1', name: 'Sede principal' }] as never);
+      mockedListLocations.mockResolvedValue([clinicLocation({ id: 'loc-1', name: 'Sede principal' })]);
       mockedSchedule.mockResolvedValue(null);
     });
 

@@ -12,6 +12,7 @@ import { listCurrencies } from '@/lib/reference/currencies-api';
 import { ApiError } from '@/lib/api/client';
 import { setupUser } from '@/lib/test/user';
 import { notifyError } from '../errors/notify';
+import { clinicLocation } from '@/lib/test/locations';
 
 jest.mock('../../lib/price-lists/price-lists-api', () => ({
   ...jest.requireActual('../../lib/price-lists/price-lists-api'),
@@ -33,15 +34,17 @@ const mockedCurrencies = listCurrencies as jest.MockedFunction<typeof listCurren
 const mockedNotify = notifyError as jest.MockedFunction<typeof notifyError>;
 
 function location(id: string, name: string, country: 'CO' | 'ES'): ClinicLocation {
-  return {
+  return clinicLocation({
     id,
     name,
     address: null,
     country,
     isActive: true,
-    timeZone: 'America/Bogota',
+    currency: country === 'ES' ? 'EUR' : 'COP',
+    timeZone: country === 'ES' ? 'Europe/Madrid' : 'America/Bogota',
+    locale: country === 'ES' ? 'es-ES' : 'es-CO',
     createdAt: '2026-01-01T00:00:00Z',
-  };
+  });
 }
 const norte = location('loc-1', 'Sede Norte', 'CO');
 const madrid = location('loc-2', 'Sede Madrid', 'ES');

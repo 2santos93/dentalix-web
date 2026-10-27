@@ -2197,6 +2197,23 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/public/currencies": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Monedas admitidas, sin sesión (formulario de registro) */
+        get: operations["PublicReferenceController_currencies"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/payments": {
         parameters: {
             query?: never;
@@ -4655,6 +4672,11 @@ export interface components {
              */
             timeZone: string;
         };
+        /**
+         * @description País de la primera sede. Obligatorio junto con los otros tres campos location*; sin los cuatro es la forma legada (fase 1).
+         * @enum {string}
+         */
+        ClinicCountry: "CO" | "ES";
         RegisterDto: {
             clinicName: string;
             /** @example sonrisa */
@@ -4664,6 +4686,23 @@ export interface components {
             /** Format: password */
             password: string;
             fullName: string;
+            /** @description País de la primera sede. Obligatorio junto con los otros tres campos location*; sin los cuatro es la forma legada (fase 1). */
+            locationCountry?: components["schemas"]["ClinicCountry"];
+            /**
+             * @description Moneda ISO 4217 de la primera sede (GET /public/currencies).
+             * @example COP
+             */
+            locationCurrency?: string;
+            /**
+             * @description Zona horaria IANA de la primera sede.
+             * @example America/Bogota
+             */
+            locationTimeZone?: string;
+            /**
+             * @description Formato regional BCP 47 de la primera sede.
+             * @example es-CO
+             */
+            locationLocale?: string;
         };
         RegisterAcceptedDto: {
             /** @example Te enviamos un correo para confirmar el registro. Abre el enlace para activar tu clínica. */
@@ -5490,8 +5529,6 @@ export interface components {
             /** @description true anota la baja de los recordatorios a petición del paciente (origen STAFF); false la quita y los reactiva. */
             reminderOptOut?: boolean;
         };
-        /** @enum {string} */
-        ClinicCountry: "CO" | "ES";
         /**
          * @description PATIENT: otro paciente de la clínica (sus datos salen de su ficha). CONTACT: contacto sin ficha.
          * @enum {string}
@@ -6070,10 +6107,25 @@ export interface components {
             phone: string | null;
             isActive: boolean;
             /**
-             * @description Zona horaria IANA de la sede (la de su horario; sin horario, la de su país). Define sus días civiles: «hoy» en la caja y el dashboard (DX-097).
+             * @description G1: moneda ISO 4217 de la sede (3 letras; se pasa a mayúsculas). Tiene que estar en GET /currencies. null = sede sin configurar (fase 1).
+             * @example COP
+             */
+            currency: string | null;
+            /**
+             * @description G1: zona horaria IANA de la sede. Define sus días civiles («hoy» en caja, informes y agenda) y cómo se leen sus horarios. null = sede sin configurar (fase 1).
              * @example America/Bogota
              */
-            timeZone: string;
+            timeZone: string | null;
+            /**
+             * @description G1: formato regional BCP 47 de la sede (fechas y números); se guarda canonicalizado (es-mx → es-MX). null = sede sin configurar (fase 1).
+             * @example es-CO
+             */
+            locale: string | null;
+            /**
+             * Format: date-time
+             * @description D5: cuándo un ADMIN confirmó moneda, zona y formato; null = asignados al actualizar Dentalix, por revisar.
+             */
+            regionalSettingsReviewedAt: string | null;
             /** Format: date-time */
             createdAt: string;
         };
@@ -6082,8 +6134,23 @@ export interface components {
             name: string;
             /** @example Cra 15 #90-20 */
             address?: string;
-            /** @description País de la sede: decide los campos legales obligatorios de la receta (CO o ES). Por defecto CO. */
-            country?: components["schemas"]["ClinicCountry"];
+            /** @description País de la sede: decide los campos legales obligatorios de la receta (CO o ES). */
+            country: components["schemas"]["ClinicCountry"];
+            /**
+             * @description G1: moneda ISO 4217 de la sede (3 letras; se pasa a mayúsculas). Tiene que estar en GET /currencies.
+             * @example COP
+             */
+            currency: string;
+            /**
+             * @description G1: zona horaria IANA de la sede. Define sus días civiles («hoy» en caja, informes y agenda) y cómo se leen sus horarios.
+             * @example America/Bogota
+             */
+            timeZone: string;
+            /**
+             * @description G1: formato regional BCP 47 de la sede (fechas y números); se guarda canonicalizado (es-mx → es-MX).
+             * @example es-CO
+             */
+            locale: string;
             /**
              * @description DX-222: teléfono de la sede que ven los pacientes en las indicaciones postoperatorias ({{telefono_sede}}). Hasta 40 caracteres.
              * @example +57 601 555 0101
@@ -6093,7 +6160,7 @@ export interface components {
         UpdateLocationDto: {
             name?: string;
             address?: string;
-            /** @description País de la sede: decide los campos legales obligatorios de la receta (CO o ES). Por defecto CO. */
+            /** @description País de la sede: decide los campos legales obligatorios de la receta (CO o ES). */
             country?: components["schemas"]["ClinicCountry"];
             /**
              * @description DX-319: nº de registro sanitario de la sede, texto libre sin formato ni validación por país (hasta 64 caracteres, se recorta). Solo ADMIN; queda auditado con su antes y después. Vacío o null lo quita; sin el campo no cambia.
@@ -6107,6 +6174,31 @@ export interface components {
              * @example +57 601 555 0101
              */
             phone?: string | null;
+            /**
+             * @description G1: moneda ISO 4217 de la sede (3 letras; se pasa a mayúsculas). Tiene que estar en GET /currencies.
+             * @example COP
+             */
+            currency?: Record<string, never>;
+            /**
+             * @description G1: zona horaria IANA de la sede. Define sus días civiles («hoy» en caja, informes y agenda) y cómo se leen sus horarios.
+             * @example America/Bogota
+             */
+            timeZone?: Record<string, never>;
+            /**
+             * @description G1: formato regional BCP 47 de la sede (fechas y números); se guarda canonicalizado (es-mx → es-MX).
+             * @example es-CO
+             */
+            locale?: Record<string, never>;
+            /**
+             * @description G1: marca la sede como revisada (moneda, zona y formato confirmados) aunque no cambie nada.
+             * @enum {boolean}
+             */
+            confirmRegionalSettings?: true;
+            /**
+             * @description G1: confirma un cambio de moneda o zona en una sede con historial (los importes guardados no se convierten). No salta el bloqueo por caja abierta.
+             * @enum {boolean}
+             */
+            confirmRegionalChange?: true;
             /** @description Desactivar una sede la oculta para operar; no se puede desactivar la última activa. */
             isActive?: boolean;
         };
@@ -7405,10 +7497,10 @@ export interface components {
         };
         ReplaceLocationScheduleDto: {
             /**
-             * @description Zona IANA de la sede
-             * @example America/Bogota
+             * @deprecated
+             * @description Obsoleto (G1): la zona es un dato de la sede (PATCH /locations/:id) y nunca se guarda desde aquí. Solo se acepta, para una web antigua, si es igual a la zona de la sede; distinta (o sede sin zona) es 400.
              */
-            timezone: string;
+            timezone?: string;
             /** @description La semana COMPLETA. Un día sin tramos = cerrado. Lista vacía = sede sin restricción. */
             ranges: components["schemas"]["ScheduleRangeDto"][];
         };
@@ -8181,7 +8273,7 @@ export interface components {
         };
         CreateTreatmentPlanDto: {
             /**
-             * @description ISO 4217 (default USD)
+             * @description ISO 4217 (si se omite, la moneda de la sede activa o la común de la clínica)
              * @example USD
              */
             currency?: string;
@@ -8302,7 +8394,7 @@ export interface components {
             /** @enum {string} */
             status: "DRAFT" | "PRESENTED" | "ACCEPTED" | "REJECTED" | "COMPLETED" | "CANCELLED";
             /**
-             * @description ISO 4217 (default USD)
+             * @description ISO 4217
              * @example USD
              */
             currency: string;
@@ -17227,7 +17319,7 @@ export interface operations {
             };
         };
         responses: {
-            /** @description Horario reemplazado */
+            /** @description Horario reemplazado; `timezone` en la respuesta es la zona de la sede */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -19464,6 +19556,32 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["Icd10CodeDto"][];
                 };
+            };
+        };
+    };
+    PublicReferenceController_currencies: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["CurrencyDto"][];
+                };
+            };
+            /** @description Demasiadas solicitudes. La cabecera Retry-After indica los segundos de espera. */
+            429: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
         };
     };

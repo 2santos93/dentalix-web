@@ -10,6 +10,7 @@ import {
 } from '@/lib/cancellations/cancellation-policy-api';
 import { listCurrencies } from '@/lib/reference/currencies-api';
 import { ApiError } from '@/lib/api/client';
+import { clinicLocation } from '@/lib/test/locations';
 
 jest.mock('../../lib/locations/locations-api', () => ({
   ...jest.requireActual('../../lib/locations/locations-api'),
@@ -34,7 +35,7 @@ const mockedCreate = createCancellationPolicyVersion as jest.MockedFunction<
 const mockedPreview = getReminderEmailPreview as jest.MockedFunction<typeof getReminderEmailPreview>;
 const mockedCurrencies = listCurrencies as jest.MockedFunction<typeof listCurrencies>;
 
-const SEDE: ClinicLocation = {
+const SEDE: ClinicLocation = clinicLocation({
   id: 'loc-1',
   name: 'Sede principal',
   address: null,
@@ -42,7 +43,7 @@ const SEDE: ClinicLocation = {
   isActive: true,
   timeZone: 'America/Bogota',
   createdAt: '2026-01-01T00:00:00.000Z',
-};
+});
 
 function version(n: number, overrides: Partial<CancellationPolicyVersion> = {}): CancellationPolicyVersion {
   return {

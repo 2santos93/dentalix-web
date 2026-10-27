@@ -2,31 +2,19 @@
 import { useSessionLocations } from '@/lib/locations/session-locations';
 import { useEffect, useState } from 'react';
 import type { ClinicLocation } from './locations-api';
+import { clinicBaseCurrency } from './location-settings';
+
+export { clinicBaseCurrency };
 
 /**
- * Moneda base de la clínica (DX-063 / FE-014). La API no guarda una moneda por
- * clínica: la deriva el país de la sede (DX-013), que es el que fija la moneda
- * en la que se cobra allí.
+ * PENDIENTE DE LA TASK 9 de GLOBAL-G1, que borra este fichero: la moneda sale
+ * de la sede (`locationCurrency`), no del país. Solo lo leen aún la caja y el
+ * modal de listas de precios, que la Task 9 migra.
  */
 export const COUNTRY_CURRENCY: Record<ClinicLocation['country'], string> = {
   CO: 'COP',
   ES: 'EUR',
 };
-
-/**
- * La moneda común de las sedes ACTIVAS de la clínica, o `null` si no hay sedes
- * activas o si son de países con monedas distintas (revisión D-3). Es para datos
- * de toda la clínica, como el catálogo: `defaultPrice` no lleva moneda, así que
- * con sedes en Colombia y España no se puede saber si son pesos o euros, y la
- * sede elegida en el selector no lo decide. Sin moneda, el importe va sin
- * símbolo.
- */
-export function clinicBaseCurrency(locations: ClinicLocation[]): string | null {
-  const currencies = new Set(
-    locations.filter((l) => l.isActive).map((l) => COUNTRY_CURRENCY[l.country]),
-  );
-  return currencies.size === 1 ? [...currencies][0] : null;
-}
 
 /**
  * `clinicBaseCurrency` de la clínica de la sesión. `undefined` mientras carga;

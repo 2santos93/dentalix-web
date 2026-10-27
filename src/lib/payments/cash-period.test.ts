@@ -51,8 +51,10 @@ describe('presetRange (en la zona de la sede)', () => {
     });
   });
 
-  it('una zona desconocida cae en la zona por defecto de la sede (Bogotá), nunca en la del navegador', () => {
-    expect(presetRange('today', 'Mars/Olympus', bogotaThu2230)).toEqual({ from: '2026-10-15', to: '2026-10-15' });
+  it('presetRange throws on an invalid zone', () => {
+    // Sin zona válida no hay «hoy»: nunca se cuenta en Bogotá ni en la del navegador.
+    expect(() => presetRange('today', 'Mars/Olympus', bogotaThu2230)).toThrow(RangeError);
+    expect(() => presetRange('month', '', bogotaThu2230)).toThrow(RangeError);
   });
 });
 

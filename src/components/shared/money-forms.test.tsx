@@ -24,7 +24,9 @@ jest.mock('../../lib/payments/billable-plans-api', () => ({
   ...jest.requireActual('../../lib/payments/billable-plans-api'),
   listBillablePlans: jest.fn(),
 }));
-jest.mock('../../lib/locations/locations-api', () => ({ listLocations: jest.fn().mockResolvedValue([]) }));
+jest.mock('../../lib/locations/locations-api', () => ({
+  listLocations: jest.fn().mockResolvedValue([jest.requireActual('../../lib/test/locations').clinicLocation()]),
+}));
 jest.mock('../../lib/reference/currencies-api', () => ({
   listCurrencies: jest.fn().mockResolvedValue([
     { code: 'COP', name: 'Peso colombiano', symbol: '$' },

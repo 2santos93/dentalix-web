@@ -14,6 +14,7 @@ import { setActiveLocationId } from '@/lib/locations/location-store';
 import { listLocations, type ClinicLocation } from '@/lib/locations/locations-api';
 import { ApiError } from '@/lib/api/client';
 import { tokenFor } from '@/lib/test/prescriptions';
+import { clinicLocation } from '@/lib/test/locations';
 
 // NOTE: jest.mock's string literal is not alias-rewritten by the SWC transform
 // (only real import/require specifiers are) — use a relative path here, same
@@ -33,15 +34,17 @@ const mockedLocations = listLocations as jest.MockedFunction<typeof listLocation
 
 function clinicIn(country: ClinicLocation['country']): ClinicLocation[] {
   return [
-    {
+    clinicLocation({
       id: 'l1',
       name: 'Principal',
       address: null,
       country,
       isActive: true,
+      currency: country === 'ES' ? 'EUR' : 'COP',
       timeZone: country === 'ES' ? 'Europe/Madrid' : 'America/Bogota',
+      locale: country === 'ES' ? 'es-ES' : 'es-CO',
       createdAt: '2026-01-01T00:00:00Z',
-    },
+    }),
   ];
 }
 
@@ -533,15 +536,17 @@ describe('CatalogView', () => {
   it('una clínica con sedes en Colombia y España pinta el importe sin moneda, elija la sede que elija', async () => {
     mockedLocations.mockResolvedValue([
       ...clinicIn('CO'),
-      {
+      clinicLocation({
         id: 'l2',
         name: 'Madrid',
         address: null,
         country: 'ES',
         isActive: true,
+        currency: 'EUR',
         timeZone: 'Europe/Madrid',
+        locale: 'es-ES',
         createdAt: '2026-01-01T00:00:00Z',
-      },
+      }),
     ]);
     setActiveLocationId('l2');
     mockedList.mockResolvedValue(page([item1]));

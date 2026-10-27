@@ -6,6 +6,7 @@ import type { PriceList } from '@/lib/price-lists/price-lists-api';
 import type { ClinicLocation } from '@/lib/locations/locations-api';
 import { ApiError } from '@/lib/api/client';
 import { setupUser } from '@/lib/test/user';
+import { clinicLocation } from '@/lib/test/locations';
 
 jest.mock('../../lib/agreements/agreements-api', () => ({
   ...jest.requireActual('../../lib/agreements/agreements-api'),
@@ -36,7 +37,7 @@ const priceList: PriceList = {
   createdAt: '2026-10-01T00:00:00.000Z',
   updatedAt: '2026-10-01T00:00:00.000Z',
 };
-const location: ClinicLocation = {
+const location: ClinicLocation = clinicLocation({
   id: 'loc-1',
   name: 'Sede Norte',
   address: null,
@@ -44,7 +45,7 @@ const location: ClinicLocation = {
   isActive: true,
   timeZone: 'America/Bogota',
   createdAt: '2026-01-01T00:00:00Z',
-};
+});
 const categories = ['Endodoncia', 'Preventiva', 'Restauradora'];
 
 const existing: Agreement = {

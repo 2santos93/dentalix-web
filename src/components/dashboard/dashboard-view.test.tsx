@@ -8,6 +8,7 @@ import { listCurrencies } from '@/lib/reference/currencies-api';
 import { listPatients } from '@/lib/patients/patients-api';
 import { listStaff } from '@/lib/appointments/staff-api';
 import { listLocations, type ClinicLocation } from '@/lib/locations/locations-api';
+import { clinicLocation } from '@/lib/test/locations';
 
 // NOTE: jest.mock's string literal is not alias-rewritten by the SWC
 // transform (only real `import`/`require` specifiers are) — use a relative
@@ -39,7 +40,7 @@ const mockedListPatients = listPatients as jest.MockedFunction<typeof listPatien
 const mockedListStaff = listStaff as jest.MockedFunction<typeof listStaff>;
 const mockedListLocations = listLocations as jest.MockedFunction<typeof listLocations>;
 
-const sede = (timeZone: string): ClinicLocation => ({
+const sede = (timeZone: string): ClinicLocation => clinicLocation({
   id: 'loc-1',
   name: 'Sede principal',
   address: null,
@@ -464,6 +465,22 @@ describe('DashboardView · días de la sede (DX-097)', () => {
     expect(screen.getByRole('status', { name: /cargando panel/i })).toBeInTheDocument();
     expect(mockedGetDashboard).not.toHaveBeenCalled();
     resolve([sede('America/Bogota')]);
+    await waitFor(() => expect(mockedGetDashboard).toHaveBeenCalledTimes(1));
+  });
+
+  it('consumers render SedeConfigError without a zone', async () => {
+    mockedListLocations.mockResolvedValueOnce([clinicLocation({ timeZone: null })]);
+    render(<DashboardView token="tok" />);
+
+    expect(
+      await screen.findByText('No se pudo saber la zona horaria de la sede. Vuelve a intentarlo.'),
+    ).toBeInTheDocument();
+    // Sin zona no hay período por defecto: ni Bogotá ni la del navegador.
+    expect(mockedGetDashboard).not.toHaveBeenCalled();
+    expect(screen.queryByTestId('dashboard-zone-note')).not.toBeInTheDocument();
+
+    mockedListLocations.mockResolvedValueOnce([sede('Europe/Madrid')]);
+    await userEvent.click(screen.getByRole('button', { name: 'Reintentar' }));
     await waitFor(() => expect(mockedGetDashboard).toHaveBeenCalledTimes(1));
   });
 });

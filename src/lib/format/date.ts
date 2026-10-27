@@ -206,12 +206,6 @@ export function formatDateLabel(
 }
 
 /**
- * Zona de una sede sin zona conocida: la misma con la que la API interpreta
- * una sede sin horario de Colombia (DX-097). Nunca la del navegador.
- */
-export const DEFAULT_SEDE_TIME_ZONE = 'America/Bogota';
-
-/**
  * El día civil (`YYYY-MM-DD`) de un instante en una zona IANA — p. ej. qué día
  * es «hoy» en la sede (DX-097). `null` si el instante o la zona no son válidos.
  */

@@ -250,6 +250,25 @@ describe('AuditLogView', () => {
     );
   });
 
+  it('audit view waits for the zone', async () => {
+    // La primera página tarda: las fechas se escriben antes de saber la zona.
+    let resolveFirst: (value: AuditEventsPage) => void = () => {};
+    mockedList.mockReturnValueOnce(new Promise((resolve) => (resolveFirst = resolve)));
+    mockedList.mockResolvedValue(page({ timeZone: 'Asia/Tokyo' }));
+    render(<AuditLogView token="tok" />);
+    await userEvent.type(screen.getByLabelText('Desde'), '2026-10-01');
+
+    // Se pide solo la zona y luego la consulta con fechas en la zona de la API
+    // (Tokio, UTC+9: el día empieza a las 15:00 UTC del anterior).
+    await waitFor(() =>
+      expect(mockedList).toHaveBeenLastCalledWith('tok', { limit: 50, from: '2026-09-30T15:00:00.000Z' }),
+    );
+    expect(mockedList).toHaveBeenCalledWith('tok', { limit: 1 });
+    // Nunca con otra zona: ninguna consulta con el día contado en Bogotá.
+    expect(mockedList).not.toHaveBeenCalledWith('tok', expect.objectContaining({ from: '2026-10-01T05:00:00.000Z' }));
+    resolveFirst(page());
+  });
+
   it('un rango invertido se explica junto a las fechas y no se consulta', async () => {
     mockedList.mockResolvedValue(page());
     render(<AuditLogView token="tok" />);

@@ -5,6 +5,7 @@ import { ApiError } from '@/lib/api/client';
 import { recordOpeningBalancePayment, recordPayment } from '@/lib/payments/payments-api';
 import { listBillablePlans, type BillablePlan } from '@/lib/payments/billable-plans-api';
 import { listLocations } from '@/lib/locations/locations-api';
+import { clinicLocation } from '@/lib/test/locations';
 
 jest.mock('../../lib/payments/payments-api', () => ({
   recordPayment: jest.fn(),
@@ -84,7 +85,7 @@ beforeEach(() => {
   mockedRecordOpening.mockReset();
   mockedList.mockReset();
   mockedLocations.mockReset();
-  mockedLocations.mockResolvedValue([]);
+  mockedLocations.mockResolvedValue([clinicLocation()]);
 });
 
 const opening = {
@@ -151,7 +152,7 @@ it('propone el primer plan, su moneda y la fecha de hoy, y enseña su saldo', as
 describe('fecha por defecto en la zona de la sede (DX-097)', () => {
   afterEach(() => jest.useRealTimers());
 
-  const sedeIn = (timeZone: string) => ({
+  const sedeIn = (timeZone: string) => (clinicLocation({
     id: 'loc-1',
     name: 'Sede',
     address: null,
@@ -159,7 +160,7 @@ describe('fecha por defecto en la zona de la sede (DX-097)', () => {
     isActive: true,
     timeZone,
     createdAt: '2026-01-01T00:00:00.000Z',
-  });
+  }));
 
   it('a las 20:30 de Bogotá (01:30Z del día siguiente, navegador en UTC) propone el día de la sede', async () => {
     jest.useFakeTimers({
@@ -190,6 +191,23 @@ describe('fecha por defecto en la zona de la sede (DX-097)', () => {
       expect((within(dialog).getByLabelText('Fecha de pago') as HTMLInputElement).value).toBe('2026-10-16'),
     );
   });
+});
+
+it('consumers render SedeConfigError without a zone', async () => {
+  mockedLocations.mockResolvedValue([clinicLocation({ timeZone: null })]);
+  mockedList.mockResolvedValue([copPlan]);
+  renderModal();
+  const dialog = screen.getByRole('dialog');
+  await within(dialog).findByLabelText('Plan');
+  // La fecha no se rellena con «hoy» de otra zona: el campo muestra el fallo y su reintento.
+  expect(await within(dialog).findByText('Sin zona de sede')).toBeInTheDocument();
+  expect(within(dialog).queryByDisplayValue(/^\d{4}-\d{2}-\d{2}$/)).not.toBeInTheDocument();
+
+  mockedLocations.mockResolvedValue([clinicLocation({ timeZone: 'Asia/Tokyo' })]);
+  await userEvent.setup().click(within(dialog).getByRole('button', { name: 'Reintentar' }));
+  await waitFor(() =>
+    expect((within(dialog).getByLabelText('Fecha de pago') as HTMLInputElement).value).toMatch(/^\d{4}-\d{2}-\d{2}$/),
+  );
 });
 
 it('registra el abono contra el plan elegido, con Idempotency-Key, y avisa', async () => {
@@ -294,9 +312,9 @@ it('si no cargan los planes, el selector se sustituye por un error con reintento
 it('con varias sedes dice en cuál quedará registrado el abono', async () => {
   window.localStorage.setItem('dentalix.activeLocationId', 'loc-2');
   mockedLocations.mockResolvedValue([
-    { id: 'loc-1', name: 'Sede principal', isActive: true },
-    { id: 'loc-2', name: 'Sede Norte', isActive: true },
-  ] as Awaited<ReturnType<typeof listLocations>>);
+    clinicLocation({ id: 'loc-1', name: 'Sede principal' }),
+    clinicLocation({ id: 'loc-2', name: 'Sede Norte' }),
+  ]);
   mockedList.mockResolvedValue([copPlan]);
   renderModal();
   expect(

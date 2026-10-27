@@ -4,6 +4,7 @@ import { listLocations } from '@/lib/locations/locations-api';
 import { updateLocationCountry } from '@/lib/prescriptions/prescriptions-api';
 import { notifyError } from '@/components/errors/notify';
 import { setupUser } from '@/lib/test/user';
+import { clinicLocation } from '@/lib/test/locations';
 
 jest.mock('../../lib/locations/locations-api', () => ({ listLocations: jest.fn() }));
 jest.mock('../../lib/prescriptions/prescriptions-api', () => ({
@@ -15,7 +16,7 @@ jest.mock('../errors/notify', () => ({ notifyError: jest.fn() }));
 const mockedList = listLocations as jest.MockedFunction<typeof listLocations>;
 const mockedUpdate = updateLocationCountry as jest.MockedFunction<typeof updateLocationCountry>;
 
-const sede = {
+const sede = clinicLocation({
   id: 'loc1',
   name: 'Sede Principal',
   address: null,
@@ -23,7 +24,7 @@ const sede = {
   isActive: true,
   timeZone: 'America/Bogota',
   createdAt: '2026-01-01T00:00:00.000Z',
-};
+});
 
 describe('LocationCountrySettings', () => {
   beforeEach(() => {
