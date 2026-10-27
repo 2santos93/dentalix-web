@@ -45,7 +45,7 @@ test.beforeAll(async ({ request }) => {
   await addStaffViaApi(request, session, { ...reception, role: 'RECEPTION', password });
   const schedule = await request.put(`${API_URL}/locations/schedule`, {
     headers: session.headers,
-    data: { timezone: 'America/Bogota', ranges: [] },
+    data: { ranges: [] },
   });
   expect(schedule.ok()).toBeTruthy();
   for (const v of viewports) {

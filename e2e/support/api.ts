@@ -2,6 +2,7 @@ import { expect, type APIRequestContext } from '@playwright/test';
 import type { RegisterAndLoginParams } from './auth';
 import { API_URL, tenantOrigin } from './urls';
 import { invitationLinkFor, registrationTokenFor } from './mail';
+import { E2E_REGION, type RegionalSettings } from './regional';
 
 /**
  * Siembra por la API, sin pasar por la UI (DX-070): para preparar en un
@@ -37,15 +38,28 @@ export async function apiLogin(
  * Registra una clínica nueva por la API e inicia sesión con su dueño (ADMIN).
  * DX-029: el registro (202) no crea nada hasta abrir el enlace del email, así
  * que se lee del buzón de e2e y se confirma con `POST /auth/register/verify`.
+ * G1 (DX-317): la primera sede nace con los cuatro valores regionales
+ * (`clinic.location`, por defecto `E2E_REGION`).
  */
 export async function registerClinicViaApi(
   request: APIRequestContext,
   clinic: RegisterAndLoginParams,
 ): Promise<ApiSession> {
   const host = new URL(tenantOrigin(clinic.subdomain)).host;
+  const region: RegionalSettings = { ...E2E_REGION, ...clinic.location };
   const res = await request.post(`${API_URL}/auth/register`, {
     headers: { 'X-Tenant-Host': host },
-    data: clinic,
+    data: {
+      clinicName: clinic.clinicName,
+      subdomain: clinic.subdomain,
+      fullName: clinic.fullName,
+      email: clinic.email,
+      password: clinic.password,
+      locationCountry: region.country,
+      locationCurrency: region.currency,
+      locationTimeZone: region.timeZone,
+      locationLocale: region.locale,
+    },
   });
   expect(res.status(), `registro por la API falló: ${await res.text()}`).toBe(202);
   const token = await registrationTokenFor(clinic.email);

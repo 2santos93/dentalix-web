@@ -59,7 +59,6 @@ test.beforeAll(async ({ request }) => {
   const schedule = await request.put(`${API_URL}/locations/schedule`, {
     headers: session.headers,
     data: {
-      timezone: 'America/Bogota',
       ranges: [1, 2, 3, 4, 5].flatMap((weekday) => [
         { weekday, startMinute: 540, endMinute: 780 },
         { weekday, startMinute: 900, endMinute: 1140 },

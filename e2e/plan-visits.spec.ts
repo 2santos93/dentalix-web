@@ -42,7 +42,7 @@ test.beforeAll(async ({ playwright }) => {
     locationId = await reuseDemoLocation(api, admin, QA_LOCATION);
     const schedule = await api.put(`${API_URL}/locations/schedule`, {
       headers: { ...admin.headers, "X-Location-Id": locationId },
-      data: { timezone: "America/Bogota", ranges: [] },
+      data: { ranges: [] },
     });
     expect(schedule.ok(), await schedule.text()).toBeTruthy();
   } finally {

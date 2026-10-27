@@ -6,6 +6,7 @@ import { addStaffViaApi, type ApiSession } from './support/api';
 import { atSede, sedeDate, sedeDayFromToday, sedeTime } from './support/clock';
 import { expectNoHorizontalScroll } from './support/layout';
 import { API_URL } from './support/urls';
+import { E2E_REGION } from './support/regional';
 
 /**
  * e2e (DX-089): personal restringido a sedes.
@@ -164,11 +165,11 @@ for (const viewport of VIEWPORTS) {
     const call = apiClient(request, admin);
 
     // --- 1. Siembra como ADMIN ------------------------------------------------
-    const norte = await call<Location>('post', '/locations', { name: 'Sede Norte' });
+    const norte = await call<Location>('post', '/locations', { name: 'Sede Norte', ...E2E_REGION });
     const principal = (await call<Location[]>('get', '/locations')).find((l) => l.id !== norte.id)!;
     expect(principal, 'la clínica nace con su sede principal').toBeTruthy();
     for (const loc of [principal, norte]) {
-      await call('put', '/locations/schedule', { timezone: 'America/Bogota', ranges: [] }, loc.id);
+      await call('put', '/locations/schedule', { ranges: [] }, loc.id);
     }
 
     const receptionEmail = `test.recepcion.sedes.${tag}@example.com`;
