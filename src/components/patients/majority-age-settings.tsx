@@ -1,7 +1,6 @@
 'use client';
 import { useEffect, useId, useState } from 'react';
 import { Lock, UserCheck } from 'lucide-react';
-import { ApiError } from '@/lib/api/api-error';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import {
   getPatientSettings,
@@ -43,14 +42,17 @@ const copy = {
   forbiddenHint: 'La ficha de cada paciente dice si es menor y a quién van sus avisos.',
 };
 
+// 44 px bajo `sm` (DESIGN.md, objetivo táctil de móvil).
 const fieldClass =
-  'flex h-10 w-full rounded-lg border border-border bg-surface px-3 text-sm text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary';
+  'flex h-10 w-full rounded-lg border border-border bg-surface px-3 text-sm text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary max-sm:min-h-11';
 
-/** Una API anterior a esta pantalla no tiene la ruta: se dice qué no cargó, no «no encontramos». */
-function loadErrorMessage(err: unknown): string {
-  if (err instanceof ApiError && err.status === 404) return copy.loadError;
-  return apiErrorMessage(err, copy.loadError);
-}
+/**
+ * Una API anterior a esta pantalla no tiene la ruta: `/patients/settings` cae
+ * en `GET /patients/:id` y responde 500 (id que no es UUID), que ya va al
+ * `fallback`. El 404 se fija también, para que diga qué no cargó y no
+ * «no encontramos lo que buscas».
+ */
+const loadErrorOptions = { fallback: copy.loadError, byStatus: { 404: copy.loadError } };
 
 /**
  * Ajustes → Mayoría de edad (DX-328): desde qué edad un paciente es adulto en
@@ -77,7 +79,7 @@ export function MajorityAgeSettingsSection({ token, allowed }: { token: string; 
         setLoadError(null);
       })
       .catch((err: unknown) => {
-        if (!cancelled) setLoadError(loadErrorMessage(err));
+        if (!cancelled) setLoadError(apiErrorMessage(err, loadErrorOptions));
       });
     return () => {
       cancelled = true;
@@ -188,7 +190,7 @@ export function MajorityAgeSettingsSection({ token, allowed }: { token: string; 
                   {copy.cancel}
                 </Button>
               </DialogClose>
-              <Button type="submit" loading={saving}>
+              <Button type="submit" loading={saving} className="max-sm:min-h-11">
                 {copy.save}
               </Button>
             </DialogFooter>

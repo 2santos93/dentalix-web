@@ -56,10 +56,14 @@ describe('MajorityAgeSettingsSection (DX-328)', () => {
     expect(mockedSave).not.toHaveBeenCalled();
   });
 
-  it('a 404 from an older API shows the section error with retry', async () => {
+  it.each([
+    // La API anterior: `/patients/settings` cae en `GET /patients/:id` y Prisma falla con el id.
+    [500, 'Internal server error'],
+    [404, 'Cannot GET /patients/settings'],
+  ])('a %i from an older API shows the section error with retry', async (status, message) => {
     const user = userEvent.setup();
     mockedGet
-      .mockRejectedValueOnce(new ApiError(404, 'Cannot GET /patients/settings'))
+      .mockRejectedValueOnce(new ApiError(status, message))
       .mockResolvedValueOnce({ majorityAge: 18 });
     render(<MajorityAgeSettingsSection token="tok" allowed />);
     expect(await screen.findByText('No pudimos cargar la mayoría de edad.')).toBeInTheDocument();

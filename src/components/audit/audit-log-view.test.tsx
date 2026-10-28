@@ -185,6 +185,31 @@ describe('AuditLogView', () => {
     expect(within(corrected).getByText('Corrección de quién lo realizó · Otro profesional')).toBeInTheDocument();
   });
 
+  it('DX-328: el cambio de la mayoría de edad dice la edad antes y después', async () => {
+    mockedList.mockResolvedValue(
+      page({
+        items: [
+          {
+            ...view,
+            id: 'ev-8',
+            action: 'UPDATE',
+            resourceType: 'CLINIC_SETTINGS',
+            patient: null,
+            metadata: {
+              reason: 'MAJORITY_AGE_SETTINGS',
+              statusChange: { from: 'AGE_18', to: 'AGE_16' },
+            },
+          },
+        ],
+      }),
+    );
+    render(<AuditLogView token="tok" />);
+    const table = await screen.findByRole('table', { name: 'Registro de auditoría' });
+    const [, changed] = within(table).getAllByRole('row');
+    expect(within(changed).getByText('Ajustes de la clínica')).toBeInTheDocument();
+    expect(within(changed).getByText('Mayoría de edad: 18 → 16 años')).toBeInTheDocument();
+  });
+
   it('vacío: lo dice y sugiere cambiar los filtros', async () => {
     mockedList.mockResolvedValue(page({ items: [] }));
     render(<AuditLogView token="tok" />);
