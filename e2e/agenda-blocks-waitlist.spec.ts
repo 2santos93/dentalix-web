@@ -3,9 +3,11 @@ import { confirmCancellation } from './support/cancellation';
 import { randomUUID } from 'node:crypto';
 import { addStaffViaApi, apiPost, registerClinicViaApi, type ApiSession } from './support/api';
 import { loginAs } from './support/auth';
-import { atSede, sedeDayFromToday } from './support/clock';
+import { atSede, SEDE_TZ, sedeDayFromToday } from './support/clock';
+import { E2E_REGION } from './support/regional';
 import { API_URL, tenantOrigin } from './support/urls';
 import { chooseAppointmentStatus } from './support/appointment-status';
+import { regionalFormat } from '../src/lib/format/regional-format';
 
 /**
  * e2e DX-122: bloqueos de agenda y «Pendientes por agendar».
@@ -140,8 +142,10 @@ test('recepción bloquea las vacaciones de Luis: se ven en la agenda y una cita 
   await form.getByRole('button', { name: 'Agendar cita' }).click();
   await expect(
     // Un día completo se nombra por el día elegido, no por el fin exclusivo.
+    // Con el formateador de la sede, como la API: «2/11» en es-CO (CLDR), no
+    // un dd/MM fijo que solo coincide del 10 al 31.
     form.getByText(
-      `La agenda del profesional está bloqueada (Vacaciones) el ${VACATION_DAY.slice(8, 10)}/${VACATION_DAY.slice(5, 7)}. Elige otro horario.`,
+      `La agenda del profesional está bloqueada (Vacaciones) el ${regionalFormat(E2E_REGION).dayMonth(atSede(VACATION_DAY, '12:00'), SEDE_TZ)}. Elige otro horario.`,
       { exact: true },
     ),
   ).toBeVisible({ timeout: 10_000 });
