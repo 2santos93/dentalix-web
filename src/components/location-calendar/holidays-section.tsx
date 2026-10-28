@@ -240,6 +240,8 @@ export function HolidaysSection({ token, location, holidays, onChanged }: Holida
           icon={<CalendarDays aria-hidden />}
           title={copy.emptyTitle}
           description={copy.emptyDescription}
+          // < sm: los dos botones a todo el ancho, como la barra de la lista.
+          actionClassName="w-full sm:w-auto"
           action={
             <div className="flex w-full flex-col gap-2 sm:flex-row-reverse">
               {addButton}

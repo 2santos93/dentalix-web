@@ -148,6 +148,18 @@ test('new location shows Monday–Friday and the empty state', async ({ page }) 
   const section = holidaysSection(page);
   await expect(section.getByText('Añade los festivos de tu sede')).toBeVisible();
   await expect(section.getByText('Dentalix no trae los festivos de ningún país.', { exact: false })).toBeVisible();
+
+  // A 390 px, «Añadir festivo» e «Importar» del vacío van a todo el ancho del
+  // bloque, como los de la barra de la lista.
+  await page.setViewportSize(VIEWPORTS[1]);
+  const empty = section.getByRole('heading', { name: 'Festivos' }).locator('xpath=ancestor::section[1]');
+  const sectionWidth = (await empty.boundingBox())!.width;
+  for (const name of ['Añadir festivo', 'Importar']) {
+    const box = (await section.getByRole('button', { name, exact: true }).boundingBox())!;
+    // 24 px de padding a cada lado del bloque vacío, más su borde.
+    expect(box.width, `${name} a 390 px`).toBeGreaterThanOrEqual(sectionWidth - 2 * 24 - 2);
+  }
+  await page.setViewportSize(VIEWPORTS[0]);
   await shoot(page, 'empty', section.getByRole('heading', { name: 'Festivos' }));
 });
 

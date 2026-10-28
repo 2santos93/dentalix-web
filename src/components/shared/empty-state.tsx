@@ -1,10 +1,13 @@
 import * as React from 'react';
+import { cn } from '@/lib/utils';
 
 interface EmptyStateProps {
   title: string;
   description?: string;
   icon?: React.ReactNode;
   action?: React.ReactNode;
+  /** Clases del contenedor de `action`, p. ej. `w-full sm:w-auto` para botones a todo el ancho en móvil. */
+  actionClassName?: string;
   /** Exposes the block as a status region for loading/empty announcements. */
   role?: 'status';
 }
@@ -15,6 +18,7 @@ export function EmptyState({
   description,
   icon,
   action,
+  actionClassName,
   role,
 }: EmptyStateProps) {
   return (
@@ -27,7 +31,7 @@ export function EmptyState({
       {description ? (
         <p className="max-w-sm text-sm text-muted">{description}</p>
       ) : null}
-      {action ? <div className="mt-3">{action}</div> : null}
+      {action ? <div className={cn('mt-3', actionClassName)}>{action}</div> : null}
     </div>
   );
 }
