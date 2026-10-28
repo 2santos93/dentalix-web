@@ -1,9 +1,12 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import { Plus } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import type { ClinicLocation } from '@/lib/locations/locations-api';
 import { useSessionLocations } from '@/lib/locations/session-locations';
+import { getTokenRole } from '@/lib/auth/token-role';
+import { canManageLocationCalendar } from '@/lib/locations/location-calendar';
 import { COUNTRY_LABELS } from '@/lib/prescriptions/prescriptions-api';
 import { locationCurrency, locationTimeZone } from '@/lib/locations/location-settings';
 import { canonicalLocale, HOUR_CYCLE_LABELS, isHourCycle } from '@/lib/locations/regional-settings';
@@ -20,6 +23,8 @@ export const locationsListCopy = {
   create: 'Nueva sede',
   edit: 'Editar',
   editFor: (name: string) => `Editar ${name}`,
+  calendar: 'Calendario',
+  calendarFor: (name: string) => `Calendario ${name}`,
   review: 'Revisar',
   reviewFor: (name: string) => `Revisar ${name}`,
   pendingReview: 'Por revisar',
@@ -80,6 +85,8 @@ export function LocationsList({
   onInitialEditConsumed,
 }: LocationsListProps) {
   const requestLocations = useSessionLocations(token);
+  // DX-316: el enlace al calendario sigue su propia regla (la de la API), no la de «Editar».
+  const canOpenCalendar = canManageLocationCalendar(getTokenRole(token));
   const [locations, setLocations] = useState<ClinicLocation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -197,18 +204,33 @@ export function LocationsList({
                   />
                 </dl>
               </div>
-              {canEdit ? (
-                // Aviso D5: guardar el modal, aunque no cambie nada, confirma la sede.
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => openModal(location)}
-                  aria-label={needsRegionalReview(location) ? copy.reviewFor(location.name) : copy.editFor(location.name)}
-                  className="self-start sm:self-center"
-                >
-                  {needsRegionalReview(location) ? copy.review : copy.edit}
-                </Button>
+              {canEdit || canOpenCalendar ? (
+                <div className="flex shrink-0 gap-2 self-start sm:self-center">
+                  {canOpenCalendar ? (
+                    // DX-316: días hábiles y festivos de esta sede.
+                    <Button asChild variant="ghost" size="sm" className="max-sm:min-h-11">
+                      <Link
+                        href={`/settings/calendario?sede=${encodeURIComponent(location.id)}`}
+                        aria-label={copy.calendarFor(location.name)}
+                      >
+                        {copy.calendar}
+                      </Link>
+                    </Button>
+                  ) : null}
+                  {canEdit ? (
+                    // Aviso D5: guardar el modal, aunque no cambie nada, confirma la sede.
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => openModal(location)}
+                      aria-label={needsRegionalReview(location) ? copy.reviewFor(location.name) : copy.editFor(location.name)}
+                      className="max-sm:min-h-11"
+                    >
+                      {needsRegionalReview(location) ? copy.review : copy.edit}
+                    </Button>
+                  ) : null}
+                </div>
               ) : null}
             </li>
           ))}

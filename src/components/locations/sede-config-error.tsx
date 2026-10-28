@@ -54,6 +54,8 @@ interface SedeConfigErrorProps {
   description?: string;
   /** La sede a la que le falta el dato, si se sabe: «Configurar sede» abre su modal. */
   locationId?: string | null;
+  /** Para `note`: `id` del texto, para que un control que la nota deshabilita la cite en `aria-describedby`. */
+  descriptionId?: string;
   className?: string;
 }
 
@@ -71,6 +73,7 @@ export function SedeConfigError({
   retryId,
   description,
   locationId,
+  descriptionId,
   className,
 }: SedeConfigErrorProps) {
   const token = useAuthStore((s) => s.accessToken);
@@ -102,7 +105,7 @@ export function SedeConfigError({
       >
         <span className="flex flex-1 items-start gap-2 text-ink">
           <AlertCircle aria-hidden="true" className="mt-0.5 size-4 shrink-0 text-warning" />
-          {description ?? sedeConfigErrorCopy[kind]}
+          <span id={descriptionId}>{description ?? sedeConfigErrorCopy[kind]}</span>
         </span>
         <span className="flex flex-wrap gap-2">
           <Button type="button" variant="secondary" size="sm" onClick={onRetry}>

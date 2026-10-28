@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync } from 'node:fs';
+import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
 
 /**
@@ -166,5 +166,47 @@ describe('arquitectura: sin formato regional ni reloj fijos (G1-B)', () => {
     expect(helper.split('\n').filter((l) => REGIONAL_LOCALE.test(l) && !COMMENT_LINE.test(l))).toEqual([
       "    dateFormatter('en-US', {",
     ]);
+  });
+});
+
+/**
+ * DX-316 (I4, R1): el calendario de la sede no se razona por país. Ni el
+ * cliente y la lógica (`lib/locations/location-calendar*.ts`) ni sus pantallas
+ * (`components/location-calendar/**`) nombran un país, sin contar los tests.
+ */
+const COUNTRY_WORD = /countr(?:y|ies)/i;
+
+function locationCalendarFiles(): string[] {
+  const lib = readdirSync(join(SRC, 'lib/locations'))
+    .filter((name) => /^location-calendar.*\.ts$/.test(name))
+    .map((name) => join(SRC, 'lib/locations', name));
+  const screens = join(SRC, 'components/location-calendar');
+  const components = existsSync(screens) ? sourceFiles(screens) : [];
+  return [...lib, ...components].filter(scanned);
+}
+
+describe('arquitectura: calendario de la sede sin país (DX-316)', () => {
+  it('location calendar files never mention a country', () => {
+    const files = locationCalendarFiles();
+    const rels = files.map((f) => relative(SRC, f).split(sep).join('/'));
+    expect(rels).toEqual(
+      expect.arrayContaining(['lib/locations/location-calendar.ts', 'lib/locations/location-calendar-api.ts']),
+    );
+    expect(rels.some((r) => r.includes('.test.'))).toBe(false);
+    const mentions = files.flatMap((path) =>
+      readFileSync(path, 'utf8')
+        .split('\n')
+        .map((line, i) => ({ line, n: i + 1 }))
+        .filter(({ line }) => COUNTRY_WORD.test(line))
+        .map(({ line, n }) => `${relative(SRC, path)}:${n}: ${line.trim()}`),
+    );
+    expect(mentions).toEqual([]);
+  });
+
+  it('the country pattern catches singular, plural and any case, not the Spanish copy', () => {
+    for (const line of ['countryCode', '// Country', 'const COUNTRIES = []', 'byCountries(x)']) {
+      expect([line, COUNTRY_WORD.test(line)]).toEqual([line, true]);
+    }
+    expect(COUNTRY_WORD.test('Dentalix no trae los festivos de ningún país.')).toBe(false);
   });
 });

@@ -1,4 +1,4 @@
-import { regionalFormat, UI_LANGUAGE, type HourCycle } from './regional-format';
+import { regionalFormat, UI_LANGUAGE, weekdayName, type HourCycle } from './regional-format';
 // Copia byte a byte de `src/shared/format/regional-format.cases.json` de la API: no se edita aquí.
 // La fuente es la API; `scripts/check-api-reference-sync.mjs` (CI) falla si
 // divergen. Ver src/lib/money/README.md.
@@ -179,6 +179,81 @@ describe('regionalFormat', () => {
     expect(fmt.longDate(AT_1505_UTC, 'UTC')).toBe('martes 27 de octubre de 2026');
     expect(fmt.longDate(AT_1505_UTC, 'UTC', { weekday: false })).toBe('27 de octubre de 2026');
     expect(fmt.longDateTime(AT_1505_UTC, 'UTC')).not.toContain(',');
+  });
+
+  describe('civil words (DX-316)', () => {
+    const fmt = regionalFormat({ locale: 'en-US', hourCycle: 'h12' });
+
+    it('civilLongDate gives weekday, day, month and year without a comma', () => {
+      expect(fmt.civilLongDate('2027-05-03')).toBe('lunes 3 de mayo de 2027');
+    });
+
+    it('civilLongDate without weekday and year', () => {
+      expect(fmt.civilLongDate('2027-05-03', { weekday: false, year: false })).toBe('3 de mayo');
+      expect(fmt.civilLongDate('2027-05-03', { weekday: false })).toBe('3 de mayo de 2027');
+      expect(fmt.civilLongDate('2027-05-03', { year: false })).toBe('lunes 3 de mayo');
+    });
+
+    it('civilLongDate rejects a day that does not exist', () => {
+      expect(() => fmt.civilLongDate('2027-02-30')).toThrow(RangeError);
+      expect(() => fmt.civilLongDate('2027-5-3')).toThrow(RangeError);
+    });
+
+    it('weekdayName is lower case, 0 = domingo', () => {
+      expect(fmt.weekdayName(0)).toBe('domingo');
+      expect(fmt.weekdayName(1)).toBe('lunes');
+      expect(fmt.weekdayName(6)).toBe('sábado');
+    });
+
+    it.each([7, -1, 1.5, Number.NaN])('weekdayName(%s) throws', (weekday) => {
+      expect(() => fmt.weekdayName(weekday)).toThrow(RangeError);
+    });
+
+    it('weekdayName does not depend on the location format: a location without one can name its days (M3)', () => {
+      const all = [0, 1, 2, 3, 4, 5, 6];
+      const neutral = all.map(weekdayName);
+      expect(neutral).toEqual(['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado']);
+      for (const locale of ['en-US', 'de-DE', 'ar-EG', 'ja-JP-u-ca-japanese', 'he-IL-u-ca-hebrew']) {
+        for (const hourCycle of ['h12', 'h23'] as const) {
+          expect(all.map(regionalFormat({ locale, hourCycle }).weekdayName)).toEqual(neutral);
+        }
+      }
+      expect(() => weekdayName(7)).toThrow(RangeError);
+    });
+
+    it('civil words do not depend on the process zone', () => {
+      // Cambiar `TZ` en el test no llega a ICU. Se simula la zona del proceso:
+      // todo formatter sin `timeZone` explícito usa Pacific/Kiritimati
+      // (UTC+14), donde el mediodía UTC del lunes ya es «martes». Un módulo
+      // nuevo evita que un formatter cacheado antes tape el fallo.
+      const RealDateTimeFormat = Intl.DateTimeFormat;
+      const withProcessZone = function (locales?: string | string[], options?: Intl.DateTimeFormatOptions) {
+        return new RealDateTimeFormat(locales, { ...options, timeZone: options?.timeZone ?? 'Pacific/Kiritimati' });
+      } as unknown as typeof Intl.DateTimeFormat;
+      withProcessZone.supportedLocalesOf = RealDateTimeFormat.supportedLocalesOf.bind(RealDateTimeFormat);
+      Intl.DateTimeFormat = withProcessZone;
+      try {
+        jest.isolateModules(() => {
+          const fresh = jest.requireActual<typeof import('./regional-format')>('./regional-format');
+          const kiritimati = fresh.regionalFormat({ locale: 'en-US', hourCycle: 'h12' });
+          expect(kiritimati.weekdayName(1)).toBe('lunes');
+          // En Kiritimati el mediodía UTC del 3 de mayo ya es 4: la fecha de un festivo no se corre.
+          expect(kiritimati.civilDate('2027-05-03')).toBe('05/03/2027');
+          expect(kiritimati.civilLongDate('2027-05-03')).toBe('lunes 3 de mayo de 2027');
+          expect(kiritimati.civilLongDate('2027-05-03', { weekday: false, year: false })).toBe('3 de mayo');
+        });
+      } finally {
+        Intl.DateTimeFormat = RealDateTimeFormat;
+      }
+    });
+
+    it('civil words keep the Gregorian calendar for any locale', () => {
+      for (const locale of ['ja-JP-u-ca-japanese', 'he-IL-u-ca-hebrew']) {
+        const other = regionalFormat({ locale, hourCycle: 'h23' });
+        expect(other.civilLongDate('2027-05-03')).toBe('lunes 3 de mayo de 2027');
+        expect(other.weekdayName(3)).toBe('miércoles');
+      }
+    });
   });
 
   it('KWD money has 2 decimals', () => {

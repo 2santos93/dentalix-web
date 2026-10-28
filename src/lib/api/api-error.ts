@@ -32,6 +32,11 @@ export class ApiError extends Error {
    * `LOCATION_LOCALE_REQUIRED`, G1-B §10): «Configurar sede» abre esa sede.
    */
   public readonly locationId: string | null;
+  /**
+   * El festivo que ya ocupa ese día, en el 409 `HOLIDAY_ALREADY_EXISTS` del
+   * calendario de la sede (DX-316): la pantalla puede llevar a él.
+   */
+  public readonly holidayId: string | null;
 
   constructor(
     public readonly status: number,
@@ -42,6 +47,7 @@ export class ApiError extends Error {
       code?: string | null;
       field?: string | null;
       locationId?: string | null;
+      holidayId?: string | null;
     } = {},
   ) {
     super(message);
@@ -51,6 +57,7 @@ export class ApiError extends Error {
     this.code = details.code ?? null;
     this.field = details.field ?? null;
     this.locationId = details.locationId ?? null;
+    this.holidayId = details.holidayId ?? null;
   }
 }
 

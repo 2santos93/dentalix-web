@@ -4,6 +4,7 @@ import {
   BellRing,
   Building2,
   CalendarClock,
+  CalendarDays,
   ClipboardClock,
   ClipboardList,
   Clock,
@@ -37,6 +38,7 @@ import { canManageAnamnesisSettings } from '@/lib/clinical/medical-alerts';
 import { canManagePatientSettings } from '@/lib/patients/patient-settings-api';
 import { canManageDomains } from '@/lib/domains/domains-api';
 import { canImportPatients } from '@/lib/patient-imports/patient-imports-api';
+import { canManageLocationCalendar } from '@/lib/locations/location-calendar';
 import { canSearchImplantLots } from '@/lib/implants/implants-api';
 import { canReadSupportAccesses } from '@/lib/support-accesses/support-accesses-api';
 
@@ -83,6 +85,14 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
         label: 'Sedes',
         description: 'Alta de sedes, su país, moneda, zona horaria y formato, sus datos legales y su política de cancelación.',
         icon: Building2,
+      },
+      // DX-316.
+      {
+        href: '/settings/calendario',
+        label: 'Calendario de la sede',
+        description: 'Días hábiles y festivos de cada sede, para los plazos en días hábiles.',
+        icon: CalendarDays,
+        visible: canManageLocationCalendar,
       },
       // SEC-009.
       {

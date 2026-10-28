@@ -6,6 +6,7 @@ import { addStaffViaApi, apiPost, registerClinicViaApi, type ApiSession } from '
 import { loginAs } from './support/auth';
 import { DAY_MS, sedeDate } from './support/clock';
 import { expectDialogInsideViewport, expectNoHorizontalScroll, expectNoHorizontalScrollIn } from './support/layout';
+import { expectTouchTarget } from './support/touch-targets';
 import { API_URL, tenantOrigin } from './support/urls';
 
 /**
@@ -223,7 +224,7 @@ test('capturas a 390 y 1440 px en claro y oscuro: ajuste, modal, ficha y auditor
       if (width < 640) {
         // DESIGN.md: 44 px de objetivo táctil en móvil para la acción principal y el campo.
         for (const target of [dialog.getByRole('button', { name: 'Guardar' }), dialog.getByLabel('Edad')]) {
-          expect((await target.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+          await expectTouchTarget(target, { scope: dialog });
         }
       }
       await expectNoHorizontalScroll(page);

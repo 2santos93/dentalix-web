@@ -11,6 +11,10 @@ import { API_URL, tenantOrigin } from "./support/urls";
 import { loginAs, accessTokenOf } from "./support/auth";
 import { atSede, sedeDayFromToday } from "./support/clock";
 import { chooseAppointmentStatus } from "./support/appointment-status";
+import {
+  meetsTouchTarget,
+  waitForAnimationsSettled,
+} from "./support/touch-targets";
 import type { ApiSession } from "./support/api";
 import {
   demoAdminSession,
@@ -192,6 +196,8 @@ async function noOverflow(page: Page) {
   ).toBeLessThanOrEqual(0);
 }
 async function touchTargets(scope: Locator) {
+  // Un diálogo recién abierto aún puede estar animando su entrada: se mide en reposo.
+  await waitForAnimationsSettled(scope);
   const sizes = await scope
     .locator('button:visible,select:visible,a[href^="https://wa.me"]:visible')
     .evaluateAll((elements) =>
@@ -206,7 +212,7 @@ async function touchTargets(scope: Locator) {
     );
   expect(sizes.length).toBeGreaterThan(0);
   expect(
-    sizes.filter((s) => s.h < 44 || s.w < 44),
+    sizes.filter((s) => !meetsTouchTarget(s.h) || !meetsTouchTarget(s.w)),
     "controles deben medir al menos 44×44",
   ).toEqual([]);
 }
