@@ -48,8 +48,16 @@ function renderSection(initial: LocationHoliday[], location: ClinicLocation = us
 
 const rowOf = (name: string) => screen.getByText(name).closest('tr') as HTMLElement;
 
+/** Fechas de los festivos de prueba en la sede en-US. */
+const DATE_TEXT: Record<string, string> = {
+  'Cierre por obras': '05/03/2027 · lunes',
+  Obras: '05/03/2027 · lunes',
+  'Día de la sede': '3 de mayo',
+};
+const actionsName = (name: string) => copy.actionsFor(name, DATE_TEXT[name]);
+
 async function openRowAction(user: ReturnType<typeof setupUser>, name: string, action: string) {
-  await user.click(screen.getByRole('button', { name: copy.actionsFor(name) }));
+  await user.click(screen.getByRole('button', { name: actionsName(name) }));
   await user.click(within(await screen.findByRole('menu')).getByRole('menuitem', { name: action }));
 }
 
@@ -85,6 +93,11 @@ describe('HolidaysSection (DX-316, spec §7.2)', () => {
     expect(screen.getByRole('table', { name: '2028' })).toContainElement(rowOf('Inventario'));
   });
 
+  // Este test no protege nada: Jest da al test una copia de `process.env` y
+  // el cambio de `TZ` no llega a ICU, así que pasa con o sin el
+  // `timeZone: 'UTC'` del helper. La guarda real es «civil words do not depend
+  // on the process zone» (Pacific/Kiritimati) en `regional-format.test.ts`,
+  // que también cubre `civilDate`. Se deja porque lo pide el brief (I6).
   it('the same dates in a non-UTC process zone (I6)', () => {
     const before = process.env.TZ;
     process.env.TZ = 'America/Los_Angeles';
@@ -167,7 +180,7 @@ describe('HolidaysSection (DX-316, spec §7.2)', () => {
     expect(screen.getByText('Cierre por obras')).toBeInTheDocument();
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     await waitFor(() =>
-      expect(screen.getByRole('button', { name: copy.actionsFor('Cierre por obras') })).toHaveFocus(),
+      expect(screen.getByRole('button', { name: actionsName('Cierre por obras') })).toHaveFocus(),
     );
 
     // Reintentar desde el aviso la retira.
@@ -190,7 +203,7 @@ describe('HolidaysSection (DX-316, spec §7.2)', () => {
     await user.click(screen.getByRole('button', { name: holidayFormCopy.save }));
     expect(await screen.findByText('Obras')).toBeInTheDocument();
     expect(updateHoliday).toHaveBeenCalledWith('tok', 'sur', 'h-27', { name: 'Obras' });
-    await waitFor(() => expect(screen.getByRole('button', { name: copy.actionsFor('Obras') })).toHaveFocus());
+    await waitFor(() => expect(screen.getByRole('button', { name: actionsName('Obras') })).toHaveFocus());
   });
 
   it('exactly one primary button, empty or not', () => {
@@ -201,5 +214,57 @@ describe('HolidaysSection (DX-316, spec §7.2)', () => {
     expect(screen.getAllByRole('button').filter((b) => b.classList.contains('bg-primary'))).toHaveLength(1);
     expect(screen.getByRole('button', { name: copy.add })).toHaveClass('bg-primary');
     expect(screen.getByRole('button', { name: copy.import })).not.toHaveClass('bg-primary');
+  });
+
+  it('rows are 44 px only as a table: the stacked mobile card grows with its content', () => {
+    renderSection([puntual2027]);
+    const row = rowOf('Cierre por obras');
+    expect(row).toHaveClass('sm:h-11');
+    expect(row).not.toHaveClass('h-11');
+  });
+
+  it('two holidays with the same name have distinct actions buttons, named with their date', () => {
+    const otro: LocationHoliday = { id: 'h-28b', date: '2028-05-03', name: 'Cierre por obras', recurring: false };
+    renderSection([puntual2027, otro, mayo]);
+    expect(screen.getByRole('button', { name: 'Acciones de Cierre por obras, 05/03/2027 · lunes' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Acciones de Cierre por obras, 05/03/2028 · miércoles' })).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Acciones de Día de la sede, 3 de mayo' })).toBeInTheDocument();
+  });
+
+  it('without a format the actions button is named after the holiday only', () => {
+    renderSection([puntual2027], clinicLocation({ locale: null }));
+    expect(screen.getByRole('button', { name: 'Acciones de Cierre por obras' })).toBeInTheDocument();
+  });
+
+  it('a 404 on delete removes the row, says it was already deleted and offers no retry', async () => {
+    mockedDelete.mockRejectedValue(new ApiError(404, 'No encontramos ese festivo.', { code: 'HOLIDAY_NOT_FOUND' }));
+    const user = setupUser();
+    renderSection([mayo, puntual2027]);
+    await openRowAction(user, 'Cierre por obras', copy.delete);
+    await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: copy.deleteConfirm }));
+
+    await waitFor(() => expect(screen.queryByText('Cierre por obras')).not.toBeInTheDocument());
+    expect(mockedNotify).toHaveBeenCalledTimes(1);
+    expect(mockedNotify).toHaveBeenCalledWith(copy.alreadyDeleted);
+    await waitFor(() => expect(screen.getByRole('button', { name: copy.add })).toHaveFocus());
+  });
+
+  it('Escape during an in-flight delete keeps the dialog until it ends, then focus lands on «Añadir festivo»', async () => {
+    let finish: () => void = () => {};
+    mockedDelete.mockImplementation(() => new Promise<void>((resolve) => (finish = resolve)));
+    const user = setupUser();
+    renderSection([mayo, puntual2027]);
+    await openRowAction(user, 'Cierre por obras', copy.delete);
+    await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: copy.deleteConfirm }));
+    await waitFor(() => expect(mockedDelete).toHaveBeenCalled());
+
+    await user.keyboard('{Escape}');
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+
+    finish();
+    await waitFor(() => expect(screen.queryByText('Cierre por obras')).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    await waitFor(() => expect(screen.getByRole('button', { name: copy.add })).toHaveFocus());
+    expect(document.activeElement).not.toBe(document.body);
   });
 });

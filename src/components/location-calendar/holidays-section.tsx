@@ -1,7 +1,8 @@
 'use client';
 import * as React from 'react';
-import { useRef, useState } from 'react';
+import { useId, useRef, useState } from 'react';
 import { CalendarDays, Pencil, Plus, Trash2, Upload } from 'lucide-react';
+import { ApiError } from '@/lib/api/api-error';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import type { RegionalFormat } from '@/lib/format/regional-format';
 import { deleteHoliday, type LocationHoliday } from '@/lib/locations/location-calendar-api';
@@ -29,13 +30,16 @@ export const holidaysCopy = {
   colDate: 'Fecha',
   colName: 'Nombre',
   colActions: 'Acciones',
-  actionsFor: (name: string) => `Acciones de ${name}`,
+  /** Con la fecha cuando la hay: dos festivos pueden llamarse igual en años distintos. */
+  actionsFor: (name: string, date: string | null) => (date ? `Acciones de ${name}, ${date}` : `Acciones de ${name}`),
   edit: 'Editar',
   delete: 'Eliminar',
   deleteTitle: 'Eliminar festivo',
   deleteBody: (name: string) => `¿Eliminar «${name}»? Los plazos ya calculados no cambian.`,
   deleteConfirm: 'Eliminar',
   deleteError: 'No pudimos eliminar el festivo.',
+  /** 404 al eliminar: otra persona ya lo retiró; se quita de la lista y no hay nada que reintentar. */
+  alreadyDeleted: 'Ese festivo ya se había eliminado.',
   /** Sin formato de la sede no se pinta ninguna fecha (R11); la nota la pone la vista. */
   noDate: '—',
 };
@@ -82,6 +86,7 @@ export function HolidaysSection({ token, location, holidays, onChanged, onImport
   const addRef = useRef<HTMLButtonElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const focusTarget = useRef<FocusTarget>({ kind: 'add' });
+  const headingId = useId();
 
   // Radix devuelve el foco a lo que lo tenía al abrir: el ítem del menú de la
   // fila, que ya no existe, o una fila que se acaba de retirar. Se coloca a mano.
@@ -121,6 +126,14 @@ export function HolidaysSection({ token, location, holidays, onChanged, onImport
       setDeleting(null);
       onChanged((prev) => prev.filter((h) => h.id !== holiday.id));
     } catch (err) {
+      if (err instanceof ApiError && err.status === 404) {
+        // Ya no está: reintentar daría el mismo 404 para siempre.
+        focusTarget.current = { kind: 'add' };
+        setDeleting(null);
+        onChanged((prev) => prev.filter((h) => h.id !== holiday.id));
+        notifyError(copy.alreadyDeleted);
+        return;
+      }
       // Se cierra también al fallar: con el diálogo abierto Radix deja inerte
       // el resto, y el «Reintentar» del aviso no se podría pulsar.
       focusTarget.current = { kind: 'row', id: holiday.id };
@@ -151,9 +164,9 @@ export function HolidaysSection({ token, location, holidays, onChanged, onImport
   ) : null;
 
   return (
-    <section aria-labelledby="holidays-heading" className="flex flex-col gap-4">
+    <section aria-labelledby={headingId} className="flex flex-col gap-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h2 id="holidays-heading" className="text-lg font-semibold text-ink">
+        <h2 id={headingId} className="text-lg font-semibold text-ink">
           {copy.heading}
         </h2>
         {blocks.length > 0 ? (
@@ -194,7 +207,7 @@ export function HolidaysSection({ token, location, holidays, onChanged, onImport
                   </TableHeader>
                   <TableBody>
                     {block.items.map((holiday) => (
-                      <TableRow key={holiday.id} className="h-11">
+                      <TableRow key={holiday.id} className="sm:h-11">
                         <TableCell className="whitespace-nowrap text-ink tabular-nums" data-label={copy.colDate}>
                           {dateText(holiday, fmt)}
                         </TableCell>
@@ -204,7 +217,7 @@ export function HolidaysSection({ token, location, holidays, onChanged, onImport
                         <TableCell className="py-1 text-right" data-label={copy.colActions}>
                           <span data-holiday-id={holiday.id} className="inline-flex">
                             <RowActions
-                              label={copy.actionsFor(holiday.name)}
+                              label={copy.actionsFor(holiday.name, fmt ? dateText(holiday, fmt) : null)}
                               busy={busyId === holiday.id}
                               className="max-sm:size-11"
                               actions={[
@@ -249,7 +262,9 @@ export function HolidaysSection({ token, location, holidays, onChanged, onImport
       <ConfirmDialog
         open={deleting !== null}
         onOpenChange={(open) => {
-          if (!open) setDeleting(null);
+          // Con la eliminación en vuelo, Escape y el fondo no cierran: el
+          // diálogo se cierra al terminar y deja el foco en un sitio que existe.
+          if (!open && !(deleting && busyId === deleting.id)) setDeleting(null);
         }}
         title={copy.deleteTitle}
         description={deleting ? copy.deleteBody(deleting.name) : undefined}

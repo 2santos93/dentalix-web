@@ -177,7 +177,8 @@ function LocationCalendarSections({
             locationId={location.id}
             fmt={fmt}
             initial={calendar.workingWeekdays}
-            onSaved={setCalendar}
+            // Solo los días: los festivos de la pantalla pueden ser más nuevos que la respuesta del PUT.
+            onSaved={(saved) => setCalendar((c) => (c ? { ...c, workingWeekdays: saved.workingWeekdays } : saved))}
           />
         ) : (
           <p data-testid="working-weekdays-summary" className="font-medium text-ink">

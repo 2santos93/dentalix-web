@@ -225,6 +225,8 @@ describe('regionalFormat', () => {
           const fresh = jest.requireActual<typeof import('./regional-format')>('./regional-format');
           const kiritimati = fresh.regionalFormat({ locale: 'en-US', hourCycle: 'h12' });
           expect(kiritimati.weekdayName(1)).toBe('lunes');
+          // En Kiritimati el mediodía UTC del 3 de mayo ya es 4: la fecha de un festivo no se corre.
+          expect(kiritimati.civilDate('2027-05-03')).toBe('05/03/2027');
           expect(kiritimati.civilLongDate('2027-05-03')).toBe('lunes 3 de mayo de 2027');
           expect(kiritimati.civilLongDate('2027-05-03', { weekday: false, year: false })).toBe('3 de mayo');
         });

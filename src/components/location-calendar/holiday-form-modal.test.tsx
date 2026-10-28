@@ -85,6 +85,46 @@ describe('HolidayFormModal (DX-316, spec §7.2)', () => {
     expect(await screen.findByText('Ya hay un festivo ese día: «Cierre anual».')).toBeInTheDocument();
     expect(onSaved).not.toHaveBeenCalled();
     expect(onOpenChange).not.toHaveBeenCalledWith(false);
+    // Lo escrito se queda para corregirlo.
+    expect(dateInput().value).toBe('2027-05-03');
+    expect(nameInput().value).toBe('Fiesta');
+  });
+
+  it('a 400 with the class-validator array goes to the top of the modal', async () => {
+    mockedCreate.mockRejectedValue(
+      new ApiError(400, 'Bad Request', {
+        messages: [
+          'Fecha «x» no válida: usa AAAA-MM-DD, por ejemplo 2027-05-03.',
+          'El nombre es obligatorio (hasta 120 caracteres).',
+        ],
+      }),
+    );
+    const user = setupUser();
+    renderModal();
+    await user.type(dateInput(), '2027-05-03');
+    await user.type(nameInput(), 'Fiesta');
+    await user.click(screen.getByRole('button', { name: copy.create }));
+
+    const banner = await screen.findByText(/Fecha «x» no válida/);
+    expect(banner).toHaveTextContent('El nombre es obligatorio (hasta 120 caracteres).');
+    expect(dateInput()).not.toHaveAttribute('aria-invalid');
+    expect(nameInput()).not.toHaveAttribute('aria-invalid');
+  });
+
+  it('a 400 naming a field the form does not have goes to the top of the modal', async () => {
+    mockedCreate.mockRejectedValue(
+      new ApiError(400, 'El identificador de la sede no es válido.', { field: 'locationId' }),
+    );
+    const user = setupUser();
+    renderModal();
+    await user.type(dateInput(), '2027-05-03');
+    await user.type(nameInput(), 'Fiesta');
+    await user.click(screen.getByRole('button', { name: copy.create }));
+
+    expect(await screen.findByText('El identificador de la sede no es válido.')).toBeInTheDocument();
+    expect(dateInput()).not.toHaveAttribute('aria-invalid');
+    expect(nameInput()).not.toHaveAttribute('aria-invalid');
+    expect(recurringBox()).not.toHaveAttribute('aria-invalid');
   });
 
   it('409 LOCATION_HOLIDAY_LIMIT on create is shown too', async () => {

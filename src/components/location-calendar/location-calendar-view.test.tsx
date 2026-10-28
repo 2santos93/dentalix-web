@@ -2,7 +2,7 @@ import { useSyncExternalStore } from 'react';
 import { render, screen, waitFor, within } from '@testing-library/react';
 import { LocationCalendarView } from './location-calendar-view';
 import { listLocations } from '@/lib/locations/locations-api';
-import { getLocationCalendar } from '@/lib/locations/location-calendar-api';
+import { createHoliday, getLocationCalendar, setWorkingWeekdays } from '@/lib/locations/location-calendar-api';
 import { setActiveLocationId } from '@/lib/locations/location-store';
 import { ApiError } from '@/lib/api/api-error';
 import { clinicLocation } from '@/lib/test/locations';
@@ -34,9 +34,13 @@ jest.mock('../../lib/locations/locations-api', () => ({
 jest.mock('../../lib/locations/location-calendar-api', () => ({
   ...jest.requireActual('../../lib/locations/location-calendar-api'),
   getLocationCalendar: jest.fn(),
+  setWorkingWeekdays: jest.fn(),
+  createHoliday: jest.fn(),
 }));
 const mockedList = jest.mocked(listLocations);
 const mockedGet = jest.mocked(getLocationCalendar);
+const mockedSetWeekdays = jest.mocked(setWorkingWeekdays);
+const mockedCreate = jest.mocked(createHoliday);
 
 const norte = clinicLocation({ id: 'norte', name: 'Sede Norte', locale: 'de-DE', hourCycle: 'h23' });
 const sur = clinicLocation({ id: 'sur', name: 'Sede Sur', locale: 'en-US', hourCycle: 'h12' });
@@ -203,5 +207,31 @@ describe('LocationCalendarView (DX-316, spec §7.1–§7.2)', () => {
     renderView();
     const festivos = await screen.findByRole('region', { name: 'Festivos' });
     expect(within(festivos).getByText('03.05.2027 · lunes')).toBeInTheDocument();
+  });
+
+  it('saving the working days keeps a holiday added while the save was in flight', async () => {
+    setActiveLocationId('norte');
+    let finishSave: (c: Awaited<ReturnType<typeof setWorkingWeekdays>>) => void = () => {};
+    mockedSetWeekdays.mockImplementation(() => new Promise((resolve) => (finishSave = resolve)));
+    mockedCreate.mockResolvedValue({ id: 'h-new', date: '2027-12-24', name: 'Nochebuena', recurring: false });
+    const user = setupUser();
+    renderView();
+    const festivos = await screen.findByRole('region', { name: 'Festivos' });
+
+    await user.click(screen.getByRole('checkbox', { name: 'Sábado' }));
+    await user.click(screen.getByRole('button', { name: 'Guardar días hábiles' }));
+    await waitFor(() => expect(mockedSetWeekdays).toHaveBeenCalled());
+
+    await user.click(within(festivos).getByRole('button', { name: 'Añadir festivo' }));
+    await user.type(screen.getByLabelText('Fecha'), '2027-12-24');
+    await user.type(screen.getByLabelText('Nombre'), 'Nochebuena');
+    await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Añadir festivo' }));
+    expect(await within(festivos).findByText('Nochebuena')).toBeInTheDocument();
+
+    // La respuesta del PUT es de antes del alta: no trae el festivo nuevo.
+    finishSave({ locationId: 'norte', workingWeekdays: [1, 2, 3, 4, 5, 6], holidays: [] });
+    expect(await screen.findByText('Guardado')).toBeInTheDocument();
+    expect(screen.getByTestId('working-weekdays-summary')).toHaveTextContent('Lunes a sábado');
+    expect(within(festivos).getByText('Nochebuena')).toBeInTheDocument();
   });
 });
