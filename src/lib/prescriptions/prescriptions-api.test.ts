@@ -4,19 +4,21 @@
  */
 import {
   canIssuePrescriptions,
+  canManagePrescriptionSettings,
   canManagePrescriptionTemplates,
   canUsePrescriptions,
   canVoidPrescription,
   checkPrescriptionSafety,
-  cimaTechnicalSheetUrl,
   createPrescriptionTemplate,
   deletePrescriptionTemplate,
   getPrescription,
   getPrescriptionIssuer,
+  getPrescriptionSettings,
   issuePrescription,
   listPatientPrescriptions,
   listPrescriptionTemplates,
   prescriptionPrintHref,
+  savePrescriptionSettings,
   updatePrescriptionTemplate,
   voidPrescription,
 } from './prescriptions-api';
@@ -90,7 +92,7 @@ describe('prescriptions-api', () => {
     expect(call(spy, 4).path).toMatch(/\/prescriptions\/rx1\/void$/);
   });
 
-  it('plantillas y país de la sede', async () => {
+  it('plantillas', async () => {
     const spy = mockFetch({});
     await listPrescriptionTemplates('tok');
     await createPrescriptionTemplate('tok', { name: 'A', items: [{ activeIngredient: 'X' }] });
@@ -117,11 +119,22 @@ describe('prescriptions-api', () => {
     expect(body).toEqual({ items: [{ activeIngredient: 'Ibuprofeno' }] });
   });
 
-  it('DX-300: enlace a la ficha técnica de la CIMA solo con un nº de registro válido', () => {
-    expect(cimaTechnicalSheetUrl(' 62985 ')).toBe(
-      'https://cima.aemps.es/cima/dochtml/ft/62985/FT_62985.html',
-    );
-    expect(cimaTechnicalSheetUrl('Ana Pérez')).toBeNull();
-    expect(cimaTechnicalSheetUrl('')).toBeNull();
+  it('canManagePrescriptionSettings is ADMIN only', () => {
+    expect(canManagePrescriptionSettings('ADMIN')).toBe(true);
+    expect(canManagePrescriptionSettings('DENTIST')).toBe(false);
+    expect(canManagePrescriptionSettings('ASSISTANT')).toBe(false);
+    expect(canManagePrescriptionSettings('RECEPTION')).toBe(false);
+    expect(canManagePrescriptionSettings(null)).toBe(false);
+  });
+
+  it('settings GET and PUT hit /prescriptions/settings', async () => {
+    const settings = { printQuantityInWords: true, requireClinicalRecordNumber: false, validityDays: 30 };
+    const spy = mockFetch(settings);
+    await expect(getPrescriptionSettings('tok')).resolves.toEqual(settings);
+    await savePrescriptionSettings('tok', settings);
+    expect(call(spy, 0)).toMatchObject({ method: 'GET', auth: 'Bearer tok' });
+    expect(call(spy, 0).path).toMatch(/\/prescriptions\/settings$/);
+    expect(call(spy, 1)).toMatchObject({ method: 'PUT', body: settings, auth: 'Bearer tok' });
+    expect(call(spy, 1).path).toMatch(/\/prescriptions\/settings$/);
   });
 });

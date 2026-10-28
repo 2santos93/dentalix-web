@@ -7,12 +7,16 @@ import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { Input } from '@/components/ui/input';
 import { fieldClass } from '@/lib/ui/field-class';
 import { cn } from '@/lib/utils';
-import {
-  cimaTechnicalSheetUrl,
-  type ClinicCountry,
-  type PrescriptionSafetyPreview,
-  type SafetyAlert,
-} from '@/lib/prescriptions/prescriptions-api';
+import type { PrescriptionSafetyPreview, SafetyAlert } from '@/lib/prescriptions/prescriptions-api';
+// TODO(T8): sale el campo de la CIMA (D12), con esta copia local del enlace y el país.
+import type { ClinicCountry } from '@/lib/locations/location-country';
+
+function cimaTechnicalSheetUrl(registrationNumber: string): string | null {
+  const nregistro = registrationNumber.trim();
+  if (!/^\d{4,10}(IP\d{0,4})?$/i.test(nregistro)) return null;
+  const n = encodeURIComponent(nregistro.toUpperCase());
+  return `https://cima.aemps.es/cima/dochtml/ft/${n}/FT_${n}.html`;
+}
 
 export const safetyCopy = {
   title: 'Avisos de seguridad',

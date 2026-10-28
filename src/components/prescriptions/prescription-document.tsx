@@ -25,7 +25,9 @@ const copy = {
   posology: (dose: string, frequency: string, days: number) =>
     `${dose}, ${frequency.toLowerCase()}, durante ${days} ${days === 1 ? 'día' : 'días'}.`,
   quantity: 'Cantidad total',
-  quantityValue: (n: number, words: string, unit: string) => `${n} (${words}) ${unit}`,
+  // TODO(T7): la cantidad sin letras de la receta única.
+  quantityValue: (n: number, words: string | null, unit: string) =>
+    words === null ? `${n} ${unit}` : `${n} (${words}) ${unit}`,
   packages: 'Envases',
   brand: 'Marca',
   instructions: 'Indicaciones',
@@ -66,7 +68,8 @@ interface PrescriptionDocumentProps {
  * la receta. Papel blanco y tinta oscura explícitos, también en modo oscuro.
  */
 export function PrescriptionDocument({ prescription: rx }: PrescriptionDocumentProps) {
-  const country = rx.country;
+  // TODO(T7): plantilla legada o neutral y formato de la sede de la receta.
+  const country = rx.country ?? 'CO';
   const voided = rx.status === 'VOIDED';
   const confirmedAlerts = (rx.safetyAlerts ?? []).filter((a) => a.severity === 'BLOCKING');
 

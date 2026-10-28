@@ -1,8 +1,6 @@
-import type {
-  ClinicCountry,
-  PrescriptionItemInput,
-  PrescriptionTemplateItem,
-} from './prescriptions-api';
+// TODO(T8): los envases dejan de depender del país.
+import type { ClinicCountry } from '@/lib/locations/location-country';
+import type { PrescriptionItemInput, PrescriptionTemplateItem } from './prescriptions-api';
 
 /**
  * Un medicamento tal como se edita en el formulario: todo texto, también los

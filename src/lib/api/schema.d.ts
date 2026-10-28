@@ -3980,6 +3980,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/prescriptions/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Ajustes de la receta de la clínica (DX-324) */
+        get: operations["PrescriptionsController_settings"];
+        /**
+         * Cambia los ajustes de la receta de la clínica; queda en la auditoría
+         * @description DX-324. Aplica a la siguiente emisión; una receta ya emitida no cambia. Si nada cambia, responde 200 sin evento de auditoría.
+         */
+        put: operations["PrescriptionsController_updateClinicSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/prescriptions/{id}": {
         parameters: {
             query?: never;
@@ -7589,8 +7610,10 @@ export interface components {
             email: string;
             /** @enum {string} */
             role: "DENTIST" | "ASSISTANT" | "RECEPTION" | "ADMIN";
-            /** @description Registro profesional / nº de colegiado (DX-013). Solo en el perfil y en la respuesta del PATCH. */
+            /** @description Nº de registro profesional del miembro (DX-013). Solo en el perfil y en la respuesta del PATCH. */
             professionalLicense?: string | null;
+            /** @description Especialidad del profesional en esta clínica (DX-324). Solo en el perfil y en la respuesta del PATCH. */
+            professionalSpecialty?: string | null;
             /** @description Sedes activas en las que puede trabajar (DX-089). null = todas (sin restricción). Solo en GET /staff y en el perfil. */
             locationIds?: string[] | null;
         };
@@ -7650,8 +7673,10 @@ export interface components {
             fullName?: string;
             /** @enum {string} */
             role?: "DENTIST" | "ASSISTANT" | "RECEPTION" | "ADMIN";
-            /** @description Registro profesional (CO: RETHUS / tarjeta profesional) o nº de colegiado (ES). Cadena vacía lo borra. Lo exige la receta (DX-013). */
+            /** @description Nº de registro profesional del miembro. Cadena vacía lo borra. Lo exige la receta (DX-013). */
             professionalLicense?: string;
+            /** @description Especialidad del profesional en esta clínica; la receta la imprime si existe. Cadena vacía la borra. */
+            professionalSpecialty?: string;
         };
         StaffLocationsDto: {
             /** @description true = sin restricción: trabaja en todas las sedes (siempre en un ADMIN) y `locationIds` va vacío */
@@ -12675,6 +12700,11 @@ export interface components {
             /** @description Ausente = no tocar las notas; null o vacío = borrarlas. */
             notes?: string | null;
         };
+        /**
+         * @description Plantilla con la que se emitió una receta anterior a la receta única; null en la receta única
+         * @enum {string}
+         */
+        LegacyPrescriptionCountry: "CO" | "ES";
         /** @enum {string} */
         PrescriptionStatus: "ISSUED" | "VOIDED";
         AllergyMatchDto: {
@@ -12723,8 +12753,11 @@ export interface components {
             durationDays: number;
             totalQuantity: number;
             quantityUnit: string;
-            /** @example veintiuno */
-            quantityInWords: string;
+            /**
+             * @description Cantidad total en letras: la guardada en una receta legada; en la receta única, solo si la clínica la imprimía al emitir (si no, null)
+             * @example veintiuno
+             */
+            quantityInWords: string | null;
             packages: number | null;
             instructions: string | null;
         };
@@ -12739,7 +12772,8 @@ export interface components {
             patientId: string;
             /** Format: uuid */
             professionalId: string;
-            country: components["schemas"]["ClinicCountry"];
+            /** @description Plantilla con la que se emitió una receta anterior a la receta única; null en la receta única */
+            country: components["schemas"]["LegacyPrescriptionCountry"] | null;
             status: components["schemas"]["PrescriptionStatus"];
             /**
              * Format: date-time
@@ -12748,6 +12782,7 @@ export interface components {
             issuedAt: string;
             /**
              * Format: date
+             * @description Fecha desde la que la receta vale
              * @example 2026-10-16
              */
             dispensationDate: string;
@@ -12759,11 +12794,20 @@ export interface components {
             patientName: string;
             patientDocument: string | null;
             patientBirthYear: number | null;
+            /** @description Años cumplidos el día de la emisión en la zona de la sede; null sin fecha de nacimiento, con una edad imposible o en recetas anteriores */
+            patientAgeYears: number | null;
+            /**
+             * @description Peso de la anamnesis vigente al emitir, redondeado a 0,1 kg; null si no consta o en recetas anteriores
+             * @example 72.5
+             */
+            patientWeightKg: number | null;
             /** @description Nº de historia clínica */
             clinicalRecordNumber: string | null;
             professionalName: string;
-            /** @description Registro profesional (CO) / nº de colegiado (ES) */
+            /** @description Nº de registro profesional */
             professionalLicense: string;
+            /** @description Especialidad del perfil del profesional al emitir; null si no tenía o en recetas anteriores */
+            professionalSpecialty: string | null;
             professionalEmail: string | null;
             clinicName: string;
             locationName: string;
@@ -12816,7 +12860,7 @@ export interface components {
         };
         PrescriptionItemInputDto: {
             /**
-             * @description Principio activo (DCI/DOE)
+             * @description Principio activo (DCI)
              * @example Amoxicilina
              */
             activeIngredient?: string;
@@ -12835,29 +12879,29 @@ export interface components {
             /** @example 7 */
             durationDays?: number;
             /**
-             * @description Se imprime también en letras
+             * @description Se imprime en cifras y, si la clínica lo tiene activado, también en letras
              * @example 21
              */
             totalQuantity?: number;
             /** @example cápsulas */
             quantityUnit?: string;
-            /** @description Nº de envases (obligatorio en ES) */
+            /** @description Nº de envases (opcional) */
             packages?: number;
             /** @description Indicaciones para el paciente */
             instructions?: string;
         };
         IssuePrescriptionDto: {
-            /** @description 1 a 10 (en ES, 1) */
+            /** @description 1 a 10 */
             items: components["schemas"]["PrescriptionItemInputDto"][];
             /**
              * Format: date
-             * @description Fecha prevista de dispensación (ES) / de la receta. Por defecto hoy en la zona de la sede; no anterior a hoy ni más de 90 días después.
+             * @description Fecha desde la que vale la receta. Por defecto hoy en la zona de la sede; no anterior a hoy ni más de 90 días después.
              * @example 2026-10-16
              */
             dispensationDate?: string;
             /** @description Indicaciones generales */
             notes?: string;
-            /** @description Registro profesional (CO) / nº de colegiado (ES) si tu perfil aún no lo tiene; queda guardado en la receta y en tu perfil de la clínica. Si el perfil ya lo tiene, se ignora (lo cambia un ADMIN en Personal). */
+            /** @description Nº de registro profesional si tu perfil aún no lo tiene; queda guardado en la receta y en tu perfil de la clínica. Si el perfil ya lo tiene, se ignora (lo cambia un ADMIN en Personal). */
             professionalLicense?: string;
             /**
              * @deprecated
@@ -12881,7 +12925,6 @@ export interface components {
             safetyAlerts: components["schemas"]["SafetyAlertDto"][];
         };
         PrescriptionIssuerDto: {
-            country: components["schemas"]["ClinicCountry"];
             /** Format: uuid */
             locationId: string;
             locationName: string;
@@ -12890,10 +12933,45 @@ export interface components {
             professionalName: string;
             /** @description null = hay que pedirlo en el modal */
             professionalLicense: string | null;
-            /** @description Días naturales de validez (ES 10, CO 30) */
+            /** @description Especialidad del perfil; se imprime si existe */
+            professionalSpecialty: string | null;
+            /** @description Días de validez de la receta (ajuste de la clínica) */
             validityDays: number;
-            /** @description Medicamentos por receta (ES 1, CO 10) */
+            /**
+             * @description Medicamentos por receta
+             * @example 10
+             */
             maxItems: number;
+            /** @description La receta imprime la cantidad también en letras (ajuste de la clínica) */
+            printQuantityInWords: boolean;
+            /** @description Se exige el documento del paciente, que se imprime como nº de historia clínica (ajuste de la clínica) */
+            requireClinicalRecordNumber: boolean;
+        };
+        PrescriptionSettingsDto: {
+            /**
+             * @description La receta imprime la cantidad total de cada medicamento también en letras.
+             * @example true
+             */
+            printQuantityInWords: boolean;
+            /**
+             * @description Emitir exige el documento del paciente, que la receta imprime como nº de historia clínica.
+             * @example false
+             */
+            requireClinicalRecordNumber: boolean;
+            /**
+             * @description Días civiles de validez de la receta, contando el de la fecha de inicio.
+             * @example 30
+             */
+            validityDays: number;
+        };
+        /** @enum {string} */
+        PrescriptionHourCycle: "h12" | "h23";
+        PrescriptionLocationFormatDto: {
+            /** @example Asia/Tokyo */
+            timeZone: string | null;
+            /** @example ja-JP */
+            locale: string | null;
+            hourCycle: components["schemas"]["PrescriptionHourCycle"] | null;
         };
         PrescriptionDocumentDto: {
             /** Format: uuid */
@@ -12906,7 +12984,8 @@ export interface components {
             patientId: string;
             /** Format: uuid */
             professionalId: string;
-            country: components["schemas"]["ClinicCountry"];
+            /** @description Plantilla con la que se emitió una receta anterior a la receta única; null en la receta única */
+            country: components["schemas"]["LegacyPrescriptionCountry"] | null;
             status: components["schemas"]["PrescriptionStatus"];
             /**
              * Format: date-time
@@ -12915,6 +12994,7 @@ export interface components {
             issuedAt: string;
             /**
              * Format: date
+             * @description Fecha desde la que la receta vale
              * @example 2026-10-16
              */
             dispensationDate: string;
@@ -12926,11 +13006,20 @@ export interface components {
             patientName: string;
             patientDocument: string | null;
             patientBirthYear: number | null;
+            /** @description Años cumplidos el día de la emisión en la zona de la sede; null sin fecha de nacimiento, con una edad imposible o en recetas anteriores */
+            patientAgeYears: number | null;
+            /**
+             * @description Peso de la anamnesis vigente al emitir, redondeado a 0,1 kg; null si no consta o en recetas anteriores
+             * @example 72.5
+             */
+            patientWeightKg: number | null;
             /** @description Nº de historia clínica */
             clinicalRecordNumber: string | null;
             professionalName: string;
-            /** @description Registro profesional (CO) / nº de colegiado (ES) */
+            /** @description Nº de registro profesional */
             professionalLicense: string;
+            /** @description Especialidad del perfil del profesional al emitir; null si no tenía o en recetas anteriores */
+            professionalSpecialty: string | null;
             professionalEmail: string | null;
             clinicName: string;
             locationName: string;
@@ -12955,6 +13044,8 @@ export interface components {
             voidReason: string | null;
             items: components["schemas"]["PrescriptionItemDto"][];
             clinicLogoUrl: string | null;
+            /** @description Formato regional y zona actuales de la sede de la receta, para imprimirla */
+            locationFormat: components["schemas"]["PrescriptionLocationFormatDto"];
             /** @description true si el hash guardado coincide con el recalculado al leer */
             integrityOk: boolean;
         };
@@ -24533,7 +24624,7 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description Sede desde la que se emite (da el país y la dirección). Sin ella, la sede principal. */
+                /** @description Sede desde la que se emite (da la dirección y la zona horaria). Sin ella, la sede principal. */
                 "X-Location-Id"?: string;
             };
             path: {
@@ -24555,7 +24646,7 @@ export interface operations {
                     "application/json": components["schemas"]["PrescriptionDto"];
                 };
             };
-            /** @description Falta un campo legal según el país de la sede (mensaje en español con todos los que faltan), fecha de dispensación inválida o ES con más de un medicamento */
+            /** @description Falta un campo obligatorio de la receta o el documento del paciente si la clínica lo exige (mensaje en español con todos los que faltan), o fecha de inicio inválida */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -24591,7 +24682,7 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description Sede desde la que se emite (da el país y la dirección). Sin ella, la sede principal. */
+                /** @description Sede desde la que se emite (da la dirección y la zona horaria). Sin ella, la sede principal. */
                 "X-Location-Id"?: string;
             };
             path: {
@@ -24641,7 +24732,7 @@ export interface operations {
         parameters: {
             query?: never;
             header?: {
-                /** @description Sede desde la que se emite (da el país y la dirección). Sin ella, la sede principal. */
+                /** @description Sede desde la que se emite (da la dirección y la zona horaria). Sin ella, la sede principal. */
                 "X-Location-Id"?: string;
             };
             path?: never;
@@ -24649,7 +24740,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description País y sede desde los que se emitiría, y el registro profesional del usuario */
+            /** @description Sede desde la que se emitiría, registro y especialidad del usuario, y los ajustes de receta de la clínica */
             200: {
                 headers: {
                     [name: string]: unknown;
@@ -24659,6 +24750,69 @@ export interface operations {
                 };
             };
             /** @description Rol sin acceso clínico (recepción) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PrescriptionsController_settings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrescriptionSettingsDto"];
+                };
+            };
+            /** @description Rol sin acceso clínico (recepción) */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PrescriptionsController_updateClinicSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PrescriptionSettingsDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PrescriptionSettingsDto"];
+                };
+            };
+            /** @description Falta un campo, un sí/no que no es booleano o una validez fuera de 1–365 o no entera */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo un administrador puede cambiar los ajustes de la receta. */
             403: {
                 headers: {
                     [name: string]: unknown;

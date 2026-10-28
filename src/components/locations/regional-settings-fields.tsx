@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import type { Currency } from '@/lib/reference/currencies-api';
 import type { HourCycle } from '@/lib/format/regional-format';
-import { COUNTRY_LABELS, type ClinicCountry } from '@/lib/prescriptions/prescriptions-api';
+import { COUNTRY_LABELS, type ClinicCountry } from '@/lib/locations/location-country';
 import {
   browserLocales,
   HOUR_CYCLE_LABELS,

@@ -210,3 +210,71 @@ describe('arquitectura: calendario de la sede sin país (DX-316)', () => {
     expect(COUNTRY_WORD.test('Dentalix no trae los festivos de ningún país.')).toBe(false);
   });
 });
+
+/**
+ * DX-324 (spec R1, R12, R14, §6.10): la receta es una sola para todas las
+ * clínicas. Ningún fichero de `components/prescriptions/**` ni de
+ * `lib/prescriptions/**` (sin tests) nombra un país, un código de país, una
+ * norma o una autoridad nacional, salvo la excepción con nombre de R12:
+ * `lib/prescriptions/legacy-prescription-layout.ts`, que congela los textos de
+ * las recetas emitidas antes de DX-324. Mira también los comentarios.
+ */
+const PRESCRIPTION_LEGACY_LAYOUT = 'lib/prescriptions/legacy-prescription-layout.ts';
+/** Códigos de país en mayúsculas (`'CO'`, `ES:`) y normas o autoridades nacionales. */
+const NATIONAL_TERM = /\b(?:CO|ES)\b|colegiado|DNI\/NIE|AEMPS|CIMA|Decreto|Dec\. 780|RD 1718|España|Colombia/;
+
+function nationalTermHit(line: string): boolean {
+  return COUNTRY_WORD.test(line) || NATIONAL_TERM.test(line);
+}
+
+function prescriptionFiles(): string[] {
+  return [join(SRC, 'components/prescriptions'), join(SRC, 'lib/prescriptions')]
+    .flatMap(sourceFiles)
+    .filter(scanned)
+    .filter((path) => relative(SRC, path).split(sep).join('/') !== PRESCRIPTION_LEGACY_LAYOUT);
+}
+
+describe('arquitectura: receta sin país (DX-324)', () => {
+  // TODO(T8): pasa a `it` cuando el modal, el panel, los medicamentos y el
+  // borrador dejen de razonar por país (T7 limpia el documento).
+  it.failing('prescription files never mention a country outside the legacy layout', () => {
+    const mentions = prescriptionFiles().flatMap((path) =>
+      readFileSync(path, 'utf8')
+        .split('\n')
+        .map((line, i) => ({ line, n: i + 1 }))
+        .filter(({ line }) => nationalTermHit(line))
+        .map(({ line, n }) => `${relative(SRC, path)}:${n}: ${line.trim()}`),
+    );
+    expect(mentions).toEqual([]);
+  });
+
+  it('the prescription scan covers the document, the modal and the client, skips the legacy layout and catches national terms', () => {
+    const rels = prescriptionFiles().map((f) => relative(SRC, f).split(sep).join('/'));
+    expect(rels).toEqual(
+      expect.arrayContaining([
+        'components/prescriptions/prescription-document.tsx',
+        'components/prescriptions/new-prescription-modal.tsx',
+        'lib/prescriptions/prescriptions-api.ts',
+        'lib/prescriptions/prescription-layout.ts',
+        'lib/prescriptions/prescription-format.ts',
+      ]),
+    );
+    expect(rels).not.toContain(PRESCRIPTION_LEGACY_LAYOUT);
+    expect(rels.some((r) => r.includes('.test.'))).toBe(false);
+    for (const line of [
+      "const country = rx.country ?? 'CO';",
+      "{ CO: 'Documento', ES: 'DNI/NIE' }",
+      "'Nº de colegiado'",
+      'Real Decreto 1718/2010, art. 3',
+      'Ficha técnica en la CIMA de la AEMPS',
+      'En España cada receta lleva un solo medicamento',
+      '(Colombia)',
+      'type ClinicCountry',
+    ]) {
+      expect([line, nationalTermHit(line)]).toEqual([line, true]);
+    }
+    for (const line of ["title: 'Receta'", "documentLabel: 'Documento'", 'MUTUA_ES', 'VALUES', 'Nº de registro profesional']) {
+      expect([line, nationalTermHit(line)]).toEqual([line, false]);
+    }
+  });
+});

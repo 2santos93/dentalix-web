@@ -7,7 +7,6 @@ import { ApiError } from '@/lib/api/client';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import {
   checkPrescriptionSafety,
-  COUNTRY_LABELS,
   getPrescriptionIssuer,
   issuePrescription,
   listPrescriptionTemplates,
@@ -25,6 +24,8 @@ import {
   type ItemDraft,
   type ItemDraftErrors,
 } from '@/lib/prescriptions/prescription-draft';
+// TODO(T8): el modal deja de razonar por país.
+import { COUNTRY_LABELS, type ClinicCountry } from '@/lib/locations/location-country';
 import { FormModal } from '@/components/shared/form-modal';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { FieldError } from '@/components/errors/field-error';
@@ -264,7 +265,8 @@ function NewPrescriptionForm({
       ? 'Confirma los avisos de seguridad para emitir.'
       : null;
 
-  const country = issuer?.country ?? 'CO';
+  // TODO(T8): el emisor ya no trae país; hasta la T8 el modal se pinta como antes con 'CO'.
+  const country: ClinicCountry = 'CO';
   const maxItems = issuer?.maxItems ?? 10;
   const tooMany = items.length > maxItems;
   const needsLicense = issuer !== null && issuer.professionalLicense === null;
@@ -405,7 +407,7 @@ function NewPrescriptionForm({
       ) : (
         <>
           <p className="text-sm text-muted">
-            {copy.issuer(issuer.locationName, COUNTRY_LABELS[issuer.country], issuer.validityDays)}
+            {copy.issuer(issuer.locationName, COUNTRY_LABELS[country], issuer.validityDays)}
           </p>
 
           <FormField htmlFor="rx-template" label={copy.templateLabel}>

@@ -2,7 +2,8 @@
 import * as React from 'react';
 import { Trash2 } from 'lucide-react';
 import type { ItemDraft, ItemDraftErrors } from '@/lib/prescriptions/prescription-draft';
-import type { ClinicCountry } from '@/lib/prescriptions/prescriptions-api';
+// TODO(T8): el modo de la receta deja de llevar país.
+import type { ClinicCountry } from '@/lib/locations/location-country';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';

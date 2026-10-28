@@ -7,7 +7,7 @@ import type { ClinicLocation } from '@/lib/locations/locations-api';
 import { useSessionLocations } from '@/lib/locations/session-locations';
 import { getTokenRole } from '@/lib/auth/token-role';
 import { canManageLocationCalendar } from '@/lib/locations/location-calendar';
-import { COUNTRY_LABELS } from '@/lib/prescriptions/prescriptions-api';
+import { COUNTRY_LABELS } from '@/lib/locations/location-country';
 import { locationCurrency, locationTimeZone } from '@/lib/locations/location-settings';
 import { canonicalLocale, HOUR_CYCLE_LABELS, isHourCycle } from '@/lib/locations/regional-settings';
 import { AsyncSection } from '@/components/shared/async-section';
