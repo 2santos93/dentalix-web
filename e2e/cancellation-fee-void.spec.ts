@@ -1,12 +1,12 @@
 import { test, expect } from './support/test';
 import { randomUUID } from 'node:crypto';
-import { readFileSync } from 'node:fs';
-import type { AxeResults } from 'axe-core';
-import type { APIRequestContext, Page } from '@playwright/test';
+import { mkdirSync } from 'node:fs';
+import type { APIRequestContext, Locator, Page } from '@playwright/test';
 import { addStaffViaApi, apiPost, registerClinicViaApi, type ApiSession } from './support/api';
 import { loginAs } from './support/auth';
 import { expectDialogInsideViewport, expectNoHorizontalScroll } from './support/layout';
 import { API_URL, tenantOrigin } from './support/urls';
+import { axeInBothThemes } from './support/axe';
 
 /**
  * e2e SEC-050: el cargo por inasistencia o cancelación tardía (DX-291) ya no
@@ -15,6 +15,12 @@ import { API_URL, tenantOrigin } from './support/urls';
  * «Anular cargo»; el ADMIN lo anula con motivo desde el plan y el ítem sale
  * del plan (la vista del cargo pasa a VOIDED). A 1440 y a 390 px, sin scroll
  * horizontal.
+ *
+ * DX-343: «Anular cargo» se confirma con el botón destructivo; cada uno tiene
+ * un nombre único (ítem e importe, y «Cargo n de N» con varios); tras anular
+ * el foco va al encabezado de los ítems; tras un 409 el diálogo no reenvía y,
+ * si releer el plan falla, error de sección con «Reintentar». axe (todas las
+ * violaciones) en claro y oscuro. Con DX343_QA_DIR guarda capturas.
  *
  * Una clínica nueva por corrida. En serie.
  */
@@ -28,6 +34,7 @@ const dentist = { fullName: 'Dra. Diana Ortiz', email: `diana.void.${suffix}@exa
 let session: ApiSession;
 let providerId: string;
 let policyVersionId: string;
+const QA_DIR = process.env.DX343_QA_DIR;
 
 test.describe.configure({ mode: 'serial' });
 
@@ -69,14 +76,17 @@ async function chargedPatient(
   request: APIRequestContext,
   lastName: string,
   hours: number,
+  existingPatientId?: string,
 ): Promise<{ patientId: string; appointmentId: string }> {
-  const patient = await apiPost<{ id: string }>(request, session, '/patients', {
-    firstName: 'Pablo',
-    lastName,
-    docType: 'CC',
-    docNumber: lastName.slice(0, 20),
-    sex: 'M',
-  });
+  const patient = existingPatientId
+    ? { id: existingPatientId }
+    : await apiPost<{ id: string }>(request, session, '/patients', {
+        firstName: 'Pablo',
+        lastName,
+        docType: 'CC',
+        docNumber: lastName.slice(0, 20),
+        sex: 'M',
+      });
   const start = new Date(Math.ceil((Date.now() + hours * 3_600_000) / 60_000) * 60_000);
   const appointment = await apiPost<{ id: string }>(request, session, '/appointments', {
     patientId: patient.id,
@@ -109,6 +119,23 @@ function feeRow(page: Page) {
     .first();
 }
 
+/**
+ * axe en claro y oscuro sobre `scope` y, con DX343_QA_DIR, captura de la
+ * página en cada tema.
+ */
+async function audit(page: Page, scope: Locator, name: string) {
+  const width = page.viewportSize()?.width ?? 0;
+  const violations = await axeInBothThemes(page, scope, async (colorScheme) => {
+    if (!QA_DIR) return;
+    mkdirSync(QA_DIR, { recursive: true });
+    await page.screenshot({ path: `${QA_DIR}/${name}-${width}-${colorScheme}.png` });
+  });
+  expect.soft(violations.light, `${name} ${width} claro`).toEqual([]);
+  expect.soft(violations.dark, `${name} ${width} oscuro`).toEqual([]);
+}
+
+const itemsHeading = (page: Page) => page.getByRole('heading', { name: 'Ítems del plan de tratamiento' });
+
 async function flow(page: Page, request: APIRequestContext, width: number, lastName: string) {
   await page.setViewportSize({ width, height: width < 768 ? 844 : 900 });
   const { patientId, appointmentId } = await chargedPatient(request, lastName, width < 768 ? 6 : 5);
@@ -129,45 +156,25 @@ async function flow(page: Page, request: APIRequestContext, width: number, lastN
   await page.goto(`${origin}/patients/${patientId}?tab=treatment-plans`);
   const adminRow = feeRow(page);
   await expect(adminRow).toBeVisible({ timeout: 15_000 });
-  await page.evaluate(readFileSync(require.resolve('axe-core/axe.min.js'), 'utf8'));
-  for (const colorScheme of ['light', 'dark'] as const) {
-    await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
-    await page.mouse.move(0, 0);
-    const region = page.getByRole('heading', { name: 'Ítems del plan de tratamiento' }).locator('..');
-    await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
-    await page.evaluate(() => Promise.allSettled(document.getAnimations().map((animation) => animation.finished)));
-    await page.waitForTimeout(500);
-    const violations = await region.evaluate(async (element) => {
-      const axe = (window as unknown as { axe: { run: (context: Element) => Promise<AxeResults> } }).axe;
-      return (await axe.run(element)).violations.map((v) => ({ id: v.id, nodes: v.nodes.map((n) => ({ target: n.target, summary: n.failureSummary })) }));
-    });
-    expect.soft(violations, `plan ${width} ${colorScheme}`).toEqual([]);
-  }
-  await page.emulateMedia({ colorScheme: 'light' });
-  await expect(adminRow.getByRole('button', { name: 'Quitar', exact: true })).toHaveCount(0);
-  await adminRow.getByRole('button', { name: /Anular cargo [0-9]/ }).click();
+  await adminRow.scrollIntoViewIfNeeded();
+  await audit(page, itemsHeading(page).locator('..'), 'plan');
+  const action = adminRow.getByRole('button', { name: /^Anular cargo: / });
+  await expect(action).toHaveAccessibleName(/^Anular cargo: .+, .*50\.000/);
+  await action.click();
   const dialog = page.getByRole('dialog', { name: 'Anular el cargo' });
   await expectDialogInsideViewport(page, dialog);
-  await page.evaluate(readFileSync(require.resolve('axe-core/axe.min.js'), 'utf8'));
-  for (const colorScheme of ['light', 'dark'] as const) {
-    await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
-    await page.mouse.move(0, 0);
-    await dialog.evaluate((element) => Promise.allSettled(element.getAnimations({ subtree: true }).map((animation) => animation.finished)));
-    const violations = await dialog.evaluate(async (element) => {
-      const axe = (window as unknown as { axe: { run: (context: Element) => Promise<AxeResults> } }).axe;
-      const result = await axe.run(element);
-      return result.violations.map((v) => ({ id: v.id, nodes: v.nodes.map((n) => ({ target: n.target, summary: n.failureSummary })) }));
-    });
-    expect.soft(violations, `diálogo ${width} ${colorScheme}`).toEqual([]);
-  }
-  await page.emulateMedia({ colorScheme: 'light' });
+  // Se confirma con la variante destructiva, como «Anular» en un abono.
+  await expect(dialog.getByRole('button', { name: 'Anular cargo' })).toHaveClass(/bg-danger/);
+  await dialog.getByLabel('Motivo').fill('Cargo generado por error: avisó por teléfono');
+  await audit(page, dialog, 'dialogo-anular');
+  await dialog.getByLabel('Motivo').fill('');
   await dialog.getByRole('button', { name: 'Anular cargo' }).click();
   await expect(dialog.getByRole('alert')).toContainText('Escribe el motivo');
   await dialog.getByLabel('Motivo').fill('Cargo generado por error: avisó por teléfono');
   await expectNoHorizontalScroll(page);
   await dialog.getByRole('button', { name: 'Anular cargo' }).click();
   await expect(dialog).toBeHidden({ timeout: 10_000 });
-  await expect(page.getByRole('heading', { name: 'Ítems del plan de tratamiento' })).toBeFocused();
+  await expect(itemsHeading(page)).toBeFocused();
   await expect(feeRow(page)).toHaveCount(0, { timeout: 10_000 });
   await expectNoHorizontalScroll(page);
 
@@ -190,3 +197,92 @@ test('390 px: el mismo flujo sin scroll horizontal', async ({ page, request }) =
   test.setTimeout(180_000);
   await flow(page, request, 390, `Movil${suffix}`.slice(0, 30));
 });
+
+for (const width of [1440, 390]) {
+  test(`${width} px: dos cargos del mismo importe tienen nombres únicos que coinciden con su fila (DX-343)`, async ({
+    page,
+    request,
+  }) => {
+    test.setTimeout(180_000);
+    await page.setViewportSize({ width, height: width < 768 ? 844 : 900 });
+    const { patientId } = await chargedPatient(request, `Doble${width}${suffix}`.slice(0, 30), width < 768 ? 12 : 11);
+    await chargedPatient(request, '', width < 768 ? 14 : 13, patientId);
+    await loginAs(page, origin, admin.email, password);
+    await page.goto(`${origin}/patients/${patientId}?tab=treatment-plans`);
+    const rows = page
+      .locator('tr, li')
+      .filter({ hasText: 'Cargo por inasistencia o cancelación tardía:' })
+      .locator('visible=true');
+    await expect(rows).toHaveCount(2, { timeout: 15_000 });
+    for (const n of [1, 2]) {
+      const row = rows.nth(n - 1);
+      await expect(row.getByText(`Cargo ${n} de 2`, { exact: true })).toBeVisible();
+      await expect(row.getByRole('button', { name: /Anular cargo/ })).toHaveAccessibleName(
+        new RegExp(`^Anular cargo ${n} de 2: .+, .*50\\.000`),
+      );
+    }
+    await rows.first().scrollIntoViewIfNeeded();
+    await audit(page, itemsHeading(page).locator('..'), 'plan-dos-cargos');
+    await expectNoHorizontalScroll(page);
+    await page.context().clearCookies();
+  });
+
+  test(`${width} px: tras un 409 el diálogo no reenvía y, si releer el plan falla, error de sección con Reintentar (DX-343)`, async ({
+    page,
+    request,
+  }) => {
+    test.setTimeout(180_000);
+    await page.setViewportSize({ width, height: width < 768 ? 844 : 900 });
+    const { patientId, appointmentId } = await chargedPatient(request, `Choque${width}${suffix}`.slice(0, 30), width < 768 ? 16 : 15);
+    await loginAs(page, origin, admin.email, password);
+    await page.goto(`${origin}/patients/${patientId}?tab=treatment-plans`);
+    await feeRow(page).getByRole('button', { name: /Anular cargo/ }).click();
+    const dialog = page.getByRole('dialog', { name: 'Anular el cargo' });
+    await dialog.getByLabel('Motivo').fill('Motivo de quien llegó tarde');
+
+    // Otra persona lo anula mientras el diálogo está abierto, y la relectura del plan falla.
+    const other = await request.post(`${API_URL}/appointments/${appointmentId}/cancellation-fee/void`, {
+      headers: session.headers,
+      data: { reason: 'Anulado por otra persona' },
+    });
+    expect(other.ok(), await other.text()).toBeTruthy();
+    await page.route('**/treatment-plans/*', async (route) => {
+      if (route.request().method() === 'GET') {
+        await route.fulfill({ status: 500, contentType: 'application/json', body: '{}' });
+      } else {
+        await route.continue();
+      }
+    });
+    let posts = 0;
+    page.on('request', (r) => {
+      if (r.method() === 'POST' && r.url().endsWith(`/appointments/${appointmentId}/cancellation-fee/void`)) posts++;
+    });
+    const conflict = page.waitForResponse(
+      (r) => r.url().endsWith(`/appointments/${appointmentId}/cancellation-fee/void`) && r.status() === 409,
+    );
+    await dialog.getByRole('button', { name: 'Anular cargo' }).click();
+    await conflict;
+    await expect(dialog.getByRole('status')).toContainText('cambió mientras lo tenías abierto');
+    await expect(dialog.getByRole('button', { name: 'Anular cargo' })).toHaveCount(0);
+    await expect(dialog.getByLabel('Motivo')).toBeDisabled();
+    await dialog.locator('form').evaluate((form: HTMLFormElement) => form.requestSubmit());
+    await audit(page, dialog, 'dialogo-anular-409');
+    await dialog.getByRole('button', { name: 'Cancelar' }).click();
+    await expect(dialog).toBeHidden();
+    await expect(itemsHeading(page)).toBeFocused();
+
+    // Sin una lectura buena no queda la fila vieja: error de sección con Reintentar.
+    const failure = page.getByRole('alert').filter({ hasText: 'No pudimos actualizar el plan.' });
+    await expect(failure).toBeVisible({ timeout: 10_000 });
+    await expect(feeRow(page)).toHaveCount(0);
+    expect(posts).toBe(1);
+    await audit(page, failure, 'plan-error');
+    await page.unroute('**/treatment-plans/*');
+    await failure.getByRole('button', { name: 'Reintentar' }).click();
+    await expect(failure).toBeHidden({ timeout: 10_000 });
+    await expect(page.getByRole('table', { name: /ítems del plan de tratamiento/i }).or(page.getByText('Este plan todavía no tiene ítems.')).first()).toBeVisible();
+    await expect(feeRow(page)).toHaveCount(0);
+    await expectNoHorizontalScroll(page);
+    await page.context().clearCookies();
+  });
+}

@@ -51,9 +51,8 @@ const PREEXISTING_CONTRAST: { matches: (node: { html: string; target: unknown[] 
   // Badge tintado (`bg-success/15 text-success`, etc.): 4.08–4.09:1 en claro,
   // como «Abierta» en la lista de turnos de la Caja.
   { matches: (n) => /class="[^"]*\bbg-(success|warning|danger)\/15\b/.test(n.html), why: 'Badge tintado del sistema' },
-  // Button `destructive` (`bg-danger text-white`): 2.69:1 en oscuro. axe
-  // recorta el `class` del botón, así que se reconoce por su selector.
-  { matches: (n) => n.html.startsWith('<button') && String(n.target.at(-1)).endsWith('.bg-danger'), why: 'Button destructive en oscuro' },
+  // (El Button `destructive` en oscuro, 2.69:1 con texto blanco, se corrigió
+  // en DX-343 con `--color-danger-fg`: ya no se exime.)
   // Rótulo de ámbito bajo la cabecera (`text-muted` sobre `bg-surface-2`,
   // 4.34:1 en claro), el mismo de Cartera, Descuentos y Caja.
   { matches: (n) => /^<span>(Toda la clínica|Gastos de .+)<\/span>$/.test(n.html), why: 'Rótulo de ámbito de PageHeader' },
