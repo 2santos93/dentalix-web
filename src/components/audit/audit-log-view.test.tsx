@@ -210,6 +210,29 @@ describe('AuditLogView', () => {
     expect(within(changed).getByText('Mayoría de edad: 18 → 16 años')).toBeInTheDocument();
   });
 
+  it('DX-316: un cambio del calendario de la sede dice el recurso y el motivo', async () => {
+    mockedList.mockResolvedValue(
+      page({
+        items: [
+          {
+            ...view,
+            id: 'ev-9',
+            action: 'CREATE',
+            resourceType: 'LOCATION_CALENDAR',
+            resourceId: 'loc-1',
+            patient: null,
+            metadata: { reason: 'HOLIDAYS_IMPORTED' },
+          },
+        ],
+      }),
+    );
+    render(<AuditLogView token="tok" />);
+    const table = await screen.findByRole('table', { name: 'Registro de auditoría' });
+    const [, imported] = within(table).getAllByRole('row');
+    expect(within(imported).getByText('Calendario de la sede')).toBeInTheDocument();
+    expect(within(imported).getByText('Festivos importados')).toBeInTheDocument();
+  });
+
   it('vacío: lo dice y sugiere cambiar los filtros', async () => {
     mockedList.mockResolvedValue(page({ items: [] }));
     render(<AuditLogView token="tok" />);

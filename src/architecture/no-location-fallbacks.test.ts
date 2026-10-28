@@ -174,6 +174,8 @@ describe('arquitectura: sin formato regional ni reloj fijos (G1-B)', () => {
  * cliente y la lógica (`lib/locations/location-calendar*.ts`) ni sus pantallas
  * (`components/location-calendar/**`) nombran un país, sin contar los tests.
  */
+const COUNTRY_WORD = /countr(?:y|ies)/i;
+
 function locationCalendarFiles(): string[] {
   const lib = readdirSync(join(SRC, 'lib/locations'))
     .filter((name) => /^location-calendar.*\.ts$/.test(name))
@@ -195,9 +197,16 @@ describe('arquitectura: calendario de la sede sin país (DX-316)', () => {
       readFileSync(path, 'utf8')
         .split('\n')
         .map((line, i) => ({ line, n: i + 1 }))
-        .filter(({ line }) => /country/i.test(line))
+        .filter(({ line }) => COUNTRY_WORD.test(line))
         .map(({ line, n }) => `${relative(SRC, path)}:${n}: ${line.trim()}`),
     );
     expect(mentions).toEqual([]);
+  });
+
+  it('the country pattern catches singular, plural and any case, not the Spanish copy', () => {
+    for (const line of ['countryCode', '// Country', 'const COUNTRIES = []', 'byCountries(x)']) {
+      expect([line, COUNTRY_WORD.test(line)]).toEqual([line, true]);
+    }
+    expect(COUNTRY_WORD.test('Dentalix no trae los festivos de ningún país.')).toBe(false);
   });
 });

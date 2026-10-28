@@ -11,20 +11,8 @@ import type { LocationHoliday } from './location-calendar-api';
 /** La semana se pinta de lunes a domingo (ISO 8601) en todas las sedes (R12). */
 export const ISO_WEEK_ORDER: readonly number[] = [1, 2, 3, 4, 5, 6, 0];
 
-const CIVIL_DATE_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
-
 function capitalize(text: string): string {
   return text.charAt(0).toUpperCase() + text.slice(1);
-}
-
-/** Día de la semana de un día civil 'YYYY-MM-DD' (0 = domingo), sin zona. RangeError si no existe. */
-export function civilWeekday(day: string): number {
-  const match = CIVIL_DATE_RE.exec(day);
-  const instant = match ? new Date(Date.UTC(+match[1], +match[2] - 1, +match[3])) : undefined;
-  if (!instant || instant.toISOString().slice(0, 10) !== day) {
-    throw new RangeError(`Día civil no válido: ${day}`);
-  }
-  return instant.getUTCDay();
 }
 
 /**

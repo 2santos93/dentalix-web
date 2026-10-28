@@ -123,12 +123,56 @@ describe('location-calendar-api', () => {
     expect((list as ApiError).messages).toEqual(['Elige al menos un día hábil.']);
   });
 
-  it('the preview can answer 409 LOCATION_HOLIDAY_LIMIT (spec I1)', async () => {
-    mockFetch({ statusCode: 409, code: 'LOCATION_HOLIDAY_LIMIT', message: 'Tope de festivos.' }, 409);
-    const file = new File(['fecha,nombre'], 'festivos.csv', { type: 'text/csv' });
-    const error = await previewHolidayImport('tok', 'loc-1', file).catch((e: unknown) => e);
+  async function rejection(promise: Promise<unknown>): Promise<ApiError> {
+    const error = await promise.catch((e: unknown) => e);
     expect(error).toBeInstanceOf(ApiError);
-    expect((error as ApiError).status).toBe(409);
-    expect((error as ApiError).code).toBe('LOCATION_HOLIDAY_LIMIT');
+    return error as ApiError;
+  }
+
+  const limitBody = {
+    statusCode: 409,
+    error: 'Conflict',
+    code: 'LOCATION_HOLIDAY_LIMIT',
+    message: 'La sede tendría más de 1.000 festivos. Borra los de años pasados e inténtalo de nuevo.',
+  };
+  const ics = () => new File(['BEGIN:VCALENDAR'], 'festivos.ics', { type: 'text/calendar' });
+
+  it.each([
+    ['createHoliday', () => createHoliday('tok', 'loc-1', { date: '2027-05-03', name: 'Cierre anual', recurring: false })],
+    ['previewHolidayImport (spec I1)', () => previewHolidayImport('tok', 'loc-1', ics())],
+    ['importHolidays', () => importHolidays('tok', 'loc-1', ics())],
+  ])('409 LOCATION_HOLIDAY_LIMIT on %s keeps code and message', async (_name, run) => {
+    mockFetch(limitBody, 409);
+    const error = await rejection(run());
+    expect(error.status).toBe(409);
+    expect(error.code).toBe('LOCATION_HOLIDAY_LIMIT');
+    expect(error.messages).toEqual(['La sede tendría más de 1.000 festivos. Borra los de años pasados e inténtalo de nuevo.']);
+  });
+
+  it('409 HOLIDAY_ALREADY_EXISTS names the existing holiday and carries its id', async () => {
+    mockFetch(
+      {
+        statusCode: 409,
+        error: 'Conflict',
+        code: 'HOLIDAY_ALREADY_EXISTS',
+        message: 'Ese día ya es festivo cada año: «Cierre anual».',
+        holidayId: 'hol-9',
+      },
+      409,
+    );
+    const error = await rejection(
+      createHoliday('tok', 'loc-1', { date: '2030-05-03', name: 'Otro', recurring: false }),
+    );
+    expect(error.code).toBe('HOLIDAY_ALREADY_EXISTS');
+    expect(error.messages).toEqual(['Ese día ya es festivo cada año: «Cierre anual».']);
+    expect(error.holidayId).toBe('hol-9');
+  });
+
+  it('404 HOLIDAY_NOT_FOUND on delete throws instead of resolving', async () => {
+    mockFetch({ statusCode: 404, error: 'Not Found', code: 'HOLIDAY_NOT_FOUND', message: 'No encontramos ese festivo.' }, 404);
+    const error = await rejection(deleteHoliday('tok', 'loc-1', 'hol-1'));
+    expect(error.status).toBe(404);
+    expect(error.code).toBe('HOLIDAY_NOT_FOUND');
+    expect(error.messages).toEqual(['No encontramos ese festivo.']);
   });
 });

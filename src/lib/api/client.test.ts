@@ -120,6 +120,23 @@ describe('apiFetch', () => {
     expect((err as ApiError).code).toBe('LOCATION_LOCALE_REQUIRED');
     expect((err as ApiError).locationId).toBe('sede-1');
   });
+
+  it('DX-316: expone el `holidayId` del 409 HOLIDAY_ALREADY_EXISTS', async () => {
+    global.fetch = jest.fn().mockResolvedValue({
+      ok: false,
+      status: 409,
+      headers: { get: () => null },
+      json: async () => ({
+        statusCode: 409,
+        code: 'HOLIDAY_ALREADY_EXISTS',
+        message: 'Ya hay un festivo ese día: «Cierre anual».',
+        holidayId: 'hol-1',
+      }),
+    }) as unknown as typeof fetch;
+    const err = await apiFetch('/locations/loc-1/holidays', { method: 'POST', body: {} }).catch((e: unknown) => e);
+    expect((err as ApiError).holidayId).toBe('hol-1');
+    expect((err as ApiError).locationId).toBeNull();
+  });
 });
 
 describe('apiFetch — refresh por cookie (DX-062)', () => {

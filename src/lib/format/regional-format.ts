@@ -1,4 +1,5 @@
 import iso4217ZeroDecimal from '@/lib/money/iso4217-zero-decimal.json';
+import { civilNoonUtc } from '@/lib/time/civil-day';
 
 /**
  * Helper único de formato regional (DX-350). Mismo contrato que la API y los
@@ -71,7 +72,6 @@ export interface RegionalFormat {
 const ISO_ZERO_DECIMAL_CURRENCIES: ReadonlySet<string> = new Set(iso4217ZeroDecimal.minorUnitsZero);
 
 const HOUR_CYCLES: readonly string[] = ['h12', 'h23'];
-const CIVIL_DATE_RE = /^(\d{4})-(\d{2})-(\d{2})$/;
 const BIDI_MARKS_RE = /[\u200e\u200f\u061c]/g;
 const SPACES_RE = /\s+/g;
 
@@ -103,19 +103,6 @@ function numberFormatter(locale: string, options: Intl.NumberFormatOptions): Int
     numberFormatters.set(key, formatter);
   }
   return formatter;
-}
-
-/**
- * Mediodía UTC del día civil `day`: con `timeZone: 'UTC'` sus palabras no
- * dependen de la zona del proceso ni del navegador. RangeError si el día no existe.
- */
-function civilNoonUtc(day: string): Date {
-  const match = CIVIL_DATE_RE.exec(day);
-  const instant = match ? new Date(Date.UTC(+match[1], +match[2] - 1, +match[3], 12)) : undefined;
-  if (!instant || instant.toISOString().slice(0, 10) !== day) {
-    throw new RangeError(`Día civil no válido: ${day}`);
-  }
-  return instant;
 }
 
 /** Palabras de fecha de `UI_LANGUAGE` para un día civil, sin zona. */

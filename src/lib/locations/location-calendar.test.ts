@@ -1,8 +1,8 @@
 import { regionalFormat } from '@/lib/format/regional-format';
+import { civilWeekday } from '@/lib/time/civil-day';
 import type { LocationHoliday } from './location-calendar-api';
 import {
   canManageLocationCalendar,
-  civilWeekday,
   describeWorkingWeekdays,
   groupHolidays,
   importCopy,
@@ -62,18 +62,10 @@ describe('recurringLabel', () => {
   });
 });
 
-describe('civilWeekday', () => {
-  it('0 = domingo, like the API', () => {
-    expect(civilWeekday('2027-05-02')).toBe(0);
-    expect(civilWeekday('2027-05-03')).toBe(1);
-  });
-
-  it('rejects a day that does not exist', () => {
-    expect(() => civilWeekday('2027-02-30')).toThrow(RangeError);
-    expect(() => civilWeekday('03/05/2027')).toThrow(RangeError);
-  });
-});
-
+// Lo pide el plan (I6), pero NO protege nada: Jest da al test una copia de
+// `process.env`, así que este `TZ` no llega a ICU y el test pasa igual sin el
+// `timeZone: 'UTC'` del helper. La guarda real es «civil words do not depend
+// on the process zone» (Pacific/Kiritimati) en `regional-format.test.ts`.
 describe('labels do not depend on the process zone', () => {
   const originalTz = process.env.TZ;
   afterEach(() => {
