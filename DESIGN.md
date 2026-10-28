@@ -15,6 +15,7 @@ colors:
   success: "#15803D"
   warning: "#B45309"
   danger: "#BE123C"
+  danger-fg: "#FFFFFF"
 typography:
   display:
     fontFamily: "var(--font-sans)"
@@ -232,7 +233,7 @@ inputs, small cards), **12px** (lg — cards and panels), pill for status chips 
 - **Secondary:** surface bg + 1px border + ink text.
 - **Ghost:** transparent + ink/muted text; hover fills with surface-2.
 - **Hover/Focus:** subtle bg shift; focus-visible = 2px accent ring with 2px offset. Never remove focus.
-- **Destructive:** danger only inside confirmation, not as a default row action.
+- **Destructive:** solid danger + danger-fg text (white in light, deep rose-ink on the lighter dark-theme danger), only inside confirmation, not as a default row action.
 
 ### Inputs / Fields
 - **Style:** surface bg, 1px border, 8px radius, 40px height, ink text, muted placeholder (≥4.5:1).

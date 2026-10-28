@@ -19,12 +19,19 @@ import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { MoneyInput } from '@/components/shared/money-input';
 import { SectionError } from '@/components/errors/section-error';
 import { Button } from '@/components/ui/button';
-import { FeeReasonModal, VoidCancellationFeeModal, feeReasonCopy, voidFeeCopy } from './fee-reason-modal';
+import {
+  FeeConflictNotice,
+  FeeReasonModal,
+  VoidCancellationFeeModal,
+  feeReasonCopy,
+  voidFeeCopy,
+} from './fee-reason-modal';
 
 export const cancellationFeeCopy = {
   heading: 'Cargo por inasistencia o cancelación tardía',
   loading: 'Cargando el cargo…',
   loadError: 'Cargo sin cargar',
+  loadErrorDescription: 'No se pudo cargar el estado del cargo.',
   suggested: (amount: string, version: number) =>
     `Importe sugerido: ${amount} (política comunicada, versión ${version}).`,
   readOnly: 'Solo un administrador (o recepción, si la política de la sede lo permite) puede generarlo o condonarlo.',
@@ -77,7 +84,10 @@ function money(amount: number | null | undefined, currency: string | null | unde
  */
 export function CancellationFeePanel({ token, appointmentId }: { token: string; appointmentId: string }) {
   const headingRef = useRef<HTMLHeadingElement>(null);
-  const focusAfterVoid = useRef(false);
+  // DX-343: tras generar, condonar, anular o un 409, el botón que abrió el
+  // diálogo ya no existe (o ya no vale): el foco va al encabezado del panel.
+  // Cerrar sin actuar lo deja volver a quien abrió.
+  const focusHeadingOnClose = useRef(false);
   const [view, setView] = useState<CancellationFeeView | null>(null);
   const [staleView, setStaleView] = useState(false);
   const [failed, setFailed] = useState(false);
@@ -105,8 +115,16 @@ export function CancellationFeePanel({ token, appointmentId }: { token: string; 
   }, [token, appointmentId, reloadKey]);
 
   function invalidateView() {
+    focusHeadingOnClose.current = true;
     setStaleView(true);
     setReloadKey((k) => k + 1);
+  }
+
+  function focusHeadingAfterChange(event: Event) {
+    if (!focusHeadingOnClose.current) return;
+    focusHeadingOnClose.current = false;
+    event.preventDefault();
+    headingRef.current?.focus();
   }
 
   if (failed) {
@@ -114,7 +132,7 @@ export function CancellationFeePanel({ token, appointmentId }: { token: string; 
       <section aria-label={copy.heading} className="border-t border-hairline pt-4">
         <SectionError
           title={copy.loadError}
-          description="No se pudo cargar el estado del cargo."
+          description={copy.loadErrorDescription}
           onRetry={() => {
             setFailed(false);
             setReloadKey((k) => k + 1);
@@ -236,26 +254,22 @@ export function CancellationFeePanel({ token, appointmentId }: { token: string; 
           currency={view.communicated.currency}
           onClose={() => setDialog(null)}
           onDone={(next) => {
+            focusHeadingOnClose.current = true;
             setDialog(null);
             setView(next);
           }}
           onStale={invalidateView}
+          onCloseAutoFocus={focusHeadingAfterChange}
         />
       ) : null}
       {dialog === 'void' ? (
         <VoidCancellationFeeModal
-          onCloseAutoFocus={(event) => {
-            if (focusAfterVoid.current) {
-              event.preventDefault();
-              headingRef.current?.focus();
-              focusAfterVoid.current = false;
-            }
-          }}
+          onCloseAutoFocus={focusHeadingAfterChange}
           token={token}
           appointmentId={appointmentId}
           onClose={() => setDialog(null)}
           onDone={(next) => {
-            focusAfterVoid.current = true;
+            focusHeadingOnClose.current = true;
             setDialog(null);
             setView(next);
           }}
@@ -264,18 +278,12 @@ export function CancellationFeePanel({ token, appointmentId }: { token: string; 
       ) : null}
       {dialog === 'waive' ? (
         <WaiveFeeModal
-          onCloseAutoFocus={(event) => {
-            if (focusAfterVoid.current) {
-              event.preventDefault();
-              headingRef.current?.focus();
-              focusAfterVoid.current = false;
-            }
-          }}
+          onCloseAutoFocus={focusHeadingAfterChange}
           token={token}
           appointmentId={appointmentId}
           onClose={() => setDialog(null)}
           onDone={(next) => {
-            focusAfterVoid.current = true;
+            focusHeadingOnClose.current = true;
             setDialog(null);
             setView(next);
           }}
@@ -294,6 +302,7 @@ function ChargeFeeModal({
   onClose,
   onDone,
   onStale,
+  onCloseAutoFocus,
 }: {
   token: string;
   appointmentId: string;
@@ -303,6 +312,7 @@ function ChargeFeeModal({
   onDone: (view: CancellationFeeView) => void;
   /** 409: otra persona ya decidió; el panel se relee por debajo. */
   onStale: () => void;
+  onCloseAutoFocus?: (event: Event) => void;
 }) {
   const id = useId();
   const amountId = `${id}-amount`;
@@ -363,8 +373,9 @@ function ChargeFeeModal({
       submitting={submitting}
       error={error}
       hideSubmit={stale}
+      onCloseAutoFocus={onCloseAutoFocus}
     >
-      {stale ? <p role="status" className="text-sm text-muted">El estado del cargo cambió. Se está actualizando; cierra el diálogo y revisa los datos antes de volver a actuar.</p> : null}
+      {stale ? <FeeConflictNotice /> : null}
       <FormField
         htmlFor={amountId}
         label={copy.amount}
@@ -381,7 +392,7 @@ function ChargeFeeModal({
           }}
           currency={currency}
           requirePositive
-          disabled={submitting}
+          disabled={submitting || stale}
           aria-invalid={fieldError ? true : undefined}
           aria-describedby={fieldError ? fieldErrorId(amountId) : `${amountId}-hint`}
         />

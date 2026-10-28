@@ -188,7 +188,12 @@ const copy = {
   feeItemNote: 'Cargo por inasistencia o cancelación tardía: su importe y su estado no se cambian aquí.',
   feeItemNoteAdmin:
     'Cargo por inasistencia o cancelación tardía: su importe y su estado no se cambian aquí; si se generó por error, anúlalo con motivo.',
-  voidFeeFor: (tooth: string) => (tooth ? `Anular el cargo del ítem del diente ${tooth}` : 'Anular cargo'),
+  // DX-343: cada «Anular cargo» se distingue por el ítem y su importe y, si
+  // hay varios cargos en el plan, por la referencia visible «Cargo n de N».
+  feeReference: (n: number, total: number) => `Cargo ${n} de ${total}`,
+  voidFeeFor: (item: string, amount: string, ref?: { n: number; total: number }) =>
+    `Anular cargo${ref ? ` ${ref.n} de ${ref.total}` : ''}: ${item}, ${amount}`,
+  feeRefreshing: 'Actualizando el estado del cargo…',
   removing: 'Quitando…',
   removeConfirmTitle: '¿Quitar este ítem del plan?',
   // El backend hace soft-delete (`deletedAt`) y `getPlan` incluye los ítems
@@ -394,7 +399,9 @@ interface ItemsTableProps {
   catalogById: Map<string, DentalCatalogItem>;
   /** The plan's currency (`planDetail.currency`) — item prices don't carry their own currency. */
   currency: string;
-  feeOrdinals: ReadonlyMap<string, number>;
+  /** DX-343: «Cargo n de N» de cada ítem de cargo (ver `feeReferences`). */
+  feeRefs: ReadonlyMap<string, FeeRef>;
+  /** DX-343: un 409 dejó el cargo sin confirmar; «Anular cargo» espera. */
   feeStale?: boolean;
   updatingItemId: string | null;
   /** FDI code whose rows are marked as the ones the user arrived looking for. */
@@ -486,12 +493,29 @@ function ItemAttributionLine({
  * de estado (la API responde 409 a todo rol): lo dice y, a un ADMIN, le ofrece
  * anularlo con motivo.
  */
-function FeeItemLine({ item, currency, ordinal, disabled, onVoid }: { item: TreatmentPlanItem; currency: string; ordinal: number; disabled?: boolean; onVoid?: (item: TreatmentPlanItem) => void }) {
+function FeeItemLine({
+  item,
+  label,
+  currency,
+  feeRef,
+  disabled,
+  onVoid,
+}: {
+  item: TreatmentPlanItem;
+  /** El procedimiento tal como lo dice la fila. */
+  label: string;
+  currency: string;
+  /** Solo con más de un cargo en el plan. */
+  feeRef?: FeeRef;
+  /** DX-343: tras un 409, hasta releer el plan. */
+  disabled?: boolean;
+  onVoid?: (item: TreatmentPlanItem) => void;
+}) {
   if (!item.cancellationFeeAppointmentId) return null;
   return (
     <span className="flex flex-col items-start gap-1 text-xs text-muted">
       <span>{onVoid ? copy.feeItemNoteAdmin : copy.feeItemNote}</span>
-      <span> Cargo {ordinal}</span>
+      {feeRef ? <span className="font-medium text-ink">{copy.feeReference(feeRef.n, feeRef.total)}</span> : null}
       {onVoid ? (
         <Button
           type="button"
@@ -499,7 +523,7 @@ function FeeItemLine({ item, currency, ordinal, disabled, onVoid }: { item: Trea
           size="sm"
           className="h-11 md:h-8"
           disabled={disabled}
-          aria-label={`Anular cargo ${ordinal}: ${item.notes || "cargo por inasistencia"}, ${formatCurrency(item.price, currency)}`}
+          aria-label={copy.voidFeeFor(label, formatCurrency(item.price, currency), feeRef)}
           onClick={() => onVoid(item)}
         >
           {voidFeeCopy.action}
@@ -507,6 +531,19 @@ function FeeItemLine({ item, currency, ordinal, disabled, onVoid }: { item: Trea
       ) : null}
     </span>
   );
+}
+
+type FeeRef = { n: number; total: number };
+
+/**
+ * DX-343: «Cargo n de N» por ítem de cargo, en el orden del plan entero (no
+ * de cada visita), para que dos cargos del mismo importe no se confundan.
+ * Vacío con un solo cargo: ítem e importe ya lo distinguen.
+ */
+function feeReferences(items: TreatmentPlanItem[]): ReadonlyMap<string, FeeRef> {
+  const fees = items.filter((item) => item.cancellationFeeAppointmentId);
+  if (fees.length < 2) return new Map();
+  return new Map(fees.map((item, index) => [item.id, { n: index + 1, total: fees.length }]));
 }
 
 /** Línea del descuento de un ítem: importe y, si lo tiene, su motivo. */
@@ -702,7 +739,7 @@ function ItemsTable({
   catalogById,
   currency,
   updatingItemId,
-  feeOrdinals,
+  feeRefs,
   feeStale,
   focusedTooth,
   odontogramHref,
@@ -820,7 +857,14 @@ function ItemsTable({
                         )}
                       </span>
                       <ItemAttributionLine item={item} onCorrect={onCorrectAttribution} />
-                      <FeeItemLine item={item} currency={currency} ordinal={feeOrdinals.get(item.id) ?? 1} disabled={feeStale} onVoid={onVoidFee} />
+                      <FeeItemLine
+                        item={item}
+                        label={procedureName(item, catalogById)}
+                        currency={currency}
+                        feeRef={feeRefs.get(item.id)}
+                        disabled={feeStale}
+                        onVoid={onVoidFee}
+                      />
                     </div>
                   </TableCell>
                   <TableCell>
@@ -891,7 +935,14 @@ function ItemsTable({
               </div>
               {isFee(item) ? (
                 <div className="mt-2">
-                  <FeeItemLine item={item} currency={currency} ordinal={feeOrdinals.get(item.id) ?? 1} disabled={feeStale} onVoid={onVoidFee} />
+                  <FeeItemLine
+                        item={item}
+                        label={procedureName(item, catalogById)}
+                        currency={currency}
+                        feeRef={feeRefs.get(item.id)}
+                        disabled={feeStale}
+                        onVoid={onVoidFee}
+                      />
                 </div>
               ) : null}
               <div className="mt-3 flex items-center justify-between gap-2">
@@ -1223,13 +1274,18 @@ export function TreatmentPlansTab({
   // inline de arriba, que es la del cambio de estado.
   const [itemToRemove, setItemToRemove] = useState<string | null>(null);
   // SEC-050: el ítem cuyo cargo por inasistencia se está anulando.
-  const feeListRef = useRef<HTMLHeadingElement>(null);
-  const focusAfterFeeVoid = useRef(false);
+  const [feeToVoid, setFeeToVoid] = useState<TreatmentPlanItem | null>(null);
+  // DX-343: tras anular (o un 409) la fila del cargo puede desaparecer; el
+  // foco va al encabezado de los ítems en vez de perderse.
+  const itemsHeadingRef = useRef<HTMLHeadingElement>(null);
+  const focusItemsHeadingOnClose = useRef(false);
+  // DX-343: el plan cuyo cargo dio 409. Hasta que una lectura del plan salga
+  // bien, sus «Anular cargo» quedan deshabilitados; el ref deja al efecto de
+  // carga comprobarlo sin depender de este estado.
   const [feeStalePlanId, setFeeStalePlanId] = useState<string | null>(null);
   const feeStalePlanRef = useRef<string | null>(null);
   const feeStale = feeStalePlanId === selectedPlanId && selectedPlanId !== null;
   const [feeReloadFailed, setFeeReloadFailed] = useState(false);
-  const [feeToVoid, setFeeToVoid] = useState<TreatmentPlanItem | null>(null);
   // DX-050: el ítem que se marca como realizado (eligiendo quién lo hizo) o
   // cuya atribución corrige un ADMIN.
   const [markDone, setMarkDone] = useState<{ itemId: string; mode: 'done' | 'correct' } | null>(null);
@@ -1483,6 +1539,7 @@ export function TreatmentPlansTab({
   }
 
   const catalogById = new Map(allCatalogItems.map((item) => [item.id, item]));
+  const feeRefs = feeReferences(planDetail?.items ?? []);
 
   // DX-105: el precio resuelto de la prestación elegida para ESTE paciente
   // (convenio > lista de la sede > catálogo). Precarga el campo; si falla,
@@ -2380,15 +2437,35 @@ export function TreatmentPlansTab({
                   {bulkNotice}
                 </p>
 
-                <h3 ref={feeListRef} tabIndex={-1} className="text-base font-semibold text-ink">Ítems del plan de tratamiento</h3>
-                {feeStale ? <p role="status" className="text-sm text-muted">Actualizando el estado del cargo.</p> : null}
-                {feeStale && feeReloadFailed ? <SectionError description="No se pudo actualizar el plan." onRetry={() => { setFeeReloadFailed(false); setPlanDetailReloadKey((k) => k + 1); }} /> : null}
+                {/* DX-343: destino del foco cuando la fila del cargo desaparece. */}
+                <h3 ref={itemsHeadingRef} tabIndex={-1} className="text-base font-semibold text-ink">
+                  {copy.itemsTableCaption}
+                </h3>
+                {/* DX-343: tras un 409 la lista de ítems ya no es fiable. Si
+                    releerla falla, cede su sitio al error de sección (escalón
+                    1): no queda una tabla vieja con un aviso de «actualizando»
+                    que ya no es verdad. */}
+                {feeStale && feeReloadFailed ? (
+                  <SectionError
+                    description={copy.genericPlanDetailRefreshError}
+                    onRetry={() => {
+                      setFeeReloadFailed(false);
+                      setPlanDetailReloadKey((k) => k + 1);
+                    }}
+                  />
+                ) : (
+                <>
+                {feeStale ? (
+                  <p role="status" className="text-sm text-muted">
+                    {copy.feeRefreshing}
+                  </p>
+                ) : null}
                 <PlanVisitsBoard key={planDetail.id} token={token} plan={planDetail} role={role} onChanged={refreshPlanDetail} renderItems={visitItems => <ItemsTable
                   items={visitItems}
                   catalogById={catalogById}
                   currency={planDetail.currency}
                   feeStale={feeStale}
-                  feeOrdinals={new Map((planDetail.items ?? []).filter((item) => item.cancellationFeeAppointmentId).map((item, index) => [item.id, index + 1]))}
+                  feeRefs={feeRefs}
                   updatingItemId={updatingItemId}
                   focusedTooth={focusedToothOnPlan}
                   odontogramHref={odontogramHref}
@@ -2418,8 +2495,9 @@ export function TreatmentPlansTab({
                         }
                       : undefined
                   }
-                />
-                } />
+                />} />
+                </>
+                )}
 
                 {canSeeBilling ? (
                   <>
@@ -2869,20 +2947,20 @@ export function TreatmentPlansTab({
           token={token}
           appointmentId={feeToVoid.cancellationFeeAppointmentId}
           onCloseAutoFocus={(event) => {
-            if (focusAfterFeeVoid.current) {
-              event.preventDefault();
-              feeListRef.current?.focus();
-              focusAfterFeeVoid.current = false;
-            }
+            if (!focusItemsHeadingOnClose.current) return;
+            focusItemsHeadingOnClose.current = false;
+            event.preventDefault();
+            itemsHeadingRef.current?.focus();
           }}
           onClose={() => setFeeToVoid(null)}
           onDone={() => {
-            focusAfterFeeVoid.current = true;
+            focusItemsHeadingOnClose.current = true;
             setFeeToVoid(null);
             // El ítem sale del plan y deja de ser facturable.
             void Promise.all([refreshPlanDetail(), refreshBalanceAndPayments()]);
           }}
           onStale={() => {
+            focusItemsHeadingOnClose.current = true;
             feeStalePlanRef.current = selectedPlanId;
             setFeeStalePlanId(selectedPlanId);
             setFeeReloadFailed(false);

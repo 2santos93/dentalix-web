@@ -23,6 +23,24 @@ export const feeReasonCopy = {
   counter: (n: number) => `${n}/${WAIVE_REASON_MAX}`,
 };
 
+/**
+ * DX-343: tras un 409 el diálogo deja de poder enviarse. El mensaje del
+ * servidor (arriba, en el aviso de error) dice qué pasó; esto dice por qué ya
+ * no hay botón y dónde mirar ahora.
+ */
+export const feeConflictCopy = {
+  notice:
+    'Este cargo cambió mientras lo tenías abierto, así que ya no se puede enviar. Ciérralo para ver su estado actual.',
+};
+
+export function FeeConflictNotice() {
+  return (
+    <p role="status" className="text-sm text-muted">
+      {feeConflictCopy.notice}
+    </p>
+  );
+}
+
 /** SEC-050: anular un cargo ya generado. */
 export const voidFeeCopy = {
   action: 'Anular cargo',
@@ -115,7 +133,7 @@ export function FeeReasonModal({
       hideSubmit={stale}
       onCloseAutoFocus={onCloseAutoFocus}
     >
-      {stale ? <p role="status" className="text-sm text-muted">El estado del cargo cambió. Se está actualizando; cierra el diálogo y revisa los datos antes de volver a actuar.</p> : null}
+      {stale ? <FeeConflictNotice /> : null}
       <div className="flex flex-col gap-1.5">
         <Label htmlFor={reasonId}>{feeReasonCopy.reason}</Label>
         <textarea
@@ -123,7 +141,7 @@ export function FeeReasonModal({
           rows={3}
           maxLength={WAIVE_REASON_MAX}
           value={reason}
-          disabled={submitting}
+          disabled={submitting || stale}
           onChange={(e) => {
             setReason(e.target.value);
             setFieldError(null);

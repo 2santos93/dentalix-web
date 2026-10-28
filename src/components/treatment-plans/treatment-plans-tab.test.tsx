@@ -1035,15 +1035,82 @@ describe('TreatmentPlansTab', () => {
       expect(screen.queryByRole('button', { name: /Anular cargo/ })).not.toBeInTheDocument();
     });
 
-    it('identifica cada cargo por ítem e importe', async () => {
+    it('un solo cargo: «Anular cargo» nombra el ítem y el importe, sin numeración (DX-343)', async () => {
       renderFeePlan(adminToken);
-      mockedGetPlan.mockResolvedValue({ ...feePlan, items: [feeItem, { ...feeItem, id: 'item-fee-2', cancellationFeeAppointmentId: 'appt-2', price: feeItem.price }], total: feeItem.price * 2 });
       const table = await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
-      await waitFor(() => expect(within(table).getAllByRole('button', { name: /Anular cargo/ })).toHaveLength(2));
-      const names = within(table).getAllByRole('button', { name: /Anular cargo/ }).map((button) => button.getAttribute('aria-label'));
+      const action = within(table).getByRole('button', { name: /Anular cargo/ });
+      expect(action).toHaveAccessibleName(/^Anular cargo: Resina, .*50\.000/);
+      expect(screen.queryByText(/^Cargo 1 de/)).not.toBeInTheDocument();
+    });
+
+    it('varios cargos iguales: cada «Anular cargo» tiene un nombre único que coincide con su fila (DX-343)', async () => {
+      const second = { ...feeItem, id: 'item-fee-2', cancellationFeeAppointmentId: 'appt-2' };
+      mockedListPlans.mockResolvedValue([feePlan]);
+      mockedGetPlan.mockResolvedValue({ ...feePlan, items: [feeItem, second], total: feeItem.price * 2 });
+      render(<TreatmentPlansTab patientId="pat-1" token={adminToken} />);
+      const table = await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+      const rows = within(table).getAllByRole('row').slice(1);
+      expect(within(rows[0]).getByRole('button', { name: /Anular cargo/ })).toHaveAccessibleName(
+        /^Anular cargo 1 de 2: Resina, .*50\.000/,
+      );
+      expect(within(rows[0]).getByText('Cargo 1 de 2')).toBeInTheDocument();
+      expect(within(rows[1]).getByRole('button', { name: /Anular cargo/ })).toHaveAccessibleName(
+        /^Anular cargo 2 de 2: Resina, .*50\.000/,
+      );
+      expect(within(rows[1]).getByText('Cargo 2 de 2')).toBeInTheDocument();
+      // Las tarjetas (móvil) dicen lo mismo: dos nombres por cargo, uno por vista.
+      const names = screen.getAllByRole('button', { name: /Anular cargo/ }).map((b) => b.getAttribute('aria-label'));
       expect(new Set(names).size).toBe(2);
-      expect(names.every((name) => /cargo \d.*inasistencia.*\d/i.test(name ?? ''))).toBe(true);
-      expect(names.every((name) => !name?.includes('item-fee'))).toBe(true);
+      expect(names.some((name) => name?.includes('item-fee'))).toBe(false);
+    });
+
+    it('tras un 409, si releer el plan falla, los ítems ceden su sitio al error de sección y Reintentar los trae (DX-343)', async () => {
+      const fresh = { ...feePlan, items: [item2], total: item2.price };
+      mockedListPlans.mockResolvedValue([feePlan]);
+      mockedGetPlan
+        .mockResolvedValueOnce({ ...feePlan, items: [feeItem, item2], total: feeItem.price + item2.price })
+        .mockRejectedValueOnce(new Error('red'))
+        .mockResolvedValue(fresh);
+      jest.mocked(voidCancellationFee).mockRejectedValueOnce(new ApiError(409, 'El cargo ya está anulado.'));
+      const user = userEvent.setup();
+      render(<TreatmentPlansTab patientId="pat-1" token={adminToken} />);
+      const table = await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+      await user.click(within(table).getByRole('button', { name: /Anular cargo/ }));
+      const dialog = await screen.findByRole('dialog', { name: 'Anular el cargo' });
+      await user.type(within(dialog).getByLabelText('Motivo'), 'Cargo erróneo');
+      await user.click(within(dialog).getByRole('button', { name: 'Anular cargo' }));
+      await within(dialog).findByText('El cargo ya está anulado.');
+      expect(within(dialog).getByRole('status')).toHaveTextContent(/cambió mientras lo tenías abierto/);
+      await user.click(within(dialog).getByRole('button', { name: 'Cancelar' }));
+      const failure = await screen.findByRole('alert');
+      expect(failure).toHaveTextContent('No pudimos actualizar el plan.');
+      // Sin datos fiables no queda ni la tabla vieja ni un «Actualizando…» que ya no es verdad.
+      expect(screen.queryByRole('table', { name: /ítems del plan de tratamiento/i })).not.toBeInTheDocument();
+      expect(screen.queryByText(/Actualizando el estado del cargo/)).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Anular cargo/ })).not.toBeInTheDocument();
+      await user.click(within(failure).getByRole('button', { name: 'Reintentar' }));
+      const refreshed = await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+      expect(within(refreshed).queryByRole('button', { name: /Anular cargo/ })).not.toBeInTheDocument();
+    });
+
+    it('tras un 409, al cerrar el foco va al encabezado de los ítems (DX-343)', async () => {
+      mockedListPlans.mockResolvedValue([feePlan]);
+      mockedGetPlan
+        .mockResolvedValueOnce({ ...feePlan, items: [feeItem, item2], total: feeItem.price + item2.price })
+        .mockResolvedValue({ ...feePlan, items: [item2], total: item2.price });
+      jest.mocked(voidCancellationFee).mockRejectedValueOnce(new ApiError(409, 'El cargo ya está anulado.'));
+      const user = userEvent.setup();
+      render(<TreatmentPlansTab patientId="pat-1" token={adminToken} />);
+      const table = await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+      await user.click(within(table).getByRole('button', { name: /Anular cargo/ }));
+      const dialog = await screen.findByRole('dialog', { name: 'Anular el cargo' });
+      await user.type(within(dialog).getByLabelText('Motivo'), 'Cargo erróneo');
+      await user.click(within(dialog).getByRole('button', { name: 'Anular cargo' }));
+      await within(dialog).findByText('El cargo ya está anulado.');
+      // La relectura quita la fila del cargo (y con ella el botón que abrió el diálogo).
+      await waitFor(() => expect(screen.queryAllByRole('button', { name: /Anular cargo \d|Anular cargo:/, hidden: true })).toHaveLength(0));
+      await user.click(within(dialog).getByRole('button', { name: 'Cancelar' }));
+      await waitFor(() => expect(screen.getByRole('heading', { name: 'Ítems del plan de tratamiento' })).toHaveFocus());
     });
 
     it('ignora la respuesta tardía del plan anterior tras un conflicto', async () => {
