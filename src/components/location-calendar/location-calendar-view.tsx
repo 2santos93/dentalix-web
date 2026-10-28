@@ -12,6 +12,7 @@ import { SectionError } from '@/components/errors/section-error';
 import { EmptyState } from '@/components/shared/empty-state';
 import { SedeConfigError } from '@/components/locations/sede-config-error';
 import { Skeleton } from '@/components/ui/skeleton';
+import { HolidaysSection } from './holidays-section';
 import { WorkingWeekdaysForm, workingWeekdaysCopy } from './working-weekdays-form';
 
 export const locationCalendarCopy = {
@@ -184,7 +185,13 @@ function LocationCalendarSections({
           </p>
         )}
       </section>
-      {/* Task 9: aquí va `HolidaysSection` con `calendar.holidays` y `fmt` (o null: «—», sin nota propia). */}
+      {/* Sin formato pinta «—» en las fechas y ninguna nota propia: ya está la de arriba. */}
+      <HolidaysSection
+        token={token}
+        location={location}
+        holidays={calendar.holidays}
+        onChanged={(update) => setCalendar((c) => (c ? { ...c, holidays: update(c.holidays) } : c))}
+      />
     </div>
   );
 }

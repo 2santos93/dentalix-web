@@ -165,4 +165,43 @@ describe('LocationCalendarView (DX-316, spec §7.1–§7.2)', () => {
     expect(screen.getByTestId('working-weekdays-summary')).toHaveTextContent('—');
     expect(screen.queryByRole('group', { name: 'Días hábiles' })).not.toBeInTheDocument();
   });
+
+  it('without a usable format the festivos show «—» and the one note covers both sections (Task 9)', async () => {
+    mockedList.mockResolvedValue([clinicLocation({ id: 'sin', name: 'Sede Sin Formato', locale: null })]);
+    mockedGet.mockResolvedValue({
+      locationId: 'sin',
+      workingWeekdays: [1, 2, 3, 4, 5],
+      holidays: [{ id: 'h1', date: '2027-05-03', name: 'Cierre', recurring: false }],
+    });
+    renderView();
+    const festivos = await screen.findByRole('region', { name: 'Festivos' });
+    expect(within(festivos).getByText('Cierre').closest('tr')).toHaveTextContent('—');
+    expect(within(festivos).queryByText(/No se pudo saber el formato regional/)).not.toBeInTheDocument();
+    expect(screen.getAllByText(/No se pudo saber el formato regional o el reloj de la sede/)).toHaveLength(1);
+  });
+
+  it('exactly one primary button in the view: «Añadir festivo»', async () => {
+    mockedGet.mockResolvedValue({
+      locationId: 'norte',
+      workingWeekdays: [1, 2, 3, 4, 5],
+      holidays: [{ id: 'h1', date: '2027-05-03', name: 'Cierre', recurring: false }],
+    });
+    setActiveLocationId('norte');
+    renderView();
+    await screen.findByRole('region', { name: 'Festivos' });
+    const primaries = screen.getAllByRole('button').filter((b) => b.classList.contains('bg-primary'));
+    expect(primaries.map((b) => b.textContent)).toEqual(['Añadir festivo']);
+  });
+
+  it('the festivos come from the calendar and use the format of the chosen location', async () => {
+    mockedGet.mockResolvedValue({
+      locationId: 'norte',
+      workingWeekdays: [1, 2, 3, 4, 5],
+      holidays: [{ id: 'h1', date: '2027-05-03', name: 'Cierre', recurring: false }],
+    });
+    setActiveLocationId('norte');
+    renderView();
+    const festivos = await screen.findByRole('region', { name: 'Festivos' });
+    expect(within(festivos).getByText('03.05.2027 · lunes')).toBeInTheDocument();
+  });
 });
