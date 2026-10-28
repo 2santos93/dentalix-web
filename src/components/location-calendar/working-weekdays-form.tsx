@@ -1,6 +1,6 @@
 'use client';
 import * as React from 'react';
-import { useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import Link from 'next/link';
 import { CheckCircle2 } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/error-message';
@@ -17,7 +17,7 @@ export const workingWeekdaysCopy = {
   save: 'Guardar días hábiles',
   saved: 'Guardado',
   empty: 'Elige al menos un día hábil.',
-  saveError: 'No pudimos guardar los días hábiles.',
+  saveError: 'No pudimos guardar los días hábiles. Intenta de nuevo.',
   /** Sin días elegidos (o sin formato de la sede) no hay resumen que pintar. */
   noSummary: '—',
 };
@@ -52,12 +52,27 @@ export function WorkingWeekdaysForm({ token, locationId, fmt, initial, onSaved }
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saved, setSaved] = useState(false);
+  // A dónde vuelve el foco cuando termina el guardado (mientras dura, las
+  // casillas y el botón están deshabilitados y el navegador lo suelta).
+  const focusAfterSave = useRef<'first' | 'save' | null>(null);
+  const firstDayRef = useRef<HTMLInputElement>(null);
+  const saveRef = useRef<HTMLButtonElement>(null);
   const id = useId();
   const helpId = `${id}-help`;
   const errorId = `${id}-error`;
 
   const isEmpty = days.length === 0;
   const unchanged = sameDays(days, initial);
+
+  // Tras guardar, el botón sigue deshabilitado (no hay cambios): el foco va a la
+  // primera casilla. Tras un error, a «Guardar» para reintentar, con el error
+  // ya enlazado al grupo.
+  useEffect(() => {
+    if (saving || !focusAfterSave.current) return;
+    if (focusAfterSave.current === 'first') firstDayRef.current?.focus();
+    else saveRef.current?.focus();
+    focusAfterSave.current = null;
+  }, [saving]);
 
   function toggle(day: number, checked: boolean) {
     setDays((prev) => (checked ? [...prev, day] : prev.filter((d) => d !== day)));
@@ -75,8 +90,10 @@ export function WorkingWeekdaysForm({ token, locationId, fmt, initial, onSaved }
       const calendar = await setWorkingWeekdays(token, locationId, [...days].sort((a, b) => a - b));
       onSaved(calendar);
       setSaved(true);
+      focusAfterSave.current = 'first';
     } catch (err) {
       setError(apiErrorMessage(err, copy.saveError));
+      focusAfterSave.current = 'save';
     } finally {
       setSaving(false);
     }
@@ -87,8 +104,7 @@ export function WorkingWeekdaysForm({ token, locationId, fmt, initial, onSaved }
   return (
     <form onSubmit={submit} noValidate className="flex flex-col gap-3">
       <fieldset
-        aria-describedby={message ? `${helpId} ${errorId}` : helpId}
-        aria-invalid={message ? true : undefined}
+        aria-describedby={message ? `${errorId} ${helpId}` : helpId}
         className="flex flex-col gap-3"
       >
         <legend className="sr-only">{copy.legend}</legend>
@@ -96,13 +112,15 @@ export function WorkingWeekdaysForm({ token, locationId, fmt, initial, onSaved }
         <div className="grid grid-cols-4 gap-2 sm:grid-cols-7">
           {ISO_WEEK_ORDER.map((day) => {
             const inputId = `${id}-day-${day}`;
+            const first = day === ISO_WEEK_ORDER[0];
             return (
               <label
                 key={day}
                 htmlFor={inputId}
-                className="flex min-h-11 cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border border-border bg-surface px-1 py-2 text-center text-sm text-ink has-[:checked]:border-primary has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-primary"
+                className="flex min-h-11 cursor-pointer flex-col items-center justify-center gap-1 rounded-lg border border-border bg-surface px-1 py-2 text-center text-sm text-ink has-[:checked]:border-primary has-[:focus-visible]:ring-2 has-[:focus-visible]:ring-primary has-[:focus-visible]:ring-offset-2 has-[:focus-visible]:ring-offset-bg"
               >
                 <input
+                  ref={first ? firstDayRef : undefined}
                   id={inputId}
                   type="checkbox"
                   checked={days.includes(day)}
@@ -117,6 +135,8 @@ export function WorkingWeekdaysForm({ token, locationId, fmt, initial, onSaved }
           })}
         </div>
       </fieldset>
+      {/* El error, justo debajo de las casillas que lo provocan (DESIGN, escalón 4). */}
+      {message ? <InlineError id={errorId}>{message}</InlineError> : null}
       <p data-testid="working-weekdays-summary" className="font-medium text-ink">
         {isEmpty ? copy.noSummary : describeWorkingWeekdays(days, fmt)}
       </p>
@@ -126,16 +146,18 @@ export function WorkingWeekdaysForm({ token, locationId, fmt, initial, onSaved }
           {copy.schedulesLink}
         </Link>
       </p>
-      {message ? (
-        <InlineError id={errorId}>{message}</InlineError>
-      ) : saved ? (
-        <p role="status" className="flex items-center gap-1 text-sm text-success">
-          <CheckCircle2 aria-hidden className="size-4" />
-          {copy.saved}
-        </p>
-      ) : null}
+      {/* Región viva siempre montada: el texto entra al guardar y se anuncia. */}
+      <p role="status" className={saved && !message ? 'flex items-center gap-1 text-sm text-success' : 'sr-only'}>
+        {saved && !message ? (
+          <>
+            <CheckCircle2 aria-hidden className="size-4" />
+            {copy.saved}
+          </>
+        ) : null}
+      </p>
       <div>
         <Button
+          ref={saveRef}
           type="submit"
           variant="secondary"
           disabled={saving || isEmpty || unchanged}

@@ -46,6 +46,10 @@ function calendar(locationId: string, workingWeekdays = [1, 2, 3, 4, 5]) {
   return { locationId, workingWeekdays, holidays: [] };
 }
 
+function renderView() {
+  return render(<LocationCalendarView token="tok" allowed />);
+}
+
 const sedeSelect = () => screen.getByRole('combobox', { name: 'Sede' }) as HTMLSelectElement;
 
 beforeEach(() => {
@@ -62,7 +66,7 @@ describe('LocationCalendarView (DX-316, spec §7.1–§7.2)', () => {
   it('defaults to the active location and switches with the Sede select, updating ?sede=', async () => {
     setActiveLocationId('sur');
     const user = setupUser();
-    render(<LocationCalendarView token="tok" />);
+    renderView();
     expect(await screen.findByTestId('working-weekdays-summary')).toHaveTextContent('Domingo a jueves');
     expect(sedeSelect().value).toBe('sur');
     expect(mockedGet).toHaveBeenCalledWith('tok', 'sur');
@@ -76,7 +80,7 @@ describe('LocationCalendarView (DX-316, spec §7.1–§7.2)', () => {
 
   it('without an active location («Todas las sedes») picks the first active one', async () => {
     mockedList.mockResolvedValue([vieja, norte, sur]);
-    render(<LocationCalendarView token="tok" />);
+    renderView();
     await screen.findByTestId('working-weekdays-summary');
     expect(sedeSelect().value).toBe('norte');
   });
@@ -84,7 +88,7 @@ describe('LocationCalendarView (DX-316, spec §7.1–§7.2)', () => {
   it('?sede=<id> preselects that location', async () => {
     setActiveLocationId('norte');
     search = new URLSearchParams('sede=sur');
-    render(<LocationCalendarView token="tok" />);
+    renderView();
     expect(await screen.findByTestId('working-weekdays-summary')).toHaveTextContent('Domingo a jueves');
     expect(sedeSelect().value).toBe('sur');
     expect(mockedGet).toHaveBeenCalledWith('tok', 'sur');
@@ -92,7 +96,7 @@ describe('LocationCalendarView (DX-316, spec §7.1–§7.2)', () => {
   });
 
   it('an inactive location reads «(inactiva)» in the Sede select', async () => {
-    render(<LocationCalendarView token="tok" />);
+    renderView();
     await screen.findByTestId('working-weekdays-summary');
     const options = within(sedeSelect()).getAllByRole('option').map((o) => o.textContent);
     expect(options).toEqual(['Sede Norte', 'Sede Sur', 'Sede Vieja (inactiva)']);
@@ -101,7 +105,7 @@ describe('LocationCalendarView (DX-316, spec §7.1–§7.2)', () => {
   it('load failure shows SectionError with retry', async () => {
     const user = setupUser();
     mockedGet.mockRejectedValueOnce(new ApiError(500, 'Internal server error'));
-    render(<LocationCalendarView token="tok" />);
+    renderView();
     expect(await screen.findByText('No pudimos cargar el calendario de la sede.')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Reintentar' }));
     expect(await screen.findByTestId('working-weekdays-summary')).toHaveTextContent('Lunes a viernes');
@@ -111,24 +115,53 @@ describe('LocationCalendarView (DX-316, spec §7.1–§7.2)', () => {
   it('a failed list of locations shows SectionError with retry', async () => {
     const user = setupUser();
     mockedList.mockRejectedValueOnce(new ApiError(500, 'Internal server error'));
-    render(<LocationCalendarView token="tok" />);
+    renderView();
     expect(await screen.findByText('No pudimos cargar las sedes.')).toBeInTheDocument();
     await user.click(screen.getByRole('button', { name: 'Reintentar' }));
     expect(await screen.findByTestId('working-weekdays-summary')).toBeInTheDocument();
   });
 
-  it('a non-ADMIN token shows the 403 message', async () => {
+  it('a non-ADMIN sees the locked state and nothing is fetched', () => {
+    render(<LocationCalendarView token="tok" allowed={false} />);
+    expect(screen.getByRole('status')).toHaveTextContent('Solo administración cambia el calendario de la sede.');
+    expect(screen.queryByRole('combobox', { name: 'Sede' })).not.toBeInTheDocument();
+    expect(mockedList).not.toHaveBeenCalled();
+    expect(mockedGet).not.toHaveBeenCalled();
+  });
+
+  it('a stale ADMIN role still shows the API 403 message in the section', async () => {
     const message = 'Solo un administrador de la clínica puede ver o cambiar el calendario de la sede.';
     mockedGet.mockRejectedValue(new ApiError(403, message));
-    render(<LocationCalendarView token="tok" />);
+    renderView();
     expect(await screen.findByText(message)).toBeInTheDocument();
     expect(screen.queryByRole('group', { name: 'Días hábiles' })).not.toBeInTheDocument();
   });
 
-  it('a location without a usable format shows «—» and SedeConfigError instead of the weekdays form', async () => {
+  it('an unknown or foreign ?sede= opens the default location and replaces the id in the URL', async () => {
+    setActiveLocationId('norte');
+    search = new URLSearchParams('sede=otra-clinica');
+    renderView();
+    await screen.findByTestId('working-weekdays-summary');
+    expect(sedeSelect().value).toBe('norte');
+    expect(replace).toHaveBeenCalledWith('/settings/calendario?sede=norte', { scroll: false });
+    expect(mockedGet).not.toHaveBeenCalledWith('tok', 'otra-clinica');
+    expect(mockedGet).toHaveBeenCalledWith('tok', 'norte');
+  });
+
+  it('a valid ?sede= is left alone in the URL', async () => {
+    search = new URLSearchParams('sede=sur');
+    renderView();
+    await screen.findByTestId('working-weekdays-summary');
+    expect(replace).not.toHaveBeenCalled();
+  });
+
+  it('a location without a usable format shows «—» and one SedeConfigError for the whole screen', async () => {
     mockedList.mockResolvedValue([clinicLocation({ id: 'sin', name: 'Sede Sin Formato', locale: null })]);
-    render(<LocationCalendarView token="tok" />);
-    expect(await screen.findByText(/No se pudo saber el formato regional o el reloj de la sede/)).toBeInTheDocument();
+    renderView();
+    expect(await screen.findAllByText(/No se pudo saber el formato regional o el reloj de la sede/)).toHaveLength(1);
+    // La nota va encima de las secciones, no dentro de «Días hábiles».
+    const section = screen.getByRole('region', { name: 'Días hábiles' });
+    expect(within(section).queryByText(/No se pudo saber el formato regional/)).not.toBeInTheDocument();
     expect(screen.getByTestId('working-weekdays-summary')).toHaveTextContent('—');
     expect(screen.queryByRole('group', { name: 'Días hábiles' })).not.toBeInTheDocument();
   });

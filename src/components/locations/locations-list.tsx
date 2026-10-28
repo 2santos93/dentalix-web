@@ -5,6 +5,8 @@ import { Plus } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import type { ClinicLocation } from '@/lib/locations/locations-api';
 import { useSessionLocations } from '@/lib/locations/session-locations';
+import { getTokenRole } from '@/lib/auth/token-role';
+import { canManageLocationCalendar } from '@/lib/locations/location-calendar';
 import { COUNTRY_LABELS } from '@/lib/prescriptions/prescriptions-api';
 import { locationCurrency, locationTimeZone } from '@/lib/locations/location-settings';
 import { canonicalLocale, HOUR_CYCLE_LABELS, isHourCycle } from '@/lib/locations/regional-settings';
@@ -83,6 +85,8 @@ export function LocationsList({
   onInitialEditConsumed,
 }: LocationsListProps) {
   const requestLocations = useSessionLocations(token);
+  // DX-316: el enlace al calendario sigue su propia regla (la de la API), no la de «Editar».
+  const canOpenCalendar = canManageLocationCalendar(getTokenRole(token));
   const [locations, setLocations] = useState<ClinicLocation[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -200,28 +204,32 @@ export function LocationsList({
                   />
                 </dl>
               </div>
-              {canEdit ? (
+              {canEdit || canOpenCalendar ? (
                 <div className="flex shrink-0 gap-2 self-start sm:self-center">
-                  {/* DX-316: días hábiles y festivos de esta sede (solo ADMIN, como la API). */}
-                  <Button asChild variant="ghost" size="sm" className="max-sm:min-h-11">
-                    <Link
-                      href={`/settings/calendario?sede=${encodeURIComponent(location.id)}`}
-                      aria-label={copy.calendarFor(location.name)}
+                  {canOpenCalendar ? (
+                    // DX-316: días hábiles y festivos de esta sede.
+                    <Button asChild variant="ghost" size="sm" className="max-sm:min-h-11">
+                      <Link
+                        href={`/settings/calendario?sede=${encodeURIComponent(location.id)}`}
+                        aria-label={copy.calendarFor(location.name)}
+                      >
+                        {copy.calendar}
+                      </Link>
+                    </Button>
+                  ) : null}
+                  {canEdit ? (
+                    // Aviso D5: guardar el modal, aunque no cambie nada, confirma la sede.
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      onClick={() => openModal(location)}
+                      aria-label={needsRegionalReview(location) ? copy.reviewFor(location.name) : copy.editFor(location.name)}
+                      className="max-sm:min-h-11"
                     >
-                      {copy.calendar}
-                    </Link>
-                  </Button>
-                  {/* Aviso D5: guardar el modal, aunque no cambie nada, confirma la sede. */}
-                  <Button
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => openModal(location)}
-                    aria-label={needsRegionalReview(location) ? copy.reviewFor(location.name) : copy.editFor(location.name)}
-                    className="max-sm:min-h-11"
-                  >
-                    {needsRegionalReview(location) ? copy.review : copy.edit}
-                  </Button>
+                      {needsRegionalReview(location) ? copy.review : copy.edit}
+                    </Button>
+                  ) : null}
                 </div>
               ) : null}
             </li>

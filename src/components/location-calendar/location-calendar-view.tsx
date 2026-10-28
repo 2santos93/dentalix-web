@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useId, useState } from 'react';
 import { usePathname, useRouter, useSearchParams } from 'next/navigation';
+import { Lock } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import type { ClinicLocation } from '@/lib/locations/locations-api';
 import { getLocationCalendar, type LocationCalendar } from '@/lib/locations/location-calendar-api';
@@ -8,6 +9,7 @@ import { locationRegionalFormat } from '@/lib/locations/location-settings';
 import { useLocationsState } from '@/lib/locations/use-locations-state';
 import { NO_ACTIVE_LOCATION_ERROR } from '@/lib/locations/use-sede-time-zone';
 import { SectionError } from '@/components/errors/section-error';
+import { EmptyState } from '@/components/shared/empty-state';
 import { SedeConfigError } from '@/components/locations/sede-config-error';
 import { Skeleton } from '@/components/ui/skeleton';
 import { WorkingWeekdaysForm, workingWeekdaysCopy } from './working-weekdays-form';
@@ -19,6 +21,8 @@ export const locationCalendarCopy = {
   loadingLabel: 'Cargando',
   locationsError: 'No pudimos cargar las sedes.',
   loadError: 'No pudimos cargar el calendario de la sede.',
+  forbiddenTitle: 'Solo administración cambia el calendario de la sede.',
+  forbiddenHint: 'Los plazos en días hábiles de cada sede ya cuentan con su calendario.',
 };
 
 const copy = locationCalendarCopy;
@@ -48,21 +52,40 @@ function optionLabel(location: ClinicLocation): string {
 
 /**
  * Ajustes › Calendario de la sede (DX-316, spec §7.2): selector de sede y, de
- * la sede elegida, sus días hábiles y sus festivos. Solo ADMIN; al resto la
- * API le responde 403 y la pantalla enseña ese mensaje.
+ * la sede elegida, sus días hábiles y sus festivos. Solo ADMIN: al resto se le
+ * dice sin pedir nada a la API, como en Mayoría de edad (`allowed` sale del
+ * rol del token); si el rol del token está viejo, el 403 de la API se enseña
+ * en la sección.
  */
-export function LocationCalendarView({ token }: { token: string }) {
+export function LocationCalendarView({ token, allowed }: { token: string; allowed: boolean }) {
+  if (!allowed) {
+    return <EmptyState role="status" icon={<Lock aria-hidden />} title={copy.forbiddenTitle} description={copy.forbiddenHint} />;
+  }
+  return <AllowedLocationCalendarView token={token} />;
+}
+
+function AllowedLocationCalendarView({ token }: { token: string }) {
   const router = useRouter();
   const pathname = usePathname();
   const requestedId = useSearchParams().get('sede');
   const state = useLocationsState(token);
   const selectId = useId();
+  const location =
+    state.status === 'ready' ? pickCalendarLocation(state.locations, requestedId, state.activeLocationId) : undefined;
+
+  // Un `?sede=` que no es de esta clínica (o ya no existe) abre la sede por
+  // defecto, y la URL pasa a decir cuál es: un enlace viejo no aparenta abrir
+  // la sede que pedía.
+  useEffect(() => {
+    if (requestedId && location && requestedId !== location.id) {
+      router.replace(`${pathname}?sede=${encodeURIComponent(location.id)}`, { scroll: false });
+    }
+  }, [requestedId, location, router, pathname]);
 
   if (state.status === 'loading') return <LoadingBlock />;
   if (state.status === 'error') {
     return <SectionError description={copy.locationsError} onRetry={state.retry} />;
   }
-  const location = pickCalendarLocation(state.locations, requestedId, state.activeLocationId);
   if (!location) {
     return <SectionError description={NO_ACTIVE_LOCATION_ERROR} onRetry={state.retry} />;
   }
@@ -139,6 +162,10 @@ function LocationCalendarSections({
 
   return (
     <div className="flex flex-col gap-10">
+      {/* Una sola nota para toda la pantalla: sin formato, las dos secciones pintan «—» (R11). */}
+      {fmt ? null : (
+        <SedeConfigError kind="locale" variant="note" locationId={location.id} onRetry={onRetryLocations} />
+      )}
       <section aria-labelledby="working-weekdays-heading" className="flex flex-col gap-3">
         <h2 id="working-weekdays-heading" className="text-lg font-semibold text-ink">
           {copy.weekdaysHeading}
@@ -152,15 +179,12 @@ function LocationCalendarSections({
             onSaved={setCalendar}
           />
         ) : (
-          <>
-            <p data-testid="working-weekdays-summary" className="font-medium text-ink">
-              {workingWeekdaysCopy.noSummary}
-            </p>
-            <SedeConfigError kind="locale" variant="note" locationId={location.id} onRetry={onRetryLocations} />
-          </>
+          <p data-testid="working-weekdays-summary" className="font-medium text-ink">
+            {workingWeekdaysCopy.noSummary}
+          </p>
         )}
       </section>
-      {/* Task 9: aquí va `HolidaysSection` con `calendar.holidays`. */}
+      {/* Task 9: aquí va `HolidaysSection` con `calendar.holidays` y `fmt` (o null: «—», sin nota propia). */}
     </div>
   );
 }

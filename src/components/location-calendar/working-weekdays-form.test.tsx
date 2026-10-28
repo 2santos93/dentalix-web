@@ -52,8 +52,45 @@ describe('WorkingWeekdaysForm (DX-316, spec §7.2)', () => {
     expect(screen.getByTestId('working-weekdays-summary')).toHaveTextContent('Domingo a jueves');
     await user.click(screen.getByRole('button', { name: 'Guardar días hábiles' }));
     await waitFor(() => expect(mockedSet).toHaveBeenCalledWith('tok', 'loc-1', [0, 1, 2, 3, 4]));
-    expect(await screen.findByRole('status')).toHaveTextContent('Guardado');
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Guardado'));
     expect(onSaved).toHaveBeenCalledWith(saved);
+  });
+
+  it('«Guardado» goes into a live region that was already mounted', async () => {
+    const user = setupUser();
+    mockedSet.mockResolvedValue({ locationId: 'loc-1', workingWeekdays: [1, 2, 3, 4, 5, 6], holidays: [] });
+    renderForm();
+    const status = screen.getByRole('status');
+    expect(status).toBeEmptyDOMElement();
+    await user.click(screen.getByRole('checkbox', { name: 'Sábado' }));
+    await user.click(screen.getByRole('button', { name: 'Guardar días hábiles' }));
+    await waitFor(() => expect(status).toHaveTextContent('Guardado'));
+    expect(screen.getByRole('status')).toBe(status);
+  });
+
+  it('after a keyboard save focus lands on the first day, never on <body>', async () => {
+    const user = setupUser();
+    mockedSet.mockResolvedValue({ locationId: 'loc-1', workingWeekdays: [1, 2, 3, 4, 5, 6], holidays: [] });
+    renderForm();
+    await user.click(screen.getByRole('checkbox', { name: 'Sábado' }));
+    screen.getByRole('button', { name: 'Guardar días hábiles' }).focus();
+    await user.keyboard('{Enter}');
+    await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Guardado'));
+    expect(document.activeElement).not.toBe(document.body);
+    expect(screen.getByRole('checkbox', { name: 'Lunes' })).toHaveFocus();
+  });
+
+  it('after a failed keyboard save focus returns to «Guardar días hábiles» with the error linked', async () => {
+    const user = setupUser();
+    mockedSet.mockRejectedValue(new ApiError(500, 'Internal server error'));
+    renderForm();
+    await user.click(screen.getByRole('checkbox', { name: 'Sábado' }));
+    screen.getByRole('button', { name: 'Guardar días hábiles' }).focus();
+    await user.keyboard('{Enter}');
+    const alert = await screen.findByRole('alert');
+    expect(alert).toHaveTextContent('No pudimos guardar los días hábiles. Intenta de nuevo.');
+    await waitFor(() => expect(screen.getByRole('button', { name: 'Guardar días hábiles' })).toHaveFocus());
+    expect(fieldset()).toHaveAttribute('aria-describedby', expect.stringContaining(alert.id));
   });
 
   it('unchecking every day disables save and shows «Elige al menos un día hábil.»', async () => {
@@ -77,6 +114,9 @@ describe('WorkingWeekdaysForm (DX-316, spec §7.2)', () => {
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent(message);
     expect(fieldset()).toHaveAttribute('aria-describedby', expect.stringContaining(alert.id));
+    expect(fieldset()).not.toHaveAttribute('aria-invalid');
+    // Justo debajo de las casillas, antes del resumen y la ayuda.
+    expect(fieldset().nextElementSibling).toBe(alert);
     expect(onSaved).not.toHaveBeenCalled();
     expect(screen.queryByText('Guardado')).not.toBeInTheDocument();
   });

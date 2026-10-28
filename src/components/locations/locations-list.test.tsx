@@ -123,6 +123,20 @@ describe('LocationsList (G1, spec §6.3)', () => {
     expect(screen.getByRole('link', { name: 'Calendario Sede Norte' })).toHaveTextContent('Calendario');
   });
 
+  it('the «Calendario» link follows canManageLocationCalendar (the token role), not canEdit', async () => {
+    mockedList.mockResolvedValue([norte]);
+    const { unmount } = render(<LocationsList token={RECEPTIONIST} canEdit />);
+    await screen.findByText('Sede Norte');
+    expect(screen.getByRole('button', { name: 'Editar Sede Norte' })).toBeInTheDocument();
+    expect(screen.queryByRole('link', { name: 'Calendario Sede Norte' })).not.toBeInTheDocument();
+    unmount();
+
+    render(<LocationsList token={ADMIN} canEdit={false} />);
+    await screen.findByText('Sede Norte');
+    expect(screen.queryByRole('button', { name: 'Editar Sede Norte' })).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: 'Calendario Sede Norte' })).toBeInTheDocument();
+  });
+
   it('a location with null regional fields is listed «Por configurar» and the modal completes it', async () => {
     mockedList.mockResolvedValue([legacy]);
     const completed = { ...legacy, currency: 'JPY', timeZone: 'Asia/Tokyo', locale: 'ja-JP', hourCycle: 'h23' as const, regionalSettingsReviewedAt: '2026-10-27T10:00:00.000Z' };

@@ -2,6 +2,8 @@
 import { Suspense, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuthStore } from '@/lib/auth/auth-store';
+import { getTokenRole } from '@/lib/auth/token-role';
+import { canManageLocationCalendar } from '@/lib/locations/location-calendar';
 import { PageHeader } from '@/components/shared/page-header';
 import { SETTINGS_BACK } from '@/components/settings/settings-sections';
 import { LocationCalendarView } from '@/components/location-calendar/location-calendar-view';
@@ -14,8 +16,9 @@ const copy = {
 };
 
 /**
- * Ajustes › Calendario de la sede (DX-316). Solo ADMIN: la API responde 403 al
- * resto y la vista enseña ese mensaje. `?sede=<id>` elige la sede.
+ * Ajustes › Calendario de la sede (DX-316). Solo ADMIN: al resto se le enseña
+ * el estado bloqueado sin llamar a la API, como en Mayoría de edad.
+ * `?sede=<id>` elige la sede.
  */
 export default function LocationCalendarPage() {
   const router = useRouter();
@@ -41,7 +44,10 @@ export default function LocationCalendarPage() {
       <PageHeader back={SETTINGS_BACK} title={copy.title} description={copy.description} />
       {/* `useSearchParams` (en la vista) exige un límite de Suspense. */}
       <Suspense fallback={null}>
-        <LocationCalendarView token={accessToken} />
+        <LocationCalendarView
+          token={accessToken}
+          allowed={canManageLocationCalendar(getTokenRole(accessToken))}
+        />
       </Suspense>
     </>
   );
