@@ -229,7 +229,9 @@ export function PatientResponsiblePartiesSection({
         )}
 
         {recipient.kind === 'RESPONSIBLE' ? (
-          <p className="text-sm text-muted">{copy.noticesTo(recipient.name, recipient.email)}</p>
+          <p className="break-words text-sm text-muted">
+            {copy.noticesTo(recipient.name, recipient.email)}
+          </p>
         ) : data.minor && data.parties.length === 0 ? (
           <p className="text-sm text-warning">{copy.minorNoResponsible(data.majorityAge)}</p>
         ) : null}

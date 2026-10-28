@@ -135,6 +135,27 @@ describe('PatientResponsiblePartiesSection (DX-203)', () => {
     );
   });
 
+  it('un correo largo sin espacios en el aviso parte la línea en vez de ensanchar la ficha a 390 px', async () => {
+    // jsdom no maqueta: se fija lo que lo hace posible (mismo caso que «Datos»).
+    const email = 'claudia.navarro.consultorio@una-empresa-de-nombre-largo.example.com';
+    mockedGet.mockResolvedValue(
+      data({
+        parties: [motherParty],
+        noticeRecipient: {
+          kind: 'RESPONSIBLE',
+          name: 'Claudia',
+          email,
+          minor: true,
+          responsiblePartyId: 'r1',
+        },
+      }),
+    );
+    renderSection();
+    expect(
+      await screen.findByText(`Los avisos de este paciente van a Claudia (${email}).`),
+    ).toHaveClass('break-words');
+  });
+
   it('en la ficha del responsable: «Responsable de» con chips a los familiares', async () => {
     mockedGet.mockResolvedValue(
       data({

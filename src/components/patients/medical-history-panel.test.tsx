@@ -76,6 +76,21 @@ describe('MedicalHistoryPanel', () => {
     expect(await screen.findByText(/registrada el .* por Dra\. Ana Ríos/i)).toBeInTheDocument();
   });
 
+  it('un texto largo sin espacios parte la línea en vez de ensanchar la ficha a 390 px', async () => {
+    // jsdom no maqueta: se fija lo que lo hace posible. Sin `min-w-0` la celda
+    // de la rejilla mide lo que el texto entero (p. ej. una URL pegada) y
+    // `<main>` se desplaza en horizontal en móvil (mismo caso que «Datos»).
+    const notes =
+      'https://informes.una-clinica-de-nombre-largo.example.com/radiografias/panoramica-2026';
+    mockedGet.mockResolvedValue({ ...latest, notes });
+    render(<MedicalHistoryPanel token="tok" patientId="p1" />);
+
+    // El formulario de la versión nueva repite el valor en su textarea.
+    const value = await screen.findByText(notes, { selector: 'dd' });
+    expect(value).toHaveClass('break-words');
+    expect(value.parentElement).toHaveClass('min-w-0');
+  });
+
   it('si el personal no carga, la versión conserva su fecha de registro', async () => {
     mockedListStaff.mockRejectedValue(new Error('sin red'));
     mockedGet.mockResolvedValue(latest);
