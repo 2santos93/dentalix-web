@@ -100,7 +100,7 @@ for (const viewport of [
     });
 
     // Estado de cuenta: el anulado con su autor y motivo.
-    await page.getByRole('tab', { name: 'Estado de cuenta' }).click();
+    await page.goto(`${origin}/patients/${patientId}?tab=account-statement`);
     const statement = page.locator('#tabpanel-account-statement');
     const movements = statement.getByRole('table', { name: 'Movimientos (abonos)' });
     await expect(movements).toContainText(`Anulado por ${adminName}: ${REASON}`, {

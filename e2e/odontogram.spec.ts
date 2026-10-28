@@ -2,6 +2,7 @@ import { test, expect } from './support/test';
 import { randomUUID } from 'node:crypto';
 import { accessTokenOf, registerAndLogin } from './support/auth';
 import { API_URL } from './support/urls';
+import { openPatientTab } from './support/patient-tabs';
 
 /**
  * e2e: register clinic + login, seed one `DentalCatalogItem` via the API
@@ -130,9 +131,7 @@ test('register a procedure on a tooth -> colored + in timeline, persists after r
   ).toBeVisible({ timeout: 10_000 });
 
   // --- Open the "Odontograma" tab ---
-  const odontogramTab = page.getByRole('tab', { name: 'Odontograma', exact: true });
-  await odontogramTab.click();
-  await expect(odontogramTab).toHaveAttribute('aria-selected', 'true');
+  await openPatientTab(page, 'Odontograma');
 
   // Chart's outer wrapper (role="group", aria-label="Odontograma") — distinct
   // role from the tab above, so no ambiguity despite the identical name.
@@ -188,11 +187,9 @@ test('register a procedure on a tooth -> colored + in timeline, persists after r
     page.getByRole('heading', { name: `${patientFirstName} ${patientLastName}` }),
   ).toBeVisible({ timeout: 10_000 });
 
-  // The active tab is local component state, not persisted across a reload
-  // -> the page comes back on "Datos"; reopen "Odontograma".
-  const odontogramTabAfterReload = page.getByRole('tab', { name: 'Odontograma', exact: true });
-  await odontogramTabAfterReload.click();
-  await expect(odontogramTabAfterReload).toHaveAttribute('aria-selected', 'true');
+  // The active tab lives in `?tab=`, so the reload should keep it; the helper
+  // confirms it (re-clicking the selected tab is a no-op).
+  await openPatientTab(page, 'Odontograma');
 
   const chartAfterReload = page.getByRole('group', { name: 'Odontograma', exact: true });
   await expect(chartAfterReload).toBeVisible({ timeout: 10_000 });
