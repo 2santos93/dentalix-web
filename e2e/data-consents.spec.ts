@@ -1,6 +1,7 @@
 import { test, expect, type Page } from './support/test';
 import { randomUUID } from 'node:crypto';
 import { registerAndLogin } from './support/auth';
+import { openPatientTab } from './support/patient-tabs';
 
 /**
  * e2e (DX-037): autorización de datos Ley 1581 versionada y con prueba.
@@ -72,7 +73,7 @@ test('autorización de datos: publicar política → alta con casillas → ficha
   await page.waitForURL(/\/patients\/[0-9a-f-]{36}$/);
 
   // --- 3. Pestaña «Autorizaciones» y revocación de MARKETING ---
-  await page.getByRole('tab', { name: 'Autorizaciones' }).click();
+  await openPatientTab(page, 'Autorizaciones');
   for (const scope of ['GENERAL', 'SENSITIVE_HEALTH', 'MARKETING']) {
     await expect(page.getByTestId(`consent-status-${scope}`)).toContainText('Autorizado');
   }

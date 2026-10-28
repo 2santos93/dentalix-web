@@ -5,6 +5,7 @@ import { addStaffViaApi, apiPost, registerClinicViaApi, type ApiSession } from '
 import { loginAs } from './support/auth';
 import { LATE_BROWSER_TIME, atSede, sedeDayFromToday } from './support/clock';
 import { expectNoHorizontalScroll } from './support/layout';
+import { expectTouchTarget } from './support/touch-targets';
 import { API_URL, tenantOrigin } from './support/urls';
 
 /**
@@ -228,8 +229,7 @@ test('390 px: el aviso en la hoja «En clínica» y «Traer a esta cita» con te
   const notice = sheet.getByRole('group', { name: NOTICE });
   await expect(notice).toContainText(s.message, { timeout: 10_000 });
   const claim = notice.getByRole('button', { name: `Traer a esta cita: ${s.itemLabel}` });
-  const box = await claim.boundingBox();
-  expect(box?.height ?? 0).toBeGreaterThanOrEqual(44);
+  await expectTouchTarget(claim, { scope: sheet });
   await expectNoHorizontalScroll(page);
   await claim.focus();
   await page.keyboard.press('Enter');

@@ -4,6 +4,7 @@ import { addStaffViaApi, apiPost, registerClinicViaApi, type ApiSession } from '
 import { loginAs } from './support/auth';
 import { atSede, sedeDayFromToday } from './support/clock';
 import { expectNoHorizontalScroll } from './support/layout';
+import { expectTouchTarget, waitForAnimationsSettled } from './support/touch-targets';
 import { API_URL, tenantOrigin } from './support/urls';
 
 /**
@@ -89,11 +90,23 @@ async function openDayList(page: Page) {
 }
 
 /**
+ * Espera a que la lista recién abierta se asiente: Radix enfoca la opción
+ * marcada al abrir y vuelve a hacerlo cuando termina de colocar y animar el
+ * contenido. Una flecha pulsada en ese hueco (3 ms tras el primer foco, en la
+ * ola final de G2G3) movía el foco y Radix lo devolvía a la opción marcada.
+ */
+async function waitForListSettled(page: Page) {
+  // Solo las animaciones de la lista: un spinner en otra parte de la página no cuenta.
+  await waitForAnimationsSettled(page.getByRole('listbox'));
+}
+
+/**
  * Recorre la lista abierta tecla a tecla, esperando a que el foco llegue a cada
  * opción antes de la siguiente (a ritmo de persona: con pulsaciones seguidas en
  * una máquina cargada Radix puede no haber movido aún el foco).
  */
 async function walkOptions(page: Page, steps: Array<[string, string]>) {
+  await waitForListSettled(page);
   for (const [key, option] of steps) {
     await page.keyboard.press(key);
     await expect(page.getByRole('option', { name: option, exact: true })).toBeFocused();
@@ -197,7 +210,7 @@ test('390 px: en el detalle, ↑/↓ no envían nada y Enter aplica el estado', 
   await expect(status).toHaveText('Confirmada', { timeout: 10_000 });
   await expect(status).toHaveAccessibleName('Estado: Confirmada');
   // Usable con el dedo: al menos 44 px de alto.
-  expect((await status.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+  await expectTouchTarget(status, { scope: detail });
 
   await status.focus();
   await page.keyboard.press('ArrowDown');

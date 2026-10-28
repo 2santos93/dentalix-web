@@ -73,7 +73,7 @@ function money(amount: number | null | undefined, currency: string | null | unde
  * cargo» con motivo, SEC-050) (ADMIN, o RECEPTION si la
  * política de la sede lo permite; el servidor decide y lo dice en
  * `canManage`). Los 409 del servidor («No consta que el paciente fuera
- * informado…», EPS_CO) salen tal cual, sin botón de cobrar.
+ * informado…») salen tal cual, sin botón de cobrar.
  */
 export function CancellationFeePanel({ token, appointmentId }: { token: string; appointmentId: string }) {
   const headingRef = useRef<HTMLHeadingElement>(null);

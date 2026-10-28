@@ -22,9 +22,6 @@ const copy = {
   emergencyContact: 'Contacto de emergencia',
   relationship: 'Parentesco',
   emergencyPhone: 'Teléfono de emergencia',
-  // DX-153: la cobertura vive en su sección; el texto libre solo se muestra
-  // como dato anterior si el paciente no tiene ninguna cobertura.
-  legacyInsurer: 'Aseguradora (dato anterior)',
   occupation: 'Ocupación',
   maritalStatus: 'Estado civil',
   physician: 'Médico tratante',
@@ -61,9 +58,9 @@ function Block({ title, fields }: { title: string; fields: Field[] }) {
       <h3 className="text-sm font-medium text-muted">{title}</h3>
       <dl className="grid gap-3 sm:grid-cols-2">
         {fields.map((f) => (
-          <div key={f.label}>
+          <div key={f.label} className="min-w-0">
             <dt className="text-sm text-muted">{f.label}</dt>
-            <dd className="text-ink">{f.value ?? copy.fallback}</dd>
+            <dd className="break-words text-ink">{f.value ?? copy.fallback}</dd>
           </div>
         ))}
       </dl>
@@ -90,12 +87,6 @@ export function PatientDataPanel({ patient }: PatientDataPanelProps) {
   const birth = patient.birthDate
     ? `${formatCivilDate(patient.birthDate)}${age === null ? '' : ` · ${copy.years(age)}`}`
     : null;
-  // DX-153: el texto libre anterior solo sale si no hay ninguna cobertura (y se
-  // omite entero, sin «—», cuando no aplica).
-  const legacyInsurerFields: Field[] =
-    patient.coverage?.status === 'NONE' && patient.insurerEps
-      ? [{ label: copy.legacyInsurer, value: patient.insurerEps }]
-      : [];
   const consent = patient.dataConsentAccepted
     ? [copy.consentAccepted, formatCivilDate(patient.dataConsentAt ?? null)]
         .concat(patient.dataConsentPolicyVersion ? [copy.consentVersion(patient.dataConsentPolicyVersion)] : [])
@@ -137,7 +128,6 @@ export function PatientDataPanel({ patient }: PatientDataPanelProps) {
         <Block
           title={copy.administrative}
           fields={[
-            ...legacyInsurerFields,
             { label: copy.occupation, value: patient.occupation ?? null },
             { label: copy.maritalStatus, value: patient.maritalStatus ?? null },
             { label: copy.physician, value: patient.physicianName ?? null },

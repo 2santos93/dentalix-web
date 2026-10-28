@@ -2,6 +2,7 @@ import { test, expect, type APIRequestContext, type Page } from './support/test'
 import { randomUUID } from 'node:crypto';
 import { accessTokenOf, registerAndLogin } from './support/auth';
 import { API_URL } from './support/urls';
+import { openPatientTab } from './support/patient-tabs';
 
 /**
  * e2e (DX-038): historia clínica inalterable + adendas de corrección.
@@ -98,9 +99,7 @@ for (const viewport of VIEWPORTS) {
     expect(await patch.text()).toContain('adenda');
 
     await page.goto(`${origin}/patients/${seeded.patientId}`);
-    const tab = page.getByRole('tab', { name: 'Historia clínica' });
-    await tab.click();
-    await expect(tab).toHaveAttribute('aria-selected', 'true');
+    await openPatientTab(page, 'Historia clínica');
 
     const original = page.getByText(ORIGINAL_NOTES).locator('visible=true');
     await expect(original).toBeVisible({ timeout: 15_000 });
@@ -141,7 +140,7 @@ for (const viewport of VIEWPORTS) {
 
     // Persistió en el servidor: tras recargar sigue debajo del original.
     await page.reload();
-    await page.getByRole('tab', { name: 'Historia clínica' }).click();
+    await openPatientTab(page, 'Historia clínica');
     await expect(
       page
         .getByRole('list', { name: /Adendas de la evolución del/ })

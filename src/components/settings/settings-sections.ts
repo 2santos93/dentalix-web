@@ -4,6 +4,7 @@ import {
   BellRing,
   Building2,
   CalendarClock,
+  CalendarDays,
   ClipboardClock,
   ClipboardList,
   Clock,
@@ -18,6 +19,7 @@ import {
   Pill,
   ScanBarcode,
   ShieldCheck,
+  UserCheck,
   Wallet,
 } from 'lucide-react';
 import type { ClinicRole } from '@/lib/me/me-api';
@@ -33,8 +35,10 @@ import { canManageReminders } from '@/lib/reminders/reminders-api';
 import { canManageDiscounts } from '@/lib/discounts/discounts-api';
 import { canManageCashSessions } from '@/lib/cash-sessions/cash-sessions-api';
 import { canManageAnamnesisSettings } from '@/lib/clinical/medical-alerts';
+import { canManagePatientSettings } from '@/lib/patients/patient-settings-api';
 import { canManageDomains } from '@/lib/domains/domains-api';
 import { canImportPatients } from '@/lib/patient-imports/patient-imports-api';
+import { canManageLocationCalendar } from '@/lib/locations/location-calendar';
 import { canSearchImplantLots } from '@/lib/implants/implants-api';
 import { canReadSupportAccesses } from '@/lib/support-accesses/support-accesses-api';
 
@@ -82,6 +86,14 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
         description: 'Alta de sedes, su país, moneda, zona horaria y formato, sus datos legales y su política de cancelación.',
         icon: Building2,
       },
+      // DX-316.
+      {
+        href: '/settings/calendario',
+        label: 'Calendario de la sede',
+        description: 'Días hábiles y festivos de cada sede, para los plazos en días hábiles.',
+        icon: CalendarDays,
+        visible: canManageLocationCalendar,
+      },
       // SEC-009.
       {
         href: '/settings/dominios',
@@ -89,6 +101,14 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
         description: 'Un dominio de la clínica desde el que el equipo entra a Dentalix.',
         icon: Globe,
         visible: canManageDomains,
+      },
+      // DX-328.
+      {
+        href: '/settings/mayoria-de-edad',
+        label: 'Mayoría de edad',
+        description: 'Desde qué edad el paciente recibe sus propios avisos y recibos.',
+        icon: UserCheck,
+        visible: canManagePatientSettings,
       },
     ],
   },

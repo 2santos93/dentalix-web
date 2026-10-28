@@ -21,10 +21,30 @@ describe('Índice de Ajustes (DX-282)', () => {
     ]);
   });
 
-  it('ADMIN ve las 19 pantallas de ajustes, cada una una sola vez', () => {
+  it('ADMIN ve las 21 pantallas de ajustes, cada una una sola vez', () => {
     const hrefs = hrefsFor('ADMIN');
-    expect(hrefs).toHaveLength(19);
-    expect(new Set(hrefs).size).toBe(19);
+    expect(hrefs).toHaveLength(21);
+    expect(new Set(hrefs).size).toBe(21);
+  });
+
+  it('settings index lists Calendario de la sede only for ADMIN', () => {
+    const clinic = visibleSettingsSections('ADMIN').find((section) => section.id === 'clinica');
+    const labels = clinic?.entries.map((entry) => entry.label) ?? [];
+    // Justo después de «Sedes» (DX-316, spec §7.1).
+    expect(labels.indexOf('Calendario de la sede')).toBe(labels.indexOf('Sedes') + 1);
+    expect(hrefsFor('ADMIN')).toContain('/settings/calendario');
+    for (const role of ['DENTIST', 'ASSISTANT', 'RECEPTION', null] as const) {
+      expect(hrefsFor(role)).not.toContain('/settings/calendario');
+    }
+  });
+
+  it('settings index lists Mayoría de edad only for ADMIN', () => {
+    const clinic = visibleSettingsSections('ADMIN').find((section) => section.id === 'clinica');
+    expect(clinic?.entries.map((entry) => entry.label)).toContain('Mayoría de edad');
+    expect(hrefsFor('ADMIN')).toContain('/settings/mayoria-de-edad');
+    for (const role of ['DENTIST', 'ASSISTANT', 'RECEPTION', null] as const) {
+      expect(hrefsFor(role)).not.toContain('/settings/mayoria-de-edad');
+    }
   });
 
   it('no deja ninguna pantalla de /settings sin entrada (salvo el perfil y la auditoría)', () => {

@@ -364,8 +364,9 @@ for (const viewport of VIEWPORTS) {
     await expect(edit).toBeHidden({ timeout: 10_000 });
     await expect(page.getByText('Guardada. Ahora va por la versión 2.')).toBeVisible();
 
-    await page.goto(`${origin}/patients/${patient.id}`);
-    await page.getByRole('tab', { name: 'Historia clínica' }).click();
+    // Enlace directo a la pestaña: el spec prueba las entregas, no el cambio
+    // de pestaña, y un clic perdido en `router.replace` lo hacía intermitente.
+    await page.goto(`${origin}/patients/${patient.id}?tab=clinical-history`);
     await expect(page.getByRole('heading', { name: 'Indicaciones entregadas' })).toBeVisible({
       timeout: 15_000,
     });

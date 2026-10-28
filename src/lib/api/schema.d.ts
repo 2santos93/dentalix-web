@@ -394,6 +394,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/patients/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Mayoría de edad de la clínica (DX-328) */
+        get: operations["PatientsController_settings"];
+        /**
+         * Cambia la mayoría de edad de la clínica (14–21 años); queda en la auditoría
+         * @description DX-328. Aplica desde la siguiente petición. Si el valor no cambia, responde 200 sin evento de auditoría.
+         */
+        put: operations["PatientsController_updateClinicSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/patients/{id}": {
         parameters: {
             query?: never;
@@ -3181,6 +3202,121 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/locations/{id}/calendar": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Días hábiles y festivos vivos de la sede */
+        get: operations["LocationCalendarController_get"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/locations/{id}/calendar/working-weekdays": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Fijar los días hábiles de la semana de la sede
+         * @description Reemplaza la semana entera. Se guardan ordenados y sin repetidos. Sin cambio real no queda evento de auditoría.
+         */
+        put: operations["LocationCalendarController_setWorkingWeekdays"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/locations/{id}/holidays": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Añadir un festivo a la sede */
+        post: operations["LocationCalendarController_create"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/locations/{id}/holidays/{holidayId}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        post?: never;
+        /** Eliminar un festivo (se retira; la fecha se puede volver a añadir) */
+        delete: operations["LocationCalendarController_retire"];
+        options?: never;
+        head?: never;
+        /**
+         * Cambiar la fecha, el nombre o la clase de un festivo
+         * @description Un campo ausente no cambia; `null` es 400.
+         */
+        patch: operations["LocationCalendarController_update"];
+        trace?: never;
+    };
+    "/api/v1/locations/{id}/holidays/import/preview": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Vista previa de una importación de festivos (CSV o ICS)
+         * @description Lee, valida y clasifica cada fila contra los festivos vivos de la sede sin escribir nada ni auditar.
+         */
+        post: operations["LocationCalendarController_preview"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/locations/{id}/holidays/import": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Importar festivos (CSV o ICS) sin duplicar
+         * @description Escribe las filas NEW en una transacción con el calendario de la sede bloqueado; las filas con error no impiden escribir las demás. Importar dos veces el mismo fichero no duplica nada. Sin festivos creados no queda evento de auditoría.
+         */
+        post: operations["LocationCalendarController_import"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/platform/tenants": {
         parameters: {
             query?: never;
@@ -4461,7 +4597,7 @@ export interface components {
         /** @enum {string} */
         AuditAction: "VIEW" | "CREATE" | "UPDATE" | "DELETE" | "SIGN" | "VOID" | "LOGIN" | "LOGIN_FAILED" | "PASSWORD_RESET" | "EXPORT" | "PRINT" | "SEND";
         /** @enum {string} */
-        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION" | "POSTOP_TEMPLATE" | "POSTOP_DELIVERY" | "PATIENT_DOCUMENT" | "MEDICAL_HISTORY_SUBMISSION" | "AGREEMENT" | "PRICE_LIST" | "PROVIDER_SCHEDULE" | "PATIENT_IMPORT_BATCH" | "EXPENSE" | "CANCELLATION_POLICY" | "PAYMENT_ALLOCATION";
+        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION" | "POSTOP_TEMPLATE" | "POSTOP_DELIVERY" | "PATIENT_DOCUMENT" | "MEDICAL_HISTORY_SUBMISSION" | "AGREEMENT" | "PRICE_LIST" | "PROVIDER_SCHEDULE" | "PATIENT_IMPORT_BATCH" | "EXPENSE" | "CANCELLATION_POLICY" | "PAYMENT_ALLOCATION" | "CLINIC_SETTINGS" | "LOCATION_CALENDAR";
         /**
          * @description Rol con el que actuó (del token). `null` en un login fallido.
          * @enum {string}
@@ -5067,11 +5203,6 @@ export interface components {
             dataConsentPolicyVersion: string | null;
             maritalStatus: string | null;
             occupation: string | null;
-            /**
-             * @deprecated
-             * @description DEPRECADO (DX-153): texto libre original, solo lectura. La aseguradora vive ahora en las coberturas del paciente (`/patients/:id/coverages`); enviarlo en POST o PATCH se ignora.
-             */
-            insurerEps: string | null;
             physicianName: string | null;
             physicianPhone: string | null;
             emergencyContactName: string | null;
@@ -5186,11 +5317,6 @@ export interface components {
             dataConsentPolicyVersion: string | null;
             maritalStatus: string | null;
             occupation: string | null;
-            /**
-             * @deprecated
-             * @description DEPRECADO (DX-153): texto libre original, solo lectura. La aseguradora vive ahora en las coberturas del paciente (`/patients/:id/coverages`); enviarlo en POST o PATCH se ignora.
-             */
-            insurerEps: string | null;
             physicianName: string | null;
             physicianPhone: string | null;
             emergencyContactName: string | null;
@@ -5264,6 +5390,13 @@ export interface components {
             page: number;
             pageSize: number;
         };
+        PatientSettingsDto: {
+            /**
+             * @description Edad desde la que el paciente es adulto en esta clínica (Ajustes › Mayoría de edad).
+             * @example 18
+             */
+            majorityAge: number;
+        };
         OverdueAmountDto: {
             /** @example COP */
             currency: string;
@@ -5326,11 +5459,6 @@ export interface components {
             dataConsentPolicyVersion: string | null;
             maritalStatus: string | null;
             occupation: string | null;
-            /**
-             * @deprecated
-             * @description DEPRECADO (DX-153): texto libre original, solo lectura. La aseguradora vive ahora en las coberturas del paciente (`/patients/:id/coverages`); enviarlo en POST o PATCH se ignora.
-             */
-            insurerEps: string | null;
             physicianName: string | null;
             physicianPhone: string | null;
             emergencyContactName: string | null;
@@ -5471,18 +5599,18 @@ export interface components {
             source: components["schemas"]["ReminderOptOutSource"];
         };
         /**
-         * @description PATIENT: el propio paciente. RESPONSIBLE (DX-203): un menor (CO < 18, ES < 16) o un paciente sin email; los avisos van al email de su responsable que recibe avisos (primero el pagador). GUARDIAN: menor cuyo responsable no tiene email; va al email de la ficha saludándolo. CONTACT: menor sin responsables; se saluda a su contacto principal.
+         * @description PATIENT: el propio paciente. RESPONSIBLE (DX-203): un menor (menor que la mayoría de edad de la clínica) o un paciente sin email; los avisos van al email de su responsable que recibe avisos (primero el pagador). GUARDIAN: menor cuyo responsable no tiene email; va al email de la ficha saludándolo. CONTACT: menor sin responsables; se saluda a su contacto principal.
          * @enum {string}
          */
         CommunicationRecipientKind: "PATIENT" | "RESPONSIBLE" | "GUARDIAN" | "CONTACT";
         CommunicationRecipientDto: {
-            /** @description PATIENT: el propio paciente. RESPONSIBLE (DX-203): un menor (CO < 18, ES < 16) o un paciente sin email; los avisos van al email de su responsable que recibe avisos (primero el pagador). GUARDIAN: menor cuyo responsable no tiene email; va al email de la ficha saludándolo. CONTACT: menor sin responsables; se saluda a su contacto principal. */
+            /** @description PATIENT: el propio paciente. RESPONSIBLE (DX-203): un menor (menor que la mayoría de edad de la clínica) o un paciente sin email; los avisos van al email de su responsable que recibe avisos (primero el pagador). GUARDIAN: menor cuyo responsable no tiene email; va al email de la ficha saludándolo. CONTACT: menor sin responsables; se saluda a su contacto principal. */
             kind: components["schemas"]["CommunicationRecipientKind"];
             /** @description Nombre de pila de a quien se dirigen los avisos. */
             name: string | null;
             /** @description Email al que salen los avisos; null = no hay a quién. */
             email: string | null;
-            /** @description Menor según el país de la sede (CO: menos de 18; ES: menos de 16). */
+            /** @description Menor que la mayoría de edad de la clínica, en el día civil de la sede. */
             minor: boolean;
             /**
              * Format: uuid
@@ -5597,11 +5725,13 @@ export interface components {
         PatientResponsiblesDto: {
             /** Format: uuid */
             patientId: string;
-            /** @description Menor según el país de la sede activa o principal, en su día civil (CO < 18, ES < 16). */
+            /** @description Menor que la mayoría de edad de la clínica (`majorityAge`), en el día civil de la sede activa o principal. */
             minor: boolean;
-            /** @example 18 */
+            /**
+             * @description Edad desde la que el paciente es adulto en esta clínica (Ajustes › Mayoría de edad).
+             * @example 18
+             */
             majorityAge: number;
-            country: components["schemas"]["ClinicCountry"];
             parties: components["schemas"]["ResponsiblePartyDto"][];
             /** @description «Responsable de: …»: los pacientes de los que es responsable. */
             responsibleFor: components["schemas"]["ResponsibleForDto"][];
@@ -9718,12 +9848,12 @@ export interface components {
             docNumber: string | null;
         };
         /**
-         * @description RESPONSIBLE: un menor (CO < 18, ES < 16) o un paciente sin email; sale a nombre de su responsable que recibe avisos (primero el pagador principal).
+         * @description RESPONSIBLE: un menor (menor que la mayoría de edad de la clínica) o un paciente sin email; sale a nombre de su responsable que recibe avisos (primero el pagador principal).
          * @enum {string}
          */
         StatementAddresseeKind: "PATIENT" | "RESPONSIBLE";
         AccountStatementAddresseeDto: {
-            /** @description RESPONSIBLE: un menor (CO < 18, ES < 16) o un paciente sin email; sale a nombre de su responsable que recibe avisos (primero el pagador principal). */
+            /** @description RESPONSIBLE: un menor (menor que la mayoría de edad de la clínica) o un paciente sin email; sale a nombre de su responsable que recibe avisos (primero el pagador principal). */
             kind: components["schemas"]["StatementAddresseeKind"];
             /** @description Nombre completo */
             name: string;
@@ -11289,10 +11419,10 @@ export interface components {
              */
             status: "NONE" | "CHARGED" | "WAIVED" | "VOIDED";
             /**
-             * @description Por qué no se puede generar el cargo ahora: no es inasistencia ni tardía, no consta la política comunicada, la versión comunicada no tiene importe, EPS_CO activa en Colombia, o ya cobrado/condonado.
+             * @description Por qué no se puede generar el cargo ahora: no es inasistencia ni tardía, no consta la política comunicada, la versión comunicada no tiene importe, o ya cobrado/condonado.
              * @enum {string|null}
              */
-            chargeBlock: "NOT_ELIGIBLE" | "NOT_INFORMED" | "NO_FEE" | "EPS_CO" | "ALREADY_CHARGED" | "ALREADY_WAIVED" | null;
+            chargeBlock: "NOT_ELIGIBLE" | "NOT_INFORMED" | "NO_FEE" | "ALREADY_CHARGED" | "ALREADY_WAIVED" | null;
             chargeBlockMessage: string | null;
             /** @description El usuario puede generar, condonar o anular: ADMIN, o RECEPTION si la política vigente de la sede lo permite. */
             canManage: boolean;
@@ -11319,6 +11449,114 @@ export interface components {
              * @example Cargo generado por error: el paciente avisó a tiempo por teléfono
              */
             reason: string;
+        };
+        LocationHolidayDto: {
+            /** Format: uuid */
+            id: string;
+            /**
+             * Format: date
+             * @example 2027-05-03
+             */
+            date: string;
+            /** @example Cierre anual */
+            name: string;
+            /** @description Cada año el mismo mes y día, también antes de `date` (R6) */
+            recurring: boolean;
+        };
+        LocationCalendarDto: {
+            /** Format: uuid */
+            locationId: string;
+            /**
+             * @description 0 = domingo … 6 = sábado; ordenados y sin repetidos
+             * @example [
+             *       1,
+             *       2,
+             *       3,
+             *       4,
+             *       5
+             *     ]
+             */
+            workingWeekdays: number[];
+            /** @description Festivos vivos: los recurrentes por (mes, día), luego los puntuales por fecha */
+            holidays: components["schemas"]["LocationHolidayDto"][];
+        };
+        SetWorkingWeekdaysDto: {
+            /**
+             * @description 0 = domingo … 6 = sábado. Se guardan ordenados y sin repetidos.
+             * @example [
+             *       1,
+             *       2,
+             *       3,
+             *       4,
+             *       5
+             *     ]
+             */
+            workingWeekdays: number[];
+        };
+        CreateLocationHolidayDto: {
+            /**
+             * Format: date
+             * @description AAAA-MM-DD entre 2000-01-01 y 2100-12-31
+             * @example 2027-05-03
+             */
+            date: string;
+            /** @example Cierre anual */
+            name: string;
+            /**
+             * @description Cada año el mismo mes y día (no el 29 de febrero); por defecto, no
+             * @default false
+             */
+            recurring: boolean;
+        };
+        UpdateLocationHolidayDto: {
+            /**
+             * Format: date
+             * @example 2027-05-03
+             */
+            date?: string;
+            /** @example Cierre anual */
+            name?: string;
+            recurring?: boolean;
+        };
+        HolidayImportCountsDto: {
+            /** @description Creados, o que se crearían en la vista previa */
+            new: number;
+            duplicate: number;
+            error: number;
+        };
+        HolidayImportRowDto: {
+            /**
+             * @description Fila física del CSV o línea del `BEGIN:VEVENT` del ICS
+             * @example 2
+             */
+            line: number;
+            /**
+             * Format: date
+             * @description AAAA-MM-DD; null si no se pudo leer
+             * @example 2027-05-03
+             */
+            date: string | null;
+            /** @example Cierre anual */
+            name: string | null;
+            recurring: boolean | null;
+            /**
+             * @description NEW: se crea (o se ha creado); DUPLICATE: ya existe igual; ERROR: no se importa
+             * @enum {string}
+             */
+            status: "NEW" | "DUPLICATE" | "ERROR";
+            /** @description Por qué es DUPLICATE o ERROR; null si es NEW. Sin cifras. */
+            message: string | null;
+            /** @description Líneas del fichero con las que choca, ordenadas; [] si ninguna */
+            relatedLines: number[];
+        };
+        HolidayImportResultDto: {
+            /** @enum {string} */
+            format: "CSV" | "ICS";
+            /** @description true en la vista previa (no escribe) */
+            dryRun: boolean;
+            counts: components["schemas"]["HolidayImportCountsDto"];
+            /** @description Por línea */
+            rows: components["schemas"]["HolidayImportRowDto"][];
         };
         PlatformTenantDto: {
             /** Format: uuid */
@@ -14234,6 +14472,62 @@ export interface operations {
                 };
             };
             /** @description Rol distinto de ADMIN */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientsController_settings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PatientSettingsDto"];
+                };
+            };
+        };
+    };
+    PatientsController_updateClinicSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PatientSettingsDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PatientSettingsDto"];
+                };
+            };
+            /** @description Fuera de 14–21 o no entero */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo un administrador puede cambiar la mayoría de edad. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -22128,7 +22422,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description No es inasistencia ni tardía, «No consta que el paciente fuera informado de la política», la versión comunicada no tiene importe, cobertura EPS_CO activa en una sede de Colombia (Ley 1438 art. 55), ya cobrado o condonado, o la cita cambió mientras tanto */
+            /** @description No es inasistencia ni tardía, «No consta que el paciente fuera informado de la política», la versión comunicada no tiene importe, ya cobrado o condonado, o la cita cambió mientras tanto */
             409: {
                 headers: {
                     [name: string]: unknown;
@@ -22236,6 +22530,389 @@ export interface operations {
             };
             /** @description Sin cargo generado (o condonado), ya anulado, ya cobrado (anula antes el abono), o la cita cambió */
             409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    LocationCalendarController_get: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocationCalendarDto"];
+                };
+            };
+            /** @description El identificador de la sede no es válido. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo un administrador de la clínica puede ver o cambiar el calendario de la sede. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sede inexistente, de otra clínica o retirada */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    LocationCalendarController_setWorkingWeekdays: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SetWorkingWeekdaysDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocationCalendarDto"];
+                };
+            };
+            /** @description Elige al menos un día hábil. / Los días hábiles van de 0 (domingo) a 6 (sábado). */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo un administrador de la clínica puede ver o cambiar el calendario de la sede. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sede inexistente, de otra clínica o retirada */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    LocationCalendarController_create: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CreateLocationHolidayDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocationHolidayDto"];
+                };
+            };
+            /** @description Fecha que no es AAAA-MM-DD o fuera de 2000–2100, nombre vacío o de más de 120 caracteres, o recurrente el 29 de febrero */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo un administrador de la clínica puede ver o cambiar el calendario de la sede. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sede inexistente, de otra clínica o retirada */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `HOLIDAY_ALREADY_EXISTS` con `holidayId`: ese día ya es festivo de la sede (R5); `LOCATION_HOLIDAY_LIMIT`: la sede ya tiene 1000 festivos */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    LocationCalendarController_retire: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                holidayId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description Retirado */
+            204: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El identificador de la sede no es válido. / El identificador del festivo no es válido. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo un administrador de la clínica puede ver o cambiar el calendario de la sede. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sede inexistente, de otra clínica o retirada, o festivo inexistente, retirado o de otra sede */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    LocationCalendarController_update: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+                holidayId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["UpdateLocationHolidayDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["LocationHolidayDto"];
+                };
+            };
+            /** @description Un campo en null, fecha o nombre no válidos, o recurrente el 29 de febrero */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo un administrador de la clínica puede ver o cambiar el calendario de la sede. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sede inexistente, de otra clínica o retirada, o festivo inexistente, retirado o de otra sede */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `HOLIDAY_ALREADY_EXISTS` con `holidayId`: el día ya es festivo de la sede (el propio no cuenta) */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    LocationCalendarController_preview: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /**
+                     * Format: binary
+                     * @description .csv (fecha, nombre y, si quieres, recurrente) o .ics; hasta 256 KB y 500 filas o días de festivo
+                     */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HolidayImportResultDto"];
+                };
+            };
+            /** @description Falta el archivo. / Sube un archivo .csv o .ics. / El archivo está vacío. / extensión que no coincide con el contenido / fichero ilegible (cabecera del CSV, UTF-8, sin eventos, incompleto, más de 500 entradas) / El identificador de la sede no es válido. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo un administrador de la clínica puede ver o cambiar el calendario de la sede. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sede inexistente, de otra clínica o retirada */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `LOCATION_HOLIDAY_LIMIT`: las filas nuevas pasarían de 1000 festivos en la sede */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El archivo supera 256 KB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Hay demasiadas subidas en curso. Inténtalo de nuevo en unos segundos. (con Retry-After) */
+            503: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    LocationCalendarController_import: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "multipart/form-data": {
+                    /**
+                     * Format: binary
+                     * @description .csv (fecha, nombre y, si quieres, recurrente) o .ics; hasta 256 KB y 500 filas o días de festivo
+                     */
+                    file: string;
+                };
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["HolidayImportResultDto"];
+                };
+            };
+            /** @description Falta el archivo. / Sube un archivo .csv o .ics. / El archivo está vacío. / extensión que no coincide con el contenido / fichero ilegible (cabecera del CSV, UTF-8, sin eventos, incompleto, más de 500 entradas) / El identificador de la sede no es válido. */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo un administrador de la clínica puede ver o cambiar el calendario de la sede. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sede inexistente, de otra clínica o retirada */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description `LOCATION_HOLIDAY_LIMIT`: las filas nuevas pasarían de 1000 festivos en la sede; no se escribe nada */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description El archivo supera 256 KB. */
+            413: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Hay demasiadas subidas en curso. Inténtalo de nuevo en unos segundos. (con Retry-After) */
+            503: {
                 headers: {
                     [name: string]: unknown;
                 };

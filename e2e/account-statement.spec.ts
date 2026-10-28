@@ -2,6 +2,7 @@ import { test, expect, type APIRequestContext } from './support/test';
 import { randomUUID } from 'node:crypto';
 import { accessTokenOf, registerAndLogin } from './support/auth';
 import { API_URL } from './support/urls';
+import { openPatientTab } from './support/patient-tabs';
 
 /**
  * e2e (DX-011): abrir la ficha → pestaña «Estado de cuenta» → «Imprimir».
@@ -130,9 +131,7 @@ test('estado de cuenta: ficha → pestaña → imprimir muestra un documento lim
     page.getByRole('heading', { name: `${patientFirstName} ${patientLastName}` }),
   ).toBeVisible({ timeout: 10_000 });
 
-  const tab = page.getByRole('tab', { name: 'Estado de cuenta' });
-  await tab.click();
-  await expect(tab).toHaveAttribute('aria-selected', 'true');
+  await openPatientTab(page, 'Estado de cuenta');
   await expect(page).toHaveURL(/tab=account-statement/);
 
   const panel = page.locator('#tabpanel-account-statement');

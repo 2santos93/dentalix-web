@@ -141,8 +141,7 @@ for (const viewport of VIEWPORTS) {
     await expect(page.getByText(/Evolución registrada en la ficha de Lucía/)).toBeVisible();
 
     // --- 3. Ficha → Historia clínica ------------------------------------------
-    await page.goto(`${origin}/patients/${patient.id}`);
-    await page.getByRole('tab', { name: 'Historia clínica' }).click();
+    await page.goto(`${origin}/patients/${patient.id}?tab=clinical-history`);
     await expect(page.getByText(expected).locator('visible=true')).toBeVisible({ timeout: 15_000 });
     await expect(
       page.getByText(new RegExp(`^Cita del \\d{2}/\\d{2} · ${ownerName}$`)).locator('visible=true'),

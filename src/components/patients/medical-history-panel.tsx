@@ -250,25 +250,25 @@ export function MedicalHistoryPanel({ token, patientId, onSaved }: MedicalHistor
               <p className="t-label text-muted">{copy.appendOnlyNote}</p>
             </div>
             <dl className="grid gap-3 sm:grid-cols-2">
-              <div>
+              <div className="min-w-0">
                 <dt className="text-sm font-medium text-muted">{copy.allergiesCountLabel}</dt>
                 <dd className="text-ink">{latest.allergies.length}</dd>
               </div>
-              <div>
+              <div className="min-w-0">
                 <dt className="text-sm font-medium text-muted">{copy.conditionsCountLabel}</dt>
                 <dd className="text-ink">{latest.conditions.length}</dd>
               </div>
-              <div>
+              <div className="min-w-0">
                 <dt className="text-sm font-medium text-muted">{copy.medicationsCountLabel}</dt>
                 <dd className="text-ink">{latest.medications.length}</dd>
               </div>
-              <div>
+              <div className="min-w-0">
                 <dt className="text-sm font-medium text-muted">{copy.familyHistoryLabel}</dt>
-                <dd className="text-ink">{latest.familyHistory ?? copy.fieldFallback}</dd>
+                <dd className="break-words text-ink">{latest.familyHistory ?? copy.fieldFallback}</dd>
               </div>
-              <div>
+              <div className="min-w-0">
                 <dt className="text-sm font-medium text-muted">{copy.notesLabel}</dt>
-                <dd className="text-ink">{latest.notes ?? copy.fieldFallback}</dd>
+                <dd className="break-words text-ink">{latest.notes ?? copy.fieldFallback}</dd>
               </div>
             </dl>
           </div>

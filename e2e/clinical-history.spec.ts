@@ -1,6 +1,7 @@
 import { test, expect } from './support/test';
 import { randomUUID } from 'node:crypto';
 import { registerAndLogin } from './support/auth';
+import { openPatientTab } from './support/patient-tabs';
 
 /**
  * e2e: register clinic + login, create a patient, open its detail, save a
@@ -95,9 +96,7 @@ test('save anamnesis + add evolution via the UI -> both persist through the back
   ).toBeVisible({ timeout: 10_000 });
 
   // --- Open the "Historia clínica" tab ---
-  const clinicalHistoryTab = page.getByRole('tab', { name: 'Historia clínica' });
-  await clinicalHistoryTab.click();
-  await expect(clinicalHistoryTab).toHaveAttribute('aria-selected', 'true');
+  await openPatientTab(page, 'Historia clínica');
 
   // Scope form interactions to each section so lookups stay unambiguous.
   const anamnesisSection = page.locator('section', { hasText: 'Anamnesis' });
@@ -167,11 +166,9 @@ test('save anamnesis + add evolution via the UI -> both persist through the back
     page.getByRole('heading', { name: `${patientFirstName} ${patientLastName}` }),
   ).toBeVisible({ timeout: 10_000 });
 
-  // The active tab is local component state, not persisted across a reload
-  // -> the page comes back on "Datos"; reopen "Historia clínica".
-  const clinicalHistoryTabAfterReload = page.getByRole('tab', { name: 'Historia clínica' });
-  await clinicalHistoryTabAfterReload.click();
-  await expect(clinicalHistoryTabAfterReload).toHaveAttribute('aria-selected', 'true');
+  // The active tab lives in `?tab=`, so the reload should keep it; the helper
+  // confirms it (re-clicking the selected tab is a no-op).
+  await openPatientTab(page, 'Historia clínica');
 
   const anamnesisSectionAfterReload = page.locator('section', { hasText: 'Anamnesis' });
   const evolutionsSectionAfterReload = page.locator('section', { hasText: 'Evoluciones' });

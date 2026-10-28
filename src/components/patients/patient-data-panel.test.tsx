@@ -21,7 +21,6 @@ function patient(overrides: Partial<Patient> = {}): Patient {
     dataConsentPolicyVersion: null,
     maritalStatus: null,
     occupation: null,
-    insurerEps: null,
     physicianName: null,
     physicianPhone: null,
     emergencyContactName: null,
@@ -161,7 +160,7 @@ describe('PatientDataPanel', () => {
   });
 });
 
-describe('PatientDataPanel · aseguradora (DX-153)', () => {
+describe('PatientDataPanel · sin aseguradora en texto libre (DX-322)', () => {
   const coverage = (status: 'NONE' | 'ACTIVE' | 'EXPIRED' | 'NOT_STARTED') => ({
     status,
     payerName: null,
@@ -169,42 +168,16 @@ describe('PatientDataPanel · aseguradora (DX-153)', () => {
     validTo: null,
   });
 
-  it('ya no muestra «Aseguradora / EPS»', () => {
-    render(
-      <PatientDataPanel
-        patient={patient({ occupation: 'Docente', insurerEps: 'Sanitas', coverage: coverage('ACTIVE') })}
-      />,
-    );
+  it('patient data panel never shows a legacy insurer row', () => {
+    // DX-322: el texto libre de aseguradora sale del contrato; aunque una
+    // respuesta antigua lo traiga, la ficha no lo pinta.
+    const stale = { ...patient({ occupation: 'Docente', coverage: coverage('NONE') }), insurerEps: 'Sanitas' };
+    render(<PatientDataPanel patient={stale} />);
+    expect(screen.queryByText('Aseguradora (dato anterior)')).not.toBeInTheDocument();
     expect(screen.queryByText('Aseguradora / EPS')).not.toBeInTheDocument();
     expect(screen.queryByText('Sanitas')).not.toBeInTheDocument();
   });
-
-  it('muestra el texto libre como «Aseguradora (dato anterior)» solo sin coberturas', () => {
-    render(
-      <PatientDataPanel patient={patient({ insurerEps: 'Sanitas', coverage: coverage('NONE') })} />,
-    );
-    expect(screen.getByText('Aseguradora (dato anterior)')).toBeInTheDocument();
-    expect(screen.getByText('Sanitas')).toBeInTheDocument();
-  });
-
-  it.each(['ACTIVE', 'EXPIRED', 'NOT_STARTED'] as const)(
-    'no lo muestra con una cobertura %s',
-    (status) => {
-      render(
-        <PatientDataPanel patient={patient({ insurerEps: 'Sanitas', coverage: coverage(status) })} />,
-      );
-      expect(screen.queryByText('Aseguradora (dato anterior)')).not.toBeInTheDocument();
-    },
-  );
-
-  it('sin texto anterior no deja ni la etiqueta ni un «—»', () => {
-    render(
-      <PatientDataPanel patient={patient({ occupation: 'Docente', coverage: coverage('NONE') })} />,
-    );
-    expect(screen.queryByText('Aseguradora (dato anterior)')).not.toBeInTheDocument();
-  });
 });
-
 
 describe('paciente importado (DX-107)', () => {
   it('marca el origen y la autorización de datos como pendiente, aunque no tenga datos administrativos', () => {
@@ -218,5 +191,18 @@ describe('paciente importado (DX-107)', () => {
     render(<PatientDataPanel patient={patient({ importBatchId: null, occupation: 'Docente' })} />);
     expect(screen.queryByText('Importado desde archivo')).not.toBeInTheDocument();
     expect(screen.getByText('Pendiente')).toBeInTheDocument();
+  });
+});
+
+describe('PatientDataPanel · maquetación', () => {
+  it('un correo largo sin espacios parte la línea en vez de ensanchar la ficha a 390 px', () => {
+    // jsdom no maqueta: se fija lo que lo hace posible. Sin `min-w-0` la celda
+    // de la rejilla mide lo que el correo entero y `<main>` se desplaza en
+    // horizontal en móvil (QA G2G3, DX-328).
+    const email = 'nombre.apellido.consultorio@una-empresa-de-nombre-largo.example.com';
+    render(<PatientDataPanel patient={patient({ email })} />);
+    const value = screen.getByText(email);
+    expect(value).toHaveClass('break-words');
+    expect(value.parentElement).toHaveClass('min-w-0');
   });
 });
