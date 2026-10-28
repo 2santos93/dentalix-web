@@ -95,8 +95,15 @@ async function openDayList(page: Page) {
  * ola final de G2G3) movía el foco y Radix lo devolvía a la opción marcada.
  */
 async function waitForListSettled(page: Page) {
-  await page.evaluate(async () => {
-    await Promise.all(document.getAnimations().map((a) => a.finished));
+  // Solo las animaciones de la lista: una infinita (un spinner en otra parte
+  // de la página) no termina nunca, y una cancelada rechaza `finished`.
+  await page.getByRole('listbox').evaluate(async (el) => {
+    await Promise.all(
+      el
+        .getAnimations({ subtree: true })
+        .filter((a) => a.effect?.getTiming().iterations !== Infinity)
+        .map((a) => a.finished.catch(() => {})),
+    );
     await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
   });
 }

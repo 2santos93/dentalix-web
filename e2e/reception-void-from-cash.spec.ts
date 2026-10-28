@@ -2,6 +2,7 @@ import { test, expect, type APIRequestContext } from './support/test';
 import { randomUUID } from 'node:crypto';
 import { accessTokenOf, waitForHydratedForm } from './support/auth';
 import { API_URL, tenantOrigin } from './support/urls';
+import { openPatientTab } from './support/patient-tabs';
 
 /**
  * e2e (DX-057): recepción anula desde la CAJA un abono suyo de hoy.
@@ -159,7 +160,7 @@ for (const viewport of [
     await expect(page.getByText('Insufficient role')).toHaveCount(0);
 
     // --- Estado de cuenta: el abono anulado, con autor y motivo.
-    await tabs.getByRole('tab', { name: 'Estado de cuenta' }).click();
+    await openPatientTab(page, 'Estado de cuenta');
     const movements = page
       .locator('#tabpanel-account-statement')
       .getByRole('table', { name: 'Movimientos (abonos)' });
