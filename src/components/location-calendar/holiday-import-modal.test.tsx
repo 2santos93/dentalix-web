@@ -8,7 +8,7 @@ import {
   type HolidayImportRow,
 } from '@/lib/locations/location-calendar-api';
 import type { ClinicLocation } from '@/lib/locations/locations-api';
-import { ApiError } from '@/lib/api/api-error';
+import { ApiError, NetworkError } from '@/lib/api/api-error';
 import { clinicLocation } from '@/lib/test/locations';
 import { setupUser } from '@/lib/test/user';
 
@@ -167,7 +167,10 @@ describe('HolidayImportModal (DX-316, spec §7.2)', () => {
     mockedPreview.mockResolvedValue(result({ new: 1, duplicate: 1, error: 204 }, [row(2, 'NEW'), ...issues]));
     renderModal();
     await user.upload(fileInput(), csv());
-    const list = await screen.findByRole('list', { name: copy.issuesHeading });
+    const region = await screen.findByRole('region', { name: copy.issuesHeading });
+    // Un solo nombre: la región. La lista no lo repite.
+    const list = within(region).getByRole('list');
+    expect(list).not.toHaveAttribute('aria-labelledby');
     const items = within(list).getAllByRole('listitem');
     expect(items).toHaveLength(200);
     expect(items[0]).toHaveTextContent('Línea 5');
@@ -260,7 +263,11 @@ describe('HolidayImportModal (DX-316, spec §7.2)', () => {
     await user.upload(fileInput(), csv());
     await screen.findByTestId('holiday-import-summary');
     await user.click(importButton());
-    expect(await screen.findByText(copy.changed)).toHaveFocus();
+    const note = await screen.findByText(copy.changed);
+    // Se lee una vez: tiene el foco y no está en una región viva.
+    expect(note.parentElement).toHaveFocus();
+    expect(note.closest('[role="status"], [role="alert"]')).toBeNull();
+    expect(screen.queryByText(copy.followUpError)).not.toBeInTheDocument();
     expect(onImported).toHaveBeenCalledWith(real);
     expect(onOpenChange).not.toHaveBeenCalled();
     expect(screen.getByTestId('holiday-import-summary')).toHaveTextContent('10 nuevos · 1 ya existía · 1 con error');
@@ -369,5 +376,112 @@ describe('HolidayImportModal (DX-316, spec §7.2)', () => {
     expect(onImported).not.toHaveBeenCalled();
     expect(onOpenChange).not.toHaveBeenCalled();
     expect(screen.getByTestId('holiday-import-summary')).toBeInTheDocument();
+  });
+
+  it('while a file is being read the «Elige un archivo…» hint is gone', async () => {
+    const user = setupUser();
+    mockedPreview.mockReturnValue(new Promise(() => {}));
+    renderModal();
+    expect(screen.getByText(copy.pickFirst)).toBeInTheDocument();
+    await user.upload(fileInput(), csv());
+    expect(screen.getByText(copy.reading)).toBeInTheDocument();
+    expect(screen.queryByText(copy.pickFirst)).not.toBeInTheDocument();
+  });
+
+  it('while importing, the X is aria-disabled and does not close', async () => {
+    const user = setupUser();
+    mockedPreview.mockResolvedValue(twelveNew);
+    const pending = deferred<HolidayImportResult>();
+    mockedImport.mockReturnValue(pending.promise);
+    const { onOpenChange } = renderModal();
+    const xClose = () => screen.getAllByRole('button', { name: copy.close }).find((b) => b.querySelector('.sr-only')) as HTMLElement;
+    expect(xClose()).not.toHaveAttribute('aria-disabled');
+    await user.upload(fileInput(), csv());
+    await screen.findByTestId('holiday-import-summary');
+    await user.click(importButton());
+    expect(xClose()).toHaveAttribute('aria-disabled', 'true');
+    await user.click(xClose());
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(onOpenChange).not.toHaveBeenCalled();
+    pending.resolve(result({ new: 12, duplicate: 0, error: 0 }, [], false));
+    await waitFor(() => expect(onOpenChange).toHaveBeenCalledWith(false));
+  });
+
+  it('a location without a regional format shows «—» for every count and line', async () => {
+    const user = setupUser();
+    mockedPreview.mockResolvedValue(
+      result({ new: 3, duplicate: 1, error: 1 }, [row(4, 'ERROR', 'La fecha se repite en el archivo.', [7]), row(5, 'DUPLICATE', 'Ya existe: «Obras».')]),
+    );
+    renderModal(clinicLocation({ id: 'sin', locale: null, hourCycle: null }));
+    await user.upload(fileInput(), csv());
+    expect(await screen.findByTestId('holiday-import-summary')).toHaveTextContent('— nuevos · — ya existía · — con error');
+    expect(importButton()).toHaveTextContent('Importar — festivos');
+    expect(screen.getAllByText('Línea —')).toHaveLength(2);
+    expect(screen.getByText(/\(línea —\)/)).toBeInTheDocument();
+  });
+
+  it('a 400 with an array message shows the Spanish messages in the modal', async () => {
+    const user = setupUser();
+    mockedPreview.mockRejectedValue(
+      new ApiError(400, 'Bad Request', {
+        messages: ['El archivo está vacío.', 'La primera fila tiene que tener las columnas «fecha» y «nombre» (y, si quieres, «recurrente»).'],
+      }),
+    );
+    renderModal();
+    await user.upload(fileInput(), csv());
+    const alert = await within(screen.getByRole('dialog')).findByRole('alert');
+    expect(alert).toHaveTextContent('El archivo está vacío.');
+    expect(alert).toHaveTextContent('La primera fila tiene que tener las columnas «fecha» y «nombre»');
+  });
+
+  it.each([
+    ['a 500', new ApiError(500, 'Internal Server Error'), 'No pudimos revisar el archivo. Intenta de nuevo.'],
+    ['a network failure', new NetworkError(new TypeError('Failed to fetch')), 'No hay conexión con el servidor. Revisa tu conexión a internet.'],
+  ])('%s at preview does not blame the file', async (_label, error, text) => {
+    const user = setupUser();
+    mockedPreview.mockRejectedValue(error);
+    renderModal();
+    await user.upload(fileInput(), csv());
+    expect(await within(screen.getByRole('dialog')).findByRole('alert')).toHaveTextContent(text);
+    expect(importButton()).toBeDisabled();
+  });
+
+  it.each([
+    ['a 500', new ApiError(500, 'Internal Server Error'), 'No pudimos importar los festivos. Intenta de nuevo.'],
+    ['a network failure', new NetworkError(new TypeError('Failed to fetch')), 'No hay conexión con el servidor. Revisa tu conexión a internet.'],
+  ])('%s at import keeps the preview and lets the user try again', async (_label, error, text) => {
+    const user = setupUser();
+    mockedPreview.mockResolvedValue(twelveNew);
+    mockedImport.mockRejectedValueOnce(error);
+    const { onImported } = renderModal();
+    await user.upload(fileInput(), csv());
+    await screen.findByTestId('holiday-import-summary');
+    await user.click(importButton());
+    expect(await within(screen.getByRole('dialog')).findByRole('alert')).toHaveTextContent(text);
+    expect(onImported).not.toHaveBeenCalled();
+    expect(importButton()).toBeEnabled();
+  });
+
+  it('if onImported throws after a successful write, the import still counts as done and the follow-up error is separate', async () => {
+    const user = setupUser();
+    mockedPreview.mockResolvedValue(twelveNew);
+    mockedImport.mockResolvedValue(result({ new: 12, duplicate: 0, error: 0 }, [], false));
+    const onImported = jest.fn(async () => {
+      throw new Error('reload exploded');
+    });
+    const onOpenChange = jest.fn();
+    render(<Harness location={usa} onImported={onImported} onOpenChange={onOpenChange} />);
+    await user.upload(fileInput(), csv());
+    await screen.findByTestId('holiday-import-summary');
+    await user.click(importButton());
+    const followUp = await screen.findByText(copy.followUpError);
+    expect(followUp.closest('[tabindex="-1"]')).toHaveFocus();
+    // No es «no se importó»: ni banner de error de importación ni botón para repetirla.
+    expect(screen.queryByText(copy.importError)).not.toBeInTheDocument();
+    expect(within(screen.getByRole('dialog')).queryByRole('alert')).not.toBeInTheDocument();
+    expect(screen.queryByRole('button', { name: /^Importar/ })).not.toBeInTheDocument();
+    expect(screen.queryByText(copy.changed)).not.toBeInTheDocument();
+    expect(mockedImport).toHaveBeenCalledTimes(1);
+    expect(onOpenChange).not.toHaveBeenCalled();
   });
 });

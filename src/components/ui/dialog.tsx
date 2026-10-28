@@ -22,8 +22,15 @@ DialogOverlay.displayName = DialogPrimitive.Overlay.displayName;
 
 const DialogContent = React.forwardRef<
   React.ComponentRef<typeof DialogPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
->(({ className, children, onOpenAutoFocus, onCloseAutoFocus, ...props }, ref) => {
+  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & {
+    /**
+     * La X se ve deshabilitada y no cierra (p. ej. una escritura en vuelo que
+     * no se puede cancelar). Sigue siendo enfocable: quitarle el foco a mitad
+     * lo dejaría en <body>.
+     */
+    closeDisabled?: boolean;
+  }
+>(({ className, children, onOpenAutoFocus, onCloseAutoFocus, closeDisabled = false, ...props }, ref) => {
   // Los diálogos de la app se abren con `open` y sin `DialogTrigger`, así que
   // Radix no sabe a dónde devolver el foco al cerrar y lo deja en <body>. Se
   // recuerda el elemento que tenía el foco al abrir y se le devuelve al cerrar
@@ -54,7 +61,15 @@ const DialogContent = React.forwardRef<
         {...props}
       >
         {children}
-        <DialogPrimitive.Close className="absolute right-4 top-4 rounded-md p-1 text-muted transition-colors hover:bg-bg hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary print:hidden">
+        <DialogPrimitive.Close
+          aria-disabled={closeDisabled || undefined}
+          // Radix no cierra si el clic ya viene con `preventDefault`.
+          onClick={closeDisabled ? (e) => e.preventDefault() : undefined}
+          className={cn(
+            'absolute right-4 top-4 rounded-md p-1 text-muted transition-colors hover:bg-bg hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary print:hidden',
+            closeDisabled && 'cursor-not-allowed opacity-50 hover:bg-transparent hover:text-muted',
+          )}
+        >
           <X className="size-4" />
           <span className="sr-only">Cerrar</span>
         </DialogPrimitive.Close>

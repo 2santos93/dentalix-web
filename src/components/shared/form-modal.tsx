@@ -54,6 +54,12 @@ interface FormModalProps {
    * llama lo lleva a otro sitio con `event.preventDefault()`.
    */
   onCloseAutoFocus?: (event: Event) => void;
+  /**
+   * Mientras `submitting`, la X tampoco cierra (y se ve deshabilitada), igual
+   * que Cancelar. Para envíos que no se pueden abandonar a medias; quien llama
+   * bloquea también Escape y el fondo en su `onOpenChange`.
+   */
+  lockCloseWhileSubmitting?: boolean;
 }
 
 /**
@@ -79,6 +85,7 @@ export function FormModal({
   size = 'default',
   destructive = false,
   onCloseAutoFocus,
+  lockCloseWhileSubmitting = false,
 }: FormModalProps) {
   const submitHintId = React.useId();
   const errorRef = React.useRef<HTMLDivElement>(null);
@@ -92,7 +99,11 @@ export function FormModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className={cn(size === 'lg' && 'max-w-2xl')} onCloseAutoFocus={onCloseAutoFocus}>
+      <DialogContent
+        className={cn(size === 'lg' && 'max-w-2xl')}
+        onCloseAutoFocus={onCloseAutoFocus}
+        closeDisabled={lockCloseWhileSubmitting && submitting}
+      >
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>
           {description ? <DialogDescription>{description}</DialogDescription> : null}

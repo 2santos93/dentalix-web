@@ -95,6 +95,8 @@ export function HolidaysSection({ token, location, holidays, onChanged }: Holida
   const [importSummary, setImportSummary] = useState<string | null>(null);
   const addRef = useRef<HTMLButtonElement>(null);
   const importRef = useRef<HTMLButtonElement>(null);
+  /** El resumen espera a que el diálogo se cierre (ver `importClosed`). */
+  const pendingSummary = useRef<string | null>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const focusTarget = useRef<FocusTarget>({ kind: 'add' });
   const headingId = useId();
@@ -114,6 +116,8 @@ export function HolidaysSection({ token, location, holidays, onChanged }: Holida
 
   function openImport() {
     focusTarget.current = { kind: 'import' };
+    // Vacía la línea: si la próxima importación da el mismo texto, se anuncia igual.
+    setImportSummary(null);
     setImportKey((prev) => (prev ?? 0) + 1);
     setImportOpen(true);
   }
@@ -123,14 +127,26 @@ export function HolidaysSection({ token, location, holidays, onChanged }: Holida
     try {
       const fresh = await getLocationCalendar(token, location.id);
       onChanged(() => fresh.holidays);
-    } catch (err) {
-      notifyError(apiErrorMessage(err, copy.reloadError), { onRetry: () => void reload() });
+    } catch {
+      // Siempre este texto, también sin red o con un 4xx: lo que importa es que la importación sí se hizo.
+      notifyError(copy.reloadError, { onRetry: () => void reload() });
     }
   }
 
   async function imported(result: HolidayImportResult) {
-    setImportSummary(importedSummaryText(result.counts, (n) => sedeNumber(n, fmt)));
+    pendingSummary.current = importedSummaryText(result.counts, (n) => sedeNumber(n, fmt));
     await reload();
+  }
+
+  // Con el diálogo abierto Radix pone aria-hidden al resto de la página, y una
+  // región viva que cambia ahí no se anuncia. `onCloseAutoFocus` llega cuando
+  // el diálogo ya se desmontó y quitó ese aria-hidden: es el momento de escribir.
+  function importClosed(event: Event) {
+    restoreFocus(event);
+    if (pendingSummary.current !== null) {
+      setImportSummary(pendingSummary.current);
+      pendingSummary.current = null;
+    }
   }
 
   function openCreate() {
@@ -146,6 +162,7 @@ export function HolidaysSection({ token, location, holidays, onChanged }: Holida
   }
 
   function saved(holiday: LocationHoliday) {
+    setImportSummary(null);
     onChanged((prev) =>
       prev.some((h) => h.id === holiday.id) ? prev.map((h) => (h.id === holiday.id ? holiday : h)) : [...prev, holiday],
     );
@@ -155,6 +172,7 @@ export function HolidaysSection({ token, location, holidays, onChanged }: Holida
     setBusyId(holiday.id);
     try {
       await deleteHoliday(token, location.id, holiday.id);
+      setImportSummary(null);
       focusTarget.current = { kind: 'add' };
       setDeleting(null);
       onChanged((prev) => prev.filter((h) => h.id !== holiday.id));
@@ -307,7 +325,7 @@ export function HolidaysSection({ token, location, holidays, onChanged }: Holida
           token={token}
           location={location}
           onImported={imported}
-          onCloseAutoFocus={restoreFocus}
+          onCloseAutoFocus={importClosed}
         />
       ) : null}
 

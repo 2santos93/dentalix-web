@@ -1,7 +1,7 @@
 'use client';
 import * as React from 'react';
 import { useEffect, useRef, useState } from 'react';
-import { FileText, Upload } from 'lucide-react';
+import { AlertCircle, FileText, Upload } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import type { RegionalFormat } from '@/lib/format/regional-format';
 import { sedeNumber } from '@/lib/format/sede-number';
@@ -45,11 +45,15 @@ export const holidayImportCopy = {
   more: (rest: string) => `y ${rest} más`,
   pickFirst: 'Elige un archivo para ver qué se va a importar.',
   nothingNew: 'No hay festivos nuevos que importar.',
-  changed: 'Los festivos de la sede cambiaron desde la vista previa. Este es el resultado real de la importación.',
+  // «Revisar» como en la importación de pacientes: la UI no nombra ninguna «vista previa».
+  changed: 'Los festivos de la sede cambiaron mientras revisabas el archivo. Esto es lo que se importó.',
+  /** La escritura salió bien; lo que falló es lo de después (recargar la lista). */
+  followUpError: 'Los festivos se importaron, pero no pudimos actualizar la lista. Cierra y recarga la página.',
   close: 'Cerrar',
   cancel: 'Cancelar',
-  previewError: 'No pudimos leer el archivo.',
-  importError: 'No pudimos importar los festivos.',
+  // Solo para 5xx y fallos desconocidos (los 4xx traen su texto): no culpa al archivo.
+  previewError: 'No pudimos revisar el archivo. Intenta de nuevo.',
+  importError: 'No pudimos importar los festivos. Intenta de nuevo.',
 };
 
 const copy = holidayImportCopy;
@@ -82,8 +86,11 @@ type State =
   | { phase: 'reading'; file: File }
   | { phase: 'failed'; file: File; message: string }
   | { phase: 'preview'; file: File; result: HolidayImportResult }
-  /** Ya importado, pero distinto de lo previsto: se enseña lo que pasó de verdad. */
-  | { phase: 'done'; file: File; result: HolidayImportResult };
+  /**
+   * Ya importado y el modal sigue abierto: el resultado no coincide con lo
+   * revisado (`changed`), o falló lo de después (`followUp`).
+   */
+  | { phase: 'done'; file: File; result: HolidayImportResult; changed: boolean; followUp: boolean };
 
 interface HolidayImportModalProps {
   open: boolean;
@@ -91,7 +98,10 @@ interface HolidayImportModalProps {
   token: string;
   /** La sede ELEGIDA: de ella sale el formato de las cifras. */
   location: ClinicLocation;
-  /** Tras importar: quien llama recarga la lista. El modal espera a que termine antes de cerrarse. */
+  /**
+   * Tras importar: quien llama recarga la lista. El modal espera a que termine
+   * antes de cerrarse. Si lanza, la importación sigue contando como hecha.
+   */
   onImported: (result: HolidayImportResult) => Promise<void> | void;
   /** Ver `FormModal`: a dónde vuelve el foco al cerrar. */
   onCloseAutoFocus?: (event: Event) => void;
@@ -121,17 +131,18 @@ export function HolidayImportModal({
   const [importing, setImporting] = useState(false);
   const [importError, setImportError] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const changedRef = useRef<HTMLParagraphElement>(null);
+  const noteRef = useRef<HTMLDivElement>(null);
   /** Sube con cada archivo y al cerrar: una respuesta con otro número llega tarde. */
   const seq = useRef(0);
   /** El `importing` del estado tarda un render: dos envíos seguidos verían `false`. */
   const importingRef = useRef(false);
 
   // El botón de importar desaparece: el foco va al aviso que explica por qué
-  // el modal sigue abierto, no al contenedor del diálogo.
+  // el modal sigue abierto, no al contenedor del diálogo. El aviso no está en
+  // una región viva: se lee una vez, al recibir el foco.
   const done = state.phase === 'done';
   useEffect(() => {
-    if (done) changedRef.current?.focus();
+    if (done) noteRef.current?.focus();
   }, [done]);
 
   function changeOpen(next: boolean) {
@@ -159,16 +170,27 @@ export function HolidayImportModal({
     setImporting(true);
     setImportError(null);
     try {
-      const result = await importHolidays(token, location.id, file);
-      await onImported(result);
-      if (sameCounts(result.counts, previewed.counts)) {
+      let result: HolidayImportResult;
+      try {
+        result = await importHolidays(token, location.id, file);
+      } catch (err) {
+        setImportError(apiErrorMessage(err, copy.importError));
+        return;
+      }
+      // Desde aquí la escritura ya está hecha: un fallo después no es «no se importó».
+      let followUp = false;
+      try {
+        await onImported(result);
+      } catch {
+        followUp = true;
+      }
+      const changed = !sameCounts(result.counts, previewed.counts);
+      if (!changed && !followUp) {
         importingRef.current = false;
         onOpenChange(false);
         return;
       }
-      setState({ phase: 'done', file, result });
-    } catch (err) {
-      setImportError(apiErrorMessage(err, copy.importError));
+      setState({ phase: 'done', file, result, changed, followUp });
     } finally {
       importingRef.current = false;
       setImporting(false);
@@ -188,8 +210,11 @@ export function HolidayImportModal({
   const file = state.phase === 'idle' ? null : state.file;
   const newCount = state.phase === 'preview' ? state.result.counts.new : 0;
   const issues = result ? result.rows.filter((r) => r.status !== 'NEW') : [];
-  const hint =
-    state.phase === 'preview' ? (newCount === 0 ? copy.nothingNew : null) : done ? undefined : copy.pickFirst;
+  // Leyendo: hueco vacío (el estado ya dice «Leyendo el archivo…»).
+  let hint: string | null | undefined = copy.pickFirst;
+  if (state.phase === 'preview') hint = newCount === 0 ? copy.nothingNew : null;
+  else if (state.phase === 'reading') hint = null;
+  else if (done) hint = undefined;
   const errorId = 'holiday-import-file-error';
 
   return (
@@ -207,6 +232,7 @@ export function HolidayImportModal({
       hideSubmit={done}
       error={importError}
       onCloseAutoFocus={onCloseAutoFocus}
+      lockCloseWhileSubmitting
     >
       <ul className="flex list-disc flex-col gap-1 pl-5 text-sm text-muted">
         <li>{copy.helpCsv}</li>
@@ -258,14 +284,21 @@ export function HolidayImportModal({
         ) : null}
       </div>
 
+      {state.phase === 'done' ? (
+        <div ref={noteRef} tabIndex={-1} className="flex flex-col gap-1 rounded-lg focus:outline-none">
+          {state.changed ? <p className="text-sm font-medium text-ink">{copy.changed}</p> : null}
+          {state.followUp ? (
+            <p className="flex items-start gap-1.5 text-sm text-danger">
+              <AlertCircle aria-hidden className="mt-0.5 size-4 shrink-0" />
+              <span>{copy.followUpError}</span>
+            </p>
+          ) : null}
+        </div>
+      ) : null}
+
       {/* Siempre montado: el lector de pantalla anuncia la lectura y el resumen. */}
       <div role="status" className="flex flex-col gap-2">
         {state.phase === 'reading' ? <p className="text-sm text-muted">{copy.reading}</p> : null}
-        {done ? (
-          <p ref={changedRef} tabIndex={-1} className="rounded-lg text-sm font-medium text-ink focus:outline-none">
-            {copy.changed}
-          </p>
-        ) : null}
         {result ? (
           <p data-testid="holiday-import-summary" className="text-sm font-medium text-ink tabular-nums">
             {importCountsText(result.counts, num)}
@@ -289,7 +322,8 @@ function IssueList({ rows, num }: { rows: HolidayImportRow[]; num: Num }) {
       </h3>
       {/* Desplazable y enfocable: con 200 filas se recorre con el teclado. */}
       <div tabIndex={0} aria-labelledby={headingId} role="region" className="max-h-64 overflow-y-auto rounded-lg border border-border focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary">
-        <ul aria-labelledby={headingId} className="divide-y divide-border">
+        {/* El nombre lo lleva la región; repetirlo en la lista lo leería dos veces. */}
+        <ul className="divide-y divide-border">
           {shown.map((r, i) => (
             // Un evento de varios días del ICS da varias filas con la misma línea.
             <li key={`${r.line}-${i}`} className="flex flex-col gap-0.5 px-3 py-2 text-sm sm:flex-row sm:gap-3">

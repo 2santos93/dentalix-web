@@ -12,7 +12,7 @@ import {
   type LocationHoliday,
 } from '@/lib/locations/location-calendar-api';
 import type { ClinicLocation } from '@/lib/locations/locations-api';
-import { ApiError } from '@/lib/api/api-error';
+import { ApiError, NetworkError } from '@/lib/api/api-error';
 import { notifyError } from '@/components/errors/notify';
 import { clinicLocation } from '@/lib/test/locations';
 import { setupUser } from '@/lib/test/user';
@@ -317,7 +317,8 @@ describe('HolidaysSection (DX-316, spec §7.2)', () => {
       const user = setupUser();
       mockedPreview.mockResolvedValue(importResult(2, true));
       mockedImport.mockResolvedValue(importResult(2, false));
-      mockedGet.mockRejectedValueOnce(new ApiError(500, 'boom'));
+      // Sin red: el aviso sigue diciendo que la importación sí se hizo (M2).
+      mockedGet.mockRejectedValueOnce(new NetworkError(new TypeError('Failed to fetch')));
       renderSection([]);
       await importFromEmpty(user);
       await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
@@ -326,6 +327,78 @@ describe('HolidaysSection (DX-316, spec §7.2)', () => {
       mockedGet.mockResolvedValueOnce({ locationId: 'sur', workingWeekdays: [1, 2, 3, 4, 5], holidays: [mayo] });
       mockedNotify.mock.calls[0][1]!.onRetry!();
       expect(await screen.findByText('Día de la sede')).toBeInTheDocument();
+    });
+
+    it('the status summary is written only after the dialog has closed and the page is no longer aria-hidden', async () => {
+      const user = setupUser();
+      mockedPreview.mockResolvedValue(importResult(2, true));
+      mockedImport.mockResolvedValue(importResult(2, false));
+      let finishReload!: () => void;
+      mockedGet.mockReturnValue(
+        new Promise((resolve) => {
+          finishReload = () => resolve({ locationId: 'sur', workingWeekdays: [1, 2, 3, 4, 5], holidays: [mayo] });
+        }),
+      );
+      renderSection([]);
+      await importFromEmpty(user);
+      await waitFor(() => expect(mockedGet).toHaveBeenCalled());
+      // Diálogo abierto (espera a la recarga): la línea sigue vacía.
+      expect(screen.getByRole('dialog')).toBeInTheDocument();
+      const status = () => document.querySelector('section p[role="status"]') as HTMLElement;
+      expect(status()).toBeEmptyDOMElement();
+      finishReload();
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+      await waitFor(() => expect(status()).toHaveTextContent('Importados 2 festivos'));
+      expect(status().closest('[aria-hidden="true"]')).toBeNull();
+    });
+
+    it('when the result differs, the summary waits until the user closes the dialog', async () => {
+      const user = setupUser();
+      mockedPreview.mockResolvedValue(importResult(2, true));
+      mockedImport.mockResolvedValue(importResult(1, false, { duplicate: 1 }));
+      mockedGet.mockResolvedValue({ locationId: 'sur', workingWeekdays: [1, 2, 3, 4, 5], holidays: [mayo] });
+      renderSection([]);
+      await importFromEmpty(user);
+      await screen.findByText(/cambiaron mientras revisabas el archivo/);
+      const status = () => document.querySelector('section p[role="status"]') as HTMLElement;
+      expect(status()).toBeEmptyDOMElement();
+      const footerClose = screen.getAllByRole('button', { name: 'Cerrar' }).find((b) => !b.querySelector('.sr-only'));
+      await user.click(footerClose as HTMLElement);
+      await waitFor(() => expect(status()).toHaveTextContent('Importado 1 festivo · 1 ya existía'));
+    });
+
+    it('a later add clears the import summary', async () => {
+      const user = setupUser();
+      mockedPreview.mockResolvedValue(importResult(1, true));
+      mockedImport.mockResolvedValue(importResult(1, false));
+      mockedGet.mockResolvedValue({ locationId: 'sur', workingWeekdays: [1, 2, 3, 4, 5], holidays: [mayo] });
+      mockedCreate.mockResolvedValue(puntual2027);
+      renderSection([]);
+      await importFromEmpty(user);
+      const status = () => document.querySelector('section p[role="status"]') as HTMLElement;
+      await waitFor(() => expect(status()).toHaveTextContent('Importado 1 festivo'));
+      await user.click(screen.getByRole('button', { name: copy.add }));
+      await user.type(await screen.findByLabelText('Fecha'), '2027-05-03');
+      await user.type(screen.getByLabelText('Nombre'), 'Cierre por obras');
+      await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Añadir festivo' }));
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+      expect(status()).toBeEmptyDOMElement();
+    });
+
+    it('a later delete clears the import summary', async () => {
+      const user = setupUser();
+      mockedPreview.mockResolvedValue(importResult(1, true));
+      mockedImport.mockResolvedValue(importResult(1, false));
+      mockedGet.mockResolvedValue({ locationId: 'sur', workingWeekdays: [1, 2, 3, 4, 5], holidays: [mayo] });
+      mockedDelete.mockResolvedValue(undefined);
+      renderSection([]);
+      await importFromEmpty(user);
+      const status = () => document.querySelector('section p[role="status"]') as HTMLElement;
+      await waitFor(() => expect(status()).toHaveTextContent('Importado 1 festivo'));
+      await openRowAction(user, 'Día de la sede', copy.delete);
+      await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: copy.deleteConfirm }));
+      await waitFor(() => expect(screen.queryByText('Día de la sede')).not.toBeInTheDocument());
+      expect(status()).toBeEmptyDOMElement();
     });
   });
 });
