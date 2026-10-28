@@ -108,7 +108,7 @@ type Expected = { paid: number; pending: number } | 'not-billable';
 async function expectItem(panel: Locator, mobile: boolean, procedure: string, expected: Expected) {
   if (!mobile) {
     const row = panel
-      .getByRole('table', { name: 'Ítems del plan de tratamiento' })
+      .getByRole('table', { name: /^Ítems de la visita \d+$/ })
       .getByRole('row')
       .filter({ hasText: procedure });
     const paid = row.locator('td[data-label="Cobrado"]');

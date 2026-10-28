@@ -23,6 +23,7 @@
   --color-success-text: #166534;
   --color-warning: #B45309;
   --color-danger: #BE123C;
+  --color-danger-fg: #FFFFFF; /* text on the solid danger (destructive confirm) */
 
   /* Elevation — flat by default; depth only for real overlays / hover state. */
   --shadow-overlay: 0 8px 28px -8px rgb(15 23 42 / 0.18);
@@ -43,6 +44,7 @@
   --color-success-text: #4ADE80;
   --color-warning: #FBBF24;
   --color-danger: #FB7185;
+  --color-danger-fg: #2B0A12; /* white on #FB7185 is 2.7:1; deep rose-ink passes AA */
 
   --shadow-overlay: 0 10px 34px -8px rgb(0 0 0 / 0.55);
   --shadow-lift: 0 1px 2px rgb(0 0 0 / 0.35);

@@ -24,6 +24,7 @@
   --color-success-text: var(--color-success-text);
   --color-warning: var(--color-warning);
   --color-danger: var(--color-danger);
+  --color-danger-foreground: var(--color-danger-fg);
 
   /* Elevation vocabulary — only overlays and hover state carry shadow. */
   --shadow-overlay: var(--shadow-overlay);

@@ -1,6 +1,6 @@
 'use client';
 import * as React from 'react';
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Ban, Receipt, Undo2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -17,14 +17,21 @@ import { moneyInputText, parseMoneyInput } from '@/lib/format/money';
 import { FormModal } from '@/components/shared/form-modal';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { MoneyInput } from '@/components/shared/money-input';
-import { FieldError } from '@/components/errors/field-error';
+import { SectionError } from '@/components/errors/section-error';
 import { Button } from '@/components/ui/button';
-import { FeeReasonModal, VoidCancellationFeeModal, feeReasonCopy, voidFeeCopy } from './fee-reason-modal';
+import {
+  FeeConflictNotice,
+  FeeReasonModal,
+  VoidCancellationFeeModal,
+  feeReasonCopy,
+  voidFeeCopy,
+} from './fee-reason-modal';
 
 export const cancellationFeeCopy = {
   heading: 'Cargo por inasistencia o cancelación tardía',
   loading: 'Cargando el cargo…',
   loadError: 'Cargo sin cargar',
+  loadErrorDescription: 'No se pudo cargar el estado del cargo.',
   suggested: (amount: string, version: number) =>
     `Importe sugerido: ${amount} (política comunicada, versión ${version}).`,
   readOnly: 'Solo un administrador (o recepción, si la política de la sede lo permite) puede generarlo o condonarlo.',
@@ -76,7 +83,13 @@ function money(amount: number | null | undefined, currency: string | null | unde
  * informado…») salen tal cual, sin botón de cobrar.
  */
 export function CancellationFeePanel({ token, appointmentId }: { token: string; appointmentId: string }) {
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  // DX-343: tras generar, condonar, anular o un 409, el botón que abrió el
+  // diálogo ya no existe (o ya no vale): el foco va al encabezado del panel.
+  // Cerrar sin actuar lo deja volver a quien abrió.
+  const focusHeadingOnClose = useRef(false);
   const [view, setView] = useState<CancellationFeeView | null>(null);
+  const [staleView, setStaleView] = useState(false);
   const [failed, setFailed] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const [dialog, setDialog] = useState<'charge' | 'waive' | 'void' | null>(null);
@@ -87,9 +100,13 @@ export function CancellationFeePanel({ token, appointmentId }: { token: string; 
       .then((res) => {
         if (cancelled) return;
         setView(res);
+        setStaleView(false);
         setFailed(false);
       })
       .catch(() => {
+        // DX-343: un diálogo abierto tras un 409 sigue abierto (ya no puede
+        // enviar nada y su mensaje se sigue leyendo); al cerrarlo, el foco va
+        // al encabezado, que la rama de error también pinta.
         if (!cancelled) setFailed(true);
       });
     return () => {
@@ -97,17 +114,90 @@ export function CancellationFeePanel({ token, appointmentId }: { token: string; 
     };
   }, [token, appointmentId, reloadKey]);
 
+  function invalidateView() {
+    focusHeadingOnClose.current = true;
+    setStaleView(true);
+    setReloadKey((k) => k + 1);
+  }
+
+  function focusHeadingAfterChange(event: Event) {
+    if (!focusHeadingOnClose.current) return;
+    focusHeadingOnClose.current = false;
+    event.preventDefault();
+    headingRef.current?.focus();
+  }
+
+  const heading = (
+    <h3 ref={headingRef} tabIndex={-1} id={`fee-${appointmentId}`} className="font-semibold text-ink">
+      {copy.heading}
+    </h3>
+  );
+  const dialogs = (
+    <>
+      {dialog === 'charge' && view?.communicated?.suggestedFee != null && view.communicated.currency ? (
+        <ChargeFeeModal
+          token={token}
+          appointmentId={appointmentId}
+          suggested={view.communicated.suggestedFee}
+          currency={view.communicated.currency}
+          onClose={() => setDialog(null)}
+          onDone={(next) => {
+            focusHeadingOnClose.current = true;
+            setDialog(null);
+            setView(next);
+          }}
+          onStale={invalidateView}
+          onCloseAutoFocus={focusHeadingAfterChange}
+        />
+      ) : null}
+      {dialog === 'void' ? (
+        <VoidCancellationFeeModal
+          onCloseAutoFocus={focusHeadingAfterChange}
+          token={token}
+          appointmentId={appointmentId}
+          onClose={() => setDialog(null)}
+          onDone={(next) => {
+            focusHeadingOnClose.current = true;
+            setDialog(null);
+            setView(next);
+          }}
+          onStale={invalidateView}
+        />
+      ) : null}
+      {dialog === 'waive' ? (
+        <WaiveFeeModal
+          onCloseAutoFocus={focusHeadingAfterChange}
+          token={token}
+          appointmentId={appointmentId}
+          onClose={() => setDialog(null)}
+          onDone={(next) => {
+            focusHeadingOnClose.current = true;
+            setDialog(null);
+            setView(next);
+          }}
+          onStale={invalidateView}
+        />
+      ) : null}
+    </>
+  );
+
   if (failed) {
     return (
-      <section aria-label={copy.heading} className="border-t border-hairline pt-4">
-        <FieldError
-          label={copy.loadError}
+      <section
+        aria-labelledby={`fee-${appointmentId}`}
+        data-testid="cancellation-fee-panel"
+        className="flex flex-col gap-2 border-t border-hairline pt-4 text-sm"
+      >
+        {heading}
+        <SectionError
+          title={copy.loadError}
+          description={copy.loadErrorDescription}
           onRetry={() => {
             setFailed(false);
             setReloadKey((k) => k + 1);
           }}
-          className="h-9"
         />
+        {dialogs}
       </section>
     );
   }
@@ -130,9 +220,7 @@ export function CancellationFeePanel({ token, appointmentId }: { token: string; 
       data-testid="cancellation-fee-panel"
       className="flex flex-col gap-2 border-t border-hairline pt-4 text-sm"
     >
-      <h3 id={`fee-${appointmentId}`} className="font-semibold text-ink">
-        {copy.heading}
-      </h3>
+      {heading}
       {view.status === 'VOIDED' && fee ? (
         <div className="flex flex-col gap-1">
           <p className="tabular-nums text-ink">{copy.voided(money(fee.amount, fee.currency) ?? '')}</p>
@@ -167,6 +255,7 @@ export function CancellationFeePanel({ token, appointmentId }: { token: string; 
               type="button"
               variant="secondary"
               className="w-full self-start sm:w-auto"
+              disabled={staleView}
               onClick={() => setDialog('void')}
             >
               <Undo2 aria-hidden />
@@ -194,7 +283,7 @@ export function CancellationFeePanel({ token, appointmentId }: { token: string; 
           {view.canManage ? (
             <div className="flex flex-col gap-2 sm:flex-row">
               {view.chargeBlock === null ? (
-                <Button type="button" className="w-full sm:w-auto" onClick={() => setDialog('charge')}>
+                <Button type="button" className="w-full sm:w-auto" disabled={staleView} onClick={() => setDialog('charge')}>
                   <Receipt aria-hidden />
                   {copy.charge}
                 </Button>
@@ -203,6 +292,7 @@ export function CancellationFeePanel({ token, appointmentId }: { token: string; 
                 type="button"
                 variant="secondary"
                 className="w-full sm:w-auto"
+                disabled={staleView}
                 onClick={() => setDialog('waive')}
               >
                 <Ban aria-hidden />
@@ -214,44 +304,7 @@ export function CancellationFeePanel({ token, appointmentId }: { token: string; 
           )}
         </>
       )}
-      {dialog === 'charge' && view.communicated?.suggestedFee != null && view.communicated.currency ? (
-        <ChargeFeeModal
-          token={token}
-          appointmentId={appointmentId}
-          suggested={view.communicated.suggestedFee}
-          currency={view.communicated.currency}
-          onClose={() => setDialog(null)}
-          onDone={(next) => {
-            setDialog(null);
-            setView(next);
-          }}
-          onStale={() => setReloadKey((k) => k + 1)}
-        />
-      ) : null}
-      {dialog === 'void' ? (
-        <VoidCancellationFeeModal
-          token={token}
-          appointmentId={appointmentId}
-          onClose={() => setDialog(null)}
-          onDone={(next) => {
-            setDialog(null);
-            setView(next);
-          }}
-          onStale={() => setReloadKey((k) => k + 1)}
-        />
-      ) : null}
-      {dialog === 'waive' ? (
-        <WaiveFeeModal
-          token={token}
-          appointmentId={appointmentId}
-          onClose={() => setDialog(null)}
-          onDone={(next) => {
-            setDialog(null);
-            setView(next);
-          }}
-          onStale={() => setReloadKey((k) => k + 1)}
-        />
-      ) : null}
+      {dialogs}
     </section>
   );
 }
@@ -264,6 +317,7 @@ function ChargeFeeModal({
   onClose,
   onDone,
   onStale,
+  onCloseAutoFocus,
 }: {
   token: string;
   appointmentId: string;
@@ -273,6 +327,7 @@ function ChargeFeeModal({
   onDone: (view: CancellationFeeView) => void;
   /** 409: otra persona ya decidió; el panel se relee por debajo. */
   onStale: () => void;
+  onCloseAutoFocus?: (event: Event) => void;
 }) {
   const id = useId();
   const amountId = `${id}-amount`;
@@ -281,9 +336,11 @@ function ChargeFeeModal({
   const [fieldError, setFieldError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [stale, setStale] = useState(false);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (stale || submitting) return;
     const parsed = parseMoneyInput(amountText, currency);
     const problem = !parsed.ok
       ? parsed.message
@@ -309,7 +366,10 @@ function ChargeFeeModal({
       onDone(next);
     } catch (err) {
       setError(apiErrorMessage(err, copy.chargeError));
-      if (err instanceof ApiError && err.status === 409) onStale();
+      if (err instanceof ApiError && err.status === 409) {
+        setStale(true);
+        onStale();
+      }
     } finally {
       setSubmitting(false);
     }
@@ -327,7 +387,10 @@ function ChargeFeeModal({
       submitLabel={copy.chargeSubmit}
       submitting={submitting}
       error={error}
+      hideSubmit={stale}
+      onCloseAutoFocus={onCloseAutoFocus}
     >
+      {stale ? <FeeConflictNotice /> : null}
       <FormField
         htmlFor={amountId}
         label={copy.amount}
@@ -344,7 +407,7 @@ function ChargeFeeModal({
           }}
           currency={currency}
           requirePositive
-          disabled={submitting}
+          disabled={submitting || stale}
           aria-invalid={fieldError ? true : undefined}
           aria-describedby={fieldError ? fieldErrorId(amountId) : `${amountId}-hint`}
         />
@@ -359,6 +422,7 @@ function WaiveFeeModal({
   onClose,
   onDone,
   onStale,
+  onCloseAutoFocus,
 }: {
   token: string;
   appointmentId: string;
@@ -366,6 +430,7 @@ function WaiveFeeModal({
   onDone: (view: CancellationFeeView) => void;
   /** 409: otra persona ya decidió; el panel se relee por debajo. */
   onStale: () => void;
+  onCloseAutoFocus?: (event: Event) => void;
 }) {
   return (
     <FeeReasonModal
@@ -378,6 +443,7 @@ function WaiveFeeModal({
       onClose={onClose}
       onDone={onDone}
       onStale={onStale}
+      onCloseAutoFocus={onCloseAutoFocus}
     />
   );
 }

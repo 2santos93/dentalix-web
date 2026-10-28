@@ -1,5 +1,5 @@
 import { moneyInputCopy } from '@/lib/format/money';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { TreatmentPlansTab } from './treatment-plans-tab';
 import { ApiError } from '@/lib/api/client';
@@ -420,7 +420,7 @@ describe('TreatmentPlansTab', () => {
 
     render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
 
-    const table = await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+    const table = await screen.findByRole('table', { name: /ítems de la visita/i });
     expect(within(table).getByText('11')).toBeInTheDocument();
     expect(within(table).getByText('Resina')).toBeInTheDocument();
     expect(within(table).getByText('26')).toBeInTheDocument();
@@ -445,7 +445,7 @@ describe('TreatmentPlansTab', () => {
       />,
     );
 
-    const table = await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+    const table = await screen.findByRole('table', { name: /ítems de la visita/i });
     const links = within(table).getAllByRole('link', { name: /^registrar implante/i });
     expect(links.map((l) => l.getAttribute('href'))).toEqual([
       '/patients/pat-1?tab=implants&registerTooth=26&planItem=item-2',
@@ -475,7 +475,7 @@ describe('TreatmentPlansTab', () => {
       />,
     );
 
-    const table = await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+    const table = await screen.findByRole('table', { name: /ítems de la visita/i });
     expect(within(table).getByText('Sin diente')).toBeInTheDocument();
     expect(within(table).queryByText('Diente completo')).not.toBeInTheDocument();
     expect(screen.queryByRole('link', { name: /registrar implante/i })).not.toBeInTheDocument();
@@ -488,7 +488,7 @@ describe('TreatmentPlansTab', () => {
 
     render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
 
-    await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+    await screen.findByRole('table', { name: /ítems de la visita/i });
     expect(screen.queryByRole('link', { name: /registrar implante/i })).not.toBeInTheDocument();
   });
 
@@ -499,7 +499,7 @@ describe('TreatmentPlansTab', () => {
 
     render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
 
-    const table = await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+    const table = await screen.findByRole('table', { name: /ítems de la visita/i });
     expect(within(table).getByText('cat-missing')).toBeInTheDocument();
   });
 
@@ -510,7 +510,7 @@ describe('TreatmentPlansTab', () => {
     const user = userEvent.setup();
     render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
 
-    await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+    await screen.findByRole('table', { name: /ítems de la visita/i });
 
     // El procedimiento se elige en el `CatalogPicker` filtrado (radios), el
     // mismo que usa el odontograma — ya no en un `<select>` nativo sobre el
@@ -552,7 +552,7 @@ describe('TreatmentPlansTab', () => {
 
     const user = userEvent.setup();
     render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
-    await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+    await screen.findByRole('table', { name: /ítems de la visita/i });
 
     await user.type(screen.getByLabelText(/código fdi/i), '99');
     await user.click(screen.getByRole('radio', { name: /resina/i }));
@@ -581,7 +581,7 @@ describe('TreatmentPlansTab', () => {
     const user = userEvent.setup();
     render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
 
-    const table = await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+    const table = await screen.findByRole('table', { name: /ítems de la visita/i });
     const statusSelect = within(table).getByRole<HTMLSelectElement>('combobox', {
       name: /estado del ítem del diente 11/i,
     });
@@ -598,7 +598,7 @@ describe('TreatmentPlansTab', () => {
     // its own refresh is in flight (it must NOT re-enable just because the
     // PATCH itself settled).
     await waitFor(() => expect(mockedGetPlan).toHaveBeenCalledTimes(2));
-    expect(screen.getByRole('table', { name: /ítems del plan de tratamiento/i })).toBe(table);
+    expect(screen.getByRole('table', { name: /ítems de la visita/i })).toBe(table);
     expect(within(table).getByRole<HTMLSelectElement>('combobox', { name: /estado del ítem del diente 11/i })).toBeDisabled();
 
     refetch.resolve({ ...plan1Detail, items: [{ ...item1, status: 'ACCEPTED' }, item2] });
@@ -611,7 +611,7 @@ describe('TreatmentPlansTab', () => {
     expect(
       within(table).getByRole<HTMLSelectElement>('combobox', { name: /estado del ítem del diente 11/i }).value,
     ).toBe('ACCEPTED');
-    expect(screen.getByRole('table', { name: /ítems del plan de tratamiento/i })).toBe(table);
+    expect(screen.getByRole('table', { name: /ítems de la visita/i })).toBe(table);
   });
 
   it('removing an item calls removeItem then refreshes the plan in place — the removed item disappears and the total drops, table stays mounted', async () => {
@@ -628,7 +628,7 @@ describe('TreatmentPlansTab', () => {
     const user = userEvent.setup();
     render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
 
-    const table = await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+    const table = await screen.findByRole('table', { name: /ítems de la visita/i });
     const row = within(table).getByText('11').closest('tr') as HTMLTableRowElement;
     const removeButton = within(row).getByRole('button', { name: /quitar/i });
 
@@ -641,13 +641,13 @@ describe('TreatmentPlansTab', () => {
     await waitFor(() => expect(mockedRemoveItem).toHaveBeenCalledWith(tok, 'plan-1', 'item-1'));
     await waitFor(() => expect(mockedGetPlan).toHaveBeenCalledTimes(2));
     // Still the same table node while the refetch is pending — no remount.
-    expect(screen.getByRole('table', { name: /ítems del plan de tratamiento/i })).toBe(table);
+    expect(screen.getByRole('table', { name: /ítems de la visita/i })).toBe(table);
     expect(within(row).getByRole('button', { name: /quitando/i })).toBeDisabled();
 
     refetch.resolve({ ...plan1Detail, items: [item2], total: item2.price });
 
     await waitFor(() => expect(within(table).queryByText('11')).not.toBeInTheDocument());
-    expect(screen.getByRole('table', { name: /ítems del plan de tratamiento/i })).toBe(table);
+    expect(screen.getByRole('table', { name: /ítems de la visita/i })).toBe(table);
     // Scope to the "Total" row specifically — after removal the total
     // (80000) happens to equal item2's own price, which also still renders
     // in its table cell + mobile card, so an unscoped query would match 3
@@ -664,7 +664,7 @@ describe('TreatmentPlansTab', () => {
     const user = userEvent.setup();
     render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
 
-    const table = await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+    const table = await screen.findByRole('table', { name: /ítems de la visita/i });
     const row = within(table).getByText('11').closest('tr') as HTMLTableRowElement;
     await user.click(within(row).getByRole('button', { name: /quitar/i }));
 
@@ -711,7 +711,7 @@ describe('TreatmentPlansTab', () => {
 
     const user = userEvent.setup();
     render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
-    await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+    await screen.findByRole('table', { name: /ítems de la visita/i });
 
     mockedGetPlan.mockResolvedValueOnce({ ...plan1Detail, status: 'CANCELLED' });
     mockedListPlans.mockResolvedValueOnce([{ ...plan1, status: 'CANCELLED' }]);
@@ -733,7 +733,7 @@ describe('TreatmentPlansTab', () => {
 
     const user = userEvent.setup();
     render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
-    await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+    await screen.findByRole('table', { name: /ítems de la visita/i });
 
     // Scope each figure to its own card — `billable` (130000) happens to
     // equal the items total, which also renders in the "Total" row above, so
@@ -760,7 +760,7 @@ describe('TreatmentPlansTab', () => {
 
       const user = userEvent.setup({ advanceTimers: jest.advanceTimersByTime });
       render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
-      await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+      await screen.findByRole('table', { name: /ítems de la visita/i });
       expect(await screen.findByText('A pagar')).toBeInTheDocument();
       await user.click(screen.getByRole('button', { name: /^registrar abono$/i }));
 
@@ -780,7 +780,7 @@ describe('TreatmentPlansTab', () => {
 
     const user = userEvent.setup();
     render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
-    await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+    await screen.findByRole('table', { name: /ítems de la visita/i });
     expect(await screen.findByText('A pagar')).toBeInTheDocument();
 
     await user.click(screen.getByRole('button', { name: /^registrar abono$/i }));
@@ -894,7 +894,7 @@ describe('TreatmentPlansTab', () => {
       mockedGetPlan.mockResolvedValue(rejected);
 
       render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
-      await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+      await screen.findByRole('table', { name: /ítems de la visita/i });
 
       const payButton = await screen.findByRole('button', { name: /^registrar abono$/i });
       expect(payButton).toBeDisabled();
@@ -925,7 +925,7 @@ describe('TreatmentPlansTab', () => {
 
       const user = userEvent.setup();
       render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
-      await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+      await screen.findByRole('table', { name: /ítems de la visita/i });
       const billableCard = (await screen.findByText('A pagar')).closest('div') as HTMLElement;
       expect(within(billableCard).getByText(expectedCurrencyText(balance1.billable))).toBeInTheDocument();
 
@@ -946,7 +946,7 @@ describe('TreatmentPlansTab', () => {
       mockedGetPlan.mockResolvedValue(completed);
 
       render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
-      await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+      await screen.findByRole('table', { name: /ítems de la visita/i });
 
       expect(await screen.findByRole('button', { name: /^registrar abono$/i })).toBeEnabled();
       expect(await screen.findByRole('button', { name: /crear plan de pagos/i })).toBeInTheDocument();
@@ -961,7 +961,7 @@ describe('TreatmentPlansTab', () => {
 
       const user = userEvent.setup();
       render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
-      const table = await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+      const table = await screen.findByRole('table', { name: /ítems de la visita/i });
 
       expect(
         screen.getByText(
@@ -1017,7 +1017,7 @@ describe('TreatmentPlansTab', () => {
       ['ADMIN', adminToken],
     ])('%s: sin «Quitar» ni cambio de estado en el ítem del cargo; el ítem normal, como hoy', async (_role, token) => {
       renderFeePlan(token);
-      const table = await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+      const table = await screen.findByRole('table', { name: /ítems de la visita/i });
       const rows = within(table).getAllByRole('row').slice(1);
       const feeRow = rows.find((r) => within(r).queryByText(/Cargo por inasistencia/))!;
       const normalRow = rows.find((r) => r !== feeRow)!;
@@ -1031,7 +1031,139 @@ describe('TreatmentPlansTab', () => {
 
     it('DENTIST no ve «Anular cargo»', async () => {
       renderFeePlan(dentistToken);
-      await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+      await screen.findByRole('table', { name: /ítems de la visita/i });
+      expect(screen.queryByRole('button', { name: /Anular cargo/ })).not.toBeInTheDocument();
+    });
+
+    it('un solo cargo: «Anular cargo» nombra el ítem y el importe, sin numeración (DX-343)', async () => {
+      renderFeePlan(adminToken);
+      const table = await screen.findByRole('table', { name: /ítems de la visita/i });
+      const action = within(table).getByRole('button', { name: /Anular cargo/ });
+      expect(action).toHaveAccessibleName(/^Anular cargo: Resina, .*50\.000/);
+      expect(screen.queryByText(/^Cargo 1 de/)).not.toBeInTheDocument();
+    });
+
+    it('varios cargos iguales: cada «Anular cargo» tiene un nombre único que coincide con su fila (DX-343)', async () => {
+      const second = { ...feeItem, id: 'item-fee-2', cancellationFeeAppointmentId: 'appt-2' };
+      mockedListPlans.mockResolvedValue([feePlan]);
+      mockedGetPlan.mockResolvedValue({ ...feePlan, items: [feeItem, second], total: feeItem.price * 2 });
+      render(<TreatmentPlansTab patientId="pat-1" token={adminToken} />);
+      const table = await screen.findByRole('table', { name: /ítems de la visita/i });
+      const rows = within(table).getAllByRole('row').slice(1);
+      expect(within(rows[0]).getByRole('button', { name: /Anular cargo/ })).toHaveAccessibleName(
+        /^Anular cargo 1 de 2: Resina, .*50\.000/,
+      );
+      expect(within(rows[0]).getByText('Cargo 1 de 2')).toBeInTheDocument();
+      expect(within(rows[1]).getByRole('button', { name: /Anular cargo/ })).toHaveAccessibleName(
+        /^Anular cargo 2 de 2: Resina, .*50\.000/,
+      );
+      expect(within(rows[1]).getByText('Cargo 2 de 2')).toBeInTheDocument();
+      // Las tarjetas (móvil) dicen lo mismo: dos nombres por cargo, uno por vista.
+      const names = screen.getAllByRole('button', { name: /Anular cargo/ }).map((b) => b.getAttribute('aria-label'));
+      expect(new Set(names).size).toBe(2);
+      expect(names.some((name) => name?.includes('item-fee'))).toBe(false);
+    });
+
+    it('«Cargo n de N» sigue el orden en pantalla (visita a visita), no el de los ítems (DX-343)', async () => {
+      // El primer cargo de `items` se movió a la visita 2: en pantalla va segundo.
+      const movedFirst = { ...feeItem, visit: 2 };
+      const second = { ...feeItem, id: 'item-fee-2', cancellationFeeAppointmentId: 'appt-2', visit: 1 };
+      mockedListPlans.mockResolvedValue([feePlan]);
+      mockedGetPlan.mockResolvedValue({ ...feePlan, items: [movedFirst, second], total: feeItem.price * 2 });
+      render(<TreatmentPlansTab patientId="pat-1" token={adminToken} />);
+      const visit1 = await screen.findByRole('table', { name: 'Ítems de la visita 1' });
+      const visit2 = screen.getByRole('table', { name: 'Ítems de la visita 2' });
+      expect(within(visit1).getByText('Cargo 1 de 2')).toBeInTheDocument();
+      expect(within(visit1).getByRole('button', { name: /Anular cargo/ })).toHaveAccessibleName(/^Anular cargo 1 de 2:/);
+      expect(within(visit2).getByText('Cargo 2 de 2')).toBeInTheDocument();
+      expect(within(visit2).getByRole('button', { name: /Anular cargo/ })).toHaveAccessibleName(/^Anular cargo 2 de 2:/);
+    });
+
+    it('cada tabla nombra su visita y ninguna repite el encabezado de los ítems (DX-343)', async () => {
+      mockedListPlans.mockResolvedValue([feePlan]);
+      mockedGetPlan.mockResolvedValue({
+        ...feePlan,
+        items: [feeItem, { ...item2, visit: 2 }],
+        total: feeItem.price + item2.price,
+      });
+      render(<TreatmentPlansTab patientId="pat-1" token={adminToken} />);
+      await screen.findByRole('table', { name: 'Ítems de la visita 1' });
+      const heading = screen.getByRole('heading', { name: 'Ítems del plan de tratamiento' });
+      const names = screen.getAllByRole('table').map((t) => t.querySelector('caption')?.textContent);
+      expect(names).toEqual(expect.arrayContaining(['Ítems de la visita 1', 'Ítems de la visita 2']));
+      expect(names).not.toContain(heading.textContent);
+    });
+
+    it('tras un 409, si releer el plan falla, los ítems ceden su sitio al error de sección y Reintentar los trae (DX-343)', async () => {
+      const fresh = { ...feePlan, items: [item2], total: item2.price };
+      mockedListPlans.mockResolvedValue([feePlan]);
+      mockedGetPlan
+        .mockResolvedValueOnce({ ...feePlan, items: [feeItem, item2], total: feeItem.price + item2.price })
+        .mockRejectedValueOnce(new Error('red'))
+        .mockResolvedValue(fresh);
+      jest.mocked(voidCancellationFee).mockRejectedValueOnce(new ApiError(409, 'El cargo ya está anulado.'));
+      const user = userEvent.setup();
+      render(<TreatmentPlansTab patientId="pat-1" token={adminToken} />);
+      const table = await screen.findByRole('table', { name: /ítems de la visita/i });
+      await user.click(within(table).getByRole('button', { name: /Anular cargo/ }));
+      const dialog = await screen.findByRole('dialog', { name: 'Anular el cargo' });
+      await user.type(within(dialog).getByLabelText('Motivo'), 'Cargo erróneo');
+      await user.click(within(dialog).getByRole('button', { name: 'Anular cargo' }));
+      await within(dialog).findByText('El cargo ya está anulado.');
+      expect(within(dialog).getByRole('status')).toHaveTextContent(/cambió mientras lo tenías abierto/);
+      await user.click(within(dialog).getByRole('button', { name: 'Cancelar' }));
+      const failure = await screen.findByRole('alert');
+      expect(failure).toHaveTextContent('No pudimos actualizar el plan.');
+      // Sin datos fiables no queda ni la tabla vieja ni un «Actualizando…» que ya no es verdad.
+      expect(screen.queryByRole('table', { name: /ítems de la visita/i })).not.toBeInTheDocument();
+      expect(screen.queryByText(/Actualizando el estado del cargo/)).not.toBeInTheDocument();
+      expect(screen.queryByRole('button', { name: /Anular cargo/ })).not.toBeInTheDocument();
+      await user.click(within(failure).getByRole('button', { name: 'Reintentar' }));
+      const refreshed = await screen.findByRole('table', { name: /ítems de la visita/i });
+      expect(within(refreshed).queryByRole('button', { name: /Anular cargo/ })).not.toBeInTheDocument();
+    });
+
+    it('tras un 409, al cerrar el foco va al encabezado de los ítems (DX-343)', async () => {
+      mockedListPlans.mockResolvedValue([feePlan]);
+      mockedGetPlan
+        .mockResolvedValueOnce({ ...feePlan, items: [feeItem, item2], total: feeItem.price + item2.price })
+        .mockResolvedValue({ ...feePlan, items: [item2], total: item2.price });
+      jest.mocked(voidCancellationFee).mockRejectedValueOnce(new ApiError(409, 'El cargo ya está anulado.'));
+      const user = userEvent.setup();
+      render(<TreatmentPlansTab patientId="pat-1" token={adminToken} />);
+      const table = await screen.findByRole('table', { name: /ítems de la visita/i });
+      await user.click(within(table).getByRole('button', { name: /Anular cargo/ }));
+      const dialog = await screen.findByRole('dialog', { name: 'Anular el cargo' });
+      await user.type(within(dialog).getByLabelText('Motivo'), 'Cargo erróneo');
+      await user.click(within(dialog).getByRole('button', { name: 'Anular cargo' }));
+      await within(dialog).findByText('El cargo ya está anulado.');
+      // La relectura quita la fila del cargo (y con ella el botón que abrió el diálogo).
+      await waitFor(() => expect(screen.queryAllByRole('button', { name: /Anular cargo \d|Anular cargo:/, hidden: true })).toHaveLength(0));
+      await user.click(within(dialog).getByRole('button', { name: 'Cancelar' }));
+      await waitFor(() => expect(screen.getByRole('heading', { name: 'Ítems del plan de tratamiento' })).toHaveFocus());
+    });
+
+    it('ignora la respuesta tardía del plan anterior tras un conflicto', async () => {
+      let resolveOld!: (value: typeof feePlan & { items: TreatmentPlanItem[]; total: number }) => void;
+      const oldDetail = { ...feePlan, items: [feeItem], total: feeItem.price };
+      mockedListPlans.mockResolvedValue([feePlan, plan2]);
+      mockedGetPlan.mockResolvedValueOnce(oldDetail)
+        .mockImplementationOnce(() => new Promise((resolve) => { resolveOld = resolve; }))
+        .mockResolvedValue(plan2Detail);
+      jest.mocked(voidCancellationFee).mockRejectedValueOnce(new ApiError(409, 'Cargo actualizado'));
+      const user = userEvent.setup();
+      render(<TreatmentPlansTab patientId="pat-1" token={adminToken} />);
+      const table = await screen.findByRole('table', { name: /ítems de la visita/i });
+      await user.click(within(table).getByRole('button', { name: /Anular cargo/ }));
+      const dialog = await screen.findByRole('dialog', { name: 'Anular el cargo' });
+      await user.type(within(dialog).getByLabelText('Motivo'), 'Cargo erróneo');
+      await user.click(within(dialog).getByRole('button', { name: 'Anular cargo' }));
+      await within(dialog).findByText('Cargo actualizado');
+      await user.click(within(dialog).getByRole('button', { name: 'Cerrar' }));
+      await user.selectOptions(screen.getByLabelText(/^plan$/i), 'plan-2');
+      await waitFor(() => expect(mockedGetPlan).toHaveBeenCalledWith(adminToken, 'plan-2'));
+      await act(async () => { resolveOld(oldDetail); });
+      expect(screen.getByLabelText<HTMLSelectElement>(/^plan$/i)).toHaveValue('plan-2');
       expect(screen.queryByRole('button', { name: /Anular cargo/ })).not.toBeInTheDocument();
     });
 
@@ -1039,8 +1171,8 @@ describe('TreatmentPlansTab', () => {
       jest.mocked(voidCancellationFee).mockResolvedValue({} as never);
       const user = userEvent.setup();
       renderFeePlan(adminToken);
-      const table = await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
-      await user.click(within(table).getByRole('button', { name: 'Anular cargo' }));
+      const table = await screen.findByRole('table', { name: /ítems de la visita/i });
+      await user.click(within(table).getByRole('button', { name: /Anular cargo/ }));
       const dialog = await screen.findByRole('dialog', { name: 'Anular el cargo' });
       await user.type(within(dialog).getByLabelText('Motivo'), 'Cargo generado por error');
       const calls = mockedGetPlan.mock.calls.length;
@@ -1049,6 +1181,7 @@ describe('TreatmentPlansTab', () => {
         expect(voidCancellationFee).toHaveBeenCalledWith(adminToken, 'appt-1', 'Cargo generado por error'),
       );
       await waitFor(() => expect(mockedGetPlan.mock.calls.length).toBeGreaterThan(calls));
+      expect(screen.getByRole('heading', { name: 'Ítems del plan de tratamiento' })).toHaveFocus();
       expect(mockedRemoveItem).not.toHaveBeenCalled();
     });
   });
@@ -1071,7 +1204,7 @@ describe('TreatmentPlansTab', () => {
       mockedListPlans.mockResolvedValue([plan1]);
       mockedGetPlan.mockResolvedValue({ ...plan1, items: [doneByLaura, legacyDone], total: 0 });
       render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
-      const table = await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+      const table = await screen.findByRole('table', { name: /ítems de la visita/i });
       expect(within(table).getByText('Realizado por Dra. Laura Gómez · 20/10/2026 · Sede Norte')).toBeInTheDocument();
       expect(within(table).getByText('Sin atribuir')).toBeInTheDocument();
       // La lista móvil dice lo mismo.
@@ -1082,7 +1215,7 @@ describe('TreatmentPlansTab', () => {
       mockedListPlans.mockResolvedValue([plan1]);
       mockedGetPlan.mockResolvedValue({ ...plan1, items: [doneByLaura], total: 0 });
       render(<TreatmentPlansTab patientId="pat-1" token={otherDentistToken} />);
-      const table = await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+      const table = await screen.findByRole('table', { name: /ítems de la visita/i });
       const select = within(table).getByRole('combobox', { name: /estado del ítem del diente 26/i });
       expect(within(select).getByRole('option', { name: 'Aceptado' })).toBeDisabled();
       expect(within(table).queryByRole('button', { name: /corregir quién/i })).not.toBeInTheDocument();
@@ -1098,7 +1231,7 @@ describe('TreatmentPlansTab', () => {
       mockedUpdateItem.mockResolvedValue({ ...doneByLaura, performedById: 'u-admin' });
       const user = userEvent.setup();
       render(<TreatmentPlansTab patientId="pat-1" token={adminToken} />);
-      const table = await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+      const table = await screen.findByRole('table', { name: /ítems de la visita/i });
       const select = within(table).getByRole('combobox', { name: /estado del ítem del diente 26/i });
       expect(within(select).getByRole('option', { name: 'Aceptado' })).toBeEnabled();
       await user.click(within(table).getByRole('button', { name: 'Corregir quién realizó el ítem del diente 26' }));
@@ -1122,7 +1255,7 @@ describe('TreatmentPlansTab', () => {
       ]);
       const user = userEvent.setup();
       render(<TreatmentPlansTab patientId="pat-1" token={adminToken} />);
-      const table = await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+      const table = await screen.findByRole('table', { name: /ítems de la visita/i });
       expect(within(table).queryByRole('button', { name: /corregir quién/i })).not.toBeInTheDocument();
       await user.click(
         within(table).getByRole('button', { name: 'Atribuir quién, cuándo y dónde se realizó el ítem del diente 47' }),
@@ -1138,7 +1271,7 @@ describe('TreatmentPlansTab', () => {
       mockedUpdateItem.mockResolvedValue({ ...item2 });
       const user = userEvent.setup();
       render(<TreatmentPlansTab patientId="pat-1" token={adminToken} />);
-      const table = await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+      const table = await screen.findByRole('table', { name: /ítems de la visita/i });
       await user.selectOptions(
         within(table).getByRole('combobox', { name: /estado del ítem del diente 26/i }),
         'ACCEPTED',
@@ -1185,7 +1318,7 @@ describe('TreatmentPlansTab', () => {
           <Toaster />
         </>,
       );
-      await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+      await screen.findByRole('table', { name: /ítems de la visita/i });
 
       // No inline red strip for a background refresh failure.
       expect(screen.queryAllByRole('alert')).toHaveLength(0);
@@ -1239,7 +1372,7 @@ describe('TreatmentPlansTab', () => {
 
       await waitFor(() => expect(mockedGetPlan).toHaveBeenCalledTimes(2));
       await waitFor(() => expect(screen.queryByRole('alert')).not.toBeInTheDocument());
-      await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+      await screen.findByRole('table', { name: /ítems de la visita/i });
     });
 
     it('un refresh en segundo plano fallido del detalle del plan se muestra como un toast (escalón 3: planDetailRefreshError)', async () => {
@@ -1256,7 +1389,7 @@ describe('TreatmentPlansTab', () => {
           <Toaster />
         </>,
       );
-      await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+      await screen.findByRole('table', { name: /ítems de la visita/i });
 
       const planStatusSelect = screen.getByLabelText<HTMLSelectElement>(/^estado del plan$/i);
       await user.selectOptions(planStatusSelect, 'CANCELLED');
@@ -1291,7 +1424,7 @@ describe('TreatmentPlansTab', () => {
           <Toaster />
         </>,
       );
-      await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+      await screen.findByRole('table', { name: /ítems de la visita/i });
 
       const planStatusSelect = screen.getByLabelText<HTMLSelectElement>(/^estado del plan$/i);
       await user.selectOptions(planStatusSelect, 'CANCELLED');
@@ -1308,7 +1441,7 @@ describe('TreatmentPlansTab', () => {
       // dismisses it.
       const planSelect = screen.getByLabelText<HTMLSelectElement>(/^plan$/i);
       await user.selectOptions(planSelect, 'plan-2');
-      await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+      await screen.findByRole('table', { name: /ítems de la visita/i });
       await waitFor(() => expect(mockedGetPlan).toHaveBeenCalledTimes(3));
       expect(mockedGetPlan).toHaveBeenNthCalledWith(3, tok, 'plan-2');
 
@@ -1327,7 +1460,7 @@ describe('TreatmentPlansTab', () => {
 
       const user = userEvent.setup();
       render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
-      await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+      await screen.findByRole('table', { name: /ítems de la visita/i });
 
       const planStatusSelect = screen.getByLabelText<HTMLSelectElement>(/^estado del plan$/i);
       await user.selectOptions(planStatusSelect, 'CANCELLED');
@@ -1343,7 +1476,7 @@ describe('TreatmentPlansTab', () => {
 
       const user = userEvent.setup();
       render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
-      const table = await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+      const table = await screen.findByRole('table', { name: /ítems de la visita/i });
       const row = within(table).getByText('11').closest('tr') as HTMLTableRowElement;
 
       await user.click(within(row).getByRole('button', { name: /quitar/i }));
@@ -1363,7 +1496,7 @@ describe('TreatmentPlansTab', () => {
 
       const user = userEvent.setup();
       render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
-      await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+      await screen.findByRole('table', { name: /ítems de la visita/i });
 
       const alert = await screen.findByRole('alert');
       expect(alert).toHaveTextContent('No pudimos cargar el saldo.');
@@ -1484,7 +1617,7 @@ describe('TreatmentPlansTab', () => {
 
       const user = userEvent.setup();
       render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
-      await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+      await screen.findByRole('table', { name: /ítems de la visita/i });
 
       await user.type(screen.getByLabelText(/código fdi/i), '16');
       await user.click(screen.getByRole('radio', { name: /resina/i }));
@@ -1595,7 +1728,7 @@ describe('TreatmentPlansTab', () => {
       const user = userEvent.setup();
       render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
 
-      const table = await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+      const table = await screen.findByRole('table', { name: /ítems de la visita/i });
       expect(
         within(table).getByText(`Descuento −${expectedCurrencyText(5000)}`),
       ).toBeInTheDocument();
@@ -1618,7 +1751,7 @@ describe('TreatmentPlansTab', () => {
       mockedGetPlan.mockResolvedValue(plan1Detail);
       const user = userEvent.setup();
       render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
-      await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+      await screen.findByRole('table', { name: /ítems de la visita/i });
 
       await user.type(screen.getByLabelText(/código fdi/i), '16');
       await user.click(screen.getByRole('radio', { name: /resina/i }));
@@ -1639,7 +1772,7 @@ describe('TreatmentPlansTab', () => {
       mockedGetPlan.mockResolvedValue(plan1Detail);
       const user = userEvent.setup();
       render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
-      await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+      await screen.findByRole('table', { name: /ítems de la visita/i });
 
       await user.type(screen.getByLabelText(/código fdi/i), '16');
       await user.click(screen.getByRole('radio', { name: /resina/i }));
@@ -1662,7 +1795,7 @@ describe('TreatmentPlansTab', () => {
       mockedGetPlan.mockResolvedValue(plan1Detail);
       const user = userEvent.setup();
       render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
-      await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+      await screen.findByRole('table', { name: /ítems de la visita/i });
 
       await user.type(screen.getByLabelText(/código fdi/i), '16');
       await user.click(screen.getByRole('radio', { name: /resina/i }));
@@ -1687,7 +1820,7 @@ describe('TreatmentPlansTab', () => {
       mockedListPayments.mockResolvedValue([]);
       const user = userEvent.setup();
       render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
-      await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+      await screen.findByRole('table', { name: /ítems de la visita/i });
       expect(await screen.findByText('A pagar')).toBeInTheDocument();
       await user.click(screen.getByRole('button', { name: /^registrar abono$/i }));
       const field = screen.getByLabelText(/^monto$/i);
@@ -1714,7 +1847,7 @@ describe('TreatmentPlansTab', () => {
       mockedGetPlan.mockResolvedValue(plan1Detail);
       const user = userEvent.setup();
       render(<TreatmentPlansTab patientId="pat-1" token={discountDentistToken} />);
-      await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+      await screen.findByRole('table', { name: /ítems de la visita/i });
       await waitFor(() => expect(mockedGetDiscountPolicy).toHaveBeenCalled());
 
       await user.type(screen.getByLabelText(/código fdi/i), '16');
@@ -1733,7 +1866,7 @@ describe('TreatmentPlansTab', () => {
       mockedAddItem.mockResolvedValue({ ...item1, id: 'item-3' });
       const user = userEvent.setup();
       render(<TreatmentPlansTab patientId="pat-1" token={discountAdminToken} />);
-      await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+      await screen.findByRole('table', { name: /ítems de la visita/i });
       await waitFor(() => expect(mockedGetDiscountPolicy).toHaveBeenCalled());
 
       await user.type(screen.getByLabelText(/código fdi/i), '16');
@@ -1770,7 +1903,7 @@ describe('TreatmentPlansTab', () => {
       });
       const user = userEvent.setup();
       render(<TreatmentPlansTab patientId="pat-1" token={discountDentistToken} />);
-      const table = await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+      const table = await screen.findByRole('table', { name: /ítems de la visita/i });
       await waitFor(() => expect(mockedGetDiscountPolicy).toHaveBeenCalled());
 
       const bulk = screen.getByRole('button', { name: 'Descuento %' });
@@ -1809,7 +1942,7 @@ describe('TreatmentPlansTab', () => {
           <Toaster />
         </>,
       );
-      const table = await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+      const table = await screen.findByRole('table', { name: /ítems de la visita/i });
       await waitFor(() => expect(mockedGetDiscountPolicy).toHaveBeenCalled());
       await user.click(within(table).getByRole('checkbox', { name: 'Seleccionar el ítem del diente 11' }));
       await user.click(screen.getByRole('button', { name: 'Descuento %' }));
@@ -1830,7 +1963,7 @@ describe('TreatmentPlansTab', () => {
       mockedListPlans.mockResolvedValue([plan1]);
       mockedGetPlan.mockResolvedValue(plan1Detail);
       render(<TreatmentPlansTab patientId="pat-1" token="tok-sin-rol" />);
-      await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+      await screen.findByRole('table', { name: /ítems de la visita/i });
       expect(mockedGetPlanBalance).not.toHaveBeenCalled();
       expect(mockedListPayments).not.toHaveBeenCalled();
       expect(screen.queryByRole('heading', { name: 'Abonos y saldo' })).not.toBeInTheDocument();
@@ -1841,7 +1974,7 @@ describe('TreatmentPlansTab', () => {
       mockedGetPlan.mockResolvedValue(plan1Detail);
       const token = `h.${btoa(JSON.stringify({ sub: 'u1', tenantId: 't1', role }))}.s`;
       render(<TreatmentPlansTab patientId="pat-1" token={token} />);
-      await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+      await screen.findByRole('table', { name: /ítems de la visita/i });
       await waitFor(() => expect(mockedGetPlanBalance).toHaveBeenCalledWith(token, 'plan-1'));
       expect(mockedListPayments).toHaveBeenCalledWith(token, 'plan-1');
       expect(await screen.findByRole('heading', { name: 'Abonos y saldo' })).toBeInTheDocument();
@@ -1854,7 +1987,7 @@ describe('TreatmentPlansTab', () => {
         mockedGetPlan.mockResolvedValue(plan1Detail);
         const user = userEvent.setup();
         render(<TreatmentPlansTab patientId="pat-1" token={token} />);
-        await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+        await screen.findByRole('table', { name: /ítems de la visita/i });
         await waitFor(() => expect(mockedGetDiscountPolicy).toHaveBeenCalled());
         await user.type(screen.getByLabelText(/código fdi/i), '16');
         // Resina: 50.000 de catálogo, que rellena el precio.
@@ -1952,7 +2085,7 @@ describe('TreatmentPlansTab', () => {
         mockedListPlans.mockResolvedValue([plan1]);
         mockedGetPlan.mockResolvedValue({ ...plan1Detail, items: [reduced, item2] });
         render(<TreatmentPlansTab patientId="pat-1" token={discountAdminToken} />);
-        const table = await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+        const table = await screen.findByRole('table', { name: /ítems de la visita/i });
         expect(within(table).getByText(/Rebaja −10\.000,00 .* \(catálogo 60\.000,00/)).toBeInTheDocument();
         expect(within(table).getByText('Motivo: Paciente frecuente')).toBeInTheDocument();
       });
@@ -1963,7 +2096,7 @@ describe('TreatmentPlansTab', () => {
       mockedListPlans.mockResolvedValue([{ ...plan1, status: 'ACCEPTED' as const }]);
       mockedGetPlan.mockResolvedValue(accepted);
       render(<TreatmentPlansTab patientId="pat-1" token={discountAdminToken} />);
-      const table = await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+      const table = await screen.findByRole('table', { name: /ítems de la visita/i });
       expect(within(table).queryByRole('checkbox')).not.toBeInTheDocument();
       expect(screen.queryByRole('button', { name: 'Descuento %' })).not.toBeInTheDocument();
       expect(
@@ -1994,7 +2127,7 @@ describe('TreatmentPlansTab', () => {
       mockedGetPlan.mockResolvedValue(plan1Detail);
       const user = userEvent.setup();
       render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
-      await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+      await screen.findByRole('table', { name: /ítems de la visita/i });
       await user.type(screen.getByLabelText(/código fdi/i), '16');
       return user;
     }
@@ -2175,7 +2308,7 @@ describe('TreatmentPlansTab', () => {
       mockedListPlans.mockResolvedValue([plan1]);
       mockedGetPlan.mockResolvedValue({ ...plan1Detail, items: [withAgreement, item2] });
       render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
-      const table = await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+      const table = await screen.findByRole('table', { name: /ítems de la visita/i });
       expect(within(table).getByText(/Convenio Seguros Sol · precio de lista 50\.000,00/)).toBeInTheDocument();
     });
 
@@ -2192,7 +2325,7 @@ describe('TreatmentPlansTab', () => {
       mockedListPlans.mockResolvedValue([plan1]);
       mockedGetPlan.mockResolvedValue({ ...plan1Detail, items: [both, item2] });
       render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
-      const table = await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+      const table = await screen.findByRole('table', { name: /ítems de la visita/i });
       expect(within(table).getByText(/Convenio Seguros Sol · precio de lista 50\.000,00/)).toBeInTheDocument();
       expect(within(table).getByText(/Descuento −2000,00/)).toBeInTheDocument();
     });
@@ -2208,7 +2341,7 @@ describe('TreatmentPlansTab', () => {
       mockedListPlans.mockResolvedValue([plan1]);
       mockedGetPlan.mockResolvedValue({ ...plan1Detail, items: [fromList, sameAsList] });
       render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
-      const table = await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+      const table = await screen.findByRole('table', { name: /ítems de la visita/i });
       expect(within(table).getAllByText(/Lista de precios de la sede · precio de lista/)).toHaveLength(1);
     });
 
@@ -2219,7 +2352,7 @@ describe('TreatmentPlansTab', () => {
       mockedApplyBulkDiscount.mockResolvedValue({ items: [{ ...item1, discount: 2500 }], skippedNoDiscount: 2 });
       const user = userEvent.setup();
       render(<TreatmentPlansTab patientId="pat-1" token={discountDentistToken} />);
-      const table = await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+      const table = await screen.findByRole('table', { name: /ítems de la visita/i });
       await waitFor(() => expect(mockedGetDiscountPolicy).toHaveBeenCalled());
       await user.click(within(table).getByRole('checkbox', { name: 'Seleccionar el ítem del diente 11' }));
       await user.click(screen.getByRole('button', { name: 'Descuento %' }));
@@ -2263,7 +2396,7 @@ describe('TreatmentPlansTab', () => {
     };
 
     async function itemsTable() {
-      return screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+      return screen.findByRole('table', { name: /ítems de la visita/i });
     }
 
     /** El `<dl>` de cifras del plan: «Sin imputar» vive ahí, junto a «Pagado». */
@@ -2637,7 +2770,7 @@ describe('TreatmentPlansTab', () => {
       mockedListPayments.mockResolvedValue([]);
       const user = userEvent.setup();
       render(<TreatmentPlansTab patientId="pat-1" token={tok} />);
-      await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+      await screen.findByRole('table', { name: /ítems de la visita/i });
       await user.click(await screen.findByRole('button', { name: /^registrar abono$/i }));
       expect(screen.getByLabelText<HTMLSelectElement>(/^moneda$/i).value).toBe('JPY');
     });

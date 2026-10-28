@@ -23,6 +23,24 @@ export const feeReasonCopy = {
   counter: (n: number) => `${n}/${WAIVE_REASON_MAX}`,
 };
 
+/**
+ * DX-343: tras un 409 el diálogo deja de poder enviarse. El mensaje del
+ * servidor (arriba, en el aviso de error) dice qué pasó; esto dice por qué ya
+ * no hay botón y dónde mirar ahora.
+ */
+export const feeConflictCopy = {
+  notice:
+    'Este cargo cambió mientras lo tenías abierto, así que ya no se puede enviar. Ciérralo para ver su estado actual.',
+};
+
+export function FeeConflictNotice() {
+  return (
+    <p role="status" className="text-sm text-muted">
+      {feeConflictCopy.notice}
+    </p>
+  );
+}
+
 /** SEC-050: anular un cargo ya generado. */
 export const voidFeeCopy = {
   action: 'Anular cargo',
@@ -45,6 +63,7 @@ interface FeeReasonModalProps {
   onDone: (view: CancellationFeeView) => void;
   /** 409: otra persona ya decidió (o ya se cobró); quien abrió se relee. */
   onStale: () => void;
+  onCloseAutoFocus?: (event: Event) => void;
 }
 
 /**
@@ -62,6 +81,7 @@ export function FeeReasonModal({
   onClose,
   onDone,
   onStale,
+  onCloseAutoFocus,
 }: FeeReasonModalProps) {
   const id = useId();
   const reasonId = `${id}-reason`;
@@ -69,9 +89,11 @@ export function FeeReasonModal({
   const [fieldError, setFieldError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [stale, setStale] = useState(false);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (stale || submitting) return;
     const trimmed = reason.trim();
     if (trimmed.length < WAIVE_REASON_MIN || trimmed.length > WAIVE_REASON_MAX) {
       setFieldError(feeReasonCopy.reasonError);
@@ -86,7 +108,10 @@ export function FeeReasonModal({
       onDone(next);
     } catch (err) {
       setError(apiErrorMessage(err, errorMessage));
-      if (err instanceof ApiError && err.status === 409) onStale();
+      if (err instanceof ApiError && err.status === 409) {
+        setStale(true);
+        onStale();
+      }
     } finally {
       setSubmitting(false);
     }
@@ -104,7 +129,11 @@ export function FeeReasonModal({
       submitLabel={submitLabel}
       submitting={submitting}
       error={error}
+      destructive
+      hideSubmit={stale}
+      onCloseAutoFocus={onCloseAutoFocus}
     >
+      {stale ? <FeeConflictNotice /> : null}
       <div className="flex flex-col gap-1.5">
         <Label htmlFor={reasonId}>{feeReasonCopy.reason}</Label>
         <textarea
@@ -112,7 +141,7 @@ export function FeeReasonModal({
           rows={3}
           maxLength={WAIVE_REASON_MAX}
           value={reason}
-          disabled={submitting}
+          disabled={submitting || stale}
           onChange={(e) => {
             setReason(e.target.value);
             setFieldError(null);
@@ -149,12 +178,14 @@ export function VoidCancellationFeeModal({
   onClose,
   onDone,
   onStale,
+  onCloseAutoFocus,
 }: {
   token: string;
   appointmentId: string;
   onClose: () => void;
   onDone: (view: CancellationFeeView) => void;
   onStale: () => void;
+  onCloseAutoFocus?: (event: Event) => void;
 }) {
   return (
     <FeeReasonModal
@@ -167,6 +198,7 @@ export function VoidCancellationFeeModal({
       onClose={onClose}
       onDone={onDone}
       onStale={onStale}
+      onCloseAutoFocus={onCloseAutoFocus}
     />
   );
 }

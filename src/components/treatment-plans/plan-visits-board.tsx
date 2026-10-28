@@ -35,7 +35,15 @@ export function PlanVisitsBoard({
   plan: TreatmentPlan;
   role: ClinicRole | null;
   onChanged: () => void | Promise<void>;
-  renderItems: (items: TreatmentPlanItem[]) => React.ReactNode;
+  /**
+   * Los ítems de una visita. `visit` es su número (`null` sin visitas) y
+   * `ordered`, todos los ítems en el orden en que se pintan (visita a visita):
+   * lo que numere entre visitas (DX-343, «Cargo n de N») sigue la pantalla.
+   */
+  renderItems: (
+    items: TreatmentPlanItem[],
+    context: { visit: number | null; ordered: TreatmentPlanItem[] },
+  ) => React.ReactNode;
 }) {
   const editable =
     (role === "DENTIST" || role === "ADMIN") &&
@@ -111,6 +119,11 @@ export function PlanVisitsBoard({
     (a, b) => a - b,
   );
   const next = Math.max(0, ...numbers) + 1;
+  const itemsOf = (number: number) =>
+    (plan.items ?? []).filter((i) =>
+      assignments.some((a) => a.visit === number && a.itemId === i.id),
+    );
+  const ordered = numbers.flatMap(itemsOf);
   function move(itemId: string, visit: number) {
     setDirty(true);
     setAssignments((prev) =>
@@ -192,12 +205,10 @@ export function PlanVisitsBoard({
           </button>
         </InlineError>
       ) : null}
-      {numbers.length === 0 ? renderItems([]) : null}
+      {numbers.length === 0 ? renderItems([], { visit: null, ordered }) : null}
       {numbers.map((number) => {
         const assignment = assignments.filter((i) => i.visit === number);
-        const items = (plan.items ?? []).filter((i) =>
-          assignment.some((a) => a.itemId === i.id),
-        );
+        const items = itemsOf(number);
         const visit = scheduledVisit(number);
         const title = `Visita ${number}${assignment[0]?.visitLabel ? " · " + assignment[0].visitLabel : ""}`;
         return (
@@ -303,7 +314,7 @@ export function PlanVisitsBoard({
                 </div>
               ) : null}
             </div>
-            {renderItems(items)}
+            {renderItems(items, { visit: number, ordered })}
           </section>
         );
       })}
