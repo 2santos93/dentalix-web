@@ -35,7 +35,6 @@ function data(over: Partial<PatientResponsibles> = {}): PatientResponsibles {
     patientId: 'son',
     minor: true,
     majorityAge: 18,
-    country: 'CO',
     parties: [],
     responsibleFor: [],
     noticeRecipient: {

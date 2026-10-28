@@ -394,6 +394,27 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/patients/settings": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Mayoría de edad de la clínica (DX-328) */
+        get: operations["PatientsController_settings"];
+        /**
+         * Cambia la mayoría de edad de la clínica (14–21 años); queda en la auditoría
+         * @description DX-328. Aplica desde la siguiente petición. Si el valor no cambia, responde 200 sin evento de auditoría.
+         */
+        put: operations["PatientsController_updateClinicSettings"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/patients/{id}": {
         parameters: {
             query?: never;
@@ -4461,7 +4482,7 @@ export interface components {
         /** @enum {string} */
         AuditAction: "VIEW" | "CREATE" | "UPDATE" | "DELETE" | "SIGN" | "VOID" | "LOGIN" | "LOGIN_FAILED" | "PASSWORD_RESET" | "EXPORT" | "PRINT" | "SEND";
         /** @enum {string} */
-        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION" | "POSTOP_TEMPLATE" | "POSTOP_DELIVERY" | "PATIENT_DOCUMENT" | "MEDICAL_HISTORY_SUBMISSION" | "AGREEMENT" | "PRICE_LIST" | "PROVIDER_SCHEDULE" | "PATIENT_IMPORT_BATCH" | "EXPENSE" | "CANCELLATION_POLICY" | "PAYMENT_ALLOCATION";
+        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION" | "POSTOP_TEMPLATE" | "POSTOP_DELIVERY" | "PATIENT_DOCUMENT" | "MEDICAL_HISTORY_SUBMISSION" | "AGREEMENT" | "PRICE_LIST" | "PROVIDER_SCHEDULE" | "PATIENT_IMPORT_BATCH" | "EXPENSE" | "CANCELLATION_POLICY" | "PAYMENT_ALLOCATION" | "CLINIC_SETTINGS";
         /**
          * @description Rol con el que actuó (del token). `null` en un login fallido.
          * @enum {string}
@@ -5067,11 +5088,6 @@ export interface components {
             dataConsentPolicyVersion: string | null;
             maritalStatus: string | null;
             occupation: string | null;
-            /**
-             * @deprecated
-             * @description DEPRECADO (DX-153): texto libre original, solo lectura. La aseguradora vive ahora en las coberturas del paciente (`/patients/:id/coverages`); enviarlo en POST o PATCH se ignora.
-             */
-            insurerEps: string | null;
             physicianName: string | null;
             physicianPhone: string | null;
             emergencyContactName: string | null;
@@ -5186,11 +5202,6 @@ export interface components {
             dataConsentPolicyVersion: string | null;
             maritalStatus: string | null;
             occupation: string | null;
-            /**
-             * @deprecated
-             * @description DEPRECADO (DX-153): texto libre original, solo lectura. La aseguradora vive ahora en las coberturas del paciente (`/patients/:id/coverages`); enviarlo en POST o PATCH se ignora.
-             */
-            insurerEps: string | null;
             physicianName: string | null;
             physicianPhone: string | null;
             emergencyContactName: string | null;
@@ -5264,6 +5275,13 @@ export interface components {
             page: number;
             pageSize: number;
         };
+        PatientSettingsDto: {
+            /**
+             * @description Edad desde la que el paciente es adulto en esta clínica (Ajustes › Mayoría de edad).
+             * @example 18
+             */
+            majorityAge: number;
+        };
         OverdueAmountDto: {
             /** @example COP */
             currency: string;
@@ -5326,11 +5344,6 @@ export interface components {
             dataConsentPolicyVersion: string | null;
             maritalStatus: string | null;
             occupation: string | null;
-            /**
-             * @deprecated
-             * @description DEPRECADO (DX-153): texto libre original, solo lectura. La aseguradora vive ahora en las coberturas del paciente (`/patients/:id/coverages`); enviarlo en POST o PATCH se ignora.
-             */
-            insurerEps: string | null;
             physicianName: string | null;
             physicianPhone: string | null;
             emergencyContactName: string | null;
@@ -5471,18 +5484,18 @@ export interface components {
             source: components["schemas"]["ReminderOptOutSource"];
         };
         /**
-         * @description PATIENT: el propio paciente. RESPONSIBLE (DX-203): un menor (CO < 18, ES < 16) o un paciente sin email; los avisos van al email de su responsable que recibe avisos (primero el pagador). GUARDIAN: menor cuyo responsable no tiene email; va al email de la ficha saludándolo. CONTACT: menor sin responsables; se saluda a su contacto principal.
+         * @description PATIENT: el propio paciente. RESPONSIBLE (DX-203): un menor (menor que la mayoría de edad de la clínica) o un paciente sin email; los avisos van al email de su responsable que recibe avisos (primero el pagador). GUARDIAN: menor cuyo responsable no tiene email; va al email de la ficha saludándolo. CONTACT: menor sin responsables; se saluda a su contacto principal.
          * @enum {string}
          */
         CommunicationRecipientKind: "PATIENT" | "RESPONSIBLE" | "GUARDIAN" | "CONTACT";
         CommunicationRecipientDto: {
-            /** @description PATIENT: el propio paciente. RESPONSIBLE (DX-203): un menor (CO < 18, ES < 16) o un paciente sin email; los avisos van al email de su responsable que recibe avisos (primero el pagador). GUARDIAN: menor cuyo responsable no tiene email; va al email de la ficha saludándolo. CONTACT: menor sin responsables; se saluda a su contacto principal. */
+            /** @description PATIENT: el propio paciente. RESPONSIBLE (DX-203): un menor (menor que la mayoría de edad de la clínica) o un paciente sin email; los avisos van al email de su responsable que recibe avisos (primero el pagador). GUARDIAN: menor cuyo responsable no tiene email; va al email de la ficha saludándolo. CONTACT: menor sin responsables; se saluda a su contacto principal. */
             kind: components["schemas"]["CommunicationRecipientKind"];
             /** @description Nombre de pila de a quien se dirigen los avisos. */
             name: string | null;
             /** @description Email al que salen los avisos; null = no hay a quién. */
             email: string | null;
-            /** @description Menor según el país de la sede (CO: menos de 18; ES: menos de 16). */
+            /** @description Menor que la mayoría de edad de la clínica, en el día civil de la sede. */
             minor: boolean;
             /**
              * Format: uuid
@@ -5597,11 +5610,13 @@ export interface components {
         PatientResponsiblesDto: {
             /** Format: uuid */
             patientId: string;
-            /** @description Menor según el país de la sede activa o principal, en su día civil (CO < 18, ES < 16). */
+            /** @description Menor que la mayoría de edad de la clínica (`majorityAge`), en el día civil de la sede activa o principal. */
             minor: boolean;
-            /** @example 18 */
+            /**
+             * @description Edad desde la que el paciente es adulto en esta clínica (Ajustes › Mayoría de edad).
+             * @example 18
+             */
             majorityAge: number;
-            country: components["schemas"]["ClinicCountry"];
             parties: components["schemas"]["ResponsiblePartyDto"][];
             /** @description «Responsable de: …»: los pacientes de los que es responsable. */
             responsibleFor: components["schemas"]["ResponsibleForDto"][];
@@ -9718,12 +9733,12 @@ export interface components {
             docNumber: string | null;
         };
         /**
-         * @description RESPONSIBLE: un menor (CO < 18, ES < 16) o un paciente sin email; sale a nombre de su responsable que recibe avisos (primero el pagador principal).
+         * @description RESPONSIBLE: un menor (menor que la mayoría de edad de la clínica) o un paciente sin email; sale a nombre de su responsable que recibe avisos (primero el pagador principal).
          * @enum {string}
          */
         StatementAddresseeKind: "PATIENT" | "RESPONSIBLE";
         AccountStatementAddresseeDto: {
-            /** @description RESPONSIBLE: un menor (CO < 18, ES < 16) o un paciente sin email; sale a nombre de su responsable que recibe avisos (primero el pagador principal). */
+            /** @description RESPONSIBLE: un menor (menor que la mayoría de edad de la clínica) o un paciente sin email; sale a nombre de su responsable que recibe avisos (primero el pagador principal). */
             kind: components["schemas"]["StatementAddresseeKind"];
             /** @description Nombre completo */
             name: string;
@@ -11289,10 +11304,10 @@ export interface components {
              */
             status: "NONE" | "CHARGED" | "WAIVED" | "VOIDED";
             /**
-             * @description Por qué no se puede generar el cargo ahora: no es inasistencia ni tardía, no consta la política comunicada, la versión comunicada no tiene importe, EPS_CO activa en Colombia, o ya cobrado/condonado.
+             * @description Por qué no se puede generar el cargo ahora: no es inasistencia ni tardía, no consta la política comunicada, la versión comunicada no tiene importe, o ya cobrado/condonado.
              * @enum {string|null}
              */
-            chargeBlock: "NOT_ELIGIBLE" | "NOT_INFORMED" | "NO_FEE" | "EPS_CO" | "ALREADY_CHARGED" | "ALREADY_WAIVED" | null;
+            chargeBlock: "NOT_ELIGIBLE" | "NOT_INFORMED" | "NO_FEE" | "ALREADY_CHARGED" | "ALREADY_WAIVED" | null;
             chargeBlockMessage: string | null;
             /** @description El usuario puede generar, condonar o anular: ADMIN, o RECEPTION si la política vigente de la sede lo permite. */
             canManage: boolean;
@@ -14234,6 +14249,62 @@ export interface operations {
                 };
             };
             /** @description Rol distinto de ADMIN */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientsController_settings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PatientSettingsDto"];
+                };
+            };
+        };
+    };
+    PatientsController_updateClinicSettings: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["PatientSettingsDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PatientSettingsDto"];
+                };
+            };
+            /** @description Fuera de 14–21 o no entero */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo un administrador puede cambiar la mayoría de edad. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -22128,7 +22199,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description No es inasistencia ni tardía, «No consta que el paciente fuera informado de la política», la versión comunicada no tiene importe, cobertura EPS_CO activa en una sede de Colombia (Ley 1438 art. 55), ya cobrado o condonado, o la cita cambió mientras tanto */
+            /** @description No es inasistencia ni tardía, «No consta que el paciente fuera informado de la política», la versión comunicada no tiene importe, ya cobrado o condonado, o la cita cambió mientras tanto */
             409: {
                 headers: {
                     [name: string]: unknown;

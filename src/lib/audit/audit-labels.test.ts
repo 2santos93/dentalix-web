@@ -42,6 +42,11 @@ describe('etiquetas de auditoría', () => {
     expect(AUDIT_RESOURCE_LABELS.PAYMENT_ALLOCATION).toBe('Imputación de abono');
   });
 
+  it('AUDIT_RESOURCE_LABELS.CLINIC_SETTINGS is Ajustes de la clínica', () => {
+    // DX-328: la mayoría de edad de la clínica se audita como ajuste de la clínica.
+    expect(AUDIT_RESOURCE_LABELS.CLINIC_SETTINGS).toBe('Ajustes de la clínica');
+  });
+
   it('las opciones no repiten valores', () => {
     expect(new Set(AUDIT_ACTION_OPTIONS).size).toBe(AUDIT_ACTION_OPTIONS.length);
     expect(new Set(AUDIT_RESOURCE_OPTIONS).size).toBe(AUDIT_RESOURCE_OPTIONS.length);

@@ -76,7 +76,6 @@ export interface Patient {
   importBatchId?: string | null;
   maritalStatus?: string | null;
   occupation?: string | null;
-  insurerEps?: string | null;
   /** DX-153: resumen de cobertura; solo en las lecturas (GET), no en PATCH. */
   coverage?: CoverageSummary;
   /** DX-105: resumen del convenio asignado; solo en las lecturas (GET). */
