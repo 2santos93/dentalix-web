@@ -24,7 +24,7 @@ import {
 } from 'lucide-react';
 import type { ClinicRole } from '@/lib/me/me-api';
 import { canManageConsentTemplates } from '@/lib/consents/consents-api';
-import { canManagePrescriptionTemplates } from '@/lib/prescriptions/prescriptions-api';
+import { canManagePrescriptionSettings } from '@/lib/prescriptions/prescriptions-api';
 import { canManageAppointmentTypes } from '@/lib/appointments/appointment-types-api';
 import { canManagePayers } from '@/lib/payers/payers-api';
 import { canManagePriceLists } from '@/lib/price-lists/price-lists-api';
@@ -214,13 +214,13 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
         icon: FileSignature,
         visible: canManageConsentTemplates,
       },
-      // DX-013.
+      // DX-013, DX-324.
       {
         href: '/settings/recetas',
         label: 'Recetas',
-        description: 'Plantillas para emitir recetas más rápido.',
+        description: 'Plantillas y datos que imprime la receta.',
         icon: Pill,
-        visible: canManagePrescriptionTemplates,
+        visible: canManagePrescriptionSettings,
       },
       // DX-222.
       {

@@ -90,7 +90,7 @@ describe('StaffMemberProfile', () => {
     );
   });
 
-  it('edita el registro profesional / nº de colegiado (DX-013) y solo manda ese campo', async () => {
+  it('edita el nº de registro profesional (DX-013) y solo manda ese campo', async () => {
     mockedGet.mockResolvedValue({ ...activo, professionalLicense: null });
     mockedUpdate.mockResolvedValue({ ...activo, professionalLicense: 'RM-77' });
     const user = userEvent.setup();
@@ -103,6 +103,44 @@ describe('StaffMemberProfile', () => {
       expect(mockedUpdate).toHaveBeenCalledWith('tok', 'u1', { professionalLicense: 'RM-77' }),
     );
     expect(await screen.findByLabelText(/registro profesional/i)).toHaveValue('RM-77');
+  });
+
+  it('profile edits specialty and sends only what changed', async () => {
+    mockedGet.mockResolvedValue({ ...activo, professionalLicense: 'RM-77', professionalSpecialty: null });
+    mockedUpdate.mockResolvedValue({ ...activo, professionalLicense: 'RM-77', professionalSpecialty: 'Endodoncia' });
+    const user = userEvent.setup();
+    const { container } = render(<StaffMemberProfile token="tok" userId="u1" />);
+    const license = await screen.findByLabelText('Nº de registro profesional');
+    expect(license).toHaveAccessibleDescription('Sale en las recetas que emite.');
+    const specialty = screen.getByLabelText('Especialidad (opcional)');
+    expect(specialty).toHaveValue('');
+    expect(specialty).toHaveAttribute('maxLength', '80');
+    expect(specialty).toHaveAccessibleDescription('Sale en sus recetas, bajo su nombre.');
+    expect(container).not.toHaveTextContent(/Colombia|España|colegiado|RETHUS/);
+    await user.type(specialty, '  Endodoncia ');
+    await user.click(screen.getByRole('button', { name: /guardar cambios/i }));
+    await waitFor(() =>
+      expect(mockedUpdate).toHaveBeenCalledWith('tok', 'u1', { professionalSpecialty: 'Endodoncia' }),
+    );
+    expect(await screen.findByLabelText('Especialidad (opcional)')).toHaveValue('Endodoncia');
+    await waitFor(() =>
+      expect(screen.getByRole('button', { name: /guardar cambios/i })).toBeDisabled(),
+    );
+  });
+
+  it('borrar la especialidad manda una cadena vacía (la API responde null)', async () => {
+    mockedGet.mockResolvedValue({ ...activo, professionalSpecialty: 'Endodoncia' });
+    mockedUpdate.mockResolvedValue({ ...activo, professionalSpecialty: null });
+    const user = userEvent.setup();
+    render(<StaffMemberProfile token="tok" userId="u1" />);
+    const specialty = await screen.findByLabelText('Especialidad (opcional)');
+    expect(specialty).toHaveValue('Endodoncia');
+    await user.clear(specialty);
+    await user.click(screen.getByRole('button', { name: /guardar cambios/i }));
+    await waitFor(() =>
+      expect(mockedUpdate).toHaveBeenCalledWith('tok', 'u1', { professionalSpecialty: '' }),
+    );
+    await waitFor(() => expect(screen.getByLabelText('Especialidad (opcional)')).toHaveValue(''));
   });
 
   it('borrar el registro profesional lo deja vacío (la API responde null)', async () => {

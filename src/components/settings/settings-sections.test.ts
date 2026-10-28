@@ -38,6 +38,18 @@ describe('Índice de Ajustes (DX-282)', () => {
     }
   });
 
+  it('Recetas is ADMIN only and reads «Plantillas y datos que imprime la receta.»', () => {
+    const entry = SETTINGS_SECTIONS.flatMap((section) => section.entries).find(
+      (e) => e.href === '/settings/recetas',
+    );
+    expect(entry?.label).toBe('Recetas');
+    expect(entry?.description).toBe('Plantillas y datos que imprime la receta.');
+    expect(hrefsFor('ADMIN')).toContain('/settings/recetas');
+    for (const role of ['DENTIST', 'ASSISTANT', 'RECEPTION', null] as const) {
+      expect(hrefsFor(role)).not.toContain('/settings/recetas');
+    }
+  });
+
   it('settings index lists Mayoría de edad only for ADMIN', () => {
     const clinic = visibleSettingsSections('ADMIN').find((section) => section.id === 'clinica');
     expect(clinic?.entries.map((entry) => entry.label)).toContain('Mayoría de edad');
