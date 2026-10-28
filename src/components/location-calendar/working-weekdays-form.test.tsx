@@ -12,11 +12,11 @@ jest.mock('../../lib/locations/location-calendar-api', () => ({
 }));
 const mockedSet = jest.mocked(setWorkingWeekdays);
 
-// Una sede en inglés: las palabras de los días no cambian con el locale (I6).
+// Los nombres de los días salen del helper en UI_LANGUAGE; ninguna sede los cambia (I6, M3).
 const fmt = regionalFormat({ locale: 'en-US', hourCycle: 'h12' });
 
 function renderForm(initial: number[] = [1, 2, 3, 4, 5], onSaved = jest.fn()) {
-  render(<WorkingWeekdaysForm token="tok" locationId="loc-1" fmt={fmt} initial={initial} onSaved={onSaved} />);
+  render(<WorkingWeekdaysForm token="tok" locationId="loc-1" initial={initial} onSaved={onSaved} />);
   return onSaved;
 }
 

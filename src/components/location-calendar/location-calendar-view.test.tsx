@@ -1,6 +1,6 @@
 import { useSyncExternalStore } from 'react';
 import { render, screen, waitFor, within } from '@testing-library/react';
-import { LocationCalendarView } from './location-calendar-view';
+import { LocationCalendarView, locationCalendarCopy } from './location-calendar-view';
 import { listLocations } from '@/lib/locations/locations-api';
 import { createHoliday, getLocationCalendar, setWorkingWeekdays } from '@/lib/locations/location-calendar-api';
 import { setActiveLocationId } from '@/lib/locations/location-store';
@@ -159,18 +159,28 @@ describe('LocationCalendarView (DX-316, spec §7.1–§7.2)', () => {
     expect(replace).not.toHaveBeenCalled();
   });
 
-  it('a location without a usable format shows «—» and one SedeConfigError for the whole screen', async () => {
+  it('a location without a usable format still shows the weekdays form, under one note for the whole screen (M3)', async () => {
     mockedList.mockResolvedValue([clinicLocation({ id: 'sin', name: 'Sede Sin Formato', locale: null })]);
     renderView();
-    expect(await screen.findAllByText(/No se pudo saber el formato regional o el reloj de la sede/)).toHaveLength(1);
+    expect(await screen.findAllByText(locationCalendarCopy.noFormat)).toHaveLength(1);
     // La nota va encima de las secciones, no dentro de «Días hábiles».
     const section = screen.getByRole('region', { name: 'Días hábiles' });
     expect(within(section).queryByText(/No se pudo saber el formato regional/)).not.toBeInTheDocument();
-    expect(screen.getByTestId('working-weekdays-summary')).toHaveTextContent('—');
-    expect(screen.queryByRole('group', { name: 'Días hábiles' })).not.toBeInTheDocument();
+    // Los nombres de los días no dependen del formato de la sede: el formulario se puede usar.
+    const group = within(section).getByRole('group', { name: 'Días hábiles' });
+    expect(within(group).getAllByRole('checkbox').map((box) => (box as HTMLInputElement).labels?.[0]?.textContent)).toEqual([
+      'Lunes',
+      'Martes',
+      'Miércoles',
+      'Jueves',
+      'Viernes',
+      'Sábado',
+      'Domingo',
+    ]);
+    expect(screen.getByTestId('working-weekdays-summary')).toHaveTextContent('Lunes a viernes');
   });
 
-  it('without a usable format the festivos show «—» and the one note covers both sections (Task 9)', async () => {
+  it('without a usable format the festivos show «—», keep add/edit/delete, and «Importar» is disabled and points to the note (M3)', async () => {
     mockedList.mockResolvedValue([clinicLocation({ id: 'sin', name: 'Sede Sin Formato', locale: null })]);
     mockedGet.mockResolvedValue({
       locationId: 'sin',
@@ -181,7 +191,23 @@ describe('LocationCalendarView (DX-316, spec §7.1–§7.2)', () => {
     const festivos = await screen.findByRole('region', { name: 'Festivos' });
     expect(within(festivos).getByText('Cierre').closest('tr')).toHaveTextContent('—');
     expect(within(festivos).queryByText(/No se pudo saber el formato regional/)).not.toBeInTheDocument();
-    expect(screen.getAllByText(/No se pudo saber el formato regional o el reloj de la sede/)).toHaveLength(1);
+    expect(screen.getAllByText(locationCalendarCopy.noFormat)).toHaveLength(1);
+    expect(within(festivos).getByRole('button', { name: 'Añadir festivo' })).toBeEnabled();
+    expect(within(festivos).getByRole('button', { name: 'Acciones de Cierre' })).toBeEnabled();
+    const importar = within(festivos).getByRole('button', { name: 'Importar' });
+    expect(importar).toBeDisabled();
+    expect(importar).toHaveAccessibleDescription(locationCalendarCopy.noFormat);
+    // Nunca «Importar — festivos» ni «Línea —»: el modal no se abre.
+    expect(screen.queryByText(/—\s*festivos|Línea —/)).not.toBeInTheDocument();
+  });
+
+  it('with a usable format «Importar» is enabled and has no description', async () => {
+    setActiveLocationId('norte');
+    renderView();
+    const festivos = await screen.findByRole('region', { name: 'Festivos' });
+    const importar = within(festivos).getByRole('button', { name: 'Importar' });
+    expect(importar).toBeEnabled();
+    expect(importar).not.toHaveAttribute('aria-describedby');
   });
 
   it('exactly one primary button in the view: «Añadir festivo»', async () => {

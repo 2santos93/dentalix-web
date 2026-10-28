@@ -13,7 +13,7 @@ import { EmptyState } from '@/components/shared/empty-state';
 import { SedeConfigError } from '@/components/locations/sede-config-error';
 import { Skeleton } from '@/components/ui/skeleton';
 import { HolidaysSection } from './holidays-section';
-import { WorkingWeekdaysForm, workingWeekdaysCopy } from './working-weekdays-form';
+import { WorkingWeekdaysForm } from './working-weekdays-form';
 
 export const locationCalendarCopy = {
   sede: 'Sede',
@@ -24,6 +24,9 @@ export const locationCalendarCopy = {
   loadError: 'No pudimos cargar el calendario de la sede.',
   forbiddenTitle: 'Solo administración cambia el calendario de la sede.',
   forbiddenHint: 'Los plazos en días hábiles de cada sede ya cuentan con su calendario.',
+  /** Sede sin formato (M3): dice qué falta y por qué «Importar» está deshabilitado. */
+  noFormat:
+    'No se pudo saber el formato regional de la sede, así que sus fechas no se muestran y no se pueden importar festivos. Vuelve a intentarlo o revisa la sede en Ajustes → Sedes.',
 };
 
 const copy = locationCalendarCopy;
@@ -127,8 +130,9 @@ function LocationCalendarSections({
   const [calendar, setCalendar] = useState<LocationCalendar | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [reloadKey, setReloadKey] = useState(0);
-  // Las palabras de los días salen del formato de la sede ELEGIDA, no de la activa.
+  // Las fechas salen del formato de la sede ELEGIDA, no de la activa.
   const fmt = locationRegionalFormat(location);
+  const noFormatNoteId = useId();
 
   useEffect(() => {
     let cancelled = false;
@@ -163,33 +167,35 @@ function LocationCalendarSections({
 
   return (
     <div className="flex flex-col gap-10">
-      {/* Una sola nota para toda la pantalla: sin formato, las dos secciones pintan «—» (R11). */}
+      {/* Una sola nota para toda la pantalla: sin formato, los festivos pintan «—» (R11) e «Importar» se deshabilita (M3). */}
       {fmt ? null : (
-        <SedeConfigError kind="locale" variant="note" locationId={location.id} onRetry={onRetryLocations} />
+        <SedeConfigError
+          kind="locale"
+          variant="note"
+          description={copy.noFormat}
+          descriptionId={noFormatNoteId}
+          locationId={location.id}
+          onRetry={onRetryLocations}
+        />
       )}
       <section aria-labelledby="working-weekdays-heading" className="flex flex-col gap-3">
         <h2 id="working-weekdays-heading" className="text-lg font-semibold text-ink">
           {copy.weekdaysHeading}
         </h2>
-        {fmt ? (
-          <WorkingWeekdaysForm
-            token={token}
-            locationId={location.id}
-            fmt={fmt}
-            initial={calendar.workingWeekdays}
-            // Solo los días: los festivos de la pantalla pueden ser más nuevos que la respuesta del PUT.
-            onSaved={(saved) => setCalendar((c) => (c ? { ...c, workingWeekdays: saved.workingWeekdays } : saved))}
-          />
-        ) : (
-          <p data-testid="working-weekdays-summary" className="font-medium text-ink">
-            {workingWeekdaysCopy.noSummary}
-          </p>
-        )}
+        {/* Los nombres de los días no dependen del formato de la sede: el formulario va siempre (M3). */}
+        <WorkingWeekdaysForm
+          token={token}
+          locationId={location.id}
+          initial={calendar.workingWeekdays}
+          // Solo los días: los festivos de la pantalla pueden ser más nuevos que la respuesta del PUT.
+          onSaved={(saved) => setCalendar((c) => (c ? { ...c, workingWeekdays: saved.workingWeekdays } : saved))}
+        />
       </section>
       {/* Sin formato pinta «—» en las fechas y ninguna nota propia: ya está la de arriba. */}
       <HolidaysSection
         token={token}
         location={location}
+        noFormatNoteId={noFormatNoteId}
         holidays={calendar.holidays}
         onChanged={(update) => setCalendar((c) => (c ? { ...c, holidays: update(c.holidays) } : c))}
       />

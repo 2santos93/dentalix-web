@@ -122,7 +122,12 @@ function civilLongDate(day: string, opts: { weekday?: boolean; year?: boolean } 
   return opts.weekday === false ? withYear : `${parts.weekday} ${withYear}`;
 }
 
-function weekdayName(weekday: number): string {
+/**
+ * 0 = domingo … 6 = sábado en `UI_LANGUAGE`. No lee ningún formato de sede, así
+ * que una sede sin formato también puede nombrar sus días (DX-316, M3); es la
+ * misma función que `regionalFormat(…).weekdayName`.
+ */
+export function weekdayName(weekday: number): string {
   if (!Number.isInteger(weekday) || weekday < 0 || weekday > 6) {
     throw new RangeError(`Día de la semana fuera de rango: ${weekday}`);
   }

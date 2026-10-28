@@ -1,4 +1,4 @@
-import { regionalFormat, UI_LANGUAGE, type HourCycle } from './regional-format';
+import { regionalFormat, UI_LANGUAGE, weekdayName, type HourCycle } from './regional-format';
 // Copia byte a byte de `src/shared/format/regional-format.cases.json` de la API: no se edita aquí.
 // La fuente es la API; `scripts/check-api-reference-sync.mjs` (CI) falla si
 // divergen. Ver src/lib/money/README.md.
@@ -209,6 +209,18 @@ describe('regionalFormat', () => {
       expect(() => fmt.weekdayName(weekday)).toThrow(RangeError);
     });
 
+    it('weekdayName does not depend on the location format: a location without one can name its days (M3)', () => {
+      const all = [0, 1, 2, 3, 4, 5, 6];
+      const neutral = all.map(weekdayName);
+      expect(neutral).toEqual(['domingo', 'lunes', 'martes', 'miércoles', 'jueves', 'viernes', 'sábado']);
+      for (const locale of ['en-US', 'de-DE', 'ar-EG', 'ja-JP-u-ca-japanese', 'he-IL-u-ca-hebrew']) {
+        for (const hourCycle of ['h12', 'h23'] as const) {
+          expect(all.map(regionalFormat({ locale, hourCycle }).weekdayName)).toEqual(neutral);
+        }
+      }
+      expect(() => weekdayName(7)).toThrow(RangeError);
+    });
+
     it('civil words do not depend on the process zone', () => {
       // Cambiar `TZ` en el test no llega a ICU. Se simula la zona del proceso:
       // todo formatter sin `timeZone` explícito usa Pacific/Kiritimati
@@ -216,7 +228,7 @@ describe('regionalFormat', () => {
       // nuevo evita que un formatter cacheado antes tape el fallo.
       const RealDateTimeFormat = Intl.DateTimeFormat;
       const withProcessZone = function (locales?: string | string[], options?: Intl.DateTimeFormatOptions) {
-        return new RealDateTimeFormat(locales, { timeZone: 'Pacific/Kiritimati', ...options });
+        return new RealDateTimeFormat(locales, { ...options, timeZone: options?.timeZone ?? 'Pacific/Kiritimati' });
       } as unknown as typeof Intl.DateTimeFormat;
       withProcessZone.supportedLocalesOf = RealDateTimeFormat.supportedLocalesOf.bind(RealDateTimeFormat);
       Intl.DateTimeFormat = withProcessZone;

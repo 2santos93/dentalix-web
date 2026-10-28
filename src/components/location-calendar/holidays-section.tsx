@@ -64,6 +64,8 @@ interface HolidaysSectionProps {
   location: ClinicLocation;
   holidays: readonly LocationHoliday[];
   onChanged: HolidaysUpdate;
+  /** `id` del texto de la nota de la vista sobre la sede sin formato: describe por qué «Importar» está deshabilitado. */
+  noFormatNoteId?: string;
 }
 
 type FormState = { holiday?: LocationHoliday; key: number } | null;
@@ -80,11 +82,13 @@ function dateText(holiday: LocationHoliday, fmt: RegionalFormat | null): string 
  * DX-316 (spec §7.2): los festivos de la sede. Primero «Cada año» (los
  * recurrentes, por mes y día) y después un bloque por año con los puntuales.
  * Las palabras de fecha salen siempre del formato de la sede elegida; sin él,
- * «—» (la nota de «Configurar sede» la pinta la vista una sola vez). Alta y
+ * «—» (la nota de «Configurar sede» la pinta la vista una sola vez) e
+ * «Importar» se deshabilita: el resumen y los números de línea de la
+ * importación necesitan el formato (M3). Alta y
  * edición en `HolidayFormModal`; eliminar pide confirmación, y si falla avisa
  * con reintento sin quitar la fila (escalón 3).
  */
-export function HolidaysSection({ token, location, holidays, onChanged }: HolidaysSectionProps) {
+export function HolidaysSection({ token, location, holidays, onChanged, noFormatNoteId }: HolidaysSectionProps) {
   const fmt = locationRegionalFormat(location);
   const [form, setForm] = useState<FormState>(null);
   const [formOpen, setFormOpen] = useState(false);
@@ -209,7 +213,15 @@ export function HolidaysSection({ token, location, holidays, onChanged }: Holida
   );
   // Solo uno montado a la vez (barra o vacío), así que comparten la ref.
   const importButton = (
-    <Button ref={importRef} type="button" variant="secondary" onClick={openImport} className="max-sm:min-h-11 max-sm:w-full">
+    <Button
+      ref={importRef}
+      type="button"
+      variant="secondary"
+      onClick={openImport}
+      disabled={!fmt}
+      aria-describedby={fmt ? undefined : noFormatNoteId}
+      className="max-sm:min-h-11 max-sm:w-full"
+    >
       <Upload aria-hidden />
       {copy.import}
     </Button>

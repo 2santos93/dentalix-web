@@ -19,9 +19,13 @@ function capitalize(text: string): string {
  * Resumen de los días hábiles: «Todos los días», un tramo seguido de 3 o más
  * días como «Lunes a viernes» (también si cruza el domingo: «Viernes a
  * lunes»), y si no, la lista en orden ISO: «Lunes, miércoles y viernes».
- * RangeError con la semana vacía o un día fuera de 0–6.
+ * RangeError con la semana vacía o un día fuera de 0–6. Solo usa los nombres
+ * de los días, que no dependen del formato de la sede.
  */
-export function describeWorkingWeekdays(days: readonly number[], fmt: RegionalFormat): string {
+export function describeWorkingWeekdays(
+  days: readonly number[],
+  fmt: Pick<RegionalFormat, 'weekdayName'>,
+): string {
   const set = new Set(days);
   if (set.size === 0 || [...set].some((d) => !ISO_WEEK_ORDER.includes(d))) {
     throw new RangeError(`Días hábiles no válidos: ${days.join(',')}`);
@@ -72,14 +76,3 @@ export function groupHolidays(h: readonly LocationHoliday[]): {
 export function canManageLocationCalendar(role: ClinicRole | null): boolean {
   return role === 'ADMIN';
 }
-
-/** Textos con número de la importación (spec §7.2, M13), con singular; cifras con el formato de la sede. */
-export const importCopy = {
-  newRows: (n: number, fmt: RegionalFormat) => (n === 1 ? '1 nuevo' : `${fmt.number(n)} nuevos`),
-  duplicateRows: (n: number, fmt: RegionalFormat) => (n === 1 ? '1 ya existía' : `${fmt.number(n)} ya existían`),
-  errorRows: (n: number, fmt: RegionalFormat) => (n === 1 ? '1 con error' : `${fmt.number(n)} con errores`),
-  importButton: (n: number, fmt: RegionalFormat) => (n === 1 ? 'Importar 1 festivo' : `Importar ${fmt.number(n)} festivos`),
-  imported: (n: number, fmt: RegionalFormat) => (n === 1 ? 'Importado 1 festivo' : `Importados ${fmt.number(n)} festivos`),
-  /** Las partes del resumen se unen con « · ». */
-  separator: ' · ',
-} as const;

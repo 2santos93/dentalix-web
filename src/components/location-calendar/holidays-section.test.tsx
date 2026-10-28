@@ -124,6 +124,33 @@ describe('HolidaysSection (DX-316, spec §7.2)', () => {
     expect(screen.queryByRole('link', { name: 'Configurar sede' })).not.toBeInTheDocument();
   });
 
+  it('location without locale disables «Importar» (list and empty state) and keeps add, edit and delete (M3)', async () => {
+    const sin = clinicLocation({ locale: null });
+    const { unmount } = render(
+      <>
+        <p id="nota">Nota de la vista</p>
+        <HolidaysSection token="tok" location={sin} holidays={[]} onChanged={jest.fn()} noFormatNoteId="nota" />
+      </>,
+    );
+    expect(screen.getByRole('button', { name: copy.import })).toBeDisabled();
+    expect(screen.getByRole('button', { name: copy.import })).toHaveAccessibleDescription('Nota de la vista');
+    expect(screen.getByRole('button', { name: copy.add })).toBeEnabled();
+    unmount();
+
+    mockedDelete.mockResolvedValue(undefined);
+    const user = setupUser();
+    renderSection([puntual2027], sin);
+    expect(screen.getByRole('button', { name: copy.import })).toBeDisabled();
+    expect(screen.getByRole('button', { name: copy.add })).toBeEnabled();
+    await user.click(screen.getByRole('button', { name: 'Acciones de Cierre por obras' }));
+    const menu = within(await screen.findByRole('menu'));
+    expect(menu.getByRole('menuitem', { name: copy.edit })).toBeInTheDocument();
+    await user.click(menu.getByRole('menuitem', { name: copy.delete }));
+    await user.click(within(await screen.findByRole('dialog')).getByRole('button', { name: copy.deleteConfirm }));
+    await waitFor(() => expect(screen.queryByText('Cierre por obras')).not.toBeInTheDocument());
+    expect(mockedDelete).toHaveBeenCalledWith('tok', sin.id, puntual2027.id);
+  });
+
   it('add posts exactly { date, name, recurring } and the row appears', async () => {
     mockedCreate.mockResolvedValue({ id: 'h-new', date: '2027-12-24', name: 'Nochebuena', recurring: false });
     const user = setupUser();

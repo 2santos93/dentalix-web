@@ -4,7 +4,7 @@ import { useEffect, useId, useRef, useState } from 'react';
 import Link from 'next/link';
 import { CheckCircle2 } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/error-message';
-import type { RegionalFormat } from '@/lib/format/regional-format';
+import { weekdayName } from '@/lib/format/regional-format';
 import { setWorkingWeekdays, type LocationCalendar } from '@/lib/locations/location-calendar-api';
 import { describeWorkingWeekdays, ISO_WEEK_ORDER } from '@/lib/locations/location-calendar';
 import { InlineError } from '@/components/errors/inline-error';
@@ -18,7 +18,7 @@ export const workingWeekdaysCopy = {
   saved: 'Guardado',
   empty: 'Elige al menos un día hábil.',
   saveError: 'No pudimos guardar los días hábiles. Intenta de nuevo.',
-  /** Sin días elegidos (o sin formato de la sede) no hay resumen que pintar. */
+  /** Sin días elegidos no hay resumen que pintar. */
   noSummary: '—',
 };
 
@@ -35,8 +35,6 @@ function sameDays(a: readonly number[], b: readonly number[]): boolean {
 interface WorkingWeekdaysFormProps {
   token: string;
   locationId: string;
-  /** Formato de la sede elegida: los nombres de los días salen de `fmt.weekdayName` (I6). */
-  fmt: RegionalFormat;
   /** Días hábiles guardados, 0 = domingo … 6 = sábado. */
   initial: readonly number[];
   onSaved: (calendar: LocationCalendar) => void;
@@ -45,9 +43,11 @@ interface WorkingWeekdaysFormProps {
 /**
  * DX-316 (spec §7.2): los días de la semana que cuentan como hábiles en una
  * sede, de lunes a domingo (R12). Solo cambia los plazos en días hábiles; el
- * horario de atención vive en Horarios (R4).
+ * horario de atención vive en Horarios (R4). Los nombres de los días salen del
+ * helper de formato en `UI_LANGUAGE` (I6) y no dependen del formato de la sede:
+ * una sede sin formato también elige sus días (M3).
  */
-export function WorkingWeekdaysForm({ token, locationId, fmt, initial, onSaved }: WorkingWeekdaysFormProps) {
+export function WorkingWeekdaysForm({ token, locationId, initial, onSaved }: WorkingWeekdaysFormProps) {
   const [days, setDays] = useState<number[]>(() => [...initial]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -129,7 +129,7 @@ export function WorkingWeekdaysForm({ token, locationId, fmt, initial, onSaved }
                   className="size-4 shrink-0 accent-[var(--color-primary)] focus-visible:outline-none"
                 />
                 {/* Casilla encima del nombre: «Miércoles» cabe entero en una cuarta parte de 390 px. */}
-                <span className="break-words">{capitalize(fmt.weekdayName(day))}</span>
+                <span className="break-words">{capitalize(weekdayName(day))}</span>
               </label>
             );
           })}
@@ -138,7 +138,7 @@ export function WorkingWeekdaysForm({ token, locationId, fmt, initial, onSaved }
       {/* El error, justo debajo de las casillas que lo provocan (DESIGN, escalón 4). */}
       {message ? <InlineError id={errorId}>{message}</InlineError> : null}
       <p data-testid="working-weekdays-summary" className="font-medium text-ink">
-        {isEmpty ? copy.noSummary : describeWorkingWeekdays(days, fmt)}
+        {isEmpty ? copy.noSummary : describeWorkingWeekdays(days, { weekdayName })}
       </p>
       <p id={helpId} className="max-w-[68ch] text-sm text-muted">
         {copy.help}{' '}

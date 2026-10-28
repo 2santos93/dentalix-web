@@ -5,7 +5,6 @@ import {
   canManageLocationCalendar,
   describeWorkingWeekdays,
   groupHolidays,
-  importCopy,
   ISO_WEEK_ORDER,
   recurringLabel,
 } from './location-calendar';
@@ -76,30 +75,6 @@ describe('labels do not depend on the process zone', () => {
     process.env.TZ = 'America/Los_Angeles';
     expect(recurringLabel('2027-05-03', fmt)).toBe('3 de mayo');
     expect(fmt.weekdayName(civilWeekday('2027-05-03'))).toBe('lunes');
-  });
-});
-
-describe('importCopy', () => {
-  it('has a singular for n = 1 and the plural otherwise', () => {
-    expect(importCopy.newRows(1, fmt)).toBe('1 nuevo');
-    expect(importCopy.newRows(12, fmt)).toBe('12 nuevos');
-    expect(importCopy.duplicateRows(1, fmt)).toBe('1 ya existía');
-    expect(importCopy.duplicateRows(12, fmt)).toBe('12 ya existían');
-    expect(importCopy.errorRows(1, fmt)).toBe('1 con error');
-    expect(importCopy.errorRows(12, fmt)).toBe('12 con errores');
-    expect(importCopy.importButton(1, fmt)).toBe('Importar 1 festivo');
-    expect(importCopy.importButton(12, fmt)).toBe('Importar 12 festivos');
-    expect(importCopy.imported(1, fmt)).toBe('Importado 1 festivo');
-    expect(importCopy.imported(12, fmt)).toBe('Importados 12 festivos');
-  });
-
-  it('numbers come from the location format', () => {
-    expect(importCopy.newRows(1000, regionalFormat({ locale: 'de-DE', hourCycle: 'h23' }))).toBe('1.000 nuevos');
-    expect(importCopy.newRows(1000, fmt)).toBe('1,000 nuevos');
-  });
-
-  it('joins the parts with « · »', () => {
-    expect(importCopy.separator).toBe(' · ');
   });
 });
 
