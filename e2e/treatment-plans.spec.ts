@@ -4,6 +4,7 @@ import { formatCurrency } from '../src/lib/format/currency';
 import { accessTokenOf, registerAndLogin } from './support/auth';
 import { E2E_REGION } from './support/regional';
 import { API_URL } from './support/urls';
+import { openPatientTab } from './support/patient-tabs';
 
 /**
  * e2e: register clinic + login, seed one `DentalCatalogItem` (PROCEDURE, with
@@ -145,9 +146,7 @@ test('treatment plan: create -> add item -> total -> status DONE -> remove -> to
   ).toBeVisible({ timeout: 10_000 });
 
   // --- Open the "Plan de tratamiento" tab ---
-  const treatmentPlansTab = page.getByRole('tab', { name: 'Plan de tratamiento' });
-  await treatmentPlansTab.click();
-  await expect(treatmentPlansTab).toHaveAttribute('aria-selected', 'true');
+  await openPatientTab(page, 'Plan de tratamiento');
 
   const tabPanel = page.locator('#tabpanel-treatment-plans');
   await expect(tabPanel).toBeVisible({ timeout: 10_000 });
@@ -274,11 +273,9 @@ test('treatment plan: create -> add item -> total -> status DONE -> remove -> to
     page.getByRole('heading', { name: `${patientFirstName} ${patientLastName}` }),
   ).toBeVisible({ timeout: 10_000 });
 
-  // The active tab is local component state, not persisted across a reload
-  // -> the page comes back on "Datos"; reopen "Plan de tratamiento".
-  const treatmentPlansTabAfterReload = page.getByRole('tab', { name: 'Plan de tratamiento' });
-  await treatmentPlansTabAfterReload.click();
-  await expect(treatmentPlansTabAfterReload).toHaveAttribute('aria-selected', 'true');
+  // The active tab lives in `?tab=`, so the reload should keep it; the helper
+  // confirms it (re-clicking the selected tab is a no-op).
+  await openPatientTab(page, 'Plan de tratamiento');
 
   const tabPanelAfterReload = page.locator('#tabpanel-treatment-plans');
   // Only one plan exists for this patient -> `TreatmentPlansTab` auto-selects

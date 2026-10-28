@@ -18,6 +18,7 @@ import {
   Pill,
   ScanBarcode,
   ShieldCheck,
+  UserCheck,
   Wallet,
 } from 'lucide-react';
 import type { ClinicRole } from '@/lib/me/me-api';
@@ -33,6 +34,7 @@ import { canManageReminders } from '@/lib/reminders/reminders-api';
 import { canManageDiscounts } from '@/lib/discounts/discounts-api';
 import { canManageCashSessions } from '@/lib/cash-sessions/cash-sessions-api';
 import { canManageAnamnesisSettings } from '@/lib/clinical/medical-alerts';
+import { canManagePatientSettings } from '@/lib/patients/patient-settings-api';
 import { canManageDomains } from '@/lib/domains/domains-api';
 import { canImportPatients } from '@/lib/patient-imports/patient-imports-api';
 import { canSearchImplantLots } from '@/lib/implants/implants-api';
@@ -89,6 +91,14 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
         description: 'Un dominio de la clínica desde el que el equipo entra a Dentalix.',
         icon: Globe,
         visible: canManageDomains,
+      },
+      // DX-328.
+      {
+        href: '/settings/mayoria-de-edad',
+        label: 'Mayoría de edad',
+        description: 'Desde qué edad el paciente recibe sus propios avisos y recibos.',
+        icon: UserCheck,
+        visible: canManagePatientSettings,
       },
     ],
   },

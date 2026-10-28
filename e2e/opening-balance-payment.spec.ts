@@ -7,6 +7,7 @@ import { tenantOrigin } from './support/urls';
 import { E2E_REGION } from './support/regional';
 import { regionalFormat } from '../src/lib/format/regional-format';
 import { expectNoHorizontalScroll, expectNoHorizontalScrollIn } from './support/layout';
+import { openPatientTab } from './support/patient-tabs';
 
 /**
  * e2e (DX-262, correcciones de la revisión C1 e I2) en la demo, a 1440 y 390.
@@ -160,7 +161,7 @@ for (const viewport of [
       .getByRole('link', { name: new RegExp(lastName) })
       .first()
       .click();
-    await page.getByRole('tab', { name: 'Estado de cuenta' }).click();
+    await openPatientTab(page, 'Estado de cuenta');
     const panel = page.locator('#tabpanel-account-statement');
     const openings = panel.getByRole('table', { name: 'Saldos migrados' });
     await expect(openings).toBeVisible({ timeout: 15_000 });

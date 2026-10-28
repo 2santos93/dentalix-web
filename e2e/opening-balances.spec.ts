@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { sessionCookie, waitForHydratedForm } from './support/auth';
 import { tenantOrigin } from './support/urls';
 import { expectNoHorizontalScroll, expectNoHorizontalScrollIn } from './support/layout';
+import { openPatientTab } from './support/patient-tabs';
 
 /**
  * e2e (DX-262): paso «Saldos» del asistente de importación en la demo, a 1440
@@ -136,8 +137,7 @@ for (const viewport of [
       .getByRole('link', { name: new RegExp(lastName) })
       .first()
       .click();
-    const tab = page.getByRole('tab', { name: 'Estado de cuenta' });
-    await tab.click();
+    await openPatientTab(page, 'Estado de cuenta');
     const panel = page.locator('#tabpanel-account-statement');
     const openings = panel.getByRole('table', { name: 'Saldos migrados' });
     await expect(openings).toBeVisible({ timeout: 15_000 });

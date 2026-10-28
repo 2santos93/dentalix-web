@@ -21,10 +21,19 @@ describe('Índice de Ajustes (DX-282)', () => {
     ]);
   });
 
-  it('ADMIN ve las 19 pantallas de ajustes, cada una una sola vez', () => {
+  it('ADMIN ve las 20 pantallas de ajustes, cada una una sola vez', () => {
     const hrefs = hrefsFor('ADMIN');
-    expect(hrefs).toHaveLength(19);
-    expect(new Set(hrefs).size).toBe(19);
+    expect(hrefs).toHaveLength(20);
+    expect(new Set(hrefs).size).toBe(20);
+  });
+
+  it('settings index lists Mayoría de edad only for ADMIN', () => {
+    const clinic = visibleSettingsSections('ADMIN').find((section) => section.id === 'clinica');
+    expect(clinic?.entries.map((entry) => entry.label)).toContain('Mayoría de edad');
+    expect(hrefsFor('ADMIN')).toContain('/settings/mayoria-de-edad');
+    for (const role of ['DENTIST', 'ASSISTANT', 'RECEPTION', null] as const) {
+      expect(hrefsFor(role)).not.toContain('/settings/mayoria-de-edad');
+    }
   });
 
   it('no deja ninguna pantalla de /settings sin entrada (salvo el perfil y la auditoría)', () => {

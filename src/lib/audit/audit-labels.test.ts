@@ -15,6 +15,7 @@ import {
   patientFlowDetail,
   planItemAttributionDetail,
   healthRegistrationDetail,
+  clinicSettingsDetail,
 } from './audit-labels';
 
 describe('etiquetas de auditoría', () => {
@@ -40,6 +41,11 @@ describe('etiquetas de auditoría', () => {
   it('labels PAYMENT_ALLOCATION as Imputación de abono', () => {
     // DX-051: un ADMIN reasigna a qué ítems va un abono.
     expect(AUDIT_RESOURCE_LABELS.PAYMENT_ALLOCATION).toBe('Imputación de abono');
+  });
+
+  it('AUDIT_RESOURCE_LABELS.CLINIC_SETTINGS is Ajustes de la clínica', () => {
+    // DX-328: la mayoría de edad de la clínica se audita como ajuste de la clínica.
+    expect(AUDIT_RESOURCE_LABELS.CLINIC_SETTINGS).toBe('Ajustes de la clínica');
   });
 
   it('las opciones no repiten valores', () => {
@@ -270,5 +276,23 @@ describe('healthRegistrationDetail (DX-319)', () => {
 
   it('null sin el cambio', () => {
     expect(healthRegistrationDetail({})).toBeNull();
+  });
+});
+
+describe('clinicSettingsDetail (DX-328)', () => {
+  it('clinicSettingsDetail renders Mayoría de edad: 18 → 16 años', () => {
+    expect(
+      clinicSettingsDetail({
+        reason: 'MAJORITY_AGE_SETTINGS',
+        statusChange: { from: 'AGE_18', to: 'AGE_16' },
+      }),
+    ).toBe('Mayoría de edad: 18 → 16 años');
+  });
+
+  it('null para otra reason', () => {
+    expect(
+      clinicSettingsDetail({ reason: 'CASH_SETTINGS', statusChange: { from: 'AGE_18', to: 'AGE_16' } }),
+    ).toBeNull();
+    expect(clinicSettingsDetail({})).toBeNull();
   });
 });

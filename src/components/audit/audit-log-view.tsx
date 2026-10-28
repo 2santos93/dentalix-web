@@ -27,6 +27,7 @@ import {
   scheduleChangeDetail,
   cancellationDetail,
   healthRegistrationDetail,
+  clinicSettingsDetail,
   patientFlowDetail,
   importBatchDetail,
   planItemAttributionDetail,
@@ -453,6 +454,7 @@ function AuditRow({ event, showPatient }: { event: AuditEvent; showPatient: bool
     planItemAttributionDetail(event.metadata) ??
     importBatchDetail(event.metadata) ??
     healthRegistrationDetail(event.metadata) ??
+    clinicSettingsDetail(event.metadata) ??
     anamnesisDetail(event.metadata);
   return (
     <TableRow>

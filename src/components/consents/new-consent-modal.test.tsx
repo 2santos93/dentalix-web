@@ -41,7 +41,6 @@ function responsibles(over: Partial<PatientResponsibles> = {}): PatientResponsib
     patientId: 'p1',
     minor: false,
     majorityAge: 18,
-    country: 'CO',
     parties: [],
     responsibleFor: [],
     noticeRecipient: {

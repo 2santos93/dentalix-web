@@ -105,6 +105,8 @@ export const AUDIT_RESOURCE_LABELS: Record<AuditResourceType, string> = {
   EXPENSE: 'Gasto',
   // DX-051: un ADMIN reasigna a qué ítems del plan va un abono.
   PAYMENT_ALLOCATION: 'Imputación de abono',
+  // DX-328: ajustes de la clínica (mayoría de edad).
+  CLINIC_SETTINGS: 'Ajustes de la clínica',
 };
 
 export const AUDIT_RESOURCE_OPTIONS = Object.keys(AUDIT_RESOURCE_LABELS) as AuditResourceType[];
@@ -396,4 +398,22 @@ export function healthRegistrationDetail(metadata: AuditMetadata): string | null
     parts.push(`En los documentos: ${shown(before.shown)} → ${shown(after.shown)}`);
   }
   return parts.length > 0 ? parts.join(' · ') : null;
+}
+
+/** Edad de un `statusChange` de ajustes de la clínica (`AGE_18` → 18), o null. */
+function ageOf(code: string): string | null {
+  const match = /^AGE_(\d+)$/.exec(code);
+  return match ? match[1] : null;
+}
+
+/**
+ * DX-328: el cambio de la mayoría de edad de la clínica, antes y después
+ * («Mayoría de edad: 18 → 16 años»). null si el evento no es de ese ajuste.
+ */
+export function clinicSettingsDetail(metadata: AuditMetadata): string | null {
+  if (metadata.reason !== 'MAJORITY_AGE_SETTINGS' || !metadata.statusChange) return null;
+  const before = ageOf(metadata.statusChange.from);
+  const after = ageOf(metadata.statusChange.to);
+  if (before === null || after === null) return null;
+  return `Mayoría de edad: ${before} → ${after} años`;
 }
