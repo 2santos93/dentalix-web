@@ -104,10 +104,10 @@ export function CancellationFeePanel({ token, appointmentId }: { token: string; 
         setFailed(false);
       })
       .catch(() => {
-        if (!cancelled) {
-          setFailed(true);
-          setDialog(null);
-        }
+        // DX-343: un diálogo abierto tras un 409 sigue abierto (ya no puede
+        // enviar nada y su mensaje se sigue leyendo); al cerrarlo, el foco va
+        // al encabezado, que la rama de error también pinta.
+        if (!cancelled) setFailed(true);
       });
     return () => {
       cancelled = true;
@@ -127,9 +127,68 @@ export function CancellationFeePanel({ token, appointmentId }: { token: string; 
     headingRef.current?.focus();
   }
 
+  const heading = (
+    <h3 ref={headingRef} tabIndex={-1} id={`fee-${appointmentId}`} className="font-semibold text-ink">
+      {copy.heading}
+    </h3>
+  );
+  const dialogs = (
+    <>
+      {dialog === 'charge' && view?.communicated?.suggestedFee != null && view.communicated.currency ? (
+        <ChargeFeeModal
+          token={token}
+          appointmentId={appointmentId}
+          suggested={view.communicated.suggestedFee}
+          currency={view.communicated.currency}
+          onClose={() => setDialog(null)}
+          onDone={(next) => {
+            focusHeadingOnClose.current = true;
+            setDialog(null);
+            setView(next);
+          }}
+          onStale={invalidateView}
+          onCloseAutoFocus={focusHeadingAfterChange}
+        />
+      ) : null}
+      {dialog === 'void' ? (
+        <VoidCancellationFeeModal
+          onCloseAutoFocus={focusHeadingAfterChange}
+          token={token}
+          appointmentId={appointmentId}
+          onClose={() => setDialog(null)}
+          onDone={(next) => {
+            focusHeadingOnClose.current = true;
+            setDialog(null);
+            setView(next);
+          }}
+          onStale={invalidateView}
+        />
+      ) : null}
+      {dialog === 'waive' ? (
+        <WaiveFeeModal
+          onCloseAutoFocus={focusHeadingAfterChange}
+          token={token}
+          appointmentId={appointmentId}
+          onClose={() => setDialog(null)}
+          onDone={(next) => {
+            focusHeadingOnClose.current = true;
+            setDialog(null);
+            setView(next);
+          }}
+          onStale={invalidateView}
+        />
+      ) : null}
+    </>
+  );
+
   if (failed) {
     return (
-      <section aria-label={copy.heading} className="border-t border-hairline pt-4">
+      <section
+        aria-labelledby={`fee-${appointmentId}`}
+        data-testid="cancellation-fee-panel"
+        className="flex flex-col gap-2 border-t border-hairline pt-4 text-sm"
+      >
+        {heading}
         <SectionError
           title={copy.loadError}
           description={copy.loadErrorDescription}
@@ -138,6 +197,7 @@ export function CancellationFeePanel({ token, appointmentId }: { token: string; 
             setReloadKey((k) => k + 1);
           }}
         />
+        {dialogs}
       </section>
     );
   }
@@ -160,9 +220,7 @@ export function CancellationFeePanel({ token, appointmentId }: { token: string; 
       data-testid="cancellation-fee-panel"
       className="flex flex-col gap-2 border-t border-hairline pt-4 text-sm"
     >
-      <h3 ref={headingRef} tabIndex={-1} id={`fee-${appointmentId}`} className="font-semibold text-ink">
-        {copy.heading}
-      </h3>
+      {heading}
       {view.status === 'VOIDED' && fee ? (
         <div className="flex flex-col gap-1">
           <p className="tabular-nums text-ink">{copy.voided(money(fee.amount, fee.currency) ?? '')}</p>
@@ -246,50 +304,7 @@ export function CancellationFeePanel({ token, appointmentId }: { token: string; 
           )}
         </>
       )}
-      {dialog === 'charge' && view.communicated?.suggestedFee != null && view.communicated.currency ? (
-        <ChargeFeeModal
-          token={token}
-          appointmentId={appointmentId}
-          suggested={view.communicated.suggestedFee}
-          currency={view.communicated.currency}
-          onClose={() => setDialog(null)}
-          onDone={(next) => {
-            focusHeadingOnClose.current = true;
-            setDialog(null);
-            setView(next);
-          }}
-          onStale={invalidateView}
-          onCloseAutoFocus={focusHeadingAfterChange}
-        />
-      ) : null}
-      {dialog === 'void' ? (
-        <VoidCancellationFeeModal
-          onCloseAutoFocus={focusHeadingAfterChange}
-          token={token}
-          appointmentId={appointmentId}
-          onClose={() => setDialog(null)}
-          onDone={(next) => {
-            focusHeadingOnClose.current = true;
-            setDialog(null);
-            setView(next);
-          }}
-          onStale={invalidateView}
-        />
-      ) : null}
-      {dialog === 'waive' ? (
-        <WaiveFeeModal
-          onCloseAutoFocus={focusHeadingAfterChange}
-          token={token}
-          appointmentId={appointmentId}
-          onClose={() => setDialog(null)}
-          onDone={(next) => {
-            focusHeadingOnClose.current = true;
-            setDialog(null);
-            setView(next);
-          }}
-          onStale={invalidateView}
-        />
-      ) : null}
+      {dialogs}
     </section>
   );
 }

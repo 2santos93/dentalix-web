@@ -330,7 +330,7 @@ describe('CancellationFeePanel (DX-291)', () => {
       await waitFor(() => expect(screen.getByRole('button', { name: 'Anular cargo' })).toBeEnabled());
     });
 
-    it('un fallo de recarga cierra el diálogo y mantiene bloqueado hasta reintento exitoso', async () => {
+    it('un fallo de recarga tras el 409 deja el diálogo abierto, el foco va al encabezado al cerrar y sigue bloqueado hasta un reintento bueno (DX-343)', async () => {
       let resolveReload!: (value: CancellationFeeView) => void;
       get.mockResolvedValueOnce(charged).mockRejectedValueOnce(new Error('red')).mockImplementationOnce(() => new Promise((resolve) => { resolveReload = resolve; }));
       voidFee.mockRejectedValueOnce(new ApiError(409, 'El cargo cambió.'));
@@ -339,9 +339,15 @@ describe('CancellationFeePanel (DX-291)', () => {
       const dialog = await screen.findByRole('dialog', { name: 'Anular el cargo' });
       fireEvent.change(within(dialog).getByLabelText('Motivo'), { target: { value: 'Error' } });
       fireEvent.click(within(dialog).getByRole('button', { name: 'Anular cargo' }));
+      await within(dialog).findByText('El cargo cambió.');
+      await waitFor(() => expect(get).toHaveBeenCalledTimes(2));
+      // El diálogo no se cierra solo: el mensaje del 409 se sigue leyendo.
+      expect(screen.getByRole('dialog', { name: 'Anular el cargo' })).toBeInTheDocument();
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Cancelar' }));
       await screen.findByText('Cargo sin cargar');
+      // El encabezado sigue sobre el error de sección y recibe el foco.
+      await waitFor(() => expect(screen.getByRole('heading', { name: /Cargo por inasistencia/ })).toHaveFocus());
       fireEvent.click(screen.getByRole('button', { name: 'Reintentar' }));
-      expect(screen.queryByRole('dialog', { name: 'Anular el cargo' })).not.toBeInTheDocument();
       expect(screen.getByRole('button', { name: 'Anular cargo' })).toBeDisabled();
       resolveReload(voided);
       expect(await screen.findByText(/Cargo anulado/)).toBeInTheDocument();

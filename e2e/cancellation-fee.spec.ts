@@ -309,6 +309,8 @@ for (const width of [1440, 390]) {
     const failure = page.getByRole('alert').filter({ hasText: 'Cargo sin cargar' });
     await expect(failure).toBeVisible({ timeout: 15_000 });
     await expect(failure).toContainText('No se pudo cargar el estado del cargo.');
+    // El encabezado del panel sigue sobre el error: la sección conserva su nombre.
+    await expect(feeHeading(panel)).toBeVisible();
     await audit(page, failure, 'panel-error');
     await failure.getByRole('button', { name: 'Reintentar' }).click();
     await expect(panel).toContainText('Importe sugerido', { timeout: 10_000 });

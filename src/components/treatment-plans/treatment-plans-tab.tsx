@@ -170,6 +170,9 @@ const copy = {
   genericPlanDetailRefreshError: 'No pudimos actualizar el plan.',
   genericPlanStatusError: 'No pudimos actualizar el estado del plan. Intenta de nuevo.',
   itemsTableCaption: 'Ítems del plan de tratamiento',
+  // DX-343: cada tabla nombra su visita; el encabezado visible ya dice «Ítems
+  // del plan de tratamiento» y repetirlo en N tablas no distingue ninguna.
+  visitItemsTableCaption: (visit: number) => `Ítems de la visita ${visit}`,
   colTooth: 'Diente',
   // DX-291: un cargo administrativo (inasistencia) no es de ningún diente.
   noTooth: 'Sin diente',
@@ -399,6 +402,8 @@ interface ItemsTableProps {
   catalogById: Map<string, DentalCatalogItem>;
   /** The plan's currency (`planDetail.currency`) — item prices don't carry their own currency. */
   currency: string;
+  /** La visita cuyos ítems lista (`null` sin visitas): nombra la tabla. */
+  visit: number | null;
   /** DX-343: «Cargo n de N» de cada ítem de cargo (ver `feeReferences`). */
   feeRefs: ReadonlyMap<string, FeeRef>;
   /** DX-343: un 409 dejó el cargo sin confirmar; «Anular cargo» espera. */
@@ -536,8 +541,9 @@ function FeeItemLine({
 type FeeRef = { n: number; total: number };
 
 /**
- * DX-343: «Cargo n de N» por ítem de cargo, en el orden del plan entero (no
- * de cada visita), para que dos cargos del mismo importe no se confundan.
+ * DX-343: «Cargo n de N» por ítem de cargo, en el orden en que se pintan
+ * (visita a visita, el de `PlanVisitsBoard`) y sobre el plan entero, para que
+ * dos cargos del mismo importe no se confundan.
  * Vacío con un solo cargo: ítem e importe ya lo distinguen.
  */
 function feeReferences(items: TreatmentPlanItem[]): ReadonlyMap<string, FeeRef> {
@@ -739,6 +745,7 @@ function ItemsTable({
   catalogById,
   currency,
   updatingItemId,
+  visit,
   feeRefs,
   feeStale,
   focusedTooth,
@@ -782,7 +789,9 @@ function ItemsTable({
       {/* Desktop table */}
       <div className="hidden md:block">
         <Table>
-          <caption className="sr-only">{copy.itemsTableCaption}</caption>
+          <caption className="sr-only">
+            {visit === null ? copy.itemsTableCaption : copy.visitItemsTableCaption(visit)}
+          </caption>
           <TableHeader>
             <TableRow className="hover:bg-transparent">
               {selection ? (
@@ -936,13 +945,13 @@ function ItemsTable({
               {isFee(item) ? (
                 <div className="mt-2">
                   <FeeItemLine
-                        item={item}
-                        label={procedureName(item, catalogById)}
-                        currency={currency}
-                        feeRef={feeRefs.get(item.id)}
-                        disabled={feeStale}
-                        onVoid={onVoidFee}
-                      />
+                    item={item}
+                    label={procedureName(item, catalogById)}
+                    currency={currency}
+                    feeRef={feeRefs.get(item.id)}
+                    disabled={feeStale}
+                    onVoid={onVoidFee}
+                  />
                 </div>
               ) : null}
               <div className="mt-3 flex items-center justify-between gap-2">
@@ -1539,7 +1548,6 @@ export function TreatmentPlansTab({
   }
 
   const catalogById = new Map(allCatalogItems.map((item) => [item.id, item]));
-  const feeRefs = feeReferences(planDetail?.items ?? []);
 
   // DX-105: el precio resuelto de la prestación elegida para ESTE paciente
   // (convenio > lista de la sede > catálogo). Precarga el campo; si falla,
@@ -2460,12 +2468,13 @@ export function TreatmentPlansTab({
                     {copy.feeRefreshing}
                   </p>
                 ) : null}
-                <PlanVisitsBoard key={planDetail.id} token={token} plan={planDetail} role={role} onChanged={refreshPlanDetail} renderItems={visitItems => <ItemsTable
+                <PlanVisitsBoard key={planDetail.id} token={token} plan={planDetail} role={role} onChanged={refreshPlanDetail} renderItems={(visitItems, { visit, ordered }) => <ItemsTable
                   items={visitItems}
+                  visit={visit}
                   catalogById={catalogById}
                   currency={planDetail.currency}
                   feeStale={feeStale}
-                  feeRefs={feeRefs}
+                  feeRefs={feeReferences(ordered)}
                   updatingItemId={updatingItemId}
                   focusedTooth={focusedToothOnPlan}
                   odontogramHref={odontogramHref}

@@ -280,7 +280,7 @@ for (const width of [1440, 390]) {
     await page.unroute('**/treatment-plans/*');
     await failure.getByRole('button', { name: 'Reintentar' }).click();
     await expect(failure).toBeHidden({ timeout: 10_000 });
-    await expect(page.getByRole('table', { name: /ítems del plan de tratamiento/i }).or(page.getByText('Este plan todavía no tiene ítems.')).first()).toBeVisible();
+    await expect(page.getByRole('table', { name: /ítems de la visita/i }).or(page.getByText('Este plan todavía no tiene ítems.')).first()).toBeVisible();
     await expect(feeRow(page)).toHaveCount(0);
     await expectNoHorizontalScroll(page);
     await page.context().clearCookies();

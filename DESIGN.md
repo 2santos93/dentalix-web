@@ -67,6 +67,12 @@ components:
     rounded: "{rounded.md}"
     padding: "0 16px"
     height: "40px"
+  button-destructive:
+    backgroundColor: "{colors.danger}"
+    textColor: "{colors.danger-fg}"
+    rounded: "{rounded.md}"
+    padding: "0 16px"
+    height: "40px"
   button-secondary:
     backgroundColor: "{colors.surface}"
     textColor: "{colors.ink}"
@@ -157,6 +163,9 @@ blue-tinted slates so the whole system reads clinical rather than warm.
 - **Success** (`#15803D`), **Warning** (`#B45309`), **Danger** (`#BE123C`): status
   only. On light chips, use a tint of the hue as background with the dark hue as text;
   reserve solid danger for destructive confirmation, never as decoration.
+- **Danger-fg** (`#FFFFFF`; dark theme `#2B0A12`): text on solid danger. Dark theme
+  lightens danger to `#FB7185`, where white is 2.7:1; the deep rose-ink is 6.8:1
+  (5.7:1 on hover). Same pattern as primary-fg (`#FFFFFF`; dark `#052730`).
 
 **The One Accent Rule.** The accent is tokenized and rare. If a screen reads as
 "the teal screen," it is overusing it — pull back to ink + neutrals and let the
@@ -233,7 +242,7 @@ inputs, small cards), **12px** (lg — cards and panels), pill for status chips 
 - **Secondary:** surface bg + 1px border + ink text.
 - **Ghost:** transparent + ink/muted text; hover fills with surface-2.
 - **Hover/Focus:** subtle bg shift; focus-visible = 2px accent ring with 2px offset. Never remove focus.
-- **Destructive:** solid danger + danger-fg text (white in light, deep rose-ink on the lighter dark-theme danger), only inside confirmation, not as a default row action.
+- **Destructive:** solid danger + danger-fg text (`#FFFFFF` on `#BE123C`; dark theme `#2B0A12` on `#FB7185`), only inside confirmation, not as a default row action.
 
 ### Inputs / Fields
 - **Style:** surface bg, 1px border, 8px radius, 40px height, ink text, muted placeholder (≥4.5:1).
