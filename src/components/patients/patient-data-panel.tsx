@@ -58,9 +58,9 @@ function Block({ title, fields }: { title: string; fields: Field[] }) {
       <h3 className="text-sm font-medium text-muted">{title}</h3>
       <dl className="grid gap-3 sm:grid-cols-2">
         {fields.map((f) => (
-          <div key={f.label}>
+          <div key={f.label} className="min-w-0">
             <dt className="text-sm text-muted">{f.label}</dt>
-            <dd className="text-ink">{f.value ?? copy.fallback}</dd>
+            <dd className="break-words text-ink">{f.value ?? copy.fallback}</dd>
           </div>
         ))}
       </dl>

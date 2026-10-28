@@ -193,4 +193,14 @@ describe('paciente importado (DX-107)', () => {
     expect(screen.queryByText('Importado desde archivo')).not.toBeInTheDocument();
     expect(screen.getByText('Pendiente')).toBeInTheDocument();
   });
+  it('un correo largo sin espacios parte la línea en vez de ensanchar la ficha a 390 px', () => {
+    // jsdom no maqueta: se fija lo que lo hace posible. Sin `min-w-0` la celda
+    // de la rejilla mide lo que el correo entero y `<main>` se desplaza en
+    // horizontal en móvil (QA G2G3, DX-328).
+    const email = 'nombre.apellido.consultorio@una-empresa-de-nombre-largo.example.com';
+    render(<PatientDataPanel patient={patient({ email })} />);
+    const value = screen.getByText(email);
+    expect(value).toHaveClass('break-words');
+    expect(value.parentElement).toHaveClass('min-w-0');
+  });
 });
