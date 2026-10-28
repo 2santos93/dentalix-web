@@ -89,11 +89,25 @@ async function openDayList(page: Page) {
 }
 
 /**
+ * Espera a que la lista recién abierta se asiente: Radix enfoca la opción
+ * marcada al abrir y vuelve a hacerlo cuando termina de colocar y animar el
+ * contenido. Una flecha pulsada en ese hueco (3 ms tras el primer foco, en la
+ * ola final de G2G3) movía el foco y Radix lo devolvía a la opción marcada.
+ */
+async function waitForListSettled(page: Page) {
+  await page.evaluate(async () => {
+    await Promise.all(document.getAnimations().map((a) => a.finished));
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+  });
+}
+
+/**
  * Recorre la lista abierta tecla a tecla, esperando a que el foco llegue a cada
  * opción antes de la siguiente (a ritmo de persona: con pulsaciones seguidas en
  * una máquina cargada Radix puede no haber movido aún el foco).
  */
 async function walkOptions(page: Page, steps: Array<[string, string]>) {
+  await waitForListSettled(page);
   for (const [key, option] of steps) {
     await page.keyboard.press(key);
     await expect(page.getByRole('option', { name: option, exact: true })).toBeFocused();
