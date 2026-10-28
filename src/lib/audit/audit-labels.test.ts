@@ -316,6 +316,14 @@ describe('clinicSettingsDetail (DX-328)', () => {
   });
 
   it.each([
+    ['RX_W0_H0_V1', 'RX_W0_H0_V30', 'Receta: validez 1 → 30 días'],
+    ['RX_W0_H0_V30', 'RX_W0_H0_V1', 'Receta: validez 30 → 1 día'],
+    ['RX_W0_H0_V30', 'RX_W0_H0_V365', 'Receta: validez 30 → 365 días'],
+  ])('validity unit agrees with the number next to it (%s → %s)', (from, to, text) => {
+    expect(clinicSettingsDetail({ reason: 'PRESCRIPTION_SETTINGS', statusChange: { from, to } })).toBe(text);
+  });
+
+  it.each([
     ['RX_W2_H0_V30', 'RX_W0_H0_V30'],
     ['RX_W1_H0_V30', 'RX_W1_H0'],
     ['AGE_18', 'RX_W1_H0_V30'],

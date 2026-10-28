@@ -437,7 +437,11 @@ function prescriptionSettingsDetail(from: string, to: string): string | null {
   if (before.record !== after.record) {
     parts.push(`nº de historia clínica exigido ${yesNo(before.record)} → ${yesNo(after.record)}`);
   }
-  if (before.days !== after.days) parts.push(`validez ${before.days} → ${after.days} días`);
+  if (before.days !== after.days) {
+    // La unidad concuerda con el número que tiene al lado: el de después.
+    const unit = after.days === '1' ? 'día' : 'días';
+    parts.push(`validez ${before.days} → ${after.days} ${unit}`);
+  }
   return parts.length > 0 ? `Receta: ${parts.join('; ')}` : null;
 }
 

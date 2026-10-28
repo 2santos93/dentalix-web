@@ -116,6 +116,9 @@ describe('PrescriptionSettingsForm (DX-324)', () => {
       );
       expect(validity()).toHaveAttribute('aria-invalid', 'true');
       expect(validity()).toHaveAccessibleDescription(PRESCRIPTION_VALIDITY_DAYS_MESSAGE);
+      expect(error.closest('[role="alert"]')).not.toBeNull();
+      // El foco va al campo que hay que corregir, no se queda en «Guardar».
+      expect(validity()).toHaveFocus();
       expect(mockedSave).not.toHaveBeenCalled();
     },
   );

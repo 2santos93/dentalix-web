@@ -1,6 +1,6 @@
 'use client';
 import * as React from 'react';
-import { useCallback, useEffect, useId, useState } from 'react';
+import { useCallback, useEffect, useId, useRef, useState } from 'react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import {
   getPrescriptionSettings,
@@ -49,12 +49,6 @@ function parseValidityDays(text: string): number | null {
   return days >= PRESCRIPTION_VALIDITY_DAYS_MIN && days <= PRESCRIPTION_VALIDITY_DAYS_MAX ? days : null;
 }
 
-/**
- * Ajustes → Recetas (DX-324): los datos que imprime la receta en todas las
- * sedes de la clínica. Una clínica nueva empieza sin cantidad en letras, sin
- * exigir el nº de historia clínica y con 30 días de validez. Solo ADMIN: la
- * página decide el permiso y no monta esto sin él.
- */
 /** Los valores de la API pasan a ser la base y el borrador del formulario. */
 function useSettingsDraft() {
   const [settings, setSettings] = useState<PrescriptionSettings | null>(null);
@@ -70,6 +64,12 @@ function useSettingsDraft() {
   return { settings, words, setWords, record, setRecord, validity, setValidity, adopt };
 }
 
+/**
+ * Ajustes → Recetas (DX-324): los datos que imprime la receta en todas las
+ * sedes de la clínica. Una clínica nueva empieza sin cantidad en letras, sin
+ * exigir el nº de historia clínica y con 30 días de validez. Solo ADMIN: la
+ * página decide el permiso y no monta esto sin él.
+ */
 export function PrescriptionSettingsForm({ token }: { token: string }) {
   const { settings, words, setWords, record, setRecord, validity, setValidity, adopt } = useSettingsDraft();
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -79,6 +79,7 @@ export function PrescriptionSettingsForm({ token }: { token: string }) {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [notice, setNotice] = useState('');
   const validityId = useId();
+  const validityRef = useRef<HTMLInputElement>(null);
   const validityHintId = `${validityId}-hint`;
 
   useEffect(() => {
@@ -130,6 +131,8 @@ export function PrescriptionSettingsForm({ token }: { token: string }) {
     const validityDays = parseValidityDays(validity);
     if (validityDays === null) {
       setValidityError(PRESCRIPTION_VALIDITY_DAYS_MESSAGE);
+      // DESIGN.md (errores de formulario): el foco va al campo que hay que corregir.
+      validityRef.current?.focus();
       return;
     }
     setValidityError(null);
@@ -176,6 +179,7 @@ export function PrescriptionSettingsForm({ token }: { token: string }) {
             error={validityError}
           >
             <Input
+              ref={validityRef}
               id={validityId}
               type="text"
               inputMode="numeric"
