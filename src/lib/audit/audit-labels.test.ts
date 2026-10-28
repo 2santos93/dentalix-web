@@ -15,6 +15,7 @@ import {
   patientFlowDetail,
   planItemAttributionDetail,
   healthRegistrationDetail,
+  clinicSettingsDetail,
 } from './audit-labels';
 
 describe('etiquetas de auditoría', () => {
@@ -275,5 +276,23 @@ describe('healthRegistrationDetail (DX-319)', () => {
 
   it('null sin el cambio', () => {
     expect(healthRegistrationDetail({})).toBeNull();
+  });
+});
+
+describe('clinicSettingsDetail (DX-328)', () => {
+  it('clinicSettingsDetail renders Mayoría de edad: 18 → 16 años', () => {
+    expect(
+      clinicSettingsDetail({
+        reason: 'MAJORITY_AGE_SETTINGS',
+        statusChange: { from: 'AGE_18', to: 'AGE_16' },
+      }),
+    ).toBe('Mayoría de edad: 18 → 16 años');
+  });
+
+  it('null para otra reason', () => {
+    expect(
+      clinicSettingsDetail({ reason: 'CASH_SETTINGS', statusChange: { from: 'AGE_18', to: 'AGE_16' } }),
+    ).toBeNull();
+    expect(clinicSettingsDetail({})).toBeNull();
   });
 });
