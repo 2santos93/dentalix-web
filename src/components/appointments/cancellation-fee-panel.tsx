@@ -79,6 +79,7 @@ export function CancellationFeePanel({ token, appointmentId }: { token: string; 
   const headingRef = useRef<HTMLHeadingElement>(null);
   const focusAfterVoid = useRef(false);
   const [view, setView] = useState<CancellationFeeView | null>(null);
+  const [staleView, setStaleView] = useState(false);
   const [failed, setFailed] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
   const [dialog, setDialog] = useState<'charge' | 'waive' | 'void' | null>(null);
@@ -89,15 +90,24 @@ export function CancellationFeePanel({ token, appointmentId }: { token: string; 
       .then((res) => {
         if (cancelled) return;
         setView(res);
+        setStaleView(false);
         setFailed(false);
       })
       .catch(() => {
-        if (!cancelled) setFailed(true);
+        if (!cancelled) {
+          setFailed(true);
+          setDialog(null);
+        }
       });
     return () => {
       cancelled = true;
     };
   }, [token, appointmentId, reloadKey]);
+
+  function invalidateView() {
+    setStaleView(true);
+    setReloadKey((k) => k + 1);
+  }
 
   if (failed) {
     return (
@@ -169,6 +179,7 @@ export function CancellationFeePanel({ token, appointmentId }: { token: string; 
               type="button"
               variant="secondary"
               className="w-full self-start sm:w-auto"
+              disabled={staleView}
               onClick={() => setDialog('void')}
             >
               <Undo2 aria-hidden />
@@ -196,7 +207,7 @@ export function CancellationFeePanel({ token, appointmentId }: { token: string; 
           {view.canManage ? (
             <div className="flex flex-col gap-2 sm:flex-row">
               {view.chargeBlock === null ? (
-                <Button type="button" className="w-full sm:w-auto" onClick={() => setDialog('charge')}>
+                <Button type="button" className="w-full sm:w-auto" disabled={staleView} onClick={() => setDialog('charge')}>
                   <Receipt aria-hidden />
                   {copy.charge}
                 </Button>
@@ -205,6 +216,7 @@ export function CancellationFeePanel({ token, appointmentId }: { token: string; 
                 type="button"
                 variant="secondary"
                 className="w-full sm:w-auto"
+                disabled={staleView}
                 onClick={() => setDialog('waive')}
               >
                 <Ban aria-hidden />
@@ -227,7 +239,7 @@ export function CancellationFeePanel({ token, appointmentId }: { token: string; 
             setDialog(null);
             setView(next);
           }}
-          onStale={() => setReloadKey((k) => k + 1)}
+          onStale={invalidateView}
         />
       ) : null}
       {dialog === 'void' ? (
@@ -247,19 +259,27 @@ export function CancellationFeePanel({ token, appointmentId }: { token: string; 
             setDialog(null);
             setView(next);
           }}
-          onStale={() => setReloadKey((k) => k + 1)}
+          onStale={invalidateView}
         />
       ) : null}
       {dialog === 'waive' ? (
         <WaiveFeeModal
+          onCloseAutoFocus={(event) => {
+            if (focusAfterVoid.current) {
+              event.preventDefault();
+              headingRef.current?.focus();
+              focusAfterVoid.current = false;
+            }
+          }}
           token={token}
           appointmentId={appointmentId}
           onClose={() => setDialog(null)}
           onDone={(next) => {
+            focusAfterVoid.current = true;
             setDialog(null);
             setView(next);
           }}
-          onStale={() => setReloadKey((k) => k + 1)}
+          onStale={invalidateView}
         />
       ) : null}
     </section>
@@ -295,6 +315,7 @@ function ChargeFeeModal({
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (stale || submitting) return;
     const parsed = parseMoneyInput(amountText, currency);
     const problem = !parsed.ok
       ? parsed.message
@@ -375,6 +396,7 @@ function WaiveFeeModal({
   onClose,
   onDone,
   onStale,
+  onCloseAutoFocus,
 }: {
   token: string;
   appointmentId: string;
@@ -382,6 +404,7 @@ function WaiveFeeModal({
   onDone: (view: CancellationFeeView) => void;
   /** 409: otra persona ya decidió; el panel se relee por debajo. */
   onStale: () => void;
+  onCloseAutoFocus?: (event: Event) => void;
 }) {
   return (
     <FeeReasonModal
@@ -394,6 +417,7 @@ function WaiveFeeModal({
       onClose={onClose}
       onDone={onDone}
       onStale={onStale}
+      onCloseAutoFocus={onCloseAutoFocus}
     />
   );
 }

@@ -129,19 +129,34 @@ async function flow(page: Page, request: APIRequestContext, width: number, lastN
   await page.goto(`${origin}/patients/${patientId}?tab=treatment-plans`);
   const adminRow = feeRow(page);
   await expect(adminRow).toBeVisible({ timeout: 15_000 });
+  await page.evaluate(readFileSync(require.resolve('axe-core/axe.min.js'), 'utf8'));
+  for (const colorScheme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
+    await page.mouse.move(0, 0);
+    const region = page.getByRole('heading', { name: 'Ítems del plan de tratamiento' }).locator('..');
+    await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))));
+    await page.evaluate(() => Promise.allSettled(document.getAnimations().map((animation) => animation.finished)));
+    await page.waitForTimeout(500);
+    const violations = await region.evaluate(async (element) => {
+      const axe = (window as unknown as { axe: { run: (context: Element) => Promise<AxeResults> } }).axe;
+      return (await axe.run(element)).violations.map((v) => ({ id: v.id, nodes: v.nodes.map((n) => ({ target: n.target, summary: n.failureSummary })) }));
+    });
+    expect.soft(violations, `plan ${width} ${colorScheme}`).toEqual([]);
+  }
+  await page.emulateMedia({ colorScheme: 'light' });
   await expect(adminRow.getByRole('button', { name: 'Quitar', exact: true })).toHaveCount(0);
-  await adminRow.getByRole('button', { name: /Anular cargo del ítem/ }).click();
+  await adminRow.getByRole('button', { name: /Anular cargo [0-9]/ }).click();
   const dialog = page.getByRole('dialog', { name: 'Anular el cargo' });
   await expectDialogInsideViewport(page, dialog);
   await page.evaluate(readFileSync(require.resolve('axe-core/axe.min.js'), 'utf8'));
   for (const colorScheme of ['light', 'dark'] as const) {
     await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
     await page.mouse.move(0, 0);
-    await dialog.evaluate((element) => Promise.all(element.getAnimations({ subtree: true }).map((animation) => animation.finished)));
+    await dialog.evaluate((element) => Promise.allSettled(element.getAnimations({ subtree: true }).map((animation) => animation.finished)));
     const violations = await dialog.evaluate(async (element) => {
       const axe = (window as unknown as { axe: { run: (context: Element) => Promise<AxeResults> } }).axe;
       const result = await axe.run(element);
-      return result.violations.filter((v) => v.impact === 'serious' || v.impact === 'critical').map((v) => ({ id: v.id, nodes: v.nodes.map((n) => ({ target: n.target, summary: n.failureSummary })) }));
+      return result.violations.map((v) => ({ id: v.id, nodes: v.nodes.map((n) => ({ target: n.target, summary: n.failureSummary })) }));
     });
     expect.soft(violations, `diálogo ${width} ${colorScheme}`).toEqual([]);
   }
@@ -152,7 +167,7 @@ async function flow(page: Page, request: APIRequestContext, width: number, lastN
   await expectNoHorizontalScroll(page);
   await dialog.getByRole('button', { name: 'Anular cargo' }).click();
   await expect(dialog).toBeHidden({ timeout: 10_000 });
-  await expect(page.locator('[aria-label="Ítems del plan de tratamiento"][tabindex="-1"]')).toBeFocused();
+  await expect(page.getByRole('heading', { name: 'Ítems del plan de tratamiento' })).toBeFocused();
   await expect(feeRow(page)).toHaveCount(0, { timeout: 10_000 });
   await expectNoHorizontalScroll(page);
 

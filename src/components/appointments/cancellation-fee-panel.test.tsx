@@ -208,6 +208,7 @@ describe('CancellationFeePanel (DX-291)', () => {
     fireEvent.click(within(dialog).getByRole('button', { name: 'Condonar' }));
     await waitFor(() => expect(waive).toHaveBeenCalledWith('t', 'a-1', 'Hospitalización'));
     expect(await screen.findByText('Motivo: Hospitalización')).toBeInTheDocument();
+    expect(screen.getByRole('heading', { name: /Cargo por inasistencia/ })).toHaveFocus();
   });
 
   it('error al cargar: reintento', async () => {
@@ -262,6 +263,41 @@ describe('CancellationFeePanel (DX-291)', () => {
       expect(await within(dialog).findByText(/Anula antes el abono/)).toBeInTheDocument();
       await waitFor(() => expect(get).toHaveBeenCalledTimes(2));
       expect(within(dialog).queryByRole('button', { name: 'Anular cargo' })).not.toBeInTheDocument();
+      fireEvent.submit(dialog.querySelector('form')!);
+      expect(voidFee).toHaveBeenCalledTimes(1);
+    });
+
+    it('bloquea reabrir mientras el estado en conflicto se actualiza', async () => {
+      let resolveReload!: (value: CancellationFeeView) => void;
+      get.mockResolvedValueOnce(charged).mockImplementationOnce(() => new Promise((resolve) => { resolveReload = resolve; }));
+      voidFee.mockRejectedValueOnce(new ApiError(409, 'El cargo cambió.'));
+      render(<CancellationFeePanel token="t" appointmentId="a-1" />);
+      fireEvent.click(await screen.findByRole('button', { name: 'Anular cargo' }));
+      const dialog = await screen.findByRole('dialog', { name: 'Anular el cargo' });
+      fireEvent.change(within(dialog).getByLabelText('Motivo'), { target: { value: 'Error' } });
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Anular cargo' }));
+      await within(dialog).findByText('El cargo cambió.');
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Cerrar' }));
+      expect(screen.getByRole('button', { name: 'Anular cargo' })).toBeDisabled();
+      resolveReload(charged);
+      await waitFor(() => expect(screen.getByRole('button', { name: 'Anular cargo' })).toBeEnabled());
+    });
+
+    it('un fallo de recarga cierra el diálogo y mantiene bloqueado hasta reintento exitoso', async () => {
+      let resolveReload!: (value: CancellationFeeView) => void;
+      get.mockResolvedValueOnce(charged).mockRejectedValueOnce(new Error('red')).mockImplementationOnce(() => new Promise((resolve) => { resolveReload = resolve; }));
+      voidFee.mockRejectedValueOnce(new ApiError(409, 'El cargo cambió.'));
+      render(<CancellationFeePanel token="t" appointmentId="a-1" />);
+      fireEvent.click(await screen.findByRole('button', { name: 'Anular cargo' }));
+      const dialog = await screen.findByRole('dialog', { name: 'Anular el cargo' });
+      fireEvent.change(within(dialog).getByLabelText('Motivo'), { target: { value: 'Error' } });
+      fireEvent.click(within(dialog).getByRole('button', { name: 'Anular cargo' }));
+      await screen.findByText('Cargo sin cargar');
+      fireEvent.click(screen.getByRole('button', { name: 'Reintentar' }));
+      expect(screen.queryByRole('dialog', { name: 'Anular el cargo' })).not.toBeInTheDocument();
+      expect(screen.getByRole('button', { name: 'Anular cargo' })).toBeDisabled();
+      resolveReload(voided);
+      expect(await screen.findByText(/Cargo anulado/)).toBeInTheDocument();
     });
 
     it('avisa si el ítem del plan no cobra lo que dice el cargo', async () => {

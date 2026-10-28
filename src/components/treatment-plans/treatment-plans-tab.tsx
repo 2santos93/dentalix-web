@@ -394,6 +394,8 @@ interface ItemsTableProps {
   catalogById: Map<string, DentalCatalogItem>;
   /** The plan's currency (`planDetail.currency`) — item prices don't carry their own currency. */
   currency: string;
+  feeOrdinals: ReadonlyMap<string, number>;
+  feeStale?: boolean;
   updatingItemId: string | null;
   /** FDI code whose rows are marked as the ones the user arrived looking for. */
   focusedTooth?: string | null;
@@ -484,18 +486,20 @@ function ItemAttributionLine({
  * de estado (la API responde 409 a todo rol): lo dice y, a un ADMIN, le ofrece
  * anularlo con motivo.
  */
-function FeeItemLine({ item, currency, onVoid }: { item: TreatmentPlanItem; currency: string; onVoid?: (item: TreatmentPlanItem) => void }) {
+function FeeItemLine({ item, currency, ordinal, disabled, onVoid }: { item: TreatmentPlanItem; currency: string; ordinal: number; disabled?: boolean; onVoid?: (item: TreatmentPlanItem) => void }) {
   if (!item.cancellationFeeAppointmentId) return null;
   return (
     <span className="flex flex-col items-start gap-1 text-xs text-muted">
       <span>{onVoid ? copy.feeItemNoteAdmin : copy.feeItemNote}</span>
+      <span> Cargo {ordinal}</span>
       {onVoid ? (
         <Button
           type="button"
           variant="outline"
           size="sm"
           className="h-11 md:h-8"
-          aria-label={`Anular cargo del ítem ${item.id}, ${formatCurrency(item.price, currency)}`}
+          disabled={disabled}
+          aria-label={`Anular cargo ${ordinal}: ${item.notes || "cargo por inasistencia"}, ${formatCurrency(item.price, currency)}`}
           onClick={() => onVoid(item)}
         >
           {voidFeeCopy.action}
@@ -698,6 +702,8 @@ function ItemsTable({
   catalogById,
   currency,
   updatingItemId,
+  feeOrdinals,
+  feeStale,
   focusedTooth,
   odontogramHref,
   implantHref,
@@ -814,7 +820,7 @@ function ItemsTable({
                         )}
                       </span>
                       <ItemAttributionLine item={item} onCorrect={onCorrectAttribution} />
-                      <FeeItemLine item={item} currency={currency} onVoid={onVoidFee} />
+                      <FeeItemLine item={item} currency={currency} ordinal={feeOrdinals.get(item.id) ?? 1} disabled={feeStale} onVoid={onVoidFee} />
                     </div>
                   </TableCell>
                   <TableCell>
@@ -885,7 +891,7 @@ function ItemsTable({
               </div>
               {isFee(item) ? (
                 <div className="mt-2">
-                  <FeeItemLine item={item} currency={currency} onVoid={onVoidFee} />
+                  <FeeItemLine item={item} currency={currency} ordinal={feeOrdinals.get(item.id) ?? 1} disabled={feeStale} onVoid={onVoidFee} />
                 </div>
               ) : null}
               <div className="mt-3 flex items-center justify-between gap-2">
@@ -1217,8 +1223,12 @@ export function TreatmentPlansTab({
   // inline de arriba, que es la del cambio de estado.
   const [itemToRemove, setItemToRemove] = useState<string | null>(null);
   // SEC-050: el ítem cuyo cargo por inasistencia se está anulando.
-  const feeListRef = useRef<HTMLDivElement>(null);
+  const feeListRef = useRef<HTMLHeadingElement>(null);
   const focusAfterFeeVoid = useRef(false);
+  const [feeStalePlanId, setFeeStalePlanId] = useState<string | null>(null);
+  const feeStalePlanRef = useRef<string | null>(null);
+  const feeStale = feeStalePlanId === selectedPlanId && selectedPlanId !== null;
+  const [feeReloadFailed, setFeeReloadFailed] = useState(false);
   const [feeToVoid, setFeeToVoid] = useState<TreatmentPlanItem | null>(null);
   // DX-050: el ítem que se marca como realizado (eligiendo quién lo hizo) o
   // cuya atribución corrige un ADMIN.
@@ -1607,6 +1617,11 @@ export function TreatmentPlansTab({
         const data = await getPlan(token, selectedPlanId as string);
         if (cancelled) return;
         setPlanDetail(data);
+        if (feeStalePlanRef.current === selectedPlanId) {
+          feeStalePlanRef.current = null;
+          setFeeStalePlanId(null);
+          setFeeReloadFailed(false);
+        }
         loadedPlanIdRef.current = selectedPlanId;
         setPlanDetailError(null);
       } catch (err) {
@@ -1614,6 +1629,8 @@ export function TreatmentPlansTab({
         const message = apiErrorMessage(err, copy.genericPlanDetailError);
         if (isInitialLoad) {
           setPlanDetailError(message);
+        } else if (feeStalePlanRef.current === selectedPlanId) {
+          setFeeReloadFailed(true);
         } else {
           // Retry bumps `planDetailReloadKey` (functional `setState`
           // updater, stable identity) rather than closing over a ref — see
@@ -2363,11 +2380,15 @@ export function TreatmentPlansTab({
                   {bulkNotice}
                 </p>
 
-                <div ref={feeListRef} tabIndex={-1} aria-label="Ítems del plan de tratamiento">
+                <h3 ref={feeListRef} tabIndex={-1} className="text-base font-semibold text-ink">Ítems del plan de tratamiento</h3>
+                {feeStale ? <p role="status" className="text-sm text-muted">Actualizando el estado del cargo.</p> : null}
+                {feeStale && feeReloadFailed ? <SectionError description="No se pudo actualizar el plan." onRetry={() => { setFeeReloadFailed(false); setPlanDetailReloadKey((k) => k + 1); }} /> : null}
                 <PlanVisitsBoard key={planDetail.id} token={token} plan={planDetail} role={role} onChanged={refreshPlanDetail} renderItems={visitItems => <ItemsTable
                   items={visitItems}
                   catalogById={catalogById}
                   currency={planDetail.currency}
+                  feeStale={feeStale}
+                  feeOrdinals={new Map((planDetail.items ?? []).filter((item) => item.cancellationFeeAppointmentId).map((item, index) => [item.id, index + 1]))}
                   updatingItemId={updatingItemId}
                   focusedTooth={focusedToothOnPlan}
                   odontogramHref={odontogramHref}
@@ -2399,7 +2420,6 @@ export function TreatmentPlansTab({
                   }
                 />
                 } />
-                </div>
 
                 {canSeeBilling ? (
                   <>
@@ -2862,7 +2882,12 @@ export function TreatmentPlansTab({
             // El ítem sale del plan y deja de ser facturable.
             void Promise.all([refreshPlanDetail(), refreshBalanceAndPayments()]);
           }}
-          onStale={() => void refreshPlanDetail()}
+          onStale={() => {
+            feeStalePlanRef.current = selectedPlanId;
+            setFeeStalePlanId(selectedPlanId);
+            setFeeReloadFailed(false);
+            setPlanDetailReloadKey((k) => k + 1);
+          }}
         />
       ) : null}
 

@@ -75,6 +75,7 @@ export function FeeReasonModal({
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    if (stale || submitting) return;
     const trimmed = reason.trim();
     if (trimmed.length < WAIVE_REASON_MIN || trimmed.length > WAIVE_REASON_MAX) {
       setFieldError(feeReasonCopy.reasonError);

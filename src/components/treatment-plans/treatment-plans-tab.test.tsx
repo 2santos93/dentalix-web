@@ -1,5 +1,5 @@
 import { moneyInputCopy } from '@/lib/format/money';
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { act, render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { TreatmentPlansTab } from './treatment-plans-tab';
 import { ApiError } from '@/lib/api/client';
@@ -1037,12 +1037,37 @@ describe('TreatmentPlansTab', () => {
 
     it('identifica cada cargo por ítem e importe', async () => {
       renderFeePlan(adminToken);
-      mockedGetPlan.mockResolvedValue({ ...feePlan, items: [feeItem, { ...feeItem, id: 'item-fee-2', cancellationFeeAppointmentId: 'appt-2', price: 250 }], total: 300 });
+      mockedGetPlan.mockResolvedValue({ ...feePlan, items: [feeItem, { ...feeItem, id: 'item-fee-2', cancellationFeeAppointmentId: 'appt-2', price: feeItem.price }], total: feeItem.price * 2 });
       const table = await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
       await waitFor(() => expect(within(table).getAllByRole('button', { name: /Anular cargo/ })).toHaveLength(2));
       const names = within(table).getAllByRole('button', { name: /Anular cargo/ }).map((button) => button.getAttribute('aria-label'));
       expect(new Set(names).size).toBe(2);
-      expect(names.every((name) => /ítem.*\d/.test(name ?? ''))).toBe(true);
+      expect(names.every((name) => /cargo \d.*inasistencia.*\d/i.test(name ?? ''))).toBe(true);
+      expect(names.every((name) => !name?.includes('item-fee'))).toBe(true);
+    });
+
+    it('ignora la respuesta tardía del plan anterior tras un conflicto', async () => {
+      let resolveOld!: (value: typeof feePlan & { items: TreatmentPlanItem[]; total: number }) => void;
+      const oldDetail = { ...feePlan, items: [feeItem], total: feeItem.price };
+      mockedListPlans.mockResolvedValue([feePlan, plan2]);
+      mockedGetPlan.mockResolvedValueOnce(oldDetail)
+        .mockImplementationOnce(() => new Promise((resolve) => { resolveOld = resolve; }))
+        .mockResolvedValue(plan2Detail);
+      jest.mocked(voidCancellationFee).mockRejectedValueOnce(new ApiError(409, 'Cargo actualizado'));
+      const user = userEvent.setup();
+      render(<TreatmentPlansTab patientId="pat-1" token={adminToken} />);
+      const table = await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+      await user.click(within(table).getByRole('button', { name: /Anular cargo/ }));
+      const dialog = await screen.findByRole('dialog', { name: 'Anular el cargo' });
+      await user.type(within(dialog).getByLabelText('Motivo'), 'Cargo erróneo');
+      await user.click(within(dialog).getByRole('button', { name: 'Anular cargo' }));
+      await within(dialog).findByText('Cargo actualizado');
+      await user.click(within(dialog).getByRole('button', { name: 'Cerrar' }));
+      await user.selectOptions(screen.getByLabelText(/^plan$/i), 'plan-2');
+      await waitFor(() => expect(mockedGetPlan).toHaveBeenCalledWith(adminToken, 'plan-2'));
+      await act(async () => { resolveOld(oldDetail); });
+      expect(screen.getByLabelText<HTMLSelectElement>(/^plan$/i)).toHaveValue('plan-2');
+      expect(screen.queryByRole('button', { name: /Anular cargo/ })).not.toBeInTheDocument();
     });
 
     it('ADMIN anula el cargo con motivo y el plan se refresca', async () => {
@@ -1059,7 +1084,7 @@ describe('TreatmentPlansTab', () => {
         expect(voidCancellationFee).toHaveBeenCalledWith(adminToken, 'appt-1', 'Cargo generado por error'),
       );
       await waitFor(() => expect(mockedGetPlan.mock.calls.length).toBeGreaterThan(calls));
-      expect(screen.getByLabelText('Ítems del plan de tratamiento', { selector: 'div[tabindex]' })).toHaveFocus();
+      expect(screen.getByRole('heading', { name: 'Ítems del plan de tratamiento' })).toHaveFocus();
       expect(mockedRemoveItem).not.toHaveBeenCalled();
     });
   });
