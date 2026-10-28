@@ -16,6 +16,7 @@ import {
   planItemAttributionDetail,
   healthRegistrationDetail,
   clinicSettingsDetail,
+  locationCalendarDetail,
 } from './audit-labels';
 
 describe('etiquetas de auditoría', () => {
@@ -294,5 +295,26 @@ describe('clinicSettingsDetail (DX-328)', () => {
       clinicSettingsDetail({ reason: 'CASH_SETTINGS', statusChange: { from: 'AGE_18', to: 'AGE_16' } }),
     ).toBeNull();
     expect(clinicSettingsDetail({})).toBeNull();
+  });
+});
+
+describe('locationCalendarDetail (DX-316)', () => {
+  it('AUDIT_RESOURCE_LABELS.LOCATION_CALENDAR is Calendario de la sede', () => {
+    expect(AUDIT_RESOURCE_LABELS.LOCATION_CALENDAR).toBe('Calendario de la sede');
+  });
+
+  it.each([
+    ['WORKING_WEEKDAYS_CHANGED', 'Días hábiles cambiados'],
+    ['HOLIDAY_CREATED', 'Festivo añadido'],
+    ['HOLIDAY_UPDATED', 'Festivo editado'],
+    ['HOLIDAY_DELETED', 'Festivo eliminado'],
+    ['HOLIDAYS_IMPORTED', 'Festivos importados'],
+  ])('%s → %s', (reason, label) => {
+    expect(locationCalendarDetail({ reason })).toBe(label);
+  });
+
+  it('null para otra reason o sin reason', () => {
+    expect(locationCalendarDetail({ reason: 'CASH_SETTINGS' })).toBeNull();
+    expect(locationCalendarDetail({})).toBeNull();
   });
 });

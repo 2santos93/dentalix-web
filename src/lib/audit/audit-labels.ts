@@ -107,6 +107,8 @@ export const AUDIT_RESOURCE_LABELS: Record<AuditResourceType, string> = {
   PAYMENT_ALLOCATION: 'Imputación de abono',
   // DX-328: ajustes de la clínica (mayoría de edad).
   CLINIC_SETTINGS: 'Ajustes de la clínica',
+  // DX-316: días hábiles y festivos de una sede (el resourceId es la sede).
+  LOCATION_CALENDAR: 'Calendario de la sede',
 };
 
 export const AUDIT_RESOURCE_OPTIONS = Object.keys(AUDIT_RESOURCE_LABELS) as AuditResourceType[];
@@ -416,4 +418,17 @@ export function clinicSettingsDetail(metadata: AuditMetadata): string | null {
   const after = ageOf(metadata.statusChange.to);
   if (before === null || after === null) return null;
   return `Mayoría de edad: ${before} → ${after} años`;
+}
+
+const LOCATION_CALENDAR_REASONS: Record<string, string> = {
+  WORKING_WEEKDAYS_CHANGED: 'Días hábiles cambiados',
+  HOLIDAY_CREATED: 'Festivo añadido',
+  HOLIDAY_UPDATED: 'Festivo editado',
+  HOLIDAY_DELETED: 'Festivo eliminado',
+  HOLIDAYS_IMPORTED: 'Festivos importados',
+};
+
+/** DX-316: qué cambió en el calendario de una sede, o null si el evento no es de él. */
+export function locationCalendarDetail(metadata: AuditMetadata): string | null {
+  return (metadata.reason && LOCATION_CALENDAR_REASONS[metadata.reason]) ?? null;
 }
