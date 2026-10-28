@@ -160,7 +160,7 @@ describe('PatientDataPanel', () => {
   });
 });
 
-describe('PatientDataPanel · aseguradora (DX-153)', () => {
+describe('PatientDataPanel · sin aseguradora en texto libre (DX-322)', () => {
   const coverage = (status: 'NONE' | 'ACTIVE' | 'EXPIRED' | 'NOT_STARTED') => ({
     status,
     payerName: null,
@@ -179,7 +179,6 @@ describe('PatientDataPanel · aseguradora (DX-153)', () => {
   });
 });
 
-
 describe('paciente importado (DX-107)', () => {
   it('marca el origen y la autorización de datos como pendiente, aunque no tenga datos administrativos', () => {
     render(<PatientDataPanel patient={patient({ importBatchId: 'batch-1' })} />);
@@ -193,6 +192,9 @@ describe('paciente importado (DX-107)', () => {
     expect(screen.queryByText('Importado desde archivo')).not.toBeInTheDocument();
     expect(screen.getByText('Pendiente')).toBeInTheDocument();
   });
+});
+
+describe('PatientDataPanel · maquetación', () => {
   it('un correo largo sin espacios parte la línea en vez de ensanchar la ficha a 390 px', () => {
     // jsdom no maqueta: se fija lo que lo hace posible. Sin `min-w-0` la celda
     // de la rejilla mide lo que el correo entero y `<main>` se desplaza en

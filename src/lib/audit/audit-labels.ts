@@ -105,6 +105,7 @@ export const AUDIT_RESOURCE_LABELS: Record<AuditResourceType, string> = {
   EXPENSE: 'Gasto',
   // DX-051: un ADMIN reasigna a qué ítems del plan va un abono.
   PAYMENT_ALLOCATION: 'Imputación de abono',
+  // DX-328: ajustes de la clínica (mayoría de edad).
   CLINIC_SETTINGS: 'Ajustes de la clínica',
 };
 

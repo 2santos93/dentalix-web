@@ -24,7 +24,10 @@ import {
 } from '@/components/ui/dialog';
 
 const copy = {
-  title: 'Mayoría de edad',
+  // La página ya se titula «Mayoría de edad»: la tarjeta nombra el ajuste en
+  // vez de repetir el H1 (igual que «Vigencia de la anamnesis» bajo
+  // «Historia clínica»).
+  title: 'Edad desde la que el paciente es adulto',
   hint:
     'Por debajo de esta edad, los recordatorios, recibos y estados de cuenta del paciente van a su responsable, y la ficha avisa si no tiene uno. Una clínica nueva empieza con 18 años.',
   years: (n: number) => `${n} años`,

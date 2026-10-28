@@ -43,8 +43,9 @@ const copy = {
   forbiddenHint: 'El equipo clínico ve en la agenda y en la ficha si la anamnesis está caducada.',
 };
 
+// 44 px bajo `sm` (DESIGN.md, objetivo táctil de móvil).
 const fieldClass =
-  'flex h-10 w-full rounded-lg border border-border bg-surface px-3 text-sm text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary';
+  'flex h-10 w-full rounded-lg border border-border bg-surface px-3 text-sm text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary max-sm:min-h-11';
 
 /**
  * Ajustes → Historia clínica (DX-247): cuántos meses vale la anamnesis en la
@@ -182,7 +183,7 @@ export function AnamnesisSettingsSection({ token, allowed }: { token: string; al
                   {copy.cancel}
                 </Button>
               </DialogClose>
-              <Button type="submit" loading={saving}>
+              <Button type="submit" loading={saving} className="max-sm:min-h-11">
                 {copy.save}
               </Button>
             </DialogFooter>
