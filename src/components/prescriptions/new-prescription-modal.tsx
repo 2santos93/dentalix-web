@@ -100,8 +100,9 @@ interface NewPrescriptionModalProps {
  * nº de HC) son los de la clínica, que da el emisor. Antes de enviar valida en
  * el cliente los campos obligatorios (mismas reglas que la API): marca cada
  * campo inválido junto al control y lleva el foco al primero. Lo que el
- * formulario no conoce (el documento del paciente) lo dice la API en un 400,
- * que `FormModal` muestra en un resumen visible y con el foco.
+ * formulario no conoce (el documento del paciente, exigido solo si la clínica
+ * pide el nº de historia clínica) lo dice la API en un 400, que `FormModal`
+ * muestra en un resumen visible y con el foco.
  *
  * Receta segura (DX-300): mientras se escribe, el modal pide al SERVIDOR los
  * avisos de seguridad (alergias con las casillas de la anamnesis,
@@ -443,7 +444,7 @@ function NewPrescriptionForm({
                 index={index}
                 item={item}
                 idPrefix="rx-item"
-                mode={{ kind: 'prescription' }}
+                mode={{ kind: 'prescription', printQuantityInWords: issuer.printQuantityInWords }}
                 errors={itemErrors[index]}
                 onChange={(patch) => updateItem(index, patch)}
                 onRemove={items.length > 1 ? () => removeItem(index) : undefined}

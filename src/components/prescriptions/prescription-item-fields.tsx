@@ -27,11 +27,14 @@ const copy = {
 
 /**
  * `prescription`: las reglas de la receta (marca, envases e indicaciones
- * opcionales).
+ * opcionales). `printQuantityInWords` es el ajuste de la clínica: solo con él
+ * la pista dice que la cantidad se imprime también en letras.
  * `template`: solo el principio activo es obligatorio; el resto se completa al
- * emitir.
+ * emitir. Sin la pista de las letras: lo decide el ajuste al emitir.
  */
-export type ItemFieldsMode = { kind: 'prescription' } | { kind: 'template' };
+export type ItemFieldsMode =
+  | { kind: 'prescription'; printQuantityInWords: boolean }
+  | { kind: 'template' };
 
 interface PrescriptionItemFieldsProps {
   index: number;
@@ -63,6 +66,8 @@ export function PrescriptionItemFields({
   const n = index + 1;
   const id = (field: keyof ItemDraft) => `${idPrefix}-${index}-${field}`;
   const template = mode.kind === 'template';
+  const quantityHint =
+    mode.kind === 'prescription' && mode.printQuantityInWords ? copy.totalQuantityHint : undefined;
   const label = (text: string, alwaysRequired = false) =>
     template && !alwaysRequired ? copy.optional(text) : text;
   const invalid = (field: keyof ItemDraft) =>
@@ -154,7 +159,7 @@ export function PrescriptionItemFields({
         {text('dose', copy.dose, '1 cápsula')}
         {text('frequency', copy.frequency, 'Cada 8 horas')}
         {number('durationDays', copy.durationDays, 365)}
-        {number('totalQuantity', copy.totalQuantity, 9999, true, copy.totalQuantityHint)}
+        {number('totalQuantity', copy.totalQuantity, 9999, true, quantityHint)}
         {text('quantityUnit', copy.quantityUnit, 'cápsulas')}
         {number('packages', copy.packages, 99, false)}
         {text('instructions', copy.instructions, 'Tomar después de las comidas', false)}

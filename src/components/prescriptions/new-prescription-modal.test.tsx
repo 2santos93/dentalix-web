@@ -425,6 +425,28 @@ describe('NewPrescriptionModal', () => {
     expect(screen.queryByRole('link')).not.toBeInTheDocument();
   });
 
+  it('the words hint on «Cantidad total» shows only when the clinic prints quantities in words', async () => {
+    const hint = 'Se imprime también en letras.';
+    mockedIssuer.mockResolvedValue(makeIssuer({ printQuantityInWords: true }));
+    const { unmount } = render(
+      <NewPrescriptionModal open onOpenChange={jest.fn()} token="tok" patientId="p1" onIssued={jest.fn()} />,
+    );
+    await screen.findByText(/Se emite desde/);
+    expect(screen.getByText(hint)).toBeInTheDocument();
+    unmount();
+
+    mockedIssuer.mockResolvedValue(makeIssuer({ printQuantityInWords: false }));
+    renderModal();
+    await screen.findByText(/Se emite desde/);
+    expect(screen.queryByText(hint)).not.toBeInTheDocument();
+    const quantity = screen.getByLabelText(/cantidad total/i);
+    // Sin pista, el campo no apunta a ningún id que no exista.
+    for (const id of (quantity.getAttribute('aria-describedby') ?? '').split(' ').filter(Boolean)) {
+      expect(document.getElementById(id)).not.toBeNull();
+    }
+    expect(quantity).toHaveAccessibleDescription('');
+  });
+
   it('the HC note shows only when the clinic requires it', async () => {
     const note = 'Esta clínica exige el documento del paciente como nº de historia clínica.';
     renderModal();

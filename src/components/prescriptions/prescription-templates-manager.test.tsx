@@ -87,6 +87,9 @@ describe('PrescriptionTemplatesManager', () => {
     expect(within(dialog).getByLabelText('Concentración (opcional)')).toBeInTheDocument();
     expect(within(dialog).getByLabelText('Nº de envases (opcional)')).toBeInTheDocument();
     expect(within(dialog).queryByRole('textbox', { name: /Nº de registro del medicamento/ })).not.toBeInTheDocument();
+    // Una plantilla no imprime nada: las letras las decide el ajuste al emitir.
+    expect(within(dialog).queryByText('Se imprime también en letras.')).not.toBeInTheDocument();
+    expect(within(dialog).getByLabelText('Cantidad total (opcional)')).toHaveAccessibleDescription('');
   });
 
   it('edita y retira con confirmación', async () => {
