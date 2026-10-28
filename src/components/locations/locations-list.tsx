@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
+import Link from 'next/link';
 import { Plus } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import type { ClinicLocation } from '@/lib/locations/locations-api';
@@ -20,6 +21,8 @@ export const locationsListCopy = {
   create: 'Nueva sede',
   edit: 'Editar',
   editFor: (name: string) => `Editar ${name}`,
+  calendar: 'Calendario',
+  calendarFor: (name: string) => `Calendario ${name}`,
   review: 'Revisar',
   reviewFor: (name: string) => `Revisar ${name}`,
   pendingReview: 'Por revisar',
@@ -198,17 +201,28 @@ export function LocationsList({
                 </dl>
               </div>
               {canEdit ? (
-                // Aviso D5: guardar el modal, aunque no cambie nada, confirma la sede.
-                <Button
-                  type="button"
-                  variant="secondary"
-                  size="sm"
-                  onClick={() => openModal(location)}
-                  aria-label={needsRegionalReview(location) ? copy.reviewFor(location.name) : copy.editFor(location.name)}
-                  className="self-start sm:self-center"
-                >
-                  {needsRegionalReview(location) ? copy.review : copy.edit}
-                </Button>
+                <div className="flex shrink-0 gap-2 self-start sm:self-center">
+                  {/* DX-316: días hábiles y festivos de esta sede (solo ADMIN, como la API). */}
+                  <Button asChild variant="ghost" size="sm" className="max-sm:min-h-11">
+                    <Link
+                      href={`/settings/calendario?sede=${encodeURIComponent(location.id)}`}
+                      aria-label={copy.calendarFor(location.name)}
+                    >
+                      {copy.calendar}
+                    </Link>
+                  </Button>
+                  {/* Aviso D5: guardar el modal, aunque no cambie nada, confirma la sede. */}
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    onClick={() => openModal(location)}
+                    aria-label={needsRegionalReview(location) ? copy.reviewFor(location.name) : copy.editFor(location.name)}
+                    className="max-sm:min-h-11"
+                  >
+                    {needsRegionalReview(location) ? copy.review : copy.edit}
+                  </Button>
+                </div>
               ) : null}
             </li>
           ))}

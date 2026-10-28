@@ -21,7 +21,7 @@ import {
 const copy = {
   title: 'Horarios',
   description: {
-    sede: 'Define los días y tramos en que la sede atiende. Las citas fuera de ese horario se rechazan.',
+    sede: 'Define los días y tramos en que la sede atiende. Las citas fuera de ese horario se rechazan. Para los plazos en días hábiles, mira Calendario de la sede.',
     profesionales:
       'En qué sede atiende cada profesional cada día, y las fechas con un horario distinto.',
     cuadrante: 'La semana de cada profesional, con la sede en la que está cada día.',

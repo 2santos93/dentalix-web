@@ -101,6 +101,28 @@ describe('LocationsList (G1, spec §6.3)', () => {
     expect(screen.getByRole('button', { name: 'Editar Sede Norte' })).toBeInTheDocument();
   });
 
+  it('the Sedes list links «Calendario Sede Norte» to /settings/calendario?sede=<id> for ADMIN only', async () => {
+    const otra = clinicLocation({ id: 'loc 2', name: 'Sede Sur', isActive: false });
+    mockedList.mockResolvedValue([norte, otra]);
+    const { unmount } = render(<LocationsList token={RECEPTIONIST} canEdit={false} />);
+    await screen.findByText('Sede Norte');
+    expect(screen.queryByRole('link', { name: /^Calendario/ })).not.toBeInTheDocument();
+    unmount();
+
+    render(<LocationsList token={ADMIN} canEdit />);
+    await screen.findByText('Sede Norte');
+    expect(screen.getByRole('link', { name: 'Calendario Sede Norte' })).toHaveAttribute(
+      'href',
+      '/settings/calendario?sede=norte',
+    );
+    // El id va codificado; una sede inactiva también tiene su calendario.
+    expect(screen.getByRole('link', { name: 'Calendario Sede Sur' })).toHaveAttribute(
+      'href',
+      '/settings/calendario?sede=loc%202',
+    );
+    expect(screen.getByRole('link', { name: 'Calendario Sede Norte' })).toHaveTextContent('Calendario');
+  });
+
   it('a location with null regional fields is listed «Por configurar» and the modal completes it', async () => {
     mockedList.mockResolvedValue([legacy]);
     const completed = { ...legacy, currency: 'JPY', timeZone: 'Asia/Tokyo', locale: 'ja-JP', hourCycle: 'h23' as const, regionalSettingsReviewedAt: '2026-10-27T10:00:00.000Z' };
