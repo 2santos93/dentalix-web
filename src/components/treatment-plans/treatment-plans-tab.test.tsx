@@ -1035,12 +1035,22 @@ describe('TreatmentPlansTab', () => {
       expect(screen.queryByRole('button', { name: /Anular cargo/ })).not.toBeInTheDocument();
     });
 
+    it('identifica cada cargo por ítem e importe', async () => {
+      renderFeePlan(adminToken);
+      mockedGetPlan.mockResolvedValue({ ...feePlan, items: [feeItem, { ...feeItem, id: 'item-fee-2', cancellationFeeAppointmentId: 'appt-2', price: 250 }], total: 300 });
+      const table = await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
+      await waitFor(() => expect(within(table).getAllByRole('button', { name: /Anular cargo/ })).toHaveLength(2));
+      const names = within(table).getAllByRole('button', { name: /Anular cargo/ }).map((button) => button.getAttribute('aria-label'));
+      expect(new Set(names).size).toBe(2);
+      expect(names.every((name) => /ítem.*\d/.test(name ?? ''))).toBe(true);
+    });
+
     it('ADMIN anula el cargo con motivo y el plan se refresca', async () => {
       jest.mocked(voidCancellationFee).mockResolvedValue({} as never);
       const user = userEvent.setup();
       renderFeePlan(adminToken);
       const table = await screen.findByRole('table', { name: /ítems del plan de tratamiento/i });
-      await user.click(within(table).getByRole('button', { name: 'Anular cargo' }));
+      await user.click(within(table).getByRole('button', { name: /Anular cargo/ }));
       const dialog = await screen.findByRole('dialog', { name: 'Anular el cargo' });
       await user.type(within(dialog).getByLabelText('Motivo'), 'Cargo generado por error');
       const calls = mockedGetPlan.mock.calls.length;
@@ -1049,6 +1059,7 @@ describe('TreatmentPlansTab', () => {
         expect(voidCancellationFee).toHaveBeenCalledWith(adminToken, 'appt-1', 'Cargo generado por error'),
       );
       await waitFor(() => expect(mockedGetPlan.mock.calls.length).toBeGreaterThan(calls));
+      expect(screen.getByLabelText('Ítems del plan de tratamiento', { selector: 'div[tabindex]' })).toHaveFocus();
       expect(mockedRemoveItem).not.toHaveBeenCalled();
     });
   });

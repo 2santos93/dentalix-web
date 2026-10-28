@@ -1,5 +1,7 @@
 import { test, expect } from './support/test';
 import { randomUUID } from 'node:crypto';
+import { readFileSync } from 'node:fs';
+import type { AxeResults } from 'axe-core';
 import type { APIRequestContext, Page } from '@playwright/test';
 import { addStaffViaApi, apiPost, registerClinicViaApi, type ApiSession } from './support/api';
 import { loginAs } from './support/auth';
@@ -128,15 +130,29 @@ async function flow(page: Page, request: APIRequestContext, width: number, lastN
   const adminRow = feeRow(page);
   await expect(adminRow).toBeVisible({ timeout: 15_000 });
   await expect(adminRow.getByRole('button', { name: 'Quitar', exact: true })).toHaveCount(0);
-  await adminRow.getByRole('button', { name: 'Anular cargo' }).click();
+  await adminRow.getByRole('button', { name: /Anular cargo del ítem/ }).click();
   const dialog = page.getByRole('dialog', { name: 'Anular el cargo' });
   await expectDialogInsideViewport(page, dialog);
+  await page.evaluate(readFileSync(require.resolve('axe-core/axe.min.js'), 'utf8'));
+  for (const colorScheme of ['light', 'dark'] as const) {
+    await page.emulateMedia({ colorScheme, reducedMotion: 'reduce' });
+    await page.mouse.move(0, 0);
+    await dialog.evaluate((element) => Promise.all(element.getAnimations({ subtree: true }).map((animation) => animation.finished)));
+    const violations = await dialog.evaluate(async (element) => {
+      const axe = (window as unknown as { axe: { run: (context: Element) => Promise<AxeResults> } }).axe;
+      const result = await axe.run(element);
+      return result.violations.filter((v) => v.impact === 'serious' || v.impact === 'critical').map((v) => ({ id: v.id, nodes: v.nodes.map((n) => ({ target: n.target, summary: n.failureSummary })) }));
+    });
+    expect.soft(violations, `diálogo ${width} ${colorScheme}`).toEqual([]);
+  }
+  await page.emulateMedia({ colorScheme: 'light' });
   await dialog.getByRole('button', { name: 'Anular cargo' }).click();
   await expect(dialog.getByRole('alert')).toContainText('Escribe el motivo');
   await dialog.getByLabel('Motivo').fill('Cargo generado por error: avisó por teléfono');
   await expectNoHorizontalScroll(page);
   await dialog.getByRole('button', { name: 'Anular cargo' }).click();
   await expect(dialog).toBeHidden({ timeout: 10_000 });
+  await expect(page.locator('[aria-label="Ítems del plan de tratamiento"][tabindex="-1"]')).toBeFocused();
   await expect(feeRow(page)).toHaveCount(0, { timeout: 10_000 });
   await expectNoHorizontalScroll(page);
 

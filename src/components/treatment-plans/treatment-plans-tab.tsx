@@ -484,7 +484,7 @@ function ItemAttributionLine({
  * de estado (la API responde 409 a todo rol): lo dice y, a un ADMIN, le ofrece
  * anularlo con motivo.
  */
-function FeeItemLine({ item, onVoid }: { item: TreatmentPlanItem; onVoid?: (item: TreatmentPlanItem) => void }) {
+function FeeItemLine({ item, currency, onVoid }: { item: TreatmentPlanItem; currency: string; onVoid?: (item: TreatmentPlanItem) => void }) {
   if (!item.cancellationFeeAppointmentId) return null;
   return (
     <span className="flex flex-col items-start gap-1 text-xs text-muted">
@@ -495,7 +495,7 @@ function FeeItemLine({ item, onVoid }: { item: TreatmentPlanItem; onVoid?: (item
           variant="outline"
           size="sm"
           className="h-11 md:h-8"
-          aria-label={item.toothNumber ? copy.voidFeeFor(item.toothNumber) : undefined}
+          aria-label={`Anular cargo del ítem ${item.id}, ${formatCurrency(item.price, currency)}`}
           onClick={() => onVoid(item)}
         >
           {voidFeeCopy.action}
@@ -814,7 +814,7 @@ function ItemsTable({
                         )}
                       </span>
                       <ItemAttributionLine item={item} onCorrect={onCorrectAttribution} />
-                      <FeeItemLine item={item} onVoid={onVoidFee} />
+                      <FeeItemLine item={item} currency={currency} onVoid={onVoidFee} />
                     </div>
                   </TableCell>
                   <TableCell>
@@ -885,7 +885,7 @@ function ItemsTable({
               </div>
               {isFee(item) ? (
                 <div className="mt-2">
-                  <FeeItemLine item={item} onVoid={onVoidFee} />
+                  <FeeItemLine item={item} currency={currency} onVoid={onVoidFee} />
                 </div>
               ) : null}
               <div className="mt-3 flex items-center justify-between gap-2">
@@ -1217,6 +1217,8 @@ export function TreatmentPlansTab({
   // inline de arriba, que es la del cambio de estado.
   const [itemToRemove, setItemToRemove] = useState<string | null>(null);
   // SEC-050: el ítem cuyo cargo por inasistencia se está anulando.
+  const feeListRef = useRef<HTMLDivElement>(null);
+  const focusAfterFeeVoid = useRef(false);
   const [feeToVoid, setFeeToVoid] = useState<TreatmentPlanItem | null>(null);
   // DX-050: el ítem que se marca como realizado (eligiendo quién lo hizo) o
   // cuya atribución corrige un ADMIN.
@@ -2361,6 +2363,7 @@ export function TreatmentPlansTab({
                   {bulkNotice}
                 </p>
 
+                <div ref={feeListRef} tabIndex={-1} aria-label="Ítems del plan de tratamiento">
                 <PlanVisitsBoard key={planDetail.id} token={token} plan={planDetail} role={role} onChanged={refreshPlanDetail} renderItems={visitItems => <ItemsTable
                   items={visitItems}
                   catalogById={catalogById}
@@ -2394,7 +2397,9 @@ export function TreatmentPlansTab({
                         }
                       : undefined
                   }
-                />} />
+                />
+                } />
+                </div>
 
                 {canSeeBilling ? (
                   <>
@@ -2843,8 +2848,16 @@ export function TreatmentPlansTab({
           key={feeToVoid.id}
           token={token}
           appointmentId={feeToVoid.cancellationFeeAppointmentId}
+          onCloseAutoFocus={(event) => {
+            if (focusAfterFeeVoid.current) {
+              event.preventDefault();
+              feeListRef.current?.focus();
+              focusAfterFeeVoid.current = false;
+            }
+          }}
           onClose={() => setFeeToVoid(null)}
           onDone={() => {
+            focusAfterFeeVoid.current = true;
             setFeeToVoid(null);
             // El ítem sale del plan y deja de ser facturable.
             void Promise.all([refreshPlanDetail(), refreshBalanceAndPayments()]);

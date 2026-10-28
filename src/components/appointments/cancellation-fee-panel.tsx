@@ -1,6 +1,6 @@
 'use client';
 import * as React from 'react';
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import Link from 'next/link';
 import { Ban, Receipt, Undo2 } from 'lucide-react';
 import { toast } from 'sonner';
@@ -17,7 +17,7 @@ import { moneyInputText, parseMoneyInput } from '@/lib/format/money';
 import { FormModal } from '@/components/shared/form-modal';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { MoneyInput } from '@/components/shared/money-input';
-import { FieldError } from '@/components/errors/field-error';
+import { SectionError } from '@/components/errors/section-error';
 import { Button } from '@/components/ui/button';
 import { FeeReasonModal, VoidCancellationFeeModal, feeReasonCopy, voidFeeCopy } from './fee-reason-modal';
 
@@ -76,6 +76,8 @@ function money(amount: number | null | undefined, currency: string | null | unde
  * informado…», EPS_CO) salen tal cual, sin botón de cobrar.
  */
 export function CancellationFeePanel({ token, appointmentId }: { token: string; appointmentId: string }) {
+  const headingRef = useRef<HTMLHeadingElement>(null);
+  const focusAfterVoid = useRef(false);
   const [view, setView] = useState<CancellationFeeView | null>(null);
   const [failed, setFailed] = useState(false);
   const [reloadKey, setReloadKey] = useState(0);
@@ -100,13 +102,13 @@ export function CancellationFeePanel({ token, appointmentId }: { token: string; 
   if (failed) {
     return (
       <section aria-label={copy.heading} className="border-t border-hairline pt-4">
-        <FieldError
-          label={copy.loadError}
+        <SectionError
+          title={copy.loadError}
+          description="No se pudo cargar el estado del cargo."
           onRetry={() => {
             setFailed(false);
             setReloadKey((k) => k + 1);
           }}
-          className="h-9"
         />
       </section>
     );
@@ -130,7 +132,7 @@ export function CancellationFeePanel({ token, appointmentId }: { token: string; 
       data-testid="cancellation-fee-panel"
       className="flex flex-col gap-2 border-t border-hairline pt-4 text-sm"
     >
-      <h3 id={`fee-${appointmentId}`} className="font-semibold text-ink">
+      <h3 ref={headingRef} tabIndex={-1} id={`fee-${appointmentId}`} className="font-semibold text-ink">
         {copy.heading}
       </h3>
       {view.status === 'VOIDED' && fee ? (
@@ -230,10 +232,18 @@ export function CancellationFeePanel({ token, appointmentId }: { token: string; 
       ) : null}
       {dialog === 'void' ? (
         <VoidCancellationFeeModal
+          onCloseAutoFocus={(event) => {
+            if (focusAfterVoid.current) {
+              event.preventDefault();
+              headingRef.current?.focus();
+              focusAfterVoid.current = false;
+            }
+          }}
           token={token}
           appointmentId={appointmentId}
           onClose={() => setDialog(null)}
           onDone={(next) => {
+            focusAfterVoid.current = true;
             setDialog(null);
             setView(next);
           }}
@@ -281,6 +291,7 @@ function ChargeFeeModal({
   const [fieldError, setFieldError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [stale, setStale] = useState(false);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -309,7 +320,10 @@ function ChargeFeeModal({
       onDone(next);
     } catch (err) {
       setError(apiErrorMessage(err, copy.chargeError));
-      if (err instanceof ApiError && err.status === 409) onStale();
+      if (err instanceof ApiError && err.status === 409) {
+        setStale(true);
+        onStale();
+      }
     } finally {
       setSubmitting(false);
     }
@@ -327,7 +341,9 @@ function ChargeFeeModal({
       submitLabel={copy.chargeSubmit}
       submitting={submitting}
       error={error}
+      hideSubmit={stale}
     >
+      {stale ? <p role="status" className="text-sm text-muted">El estado del cargo cambió. Se está actualizando; cierra el diálogo y revisa los datos antes de volver a actuar.</p> : null}
       <FormField
         htmlFor={amountId}
         label={copy.amount}

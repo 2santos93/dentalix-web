@@ -45,6 +45,7 @@ interface FeeReasonModalProps {
   onDone: (view: CancellationFeeView) => void;
   /** 409: otra persona ya decidió (o ya se cobró); quien abrió se relee. */
   onStale: () => void;
+  onCloseAutoFocus?: (event: Event) => void;
 }
 
 /**
@@ -62,6 +63,7 @@ export function FeeReasonModal({
   onClose,
   onDone,
   onStale,
+  onCloseAutoFocus,
 }: FeeReasonModalProps) {
   const id = useId();
   const reasonId = `${id}-reason`;
@@ -69,6 +71,7 @@ export function FeeReasonModal({
   const [fieldError, setFieldError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [stale, setStale] = useState(false);
 
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -86,7 +89,10 @@ export function FeeReasonModal({
       onDone(next);
     } catch (err) {
       setError(apiErrorMessage(err, errorMessage));
-      if (err instanceof ApiError && err.status === 409) onStale();
+      if (err instanceof ApiError && err.status === 409) {
+        setStale(true);
+        onStale();
+      }
     } finally {
       setSubmitting(false);
     }
@@ -104,7 +110,11 @@ export function FeeReasonModal({
       submitLabel={submitLabel}
       submitting={submitting}
       error={error}
+      destructive
+      hideSubmit={stale}
+      onCloseAutoFocus={onCloseAutoFocus}
     >
+      {stale ? <p role="status" className="text-sm text-muted">El estado del cargo cambió. Se está actualizando; cierra el diálogo y revisa los datos antes de volver a actuar.</p> : null}
       <div className="flex flex-col gap-1.5">
         <Label htmlFor={reasonId}>{feeReasonCopy.reason}</Label>
         <textarea
@@ -149,12 +159,14 @@ export function VoidCancellationFeeModal({
   onClose,
   onDone,
   onStale,
+  onCloseAutoFocus,
 }: {
   token: string;
   appointmentId: string;
   onClose: () => void;
   onDone: (view: CancellationFeeView) => void;
   onStale: () => void;
+  onCloseAutoFocus?: (event: Event) => void;
 }) {
   return (
     <FeeReasonModal
@@ -167,6 +179,7 @@ export function VoidCancellationFeeModal({
       onClose={onClose}
       onDone={onDone}
       onStale={onStale}
+      onCloseAutoFocus={onCloseAutoFocus}
     />
   );
 }

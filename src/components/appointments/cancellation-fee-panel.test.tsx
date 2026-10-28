@@ -200,6 +200,7 @@ describe('CancellationFeePanel (DX-291)', () => {
     render(<CancellationFeePanel token="t" appointmentId="a-1" />);
     fireEvent.click(await screen.findByRole('button', { name: 'Condonar' }));
     const dialog = await screen.findByRole('dialog', { name: 'Condonar el cargo' });
+    expect(within(dialog).getByRole('button', { name: 'Condonar' })).toHaveClass('bg-danger');
     fireEvent.click(within(dialog).getByRole('button', { name: 'Condonar' }));
     expect(await within(dialog).findByRole('alert')).toHaveTextContent(/Escribe el motivo/);
     expect(waive).not.toHaveBeenCalled();
@@ -212,7 +213,8 @@ describe('CancellationFeePanel (DX-291)', () => {
   it('error al cargar: reintento', async () => {
     get.mockRejectedValueOnce(new Error('red')).mockResolvedValueOnce(view());
     render(<CancellationFeePanel token="t" appointmentId="a-1" />);
-    fireEvent.click(await screen.findByRole('button', { name: /reintentar|cargo sin cargar/i }));
+    expect(await screen.findByRole('alert')).toHaveTextContent('Cargo sin cargar');
+    fireEvent.click(screen.getByRole('button', { name: 'Reintentar' }));
     expect(await screen.findByRole('button', { name: 'Generar cargo' })).toBeInTheDocument();
   });
 
@@ -223,6 +225,7 @@ describe('CancellationFeePanel (DX-291)', () => {
       render(<CancellationFeePanel token="t" appointmentId="a-1" />);
       fireEvent.click(await screen.findByRole('button', { name: 'Anular cargo' }));
       const dialog = await screen.findByRole('dialog', { name: 'Anular el cargo' });
+      expect(within(dialog).getByRole('button', { name: 'Anular cargo' })).toHaveClass('bg-danger');
       fireEvent.click(within(dialog).getByRole('button', { name: 'Anular cargo' }));
       expect(await within(dialog).findByRole('alert')).toHaveTextContent(/Escribe el motivo/);
       expect(within(dialog).getByLabelText('Motivo')).toHaveFocus();
@@ -235,6 +238,7 @@ describe('CancellationFeePanel (DX-291)', () => {
       expect(await screen.findByText(/Cargo anulado: .*40\.000/)).toBeInTheDocument();
       expect(screen.getByText('Motivo: Cargo generado por error')).toBeInTheDocument();
       expect(screen.getByText('Por Dr. Owner.')).toBeInTheDocument();
+      expect(screen.getByRole('heading', { name: /Cargo por inasistencia/ })).toHaveFocus();
       expect(screen.queryByRole('button', { name: 'Anular cargo' })).not.toBeInTheDocument();
     });
 
@@ -257,6 +261,7 @@ describe('CancellationFeePanel (DX-291)', () => {
       fireEvent.click(within(dialog).getByRole('button', { name: 'Anular cargo' }));
       expect(await within(dialog).findByText(/Anula antes el abono/)).toBeInTheDocument();
       await waitFor(() => expect(get).toHaveBeenCalledTimes(2));
+      expect(within(dialog).queryByRole('button', { name: 'Anular cargo' })).not.toBeInTheDocument();
     });
 
     it('avisa si el ítem del plan no cobra lo que dice el cargo', async () => {
