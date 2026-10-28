@@ -1,33 +1,33 @@
 import * as React from 'react';
 import type { PrescriptionDocument as PrescriptionDoc } from '@/lib/prescriptions/prescriptions-api';
-import { formatCivilDate, formatDateTime } from '@/lib/format/date';
+import type { PrescriptionFormat } from '@/lib/prescriptions/prescription-format';
+import { legacyPrescriptionLayout } from '@/lib/prescriptions/legacy-prescription-layout';
+import { neutralPrescriptionLayout } from '@/lib/prescriptions/prescription-layout';
+
+/** Lo que depende del formato de la sede y no lo tiene (R11): nunca otro formato. */
+const MISSING = '—';
 
 const copy = {
-  title: { CO: 'Fórmula médica', ES: 'Receta médica privada' },
-  legalBasis: {
-    CO: 'Decreto 780 de 2016, art. 2.5.3.10.16',
-    ES: 'Real Decreto 1718/2010, art. 3',
-  },
   issuedAt: 'Fecha de emisión',
-  dispensation: { CO: 'Fecha de la receta', ES: 'Fecha prevista de dispensación' },
   validUntil: 'Válida hasta',
-  validityNote: { CO: '30 días naturales', ES: '10 días naturales' },
   patientHeading: 'Paciente',
   patientName: 'Nombre',
-  document: { CO: 'Documento', ES: 'DNI/NIE' },
+  age: 'Edad',
+  ageValue: (years: number) => (years === 1 ? '1 año' : `${years} años`),
+  weight: 'Peso',
   clinicalRecord: 'Nº de historia clínica',
   birthYear: 'Año de nacimiento',
   professionalHeading: 'Profesional que prescribe',
-  license: { CO: 'Registro profesional', ES: 'Nº de colegiado' },
+  specialty: 'Especialidad',
   contact: 'Contacto',
   medicationsHeading: 'Medicamentos',
   presentation: (form: string, route: string) => `${form} · Vía ${route.toLowerCase()}`,
   posology: (dose: string, frequency: string, days: number) =>
     `${dose}, ${frequency.toLowerCase()}, durante ${days} ${days === 1 ? 'día' : 'días'}.`,
   quantity: 'Cantidad total',
-  // TODO(T7): la cantidad sin letras de la receta única.
+  // Cifras sin formato, también sin formato de sede (I8); las letras, solo si la foto las tiene.
   quantityValue: (n: number, words: string | null, unit: string) =>
-    words === null ? `${n} ${unit}` : `${n} (${words}) ${unit}`,
+    words === null ? `${String(n)} ${unit}` : `${String(n)} (${words}) ${unit}`,
   packages: 'Envases',
   brand: 'Marca',
   instructions: 'Indicaciones',
@@ -58,18 +58,25 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 interface PrescriptionDocumentProps {
   prescription: PrescriptionDoc;
+  /** El formato de la sede de la receta (`prescriptionFormat`); `null` → «—» en fechas y peso. */
+  format: PrescriptionFormat | null;
 }
 
 /**
- * La receta como DOCUMENTO para papel o PDF A4 (DX-013): clínica y sede,
- * paciente, profesional con su registro / nº de colegiado, medicamentos con la
- * cantidad en números y letras, fechas y validez, y espacio para la firma. Los
- * campos siguen el país con el que se emitió (CO o ES), que queda congelado en
- * la receta. Papel blanco y tinta oscura explícitos, también en modo oscuro.
+ * La receta como DOCUMENTO para papel o PDF A4 (DX-013, DX-324): clínica y
+ * sede, paciente, profesional con su registro, medicamentos con la cantidad,
+ * fechas y validez, y espacio para la firma. Todo sale de la foto (R9): una
+ * receta única pinta la plantilla neutral; una emitida antes de DX-324, la suya
+ * congelada, con sus textos, filas y orden de entonces. Las fechas y el peso
+ * siguen el formato de la sede de la receta (R11). Papel blanco y tinta oscura
+ * explícitos, también en modo oscuro.
  */
-export function PrescriptionDocument({ prescription: rx }: PrescriptionDocumentProps) {
-  // TODO(T7): plantilla legada o neutral y formato de la sede de la receta.
-  const country = rx.country ?? 'CO';
+export function PrescriptionDocument({ prescription: rx, format }: PrescriptionDocumentProps) {
+  const layout = legacyPrescriptionLayout(rx) ?? neutralPrescriptionLayout(rx);
+  const neutral = layout.patientRows === 'neutral';
+  const dateTime = (iso: string | null) =>
+    format && iso ? format.fmt.dateTime(new Date(iso), format.timeZone) : MISSING;
+  const civilDate = (day: string) => (format ? format.fmt.civilDate(day) : MISSING);
   const voided = rx.status === 'VOIDED';
   const confirmedAlerts = (rx.safetyAlerts ?? []).filter((a) => a.severity === 'BLOCKING');
 
@@ -95,8 +102,10 @@ export function PrescriptionDocument({ prescription: rx }: PrescriptionDocumentP
           </div>
         </div>
         <div className="sm:text-right print:text-right">
-          <h1 className="text-xl font-semibold tracking-tight">{copy.title[country]}</h1>
-          <p className="text-xs text-[#4b5563]">{copy.legalBasis[country]}</p>
+          <h1 className="text-xl font-semibold tracking-tight">{layout.title}</h1>
+          {layout.subtitle !== null ? (
+            <p className="text-xs text-[#4b5563]">{layout.subtitle}</p>
+          ) : null}
         </div>
       </header>
 
@@ -108,7 +117,7 @@ export function PrescriptionDocument({ prescription: rx }: PrescriptionDocumentP
           <p className="text-base font-bold tracking-wide">{copy.voided}</p>
           <p className="text-sm">
             {copy.voidedDetail(
-              formatDateTime(rx.voidedAt),
+              dateTime(rx.voidedAt),
               rx.voidedByName ?? copy.unknownUser,
               rx.voidReason ?? '',
             )}
@@ -118,14 +127,14 @@ export function PrescriptionDocument({ prescription: rx }: PrescriptionDocumentP
 
       <dl className="mt-4 grid grid-cols-2 gap-3 text-sm sm:grid-cols-3 print:grid-cols-3">
         <Field label={copy.issuedAt}>
-          <span className="tabular-nums">{formatDateTime(rx.issuedAt)}</span>
+          <span className="tabular-nums">{dateTime(rx.issuedAt)}</span>
         </Field>
-        <Field label={copy.dispensation[country]}>
-          <span className="tabular-nums">{formatCivilDate(rx.dispensationDate)}</span>
+        <Field label={layout.dispensationLabel}>
+          <span className="tabular-nums">{civilDate(rx.dispensationDate)}</span>
         </Field>
         <Field label={copy.validUntil}>
-          <span className="tabular-nums">{formatCivilDate(rx.validUntil)}</span>{' '}
-          <span className="text-xs font-normal text-[#4b5563]">({copy.validityNote[country]})</span>
+          <span className="tabular-nums">{civilDate(rx.validUntil)}</span>{' '}
+          <span className="text-xs font-normal text-[#4b5563]">({layout.validityNote})</span>
         </Field>
       </dl>
 
@@ -135,18 +144,37 @@ export function PrescriptionDocument({ prescription: rx }: PrescriptionDocumentP
         </h2>
         <dl className="mt-2 grid grid-cols-2 gap-3 text-sm sm:grid-cols-3 print:grid-cols-3">
           <Field label={copy.patientName}>{rx.patientName}</Field>
-          <Field label={copy.document[country]}>
+          <Field label={layout.documentLabel}>
             <span className="tabular-nums">{rx.patientDocument ?? '—'}</span>
           </Field>
-          {country === 'CO' ? (
+          {layout.patientRows === 'clinicalRecord' ? (
             <Field label={copy.clinicalRecord}>
               <span className="tabular-nums">{rx.clinicalRecordNumber ?? '—'}</span>
             </Field>
-          ) : (
+          ) : null}
+          {layout.patientRows === 'birthYear' ? (
             <Field label={copy.birthYear}>
               <span className="tabular-nums">{rx.patientBirthYear ?? '—'}</span>
             </Field>
-          )}
+          ) : null}
+          {/* Receta única: cada fila solo si la foto tiene el dato. */}
+          {neutral && rx.patientAgeYears !== null ? (
+            <Field label={copy.age}>
+              <span className="tabular-nums">{copy.ageValue(rx.patientAgeYears)}</span>
+            </Field>
+          ) : null}
+          {neutral && rx.patientWeightKg !== null ? (
+            <Field label={copy.weight}>
+              <span className="tabular-nums">
+                {format ? `${format.fmt.number(rx.patientWeightKg, { max: 1 })} kg` : MISSING}
+              </span>
+            </Field>
+          ) : null}
+          {neutral && rx.clinicalRecordNumber !== null ? (
+            <Field label={copy.clinicalRecord}>
+              <span className="tabular-nums">{rx.clinicalRecordNumber}</span>
+            </Field>
+          ) : null}
         </dl>
       </section>
 
@@ -157,7 +185,7 @@ export function PrescriptionDocument({ prescription: rx }: PrescriptionDocumentP
         <ol className="mt-2 flex flex-col divide-y divide-[#e5e7eb] border-y border-[#e5e7eb]">
           {rx.items.map((item) => (
             <li key={item.id} className="prescription-item flex gap-3 py-3 text-sm">
-              <span className="font-semibold tabular-nums">{item.position}.</span>
+              <span className="font-semibold tabular-nums">{String(item.position)}.</span>
               <div className={voided ? 'line-through decoration-[#be123c]' : undefined}>
                 <p className="text-base font-semibold">
                   {item.activeIngredient} {item.concentration}
@@ -176,7 +204,7 @@ export function PrescriptionDocument({ prescription: rx }: PrescriptionDocumentP
                     <>
                       {' · '}
                       <span className="text-[#4b5563]">{copy.packages}:</span>{' '}
-                      <span className="font-medium tabular-nums">{item.packages}</span>
+                      <span className="font-medium tabular-nums">{String(item.packages)}</span>
                     </>
                   ) : null}
                 </p>
@@ -232,9 +260,12 @@ export function PrescriptionDocument({ prescription: rx }: PrescriptionDocumentP
       >
         <dl className="flex flex-col gap-2 text-sm">
           <Field label={copy.professionalHeading}>{rx.professionalName}</Field>
-          <Field label={copy.license[country]}>
+          <Field label={layout.licenseLabel}>
             <span className="tabular-nums">{rx.professionalLicense}</span>
           </Field>
+          {neutral && rx.professionalSpecialty ? (
+            <Field label={copy.specialty}>{rx.professionalSpecialty}</Field>
+          ) : null}
           {rx.professionalEmail ? (
             <Field label={copy.contact}>{rx.professionalEmail}</Field>
           ) : null}

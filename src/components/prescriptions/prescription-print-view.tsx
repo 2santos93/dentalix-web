@@ -1,9 +1,11 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ChevronLeft, FileX, Lock, Printer } from 'lucide-react';
 import { ApiError } from '@/lib/api/client';
 import { getPrescription, type PrescriptionDocument as PrescriptionDoc } from '@/lib/prescriptions/prescriptions-api';
+import { prescriptionFormat } from '@/lib/prescriptions/prescription-format';
+import { SedeConfigError } from '@/components/locations/sede-config-error';
 import { SectionError } from '@/components/errors/section-error';
 import { EmptyState } from '@/components/shared/empty-state';
 import { Button } from '@/components/ui/button';
@@ -33,7 +35,9 @@ interface PrescriptionPrintViewProps {
 /**
  * Vista imprimible de la receta (DX-013), fuera del shell, mismo patrón que la
  * del consentimiento: abre el diálogo de impresión UNA vez cuando la receta
- * está en pantalla; la barra lleva `print:hidden`.
+ * está en pantalla; la barra lleva `print:hidden`. El formato es el de la sede
+ * de la receta, tal como lo trae la API, no el de la sede activa (DX-324, R11):
+ * sin él, el documento pinta «—» y una nota `print:hidden` lo explica.
  */
 export function PrescriptionPrintView({
   token,
@@ -48,6 +52,7 @@ export function PrescriptionPrintView({
   const [reloadKey, setReloadKey] = useState(0);
   const printed = useRef(false);
   const forbidden = !allowed || deniedByApi;
+  const format = useMemo(() => (data ? prescriptionFormat(data.locationFormat) : null), [data]);
 
   useEffect(() => {
     if (!allowed) return;
@@ -110,9 +115,21 @@ export function PrescriptionPrintView({
 
       <main className="flex-1 px-0 py-0 sm:px-4 sm:py-8 print:p-0">
         {data ? (
-          <div className="mx-auto max-w-[210mm] shadow-sm print:shadow-none">
-            <PrescriptionDocument prescription={data} />
-          </div>
+          <>
+            {format === null ? (
+              <div className="mx-auto max-w-[210mm] px-4 pt-4 pb-4 sm:px-0 sm:pt-0 print:hidden">
+                <SedeConfigError
+                  kind="locale"
+                  variant="note"
+                  locationId={data.locationId}
+                  onRetry={() => setReloadKey((k) => k + 1)}
+                />
+              </div>
+            ) : null}
+            <div className="mx-auto max-w-[210mm] shadow-sm print:shadow-none">
+              <PrescriptionDocument prescription={data} format={format} />
+            </div>
+          </>
         ) : forbidden ? (
           <div className="mx-auto max-w-xl px-4 py-8">
             <EmptyState
