@@ -4,6 +4,7 @@ import { addStaffViaApi, apiPost, registerClinicViaApi, type ApiSession } from '
 import { loginAs } from './support/auth';
 import { atSede, sedeDayFromToday } from './support/clock';
 import { expectNoHorizontalScroll } from './support/layout';
+import { expectTouchTarget, waitForAnimationsSettled } from './support/touch-targets';
 import { API_URL, tenantOrigin } from './support/urls';
 
 /**
@@ -95,17 +96,8 @@ async function openDayList(page: Page) {
  * ola final de G2G3) movía el foco y Radix lo devolvía a la opción marcada.
  */
 async function waitForListSettled(page: Page) {
-  // Solo las animaciones de la lista: una infinita (un spinner en otra parte
-  // de la página) no termina nunca, y una cancelada rechaza `finished`.
-  await page.getByRole('listbox').evaluate(async (el) => {
-    await Promise.all(
-      el
-        .getAnimations({ subtree: true })
-        .filter((a) => a.effect?.getTiming().iterations !== Infinity)
-        .map((a) => a.finished.catch(() => {})),
-    );
-    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
-  });
+  // Solo las animaciones de la lista: un spinner en otra parte de la página no cuenta.
+  await waitForAnimationsSettled(page.getByRole('listbox'));
 }
 
 /**
@@ -218,7 +210,7 @@ test('390 px: en el detalle, ↑/↓ no envían nada y Enter aplica el estado', 
   await expect(status).toHaveText('Confirmada', { timeout: 10_000 });
   await expect(status).toHaveAccessibleName('Estado: Confirmada');
   // Usable con el dedo: al menos 44 px de alto.
-  expect((await status.boundingBox())!.height).toBeGreaterThanOrEqual(44);
+  await expectTouchTarget(status, { scope: detail });
 
   await status.focus();
   await page.keyboard.press('ArrowDown');

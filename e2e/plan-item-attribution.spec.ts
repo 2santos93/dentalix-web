@@ -2,6 +2,7 @@ import { test, expect, type APIRequestContext, type Browser, type Page } from '.
 import { randomUUID } from 'node:crypto';
 import { API_URL, tenantOrigin } from './support/urls';
 import { loginAs } from './support/auth';
+import { expectTouchTarget } from './support/touch-targets';
 
 /**
  * DX-050 · Producción atribuible. En la clínica demo (`npm run seed:demo`), la
@@ -140,8 +141,7 @@ for (const [width, theme] of [
 
     await performer.selectOption(data.dentistId);
     if (width === 390) {
-      const box = await performer.boundingBox();
-      expect(box?.height ?? 0, 'selector táctil de 44 px').toBeGreaterThanOrEqual(44);
+      await expectTouchTarget(performer, { scope: dialog, label: 'selector táctil de 44 px' });
       await noOverflow(page);
     }
     await page.screenshot({
