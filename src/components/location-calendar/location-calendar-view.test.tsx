@@ -197,6 +197,26 @@ describe('LocationCalendarView (DX-316, spec §7.1–§7.2)', () => {
     expect(primaries.map((b) => b.textContent)).toEqual(['Añadir festivo']);
   });
 
+  it('an ADMIN sees «Importar» on the real screen, in the empty state and next to «Añadir festivo», and it opens the import', async () => {
+    const user = setupUser();
+    setActiveLocationId('norte');
+    renderView();
+    const section = await screen.findByRole('region', { name: 'Festivos' });
+    await user.click(within(section).getByRole('button', { name: 'Importar' }));
+    expect(await screen.findByRole('dialog', { name: 'Importar festivos' })).toBeInTheDocument();
+    await user.keyboard('{Escape}');
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+
+    mockedGet.mockResolvedValue({
+      locationId: 'sur',
+      workingWeekdays: [1, 2, 3, 4, 5],
+      holidays: [{ id: 'h1', date: '2027-05-03', name: 'Cierre', recurring: false }],
+    });
+    await user.selectOptions(sedeSelect(), 'Sede Sur');
+    await screen.findByText('Cierre');
+    expect(within(screen.getByRole('region', { name: 'Festivos' })).getByRole('button', { name: 'Importar' })).toBeInTheDocument();
+  });
+
   it('the festivos come from the calendar and use the format of the chosen location', async () => {
     mockedGet.mockResolvedValue({
       locationId: 'norte',

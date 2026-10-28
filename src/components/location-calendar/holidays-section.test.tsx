@@ -5,6 +5,10 @@ import { holidayFormCopy } from './holiday-form-modal';
 import {
   createHoliday,
   deleteHoliday,
+  getLocationCalendar,
+  importHolidays,
+  previewHolidayImport,
+  type HolidayImportResult,
   type LocationHoliday,
 } from '@/lib/locations/location-calendar-api';
 import type { ClinicLocation } from '@/lib/locations/locations-api';
@@ -18,11 +22,17 @@ jest.mock('../../lib/locations/location-calendar-api', () => ({
   createHoliday: jest.fn(),
   updateHoliday: jest.fn(),
   deleteHoliday: jest.fn(),
+  getLocationCalendar: jest.fn(),
+  previewHolidayImport: jest.fn(),
+  importHolidays: jest.fn(),
 }));
 jest.mock('../errors/notify', () => ({ notifyError: jest.fn() }));
 const mockedCreate = jest.mocked(createHoliday);
 const mockedDelete = jest.mocked(deleteHoliday);
 const mockedNotify = jest.mocked(notifyError);
+const mockedGet = jest.mocked(getLocationCalendar);
+const mockedPreview = jest.mocked(previewHolidayImport);
+const mockedImport = jest.mocked(importHolidays);
 
 const copy = holidaysCopy;
 const usa = clinicLocation({ id: 'sur', locale: 'en-US', hourCycle: 'h12' });
@@ -33,17 +43,13 @@ const puntual2027: LocationHoliday = { id: 'h-27', date: '2027-05-03', name: 'Ci
 const puntual2028: LocationHoliday = { id: 'h-28', date: '2028-01-10', name: 'Inventario', recurring: false };
 
 /** La sección con el estado que le daría la vista: `onChanged` sustituye la lista. */
-function Harness({ location, initial, onImport }: { location: ClinicLocation; initial: LocationHoliday[]; onImport?: () => void }) {
+function Harness({ location, initial }: { location: ClinicLocation; initial: LocationHoliday[] }) {
   const [holidays, setHolidays] = useState(initial);
-  return (
-    <HolidaysSection token="tok" location={location} holidays={holidays} onChanged={setHolidays} onImport={onImport ?? jest.fn()} />
-  );
+  return <HolidaysSection token="tok" location={location} holidays={holidays} onChanged={setHolidays} />;
 }
 
 function renderSection(initial: LocationHoliday[], location: ClinicLocation = usa) {
-  const onImport = jest.fn();
-  render(<Harness location={location} initial={initial} onImport={onImport} />);
-  return { onImport };
+  render(<Harness location={location} initial={initial} />);
 }
 
 const rowOf = (name: string) => screen.getByText(name).closest('tr') as HTMLElement;
@@ -66,7 +72,7 @@ beforeEach(() => jest.clearAllMocks());
 describe('HolidaysSection (DX-316, spec §7.2)', () => {
   it('empty calendar shows «Añade los festivos de tu sede» with both actions', async () => {
     const user = setupUser();
-    const { onImport } = renderSection([]);
+    renderSection([]);
     expect(screen.getByRole('heading', { level: 2, name: copy.heading })).toBeInTheDocument();
     expect(screen.getByText('Añade los festivos de tu sede')).toBeInTheDocument();
     expect(
@@ -76,7 +82,7 @@ describe('HolidaysSection (DX-316, spec §7.2)', () => {
     ).toBeInTheDocument();
     expect(screen.getAllByRole('button', { name: 'Añadir festivo' })).toHaveLength(1);
     await user.click(screen.getByRole('button', { name: 'Importar' }));
-    expect(onImport).toHaveBeenCalledTimes(1);
+    expect(await screen.findByRole('dialog', { name: 'Importar festivos' })).toBeInTheDocument();
   });
 
   it.each([
@@ -266,5 +272,60 @@ describe('HolidaysSection (DX-316, spec §7.2)', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
     await waitFor(() => expect(screen.getByRole('button', { name: copy.add })).toHaveFocus());
     expect(document.activeElement).not.toBe(document.body);
+  });
+
+  describe('import (Task 10)', () => {
+    function importResult(n: number, dryRun: boolean, extra: Partial<HolidayImportResult['counts']> = {}): HolidayImportResult {
+      return { format: 'CSV', dryRun, counts: { new: n, duplicate: 0, error: 0, ...extra }, rows: [] };
+    }
+    const csvFile = () => new File(['fecha,nombre\n2027-05-03,Obras\n'], 'festivos.csv', { type: 'text/csv' });
+
+    async function importFromEmpty(user: ReturnType<typeof setupUser>) {
+      await user.click(screen.getByRole('button', { name: 'Importar' }));
+      await user.upload(await screen.findByLabelText('Archivo de festivos (.csv o .ics)'), csvFile());
+      await screen.findByTestId('holiday-import-summary');
+      await user.click(screen.getByRole('button', { name: /^Importar \d/ }));
+    }
+
+    it('confirming imports, closes, reloads and shows the status summary', async () => {
+      const user = setupUser();
+      mockedPreview.mockResolvedValue(importResult(2, true));
+      mockedImport.mockResolvedValue(importResult(2, false));
+      mockedGet.mockResolvedValue({ locationId: 'sur', workingWeekdays: [1, 2, 3, 4, 5], holidays: [mayo, puntual2027] });
+      renderSection([]);
+      await importFromEmpty(user);
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+      expect(mockedGet).toHaveBeenCalledWith('tok', 'sur');
+      expect(rowOf('Día de la sede')).toBeInTheDocument();
+      expect(rowOf('Cierre por obras')).toBeInTheDocument();
+      expect(screen.getByRole('status')).toHaveTextContent('Importados 2 festivos');
+      // El vacío ya no está: el foco va al «Importar» de la barra, no a <body>.
+      await waitFor(() => expect(screen.getByRole('button', { name: 'Importar' })).toHaveFocus());
+    });
+
+    it('the status summary is singular and adds what was skipped', async () => {
+      const user = setupUser();
+      mockedPreview.mockResolvedValue(importResult(1, true, { duplicate: 3, error: 1 }));
+      mockedImport.mockResolvedValue(importResult(1, false, { duplicate: 3, error: 1 }));
+      mockedGet.mockResolvedValue({ locationId: 'sur', workingWeekdays: [1, 2, 3, 4, 5], holidays: [mayo] });
+      renderSection([]);
+      await importFromEmpty(user);
+      await waitFor(() => expect(screen.getByRole('status')).toHaveTextContent('Importado 1 festivo · 3 ya existían · 1 con error'));
+    });
+
+    it('if the reload fails after importing, it says so with a retry and keeps the summary', async () => {
+      const user = setupUser();
+      mockedPreview.mockResolvedValue(importResult(2, true));
+      mockedImport.mockResolvedValue(importResult(2, false));
+      mockedGet.mockRejectedValueOnce(new ApiError(500, 'boom'));
+      renderSection([]);
+      await importFromEmpty(user);
+      await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+      expect(screen.getByRole('status')).toHaveTextContent('Importados 2 festivos');
+      expect(mockedNotify).toHaveBeenCalledWith(copy.reloadError, expect.objectContaining({ onRetry: expect.any(Function) }));
+      mockedGet.mockResolvedValueOnce({ locationId: 'sur', workingWeekdays: [1, 2, 3, 4, 5], holidays: [mayo] });
+      mockedNotify.mock.calls[0][1]!.onRetry!();
+      expect(await screen.findByText('Día de la sede')).toBeInTheDocument();
+    });
   });
 });

@@ -5,9 +5,15 @@ import { CalendarDays, Pencil, Plus, Trash2, Upload } from 'lucide-react';
 import { ApiError } from '@/lib/api/api-error';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import type { RegionalFormat } from '@/lib/format/regional-format';
-import { deleteHoliday, type LocationHoliday } from '@/lib/locations/location-calendar-api';
+import {
+  deleteHoliday,
+  getLocationCalendar,
+  type HolidayImportResult,
+  type LocationHoliday,
+} from '@/lib/locations/location-calendar-api';
 import { groupHolidays, recurringLabel } from '@/lib/locations/location-calendar';
 import { locationRegionalFormat } from '@/lib/locations/location-settings';
+import { sedeNumber } from '@/lib/format/sede-number';
 import type { ClinicLocation } from '@/lib/locations/locations-api';
 import { civilWeekday } from '@/lib/time/civil-day';
 import { notifyError } from '@/components/errors/notify';
@@ -18,6 +24,7 @@ import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { HolidayFormModal } from './holiday-form-modal';
+import { HolidayImportModal, importedSummaryText } from './holiday-import-modal';
 
 export const holidaysCopy = {
   heading: 'Festivos',
@@ -42,6 +49,8 @@ export const holidaysCopy = {
   alreadyDeleted: 'Ese festivo ya se había eliminado.',
   /** Sin formato de la sede no se pinta ninguna fecha (R11); la nota la pone la vista. */
   noDate: '—',
+  /** La importación ya se hizo; lo que falló es traer la lista nueva. */
+  reloadError: 'Importamos los festivos, pero no pudimos recargar la lista.',
 };
 
 const copy = holidaysCopy;
@@ -55,13 +64,11 @@ interface HolidaysSectionProps {
   location: ClinicLocation;
   holidays: readonly LocationHoliday[];
   onChanged: HolidaysUpdate;
-  /** Abre la importación (Task 10). Sin ella no se ofrece el botón. */
-  onImport?: () => void;
 }
 
 type FormState = { holiday?: LocationHoliday; key: number } | null;
-/** A dónde vuelve el foco cuando se cierra un modal: «Añadir festivo» o las acciones de una fila. */
-type FocusTarget = { kind: 'add' } | { kind: 'row'; id: string };
+/** A dónde vuelve el foco cuando se cierra un modal: «Añadir festivo», «Importar» o las acciones de una fila. */
+type FocusTarget = { kind: 'add' } | { kind: 'import' } | { kind: 'row'; id: string };
 
 function dateText(holiday: LocationHoliday, fmt: RegionalFormat | null): string {
   if (!fmt) return copy.noDate;
@@ -77,13 +84,17 @@ function dateText(holiday: LocationHoliday, fmt: RegionalFormat | null): string 
  * edición en `HolidayFormModal`; eliminar pide confirmación, y si falla avisa
  * con reintento sin quitar la fila (escalón 3).
  */
-export function HolidaysSection({ token, location, holidays, onChanged, onImport }: HolidaysSectionProps) {
+export function HolidaysSection({ token, location, holidays, onChanged }: HolidaysSectionProps) {
   const fmt = locationRegionalFormat(location);
   const [form, setForm] = useState<FormState>(null);
   const [formOpen, setFormOpen] = useState(false);
   const [deleting, setDeleting] = useState<LocationHoliday | null>(null);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [importKey, setImportKey] = useState<number | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
+  const [importSummary, setImportSummary] = useState<string | null>(null);
   const addRef = useRef<HTMLButtonElement>(null);
+  const importRef = useRef<HTMLButtonElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const focusTarget = useRef<FocusTarget>({ kind: 'add' });
   const headingId = useId();
@@ -97,7 +108,29 @@ export function HolidaysSection({ token, location, holidays, onChanged, onImport
       target.kind === 'row'
         ? listRef.current?.querySelector<HTMLButtonElement>(`[data-holiday-id="${CSS.escape(target.id)}"] button`)
         : null;
-    (rowTrigger ?? addRef.current)?.focus();
+    const fallback = target.kind === 'import' ? (importRef.current ?? addRef.current) : addRef.current;
+    (rowTrigger ?? fallback)?.focus();
+  }
+
+  function openImport() {
+    focusTarget.current = { kind: 'import' };
+    setImportKey((prev) => (prev ?? 0) + 1);
+    setImportOpen(true);
+  }
+
+  /** La respuesta de la importación no trae ids: se recarga el calendario (spec §7.2). */
+  async function reload() {
+    try {
+      const fresh = await getLocationCalendar(token, location.id);
+      onChanged(() => fresh.holidays);
+    } catch (err) {
+      notifyError(apiErrorMessage(err, copy.reloadError), { onRetry: () => void reload() });
+    }
+  }
+
+  async function imported(result: HolidayImportResult) {
+    setImportSummary(importedSummaryText(result.counts, (n) => sedeNumber(n, fmt)));
+    await reload();
   }
 
   function openCreate() {
@@ -156,19 +189,26 @@ export function HolidaysSection({ token, location, holidays, onChanged, onImport
       {copy.add}
     </Button>
   );
-  const importButton = onImport ? (
-    <Button type="button" variant="secondary" onClick={onImport} className="max-sm:min-h-11 max-sm:w-full">
+  // Solo uno montado a la vez (barra o vacío), así que comparten la ref.
+  const importButton = (
+    <Button ref={importRef} type="button" variant="secondary" onClick={openImport} className="max-sm:min-h-11 max-sm:w-full">
       <Upload aria-hidden />
       {copy.import}
     </Button>
-  ) : null;
+  );
 
   return (
     <section aria-labelledby={headingId} className="flex flex-col gap-4">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <h2 id={headingId} className="text-lg font-semibold text-ink">
-          {copy.heading}
-        </h2>
+        <div className="flex flex-col gap-1">
+          <h2 id={headingId} className="text-lg font-semibold text-ink">
+            {copy.heading}
+          </h2>
+          {/* Siempre montada para que se anuncie; no hay toast de éxito en el proyecto. */}
+          <p role="status" className="text-sm text-muted tabular-nums empty:hidden">
+            {importSummary}
+          </p>
+        </div>
         {blocks.length > 0 ? (
           <div className="flex flex-col gap-2 sm:flex-row-reverse">
             {addButton}
@@ -255,6 +295,18 @@ export function HolidaysSection({ token, location, holidays, onChanged, onImport
           locationId={location.id}
           holiday={form.holiday}
           onSaved={saved}
+          onCloseAutoFocus={restoreFocus}
+        />
+      ) : null}
+
+      {importKey !== null ? (
+        <HolidayImportModal
+          key={importKey}
+          open={importOpen}
+          onOpenChange={setImportOpen}
+          token={token}
+          location={location}
+          onImported={imported}
           onCloseAutoFocus={restoreFocus}
         />
       ) : null}
