@@ -77,6 +77,18 @@ describe('PrescriptionTemplatesManager', () => {
     expect(await screen.findAllByText('Analgesia')).not.toHaveLength(0);
   });
 
+  it('the template form marks every field but the active ingredient as optional, packages included', async () => {
+    const user = setupUser();
+    render(<PrescriptionTemplatesManager token="tok" allowed />);
+    await screen.findByRole('table', { name: 'Plantillas de receta' });
+    await user.click(screen.getByRole('button', { name: 'Nueva plantilla' }));
+    const dialog = await screen.findByRole('dialog', { name: 'Nueva plantilla de receta' });
+    expect(within(dialog).getByLabelText('Principio activo (DCI)')).toBeInTheDocument();
+    expect(within(dialog).getByLabelText('Concentración (opcional)')).toBeInTheDocument();
+    expect(within(dialog).getByLabelText('Nº de envases (opcional)')).toBeInTheDocument();
+    expect(within(dialog).queryByRole('textbox', { name: /Nº de registro del medicamento/ })).not.toBeInTheDocument();
+  });
+
   it('edita y retira con confirmación', async () => {
     const user = setupUser();
     mockedUpdate.mockResolvedValue({ ...postExodoncia, name: 'Post-exodoncia adulto' });

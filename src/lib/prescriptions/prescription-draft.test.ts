@@ -69,12 +69,12 @@ describe('itemDraftErrors', () => {
     quantityUnit: 'cápsulas',
   };
 
-  it('un medicamento completo en Colombia no tiene errores (envases y marca opcionales)', () => {
-    expect(itemDraftErrors(complete, 'CO')).toEqual({});
+  it('un medicamento completo no tiene errores (envases y marca opcionales)', () => {
+    expect(itemDraftErrors(complete)).toEqual({});
   });
 
   it('marca cada campo obligatorio vacío con un mensaje en español', () => {
-    const errors = itemDraftErrors(emptyItemDraft(), 'CO');
+    const errors = itemDraftErrors(emptyItemDraft());
     expect(Object.keys(errors)).toEqual([
       'activeIngredient',
       'concentration',
@@ -90,15 +90,16 @@ describe('itemDraftErrors', () => {
     expect(errors.durationDays).toMatch(/^Falta la duración/);
   });
 
-  it('en España el nº de envases es obligatorio', () => {
-    expect(itemDraftErrors(complete, 'ES')).toEqual({ packages: expect.stringMatching(/envases/) });
-    expect(itemDraftErrors({ ...complete, packages: '1' }, 'ES')).toEqual({});
+  it('itemDraftErrors never requires packages', () => {
+    expect(itemDraftErrors({ ...complete, packages: '' })).toEqual({});
+    expect(itemDraftErrors({ ...complete, packages: '   ' })).toEqual({});
+    expect(itemDraftErrors({ ...complete, packages: '1' })).toEqual({});
+    expect(itemDraftErrors(emptyItemDraft())).not.toHaveProperty('packages');
   });
 
   it('los números deben ser enteros dentro de su rango, también con coma decimal', () => {
     const errors = itemDraftErrors(
       { ...complete, durationDays: '7,5', totalQuantity: '0', packages: '100' },
-      'CO',
     );
     expect(errors.durationDays).toBe('Debe ser un número entero entre 1 y 365.');
     expect(errors.totalQuantity).toBe('Debe ser un número entero entre 1 y 9999.');
@@ -106,6 +107,6 @@ describe('itemDraftErrors', () => {
   });
 
   it('un texto solo con espacios cuenta como vacío', () => {
-    expect(itemDraftErrors({ ...complete, dose: '   ' }, 'CO')).toEqual({ dose: 'Falta la dosis.' });
+    expect(itemDraftErrors({ ...complete, dose: '   ' })).toEqual({ dose: 'Falta la dosis.' });
   });
 });

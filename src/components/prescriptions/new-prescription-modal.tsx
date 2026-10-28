@@ -24,8 +24,6 @@ import {
   type ItemDraft,
   type ItemDraftErrors,
 } from '@/lib/prescriptions/prescription-draft';
-// TODO(T8): el modal deja de razonar por país.
-import { COUNTRY_LABELS, type ClinicCountry } from '@/lib/locations/location-country';
 import { FormModal } from '@/components/shared/form-modal';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { FieldError } from '@/components/errors/field-error';
@@ -42,8 +40,8 @@ import { PrescriptionSafetyPanel, type SafetyState } from './prescription-safety
 const copy = {
   title: 'Nueva receta',
   description: 'Desde una plantilla o en blanco. Una vez emitida no se puede editar: solo anular.',
-  issuer: (location: string, country: string, days: number) =>
-    `Se emite desde ${location} (${country}) · validez de ${days} días naturales.`,
+  issuer: (location: string, days: number) =>
+    `Se emite desde ${location} · válida ${days === 1 ? '1 día' : `${days} días`}.`,
   issuerError: 'No pudimos preparar la receta.',
   loading: 'Preparando la receta',
   templateLabel: 'Partir de una plantilla',
@@ -52,16 +50,14 @@ const copy = {
   templateCount: (n: number) => (n === 1 ? '1 medicamento' : `${n} medicamentos`),
   requiredNote: 'Todos los campos son obligatorios salvo los marcados como opcionales.',
   addItem: 'Añadir medicamento',
-  tooManyItems: (max: number) =>
-    max === 1
-      ? 'En España cada receta lleva un solo medicamento: quita los demás o emite una receta por cada uno.'
-      : `Una receta admite como mucho ${max} medicamentos.`,
-  dateLabel: { CO: 'Fecha de la receta', ES: 'Fecha prevista de dispensación' },
+  tooManyItems: (max: number) => `Una receta admite como mucho ${max} medicamentos.`,
+  dateLabel: 'Válida desde',
   dateHint: 'Si la dejas vacía, hoy.',
   notesLabel: 'Indicaciones generales (opcional)',
-  licenseLabel: { CO: 'Tu registro profesional', ES: 'Tu nº de colegiado' },
+  licenseLabel: 'Tu nº de registro profesional',
   licenseHint: 'Tu perfil de esta clínica aún no lo tiene: se guardará en la receta y en tu perfil.',
-  licenseMissing: { CO: 'Falta tu registro profesional.', ES: 'Falta tu nº de colegiado.' },
+  licenseMissing: 'Falta tu nº de registro profesional.',
+  clinicalRecordNote: 'Esta clínica exige el documento del paciente como nº de historia clínica.',
   submit: 'Emitir receta',
   genericError: 'No pudimos emitir la receta. Intenta de nuevo.',
   reasonMissing: 'Escribe el motivo para emitir pese a los avisos.',
@@ -99,12 +95,13 @@ interface NewPrescriptionModalProps {
 }
 
 /**
- * «Nueva receta» (DX-013): desde una plantilla o en blanco, con uno o varios
- * medicamentos (en ES, uno). Antes de enviar valida en el cliente los campos
- * obligatorios según el país de la sede (mismas reglas que la API): marca cada
+ * «Nueva receta» (DX-013, receta única de DX-324): desde una plantilla o en
+ * blanco, con hasta `maxItems` medicamentos. Las reglas y los ajustes (validez,
+ * nº de HC) son los de la clínica, que da el emisor. Antes de enviar valida en
+ * el cliente los campos obligatorios (mismas reglas que la API): marca cada
  * campo inválido junto al control y lleva el foco al primero. Lo que el
- * formulario no conoce (documento o nacimiento del paciente) lo dice la API en
- * un 400, que `FormModal` muestra en un resumen visible y con el foco.
+ * formulario no conoce (el documento del paciente) lo dice la API en un 400,
+ * que `FormModal` muestra en un resumen visible y con el foco.
  *
  * Receta segura (DX-300): mientras se escribe, el modal pide al SERVIDOR los
  * avisos de seguridad (alergias con las casillas de la anamnesis,
@@ -265,8 +262,6 @@ function NewPrescriptionForm({
       ? 'Confirma los avisos de seguridad para emitir.'
       : null;
 
-  // TODO(T8): el emisor ya no trae país; hasta la T8 el modal se pinta como antes con 'CO'.
-  const country: ClinicCountry = 'CO';
   const maxItems = issuer?.maxItems ?? 10;
   const tooMany = items.length > maxItems;
   const needsLicense = issuer !== null && issuer.professionalLicense === null;
@@ -315,8 +310,8 @@ function NewPrescriptionForm({
       return;
     }
 
-    const nextItemErrors = items.map((item) => itemDraftErrors(item, country));
-    const nextLicenseError = needsLicense && !license.trim() ? copy.licenseMissing[country] : null;
+    const nextItemErrors = items.map((item) => itemDraftErrors(item));
+    const nextLicenseError = needsLicense && !license.trim() ? copy.licenseMissing : null;
     // Ids en el orden en que se ven: el primero recibe el foco.
     const invalidIds = [
       ...nextItemErrors.flatMap((errors, index) =>
@@ -406,9 +401,12 @@ function NewPrescriptionForm({
         </div>
       ) : (
         <>
-          <p className="text-sm text-muted">
-            {copy.issuer(issuer.locationName, COUNTRY_LABELS[country], issuer.validityDays)}
-          </p>
+          <div className="flex flex-col gap-1">
+            <p className="text-sm text-muted">{copy.issuer(issuer.locationName, issuer.validityDays)}</p>
+            {issuer.requireClinicalRecordNumber ? (
+              <p className="text-sm text-muted">{copy.clinicalRecordNote}</p>
+            ) : null}
+          </div>
 
           <FormField htmlFor="rx-template" label={copy.templateLabel}>
             {templatesFailed ? (
@@ -445,7 +443,7 @@ function NewPrescriptionForm({
                 index={index}
                 item={item}
                 idPrefix="rx-item"
-                mode={{ kind: 'prescription', country }}
+                mode={{ kind: 'prescription' }}
                 errors={itemErrors[index]}
                 onChange={(patch) => updateItem(index, patch)}
                 onRemove={items.length > 1 ? () => removeItem(index) : undefined}
@@ -465,7 +463,7 @@ function NewPrescriptionForm({
           </Button>
 
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <FormField htmlFor="rx-date" label={copy.dateLabel[country]} hint={copy.dateHint}>
+            <FormField htmlFor="rx-date" label={copy.dateLabel} hint={copy.dateHint}>
               <Input
                 id="rx-date"
                 type="date"
@@ -480,7 +478,7 @@ function NewPrescriptionForm({
             {needsLicense ? (
               <FormField
                 htmlFor="rx-license"
-                label={copy.licenseLabel[country]}
+                label={copy.licenseLabel}
                 hint={copy.licenseHint}
                 error={licenseError}
               >
@@ -515,7 +513,6 @@ function NewPrescriptionForm({
 
           <PrescriptionSafetyPanel
             state={visibleSafety}
-            country={country}
             onRetry={() => setSafetyRetry((k) => k + 1)}
             confirmed={confirmed}
             onConfirmedChange={(checked) => setConfirmedKey(checked ? alertKey : null)}

@@ -235,9 +235,7 @@ function prescriptionFiles(): string[] {
 }
 
 describe('arquitectura: receta sin país (DX-324)', () => {
-  // TODO(T8): pasa a `it` cuando el modal, el panel, los medicamentos y el
-  // borrador dejen de razonar por país (T7 limpia el documento).
-  it.failing('prescription files never mention a country outside the legacy layout', () => {
+  it('prescription files never mention a country outside the legacy layout', () => {
     const mentions = prescriptionFiles().flatMap((path) =>
       readFileSync(path, 'utf8')
         .split('\n')
