@@ -4853,11 +4853,6 @@ export interface components {
              */
             timeZone: string;
         };
-        /**
-         * @description País de la primera sede. Obligatorio junto con los otros tres campos location*; sin los cuatro es la forma legada (fase 1).
-         * @enum {string}
-         */
-        ClinicCountry: "CO" | "ES";
         RegisterDto: {
             clinicName: string;
             /** @example sonrisa */
@@ -4867,8 +4862,8 @@ export interface components {
             /** Format: password */
             password: string;
             fullName: string;
-            /** @description País de la primera sede. Obligatorio junto con los otros tres campos location*; sin los cuatro es la forma legada (fase 1). */
-            locationCountry?: components["schemas"]["ClinicCountry"];
+            /** @description País de la primera sede: código ISO 3166-1 alfa-2 de la lista de países. Obligatorio junto con los otros campos location*. */
+            locationCountry?: string;
             /**
              * @description Moneda ISO 4217 de la primera sede (GET /public/currencies).
              * @example EUR
@@ -6312,7 +6307,8 @@ export interface components {
             id: string;
             name: string;
             address: string | null;
-            country: components["schemas"]["ClinicCountry"];
+            /** @description País de la sede: código ISO 3166-1 alfa-2 de la lista de países. No decide ninguna regla. */
+            country: string;
             /** @description DX-319: nº de registro sanitario (texto libre) o null. */
             healthRegistrationNumber: string | null;
             /** @description DX-319: si el nº de registro sanitario aparece en los documentos de la sede (por defecto no). */
@@ -6354,8 +6350,8 @@ export interface components {
             name: string;
             /** @example Cra 15 #90-20 */
             address?: string;
-            /** @description País de la sede: decide los campos legales obligatorios de la receta (CO o ES). */
-            country: components["schemas"]["ClinicCountry"];
+            /** @description País de la sede: código ISO 3166-1 alfa-2 de la lista de países. No decide ninguna regla. */
+            country: string;
             /**
              * @description G1: moneda ISO 4217 de la sede (3 letras; se pasa a mayúsculas). Tiene que estar en GET /currencies.
              * @example EUR
@@ -6386,8 +6382,8 @@ export interface components {
         UpdateLocationDto: {
             name?: string;
             address?: string;
-            /** @description País de la sede: decide los campos legales obligatorios de la receta (CO o ES). */
-            country?: components["schemas"]["ClinicCountry"];
+            /** @description País de la sede: código ISO 3166-1 alfa-2 de la lista de países. No decide ninguna regla. */
+            country?: string;
             /**
              * @description DX-319: nº de registro sanitario de la sede, texto libre sin formato ni validación por país (hasta 64 caracteres, se recorta). Solo ADMIN; queda auditado con su antes y después. Vacío o null lo quita; sin el campo no cambia.
              * @example NRS 28/1234-AB

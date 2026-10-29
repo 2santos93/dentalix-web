@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import type { Currency } from '@/lib/reference/currencies-api';
 import type { HourCycle } from '@/lib/format/regional-format';
-import { COUNTRY_LABELS, type ClinicCountry } from '@/lib/locations/location-country';
+import { COUNTRIES } from '@/lib/locations/countries';
 import {
   browserLocales,
   HOUR_CYCLE_LABELS,
@@ -24,7 +24,7 @@ import { cn } from '@/lib/utils';
 export const regionalSettingsFieldsCopy = {
   country: 'País',
   countryPlaceholder: 'Elige el país',
-  countryHint: 'Decide los campos legales de la receta. No cambia la moneda, la zona ni el formato.',
+  countryHint: 'País donde está la sede. No cambia la moneda, la zona ni el formato.',
   currency: 'Moneda',
   currencyPlaceholder: 'Elige la moneda',
   timeZone: 'Zona horaria',
@@ -40,8 +40,6 @@ export const regionalSettingsFieldsCopy = {
 };
 
 const copy = regionalSettingsFieldsCopy;
-
-const COUNTRIES = Object.keys(COUNTRY_LABELS) as ClinicCountry[];
 
 const HOUR_CYCLES: readonly HourCycle[] = ['h12', 'h23'];
 
@@ -134,7 +132,7 @@ export function RegionalSettingsFields({
         <select
           id={id('country')}
           value={values.country}
-          onChange={(e) => onChange('country', e.target.value as ClinicCountry | '')}
+          onChange={(e) => onChange('country', e.target.value)}
           aria-required
           aria-invalid={invalid('country')}
           aria-describedby={describedBy('country', `${id('country')}-hint`)}
@@ -144,8 +142,8 @@ export function RegionalSettingsFields({
             {copy.countryPlaceholder}
           </option>
           {COUNTRIES.map((c) => (
-            <option key={c} value={c}>
-              {COUNTRY_LABELS[c]}
+            <option key={c.code} value={c.code}>
+              {c.name}
             </option>
           ))}
         </select>

@@ -13,8 +13,7 @@ type RegisterLocationField =
 /**
  * Cuerpo de `POST /auth/register` que envía esta web (G1, spec §3.5; G1-B
  * §4.3): la primera sede va SIEMPRE con país, moneda, zona, formato y reloj.
- * La API acepta aún las formas sin ellos (webs antiguas, fase 1); esta web no
- * las usa.
+ * Desde DX-312 (R7) la API ya no acepta la forma sin sede.
  */
 export type RegisterInput = Omit<RegisterDto, RegisterLocationField> & Required<Pick<RegisterDto, RegisterLocationField>>;
 

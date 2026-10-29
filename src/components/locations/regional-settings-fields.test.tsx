@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { render, screen, within } from '@testing-library/react';
 import type { HourCycle } from '@/lib/format/regional-format';
-import { RegionalSettingsFields } from './regional-settings-fields';
+import { RegionalSettingsFields, regionalSettingsFieldsCopy } from './regional-settings-fields';
+import { COUNTRIES } from '@/lib/locations/countries';
 import { listCurrencies } from '@/lib/reference/currencies-api';
 import {
   canonicalLocale,
@@ -53,11 +54,30 @@ describe('RegionalSettingsFields', () => {
     await screen.findByRole('option', { name: 'Euro (€)' });
     expect(screen.getByLabelText('País')).toHaveValue('');
     expect(screen.getByLabelText('Moneda')).toHaveValue('');
-    expect(within(screen.getByLabelText('País')).getAllByRole('option').map((o) => o.textContent)).toEqual([
-      'Elige el país',
-      'Colombia',
-      'España',
-    ]);
+    expect(within(screen.getByLabelText('País')).getAllByRole('option')[0]).toHaveTextContent('Elige el país');
+  });
+
+  it('the country select offers every country of the shared list by name', async () => {
+    const user = setupUser();
+    render(<Harness />);
+    await screen.findByRole('option', { name: 'Euro (€)' });
+    const select = screen.getByLabelText('País');
+    const options = within(select).getAllByRole('option').slice(1) as HTMLOptionElement[];
+    expect(options.map((o) => [o.value, o.textContent])).toEqual(COUNTRIES.map((c) => [c.code, c.name]));
+    expect(options).toHaveLength(250);
+    // El valor de cada opción es el código: elegir por código sigue valiendo.
+    await user.selectOptions(select, 'VE');
+    expect(select).toHaveValue('VE');
+    expect(screen.getByRole('option', { name: 'Venezuela', selected: true })).toBeInTheDocument();
+  });
+
+  it('the country hint says what the country is and promises nothing about phones or the prescription', async () => {
+    render(<Harness />);
+    await screen.findByRole('option', { name: 'Euro (€)' });
+    const hint = 'País donde está la sede. No cambia la moneda, la zona ni el formato.';
+    expect(regionalSettingsFieldsCopy.countryHint).toBe(hint);
+    expect(screen.getByLabelText('País')).toHaveAccessibleDescription(hint);
+    expect(hint).not.toMatch(/receta|tel[eé]fono|indicativo/i);
   });
 
   it('shows a live preview with the chosen format and zone', async () => {
@@ -220,5 +240,13 @@ describe('regional-settings helpers', () => {
         hourCycle: 'h11' as RegionalSettingsValues['hourCycle'],
       }),
     ).toEqual({ hourCycle: 'El reloj «h11» no es válido: elige 12 h o 24 h.' });
+  });
+
+  it('validateRegionalSettings rejects a code that is not in the list with the API message', () => {
+    const valid = { currency: 'EUR', timeZone: 'UTC', locale: 'de-DE', hourCycle: 'h23' } as const;
+    expect(validateRegionalSettings({ ...valid, country: 'VE' })).toEqual({});
+    expect(validateRegionalSettings({ ...valid, country: 'ZZ' })).toEqual({
+      country: 'El país «ZZ» no está en la lista de países.',
+    });
   });
 });

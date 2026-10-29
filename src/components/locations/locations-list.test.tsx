@@ -56,10 +56,15 @@ beforeEach(() => {
 });
 
 describe('LocationsList (G1, spec §6.3)', () => {
-  it('lists each location with country, currency, zone and format', async () => {
-    mockedList.mockResolvedValue([norte]);
+  it('lists each location with its country name', async () => {
+    const caracas = clinicLocation({ id: 'ccs', name: 'Sede Caracas', country: 'VE', currency: 'VES', timeZone: 'America/Caracas', locale: 'es-VE' });
+    // Un código que no está en la copia compartida se pinta tal cual.
+    const unknown = clinicLocation({ id: 'zz', name: 'Sede Sin Lista', country: 'ZZ' });
+    mockedList.mockResolvedValue([norte, caracas, unknown]);
     render(<LocationsList token={ADMIN} canEdit />);
     const row = (await screen.findByText('Sede Norte')).closest('li')!;
+    expect(screen.getByText('Sede Caracas').closest('li')).toHaveTextContent('Venezuela');
+    expect(screen.getByText('Sede Sin Lista').closest('li')).toHaveTextContent('ZZ');
     expect(row).toHaveTextContent('España');
     expect(row).toHaveTextContent('EUR');
     expect(row).toHaveTextContent('Europe/Madrid');

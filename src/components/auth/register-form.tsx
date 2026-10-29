@@ -122,7 +122,7 @@ export function RegisterForm({ tenant }: { tenant: string | null }) {
         fullName,
         email,
         password,
-        locationCountry: regional.country as Exclude<RegionalSettingsValues['country'], ''>,
+        locationCountry: regional.country,
         locationCurrency: regional.currency,
         locationTimeZone: timeZone,
         locationLocale: locale,

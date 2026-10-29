@@ -162,7 +162,7 @@ export function LocationFormModal({ open, onOpenChange, token, location, onSaved
       name: name.trim(),
       ...(trimmedAddress ? { address: trimmedAddress } : {}),
       ...(trimmedPhone ? { phone: trimmedPhone } : {}),
-      country: regional.country as CreateLocationInput['country'],
+      country: regional.country,
       currency: regional.currency,
       timeZone: canonicalTimeZone(regional.timeZone) ?? regional.timeZone.trim(),
       locale: canonicalLocale(regional.locale) ?? regional.locale.trim(),

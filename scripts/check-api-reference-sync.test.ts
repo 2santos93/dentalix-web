@@ -7,8 +7,8 @@ import { tmpdir } from 'node:os';
 import path from 'node:path';
 
 /**
- * DX-350 (G1-B §8): las tres listas que la API posee y la web copia byte a
- * byte. Corre el script de verdad contra árboles de ejemplo.
+ * DX-350 (G1-B §8) y DX-312 (§6.5): las cuatro listas que la API posee y la
+ * web copia byte a byte. Corre el script de verdad contra árboles de ejemplo.
  */
 const SCRIPT = path.join(__dirname, 'check-api-reference-sync.mjs');
 
@@ -16,6 +16,7 @@ const PAIRS = [
   ['prisma/reference/iso4217-zero-decimal.json', 'src/lib/money/iso4217-zero-decimal.json'],
   ['prisma/reference/iana-zone-names.json', 'src/lib/locations/iana-zone-names.json'],
   ['src/shared/format/regional-format.cases.json', 'src/lib/format/regional-format.cases.json'],
+  ['prisma/reference/iso3166-countries.json', 'src/lib/locations/iso3166-countries.json'],
 ] as const;
 
 function write(root: string, rel: string, content: string) {
@@ -45,6 +46,17 @@ describe('check-api-reference-sync', () => {
   it('identical files pass', () => {
     const { web, api } = trees();
     expect(run(api, web).code).toBe(0);
+  });
+
+  it('the four shared files are compared byte by byte', () => {
+    const { web, api } = trees({ 'prisma/reference/iso3166-countries.json': '{"n":3} \n' });
+    const r = run(api, web);
+    expect(r.code).toBe(1);
+    expect(r.out).toContain(
+      'src/lib/locations/iso3166-countries.json difiere de prisma/reference/iso3166-countries.json (primer byte distinto: 7)',
+    );
+    const ok = trees();
+    expect(run(ok.api, ok.web).out).toContain('4 ficheros idénticos');
   });
 
   it('check-api-reference-sync fails naming the drifted file', () => {

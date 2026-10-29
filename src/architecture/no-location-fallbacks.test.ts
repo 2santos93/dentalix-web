@@ -528,13 +528,17 @@ describe('arquitectura: pagadores sin país (DX-326)', () => {
  * `lib/api/schema.d.ts` y los `*fixture*` de producción. Se salta solo los
  * tests de `src`, `lib/test/**`, el normalizador legado de R13
  * (`lib/patients/legacy-doc-type.ts`), el formato de receta anterior de DX-324
- * y las líneas con nombre de `COUNTRY_DOCUMENT_LINE_EXCEPTIONS`. En `e2e/`
+ * la lista de países copiada de la API (DX-312 R8: datos generados, donde
+ * `CC` es un código de país, no un documento) y las líneas con nombre de
+ * `COUNTRY_DOCUMENT_LINE_EXCEPTIONS`. En `e2e/`
  * solo valen dentro de un `test('legacy …')`, de una función `legacy…` o de
  * un fichero `legacy-*`.
  */
 const DOC_TYPE_LEGACY_NORMALIZER = 'lib/patients/legacy-doc-type.ts';
 // DX-324 (R12): `PRESCRIPTION_LEGACY_LAYOUT` congela los rótulos de las recetas anteriores.
 const LEGACY_FILES = [DOC_TYPE_LEGACY_NORMALIZER, PRESCRIPTION_LEGACY_LAYOUT];
+// DX-312 (R8, R10): copia byte a byte de la lista generada en la API; `scripts/check-api-reference-sync.mjs` la vigila.
+const COUNTRY_LIST_COPY = 'lib/locations/iso3166-countries.json';
 const COUNTRY_DOCUMENT = /[Cc][ée]dula|[Tt]arjeta de identidad|[Ee]xtranjer[ií]a|\b(?:CC|TI|CE)\b|INVIMA/;
 /** Siglas de documentos de otros países: en cualquier caja, como palabra. */
 const COUNTRY_DOCUMENT_ACRONYM = /\b(?:NIT|NIF|RIF|DNI|NIE|RUT|CURP|CPF|RUC|CUIL|CUIT|NUIP)\b/i;
@@ -567,7 +571,7 @@ function documentScanFiles(dir: string = SRC): string[] {
     if (!/\.(ts|tsx|js|jsx|mjs|json|css|md)$/.test(entry.name)) return [];
     const rel = relative(SRC, path).split(sep).join('/');
     if (/\.(test|spec)\./.test(rel) || rel.startsWith('lib/test/')) return [];
-    return LEGACY_FILES.includes(rel) ? [] : [path];
+    return LEGACY_FILES.includes(rel) || rel === COUNTRY_LIST_COPY ? [] : [path];
   });
 }
 
@@ -638,6 +642,15 @@ describe('arquitectura: tipos de documento sin país (DX-327)', () => {
       countryDocumentHits(relative(SRC, path).split(sep).join('/'), readFileSync(path, 'utf8')),
     );
     expect(mentions).toEqual([]);
+  });
+
+  it('only the country list copy is skipped, and it is skipped only for its country codes', () => {
+    expect(existsSync(join(SRC, COUNTRY_LIST_COPY))).toBe(true);
+    const rels = documentScanFiles().map((f) => relative(SRC, f).split(sep).join('/'));
+    expect(rels).not.toContain(COUNTRY_LIST_COPY);
+    expect(rels).toEqual(expect.arrayContaining(['lib/locations/iana-zone-names.json', 'lib/locations/countries.ts']));
+    const hits = countryDocumentHits(COUNTRY_LIST_COPY, readFileSync(join(SRC, COUNTRY_LIST_COPY), 'utf8'));
+    expect(hits.every((h) => /: "code": "[A-Z]{2}",$/.test(h))).toBe(true);
   });
 
   it('every named line exception still exists, so a closed ticket takes its exception with it', () => {
