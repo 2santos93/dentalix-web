@@ -36,6 +36,9 @@ const admin = { fullName: 'Irene Ajustes', email: `admin.rxset.${suffix}@example
 const dentist = { fullName: 'Diego Dentista', email: `dentist.rxset.${suffix}@example.com` };
 const QA_DIR = process.env.E2E_QA_DIR;
 
+// `country` es solo el campo que `POST /locations` aún exige (hasta DX-312): un
+// dato de la sede, no una regla (R14). La receta no lo lee; su formato sale de
+// la moneda, la zona, el idioma y el reloj de cada sede.
 const SEDE_A = { name: 'Sede A', country: 'CO', currency: 'USD', timeZone: 'America/New_York', locale: 'en-US', hourCycle: 'h12' } satisfies RegionalSettings & { name: string };
 const SEDE_B = { name: 'Sede B', country: 'ES', currency: 'EUR', timeZone: 'Europe/Berlin', locale: 'de-DE', hourCycle: 'h23' } satisfies RegionalSettings & { name: string };
 

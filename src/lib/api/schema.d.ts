@@ -12946,6 +12946,11 @@ export interface components {
             printQuantityInWords: boolean;
             /** @description Se exige el documento del paciente, que se imprime como nº de historia clínica (ajuste de la clínica) */
             requireClinicalRecordNumber: boolean;
+            /**
+             * @deprecated
+             * @description Fase 1: país legado de la sede, solo para la web anterior a DX-324; la fase 2 lo retira. La web nueva no lo lee.
+             */
+            country: components["schemas"]["LegacyPrescriptionCountry"] | null;
         };
         PrescriptionSettingsDto: {
             /**

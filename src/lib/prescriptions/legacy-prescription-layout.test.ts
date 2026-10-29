@@ -28,4 +28,9 @@ describe('legacyPrescriptionLayout', () => {
   it('country null → null', () => {
     expect(legacyPrescriptionLayout({ country: null })).toBeNull();
   });
+
+  it('unknown legacy country → null (explicit neutral fallback, never undefined)', () => {
+    const unknown = { country: 'XX' as unknown as 'CO' };
+    expect(legacyPrescriptionLayout(unknown)).toBeNull();
+  });
 });

@@ -217,9 +217,17 @@ describe('arquitectura: calendario de la sede sin país (DX-316)', () => {
  * `lib/prescriptions/**` (sin tests) nombra un país, un código de país, una
  * norma o una autoridad nacional, salvo la excepción con nombre de R12:
  * `lib/prescriptions/legacy-prescription-layout.ts`, que congela los textos de
- * las recetas emitidas antes de DX-324. Mira también los comentarios.
+ * las recetas emitidas antes de DX-324. Mira también los comentarios. Cubre
+ * además las otras pantallas que tocó DX-324: Ajustes › Recetas, la ruta de
+ * impresión y el perfil del personal (antes «en Colombia, RETHUS…; en España,
+ * nº de colegiado»).
  */
 const PRESCRIPTION_LEGACY_LAYOUT = 'lib/prescriptions/legacy-prescription-layout.ts';
+const PRESCRIPTION_SCREENS = [
+  'app/(app)/settings/recetas/page.tsx',
+  'app/print/patients/[id]/prescriptions/[prescriptionId]/page.tsx',
+  'components/staff/staff-member-profile.tsx',
+];
 /** Códigos de país en mayúsculas (`'CO'`, `ES:`) y normas o autoridades nacionales. */
 const NATIONAL_TERM = /\b(?:CO|ES)\b|colegiado|DNI\/NIE|AEMPS|CIMA|Decreto|Dec\. 780|RD 1718|España|Colombia/;
 
@@ -230,6 +238,7 @@ function nationalTermHit(line: string): boolean {
 function prescriptionFiles(): string[] {
   return [join(SRC, 'components/prescriptions'), join(SRC, 'lib/prescriptions')]
     .flatMap(sourceFiles)
+    .concat(PRESCRIPTION_SCREENS.map((rel) => join(SRC, rel)))
     .filter(scanned)
     .filter((path) => relative(SRC, path).split(sep).join('/') !== PRESCRIPTION_LEGACY_LAYOUT);
 }
@@ -246,7 +255,7 @@ describe('arquitectura: receta sin país (DX-324)', () => {
     expect(mentions).toEqual([]);
   });
 
-  it('the prescription scan covers the document, the modal and the client, skips the legacy layout and catches national terms', () => {
+  it('the prescription scan covers the document, the modal, the client and the other DX-324 screens, skips the legacy layout and catches national terms', () => {
     const rels = prescriptionFiles().map((f) => relative(SRC, f).split(sep).join('/'));
     expect(rels).toEqual(
       expect.arrayContaining([
@@ -255,8 +264,10 @@ describe('arquitectura: receta sin país (DX-324)', () => {
         'lib/prescriptions/prescriptions-api.ts',
         'lib/prescriptions/prescription-layout.ts',
         'lib/prescriptions/prescription-format.ts',
+        ...PRESCRIPTION_SCREENS,
       ]),
     );
+    for (const rel of PRESCRIPTION_SCREENS) expect([rel, existsSync(join(SRC, rel))]).toEqual([rel, true]);
     expect(rels).not.toContain(PRESCRIPTION_LEGACY_LAYOUT);
     expect(rels.some((r) => r.includes('.test.'))).toBe(false);
     for (const line of [
@@ -273,6 +284,37 @@ describe('arquitectura: receta sin país (DX-324)', () => {
     }
     for (const line of ["title: 'Receta'", "documentLabel: 'Documento'", 'MUTUA_ES', 'VALUES', 'Nº de registro profesional']) {
       expect([line, nationalTermHit(line)]).toEqual([line, false]);
+    }
+  });
+});
+
+/**
+ * DX-324, fase 1: la API vuelve a enviar `PrescriptionIssuerDto.country`
+ * (deprecated) solo para la web anterior. La web nueva no lo lee en ningún
+ * sitio; la fase 2 lo retira.
+ */
+const ISSUER_COUNTRY_READ = /issuer\w*\??\.country\b|\{[^}]*\bcountry\b[^}]*\}\s*=\s*\w*issuer/i;
+
+describe('arquitectura: la web no lee el país deprecated del emisor (DX-324)', () => {
+  it('no source file reads issuer.country', () => {
+    const mentions = sourceFiles(SRC)
+      .filter(scanned)
+      .flatMap((path) =>
+        readFileSync(path, 'utf8')
+          .split('\n')
+          .map((line, i) => ({ line, n: i + 1 }))
+          .filter(({ line }) => ISSUER_COUNTRY_READ.test(line))
+          .map(({ line, n }) => `${relative(SRC, path)}:${n}: ${line.trim()}`),
+      );
+    expect(mentions).toEqual([]);
+  });
+
+  it('the issuer pattern catches property reads and destructuring, not the prescription country', () => {
+    for (const line of ['issuer.country', 'issuer?.country', 'data.issuer.country', 'const { country } = issuer;']) {
+      expect([line, ISSUER_COUNTRY_READ.test(line)]).toEqual([line, true]);
+    }
+    for (const line of ['rx.country', 'issuer.locationName', 'issuer.countryless']) {
+      expect([line, ISSUER_COUNTRY_READ.test(line)]).toEqual([line, false]);
     }
   });
 });

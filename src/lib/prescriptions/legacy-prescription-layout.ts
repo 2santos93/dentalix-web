@@ -34,7 +34,16 @@ const LEGACY_LAYOUTS: Record<LegacyPrescriptionCountry, PrescriptionLayout> = {
   },
 };
 
-/** La plantilla congelada de una receta anterior, o `null` si es una receta única. */
+/**
+ * La plantilla congelada de una receta anterior, o `null` si es una receta única.
+ *
+ * Un país legado que no esté en `LEGACY_LAYOUTS` también da `null`, a propósito:
+ * hoy es inalcanzable (la API solo emite `LegacyPrescriptionCountry`), y si un
+ * día llega un valor nuevo o una fila rota, la receta se imprime con la
+ * plantilla neutra antes que romper la impresión. Es una reserva explícita, no
+ * un descuido; la fija `legacy-prescription-layout.test.ts`.
+ */
 export function legacyPrescriptionLayout(rx: Pick<Prescription, 'country'>): PrescriptionLayout | null {
-  return rx.country === null ? null : LEGACY_LAYOUTS[rx.country];
+  if (rx.country === null) return null;
+  return LEGACY_LAYOUTS[rx.country] ?? null;
 }

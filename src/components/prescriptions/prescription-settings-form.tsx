@@ -78,6 +78,7 @@ export function PrescriptionSettingsForm({ token }: { token: string }) {
   const [validityError, setValidityError] = useState<string | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [notice, setNotice] = useState('');
+  const noticeRef = useRef<HTMLParagraphElement>(null);
   const validityId = useId();
   const validityRef = useRef<HTMLInputElement>(null);
   const validityHintId = `${validityId}-hint`;
@@ -97,6 +98,12 @@ export function PrescriptionSettingsForm({ token }: { token: string }) {
       cancelled = true;
     };
   }, [token, reloadKey, adopt]);
+
+  // Tras guardar, Guardar queda deshabilitado (no hay cambios) y el foco caería
+  // a `<body>`: lo llevamos al aviso para no perder el sitio al teclado.
+  useEffect(() => {
+    if (notice) noticeRef.current?.focus();
+  }, [notice]);
 
   if (loadError) {
     return (
@@ -161,14 +168,20 @@ export function PrescriptionSettingsForm({ token }: { token: string }) {
           hint={copy.wordsHint}
           checked={words}
           disabled={saving}
-          onChange={setWords}
+          onChange={(value) => {
+            setWords(value);
+            setNotice('');
+          }}
         />
         <SettingSwitch
           title={copy.recordTitle}
           hint={copy.recordHint}
           checked={record}
           disabled={saving}
-          onChange={setRecord}
+          onChange={(value) => {
+            setRecord(value);
+            setNotice('');
+          }}
         />
         <div className="px-4 py-4 sm:px-6">
           <FormField
@@ -191,6 +204,7 @@ export function PrescriptionSettingsForm({ token }: { token: string }) {
               onChange={(e) => {
                 setValidity(e.target.value);
                 setValidityError(null);
+                setNotice('');
               }}
               className="w-28 tabular-nums max-sm:min-h-11"
             />
@@ -198,7 +212,12 @@ export function PrescriptionSettingsForm({ token }: { token: string }) {
         </div>
       </div>
       {saveError ? <InlineError variant="summary">{saveError}</InlineError> : null}
-      <p role="status" className={notice ? 'text-sm text-success' : 'sr-only'}>
+      <p
+        ref={noticeRef}
+        role="status"
+        tabIndex={-1}
+        className={cn(notice ? 'text-sm text-success' : 'sr-only', 'focus:outline-none')}
+      >
         {notice}
       </p>
       <Button

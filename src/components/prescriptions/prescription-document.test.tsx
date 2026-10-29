@@ -402,6 +402,14 @@ describe('PrescriptionDocument (A4)', () => {
     expect(container.textContent).not.toMatch(/Decreto|naturales|Fórmula médica|Receta médica privada/);
   });
 
+  it('an unknown legacy country falls back to the neutral layout (M3)', () => {
+    const rx = makePrescriptionDocument({ country: 'XX' as unknown as 'CO' });
+    const { container } = renderDocument(rx);
+    expect(screen.getByRole('heading', { name: 'Receta' })).toBeInTheDocument();
+    expect(screen.getByText('Nº de registro profesional')).toBeInTheDocument();
+    expect(container.textContent).not.toMatch(/Decreto|naturales|Fórmula médica|Receta médica privada/);
+  });
+
   it('single-format validity of one day reads «(1 día)»', () => {
     renderDocument(makePrescriptionDocument({ validUntil: '2026-10-16' }));
     expect(screen.getByText('(1 día)')).toBeInTheDocument();

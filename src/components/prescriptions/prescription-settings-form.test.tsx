@@ -91,6 +91,36 @@ describe('PrescriptionSettingsForm (DX-324)', () => {
     expect(validity()).toHaveValue('10');
   });
 
+  it('after a save, focus goes to the saved notice, not to <body> (Guardar is disabled)', async () => {
+    const user = await renderLoaded();
+    mockedSave.mockImplementation(async (_t, s) => s);
+    await user.click(screen.getByRole('switch', { name: 'Cantidad en letras' }));
+    await user.click(save());
+    const notice = await screen.findByText('Ajustes de la receta guardados.');
+    await waitFor(() => expect(notice).toHaveFocus());
+    expect(notice).toHaveAttribute('role', 'status');
+    expect(notice).toHaveAttribute('tabindex', '-1');
+    expect(save()).toBeDisabled();
+    expect(document.body).not.toHaveFocus();
+  });
+
+  it.each([
+    ['the words switch', (user: ReturnType<typeof userEvent.setup>) =>
+      user.click(screen.getByRole('switch', { name: 'Cantidad en letras' }))],
+    ['the record switch', (user: ReturnType<typeof userEvent.setup>) =>
+      user.click(screen.getByRole('switch', { name: 'Exigir el nº de historia clínica' }))],
+    ['the validity', (user: ReturnType<typeof userEvent.setup>) => user.type(validity(), '0')],
+  ])('editing %s again clears the saved notice', async (_name, edit) => {
+    const user = await renderLoaded();
+    mockedSave.mockImplementation(async (_t, s) => s);
+    await user.click(screen.getByRole('switch', { name: 'Cantidad en letras' }));
+    await user.click(save());
+    expect(await screen.findByText('Ajustes de la receta guardados.')).toBeInTheDocument();
+    await edit(user);
+    expect(screen.queryByText('Ajustes de la receta guardados.')).not.toBeInTheDocument();
+    expect(screen.getByRole('status')).toHaveTextContent('');
+  });
+
   it.each([1, 365])('validity %i saves (M4)', async (days) => {
     const user = await renderLoaded();
     mockedSave.mockImplementation(async (_t, s) => s);

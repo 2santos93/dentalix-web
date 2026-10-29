@@ -131,6 +131,8 @@ export function makeIssuer(overrides: Partial<PrescriptionIssuer> = {}): Prescri
     maxItems: 10,
     printQuantityInWords: false,
     requireClinicalRecordNumber: false,
+    // Deprecated (fase 1, solo para la web anterior): la web nueva no lo lee.
+    country: null,
     ...overrides,
   };
 }
