@@ -829,3 +829,108 @@ describe('arquitectura: tipos de documento sin país (DX-327)', () => {
     expect(LABEL_MAP.test("import { DOC_TYPE_LABEL } from '@/lib/patients/doc-type';")).toBe(false);
   });
 });
+
+/**
+ * DX-312 (spec R10, R12, §6.2): el país de la sede es un código ISO libre y su
+ * nombre sale solo de `lib/locations/countries.ts`. Ningún fichero de
+ * producción de `src/` tiene un mapa de etiquetas de país (`COUNTRY_LABELS`,
+ * `COUNTRY_NAMES`, `phoneCountryName`) ni el enum `ClinicCountry` (fuera de
+ * los comentarios), ni nombra Colombia, España o Venezuela (comentarios
+ * incluidos, sin tildes ni mayúsculas). Se salta los tests, `lib/test/**`, los
+ * `*fixture*`, `lib/api/schema.d.ts` (generado), la copia de la lista de
+ * países (datos generados) y la receta legada de R12 (W13).
+ */
+const COUNTRY_LABEL_CODE = /COUNTRY_LABELS|COUNTRY_NAMES|ClinicCountry|phoneCountryName/;
+const COUNTRY_NAME = /colombi|espa[ñn]a|venezuel/i;
+const COUNTRY_NAME_EXCEPTIONS = [COUNTRY_LIST_COPY, PRESCRIPTION_LEGACY_LAYOUT];
+const COUNTRY_NAMES_LIB = 'lib/locations/countries.ts';
+const REGIONAL_FIELDS = 'components/locations/regional-settings-fields.tsx';
+
+function withoutMarks(text: string): string {
+  return text.normalize('NFD').replace(/\p{M}/gu, '');
+}
+
+function namesCountryOutsideList(line: string): boolean {
+  return (!COMMENT_LINE.test(line) && COUNTRY_LABEL_CODE.test(line)) || COUNTRY_NAME.test(withoutMarks(line));
+}
+
+function countryNameScanFiles(dir: string = SRC): string[] {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) return countryNameScanFiles(path);
+    if (!/\.(ts|tsx|js|jsx|mjs|json|css|md)$/.test(entry.name) || !scanned(path)) return [];
+    return COUNTRY_NAME_EXCEPTIONS.includes(relative(SRC, path).split(sep).join('/')) ? [] : [path];
+  });
+}
+
+/** Un `import`, `import()` o `require` de la copia de la lista de países. */
+const IMPORTS_COUNTRY_LIST = /(?:from\s*|import\s*\(\s*|require\s*\(\s*)['"][^'"]*iso3166-countries\.json['"]/;
+
+describe('arquitectura: país de la sede libre (DX-312)', () => {
+  it('no production file names a country label map, ClinicCountry or a country name outside the shared list', () => {
+    expect(lineHits(countryNameScanFiles(), namesCountryOutsideList)).toEqual([]);
+  });
+
+  it('the country name scan covers production, and skips only tests, the generated files and the named exceptions', () => {
+    const rels = countryNameScanFiles().map((f) => relative(SRC, f).split(sep).join('/'));
+    expect(rels).toEqual(
+      expect.arrayContaining([
+        COUNTRY_NAMES_LIB,
+        REGIONAL_FIELDS,
+        'components/locations/locations-list.tsx',
+        'components/patients/patient-communication-section.tsx',
+        'lib/patients/communication-api.ts',
+        'lib/money/README.md',
+      ]),
+    );
+    for (const rel of COUNTRY_NAME_EXCEPTIONS) {
+      expect([rel, existsSync(join(SRC, rel)), rels.includes(rel)]).toEqual([rel, true, false]);
+    }
+    expect(rels).not.toContain('lib/api/schema.d.ts');
+    expect(rels.some((r) => r.startsWith('lib/test/') || r.includes('.test.') || r.includes('fixture'))).toBe(false);
+  });
+
+  it('country names come only from lib/locations/countries.ts', () => {
+    const importers = sourceFiles(SRC)
+      .filter(scanned)
+      .filter((path) => readFileSync(path, 'utf8').split('\n').some((line) => IMPORTS_COUNTRY_LIST.test(line)))
+      .map((path) => relative(SRC, path).split(sep).join('/'));
+    expect(importers).toEqual([COUNTRY_NAMES_LIB]);
+    for (const line of [
+      "import countries from '@/lib/locations/iso3166-countries.json';",
+      "import list from './iso3166-countries.json'",
+      "const list = await import('../locations/iso3166-countries.json');",
+      'const list = require("./iso3166-countries.json");',
+    ]) {
+      expect([line, IMPORTS_COUNTRY_LIST.test(line)]).toEqual([line, true]);
+    }
+    for (const line of ["import { countryName } from '@/lib/locations/countries';", '// iso3166-countries.json']) {
+      expect([line, IMPORTS_COUNTRY_LIST.test(line)]).toEqual([line, false]);
+    }
+  });
+
+  it('the location country copy no longer mentions the prescription or phones', () => {
+    const hint = /countryHint:\s*'([^']*)'/.exec(readFileSync(join(SRC, REGIONAL_FIELDS), 'utf8'))?.[1];
+    expect(hint).toBeDefined();
+    expect(withoutMarks(hint ?? '').toLowerCase()).not.toMatch(/receta|telefono|indicativo/);
+  });
+
+  it('the country patterns catch each form and skip neutral text', () => {
+    for (const line of [
+      'label={COUNTRY_LABELS[c]}',
+      'const COUNTRY_NAMES = new Map();',
+      'type ClinicCountry = string;',
+      'phoneCountryName(code)',
+      "'ESPAÑA'",
+      'en Espana',
+      '// Colombia y España',
+      ' * Sede en Venezuela',
+      'colombiano',
+    ]) {
+      expect([line, namesCountryOutsideList(line)]).toEqual([line, true]);
+    }
+    for (const line of ["country: 'País',", 'countryName(code)', '// ClinicCountry desapareció en DX-312', 'Escribe el nombre o el código del país']) {
+      expect([line, namesCountryOutsideList(line)]).toEqual([line, false]);
+    }
+  });
+});

@@ -47,9 +47,9 @@ const DB_SKIP = 'E2E_DATABASE_URL no definido: no se pueden mover a hoy las cita
 const MIN = 60_000;
 const DAY = 24 * 60 * MIN;
 
-const SEDE_A = { name: 'Sede A', country: 'CO', currency: 'USD', timeZone: 'America/New_York', locale: 'en-US', hourCycle: 'h12' } satisfies RegionalSettings & { name: string };
-const SEDE_B = { name: 'Sede B', country: 'ES', currency: 'JPY', timeZone: 'Asia/Tokyo', locale: 'ja-JP', hourCycle: 'h23' } satisfies RegionalSettings & { name: string };
-const SEDE_C = { name: 'Sede C', country: 'ES', currency: 'EUR', timeZone: 'Europe/Paris', locale: 'fr-FR', hourCycle: 'h12' } satisfies RegionalSettings & { name: string };
+const SEDE_A = { name: 'Sede A', country: 'US', currency: 'USD', timeZone: 'America/New_York', locale: 'en-US', hourCycle: 'h12' } satisfies RegionalSettings & { name: string };
+const SEDE_B = { name: 'Sede B', country: 'JP', currency: 'JPY', timeZone: 'Asia/Tokyo', locale: 'ja-JP', hourCycle: 'h23' } satisfies RegionalSettings & { name: string };
+const SEDE_C = { name: 'Sede C', country: 'FR', currency: 'EUR', timeZone: 'Europe/Paris', locale: 'fr-FR', hourCycle: 'h12' } satisfies RegionalSettings & { name: string };
 type Sede = typeof SEDE_A | typeof SEDE_B | typeof SEDE_C;
 
 const VIEWPORTS = [

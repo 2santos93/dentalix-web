@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { mkdirSync } from 'node:fs';
 import { apiLogin, registerClinicViaApi, type ApiSession } from './support/api';
 import { fillRegistrationLocation, loginAs, waitForHydratedForm } from './support/auth';
+import { E2E_DATABASE_URL, markLocationUnreviewed } from './support/db';
 import { expectDialogInsideViewport, expectNoHorizontalScroll } from './support/layout';
 import { registrationTokenFor } from './support/mail';
 import { chooseCountry, E2E_BROWSER_LOCALE, E2E_REGION, type RegionalSettings } from './support/regional';
@@ -17,19 +18,22 @@ import { API_URL, tenantOrigin } from './support/urls';
  * 2. Registro por la UI, sin sesión: país y moneda empiezan vacíos, zona y
  *    formato traen la sugerencia del navegador, las monedas salen de la lista
  *    pública y la sede nace con los cuatro valores elegidos, ya revisada.
- * 3. Aviso D5: una clínica registrada en la forma legada (la de una web
- *    antigua, sin los campos de sede) nace con la sede rellenada por la
- *    función D5 y sin revisar. El ADMIN ve el aviso en el panel y en Ajustes →
+ * 3. Legado, aviso D5: una sede anterior a G1, rellenada por la función D5,
+ *    sigue «sin revisar». Desde DX-312 (R7) la API no registra sin sede, así
+ *    que la clínica se registra normal y su sede se deja sin revisar por la BD
+ *    (`markLocationUnreviewed`). El ADMIN ve el aviso en el panel y en Ajustes →
  *    Sedes; «Revisar» → «Guardar sede» la confirma y el aviso desaparece.
  *
  * Cada caso a 1440 y a 390 px (sin scroll horizontal), con capturas en claro y
- * oscuro en E2E_QA_DIR si está definido.
+ * oscuro en E2E_QA_DIR si está definido. Sin E2E_DATABASE_URL el caso legado se
+ * salta (permitido en e2e/allowed-skips.json); en la CI siempre está.
  */
 const suffix = (process.env.E2E_RUN_SUFFIX ?? randomUUID()).replace(/[^a-z0-9]/gi, '').toLowerCase().slice(0, 8);
 const password = 'Password123!';
 const QA_DIR = process.env.E2E_QA_DIR;
+const DB_SKIP = 'E2E_DATABASE_URL no definido: no se puede dejar una sede sin revisar';
 
-const TOKYO: RegionalSettings = { country: 'CO', currency: 'JPY', timeZone: 'Asia/Tokyo', locale: 'ja-JP', hourCycle: 'h23' };
+const TOKYO: RegionalSettings = { country: 'JP', currency: 'JPY', timeZone: 'Asia/Tokyo', locale: 'ja-JP', hourCycle: 'h23' };
 const MADRID: RegionalSettings = { country: 'ES', currency: 'EUR', timeZone: 'Europe/Madrid', locale: 'es-ES', hourCycle: 'h23' };
 
 const VIEWPORTS = [
@@ -95,27 +99,6 @@ async function expectSameWindow(page: Page): Promise<void> {
     await page.evaluate(() => (window as unknown as { __g1NoReload?: boolean }).__g1NoReload === true),
     'la página no se recargó',
   ).toBe(true);
-}
-
-/**
- * Registro en la forma LEGADA (web antigua): sin los cuatro `location*`. La API
- * nueva lo acepta y, al confirmarlo, la sede queda rellenada por la función D5
- * y sin revisar: el estado de una sede que trajo la migración.
- */
-async function registerLegacyClinic(
-  request: APIRequestContext,
-  clinic: { subdomain: string; clinicName: string; fullName: string; email: string },
-): Promise<ApiSession> {
-  const origin = tenantOrigin(clinic.subdomain);
-  const res = await request.post(`${API_URL}/auth/register`, {
-    headers: { 'X-Tenant-Host': new URL(origin).host },
-    data: { ...clinic, password },
-  });
-  expect(res.status(), `registro legado falló: ${await res.text()}`).toBe(202);
-  const token = await registrationTokenFor(clinic.email);
-  const verify = await request.post(`${API_URL}/auth/register/verify`, { data: { token, password } });
-  expect(verify.ok(), `confirmar el registro legado falló: ${await verify.text()}`).toBeTruthy();
-  return apiLogin(request, origin, clinic.email, password);
 }
 
 for (const viewport of VIEWPORTS) {
@@ -261,26 +244,23 @@ for (const viewport of VIEWPORTS) {
       expect(location.regionalSettingsReviewedAt, 'la sede elegida en el registro nace revisada').not.toBeNull();
     });
 
-    test('aviso D5: la sede sin revisar sale en el panel y desaparece al confirmarla', async ({ page, request }) => {
+    test('legacy aviso D5: la sede sin revisar sale en el panel y desaparece al confirmarla', async ({ page, request }) => {
+      test.skip(!E2E_DATABASE_URL, DB_SKIP);
       test.setTimeout(120_000);
       const tag = `${suffix}${viewport.width}`;
       const email = `admin.d5.${tag}@example.com`;
-      const session = await registerLegacyClinic(request, {
+      const session = await registerClinicViaApi(request, {
         subdomain: `g1-d5-${tag}`,
         clinicName: `Clínica Legada ${tag}`,
         fullName: 'Marta Legada',
         email,
+        password,
       });
+      const [created] = await listLocations(request, session);
+      // Fixture: la sede de una clínica anterior a G1, con sus valores y sin revisar.
+      markLocationUnreviewed(created.id);
       const [legacy] = await listLocations(request, session);
-      // Fixture: la función D5 la rellenó por el país (CO) y la dejó sin revisar.
-      // G1-B: el reloj lo pone la función de G1-B, 24 h (el que la app mostraba).
-      expect(legacy).toMatchObject({
-        country: 'CO',
-        currency: 'COP',
-        timeZone: 'America/Bogota',
-        locale: 'es-CO',
-        hourCycle: 'h23',
-      });
+      expect(legacy).toMatchObject({ ...E2E_REGION });
       expect(legacy.regionalSettingsReviewedAt).toBeNull();
 
       await loginAs(page, session.origin, email, password);
@@ -288,7 +268,9 @@ for (const viewport of VIEWPORTS) {
       const notice = page.getByRole('region', { name: 'Sedes por revisar' });
       await expect(notice).toBeVisible({ timeout: 15_000 });
       await expect(notice).toContainText('Revisa la moneda, la zona horaria, el formato y el reloj de 1 sede.');
-      await expect(notice).toContainText(`${legacy.name}: COP · America/Bogota · es-CO · 24 h`);
+      await expect(notice).toContainText(
+        `${legacy.name}: ${E2E_REGION.currency} · ${E2E_REGION.timeZone} · ${E2E_REGION.locale} · 24 h`,
+      );
       if (viewport.width === 390) await expectNoHorizontalScroll(page);
       await shoot(page, 'e2e-d5-panel', viewport.width);
 

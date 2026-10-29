@@ -140,6 +140,20 @@
       "annotation": "E2E_DATABASE_URL no definido: no se pueden mover a hoy las citas ni quitar el reloj de una sede",
       "requiresUnset": "E2E_DATABASE_URL",
       "reason": "Sin E2E_DATABASE_URL no se pueden mover a hoy (ya empezadas) las citas de las sedes ni dejar el reloj de una sede en NULL."
+    },
+    {
+      "file": "e2e/regional-settings.spec.ts",
+      "title": "1440 px › legacy aviso D5: la sede sin revisar sale en el panel y desaparece al confirmarla",
+      "annotation": "E2E_DATABASE_URL no definido: no se puede dejar una sede sin revisar",
+      "requiresUnset": "E2E_DATABASE_URL",
+      "reason": "Sin E2E_DATABASE_URL no se puede dejar sin revisar la sede de una clínica nueva (desde DX-312 la API no registra sin sede)."
+    },
+    {
+      "file": "e2e/regional-settings.spec.ts",
+      "title": "390 px › legacy aviso D5: la sede sin revisar sale en el panel y desaparece al confirmarla",
+      "annotation": "E2E_DATABASE_URL no definido: no se puede dejar una sede sin revisar",
+      "requiresUnset": "E2E_DATABASE_URL",
+      "reason": "Sin E2E_DATABASE_URL no se puede dejar sin revisar la sede de una clínica nueva (desde DX-312 la API no registra sin sede)."
     }
   ]
 }
