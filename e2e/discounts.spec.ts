@@ -99,7 +99,7 @@ async function seed(
   // SEC-047: otra paciente con un convenio interno (lo asigna el ADMIN, sin
   // cobertura) y un ítem resuelto por él: su línea del informe lleva la frase
   // larga del convenio, que a 390 px no debe desbordar la tarjeta (QA D1).
-  const payer = await post<{ id: string }>('/payers', { name: `Cortesía empleados ${tag}`, type: 'OTRO' });
+  const payer = await post<{ id: string }>('/payers', { name: `Cortesía empleados ${tag}`, type: 'OTHER' });
   const agreement = await post<{ id: string }>('/agreements', {
     name: `Cortesía empleados de la clínica 100 % ${tag}`,
     payerId: payer.id,
