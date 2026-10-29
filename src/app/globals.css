@@ -456,3 +456,7 @@
     padding-block: 8pt;
   }
 }
+
+/* Keep long patient and professional fields within the document columns. */
+.prescription-print-root dl > div { min-width: 0; }
+.prescription-print-root dd { overflow-wrap: anywhere; }
