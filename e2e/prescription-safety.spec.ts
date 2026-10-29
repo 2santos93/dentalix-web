@@ -56,7 +56,7 @@ test('receta con aviso bloqueante (warfarina + ibuprofeno): 390/1440, claro/oscu
   const patient = await admin.post<{ id: string }>('/patients', {
     firstName: 'Wanda',
     lastName: `Segura${suffix}`.slice(0, 40),
-    docType: 'CC',
+    docType: 'NATIONAL_ID',
     docNumber: `RXS${suffix}`.slice(0, 20),
     birthDate: '1970-01-01',
     sex: 'F',

@@ -101,7 +101,7 @@ for (const viewport of VIEWPORTS) {
     const patient = await call<{ id: string }>('post', '/patients', {
       firstName: 'Lucía',
       lastName: `Plantillas${tag}`,
-      docType: 'CC',
+      docType: 'NATIONAL_ID',
       docNumber: `NT${tag}`.slice(0, 20),
       sex: 'F',
     });

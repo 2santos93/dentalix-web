@@ -43,7 +43,7 @@ async function seedNightPayment(page: Page, tag: string): Promise<Seeded> {
   const patient = await apiPost<{ id: string }>(page.request, admin, '/patients', {
     firstName: 'Abono',
     lastName,
-    docType: 'CC',
+    docType: 'NATIONAL_ID',
     docNumber: `DX97${suffix}`.slice(0, 20),
     sex: 'F',
   });

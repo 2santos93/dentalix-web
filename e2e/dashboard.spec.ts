@@ -117,7 +117,7 @@ test('dashboard: aggregated cards render seeded payment income, low-stock item, 
     data: {
       firstName: patientFirstName,
       lastName: patientLastName,
-      docType: 'CC',
+      docType: 'NATIONAL_ID',
       docNumber: patientDocNumber,
       sex: 'F',
     },

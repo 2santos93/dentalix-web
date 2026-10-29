@@ -87,7 +87,7 @@ for (const viewport of [
   { name: 'escritorio', width: 1440, height: 900, tag: '1' },
   { name: 'movil', width: 390, height: 844, tag: '2' },
 ]) {
-  test(`importar, revisar, confirmar y deshacer un lote (${viewport.name})`, async ({ page, request }) => {
+  test(`legacy «Tipo Doc» CC y columna «Cédula»: importar, revisar, confirmar y deshacer un lote (${viewport.name})`, async ({ page, request }) => {
     test.setTimeout(150_000);
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
     const origin = tenantOrigin(DEMO_SUBDOMAIN);
@@ -159,6 +159,9 @@ for (const viewport of [
     expect(created).toBeTruthy();
     await page.goto(`${origin}/patients/${created.id}`);
     await expect(page.getByText('Importado desde archivo')).toBeVisible();
+    // DX-327: el sinónimo antiguo «CC» se guarda como el tipo genérico, sin nombre propio.
+    await expect(page.getByText(`Documento nacional ${docA}`).first()).toBeVisible();
+    await expect(page.locator('main')).not.toContainText('Cédula');
     await expect(page.getByText(/Pendiente · importado sin autorización/)).toBeVisible();
 
     // Historial: deshacer el lote.
@@ -199,7 +202,7 @@ function bigCsv(rows: number, docPrefix: string): Buffer {
   return Buffer.from(lines.join('\n'), 'utf8');
 }
 
-test('DX-107 × DX-259: un CSV de 10.000 pacientes (> 1 MB) sube con progreso, se valida y se importa', async ({
+test('legacy «Tipo Doc» CC, DX-107 × DX-259: un CSV de 10.000 pacientes (> 1 MB) sube con progreso, se valida y se importa', async ({
   page,
 }) => {
   test.setTimeout(300_000);

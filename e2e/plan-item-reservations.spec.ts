@@ -87,7 +87,7 @@ async function scenario(page: Page, name: string, offsetMin: number): Promise<Sc
   const patient = await apiPost<{ id: string }>(request, session, '/patients', {
     firstName: name,
     lastName: last,
-    docType: 'CC',
+    docType: 'NATIONAL_ID',
     docNumber: `RES${name}${suffix}`.slice(0, 20),
     sex: 'F',
   });

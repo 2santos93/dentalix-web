@@ -87,13 +87,14 @@ for (const browserClock of ['23:30', '06:00']) {
     await expect(page).toHaveURL(/\/patients\/new$/);
 
     await page.getByLabel('Nombre', { exact: true }).fill(patientFirstName);
+    await page.getByLabel('Tipo de documento').selectOption('NATIONAL_ID');
     await page.getByLabel('Apellido', { exact: true }).fill(patientLastName);
     await page.getByLabel('Número de documento').fill(patientDocNumber);
     await page.getByLabel('Sexo').selectOption('F');
 
     const createPatientError = page.locator('p[role="alert"]');
     // El alta de paciente es un WIZARD de 5 pasos y el submit ("Guardar") vive en
-    // el último; con nombre+apellido llenos se puede saltar directo al final (ver
+    // el último; con nombre, apellido y tipo de documento se puede saltar directo al final (ver
     // `goToStep` en patient-create-wizard.tsx). Antes esto pulsaba un botón "Crear
     // paciente" que ya no existe, y el spec se colgaba 30s en el click.
     await page.getByRole('button', { name: /Autorización de datos/ }).click();

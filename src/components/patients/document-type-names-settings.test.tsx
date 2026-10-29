@@ -50,16 +50,16 @@ describe('DocumentTypeNamesSettingsSection (DX-327)', () => {
   it('saves the five names trimmed, sending null for empty ones', async () => {
     const user = userEvent.setup();
     mockedGet.mockResolvedValue({ ...NONE, OTHER: 'Carné' });
-    mockedSave.mockResolvedValue({ ...NONE, NATIONAL_ID: 'Cédula local' });
+    mockedSave.mockResolvedValue({ ...NONE, NATIONAL_ID: 'Documento A' });
     render(<DocumentTypeNamesSettingsSection token="tok" allowed />);
     const national = await screen.findByLabelText(DOC_TYPE_LABEL.NATIONAL_ID);
     await waitFor(() => expect(screen.getByLabelText(DOC_TYPE_LABEL.OTHER)).toHaveValue('Carné'));
-    await user.type(national, '  Cédula local  ');
+    await user.type(national, '  Documento A  ');
     await user.type(screen.getByLabelText(DOC_TYPE_LABEL.PASSPORT), '   ');
     await user.clear(screen.getByLabelText(DOC_TYPE_LABEL.OTHER));
     await user.click(screen.getByRole('button', { name: 'Guardar' }));
     await waitFor(() =>
-      expect(mockedSave).toHaveBeenCalledWith('tok', { ...NONE, NATIONAL_ID: 'Cédula local' }),
+      expect(mockedSave).toHaveBeenCalledWith('tok', { ...NONE, NATIONAL_ID: 'Documento A' }),
     );
     expect(await screen.findByText('Nombres guardados.')).toBeInTheDocument();
   });

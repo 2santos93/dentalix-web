@@ -142,7 +142,7 @@ async function seed(request: APIRequestContext, tag: string) {
   const patient = await post<{ id: string }>("/patients", {
     firstName: "Visitas",
     lastName: tag,
-    docType: "CC",
+    docType: "NATIONAL_ID",
     docNumber: tag,
     sex: "F",
     phone: "3001234567",

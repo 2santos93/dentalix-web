@@ -45,7 +45,7 @@ test.beforeAll(async ({ playwright }) => {
     ({ id: patientId } = await apiPost<{ id: string }>(api, admin, '/patients', {
       firstName: 'Paciente',
       lastName: `Recepción ${suffix}`,
-      docType: 'CC',
+      docType: 'NATIONAL_ID',
       docNumber: `RC${suffix}`,
       sex: 'F',
     }));

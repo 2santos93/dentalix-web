@@ -55,6 +55,7 @@ test('autorización de datos: publicar política → alta con casillas → ficha
   // --- 2. Alta del paciente con el paso de autorización ---
   await page.goto(`${origin}/patients/new`);
   await page.getByLabel('Nombre', { exact: true }).fill('Lucía');
+  await page.getByLabel('Tipo de documento').selectOption('NATIONAL_ID');
   await page.getByLabel(/apellido/i).fill(patientLastName);
   for (let i = 0; i < 4; i += 1) {
     await page.getByRole('button', { name: /siguiente/i }).click();

@@ -78,7 +78,7 @@ async function seedDebtor(
   const { id } = await apiPost<{ id: string }>(request, session, '/patients', {
     firstName: p.firstName,
     lastName: p.lastName,
-    docType: 'CC',
+    docType: 'NATIONAL_ID',
     docNumber: p.doc.slice(0, 20),
     sex: 'F',
     phone: '300 555 0177',

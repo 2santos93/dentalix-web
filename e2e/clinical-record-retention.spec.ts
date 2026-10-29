@@ -62,7 +62,7 @@ for (const viewport of VIEWPORTS) {
     const retained = await post<{ id: string }>('/patients', {
       firstName: 'Rosa',
       lastName: `Retenida${tag}`,
-      docType: 'CC',
+      docType: 'NATIONAL_ID',
       docNumber: `RT${tag}`.slice(0, 20),
       sex: 'F',
     });
@@ -70,7 +70,7 @@ for (const viewport of VIEWPORTS) {
     const free = await post<{ id: string }>('/patients', {
       firstName: 'Duplicado',
       lastName: `Libre${tag}`,
-      docType: 'CC',
+      docType: 'NATIONAL_ID',
       docNumber: `LB${tag}`.slice(0, 20),
       sex: 'M',
     });

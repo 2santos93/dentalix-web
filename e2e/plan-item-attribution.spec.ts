@@ -57,7 +57,7 @@ async function seed(request: APIRequestContext, tag: string): Promise<Seeded> {
   const patient = await call<{ id: string }>('post', '/patients', {
     firstName: 'Atribución',
     lastName: tag,
-    docType: 'CC',
+    docType: 'NATIONAL_ID',
     docNumber: tag,
     sex: 'F',
   });

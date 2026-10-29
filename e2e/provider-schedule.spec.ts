@@ -213,7 +213,7 @@ test('una cita fuera de su horario se agenda con el aviso; «Buscar hueco» en l
   const patient = await apiPost<{ id: string }>(request, session, '/patients', {
     firstName: 'Bruno',
     lastName: patientLast,
-    docType: 'CC',
+    docType: 'NATIONAL_ID',
     docNumber: `ROT${suffix}`.slice(0, 20),
     sex: 'M',
   });

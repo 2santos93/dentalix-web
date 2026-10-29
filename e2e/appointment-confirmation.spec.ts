@@ -49,7 +49,7 @@ test('recepción genera el enlace -> el paciente confirma desde el móvil -> la 
     data: {
       firstName: 'Camila',
       lastName: `Confirma${suffix}`,
-      docType: 'CC',
+      docType: 'NATIONAL_ID',
       docNumber: `DOCCONF${suffix}`,
       sex: 'F',
       phone: '+57 310 555 0101',

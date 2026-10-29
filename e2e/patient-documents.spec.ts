@@ -173,7 +173,7 @@ test('subir, filtrar, ver, descargar y anular documentos; acceso desde el diente
     data: {
       firstName: 'Ana',
       lastName: `Documentos${suffix}`.slice(0, 40),
-      docType: 'CC',
+      docType: 'NATIONAL_ID',
       docNumber: `DOC${suffix}`.slice(0, 20),
       sex: 'F',
     },

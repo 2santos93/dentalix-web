@@ -44,7 +44,7 @@ test.beforeAll(async ({ request }) => {
   ({ id: motherId } = await apiPost<{ id: string }>(request, session, '/patients', {
     firstName: 'Claudia',
     lastName,
-    docType: 'CC',
+    docType: 'NATIONAL_ID',
     docNumber: `RM${suffix}`.slice(0, 20),
     sex: 'F',
     birthDate: '1985-01-01',
@@ -53,7 +53,7 @@ test.beforeAll(async ({ request }) => {
   ({ id: sonId } = await apiPost<{ id: string }>(request, session, '/patients', {
     firstName: 'Tomás',
     lastName,
-    docType: 'TI',
+    docType: 'NATIONAL_ID',
     docNumber: `RH${suffix}`.slice(0, 20),
     sex: 'M',
     birthDate: '2016-04-10',
@@ -61,7 +61,7 @@ test.beforeAll(async ({ request }) => {
   ({ id: daughterId } = await apiPost<{ id: string }>(request, session, '/patients', {
     firstName: 'Sofía',
     lastName,
-    docType: 'TI',
+    docType: 'NATIONAL_ID',
     docNumber: `RS${suffix}`.slice(0, 20),
     sex: 'F',
     birthDate: '2015-02-11',
@@ -172,7 +172,7 @@ test('consentimiento de un menor: el tutor viene precargado desde la madre y se 
 
   await expect(dialog.getByRole('radio', { name: /tutor/i })).toBeChecked();
   await expect(dialog.getByLabel('Nombre del tutor')).toHaveValue(`Claudia ${lastName}`);
-  await expect(dialog.getByLabel('Documento del tutor')).toHaveValue(`CC ${`RM${suffix}`.slice(0, 20)}`);
+  await expect(dialog.getByLabel('Documento del tutor')).toHaveValue(`Documento nacional ${`RM${suffix}`.slice(0, 20)}`);
 
   await dialog.getByRole('radio', { name: 'El paciente' }).check();
   await expect(dialog).toContainText('El paciente es menor de 18 años: lo habitual es que firme su responsable.');

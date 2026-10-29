@@ -68,7 +68,7 @@ for (const viewport of [
   { name: 'escritorio', width: 1440, height: 900, tag: '1' },
   { name: 'movil', width: 390, height: 844, tag: '2' },
 ]) {
-  test(`hoja de saldos: dry-run, importar, estado de cuenta y deshacer (${viewport.name})`, async ({ page }) => {
+  test(`legacy «Tipo Doc» CC: hoja de saldos: dry-run, importar, estado de cuenta y deshacer (${viewport.name})`, async ({ page }) => {
     test.setTimeout(150_000);
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
     const origin = tenantOrigin(DEMO_SUBDOMAIN);

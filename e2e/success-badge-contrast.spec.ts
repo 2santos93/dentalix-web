@@ -81,7 +81,7 @@ test('DX346: success badges and covered items meet AA on cash shifts, plan and s
     'X-Tenant-Host': new URL(origin).host } };
   await apiPost(page.request, session, '/cash-sessions/open', { floats: [] });
   const patient = await apiPost<{ id: string }>(page.request, session, '/patients', {
-    firstName: 'Irene', lastName: `Contraste${tag}`, docType: 'CC', docNumber: `C${tag}`, sex: 'F' });
+    firstName: 'Irene', lastName: `Contraste${tag}`, docType: 'NATIONAL_ID', docNumber: `C${tag}`, sex: 'F' });
   const plan = await apiPost<{ id: string }>(page.request, session, `/patients/${patient.id}/treatment-plans`, { currency: 'USD' });
   const catalog = await apiPost<{ id: string }>(page.request, session, '/catalog/items', {
     code: `contrast-${tag}`, kind: 'PROCEDURE', labelEs: `Corona${tag}`, color: '#3366CC', defaultPrice: 100 });

@@ -75,7 +75,7 @@ async function seed(
   const patient = await post<{ id: string }>('/patients', {
     firstName: 'Rosa',
     lastName,
-    docType: 'CC',
+    docType: 'NATIONAL_ID',
     docNumber: `DX204${tag}`.slice(0, 20),
     sex: 'F',
   });
@@ -110,7 +110,7 @@ async function seed(
   const agreementPatient = await post<{ id: string }>('/patients', {
     firstName: 'Marta',
     lastName: agreementLastName,
-    docType: 'CC',
+    docType: 'NATIONAL_ID',
     docNumber: `SEC47${tag}`.slice(0, 20),
     sex: 'F',
   });
