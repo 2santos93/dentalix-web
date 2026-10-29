@@ -8,6 +8,7 @@ import { expectNoHorizontalScroll } from './support/layout';
 import { MAIL_DIR } from './support/mail';
 import { atSede, sedeDate, sedeDayFromToday } from './support/clock';
 import { API_URL } from './support/urls';
+import { E2E_BROWSER_LOCALE } from './support/regional';
 
 /**
  * e2e (DX-222): indicaciones postoperatorias de punta a punta, en escritorio
@@ -330,7 +331,7 @@ for (const viewport of VIEWPORTS) {
     const patientContext = await browser.newContext({
       viewport: { width: 390, height: 844 },
       timezoneId: 'America/Bogota',
-      locale: 'es-CO',
+      locale: E2E_BROWSER_LOCALE,
     });
     const publicPage = await patientContext.newPage();
     await publicPage.goto(publicUrl);

@@ -161,11 +161,35 @@ export function browserHourCycle(intl: typeof Intl = Intl): HourCycle | null {
   }
 }
 
+/**
+ * País de la sede sugerido por el navegador (DX-312 R11, P1): la región
+ * **explícita** de la primera etiqueta de `navigator.languages` que la trae y
+ * que está en la lista de países (`es-VE` → `VE`). Nunca se deduce del idioma:
+ * `es` y `es-419` no sugieren nada, y no se usa `maximize()`. `null` = sin
+ * sugerencia (el campo empieza vacío). `languages` se inyecta en los tests.
+ */
+export function browserCountry(languages?: readonly string[]): string | null {
+  const tags = languages ?? navigatorLanguages();
+  for (const tag of tags) {
+    let region: string | undefined;
+    try {
+      region = new Intl.Locale(tag).region;
+    } catch {
+      continue;
+    }
+    if (region && isCountryCode(region)) return region;
+  }
+  return null;
+}
+
+function navigatorLanguages(): readonly string[] {
+  if (typeof navigator === 'undefined') return [];
+  return navigator.languages?.length ? navigator.languages : [navigator.language];
+}
+
 /** Los formatos que el navegador declara (`navigator.languages`), canonicalizados y sin repetir. */
 export function browserLocales(): string[] {
-  if (typeof navigator === 'undefined') return [];
-  const raw = navigator.languages?.length ? navigator.languages : [navigator.language];
-  return unique(raw.map((l) => canonicalLocale(l)));
+  return unique(navigatorLanguages().map((l) => canonicalLocale(l)));
 }
 
 /**

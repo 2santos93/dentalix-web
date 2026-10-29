@@ -7,6 +7,7 @@ import { apiErrorMessage } from '@/lib/api/error-message';
 import { REGISTER_LOCATION_FIELDS, registerClinic } from '@/lib/auth/register-api';
 import { listPublicCurrencies } from '@/lib/reference/currencies-api';
 import {
+  browserCountry,
   browserHourCycle,
   browserLocale,
   browserTimeZone,
@@ -68,9 +69,10 @@ export function RegisterForm({ tenant }: { tenant: string | null }) {
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
-  // G1 (spec §6.7): la primera sede. País y moneda empiezan vacíos; zona,
-  // formato y reloj (G1-B §9) se sugieren desde el navegador, a la vista y
-  // editables (R10). Sin reloj del navegador, vacío y obligatorio.
+  // G1 (spec §6.7): la primera sede. La moneda empieza vacía; el país solo se
+  // sugiere con una región explícita del navegador (DX-312 P1); zona, formato y
+  // reloj (G1-B §9) se sugieren desde el navegador, a la vista y editables
+  // (R10). Sin reloj del navegador, vacío y obligatorio.
   const [regional, setRegional] = useState<RegionalSettingsValues>(EMPTY_REGIONAL);
   const [suggestions, setSuggestions] = useState<RegionalSuggestions>();
   const [regionalErrors, setRegionalErrors] = useState<RegionalSettingsErrors>({});
@@ -79,10 +81,16 @@ export function RegisterForm({ tenant }: { tenant: string | null }) {
   // zona ni el idioma del navegador.
   useEffect(() => {
     function suggest() {
-      const suggested = { timeZone: browserTimeZone(), locale: browserLocale(), hourCycle: browserHourCycle() };
+      const suggested = {
+        country: browserCountry(),
+        timeZone: browserTimeZone(),
+        locale: browserLocale(),
+        hourCycle: browserHourCycle(),
+      };
       setSuggestions(suggested);
       setRegional((prev) => ({
         ...prev,
+        country: prev.country || suggested.country || '',
         timeZone: prev.timeZone || suggested.timeZone || '',
         locale: prev.locale || suggested.locale || '',
         hourCycle: prev.hourCycle || suggested.hourCycle || '',

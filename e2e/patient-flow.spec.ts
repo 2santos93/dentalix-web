@@ -9,6 +9,7 @@ import { loginAs } from './support/auth';
 import { LATE_BROWSER_TIME, atSede, lastSlotToday, sedeDayFromToday, type SedeSlot } from './support/clock';
 import { expectNoHorizontalScroll } from './support/layout';
 import { API_URL, tenantOrigin } from './support/urls';
+import { E2E_BROWSER_LOCALE } from './support/regional';
 
 /**
  * e2e DX-200: flujo del paciente en la clínica.
@@ -122,7 +123,7 @@ test('1440 px: llegó → en sillón → listo para cobrar → completada', asyn
   await expect(panel.getByRole('link', {name:'Abrir a pantalla completa'})).toHaveAttribute('href','/agenda/en-clinica');
 
   // La odontóloga: «Te esperan 1» en la navegación y su panel.
-  const lina = await browser.newPage({ viewport: { width: 1440, height: 900 }, timezoneId: 'America/Bogota', locale: 'es-CO' });
+  const lina = await browser.newPage({ viewport: { width: 1440, height: 900 }, timezoneId: 'America/Bogota', locale: E2E_BROWSER_LOCALE });
   await lateEvening(lina);
   await loginAs(lina, origin, dentist.email, password);
   await expect(lina.getByRole('link', { name: 'Agenda · Te espera 1 paciente' }).first()).toBeVisible({

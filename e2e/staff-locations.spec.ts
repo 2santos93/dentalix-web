@@ -6,7 +6,7 @@ import { addStaffViaApi, type ApiSession } from './support/api';
 import { atSede, sedeDate, sedeDayFromToday, sedeTime } from './support/clock';
 import { expectNoHorizontalScroll } from './support/layout';
 import { API_URL } from './support/urls';
-import { E2E_REGION } from './support/regional';
+import { E2E_BROWSER_LOCALE, E2E_REGION } from './support/regional';
 
 /**
  * e2e (DX-089): personal restringido a sedes.
@@ -133,7 +133,7 @@ async function receptionPage(browser: Browser, width: number, height: number): P
   const context = await browser.newContext({
     viewport: { width, height },
     timezoneId: 'America/Bogota',
-    locale: 'es-CO',
+    locale: E2E_BROWSER_LOCALE,
   });
   return context.newPage();
 }

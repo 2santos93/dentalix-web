@@ -2,10 +2,12 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import { LocationFormModal } from './location-form-modal';
 import { createLocation, updateLocationSettings, type ClinicLocation } from '@/lib/locations/locations-api';
 import { listCurrencies } from '@/lib/reference/currencies-api';
-import { browserHourCycle, browserLocale, browserTimeZone } from '@/lib/locations/regional-settings';
+import { browserCountry, browserHourCycle, browserLocale, browserTimeZone } from '@/lib/locations/regional-settings';
+import { countryName } from '@/lib/locations/countries';
 import { ApiError } from '@/lib/api/api-error';
 import { clinicLocation } from '@/lib/test/locations';
 import { setupUser } from '@/lib/test/user';
+import { chooseCountry } from '@/lib/test/country';
 
 jest.mock('../../lib/locations/locations-api', () => ({
   ...jest.requireActual('../../lib/locations/locations-api'),
@@ -16,6 +18,7 @@ jest.mock('../../lib/locations/locations-api', () => ({
 jest.mock('../../lib/reference/currencies-api', () => ({ listCurrencies: jest.fn() }));
 jest.mock('../../lib/locations/regional-settings', () => ({
   ...jest.requireActual('../../lib/locations/regional-settings'),
+  browserCountry: jest.fn(),
   browserTimeZone: jest.fn(),
   browserLocale: jest.fn(),
   browserHourCycle: jest.fn(),
@@ -33,6 +36,8 @@ const CURRENCIES = [
 beforeEach(() => {
   jest.clearAllMocks();
   jest.mocked(listCurrencies).mockResolvedValue(CURRENCIES);
+  // Sin región explícita en el navegador: ningún país sugerido (DX-312 P1).
+  jest.mocked(browserCountry).mockReturnValue(null);
   jest.mocked(browserTimeZone).mockReturnValue('Asia/Tokyo');
   jest.mocked(browserLocale).mockReturnValue('ja-JP');
   jest.mocked(browserHourCycle).mockReturnValue('h23');
@@ -83,7 +88,7 @@ describe('LocationFormModal (G1, spec §6.2)', () => {
     const { dialog, user } = setup();
     await currenciesLoaded(dialog);
     await user.type(within(dialog).getByLabelText('Nombre'), 'Sede Norte');
-    await user.selectOptions(within(dialog).getByLabelText('País'), 'ES');
+    await chooseCountry(user, within(dialog).getByLabelText('País'), 'ES');
     await user.selectOptions(within(dialog).getByLabelText('Moneda'), 'EUR');
     await user.clear(within(dialog).getByLabelText('Zona horaria'));
     await user.type(within(dialog).getByLabelText('Zona horaria'), 'Marte/Olimpo');
@@ -114,14 +119,15 @@ describe('LocationFormModal (G1, spec §6.2)', () => {
 
     await currenciesLoaded(dialog);
     await user.type(within(dialog).getByLabelText('Nombre'), '  Sede Tokio ');
-    await user.selectOptions(within(dialog).getByLabelText('País'), 'ES');
+    await chooseCountry(user, within(dialog).getByLabelText('País'), 'ES');
     await user.selectOptions(within(dialog).getByLabelText('Moneda'), 'JPY');
     await user.click(within(dialog).getByRole('button', { name: 'Crear sede' }));
 
     await waitFor(() => expect(mockedCreate).toHaveBeenCalledTimes(1));
     const shown = {
       name: (within(dialog).getByLabelText('Nombre') as HTMLInputElement).value.trim(),
-      country: (within(dialog).getByLabelText('País') as HTMLSelectElement).value,
+      // El campo muestra el nombre del país; se envía su código.
+      country: (within(dialog).getByLabelText('País') as HTMLInputElement).value === countryName('ES') ? 'ES' : null,
       currency: (within(dialog).getByLabelText('Moneda') as HTMLSelectElement).value,
       timeZone: (zone as HTMLInputElement).value,
       locale: (locale as HTMLInputElement).value,
@@ -152,7 +158,7 @@ describe('LocationFormModal (G1, spec §6.2)', () => {
 
     await currenciesLoaded(dialog);
     await user.type(within(dialog).getByLabelText('Nombre'), 'Sede Tokio');
-    await user.selectOptions(within(dialog).getByLabelText('País'), 'ES');
+    await chooseCountry(user, within(dialog).getByLabelText('País'), 'ES');
     await user.selectOptions(within(dialog).getByLabelText('Moneda'), 'JPY');
     await user.click(within(dialog).getByRole('button', { name: 'Crear sede' }));
 
@@ -253,21 +259,51 @@ describe('LocationFormModal (G1, spec §6.2)', () => {
     expect(within(dialog).getByText(/^Vista previa: /)).toBeInTheDocument();
   });
 
-  it('currency and country start empty', async () => {
+  it('currency starts empty and so does the country without a browser region', async () => {
     const { dialog } = setup();
     await currenciesLoaded(dialog);
     expect(within(dialog).getByLabelText('País')).toHaveValue('');
     expect(within(dialog).getByLabelText('Moneda')).toHaveValue('');
   });
 
+  it('create modal suggests the country of an explicit browser region, marked and editable', async () => {
+    jest.mocked(browserCountry).mockReturnValue('VE');
+    mockedCreate.mockResolvedValue(clinicLocation({ id: 'caracas' }));
+    const { dialog, user } = setup();
+    await currenciesLoaded(dialog);
+    const country = within(dialog).getByLabelText('País');
+    expect(country).toHaveValue('Venezuela');
+    expect(country).toHaveAccessibleDescription(expect.stringContaining('Sugerido por tu navegador.'));
+    await user.type(within(dialog).getByLabelText('Nombre'), 'Sede Caracas');
+    await user.selectOptions(within(dialog).getByLabelText('Moneda'), 'EUR');
+    await user.click(within(dialog).getByRole('button', { name: 'Crear sede' }));
+    await waitFor(() => expect(mockedCreate).toHaveBeenCalledTimes(1));
+    expect(mockedCreate.mock.calls[0][1]).toMatchObject({ country: 'VE' });
+  });
+
+  it('editing a location never replaces its country with a suggestion', async () => {
+    jest.mocked(browserCountry).mockReturnValue('VE');
+    const sede = clinicLocation({ id: 'madrid', country: 'ES', currency: 'EUR', timeZone: 'Europe/Madrid', locale: null });
+    mockedUpdate.mockResolvedValue(sede);
+    const { dialog, user } = setup(sede);
+    await currenciesLoaded(dialog);
+    const country = within(dialog).getByLabelText('País');
+    expect(country).toHaveValue('España');
+    expect(country).not.toHaveAccessibleDescription(expect.stringContaining('Sugerido'));
+    expect(browserCountry).not.toHaveBeenCalled();
+    await user.click(within(dialog).getByRole('button', { name: 'Guardar sede' }));
+    await waitFor(() => expect(mockedUpdate).toHaveBeenCalledTimes(1));
+    expect(mockedUpdate.mock.calls[0][2]).toMatchObject({ country: 'ES' });
+  });
+
   it('choosing a country changes nothing else', async () => {
     const { dialog, user } = setup();
     await currenciesLoaded(dialog);
-    await user.selectOptions(within(dialog).getByLabelText('País'), 'CO');
+    await chooseCountry(user, within(dialog).getByLabelText('País'), 'CO');
     expect(within(dialog).getByLabelText('Moneda')).toHaveValue('');
     expect(within(dialog).getByLabelText('Zona horaria')).toHaveValue('Asia/Tokyo');
     expect(within(dialog).getByLabelText('Formato regional')).toHaveValue('ja-JP');
-    await user.selectOptions(within(dialog).getByLabelText('País'), 'ES');
+    await chooseCountry(user, within(dialog).getByLabelText('País'), 'ES');
     expect(within(dialog).getByLabelText('Moneda')).toHaveValue('');
     expect(within(dialog).getByLabelText('Zona horaria')).toHaveValue('Asia/Tokyo');
   });
@@ -373,7 +409,7 @@ describe('LocationFormModal (G1, spec §6.2)', () => {
     const { dialog, user } = setup();
     await currenciesLoaded(dialog);
     await user.type(within(dialog).getByLabelText('Nombre'), 'Sede Norte');
-    await user.selectOptions(within(dialog).getByLabelText('País'), 'ES');
+    await chooseCountry(user, within(dialog).getByLabelText('País'), 'ES');
     await user.selectOptions(within(dialog).getByLabelText('Moneda'), 'EUR');
     await user.click(within(dialog).getByRole('button', { name: 'Crear sede' }));
     await waitFor(() =>
@@ -440,14 +476,14 @@ describe('LocationFormModal (G1, spec §6.2)', () => {
     await currenciesLoaded(dialog);
     await user.type(within(dialog).getByLabelText('Nombre'), 'Sede Norte');
     await user.type(phone, '+34 600');
-    await user.selectOptions(within(dialog).getByLabelText('País'), 'ES');
+    await chooseCountry(user, within(dialog).getByLabelText('País'), 'ES');
     await user.selectOptions(within(dialog).getByLabelText('Moneda'), 'EUR');
     await user.click(within(dialog).getByRole('button', { name: 'Crear sede' }));
     await waitFor(() => expect(phone).toHaveAccessibleDescription('El teléfono admite hasta 40 caracteres.'));
     expect(phone).toHaveAttribute('aria-invalid', 'true');
   });
 
-  it('invalid native selects get the danger border, like the inputs', async () => {
+  it('invalid country and currency get the danger border, like the inputs', async () => {
     const { dialog, user } = setup();
     await currenciesLoaded(dialog);
     await user.click(within(dialog).getByRole('button', { name: 'Crear sede' }));

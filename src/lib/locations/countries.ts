@@ -22,10 +22,12 @@ export interface CountryOption {
   name: string;
 }
 
+const BY_SPANISH_NAME = new Intl.Collator('es');
+
 /** Todos los países de la copia, ordenados por nombre en español. */
 export const COUNTRIES: readonly CountryOption[] = [...iso3166Countries]
   .map(({ code, name }) => ({ code, name }))
-  .sort((a, b) => new Intl.Collator('es').compare(a.name, b.name));
+  .sort((a, b) => BY_SPANISH_NAME.compare(a.name, b.name));
 
 const NAMES = new Map(COUNTRIES.map((c) => [c.code, c.name]));
 

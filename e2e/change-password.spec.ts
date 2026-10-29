@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { test, expect } from './support/test';
 import { loginAs, sessionCookie } from './support/auth';
 import { registerClinicViaApi } from './support/api';
+import { E2E_BROWSER_LOCALE } from './support/regional';
 
 /**
  * DX-070 (TST-004): cambio de contraseña en /settings/profile.
@@ -35,7 +36,7 @@ test('cambiar la contraseña en /settings/profile cierra las otras sesiones y el
   await loginAs(page, origin, clinic.email, OLD_PASSWORD);
 
   // "Otro dispositivo" con la misma cuenta.
-  const otherDevice = await browser.newContext({ locale: 'es-CO', timezoneId: 'America/Bogota' });
+  const otherDevice = await browser.newContext({ locale: E2E_BROWSER_LOCALE, timezoneId: 'America/Bogota' });
   try {
     const other = await otherDevice.newPage();
     await loginAs(other, origin, clinic.email, OLD_PASSWORD);

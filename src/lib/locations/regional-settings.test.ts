@@ -1,4 +1,4 @@
-import { browserHourCycle, browserLocale, canonicalLocale, canonicalTimeZone } from './regional-settings';
+import { browserCountry, browserHourCycle, browserLocale, canonicalLocale, canonicalTimeZone } from './regional-settings';
 
 describe('canonicalTimeZone (solo la capitalización, nunca el nombre)', () => {
   it.each(['Asia/Kolkata', 'Europe/Kyiv', 'Asia/Ho_Chi_Minh', 'Asia/Kathmandu', 'America/Nuuk', 'Etc/UTC'])(
@@ -88,6 +88,32 @@ describe('browserLocale', () => {
   it('null when the browser gives nothing usable', () => {
     expect(browserLocale(fakeIntl({}))).toBeNull();
     expect(browserLocale(fakeIntl({ locale: 'not a locale' }))).toBeNull();
+  });
+});
+
+describe('browserCountry (DX-312 R11, P1)', () => {
+  it('the browser region is suggested only when a language tag has an explicit region', () => {
+    const maximize = jest.spyOn(Intl.Locale.prototype, 'maximize');
+    // Solo la región escrita: nunca deducida del idioma.
+    expect(browserCountry(['es'])).toBeNull();
+    expect(browserCountry(['es-419'])).toBeNull();
+    expect(browserCountry([])).toBeNull();
+    expect(browserCountry(['es-VE', 'en-US'])).toBe('VE');
+    expect(browserCountry(['es', 'es-ve'])).toBe('VE');
+    expect(browserCountry(['es-Latn-VE'])).toBe('VE');
+    // Una región que no está en la lista de países no se sugiere.
+    expect(browserCountry(['xx-ZZ'])).toBeNull();
+    expect(browserCountry(['not a tag', 'es-VE'])).toBe('VE');
+    expect(maximize).not.toHaveBeenCalled();
+    maximize.mockRestore();
+  });
+
+  it('without an argument it reads navigator.languages', () => {
+    const languages = jest.spyOn(navigator, 'languages', 'get').mockReturnValue(['es-VE']);
+    expect(browserCountry()).toBe('VE');
+    languages.mockReturnValue(['es']);
+    expect(browserCountry()).toBeNull();
+    languages.mockRestore();
   });
 });
 
