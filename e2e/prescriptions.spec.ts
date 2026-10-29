@@ -11,8 +11,8 @@ import { invitationLinkFor } from './support/mail';
  *      registro profesional y lo introduce en el modal; el paciente es alérgico
  *      a la penicilina y se prescribe amoxicilina → alerta bloqueante hasta
  *      confirmar → emitir.
- *   2. «Ver e imprimir» abre la vista A4 en otra pestaña con los campos
- *      legales; el PDF sale en UNA sola hoja.
+ *   2. «Ver e imprimir» abre la vista A4 en otra pestaña con la receta única
+ *      (DX-324); el PDF sale en UNA sola hoja.
  *   3. «Anular» con motivo → la fila queda tachada con quién/cuándo/motivo.
  *   4. A 390px no hay scroll horizontal de página.
  *   5. Recepción no ve la pestaña y la API le responde 403.
@@ -77,8 +77,9 @@ test('emitir con alerta de alergia, imprimir en A4, anular; recepción sin pesta
   });
   await panel.getByRole('button', { name: 'Nueva receta' }).click();
   const dialog = page.getByRole('dialog', { name: 'Nueva receta' });
-  await expect(dialog.getByText(/Se emite desde .* \(Colombia\)/)).toBeVisible();
-  await dialog.getByLabel('Tu registro profesional').fill('TP-12345');
+  // DX-324: una clínica nueva emite la receta única con 30 días de validez.
+  await expect(dialog.getByText(/Se emite desde .* · válida 30 días\./)).toBeVisible();
+  await dialog.getByLabel('Tu nº de registro profesional').fill('TP-12345');
   await dialog.getByLabel('Principio activo (DCI)').fill('Amoxicilina');
   await dialog.getByLabel('Concentración').fill('500 mg');
   await dialog.getByLabel('Forma farmacéutica').fill('Cápsula');
@@ -114,10 +115,12 @@ test('emitir con alerta de alergia, imprimir en A4, anular; recepción sin pesta
     page.context().waitForEvent('page'),
     table.getByRole('link', { name: /Ver e imprimir/ }).click(),
   ]);
-  await expect(printPage.getByRole('heading', { name: 'Fórmula médica' })).toBeVisible({
+  await expect(printPage.getByRole('heading', { name: 'Receta', exact: true })).toBeVisible({
     timeout: 15_000,
   });
-  await expect(printPage.getByText('21 (veintiuno) cápsulas')).toBeVisible();
+  // Sin la cantidad en letras: una clínica nueva nace con el ajuste apagado.
+  await expect(printPage.getByText('21 cápsulas', { exact: true })).toBeVisible();
+  await expect(printPage.getByText(/veintiuno/)).toHaveCount(0);
   await expect(printPage.getByText('TP-12345')).toBeVisible();
   await expect(printPage.getByText(`RX${suffix}`.slice(0, 20)).first()).toBeVisible();
   // DX-300: el aviso confirmado y su motivo salen en el documento.
