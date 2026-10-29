@@ -1,5 +1,6 @@
 import { formatDate } from '@/lib/format/date';
 import type { PatientCoverage } from '@/lib/patients/coverages-api';
+import { isExternalPayer } from '@/lib/payers/payer-type';
 import type { PayerType } from '@/lib/payers/payers-api';
 
 // SEC-049: nº de afiliado o póliza de una cobertura. Es el espejo de la regla
@@ -29,9 +30,9 @@ export const memberNumberCopy = {
 const ALLOWED = /^[\p{L}0-9 ./-]+$/u;
 const NOT_ALPHANUMERIC = /[^\p{L}0-9]/gu;
 
-/** ¿El tipo de pagador exige nº de afiliado? Los externos; OTRO no. */
+/** ¿El tipo de pagador exige nº de afiliado? Los externos; OTHER no. */
 export function requiresMemberNumber(type: PayerType): boolean {
-  return type !== 'OTRO';
+  return isExternalPayer(type);
 }
 
 /** Mensaje si el número no vale con ese pagador, o `null`. */
@@ -55,7 +56,7 @@ export interface CoverageVerificationBadge {
 
 /**
  * Insignia «Verificada» / «Sin verificar» de una cobertura de un pagador
- * externo; `null` con uno interno (OTRO), donde no aplica.
+ * externo; `null` con uno interno (OTHER), donde no aplica.
  */
 export function coverageVerificationBadge(
   c: Pick<PatientCoverage, 'verifiedAt' | 'verifiedByName'> & {

@@ -12,7 +12,7 @@ export function agreementDto(
   return {
     id,
     name,
-    payer: { type: 'EPS_CO', ...payer },
+    payer: { type: 'PUBLIC_SYSTEM', ...payer },
     kind: 'PERCENT_DISCOUNT',
     active: true,
     validFrom: null,
@@ -32,7 +32,7 @@ export function patientAgreement(over: Partial<PatientAgreement> = {}): PatientA
       active: true,
       validFrom: null,
       validTo: null,
-      payer: { id: 'pay-1', name: 'Sanitas', type: 'EPS_CO' },
+      payer: { id: 'pay-1', name: 'Sanitas', type: 'PUBLIC_SYSTEM' },
     },
     coverageId: null,
     validFrom: null,
@@ -55,7 +55,7 @@ export function coverageFor(
   return {
     id,
     patientId: 'p1',
-    payer: { ...payer, type: 'OTRO', country: null, active: true },
+    payer: { ...payer, type: 'OTHER', active: true },
     planName,
     memberNumber: '88123456',
     policyHolderName: null,

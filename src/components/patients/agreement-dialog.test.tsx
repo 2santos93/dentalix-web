@@ -25,9 +25,9 @@ const mockedAgreements = listAgreements as jest.MockedFunction<typeof listAgreem
 const mockedCoverages = listCoverages as jest.MockedFunction<typeof listCoverages>;
 const mockedAssign = assignPatientAgreement as jest.MockedFunction<typeof assignPatientAgreement>;
 
-const sanitas = { id: 'pay-1', name: 'Sanitas', type: 'EPS_CO' as const };
-const axa = { id: 'pay-2', name: 'Axa', type: 'PREPAGADA_CO' as const };
-const cortesia = { id: 'pay-3', name: 'Cortesía', type: 'OTRO' as const };
+const sanitas = { id: 'pay-1', name: 'Sanitas', type: 'PUBLIC_SYSTEM' as const };
+const axa = { id: 'pay-2', name: 'Axa', type: 'PREPAID_PLAN' as const };
+const cortesia = { id: 'pay-3', name: 'Cortesía', type: 'OTHER' as const };
 
 /** Token con `sub` (SEC-049: el diálogo mira quién registró la cobertura). */
 const tokenFor = (sub: string) =>
@@ -328,7 +328,7 @@ describe('AgreementDialog (DX-105)', () => {
       );
     });
 
-    it('M2: con una cobertura migrada del pagador OTRO, un no-ADMIN la elige y asigna', async () => {
+    it('M2: con una cobertura migrada del pagador OTHER, un no-ADMIN la elige y asigna', async () => {
       mockedAgreements.mockResolvedValue([agreementDto('ag9', 'Sura migrada', cortesia)]);
       mockedCoverages.mockResolvedValue([
         coverageFor('c7', cortesia, 'Plan migrado', 'ACTIVE', true),
@@ -353,7 +353,7 @@ describe('AgreementDialog (DX-105)', () => {
       );
     });
 
-    it('M2: al ADMIN le avisa de reclasificar un pagador OTRO, sin bloquear', async () => {
+    it('M2: al ADMIN le avisa de reclasificar un pagador OTHER, sin bloquear', async () => {
       mockedAgreements.mockResolvedValue([agreementDto('ag9', 'Cortesía socios', cortesia)]);
       renderDialog(null, 'ADMIN');
       const user = setupUser();

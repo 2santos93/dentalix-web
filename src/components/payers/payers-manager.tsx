@@ -16,21 +16,20 @@ import { notifyError } from '@/components/errors/notify';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { PayerFormModal } from './payer-form-modal';
-import { PAYER_COUNTRY_LABELS, PAYER_NO_COUNTRY_LABEL, PAYER_TYPE_LABELS } from './payer-labels';
+import { payerTypeLabel } from './payer-labels';
 
 const copy = {
   newPayer: 'Nuevo pagador',
   count: (n: number) => (n === 1 ? '1 pagador' : `${n} pagadores`),
   empty: 'Todavía no hay pagadores.',
   emptyHint:
-    'Crea las aseguradoras, EPS, mutuas o empresas con las que trabajas para registrar la cobertura de tus pacientes.',
+    'Crea las aseguradoras, planes prepago, sistemas públicos o empresas con las que trabajas para registrar la cobertura de tus pacientes.',
   loadError: 'No pudimos cargar los pagadores.',
   forbiddenTitle: 'Solo administración gestiona los pagadores.',
   forbiddenHint: 'El resto del equipo los elige al registrar la cobertura de un paciente.',
   tableLabel: 'Pagadores',
   colName: 'Nombre',
   colType: 'Tipo',
-  colCountry: 'País',
   colStatus: 'Estado',
   colActions: 'Acciones',
   active: 'Activo',
@@ -52,10 +51,6 @@ interface PayersManagerProps {
   token: string;
   /** Solo ADMIN (la API exige el rol para escribir). */
   allowed: boolean;
-}
-
-function countryLabel(payer: Payer): string {
-  return payer.country ? PAYER_COUNTRY_LABELS[payer.country] : PAYER_NO_COUNTRY_LABEL;
 }
 
 /**
@@ -242,9 +237,6 @@ export function PayersManager({ token, allowed }: PayersManagerProps) {
                 {copy.colType}
               </th>
               <th scope="col" className="px-4 py-3 font-medium text-muted">
-                {copy.colCountry}
-              </th>
-              <th scope="col" className="px-4 py-3 font-medium text-muted">
                 {copy.colStatus}
               </th>
               <th scope="col" className="px-4 py-3 text-right font-medium text-muted">
@@ -256,8 +248,7 @@ export function PayersManager({ token, allowed }: PayersManagerProps) {
             {payers.map((p) => (
               <tr key={p.id} className="border-b border-hairline last:border-0">
                 <td className="px-4 py-3 font-medium">{p.name}</td>
-                <td className="px-4 py-3">{PAYER_TYPE_LABELS[p.type]}</td>
-                <td className="px-4 py-3">{countryLabel(p)}</td>
+                <td className="px-4 py-3">{payerTypeLabel(p.type)}</td>
                 <td className="px-4 py-3">{status(p)}</td>
                 <td className="px-4 py-3">{actions(p)}</td>
               </tr>
@@ -275,9 +266,7 @@ export function PayersManager({ token, allowed }: PayersManagerProps) {
                 <span className="min-w-0 break-words font-medium">{p.name}</span>
                 {status(p)}
               </div>
-              <p className="text-xs text-muted">
-                {PAYER_TYPE_LABELS[p.type]} · {countryLabel(p)}
-              </p>
+              <p className="text-xs text-muted">{payerTypeLabel(p.type)}</p>
               {actions(p)}
             </li>
           ))}

@@ -2,11 +2,10 @@ import { apiFetch, apiFetchOrNull } from '@/lib/api/client';
 import type { components } from '@/lib/api/schema';
 import type { ClinicRole } from '@/lib/me/me-api';
 
-// DX-153: catálogo de pagadores (aseguradoras, EPS, mutuas, empresas). Las
-// formas salen del contrato generado.
+// DX-153: catálogo de pagadores de la clínica (DX-326: tipos genéricos, sin
+// país). Las formas salen del contrato generado.
 export type Payer = components['schemas']['PayerDto'];
 export type PayerType = components['schemas']['PayerType'];
-export type PayerCountry = components['schemas']['ClinicCountry'];
 export type CreatePayerInput = components['schemas']['CreatePayerDto'];
 export type UpdatePayerInput = components['schemas']['UpdatePayerDto'];
 

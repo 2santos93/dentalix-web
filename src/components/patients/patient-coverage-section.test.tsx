@@ -38,22 +38,21 @@ const mockedPayers = listPayers as jest.MockedFunction<typeof listPayers>;
 const payer = (id: string, name: string, over: Partial<Payer> = {}): Payer => ({
   id,
   name,
-  type: 'OTRO',
-  country: null,
+  type: 'OTHER',
   active: true,
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-01T00:00:00.000Z',
   ...over,
 });
-const sanitas = payer('pay-1', 'Sanitas', { type: 'MUTUA_ES', country: 'ES' });
-const colsanitas = payer('pay-2', 'Colsanitas', { type: 'PREPAGADA_CO', country: 'CO' });
+const sanitas = payer('pay-1', 'Sanitas', { type: 'PREPAID_PLAN' });
+const colsanitas = payer('pay-2', 'Colsanitas', { type: 'INSURER' });
 
 function coverage(over: Partial<PatientCoverage> = {}): PatientCoverage {
   const p = over.payer ?? sanitas;
   return {
     id: 'c1',
     patientId: 'p1',
-    payer: { id: p.id, name: p.name, type: p.type, country: p.country, active: p.active },
+    payer: { id: p.id, name: p.name, type: p.type, active: p.active },
     planName: 'Salud Plus',
     memberNumber: '88123456',
     policyHolderName: null,
@@ -142,7 +141,7 @@ describe('PatientCoverageSection (DX-153)', () => {
     expect(rows).toHaveLength(3);
 
     expect(within(rows[0]).getByText('Sanitas')).toBeInTheDocument();
-    expect(within(rows[0]).getByText('Mutua (España)')).toBeInTheDocument();
+    expect(within(rows[0]).getByText('Plan prepago')).toBeInTheDocument();
     expect(within(rows[0]).getByText('Salud Plus')).toBeInTheDocument();
     expect(within(rows[0]).getByText('Afiliado n.º 88123456')).toHaveClass('tabular-nums');
     expect(within(rows[0]).getByText('Vigente hasta 31/01/2027')).toBeInTheDocument();

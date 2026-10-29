@@ -1,13 +1,14 @@
 import type { ClinicRole } from '@/lib/me/me-api';
 import type { Agreement } from '@/lib/agreements/agreements-api';
 import type { PatientCoverage } from '@/lib/patients/coverages-api';
+import { isExternalPayer } from '@/lib/payers/payer-type';
 
 // SEC-047: quién puede asignar qué convenio. Es el espejo de la regla de la API
 // (que es la que manda): un convenio de un pagador externo solo se asigna con
 // una cobertura VIGENTE del paciente con ese pagador, sea cual sea el rol; uno
-// interno —pagador de tipo OTRO: cortesía, empleados— solo lo asigna ADMIN,
+// interno —pagador de tipo OTHER: cortesía, empleados— solo lo asigna ADMIN,
 // salvo que el paciente traiga una cobertura MIGRADA de su aseguradora en texto
-// libre (DX-153) de ese pagador: el relleno creó pagadores OTRO para
+// libre (DX-153) de ese pagador: el relleno creó pagadores OTHER para
 // aseguradoras reales y esa cobertura no se puede crear por la API.
 // SEC-049: quien no es ADMIN tampoco puede usar una cobertura cuyo pagador o nº
 // de afiliado registró él mismo si un ADMIN no la verificó.
@@ -38,11 +39,6 @@ export type AgreementEligibility<C extends CoverageLike> =
   | { kind: 'optional-coverage'; coverages: C[]; notice: string }
   /** No se puede asignar: `reason` lo explica. */
   | { kind: 'blocked'; reason: string };
-
-/** ¿Es un pagador externo real? `OTRO` es el de los convenios internos. */
-export function isExternalPayer(type: PayerType): boolean {
-  return type !== 'OTRO';
-}
 
 /**
  * SEC-049: ¿puede la sesión usar esa cobertura? ADMIN, sí; los demás, si un

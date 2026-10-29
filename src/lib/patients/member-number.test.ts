@@ -6,20 +6,20 @@ import {
 } from './member-number';
 
 describe('nº de afiliado (SEC-049)', () => {
-  it('lo exigen los pagadores externos, no OTRO', () => {
-    for (const type of ['EPS_CO', 'PREPAGADA_CO', 'MUTUA_ES', 'EMPRESA'] as const) {
+  it('lo exigen los pagadores externos, no OTHER', () => {
+    for (const type of ['INSURER', 'PREPAID_PLAN', 'PUBLIC_SYSTEM', 'EMPLOYER'] as const) {
       expect(requiresMemberNumber(type)).toBe(true);
     }
-    expect(requiresMemberNumber('OTRO')).toBe(false);
+    expect(requiresMemberNumber('OTHER')).toBe(false);
   });
 
   it('sin nº con un pagador externo: el mismo mensaje que la API, sin tipo ni país', () => {
-    for (const type of ['EPS_CO', 'PREPAGADA_CO', 'MUTUA_ES', 'EMPRESA'] as const) {
+    for (const type of ['INSURER', 'PREPAID_PLAN', 'PUBLIC_SYSTEM', 'EMPLOYER'] as const) {
       expect(memberNumberError(type, '   ')).toBe(
         'El nº de afiliado o póliza es obligatorio con un pagador externo.',
       );
     }
-    expect(memberNumberError('OTRO', '')).toBeNull();
+    expect(memberNumberError('OTHER', '')).toBeNull();
   });
 
   it('una regla única para todo pagador externo, como la API (DX-311)', () => {
@@ -38,7 +38,7 @@ describe('nº de afiliado (SEC-049)', () => {
       ['0000', memberNumberCopy.repeated],
       ['1111-1111', memberNumberCopy.repeated],
     ];
-    for (const type of ['EPS_CO', 'PREPAGADA_CO', 'MUTUA_ES', 'EMPRESA'] as const) {
+    for (const type of ['INSURER', 'PREPAID_PLAN', 'PUBLIC_SYSTEM', 'EMPLOYER'] as const) {
       for (const [value, expected] of cases) {
         expect([value, memberNumberError(type, value)]).toEqual([value, expected]);
       }
@@ -60,7 +60,7 @@ describe('nº de afiliado (SEC-049)', () => {
   it('insignia: verificada con quién y cuándo, sin verificar, o nada con un pagador interno', () => {
     expect(
       coverageVerificationBadge({
-        payer: { type: 'EMPRESA' },
+        payer: { type: 'EMPLOYER' },
         verifiedAt: '2026-10-20T15:00:00.000Z',
         verifiedByName: 'Ana Gómez',
       }),
@@ -71,13 +71,13 @@ describe('nº de afiliado (SEC-049)', () => {
     });
     expect(
       coverageVerificationBadge({
-        payer: { type: 'EMPRESA' },
+        payer: { type: 'EMPLOYER' },
         verifiedAt: null,
         verifiedByName: null,
       }),
     ).toEqual({ label: 'Sin verificar', variant: 'muted', detail: null });
     expect(
-      coverageVerificationBadge({ payer: { type: 'OTRO' }, verifiedAt: null, verifiedByName: null }),
+      coverageVerificationBadge({ payer: { type: 'OTHER' }, verifiedAt: null, verifiedByName: null }),
     ).toBeNull();
   });
 });

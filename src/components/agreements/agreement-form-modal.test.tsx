@@ -20,8 +20,7 @@ const mockedUpdate = updateAgreement as jest.MockedFunction<typeof updateAgreeme
 const payer = (id: string, name: string): Payer => ({
   id,
   name,
-  type: 'EPS_CO',
-  country: 'CO',
+  type: 'PUBLIC_SYSTEM',
   active: true,
   createdAt: '2026-10-01T00:00:00.000Z',
   updatedAt: '2026-10-01T00:00:00.000Z',
@@ -51,7 +50,7 @@ const categories = ['Endodoncia', 'Preventiva', 'Restauradora'];
 const existing: Agreement = {
   id: 'ag-1',
   name: 'Convenio Sanitas',
-  payer: { id: 'payer-1', name: 'Sanitas', type: 'PREPAGADA_CO' },
+  payer: { id: 'payer-1', name: 'Sanitas', type: 'PREPAID_PLAN' },
   kind: 'PERCENT_DISCOUNT',
   percent: 15,
   percentByCategory: { Preventiva: 20 },
