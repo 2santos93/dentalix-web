@@ -275,6 +275,16 @@ describe('RegisterForm', () => {
     expect(country).not.toHaveAccessibleDescription(expect.stringContaining('Sugerido'));
   });
 
+  it('the location intro says which fields may come suggested, the country included', () => {
+    mockApi(() => Promise.resolve({ message: 'genérico' }));
+    render(<RegisterForm tenant={null} />);
+    expect(
+      screen.getByText(
+        'La primera sede de tu clínica. La zona, el formato, el reloj y, si tu navegador lo indica, el país vienen sugeridos: revísalos. Podrás cambiarlos y añadir más sedes en Ajustes → Sedes.',
+      ),
+    ).toBeInTheDocument();
+  });
+
   it('a 400 for a location field from the API shows next to that field', async () => {
     mockApi(() =>
       Promise.reject(

@@ -158,6 +158,25 @@ describe('CountryCombobox (DX-312, spec §6.3)', () => {
     expect(onChange).not.toHaveBeenCalled();
   });
 
+  it('the list has a name and the result count is announced while typing', async () => {
+    const { user, input } = setup();
+    const status = screen.getByRole('status');
+    await user.click(input);
+    expect(screen.getByRole('listbox', { name: 'Países' })).toBeInTheDocument();
+    // Abrir la lista completa no anuncia nada.
+    expect(status).toHaveTextContent('');
+    await user.type(input, 'venez');
+    expect(status).toHaveTextContent('1 país');
+    await user.clear(input);
+    await user.type(input, 'gu');
+    expect(status).toHaveTextContent(/^\d+ países$/);
+    await user.type(input, 'zzzz');
+    expect(status).toHaveTextContent('Ningún país coincide.');
+    expect(input).toHaveAccessibleDescription(expect.stringContaining('Ningún país coincide.'));
+    await user.tab();
+    expect(status).toHaveTextContent('');
+  });
+
   it('the field shows the chosen country\'s name', () => {
     const { input } = setup({ initial: 'VE' });
     expect(input).toHaveValue('Venezuela');

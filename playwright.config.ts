@@ -1,4 +1,5 @@
 import { defineConfig, devices } from '@playwright/test';
+import { E2E_BROWSER_LOCALE } from './e2e/support/regional';
 import { WEB_PORT } from './e2e/support/urls';
 
 /**
@@ -49,8 +50,7 @@ export default defineConfig({
     timezoneId: 'America/Bogota',
     // Idioma sin región: la suite no recibe ninguna sugerencia de país (DX-312
     // P1). Ni `en-US` (del runner) ni otro con región, que sugeriría su país.
-    // Es `E2E_BROWSER_LOCALE` de e2e/support/regional.ts.
-    locale: 'es',
+    locale: E2E_BROWSER_LOCALE,
     trace: 'retain-on-failure',
     screenshot: 'only-on-failure',
   },

@@ -10,6 +10,10 @@ export const countryComboboxCopy = {
   placeholder: 'Escribe el nombre o el código del país',
   // Sin coincidencias no es un error: es una opción deshabilitada de la lista.
   noMatch: 'Ningún país coincide.',
+  /** Nombre de la lista para el lector de pantalla. */
+  list: 'Países',
+  /** Recuento para el lector de pantalla mientras se escribe. */
+  results: (n: number) => (n === 1 ? '1 país' : `${n} países`),
 };
 
 const copy = countryComboboxCopy;
@@ -52,6 +56,7 @@ export function CountryCombobox({
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState(-1);
   const listboxId = `${id}-listbox`;
+  const statusId = `${id}-status`;
   const optionId = (code: string) => `${id}-option-${code}`;
 
   const results: CountryOption[] = open ? searchCountries(query ?? '') : [];
@@ -114,7 +119,8 @@ export function CountryCombobox({
         }
         break;
       case 'Escape':
-        // Que no cierre también el diálogo que contiene el campo.
+        // Cierra solo la lista; el diálogo que contiene el campo no se cierra
+        // mientras la lista está abierta (`ui/dialog.tsx`).
         if (open || query !== null) {
           e.preventDefault();
           e.stopPropagation();
@@ -125,6 +131,13 @@ export function CountryCombobox({
   }
 
   const shown = query ?? (value ? (countryName(value) ?? value) : '');
+  // Solo mientras se escribe: abrir la lista completa no anuncia «250 países».
+  const status =
+    open && query !== null && query.trim() !== ''
+      ? results.length === 0
+        ? copy.noMatch
+        : copy.results(results.length)
+      : '';
 
   return (
     <div className="relative">
@@ -138,7 +151,9 @@ export function CountryCombobox({
         aria-activedescendant={activeId}
         aria-invalid={invalid || undefined}
         aria-required={required || undefined}
-        aria-describedby={ariaDescribedBy}
+        // El recuento solo describe el campo cuando dice algo: vacío dejaría un
+        // espacio de más tras la pista o el error.
+        aria-describedby={cn(ariaDescribedBy, status && statusId) || undefined}
         autoComplete="off"
         spellCheck={false}
         placeholder={placeholder}
@@ -161,10 +176,16 @@ export function CountryCombobox({
         aria-hidden
         className="pointer-events-none absolute right-3 top-1/2 size-4 -translate-y-1/2 text-muted"
       />
+      {/* Fuera de la lista: un `listbox` solo admite opciones. Solo para el
+          lector de pantalla (la opción «sin coincidencias» no se anuncia sola). */}
+      <p id={statusId} role="status" aria-live="polite" className="sr-only">
+        {status}
+      </p>
       {/* El listbox existe siempre (`aria-controls` apunta a un id real); vacío y oculto cuando está cerrado. */}
       <ul
         id={listboxId}
         role="listbox"
+        aria-label={copy.list}
         hidden={!open}
         className="absolute z-20 mt-1 max-h-64 w-full overflow-y-auto overscroll-contain rounded-lg border border-border bg-surface py-1 shadow-md"
       >

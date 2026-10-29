@@ -52,6 +52,18 @@ describe('CityCombobox', () => {
     expect(onChange).toHaveBeenCalledWith({ id: 1, name: 'Bogotá' });
   });
 
+  it('Escape closes the open list', async () => {
+    const user = userEvent.setup();
+    render(<CityCombobox id="city" token="tok" countryCode="CO" value={null} onChange={() => {}} />);
+    const input = screen.getByRole('combobox');
+    await user.type(input, 'bog');
+    await screen.findByText('Bogotá');
+    expect(input).toHaveAttribute('aria-expanded', 'true');
+    await user.keyboard('{Escape}');
+    expect(input).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
+  });
+
   it('does not reopen the dropdown after a city is picked', async () => {
     const onChange = jest.fn();
     const user = userEvent.setup();

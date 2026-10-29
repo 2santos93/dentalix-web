@@ -51,7 +51,7 @@ const copy = {
   sentSpam: 'Si no lo ves en unos minutos, revisa la carpeta de spam.',
   locationLegend: 'Tu sede',
   locationIntro:
-    'La primera sede de tu clínica. La zona, el formato y el reloj se sugieren desde tu navegador: revísalos. Podrás cambiarlos y añadir más sedes en Ajustes → Sedes.',
+    'La primera sede de tu clínica. La zona, el formato, el reloj y, si tu navegador lo indica, el país vienen sugeridos: revísalos. Podrás cambiarlos y añadir más sedes en Ajustes → Sedes.',
 };
 
 const ERROR_ID = 'register-error';

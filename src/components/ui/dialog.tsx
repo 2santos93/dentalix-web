@@ -30,7 +30,7 @@ const DialogContent = React.forwardRef<
      */
     closeDisabled?: boolean;
   }
->(({ className, children, onOpenAutoFocus, onCloseAutoFocus, closeDisabled = false, ...props }, ref) => {
+>(({ className, children, onOpenAutoFocus, onCloseAutoFocus, onEscapeKeyDown, closeDisabled = false, ...props }, ref) => {
   // Los diálogos de la app se abren con `open` y sin `DialogTrigger`, así que
   // Radix no sabe a dónde devolver el foco al cerrar y lo deja en <body>. Se
   // recuerda el elemento que tenía el foco al abrir y se le devuelve al cerrar
@@ -50,6 +50,15 @@ const DialogContent = React.forwardRef<
           const active = document.activeElement;
           returnFocusRef.current = active instanceof HTMLElement && active !== document.body ? active : null;
           onOpenAutoFocus?.(event);
+        }}
+        onEscapeKeyDown={(event) => {
+          onEscapeKeyDown?.(event);
+          // Escape con la lista de un combobox abierta cierra solo la lista (lo
+          // hace el propio combobox); un segundo Escape ya cierra el diálogo.
+          // Radix escucha en `document` en fase de captura, antes que el campo,
+          // así que el `stopPropagation` del combobox no llega a tiempo.
+          const target = event.target as HTMLElement | null;
+          if (target?.closest?.('[role="combobox"][aria-expanded="true"]')) event.preventDefault();
         }}
         onCloseAutoFocus={(event) => {
           onCloseAutoFocus?.(event);

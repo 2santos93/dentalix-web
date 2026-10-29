@@ -35,7 +35,7 @@ export const locationFormCopy = {
   createTitle: 'Nueva sede',
   editTitle: 'Editar sede',
   createDescription:
-    'País, moneda, zona horaria, formato y reloj son obligatorios. La zona, el formato y el reloj se sugieren desde tu navegador: revísalos.',
+    'País, moneda, zona horaria, formato y reloj son obligatorios. La zona, el formato, el reloj y, si tu navegador lo indica, el país vienen sugeridos: revísalos.',
   editDescription:
     'Guardar confirma la moneda, la zona horaria, el formato y el reloj de la sede, aunque no cambies nada.',
   name: 'Nombre',

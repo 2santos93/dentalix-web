@@ -296,6 +296,30 @@ describe('LocationFormModal (G1, spec §6.2)', () => {
     expect(mockedUpdate.mock.calls[0][2]).toMatchObject({ country: 'ES' });
   });
 
+  it('Escape on an open country list closes the list and keeps the dialog', async () => {
+    const { dialog, user, onOpenChange } = setup();
+    await currenciesLoaded(dialog);
+    await user.type(within(dialog).getByLabelText('Nombre'), 'Sede Caracas');
+    const country = within(dialog).getByRole('combobox', { name: 'País' });
+    await user.type(country, 'venez');
+    expect(country).toHaveAttribute('aria-expanded', 'true');
+    await user.keyboard('{Escape}');
+    expect(country).toHaveAttribute('aria-expanded', 'false');
+    expect(screen.getByRole('dialog')).toBeInTheDocument();
+    expect(onOpenChange).not.toHaveBeenCalled();
+    expect(within(dialog).getByLabelText('Nombre')).toHaveValue('Sede Caracas');
+    // Con la lista cerrada, Escape cierra el modal como siempre.
+    await user.keyboard('{Escape}');
+    expect(onOpenChange).toHaveBeenCalledWith(false);
+  });
+
+  it('the create description says which fields may come suggested, the country included', () => {
+    const { dialog } = setup();
+    expect(dialog).toHaveAccessibleDescription(
+      'País, moneda, zona horaria, formato y reloj son obligatorios. La zona, el formato, el reloj y, si tu navegador lo indica, el país vienen sugeridos: revísalos.',
+    );
+  });
+
   it('choosing a country changes nothing else', async () => {
     const { dialog, user } = setup();
     await currenciesLoaded(dialog);

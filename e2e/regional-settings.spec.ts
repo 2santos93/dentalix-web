@@ -205,17 +205,26 @@ for (const viewport of VIEWPORTS) {
 
       await page.goto(`${origin}/register`);
       await waitForHydratedForm(page);
-      // País y moneda vacíos (con `es`, sin región, no se sugiere país: DX-312
-      // P1); zona y formato, sugeridos por el navegador. El formato es el
-      // locale con el que formatea este navegador (Chromium con `es` da `es-ES`),
-      // no el de la sede: se lee de la página, como hace la web.
-      const browserFormat = await page.evaluate(() => new Intl.DateTimeFormat().resolvedOptions().locale);
-      expect(browserFormat.startsWith(E2E_BROWSER_LOCALE)).toBe(true);
-      await expect(page.getByLabel('País', { exact: true })).toHaveValue('');
+      // Lo que importa a P1 (DX-312): el navegador de la suite no declara región,
+      // así que el país empieza vacío y sin marca; la moneda, vacía.
+      expect(await page.evaluate(() => [...navigator.languages])).toEqual([E2E_BROWSER_LOCALE]);
+      const country = page.getByRole('combobox', { name: 'País', exact: true });
+      const format = page.getByLabel('Formato regional', { exact: true });
+      await expect(country).toHaveValue('');
+      await expect(country).not.toHaveAccessibleDescription(/Sugerido por tu navegador/);
       await expect(page.getByLabel('Moneda', { exact: true })).toHaveValue('');
+      // Zona y formato, sugeridos y marcados. El formato es el locale con el que
+      // formatea este navegador (Chromium con `es` → `es-ES`), en la forma
+      // idioma-región, nunca el de la sede.
+      const browserFormat = await page.evaluate(() => new Intl.DateTimeFormat().resolvedOptions().locale);
       await expect(page.getByLabel('Zona horaria', { exact: true })).toHaveValue(E2E_REGION.timeZone);
-      await expect(page.getByLabel('Formato regional', { exact: true })).toHaveValue(browserFormat);
-      await expect(page.getByText('Sugerido por tu navegador.').first()).toBeVisible();
+      await expect(page.getByLabel('Zona horaria', { exact: true })).toHaveAccessibleDescription(
+        /^Sugerido por tu navegador\./,
+      );
+      await expect(format).toHaveValue(browserFormat);
+      await expect(format).toHaveValue(/^es(-[A-Z]{2})?$/);
+      await expect(format).not.toHaveValue(E2E_REGION.locale);
+      await expect(format).toHaveAccessibleDescription(/^Sugerido por tu navegador\./);
       // Sin sesión, la lista de monedas viene de GET /public/currencies (ISO completa).
       await expect(page.getByLabel('Moneda', { exact: true }).locator('option[value="JPY"]')).toHaveCount(1, {
         timeout: 10_000,

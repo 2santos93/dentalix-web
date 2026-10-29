@@ -163,23 +163,22 @@ export function browserHourCycle(intl: typeof Intl = Intl): HourCycle | null {
 
 /**
  * País de la sede sugerido por el navegador (DX-312 R11, P1): la región
- * **explícita** de la primera etiqueta de `navigator.languages` que la trae y
- * que está en la lista de países (`es-VE` → `VE`). Nunca se deduce del idioma:
- * `es` y `es-419` no sugieren nada, y no se usa `maximize()`. `null` = sin
- * sugerencia (el campo empieza vacío). `languages` se inyecta en los tests.
+ * **explícita** del idioma principal (`navigator.languages[0]`), si está en la
+ * lista de países (`es-VE` → `VE`). Los idiomas secundarios no cuentan: con
+ * `['es-419', 'en-US']` no se sugiere Estados Unidos. Nunca se deduce del
+ * idioma: `es` y `es-419` no sugieren nada, y no se usa `maximize()`. `null` =
+ * sin sugerencia (el campo empieza vacío). `languages` se inyecta en los tests.
  */
 export function browserCountry(languages?: readonly string[]): string | null {
-  const tags = languages ?? navigatorLanguages();
-  for (const tag of tags) {
-    let region: string | undefined;
-    try {
-      region = new Intl.Locale(tag).region;
-    } catch {
-      continue;
-    }
-    if (region && isCountryCode(region)) return region;
+  const [primary] = languages ?? navigatorLanguages();
+  if (!primary) return null;
+  let region: string | undefined;
+  try {
+    region = new Intl.Locale(primary).region;
+  } catch {
+    return null;
   }
-  return null;
+  return region && isCountryCode(region) ? region : null;
 }
 
 function navigatorLanguages(): readonly string[] {
