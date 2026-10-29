@@ -5696,17 +5696,11 @@ export interface components {
             clinicDefaultChannel: components["schemas"]["ContactChannel"];
             /** @description Tal como está guardado. */
             phone: string | null;
-            /**
-             * @description E.164, solo si es un móvil válido.
-             * @example +573101234567
-             */
+            /** @description E.164 (+ seguido del indicativo y el número, sin espacios), solo si es un móvil válido. */
             phoneE164: string | null;
             /** @description MISSING: sin móvil. INVALID: no es un móvil válido para el país de la sede (no puede ser canal WhatsApp). */
             phoneStatus: components["schemas"]["MobileStatus"];
-            /**
-             * @description País con el que se valida un número sin indicativo: el de la sede activa o la principal.
-             * @example CO
-             */
+            /** @description País (ISO 3166-1 alfa-2) con el que se valida un número sin indicativo: el de la sede activa o la principal (sin sedes, el del paciente). null si no hay país o si ese país no tiene indicativo por defecto (hasta DX-329): el número se escribe con +. */
             phoneCountry: string | null;
             email: string | null;
             whatsappOptIn: components["schemas"]["WhatsappOptInDto"] | null;
@@ -6373,10 +6367,7 @@ export interface components {
              * @enum {string}
              */
             hourCycle?: "h12" | "h23";
-            /**
-             * @description DX-222: teléfono de la sede que ven los pacientes en las indicaciones postoperatorias ({{telefono_sede}}). Hasta 40 caracteres.
-             * @example +57 601 555 0101
-             */
+            /** @description DX-222: teléfono de la sede que ven los pacientes en las indicaciones postoperatorias ({{telefono_sede}}). Hasta 40 caracteres. */
             phone?: string;
         };
         UpdateLocationDto: {
@@ -6391,10 +6382,7 @@ export interface components {
             healthRegistrationNumber?: string | null;
             /** @description DX-319: si el nº de registro sanitario aparece en los documentos de la sede (por defecto no). */
             showHealthRegistrationNumber?: boolean;
-            /**
-             * @description DX-222: teléfono de la sede que ven los pacientes en las indicaciones postoperatorias ({{telefono_sede}}). Hasta 40 caracteres. Vacío o null lo quita; sin el campo no cambia.
-             * @example +57 601 555 0101
-             */
+            /** @description DX-222: teléfono de la sede que ven los pacientes en las indicaciones postoperatorias ({{telefono_sede}}). Hasta 40 caracteres. Vacío o null lo quita; sin el campo no cambia. */
             phone?: string | null;
             /**
              * @description G1: moneda ISO 4217 de la sede (3 letras; se pasa a mayúsculas). Tiene que estar en GET /currencies.
@@ -9192,9 +9180,9 @@ export interface components {
             symbol: string;
         };
         CountryDto: {
-            /** @example CO */
+            /** @description Código ISO 3166-1 alfa-2. */
             code: string;
-            /** @example Colombia */
+            /** @description Nombre del país en español (CLDR). */
             name: string;
         };
         CityDto: {
