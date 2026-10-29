@@ -4,7 +4,7 @@ import { useRef, useState } from 'react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { createPayer, updatePayer, type Payer, type PayerType } from '@/lib/payers/payers-api';
 import { normalizePayerType } from '@/lib/payers/legacy-payer-type';
-import { PAYER_TYPES } from '@/lib/payers/payer-type';
+import { PAYER_TYPES, isExternalPayer } from '@/lib/payers/payer-type';
 import { FormModal } from '@/components/shared/form-modal';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { Input } from '@/components/ui/input';
@@ -27,6 +27,9 @@ const copy = {
   invalidName: 'El nombre debe tener entre 2 y 120 caracteres.',
   genericError: 'No pudimos guardar el pagador. Intenta de nuevo.',
 };
+
+/** id de la pista de SEC-047, para el `aria-describedby` del tipo. */
+const TYPE_HINT_ID = 'payer-type-hint';
 
 // <select> nativo con el aspecto del átomo Input.
 const selectClass =
@@ -56,6 +59,8 @@ export function PayerFormModal({ open, onOpenChange, payer, token, onSaved }: Pa
     payer ? (normalizePayerType(payer.type) ?? '') : '',
   );
   const [typeError, setTypeError] = useState<string | null>(null);
+  // La pista de SEC-047 sale con un tipo interno; la misma regla que el resto.
+  const internal = type !== '' && !isExternalPayer(type);
   const typeRef = useRef<HTMLSelectElement>(null);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -112,7 +117,8 @@ export function PayerFormModal({ open, onOpenChange, payer, token, onSaved }: Pa
         htmlFor="payer-type"
         label={copy.type}
         error={typeError}
-        hint={type === 'OTHER' ? copy.otherHint : undefined}
+        hint={internal ? copy.otherHint : undefined}
+        hintId={TYPE_HINT_ID}
       >
         <select
           id="payer-type"
@@ -124,7 +130,9 @@ export function PayerFormModal({ open, onOpenChange, payer, token, onSaved }: Pa
           }}
           aria-required
           aria-invalid={typeError ? true : undefined}
-          aria-describedby={typeError ? fieldErrorId('payer-type') : undefined}
+          aria-describedby={
+            typeError ? fieldErrorId('payer-type') : internal ? TYPE_HINT_ID : undefined
+          }
           className={selectClass}
         >
           <option value="" disabled>

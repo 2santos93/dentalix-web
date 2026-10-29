@@ -22,6 +22,9 @@ const sanitas: Payer = {
   updatedAt: '2026-10-01T00:00:00.000Z',
 };
 
+const OTHER_HINT =
+  'Para convenios internos (cortesía, empleados): solo un administrador podrá asignarlos. Una aseguradora o empresa va en su tipo.';
+
 function setup(payer: Payer | null = null) {
   const onSaved = jest.fn();
   const onOpenChange = jest.fn();
@@ -82,17 +85,26 @@ describe('PayerFormModal (DX-153)', () => {
     expect(mockedCreate).not.toHaveBeenCalled();
   });
 
-  it('SEC-047: OTHER shows the internal hint', async () => {
+  it('SEC-047: OTHER shows the internal hint, and the type field announces it', async () => {
     const user = setupUser();
     const { dialog } = setup();
-    await user.selectOptions(within(dialog).getByLabelText('Tipo'), 'OTHER');
-    expect(
-      within(dialog).getByText(
-        'Para convenios internos (cortesía, empleados): solo un administrador podrá asignarlos. Una aseguradora o empresa va en su tipo.',
-      ),
-    ).toBeInTheDocument();
-    await user.selectOptions(within(dialog).getByLabelText('Tipo'), 'INSURER');
+    const type = within(dialog).getByLabelText('Tipo');
+    expect(type).not.toHaveAttribute('aria-describedby');
+    await user.selectOptions(type, 'OTHER');
+    expect(within(dialog).getByText(OTHER_HINT)).toHaveAttribute('id', 'payer-type-hint');
+    expect(type).toHaveAttribute('aria-describedby', 'payer-type-hint');
+    expect(type).toHaveAccessibleDescription(OTHER_HINT);
+    await user.selectOptions(type, 'INSURER');
     expect(within(dialog).queryByText(/Para convenios internos/)).toBeNull();
+    expect(type).not.toHaveAttribute('aria-describedby');
+  });
+
+  // Excepción G5.3 (DX-334): tipos de pagador anteriores a DX-326.
+  it('legacy: un pagador OTRO de una API anterior también anuncia la pista interna', () => {
+    const { dialog } = setup({ ...sanitas, type: 'OTRO' as Payer['type'] });
+    const type = within(dialog).getByLabelText('Tipo');
+    expect(type).toHaveValue('OTHER');
+    expect(type).toHaveAccessibleDescription(OTHER_HINT);
   });
 
   it('valida el nombre antes de enviar', async () => {

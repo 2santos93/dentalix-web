@@ -43,7 +43,7 @@ describe('PayersManager (DX-153)', () => {
     expect(mockedList).not.toHaveBeenCalled();
   });
 
-  it('lists active and inactive payers with type and status, and no country column', async () => {
+  it('lista pagadores activos e inactivos con tipo y estado, sin columna de país', async () => {
     render(<PayersManager token="tok" allowed />);
     const table = await screen.findByRole('table', { name: 'Pagadores' });
     const rows = within(table).getAllByRole('row');
@@ -65,7 +65,7 @@ describe('PayersManager (DX-153)', () => {
     expect(mockedList).toHaveBeenCalledWith('tok', { includeInactive: true });
   });
 
-  it('the mobile card shows the type label only', async () => {
+  it('la tarjeta móvil solo muestra la etiqueta del tipo', async () => {
     render(<PayersManager token="tok" allowed />);
     const list = await screen.findByRole('list', { name: 'Pagadores' });
     const cards = within(list).getAllByRole('listitem');
@@ -76,7 +76,7 @@ describe('PayersManager (DX-153)', () => {
   });
 
   // Excepción G5.3 (DX-334): tipo de pagador anterior a DX-326.
-  it('legacy: a row with a code from an older API shows the generic label', async () => {
+  it('legacy: una fila con un código de una API anterior muestra la etiqueta genérica', async () => {
     mockedList.mockResolvedValue([{ ...sanitas, type: 'EPS_CO' as never }]);
     render(<PayersManager token="tok" allowed />);
     const list = await screen.findByRole('list', { name: 'Pagadores' });
@@ -84,20 +84,15 @@ describe('PayersManager (DX-153)', () => {
     expect(screen.queryByText('EPS_CO')).toBeNull();
   });
 
-  it('empty state says which payers to create', async () => {
-    mockedList.mockResolvedValue([]);
-    render(<PayersManager token="tok" allowed />);
-    expect(
-      await screen.findByText(
-        'Crea las aseguradoras, planes prepago, sistemas públicos o empresas con las que trabajas para registrar la cobertura de tus pacientes.',
-      ),
-    ).toBeInTheDocument();
-  });
-
-  it('vacío: enseña qué hacer', async () => {
+  it('vacío: dice que aún no hay pagadores y cuáles crear', async () => {
     mockedList.mockResolvedValue([]);
     render(<PayersManager token="tok" allowed />);
     expect(await screen.findByText('Todavía no hay pagadores.')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Crea las aseguradoras, planes prepago, sistemas públicos o empresas con las que trabajas para registrar la cobertura de tus pacientes.',
+      ),
+    ).toBeInTheDocument();
   });
 
   it('error de carga con reintento', async () => {

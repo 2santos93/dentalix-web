@@ -350,6 +350,59 @@ function payerFiles(): string[] {
     .filter((path) => relative(SRC, path).split(sep).join('/') !== PAYER_LEGACY_NORMALIZER);
 }
 
+/**
+ * En todo `src` (producción, `schema.d.ts` incluido): ningún código de pagador
+ * antiguo ni rótulo de pagador con país. Excepciones: el normalizador legado y
+ * los nombres de pagadores reales (los de ejemplo del contrato).
+ */
+const LEGACY_PAYER_CODE =
+  /\b(?:MUTUA_ES|PREPAGADA_CO|EPS_CO)\b|['"`](?:EMPRESA|OTRO)['"`]|PAYER_COUNTRY_LABELS|PAYER_NO_COUNTRY_LABEL|PayerCountry|\((?:Colombia|España)\)|\bEPS\b|\b[Mm]utuas?\b|\b[Pp]repagadas?\b/;
+const REAL_PAYER_NAMES = /\bSura EPS\b/g;
+
+function legacyPayerCodeHit(line: string): boolean {
+  return LEGACY_PAYER_CODE.test(line.replace(REAL_PAYER_NAMES, ''));
+}
+
+/**
+ * Fuera de `lib/payers` nadie compara un tipo de pagador con un literal: la
+ * regla de externo/interno es `isExternalPayer`, que también normaliza los
+ * códigos antiguos. `OTHER` lo comparten otros enums (motivos, documentos), así
+ * que solo cuenta comparado con un `type`/`payerType`; los demás códigos son
+ * solo de pagador y cuentan en cualquier comparación o `case`.
+ */
+const PAYER_ONLY_CODE = String.raw`(?:INSURER|PREPAID_PLAN|PUBLIC_SYSTEM|EMPLOYER|MUTUA_ES|PREPAGADA_CO|EPS_CO|EMPRESA|OTRO)`;
+const PAYER_TYPE_SUBJECT = String.raw`(?:^|[^\w])(?:type|payerType)`;
+const QUOTED = (code: string) => String.raw`['"\`]${code}['"\`]`;
+const PAYER_TYPE_COMPARISON = new RegExp(
+  [
+    String.raw`[!=]==?\s*${QUOTED(PAYER_ONLY_CODE)}`,
+    String.raw`${QUOTED(PAYER_ONLY_CODE)}\s*[!=]==?`,
+    String.raw`\bcase\s+${QUOTED(PAYER_ONLY_CODE)}`,
+    String.raw`${PAYER_TYPE_SUBJECT}\s*[!=]==?\s*${QUOTED('OTHER')}`,
+    String.raw`${QUOTED('OTHER')}\s*[!=]==?\s*[\w.?]*\b(?:type|payerType)\b`,
+  ].join('|'),
+);
+
+/** Producción de todo `src`, con el contrato, sin `lib/payers` si se pide. */
+function allPayerScanFiles({ withPayersLib }: { withPayersLib: boolean }): string[] {
+  return sourceFiles(SRC).filter((path) => {
+    const rel = relative(SRC, path).split(sep).join('/');
+    if (rel === PAYER_LEGACY_NORMALIZER) return false;
+    if (!withPayersLib && rel.startsWith('lib/payers/')) return false;
+    return scanned(path) || rel === 'lib/api/schema.d.ts';
+  });
+}
+
+function lineHits(paths: string[], hit: (line: string) => boolean): string[] {
+  return paths.flatMap((path) =>
+    readFileSync(path, 'utf8')
+      .split('\n')
+      .map((line, i) => ({ line, n: i + 1 }))
+      .filter(({ line }) => hit(line))
+      .map(({ line, n }) => `${relative(SRC, path)}:${n}: ${line.trim()}`),
+  );
+}
+
 describe('arquitectura: pagadores sin país (DX-326)', () => {
   it('payer files never mention a country or a legacy payer type outside the legacy normalizer', () => {
     const mentions = payerFiles().flatMap((path) =>
@@ -387,6 +440,80 @@ describe('arquitectura: pagadores sin país (DX-326)', () => {
     }
     for (const line of ["label: 'Aseguradora',", "type: 'OTHER',", 'PUBLIC_SYSTEM']) {
       expect([line, payerTermHit(line)]).toEqual([line, false]);
+    }
+  });
+
+  it('no production file in src names a legacy payer code or a payer country label', () => {
+    expect(lineHits(allPayerScanFiles({ withPayersLib: true }), legacyPayerCodeHit)).toEqual([]);
+  });
+
+  it('no production file outside lib/payers compares a payer type with a literal', () => {
+    expect(
+      lineHits(allPayerScanFiles({ withPayersLib: false }), (line) => PAYER_TYPE_COMPARISON.test(line)),
+    ).toEqual([]);
+  });
+
+  it('the src-wide payer scans cover all production, the contract, and skip the normalizer and tests', () => {
+    const all = allPayerScanFiles({ withPayersLib: true }).map((f) => relative(SRC, f).split(sep).join('/'));
+    expect(all).toEqual(
+      expect.arrayContaining([
+        'lib/api/schema.d.ts',
+        'lib/payers/payer-type.ts',
+        'components/patients/agreement-dialog.tsx',
+        'components/patients/patients-view.tsx',
+        'components/payers/payer-form-modal.tsx',
+      ]),
+    );
+    expect(all).not.toContain(PAYER_LEGACY_NORMALIZER);
+    expect(all.some((r) => r.includes('.test.'))).toBe(false);
+    const outside = allPayerScanFiles({ withPayersLib: false }).map((f) => relative(SRC, f).split(sep).join('/'));
+    expect(outside.some((r) => r.startsWith('lib/payers/'))).toBe(false);
+    expect(outside).toContain('components/payers/payer-form-modal.tsx');
+
+    for (const line of [
+      "if (payer.type === 'EPS_CO') {",
+      "label: 'Prepagada (Colombia)',",
+      "'OTRO': 'OTHER',",
+      'const labels = PAYER_COUNTRY_LABELS;',
+      'country: PayerCountry;',
+      'Aseguradora (España)',
+      'Aseguradoras, EPS y demás',
+      'Mutua',
+      'prepagadas',
+    ]) {
+      expect([line, legacyPayerCodeHit(line)]).toEqual([line, true]);
+    }
+    for (const line of [
+      '/** @example Convenio Sura EPS */',
+      "type: 'OTHER',",
+      'mutuamente',
+      "country: 'CO'",
+    ]) {
+      expect([line, legacyPayerCodeHit(line)]).toEqual([line, false]);
+    }
+
+    for (const line of [
+      "if (payer.type !== 'OTHER') return;",
+      "hint={type === 'OTHER' ? hint : undefined}",
+      "const internal = payer?.type == 'OTHER';",
+      "'OTHER' === coverage.payer.type",
+      "payerType !== 'OTHER'",
+      "if (p.type === 'INSURER') {",
+      "'PUBLIC_SYSTEM' !== kind",
+      "case 'EMPLOYER':",
+      "x === 'OTRO'",
+    ]) {
+      expect([line, PAYER_TYPE_COMPARISON.test(line)]).toEqual([line, true]);
+    }
+    for (const line of [
+      "if (value.reason === 'OTHER' && !note)",
+      "const noteRequired = reason === 'OTHER';",
+      "docType === 'OTHER'",
+      "{ value: 'OTHER', label: 'Otro' },",
+      "type: 'INSURER',",
+      'return normalized === null || EXTERNAL[normalized];',
+    ]) {
+      expect([line, PAYER_TYPE_COMPARISON.test(line)]).toEqual([line, false]);
     }
   });
 });
