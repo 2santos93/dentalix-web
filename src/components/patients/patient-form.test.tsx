@@ -158,6 +158,78 @@ describe('PatientForm', () => {
       await screen.findByRole('option', { name: 'Colombia' });
     });
 
+    it('a missing first name or surname is marked on its own field', async () => {
+      const user = userEvent.setup();
+      render(<PatientForm token="tok" />);
+      await user.click(screen.getByRole('button', { name: /crear|guardar/i }));
+
+      const first = screen.getByLabelText(/^nombre/i);
+      const last = screen.getByLabelText(/apellido/i);
+      expect(first).toHaveAttribute('aria-invalid', 'true');
+      expect(first).toHaveAttribute('aria-describedby', 'patient-first-name-error');
+      expect(document.getElementById('patient-first-name-error')).toHaveTextContent('Escribe el nombre.');
+      expect(last).toHaveAttribute('aria-invalid', 'true');
+      expect(last).toHaveAttribute('aria-describedby', 'patient-last-name-error');
+      expect(document.getElementById('patient-last-name-error')).toHaveTextContent('Escribe el apellido.');
+      expect(first).toHaveFocus();
+
+      await user.type(first, 'Ana');
+      expect(first).not.toHaveAttribute('aria-invalid');
+      expect(document.getElementById('patient-first-name-error')).toBeNull();
+      await screen.findByRole('option', { name: 'Colombia' });
+    });
+
+    it('a malformed email never reaches the API and is marked on its field', async () => {
+      const user = userEvent.setup();
+      render(<PatientForm token="tok" />);
+      await fillRequired(user);
+      const email = screen.getByLabelText(/correo/i);
+      await user.type(email, 'ana@');
+      await user.click(screen.getByRole('button', { name: /crear|guardar/i }));
+
+      expect(mockedCreatePatient).not.toHaveBeenCalled();
+      expect(email).toHaveAttribute('aria-invalid', 'true');
+      expect(email).toHaveAttribute('aria-describedby', 'patient-email-error');
+      expect(document.getElementById('patient-email-error')).toHaveTextContent(
+        'Revisa el correo electrónico',
+      );
+      expect(email).toHaveFocus();
+      // Solo falla el correo: no hay aviso de obligatorios.
+      expect(
+        screen.queryByText('Nombre, apellido y tipo de documento son obligatorios para continuar.'),
+      ).not.toBeInTheDocument();
+
+      mockedCreatePatient.mockResolvedValue({ id: 'p1' } as Awaited<ReturnType<typeof createPatient>>);
+      await user.type(email, 'demo.com');
+      expect(email).not.toHaveAttribute('aria-invalid');
+      await user.click(screen.getByRole('button', { name: /crear|guardar/i }));
+      await waitFor(() => expect(mockedCreatePatient).toHaveBeenCalledTimes(1));
+      expect(mockedCreatePatient.mock.calls[0][1]).toMatchObject({ email: 'ana@demo.com' });
+    });
+
+    it('a 400 the API ties to a field is shown on that field', async () => {
+      const { ApiError } = jest.requireActual('../../lib/api/client');
+      mockedCreatePatient.mockRejectedValue(
+        new ApiError(400, 'Bad Request', {
+          messages: ['El correo electrónico no es válido.'],
+          field: 'email',
+        }),
+      );
+      const user = userEvent.setup();
+      render(<PatientForm token="tok" />);
+      await fillRequired(user);
+      const email = screen.getByLabelText(/correo/i);
+      await user.type(email, 'ana@demo.com');
+      await user.click(screen.getByRole('button', { name: /crear|guardar/i }));
+
+      await waitFor(() => expect(email).toHaveAttribute('aria-invalid', 'true'));
+      expect(document.getElementById('patient-email-error')).toHaveTextContent(
+        'El correo electrónico no es válido.',
+      );
+      expect(email).toHaveFocus();
+      expect(screen.getAllByRole('alert')).toHaveLength(1);
+    });
+
     it('creates with the chosen generic type', async () => {
       const user = userEvent.setup();
       mockedCreatePatient.mockResolvedValue({ id: 'p1' } as Awaited<ReturnType<typeof createPatient>>);

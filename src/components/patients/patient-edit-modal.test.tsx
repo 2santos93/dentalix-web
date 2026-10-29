@@ -3,18 +3,12 @@ import userEvent from '@testing-library/user-event';
 import { PatientEditModal } from './patient-edit-modal';
 import { updatePatient } from '@/lib/patients/patients-api';
 import type { Patient } from '@/lib/patients/patients-api';
+import { getDocumentTypeNames } from '@/lib/patients/document-type-names-api';
 
 // jest.mock con ruta RELATIVA: el transform SWC no reescribe `@/`.
 jest.mock('../../lib/patients/patients-api', () => ({ updatePatient: jest.fn() }));
-jest.mock('../../lib/patients/document-type-names-api', () => ({
-  getDocumentTypeNames: jest.fn().mockResolvedValue({
-    NATIONAL_ID: 'ID local',
-    PASSPORT: null,
-    RESIDENCE_PERMIT: null,
-    TAX_ID: null,
-    OTHER: null,
-  }),
-}));
+// El modal no pide los nombres: se los pasa la ficha (sin un segundo GET).
+jest.mock('../../lib/patients/document-type-names-api', () => ({ getDocumentTypeNames: jest.fn() }));
 const mockedUpdate = updatePatient as jest.MockedFunction<typeof updatePatient>;
 
 const patient = {
@@ -195,11 +189,18 @@ describe('PatientEditModal', () => {
     mockedUpdate.mockResolvedValue(patient);
     const user = userEvent.setup();
     render(
-      <PatientEditModal open patient={patient} token="tok" onOpenChange={() => {}} onSaved={() => {}} />,
+      <PatientEditModal
+        open
+        patient={patient}
+        token="tok"
+        docTypeNames={{ NATIONAL_ID: 'ID local' }}
+        onOpenChange={() => {}}
+        onSaved={() => {}}
+      />,
     );
     const select = screen.getByLabelText(/tipo de documento/i) as HTMLSelectElement;
     expect(select).toHaveValue('NATIONAL_ID');
-    await screen.findByRole('option', { name: 'ID local' });
+    expect(getDocumentTypeNames).not.toHaveBeenCalled();
     expect(Array.from(select.options).map((o) => [o.value, o.textContent])).toEqual([
       ['NATIONAL_ID', 'ID local'],
       ['PASSPORT', 'Pasaporte'],
@@ -212,6 +213,21 @@ describe('PatientEditModal', () => {
     await user.click(screen.getByRole('button', { name: /guardar/i }));
     await waitFor(() => expect(mockedUpdate).toHaveBeenCalledTimes(1));
     expect(mockedUpdate.mock.calls[0][2]).toEqual({ docType: 'PASSPORT' });
+  });
+
+  it('legacy code from an older API seeds its generic type and is not sent back unchanged', async () => {
+    mockedUpdate.mockResolvedValue(patient);
+    const user = userEvent.setup();
+    const legacy = { ...patient, docType: 'CE' } as unknown as Patient;
+    render(
+      <PatientEditModal open patient={legacy} token="tok" onOpenChange={() => {}} onSaved={() => {}} />,
+    );
+    expect(screen.getByLabelText(/tipo de documento/i)).toHaveValue('RESIDENCE_PERMIT');
+
+    await user.type(screen.getByLabelText(/ocupación/i), 'Docente');
+    await user.click(screen.getByRole('button', { name: /guardar/i }));
+    await waitFor(() => expect(mockedUpdate).toHaveBeenCalledTimes(1));
+    expect(mockedUpdate.mock.calls[0][2]).not.toHaveProperty('docType');
   });
 
   it('omite docType y sex si no cambiaron', async () => {

@@ -10,8 +10,12 @@ import {
 import { FormModal } from '@/components/shared/form-modal';
 import { FormField } from '@/components/shared/form-field';
 import { Input } from '@/components/ui/input';
-import { DOC_TYPES, docTypeOptionLabel } from '@/lib/patients/doc-type';
-import { useDocumentTypeNames } from '@/lib/patients/use-document-type-names';
+import {
+  DOC_TYPES,
+  docTypeOptionLabel,
+  type ClinicDocumentTypeNames,
+} from '@/lib/patients/doc-type';
+import { normalizeDocType } from '@/lib/patients/legacy-doc-type';
 
 // Copy as constants (i18n-ready) — es first.
 const copy = {
@@ -132,6 +136,19 @@ interface PatientEditModalProps {
   token: string;
   onOpenChange: (open: boolean) => void;
   onSaved: (patient: Patient) => void;
+  /**
+   * Nombres locales de la clínica para las opciones del tipo. Los pide la
+   * página de la ficha una vez (el modal está siempre montado); `{}` = genéricos.
+   */
+  docTypeNames?: ClinicDocumentTypeNames;
+}
+
+/**
+ * Tipo con el que se siembra el select: el genérico, aunque una réplica
+ * anterior de la API mande aún un código antiguo (fase 1 de DX-327).
+ */
+function seededDocType(patient: Patient): Patient['docType'] {
+  return normalizeDocType(patient.docType) ?? patient.docType;
 }
 
 /**
@@ -145,11 +162,11 @@ export function PatientEditModal({
   token,
   onOpenChange,
   onSaved,
+  docTypeNames = {},
 }: PatientEditModalProps) {
   const [text, setText] = useState<TextState>(() => textStateFrom(patient));
-  const [docType, setDocType] = useState<Patient['docType']>(patient.docType);
+  const [docType, setDocType] = useState<Patient['docType']>(() => seededDocType(patient));
   const [sex, setSex] = useState<Patient['sex']>(patient.sex);
-  const docTypeNames = useDocumentTypeNames(token);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [seededPatient, setSeededPatient] = useState(patient);
@@ -167,7 +184,7 @@ export function PatientEditModal({
   if (patient !== seededPatient || (open && !wasOpen)) {
     setSeededPatient(patient);
     setText(textStateFrom(patient));
-    setDocType(patient.docType);
+    setDocType(seededDocType(patient));
     setSex(patient.sex);
     setError(null);
   }
@@ -197,7 +214,7 @@ export function PatientEditModal({
   function buildPatch(): UpdatePatientInput {
     const seededText = textStateFrom(seededPatient);
     const patch: UpdatePatientInput = {};
-    if (docType !== seededPatient.docType) patch.docType = docType;
+    if (docType !== seededDocType(seededPatient)) patch.docType = docType;
     if (sex !== seededPatient.sex) patch.sex = sex;
     for (const group of GROUPS) {
       for (const f of group.fields) {

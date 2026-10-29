@@ -169,6 +169,29 @@ describe('PatientCreateWizard', () => {
       expect(screen.queryByText('Elige el tipo de documento.')).not.toBeInTheDocument();
     });
 
+    it('a missing first name or surname is marked on its own field', async () => {
+      const user = userEvent.setup();
+      render(<PatientCreateWizard token="tok" canWriteClinicalHistory />);
+      await user.selectOptions(screen.getByLabelText(/tipo de documento/i), 'PASSPORT');
+      await user.click(screen.getByRole('button', { name: /siguiente/i }));
+
+      const first = screen.getByLabelText(/^nombre/i);
+      const last = screen.getByLabelText(/apellido/i);
+      expect(first).toHaveAttribute('aria-invalid', 'true');
+      expect(first).toHaveAttribute('aria-describedby', 'pcw-first-name-error');
+      expect(document.getElementById('pcw-first-name-error')).toHaveTextContent('Escribe el nombre.');
+      expect(last).toHaveAttribute('aria-invalid', 'true');
+      expect(last).toHaveAttribute('aria-describedby', 'pcw-last-name-error');
+      expect(document.getElementById('pcw-last-name-error')).toHaveTextContent('Escribe el apellido.');
+      expect(screen.getByLabelText(/tipo de documento/i)).not.toHaveAttribute('aria-invalid');
+      expect(first).toHaveFocus();
+
+      await user.type(last, 'García');
+      expect(last).not.toHaveAttribute('aria-invalid');
+      expect(document.getElementById('pcw-last-name-error')).toBeNull();
+      expect(first).toHaveAttribute('aria-invalid', 'true');
+    });
+
     it('offers the five generic types in order', () => {
       render(<PatientCreateWizard token="tok" canWriteClinicalHistory />);
       const select = screen.getByLabelText(/tipo de documento/i) as HTMLSelectElement;

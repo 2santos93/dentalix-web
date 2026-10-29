@@ -398,6 +398,7 @@ function PatientDetailView() {
             open={editing}
             patient={patient}
             token={accessToken}
+            docTypeNames={docTypeNames}
             onOpenChange={setEditing}
             // PATCH no trae la marca de saldo (DX-150) ni los resúmenes de cobertura
             // (DX-153) y convenio (DX-105): se conservan los leídos.

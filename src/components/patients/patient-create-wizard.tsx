@@ -34,6 +34,8 @@ const copy = {
   docTypeLabel: 'Tipo de documento',
   docTypePlaceholder: 'Elige el tipo',
   docTypeRequired: 'Elige el tipo de documento.',
+  firstNameRequired: 'Escribe el nombre.',
+  lastNameRequired: 'Escribe el apellido.',
   docNumberLabel: 'Número de documento',
   birthDateLabel: 'Fecha de nacimiento',
   sexLabel: 'Sexo',
@@ -71,6 +73,12 @@ const sexOptions: { value: Sex; label: string }[] = [
 ];
 
 type RequiredField = 'firstName' | 'lastName' | 'docType';
+type MissingFields = Partial<Record<RequiredField, string>>;
+
+/** `aria-invalid`/`aria-describedby` de un control con su error. */
+function invalidProps(id: string, error: string | undefined) {
+  return error ? { 'aria-invalid': true as const, 'aria-describedby': fieldErrorId(id) } : {};
+}
 
 /** True when `history` carries any data worth persisting — used to omit an empty `medicalHistory` from the create payload. */
 function historyHasContent(history: ClinicalHistoryValue): boolean {
@@ -109,7 +117,7 @@ export function PatientCreateWizard({ token, canWriteClinicalHistory }: PatientC
   const [lastName, setLastName] = useState('');
   // DX-327 (R10): sin tipo propuesto; quien da de alta lo elige.
   const [docType, setDocType] = useState<DocType | ''>('');
-  const [showDocTypeError, setShowDocTypeError] = useState(false);
+  const [missing, setMissing] = useState<MissingFields>({});
   const docTypeNames = useDocumentTypeNames(token);
   const firstNameRef = React.useRef<HTMLInputElement>(null);
   const lastNameRef = React.useRef<HTMLInputElement>(null);
@@ -144,10 +152,24 @@ export function PatientCreateWizard({ token, canWriteClinicalHistory }: PatientC
   /** Marca lo que falta y lleva el foco al primer campo obligatorio vacío. */
   function flagMissingBasics() {
     setValidationError(copy.requiredError);
-    setShowDocTypeError(docType === '');
+    setMissing({
+      ...(!firstName.trim() ? { firstName: copy.firstNameRequired } : {}),
+      ...(!lastName.trim() ? { lastName: copy.lastNameRequired } : {}),
+      ...(docType === '' ? { docType: copy.docTypeRequired } : {}),
+    });
     // Tras el render: si se vuelve al paso 1 desde otro, el campo aún no existe.
     setFocusRequest({
       field: !firstName.trim() ? 'firstName' : !lastName.trim() ? 'lastName' : 'docType',
+    });
+  }
+
+  /** Quita el error de un campo al corregirlo. */
+  function clearMissing(field: RequiredField) {
+    setMissing((prev) => {
+      if (!prev[field]) return prev;
+      const next = { ...prev };
+      delete next[field];
+      return next;
     });
   }
 
@@ -212,7 +234,7 @@ export function PatientCreateWizard({ token, canWriteClinicalHistory }: PatientC
         {stepKey === 'datos' && (
           <div className="flex flex-col gap-5">
             <div className="grid gap-5 sm:grid-cols-2">
-              <FormField htmlFor="pcw-first-name" label={copy.firstNameLabel}>
+              <FormField htmlFor="pcw-first-name" label={copy.firstNameLabel} error={missing.firstName}>
                 <Input
                   ref={firstNameRef}
                   id="pcw-first-name"
@@ -221,10 +243,14 @@ export function PatientCreateWizard({ token, canWriteClinicalHistory }: PatientC
                   autoComplete="given-name"
                   required
                   value={firstName}
-                  onChange={(e) => setFirstName(e.target.value)}
+                  onChange={(e) => {
+                    setFirstName(e.target.value);
+                    clearMissing('firstName');
+                  }}
+                  {...invalidProps('pcw-first-name', missing.firstName)}
                 />
               </FormField>
-              <FormField htmlFor="pcw-last-name" label={copy.lastNameLabel}>
+              <FormField htmlFor="pcw-last-name" label={copy.lastNameLabel} error={missing.lastName}>
                 <Input
                   ref={lastNameRef}
                   id="pcw-last-name"
@@ -233,7 +259,11 @@ export function PatientCreateWizard({ token, canWriteClinicalHistory }: PatientC
                   autoComplete="family-name"
                   required
                   value={lastName}
-                  onChange={(e) => setLastName(e.target.value)}
+                  onChange={(e) => {
+                    setLastName(e.target.value);
+                    clearMissing('lastName');
+                  }}
+                  {...invalidProps('pcw-last-name', missing.lastName)}
                 />
               </FormField>
             </div>
@@ -242,7 +272,7 @@ export function PatientCreateWizard({ token, canWriteClinicalHistory }: PatientC
               <FormField
                 htmlFor="pcw-doc-type"
                 label={copy.docTypeLabel}
-                error={showDocTypeError ? copy.docTypeRequired : null}
+                error={missing.docType}
               >
                 <select
                   ref={docTypeRef}
@@ -252,10 +282,9 @@ export function PatientCreateWizard({ token, canWriteClinicalHistory }: PatientC
                   value={docType}
                   onChange={(e) => {
                     setDocType(e.target.value as DocType | '');
-                    setShowDocTypeError(false);
+                    clearMissing('docType');
                   }}
-                  aria-invalid={showDocTypeError || undefined}
-                  aria-describedby={showDocTypeError ? fieldErrorId('pcw-doc-type') : undefined}
+                  {...invalidProps('pcw-doc-type', missing.docType)}
                   className={cn(fieldClass, 'h-10')}
                 >
                   <option value="">{copy.docTypePlaceholder}</option>

@@ -1,5 +1,5 @@
 /** DX-327 (pre-flight M15): la ficha y los formularios piden los nombres de la clínica. */
-import { renderHook, waitFor } from '@testing-library/react';
+import { act, renderHook, waitFor } from '@testing-library/react';
 import { getDocumentTypeNames } from './document-type-names-api';
 import { useDocumentTypeNames } from './use-document-type-names';
 
@@ -29,6 +29,43 @@ describe('useDocumentTypeNames', () => {
     await waitFor(() => expect(mockedGet).toHaveBeenCalledTimes(2));
     await Promise.resolve();
     expect(failed.result.current).toEqual({});
+  });
+
+  it('a response for a previous token never overwrites the current one', async () => {
+    const pending: Record<string, (names: typeof NAMES) => void> = {};
+    mockedGet.mockImplementation(
+      (token) => new Promise((resolve) => {
+        pending[token] = resolve;
+      }),
+    );
+    const { result, rerender } = renderHook(({ token }) => useDocumentTypeNames(token), {
+      initialProps: { token: 'old' },
+    });
+    rerender({ token: 'new' });
+    await waitFor(() => expect(pending.new).toBeDefined());
+
+    await act(async () => pending.new({ ...NAMES, NATIONAL_ID: 'Documento A' }));
+    expect(result.current.NATIONAL_ID).toBe('Documento A');
+    // La respuesta tardía del token anterior llega después: se descarta.
+    await act(async () => pending.old(NAMES));
+    expect(result.current.NATIONAL_ID).toBe('Documento A');
+  });
+
+  it('a response that arrives after unmount updates nothing', async () => {
+    let resolve: (names: typeof NAMES) => void = () => {};
+    mockedGet.mockReturnValue(
+      new Promise((r) => {
+        resolve = r;
+      }),
+    );
+    const consoleError = jest.spyOn(console, 'error').mockImplementation(() => {});
+    const { result, unmount } = renderHook(() => useDocumentTypeNames('tok'));
+    await waitFor(() => expect(mockedGet).toHaveBeenCalledTimes(1));
+    unmount();
+    await act(async () => resolve(NAMES));
+    expect(result.current).toEqual({});
+    expect(consoleError).not.toHaveBeenCalled();
+    consoleError.mockRestore();
   });
 
   it('without a session it asks nothing', () => {
