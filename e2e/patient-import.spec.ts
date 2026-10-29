@@ -147,7 +147,7 @@ for (const viewport of [
     await result.getByRole('button', { name: 'Continuar' }).click();
     // DX-262: el paso «Saldos» es opcional.
     await page.getByRole('button', { name: 'Continuar sin saldos' }).click();
-    await expect(page.getByText(/autorización de datos \(Ley 1581\) pendiente/)).toBeVisible();
+    await expect(page.getByText(/autorización de datos pendiente/)).toBeVisible();
     await page.getByRole('button', { name: 'Importar 2 pacientes' }).click();
     await expect(page.getByText('Importado', { exact: true }).first()).toBeVisible({ timeout: 30_000 });
     await expect(page.getByText('2 de 2 filas procesadas')).toBeVisible();

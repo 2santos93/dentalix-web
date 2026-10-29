@@ -123,10 +123,11 @@ test('emitir con alerta de alergia, imprimir en A4, anular; recepción sin pesta
   await expect(printPage.getByText(/veintiuno/)).toHaveCount(0);
   await expect(printPage.getByText('TP-12345')).toBeVisible();
   await expect(printPage.getByText(`RX${suffix}`.slice(0, 20)).first()).toBeVisible();
-  // DX-300: el aviso confirmado y su motivo salen en el documento.
-  const confirmedAlerts = printPage.getByRole('region', { name: 'Avisos de seguridad confirmados' });
-  await expect(confirmedAlerts).toContainText(/alergia a Penicilina/);
-  await expect(confirmedAlerts).toContainText('Motivo: Prueba cutánea negativa');
+  // SEC-051: el documento solo dice que el prescriptor revisó los avisos; ni el aviso ni el motivo se imprimen.
+  await expect(printPage.getByText(/Avisos de seguridad revisados por el prescriptor · reglas \S+/)).toBeVisible();
+  await expect(printPage.getByRole('region', { name: 'Avisos de seguridad confirmados' })).toHaveCount(0);
+  await expect(printPage.getByText(/alergia a Penicilina/)).toHaveCount(0);
+  await expect(printPage.getByText(/Prueba cutánea negativa/)).toHaveCount(0);
   await printPage.emulateMedia({ media: 'print' });
   await expect(printPage.getByRole('toolbar', { name: 'Acciones de la receta' })).toBeHidden();
   const pdf = (await printPage.pdf({ preferCSSPageSize: true })).toString('latin1');
