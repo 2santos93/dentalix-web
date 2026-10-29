@@ -37,7 +37,9 @@ interface CountryComboboxProps {
  * países destacados. Busca en memoria por nombre (sin tildes ni mayúsculas) o
  * por código exacto. El campo muestra el nombre del país elegido; escribir
  * abre la lista filtrada con la primera opción resaltada, las flechas,
- * Inicio/Fin la recorren, Intro elige y Escape cierra. Salir del campo sin
+ * Inicio/Fin la recorren, Intro elige y Escape cierra. La opción del país
+ * elegido lleva `aria-selected="true"`; la resaltada, solo
+ * `aria-activedescendant`. Salir del campo sin
  * elegir vuelve al último país elegido (o lo deja vacío si no había ninguno):
  * un texto suelto nunca es un país.
  */
@@ -120,7 +122,7 @@ export function CountryCombobox({
         break;
       case 'Escape':
         // Cierra solo la lista; el diálogo que contiene el campo no se cierra
-        // mientras la lista está abierta (`ui/dialog.tsx`).
+        // mientras la lista está abierta (`ui/combobox-escape.ts`).
         if (open || query !== null) {
           e.preventDefault();
           e.stopPropagation();
@@ -204,7 +206,10 @@ export function CountryCombobox({
             key={country.code}
             id={optionId(country.code)}
             role="option"
-            aria-selected={index === active}
+            // `aria-selected` marca el país elegido, no el resaltado (que va por
+            // `aria-activedescendant`): el lector anuncia «seleccionado» en la
+            // opción actual aunque las flechas se muevan por otras.
+            aria-selected={country.code === value}
             // El foco no sale del campo: si no, su `onBlur` cerraría la lista
             // antes de que llegue el clic.
             onMouseDown={(e) => e.preventDefault()}

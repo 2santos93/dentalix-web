@@ -3,6 +3,7 @@ import * as React from 'react';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { keepOpenWhileComboboxExpanded } from './combobox-escape';
 
 /**
  * A side sheet / drawer built on the same Radix Dialog primitive as
@@ -32,7 +33,7 @@ SheetOverlay.displayName = 'SheetOverlay';
 const SheetContent = React.forwardRef<
   React.ComponentRef<typeof DialogPrimitive.Content>,
   React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
->(({ className, children, onOpenAutoFocus, onCloseAutoFocus, ...props }, ref) => {
+>(({ className, children, onOpenAutoFocus, onCloseAutoFocus, onEscapeKeyDown, ...props }, ref) => {
   // Igual que `DialogContent`: las hojas se abren con `open` y sin
   // `SheetTrigger`, así que Radix no sabe a dónde devolver el foco al cerrar.
   // Se recuerda quién lo tenía al abrir y se le devuelve (WCAG 2.4.3).
@@ -46,6 +47,10 @@ const SheetContent = React.forwardRef<
           const active = document.activeElement;
           returnFocusRef.current = active instanceof HTMLElement && active !== document.body ? active : null;
           onOpenAutoFocus?.(event);
+        }}
+        onEscapeKeyDown={(event) => {
+          onEscapeKeyDown?.(event);
+          keepOpenWhileComboboxExpanded(event);
         }}
         onCloseAutoFocus={(event) => {
           onCloseAutoFocus?.(event);

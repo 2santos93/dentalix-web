@@ -3,6 +3,7 @@ import * as React from 'react';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { keepOpenWhileComboboxExpanded } from './combobox-escape';
 
 const Dialog = DialogPrimitive.Root;
 const DialogTrigger = DialogPrimitive.Trigger;
@@ -53,12 +54,7 @@ const DialogContent = React.forwardRef<
         }}
         onEscapeKeyDown={(event) => {
           onEscapeKeyDown?.(event);
-          // Escape con la lista de un combobox abierta cierra solo la lista (lo
-          // hace el propio combobox); un segundo Escape ya cierra el diálogo.
-          // Radix escucha en `document` en fase de captura, antes que el campo,
-          // así que el `stopPropagation` del combobox no llega a tiempo.
-          const target = event.target as HTMLElement | null;
-          if (target?.closest?.('[role="combobox"][aria-expanded="true"]')) event.preventDefault();
+          keepOpenWhileComboboxExpanded(event);
         }}
         onCloseAutoFocus={(event) => {
           onCloseAutoFocus?.(event);

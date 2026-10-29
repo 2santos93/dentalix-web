@@ -14,11 +14,10 @@ export const E2E_DATABASE_URL = process.env.E2E_DATABASE_URL;
  */
 export function markLocationUnreviewed(locationId: string): void {
   if (!E2E_DATABASE_URL) throw new Error('E2E_DATABASE_URL no definido');
-  execFileSync('psql', [
-    E2E_DATABASE_URL,
-    '-v',
-    'ON_ERROR_STOP=1',
-    '-c',
-    `UPDATE locations SET "regionalSettingsReviewedAt" = NULL WHERE id = '${locationId}'`,
-  ]);
+  // El id va como variable de psql (`:'id'`, entre comillas y escapada), no
+  // pegado al SQL. psql solo sustituye variables en lo que lee, no en `-c`:
+  // por eso el SQL entra por stdin.
+  execFileSync('psql', [E2E_DATABASE_URL, '-v', 'ON_ERROR_STOP=1', '-v', `id=${locationId}`], {
+    input: `UPDATE locations SET "regionalSettingsReviewedAt" = NULL WHERE id = :'id';`,
+  });
 }

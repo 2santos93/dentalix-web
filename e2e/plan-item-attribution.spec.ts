@@ -3,6 +3,7 @@ import { randomUUID } from 'node:crypto';
 import { API_URL, tenantOrigin } from './support/urls';
 import { loginAs } from './support/auth';
 import { expectTouchTarget } from './support/touch-targets';
+import { E2E_BROWSER_LOCALE } from './support/regional';
 
 /**
  * DX-050 · Producción atribuible. En la clínica demo (`npm run seed:demo`), la
@@ -199,7 +200,7 @@ async function pageAs(browser: Browser, email: string, width: number) {
   const context = await browser.newContext({
     viewport: { width, height: 900 },
     timezoneId: 'America/Bogota',
-    locale: 'es-CO',
+    locale: E2E_BROWSER_LOCALE,
   });
   const page = await context.newPage();
   const problems = watchConsole(page);

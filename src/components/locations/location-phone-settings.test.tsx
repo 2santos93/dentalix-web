@@ -37,7 +37,7 @@ describe('LocationPhoneSettings (DX-222)', () => {
     render(<LocationPhoneSettings token="tok" canEdit />);
     const field = await screen.findByLabelText(/Teléfono · Sede principal/);
     expect(field).toHaveAttribute('maxLength', '40');
-    expect(field).toHaveAccessibleDescription('Con indicativo de país, p. ej. +57 601 555 0101');
+    expect(field).toHaveAccessibleDescription('Con indicativo internacional (+…).');
   });
 
   it('ADMIN guarda el teléfono y se envía como phone', async () => {

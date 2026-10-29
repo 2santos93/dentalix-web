@@ -84,8 +84,8 @@ export function regionalFieldId(idPrefix: string, field: RegionalSettingsField):
  * §6.2 y §6.7; G1-B §9). Lo comparten el modal de sede y el registro. La
  * moneda empieza vacía y nunca se sugiere; el país solo se sugiere desde una
  * región explícita del idioma principal del navegador (DX-312 P1) y elegirlo
- * no toca ningún otro campo (R2, R10). El reloj se elige entre 12 h y 24 h, cada opción con su
- * ejemplo en vivo con el formato y la zona elegidos.
+ * no toca ningún otro campo (R2, R10). El reloj se elige entre 12 h y 24 h,
+ * cada opción con su ejemplo en vivo con el formato y la zona elegidos.
  */
 export function RegionalSettingsFields({
   idPrefix,

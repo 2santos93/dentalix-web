@@ -107,7 +107,8 @@ describe('CountryCombobox (DX-312, spec §6.3)', () => {
     const options = () => screen.getAllByRole('option');
     const active = () => input.getAttribute('aria-activedescendant');
     expect(active()).toBe(options()[0].id);
-    expect(options()[0]).toHaveAttribute('aria-selected', 'true');
+    // Sin país elegido, ninguna opción está seleccionada: resaltar no es elegir.
+    expect(options().filter((o) => o.getAttribute('aria-selected') === 'true')).toEqual([]);
     await user.keyboard('{ArrowDown}{ArrowDown}');
     expect(active()).toBe(options()[2].id);
     await user.keyboard('{ArrowUp}');
@@ -129,6 +130,18 @@ describe('CountryCombobox (DX-312, spec §6.3)', () => {
     expect(input).toHaveAttribute('aria-expanded', 'false');
     expect(input).toHaveValue(COUNTRIES[1].name);
     expect(onChange).toHaveBeenCalledTimes(1);
+  });
+
+  it('the chosen country is the selected option, wherever the highlight moves', async () => {
+    const { user, input } = setup({ initial: 'VE' });
+    await user.click(input);
+    const venezuela = screen.getByRole('option', { name: 'Venezuela' });
+    const selected = () => screen.getAllByRole('option', { selected: true });
+    expect(selected()).toEqual([venezuela]);
+    expect(input).toHaveAttribute('aria-activedescendant', venezuela.id);
+    await user.keyboard('{Home}');
+    expect(input).not.toHaveAttribute('aria-activedescendant', venezuela.id);
+    expect(selected()).toEqual([venezuela]);
   });
 
   it('Enter while the list is open never submits the form', async () => {

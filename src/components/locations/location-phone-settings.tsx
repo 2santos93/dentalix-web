@@ -21,7 +21,7 @@ export const locationPhoneCopy = {
   support:
     'Aparece en las indicaciones postoperatorias que recibe el paciente, para que sepa a dónde llamar.',
   label: 'Teléfono',
-  hint: 'Con indicativo de país, p. ej. +57 601 555 0101',
+  hint: 'Con indicativo internacional (+…).',
   save: 'Guardar',
   saveFor: (name: string) => `Guardar el teléfono de ${name}`,
   saved: 'Guardado',
