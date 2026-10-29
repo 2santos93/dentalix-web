@@ -247,5 +247,6 @@ test('receta con aviso bloqueante (warfarina + ibuprofeno): 390/1440, claro/oscu
   expect(pdfText).toContain('Ibuprofeno');
   expect(pdfText).not.toContain('Warfarina');
   expect(pdfText).not.toContain(longReason);
+  expect(pdfText.replace(/\s/g, '')).not.toContain(longReason);
 
 });
