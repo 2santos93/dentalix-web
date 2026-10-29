@@ -10,6 +10,8 @@ import {
 import { FormModal } from '@/components/shared/form-modal';
 import { FormField } from '@/components/shared/form-field';
 import { Input } from '@/components/ui/input';
+import { DOC_TYPES, docTypeOptionLabel } from '@/lib/patients/doc-type';
+import { useDocumentTypeNames } from '@/lib/patients/use-document-type-names';
 
 // Copy as constants (i18n-ready) — es first.
 const copy = {
@@ -29,14 +31,6 @@ const copy = {
 // Native <select> styled like the Input atom (same class/rationale as staff-view.tsx).
 const fieldClass =
   'flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-50';
-
-const DOC_TYPES: { value: Patient['docType']; label: string }[] = [
-  { value: 'CC', label: 'Cédula de ciudadanía' },
-  { value: 'TI', label: 'Tarjeta de identidad' },
-  { value: 'CE', label: 'Cédula de extranjería' },
-  { value: 'PASSPORT', label: 'Pasaporte' },
-  { value: 'OTHER', label: 'Otro' },
-];
 
 const SEXES: { value: Patient['sex']; label: string }[] = [
   { value: 'M', label: 'Masculino' },
@@ -155,6 +149,7 @@ export function PatientEditModal({
   const [text, setText] = useState<TextState>(() => textStateFrom(patient));
   const [docType, setDocType] = useState<Patient['docType']>(patient.docType);
   const [sex, setSex] = useState<Patient['sex']>(patient.sex);
+  const docTypeNames = useDocumentTypeNames(token);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [seededPatient, setSeededPatient] = useState(patient);
@@ -273,9 +268,9 @@ export function PatientEditModal({
                       onChange={(e) => setDocType(e.target.value as Patient['docType'])}
                       className={fieldClass}
                     >
-                      {DOC_TYPES.map((o) => (
-                        <option key={o.value} value={o.value}>
-                          {o.label}
+                      {DOC_TYPES.map((t) => (
+                        <option key={t} value={t}>
+                          {docTypeOptionLabel(t, docTypeNames)}
                         </option>
                       ))}
                     </select>

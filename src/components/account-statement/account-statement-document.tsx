@@ -12,7 +12,7 @@ import {
 } from '@/lib/account-statement/presentation';
 import { INSTALLMENT_STATUS_LABELS } from '@/lib/payment-plans/installment-status';
 import { PLAN_STATUS_LABELS } from '@/lib/treatment-plans/plan-status';
-import { DOC_TYPE_SHORT } from '@/lib/patients/doc-type';
+import { documentText, dtoDocTypeName } from '@/lib/patients/doc-type';
 import { formatCurrency } from '@/lib/format/currency';
 import { formatCivilDate, formatDateTime } from '@/lib/format/date';
 
@@ -21,7 +21,7 @@ const copy = {
   issuedAt: 'Fecha de emisión',
   patient: 'Paciente',
   document: 'Documento',
-  documentValue: (type: string, number: string | null) => (number ? `${type} ${number}` : '—'),
+  noDocument: '—',
   // DX-203: el de un menor o un paciente sin email, a nombre del responsable.
   addressee: 'A nombre de',
   addresseeValue: (name: string) => `${name} (responsable)`,
@@ -124,7 +124,7 @@ export function AccountStatementDocument({ statement }: AccountStatementDocument
             {copy.document}
           </dt>
           <dd className="tabular-nums">
-            {copy.documentValue(DOC_TYPE_SHORT[patient.docType], patient.docNumber)}
+            {documentText(dtoDocTypeName(patient), patient.docNumber) ?? copy.noDocument}
           </dd>
         </div>
         {statement.addressee?.kind === 'RESPONSIBLE' ? (

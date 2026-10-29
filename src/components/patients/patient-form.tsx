@@ -15,9 +15,12 @@ import { listCountries, type Country } from '@/lib/reference/countries-api';
 import { CityCombobox, type CitySelection } from '@/components/shared/city-combobox';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { FormField } from '@/components/shared/form-field';
+import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { InlineError } from '@/components/errors/inline-error';
 import { cn } from '@/lib/utils';
+import { fieldClass } from '@/lib/ui/field-class';
+import { DOC_TYPES, docTypeOptionLabel } from '@/lib/patients/doc-type';
+import { useDocumentTypeNames } from '@/lib/patients/use-document-type-names';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
@@ -25,6 +28,9 @@ const copy = {
   firstNameLabel: 'Nombre',
   lastNameLabel: 'Apellido',
   docTypeLabel: 'Tipo de documento',
+  docTypePlaceholder: 'Elige el tipo',
+  docTypeRequired: 'Elige el tipo de documento.',
+  requiredError: 'Nombre, apellido y tipo de documento son obligatorios para continuar.',
   docNumberLabel: 'Número de documento',
   birthDateLabel: 'Fecha de nacimiento',
   sexLabel: 'Sexo',
@@ -39,14 +45,6 @@ const copy = {
   genericError: 'No pudimos crear el paciente. Intenta de nuevo.',
 };
 
-const docTypeOptions: { value: DocType; label: string }[] = [
-  { value: 'CC', label: 'Cédula de ciudadanía' },
-  { value: 'TI', label: 'Tarjeta de identidad' },
-  { value: 'CE', label: 'Cédula de extranjería' },
-  { value: 'PASSPORT', label: 'Pasaporte' },
-  { value: 'OTHER', label: 'Otro' },
-];
-
 const sexOptions: { value: Sex; label: string }[] = [
   { value: 'UNSPECIFIED', label: 'Sin especificar' },
   { value: 'F', label: 'Femenino' },
@@ -54,10 +52,7 @@ const sexOptions: { value: Sex; label: string }[] = [
   { value: 'OTHER', label: 'Otro' },
 ];
 
-// Native <select>/<textarea> styled to match the Input atom. We keep native
-// controls here so the form stays simple and fully accessible via labels.
-const fieldClass =
-  'flex w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors placeholder:text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-50';
+type RequiredField = 'firstName' | 'lastName' | 'docType';
 
 interface PatientFormProps {
   token: string;
@@ -79,7 +74,15 @@ export function PatientForm({ token, onCreated, initialDocNumber }: PatientFormP
   const router = useRouter();
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
-  const [docType, setDocType] = useState<DocType>('CC');
+  // DX-327 (R10): sin tipo propuesto; quien da de alta lo elige.
+  const [docType, setDocType] = useState<DocType | ''>('');
+  const [showDocTypeError, setShowDocTypeError] = useState(false);
+  const docTypeNames = useDocumentTypeNames(token);
+  const firstNameRef = React.useRef<HTMLInputElement>(null);
+  const lastNameRef = React.useRef<HTMLInputElement>(null);
+  const docTypeRef = React.useRef<HTMLSelectElement>(null);
+  // Cada petición es un objeto nuevo: el efecto enfoca aunque se repita el campo.
+  const [focusRequest, setFocusRequest] = useState<{ field: RequiredField } | null>(null);
   const [docNumber, setDocNumber] = useState(initialDocNumber ?? '');
   const [birthDate, setBirthDate] = useState('');
   const [sex, setSex] = useState<Sex>('UNSPECIFIED');
@@ -107,8 +110,24 @@ export function PatientForm({ token, onCreated, initialDocNumber }: PatientFormP
     };
   }, [token]);
 
+  useEffect(() => {
+    if (!focusRequest) return;
+    const refs = { firstName: firstNameRef, lastName: lastNameRef, docType: docTypeRef };
+    refs[focusRequest.field].current?.focus();
+  }, [focusRequest]);
+
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    // La validación es nuestra (`noValidate`): el error va junto al campo,
+    // enlazado por `aria-describedby`, y no en la burbuja del navegador.
+    if (!firstName.trim() || !lastName.trim() || docType === '') {
+      setError(copy.requiredError);
+      setShowDocTypeError(docType === '');
+      setFocusRequest({
+        field: !firstName.trim() ? 'firstName' : !lastName.trim() ? 'lastName' : 'docType',
+      });
+      return;
+    }
     setError(null);
     setSubmitting(true);
     try {
@@ -140,10 +159,11 @@ export function PatientForm({ token, onCreated, initialDocNumber }: PatientFormP
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+    <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-5">
       <div className="grid gap-5 sm:grid-cols-2">
         <FormField htmlFor="patient-first-name" label={copy.firstNameLabel}>
           <Input
+            ref={firstNameRef}
             id="patient-first-name"
             name="firstName"
             type="text"
@@ -155,6 +175,7 @@ export function PatientForm({ token, onCreated, initialDocNumber }: PatientFormP
         </FormField>
         <FormField htmlFor="patient-last-name" label={copy.lastNameLabel}>
           <Input
+            ref={lastNameRef}
             id="patient-last-name"
             name="lastName"
             type="text"
@@ -167,18 +188,29 @@ export function PatientForm({ token, onCreated, initialDocNumber }: PatientFormP
       </div>
 
       <div className="grid gap-5 sm:grid-cols-2">
-        <FormField htmlFor="patient-doc-type" label={copy.docTypeLabel}>
+        <FormField
+          htmlFor="patient-doc-type"
+          label={copy.docTypeLabel}
+          error={showDocTypeError ? copy.docTypeRequired : null}
+        >
           <select
+            ref={docTypeRef}
             id="patient-doc-type"
             name="docType"
             required
             value={docType}
-            onChange={(e) => setDocType(e.target.value as DocType)}
+            onChange={(e) => {
+              setDocType(e.target.value as DocType | '');
+              setShowDocTypeError(false);
+            }}
+            aria-invalid={showDocTypeError || undefined}
+            aria-describedby={showDocTypeError ? fieldErrorId('patient-doc-type') : undefined}
             className={cn(fieldClass, 'h-10')}
           >
-            {docTypeOptions.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
+            <option value="">{copy.docTypePlaceholder}</option>
+            {DOC_TYPES.map((t) => (
+              <option key={t} value={t}>
+                {docTypeOptionLabel(t, docTypeNames)}
               </option>
             ))}
           </select>

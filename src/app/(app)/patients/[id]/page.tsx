@@ -17,6 +17,7 @@ import {
   type PatientDetailTabKey,
 } from '@/components/patients/patient-detail-tabs';
 import { PatientDataPanel } from '@/components/patients/patient-data-panel';
+import { useDocumentTypeNames } from '@/lib/patients/use-document-type-names';
 import { PatientEditModal } from '@/components/patients/patient-edit-modal';
 import { PatientRecordHeader } from '@/components/patients/patient-record-header';
 import { PatientRetentionSection } from '@/components/patients/patient-retention-section';
@@ -101,6 +102,9 @@ function PatientDetailView() {
   const [error, setError] = useState<string | null>(null);
   const [retryCount, setRetryCount] = useState(0);
   const [editing, setEditing] = useState(false);
+  // DX-327 (pre-flight M15): nombres locales de la clínica para «Tipo de
+  // documento»; si fallan, el panel pinta los genéricos.
+  const docTypeNames = useDocumentTypeNames(accessToken);
   // DX-150: un abono (o su anulación) cambia el saldo vencido de la cabecera y
   // puede cumplir el compromiso del bloque «Cobranza»: los dos se releen.
   const [moneyVersion, setMoneyVersion] = useState(0);
@@ -350,7 +354,7 @@ function PatientDetailView() {
             register={registerPanel}
             className="flex flex-col gap-4"
           >
-            <PatientDataPanel patient={patient} />
+            <PatientDataPanel patient={patient} docTypeNames={docTypeNames} />
             {/* DX-128: canal de los recordatorios, móvil, opt-in y baja. Lo ven
                 todos; lo cambian recepción y ADMIN. */}
             <PatientCommunicationSection

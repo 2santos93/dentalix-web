@@ -2,7 +2,7 @@
 import Link from 'next/link';
 import { Building2, ChevronLeft, Pencil } from 'lucide-react';
 import type { Patient } from '@/lib/patients/patients-api';
-import { DOC_TYPE_SHORT } from '@/lib/patients/doc-type';
+import { documentText, dtoDocTypeName } from '@/lib/patients/doc-type';
 import { ageFrom } from '@/lib/patients/age';
 import { Button } from '@/components/ui/button';
 import { PageHeader } from '@/components/shared/page-header';
@@ -36,7 +36,6 @@ const copy = {
   unknownPatientTitle: 'Paciente',
   identityLabel: 'Datos de identificación',
   age: (years: number) => (years === 1 ? '1 año' : `${years} años`),
-  document: (type: string, number: string) => `${type} ${number}`,
   phone: (value: string) => `Tel. ${value}`,
   /**
    * Marca de alcance. Verificado contra el backend: NINGUNA lectura de esta
@@ -68,9 +67,8 @@ function identityItems(patient: Patient): { key: string; text: string }[] {
   const items: { key: string; text: string }[] = [];
   const age = ageFrom(patient.birthDate);
   if (age !== null) items.push({ key: 'age', text: copy.age(age) });
-  if (patient.docNumber) {
-    items.push({ key: 'doc', text: copy.document(DOC_TYPE_SHORT[patient.docType], patient.docNumber) });
-  }
+  const doc = documentText(dtoDocTypeName(patient), patient.docNumber);
+  if (doc) items.push({ key: 'doc', text: doc });
   if (patient.phone) items.push({ key: 'phone', text: copy.phone(patient.phone) });
   return items;
 }

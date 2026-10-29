@@ -6,6 +6,15 @@ import type { Patient } from '@/lib/patients/patients-api';
 
 // jest.mock con ruta RELATIVA: el transform SWC no reescribe `@/`.
 jest.mock('../../lib/patients/patients-api', () => ({ updatePatient: jest.fn() }));
+jest.mock('../../lib/patients/document-type-names-api', () => ({
+  getDocumentTypeNames: jest.fn().mockResolvedValue({
+    NATIONAL_ID: 'ID local',
+    PASSPORT: null,
+    RESIDENCE_PERMIT: null,
+    TAX_ID: null,
+    OTHER: null,
+  }),
+}));
 const mockedUpdate = updatePatient as jest.MockedFunction<typeof updatePatient>;
 
 const patient = {
@@ -13,7 +22,7 @@ const patient = {
   tenantId: 't1',
   firstName: 'Carlos',
   lastName: 'Mejía',
-  docType: 'CC',
+  docType: 'NATIONAL_ID',
   docNumber: '1002',
   birthDate: null,
   sex: 'M',
@@ -180,6 +189,29 @@ describe('PatientEditModal', () => {
     const [, , input] = mockedUpdate.mock.calls[0];
     expect(input).not.toHaveProperty('phone');
     expect(input.occupation).toBe('Docente');
+  });
+
+  it("seeds the patient's generic type and sends it only when it changes", async () => {
+    mockedUpdate.mockResolvedValue(patient);
+    const user = userEvent.setup();
+    render(
+      <PatientEditModal open patient={patient} token="tok" onOpenChange={() => {}} onSaved={() => {}} />,
+    );
+    const select = screen.getByLabelText(/tipo de documento/i) as HTMLSelectElement;
+    expect(select).toHaveValue('NATIONAL_ID');
+    await screen.findByRole('option', { name: 'ID local' });
+    expect(Array.from(select.options).map((o) => [o.value, o.textContent])).toEqual([
+      ['NATIONAL_ID', 'ID local'],
+      ['PASSPORT', 'Pasaporte'],
+      ['RESIDENCE_PERMIT', 'Permiso de residencia'],
+      ['TAX_ID', 'Identificación fiscal'],
+      ['OTHER', 'Otro documento'],
+    ]);
+
+    await user.selectOptions(select, 'PASSPORT');
+    await user.click(screen.getByRole('button', { name: /guardar/i }));
+    await waitFor(() => expect(mockedUpdate).toHaveBeenCalledTimes(1));
+    expect(mockedUpdate.mock.calls[0][2]).toEqual({ docType: 'PASSPORT' });
   });
 
   it('omite docType y sex si no cambiaron', async () => {

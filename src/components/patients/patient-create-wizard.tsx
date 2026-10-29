@@ -12,10 +12,12 @@ import {
 import { Wizard, WizardNav, type WizardStep } from '@/components/ui/wizard';
 import { ClinicalHistoryFields } from '@/components/clinical/clinical-history-fields';
 import { Input } from '@/components/ui/input';
-import { FormField } from '@/components/shared/form-field';
+import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { InlineError } from '@/components/errors/inline-error';
 import { fieldClass } from '@/lib/ui/field-class';
 import { cn } from '@/lib/utils';
+import { DOC_TYPES, docTypeOptionLabel } from '@/lib/patients/doc-type';
+import { useDocumentTypeNames } from '@/lib/patients/use-document-type-names';
 import type { ClinicalHistoryValue } from '@/lib/clinical/clinical-types';
 import {
   EMPTY_SELECTION,
@@ -30,6 +32,8 @@ const copy = {
   firstNameLabel: 'Nombre',
   lastNameLabel: 'Apellido',
   docTypeLabel: 'Tipo de documento',
+  docTypePlaceholder: 'Elige el tipo',
+  docTypeRequired: 'Elige el tipo de documento.',
   docNumberLabel: 'Número de documento',
   birthDateLabel: 'Fecha de nacimiento',
   sexLabel: 'Sexo',
@@ -37,7 +41,7 @@ const copy = {
   emailLabel: 'Correo electrónico',
   addressLabel: 'Dirección',
   notesLabel: 'Notas',
-  requiredError: 'Nombre y apellido son obligatorios para continuar.',
+  requiredError: 'Nombre, apellido y tipo de documento son obligatorios para continuar.',
   summaryTitle: 'Resumen de la historia clínica',
   summaryAllergies: (n: number) => `Alergias registradas: ${n}`,
   summaryConditions: (n: number) => `Condiciones marcadas: ${n}`,
@@ -59,20 +63,14 @@ const STEPS: WizardStep[] = [
 /** Pasos que escriben la anamnesis v1: solo para roles clínicos (SEC-005). */
 const CLINICAL_STEP_KEYS = new Set(['antecedentes', 'alergias', 'habitos']);
 
-const docTypeOptions: { value: DocType; label: string }[] = [
-  { value: 'CC', label: 'Cédula de ciudadanía' },
-  { value: 'TI', label: 'Tarjeta de identidad' },
-  { value: 'CE', label: 'Cédula de extranjería' },
-  { value: 'PASSPORT', label: 'Pasaporte' },
-  { value: 'OTHER', label: 'Otro' },
-];
-
 const sexOptions: { value: Sex; label: string }[] = [
   { value: 'UNSPECIFIED', label: 'Sin especificar' },
   { value: 'F', label: 'Femenino' },
   { value: 'M', label: 'Masculino' },
   { value: 'OTHER', label: 'Otro' },
 ];
+
+type RequiredField = 'firstName' | 'lastName' | 'docType';
 
 /** True when `history` carries any data worth persisting — used to omit an empty `medicalHistory` from the create payload. */
 function historyHasContent(history: ClinicalHistoryValue): boolean {
@@ -109,7 +107,20 @@ export function PatientCreateWizard({ token, canWriteClinicalHistory }: PatientC
 
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
-  const [docType, setDocType] = useState<DocType>('CC');
+  // DX-327 (R10): sin tipo propuesto; quien da de alta lo elige.
+  const [docType, setDocType] = useState<DocType | ''>('');
+  const [showDocTypeError, setShowDocTypeError] = useState(false);
+  const docTypeNames = useDocumentTypeNames(token);
+  const firstNameRef = React.useRef<HTMLInputElement>(null);
+  const lastNameRef = React.useRef<HTMLInputElement>(null);
+  const docTypeRef = React.useRef<HTMLSelectElement>(null);
+  // Cada petición es un objeto nuevo: el efecto enfoca aunque se repita el campo.
+  const [focusRequest, setFocusRequest] = useState<{ field: RequiredField } | null>(null);
+  React.useEffect(() => {
+    if (!focusRequest) return;
+    const refs = { firstName: firstNameRef, lastName: lastNameRef, docType: docTypeRef };
+    refs[focusRequest.field].current?.focus();
+  }, [focusRequest]);
   const [docNumber, setDocNumber] = useState('');
   const [birthDate, setBirthDate] = useState('');
   const [sex, setSex] = useState<Sex>('UNSPECIFIED');
@@ -128,13 +139,23 @@ export function PatientCreateWizard({ token, canWriteClinicalHistory }: PatientC
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const isBasicInfoValid = firstName.trim() !== '' && lastName.trim() !== '';
+  const isBasicInfoValid = firstName.trim() !== '' && lastName.trim() !== '' && docType !== '';
+
+  /** Marca lo que falta y lleva el foco al primer campo obligatorio vacío. */
+  function flagMissingBasics() {
+    setValidationError(copy.requiredError);
+    setShowDocTypeError(docType === '');
+    // Tras el render: si se vuelve al paso 1 desde otro, el campo aún no existe.
+    setFocusRequest({
+      field: !firstName.trim() ? 'firstName' : !lastName.trim() ? 'lastName' : 'docType',
+    });
+  }
 
   function goToStep(next: number) {
     // Step 1 (Datos) is required — block moving forward off of it without
-    // nombre/apellido. Steps 2-5 are free to jump between.
+    // nombre/apellido/tipo de documento. Steps 2-5 are free to jump between.
     if (step === 0 && next > step && !isBasicInfoValid) {
-      setValidationError(copy.requiredError);
+      flagMissingBasics();
       return;
     }
     setValidationError(null);
@@ -143,8 +164,8 @@ export function PatientCreateWizard({ token, canWriteClinicalHistory }: PatientC
 
   async function handleSubmit() {
     if (!isBasicInfoValid) {
-      setValidationError(copy.requiredError);
       setStep(0);
+      flagMissingBasics();
       return;
     }
     setValidationError(null);
@@ -193,6 +214,7 @@ export function PatientCreateWizard({ token, canWriteClinicalHistory }: PatientC
             <div className="grid gap-5 sm:grid-cols-2">
               <FormField htmlFor="pcw-first-name" label={copy.firstNameLabel}>
                 <Input
+                  ref={firstNameRef}
                   id="pcw-first-name"
                   name="firstName"
                   type="text"
@@ -204,6 +226,7 @@ export function PatientCreateWizard({ token, canWriteClinicalHistory }: PatientC
               </FormField>
               <FormField htmlFor="pcw-last-name" label={copy.lastNameLabel}>
                 <Input
+                  ref={lastNameRef}
                   id="pcw-last-name"
                   name="lastName"
                   type="text"
@@ -216,18 +239,29 @@ export function PatientCreateWizard({ token, canWriteClinicalHistory }: PatientC
             </div>
 
             <div className="grid gap-5 sm:grid-cols-2">
-              <FormField htmlFor="pcw-doc-type" label={copy.docTypeLabel}>
+              <FormField
+                htmlFor="pcw-doc-type"
+                label={copy.docTypeLabel}
+                error={showDocTypeError ? copy.docTypeRequired : null}
+              >
                 <select
+                  ref={docTypeRef}
                   id="pcw-doc-type"
                   name="docType"
                   required
                   value={docType}
-                  onChange={(e) => setDocType(e.target.value as DocType)}
+                  onChange={(e) => {
+                    setDocType(e.target.value as DocType | '');
+                    setShowDocTypeError(false);
+                  }}
+                  aria-invalid={showDocTypeError || undefined}
+                  aria-describedby={showDocTypeError ? fieldErrorId('pcw-doc-type') : undefined}
                   className={cn(fieldClass, 'h-10')}
                 >
-                  {docTypeOptions.map((opt) => (
-                    <option key={opt.value} value={opt.value}>
-                      {opt.label}
+                  <option value="">{copy.docTypePlaceholder}</option>
+                  {DOC_TYPES.map((t) => (
+                    <option key={t} value={t}>
+                      {docTypeOptionLabel(t, docTypeNames)}
                     </option>
                   ))}
                 </select>

@@ -9,6 +9,7 @@ import {
   type ResponsibleParty,
 } from '@/lib/patients/responsible-parties-api';
 import { listPatients } from '@/lib/patients/patients-api';
+import { getDocumentTypeNames } from '@/lib/patients/document-type-names-api';
 import { ApiError } from '@/lib/api/client';
 import { setupUser } from '@/lib/test/user';
 
@@ -23,6 +24,12 @@ jest.mock('../../lib/patients/patients-api', () => ({
   ...jest.requireActual('../../lib/patients/patients-api'),
   listPatients: jest.fn(),
 }));
+
+jest.mock('../../lib/patients/document-type-names-api', () => ({
+  getDocumentTypeNames: jest.fn(),
+}));
+const mockedGetNames = getDocumentTypeNames as jest.MockedFunction<typeof getDocumentTypeNames>;
+const NO_NAMES = { NATIONAL_ID: null, PASSPORT: null, RESIDENCE_PERMIT: null, TAX_ID: null, OTHER: null };
 
 const mockedGet = getPatientResponsibles as jest.MockedFunction<typeof getPatientResponsibles>;
 const mockedCreate = createResponsibleParty as jest.MockedFunction<typeof createResponsibleParty>;
@@ -56,13 +63,17 @@ const motherParty: ResponsibleParty = {
     id: 'mother',
     firstName: 'Claudia',
     lastName: 'Navarro',
-    docType: 'CC',
+    docType: 'NATIONAL_ID',
+    docTypeLabel: null,
+    docTypeName: 'Documento nacional',
     docNumber: '52987654',
     email: 'claudia@example.com',
     phone: null,
   },
   fullName: 'Claudia Navarro',
-  docType: 'CC',
+  docType: 'NATIONAL_ID',
+  docTypeLabel: null,
+  docTypeName: 'Documento nacional',
   docNumber: '52987654',
   email: 'claudia@example.com',
   phone: null,
@@ -78,7 +89,10 @@ const renderSection = () =>
   render(<PatientResponsiblePartiesSection token="tok" patientId="son" />);
 
 describe('PatientResponsiblePartiesSection (DX-203)', () => {
-  beforeEach(() => jest.resetAllMocks());
+  beforeEach(() => {
+    jest.resetAllMocks();
+    mockedGetNames.mockResolvedValue(NO_NAMES);
+  });
 
   it('carga: esqueleto con estado accesible', () => {
     mockedGet.mockReturnValue(new Promise(() => undefined));
@@ -214,12 +228,40 @@ describe('PatientResponsiblePartiesSection (DX-203)', () => {
     expect(await screen.findByTestId('responsible-row')).toBeInTheDocument();
   });
 
+  it('a contact offers no document and the five types', async () => {
+    mockedGetNames.mockResolvedValue({ ...NO_NAMES, RESIDENCE_PERMIT: 'ID local' });
+    mockedGet.mockResolvedValue(data());
+    renderSection();
+    const user = setupUser();
+    await user.click(await screen.findByRole('button', { name: 'Añadir responsable' }));
+    await user.click(screen.getByRole('radio', { name: 'Un contacto nuevo (sin ficha)' }));
+    const select = screen.getByLabelText('Tipo de documento') as HTMLSelectElement;
+    await within(select).findByRole('option', { name: 'ID local' });
+    expect(select).toHaveValue('');
+    expect(Array.from(select.options).map((o) => [o.value, o.textContent])).toEqual([
+      ['', 'Sin documento'],
+      ['NATIONAL_ID', 'Documento nacional'],
+      ['PASSPORT', 'Pasaporte'],
+      ['RESIDENCE_PERMIT', 'ID local'],
+      ['TAX_ID', 'Identificación fiscal'],
+      ['OTHER', 'Otro documento'],
+    ]);
+  });
+
   it('alta buscando a un paciente de la clínica; el 422 del segundo pagador sale en el modal', async () => {
     mockedGet.mockResolvedValue(data());
     mockedList.mockResolvedValue({
       items: [
-        { id: 'mother', firstName: 'Claudia', lastName: 'Navarro', docType: 'CC', docNumber: '52987654' },
-        { id: 'son', firstName: 'Tomás', lastName: 'Ortiz', docType: 'TI', docNumber: '1' },
+        {
+          id: 'mother',
+          firstName: 'Claudia',
+          lastName: 'Navarro',
+          docType: 'NATIONAL_ID',
+          docTypeLabel: 'Documento A',
+          docTypeName: 'Documento A',
+          docNumber: '52987654',
+        },
+        { id: 'son', firstName: 'Tomás', lastName: 'Ortiz', docType: 'PASSPORT', docNumber: '1' },
       ],
       total: 2,
       page: 1,
@@ -234,6 +276,8 @@ describe('PatientResponsiblePartiesSection (DX-203)', () => {
     await user.type(screen.getByLabelText('Buscar paciente'), 'Clau');
     // El propio paciente no se ofrece.
     const option = await screen.findByRole('button', { name: /Claudia Navarro/ });
+    // El documento del resultado sale del `docTypeName` del DTO.
+    expect(within(option).getByText('Documento A 52987654')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Tomás Ortiz/ })).not.toBeInTheDocument();
     await user.click(option);
     await user.click(screen.getByLabelText('Pagador principal'));

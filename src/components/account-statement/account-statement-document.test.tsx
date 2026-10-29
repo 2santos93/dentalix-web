@@ -19,9 +19,26 @@ it('lleva cabecera de clínica, datos del paciente y fecha de emisión', () => {
   expect(header).toHaveTextContent(/fecha de emisión/i);
   expect(header).toHaveTextContent('15/10/2026');
   expect(screen.getByText('Ana Gómez')).toBeInTheDocument();
-  expect(screen.getByText('CC 1020304050')).toBeInTheDocument();
+  expect(screen.getByText('ID local DOC-0001')).toBeInTheDocument();
   // Sin logo configurado no se pinta una imagen rota.
   expect(screen.queryByRole('img')).not.toBeInTheDocument();
+});
+
+it('prints the docTypeName of the DTO, or the generic name when it is missing', () => {
+  const base = accountStatementFixture();
+  const { rerender } = render(<AccountStatementDocument statement={base} />);
+  expect(screen.getByText('ID local DOC-0001')).toBeInTheDocument();
+
+  // API anterior en el hueco del despliegue: sin `docTypeName`, el genérico.
+  const { docTypeName: _omit, ...withoutName } = base.patient;
+  void _omit;
+  rerender(
+    <AccountStatementDocument
+      statement={{ ...base, patient: { ...withoutName, docType: 'PASSPORT' } as typeof base.patient }}
+    />,
+  );
+  expect(screen.getByText('Pasaporte DOC-0001')).toBeInTheDocument();
+  expect(screen.queryByText(/PASSPORT/)).not.toBeInTheDocument();
 });
 
 it('pinta el logo de la clínica cuando existe', () => {

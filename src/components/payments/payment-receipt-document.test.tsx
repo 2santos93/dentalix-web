@@ -15,7 +15,7 @@ it('lleva el número, la clínica y la sede, el paciente enmascarado, el abono, 
   expect(doc).toHaveTextContent('Clínica Sonrisas');
   expect(doc).toHaveTextContent('Sede Norte · Calle 100 # 15-20');
   expect(doc).toHaveTextContent('Carolina Duque');
-  expect(doc).toHaveTextContent('CC ******5678');
+  expect(doc).toHaveTextContent('ID local ******5678');
   expect(text(doc)).toContain('150.000,00 COP');
   expect(doc).toHaveTextContent('Efectivo');
   expect(doc).toHaveTextContent('17/10/2026');
@@ -108,7 +108,7 @@ it('sin documento ni saldo no inventa datos', () => {
     />,
   );
   const doc = screen.getByTestId('receipt-document');
-  expect(doc).not.toHaveTextContent('CC ');
+  expect(doc).not.toHaveTextContent('ID local');
   expect(doc).toHaveTextContent('Saldo del plan tras este abono');
   expect(doc).toHaveTextContent('No disponible');
 });
@@ -142,4 +142,28 @@ it('DX-262: el recibo de un abono al saldo migrado dice su concepto y su fecha d
   // Revisión N1 / QA D2: sin plan, el saldo es lo que queda del migrado.
   expect(screen.getByText('Saldo pendiente tras este abono')).toBeInTheDocument();
   expect(screen.queryByText(/Saldo del plan/)).not.toBeInTheDocument();
+});
+
+it('prints the docTypeName of the DTO, or the generic name when it is missing', () => {
+  const receipt = paymentReceiptFixture();
+  const { rerender } = render(<PaymentReceiptDocument receipt={receipt} />);
+  expect(screen.getByTestId('receipt-document')).toHaveTextContent('ID local ******5678');
+
+  // API anterior en el hueco del despliegue: sin `docTypeName`, el genérico.
+  const { docTypeName: _omit, ...withoutName } = receipt.snapshot.patient;
+  void _omit;
+  rerender(
+    <PaymentReceiptDocument
+      receipt={{
+        ...receipt,
+        snapshot: {
+          ...receipt.snapshot,
+          patient: { ...withoutName, docType: 'TAX_ID' } as typeof receipt.snapshot.patient,
+        },
+      }}
+    />,
+  );
+  const doc = screen.getByTestId('receipt-document');
+  expect(doc).toHaveTextContent('Identificación fiscal ******5678');
+  expect(doc).not.toHaveTextContent('TAX_ID');
 });

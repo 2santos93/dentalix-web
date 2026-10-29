@@ -5,7 +5,13 @@ import { Check, Loader2, Search, X } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { useDebouncedValue } from '@/lib/hooks/use-debounced-value';
 import { listPatients, type DocType, type Patient } from '@/lib/patients/patients-api';
-import { DOC_TYPE_SHORT } from '@/lib/patients/doc-type';
+import {
+  DOC_TYPES,
+  docTypeOptionLabel,
+  documentText,
+  dtoDocTypeName,
+} from '@/lib/patients/doc-type';
+import { useDocumentTypeNames } from '@/lib/patients/use-document-type-names';
 import {
   createResponsibleParty,
   RELATIONSHIP_LABELS,
@@ -57,13 +63,15 @@ export const responsibleDialogCopy = {
 };
 const copy = responsibleDialogCopy;
 
-const DOC_TYPES: DocType[] = ['CC', 'TI', 'CE', 'PASSPORT', 'OTHER'];
 const SEARCH_DEBOUNCE_MS = 300;
 const SEARCH_PAGE_SIZE = 8;
 
 interface Draft {
   kind: 'PATIENT' | 'CONTACT';
-  patient: Pick<Patient, 'id' | 'firstName' | 'lastName' | 'docType' | 'docNumber'> | null;
+  patient: Pick<
+    Patient,
+    'id' | 'firstName' | 'lastName' | 'docType' | 'docTypeLabel' | 'docTypeName' | 'docNumber'
+  > | null;
   fullName: string;
   docType: DocType | '';
   docNumber: string;
@@ -89,8 +97,11 @@ function draftFrom(party: ResponsibleParty | null): Draft {
   };
 }
 
-const docLabel = (p: Pick<Patient, 'docType' | 'docNumber'>) =>
-  p.docNumber ? `${DOC_TYPE_SHORT[p.docType]} ${p.docNumber}` : DOC_TYPE_SHORT[p.docType];
+/** «{nombre visible} {número}» del DTO; sin número, solo el nombre. */
+function docLabel(p: Pick<Patient, 'docType' | 'docTypeLabel' | 'docTypeName' | 'docNumber'>): string {
+  const name = dtoDocTypeName(p);
+  return documentText(name, p.docNumber) ?? name;
+}
 
 interface ResponsiblePartyDialogProps {
   open: boolean;
@@ -120,6 +131,7 @@ export function ResponsiblePartyDialog({
   const ids = useId();
   const editing = party !== null;
   const [draft, setDraft] = useState<Draft>(() => draftFrom(party));
+  const docTypeNames = useDocumentTypeNames(token);
   const [query, setQuery] = useState('');
   const debouncedQuery = useDebouncedValue(query.trim(), SEARCH_DEBOUNCE_MS);
   const [results, setResults] = useState<Patient[]>([]);
@@ -366,7 +378,7 @@ export function ResponsiblePartyDialog({
                 <option value="">{copy.docTypeNone}</option>
                 {DOC_TYPES.map((t) => (
                   <option key={t} value={t}>
-                    {DOC_TYPE_SHORT[t]}
+                    {docTypeOptionLabel(t, docTypeNames)}
                   </option>
                 ))}
               </select>

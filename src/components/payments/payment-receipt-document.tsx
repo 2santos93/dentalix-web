@@ -1,7 +1,7 @@
 import { cn } from '@/lib/utils';
 import { formatCurrency } from '@/lib/format/currency';
 import { formatCivilDate, formatDate, formatDateTime } from '@/lib/format/date';
-import { DOC_TYPE_SHORT } from '@/lib/patients/doc-type';
+import { documentText, dtoDocTypeName } from '@/lib/patients/doc-type';
 import { PAYMENT_METHOD_LABELS } from '@/lib/payments/payment-method';
 import type { PaymentReceipt, ReceiptPrintFormat } from '@/lib/payments/payment-receipts-api';
 
@@ -137,7 +137,9 @@ export function PaymentReceiptDocument({ receipt, format = 'a4' }: PaymentReceip
         <Field label={copy.receivedFrom}>{patient.fullName}</Field>
         {patient.docNumberMasked ? (
           <Field label={copy.document}>
-            <span className="tabular-nums">{`${DOC_TYPE_SHORT[patient.docType]} ${patient.docNumberMasked}`}</span>
+            <span className="tabular-nums">
+              {documentText(dtoDocTypeName(patient), patient.docNumberMasked)}
+            </span>
           </Field>
         ) : null}
         <Field label={copy.amount}>

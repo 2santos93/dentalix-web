@@ -29,7 +29,7 @@ describe('PlanQuoteDocument (DX-012)', () => {
     expect(header).toHaveTextContent('hasta el 15/11/2026');
     const parties = screen.getByTestId('quote-parties');
     expect(parties).toHaveTextContent('Ana Pérez');
-    expect(parties).toHaveTextContent('CC 1020');
+    expect(parties).toHaveTextContent('Documento nacional DOC-1020');
     expect(parties).toHaveTextContent('Dra. Laura Gómez');
   });
 

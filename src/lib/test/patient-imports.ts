@@ -10,9 +10,9 @@ export function inspectFixture(overrides: Partial<ImportInspect> = {}): ImportIn
     fileFormat: 'CSV',
     encoding: 'utf-8',
     delimiter: ';',
-    headers: ['Cédula', 'Nombre', 'Apellidos', 'Celular', 'Extra'],
-    suggestedMapping: { docNumber: 'Cédula', firstName: 'Nombre', lastName: 'Apellidos', phone: 'Celular' },
-    sampleRows: [['1020304050', 'Ana', 'Pérez', '3101234567', 'x']],
+    headers: ['Documento', 'Nombre', 'Apellidos', 'Celular', 'Extra'],
+    suggestedMapping: { docNumber: 'Documento', firstName: 'Nombre', lastName: 'Apellidos', phone: 'Celular' },
+    sampleRows: [['DEMO-0001', 'Ana', 'Pérez', '3101234567', 'x']],
     totalRows: 3,
     fields: [
       { key: 'docType', label: 'Tipo de documento', required: false, header: 'tipo_documento' },
@@ -37,7 +37,7 @@ export function batchFixture(overrides: Partial<ImportBatchDetail> = {}): Import
     locationId: 'loc-1',
     createdAt: '2026-10-21T14:00:00.000Z',
     createdBy: { id: 'u-1', fullName: 'Admin Demo' },
-    columnMapping: { columns: { docNumber: 'Cédula' }, defaultDocType: 'CC' },
+    columnMapping: { columns: { docNumber: 'Documento' }, defaultDocType: 'NATIONAL_ID' },
     totals: { totalRows: 3, validRows: 1, duplicateRows: 1, errorRows: 1 },
     progress: {
       preparedRows: 2,
@@ -64,10 +64,10 @@ export function batchFixture(overrides: Partial<ImportBatchDetail> = {}): Import
     issues: [
       {
         row: 3,
-        column: 'Cédula',
+        column: 'Documento',
         kind: 'DUPLICATE_EXISTING',
         message: 'Ya existe un paciente con este documento en la clínica.',
-        value: 'CC 900900',
+        value: 'DEMO-0900',
       },
       { row: 4, column: 'Nombre', kind: 'ERROR', message: 'Falta «Nombres».', value: null },
     ],
@@ -76,7 +76,7 @@ export function batchFixture(overrides: Partial<ImportBatchDetail> = {}): Import
       {
         rowNumber: 2,
         status: 'NEW',
-        data: { docType: 'CC', docNumber: '1020304050', firstName: 'Ana', lastName: 'Pérez' },
+        data: { docType: 'NATIONAL_ID', docNumber: 'DEMO-0001', firstName: 'Ana', lastName: 'Pérez' },
       },
     ],
     ...overrides,

@@ -59,7 +59,7 @@ const patientsPage = {
       tenantId: 't1',
       firstName: 'María',
       lastName: 'López',
-      docType: 'CC' as const,
+      docType: 'NATIONAL_ID' as const,
       docNumber: '123',
       birthDate: null,
       sex: 'F' as const,

@@ -22,8 +22,9 @@ export type CreatePatientInput = Omit<
 
 // The `docType`/`sex` unions are re-used from the generated OpenAPI schema
 // (backend DTOs carry `@ApiProperty({ enum: ... })`) so they stay in sync
-// with the API without duplicating the literal list by hand.
-export type DocType = components['schemas']['CreatePatientDto']['docType'];
+// with the API without duplicating the literal list by hand. DX-327: los
+// cinco tipos genéricos (`enumName: 'DocType'`).
+export type DocType = components['schemas']['DocType'];
 export type Sex = components['schemas']['CreatePatientDto']['sex'];
 
 export type UpdatePatientInput = components['schemas']['UpdatePatientDto'];
@@ -57,6 +58,13 @@ export interface Patient {
   firstName: string;
   lastName: string;
   docType: DocType;
+  /**
+   * DX-327: nombre libre del documento (null = sin nombre propio) y nombre
+   * visible resuelto por la API (R17). Opcionales: una API anterior no los
+   * trae y la web cae al genérico (`dtoDocTypeName`).
+   */
+  docTypeLabel?: string | null;
+  docTypeName?: string;
   docNumber: string | null;
   birthDate: string | null;
   sex: Sex;

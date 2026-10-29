@@ -28,7 +28,7 @@ const maria: Patient = {
   tenantId: 't1',
   firstName: 'María',
   lastName: 'López',
-  docType: 'CC',
+  docType: 'NATIONAL_ID',
   docNumber: '123',
   birthDate: null,
   sex: 'F',
