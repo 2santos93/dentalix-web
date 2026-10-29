@@ -165,7 +165,7 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
       {
         href: '/settings/pagadores',
         label: 'Pagadores',
-        description: 'Aseguradoras, EPS y demás entidades que pagan por el paciente.',
+        description: 'Aseguradoras, planes prepago y demás entidades que pagan por el paciente.',
         icon: Landmark,
         visible: canManagePayers,
       },

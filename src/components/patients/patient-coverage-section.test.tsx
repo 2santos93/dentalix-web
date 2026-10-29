@@ -44,8 +44,8 @@ const payer = (id: string, name: string, over: Partial<Payer> = {}): Payer => ({
   updatedAt: '2026-01-01T00:00:00.000Z',
   ...over,
 });
-const sanitas = payer('pay-1', 'Sanitas', { type: 'PREPAID_PLAN' });
-const colsanitas = payer('pay-2', 'Colsanitas', { type: 'INSURER' });
+const sanitas = payer('pay-1', 'Sanitas', { type: 'INSURER' });
+const colsanitas = payer('pay-2', 'Colsanitas', { type: 'PREPAID_PLAN' });
 
 function coverage(over: Partial<PatientCoverage> = {}): PatientCoverage {
   const p = over.payer ?? sanitas;
@@ -141,7 +141,7 @@ describe('PatientCoverageSection (DX-153)', () => {
     expect(rows).toHaveLength(3);
 
     expect(within(rows[0]).getByText('Sanitas')).toBeInTheDocument();
-    expect(within(rows[0]).getByText('Plan prepago')).toBeInTheDocument();
+    expect(within(rows[0]).getByText('Aseguradora')).toBeInTheDocument();
     expect(within(rows[0]).getByText('Salud Plus')).toBeInTheDocument();
     expect(within(rows[0]).getByText('Afiliado n.º 88123456')).toHaveClass('tabular-nums');
     expect(within(rows[0]).getByText('Vigente hasta 31/01/2027')).toBeInTheDocument();

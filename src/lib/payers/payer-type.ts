@@ -27,7 +27,5 @@ const EXTERNAL: Readonly<Record<PayerType, boolean>> = {
  */
 export function isExternalPayer(type: string): boolean {
   const normalized = normalizePayerType(type);
-  if (normalized === null || !Object.hasOwn(EXTERNAL, normalized)) return true;
-  const external: unknown = EXTERNAL[normalized];
-  return typeof external === 'boolean' ? external : true;
+  return normalized === null || EXTERNAL[normalized];
 }

@@ -67,6 +67,17 @@ describe('agreementEligibility (SEC-047)', () => {
     );
   });
 
+  // Excepción G5.3 (DX-334): tipo de pagador anterior a DX-326.
+  it('legacy: un pagador OTRO de una API anterior sigue siendo interno, solo ADMIN', () => {
+    const legacy = { id: 'pay-old', name: 'Cortesía', type: 'OTRO' as never };
+    const coverages = [cov('c3', legacy.id)];
+    expect(agreementEligibility({ payer: legacy }, coverages, 'ADMIN', ME).kind).toBe('optional-coverage');
+    expect(agreementEligibility({ payer: legacy }, coverages, 'DENTIST', ME)).toEqual({
+      kind: 'blocked',
+      reason: agreementEligibilityCopy.adminOnly,
+    });
+  });
+
   it('M2: una cobertura MIGRADA y vigente del pagador OTHER habilita a cualquier rol', () => {
     const migrated = cov('c5', cortesia.id, 'ACTIVE', true);
     const coverages = [cov('c3', cortesia.id), migrated, cov('c6', cortesia.id, 'EXPIRED', true)];

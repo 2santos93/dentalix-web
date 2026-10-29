@@ -75,6 +75,15 @@ describe('PayersManager (DX-153)', () => {
     expect(within(list).queryByText(/·/)).toBeNull();
   });
 
+  // Excepción G5.3 (DX-334): tipo de pagador anterior a DX-326.
+  it('legacy: a row with a code from an older API shows the generic label', async () => {
+    mockedList.mockResolvedValue([{ ...sanitas, type: 'EPS_CO' as never }]);
+    render(<PayersManager token="tok" allowed />);
+    const list = await screen.findByRole('list', { name: 'Pagadores' });
+    expect(within(within(list).getAllByRole('listitem')[0]).getByText('Sistema público de salud')).toBeInTheDocument();
+    expect(screen.queryByText('EPS_CO')).toBeNull();
+  });
+
   it('empty state says which payers to create', async () => {
     mockedList.mockResolvedValue([]);
     render(<PayersManager token="tok" allowed />);

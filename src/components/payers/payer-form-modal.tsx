@@ -43,8 +43,8 @@ interface PayerFormModalProps {
 
 /**
  * Alta y edición de un pagador (DX-153). Valida nombre y tipo antes de enviar
- * (la API repite las reglas); el pagador no tiene país (DX-326). El padre lo monta con una `key` por
- * apertura para resembrar el estado.
+ * (la API repite las reglas); el pagador no tiene país (DX-326). El padre lo
+ * monta con una `key` por apertura para resembrar el estado.
  */
 export function PayerFormModal({ open, onOpenChange, payer, token, onSaved }: PayerFormModalProps) {
   const editing = payer !== null;

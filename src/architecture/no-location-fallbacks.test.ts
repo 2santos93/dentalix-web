@@ -318,3 +318,75 @@ describe('arquitectura: la web no lee el país deprecated del emisor (DX-324)', 
     }
   });
 });
+
+/**
+ * DX-326: el pagador no tiene país y sus tipos son genéricos. Ni las pantallas
+ * de pagadores ni quienes leen su tipo nombran un país ni un código o rótulo
+ * antiguo (`EPS_CO`, «Mutua (…)», «Aseguradoras, EPS»); el único que conoce los
+ * códigos antiguos es el normalizador legado. Solo producción: los tests
+ * `legacy …` los usan a propósito.
+ */
+const PAYER_LEGACY_NORMALIZER = 'lib/payers/legacy-payer-type.ts';
+const PAYER_SCREENS = [
+  'lib/patients/member-number.ts',
+  'lib/patients/agreement-eligibility.ts',
+  'components/agreements/agreements-manager.tsx',
+  'components/patients/coverage-dialog.tsx',
+  'components/patients/patient-coverage-section.tsx',
+  'app/(app)/settings/pagadores/page.tsx',
+  'components/settings/settings-sections.ts',
+];
+const LEGACY_PAYER_TERM = /\b(?:MUTUA_ES|PREPAGADA_CO|EPS_CO|EMPRESA|OTRO)\b|\bEPS\b|[Mm]utua|[Pp]repagada/;
+
+function payerTermHit(line: string): boolean {
+  return nationalTermHit(line) || LEGACY_PAYER_TERM.test(line);
+}
+
+function payerFiles(): string[] {
+  return [join(SRC, 'components/payers'), join(SRC, 'lib/payers')]
+    .flatMap(sourceFiles)
+    .concat(PAYER_SCREENS.map((rel) => join(SRC, rel)))
+    .filter(scanned)
+    .filter((path) => relative(SRC, path).split(sep).join('/') !== PAYER_LEGACY_NORMALIZER);
+}
+
+describe('arquitectura: pagadores sin país (DX-326)', () => {
+  it('payer files never mention a country or a legacy payer type outside the legacy normalizer', () => {
+    const mentions = payerFiles().flatMap((path) =>
+      readFileSync(path, 'utf8')
+        .split('\n')
+        .map((line, i) => ({ line, n: i + 1 }))
+        .filter(({ line }) => payerTermHit(line))
+        .map(({ line, n }) => `${relative(SRC, path)}:${n}: ${line.trim()}`),
+    );
+    expect(mentions).toEqual([]);
+  });
+
+  it('the payer scan covers the payer screens and skips the legacy normalizer', () => {
+    const rels = payerFiles().map((f) => relative(SRC, f).split(sep).join('/'));
+    expect(rels).toEqual(
+      expect.arrayContaining([
+        'components/payers/payer-form-modal.tsx',
+        'components/payers/payers-manager.tsx',
+        'lib/payers/payer-type.ts',
+        'lib/payers/payers-api.ts',
+        ...PAYER_SCREENS,
+      ]),
+    );
+    for (const rel of PAYER_SCREENS) expect([rel, existsSync(join(SRC, rel))]).toEqual([rel, true]);
+    expect(rels).not.toContain(PAYER_LEGACY_NORMALIZER);
+    expect(rels.some((r) => r.includes('.test.'))).toBe(false);
+    for (const line of [
+      "type: 'EPS_CO',",
+      "label: 'Mutua (España)',",
+      'PAYER_COUNTRY_LABELS[type]',
+      'country: payer.country,',
+      'Aseguradoras, EPS y demás entidades',
+    ]) {
+      expect([line, payerTermHit(line)]).toEqual([line, true]);
+    }
+    for (const line of ["label: 'Aseguradora',", "type: 'OTHER',", 'PUBLIC_SYSTEM']) {
+      expect([line, payerTermHit(line)]).toEqual([line, false]);
+    }
+  });
+});
