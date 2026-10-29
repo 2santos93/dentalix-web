@@ -30,6 +30,24 @@ describe('PatientPrescriptionsTab', () => {
     mockedVoid.mockReset();
   });
 
+  it('conserva detalles clínicos y motivo en la ficha', async () => {
+    const user = setupUser();
+    mockedList.mockResolvedValue([makePrescription({
+      safetyAlerts: [{ rule: 'ALLERGY', code: 'ALLERGY_MATCH', severity: 'BLOCKING', activeIngredient: 'Amoxicilina', message: 'MARCADOR ALERTA PRIVADA', source: 'MARCADOR FUENTE' }],
+      safetyOverrideReason: 'MARCADOR MOTIVO PRIVADO',
+      patientWeightKg: 73.2,
+      allergyOverride: true,
+      allergyMatches: [{ allergen: 'MARCADOR ALERGENO', activeIngredient: 'Amoxicilina' }],
+    })]);
+    render(<PatientPrescriptionsTab token={DENTIST} patientId="p1" />);
+    const table = await screen.findByRole('table', { name: 'Recetas del paciente' });
+    await user.click(within(table).getByText('Detalles de seguridad'));
+    expect(table).toHaveTextContent('MARCADOR ALERTA PRIVADA');
+    expect(table).toHaveTextContent('MARCADOR MOTIVO PRIVADO');
+    expect(table).toHaveTextContent('MARCADOR ALERGENO');
+    expect(table).toHaveTextContent('Peso: 73.2 kg');
+  });
+
   it('carga con esqueleto anunciado', () => {
     mockedList.mockReturnValue(new Promise(() => {}));
     render(<PatientPrescriptionsTab token={DENTIST} patientId="p1" />);

@@ -320,7 +320,7 @@ describe('PrescriptionDocument (A4)', () => {
 
   it('legacy CO and ES snapshots render with their issued labels, byte for byte', () => {
     // Textos, filas y orden de antes de DX-324; solo las fechas siguen la sede (R11).
-    const co = renderDocument(makePrescriptionDocument(makeLegacyPrescription('CO')));
+    const co = renderDocument(makePrescriptionDocument(makeLegacyPrescription('CO', { safetyRulesVersion: null })));
     expect(co.container.textContent).toBe(
       'Clínica DemoSede Principal · Cra 15 #90-20Fórmula médicaDecreto 780 de 2016, art. 2.5.3.10.16' +
         'Fecha de emisión10/16/2026 11:00 a. m.Fecha de la receta10/16/2026' +
@@ -339,7 +339,7 @@ describe('PrescriptionDocument (A4)', () => {
     expect(screen.getByText('21 (veintiuno) cápsulas')).toBeInTheDocument();
     co.unmount();
 
-    const es = renderDocument(makePrescriptionDocument(makeLegacyPrescription('ES')));
+    const es = renderDocument(makePrescriptionDocument(makeLegacyPrescription('ES', { safetyRulesVersion: null })));
     expect(es.container.textContent).toBe(
       'Clínica DemoSede Principal · Cra 15 #90-20Receta médica privadaReal Decreto 1718/2010, art. 3' +
         'Fecha de emisión10/16/2026 11:00 a. m.Fecha prevista de dispensación10/16/2026' +
@@ -358,10 +358,10 @@ describe('PrescriptionDocument (A4)', () => {
   });
 
   it('legacy CO and ES markup stays as issued (dates masked)', () => {
-    const co = renderDocument(makePrescriptionDocument(makeLegacyPrescription('CO')));
+    const co = renderDocument(makePrescriptionDocument(makeLegacyPrescription('CO', { safetyRulesVersion: null })));
     expect(legacyMarkup(co.container.innerHTML)).toEqual(LEGACY_CO_MARKUP);
     co.unmount();
-    const es = renderDocument(makePrescriptionDocument(makeLegacyPrescription('ES')));
+    const es = renderDocument(makePrescriptionDocument(makeLegacyPrescription('ES', { safetyRulesVersion: null })));
     expect(legacyMarkup(es.container.innerHTML)).toEqual(LEGACY_ES_MARKUP);
   });
 
@@ -432,7 +432,7 @@ describe('PrescriptionDocument (A4)', () => {
     expect(screen.getByText('Especialidad').nextSibling).toHaveTextContent('Endodoncia');
   });
 
-  it('age and weight rows only when the snapshot has them', () => {
+  it('age appears when present and weight stays private', () => {
     const none = renderDocument(makePrescriptionDocument());
     expect(screen.queryByText('Edad')).not.toBeInTheDocument();
     expect(screen.queryByText('Peso')).not.toBeInTheDocument();
@@ -444,13 +444,13 @@ describe('PrescriptionDocument (A4)', () => {
 
     renderDocument(makePrescriptionDocument({ patientAgeYears: 34, patientWeightKg: 72.5 }), BERLIN);
     expect(screen.getByText('Edad').nextSibling).toHaveTextContent(/^34 años$/);
-    expect(screen.getByText('Peso').nextSibling).toHaveTextContent(/^72,5 kg$/);
-    // Orden de las filas del paciente: nombre, documento, edad, peso, nº de HC.
+    expect(screen.queryByText('Peso')).not.toBeInTheDocument();
+    // Orden de las filas del paciente: nombre, documento, edad, nº de HC.
     const labels = Array.from(
       screen.getByRole('region', { name: 'Paciente' }).querySelectorAll('dt'),
       (dt) => dt.textContent,
     );
-    expect(labels).toEqual(['Nombre', 'Documento', 'Edad', 'Peso', 'Nº de historia clínica']);
+    expect(labels).toEqual(['Nombre', 'Documento', 'Edad', 'Nº de historia clínica']);
   });
 
   it('document dates follow the prescription location, not the active one', () => {
@@ -500,7 +500,7 @@ describe('PrescriptionDocument (A4)', () => {
     expect(screen.getByText('Fecha de emisión').nextSibling).toHaveTextContent(/^—$/);
     expect(screen.getByText('Válida desde').nextSibling).toHaveTextContent(/^—$/);
     expect(screen.getByText('Válida hasta').nextSibling).toHaveTextContent(/^— \(30 días\)$/);
-    expect(screen.getByText('Peso').nextSibling).toHaveTextContent(/^—$/);
+    expect(screen.queryByText('Peso')).not.toBeInTheDocument();
     expect(screen.getByRole('note')).toHaveTextContent('Anulada el — por Dra. Laura Ruiz.');
   });
 
@@ -522,11 +522,12 @@ describe('PrescriptionDocument (A4)', () => {
     expect(screen.getByRole('note')).toHaveTextContent('RECETA ANULADA');
     expect(screen.getByRole('note')).toHaveTextContent('Anulada el 10/16/2026 12:00 p. m. por Dra. Laura Ruiz.');
     expect(screen.getByRole('note')).toHaveTextContent('Motivo: Dosis equivocada');
-    expect(screen.getByText(/alergia registrada a: Penicilina \(Amoxicilina\)/)).toBeInTheDocument();
+    expect(screen.queryByText(/Penicilina/)).not.toBeInTheDocument();
+    expect(screen.getByText(/Avisos de seguridad revisados por el prescriptor/)).toHaveTextContent('versión de reglas no disponible');
     expect(screen.getByText(/pudo alterarse fuera de Dentalix/)).toBeInTheDocument();
   });
 
-  it('DX-300: los avisos bloqueantes confirmados y el motivo salen en el documento; los informativos no', () => {
+  it('los avisos y el motivo permanecen privados con la versión sellada', () => {
     renderDocument(
       makePrescriptionDocument({
         allergyOverride: true,
@@ -537,7 +538,7 @@ describe('PrescriptionDocument (A4)', () => {
             code: 'ALLERGY_MATCH',
             severity: 'BLOCKING',
             activeIngredient: 'Amoxicilina',
-            message: 'Alergia: el paciente tiene registrada alergia a penicilina y Amoxicilina puede causarla.',
+            message: 'MARCADOR EMBARAZO SEMANAS MEDICACION HABITUAL',
             source: 'Anamnesis: alergias registradas',
           },
           {
@@ -545,19 +546,21 @@ describe('PrescriptionDocument (A4)', () => {
             code: 'ANTIRESORPTIVE_MRONJ',
             severity: 'INFO',
             activeIngredient: null,
-            message: 'El paciente toma antirresortivos.',
+            message: 'MARCADOR INFORMATIVO PRIVADO',
             source: 'SDCEP',
           },
         ],
-        safetyOverrideReason: 'Prueba cutánea negativa en 2025',
+        safetyOverrideReason: 'MARCADOR MOTIVO PRIVADO',
+        patientWeightKg: 73.2,
+        notes: 'MARCADOR INDICACION GENERAL',
       }),
     );
-    const block = screen.getByRole('region', { name: 'Avisos de seguridad confirmados' });
-    expect(block).toHaveTextContent('Amoxicilina puede causarla');
-    expect(block).toHaveTextContent('Motivo: Prueba cutánea negativa en 2025');
-    expect(block).not.toHaveTextContent('antirresortivos');
-    // Sin duplicar con la nota de alergia de DX-013.
-    expect(screen.queryByText(/confirmó la prescripción conociendo la alergia/)).not.toBeInTheDocument();
+    expect(screen.getByText(/Avisos de seguridad revisados por el prescriptor/)).toHaveTextContent('reglas RX_SAFETY_V1');
+    expect(screen.queryByText(/MARCADOR EMBARAZO SEMANAS MEDICACION HABITUAL/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/MARCADOR MOTIVO PRIVADO/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/MARCADOR INFORMATIVO PRIVADO/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/73[.,]2/)).not.toBeInTheDocument();
+    expect(screen.getByText(/MARCADOR INDICACION GENERAL/)).toBeInTheDocument();
   });
 
   it('DX-300: sin avisos bloqueantes no hay bloque de avisos', () => {

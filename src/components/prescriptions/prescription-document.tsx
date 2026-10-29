@@ -14,7 +14,6 @@ const copy = {
   patientName: 'Nombre',
   age: 'Edad',
   ageValue: (years: number) => (years === 1 ? '1 año' : `${years} años`),
-  weight: 'Peso',
   clinicalRecord: 'Nº de historia clínica',
   birthYear: 'Año de nacimiento',
   professionalHeading: 'Profesional que prescribe',
@@ -32,11 +31,6 @@ const copy = {
   brand: 'Marca',
   instructions: 'Indicaciones',
   notes: 'Indicaciones generales',
-  allergyNote: (detail: string) =>
-    `El profesional confirmó la prescripción conociendo la alergia registrada a: ${detail}.`,
-  safetyHeading: 'Avisos de seguridad confirmados',
-  safetyIntro: 'El profesional emitió la receta conociendo estos avisos:',
-  safetyReason: 'Motivo',
   signature: 'Firma del profesional',
   voided: 'RECETA ANULADA',
   voidedDetail: (when: string, who: string, reason: string) =>
@@ -58,7 +52,7 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 interface PrescriptionDocumentProps {
   prescription: PrescriptionDoc;
-  /** El formato de la sede de la receta (`prescriptionFormat`); `null` → «—» en fechas y peso. */
+  /** El formato de la sede de la receta (`prescriptionFormat`); `null` → «—» en fechas. */
   format: PrescriptionFormat | null;
 }
 
@@ -67,8 +61,7 @@ interface PrescriptionDocumentProps {
  * sede, paciente, profesional con su registro, medicamentos con la cantidad,
  * fechas y validez, y espacio para la firma. Todo sale de la foto (R9): una
  * receta única pinta la plantilla neutral; una emitida antes de DX-324, la suya
- * congelada, con sus textos, filas y orden de entonces. Las fechas y el peso
- * siguen el formato de la sede de la receta (R11). Papel blanco y tinta oscura
+ * congelada, con sus textos, filas y orden de entonces. Las fechas siguen el formato de la sede de la receta (R11). Papel blanco y tinta oscura
  * explícitos, también en modo oscuro.
  */
 export function PrescriptionDocument({ prescription: rx, format }: PrescriptionDocumentProps) {
@@ -78,7 +71,6 @@ export function PrescriptionDocument({ prescription: rx, format }: PrescriptionD
     format && iso ? format.fmt.dateTime(new Date(iso), format.timeZone) : MISSING;
   const civilDate = (day: string) => (format ? format.fmt.civilDate(day) : MISSING);
   const voided = rx.status === 'VOIDED';
-  const confirmedAlerts = (rx.safetyAlerts ?? []).filter((a) => a.severity === 'BLOCKING');
 
   return (
     <article className="prescription-print-root relative mx-auto w-full max-w-[210mm] bg-white px-4 py-6 text-[#111827] sm:px-10 sm:py-10 print:max-w-none print:p-0">
@@ -163,13 +155,6 @@ export function PrescriptionDocument({ prescription: rx, format }: PrescriptionD
               <span className="tabular-nums">{copy.ageValue(rx.patientAgeYears)}</span>
             </Field>
           ) : null}
-          {neutral && rx.patientWeightKg !== null ? (
-            <Field label={copy.weight}>
-              <span className="tabular-nums">
-                {format ? `${format.fmt.number(rx.patientWeightKg, { max: 1 })} kg` : MISSING}
-              </span>
-            </Field>
-          ) : null}
           {neutral && rx.clinicalRecordNumber !== null ? (
             <Field label={copy.clinicalRecord}>
               <span className="tabular-nums">{rx.clinicalRecordNumber}</span>
@@ -222,34 +207,9 @@ export function PrescriptionDocument({ prescription: rx, format }: PrescriptionD
             <span className="text-[#4b5563]">{copy.notes}:</span> {rx.notes}
           </p>
         ) : null}
-        {/* DX-300: avisos bloqueantes confirmados y su motivo (sellados en el hash). */}
-        {confirmedAlerts.length > 0 ? (
-          <section
-            aria-label={copy.safetyHeading}
-            className="mt-3 break-inside-avoid rounded border border-[#f59e0b] p-3 text-xs text-[#92400e]"
-          >
-            <h3 className="font-semibold">{copy.safetyHeading}</h3>
-            <p className="mt-1">{copy.safetyIntro}</p>
-            <ul className="mt-1 list-disc pl-4">
-              {confirmedAlerts.map((alert, i) => (
-                <li key={`${alert.code}-${i}`} className="break-words">
-                  {alert.message}
-                </li>
-              ))}
-            </ul>
-            {rx.safetyOverrideReason ? (
-              <p className="mt-1 break-words">
-                <span className="font-semibold">{copy.safetyReason}:</span> {rx.safetyOverrideReason}
-              </p>
-            ) : null}
-          </section>
-        ) : null}
-        {/* Recetas anteriores a DX-300: la nota de alergia de DX-013. */}
-        {rx.allergyOverride && rx.safetyAlerts === null ? (
-          <p className="mt-2 text-xs text-[#92400e]">
-            {copy.allergyNote(
-              rx.allergyMatches.map((m) => `${m.allergen} (${m.activeIngredient})`).join(', '),
-            )}
+        {rx.safetyRulesVersion || rx.allergyOverride || (rx.safetyAlerts?.length ?? 0) > 0 ? (
+          <p className="mt-3 text-xs text-[#4b5563]">
+            Avisos de seguridad revisados por el prescriptor · {rx.safetyRulesVersion ? `reglas ${rx.safetyRulesVersion}` : 'versión de reglas no disponible'}
           </p>
         ) : null}
       </section>
