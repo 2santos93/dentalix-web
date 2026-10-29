@@ -8,7 +8,7 @@ import {
   type UpdatePatientInput,
 } from '@/lib/patients/patients-api';
 import { FormModal } from '@/components/shared/form-modal';
-import { FormField } from '@/components/shared/form-field';
+import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { Input } from '@/components/ui/input';
 import {
   DOC_TYPES,
@@ -18,6 +18,7 @@ import {
 } from '@/lib/patients/doc-type';
 import { DocTypeLabelField, docTypeLabelFieldError } from './doc-type-label-field';
 import { normalizeDocType } from '@/lib/patients/legacy-doc-type';
+import { isEmailAddress } from '@/lib/format/email';
 
 // Copy as constants (i18n-ready) — es first.
 const copy = {
@@ -32,6 +33,7 @@ const copy = {
   administrative: 'Administrativo',
   docType: 'Tipo de documento',
   sex: 'Sexo',
+  emailInvalid: 'Revisa el correo electrónico: le falta algo (p. ej. nombre@dominio.com).',
 };
 
 // Native <select> styled like the Input atom (same class/rationale as staff-view.tsx).
@@ -171,6 +173,8 @@ export function PatientEditModal({
   const [docTypeLabel, setDocTypeLabel] = useState(patient.docTypeLabel ?? '');
   const [docTypeLabelError, setDocTypeLabelError] = useState<string | null>(null);
   const docTypeLabelRef = React.useRef<HTMLInputElement>(null);
+  const [emailError, setEmailError] = useState<string | null>(null);
+  const emailRef = React.useRef<HTMLInputElement>(null);
   const [sex, setSex] = useState<Patient['sex']>(patient.sex);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -192,6 +196,7 @@ export function PatientEditModal({
     setDocType(seededDocType(patient));
     setDocTypeLabel(patient.docTypeLabel ?? '');
     setDocTypeLabelError(null);
+    setEmailError(null);
     setSex(patient.sex);
     setError(null);
   }
@@ -243,6 +248,15 @@ export function PatientEditModal({
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
+    // La regla de `@IsEmail()` de la API (el navegador acepta «ana@x»). Solo
+    // si cambió: un email guardado no viaja y no hay que frenar por él.
+    const email = text.email.trim();
+    const emailChanged = email !== textStateFrom(seededPatient).email;
+    if (emailChanged && email && !isEmailAddress(email)) {
+      setEmailError(copy.emailInvalid);
+      emailRef.current?.focus();
+      return;
+    }
     const labelError = docTypeLabelFieldError(docTypeLabel);
     if (labelError) {
       setDocTypeLabelError(labelError);
@@ -262,14 +276,22 @@ export function PatientEditModal({
   }
 
   function textField(f: TextFieldSpec) {
+    const id = `pe-${f.key}`;
+    const error = f.key === 'email' ? emailError : null;
     return (
-      <FormField key={f.key} htmlFor={`pe-${f.key}`} label={f.label}>
+      <FormField key={f.key} htmlFor={id} label={f.label} error={error}>
         <Input
-          id={`pe-${f.key}`}
+          ref={f.key === 'email' ? emailRef : undefined}
+          id={id}
           type={f.type ?? 'text'}
           value={text[f.key]}
           required={f.required}
-          onChange={(e) => setText((prev) => ({ ...prev, [f.key]: e.target.value }))}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={error ? fieldErrorId(id) : undefined}
+          onChange={(e) => {
+            setText((prev) => ({ ...prev, [f.key]: e.target.value }));
+            if (f.key === 'email') setEmailError(null);
+          }}
         />
       </FormField>
     );

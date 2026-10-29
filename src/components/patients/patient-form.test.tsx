@@ -32,8 +32,8 @@ async function fillRequired(user: ReturnType<typeof userEvent.setup>, type = 'NA
 describe('PatientForm', () => {
   beforeEach(() => {
     mockedCreatePatient.mockReset();
-    (listCountries as jest.Mock).mockResolvedValue([{ code: 'CO', name: 'Colombia' }]);
-    (searchCities as jest.Mock).mockResolvedValue([{ id: 1, name: 'Bogotá', region: null }]);
+    (listCountries as jest.Mock).mockResolvedValue([{ code: 'ZZ', name: 'País A' }]);
+    (searchCities as jest.Mock).mockResolvedValue([{ id: 1, name: 'Ciudad A', region: null }]);
     mockedGetNames.mockReset();
     mockedGetNames.mockResolvedValue(NO_NAMES);
   });
@@ -45,7 +45,7 @@ describe('PatientForm', () => {
     // Flush the countries-fetch effect (see patient-form.tsx's `useEffect`)
     // before the test ends, so it doesn't resolve mid-way through a later
     // test and trigger a "not wrapped in act" warning.
-    await screen.findByRole('option', { name: 'Colombia' });
+    await screen.findByRole('option', { name: 'País A' });
   });
 
   it('offers the five generic types in order', async () => {
@@ -64,7 +64,7 @@ describe('PatientForm', () => {
 
     const sexValues = Array.from(sex.options).map((o) => o.value);
     expect(sexValues).toEqual(expect.arrayContaining(['M', 'F', 'OTHER', 'UNSPECIFIED']));
-    await screen.findByRole('option', { name: 'Colombia' });
+    await screen.findByRole('option', { name: 'País A' });
   });
 
   it('renders optional fields with accessible labels', async () => {
@@ -75,13 +75,13 @@ describe('PatientForm', () => {
     expect(screen.getByLabelText(/correo/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/dirección/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/notas/i)).toBeInTheDocument();
-    await screen.findByRole('option', { name: 'Colombia' });
+    await screen.findByRole('option', { name: 'País A' });
   });
 
   it('renders a submit button', async () => {
     render(<PatientForm token="tok" />);
     expect(screen.getByRole('button', { name: /crear|guardar/i })).toBeInTheDocument();
-    await screen.findByRole('option', { name: 'Colombia' });
+    await screen.findByRole('option', { name: 'País A' });
   });
 
   it('disables the submit button while submitting', async () => {
@@ -155,7 +155,7 @@ describe('PatientForm', () => {
         'Elige el tipo de documento.',
       );
       expect(select).toHaveFocus();
-      await screen.findByRole('option', { name: 'Colombia' });
+      await screen.findByRole('option', { name: 'País A' });
     });
 
     it('a missing first name or surname is marked on its own field', async () => {
@@ -176,7 +176,7 @@ describe('PatientForm', () => {
       await user.type(first, 'Ana');
       expect(first).not.toHaveAttribute('aria-invalid');
       expect(document.getElementById('patient-first-name-error')).toBeNull();
-      await screen.findByRole('option', { name: 'Colombia' });
+      await screen.findByRole('option', { name: 'País A' });
     });
 
     it('a malformed email never reaches the API and is marked on its field', async () => {
@@ -262,7 +262,7 @@ describe('PatientForm', () => {
         'El nombre del documento no puede llevar caracteres de control.',
       );
       expect(label).toHaveFocus();
-      await screen.findByRole('option', { name: 'Colombia' });
+      await screen.findByRole('option', { name: 'País A' });
     });
 
     it('sends the free label trimmed, or omits it when empty', async () => {
@@ -277,7 +277,7 @@ describe('PatientForm', () => {
       await user.click(screen.getByRole('button', { name: /crear|guardar/i }));
       await waitFor(() => expect(onCreated).toHaveBeenCalledTimes(1));
       expect(mockedCreatePatient.mock.calls[0][1]).toMatchObject({ docTypeLabel: 'ID local' });
-      await screen.findByRole('option', { name: 'Colombia' });
+      await screen.findByRole('option', { name: 'País A' });
       unmount();
 
       render(<PatientForm token="tok" onCreated={onCreated} />);
@@ -286,7 +286,7 @@ describe('PatientForm', () => {
       await user.click(screen.getByRole('button', { name: /crear|guardar/i }));
       await waitFor(() => expect(onCreated).toHaveBeenCalledTimes(2));
       expect(mockedCreatePatient.mock.calls[1][1]).not.toHaveProperty('docTypeLabel');
-      await screen.findByRole('option', { name: 'Colombia' });
+      await screen.findByRole('option', { name: 'País A' });
     });
 
     it('the label field is styled like its neighbours (same height on mobile)', async () => {
@@ -294,7 +294,7 @@ describe('PatientForm', () => {
       expect(screen.getByLabelText('Nombre del documento (opcional)').className).toBe(
         screen.getByLabelText(/número de documento/i).className,
       );
-      await screen.findByRole('option', { name: 'Colombia' });
+      await screen.findByRole('option', { name: 'País A' });
     });
 
     it('rejects a label over 40 characters', async () => {
@@ -341,12 +341,12 @@ describe('PatientForm', () => {
       const { unmount } = render(<PatientForm token="tok" />);
       expect(await screen.findByRole('option', { name: 'ID local' })).toHaveValue('NATIONAL_ID');
       expect(screen.getByRole('option', { name: 'Otro documento' })).toHaveValue('OTHER');
-      await screen.findByRole('option', { name: 'Colombia' });
+      await screen.findByRole('option', { name: 'País A' });
       unmount();
 
       mockedGetNames.mockRejectedValue(new Error('down'));
       render(<PatientForm token="tok" />);
-      await screen.findByRole('option', { name: 'Colombia' });
+      await screen.findByRole('option', { name: 'País A' });
       expect(screen.getByRole('option', { name: 'Documento nacional' })).toHaveValue('NATIONAL_ID');
       expect(screen.getByLabelText(/tipo de documento/i)).toBeEnabled();
       expect(screen.queryByRole('alert')).not.toBeInTheDocument();
@@ -370,8 +370,8 @@ describe('PatientForm', () => {
     render(<PatientForm token="tok" />);
     const country = await screen.findByLabelText(/país/i);
     expect(screen.getByLabelText(/ciudad/i)).toBeDisabled();
-    await screen.findByRole('option', { name: 'Colombia' });
-    await userEvent.selectOptions(country, 'CO');
+    await screen.findByRole('option', { name: 'País A' });
+    await userEvent.selectOptions(country, 'ZZ');
     expect(screen.getByLabelText(/ciudad/i)).not.toBeDisabled();
   });
 });

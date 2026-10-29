@@ -14,6 +14,7 @@ import {
 } from '@/lib/patients/doc-type';
 import { DocTypeLabelField, docTypeLabelFieldError } from './doc-type-label-field';
 import { useDocumentTypeNames } from '@/lib/patients/use-document-type-names';
+import { isEmailAddress } from '@/lib/format/email';
 import {
   createResponsibleParty,
   RELATIONSHIP_LABELS,
@@ -53,6 +54,7 @@ export const responsibleDialogCopy = {
   docNumber: 'Número de documento',
   email: 'Email',
   emailHint: 'A él le llegan los avisos del paciente si es menor o no tiene email.',
+  emailInvalid: 'Revisa el email: le falta algo (p. ej. nombre@dominio.com).',
   phone: 'Teléfono',
   relationship: 'Parentesco',
   isPayer: 'Pagador principal',
@@ -146,6 +148,8 @@ export function ResponsiblePartyDialog({
   const [fieldError, setFieldError] = useState<string | null>(null);
   const [labelError, setLabelError] = useState<string | null>(null);
   const labelRef = React.useRef<HTMLInputElement>(null);
+  const [emailError, setEmailError] = useState<string | null>(null);
+  const emailRef = React.useRef<HTMLInputElement>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -187,6 +191,13 @@ export function ResponsiblePartyDialog({
     }
     if (draft.kind === 'CONTACT' && !draft.fullName.trim()) {
       setFieldError(copy.nameRequired);
+      return;
+    }
+    // La regla de `@IsEmail()` de la API (el navegador acepta «ana@x»); el
+    // contacto viaja entero, así que se mira siempre.
+    if (draft.kind === 'CONTACT' && draft.email.trim() && !isEmailAddress(draft.email.trim())) {
+      setEmailError(copy.emailInvalid);
+      emailRef.current?.focus();
       return;
     }
     const labelFieldError =
@@ -430,15 +441,27 @@ export function ResponsiblePartyDialog({
                 className="sm:col-span-2"
               />
             ) : null}
-            <FormField htmlFor={`${ids}-email`} label={copy.email} hint={copy.emailHint}>
+            <FormField
+              htmlFor={`${ids}-email`}
+              label={copy.email}
+              hint={copy.emailHint}
+              hintId={`${ids}-email-hint`}
+              error={emailError}
+            >
               <Input
+                ref={emailRef}
                 id={`${ids}-email`}
                 type="email"
                 inputMode="email"
                 value={draft.email}
                 maxLength={254}
                 autoComplete="off"
-                onChange={(e) => set('email', e.target.value)}
+                onChange={(e) => {
+                  set('email', e.target.value);
+                  setEmailError(null);
+                }}
+                aria-invalid={emailError ? true : undefined}
+                aria-describedby={emailError ? fieldErrorId(`${ids}-email`) : `${ids}-email-hint`}
               />
             </FormField>
             <FormField htmlFor={`${ids}-phone`} label={copy.phone}>

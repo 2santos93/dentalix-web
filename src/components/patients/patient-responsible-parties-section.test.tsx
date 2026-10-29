@@ -349,6 +349,33 @@ describe('PatientResponsiblePartiesSection (DX-203)', () => {
     expect(label).toHaveFocus();
   });
 
+  it('a contact email the API would reject («ana@x», no TLD) is marked on its field', async () => {
+    mockedGet.mockResolvedValue(data());
+    renderSection();
+    const user = setupUser();
+    await user.click(await screen.findByRole('button', { name: 'Añadir responsable' }));
+    await user.click(screen.getByRole('radio', { name: 'Un contacto nuevo (sin ficha)' }));
+    await user.type(screen.getByLabelText('Nombre completo'), 'Claudia Navarro');
+    const email = screen.getByLabelText('Email');
+    expect(email).toHaveAccessibleDescription(
+      'A él le llegan los avisos del paciente si es menor o no tiene email.',
+    );
+    await user.type(email, 'ana@x');
+    await user.click(screen.getByRole('button', { name: 'Añadir' }));
+
+    expect(mockedCreate).not.toHaveBeenCalled();
+    expect(email).toHaveAttribute('aria-invalid', 'true');
+    expect(email).toHaveAccessibleDescription('Revisa el email: le falta algo (p. ej. nombre@dominio.com).');
+    expect(email).toHaveFocus();
+
+    mockedCreate.mockResolvedValue(motherParty);
+    await user.type(email, '.co');
+    expect(email).not.toHaveAttribute('aria-invalid');
+    await user.click(screen.getByRole('button', { name: 'Añadir' }));
+    await waitFor(() => expect(mockedCreate).toHaveBeenCalledTimes(1));
+    expect(mockedCreate.mock.calls[0][2]).toMatchObject({ email: 'ana@x.co' });
+  });
+
   it('a contact label over 40 characters is marked on its field', async () => {
     mockedGet.mockResolvedValue(data());
     renderSection();

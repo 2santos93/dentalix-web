@@ -285,6 +285,42 @@ describe('PatientEditModal', () => {
     ]);
   });
 
+  it('an email the API would reject («ana@x», no TLD) is marked on its field and not sent', async () => {
+    const user = userEvent.setup();
+    render(
+      <PatientEditModal open patient={patient} token="tok" onOpenChange={() => {}} onSaved={() => {}} />,
+    );
+    const email = screen.getByLabelText(/correo electrónico/i);
+    await user.type(email, 'ana@x');
+    await user.click(screen.getByRole('button', { name: /guardar/i }));
+
+    expect(mockedUpdate).not.toHaveBeenCalled();
+    expect(email).toHaveAttribute('aria-invalid', 'true');
+    expect(email).toHaveAttribute('aria-describedby', 'pe-email-error');
+    expect(document.getElementById('pe-email-error')).toHaveTextContent('Revisa el correo electrónico');
+    expect(email).toHaveFocus();
+
+    mockedUpdate.mockResolvedValue(patient);
+    await user.type(email, '.co');
+    expect(email).not.toHaveAttribute('aria-invalid');
+    await user.click(screen.getByRole('button', { name: /guardar/i }));
+    await waitFor(() => expect(mockedUpdate).toHaveBeenCalledTimes(1));
+    expect(mockedUpdate.mock.calls[0][2]).toEqual({ email: 'ana@x.co' });
+  });
+
+  it('an unchanged saved email does not block saving other fields', async () => {
+    mockedUpdate.mockResolvedValue(patient);
+    const user = userEvent.setup();
+    const oldEmail = { ...patient, email: 'ana@x' };
+    render(
+      <PatientEditModal open patient={oldEmail} token="tok" onOpenChange={() => {}} onSaved={() => {}} />,
+    );
+    await user.type(screen.getByLabelText(/ocupación/i), 'Docente');
+    await user.click(screen.getByRole('button', { name: /guardar/i }));
+    await waitFor(() => expect(mockedUpdate).toHaveBeenCalledTimes(1));
+    expect(mockedUpdate.mock.calls[0][2]).toEqual({ occupation: 'Docente' });
+  });
+
   it('rejects a label with a control or format character, as the API does', async () => {
     const user = userEvent.setup();
     render(

@@ -26,6 +26,8 @@ it('lleva el número, la clínica y la sede, el paciente enmascarado, el abono, 
   expect(screen.queryByText(/anulado/i)).not.toBeInTheDocument();
 });
 
+// «NIT/NIF» es la línea que el recibo imprime hoy (payment-receipt-document.tsx,
+// excepción con nombre de la guarda de DX-327); se va con DX-019.
 it('sin razón social o NIT/NIF avisa «Datos fiscales pendientes» y el recibo sale igual', () => {
   render(<PaymentReceiptDocument receipt={paymentReceiptFixture()} />);
   expect(screen.getByText('Datos fiscales pendientes')).toBeInTheDocument();

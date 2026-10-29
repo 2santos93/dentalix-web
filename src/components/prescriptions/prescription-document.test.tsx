@@ -156,6 +156,8 @@ const LEGACY_CO_MARKUP = [
   '</footer>',
   '</article>',
 ];
+// Receta española anterior a DX-324, tal como se emitió: conserva «DNI/NIE»
+// (legacy-prescription-layout.ts, excepción R12).
 const LEGACY_ES_MARKUP = [
   '<article class="prescription-print-root relative mx-auto w-full max-w-[210mm] bg-white px-4 py-6 text-[#111827] sm:px-10 sm:py-10 print:max-w-none print:p-0">',
   '<header class="flex flex-col gap-4 border-b border-[#d1d5db] pb-4 sm:flex-row sm:items-start sm:justify-between print:flex-row">',
