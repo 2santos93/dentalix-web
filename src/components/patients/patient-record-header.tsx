@@ -159,7 +159,7 @@ export function PatientRecordHeader({
                   <li key={item.key} className="flex items-center gap-2 text-sm text-muted">
                     {/* Separador decorativo: el punto medio no aporta nada
                         leído en voz alta, y cada valor ya se explica solo
-                        («34 años», «CC 1002», «Tel. …») sin depender de él. */}
+                        («34 años», «Documento nacional DOC-1002», «Tel. …») sin depender de él. */}
                     {index > 0 ? <span aria-hidden className="text-border">·</span> : null}
                     <span className="tnum">{item.text}</span>
                   </li>

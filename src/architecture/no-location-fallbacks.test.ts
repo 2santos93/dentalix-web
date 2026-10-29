@@ -517,3 +517,136 @@ describe('arquitectura: pagadores sin país (DX-326)', () => {
     }
   });
 });
+
+/**
+ * DX-327 (spec R1, R13, §6.8, pre-flight M9): ningún texto de la web nombra un
+ * documento de un país («Cédula», «Tarjeta de identidad», «Extranjería», los
+ * códigos `CC`, `TI` y `CE`) ni una autoridad sanitaria («INVIMA», «marcado
+ * CE»). Recorrido propio, no `scanned()`/`hits()`: mira también comentarios y
+ * JSDoc, `lib/api/schema.d.ts` y los `*fixture*` de producción. Se salta solo
+ * los tests, `lib/test/**` y la excepción con nombre de R13, el normalizador
+ * legado `lib/patients/legacy-doc-type.ts`.
+ */
+const DOC_TYPE_LEGACY_NORMALIZER = 'lib/patients/legacy-doc-type.ts';
+const COUNTRY_DOCUMENT = /[Cc][ée]dula|[Tt]arjeta de identidad|[Ee]xtranjer[ií]a|\b(?:CC|TI|CE)\b|INVIMA/;
+
+function documentScanFiles(dir: string = SRC): string[] {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) return documentScanFiles(path);
+    if (!/\.(ts|tsx|js|jsx|mjs|json|css|md)$/.test(entry.name)) return [];
+    const rel = relative(SRC, path).split(sep).join('/');
+    if (/\.(test|spec)\./.test(rel) || rel.startsWith('lib/test/')) return [];
+    return rel === DOC_TYPE_LEGACY_NORMALIZER ? [] : [path];
+  });
+}
+
+/** Cada línea del texto que nombra un documento de un país, comentarios incluidos. */
+function countryDocumentHits(rel: string, text: string): string[] {
+  return text
+    .split('\n')
+    .map((line, i) => ({ line, n: i + 1 }))
+    .filter(({ line }) => COUNTRY_DOCUMENT.test(line))
+    .map(({ line, n }) => `${rel}:${n}: ${line.trim()}`);
+}
+
+describe('arquitectura: tipos de documento sin país (DX-327)', () => {
+  it('no UI text says Cédula, TI or CE outside the legacy normalizer', () => {
+    const mentions = documentScanFiles().flatMap((path) =>
+      countryDocumentHits(relative(SRC, path).split(sep).join('/'), readFileSync(path, 'utf8')),
+    );
+    expect(mentions).toEqual([]);
+  });
+
+  it('the document scan covers schema.d.ts, fixtures and comments and skips only the legacy normalizer, and its pattern catches each legacy form', () => {
+    const rels = documentScanFiles().map((f) => relative(SRC, f).split(sep).join('/'));
+    expect(rels).toEqual(
+      expect.arrayContaining([
+        'lib/api/schema.d.ts',
+        'components/treatment-plans/plan-quote-fixture.ts',
+        'components/patients/agreement-fixtures.ts',
+        'components/patients/patient-record-header.tsx',
+        'components/implants/register-implant-modal.tsx',
+        'lib/patients/doc-type.ts',
+      ]),
+    );
+    expect(rels).not.toContain(DOC_TYPE_LEGACY_NORMALIZER);
+    expect(existsSync(join(SRC, DOC_TYPE_LEGACY_NORMALIZER))).toBe(true);
+    expect(rels.some((r) => /\.(test|spec)\./.test(r) || r.startsWith('lib/test/'))).toBe(false);
+
+    // Control sintético: los comentarios y la JSDoc cuentan como texto.
+    const synthetic = [
+      '/**',
+      ' * Documento del paciente.',
+      ' * @example CC 123',
+      ' */',
+      'const a = 1; // CC 1002',
+      "const b = 'NATIONAL_ID';",
+    ].join('\n');
+    expect(countryDocumentHits('synthetic.ts', synthetic)).toEqual([
+      'synthetic.ts:3: * @example CC 123',
+      'synthetic.ts:5: const a = 1; // CC 1002',
+    ]);
+    for (const line of [
+      'Cédula de ciudadanía',
+      'cedula de extranjería',
+      'Tarjeta de identidad',
+      "docType: 'TI'",
+      'CE 123',
+      'Registro sanitario INVIMA',
+      'marcado CE',
+    ]) {
+      expect([line, COUNTRY_DOCUMENT.test(line)]).toEqual([line, true]);
+    }
+    for (const line of [
+      "docType: 'NATIONAL_ID'",
+      'Documento nacional',
+      'Registro sanitario o certificación del producto',
+      'Certificación',
+      'ACCEPTED',
+      'CERT-2019',
+    ]) {
+      expect([line, COUNTRY_DOCUMENT.test(line)]).toEqual([line, false]);
+    }
+  });
+
+  /**
+   * §6.8 (API y web): un solo resolvedor del nombre visible y un solo mapa de
+   * nombres genéricos, los de `lib/patients/doc-type.ts`.
+   */
+  const DOC_TYPE_LIB = 'lib/patients/doc-type.ts';
+  const NAME_RESOLVED_BY_HAND = /DOC_TYPE_LABEL\[|docTypeName(?:NationalId|Passport|ResidencePermit|TaxId|Other)\b/;
+  const LABEL_MAP = /\b(?:const|let)\s+DOC_TYPE_LABELS?\b|PASSPORT:\s*'Pasaporte'/;
+
+  function productionHits(pattern: RegExp): string[] {
+    return documentScanFiles()
+      .filter((path) => relative(SRC, path).split(sep).join('/') !== DOC_TYPE_LIB)
+      .flatMap((path) =>
+        readFileSync(path, 'utf8')
+          .split('\n')
+          .map((line, i) => ({ line, n: i + 1 }))
+          .filter(({ line }) => pattern.test(line))
+          .map(({ line, n }) => `${relative(SRC, path)}:${n}: ${line.trim()}`),
+      );
+  }
+
+  it('architecture: one document type name resolver', () => {
+    expect(productionHits(NAME_RESOLVED_BY_HAND)).toEqual([]);
+    expect(readFileSync(join(SRC, DOC_TYPE_LIB), 'utf8')).toMatch(NAME_RESOLVED_BY_HAND);
+    for (const line of ['label={DOC_TYPE_LABEL[type]}', 'tenant.docTypeNameNationalId', 'docTypeNameOther ?? x']) {
+      expect([line, NAME_RESOLVED_BY_HAND.test(line)]).toEqual([line, true]);
+    }
+    for (const line of ['documentTypeName(type, null, names)', 'dto.docTypeName', 'genericDocTypeName(type)']) {
+      expect([line, NAME_RESOLVED_BY_HAND.test(line)]).toEqual([line, false]);
+    }
+  });
+
+  it('architecture: one document label map', () => {
+    expect(productionHits(LABEL_MAP)).toEqual([]);
+    expect(readFileSync(join(SRC, DOC_TYPE_LIB), 'utf8')).toMatch(LABEL_MAP);
+    for (const line of ['const DOC_TYPE_LABELS = {', "  PASSPORT: 'Pasaporte',", 'let DOC_TYPE_LABEL = x']) {
+      expect([line, LABEL_MAP.test(line)]).toEqual([line, true]);
+    }
+    expect(LABEL_MAP.test("import { DOC_TYPE_LABEL } from '@/lib/patients/doc-type';")).toBe(false);
+  });
+});

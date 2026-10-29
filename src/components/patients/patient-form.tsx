@@ -20,7 +20,13 @@ import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { InlineError } from '@/components/errors/inline-error';
 import { cn } from '@/lib/utils';
 import { fieldClass } from '@/lib/ui/field-class';
-import { DOC_TYPES, docTypeOptionLabel } from '@/lib/patients/doc-type';
+import {
+  DOC_TYPES,
+  docTypeLabelTooLong,
+  docTypeOptionLabel,
+  normalizeDocTypeLabel,
+} from '@/lib/patients/doc-type';
+import { DocTypeLabelField, docTypeLabelFieldCopy } from './doc-type-label-field';
 import { useDocumentTypeNames } from '@/lib/patients/use-document-type-names';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
@@ -61,7 +67,7 @@ const sexOptions: { value: Sex; label: string }[] = [
  * que falle. Son también los campos del cuerpo a los que la API puede atar un
  * 400 (`ApiError.field`).
  */
-const CHECKED_FIELDS = ['firstName', 'lastName', 'docType', 'email'] as const;
+const CHECKED_FIELDS = ['firstName', 'lastName', 'docType', 'docTypeLabel', 'email'] as const;
 type CheckedField = (typeof CHECKED_FIELDS)[number];
 type FieldErrors = Partial<Record<CheckedField, string>>;
 
@@ -69,6 +75,7 @@ const FIELD_IDS: Record<CheckedField, string> = {
   firstName: 'patient-first-name',
   lastName: 'patient-last-name',
   docType: 'patient-doc-type',
+  docTypeLabel: 'patient-doc-type-label',
   email: 'patient-email',
 };
 
@@ -106,6 +113,8 @@ export function PatientForm({ token, onCreated, initialDocNumber }: PatientFormP
   const firstNameRef = React.useRef<HTMLInputElement>(null);
   const lastNameRef = React.useRef<HTMLInputElement>(null);
   const docTypeRef = React.useRef<HTMLSelectElement>(null);
+  const [docTypeLabel, setDocTypeLabel] = useState('');
+  const docTypeLabelRef = React.useRef<HTMLInputElement>(null);
   const emailRef = React.useRef<HTMLInputElement>(null);
   // Cada petición es un objeto nuevo: el efecto enfoca aunque se repita el campo.
   const [focusRequest, setFocusRequest] = useState<{ field: CheckedField } | null>(null);
@@ -138,7 +147,13 @@ export function PatientForm({ token, onCreated, initialDocNumber }: PatientFormP
 
   useEffect(() => {
     if (!focusRequest) return;
-    const refs = { firstName: firstNameRef, lastName: lastNameRef, docType: docTypeRef, email: emailRef };
+    const refs = {
+      firstName: firstNameRef,
+      lastName: lastNameRef,
+      docType: docTypeRef,
+      docTypeLabel: docTypeLabelRef,
+      email: emailRef,
+    };
     refs[focusRequest.field].current?.focus();
   }, [focusRequest]);
 
@@ -157,6 +172,7 @@ export function PatientForm({ token, onCreated, initialDocNumber }: PatientFormP
     if (!firstName.trim()) found.firstName = copy.firstNameRequired;
     if (!lastName.trim()) found.lastName = copy.lastNameRequired;
     if (docType === '') found.docType = copy.docTypeRequired;
+    if (docTypeLabelTooLong(docTypeLabel)) found.docTypeLabel = docTypeLabelFieldCopy.tooLong;
     // Con `noValidate` el navegador ya no frena un «ana@»: se mira su propia
     // validez de `type="email"`, la misma regla que antes aplicaba al enviar.
     if (email.trim() && emailRef.current?.validity.typeMismatch) found.email = copy.emailInvalid;
@@ -181,10 +197,12 @@ export function PatientForm({ token, onCreated, initialDocNumber }: PatientFormP
     setError(null);
     setSubmitting(true);
     try {
+      const label = normalizeDocTypeLabel(docTypeLabel);
       const input: CreatePatientInput = {
         firstName,
         lastName,
         docType,
+        ...(label ? { docTypeLabel: label } : {}),
         sex,
         ...(docNumber.trim() ? { docNumber: docNumber.trim() } : {}),
         ...(birthDate ? { birthDate: new Date(birthDate).toISOString() } : {}),
@@ -295,6 +313,17 @@ export function PatientForm({ token, onCreated, initialDocNumber }: PatientFormP
           />
         </FormField>
       </div>
+
+      <DocTypeLabelField
+        id={FIELD_IDS.docTypeLabel}
+        inputRef={docTypeLabelRef}
+        value={docTypeLabel}
+        onChange={(value) => {
+          setDocTypeLabel(value);
+          clearFieldError('docTypeLabel');
+        }}
+        error={fieldErrors.docTypeLabel}
+      />
 
       <div className="grid gap-5 sm:grid-cols-2">
         <FormField htmlFor="patient-birth-date" label={copy.birthDateLabel}>

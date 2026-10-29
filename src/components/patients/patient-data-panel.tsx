@@ -13,6 +13,7 @@ const copy = {
   emergency: 'Emergencia',
   administrative: 'Administrativo',
   docType: 'Tipo de documento',
+  docTypeLabel: 'Nombre del documento',
   docNumber: 'Número de documento',
   birthDate: 'Fecha de nacimiento',
   sex: 'Sexo',
@@ -107,6 +108,8 @@ export function PatientDataPanel({ patient, docTypeNames = {} }: PatientDataPane
             // El nombre de la clínica para el tipo, no el `docTypeName` del
             // DTO: ese ya prefiere la etiqueta del paciente (pre-flight M15).
             { label: copy.docType, value: docTypeOptionLabel(patient.docType, docTypeNames) },
+            // R7: el nombre libre del paciente, solo si tiene uno.
+            ...(patient.docTypeLabel ? [{ label: copy.docTypeLabel, value: patient.docTypeLabel }] : []),
             { label: copy.docNumber, value: patient.docNumber },
             { label: copy.birthDate, value: birth },
             { label: copy.sex, value: patient.sex },

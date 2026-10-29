@@ -12,9 +12,12 @@ import { FormField } from '@/components/shared/form-field';
 import { Input } from '@/components/ui/input';
 import {
   DOC_TYPES,
+  docTypeLabelTooLong,
   docTypeOptionLabel,
+  normalizeDocTypeLabel,
   type ClinicDocumentTypeNames,
 } from '@/lib/patients/doc-type';
+import { DocTypeLabelField, docTypeLabelFieldCopy } from './doc-type-label-field';
 import { normalizeDocType } from '@/lib/patients/legacy-doc-type';
 
 // Copy as constants (i18n-ready) — es first.
@@ -166,6 +169,9 @@ export function PatientEditModal({
 }: PatientEditModalProps) {
   const [text, setText] = useState<TextState>(() => textStateFrom(patient));
   const [docType, setDocType] = useState<Patient['docType']>(() => seededDocType(patient));
+  const [docTypeLabel, setDocTypeLabel] = useState(patient.docTypeLabel ?? '');
+  const [docTypeLabelError, setDocTypeLabelError] = useState<string | null>(null);
+  const docTypeLabelRef = React.useRef<HTMLInputElement>(null);
   const [sex, setSex] = useState<Patient['sex']>(patient.sex);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -185,6 +191,8 @@ export function PatientEditModal({
     setSeededPatient(patient);
     setText(textStateFrom(patient));
     setDocType(seededDocType(patient));
+    setDocTypeLabel(patient.docTypeLabel ?? '');
+    setDocTypeLabelError(null);
     setSex(patient.sex);
     setError(null);
   }
@@ -215,6 +223,9 @@ export function PatientEditModal({
     const seededText = textStateFrom(seededPatient);
     const patch: UpdatePatientInput = {};
     if (docType !== seededDocType(seededPatient)) patch.docType = docType;
+    // R7: viaja solo si cambió; vaciada = null (borra la etiqueta).
+    const label = normalizeDocTypeLabel(docTypeLabel);
+    if (label !== (seededPatient.docTypeLabel ?? null)) patch.docTypeLabel = label;
     if (sex !== seededPatient.sex) patch.sex = sex;
     for (const group of GROUPS) {
       for (const f of group.fields) {
@@ -233,6 +244,11 @@ export function PatientEditModal({
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
+    if (docTypeLabelTooLong(docTypeLabel)) {
+      setDocTypeLabelError(docTypeLabelFieldCopy.tooLong);
+      docTypeLabelRef.current?.focus();
+      return;
+    }
     setSaving(true);
     try {
       const saved = await updatePatient(token, patient.id, buildPatch());
@@ -282,7 +298,12 @@ export function PatientEditModal({
                     <select
                       id="pe-doc-type"
                       value={docType}
-                      onChange={(e) => setDocType(e.target.value as Patient['docType'])}
+                      onChange={(e) => {
+                        setDocType(e.target.value as Patient['docType']);
+                        // La etiqueta de un tipo no vale para otro (R7).
+                        setDocTypeLabel('');
+                        setDocTypeLabelError(null);
+                      }}
                       className={fieldClass}
                     >
                       {DOC_TYPES.map((t) => (
@@ -292,6 +313,16 @@ export function PatientEditModal({
                       ))}
                     </select>
                   </FormField>
+                  <DocTypeLabelField
+                    id="pe-docTypeLabel"
+                    inputRef={docTypeLabelRef}
+                    value={docTypeLabel}
+                    onChange={(value) => {
+                      setDocTypeLabel(value);
+                      setDocTypeLabelError(null);
+                    }}
+                    error={docTypeLabelError}
+                  />
                   <FormField htmlFor="pe-sex" label={copy.sex}>
                     <select
                       id="pe-sex"

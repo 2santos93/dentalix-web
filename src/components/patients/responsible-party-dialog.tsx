@@ -7,10 +7,13 @@ import { useDebouncedValue } from '@/lib/hooks/use-debounced-value';
 import { listPatients, type DocType, type Patient } from '@/lib/patients/patients-api';
 import {
   DOC_TYPES,
+  docTypeLabelTooLong,
   docTypeOptionLabel,
   documentText,
   dtoDocTypeName,
+  normalizeDocTypeLabel,
 } from '@/lib/patients/doc-type';
+import { DocTypeLabelField, docTypeLabelFieldCopy } from './doc-type-label-field';
 import { useDocumentTypeNames } from '@/lib/patients/use-document-type-names';
 import {
   createResponsibleParty,
@@ -74,6 +77,8 @@ interface Draft {
   > | null;
   fullName: string;
   docType: DocType | '';
+  /** R7: solo con tipo; un responsable paciente no lleva etiqueta. */
+  docTypeLabel: string;
   docNumber: string;
   email: string;
   phone: string;
@@ -88,6 +93,7 @@ function draftFrom(party: ResponsibleParty | null): Draft {
     patient: party?.responsiblePatient ?? null,
     fullName: party?.kind === 'CONTACT' ? party.fullName : '',
     docType: party?.kind === 'CONTACT' ? (party.docType ?? '') : '',
+    docTypeLabel: party?.kind === 'CONTACT' ? (party.docTypeLabel ?? '') : '',
     docNumber: party?.kind === 'CONTACT' ? (party.docNumber ?? '') : '',
     email: party?.kind === 'CONTACT' ? (party.email ?? '') : '',
     phone: party?.kind === 'CONTACT' ? (party.phone ?? '') : '',
@@ -139,6 +145,8 @@ export function ResponsiblePartyDialog({
   const [searchFailed, setSearchFailed] = useState(false);
   const [searchKey, setSearchKey] = useState(0);
   const [fieldError, setFieldError] = useState<string | null>(null);
+  const [labelError, setLabelError] = useState<string | null>(null);
+  const labelRef = React.useRef<HTMLInputElement>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -182,6 +190,11 @@ export function ResponsiblePartyDialog({
       setFieldError(copy.nameRequired);
       return;
     }
+    if (draft.kind === 'CONTACT' && draft.docType && docTypeLabelTooLong(draft.docTypeLabel)) {
+      setLabelError(docTypeLabelFieldCopy.tooLong);
+      labelRef.current?.focus();
+      return;
+    }
     setSaving(true);
     setSaveError(null);
     const flags = {
@@ -194,6 +207,9 @@ export function ResponsiblePartyDialog({
         ? {
             fullName: draft.fullName.trim(),
             docType: draft.docType || null,
+            // Pre-flight I1: el contacto viaja entero, así que la etiqueta
+            // también (la actual, o null); omitirla no la conservaría.
+            docTypeLabel: draft.docType ? normalizeDocTypeLabel(draft.docTypeLabel) : null,
             docNumber: draft.docNumber.trim() || null,
             email: draft.email.trim() || null,
             phone: draft.phone.trim() || null,
@@ -372,7 +388,12 @@ export function ResponsiblePartyDialog({
               <select
                 id={`${ids}-doctype`}
                 value={draft.docType}
-                onChange={(e) => set('docType', e.target.value as DocType | '')}
+                onChange={(e) => {
+                  set('docType', e.target.value as DocType | '');
+                  // La etiqueta de un tipo no vale para otro (R7).
+                  set('docTypeLabel', '');
+                  setLabelError(null);
+                }}
                 className={cn(fieldClass, 'h-10')}
               >
                 <option value="">{copy.docTypeNone}</option>
@@ -392,6 +413,19 @@ export function ResponsiblePartyDialog({
                 onChange={(e) => set('docNumber', e.target.value)}
               />
             </FormField>
+            {draft.docType ? (
+              <DocTypeLabelField
+                id={`${ids}-doctypelabel`}
+                inputRef={labelRef}
+                value={draft.docTypeLabel}
+                onChange={(value) => {
+                  set('docTypeLabel', value);
+                  setLabelError(null);
+                }}
+                error={labelError}
+                className="sm:col-span-2"
+              />
+            ) : null}
             <FormField htmlFor={`${ids}-email`} label={copy.email} hint={copy.emailHint}>
               <Input
                 id={`${ids}-email`}

@@ -1,4 +1,4 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { PatientForm } from './patient-form';
 import { createPatient } from '@/lib/patients/patients-api';
@@ -24,7 +24,7 @@ const mockedGetNames = getDocumentTypeNames as jest.MockedFunction<typeof getDoc
 const NO_NAMES = { NATIONAL_ID: null, PASSPORT: null, RESIDENCE_PERMIT: null, TAX_ID: null, OTHER: null };
 
 async function fillRequired(user: ReturnType<typeof userEvent.setup>, type = 'NATIONAL_ID') {
-  await user.type(screen.getByLabelText(/^nombre/i), 'Ana');
+  await user.type(screen.getByLabelText(/^nombre$/i), 'Ana');
   await user.type(screen.getByLabelText(/apellido/i), 'García');
   await user.selectOptions(screen.getByLabelText(/tipo de documento/i), type);
 }
@@ -40,7 +40,7 @@ describe('PatientForm', () => {
 
   it('renders the required fields with accessible labels', async () => {
     render(<PatientForm token="tok" />);
-    expect(screen.getByLabelText(/nombre/i)).toBeInTheDocument();
+    expect(screen.getByLabelText(/^nombre$/i)).toBeInTheDocument();
     expect(screen.getByLabelText(/apellido/i)).toBeInTheDocument();
     // Flush the countries-fetch effect (see patient-form.tsx's `useEffect`)
     // before the test ends, so it doesn't resolve mid-way through a later
@@ -141,7 +141,7 @@ describe('PatientForm', () => {
       expect(select).toHaveValue('');
       expect(select).toBeRequired();
 
-      await user.type(screen.getByLabelText(/^nombre/i), 'Ana');
+      await user.type(screen.getByLabelText(/^nombre$/i), 'Ana');
       await user.type(screen.getByLabelText(/apellido/i), 'García');
       await user.click(screen.getByRole('button', { name: /crear|guardar/i }));
 
@@ -163,7 +163,7 @@ describe('PatientForm', () => {
       render(<PatientForm token="tok" />);
       await user.click(screen.getByRole('button', { name: /crear|guardar/i }));
 
-      const first = screen.getByLabelText(/^nombre/i);
+      const first = screen.getByLabelText(/^nombre$/i);
       const last = screen.getByLabelText(/apellido/i);
       expect(first).toHaveAttribute('aria-invalid', 'true');
       expect(first).toHaveAttribute('aria-describedby', 'patient-first-name-error');
@@ -228,6 +228,58 @@ describe('PatientForm', () => {
       );
       expect(email).toHaveFocus();
       expect(screen.getAllByRole('alert')).toHaveLength(1);
+    });
+
+    it('sends the free label trimmed, or omits it when empty', async () => {
+      const user = userEvent.setup();
+      mockedCreatePatient.mockResolvedValue({ id: 'p1' } as Awaited<ReturnType<typeof createPatient>>);
+      const onCreated = jest.fn();
+      const { unmount } = render(<PatientForm token="tok" onCreated={onCreated} />);
+      await fillRequired(user);
+      const label = screen.getByLabelText('Nombre del documento (opcional)');
+      expect(screen.getByText('Si lo escribes, los documentos impresos lo muestran en lugar del tipo.')).toBeInTheDocument();
+      await user.type(label, '  ID   local  ');
+      await user.click(screen.getByRole('button', { name: /crear|guardar/i }));
+      await waitFor(() => expect(onCreated).toHaveBeenCalledTimes(1));
+      expect(mockedCreatePatient.mock.calls[0][1]).toMatchObject({ docTypeLabel: 'ID local' });
+      await screen.findByRole('option', { name: 'Colombia' });
+      unmount();
+
+      render(<PatientForm token="tok" onCreated={onCreated} />);
+      await fillRequired(user);
+      await user.type(screen.getByLabelText('Nombre del documento (opcional)'), '   ');
+      await user.click(screen.getByRole('button', { name: /crear|guardar/i }));
+      await waitFor(() => expect(onCreated).toHaveBeenCalledTimes(2));
+      expect(mockedCreatePatient.mock.calls[1][1]).not.toHaveProperty('docTypeLabel');
+      await screen.findByRole('option', { name: 'Colombia' });
+    });
+
+    it('rejects a label over 40 characters', async () => {
+      const user = userEvent.setup();
+      mockedCreatePatient.mockResolvedValue({ id: 'p1' } as Awaited<ReturnType<typeof createPatient>>);
+      render(<PatientForm token="tok" />);
+      await fillRequired(user);
+      const label = screen.getByLabelText('Nombre del documento (opcional)');
+      // 41 caracteres fuera del plano básico: el campo no los corta antes de validar.
+      fireEvent.change(label, { target: { value: '\u{1D49C}'.repeat(41) } });
+      expect(label).toHaveValue('\u{1D49C}'.repeat(41));
+      await user.click(screen.getByRole('button', { name: /crear|guardar/i }));
+
+      expect(mockedCreatePatient).not.toHaveBeenCalled();
+      expect(label).toHaveAttribute('aria-invalid', 'true');
+      expect(label).toHaveAttribute('aria-describedby', 'patient-doc-type-label-error');
+      expect(document.getElementById('patient-doc-type-label-error')).toHaveTextContent('Hasta 40 caracteres.');
+      expect(label).toHaveFocus();
+      expect(
+        screen.queryByText('Nombre, apellido y tipo de documento son obligatorios para continuar.'),
+      ).not.toBeInTheDocument();
+
+      // 40 caracteres (80 unidades UTF-16) sí caben.
+      fireEvent.change(label, { target: { value: '\u{1D49C}'.repeat(40) } });
+      expect(label).not.toHaveAttribute('aria-invalid');
+      await user.click(screen.getByRole('button', { name: /crear|guardar/i }));
+      await waitFor(() => expect(mockedCreatePatient).toHaveBeenCalledTimes(1));
+      expect(mockedCreatePatient.mock.calls[0][1]).toMatchObject({ docTypeLabel: '\u{1D49C}'.repeat(40) });
     });
 
     it('creates with the chosen generic type', async () => {

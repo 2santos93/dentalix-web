@@ -2,7 +2,7 @@
 import { useEffect, useId, useState } from 'react';
 import { Lock } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/error-message';
-import { DOC_TYPES, DOC_TYPE_LABEL, DOC_TYPE_NAME_MAX } from '@/lib/patients/doc-type';
+import { DOC_TYPES, DOC_TYPE_NAME_MAX, genericDocTypeName } from '@/lib/patients/doc-type';
 import {
   getDocumentTypeNames,
   updateDocumentTypeNames,
@@ -146,8 +146,8 @@ export function DocumentTypeNamesSettingsSection({
           <FormField
             key={type}
             htmlFor={id}
-            label={DOC_TYPE_LABEL[type]}
-            hint={copy.hint(DOC_TYPE_LABEL[type])}
+            label={genericDocTypeName(type)}
+            hint={copy.hint(genericDocTypeName(type))}
             error={error}
           >
             <input
@@ -155,7 +155,7 @@ export function DocumentTypeNamesSettingsSection({
               type="text"
               className={fieldClass}
               maxLength={DOC_TYPE_NAME_MAX}
-              placeholder={DOC_TYPE_LABEL[type]}
+              placeholder={genericDocTypeName(type)}
               value={current[type]}
               disabled={saving}
               aria-invalid={error ? true : undefined}

@@ -16,7 +16,13 @@ import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { InlineError } from '@/components/errors/inline-error';
 import { fieldClass } from '@/lib/ui/field-class';
 import { cn } from '@/lib/utils';
-import { DOC_TYPES, docTypeOptionLabel } from '@/lib/patients/doc-type';
+import {
+  DOC_TYPES,
+  docTypeLabelTooLong,
+  docTypeOptionLabel,
+  normalizeDocTypeLabel,
+} from '@/lib/patients/doc-type';
+import { DocTypeLabelField, docTypeLabelFieldCopy } from './doc-type-label-field';
 import { useDocumentTypeNames } from '@/lib/patients/use-document-type-names';
 import type { ClinicalHistoryValue } from '@/lib/clinical/clinical-types';
 import {
@@ -72,8 +78,10 @@ const sexOptions: { value: Sex; label: string }[] = [
   { value: 'OTHER', label: 'Otro' },
 ];
 
-type RequiredField = 'firstName' | 'lastName' | 'docType';
-type MissingFields = Partial<Record<RequiredField, string>>;
+/** Campos del paso 1 con error propio, en el orden del formulario. */
+const CHECKED_FIELDS = ['firstName', 'lastName', 'docType', 'docTypeLabel'] as const;
+type CheckedField = (typeof CHECKED_FIELDS)[number];
+type MissingFields = Partial<Record<CheckedField, string>>;
 
 /** `aria-invalid`/`aria-describedby` de un control con su error. */
 function invalidProps(id: string, error: string | undefined) {
@@ -122,11 +130,18 @@ export function PatientCreateWizard({ token, canWriteClinicalHistory }: PatientC
   const firstNameRef = React.useRef<HTMLInputElement>(null);
   const lastNameRef = React.useRef<HTMLInputElement>(null);
   const docTypeRef = React.useRef<HTMLSelectElement>(null);
+  const [docTypeLabel, setDocTypeLabel] = useState('');
+  const docTypeLabelRef = React.useRef<HTMLInputElement>(null);
   // Cada petición es un objeto nuevo: el efecto enfoca aunque se repita el campo.
-  const [focusRequest, setFocusRequest] = useState<{ field: RequiredField } | null>(null);
+  const [focusRequest, setFocusRequest] = useState<{ field: CheckedField } | null>(null);
   React.useEffect(() => {
     if (!focusRequest) return;
-    const refs = { firstName: firstNameRef, lastName: lastNameRef, docType: docTypeRef };
+    const refs = {
+      firstName: firstNameRef,
+      lastName: lastNameRef,
+      docType: docTypeRef,
+      docTypeLabel: docTypeLabelRef,
+    };
     refs[focusRequest.field].current?.focus();
   }, [focusRequest]);
   const [docNumber, setDocNumber] = useState('');
@@ -147,24 +162,30 @@ export function PatientCreateWizard({ token, canWriteClinicalHistory }: PatientC
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
-  const isBasicInfoValid = firstName.trim() !== '' && lastName.trim() !== '' && docType !== '';
+  const isBasicInfoValid =
+    firstName.trim() !== '' &&
+    lastName.trim() !== '' &&
+    docType !== '' &&
+    !docTypeLabelTooLong(docTypeLabel);
 
-  /** Marca lo que falta y lleva el foco al primer campo obligatorio vacío. */
+  /** Marca lo que falta o sobra y lleva el foco al primer campo con error. */
   function flagMissingBasics() {
-    setValidationError(copy.requiredError);
-    setMissing({
+    const found: MissingFields = {
       ...(!firstName.trim() ? { firstName: copy.firstNameRequired } : {}),
       ...(!lastName.trim() ? { lastName: copy.lastNameRequired } : {}),
       ...(docType === '' ? { docType: copy.docTypeRequired } : {}),
-    });
+      ...(docTypeLabelTooLong(docTypeLabel) ? { docTypeLabel: docTypeLabelFieldCopy.tooLong } : {}),
+    };
+    const missingRequired = Boolean(found.firstName || found.lastName || found.docType);
+    setValidationError(missingRequired ? copy.requiredError : null);
+    setMissing(found);
     // Tras el render: si se vuelve al paso 1 desde otro, el campo aún no existe.
-    setFocusRequest({
-      field: !firstName.trim() ? 'firstName' : !lastName.trim() ? 'lastName' : 'docType',
-    });
+    const firstInvalid = CHECKED_FIELDS.find((f) => found[f]);
+    if (firstInvalid) setFocusRequest({ field: firstInvalid });
   }
 
   /** Quita el error de un campo al corregirlo. */
-  function clearMissing(field: RequiredField) {
+  function clearMissing(field: CheckedField) {
     setMissing((prev) => {
       if (!prev[field]) return prev;
       const next = { ...prev };
@@ -197,10 +218,12 @@ export function PatientCreateWizard({ token, canWriteClinicalHistory }: PatientC
       // Solo lo marcado es una decisión; sin casillas marcadas no se registra
       // ninguna autorización (el silencio no autoriza).
       const decisions = decisionsFromSelection(consentSelection);
+      const label = normalizeDocTypeLabel(docTypeLabel);
       const input: CreatePatientInput = {
         firstName: firstName.trim(),
         lastName: lastName.trim(),
         docType,
+        ...(label ? { docTypeLabel: label } : {}),
         sex,
         ...(docNumber.trim() ? { docNumber: docNumber.trim() } : {}),
         ...(birthDate ? { birthDate: new Date(birthDate).toISOString() } : {}),
@@ -305,6 +328,17 @@ export function PatientCreateWizard({ token, canWriteClinicalHistory }: PatientC
                 />
               </FormField>
             </div>
+
+            <DocTypeLabelField
+              id="pcw-doc-type-label"
+              inputRef={docTypeLabelRef}
+              value={docTypeLabel}
+              onChange={(value) => {
+                setDocTypeLabel(value);
+                clearMissing('docTypeLabel');
+              }}
+              error={missing.docTypeLabel}
+            />
 
             <div className="grid gap-5 sm:grid-cols-2">
               <FormField htmlFor="pcw-birth-date" label={copy.birthDateLabel}>

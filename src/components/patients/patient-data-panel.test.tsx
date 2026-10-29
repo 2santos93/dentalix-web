@@ -94,6 +94,19 @@ describe('PatientDataPanel', () => {
     expect(screen.queryByText('TAX_ID')).not.toBeInTheDocument();
   });
 
+  it('shows the document name only when there is one', () => {
+    const { rerender } = render(
+      <PatientDataPanel patient={patient({ docTypeLabel: 'Documento A', docTypeName: 'Documento A' })} />,
+    );
+    const term = screen.getByText('Nombre del documento');
+    expect(term.tagName).toBe('DT');
+    expect(term.nextElementSibling).toHaveTextContent('Documento A');
+    expect(screen.getByText('Documento nacional')).toBeInTheDocument();
+
+    rerender(<PatientDataPanel patient={patient({ docTypeLabel: null })} />);
+    expect(screen.queryByText('Nombre del documento')).not.toBeInTheDocument();
+  });
+
   it('formatea la fecha de nacimiento con día y mes en dos dígitos', () => {
     // `toLocaleDateString('es')` (la implementación anterior) no rellena con
     // cero: un 5 de enero se mostraba "5/1/1992" en vez de "05/01/1992".

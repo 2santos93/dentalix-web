@@ -30,7 +30,7 @@ const copy = {
   udi: 'UDI (opcional)',
   diameter: 'Diámetro (mm)',
   length: 'Longitud (mm)',
-  sanitaryRegistration: 'Registro sanitario INVIMA / marcado CE',
+  sanitaryRegistration: 'Registro sanitario o certificación del producto',
   placedOn: 'Fecha de colocación',
   notes: 'Notas (opcional)',
   planItemNote: 'Se registra contra el ítem del plan desde el que lo abriste.',

@@ -4,10 +4,12 @@ import {
   DOC_TYPE_LABEL_MAX,
   DOC_TYPE_NAME_MAX,
   DOC_TYPES,
+  docTypeLabelTooLong,
   docTypeOptionLabel,
   documentText,
   documentTypeName,
   dtoDocTypeName,
+  normalizeDocTypeLabel,
 } from './doc-type';
 
 describe('doc-type', () => {
@@ -73,5 +75,20 @@ describe('doc-type', () => {
   it('legacy codes from an older API resolve to their generic name, never a label', () => {
     expect(documentTypeName('CC', null, {})).toBe('Documento nacional');
     expect(documentTypeName('CE', null, { RESIDENCE_PERMIT: 'ID local' })).toBe('ID local');
+  });
+
+  it('normalizeDocTypeLabel trims, joins inner spaces and turns empty into null', () => {
+    expect(normalizeDocTypeLabel('  ID   local ')).toBe('ID local');
+    expect(normalizeDocTypeLabel('   ')).toBeNull();
+    expect(normalizeDocTypeLabel('')).toBeNull();
+  });
+
+  it('docTypeLabelTooLong counts characters, not UTF-16 units, after normalizing', () => {
+    expect(docTypeLabelTooLong('a'.repeat(DOC_TYPE_LABEL_MAX))).toBe(false);
+    expect(docTypeLabelTooLong('a'.repeat(DOC_TYPE_LABEL_MAX + 1))).toBe(true);
+    // 40 caracteres fuera del plano básico son 80 unidades UTF-16: caben.
+    expect(docTypeLabelTooLong('\u{1D49C}'.repeat(DOC_TYPE_LABEL_MAX))).toBe(false);
+    expect(docTypeLabelTooLong('\u{1D49C}'.repeat(DOC_TYPE_LABEL_MAX + 1))).toBe(true);
+    expect(docTypeLabelTooLong(`  ${'a'.repeat(DOC_TYPE_LABEL_MAX)}  `)).toBe(false);
   });
 });

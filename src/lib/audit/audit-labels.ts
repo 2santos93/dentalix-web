@@ -2,7 +2,7 @@ import type { AuditAction, AuditEvent, AuditResourceType } from './audit-api';
 import type { ClinicRole } from '@/lib/me/me-api';
 import type { BadgeProps } from '@/components/ui/badge';
 import { formatDate } from '@/lib/format/date';
-import { DOC_TYPE_LABEL } from '@/lib/patients/doc-type';
+import { DOC_TYPE_LABEL, genericDocTypeName } from '@/lib/patients/doc-type';
 import type { DocType } from '@/lib/patients/patients-api';
 
 // Copy en español (i18n-ready), como el resto de etiquetas de dominio.
@@ -453,7 +453,7 @@ function documentTypeNamesDetail(changedFields: string[] | undefined): string | 
   const names: string[] = [];
   for (const field of changedFields) {
     if (!Object.hasOwn(DOC_TYPE_LABEL, field)) return null;
-    names.push(DOC_TYPE_LABEL[field as DocType]);
+    names.push(genericDocTypeName(field as DocType));
   }
   return `Nombres de documentos: ${names.join(', ')}`;
 }

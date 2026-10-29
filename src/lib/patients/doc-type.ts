@@ -26,6 +26,24 @@ export const DOC_TYPE_LABEL: Readonly<Record<DocType, string>> = {
 
 /** R7: nombre libre del documento de un paciente. */
 export const DOC_TYPE_LABEL_MAX = 40;
+/**
+ * R7: el nombre libre como lo guarda la API: recortado, con los espacios
+ * internos juntados en uno; vacío = null.
+ */
+export function normalizeDocTypeLabel(raw: string): string | null {
+  const label = raw.trim().replace(/\s+/g, ' ');
+  return label === '' ? null : label;
+}
+
+/**
+ * R7: más de `DOC_TYPE_LABEL_MAX` caracteres tras normalizar. Cuenta puntos
+ * de código, no unidades UTF-16: por eso el campo no lleva `maxLength`, que
+ * cortaría antes un nombre con caracteres fuera del plano básico.
+ */
+export function docTypeLabelTooLong(raw: string): boolean {
+  return [...(normalizeDocTypeLabel(raw) ?? '')].length > DOC_TYPE_LABEL_MAX;
+}
+
 /** R16: nombre local de un tipo en la clínica. */
 export const DOC_TYPE_NAME_MAX = 60;
 
@@ -47,6 +65,11 @@ export function documentTypeName(
   if (!generic) return type;
   const local = Object.hasOwn(clinicNames, generic) ? clinicNames[generic] : null;
   return local || DOC_TYPE_LABEL[generic];
+}
+
+/** El nombre genérico de un tipo (R2), p. ej. para rotular los ajustes. */
+export function genericDocTypeName(type: DocType): string {
+  return DOC_TYPE_LABEL[type];
 }
 
 /** R8: «{nombre} {número}», o null sin número. */
