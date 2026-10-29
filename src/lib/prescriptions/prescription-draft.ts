@@ -1,8 +1,4 @@
-import type {
-  ClinicCountry,
-  PrescriptionItemInput,
-  PrescriptionTemplateItem,
-} from './prescriptions-api';
+import type { PrescriptionItemInput, PrescriptionTemplateItem } from './prescriptions-api';
 
 /**
  * Un medicamento tal como se edita en el formulario: todo texto, también los
@@ -64,10 +60,10 @@ export function draftFromTemplateItem(item: PrescriptionTemplateItem): ItemDraft
 }
 
 /**
- * Lo que se manda a la API: los vacíos NO viajan (la API, que conoce el país
- * de la sede, responde 400 en español con todo lo que falta). Los números se
- * mandan tal cual (con la coma decimal aceptada): un «7,5» llega como 7.5 y la
- * API responde que la duración debe ser un número entero.
+ * Lo que se manda a la API: los vacíos NO viajan (la API responde 400 en
+ * español con todo lo que falta). Los números se mandan tal cual (con la coma
+ * decimal aceptada): un «7,5» llega como 7.5 y la API responde que la duración
+ * debe ser un número entero.
  */
 export function itemInputFromDraft(draft: ItemDraft): PrescriptionItemInput {
   const input: Record<string, string | number> = {};
@@ -116,12 +112,12 @@ function numberError(field: (typeof NUMBER_FIELDS)[number], raw: string, require
 }
 
 /**
- * Validación en el cliente de UN medicamento, con las mismas reglas por país
- * que la API (`prescription-rules.ts`): así cada campo se marca junto al
- * control en vez de esperar al 400. Lo que el formulario no conoce (documento
- * o nacimiento del paciente) lo sigue diciendo la API.
+ * Validación en el cliente de UN medicamento, con las mismas reglas que la API
+ * (`prescription-rules.ts`): así cada campo se marca junto al control en vez
+ * de esperar al 400. Los envases son siempre opcionales. Lo que el formulario
+ * no conoce (el documento del paciente) lo sigue diciendo la API.
  */
-export function itemDraftErrors(draft: ItemDraft, country: ClinicCountry): ItemDraftErrors {
+export function itemDraftErrors(draft: ItemDraft): ItemDraftErrors {
   const errors: ItemDraftErrors = {};
   for (const [field, message] of REQUIRED_TEXT) {
     if (draft[field].trim() === '') errors[field] = message;
@@ -133,7 +129,7 @@ export function itemDraftErrors(draft: ItemDraft, country: ClinicCountry): ItemD
   if (draft.quantityUnit.trim() === '') {
     errors.quantityUnit = 'Falta la unidad (p. ej. tabletas).';
   }
-  const packages = numberError('packages', draft.packages, country === 'ES');
+  const packages = numberError('packages', draft.packages, false);
   if (packages) errors.packages = packages;
   return errors;
 }

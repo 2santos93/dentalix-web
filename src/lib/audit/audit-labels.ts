@@ -408,14 +408,55 @@ function ageOf(code: string): string | null {
   return match ? match[1] : null;
 }
 
+interface PrescriptionSettingsCode {
+  words: boolean;
+  record: boolean;
+  days: string;
+}
+
+/** Ajustes de la receta de un `statusChange` (`RX_W1_H0_V30`), o null. */
+function prescriptionSettingsOf(code: string): PrescriptionSettingsCode | null {
+  const match = /^RX_W([01])_H([01])_V(\d+)$/.exec(code);
+  return match ? { words: match[1] === '1', record: match[2] === '1', days: match[3] } : null;
+}
+
 /**
- * DX-328: el cambio de la mayoría de edad de la clínica, antes y después
- * («Mayoría de edad: 18 → 16 años»). null si el evento no es de ese ajuste.
+ * DX-324: el cambio de los ajustes de la receta, solo lo que cambió («Receta:
+ * cantidad en letras sí → no; validez 30 → 10 días»). null si los códigos no
+ * casan o no cambia nada.
+ */
+function prescriptionSettingsDetail(from: string, to: string): string | null {
+  const before = prescriptionSettingsOf(from);
+  const after = prescriptionSettingsOf(to);
+  if (!before || !after) return null;
+  const yesNo = (v: boolean) => (v ? 'sí' : 'no');
+  const parts: string[] = [];
+  if (before.words !== after.words) {
+    parts.push(`cantidad en letras ${yesNo(before.words)} → ${yesNo(after.words)}`);
+  }
+  if (before.record !== after.record) {
+    parts.push(`nº de historia clínica exigido ${yesNo(before.record)} → ${yesNo(after.record)}`);
+  }
+  if (before.days !== after.days) {
+    // La unidad concuerda con el número que tiene al lado: el de después.
+    const unit = after.days === '1' ? 'día' : 'días';
+    parts.push(`validez ${before.days} → ${after.days} ${unit}`);
+  }
+  return parts.length > 0 ? `Receta: ${parts.join('; ')}` : null;
+}
+
+/**
+ * Un cambio de ajustes de la clínica, antes y después. DX-328: la mayoría de
+ * edad («Mayoría de edad: 18 → 16 años»). DX-324: los ajustes de la receta.
+ * null si el evento no es de uno de esos ajustes.
  */
 export function clinicSettingsDetail(metadata: AuditMetadata): string | null {
-  if (metadata.reason !== 'MAJORITY_AGE_SETTINGS' || !metadata.statusChange) return null;
-  const before = ageOf(metadata.statusChange.from);
-  const after = ageOf(metadata.statusChange.to);
+  if (!metadata.statusChange) return null;
+  const { from, to } = metadata.statusChange;
+  if (metadata.reason === 'PRESCRIPTION_SETTINGS') return prescriptionSettingsDetail(from, to);
+  if (metadata.reason !== 'MAJORITY_AGE_SETTINGS') return null;
+  const before = ageOf(from);
+  const after = ageOf(to);
   if (before === null || after === null) return null;
   return `Mayoría de edad: ${before} → ${after} años`;
 }

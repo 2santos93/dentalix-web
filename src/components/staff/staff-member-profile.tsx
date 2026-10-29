@@ -43,9 +43,10 @@ const copy = {
   emailLabel: 'Correo electrónico',
   emailHint: 'El correo identifica la cuenta y no se puede cambiar desde aquí.',
   roleLabel: 'Rol',
-  licenseLabel: 'Registro profesional / nº de colegiado',
-  licenseHint:
-    'Lo exige la receta: en Colombia, RETHUS o tarjeta profesional; en España, nº de colegiado.',
+  licenseLabel: 'Nº de registro profesional',
+  licenseHint: 'Sale en las recetas que emite.',
+  specialtyLabel: 'Especialidad (opcional)',
+  specialtyHint: 'Sale en sus recetas, bajo su nombre.',
   save: 'Guardar cambios',
   saving: 'Guardando…',
   statusActive: 'Aceptado',
@@ -136,6 +137,7 @@ export function StaffMemberProfile({ token, userId }: StaffMemberProfileProps) {
   const [fullName, setFullName] = useState('');
   const [role, setRole] = useState<ClinicRole>('ASSISTANT');
   const [license, setLicense] = useState('');
+  const [specialty, setSpecialty] = useState('');
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
 
@@ -175,6 +177,7 @@ export function StaffMemberProfile({ token, userId }: StaffMemberProfileProps) {
         setFullName(data.fullName);
         setRole(data.role);
         setLicense(data.professionalLicense ?? '');
+        setSpecialty(data.professionalSpecialty ?? '');
         setUnlockRefused(null);
         setLoadError(null);
       } catch (err) {
@@ -205,6 +208,9 @@ export function StaffMemberProfile({ token, userId }: StaffMemberProfileProps) {
       if (license.trim() !== (member.professionalLicense ?? '')) {
         patch.professionalLicense = license.trim();
       }
+      if (specialty.trim() !== (member.professionalSpecialty ?? '')) {
+        patch.professionalSpecialty = specialty.trim();
+      }
       if (Object.keys(patch).length === 0) return;
       const updated = await updateStaff(token, userId, patch);
       const next = {
@@ -219,9 +225,14 @@ export function StaffMemberProfile({ token, userId }: StaffMemberProfileProps) {
           updated.professionalLicense !== undefined
             ? updated.professionalLicense
             : (member.professionalLicense ?? null),
+        professionalSpecialty:
+          updated.professionalSpecialty !== undefined
+            ? updated.professionalSpecialty
+            : (member.professionalSpecialty ?? null),
       };
       setMember(next);
       setLicense(next.professionalLicense ?? '');
+      setSpecialty(next.professionalSpecialty ?? '');
     } catch (err) {
       setSaveError(
         apiErrorMessage(err, { fallback: copy.genericSaveError, byStatus: { 409: copy.lastAdminRole } }),
@@ -307,7 +318,8 @@ export function StaffMemberProfile({ token, userId }: StaffMemberProfileProps) {
     !!member &&
     fullName === member.fullName &&
     role === member.role &&
-    license.trim() === (member.professionalLicense ?? '');
+    license.trim() === (member.professionalLicense ?? '') &&
+    specialty.trim() === (member.professionalSpecialty ?? '');
 
   return (
     <div className="flex flex-col gap-6">
@@ -376,19 +388,38 @@ export function StaffMemberProfile({ token, userId }: StaffMemberProfileProps) {
                   </select>
                 </FormField>
 
-                <FormField
-                  htmlFor="profile-license"
-                  label={copy.licenseLabel}
-                  hint={copy.licenseHint}
-                >
-                  <Input
-                    id="profile-license"
-                    type="text"
-                    maxLength={60}
-                    value={license}
-                    onChange={(e) => setLicense(e.target.value)}
-                  />
-                </FormField>
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <FormField
+                    htmlFor="profile-license"
+                    label={copy.licenseLabel}
+                    hint={copy.licenseHint}
+                    hintId="profile-license-hint"
+                  >
+                    <Input
+                      id="profile-license"
+                      type="text"
+                      maxLength={60}
+                      aria-describedby="profile-license-hint"
+                      value={license}
+                      onChange={(e) => setLicense(e.target.value)}
+                    />
+                  </FormField>
+                  <FormField
+                    htmlFor="profile-specialty"
+                    label={copy.specialtyLabel}
+                    hint={copy.specialtyHint}
+                    hintId="profile-specialty-hint"
+                  >
+                    <Input
+                      id="profile-specialty"
+                      type="text"
+                      maxLength={80}
+                      aria-describedby="profile-specialty-hint"
+                      value={specialty}
+                      onChange={(e) => setSpecialty(e.target.value)}
+                    />
+                  </FormField>
+                </div>
 
                 {saveError && <InlineError variant="summary">{saveError}</InlineError>}
 

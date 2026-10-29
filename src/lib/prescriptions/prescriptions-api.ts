@@ -16,16 +16,18 @@ export type CreatePrescriptionTemplateInput =
   components['schemas']['CreatePrescriptionTemplateDto'];
 export type UpdatePrescriptionTemplateInput =
   components['schemas']['UpdatePrescriptionTemplateDto'];
-export type ClinicCountry = components['schemas']['ClinicCountry'];
+export type PrescriptionLocationFormat = components['schemas']['PrescriptionLocationFormatDto'];
+export type PrescriptionSettings = components['schemas']['PrescriptionSettingsDto'];
 export type SafetyAlert = components['schemas']['SafetyAlertDto'];
 export type SafetyCheckItem = components['schemas']['SafetyCheckItemDto'];
 export type PrescriptionSafetyPreview = components['schemas']['PrescriptionSafetyPreviewDto'];
 export type PrescriptionStatus = components['schemas']['PrescriptionStatus'];
 
-export const COUNTRY_LABELS: Record<ClinicCountry, string> = {
-  CO: 'Colombia',
-  ES: 'España',
-};
+/** Validez de la receta, en días (ajuste de la clínica; mismos límites y texto que la API). */
+export const PRESCRIPTION_VALIDITY_DAYS_MIN = 1;
+export const PRESCRIPTION_VALIDITY_DAYS_MAX = 365;
+export const PRESCRIPTION_VALIDITY_DAYS_MESSAGE =
+  'La validez de la receta tiene que ser un número entero de días entre 1 y 365.';
 
 /** Leer recetas: los mismos roles que la API (CLINICAL_ROLES). Recepción no. */
 export const PRESCRIPTION_READ_ROLES: readonly ClinicRole[] = ['DENTIST', 'ASSISTANT', 'ADMIN'];
@@ -41,8 +43,13 @@ export function canIssuePrescriptions(role: ClinicRole | null): boolean {
   return role !== null && PRESCRIPTION_ISSUE_ROLES.includes(role);
 }
 
-/** Crear, editar y retirar plantillas (y el país de las sedes): solo ADMIN. */
+/** Crear, editar y retirar plantillas: solo ADMIN. */
 export function canManagePrescriptionTemplates(role: ClinicRole | null): boolean {
+  return role === 'ADMIN';
+}
+
+/** Cambiar los ajustes de la receta: solo ADMIN (`PUT /prescriptions/settings`). */
+export function canManagePrescriptionSettings(role: ClinicRole | null): boolean {
   return role === 'ADMIN';
 }
 
@@ -58,7 +65,7 @@ export function canVoidPrescription(
   return actor.role === 'ADMIN' || rx.professionalId === actor.userId;
 }
 
-/** `GET /prescriptions/issuer` — país y sede desde los que se emitiría. */
+/** `GET /prescriptions/issuer` — sede desde la que se emitiría y ajustes de la receta. */
 export async function getPrescriptionIssuer(token: string): Promise<PrescriptionIssuer> {
   return apiFetch<PrescriptionIssuer>('/prescriptions/issuer', { token });
 }
@@ -76,7 +83,7 @@ export async function listPatientPrescriptions(
 }
 
 /**
- * `POST /patients/:id/prescriptions`. 400 si falta un campo legal del país;
+ * `POST /patients/:id/prescriptions`. 400 si falta un campo obligatorio;
  * 409 si hay avisos de seguridad bloqueantes y no se enviaron
  * `safetyOverride: true` y `safetyOverrideReason` (DX-300).
  */
@@ -105,17 +112,21 @@ export async function checkPrescriptionSafety(
   });
 }
 
-/**
- * Enlace a la ficha técnica de la CIMA (AEMPS) por nº de registro del
- * medicamento, para revisar 4.3 (contraindicaciones), 4.5 (interacciones) y
- * 4.6 (embarazo). Solo lleva el nº de registro: ningún dato del paciente.
- * `null` si el nº no tiene forma de nº de registro.
- */
-export function cimaTechnicalSheetUrl(registrationNumber: string): string | null {
-  const nregistro = registrationNumber.trim();
-  if (!/^\d{4,10}(IP\d{0,4})?$/i.test(nregistro)) return null;
-  const n = encodeURIComponent(nregistro.toUpperCase());
-  return `https://cima.aemps.es/cima/dochtml/ft/${n}/FT_${n}.html`;
+/** `GET /prescriptions/settings`: cantidad en letras, nº de historia clínica y validez. */
+export async function getPrescriptionSettings(token: string): Promise<PrescriptionSettings> {
+  return apiFetch<PrescriptionSettings>('/prescriptions/settings', { token });
+}
+
+/** `PUT /prescriptions/settings` (solo ADMIN). Aplica a las recetas que se emitan desde ahora. */
+export async function savePrescriptionSettings(
+  token: string,
+  settings: PrescriptionSettings,
+): Promise<PrescriptionSettings> {
+  return apiFetch<PrescriptionSettings>('/prescriptions/settings', {
+    method: 'PUT',
+    body: settings,
+    token,
+  });
 }
 
 /** `GET /prescriptions/:id` — documento completo con `integrityOk`. */

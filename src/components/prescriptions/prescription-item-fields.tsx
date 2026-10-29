@@ -2,7 +2,6 @@
 import * as React from 'react';
 import { Trash2 } from 'lucide-react';
 import type { ItemDraft, ItemDraftErrors } from '@/lib/prescriptions/prescription-draft';
-import type { ClinicCountry } from '@/lib/prescriptions/prescriptions-api';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -27,11 +26,15 @@ const copy = {
 };
 
 /**
- * `prescription`: reglas del país (en ES el nº de envases es obligatorio).
+ * `prescription`: las reglas de la receta (marca, envases e indicaciones
+ * opcionales). `printQuantityInWords` es el ajuste de la clínica: solo con él
+ * la pista dice que la cantidad se imprime también en letras.
  * `template`: solo el principio activo es obligatorio; el resto se completa al
- * emitir.
+ * emitir. Sin la pista de las letras: lo decide el ajuste al emitir.
  */
-export type ItemFieldsMode = { kind: 'prescription'; country: ClinicCountry } | { kind: 'template' };
+export type ItemFieldsMode =
+  | { kind: 'prescription'; printQuantityInWords: boolean }
+  | { kind: 'template' };
 
 interface PrescriptionItemFieldsProps {
   index: number;
@@ -48,7 +51,7 @@ interface PrescriptionItemFieldsProps {
 /**
  * Los campos de UN medicamento de la receta (DX-013), agrupados en un
  * `fieldset` con su número. Sin `required` nativo a propósito: el modal valida
- * según el país y pasa `errors`, que se pintan junto a cada campo
+ * y pasa `errors`, que se pintan junto a cada campo
  * (`aria-invalid` + `aria-describedby`).
  */
 export function PrescriptionItemFields({
@@ -63,9 +66,10 @@ export function PrescriptionItemFields({
   const n = index + 1;
   const id = (field: keyof ItemDraft) => `${idPrefix}-${index}-${field}`;
   const template = mode.kind === 'template';
+  const quantityHint =
+    mode.kind === 'prescription' && mode.printQuantityInWords ? copy.totalQuantityHint : undefined;
   const label = (text: string, alwaysRequired = false) =>
     template && !alwaysRequired ? copy.optional(text) : text;
-  const packagesRequired = mode.kind === 'prescription' && mode.country === 'ES';
   const invalid = (field: keyof ItemDraft) =>
     errors[field]
       ? { 'aria-invalid': true as const, 'aria-describedby': fieldErrorId(id(field)) }
@@ -155,9 +159,9 @@ export function PrescriptionItemFields({
         {text('dose', copy.dose, '1 cápsula')}
         {text('frequency', copy.frequency, 'Cada 8 horas')}
         {number('durationDays', copy.durationDays, 365)}
-        {number('totalQuantity', copy.totalQuantity, 9999, true, copy.totalQuantityHint)}
+        {number('totalQuantity', copy.totalQuantity, 9999, true, quantityHint)}
         {text('quantityUnit', copy.quantityUnit, 'cápsulas')}
-        {number('packages', copy.packages, 99, packagesRequired && !template)}
+        {number('packages', copy.packages, 99, false)}
         {text('instructions', copy.instructions, 'Tomar después de las comidas', false)}
       </div>
     </fieldset>

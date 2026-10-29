@@ -13,17 +13,23 @@ type StaffMemberDto = components['schemas']['StaffMemberDto'];
  * Fila de `GET /staff` (`StaffMemberDto`). El DTO marca `locationIds` como
  * opcional porque el `PATCH` no lo devuelve, pero `GET /staff` lo manda
  * siempre (DX-089): `null` = todas las sedes (y siempre `null` en un ADMIN).
- * `professionalLicense` solo llega en el perfil y en el `PATCH`.
+ * `professionalLicense` y `professionalSpecialty` solo llegan en el perfil y en
+ * el `PATCH`.
  */
-export type StaffMember = Omit<StaffMemberDto, 'professionalLicense' | 'locationIds'> & {
+export type StaffMember = Omit<
+  StaffMemberDto,
+  'professionalLicense' | 'professionalSpecialty' | 'locationIds'
+> & {
   locationIds: string[] | null;
 };
 
 export interface UpdateStaffInput {
   fullName?: string;
   role?: ClinicRole;
-  /** Registro profesional / nº de colegiado (DX-013); `''` lo borra. */
+  /** Nº de registro profesional (DX-013); `''` lo borra. */
   professionalLicense?: string;
+  /** Especialidad del profesional, que la receta imprime bajo su nombre (DX-324); `''` la borra. */
+  professionalSpecialty?: string;
 }
 
 export async function listStaff(token: string): Promise<StaffMember[]> {
@@ -33,8 +39,8 @@ export async function listStaff(token: string): Promise<StaffMember[]> {
 }
 
 /**
- * `PATCH /staff/:userId` — update `fullName`, `role` and/or
- * `professionalLicense` (the response carries the license too).
+ * `PATCH /staff/:userId` — update `fullName`, `role`, `professionalLicense`
+ * and/or `professionalSpecialty` (the response carries both too).
  */
 export async function updateStaff(
   token: string,
@@ -137,8 +143,10 @@ export async function listStaffDirectory(
 
 export interface StaffMemberDetail extends StaffMember {
   status: 'ACTIVE' | 'INACTIVE';
-  /** Registro profesional (CO) / nº de colegiado (ES) que exige la receta (DX-013). */
+  /** Nº de registro profesional que exige la receta (DX-013). */
   professionalLicense?: string | null;
+  /** Especialidad del profesional (DX-324); `null` = sin especialidad. */
+  professionalSpecialty?: string | null;
   /**
    * DX-048: hasta cuándo no puede iniciar sesión por intentos fallidos (ISO);
    * `null` = sin bloqueo.

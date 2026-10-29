@@ -1,5 +1,5 @@
 import { regionalFormat, type HourCycle } from '@/lib/format/regional-format';
-import type { ClinicCountry } from '@/lib/prescriptions/prescriptions-api';
+import type { ClinicCountry } from './location-country';
 // Copia byte a byte de `prisma/reference/iana-zone-names.json` de la API: no se edita aquí.
 // La fuente es la API; `scripts/check-api-reference-sync.mjs` (CI) falla si
 // divergen. Ver src/lib/money/README.md.

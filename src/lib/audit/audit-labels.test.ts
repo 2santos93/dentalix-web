@@ -290,6 +290,59 @@ describe('clinicSettingsDetail (DX-328)', () => {
     ).toBe('Mayoría de edad: 18 → 16 años');
   });
 
+  it('clinicSettingsDetail renders Receta: cantidad en letras sí → no', () => {
+    expect(
+      clinicSettingsDetail({
+        reason: 'PRESCRIPTION_SETTINGS',
+        changedFields: ['printQuantityInWords'],
+        statusChange: { from: 'RX_W1_H0_V30', to: 'RX_W0_H0_V30' },
+      }),
+    ).toBe('Receta: cantidad en letras sí → no');
+  });
+
+  it('… nº de historia clínica exigido no → sí; validez 30 → 10 días', () => {
+    expect(
+      clinicSettingsDetail({
+        reason: 'PRESCRIPTION_SETTINGS',
+        statusChange: { from: 'RX_W0_H0_V30', to: 'RX_W0_H1_V10' },
+      }),
+    ).toBe('Receta: nº de historia clínica exigido no → sí; validez 30 → 10 días');
+    expect(
+      clinicSettingsDetail({
+        reason: 'PRESCRIPTION_SETTINGS',
+        statusChange: { from: 'RX_W0_H1_V1', to: 'RX_W1_H0_V365' },
+      }),
+    ).toBe('Receta: cantidad en letras no → sí; nº de historia clínica exigido sí → no; validez 1 → 365 días');
+  });
+
+  it.each([
+    ['RX_W0_H0_V1', 'RX_W0_H0_V30', 'Receta: validez 1 → 30 días'],
+    ['RX_W0_H0_V30', 'RX_W0_H0_V1', 'Receta: validez 30 → 1 día'],
+    ['RX_W0_H0_V30', 'RX_W0_H0_V365', 'Receta: validez 30 → 365 días'],
+  ])('validity unit agrees with the number next to it (%s → %s)', (from, to, text) => {
+    expect(clinicSettingsDetail({ reason: 'PRESCRIPTION_SETTINGS', statusChange: { from, to } })).toBe(text);
+  });
+
+  it.each([
+    ['RX_W2_H0_V30', 'RX_W0_H0_V30'],
+    ['RX_W1_H0_V30', 'RX_W1_H0'],
+    ['AGE_18', 'RX_W1_H0_V30'],
+    ['rx_w1_h0_v30', 'RX_W0_H0_V30'],
+    ['RX_W1_H0_V30', 'RX_W1_H0_V30'],
+  ])('a PRESCRIPTION_SETTINGS code that does not match (%s → %s) → null', (from, to) => {
+    expect(clinicSettingsDetail({ reason: 'PRESCRIPTION_SETTINGS', statusChange: { from, to } })).toBeNull();
+  });
+
+  it('PRESCRIPTION_SETTINGS without statusChange → null; majority-age codes stay its own', () => {
+    expect(clinicSettingsDetail({ reason: 'PRESCRIPTION_SETTINGS' })).toBeNull();
+    expect(
+      clinicSettingsDetail({ reason: 'MAJORITY_AGE_SETTINGS', statusChange: { from: 'RX_W1_H0_V30', to: 'RX_W0_H0_V30' } }),
+    ).toBeNull();
+    expect(
+      clinicSettingsDetail({ reason: 'MAJORITY_AGE_SETTINGS', statusChange: { from: 'AGE_18', to: 'AGE_21' } }),
+    ).toBe('Mayoría de edad: 18 → 21 años');
+  });
+
   it('null para otra reason', () => {
     expect(
       clinicSettingsDetail({ reason: 'CASH_SETTINGS', statusChange: { from: 'AGE_18', to: 'AGE_16' } }),

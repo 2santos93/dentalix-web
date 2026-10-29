@@ -1,18 +1,12 @@
 'use client';
 import * as React from 'react';
-import { useId, useState } from 'react';
-import { ExternalLink, Info, ShieldAlert } from 'lucide-react';
+import { useId } from 'react';
+import { Info, ShieldAlert } from 'lucide-react';
 import { SectionError } from '@/components/errors/section-error';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
-import { Input } from '@/components/ui/input';
 import { fieldClass } from '@/lib/ui/field-class';
 import { cn } from '@/lib/utils';
-import {
-  cimaTechnicalSheetUrl,
-  type ClinicCountry,
-  type PrescriptionSafetyPreview,
-  type SafetyAlert,
-} from '@/lib/prescriptions/prescriptions-api';
+import type { PrescriptionSafetyPreview, SafetyAlert } from '@/lib/prescriptions/prescriptions-api';
 
 export const safetyCopy = {
   title: 'Avisos de seguridad',
@@ -29,9 +23,6 @@ export const safetyCopy = {
     'Confirmo que conozco los avisos y prescribo igualmente bajo mi responsabilidad.',
   reasonLabel: 'Motivo para emitir pese a los avisos',
   reasonHint: 'Queda en la receta y no se puede cambiar.',
-  cimaLabel: 'Nº de registro del medicamento (opcional)',
-  cimaHint: 'Para abrir su ficha técnica en la CIMA de la AEMPS.',
-  cimaLink: 'Ficha técnica en la CIMA: 4.3 Contraindicaciones · 4.5 Interacciones · 4.6 Embarazo',
 };
 
 export const SAFETY_REASON_MAX = 500;
@@ -44,7 +35,6 @@ export type SafetyState =
 
 interface PrescriptionSafetyPanelProps {
   state: SafetyState;
-  country: ClinicCountry;
   onRetry: () => void;
   confirmed: boolean;
   onConfirmedChange: (confirmed: boolean) => void;
@@ -91,7 +81,6 @@ function AlertList({ alerts, tone }: { alerts: SafetyAlert[]; tone: 'blocking' |
  */
 export function PrescriptionSafetyPanel({
   state,
-  country,
   onRetry,
   confirmed,
   onConfirmedChange,
@@ -100,8 +89,6 @@ export function PrescriptionSafetyPanel({
   reasonError,
 }: PrescriptionSafetyPanelProps) {
   const titleId = useId();
-  const [registration, setRegistration] = useState('');
-  const cimaUrl = country === 'ES' ? cimaTechnicalSheetUrl(registration) : null;
   const preview = state.kind === 'idle' ? undefined : state.preview;
   const alerts = preview?.alerts ?? [];
   // El texto permanece idéntico si la respuesta no cambia; los controles
@@ -196,30 +183,6 @@ export function PrescriptionSafetyPanel({
           <h4 className="text-sm font-semibold text-ink">{safetyCopy.info(info.length)}</h4>
           <AlertList alerts={info} tone="info" />
         </div>
-      ) : null}
-
-      {country === 'ES' ? (
-        <FormField htmlFor="rx-cima" label={safetyCopy.cimaLabel} hint={safetyCopy.cimaHint}>
-          <Input
-            id="rx-cima"
-            inputMode="numeric"
-            autoComplete="off"
-            maxLength={16}
-            value={registration}
-            onChange={(e) => setRegistration(e.target.value)}
-          />
-          {cimaUrl ? (
-            <a
-              href={cimaUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-start gap-1 break-words text-sm text-primary underline underline-offset-2"
-            >
-              <ExternalLink aria-hidden className="mt-0.5 size-4 shrink-0" />
-              <span>{safetyCopy.cimaLink}</span>
-            </a>
-          ) : null}
-        </FormField>
       ) : null}
     </section>
   );

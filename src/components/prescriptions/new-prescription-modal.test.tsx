@@ -99,13 +99,12 @@ describe('NewPrescriptionModal', () => {
     mockedCheck.mockReset().mockResolvedValue(preview());
   });
 
-  it('dice desde qué sede y país se emite, y emite con los datos del formulario', async () => {
+  it('issuer line reads «Se emite desde {sede} · válida 30 días.» and emits the form data', async () => {
     const user = setupUser();
     mockedIssue.mockResolvedValue(makePrescription());
     const { onIssued, onOpenChange } = renderModal();
-    expect(
-      await screen.findByText(/Se emite desde Sede Principal \(Colombia\) · validez de 30 días/),
-    ).toBeInTheDocument();
+    expect(await screen.findByText('Se emite desde Sede Principal · válida 30 días.')).toBeInTheDocument();
+    expect(screen.getByLabelText('Válida desde')).toBeInTheDocument();
     await fillAmoxicilina(user);
     await submit(user);
     await waitFor(() =>
@@ -127,6 +126,12 @@ describe('NewPrescriptionModal', () => {
     );
     expect(onOpenChange).toHaveBeenCalledWith(false);
     expect(onIssued).toHaveBeenCalled();
+  });
+
+  it('issuer line reads «válida 1 día.» with a one-day validity', async () => {
+    mockedIssuer.mockResolvedValue(makeIssuer({ validityDays: 1 }));
+    renderModal();
+    expect(await screen.findByText('Se emite desde Sede Principal · válida 1 día.')).toBeInTheDocument();
   });
 
   it('parte de una plantilla y permite añadir otro medicamento', async () => {
@@ -409,22 +414,68 @@ describe('NewPrescriptionModal', () => {
     expect(screen.queryByText(/datos cambiaron|choca con el estado/i)).not.toBeInTheDocument();
   });
 
-  it('España: enlace a la ficha técnica de la CIMA solo con nº de registro y sin datos del paciente', async () => {
+  it('there is no medicine registration field or external link', async () => {
     const user = setupUser();
-    mockedIssuer.mockResolvedValue(makeIssuer({ country: 'ES', validityDays: 10, maxItems: 1 }));
-    renderModal();
-    await screen.findByText(/\(España\)/);
-    expect(screen.queryByRole('link', { name: /CIMA/ })).not.toBeInTheDocument();
-    await user.type(screen.getByLabelText('Nº de registro del medicamento (opcional)'), '62985');
-    const link = screen.getByRole('link', { name: /Ficha técnica en la CIMA/ });
-    expect(link).toHaveAttribute('href', 'https://cima.aemps.es/cima/dochtml/ft/62985/FT_62985.html');
-    expect(link.getAttribute('href')).not.toMatch(/p1|Ana/);
-  });
-
-  it('Colombia: sin campo de la CIMA', async () => {
     renderModal();
     await screen.findByText(/Se emite desde/);
-    expect(screen.queryByLabelText(/Nº de registro del medicamento/)).not.toBeInTheDocument();
+    await fillAmoxicilina(user);
+    await screen.findByText('Sin avisos para estos medicamentos.');
+    expect(screen.queryByRole('textbox', { name: /Nº de registro del medicamento/ })).not.toBeInTheDocument();
+    expect(screen.queryAllByRole('link').filter((a) => /aemps/i.test(a.getAttribute('href') ?? ''))).toEqual([]);
+    expect(screen.queryByRole('link')).not.toBeInTheDocument();
+  });
+
+  it('the words hint on «Cantidad total» shows only when the clinic prints quantities in words', async () => {
+    const hint = 'Se imprime también en letras.';
+    mockedIssuer.mockResolvedValue(makeIssuer({ printQuantityInWords: true }));
+    const { unmount } = render(
+      <NewPrescriptionModal open onOpenChange={jest.fn()} token="tok" patientId="p1" onIssued={jest.fn()} />,
+    );
+    await screen.findByText(/Se emite desde/);
+    expect(screen.getByText(hint)).toBeInTheDocument();
+    unmount();
+
+    mockedIssuer.mockResolvedValue(makeIssuer({ printQuantityInWords: false }));
+    renderModal();
+    await screen.findByText(/Se emite desde/);
+    expect(screen.queryByText(hint)).not.toBeInTheDocument();
+    const quantity = screen.getByLabelText(/cantidad total/i);
+    // Sin pista, el campo no apunta a ningún id que no exista.
+    for (const id of (quantity.getAttribute('aria-describedby') ?? '').split(' ').filter(Boolean)) {
+      expect(document.getElementById(id)).not.toBeNull();
+    }
+    expect(quantity).toHaveAccessibleDescription('');
+  });
+
+  it('the HC note shows only when the clinic requires it', async () => {
+    const note = 'Esta clínica exige el documento del paciente como nº de historia clínica.';
+    renderModal();
+    await screen.findByText(/Se emite desde/);
+    expect(screen.queryByText(note)).not.toBeInTheDocument();
+  });
+
+  it('the HC note shows when the clinic setting is on', async () => {
+    mockedIssuer.mockResolvedValue(makeIssuer({ requireClinicalRecordNumber: true }));
+    renderModal();
+    await screen.findByText(/Se emite desde/);
+    expect(
+      screen.getByText('Esta clínica exige el documento del paciente como nº de historia clínica.'),
+    ).toBeInTheDocument();
+  });
+
+  it('a 400 for the HC rule is shown in the form summary', async () => {
+    const user = setupUser();
+    const msg = 'Falta el número de historia clínica: registra el documento del paciente en sus datos';
+    mockedIssuer.mockResolvedValue(makeIssuer({ requireClinicalRecordNumber: true }));
+    mockedIssue.mockRejectedValue(new ApiError(400, msg));
+    const { onOpenChange } = renderModal();
+    await screen.findByText(/Se emite desde/);
+    await fillAmoxicilina(user);
+    await submit(user);
+    const alert = (await screen.findByText(msg)).closest('[role="alert"]') as HTMLElement;
+    expect(alert).toBeInTheDocument();
+    await waitFor(() => expect(alert.parentElement).toHaveFocus());
+    expect(onOpenChange).not.toHaveBeenCalledWith(false);
   });
 
   it('400 de la API: el resumen del error queda en el modal, visible y con el foco', async () => {
@@ -472,22 +523,18 @@ describe('NewPrescriptionModal', () => {
     expect(screen.getByLabelText(/^dosis/i)).toHaveAttribute('aria-invalid', 'true');
   });
 
-  it('España: el nº de envases y el nº de colegiado vacíos se marcan', async () => {
+  it('missing license reads «Falta tu nº de registro profesional.» next to «Tu nº de registro profesional»', async () => {
     const user = setupUser();
-    mockedIssuer.mockResolvedValue(
-      makeIssuer({ country: 'ES', validityDays: 10, maxItems: 1, professionalLicense: null }),
-    );
+    mockedIssuer.mockResolvedValue(makeIssuer({ professionalLicense: null }));
     renderModal();
-    await screen.findByText(/\(España\)/);
+    await screen.findByText(/Se emite desde/);
     await fillAmoxicilina(user);
     await submit(user);
-    const packages = screen.getByLabelText('Nº de envases');
-    expect(packages).toHaveAttribute('aria-invalid', 'true');
-    expect(packages).toHaveFocus();
-    expect(screen.getByLabelText('Tu nº de colegiado')).toHaveAttribute('aria-invalid', 'true');
-    expect(screen.getByLabelText('Tu nº de colegiado')).toHaveAccessibleDescription(
-      /Falta tu nº de colegiado/,
-    );
+    const license = screen.getByLabelText('Tu nº de registro profesional');
+    expect(license).toHaveAttribute('aria-invalid', 'true');
+    expect(license).toHaveAccessibleDescription(/Falta tu nº de registro profesional\./);
+    expect(license).toHaveFocus();
+    expect(screen.getByLabelText('Nº de envases (opcional)')).not.toHaveAttribute('aria-invalid');
     expect(mockedIssue).not.toHaveBeenCalled();
   });
 
@@ -527,7 +574,7 @@ describe('NewPrescriptionModal', () => {
     mockedIssuer.mockResolvedValue(makeIssuer({ professionalLicense: null }));
     mockedIssue.mockResolvedValue(makePrescription());
     renderModal();
-    await user.type(await screen.findByLabelText('Tu registro profesional'), 'TP-55');
+    await user.type(await screen.findByLabelText('Tu nº de registro profesional'), 'TP-55');
     await fillAmoxicilina(user);
     await submit(user);
     await waitFor(() =>
@@ -539,16 +586,54 @@ describe('NewPrescriptionModal', () => {
     );
   });
 
-  it('España: nº de envases obligatorio, fecha prevista de dispensación y un solo medicamento', async () => {
-    mockedIssuer.mockResolvedValue(
-      makeIssuer({ country: 'ES', validityDays: 10, maxItems: 1, professionalLicense: null }),
-    );
+  it('up to 10 medications for every clinic; the 11th shows «Una receta admite como mucho 10 medicamentos.»', async () => {
+    const user = setupUser();
+    const item = postExodoncia.items[0];
+    mockedTemplates.mockResolvedValue([
+      postExodoncia,
+      { ...postExodoncia, id: 'tpl11', name: 'Once', items: Array.from({ length: 11 }, () => item) },
+    ]);
     renderModal();
-    expect(await screen.findByText(/\(España\) · validez de 10 días/)).toBeInTheDocument();
-    expect(screen.getByLabelText('Nº de envases')).toBeInTheDocument();
-    expect(screen.getByLabelText('Fecha prevista de dispensación')).toBeInTheDocument();
-    expect(screen.getByLabelText('Tu nº de colegiado')).toBeInTheDocument();
-    expect(screen.getByRole('button', { name: 'Añadir medicamento' })).toBeDisabled();
+    const select = await screen.findByLabelText('Partir de una plantilla');
+    await waitFor(() => expect(select).not.toBeDisabled());
+    const add = screen.getByRole('button', { name: 'Añadir medicamento' });
+    for (let i = 1; i < 10; i++) await user.click(add);
+    expect(screen.getAllByRole('group', { name: /^Medicamento \d+$/ })).toHaveLength(10);
+    expect(add).toBeDisabled();
+    expect(screen.queryByText(/admite como mucho/)).not.toBeInTheDocument();
+    await user.selectOptions(select, 'tpl11');
+    expect(screen.getByText('Una receta admite como mucho 10 medicamentos.')).toBeInTheDocument();
+    expect(screen.getByRole('button', { name: 'Emitir receta' })).toBeDisabled();
+  });
+
+  it('the issuer maxItems caps «Añadir medicamento»', async () => {
+    const user = setupUser();
+    mockedIssuer.mockResolvedValue(makeIssuer({ maxItems: 2 }));
+    renderModal();
+    await screen.findByText(/Se emite desde/);
+    const add = screen.getByRole('button', { name: 'Añadir medicamento' });
+    expect(add).toBeEnabled();
+    await user.click(add);
+    expect(add).toBeDisabled();
+  });
+
+  it('packages are optional: five items without packages submit', async () => {
+    const user = setupUser();
+    const item = postExodoncia.items[0];
+    mockedTemplates.mockResolvedValue([
+      { ...postExodoncia, id: 'tpl5', name: 'Cinco', items: Array.from({ length: 5 }, () => item) },
+    ]);
+    mockedIssue.mockResolvedValue(makePrescription());
+    renderModal();
+    const select = await screen.findByLabelText('Partir de una plantilla');
+    await waitFor(() => expect(select).not.toBeDisabled());
+    await user.selectOptions(select, 'tpl5');
+    expect(screen.getAllByLabelText('Nº de envases (opcional)')).toHaveLength(5);
+    await submit(user);
+    await waitFor(() => expect(mockedIssue).toHaveBeenCalled());
+    const sent = mockedIssue.mock.calls[0][2];
+    expect(sent.items).toHaveLength(5);
+    for (const sentItem of sent.items) expect(sentItem).not.toHaveProperty('packages');
   });
 
   it('si el emisor no carga: error de sección con reintento y sin poder emitir', async () => {

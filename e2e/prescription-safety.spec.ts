@@ -69,7 +69,7 @@ test('receta con aviso bloqueante (warfarina + ibuprofeno): 390/1440, claro/oscu
   await panel.getByRole('button', { name: 'Nueva receta' }).click();
   const dialog = page.getByRole('dialog', { name: 'Nueva receta' });
   await expect(dialog.getByText(/Se emite desde/)).toBeVisible();
-  await dialog.getByLabel('Tu registro profesional').fill('TP-300');
+  await dialog.getByLabel('Tu nº de registro profesional').fill('TP-300');
   await dialog.getByLabel('Principio activo (DCI)').fill('Ibuprofeno');
   await dialog.getByLabel('Concentración').fill('400 mg');
   await dialog.getByLabel('Forma farmacéutica').fill('Comprimido');
