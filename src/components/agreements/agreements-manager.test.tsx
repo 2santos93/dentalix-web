@@ -51,8 +51,7 @@ const mockedNotify = notifyError as jest.MockedFunction<typeof notifyError>;
 const sanitasPayer: Payer = {
   id: 'payer-1',
   name: 'Sanitas',
-  type: 'EPS_CO',
-  country: 'CO',
+  type: 'PUBLIC_SYSTEM',
   active: true,
   createdAt: '2026-10-01T00:00:00.000Z',
   updatedAt: '2026-10-01T00:00:00.000Z',
@@ -70,7 +69,7 @@ const norte: ClinicLocation = clinicLocation({
 const porcentaje: Agreement = {
   id: 'ag-1',
   name: 'Convenio Sanitas',
-  payer: { id: 'payer-1', name: 'Sanitas', type: 'PREPAGADA_CO' },
+  payer: { id: 'payer-1', name: 'Sanitas', type: 'PREPAID_PLAN' },
   kind: 'PERCENT_DISCOUNT',
   percent: 15,
   percentByCategory: { Preventiva: 20, Endodoncia: 5 },
@@ -162,10 +161,10 @@ describe('AgreementsManager (DX-105)', () => {
     expect(mockedCatalog).toHaveBeenCalledWith('tok', { kind: 'PROCEDURE' });
   });
 
-  it('SEC-047: un convenio de pagador OTRO avisa de que solo lo asigna un administrador', async () => {
+  it('SEC-047: un convenio de pagador OTHER avisa de que solo lo asigna un administrador', async () => {
     mockedList.mockResolvedValue([
       porcentaje,
-      { ...porcentaje, id: 'ag-9', name: 'Cortesía socios', payer: { id: 'payer-9', name: 'Cortesía', type: 'OTRO' } },
+      { ...porcentaje, id: 'ag-9', name: 'Cortesía socios', payer: { id: 'payer-9', name: 'Cortesía', type: 'OTHER' } },
     ]);
     render(<AgreementsManager token="tok" allowed />);
     const table = await screen.findByRole('table', { name: 'Convenios' });
@@ -176,6 +175,18 @@ describe('AgreementsManager (DX-105)', () => {
     expect(rows[2]).toHaveTextContent(warning);
     const list = screen.getByRole('list', { name: 'Convenios' });
     expect(within(list).getByText(warning)).toBeInTheDocument();
+  });
+
+  // Excepción G5.3 (DX-334): tipo de pagador anterior a DX-326.
+  it('legacy: un convenio de pagador OTRO de una API anterior sigue avisando de que es interno', async () => {
+    mockedList.mockResolvedValue([
+      { ...porcentaje, id: 'ag-9', name: 'Cortesía socios', payer: { id: 'payer-9', name: 'Cortesía', type: 'OTRO' as never } },
+    ]);
+    render(<AgreementsManager token="tok" allowed />);
+    const table = await screen.findByRole('table', { name: 'Convenios' });
+    expect(within(table).getAllByRole('row')[1]).toHaveTextContent(
+      'Solo un administrador podrá asignarlo. Si es una aseguradora o una empresa, reclasifica el pagador.',
+    );
   });
 
   it('vacío: enseña qué hacer', async () => {

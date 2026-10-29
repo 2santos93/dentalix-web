@@ -74,8 +74,7 @@ test.beforeAll(async ({ request }) => {
   await addStaffViaApi(request, session, { ...dentist, role: 'DENTIST', password });
   const payer = await apiPost<{ id: string }>(request, session, '/payers', {
     name: payerName,
-    type: 'EPS_CO',
-    country: 'CO',
+    type: 'PUBLIC_SYSTEM',
   });
   payerId = payer.id;
   await apiPost(request, session, '/catalog/items', {

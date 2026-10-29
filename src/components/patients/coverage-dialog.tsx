@@ -13,7 +13,7 @@ import {
   requiresMemberNumber,
 } from '@/lib/patients/member-number';
 import type { Payer } from '@/lib/payers/payers-api';
-import { PAYER_TYPE_LABELS } from '@/components/payers/payer-labels';
+import { payerTypeLabel } from '@/components/payers/payer-labels';
 import { PayerFormModal } from '@/components/payers/payer-form-modal';
 import { FormModal } from '@/components/shared/form-modal';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
@@ -246,7 +246,7 @@ export function CoverageDialog({
             <option value="">{copy.payerPlaceholder}</option>
             {options.map((p) => (
               <option key={p.id} value={p.id}>
-                {p.name} · {PAYER_TYPE_LABELS[p.type]}
+                {p.name} · {payerTypeLabel(p.type)}
               </option>
             ))}
           </select>

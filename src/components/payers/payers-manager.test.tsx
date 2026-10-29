@@ -23,14 +23,13 @@ const mockedNotify = notifyError as jest.MockedFunction<typeof notifyError>;
 const sanitas: Payer = {
   id: 'payer-1',
   name: 'Sanitas',
-  type: 'EPS_CO',
-  country: 'CO',
+  type: 'PUBLIC_SYSTEM',
   active: true,
   createdAt: '2026-10-01T00:00:00.000Z',
   updatedAt: '2026-10-01T00:00:00.000Z',
 };
-const adeslas: Payer = { ...sanitas, id: 'payer-2', name: 'Adeslas', type: 'MUTUA_ES', country: 'ES' };
-const acme: Payer = { ...sanitas, id: 'payer-3', name: 'Acme', type: 'EMPRESA', country: null, active: false };
+const adeslas: Payer = { ...sanitas, id: 'payer-2', name: 'Adeslas', type: 'INSURER' };
+const acme: Payer = { ...sanitas, id: 'payer-3', name: 'Acme', type: 'EMPLOYER', active: false };
 
 describe('PayersManager (DX-153)', () => {
   beforeEach(() => {
@@ -44,29 +43,56 @@ describe('PayersManager (DX-153)', () => {
     expect(mockedList).not.toHaveBeenCalled();
   });
 
-  it('lista activos e inactivos con tipo, país y estado', async () => {
+  it('lista pagadores activos e inactivos con tipo y estado, sin columna de país', async () => {
     render(<PayersManager token="tok" allowed />);
     const table = await screen.findByRole('table', { name: 'Pagadores' });
     const rows = within(table).getAllByRole('row');
-    expect(rows[1]).toHaveTextContent('Sanitas');
-    expect(rows[1]).toHaveTextContent('EPS (Colombia)');
-    expect(rows[1]).toHaveTextContent('Colombia');
-    expect(rows[1]).toHaveTextContent('Activo');
-    expect(rows[2]).toHaveTextContent('Adeslas');
-    expect(rows[2]).toHaveTextContent('Mutua (España)');
-    expect(rows[2]).toHaveTextContent('España');
-    expect(rows[3]).toHaveTextContent('Acme');
-    expect(rows[3]).toHaveTextContent('Empresa');
-    expect(rows[3]).toHaveTextContent('—');
-    expect(rows[3]).toHaveTextContent('Inactivo');
+    expect(
+      within(rows[0])
+        .getAllByRole('columnheader')
+        .map((h) => h.textContent),
+    ).toEqual(['Nombre', 'Tipo', 'Estado', 'Acciones']);
+    const cells = (row: HTMLElement) =>
+      within(row)
+        .getAllByRole('cell')
+        .slice(0, 3)
+        .map((c) => c.textContent);
+    expect(cells(rows[1])).toEqual(['Sanitas', 'Sistema público de salud', 'Activo']);
+    expect(cells(rows[2])).toEqual(['Adeslas', 'Aseguradora', 'Activo']);
+    expect(cells(rows[3])).toEqual(['Acme', 'Empresa', 'Inactivo']);
+    expect(within(table).queryByText('País')).toBeNull();
     expect(screen.getByText('3 pagadores')).toBeInTheDocument();
     expect(mockedList).toHaveBeenCalledWith('tok', { includeInactive: true });
   });
 
-  it('vacío: enseña qué hacer', async () => {
+  it('la tarjeta móvil solo muestra la etiqueta del tipo', async () => {
+    render(<PayersManager token="tok" allowed />);
+    const list = await screen.findByRole('list', { name: 'Pagadores' });
+    const cards = within(list).getAllByRole('listitem');
+    expect(within(cards[0]).getByText('Sistema público de salud')).toBeInTheDocument();
+    expect(within(cards[1]).getByText('Aseguradora')).toBeInTheDocument();
+    expect(within(cards[2]).getByText('Empresa')).toBeInTheDocument();
+    expect(within(list).queryByText(/·/)).toBeNull();
+  });
+
+  // Excepción G5.3 (DX-334): tipo de pagador anterior a DX-326.
+  it('legacy: una fila con un código de una API anterior muestra la etiqueta genérica', async () => {
+    mockedList.mockResolvedValue([{ ...sanitas, type: 'EPS_CO' as never }]);
+    render(<PayersManager token="tok" allowed />);
+    const list = await screen.findByRole('list', { name: 'Pagadores' });
+    expect(within(within(list).getAllByRole('listitem')[0]).getByText('Sistema público de salud')).toBeInTheDocument();
+    expect(screen.queryByText('EPS_CO')).toBeNull();
+  });
+
+  it('vacío: dice que aún no hay pagadores y cuáles crear', async () => {
     mockedList.mockResolvedValue([]);
     render(<PayersManager token="tok" allowed />);
     expect(await screen.findByText('Todavía no hay pagadores.')).toBeInTheDocument();
+    expect(
+      screen.getByText(
+        'Crea las aseguradoras, planes prepago, sistemas públicos o empresas con las que trabajas para registrar la cobertura de tus pacientes.',
+      ),
+    ).toBeInTheDocument();
   });
 
   it('error de carga con reintento', async () => {
@@ -79,26 +105,20 @@ describe('PayersManager (DX-153)', () => {
     expect(mockedList).toHaveBeenCalledTimes(2);
   });
 
-  it('crea un pagador: valida antes de enviar y lo añade ordenado', async () => {
+  it('crea un pagador sin país y lo añade ordenado', async () => {
     const user = setupUser();
-    mockedCreate.mockResolvedValue({ ...sanitas, id: 'payer-4', name: 'Bupa', type: 'MUTUA_ES', country: 'ES' });
+    mockedCreate.mockResolvedValue({ ...sanitas, id: 'payer-4', name: 'Bupa', type: 'INSURER' });
     render(<PayersManager token="tok" allowed />);
     await screen.findByRole('table', { name: 'Pagadores' });
 
     await user.click(screen.getByRole('button', { name: 'Nuevo pagador' }));
     const dialog = await screen.findByRole('dialog');
+    expect(within(dialog).queryByLabelText('País')).toBeNull();
     await user.type(within(dialog).getByLabelText('Nombre'), 'Bupa');
-    await user.selectOptions(within(dialog).getByLabelText('Tipo'), 'MUTUA_ES');
-    await user.click(within(dialog).getByRole('button', { name: 'Crear pagador' }));
-    expect(
-      await within(dialog).findByText('El tipo de pagador no corresponde con el país.'),
-    ).toBeInTheDocument();
-    expect(mockedCreate).not.toHaveBeenCalled();
-
-    await user.selectOptions(within(dialog).getByLabelText('País'), 'ES');
+    await user.selectOptions(within(dialog).getByLabelText('Tipo'), 'INSURER');
     await user.click(within(dialog).getByRole('button', { name: 'Crear pagador' }));
     await waitFor(() =>
-      expect(mockedCreate).toHaveBeenCalledWith('tok', { name: 'Bupa', type: 'MUTUA_ES', country: 'ES' }),
+      expect(mockedCreate).toHaveBeenCalledWith('tok', { name: 'Bupa', type: 'INSURER' }),
     );
     const table = await screen.findByRole('table', { name: 'Pagadores' });
     const names = within(table)
@@ -122,8 +142,7 @@ describe('PayersManager (DX-153)', () => {
     await waitFor(() =>
       expect(mockedUpdate).toHaveBeenCalledWith('tok', 'payer-1', {
         name: 'Sanitas Colombia',
-        type: 'EPS_CO',
-        country: 'CO',
+        type: 'PUBLIC_SYSTEM',
       }),
     );
     expect(await within(table).findByText('Sanitas Colombia')).toBeInTheDocument();

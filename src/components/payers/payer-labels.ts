@@ -1,17 +1,16 @@
-import type { PayerCountry, PayerType } from '@/lib/payers/payers-api';
+import { normalizePayerType } from '@/lib/payers/legacy-payer-type';
+import type { PayerType } from '@/lib/payers/payers-api';
 
 export const PAYER_TYPE_LABELS: Record<PayerType, string> = {
-  MUTUA_ES: 'Mutua (España)',
-  PREPAGADA_CO: 'Prepagada (Colombia)',
-  EPS_CO: 'EPS (Colombia)',
-  EMPRESA: 'Empresa',
-  OTRO: 'Otro / interno (cortesía, empleados)',
+  INSURER: 'Aseguradora',
+  PREPAID_PLAN: 'Plan prepago',
+  PUBLIC_SYSTEM: 'Sistema público de salud',
+  EMPLOYER: 'Empresa',
+  OTHER: 'Otro / interno (cortesía, empleados)',
 };
 
-export const PAYER_COUNTRY_LABELS: Record<PayerCountry, string> = {
-  CO: 'Colombia',
-  ES: 'España',
-};
-
-/** Texto de la columna «País» cuando el pagador no tiene país. */
-export const PAYER_NO_COUNTRY_LABEL = '—';
+/** Etiqueta del tipo; un código que no se reconoce se pinta tal cual. */
+export function payerTypeLabel(type: string): string {
+  const normalized = normalizePayerType(type);
+  return normalized === null ? type : PAYER_TYPE_LABELS[normalized];
+}

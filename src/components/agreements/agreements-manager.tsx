@@ -10,6 +10,7 @@ import {
   type Agreement,
 } from '@/lib/agreements/agreements-api';
 import { listPayers, type Payer } from '@/lib/payers/payers-api';
+import { isExternalPayer } from '@/lib/payers/payer-type';
 import { listPriceLists, type PriceList } from '@/lib/price-lists/price-lists-api';
 import { listCatalogItems } from '@/lib/odontogram/catalog-api';
 import { listLocations, type ClinicLocation } from '@/lib/locations/locations-api';
@@ -24,11 +25,11 @@ import { AgreementFormModal } from './agreement-form-modal';
 import { AGREEMENT_KIND_LABELS } from './agreement-labels';
 
 /**
- * SEC-047: un convenio de pagador OTRO solo lo asigna ADMIN. El relleno de
- * DX-153 creó pagadores OTRO para aseguradoras reales: aviso para reclasificar.
+ * SEC-047: un convenio de pagador OTHER solo lo asigna ADMIN. El relleno de
+ * DX-153 creó pagadores OTHER para aseguradoras reales: aviso para reclasificar.
  */
 function InternalPayerNote({ agreement }: { agreement: Agreement }) {
-  if (agreement.payer.type !== 'OTRO') return null;
+  if (isExternalPayer(agreement.payer.type)) return null;
   return (
     <span className="mt-1 flex items-start gap-1.5 text-xs text-warning">
       <AlertTriangle aria-hidden className="mt-0.5 size-3.5 shrink-0" />

@@ -721,7 +721,7 @@ export interface paths {
         get: operations["PatientAgreementsController_get"];
         /**
          * Asignar un convenio al paciente, sustituyendo el vigente (DX-105)
-         * @description La asignación anterior queda en el historial. Un convenio desactivado se acepta y la asignación sale con estado INACTIVE. SEC-047: un convenio de pagador externo exige `coverageId` con una cobertura vigente del paciente con ese pagador (cualquier rol); uno de pagador OTRO (cortesía, empleados…) solo lo asigna ADMIN, con la cobertura opcional.
+         * @description La asignación anterior queda en el historial. Un convenio desactivado se acepta y la asignación sale con estado INACTIVE. SEC-047: un convenio de pagador externo exige `coverageId` con una cobertura vigente del paciente con ese pagador (cualquier rol); uno de pagador OTHER (cortesía, empleados…) solo lo asigna ADMIN, con la cobertura opcional.
          */
         put: operations["PatientAgreementsController_put"];
         post?: never;
@@ -5888,14 +5888,13 @@ export interface components {
             promises: components["schemas"]["PaymentPromiseDto"][];
         };
         /** @enum {string} */
-        PayerType: "MUTUA_ES" | "PREPAGADA_CO" | "EPS_CO" | "EMPRESA" | "OTRO";
+        PayerType: "INSURER" | "PREPAID_PLAN" | "PUBLIC_SYSTEM" | "EMPLOYER" | "OTHER";
         CoveragePayerDto: {
             /** Format: uuid */
             id: string;
             /** @example Sanitas */
             name: string;
             type: components["schemas"]["PayerType"];
-            country: components["schemas"]["ClinicCountry"] | null;
             active: boolean;
         };
         PatientCoverageDto: {
@@ -5918,7 +5917,7 @@ export interface components {
             validTo: string | null;
             isPrimary: boolean;
             notes: string | null;
-            /** @description Copiada de la aseguradora en texto libre de la ficha (DX-153); la API no la crea. SEC-047: habilita a cualquier rol a asignar un convenio de pagador OTRO. */
+            /** @description Copiada de la aseguradora en texto libre de la ficha (DX-153); la API no la crea. SEC-047: habilita a cualquier rol a asignar un convenio de pagador OTHER. */
             migratedFromInsurerEps: boolean;
             /**
              * Format: uuid
@@ -5948,7 +5947,7 @@ export interface components {
             /** Format: uuid */
             payerId: string;
             planName?: string;
-            /** @description SEC-049: obligatorio con un pagador externo (todo tipo salvo OTRO), con la misma regla para todos: tras normalizar, de 4 a 40 caracteres (letras, dígitos, espacio, `-`, `.` o `/`), al menos un dígito y no un mismo carácter repetido; opcional con OTRO. */
+            /** @description SEC-049: obligatorio con un pagador externo (todo tipo salvo OTHER), con la misma regla para todos: tras normalizar, de 4 a 40 caracteres (letras, dígitos, espacio, `-`, `.` o `/`), al menos un dígito y no un mismo carácter repetido; opcional con OTHER. */
             memberNumber?: string;
             policyHolderName?: string;
             /** @example 2026-01-01 */
@@ -5983,7 +5982,6 @@ export interface components {
             /** @example Sanitas */
             name: string;
             type: components["schemas"]["PayerType"];
-            country: components["schemas"]["ClinicCountry"] | null;
             active: boolean;
             /** Format: date-time */
             createdAt: string;
@@ -5993,14 +5991,10 @@ export interface components {
         CreatePayerDto: {
             name: string;
             type: components["schemas"]["PayerType"];
-            /** @description MUTUA_ES exige ES; PREPAGADA_CO y EPS_CO exigen CO; EMPRESA y OTRO admiten cualquiera o ninguno. */
-            country?: components["schemas"]["ClinicCountry"];
         };
         UpdatePayerDto: {
             name?: string;
             type?: components["schemas"]["PayerType"];
-            /** @description null = sin país. MUTUA_ES, PREPAGADA_CO y EPS_CO lo exigen. */
-            country?: components["schemas"]["ClinicCountry"] | null;
             /** @description false = sale de los selectores. */
             active?: boolean;
         };
@@ -6080,7 +6074,7 @@ export interface components {
             id: string;
             /** @example Sanitas */
             name: string;
-            /** @description SEC-047: con un pagador externo, asignar el convenio exige una cobertura viva del paciente con él; OTRO (cortesía, empleados…) solo lo asigna ADMIN. */
+            /** @description SEC-047: con un pagador externo, asignar el convenio exige una cobertura viva del paciente con él; OTHER (cortesía, empleados…) solo lo asigna ADMIN. */
             type: components["schemas"]["PayerType"];
         };
         AgreementPriceListDto: {
@@ -15364,7 +15358,7 @@ export interface operations {
                     "application/json": components["schemas"]["PatientCoverageDto"];
                 };
             };
-            /** @description Validación, cobertura sin nº de afiliado o de un pagador interno (OTRO) */
+            /** @description Validación, cobertura sin nº de afiliado o de un pagador interno (OTHER) */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -15437,7 +15431,7 @@ export interface operations {
                     "application/json": components["schemas"]["PayerDto"];
                 };
             };
-            /** @description Nombre fuera de 2–120 caracteres o tipo que no corresponde con el país */
+            /** @description Nombre fuera de 2–120 caracteres o tipo desconocido */
             400: {
                 headers: {
                     [name: string]: unknown;
@@ -15615,7 +15609,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Convenio sin pagador externo (pagador OTRO) asignado por un rol distinto de ADMIN */
+            /** @description Convenio sin pagador externo (pagador OTHER) asignado por un rol distinto de ADMIN */
             403: {
                 headers: {
                     [name: string]: unknown;

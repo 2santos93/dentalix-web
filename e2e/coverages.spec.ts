@@ -1,6 +1,6 @@
-import { test, expect, type Page } from './support/test';
+import { test, expect, type Locator, type Page } from './support/test';
 import { randomUUID } from 'node:crypto';
-import path from 'node:path';
+import { mkdirSync } from 'node:fs';
 import { addStaffViaApi, apiPost, registerClinicViaApi, type ApiSession } from './support/api';
 import { loginAs } from './support/auth';
 import { lastSlotToday, sedeDayFromToday } from './support/clock';
@@ -10,13 +10,17 @@ import { API_URL, tenantOrigin } from './support/urls';
 /**
  * e2e DX-153: catálogo de pagadores (Ajustes) y cobertura del paciente.
  *
- * ADMIN crea «Sura EPS»; RECEPCIÓN añade una cobertura vencida desde la ficha
+ * ADMIN crea «Sura EPS» (sistema público de salud) y un pagador de cada tipo,
+ * sin que ninguno pida país (DX-326); RECEPCIÓN añade una cobertura vencida desde la ficha
  * (fila «Vencida» + chip «Cobertura vencida» en la cabecera), la pone vigente
  * y el chip desaparece; vencida otra vez por la API, el chip sale en la
  * tarjeta de la agenda; el listado de pacientes se filtra por pagador. Todo a
  * 390 px sin scroll horizontal y con el diálogo dentro de la pantalla.
  *
- * Con `DX153_QA_SHOTS=1` además deja capturas de QA en `DX153_QA_DIR`
+ * Una cobertura de un pagador «Otro / interno» no pide nº de afiliado ni lleva
+ * insignia de verificación.
+ *
+ * Capturas a 1440 y 390 px, claro y oscuro, en E2E_QA_DIR si está definido
  * (la CI no lo define y no escribe nada).
  */
 const suffix = (process.env.E2E_RUN_SUFFIX ?? randomUUID()).replace(/[^a-z0-9]/gi, '').toLowerCase();
@@ -28,28 +32,46 @@ const reception = { fullName: 'Rita Recepción', email: `rita.cob.${suffix}@exam
 const lastName = `Cobertura${suffix}`.slice(0, 40);
 const otherLastName = `SinPlan${suffix}`.slice(0, 40);
 const payerName = 'Sura EPS';
-const payerOption = `${payerName} · EPS (Colombia)`;
+const payerOption = `${payerName} · Sistema público de salud`;
 const twoDaysAgo = sedeDayFromToday(-2);
 const tomorrow = sedeDayFromToday(1);
 
-const QA_DIR = path.resolve(process.env.DX153_QA_DIR ?? 'e2e/.qa-shots');
-const QA = process.env.DX153_QA_SHOTS === '1';
+const QA_DIR = process.env.E2E_QA_DIR;
+const VIEWPORTS = [
+  { width: 1440, height: 900 },
+  { width: 390, height: 844 },
+] as const;
 
 /**
- * Captura de QA estable: sin animaciones ni transiciones a medias (modo
- * oscuro, fundido del diálogo), con las fuentes cargadas y la red en reposo.
+ * La captura `${name}-${width}-${scheme}.png` a 1440 y 390 px, en claro y
+ * oscuro, sin scroll horizontal; deja la página a 1440. `target` se desplaza a
+ * la vista en cada ancho.
  */
-async function shot(page: Page, name: string, fullPage = false) {
-  if (!QA) return;
-  await page.evaluate(() => document.fonts.ready);
-  await page.waitForLoadState('networkidle');
-  await page.screenshot({ path: path.join(QA_DIR, `${name}.png`), fullPage, animations: 'disabled' });
+async function shot(page: Page, name: string, target?: Locator): Promise<void> {
+  if (!QA_DIR) return;
+  mkdirSync(QA_DIR, { recursive: true });
+  for (const viewport of VIEWPORTS) {
+    await page.setViewportSize(viewport);
+    await target?.evaluate((el) => el.scrollIntoView({ block: 'start' }));
+    await expectNoHorizontalScroll(page);
+    // Sin el hover del último clic y sin transiciones de color a medias.
+    await page.mouse.move(0, 0);
+    for (const scheme of ['light', 'dark'] as const) {
+      await page.emulateMedia({ colorScheme: scheme });
+      await expect(page.locator('html')).toHaveClass(scheme === 'dark' ? /\bdark\b/ : /^(?!.*\bdark\b)/);
+      await page.evaluate(() => Promise.all(document.getAnimations().map((a) => a.finished.catch(() => undefined))));
+      await page.screenshot({ path: `${QA_DIR}/${name}-${viewport.width}-${scheme}.png`, fullPage: false });
+    }
+    await page.emulateMedia({ colorScheme: 'light' });
+  }
+  await page.setViewportSize(VIEWPORTS[0]);
 }
 
 let session: ApiSession;
 let patientId = '';
 let coverageId = '';
 let payerId = '';
+let otherPatientId = '';
 
 test.describe.configure({ mode: 'serial' });
 
@@ -74,13 +96,13 @@ test.beforeAll(async ({ request }) => {
     docNumber: `CB${suffix}`.slice(0, 20),
     sex: 'F',
   }));
-  await apiPost(request, session, '/patients', {
+  ({ id: otherPatientId } = await apiPost<{ id: string }>(request, session, '/patients', {
     firstName: 'Bruno',
     lastName: otherLastName,
     docType: 'CC',
     docNumber: `CBO${suffix}`.slice(0, 20),
     sex: 'M',
-  });
+  }));
 });
 
 function coverageSection(page: Page) {
@@ -98,22 +120,20 @@ test('ADMIN crea «Sura EPS» en Ajustes y la ve activa; a 390 px sin scroll hor
   await page.getByRole('button', { name: 'Nuevo pagador' }).first().click();
   const dialog = page.getByRole('dialog', { name: 'Nuevo pagador' });
   await dialog.getByLabel('Nombre').fill(payerName);
-  await dialog.getByLabel('Tipo').selectOption('EPS_CO');
-  await dialog.getByLabel('País').selectOption('CO');
+  await dialog.getByLabel('Tipo').selectOption('PUBLIC_SYSTEM');
+  await expect(dialog.getByLabel('País')).toHaveCount(0);
+  await shot(page, 'payer-form');
   await dialog.getByRole('button', { name: 'Crear pagador' }).click();
   await expect(dialog).toBeHidden({ timeout: 10_000 });
 
   const table = page.getByRole('table', { name: 'Pagadores' });
   const row = table.getByRole('row', { name: new RegExp(payerName) });
-  await expect(row).toContainText('EPS (Colombia)');
-  await expect(row.getByRole('cell').nth(2)).toHaveText('Colombia');
-  await expect(row.getByText('Activo', { exact: true })).toBeVisible();
-  await shot(page, 'ajustes-pagadores-1440');
+  await expect(row).toContainText('Sistema público de salud');
+  await expect(row.getByRole('cell').nth(2)).toHaveText('Activo');
 
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(page.getByText(payerName).locator('visible=true').first()).toBeVisible();
   await expectNoHorizontalScroll(page);
-  await shot(page, 'ajustes-pagadores-390');
 
   await page.getByRole('button', { name: 'Nuevo pagador' }).first().click();
   const modal390 = page.getByRole('dialog', { name: 'Nuevo pagador' });
@@ -125,6 +145,49 @@ test('ADMIN crea «Sura EPS» en Ajustes y la ve activa; a 390 px sin scroll hor
   const list = await page.request.get(`${API_URL}/payers`, { headers: session.headers });
   const payers = (await list.json()) as { id: string; name: string }[];
   payerId = payers.find((p) => p.name === payerName)!.id;
+});
+
+test('an admin creates one payer of each type and none asks for a country', async ({ page }) => {
+  const created = [
+    { name: 'Aseguradora Horizonte', type: 'INSURER', label: 'Aseguradora' },
+    { name: 'Plan Bienestar', type: 'PREPAID_PLAN', label: 'Plan prepago' },
+    { name: 'Servicio Público Regional', type: 'PUBLIC_SYSTEM', label: 'Sistema público de salud' },
+    { name: 'Industrias Delta', type: 'EMPLOYER', label: 'Empresa' },
+    { name: 'Cortesía del equipo', type: 'OTHER', label: 'Otro / interno (cortesía, empleados)' },
+  ] as const;
+
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.emulateMedia({ colorScheme: 'light' });
+  await loginAs(page, origin, admin.email, password);
+  await page.goto(`${origin}/settings/pagadores`);
+  const table = page.getByRole('table', { name: 'Pagadores' });
+  await expect(table.getByRole('row', { name: new RegExp(payerName) })).toBeVisible({ timeout: 15_000 });
+
+  for (const payer of created) {
+    await page.getByRole('button', { name: 'Nuevo pagador' }).first().click();
+    const dialog = page.getByRole('dialog', { name: 'Nuevo pagador' });
+    await expect(dialog.getByLabel('Tipo').locator('option:not([disabled])')).toHaveText(
+      created.map((p) => p.label),
+    );
+    await expect(dialog.getByLabel('País')).toHaveCount(0);
+    await dialog.getByLabel('Nombre').fill(payer.name);
+    await dialog.getByLabel('Tipo').selectOption(payer.type);
+    if (payer.type === 'OTHER') {
+      await expect(dialog).toContainText('solo un administrador podrá asignarlos');
+    }
+    await dialog.getByRole('button', { name: 'Crear pagador' }).click();
+    await expect(dialog).toBeHidden({ timeout: 10_000 });
+
+    const row = table.getByRole('row', { name: new RegExp(payer.name) });
+    await expect(row.getByRole('cell').nth(1)).toHaveText(payer.label);
+    await expect(row.getByRole('cell').nth(2)).toHaveText('Activo');
+  }
+  await expect(table.getByRole('columnheader', { name: 'País' })).toHaveCount(0);
+  await shot(page, 'payers-list');
+
+  const list = await page.request.get(`${API_URL}/payers`, { headers: session.headers });
+  const payers = (await list.json()) as Record<string, unknown>[];
+  for (const payer of payers) expect(payer).not.toHaveProperty('country');
 });
 
 test('RECEPCIÓN añade una cobertura vencida: fila «Vencida» y chip en la cabecera; al ponerla vigente el chip desaparece', async ({
@@ -145,7 +208,7 @@ test('RECEPCIÓN añade una cobertura vencida: fila «Vencida» y chip en la cab
   await dialog.getByLabel('Plan').fill('Plan Complementario');
   await dialog.getByLabel('Nº de afiliado o póliza').fill('987654');
   await dialog.getByLabel('Vigente hasta').fill(twoDaysAgo);
-  await shot(page, 'dialogo-cobertura-1440');
+  await shot(page, 'coverage-dialog');
   await dialog.getByRole('button', { name: 'Añadir', exact: true }).click();
   await expect(dialog).toBeHidden({ timeout: 10_000 });
 
@@ -160,11 +223,7 @@ test('RECEPCIÓN añade una cobertura vencida: fila «Vencida» y chip en la cab
   await expect(chip).toHaveCount(1);
   await expect(chip).toContainText('Cobertura vencida');
   await expectNoHorizontalScroll(page);
-  await shot(page, 'ficha-cobertura-1440', true);
-
-  await page.emulateMedia({ colorScheme: 'dark' });
-  await shot(page, 'ficha-cobertura-dark-1440', true);
-  await page.emulateMedia({ colorScheme: 'light' });
+  await shot(page, 'coverage-section', section);
 
   // Edita «Vigente hasta» a mañana: la cobertura vuelve a estar vigente.
   await row.getByRole('button', { name: `Editar la cobertura de ${payerName}` }).click();
@@ -202,7 +261,6 @@ test('390 px: la ficha con cobertura no se desplaza y el diálogo cabe en la pan
   await expect(section.getByText('Vencida', { exact: true })).toBeVisible({ timeout: 15_000 });
   await expect(page.getByTestId('coverage-chip')).toContainText('Cobertura vencida');
   await expectNoHorizontalScroll(page);
-  await shot(page, 'ficha-cobertura-390', true);
 
   await section.getByRole('button', { name: 'Añadir cobertura' }).click();
   const dialog = page.getByRole('dialog', { name: 'Añadir cobertura' });
@@ -254,18 +312,15 @@ test('SEC-049: el ADMIN verifica la cobertura y queda «Verificada» con quién 
     .click({ timeout: 15_000 });
   const confirm = page.getByRole('dialog', { name: 'Verificar cobertura' });
   await expect(confirm).toContainText('el nº de afiliado 987654 es de este paciente');
-  await shot(page, 'verificar-cobertura-1440');
   await confirm.getByRole('button', { name: 'Verificar', exact: true }).click();
   await expect(confirm).toBeHidden({ timeout: 10_000 });
   await expect(row.getByTestId('coverage-verification')).toHaveText('Verificada');
   await expect(row).toContainText(`Verificada por ${admin.fullName} el `);
   await expect(section.getByRole('button', { name: /^Verificar/ })).toHaveCount(0);
-  await shot(page, 'ficha-cobertura-verificada-1440', true);
 
   await page.setViewportSize({ width: 390, height: 844 });
   await expect(row.getByTestId('coverage-verification')).toBeVisible();
   await expectNoHorizontalScroll(page);
-  await shot(page, 'ficha-cobertura-verificada-390', true);
 });
 
 test('una cita corta de hoy con cobertura vencida muestra la marca en la agenda y en el detalle', async ({ page, request }) => {
@@ -294,7 +349,6 @@ test('una cita corta de hoy con cobertura vencida muestra la marca en la agenda 
   // Cita de 30 min: la tarjeta recorta el chip, así que el aviso es la marca de la fila de la hora.
   await card.scrollIntoViewIfNeeded();
   await expect(card.locator('[title="Cobertura vencida"]')).toBeVisible();
-  await shot(page, 'agenda-chip-1440');
 
   // El nombre accesible anuncia el aviso y nunca lleva el número de afiliado.
   const cardButton = card.getByRole('button').first();
@@ -337,8 +391,41 @@ test('el listado de pacientes filtrado por «Sura EPS» muestra solo a ese pacie
 
   await expect(page.getByText(otherLastName)).toHaveCount(0);
   await expect(page.getByText(lastName).first()).toBeVisible();
-  await shot(page, 'listado-filtro-1440');
 
   await page.setViewportSize({ width: 390, height: 844 });
   await expectNoHorizontalScroll(page);
+});
+
+test('an OTHER payer coverage needs no member number and shows no verification badge', async ({
+  page,
+}) => {
+  const otherPayer = 'Cortesía empleados';
+  await apiPost(page.request, session, '/payers', { name: otherPayer, type: 'OTHER' });
+
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.emulateMedia({ colorScheme: 'light' });
+  await loginAs(page, origin, admin.email, password);
+  await page.goto(`${origin}/patients/${otherPatientId}`);
+
+  const section = coverageSection(page);
+  await expect(section.getByText('Sin cobertura registrada')).toBeVisible({ timeout: 15_000 });
+  await section.getByRole('button', { name: 'Añadir cobertura' }).click();
+  const dialog = page.getByRole('dialog', { name: 'Añadir cobertura' });
+  await dialog
+    .getByLabel('Pagador')
+    .selectOption({ label: `${otherPayer} · Otro / interno (cortesía, empleados)` });
+  await expect(dialog.getByLabel('Número de afiliado')).toBeVisible();
+  await expect(dialog.getByLabel('Número de afiliado')).not.toHaveAttribute('aria-required', 'true');
+  await expect(dialog.getByLabel('Nº de afiliado o póliza')).toHaveCount(0);
+  await dialog.getByRole('button', { name: 'Añadir', exact: true }).click();
+  await expect(dialog).toBeHidden({ timeout: 10_000 });
+
+  const row = section.getByTestId('coverage-row');
+  await expect(row).toHaveCount(1);
+  await expect(row).toContainText(otherPayer);
+  await expect(row).toContainText('Otro / interno (cortesía, empleados)');
+  await expect(row).not.toContainText('Afiliado n.º');
+  await expect(row.getByTestId('coverage-verification')).toHaveCount(0);
+  // Ni siquiera el ADMIN tiene nada que verificar.
+  await expect(section.getByRole('button', { name: /^Verificar/ })).toHaveCount(0);
 });

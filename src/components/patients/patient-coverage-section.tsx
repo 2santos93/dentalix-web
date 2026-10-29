@@ -17,7 +17,7 @@ import {
   coverageStatusBadge,
   coverageValidityLabel,
 } from '@/lib/patients/coverage-presentation';
-import { PAYER_TYPE_LABELS } from '@/components/payers/payer-labels';
+import { payerTypeLabel } from '@/components/payers/payer-labels';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -229,7 +229,7 @@ export function PatientCoverageSection({
               <div className="flex min-w-0 flex-col gap-1">
                 <span className="flex min-w-0 flex-wrap items-center gap-2">
                   <span className="break-words font-medium text-ink">{c.payer.name}</span>
-                  <span className="text-sm text-muted">{PAYER_TYPE_LABELS[c.payer.type]}</span>
+                  <span className="text-sm text-muted">{payerTypeLabel(c.payer.type)}</span>
                 </span>
                 {c.planName ? <span className="break-words text-sm text-ink">{c.planName}</span> : null}
                 {c.memberNumber ? (

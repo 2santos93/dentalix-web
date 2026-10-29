@@ -11,7 +11,7 @@ import { PayersManager } from '@/components/payers/payers-manager';
 const copy = {
   title: 'Pagadores',
   description:
-    'Aseguradoras, EPS, mutuas y empresas que cubren a tus pacientes. Al registrar la cobertura de un paciente, eliges el pagador de esta lista.',
+    'Aseguradoras, planes prepago, sistemas públicos de salud y empresas que cubren a tus pacientes. Al registrar la cobertura de un paciente, eliges el pagador de esta lista.',
   checkingSession: 'Verificando sesión…',
 };
 

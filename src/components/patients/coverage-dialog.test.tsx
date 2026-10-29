@@ -26,8 +26,7 @@ const mockedCreatePayer = createPayer as jest.MockedFunction<typeof createPayer>
 const payer = (id: string, name: string, active = true): Payer => ({
   id,
   name,
-  type: 'OTRO',
-  country: null,
+  type: 'OTHER',
   active,
   createdAt: '2026-01-01T00:00:00.000Z',
   updatedAt: '2026-01-01T00:00:00.000Z',
@@ -39,7 +38,7 @@ const oldPayer = payer('pay-3', 'Mapfre', false);
 const existing: PatientCoverage = {
   id: 'c1',
   patientId: 'p1',
-  payer: { id: 'pay-3', name: 'Mapfre', type: 'OTRO', country: null, active: false },
+  payer: { id: 'pay-3', name: 'Mapfre', type: 'OTHER', active: false },
   planName: null,
   memberNumber: null,
   policyHolderName: null,
@@ -84,6 +83,14 @@ describe('CoverageDialog (DX-153)', () => {
     expect(names.join('|')).toContain('Sanitas');
     expect(names.join('|')).toContain('Axa');
     expect(names.join('|')).not.toContain('Mapfre');
+  });
+
+  it('DX-326: each payer option carries its generic type label', () => {
+    setup({ payers: [{ ...sanitas, type: 'PREPAID_PLAN' }, axa] });
+    const select = screen.getByLabelText('Pagador');
+    const names = within(select).getAllByRole('option').map((o) => o.textContent);
+    expect(names).toContain('Sanitas · Plan prepago');
+    expect(names).toContain('Axa · Otro / interno (cortesía, empleados)');
   });
 
   it('al editar incluye el pagador actual aunque esté inactivo', () => {
@@ -180,7 +187,7 @@ describe('CoverageDialog (DX-153)', () => {
     const payerDialog = await screen.findByRole('dialog', { name: 'Nuevo pagador' });
     await user.type(within(payerDialog).getByLabelText('Nombre'), 'Nueva EPS');
     // SEC-047: el tipo de pagador ya no viene preseleccionado.
-    await user.selectOptions(within(payerDialog).getByLabelText('Tipo'), 'EMPRESA');
+    await user.selectOptions(within(payerDialog).getByLabelText('Tipo'), 'EMPLOYER');
     await user.click(within(payerDialog).getByRole('button', { name: 'Crear pagador' }));
 
     await waitFor(() => expect(onPayerCreated).toHaveBeenCalledWith(created));
@@ -193,7 +200,7 @@ describe('CoverageDialog (DX-153)', () => {
   });
 
   describe('nº de afiliado (SEC-049)', () => {
-    const external: Payer = { ...payer('pay-ext', 'Aseguradora Norte'), type: 'EMPRESA' };
+    const external: Payer = { ...payer('pay-ext', 'Aseguradora Norte'), type: 'EMPLOYER' };
 
     it('con un pagador externo es obligatorio: error en el campo, foco y nada enviado', async () => {
       setup({ payers: [external, sanitas] });
@@ -239,7 +246,7 @@ describe('CoverageDialog (DX-153)', () => {
       expect(props.onSaved).toHaveBeenCalled();
     });
 
-    it('con un pagador interno (OTRO) sigue siendo opcional', async () => {
+    it('con un pagador interno (OTHER) sigue siendo opcional', async () => {
       mockedCreate.mockResolvedValue({ ...existing, id: 'c9' });
       setup();
       const user = setupUser();
@@ -255,8 +262,7 @@ describe('CoverageDialog (DX-153)', () => {
         payer: {
           id: 'pay-ext',
           name: 'Aseguradora Norte',
-          type: 'EMPRESA',
-          country: null,
+          type: 'EMPLOYER',
           active: true,
         },
         migratedFromInsurerEps: true,
@@ -283,8 +289,7 @@ describe('CoverageDialog (DX-153)', () => {
           payer: {
             id: 'pay-ext',
             name: 'Aseguradora Norte',
-            type: 'EMPRESA',
-            country: null,
+            type: 'EMPLOYER',
             active: true,
           },
           memberNumber: '1020304050',

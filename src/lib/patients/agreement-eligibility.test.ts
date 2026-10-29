@@ -1,7 +1,7 @@
 import { agreementEligibility, agreementEligibilityCopy } from './agreement-eligibility';
 
-const sura = { id: 'pay-sura', name: 'Sura EPS', type: 'EPS_CO' as const };
-const cortesia = { id: 'pay-cor', name: 'Cortesía', type: 'OTRO' as const };
+const sura = { id: 'pay-sura', name: 'Sura EPS', type: 'PUBLIC_SYSTEM' as const };
+const cortesia = { id: 'pay-cor', name: 'Cortesía', type: 'OTHER' as const };
 const ME = 'user-me';
 const cov = (
   id: string,
@@ -46,7 +46,7 @@ describe('agreementEligibility (SEC-047)', () => {
     );
   });
 
-  it('un convenio interno (pagador OTRO) solo lo asigna ADMIN, con la cobertura opcional', () => {
+  it('un convenio interno (pagador OTHER) solo lo asigna ADMIN, con la cobertura opcional', () => {
     const coverages = [cov('c3', cortesia.id), cov('c1', sura.id)];
     expect(agreementEligibility({ payer: cortesia }, coverages, 'ADMIN', ME)).toEqual({
       kind: 'optional-coverage',
@@ -67,7 +67,18 @@ describe('agreementEligibility (SEC-047)', () => {
     );
   });
 
-  it('M2: una cobertura MIGRADA y vigente del pagador OTRO habilita a cualquier rol', () => {
+  // Excepción G5.3 (DX-334): tipo de pagador anterior a DX-326.
+  it('legacy: un pagador OTRO de una API anterior sigue siendo interno, solo ADMIN', () => {
+    const legacy = { id: 'pay-old', name: 'Cortesía', type: 'OTRO' as never };
+    const coverages = [cov('c3', legacy.id)];
+    expect(agreementEligibility({ payer: legacy }, coverages, 'ADMIN', ME).kind).toBe('optional-coverage');
+    expect(agreementEligibility({ payer: legacy }, coverages, 'DENTIST', ME)).toEqual({
+      kind: 'blocked',
+      reason: agreementEligibilityCopy.adminOnly,
+    });
+  });
+
+  it('M2: una cobertura MIGRADA y vigente del pagador OTHER habilita a cualquier rol', () => {
     const migrated = cov('c5', cortesia.id, 'ACTIVE', true);
     const coverages = [cov('c3', cortesia.id), migrated, cov('c6', cortesia.id, 'EXPIRED', true)];
     for (const role of ['DENTIST', 'ASSISTANT', 'RECEPTION'] as const) {
