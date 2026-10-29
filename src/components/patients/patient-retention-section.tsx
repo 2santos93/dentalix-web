@@ -40,7 +40,7 @@ const copy = {
   // La base legal sigue al plazo vigente: con DOUBLE o PERMANENT, «15 años»
   // contradiría la fecha del aviso.
   hint: {
-    NONE: 'Res. 839/2017: se conserva 15 años desde la última atención. Mientras dure, el paciente no se puede archivar.',
+    NONE: 'Se conserva 15 años desde la última atención. Mientras dure, el paciente no se puede archivar.',
     DOUBLE:
       'Plazo doble: se conserva 30 años desde la última atención. Mientras dure, el paciente no se puede archivar.',
     PERMANENT: 'Se conserva sin fecha de fin: el paciente no se puede archivar.',

@@ -25,7 +25,7 @@ const mockedSuppress = partiallySuppressPatient as jest.MockedFunction<
 >;
 
 const RETENTION_MESSAGE =
-  'La historia clínica de este paciente está en retención legal hasta el 28/02/2039 (Res. 839/2017: 15 años desde la última atención): no se puede archivar ni borrar. Si necesitas retirar sus datos de contacto, usa la supresión parcial.';
+  'La historia clínica de este paciente está en retención legal hasta el 28/02/2039 (15 años desde la última atención): no se puede archivar ni borrar. Si necesitas retirar sus datos de contacto, usa la supresión parcial.';
 
 function patient(overrides: Partial<Patient> = {}): Patient {
   return {

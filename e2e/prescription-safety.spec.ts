@@ -2,6 +2,8 @@ import { test, expect, type APIRequestContext } from './support/test';
 import { randomUUID } from 'node:crypto';
 import { readFileSync, mkdirSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import { execFileSync } from 'node:child_process';
+import { tmpdir } from 'node:os';
 import type { AxeResults } from 'axe-core';
 
 // Capturas y axe crudo solo cuando se piden para QA (DX344_QA_DIR): una
@@ -89,6 +91,7 @@ test('receta con aviso bloqueante (warfarina + ibuprofeno): 390/1440, claro/oscu
 
   const checkbox = dialog.getByRole('checkbox', { name: /Confirmo que conozco los avisos/ });
   const reason = dialog.getByLabel('Motivo para emitir pese a los avisos');
+  const longReason = 'M'.repeat(500);
   await expect(submit).toHaveAccessibleDescription('Confirma los avisos de seguridad para emitir.');
   // Sin saltos: la explicación cambia o se vacía sin cambiar la altura del
   // diálogo. Se mide scrollHeight, no la caja de Emitir: el scroll anchoring
@@ -105,7 +108,7 @@ test('receta con aviso bloqueante (warfarina + ibuprofeno): 390/1440, claro/oscu
   await expect(reason).toHaveAttribute('aria-invalid', 'true');
   await expect(reason).toHaveAccessibleDescription('Escribe el motivo para emitir pese a los avisos.');
   await expect(reason).toBeFocused();
-  await reason.fill('INR estable; pauta de 2 días');
+  await reason.fill(longReason);
   await expect(reason).not.toHaveAttribute('aria-invalid');
   await expect(submit).toBeEnabled();
 
@@ -142,7 +145,7 @@ test('receta con aviso bloqueante (warfarina + ibuprofeno): 390/1440, claro/oscu
     expect(await node!.evaluate((element) => element === document.activeElement)).toBeTruthy();
     expect(await focus.boundingBox()).toEqual(before);
     await expect(checkbox).toBeChecked();
-    await expect(reason).toHaveValue('INR estable; pauta de 2 días');
+    await expect(reason).toHaveValue(longReason);
     release();
     await expect(submit).toBeEnabled();
     await expect(focus).toBeFocused();
@@ -197,11 +200,53 @@ test('receta con aviso bloqueante (warfarina + ibuprofeno): 390/1440, claro/oscu
 
   const list = await admin.get(`/patients/${patient.id}/prescriptions`);
   const [rx] = (await list.json()) as {
+    id: string;
+    safetyRulesVersion: string | null;
     safetyOverrideReason: string | null;
     safetyAlerts: { code: string; severity: string }[];
   }[];
-  expect(rx.safetyOverrideReason).toBe('INR estable; pauta de 2 días');
+  expect(rx.safetyOverrideReason).toBe(longReason);
   expect(rx.safetyAlerts).toEqual([
     expect.objectContaining({ code: 'INTERACTION_ANTICOAGULANT_NSAID', severity: 'BLOCKING' }),
   ]);
+
+  expect(rx.safetyRulesVersion).toBeTruthy();
+  const sealedVersion = rx.safetyRulesVersion!;
+  const clinical = panel.locator('table').getByText('Detalles de seguridad');
+  await clinical.click();
+  await expect(panel.locator('table')).toContainText(longReason);
+  await expect(panel.locator('table')).toContainText('Warfarina 5 mg');
+  await page.setViewportSize({ width: 390, height: 900 });
+  const mobileDetails = panel.locator('ul.md\\:hidden').getByText('Detalles de seguridad');
+  await mobileDetails.click();
+  await expect(panel.locator('ul.md\\:hidden')).toContainText(longReason);
+  await expectNoHorizontalScroll(page);
+
+  await page.addInitScript(() => { window.print = () => {}; });
+  await page.goto(`${origin}/print/patients/${patient.id}/prescriptions/${rx.id}`);
+  const doc = page.locator('.prescription-print-root');
+  await expect(doc).toContainText(`Avisos de seguridad revisados por el prescriptor · reglas ${sealedVersion}`);
+  await expect(doc).not.toContainText('Warfarina');
+  await expect(doc).not.toContainText(longReason);
+  for (const width of [390, 1440]) {
+    for (const colorScheme of ['light', 'dark'] as const) {
+      await page.setViewportSize({ width, height: 900 });
+      await page.emulateMedia({ colorScheme });
+      await expectNoHorizontalScroll(page);
+      await expect(doc).toBeVisible();
+      if (evidence) await page.screenshot({ path: path.join(evidence, `print-${width}-${colorScheme}.png`) });
+    }
+  }
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await page.emulateMedia({ media: 'print', colorScheme: 'light' });
+  const pdf = path.join(evidence ?? tmpdir(), `sec051-${suffix}.pdf`);
+  await page.pdf({ path: pdf, format: 'A4', printBackground: true });
+  const pdfText = execFileSync('pdftotext', ['-layout', pdf, '-'], { encoding: 'utf8' });
+  expect(pdfText).toContain('Avisos de seguridad revisados por el prescriptor');
+  expect(pdfText).toContain(sealedVersion);
+  expect(pdfText).toContain('Ibuprofeno');
+  expect(pdfText).not.toContain('Warfarina');
+  expect(pdfText).not.toContain(longReason);
+  expect(pdfText.replace(/\s/g, '')).not.toContain(longReason);
+
 });

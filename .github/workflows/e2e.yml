@@ -95,6 +95,9 @@ jobs:
             dentalix-web/package-lock.json
             dentalix-api/package-lock.json
 
+      - name: Poppler para verificar PDFs
+        run: sudo apt-get update && sudo apt-get install -y poppler-utils
+
       - name: Dependencias y Chromium
         timeout-minutes: 10
         run: scripts/e2e-ci.sh setup

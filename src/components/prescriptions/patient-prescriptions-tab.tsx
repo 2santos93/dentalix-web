@@ -134,6 +134,20 @@ export function PatientPrescriptionsTab({ token, patientId }: PatientPrescriptio
             <li key={item.id}>{copy.medication(item)}</li>
           ))}
         </ul>
+        {(rx.safetyAlerts?.length || rx.allergyMatches.length || rx.safetyOverrideReason || rx.patientWeightKg !== null) ? (
+          <details className="mt-2 min-w-0 text-xs text-ink [overflow-wrap:anywhere]">
+            <summary className="cursor-pointer font-medium">Detalles de seguridad</summary>
+            {rx.patientWeightKg !== null ? <p>Peso: {rx.patientWeightKg} kg</p> : null}
+            {rx.safetyRulesVersion ? <p>Reglas: {rx.safetyRulesVersion}</p> : null}
+            {rx.safetyAlerts?.map((alert, i) => (
+              <p key={`${alert.code}-${i}`}>{alert.message} · {alert.source}</p>
+            ))}
+            {rx.allergyMatches.map((match, i) => (
+              <p key={i}>Alergia: {match.allergen} ({match.activeIngredient})</p>
+            ))}
+            {rx.safetyOverrideReason ? <p>Motivo: {rx.safetyOverrideReason}</p> : null}
+          </details>
+        ) : null}
         {voided ? (
           <p className="mt-1 text-xs text-ink">
             {copy.voidedDetail(
@@ -244,7 +258,7 @@ export function PatientPrescriptionsTab({ token, patientId }: PatientPrescriptio
             <li
               key={rx.id}
               data-status={rx.status}
-              className="flex flex-col gap-2 rounded-lg border border-border bg-surface p-4 text-sm text-ink"
+              className="flex min-w-0 flex-col gap-2 rounded-lg border border-border bg-surface p-4 text-sm text-ink"
             >
               <div className="flex items-start justify-between gap-2">
                 <p className="tabular-nums text-muted">{formatDateTime(rx.issuedAt)}</p>

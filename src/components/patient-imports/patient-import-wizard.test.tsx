@@ -253,7 +253,7 @@ it('paso 3: confirma con «actualizar vacíos» y sigue el avance hasta terminar
     await user.click(await screen.findByRole('button', { name: 'Continuar' }));
     await user.click(await screen.findByRole('button', { name: 'Continuar sin saldos' }));
 
-    expect(screen.getByText(/autorización de datos \(Ley 1581\) pendiente/)).toBeInTheDocument();
+    expect(screen.getByText(/autorización de datos pendiente/)).toBeInTheDocument();
     await user.click(screen.getByLabelText(/actualizar solo los campos vacíos/i));
     await user.click(screen.getByRole('button', { name: 'Importar 1 paciente' }));
     expect(mockedConfirm).toHaveBeenCalledWith('tok', 'batch-1', 'FILL_EMPTY');

@@ -34,7 +34,7 @@ const copy = {
     `${shown} ${n === 1 ? 'saldo no se creó' : 'saldos no se crearon'}: su paciente ya tenía un saldo migrado en esa moneda de otra importación.`,
   balancesAmbiguous: (n: number, shown: string) =>
     `${shown} ${n === 1 ? 'saldo no se creó' : 'saldos no se crearon'}: su documento es de varios pacientes. Corrige las fichas repetidas.`,
-  consent: 'Recuerda pedir la autorización de datos (Ley 1581) a los pacientes importados: su ficha la marca pendiente.',
+  consent: 'Recuerda pedir la autorización de datos a los pacientes importados: su ficha la marca pendiente.',
 };
 
 export const STATUS_VARIANT: Record<ImportStatus, 'success' | 'warning' | 'danger' | 'muted' | 'secondary'> = {
