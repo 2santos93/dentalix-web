@@ -1,0 +1,179 @@
+'use client';
+import { useEffect, useId, useState } from 'react';
+import { Lock } from 'lucide-react';
+import { apiErrorMessage } from '@/lib/api/error-message';
+import { DOC_TYPES, DOC_TYPE_LABEL, DOC_TYPE_NAME_MAX } from '@/lib/patients/doc-type';
+import {
+  getDocumentTypeNames,
+  updateDocumentTypeNames,
+  type DocumentTypeNames,
+} from '@/lib/patients/document-type-names-api';
+import type { DocType } from '@/lib/patients/patients-api';
+import { EmptyState } from '@/components/shared/empty-state';
+import { FormField, fieldErrorId } from '@/components/shared/form-field';
+import { SectionError } from '@/components/errors/section-error';
+import { InlineError } from '@/components/errors/inline-error';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
+
+const copy = {
+  hint: (generic: string) => `Vacío: se usa «${generic}».`,
+  save: 'Guardar',
+  saved: 'Nombres guardados.',
+  tooLong: `Hasta ${DOC_TYPE_NAME_MAX} caracteres.`,
+  loadError: 'No pudimos cargar los nombres de documentos.',
+  saveError: 'No pudimos guardar los nombres. Intenta de nuevo.',
+  forbiddenTitle: 'Solo un administrador puede cambiar los nombres de los documentos.',
+  forbiddenHint: 'Cada ficha, recibo y receta muestra el nombre que la clínica haya configurado.',
+};
+
+// 44 px bajo `sm` (DESIGN.md, objetivo táctil de móvil).
+const fieldClass =
+  'flex h-10 w-full rounded-lg border border-border bg-surface px-3 text-sm text-ink placeholder:text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary max-sm:min-h-11';
+
+/** Cuenta caracteres Unicode (puntos de código), como el límite de la API. */
+const codePoints = (value: string) => [...value].length;
+
+const toDrafts = (names: DocumentTypeNames): Record<DocType, string> =>
+  Object.fromEntries(DOC_TYPES.map((t) => [t, names[t] ?? ''])) as Record<DocType, string>;
+
+/**
+ * Ajustes → Nombres de documentos (DX-327, R16): cómo llama la clínica a cada
+ * uno de los cinco tipos genéricos. Vacío = se usa el genérico. Solo ADMIN.
+ */
+export function DocumentTypeNamesSettingsSection({
+  token,
+  allowed,
+}: {
+  token: string;
+  allowed: boolean;
+}) {
+  const [drafts, setDrafts] = useState<Record<DocType, string> | null>(null);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [reloadKey, setReloadKey] = useState(0);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [lengthErrors, setLengthErrors] = useState<Partial<Record<DocType, string>>>({});
+  const [notice, setNotice] = useState('');
+  const idPrefix = useId();
+
+  useEffect(() => {
+    if (!allowed) return;
+    let cancelled = false;
+    getDocumentTypeNames(token)
+      .then((res) => {
+        if (cancelled) return;
+        setDrafts(toDrafts(res));
+        setLoadError(null);
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) setLoadError(apiErrorMessage(err, copy.loadError));
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token, allowed, reloadKey]);
+
+  if (!allowed) {
+    return (
+      <EmptyState
+        role="status"
+        icon={<Lock aria-hidden />}
+        title={copy.forbiddenTitle}
+        description={copy.forbiddenHint}
+      />
+    );
+  }
+  if (loadError) {
+    return (
+      <SectionError
+        description={loadError}
+        onRetry={() => {
+          setLoadError(null);
+          setReloadKey((k) => k + 1);
+        }}
+      />
+    );
+  }
+  if (!drafts) {
+    return (
+      <div role="status" aria-label="Cargando" className="max-w-2xl rounded-xl border border-border bg-surface p-6">
+        <Skeleton className="h-4 w-48" />
+        <Skeleton className="mt-4 h-4 w-72" />
+      </div>
+    );
+  }
+  const current = drafts;
+
+  async function handleSave(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    setNotice('');
+    setSaveError(null);
+    const trimmed = Object.fromEntries(
+      DOC_TYPES.map((t) => [t, current[t].trim()]),
+    ) as Record<DocType, string>;
+    const tooLong: Partial<Record<DocType, string>> = {};
+    for (const t of DOC_TYPES) {
+      if (codePoints(trimmed[t]) > DOC_TYPE_NAME_MAX) tooLong[t] = copy.tooLong;
+    }
+    setLengthErrors(tooLong);
+    if (Object.keys(tooLong).length > 0) return;
+
+    const body = Object.fromEntries(
+      DOC_TYPES.map((t) => [t, trimmed[t] === '' ? null : trimmed[t]]),
+    ) as DocumentTypeNames;
+    setSaving(true);
+    try {
+      setDrafts(toDrafts(await updateDocumentTypeNames(token, body)));
+      setNotice(copy.saved);
+    } catch (err) {
+      setSaveError(apiErrorMessage(err, copy.saveError));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <form
+      onSubmit={handleSave}
+      noValidate
+      className="flex max-w-2xl flex-col gap-4 rounded-xl border border-border bg-surface px-4 py-4 sm:px-6"
+    >
+      {DOC_TYPES.map((type) => {
+        const id = `${idPrefix}-${type}`;
+        const error = lengthErrors[type];
+        return (
+          <FormField
+            key={type}
+            htmlFor={id}
+            label={DOC_TYPE_LABEL[type]}
+            hint={copy.hint(DOC_TYPE_LABEL[type])}
+            error={error}
+          >
+            <input
+              id={id}
+              type="text"
+              className={fieldClass}
+              maxLength={DOC_TYPE_NAME_MAX}
+              placeholder={DOC_TYPE_LABEL[type]}
+              value={current[type]}
+              disabled={saving}
+              aria-invalid={error ? true : undefined}
+              aria-describedby={error ? fieldErrorId(id) : undefined}
+              onChange={(e) => setDrafts({ ...current, [type]: e.target.value })}
+            />
+          </FormField>
+        );
+      })}
+      {saveError ? <InlineError variant="summary">{saveError}</InlineError> : null}
+      <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+        <p role="status" className={notice ? 'text-sm text-success' : 'sr-only'}>
+          {notice}
+        </p>
+        <Button type="submit" loading={saving} className="max-sm:min-h-11 max-sm:w-full">
+          {copy.save}
+        </Button>
+      </div>
+    </form>
+  );
+}

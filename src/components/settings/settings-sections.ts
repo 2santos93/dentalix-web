@@ -12,6 +12,7 @@ import {
   FileUp,
   Globe,
   Handshake,
+  IdCard,
   Landmark,
   LifeBuoy,
   ListOrdered,
@@ -35,6 +36,7 @@ import { canManageReminders } from '@/lib/reminders/reminders-api';
 import { canManageDiscounts } from '@/lib/discounts/discounts-api';
 import { canManageCashSessions } from '@/lib/cash-sessions/cash-sessions-api';
 import { canManageAnamnesisSettings } from '@/lib/clinical/medical-alerts';
+import { canManageDocumentTypeNames } from '@/lib/patients/document-type-names-api';
 import { canManagePatientSettings } from '@/lib/patients/patient-settings-api';
 import { canManageDomains } from '@/lib/domains/domains-api';
 import { canImportPatients } from '@/lib/patient-imports/patient-imports-api';
@@ -109,6 +111,14 @@ export const SETTINGS_SECTIONS: SettingsSection[] = [
         description: 'Desde qué edad el paciente recibe sus propios avisos y recibos.',
         icon: UserCheck,
         visible: canManagePatientSettings,
+      },
+      // DX-327.
+      {
+        href: '/settings/tipos-de-documento',
+        label: 'Nombres de documentos',
+        description: 'Cómo se llama cada tipo de documento en tu clínica. Se usa en fichas, recibos, recetas y consentimientos, y al importar pacientes.',
+        icon: IdCard,
+        visible: canManageDocumentTypeNames,
       },
     ],
   },

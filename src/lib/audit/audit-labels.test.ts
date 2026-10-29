@@ -290,6 +290,22 @@ describe('clinicSettingsDetail (DX-328)', () => {
     ).toBe('Mayoría de edad: 18 → 16 años');
   });
 
+  it('DOCUMENT_TYPE_NAMES_SETTINGS lists the changed types by generic name', () => {
+    expect(
+      clinicSettingsDetail({
+        reason: 'DOCUMENT_TYPE_NAMES_SETTINGS',
+        changedFields: ['NATIONAL_ID', 'TAX_ID'],
+      }),
+    ).toBe('Nombres de documentos: Documento nacional, Identificación fiscal');
+  });
+
+  it('an unknown type or empty changedFields → null', () => {
+    const reason = 'DOCUMENT_TYPE_NAMES_SETTINGS';
+    expect(clinicSettingsDetail({ reason, changedFields: [] })).toBeNull();
+    expect(clinicSettingsDetail({ reason })).toBeNull();
+    expect(clinicSettingsDetail({ reason, changedFields: ['NATIONAL_ID', 'CC'] })).toBeNull();
+  });
+
   it('clinicSettingsDetail renders Receta: cantidad en letras sí → no', () => {
     expect(
       clinicSettingsDetail({

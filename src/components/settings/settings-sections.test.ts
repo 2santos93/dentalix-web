@@ -21,10 +21,20 @@ describe('Índice de Ajustes (DX-282)', () => {
     ]);
   });
 
-  it('ADMIN ve las 21 pantallas de ajustes, cada una una sola vez', () => {
+  it('ADMIN ve las 22 pantallas de ajustes, cada una una sola vez', () => {
     const hrefs = hrefsFor('ADMIN');
-    expect(hrefs).toHaveLength(21);
-    expect(new Set(hrefs).size).toBe(21);
+    expect(hrefs).toHaveLength(22);
+    expect(new Set(hrefs).size).toBe(22);
+  });
+
+  it('ADMIN sees «Nombres de documentos» right after «Mayoría de edad»; other roles do not', () => {
+    const clinic = visibleSettingsSections('ADMIN').find((section) => section.id === 'clinica');
+    const labels = clinic?.entries.map((entry) => entry.label) ?? [];
+    expect(labels.indexOf('Nombres de documentos')).toBe(labels.indexOf('Mayoría de edad') + 1);
+    expect(hrefsFor('ADMIN')).toContain('/settings/tipos-de-documento');
+    for (const role of ['DENTIST', 'ASSISTANT', 'RECEPTION', null] as const) {
+      expect(hrefsFor(role)).not.toContain('/settings/tipos-de-documento');
+    }
   });
 
   it('settings index lists Calendario de la sede only for ADMIN', () => {
