@@ -247,6 +247,61 @@ describe('PatientEditModal', () => {
     expect(mockedUpdate.mock.calls[0][2]).toEqual({ docType: 'PASSPORT', docTypeLabel: null });
   });
 
+  it('changing the type and back restores the saved label instead of deleting it', async () => {
+    mockedUpdate.mockResolvedValue(patient);
+    const user = userEvent.setup();
+    const labelled = { ...patient, docTypeLabel: 'ID local' };
+    render(
+      <PatientEditModal open patient={labelled} token="tok" onOpenChange={() => {}} onSaved={() => {}} />,
+    );
+    const label = screen.getByLabelText('Nombre del documento (opcional)');
+    const type = screen.getByLabelText(/tipo de documento/i);
+
+    await user.selectOptions(type, 'PASSPORT');
+    expect(label).toHaveValue('');
+    await user.selectOptions(type, 'NATIONAL_ID');
+    expect(label).toHaveValue('ID local');
+
+    await user.type(screen.getByLabelText(/^teléfono$/i), '3000000001');
+    await user.click(screen.getByRole('button', { name: /guardar/i }));
+    await waitFor(() => expect(mockedUpdate).toHaveBeenCalledTimes(1));
+    expect(mockedUpdate.mock.calls[0][2]).toEqual({ phone: '3000000001' });
+  });
+
+  it('places the type next to its number, with the free label right below', () => {
+    render(
+      <PatientEditModal open patient={patient} token="tok" onOpenChange={() => {}} onSaved={() => {}} />,
+    );
+    const section = screen.getByRole('heading', { name: 'Identificación' }).parentElement!;
+    const labels = Array.from(section.querySelectorAll('label')).map((l) => l.textContent);
+    expect(labels).toEqual([
+      'Nombre',
+      'Apellido',
+      'Tipo de documento',
+      'Número de documento',
+      'Nombre del documento (opcional)',
+      'Fecha de nacimiento',
+      'Sexo',
+    ]);
+  });
+
+  it('rejects a label with a control or format character, as the API does', async () => {
+    const user = userEvent.setup();
+    render(
+      <PatientEditModal open patient={patient} token="tok" onOpenChange={() => {}} onSaved={() => {}} />,
+    );
+    const label = screen.getByLabelText('Nombre del documento (opcional)');
+    fireEvent.change(label, { target: { value: 'ID \u202Elocal' } });
+    await user.click(screen.getByRole('button', { name: /guardar/i }));
+
+    expect(mockedUpdate).not.toHaveBeenCalled();
+    expect(label).toHaveAttribute('aria-invalid', 'true');
+    expect(document.getElementById('pe-docTypeLabel-error')).toHaveTextContent(
+      'El nombre del documento no puede llevar caracteres de control.',
+    );
+    expect(label).toHaveFocus();
+  });
+
   it('sends docTypeLabel null when the label is emptied', async () => {
     mockedUpdate.mockResolvedValue(patient);
     const user = userEvent.setup();
@@ -289,7 +344,7 @@ describe('PatientEditModal', () => {
       <PatientEditModal open patient={patient} token="tok" onOpenChange={() => {}} onSaved={() => {}} />,
     );
     const label = screen.getByLabelText('Nombre del documento (opcional)');
-    expect(screen.getByText('Si lo escribes, los documentos impresos lo muestran en lugar del tipo.')).toBeInTheDocument();
+    expect(screen.getByText('Si lo escribes, se muestra en lugar del tipo en fichas y documentos.')).toBeInTheDocument();
     fireEvent.change(label, { target: { value: '\u{1D49C}'.repeat(41) } });
     expect(label).toHaveValue('\u{1D49C}'.repeat(41));
     await user.click(screen.getByRole('button', { name: /guardar/i }));

@@ -190,7 +190,7 @@ function webRss(): number | null {
 }
 
 /** CSV «;» de `rows` pacientes válidos, con filas largas como las de una exportación real. */
-function bigCsv(rows: number, docPrefix: string): Buffer {
+function legacyBigCsv(rows: number, docPrefix: string): Buffer {
   const lines = ['Tipo Doc;Cédula;Nombre;Apellidos;Fecha de nacimiento;Sexo;Celular;Correo;Dirección;Observaciones'];
   for (let i = 0; i < rows; i += 1) {
     const n = String(i).padStart(5, '0');
@@ -209,7 +209,7 @@ test('legacy «Tipo Doc» CC, DX-107 × DX-259: un CSV de 10.000 pacientes (> 1 
   await page.setViewportSize({ width: 1440, height: 900 });
   const origin = tenantOrigin(DEMO_SUBDOMAIN);
   const fileName = `pacientes-10000-${suffix}.csv`;
-  const csv = bigCsv(10_000, `8${suffix}`);
+  const csv = legacyBigCsv(10_000, `8${suffix}`);
   expect(csv.length, 'más que el tope de 1 MB del proxy /api/v1').toBeGreaterThan(1024 * 1024);
   expect(csv.length).toBeLessThan(5 * 1024 * 1024);
 

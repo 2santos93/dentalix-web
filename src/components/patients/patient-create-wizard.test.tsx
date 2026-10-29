@@ -246,7 +246,7 @@ describe('PatientCreateWizard', () => {
       await user.type(screen.getByLabelText(/^nombre$/i), 'Ana');
       await user.type(screen.getByLabelText(/apellido/i), 'García');
       await user.selectOptions(screen.getByLabelText(/tipo de documento/i), 'NATIONAL_ID');
-      expect(screen.getByText('Si lo escribes, los documentos impresos lo muestran en lugar del tipo.')).toBeInTheDocument();
+      expect(screen.getByText('Si lo escribes, se muestra en lugar del tipo en fichas y documentos.')).toBeInTheDocument();
       await user.type(screen.getByLabelText('Nombre del documento (opcional)'), '  ID   local ');
       await goToStep(user, 1);
       await user.click(screen.getByRole('button', { name: /guardar/i }));
@@ -292,6 +292,61 @@ describe('PatientCreateWizard', () => {
       await goToStep(user, 1);
       await user.click(screen.getByRole('button', { name: /guardar/i }));
       expect(mockedCreatePatient.mock.calls[0][1]).toMatchObject({ docTypeLabel: '\u{1D49C}'.repeat(40) });
+    });
+
+    it.each(['ana@x', 'ana@'])(
+      'an email the API would reject (%s) stops step 1 on its field',
+      async (bad) => {
+        const user = userEvent.setup();
+        mockedCreatePatient.mockResolvedValue(CREATED);
+        render(<PatientCreateWizard token="tok" canWriteClinicalHistory={false} />);
+        await user.type(screen.getByLabelText(/^nombre$/i), 'Ana');
+        await user.type(screen.getByLabelText(/apellido/i), 'García');
+        await user.selectOptions(screen.getByLabelText(/tipo de documento/i), 'NATIONAL_ID');
+        const email = screen.getByLabelText(/correo/i);
+        await user.type(email, bad);
+        await user.click(screen.getByRole('button', { name: /siguiente/i }));
+
+        expect(email).toBeInTheDocument();
+        expect(email).toHaveAttribute('aria-invalid', 'true');
+        expect(email).toHaveAttribute('aria-describedby', 'pcw-email-error');
+        expect(document.getElementById('pcw-email-error')).toHaveTextContent('Revisa el correo electrónico');
+        expect(email).toHaveFocus();
+        expect(
+          screen.queryByText('Nombre, apellido y tipo de documento son obligatorios para continuar.'),
+        ).not.toBeInTheDocument();
+
+        await user.clear(email);
+        await user.type(email, 'ana@x.co');
+        expect(email).not.toHaveAttribute('aria-invalid');
+        await goToStep(user, 1);
+        await user.click(screen.getByRole('button', { name: /guardar/i }));
+        expect(mockedCreatePatient.mock.calls[0][1]).toMatchObject({ email: 'ana@x.co' });
+      },
+    );
+
+    it('rejects a label with a control or format character, as the API does', async () => {
+      const user = userEvent.setup();
+      mockedCreatePatient.mockResolvedValue(CREATED);
+      render(<PatientCreateWizard token="tok" canWriteClinicalHistory={false} />);
+      await user.type(screen.getByLabelText(/^nombre$/i), 'Ana');
+      await user.type(screen.getByLabelText(/apellido/i), 'García');
+      await user.selectOptions(screen.getByLabelText(/tipo de documento/i), 'NATIONAL_ID');
+      const label = screen.getByLabelText('Nombre del documento (opcional)');
+      fireEvent.change(label, { target: { value: 'ID\u200Blocal' } });
+      await user.click(screen.getByRole('button', { name: /siguiente/i }));
+
+      expect(label).toHaveAttribute('aria-invalid', 'true');
+      expect(document.getElementById('pcw-doc-type-label-error')).toHaveTextContent(
+        'El nombre del documento no puede llevar caracteres de control.',
+      );
+      expect(label).toHaveFocus();
+
+      fireEvent.change(label, { target: { value: 'ID local' } });
+      expect(label).not.toHaveAttribute('aria-invalid');
+      await goToStep(user, 1);
+      await user.click(screen.getByRole('button', { name: /guardar/i }));
+      expect(mockedCreatePatient.mock.calls[0][1]).toMatchObject({ docTypeLabel: 'ID local' });
     });
 
     it('sends the number as typed', async () => {

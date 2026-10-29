@@ -9490,7 +9490,7 @@ export interface components {
             name: string;
             /** @description Razón social (DX-019). */
             legalName: string | null;
-            /** @description NIT/NIF (DX-019). */
+            /** @description Identificador fiscal de la clínica (DX-019). */
             taxId: string | null;
             address: string | null;
         };
@@ -9574,7 +9574,7 @@ export interface components {
             version: 1;
             clinic: components["schemas"]["ReceiptClinicDto"];
             location: components["schemas"]["ReceiptLocationDto"];
-            /** @description Falta la razón social o el NIT/NIF: el recibo dice «Datos fiscales pendientes». */
+            /** @description Falta la razón social o el identificador fiscal: el recibo dice «Datos fiscales pendientes». */
             fiscalDataPending: boolean;
             patient: components["schemas"]["ReceiptPatientDto"];
             payment: components["schemas"]["ReceiptPaymentDto"];

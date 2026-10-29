@@ -36,16 +36,52 @@ export function normalizeDocTypeLabel(raw: string): string | null {
 }
 
 /**
- * R7: más de `DOC_TYPE_LABEL_MAX` caracteres tras normalizar. Cuenta puntos
- * de código, no unidades UTF-16: por eso el campo no lleva `maxLength`, que
- * cortaría antes un nombre con caracteres fuera del plano básico.
+ * Por qué la API rechazaría un nombre ya normalizado, con su misma regla y en
+ * su mismo orden: caracteres de control o de formato (U+200B al copiar de un
+ * PDF, U+202E que invierte el texto impreso) o sustitutos sueltos; luego, más
+ * caracteres de la cuenta. Cuenta puntos de código, no unidades UTF-16: por
+ * eso los campos no llevan `maxLength`, que cortaría antes un nombre con
+ * caracteres fuera del plano básico.
  */
-export function docTypeLabelTooLong(raw: string): boolean {
-  return [...(normalizeDocTypeLabel(raw) ?? '')].length > DOC_TYPE_LABEL_MAX;
+export type DocTypeTextError = 'control' | 'tooLong';
+
+const CONTROL_OR_FORMAT = /[\p{Cc}\p{Cf}\p{Cs}]/u;
+
+function textError(text: string | null, max: number): DocTypeTextError | null {
+  if (text === null) return null;
+  if (CONTROL_OR_FORMAT.test(text)) return 'control';
+  return [...text].length > max ? 'tooLong' : null;
+}
+
+/** R7: el error que daría la API al nombre libre de un paciente, o null. */
+export function docTypeLabelError(raw: string): DocTypeTextError | null {
+  return textError(normalizeDocTypeLabel(raw), DOC_TYPE_LABEL_MAX);
 }
 
 /** R16: nombre local de un tipo en la clínica. */
 export const DOC_TYPE_NAME_MAX = 60;
+
+/** R16: el nombre local como lo guarda la API (igual que R7); vacío = null. */
+export function normalizeDocTypeName(raw: string): string | null {
+  return normalizeDocTypeLabel(raw);
+}
+
+/** Una letra latina seguida de sus marcas combinantes (como en la API). */
+const LATIN_MARKS = /(\p{Script=Latin})\p{M}+/gu;
+
+/**
+ * R16: el error que daría la API al nombre local de un tipo, o null. Además
+ * de R7, la API pide al menos una letra o un número en cualquier escritura:
+ * su clave de comparación (`documentTypeKey`, que descompone, quita las
+ * marcas de las letras latinas y recompone) no puede quedar vacía.
+ */
+export function docTypeNameError(raw: string): DocTypeTextError | 'noLetter' | null {
+  const name = normalizeDocTypeName(raw);
+  const error = textError(name, DOC_TYPE_NAME_MAX);
+  if (error || name === null) return error;
+  const folded = name.normalize('NFKD').replace(LATIN_MARKS, '$1').normalize('NFC');
+  return /[\p{L}\p{N}\p{M}]/u.test(folded) ? null : 'noLetter';
+}
 
 /** R16: nombres locales de la clínica; ausente o null = sin nombre local. */
 export type ClinicDocumentTypeNames = Readonly<Partial<Record<DocType, string | null>>>;

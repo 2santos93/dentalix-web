@@ -15,6 +15,8 @@ const copy = {
   // Un «sin serie» no tuvo emisión: lo que se conserva es el alta del abono.
   registeredAt: 'Abono registrado el',
   fiscalPending: 'Datos fiscales pendientes',
+  // Excepción con nombre de la guarda de DX-327 hasta DX-019, que dará a la
+  // clínica el nombre de su identificación fiscal.
   taxId: (value: string) => `NIT/NIF ${value}`,
   location: (name: string, address: string | null) => (address ? `${name} · ${address}` : name),
   voidedStamp: 'ANULADO',

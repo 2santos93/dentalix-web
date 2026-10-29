@@ -1,8 +1,14 @@
 'use client';
-import { useEffect, useId, useState } from 'react';
+import { useEffect, useId, useRef, useState } from 'react';
 import { Lock } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/error-message';
-import { DOC_TYPES, DOC_TYPE_NAME_MAX, genericDocTypeName } from '@/lib/patients/doc-type';
+import {
+  DOC_TYPES,
+  DOC_TYPE_NAME_MAX,
+  docTypeNameError,
+  genericDocTypeName,
+  normalizeDocTypeName,
+} from '@/lib/patients/doc-type';
 import {
   getDocumentTypeNames,
   updateDocumentTypeNames,
@@ -21,6 +27,8 @@ const copy = {
   save: 'Guardar',
   saved: 'Nombres guardados.',
   tooLong: `Hasta ${DOC_TYPE_NAME_MAX} caracteres.`,
+  control: 'El nombre del documento no puede llevar caracteres de control.',
+  noLetter: 'El nombre necesita al menos una letra o un número.',
   loadError: 'No pudimos cargar los nombres de documentos.',
   saveError: 'No pudimos guardar los nombres. Intenta de nuevo.',
   forbiddenTitle: 'Solo un administrador puede cambiar los nombres de los documentos.',
@@ -31,15 +39,18 @@ const copy = {
 const fieldClass =
   'flex h-10 w-full rounded-lg border border-border bg-surface px-3 text-sm text-ink placeholder:text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary max-sm:min-h-11';
 
-/** Cuenta caracteres Unicode (puntos de código), como el límite de la API. */
-const codePoints = (value: string) => [...value].length;
-
 const toDrafts = (names: DocumentTypeNames): Record<DocType, string> =>
   Object.fromEntries(DOC_TYPES.map((t) => [t, names[t] ?? ''])) as Record<DocType, string>;
+
+// Una API anterior no tiene la ruta: su 404 es «no pudimos cargar», no un
+// «no existe» (mismo caso que la mayoría de edad).
+const loadErrorOptions = { fallback: copy.loadError, byStatus: { 404: copy.loadError } };
 
 /**
  * Ajustes → Nombres de documentos (DX-327, R16): cómo llama la clínica a cada
  * uno de los cinco tipos genéricos. Vacío = se usa el genérico. Solo ADMIN.
+ * Valida como la API (`docTypeNameError`): cuenta caracteres, no unidades
+ * UTF-16, así que los campos no llevan `maxLength`.
  */
 export function DocumentTypeNamesSettingsSection({
   token,
@@ -53,9 +64,16 @@ export function DocumentTypeNamesSettingsSection({
   const [reloadKey, setReloadKey] = useState(0);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [lengthErrors, setLengthErrors] = useState<Partial<Record<DocType, string>>>({});
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<DocType, string>>>({});
   const [notice, setNotice] = useState('');
   const idPrefix = useId();
+  const inputRefs = useRef<Partial<Record<DocType, HTMLInputElement | null>>>({});
+  // Cada petición es un objeto nuevo: el efecto enfoca aunque se repita el tipo.
+  const [focusRequest, setFocusRequest] = useState<{ type: DocType } | null>(null);
+
+  useEffect(() => {
+    if (focusRequest) inputRefs.current[focusRequest.type]?.focus();
+  }, [focusRequest]);
 
   useEffect(() => {
     if (!allowed) return;
@@ -67,7 +85,7 @@ export function DocumentTypeNamesSettingsSection({
         setLoadError(null);
       })
       .catch((err: unknown) => {
-        if (!cancelled) setLoadError(apiErrorMessage(err, copy.loadError));
+        if (!cancelled) setLoadError(apiErrorMessage(err, loadErrorOptions));
       });
     return () => {
       cancelled = true;
@@ -109,18 +127,20 @@ export function DocumentTypeNamesSettingsSection({
     e.preventDefault();
     setNotice('');
     setSaveError(null);
-    const trimmed = Object.fromEntries(
-      DOC_TYPES.map((t) => [t, current[t].trim()]),
-    ) as Record<DocType, string>;
-    const tooLong: Partial<Record<DocType, string>> = {};
+    const found: Partial<Record<DocType, string>> = {};
     for (const t of DOC_TYPES) {
-      if (codePoints(trimmed[t]) > DOC_TYPE_NAME_MAX) tooLong[t] = copy.tooLong;
+      const error = docTypeNameError(current[t]);
+      if (error) found[t] = copy[error];
     }
-    setLengthErrors(tooLong);
-    if (Object.keys(tooLong).length > 0) return;
+    setFieldErrors(found);
+    const firstInvalid = DOC_TYPES.find((t) => found[t]);
+    if (firstInvalid) {
+      setFocusRequest({ type: firstInvalid });
+      return;
+    }
 
     const body = Object.fromEntries(
-      DOC_TYPES.map((t) => [t, trimmed[t] === '' ? null : trimmed[t]]),
+      DOC_TYPES.map((t) => [t, normalizeDocTypeName(current[t])]),
     ) as DocumentTypeNames;
     setSaving(true);
     try {
@@ -141,26 +161,40 @@ export function DocumentTypeNamesSettingsSection({
     >
       {DOC_TYPES.map((type) => {
         const id = `${idPrefix}-${type}`;
-        const error = lengthErrors[type];
+        const hintId = `${id}-hint`;
+        const error = fieldErrors[type];
         return (
           <FormField
             key={type}
             htmlFor={id}
             label={genericDocTypeName(type)}
             hint={copy.hint(genericDocTypeName(type))}
+            hintId={hintId}
             error={error}
           >
             <input
+              ref={(el) => {
+                inputRefs.current[type] = el;
+              }}
               id={id}
               type="text"
               className={fieldClass}
-              maxLength={DOC_TYPE_NAME_MAX}
-              placeholder={genericDocTypeName(type)}
               value={current[type]}
               disabled={saving}
               aria-invalid={error ? true : undefined}
-              aria-describedby={error ? fieldErrorId(id) : undefined}
-              onChange={(e) => setDrafts({ ...current, [type]: e.target.value })}
+              aria-describedby={error ? fieldErrorId(id) : hintId}
+              onChange={(e) => {
+                setDrafts({ ...current, [type]: e.target.value });
+                // Corregir quita el error de ese campo, y el aviso de guardado
+                // ya no describe lo que se ve.
+                setFieldErrors((prev) => {
+                  if (!prev[type]) return prev;
+                  const next = { ...prev };
+                  delete next[type];
+                  return next;
+                });
+                setNotice('');
+              }}
             />
           </FormField>
         );

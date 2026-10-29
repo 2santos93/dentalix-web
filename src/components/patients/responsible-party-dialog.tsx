@@ -7,13 +7,12 @@ import { useDebouncedValue } from '@/lib/hooks/use-debounced-value';
 import { listPatients, type DocType, type Patient } from '@/lib/patients/patients-api';
 import {
   DOC_TYPES,
-  docTypeLabelTooLong,
   docTypeOptionLabel,
   documentText,
   dtoDocTypeName,
   normalizeDocTypeLabel,
 } from '@/lib/patients/doc-type';
-import { DocTypeLabelField, docTypeLabelFieldCopy } from './doc-type-label-field';
+import { DocTypeLabelField, docTypeLabelFieldError } from './doc-type-label-field';
 import { useDocumentTypeNames } from '@/lib/patients/use-document-type-names';
 import {
   createResponsibleParty,
@@ -190,8 +189,10 @@ export function ResponsiblePartyDialog({
       setFieldError(copy.nameRequired);
       return;
     }
-    if (draft.kind === 'CONTACT' && draft.docType && docTypeLabelTooLong(draft.docTypeLabel)) {
-      setLabelError(docTypeLabelFieldCopy.tooLong);
+    const labelFieldError =
+      draft.kind === 'CONTACT' && draft.docType ? docTypeLabelFieldError(draft.docTypeLabel) : null;
+    if (labelFieldError) {
+      setLabelError(labelFieldError);
       labelRef.current?.focus();
       return;
     }
@@ -389,9 +390,12 @@ export function ResponsiblePartyDialog({
                 id={`${ids}-doctype`}
                 value={draft.docType}
                 onChange={(e) => {
-                  set('docType', e.target.value as DocType | '');
-                  // La etiqueta de un tipo no vale para otro (R7).
-                  set('docTypeLabel', '');
+                  const next = e.target.value as DocType | '';
+                  const seeded = draftFrom(party);
+                  set('docType', next);
+                  // La etiqueta de un tipo no vale para otro (R7); volver al
+                  // tipo guardado recupera la suya, no la borra.
+                  set('docTypeLabel', next !== '' && next === seeded.docType ? seeded.docTypeLabel : '');
                   setLabelError(null);
                 }}
                 className={cn(fieldClass, 'h-10')}

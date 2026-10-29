@@ -259,7 +259,7 @@ describe('PatientResponsiblePartiesSection (DX-203)', () => {
 
     await user.selectOptions(screen.getByLabelText('Tipo de documento'), 'NATIONAL_ID');
     expect(screen.getByLabelText('Nombre del documento (opcional)')).toHaveValue('');
-    expect(screen.getByText('Si lo escribes, los documentos impresos lo muestran en lugar del tipo.')).toBeInTheDocument();
+    expect(screen.getByText('Si lo escribes, se muestra en lugar del tipo en fichas y documentos.')).toBeInTheDocument();
 
     await user.selectOptions(screen.getByLabelText('Tipo de documento'), '');
     expect(screen.queryByLabelText('Nombre del documento (opcional)')).not.toBeInTheDocument();
@@ -303,6 +303,50 @@ describe('PatientResponsiblePartiesSection (DX-203)', () => {
     await user.click(screen.getByRole('button', { name: 'Guardar' }));
     await waitFor(() => expect(mockedUpdate).toHaveBeenCalledTimes(3));
     expect(mockedUpdate.mock.calls[2][3]).toMatchObject({ docType: 'PASSPORT', docTypeLabel: 'Documento A' });
+  });
+
+  it('a contact: changing the type and back restores the saved label', async () => {
+    const contact: ResponsibleParty = {
+      ...motherParty,
+      kind: 'CONTACT',
+      responsiblePatient: null,
+      docTypeLabel: 'ID local',
+      docTypeName: 'ID local',
+    };
+    mockedGet.mockResolvedValue(data({ parties: [contact] }));
+    mockedUpdate.mockResolvedValue(contact);
+    renderSection();
+    const user = setupUser();
+
+    await user.click(await screen.findByRole('button', { name: 'Editar a Claudia Navarro' }));
+    const label = screen.getByLabelText('Nombre del documento (opcional)');
+    await user.selectOptions(screen.getByLabelText('Tipo de documento'), 'PASSPORT');
+    expect(label).toHaveValue('');
+    await user.selectOptions(screen.getByLabelText('Tipo de documento'), 'NATIONAL_ID');
+    expect(screen.getByLabelText('Nombre del documento (opcional)')).toHaveValue('ID local');
+    await user.click(screen.getByRole('button', { name: 'Guardar' }));
+    await waitFor(() => expect(mockedUpdate).toHaveBeenCalledTimes(1));
+    expect(mockedUpdate.mock.calls[0][3]).toMatchObject({ docType: 'NATIONAL_ID', docTypeLabel: 'ID local' });
+  });
+
+  it('a contact label with a control or format character is marked on its field', async () => {
+    mockedGet.mockResolvedValue(data());
+    renderSection();
+    const user = setupUser();
+    await user.click(await screen.findByRole('button', { name: 'Añadir responsable' }));
+    await user.click(screen.getByRole('radio', { name: 'Un contacto nuevo (sin ficha)' }));
+    await user.type(screen.getByLabelText('Nombre completo'), 'Claudia Navarro');
+    await user.selectOptions(screen.getByLabelText('Tipo de documento'), 'NATIONAL_ID');
+    const label = screen.getByLabelText('Nombre del documento (opcional)');
+    fireEvent.change(label, { target: { value: 'ID\u200Blocal' } });
+    await user.click(screen.getByRole('button', { name: 'Añadir' }));
+
+    expect(mockedCreate).not.toHaveBeenCalled();
+    expect(label).toHaveAttribute('aria-invalid', 'true');
+    expect(document.getElementById(label.getAttribute('aria-describedby')!)).toHaveTextContent(
+      'El nombre del documento no puede llevar caracteres de control.',
+    );
+    expect(label).toHaveFocus();
   });
 
   it('a contact label over 40 characters is marked on its field', async () => {

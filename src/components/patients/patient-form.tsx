@@ -4,7 +4,6 @@ import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Loader2 } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/error-message';
-import { ApiError } from '@/lib/api/client';
 import {
   createPatient,
   type CreatePatientInput,
@@ -20,13 +19,9 @@ import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { InlineError } from '@/components/errors/inline-error';
 import { cn } from '@/lib/utils';
 import { fieldClass } from '@/lib/ui/field-class';
-import {
-  DOC_TYPES,
-  docTypeLabelTooLong,
-  docTypeOptionLabel,
-  normalizeDocTypeLabel,
-} from '@/lib/patients/doc-type';
-import { DocTypeLabelField, docTypeLabelFieldCopy } from './doc-type-label-field';
+import { DOC_TYPES, docTypeOptionLabel, normalizeDocTypeLabel } from '@/lib/patients/doc-type';
+import { isEmailAddress } from '@/lib/format/email';
+import { DocTypeLabelField, docTypeLabelFieldError } from './doc-type-label-field';
 import { useDocumentTypeNames } from '@/lib/patients/use-document-type-names';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
@@ -34,7 +29,7 @@ import { useDocumentTypeNames } from '@/lib/patients/use-document-type-names';
 const copy = {
   firstNameLabel: 'Nombre',
   lastNameLabel: 'Apellido',
-  docTypeLabel: 'Tipo de documento',
+  docType: 'Tipo de documento',
   docTypePlaceholder: 'Elige el tipo',
   docTypeRequired: 'Elige el tipo de documento.',
   firstNameRequired: 'Escribe el nombre.',
@@ -64,8 +59,9 @@ const sexOptions: { value: Sex; label: string }[] = [
 
 /**
  * Campos con error propio, en el orden del formulario: el foco va al primero
- * que falle. Son también los campos del cuerpo a los que la API puede atar un
- * 400 (`ApiError.field`).
+ * que falle. El cliente aplica a la etiqueta y al email las reglas de la API,
+ * así que sus 400 no se alcanzan desde aquí (hoy la API no ata ningún 400 de
+ * pacientes a un campo).
  */
 const CHECKED_FIELDS = ['firstName', 'lastName', 'docType', 'docTypeLabel', 'email'] as const;
 type CheckedField = (typeof CHECKED_FIELDS)[number];
@@ -172,10 +168,11 @@ export function PatientForm({ token, onCreated, initialDocNumber }: PatientFormP
     if (!firstName.trim()) found.firstName = copy.firstNameRequired;
     if (!lastName.trim()) found.lastName = copy.lastNameRequired;
     if (docType === '') found.docType = copy.docTypeRequired;
-    if (docTypeLabelTooLong(docTypeLabel)) found.docTypeLabel = docTypeLabelFieldCopy.tooLong;
-    // Con `noValidate` el navegador ya no frena un «ana@»: se mira su propia
-    // validez de `type="email"`, la misma regla que antes aplicaba al enviar.
-    if (email.trim() && emailRef.current?.validity.typeMismatch) found.email = copy.emailInvalid;
+    const labelError = docTypeLabelFieldError(docTypeLabel);
+    if (labelError) found.docTypeLabel = labelError;
+    // La regla de `@IsEmail()` de la API, más estricta que la del navegador
+    // (que acepta «ana@x»).
+    if (email.trim() && !isEmailAddress(email.trim())) found.email = copy.emailInvalid;
     return found;
   }
 
@@ -220,20 +217,7 @@ export function PatientForm({ token, onCreated, initialDocNumber }: PatientFormP
         router.push('/patients');
       }
     } catch (err) {
-      const text = apiErrorMessage(err, copy.genericError);
-      // Un 400 que la API ata a un campo de este formulario va junto a ese campo.
-      if (
-        err instanceof ApiError &&
-        err.status === 400 &&
-        err.field &&
-        (CHECKED_FIELDS as readonly string[]).includes(err.field)
-      ) {
-        const field = err.field as CheckedField;
-        setFieldErrors({ [field]: text });
-        setFocusRequest({ field });
-        return;
-      }
-      setError(text);
+      setError(apiErrorMessage(err, copy.genericError));
     } finally {
       setSubmitting(false);
     }
@@ -279,7 +263,7 @@ export function PatientForm({ token, onCreated, initialDocNumber }: PatientFormP
       <div className="grid gap-5 sm:grid-cols-2">
         <FormField
           htmlFor="patient-doc-type"
-          label={copy.docTypeLabel}
+          label={copy.docType}
           error={fieldErrors.docType}
         >
           <select

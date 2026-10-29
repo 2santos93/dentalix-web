@@ -318,7 +318,9 @@ test('ADMIN sets a local name in Ajustes and it shows in the create form, the re
   await expect(page.getByRole('heading', { level: 1, name: 'Nombres de documentos' })).toBeVisible({ timeout: 15_000 });
   const national = page.getByRole('textbox', { name: 'Documento nacional', exact: true });
   await expect(national).toHaveValue('');
-  await expect(national).toHaveAttribute('placeholder', 'Documento nacional');
+  // Sin placeholder que repita el genérico: lo dice la pista, enlazada al campo.
+  await expect(national).not.toHaveAttribute('placeholder');
+  await expect(national).toHaveAccessibleDescription('Vacío: se usa «Documento nacional».');
   await national.fill('Documento A');
   await page.getByRole('button', { name: 'Guardar' }).click();
   await expect(page.getByText('Nombres guardados.')).toBeVisible();

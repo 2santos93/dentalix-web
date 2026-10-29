@@ -303,7 +303,7 @@ describe('clinicSettingsDetail (DX-328)', () => {
     const reason = 'DOCUMENT_TYPE_NAMES_SETTINGS';
     expect(clinicSettingsDetail({ reason, changedFields: [] })).toBeNull();
     expect(clinicSettingsDetail({ reason })).toBeNull();
-    expect(clinicSettingsDetail({ reason, changedFields: ['NATIONAL_ID', 'CC'] })).toBeNull();
+    expect(clinicSettingsDetail({ reason, changedFields: ['NATIONAL_ID', 'XYZ'] })).toBeNull();
   });
 
   it('clinicSettingsDetail renders Receta: cantidad en letras sí → no', () => {

@@ -207,27 +207,62 @@ describe('PatientForm', () => {
       expect(mockedCreatePatient.mock.calls[0][1]).toMatchObject({ email: 'ana@demo.com' });
     });
 
-    it('a 400 the API ties to a field is shown on that field', async () => {
-      const { ApiError } = jest.requireActual('../../lib/api/client');
-      mockedCreatePatient.mockRejectedValue(
-        new ApiError(400, 'Bad Request', {
-          messages: ['El correo electrónico no es válido.'],
-          field: 'email',
-        }),
-      );
+    it('an email the API would reject («ana@x», no TLD) is marked on its field', async () => {
       const user = userEvent.setup();
       render(<PatientForm token="tok" />);
       await fillRequired(user);
       const email = screen.getByLabelText(/correo/i);
-      await user.type(email, 'ana@demo.com');
+      await user.type(email, 'ana@x');
       await user.click(screen.getByRole('button', { name: /crear|guardar/i }));
 
-      await waitFor(() => expect(email).toHaveAttribute('aria-invalid', 'true'));
-      expect(document.getElementById('patient-email-error')).toHaveTextContent(
-        'El correo electrónico no es válido.',
-      );
+      expect(mockedCreatePatient).not.toHaveBeenCalled();
+      expect(email).toHaveAttribute('aria-invalid', 'true');
+      expect(document.getElementById('patient-email-error')).toHaveTextContent('Revisa el correo electrónico');
       expect(email).toHaveFocus();
-      expect(screen.getAllByRole('alert')).toHaveLength(1);
+
+      mockedCreatePatient.mockResolvedValue({ id: 'p1' } as Awaited<ReturnType<typeof createPatient>>);
+      await user.type(email, '.co');
+      await user.click(screen.getByRole('button', { name: /crear|guardar/i }));
+      await waitFor(() => expect(mockedCreatePatient).toHaveBeenCalledTimes(1));
+      expect(mockedCreatePatient.mock.calls[0][1]).toMatchObject({ email: 'ana@x.co' });
+    });
+
+    it('a 400 from the API goes to the form banner, with no field marked', async () => {
+      const { ApiError } = jest.requireActual('../../lib/api/client');
+      mockedCreatePatient.mockRejectedValue(
+        new ApiError(400, 'Bad Request', { messages: ['El paciente no se pudo crear.'] }),
+      );
+      const user = userEvent.setup();
+      render(<PatientForm token="tok" />);
+      await fillRequired(user);
+      await user.click(screen.getByRole('button', { name: /crear|guardar/i }));
+
+      expect(await screen.findByRole('alert')).toHaveTextContent('El paciente no se pudo crear.');
+      expect(screen.getByLabelText(/correo/i)).not.toHaveAttribute('aria-invalid');
+      expect(screen.getByLabelText('Nombre del documento (opcional)')).not.toHaveAttribute('aria-invalid');
+    });
+
+    it.each([
+      ['a zero-width space', 'ID\u200Blocal'],
+      ['a right-to-left override', 'ID \u202Elocal'],
+      ['a lone surrogate', 'ID \uD800'],
+      ['a control character', 'ID\u0007local'],
+    ])('rejects a label with %s, as the API does', async (_what, value) => {
+      const user = userEvent.setup();
+      render(<PatientForm token="tok" />);
+      await fillRequired(user);
+      const label = screen.getByLabelText('Nombre del documento (opcional)');
+      fireEvent.change(label, { target: { value } });
+      await user.click(screen.getByRole('button', { name: /crear|guardar/i }));
+
+      expect(mockedCreatePatient).not.toHaveBeenCalled();
+      expect(label).toHaveAttribute('aria-invalid', 'true');
+      expect(label).toHaveAttribute('aria-describedby', 'patient-doc-type-label-error');
+      expect(document.getElementById('patient-doc-type-label-error')).toHaveTextContent(
+        'El nombre del documento no puede llevar caracteres de control.',
+      );
+      expect(label).toHaveFocus();
+      await screen.findByRole('option', { name: 'Colombia' });
     });
 
     it('sends the free label trimmed, or omits it when empty', async () => {
@@ -237,7 +272,7 @@ describe('PatientForm', () => {
       const { unmount } = render(<PatientForm token="tok" onCreated={onCreated} />);
       await fillRequired(user);
       const label = screen.getByLabelText('Nombre del documento (opcional)');
-      expect(screen.getByText('Si lo escribes, los documentos impresos lo muestran en lugar del tipo.')).toBeInTheDocument();
+      expect(screen.getByText('Si lo escribes, se muestra en lugar del tipo en fichas y documentos.')).toBeInTheDocument();
       await user.type(label, '  ID   local  ');
       await user.click(screen.getByRole('button', { name: /crear|guardar/i }));
       await waitFor(() => expect(onCreated).toHaveBeenCalledTimes(1));
@@ -251,6 +286,14 @@ describe('PatientForm', () => {
       await user.click(screen.getByRole('button', { name: /crear|guardar/i }));
       await waitFor(() => expect(onCreated).toHaveBeenCalledTimes(2));
       expect(mockedCreatePatient.mock.calls[1][1]).not.toHaveProperty('docTypeLabel');
+      await screen.findByRole('option', { name: 'Colombia' });
+    });
+
+    it('the label field is styled like its neighbours (same height on mobile)', async () => {
+      render(<PatientForm token="tok" />);
+      expect(screen.getByLabelText('Nombre del documento (opcional)').className).toBe(
+        screen.getByLabelText(/número de documento/i).className,
+      );
       await screen.findByRole('option', { name: 'Colombia' });
     });
 

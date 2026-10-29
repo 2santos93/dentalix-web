@@ -14,7 +14,7 @@ const copy = {
   checkingSession: 'Verificando sesión…',
 };
 
-/** Ajustes de mayoría de edad de la clínica (DX-327). Solo ADMIN. */
+/** Ajustes de los nombres de documentos de la clínica (DX-327). Solo ADMIN. */
 export default function DocumentTypeNamesSettingsPage() {
   const router = useRouter();
   const accessToken = useAuthStore((s) => s.accessToken);

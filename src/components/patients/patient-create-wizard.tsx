@@ -16,13 +16,9 @@ import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { InlineError } from '@/components/errors/inline-error';
 import { fieldClass } from '@/lib/ui/field-class';
 import { cn } from '@/lib/utils';
-import {
-  DOC_TYPES,
-  docTypeLabelTooLong,
-  docTypeOptionLabel,
-  normalizeDocTypeLabel,
-} from '@/lib/patients/doc-type';
-import { DocTypeLabelField, docTypeLabelFieldCopy } from './doc-type-label-field';
+import { DOC_TYPES, docTypeOptionLabel, normalizeDocTypeLabel } from '@/lib/patients/doc-type';
+import { isEmailAddress } from '@/lib/format/email';
+import { DocTypeLabelField, docTypeLabelFieldError } from './doc-type-label-field';
 import { useDocumentTypeNames } from '@/lib/patients/use-document-type-names';
 import type { ClinicalHistoryValue } from '@/lib/clinical/clinical-types';
 import {
@@ -37,11 +33,12 @@ import { PatientConsentStep } from '@/components/data-consents/patient-consent-s
 const copy = {
   firstNameLabel: 'Nombre',
   lastNameLabel: 'Apellido',
-  docTypeLabel: 'Tipo de documento',
+  docType: 'Tipo de documento',
   docTypePlaceholder: 'Elige el tipo',
   docTypeRequired: 'Elige el tipo de documento.',
   firstNameRequired: 'Escribe el nombre.',
   lastNameRequired: 'Escribe el apellido.',
+  emailInvalid: 'Revisa el correo electrónico: le falta algo (p. ej. nombre@dominio.com).',
   docNumberLabel: 'Número de documento',
   birthDateLabel: 'Fecha de nacimiento',
   sexLabel: 'Sexo',
@@ -78,8 +75,12 @@ const sexOptions: { value: Sex; label: string }[] = [
   { value: 'OTHER', label: 'Otro' },
 ];
 
-/** Campos del paso 1 con error propio, en el orden del formulario. */
-const CHECKED_FIELDS = ['firstName', 'lastName', 'docType', 'docTypeLabel'] as const;
+/**
+ * Campos del paso 1 con error propio, en el orden del formulario. La etiqueta
+ * y el email siguen las reglas de la API: su 400 saldría en el paso 5, lejos
+ * del campo.
+ */
+const CHECKED_FIELDS = ['firstName', 'lastName', 'docType', 'docTypeLabel', 'email'] as const;
 type CheckedField = (typeof CHECKED_FIELDS)[number];
 type MissingFields = Partial<Record<CheckedField, string>>;
 
@@ -132,6 +133,7 @@ export function PatientCreateWizard({ token, canWriteClinicalHistory }: PatientC
   const docTypeRef = React.useRef<HTMLSelectElement>(null);
   const [docTypeLabel, setDocTypeLabel] = useState('');
   const docTypeLabelRef = React.useRef<HTMLInputElement>(null);
+  const emailRef = React.useRef<HTMLInputElement>(null);
   // Cada petición es un objeto nuevo: el efecto enfoca aunque se repita el campo.
   const [focusRequest, setFocusRequest] = useState<{ field: CheckedField } | null>(null);
   React.useEffect(() => {
@@ -141,6 +143,7 @@ export function PatientCreateWizard({ token, canWriteClinicalHistory }: PatientC
       lastName: lastNameRef,
       docType: docTypeRef,
       docTypeLabel: docTypeLabelRef,
+      email: emailRef,
     };
     refs[focusRequest.field].current?.focus();
   }, [focusRequest]);
@@ -162,11 +165,14 @@ export function PatientCreateWizard({ token, canWriteClinicalHistory }: PatientC
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
+  const labelError = docTypeLabelFieldError(docTypeLabel);
+  const emailInvalid = email.trim() !== '' && !isEmailAddress(email.trim());
   const isBasicInfoValid =
     firstName.trim() !== '' &&
     lastName.trim() !== '' &&
     docType !== '' &&
-    !docTypeLabelTooLong(docTypeLabel);
+    !labelError &&
+    !emailInvalid;
 
   /** Marca lo que falta o sobra y lleva el foco al primer campo con error. */
   function flagMissingBasics() {
@@ -174,7 +180,8 @@ export function PatientCreateWizard({ token, canWriteClinicalHistory }: PatientC
       ...(!firstName.trim() ? { firstName: copy.firstNameRequired } : {}),
       ...(!lastName.trim() ? { lastName: copy.lastNameRequired } : {}),
       ...(docType === '' ? { docType: copy.docTypeRequired } : {}),
-      ...(docTypeLabelTooLong(docTypeLabel) ? { docTypeLabel: docTypeLabelFieldCopy.tooLong } : {}),
+      ...(labelError ? { docTypeLabel: labelError } : {}),
+      ...(emailInvalid ? { email: copy.emailInvalid } : {}),
     };
     const missingRequired = Boolean(found.firstName || found.lastName || found.docType);
     setValidationError(missingRequired ? copy.requiredError : null);
@@ -294,7 +301,7 @@ export function PatientCreateWizard({ token, canWriteClinicalHistory }: PatientC
             <div className="grid gap-5 sm:grid-cols-2">
               <FormField
                 htmlFor="pcw-doc-type"
-                label={copy.docTypeLabel}
+                label={copy.docType}
                 error={missing.docType}
               >
                 <select
@@ -379,14 +386,19 @@ export function PatientCreateWizard({ token, canWriteClinicalHistory }: PatientC
                   onChange={(e) => setPhone(e.target.value)}
                 />
               </FormField>
-              <FormField htmlFor="pcw-email" label={copy.emailLabel}>
+              <FormField htmlFor="pcw-email" label={copy.emailLabel} error={missing.email}>
                 <Input
+                  ref={emailRef}
                   id="pcw-email"
                   name="email"
                   type="email"
                   autoComplete="email"
                   value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  onChange={(e) => {
+                    setEmail(e.target.value);
+                    clearMissing('email');
+                  }}
+                  {...invalidProps('pcw-email', missing.email)}
                 />
               </FormField>
             </div>

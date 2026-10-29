@@ -4,7 +4,9 @@ import {
   DOC_TYPE_LABEL_MAX,
   DOC_TYPE_NAME_MAX,
   DOC_TYPES,
-  docTypeLabelTooLong,
+  docTypeLabelError,
+  docTypeNameError,
+  normalizeDocTypeName,
   docTypeOptionLabel,
   documentText,
   documentTypeName,
@@ -83,12 +85,59 @@ describe('doc-type', () => {
     expect(normalizeDocTypeLabel('')).toBeNull();
   });
 
-  it('docTypeLabelTooLong counts characters, not UTF-16 units, after normalizing', () => {
-    expect(docTypeLabelTooLong('a'.repeat(DOC_TYPE_LABEL_MAX))).toBe(false);
-    expect(docTypeLabelTooLong('a'.repeat(DOC_TYPE_LABEL_MAX + 1))).toBe(true);
-    // 40 caracteres fuera del plano básico son 80 unidades UTF-16: caben.
-    expect(docTypeLabelTooLong('\u{1D49C}'.repeat(DOC_TYPE_LABEL_MAX))).toBe(false);
-    expect(docTypeLabelTooLong('\u{1D49C}'.repeat(DOC_TYPE_LABEL_MAX + 1))).toBe(true);
-    expect(docTypeLabelTooLong(`  ${'a'.repeat(DOC_TYPE_LABEL_MAX)}  `)).toBe(false);
+  it('docTypeLabelError counts characters, not UTF-16 units, after normalizing', () => {
+    expect(docTypeLabelError('a'.repeat(DOC_TYPE_LABEL_MAX))).toBeNull();
+    expect(docTypeLabelError('a'.repeat(DOC_TYPE_LABEL_MAX + 1))).toBe('tooLong');
+    // 40 caracteres fuera del plano básico son 80 unidades UTF-16.
+    expect(docTypeLabelError('\u{1D49C}'.repeat(DOC_TYPE_LABEL_MAX))).toBeNull();
+    expect(docTypeLabelError('\u{1D49C}'.repeat(DOC_TYPE_LABEL_MAX + 1))).toBe('tooLong');
+    expect(docTypeLabelError(`  ${'a'.repeat(DOC_TYPE_LABEL_MAX)}  `)).toBeNull();
+    expect(docTypeLabelError(`${'a'.repeat(20)}     ${'a'.repeat(19)}`)).toBeNull();
+    expect(docTypeLabelError('')).toBeNull();
+    expect(docTypeLabelError('   ')).toBeNull();
+  });
+
+  it.each([
+    ['a zero-width space', 'ID\u200Blocal'],
+    ['a right-to-left override', 'ID \u202Elocal'],
+    ['a soft hyphen', 'ID\u00ADlocal'],
+    ['a lone high surrogate', 'ID \uD800'],
+    ['a lone low surrogate', 'ID \uDC00'],
+    ['a bell', 'ID\u0007'],
+    ['a DEL', 'ID\u007F'],
+  ])('docTypeLabelError rejects %s like the API', (_what, value) => {
+    expect(docTypeLabelError(value)).toBe('control');
+  });
+
+  it('docTypeLabelError checks control characters before length, like the API', () => {
+    expect(docTypeLabelError(`${'a'.repeat(DOC_TYPE_LABEL_MAX + 5)}\u200B`)).toBe('control');
+  });
+
+  it('docTypeLabelError accepts any script and joined spaces (tabs and new lines are spaces)', () => {
+    for (const value of ['Паспорт', 'جواز سفر', '身份证', 'ID\tlocal', 'ID\nlocal', '\u{1F600} ID']) {
+      expect([value, docTypeLabelError(value)]).toEqual([value, null]);
+    }
+  });
+
+  it('normalizeDocTypeName joins spaces like the API, and empty is null', () => {
+    expect(normalizeDocTypeName('  ID   local\t ')).toBe('ID local');
+    expect(normalizeDocTypeName(' \n ')).toBeNull();
+  });
+
+  it('docTypeNameError: 60 characters, control characters and at least one letter or number', () => {
+    expect(docTypeNameError('a'.repeat(DOC_TYPE_NAME_MAX))).toBeNull();
+    expect(docTypeNameError('\u{1D49C}'.repeat(DOC_TYPE_NAME_MAX))).toBeNull();
+    expect(docTypeNameError('\u{1D49C}'.repeat(DOC_TYPE_NAME_MAX + 1))).toBe('tooLong');
+    expect(docTypeNameError(`  ${'a'.repeat(30)}    ${'a'.repeat(29)}  `)).toBeNull();
+    expect(docTypeNameError('ID\u200Blocal')).toBe('control');
+    expect(docTypeNameError('ID \uD800')).toBe('control');
+    expect(docTypeNameError('---')).toBe('noLetter');
+    expect(docTypeNameError('★ ·')).toBe('noLetter');
+    // NFKD lo parte en flecha y marca; la API lo recompone y queda sin letras.
+    expect(docTypeNameError('↚')).toBe('noLetter');
+    expect(docTypeNameError('')).toBeNull();
+    for (const value of ['ID', '身份证', '①', 'Nº 1', 'ガ']) {
+      expect([value, docTypeNameError(value)]).toEqual([value, null]);
+    }
   });
 });

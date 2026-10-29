@@ -12,12 +12,11 @@ import { FormField } from '@/components/shared/form-field';
 import { Input } from '@/components/ui/input';
 import {
   DOC_TYPES,
-  docTypeLabelTooLong,
   docTypeOptionLabel,
   normalizeDocTypeLabel,
   type ClinicDocumentTypeNames,
 } from '@/lib/patients/doc-type';
-import { DocTypeLabelField, docTypeLabelFieldCopy } from './doc-type-label-field';
+import { DocTypeLabelField, docTypeLabelFieldError } from './doc-type-label-field';
 import { normalizeDocType } from '@/lib/patients/legacy-doc-type';
 
 // Copy as constants (i18n-ready) — es first.
@@ -244,8 +243,9 @@ export function PatientEditModal({
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
-    if (docTypeLabelTooLong(docTypeLabel)) {
-      setDocTypeLabelError(docTypeLabelFieldCopy.tooLong);
+    const labelError = docTypeLabelFieldError(docTypeLabel);
+    if (labelError) {
+      setDocTypeLabelError(labelError);
       docTypeLabelRef.current?.focus();
       return;
     }
@@ -259,6 +259,20 @@ export function PatientEditModal({
     } finally {
       setSaving(false);
     }
+  }
+
+  function textField(f: TextFieldSpec) {
+    return (
+      <FormField key={f.key} htmlFor={`pe-${f.key}`} label={f.label}>
+        <Input
+          id={`pe-${f.key}`}
+          type={f.type ?? 'text'}
+          value={text[f.key]}
+          required={f.required}
+          onChange={(e) => setText((prev) => ({ ...prev, [f.key]: e.target.value }))}
+        />
+      </FormField>
+    );
   }
 
   return (
@@ -278,30 +292,22 @@ export function PatientEditModal({
           <section key={group.title} className="flex flex-col gap-3">
             <h3 className="text-sm font-medium text-muted">{group.title}</h3>
             <div className="grid gap-4 sm:grid-cols-2">
-              {group.fields.map((f) => (
-                <FormField key={f.key} htmlFor={`pe-${f.key}`} label={f.label}>
-                  <Input
-                    id={`pe-${f.key}`}
-                    type={f.type ?? 'text'}
-                    value={text[f.key]}
-                    required={f.required}
-                    onChange={(e) =>
-                      setText((prev) => ({ ...prev, [f.key]: e.target.value }))
-                    }
-                  />
-                </FormField>
-              ))}
-
-              {group.title === copy.identification && (
+              {group.title === copy.identification ? (
                 <>
+                  {group.fields.filter((f) => f.key === 'firstName' || f.key === 'lastName').map(textField)}
+                  {/* El tipo junto a su número, y su nombre libre debajo (R7). */}
                   <FormField htmlFor="pe-doc-type" label={copy.docType}>
                     <select
                       id="pe-doc-type"
                       value={docType}
                       onChange={(e) => {
-                        setDocType(e.target.value as Patient['docType']);
-                        // La etiqueta de un tipo no vale para otro (R7).
-                        setDocTypeLabel('');
+                        const next = e.target.value as Patient['docType'];
+                        setDocType(next);
+                        // La etiqueta de un tipo no vale para otro (R7); volver
+                        // al tipo guardado recupera la suya, no la borra.
+                        setDocTypeLabel(
+                          next === seededDocType(seededPatient) ? (seededPatient.docTypeLabel ?? '') : '',
+                        );
                         setDocTypeLabelError(null);
                       }}
                       className={fieldClass}
@@ -313,6 +319,7 @@ export function PatientEditModal({
                       ))}
                     </select>
                   </FormField>
+                  {group.fields.filter((f) => f.key === 'docNumber').map(textField)}
                   <DocTypeLabelField
                     id="pe-docTypeLabel"
                     inputRef={docTypeLabelRef}
@@ -322,7 +329,9 @@ export function PatientEditModal({
                       setDocTypeLabelError(null);
                     }}
                     error={docTypeLabelError}
+                    className="sm:col-span-2"
                   />
+                  {group.fields.filter((f) => f.key === 'birthDate').map(textField)}
                   <FormField htmlFor="pe-sex" label={copy.sex}>
                     <select
                       id="pe-sex"
@@ -338,6 +347,8 @@ export function PatientEditModal({
                     </select>
                   </FormField>
                 </>
+              ) : (
+                group.fields.map(textField)
               )}
             </div>
           </section>
