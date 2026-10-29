@@ -83,7 +83,7 @@ export const wizardCopy = {
   skip: 'Saltarlos: no tocar su ficha',
   fill: 'Actualizar solo los campos vacíos (nunca se pisa un dato)',
   consentNote:
-    'Los pacientes importados quedan con la autorización de datos (Ley 1581) pendiente: pídela en su próxima visita desde su ficha.',
+    'Los pacientes importados quedan con la autorización de datos pendiente: pídela en su próxima visita desde su ficha.',
   backgroundNote:
     'La importación corre en segundo plano: puedes seguir trabajando y volver a esta pantalla para ver el avance.',
   confirm: (n: number, shown: string) => `Importar ${shown} ${n === 1 ? 'paciente' : 'pacientes'}`,

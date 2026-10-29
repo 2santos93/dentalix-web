@@ -37,7 +37,7 @@ import { ConsentScopeFields } from './consent-scope-fields';
 const copy = {
   title: 'Autorizaciones de datos',
   description:
-    'Prueba de la autorización de tratamiento de datos (Ley 1581): cada aceptación o revocación queda registrada con la versión de la política, quién la registró y cuándo. Nada se edita ni se borra.',
+    'Prueba de la autorización de tratamiento de datos: cada aceptación o revocación queda registrada con la versión de la política, quién la registró y cuándo. Nada se edita ni se borra.',
   record: 'Registrar autorización',
   recordTitle: 'Registrar autorización de datos',
   recordDescription:
