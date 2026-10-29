@@ -9,7 +9,7 @@ import { PrivacyPolicySettings } from '@/components/data-consents/privacy-policy
 const copy = {
   title: 'Privacidad de datos',
   description:
-    'La política de tratamiento de datos (Ley 1581) que ven y autorizan los pacientes. Cada versión publicada queda fija.',
+    'La política de tratamiento de datos que ven y autorizan los pacientes. Cada versión publicada queda fija.',
   checkingSession: 'Verificando sesión…',
 };
 

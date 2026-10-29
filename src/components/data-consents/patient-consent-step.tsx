@@ -18,7 +18,7 @@ import { usePrivacyPolicies } from './use-privacy-policies';
 const copy = {
   title: 'Autorización de tratamiento de datos',
   description:
-    'Ley 1581 de 2012. Se guarda la versión de la política, quién la registra y cuándo. Si el paciente no autoriza ahora, puedes registrarlo después en la pestaña «Autorizaciones» de su ficha.',
+    'Se guarda la versión de la política, quién la registra y cuándo. Si el paciente no autoriza ahora, puedes registrarlo después en la pestaña «Autorizaciones» de su ficha.',
   loadError: 'No pudimos cargar la política de tratamiento de datos.',
   emptyTitle: 'La clínica aún no ha publicado su política de tratamiento de datos.',
   emptyAdmin: 'Publícala para poder registrar la autorización del paciente.',

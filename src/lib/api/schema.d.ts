@@ -4513,7 +4513,7 @@ export interface paths {
         put?: never;
         /**
          * Paso 3: confirmar e importar en segundo plano
-         * @description Encola el trabajo que importa el lote por bloques (la clínica sigue trabajando): primero los pacientes y después, si el lote trae hoja de saldos, un «Saldo migrado» por paciente y moneda (DX-262). Una importación en curso por clínica. Los pacientes quedan SIN autorización de datos (Ley 1581) registrada: la ficha la marca pendiente.
+         * @description Encola el trabajo que importa el lote por bloques (la clínica sigue trabajando): primero los pacientes y después, si el lote trae hoja de saldos, un «Saldo migrado» por paciente y moneda (DX-262). Una importación en curso por clínica. Los pacientes quedan SIN autorización de datos registrada: la ficha la marca pendiente.
          */
         post: operations["PatientImportsController_confirm"];
         delete?: never;
@@ -5150,7 +5150,7 @@ export interface components {
              */
             cityId?: number;
             notes?: string;
-            /** @description Autorización de datos (Ley 1581) que el paciente da en el alta: se registra en la misma transacción, con las mismas reglas que POST /patients/:id/data-consents. Sin este campo no se registra ninguna autorización. */
+            /** @description Autorización de datos que el paciente da en el alta: se registra en la misma transacción, con las mismas reglas que POST /patients/:id/data-consents. Sin este campo no se registra ninguna autorización. */
             dataConsents?: components["schemas"]["RecordDataConsentsDto"];
             /**
              * @deprecated
@@ -5173,7 +5173,7 @@ export interface components {
             medicalHistory?: components["schemas"]["SaveMedicalHistoryDto"];
         };
         /**
-         * @description Retención extendida de la HC: NONE = 15 años desde la última atención (Res. 839/2017), DOUBLE = 30 años, PERMANENT = nunca se libera. Solo ADMIN la cambia.
+         * @description Retención extendida de la HC: NONE = 15 años desde la última atención, DOUBLE = 30 años, PERMANENT = nunca se libera. Solo ADMIN la cambia.
          * @enum {string}
          */
         RetentionExtension: "NONE" | "DOUBLE" | "PERMANENT";
@@ -5246,7 +5246,7 @@ export interface components {
              * @description DX-039: fecha de la última atención clínica (evolución registrada o cita atendida). La mantiene la BD y nunca retrocede.
              */
             lastAttentionAt: string | null;
-            /** @description Retención extendida de la HC: NONE = 15 años desde la última atención (Res. 839/2017), DOUBLE = 30 años, PERMANENT = nunca se libera. Solo ADMIN la cambia. */
+            /** @description Retención extendida de la HC: NONE = 15 años desde la última atención, DOUBLE = 30 años, PERMANENT = nunca se libera. Solo ADMIN la cambia. */
             retentionExtended: components["schemas"]["RetentionExtension"];
             /**
              * Format: date
@@ -5263,7 +5263,7 @@ export interface components {
             partiallySuppressedAt: string | null;
             /**
              * Format: uuid
-             * @description DX-107: lote de importación que creó al paciente (null = alta a mano). Un paciente importado nace SIN autorización de datos (Ley 1581): la ficha la marca pendiente.
+             * @description DX-107: lote de importación que creó al paciente (null = alta a mano). Un paciente importado nace SIN autorización de datos: la ficha la marca pendiente.
              */
             importBatchId: string | null;
             /** @description DX-128: canal de los avisos automáticos (EMAIL, WHATSAPP o NONE). Detalle en GET /patients/:id/communication. */
@@ -5360,7 +5360,7 @@ export interface components {
              * @description DX-039: fecha de la última atención clínica (evolución registrada o cita atendida). La mantiene la BD y nunca retrocede.
              */
             lastAttentionAt: string | null;
-            /** @description Retención extendida de la HC: NONE = 15 años desde la última atención (Res. 839/2017), DOUBLE = 30 años, PERMANENT = nunca se libera. Solo ADMIN la cambia. */
+            /** @description Retención extendida de la HC: NONE = 15 años desde la última atención, DOUBLE = 30 años, PERMANENT = nunca se libera. Solo ADMIN la cambia. */
             retentionExtended: components["schemas"]["RetentionExtension"];
             /**
              * Format: date
@@ -5377,7 +5377,7 @@ export interface components {
             partiallySuppressedAt: string | null;
             /**
              * Format: uuid
-             * @description DX-107: lote de importación que creó al paciente (null = alta a mano). Un paciente importado nace SIN autorización de datos (Ley 1581): la ficha la marca pendiente.
+             * @description DX-107: lote de importación que creó al paciente (null = alta a mano). Un paciente importado nace SIN autorización de datos: la ficha la marca pendiente.
              */
             importBatchId: string | null;
             /** @description DX-128: canal de los avisos automáticos (EMAIL, WHATSAPP o NONE). Detalle en GET /patients/:id/communication. */
@@ -5502,7 +5502,7 @@ export interface components {
              * @description DX-039: fecha de la última atención clínica (evolución registrada o cita atendida). La mantiene la BD y nunca retrocede.
              */
             lastAttentionAt: string | null;
-            /** @description Retención extendida de la HC: NONE = 15 años desde la última atención (Res. 839/2017), DOUBLE = 30 años, PERMANENT = nunca se libera. Solo ADMIN la cambia. */
+            /** @description Retención extendida de la HC: NONE = 15 años desde la última atención, DOUBLE = 30 años, PERMANENT = nunca se libera. Solo ADMIN la cambia. */
             retentionExtended: components["schemas"]["RetentionExtension"];
             /**
              * Format: date
@@ -5519,7 +5519,7 @@ export interface components {
             partiallySuppressedAt: string | null;
             /**
              * Format: uuid
-             * @description DX-107: lote de importación que creó al paciente (null = alta a mano). Un paciente importado nace SIN autorización de datos (Ley 1581): la ficha la marca pendiente.
+             * @description DX-107: lote de importación que creó al paciente (null = alta a mano). Un paciente importado nace SIN autorización de datos: la ficha la marca pendiente.
              */
             importBatchId: string | null;
             /** @description DX-128: canal de los avisos automáticos (EMAIL, WHATSAPP o NONE). Detalle en GET /patients/:id/communication. */
@@ -16554,7 +16554,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Una evolución de la historia clínica no se puede modificar ni borrar (Res. 1995 de 1999, art. 18). Para corregirla, añade una adenda: POST /patients/{patientId}/clinical-entries/{entryId}/addenda */
+            /** @description La historia clínica no se puede modificar. Añade una adenda. */
             405: {
                 headers: {
                     [name: string]: unknown;
@@ -16575,7 +16575,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Una evolución de la historia clínica no se puede modificar ni borrar (Res. 1995 de 1999, art. 18). Para corregirla, añade una adenda: POST /patients/{patientId}/clinical-entries/{entryId}/addenda */
+            /** @description La historia clínica no se puede modificar. Añade una adenda. */
             405: {
                 headers: {
                     [name: string]: unknown;
@@ -16596,7 +16596,7 @@ export interface operations {
         };
         requestBody?: never;
         responses: {
-            /** @description Una evolución de la historia clínica no se puede modificar ni borrar (Res. 1995 de 1999, art. 18). Para corregirla, añade una adenda: POST /patients/{patientId}/clinical-entries/{entryId}/addenda */
+            /** @description La historia clínica no se puede modificar. Añade una adenda. */
             405: {
                 headers: {
                     [name: string]: unknown;
