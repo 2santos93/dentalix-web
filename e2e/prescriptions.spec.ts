@@ -59,7 +59,7 @@ test('emitir con alerta de alergia, imprimir en A4, anular; recepción sin pesta
   const patient = await admin.post<{ id: string }>('/patients', {
     firstName: 'Rosa',
     lastName: `Receta${suffix}`.slice(0, 40),
-    docType: 'CC',
+    docType: 'NATIONAL_ID',
     docNumber: `RX${suffix}`.slice(0, 20),
     sex: 'F',
   });

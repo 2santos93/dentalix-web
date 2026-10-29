@@ -9,8 +9,10 @@ function patient(overrides: Partial<Patient> = {}): Patient {
     tenantId: 't1',
     firstName: 'Carlos',
     lastName: 'Mejía',
-    docType: 'CC',
-    docNumber: '1002',
+    docType: 'NATIONAL_ID',
+    docTypeLabel: null,
+    docTypeName: 'ID local',
+    docNumber: 'DOC-1002',
     birthDate: '1992-03-12T00:00:00.000Z',
     sex: 'M',
     phone: null,
@@ -52,7 +54,7 @@ describe('PatientRecordHeader', () => {
     );
     const strip = screen.getByRole('list', { name: /datos de identificación/i });
     expect(strip).toHaveTextContent(/años/);
-    expect(strip).toHaveTextContent('CC 1002');
+    expect(strip).toHaveTextContent('ID local DOC-1002');
     expect(strip).toHaveTextContent('Tel. +57 300 000 0000');
   });
 
@@ -68,7 +70,30 @@ describe('PatientRecordHeader', () => {
     expect(strip).toHaveTextContent('Tel. +57 300 000 0000');
     expect(strip).not.toHaveTextContent('—');
     expect(strip).not.toHaveTextContent(/años/);
-    expect(strip).not.toHaveTextContent('CC');
+    expect(strip).not.toHaveTextContent('ID local');
+  });
+
+  it('prints the docTypeName of the DTO, or the generic name when it is missing', () => {
+    const { rerender } = render(
+      <PatientRecordHeader
+        patient={patient({ docTypeLabel: 'Documento A', docTypeName: 'Documento A' })}
+        loading={false}
+        onEdit={() => {}}
+      />,
+    );
+    const strip = () => screen.getByRole('list', { name: /datos de identificación/i });
+    expect(strip()).toHaveTextContent('Documento A DOC-1002');
+
+    // API anterior en el hueco del despliegue: sin `docTypeName`, el genérico.
+    rerender(
+      <PatientRecordHeader
+        patient={patient({ docType: 'PASSPORT', docTypeLabel: undefined, docTypeName: undefined })}
+        loading={false}
+        onEdit={() => {}}
+      />,
+    );
+    expect(strip()).toHaveTextContent('Pasaporte DOC-1002');
+    expect(strip()).not.toHaveTextContent('PASSPORT');
   });
 
   it('no pinta la tira cuando no hay ni un dato que poner', () => {

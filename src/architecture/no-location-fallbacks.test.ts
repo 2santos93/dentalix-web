@@ -1,5 +1,6 @@
 import { existsSync, readdirSync, readFileSync } from 'node:fs';
 import { join, relative, sep } from 'node:path';
+import ts from 'typescript';
 
 /**
  * GLOBAL-G1 (spec §9 web, R2, R5): ningún código de la web deduce la moneda o
@@ -515,5 +516,303 @@ describe('arquitectura: pagadores sin país (DX-326)', () => {
     ]) {
       expect([line, PAYER_TYPE_COMPARISON.test(line)]).toEqual([line, false]);
     }
+  });
+});
+
+/**
+ * DX-327 (spec R1, R13, §6.8, pre-flight M9): ningún texto de la web nombra un
+ * documento de un país («Cédula», «Tarjeta de identidad», «Extranjería», los
+ * códigos `CC`, `TI` y `CE`, y las siglas NIT, NIF, RIF, DNI, NIE, RUT, CURP,
+ * CPF, RUC, CUIL, CUIT y NUIP en cualquier caja, como en la API) ni una autoridad sanitaria («INVIMA», «marcado CE»).
+ * Recorrido propio, no `scanned()`/`hits()`: mira también comentarios y JSDoc,
+ * `lib/api/schema.d.ts` y los `*fixture*` de producción. Se salta solo los
+ * tests de `src`, `lib/test/**`, el normalizador legado de R13
+ * (`lib/patients/legacy-doc-type.ts`), el formato de receta anterior de DX-324
+ * y las líneas con nombre de `COUNTRY_DOCUMENT_LINE_EXCEPTIONS`. En `e2e/`
+ * solo valen dentro de un `test('legacy …')`, de una función `legacy…` o de
+ * un fichero `legacy-*`.
+ */
+const DOC_TYPE_LEGACY_NORMALIZER = 'lib/patients/legacy-doc-type.ts';
+// DX-324 (R12): `PRESCRIPTION_LEGACY_LAYOUT` congela los rótulos de las recetas anteriores.
+const LEGACY_FILES = [DOC_TYPE_LEGACY_NORMALIZER, PRESCRIPTION_LEGACY_LAYOUT];
+const COUNTRY_DOCUMENT = /[Cc][ée]dula|[Tt]arjeta de identidad|[Ee]xtranjer[ií]a|\b(?:CC|TI|CE)\b|INVIMA/;
+/** Siglas de documentos de otros países: en cualquier caja, como palabra. */
+const COUNTRY_DOCUMENT_ACRONYM = /\b(?:NIT|NIF|RIF|DNI|NIE|RUT|CURP|CPF|RUC|CUIL|CUIT|NUIP)\b/i;
+
+function namesCountryDocument(line: string): boolean {
+  return COUNTRY_DOCUMENT.test(line) || COUNTRY_DOCUMENT_ACRONYM.test(line);
+}
+
+/**
+ * Líneas exactas que aún nombran un documento de un país, cada una con el
+ * ticket que la quita. Cualquier otra coincidencia se arregla, no se añade
+ * aquí.
+ */
+const COUNTRY_DOCUMENT_LINE_EXCEPTIONS: readonly { file: string; line: string; until: string }[] = [
+  {
+    file: 'components/payments/payment-receipt-document.tsx',
+    line: 'taxId: (value: string) => `NIT/NIF ${value}`,',
+    until: 'DX-019',
+  },
+];
+
+function isLineException(rel: string, line: string): boolean {
+  return COUNTRY_DOCUMENT_LINE_EXCEPTIONS.some((e) => e.file === rel && e.line === line.trim());
+}
+
+function documentScanFiles(dir: string = SRC): string[] {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) return documentScanFiles(path);
+    if (!/\.(ts|tsx|js|jsx|mjs|json|css|md)$/.test(entry.name)) return [];
+    const rel = relative(SRC, path).split(sep).join('/');
+    if (/\.(test|spec)\./.test(rel) || rel.startsWith('lib/test/')) return [];
+    return LEGACY_FILES.includes(rel) ? [] : [path];
+  });
+}
+
+/** Cada línea del texto que nombra un documento de un país, comentarios incluidos. */
+function countryDocumentHits(rel: string, text: string): string[] {
+  return text
+    .split('\n')
+    .map((line, i) => ({ line, n: i + 1 }))
+    .filter(({ line }) => namesCountryDocument(line) && !isLineException(rel, line))
+    .map(({ line, n }) => `${rel}:${n}: ${line.trim()}`);
+}
+
+const E2E = join(SRC, '..', 'e2e');
+
+/** Todo `e2e/` salvo los ficheros `legacy-*`. */
+function e2eScanFiles(dir: string = E2E): string[] {
+  return readdirSync(dir, { withFileTypes: true }).flatMap((entry) => {
+    const path = join(dir, entry.name);
+    if (entry.isDirectory()) return e2eScanFiles(path);
+    if (!/\.(ts|json|csv|ics)$/.test(entry.name) || /^legacy[-.]/.test(entry.name)) return [];
+    return [path];
+  });
+}
+
+const LEGACY_NAME = /^legacy/i;
+
+/**
+ * Líneas (1-based, inclusivas) de cada `test('legacy …')` (también
+ * `test.describe`, `.only`, `.skip`…) y de cada función o constante `legacy…`.
+ */
+function legacyLineRanges(rel: string, text: string): [number, number][] {
+  const source = ts.createSourceFile(rel, text, ts.ScriptTarget.Latest, true, ts.ScriptKind.TS);
+  const ranges: [number, number][] = [];
+  const lineOf = (pos: number) => source.getLineAndCharacterOfPosition(pos).line + 1;
+  const visit = (node: ts.Node) => {
+    let legacy = false;
+    if (ts.isCallExpression(node)) {
+      const callee = node.expression.getText(source);
+      const [title] = node.arguments;
+      legacy =
+        /^test\b/.test(callee) &&
+        title !== undefined &&
+        (ts.isStringLiteral(title) || ts.isNoSubstitutionTemplateLiteral(title) || ts.isTemplateExpression(title)) &&
+        LEGACY_NAME.test((ts.isTemplateExpression(title) ? title.head.text : title.text).trim());
+    } else if (ts.isFunctionDeclaration(node) || ts.isVariableDeclaration(node)) {
+      legacy = node.name !== undefined && ts.isIdentifier(node.name) && LEGACY_NAME.test(node.name.text);
+    }
+    if (legacy) ranges.push([lineOf(node.getStart(source)), lineOf(node.getEnd())]);
+    else ts.forEachChild(node, visit);
+  };
+  visit(source);
+  return ranges;
+}
+
+/** Lo que nombra un documento de un país en un fichero de `e2e/` fuera de lo `legacy`. */
+function e2eCountryDocumentHits(rel: string, text: string): string[] {
+  const ranges = rel.endsWith('.ts') ? legacyLineRanges(rel, text) : [];
+  return text
+    .split('\n')
+    .map((line, i) => ({ line, n: i + 1 }))
+    .filter(({ line, n }) => namesCountryDocument(line) && !ranges.some(([a, b]) => n >= a && n <= b))
+    .map(({ line, n }) => `${rel}:${n}: ${line.trim()}`);
+}
+
+describe('arquitectura: tipos de documento sin país (DX-327)', () => {
+  it('no UI text says Cédula, TI, CE or another country\'s document acronym outside the legacy files', () => {
+    const mentions = documentScanFiles().flatMap((path) =>
+      countryDocumentHits(relative(SRC, path).split(sep).join('/'), readFileSync(path, 'utf8')),
+    );
+    expect(mentions).toEqual([]);
+  });
+
+  it('every named line exception still exists, so a closed ticket takes its exception with it', () => {
+    for (const e of COUNTRY_DOCUMENT_LINE_EXCEPTIONS) {
+      const lines = readFileSync(join(SRC, e.file), 'utf8').split('\n').map((l) => l.trim());
+      expect([e.file, e.until, lines.includes(e.line)]).toEqual([e.file, e.until, true]);
+      expect(namesCountryDocument(e.line)).toBe(true);
+    }
+  });
+
+  it('no e2e test names a country document outside a legacy test, function or file', () => {
+    const mentions = e2eScanFiles().flatMap((path) =>
+      e2eCountryDocumentHits(relative(E2E, path).split(sep).join('/'), readFileSync(path, 'utf8')),
+    );
+    expect(mentions).toEqual([]);
+  });
+
+  it('the e2e scan covers the specs and fixtures, and only legacy tests, functions and files may name a country document', () => {
+    const rels = e2eScanFiles().map((f) => relative(E2E, f).split(sep).join('/'));
+    expect(rels).toEqual(
+      expect.arrayContaining([
+        'patient-import.spec.ts',
+        'document-types.spec.ts',
+        'allowed-skips.json',
+        'fixtures/holidays-12.ics',
+      ]),
+    );
+    expect(rels.some((r) => r.startsWith('support/'))).toBe(true);
+    // Hoy esos dos specs sí nombran «CC» y «Cédula», dentro de lo legacy.
+    const importSpec = readFileSync(join(E2E, 'patient-import.spec.ts'), 'utf8');
+    expect(importSpec.split('\n').some(namesCountryDocument)).toBe(true);
+
+    const synthetic = [
+      "test('legacy CSV con CC', async () => {",
+      "  const csv = 'Tipo Doc;Cédula';",
+      '});',
+      "test.describe(`legacy ${name}: RUT`, () => {",
+      "  test('dentro', () => expect('DNI').toBeTruthy());",
+      '});',
+      'function legacyCsv() {',
+      "  return 'CC;1';",
+      '}',
+      "test('alta con NIT', async () => {",
+      "  await page.fill('#doc', 'CC 1');",
+      '});',
+      '// un comentario con Cédula',
+      "test(`alta ${'legacy'} con dni`, () => {});",
+    ].join('\n');
+    expect(e2eCountryDocumentHits('synthetic.spec.ts', synthetic)).toEqual([
+      "synthetic.spec.ts:10: test('alta con NIT', async () => {",
+      "synthetic.spec.ts:11: await page.fill('#doc', 'CC 1');",
+      'synthetic.spec.ts:13: // un comentario con Cédula',
+      "synthetic.spec.ts:14: test(`alta ${'legacy'} con dni`, () => {});",
+    ]);
+  });
+
+  it('the document scan covers schema.d.ts, fixtures and comments and skips only the legacy files, and its pattern catches each legacy form', () => {
+    const rels = documentScanFiles().map((f) => relative(SRC, f).split(sep).join('/'));
+    expect(rels).toEqual(
+      expect.arrayContaining([
+        'lib/api/schema.d.ts',
+        'components/treatment-plans/plan-quote-fixture.ts',
+        'components/patients/agreement-fixtures.ts',
+        'components/patients/patient-record-header.tsx',
+        'components/implants/register-implant-modal.tsx',
+        'components/payments/payment-receipt-document.tsx',
+        'lib/patients/doc-type.ts',
+      ]),
+    );
+    for (const legacy of LEGACY_FILES) {
+      expect(rels).not.toContain(legacy);
+      expect(existsSync(join(SRC, legacy))).toBe(true);
+    }
+    expect(rels.some((r) => /\.(test|spec)\./.test(r) || r.startsWith('lib/test/'))).toBe(false);
+
+    // Control sintético: los comentarios y la JSDoc cuentan como texto.
+    const synthetic = [
+      '/**',
+      ' * Documento del paciente.',
+      ' * @example CC 123',
+      ' */',
+      'const a = 1; // CC 1002',
+      "const b = 'NATIONAL_ID';",
+      "const c = 'rif: J-1';",
+    ].join('\n');
+    expect(countryDocumentHits('synthetic.ts', synthetic)).toEqual([
+      'synthetic.ts:3: * @example CC 123',
+      'synthetic.ts:5: const a = 1; // CC 1002',
+      "synthetic.ts:7: const c = 'rif: J-1';",
+    ]);
+    // La excepción es la línea exacta de su fichero, no la sigla.
+    const receipt = 'components/payments/payment-receipt-document.tsx';
+    expect(countryDocumentHits(receipt, '  taxId: (value: string) => `NIT/NIF ${value}`,')).toEqual([]);
+    expect(countryDocumentHits(receipt, "  taxIdLabel: 'NIT',")).toEqual([`${receipt}:1: taxIdLabel: 'NIT',`]);
+    expect(countryDocumentHits('other.tsx', 'taxId: (value: string) => `NIT/NIF ${value}`,')).toHaveLength(1);
+    for (const line of [
+      'Cédula de ciudadanía',
+      'cedula de extranjería',
+      'Tarjeta de identidad',
+      "docType: 'TI'",
+      'CE 123',
+      'Registro sanitario INVIMA',
+      'marcado CE',
+      'NIT/NIF 900123456-7',
+      'RIF J-12345678-9',
+      'dni del paciente',
+      'Nie: X1234567L',
+      'RUT 12.345.678-5',
+      'curp',
+      '(CPF)',
+      'RUC 20123456789',
+      'cuil',
+      'CUIT: 20-1',
+      'Nuip',
+      "label: 'Rif'",
+    ]) {
+      expect([line, namesCountryDocument(line)]).toEqual([line, true]);
+    }
+    for (const line of [
+      "docType: 'NATIONAL_ID'",
+      'Documento nacional',
+      'Registro sanitario o certificación del producto',
+      'Certificación',
+      'ACCEPTED',
+      'CERT-2019',
+      'Identificación fiscal',
+      'unit',
+      'definite',
+      'route',
+      'niños',
+      'truthy',
+      'nitrogen',
+      'para ti',
+    ]) {
+      expect([line, namesCountryDocument(line)]).toEqual([line, false]);
+    }
+  });
+
+  /**
+   * §6.8 (API y web): un solo resolvedor del nombre visible y un solo mapa de
+   * nombres genéricos, los de `lib/patients/doc-type.ts`.
+   */
+  const DOC_TYPE_LIB = 'lib/patients/doc-type.ts';
+  const NAME_RESOLVED_BY_HAND = /DOC_TYPE_LABEL\[|docTypeName(?:NationalId|Passport|ResidencePermit|TaxId|Other)\b/;
+  const LABEL_MAP = /\b(?:const|let)\s+DOC_TYPE_LABELS?\b|PASSPORT:\s*'Pasaporte'/;
+
+  function productionHits(pattern: RegExp): string[] {
+    return documentScanFiles()
+      .filter((path) => relative(SRC, path).split(sep).join('/') !== DOC_TYPE_LIB)
+      .flatMap((path) =>
+        readFileSync(path, 'utf8')
+          .split('\n')
+          .map((line, i) => ({ line, n: i + 1 }))
+          .filter(({ line }) => pattern.test(line))
+          .map(({ line, n }) => `${relative(SRC, path)}:${n}: ${line.trim()}`),
+      );
+  }
+
+  it('architecture: one document type name resolver', () => {
+    expect(productionHits(NAME_RESOLVED_BY_HAND)).toEqual([]);
+    expect(readFileSync(join(SRC, DOC_TYPE_LIB), 'utf8')).toMatch(NAME_RESOLVED_BY_HAND);
+    for (const line of ['label={DOC_TYPE_LABEL[type]}', 'tenant.docTypeNameNationalId', 'docTypeNameOther ?? x']) {
+      expect([line, NAME_RESOLVED_BY_HAND.test(line)]).toEqual([line, true]);
+    }
+    for (const line of ['documentTypeName(type, null, names)', 'dto.docTypeName', 'genericDocTypeName(type)']) {
+      expect([line, NAME_RESOLVED_BY_HAND.test(line)]).toEqual([line, false]);
+    }
+  });
+
+  it('architecture: one document label map', () => {
+    expect(productionHits(LABEL_MAP)).toEqual([]);
+    expect(readFileSync(join(SRC, DOC_TYPE_LIB), 'utf8')).toMatch(LABEL_MAP);
+    for (const line of ['const DOC_TYPE_LABELS = {', "  PASSPORT: 'Pasaporte',", 'let DOC_TYPE_LABEL = x']) {
+      expect([line, LABEL_MAP.test(line)]).toEqual([line, true]);
+    }
+    expect(LABEL_MAP.test("import { DOC_TYPE_LABEL } from '@/lib/patients/doc-type';")).toBe(false);
   });
 });

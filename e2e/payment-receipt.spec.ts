@@ -72,7 +72,7 @@ async function seed(request: APIRequestContext, host: string, tag: string, amoun
   const patient = await post<{ id: string }>(admin, '/patients', {
     firstName: 'Carolina',
     lastName,
-    docType: 'CC',
+    docType: 'NATIONAL_ID',
     docNumber,
     sex: 'F',
     email: `recibo-${tag}@example.com`,
@@ -158,7 +158,7 @@ for (const viewport of [
     await expect(doc).toContainText('Clínica Demo');
     await expect(doc).toContainText('Datos fiscales pendientes');
     await expect(doc).toContainText(data.fullName);
-    await expect(doc).toContainText(`CC ******${data.docNumber.slice(-4)}`);
+    await expect(doc).toContainText(`Documento nacional ******${data.docNumber.slice(-4)}`);
     await expect(doc).not.toContainText(data.docNumber);
     await expect(doc).toContainText(figure(first.amount));
     await expect(doc).toContainText('Recibió');

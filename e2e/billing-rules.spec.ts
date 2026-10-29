@@ -41,7 +41,7 @@ test('plan rechazado: sin «Registrar abono», sin plan de pagos, ítems congela
   const patient = await apiPost<{ id: string }>(request, admin, '/patients', {
     firstName: 'Rocío',
     lastName: `Rechazo${suffix}`,
-    docType: 'CC',
+    docType: 'NATIONAL_ID',
     docNumber: `DX109${suffix}`.slice(0, 20),
     sex: 'F',
   });

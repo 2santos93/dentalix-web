@@ -92,7 +92,7 @@ describe('ImplantCardPrintView (DX-191)', () => {
     render(<ImplantCardPrintView token={RECEPTION} patientId="p1" date="2026-10-10" />);
     const card = await screen.findByRole('article');
     expect(card).toHaveTextContent('Lucía Gómez');
-    expect(card).toHaveTextContent('CC 52000001');
+    expect(card).toHaveTextContent('Documento nacional DOC-0002');
     expect(card).toHaveTextContent('Clínica Demo');
     expect(card).toHaveTextContent('Sede principal');
     expect(card).toHaveTextContent('10/10/2026');

@@ -259,7 +259,7 @@ test('el avatar y el logo de la clínica (servidos por la API) cargan con la CSP
   ]);
   const patient = await page.request.post(`${API_URL}/patients`, {
     headers,
-    data: { firstName: 'Logo', lastName: 'Clínica', docType: 'CC', docNumber: `LG${Date.now()}`, sex: 'F' },
+    data: { firstName: 'Logo', lastName: 'Clínica', docType: 'NATIONAL_ID', docNumber: `LG${Date.now()}`, sex: 'F' },
   });
   expect(patient.ok(), await patient.text()).toBeTruthy();
   const { id } = (await patient.json()) as { id: string };

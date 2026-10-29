@@ -60,7 +60,10 @@ const mother = {
   kind: 'CONTACT' as const,
   responsiblePatient: null,
   fullName: 'Claudia Navarro',
-  docType: 'CC' as const,
+  docType: 'NATIONAL_ID' as const,
+  docTypeLabel: null,
+  // Nombre visible que resuelve la API (R17): aquí, el nombre local de la clínica.
+  docTypeName: 'ID local',
   docNumber: '52987654',
   email: 'claudia@example.com',
   phone: null,
@@ -123,7 +126,7 @@ const preview = {
   templateId: 'tpl-1',
   templateVersion: 3,
   title: 'Consentimiento de exodoncia',
-  body: 'Yo, Ana Pérez (CC 1), autorizo a Dra. Laura…',
+  body: 'Yo, Ana Pérez (Documento nacional DOC-1), autorizo a Dra. Laura…',
   professionalName: 'Dra. Laura Gómez',
 };
 
@@ -167,7 +170,7 @@ describe('NewConsentModal', () => {
     await goToSignatures(user);
     expect(screen.getByRole('radio', { name: /tutor/i })).toBeChecked();
     expect(screen.getByLabelText('Nombre del tutor')).toHaveValue('Claudia Navarro');
-    expect(screen.getByLabelText('Documento del tutor')).toHaveValue('CC 52987654');
+    expect(screen.getByLabelText('Documento del tutor')).toHaveValue('ID local 52987654');
     expect(screen.getByText(/su responsable en la ficha/)).toBeInTheDocument();
 
     sign(screen.getByRole('img', { name: 'Firma del tutor' }));
@@ -179,7 +182,7 @@ describe('NewConsentModal', () => {
       expect.objectContaining({
         signerType: 'GUARDIAN',
         guardianName: 'Claudia Navarro',
-        guardianDocument: 'CC 52987654',
+        guardianDocument: 'ID local 52987654',
       }),
     );
   });
@@ -266,7 +269,7 @@ describe('NewConsentModal', () => {
     sign(screen.getByRole('img', { name: 'Firma del tutor' }));
     expect(firmar).toBeDisabled();
     await user.type(screen.getByLabelText('Nombre del tutor'), 'Marta Pérez');
-    await user.type(screen.getByLabelText('Documento del tutor'), 'CC 999');
+    await user.type(screen.getByLabelText('Documento del tutor'), 'Documento A DOC-999');
     expect(firmar).toBeEnabled();
 
     await user.click(firmar);
@@ -276,7 +279,7 @@ describe('NewConsentModal', () => {
       expect.objectContaining({
         signerType: 'GUARDIAN',
         guardianName: 'Marta Pérez',
-        guardianDocument: 'CC 999',
+        guardianDocument: 'Documento A DOC-999',
       }),
     );
   });

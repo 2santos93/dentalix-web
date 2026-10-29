@@ -15,16 +15,27 @@ import { listCountries, type Country } from '@/lib/reference/countries-api';
 import { CityCombobox, type CitySelection } from '@/components/shared/city-combobox';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { FormField } from '@/components/shared/form-field';
+import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { InlineError } from '@/components/errors/inline-error';
 import { cn } from '@/lib/utils';
+import { fieldClass } from '@/lib/ui/field-class';
+import { DOC_TYPES, docTypeOptionLabel, normalizeDocTypeLabel } from '@/lib/patients/doc-type';
+import { isEmailAddress } from '@/lib/format/email';
+import { DocTypeLabelField, docTypeLabelFieldError } from './doc-type-label-field';
+import { useDocumentTypeNames } from '@/lib/patients/use-document-type-names';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
 const copy = {
   firstNameLabel: 'Nombre',
   lastNameLabel: 'Apellido',
-  docTypeLabel: 'Tipo de documento',
+  docType: 'Tipo de documento',
+  docTypePlaceholder: 'Elige el tipo',
+  docTypeRequired: 'Elige el tipo de documento.',
+  firstNameRequired: 'Escribe el nombre.',
+  lastNameRequired: 'Escribe el apellido.',
+  emailInvalid: 'Revisa el correo electrónico: le falta algo (p. ej. nombre@dominio.com).',
+  requiredError: 'Nombre, apellido y tipo de documento son obligatorios para continuar.',
   docNumberLabel: 'Número de documento',
   birthDateLabel: 'Fecha de nacimiento',
   sexLabel: 'Sexo',
@@ -39,14 +50,6 @@ const copy = {
   genericError: 'No pudimos crear el paciente. Intenta de nuevo.',
 };
 
-const docTypeOptions: { value: DocType; label: string }[] = [
-  { value: 'CC', label: 'Cédula de ciudadanía' },
-  { value: 'TI', label: 'Tarjeta de identidad' },
-  { value: 'CE', label: 'Cédula de extranjería' },
-  { value: 'PASSPORT', label: 'Pasaporte' },
-  { value: 'OTHER', label: 'Otro' },
-];
-
 const sexOptions: { value: Sex; label: string }[] = [
   { value: 'UNSPECIFIED', label: 'Sin especificar' },
   { value: 'F', label: 'Femenino' },
@@ -54,10 +57,30 @@ const sexOptions: { value: Sex; label: string }[] = [
   { value: 'OTHER', label: 'Otro' },
 ];
 
-// Native <select>/<textarea> styled to match the Input atom. We keep native
-// controls here so the form stays simple and fully accessible via labels.
-const fieldClass =
-  'flex w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors placeholder:text-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-50';
+/**
+ * Campos con error propio, en el orden del formulario: el foco va al primero
+ * que falle. El cliente aplica a la etiqueta y al email las reglas de la API,
+ * así que sus 400 no se alcanzan desde aquí (hoy la API no ata ningún 400 de
+ * pacientes a un campo).
+ */
+const CHECKED_FIELDS = ['firstName', 'lastName', 'docType', 'docTypeLabel', 'email'] as const;
+type CheckedField = (typeof CHECKED_FIELDS)[number];
+type FieldErrors = Partial<Record<CheckedField, string>>;
+
+const FIELD_IDS: Record<CheckedField, string> = {
+  firstName: 'patient-first-name',
+  lastName: 'patient-last-name',
+  docType: 'patient-doc-type',
+  docTypeLabel: 'patient-doc-type-label',
+  email: 'patient-email',
+};
+
+/** `aria-invalid`/`aria-describedby` de un control con su error. */
+function invalidProps(field: CheckedField, errors: FieldErrors) {
+  return errors[field]
+    ? { 'aria-invalid': true as const, 'aria-describedby': fieldErrorId(FIELD_IDS[field]) }
+    : {};
+}
 
 interface PatientFormProps {
   token: string;
@@ -79,7 +102,18 @@ export function PatientForm({ token, onCreated, initialDocNumber }: PatientFormP
   const router = useRouter();
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
-  const [docType, setDocType] = useState<DocType>('CC');
+  // DX-327 (R10): sin tipo propuesto; quien da de alta lo elige.
+  const [docType, setDocType] = useState<DocType | ''>('');
+  const [fieldErrors, setFieldErrors] = useState<FieldErrors>({});
+  const docTypeNames = useDocumentTypeNames(token);
+  const firstNameRef = React.useRef<HTMLInputElement>(null);
+  const lastNameRef = React.useRef<HTMLInputElement>(null);
+  const docTypeRef = React.useRef<HTMLSelectElement>(null);
+  const [docTypeLabel, setDocTypeLabel] = useState('');
+  const docTypeLabelRef = React.useRef<HTMLInputElement>(null);
+  const emailRef = React.useRef<HTMLInputElement>(null);
+  // Cada petición es un objeto nuevo: el efecto enfoca aunque se repita el campo.
+  const [focusRequest, setFocusRequest] = useState<{ field: CheckedField } | null>(null);
   const [docNumber, setDocNumber] = useState(initialDocNumber ?? '');
   const [birthDate, setBirthDate] = useState('');
   const [sex, setSex] = useState<Sex>('UNSPECIFIED');
@@ -107,15 +141,65 @@ export function PatientForm({ token, onCreated, initialDocNumber }: PatientFormP
     };
   }, [token]);
 
+  useEffect(() => {
+    if (!focusRequest) return;
+    const refs = {
+      firstName: firstNameRef,
+      lastName: lastNameRef,
+      docType: docTypeRef,
+      docTypeLabel: docTypeLabelRef,
+      email: emailRef,
+    };
+    refs[focusRequest.field].current?.focus();
+  }, [focusRequest]);
+
+  /** Quita el error de un campo al corregirlo. */
+  function clearFieldError(field: CheckedField) {
+    setFieldErrors((prev) => {
+      if (!prev[field]) return prev;
+      const next = { ...prev };
+      delete next[field];
+      return next;
+    });
+  }
+
+  function validate(): FieldErrors {
+    const found: FieldErrors = {};
+    if (!firstName.trim()) found.firstName = copy.firstNameRequired;
+    if (!lastName.trim()) found.lastName = copy.lastNameRequired;
+    if (docType === '') found.docType = copy.docTypeRequired;
+    const labelError = docTypeLabelFieldError(docTypeLabel);
+    if (labelError) found.docTypeLabel = labelError;
+    // La regla de `@IsEmail()` de la API, más estricta que la del navegador
+    // (que acepta «ana@x»).
+    if (email.trim() && !isEmailAddress(email.trim())) found.email = copy.emailInvalid;
+    return found;
+  }
+
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
+    // La validación es nuestra (`noValidate`): el error va junto al campo,
+    // enlazado por `aria-describedby`, y no en la burbuja del navegador.
+    const found = validate();
+    const firstInvalid = CHECKED_FIELDS.find((f) => found[f]);
+    // `docType === ''` ya está en `found`; repetirlo estrecha el tipo para TS.
+    if (firstInvalid || docType === '') {
+      setFieldErrors(found);
+      const missingRequired = Boolean(found.firstName || found.lastName || found.docType);
+      setError(missingRequired ? copy.requiredError : null);
+      setFocusRequest({ field: firstInvalid ?? 'docType' });
+      return;
+    }
+    setFieldErrors({});
     setError(null);
     setSubmitting(true);
     try {
+      const label = normalizeDocTypeLabel(docTypeLabel);
       const input: CreatePatientInput = {
         firstName,
         lastName,
         docType,
+        ...(label ? { docTypeLabel: label } : {}),
         sex,
         ...(docNumber.trim() ? { docNumber: docNumber.trim() } : {}),
         ...(birthDate ? { birthDate: new Date(birthDate).toISOString() } : {}),
@@ -140,45 +224,65 @@ export function PatientForm({ token, onCreated, initialDocNumber }: PatientFormP
   }
 
   return (
-    <form onSubmit={handleSubmit} className="flex flex-col gap-5">
+    <form onSubmit={handleSubmit} noValidate className="flex flex-col gap-5">
       <div className="grid gap-5 sm:grid-cols-2">
-        <FormField htmlFor="patient-first-name" label={copy.firstNameLabel}>
+        <FormField htmlFor="patient-first-name" label={copy.firstNameLabel} error={fieldErrors.firstName}>
           <Input
+            ref={firstNameRef}
             id="patient-first-name"
             name="firstName"
             type="text"
             autoComplete="given-name"
             required
             value={firstName}
-            onChange={(e) => setFirstName(e.target.value)}
+            onChange={(e) => {
+              setFirstName(e.target.value);
+              clearFieldError('firstName');
+            }}
+            {...invalidProps('firstName', fieldErrors)}
           />
         </FormField>
-        <FormField htmlFor="patient-last-name" label={copy.lastNameLabel}>
+        <FormField htmlFor="patient-last-name" label={copy.lastNameLabel} error={fieldErrors.lastName}>
           <Input
+            ref={lastNameRef}
             id="patient-last-name"
             name="lastName"
             type="text"
             autoComplete="family-name"
             required
             value={lastName}
-            onChange={(e) => setLastName(e.target.value)}
+            onChange={(e) => {
+              setLastName(e.target.value);
+              clearFieldError('lastName');
+            }}
+            {...invalidProps('lastName', fieldErrors)}
           />
         </FormField>
       </div>
 
       <div className="grid gap-5 sm:grid-cols-2">
-        <FormField htmlFor="patient-doc-type" label={copy.docTypeLabel}>
+        <FormField
+          htmlFor="patient-doc-type"
+          label={copy.docType}
+          error={fieldErrors.docType}
+        >
           <select
+            ref={docTypeRef}
             id="patient-doc-type"
             name="docType"
             required
             value={docType}
-            onChange={(e) => setDocType(e.target.value as DocType)}
+            onChange={(e) => {
+              setDocType(e.target.value as DocType | '');
+              clearFieldError('docType');
+            }}
+            {...invalidProps('docType', fieldErrors)}
             className={cn(fieldClass, 'h-10')}
           >
-            {docTypeOptions.map((opt) => (
-              <option key={opt.value} value={opt.value}>
-                {opt.label}
+            <option value="">{copy.docTypePlaceholder}</option>
+            {DOC_TYPES.map((t) => (
+              <option key={t} value={t}>
+                {docTypeOptionLabel(t, docTypeNames)}
               </option>
             ))}
           </select>
@@ -193,6 +297,17 @@ export function PatientForm({ token, onCreated, initialDocNumber }: PatientFormP
           />
         </FormField>
       </div>
+
+      <DocTypeLabelField
+        id={FIELD_IDS.docTypeLabel}
+        inputRef={docTypeLabelRef}
+        value={docTypeLabel}
+        onChange={(value) => {
+          setDocTypeLabel(value);
+          clearFieldError('docTypeLabel');
+        }}
+        error={fieldErrors.docTypeLabel}
+      />
 
       <div className="grid gap-5 sm:grid-cols-2">
         <FormField htmlFor="patient-birth-date" label={copy.birthDateLabel}>
@@ -233,14 +348,19 @@ export function PatientForm({ token, onCreated, initialDocNumber }: PatientFormP
             onChange={(e) => setPhone(e.target.value)}
           />
         </FormField>
-        <FormField htmlFor="patient-email" label={copy.emailLabel}>
+        <FormField htmlFor="patient-email" label={copy.emailLabel} error={fieldErrors.email}>
           <Input
+            ref={emailRef}
             id="patient-email"
             name="email"
             type="email"
             autoComplete="email"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(e) => {
+              setEmail(e.target.value);
+              clearFieldError('email');
+            }}
+            {...invalidProps('email', fieldErrors)}
           />
         </FormField>
       </div>

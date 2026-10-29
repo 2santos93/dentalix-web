@@ -53,7 +53,7 @@ test.beforeAll(async ({ request }) => {
   ({ id: patientId } = await apiPost<{ id: string }>(request, session, '/patients', {
     firstName: 'Carolina',
     lastName,
-    docType: 'CC',
+    docType: 'NATIONAL_ID',
     docNumber: `COM${suffix}`.slice(0, 20),
     sex: 'F',
     email: `carolina.${suffix}@example.com`,
@@ -62,7 +62,7 @@ test.beforeAll(async ({ request }) => {
   ({ id: noPhoneId } = await apiPost<{ id: string }>(request, session, '/patients', {
     firstName: 'Bruno',
     lastName,
-    docType: 'CC',
+    docType: 'NATIONAL_ID',
     docNumber: `COMB${suffix}`.slice(0, 20),
     sex: 'M',
   }));

@@ -1,6 +1,6 @@
 import { apiFetch, apiFetchOrNull } from '@/lib/api/client';
 import type { components } from '@/lib/api/schema';
-import { DOC_TYPE_SHORT } from './doc-type';
+import { documentText, dtoDocTypeName } from './doc-type';
 
 // DX-203: responsables de pago y avisos. Las formas salen del Swagger.
 export type PatientResponsibles = components['schemas']['PatientResponsiblesDto'];
@@ -77,10 +77,23 @@ export async function removeResponsibleParty(
   });
 }
 
-/** «CC 52987654», solo el número si no hay tipo, o null. */
-export function partyDocument(party: Pick<ResponsibleParty, 'docType' | 'docNumber'>): string | null {
+/**
+ * «{nombre visible} {número}» (R8, con el `docTypeName` del DTO), solo el
+ * número si no hay tipo, o null.
+ */
+export function partyDocument(
+  party: Pick<ResponsibleParty, 'docType' | 'docTypeLabel' | 'docTypeName' | 'docNumber'>,
+): string | null {
   if (!party.docNumber) return null;
-  return party.docType ? `${DOC_TYPE_SHORT[party.docType]} ${party.docNumber}` : party.docNumber;
+  if (!party.docType) return party.docNumber;
+  return documentText(
+    dtoDocTypeName({
+      docType: party.docType,
+      docTypeLabel: party.docTypeLabel,
+      docTypeName: party.docTypeName,
+    }),
+    party.docNumber,
+  );
 }
 
 const GUARDIAN_RELATIONSHIPS: ResponsibleRelationship[] = ['LEGAL_GUARDIAN', 'MOTHER', 'FATHER'];

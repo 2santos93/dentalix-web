@@ -35,6 +35,12 @@ import { ImportIssuesTable } from './import-issues-table';
 import { ImportProgress } from './import-progress';
 import type { RegionalFormat } from '@/lib/format/regional-format';
 import { sedeNumber } from '@/lib/format/sede-number';
+import {
+  documentText,
+  documentTypeName,
+  type ClinicDocumentTypeNames,
+} from '@/lib/patients/doc-type';
+import { useDocumentTypeNames } from '@/lib/patients/use-document-type-names';
 
 export const wizardCopy = {
   steps: ['Subir archivo', 'Columnas y validación', 'Saldos', 'Confirmar'],
@@ -172,7 +178,9 @@ export function PatientImportWizard({ token, onBatchChange, fmt, formatLoading =
   const [reading, setReading] = React.useState(false);
   const [readError, setReadError] = React.useState<string | null>(null);
   const [mapping, setMapping] = React.useState<ColumnMapping>({});
-  const [defaultDocType, setDefaultDocType] = React.useState<DocType | null>('CC');
+  // DX-327 (R10): sin tipo preseleccionado; una fila sin tipo da error.
+  const [defaultDocType, setDefaultDocType] = React.useState<DocType | null>(null);
+  const docTypeNames = useDocumentTypeNames(token);
   const [validating, setValidating] = React.useState(false);
   // Fracción subida del archivo (0..1) mientras se lee o se valida; null sin subida.
   const [uploaded, setUploaded] = React.useState<number | null>(null);
@@ -465,6 +473,7 @@ export function PatientImportWizard({ token, onBatchChange, fmt, formatLoading =
               setDefaultDocType(v);
               setDryRun(null);
             }}
+            docTypeNames={docTypeNames}
             disabled={validating}
           />
           <div className="flex flex-col gap-2">
@@ -481,6 +490,7 @@ export function PatientImportWizard({ token, onBatchChange, fmt, formatLoading =
               headingId={`${id}-dry-run`}
               batch={dryRun}
               fmt={fmt}
+              docTypeNames={docTypeNames}
               onReport={() => void onReport(dryRun.id, dryRun.fileName)}
               onContinue={() => {
                 setStep(2);
@@ -597,12 +607,14 @@ function DryRunResult({
   headingId,
   batch,
   fmt,
+  docTypeNames,
   onReport,
   onContinue,
 }: {
   headingId: string;
   batch: ImportBatchDetail;
   fmt: RegionalFormat | null;
+  docTypeNames: ClinicDocumentTypeNames;
   onReport: () => void;
   onContinue: () => void;
 }) {
@@ -644,7 +656,11 @@ function DryRunResult({
                   {row.data.firstName} {row.data.lastName}
                   <span className="text-muted">
                     {' '}
-                    · {row.data.docType} {row.data.docNumber}
+                    ·{' '}
+                    {documentText(
+                      documentTypeName(row.data.docType, null, docTypeNames),
+                      row.data.docNumber,
+                    )}
                   </span>
                 </span>
                 <span className="text-xs text-muted">

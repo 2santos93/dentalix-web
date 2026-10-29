@@ -77,7 +77,7 @@ async function patientWithPayment(
   const patient = await call<{ id: string }>('post', '/patients', {
     firstName: 'Paciente',
     lastName,
-    docType: 'CC',
+    docType: 'NATIONAL_ID',
     docNumber: `${lastName}`.slice(0, 20),
     sex: 'F',
   });

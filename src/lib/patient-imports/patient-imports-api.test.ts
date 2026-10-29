@@ -26,13 +26,13 @@ describe('subida de la importación (DX-107 × DX-259)', () => {
 
   it('validateImport manda el mapeo y el tipo por defecto ANTES del archivo, por la ruta «validate»', async () => {
     const onProgress = jest.fn();
-    await validateImport('tok', file(), { docNumber: 'Cédula' }, 'CC', onProgress);
+    await validateImport('tok', file(), { docNumber: 'Documento' }, 'PASSPORT', onProgress);
 
     expect(mockedUpload).toHaveBeenCalledWith('validate', expect.any(FormData), { token: 'tok', onProgress });
     const form = mockedUpload.mock.calls[0][1];
     expect([...form.keys()]).toEqual(['mapping', 'defaultDocType', 'file']);
-    expect(form.get('mapping')).toBe('{"docNumber":"Cédula"}');
-    expect(form.get('defaultDocType')).toBe('CC');
+    expect(form.get('mapping')).toBe('{"docNumber":"Documento"}');
+    expect(form.get('defaultDocType')).toBe('PASSPORT');
   });
 
   it('sin tipo por defecto no manda el campo', async () => {

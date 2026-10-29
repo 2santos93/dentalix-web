@@ -37,6 +37,7 @@ import { FieldError } from '@/components/errors/field-error';
 import { InlineError } from '@/components/errors/inline-error';
 import { useProviderDay } from '@/components/appointments/use-provider-day';
 import { describeRanges, fitsRanges } from '@/lib/locations/provider-schedule';
+import { documentText, dtoDocTypeName } from '@/lib/patients/doc-type';
 
 // Copy as constants (i18n-ready, es-first) — matches patient-form.tsx /
 // tooth-record-panel.tsx convention until next-intl wiring lands.
@@ -94,9 +95,9 @@ function fullPatientName(patient: Patient): string {
   return `${patient.firstName} ${patient.lastName}`;
 }
 
-/** Human label for a patient's document, e.g. "CC 123456" — or a "no document" note when the patient has none. */
+/** Human label for a patient's document, «{nombre visible} {número}» — or a "no document" note when the patient has none. */
 function patientDocLabel(patient: Patient): string {
-  return patient.docNumber ? `${patient.docType} ${patient.docNumber}` : copy.patientNoDoc;
+  return documentText(dtoDocTypeName(patient), patient.docNumber) ?? copy.patientNoDoc;
 }
 
 /** A query is treated as a document number (to pre-fill the create-patient form) when it's all digits. */

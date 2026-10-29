@@ -87,7 +87,7 @@ for (const viewport of [
   { name: 'escritorio', width: 1440, height: 900, tag: '1' },
   { name: 'movil', width: 390, height: 844, tag: '2' },
 ]) {
-  test(`abono contra el saldo migrado y solo saldos sin pacientes nuevos (${viewport.name})`, async ({ page }) => {
+  test(`legacy «Tipo Doc» CC: abono contra el saldo migrado y solo saldos sin pacientes nuevos (${viewport.name})`, async ({ page }) => {
     test.setTimeout(180_000);
     await page.setViewportSize({ width: viewport.width, height: viewport.height });
     const origin = tenantOrigin(DEMO_SUBDOMAIN);

@@ -49,14 +49,14 @@ test.beforeAll(async ({ request }) => {
   await apiPost(request, session, '/patients', {
     firstName: 'Camila',
     lastName: `Columnas${suffix}`.slice(0, 40),
-    docType: 'CC',
+    docType: 'NATIONAL_ID',
     docNumber: patientDoc,
     sex: 'F',
   });
   const other = await apiPost<{ id: string }>(request, session, '/patients', {
     firstName: 'Bruno',
     lastName: `Ocupado${suffix}`.slice(0, 40),
-    docType: 'CC',
+    docType: 'NATIONAL_ID',
     docNumber: otherDoc,
     sex: 'M',
   });

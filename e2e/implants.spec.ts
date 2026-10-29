@@ -62,7 +62,7 @@ test('registrar desde el odontograma, imprimir la tarjeta y buscar por lote (144
     admin.post<{ id: string }>('/patients', {
       firstName,
       lastName: `Implante${suffix}`.slice(0, 40),
-      docType: 'CC',
+      docType: 'NATIONAL_ID',
       docNumber: `${doc}${suffix}`.slice(0, 20),
       sex: 'F',
     });
@@ -114,7 +114,7 @@ test('registrar desde el odontograma, imprimir la tarjeta y buscar por lote (144
     timeout: 15_000,
   });
   await expect(card).toContainText(`Lucía Implante${suffix}`.slice(0, 46));
-  await expect(card).toContainText(`CC IM1${suffix}`.slice(0, 23));
+  await expect(card).toContainText(`Documento nacional ${`IM1${suffix}`.slice(0, 20)}`);
   await expect(card).toContainText(`Clinica Implantes ${suffix}`);
   await expect(card).toContainText('021.5310');
   await expect(card).toContainText('RC-ABUT-4');
@@ -186,7 +186,7 @@ test('registrar desde el ítem del plan aceptado y tarjeta legible en tema oscur
   const patient = await admin.post<{ id: string }>('/patients', {
     firstName: 'Rosa',
     lastName: `Plan${planSuffix}`.slice(0, 40),
-    docType: 'CC',
+    docType: 'NATIONAL_ID',
     docNumber: `IMP${planSuffix}`.slice(0, 20),
     sex: 'F',
   });

@@ -3,9 +3,12 @@ import userEvent from '@testing-library/user-event';
 import { PatientEditModal } from './patient-edit-modal';
 import { updatePatient } from '@/lib/patients/patients-api';
 import type { Patient } from '@/lib/patients/patients-api';
+import { getDocumentTypeNames } from '@/lib/patients/document-type-names-api';
 
 // jest.mock con ruta RELATIVA: el transform SWC no reescribe `@/`.
 jest.mock('../../lib/patients/patients-api', () => ({ updatePatient: jest.fn() }));
+// El modal no pide los nombres: se los pasa la ficha (sin un segundo GET).
+jest.mock('../../lib/patients/document-type-names-api', () => ({ getDocumentTypeNames: jest.fn() }));
 const mockedUpdate = updatePatient as jest.MockedFunction<typeof updatePatient>;
 
 const patient = {
@@ -13,7 +16,7 @@ const patient = {
   tenantId: 't1',
   firstName: 'Carlos',
   lastName: 'Mejía',
-  docType: 'CC',
+  docType: 'NATIONAL_ID',
   docNumber: '1002',
   birthDate: null,
   sex: 'M',
@@ -180,6 +183,220 @@ describe('PatientEditModal', () => {
     const [, , input] = mockedUpdate.mock.calls[0];
     expect(input).not.toHaveProperty('phone');
     expect(input.occupation).toBe('Docente');
+  });
+
+  it("seeds the patient's generic type and sends it only when it changes", async () => {
+    mockedUpdate.mockResolvedValue(patient);
+    const user = userEvent.setup();
+    render(
+      <PatientEditModal
+        open
+        patient={patient}
+        token="tok"
+        docTypeNames={{ NATIONAL_ID: 'ID local' }}
+        onOpenChange={() => {}}
+        onSaved={() => {}}
+      />,
+    );
+    const select = screen.getByLabelText(/tipo de documento/i) as HTMLSelectElement;
+    expect(select).toHaveValue('NATIONAL_ID');
+    expect(getDocumentTypeNames).not.toHaveBeenCalled();
+    expect(Array.from(select.options).map((o) => [o.value, o.textContent])).toEqual([
+      ['NATIONAL_ID', 'ID local'],
+      ['PASSPORT', 'Pasaporte'],
+      ['RESIDENCE_PERMIT', 'Permiso de residencia'],
+      ['TAX_ID', 'Identificación fiscal'],
+      ['OTHER', 'Otro documento'],
+    ]);
+
+    await user.selectOptions(select, 'PASSPORT');
+    await user.click(screen.getByRole('button', { name: /guardar/i }));
+    await waitFor(() => expect(mockedUpdate).toHaveBeenCalledTimes(1));
+    expect(mockedUpdate.mock.calls[0][2]).toEqual({ docType: 'PASSPORT' });
+  });
+
+  it('legacy code from an older API seeds its generic type and is not sent back unchanged', async () => {
+    mockedUpdate.mockResolvedValue(patient);
+    const user = userEvent.setup();
+    const legacy = { ...patient, docType: 'CE' } as unknown as Patient;
+    render(
+      <PatientEditModal open patient={legacy} token="tok" onOpenChange={() => {}} onSaved={() => {}} />,
+    );
+    expect(screen.getByLabelText(/tipo de documento/i)).toHaveValue('RESIDENCE_PERMIT');
+
+    await user.type(screen.getByLabelText(/ocupación/i), 'Docente');
+    await user.click(screen.getByRole('button', { name: /guardar/i }));
+    await waitFor(() => expect(mockedUpdate).toHaveBeenCalledTimes(1));
+    expect(mockedUpdate.mock.calls[0][2]).not.toHaveProperty('docType');
+  });
+
+  it('changing the type clears the label field', async () => {
+    mockedUpdate.mockResolvedValue(patient);
+    const user = userEvent.setup();
+    const labelled = { ...patient, docTypeLabel: 'ID local' };
+    render(
+      <PatientEditModal open patient={labelled} token="tok" onOpenChange={() => {}} onSaved={() => {}} />,
+    );
+    const label = screen.getByLabelText('Nombre del documento (opcional)');
+    expect(label).toHaveValue('ID local');
+
+    await user.selectOptions(screen.getByLabelText(/tipo de documento/i), 'PASSPORT');
+    expect(label).toHaveValue('');
+    await user.click(screen.getByRole('button', { name: /guardar/i }));
+    await waitFor(() => expect(mockedUpdate).toHaveBeenCalledTimes(1));
+    expect(mockedUpdate.mock.calls[0][2]).toEqual({ docType: 'PASSPORT', docTypeLabel: null });
+  });
+
+  it('changing the type and back restores the saved label instead of deleting it', async () => {
+    mockedUpdate.mockResolvedValue(patient);
+    const user = userEvent.setup();
+    const labelled = { ...patient, docTypeLabel: 'ID local' };
+    render(
+      <PatientEditModal open patient={labelled} token="tok" onOpenChange={() => {}} onSaved={() => {}} />,
+    );
+    const label = screen.getByLabelText('Nombre del documento (opcional)');
+    const type = screen.getByLabelText(/tipo de documento/i);
+
+    await user.selectOptions(type, 'PASSPORT');
+    expect(label).toHaveValue('');
+    await user.selectOptions(type, 'NATIONAL_ID');
+    expect(label).toHaveValue('ID local');
+
+    await user.type(screen.getByLabelText(/^teléfono$/i), '3000000001');
+    await user.click(screen.getByRole('button', { name: /guardar/i }));
+    await waitFor(() => expect(mockedUpdate).toHaveBeenCalledTimes(1));
+    expect(mockedUpdate.mock.calls[0][2]).toEqual({ phone: '3000000001' });
+  });
+
+  it('places the type next to its number, with the free label right below', () => {
+    render(
+      <PatientEditModal open patient={patient} token="tok" onOpenChange={() => {}} onSaved={() => {}} />,
+    );
+    const section = screen.getByRole('heading', { name: 'Identificación' }).parentElement!;
+    const labels = Array.from(section.querySelectorAll('label')).map((l) => l.textContent);
+    expect(labels).toEqual([
+      'Nombre',
+      'Apellido',
+      'Tipo de documento',
+      'Número de documento',
+      'Nombre del documento (opcional)',
+      'Fecha de nacimiento',
+      'Sexo',
+    ]);
+  });
+
+  it('an email the API would reject («ana@x», no TLD) is marked on its field and not sent', async () => {
+    const user = userEvent.setup();
+    render(
+      <PatientEditModal open patient={patient} token="tok" onOpenChange={() => {}} onSaved={() => {}} />,
+    );
+    const email = screen.getByLabelText(/correo electrónico/i);
+    await user.type(email, 'ana@x');
+    await user.click(screen.getByRole('button', { name: /guardar/i }));
+
+    expect(mockedUpdate).not.toHaveBeenCalled();
+    expect(email).toHaveAttribute('aria-invalid', 'true');
+    expect(email).toHaveAttribute('aria-describedby', 'pe-email-error');
+    expect(document.getElementById('pe-email-error')).toHaveTextContent('Revisa el correo electrónico');
+    expect(email).toHaveFocus();
+
+    mockedUpdate.mockResolvedValue(patient);
+    await user.type(email, '.co');
+    expect(email).not.toHaveAttribute('aria-invalid');
+    await user.click(screen.getByRole('button', { name: /guardar/i }));
+    await waitFor(() => expect(mockedUpdate).toHaveBeenCalledTimes(1));
+    expect(mockedUpdate.mock.calls[0][2]).toEqual({ email: 'ana@x.co' });
+  });
+
+  it('an unchanged saved email does not block saving other fields', async () => {
+    mockedUpdate.mockResolvedValue(patient);
+    const user = userEvent.setup();
+    const oldEmail = { ...patient, email: 'ana@x' };
+    render(
+      <PatientEditModal open patient={oldEmail} token="tok" onOpenChange={() => {}} onSaved={() => {}} />,
+    );
+    await user.type(screen.getByLabelText(/ocupación/i), 'Docente');
+    await user.click(screen.getByRole('button', { name: /guardar/i }));
+    await waitFor(() => expect(mockedUpdate).toHaveBeenCalledTimes(1));
+    expect(mockedUpdate.mock.calls[0][2]).toEqual({ occupation: 'Docente' });
+  });
+
+  it('rejects a label with a control or format character, as the API does', async () => {
+    const user = userEvent.setup();
+    render(
+      <PatientEditModal open patient={patient} token="tok" onOpenChange={() => {}} onSaved={() => {}} />,
+    );
+    const label = screen.getByLabelText('Nombre del documento (opcional)');
+    fireEvent.change(label, { target: { value: 'ID \u202Elocal' } });
+    await user.click(screen.getByRole('button', { name: /guardar/i }));
+
+    expect(mockedUpdate).not.toHaveBeenCalled();
+    expect(label).toHaveAttribute('aria-invalid', 'true');
+    expect(document.getElementById('pe-docTypeLabel-error')).toHaveTextContent(
+      'El nombre del documento no puede llevar caracteres de control.',
+    );
+    expect(label).toHaveFocus();
+  });
+
+  it('sends docTypeLabel null when the label is emptied', async () => {
+    mockedUpdate.mockResolvedValue(patient);
+    const user = userEvent.setup();
+    const labelled = { ...patient, docTypeLabel: 'ID local' };
+    render(
+      <PatientEditModal open patient={labelled} token="tok" onOpenChange={() => {}} onSaved={() => {}} />,
+    );
+    await user.clear(screen.getByLabelText('Nombre del documento (opcional)'));
+    await user.click(screen.getByRole('button', { name: /guardar/i }));
+    await waitFor(() => expect(mockedUpdate).toHaveBeenCalledTimes(1));
+    expect(mockedUpdate.mock.calls[0][2]).toEqual({ docTypeLabel: null });
+  });
+
+  it('sends the label only when it changed, trimmed', async () => {
+    mockedUpdate.mockResolvedValue(patient);
+    const user = userEvent.setup();
+    const labelled = { ...patient, docTypeLabel: 'ID local' };
+    const { rerender } = render(
+      <PatientEditModal open patient={labelled} token="tok" onOpenChange={() => {}} onSaved={() => {}} />,
+    );
+    await user.type(screen.getByLabelText(/ocupación/i), 'Docente');
+    await user.click(screen.getByRole('button', { name: /guardar/i }));
+    await waitFor(() => expect(mockedUpdate).toHaveBeenCalledTimes(1));
+    expect(mockedUpdate.mock.calls[0][2]).not.toHaveProperty('docTypeLabel');
+
+    rerender(
+      <PatientEditModal open patient={{ ...labelled }} token="tok" onOpenChange={() => {}} onSaved={() => {}} />,
+    );
+    const label = screen.getByLabelText('Nombre del documento (opcional)');
+    await user.clear(label);
+    await user.type(label, '  Documento   A ');
+    await user.click(screen.getByRole('button', { name: /guardar/i }));
+    await waitFor(() => expect(mockedUpdate).toHaveBeenCalledTimes(2));
+    expect(mockedUpdate.mock.calls[1][2]).toEqual({ docTypeLabel: 'Documento A' });
+  });
+
+  it('rejects a label over 40 characters', async () => {
+    const user = userEvent.setup();
+    render(
+      <PatientEditModal open patient={patient} token="tok" onOpenChange={() => {}} onSaved={() => {}} />,
+    );
+    const label = screen.getByLabelText('Nombre del documento (opcional)');
+    expect(screen.getByText('Si lo escribes, se muestra en lugar del tipo en fichas y documentos.')).toBeInTheDocument();
+    fireEvent.change(label, { target: { value: '\u{1D49C}'.repeat(41) } });
+    expect(label).toHaveValue('\u{1D49C}'.repeat(41));
+    await user.click(screen.getByRole('button', { name: /guardar/i }));
+
+    expect(mockedUpdate).not.toHaveBeenCalled();
+    expect(label).toHaveAttribute('aria-invalid', 'true');
+    expect(label).toHaveAttribute('aria-describedby', 'pe-docTypeLabel-error');
+    expect(document.getElementById('pe-docTypeLabel-error')).toHaveTextContent('Hasta 40 caracteres.');
+    expect(label).toHaveFocus();
+
+    mockedUpdate.mockResolvedValue(patient);
+    fireEvent.change(label, { target: { value: '\u{1D49C}'.repeat(40) } });
+    expect(label).not.toHaveAttribute('aria-invalid');
+    await user.click(screen.getByRole('button', { name: /guardar/i }));
+    await waitFor(() => expect(mockedUpdate).toHaveBeenCalledTimes(1));
+    expect(mockedUpdate.mock.calls[0][2]).toEqual({ docTypeLabel: '\u{1D49C}'.repeat(40) });
   });
 
   it('omite docType y sex si no cambiaron', async () => {

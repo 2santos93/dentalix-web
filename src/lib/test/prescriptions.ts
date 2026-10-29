@@ -31,7 +31,7 @@ export function makePrescription(overrides: Partial<Prescription> = {}): Prescri
     dispensationDate: '2026-10-16',
     validUntil: '2026-11-14',
     patientName: 'Ana Pérez',
-    patientDocument: 'CC 1020',
+    patientDocument: 'Documento nacional DOC-1020',
     patientBirthYear: null,
     patientAgeYears: null,
     patientWeightKg: null,

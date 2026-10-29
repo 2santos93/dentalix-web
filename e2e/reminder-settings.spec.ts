@@ -124,7 +124,7 @@ test('el detalle de una cita enseña sus recordatorios pendientes', async ({ pag
   const patient = await apiPost<{ id: string }>(request, session, '/patients', {
     firstName: 'Carolina',
     lastName: patientLastName,
-    docType: 'CC',
+    docType: 'NATIONAL_ID',
     docNumber: `REC${suffix}`.slice(0, 20),
     sex: 'F',
     email: `carolina.${suffix}@example.com`,

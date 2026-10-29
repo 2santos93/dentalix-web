@@ -70,7 +70,7 @@ test.beforeAll(async ({ request }) => {
   const patient = await apiPost<{ id: string }>(request, session, '/patients', {
     firstName: 'Mariana Isabel',
     lastName,
-    docType: 'CC',
+    docType: 'NATIONAL_ID',
     docNumber,
     sex: 'F',
     phone: '+57 300 123 4567',

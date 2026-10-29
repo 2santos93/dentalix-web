@@ -11,6 +11,7 @@ import {
   validateImport,
 } from '@/lib/patient-imports/patient-imports-api';
 import { saveCsv } from '@/lib/files/save-csv';
+import { getDocumentTypeNames } from '@/lib/patients/document-type-names-api';
 import { balancesFixture, batchFixture, inspectFixture } from '@/lib/test/patient-imports';
 import { ImportProgress } from './import-progress';
 import { PatientImportWizard } from './patient-import-wizard';
@@ -43,6 +44,7 @@ jest.mock('../../lib/patient-imports/patient-imports-api', () => ({
   removeBalances: jest.fn(),
 }));
 jest.mock('../../lib/files/save-csv', () => ({ saveCsv: jest.fn() }));
+jest.mock('../../lib/patients/document-type-names-api', () => ({ getDocumentTypeNames: jest.fn() }));
 
 const mockedInspect = inspectFile as jest.MockedFunction<typeof inspectFile>;
 const mockedValidate = validateImport as jest.MockedFunction<typeof validateImport>;
@@ -51,12 +53,15 @@ const mockedGet = getImport as jest.MockedFunction<typeof getImport>;
 const mockedList = listImports as jest.MockedFunction<typeof listImports>;
 const mockedBalances = uploadBalances as jest.MockedFunction<typeof uploadBalances>;
 const mockedRemoveBalances = removeBalances as jest.MockedFunction<typeof removeBalances>;
+const mockedGetNames = getDocumentTypeNames as jest.MockedFunction<typeof getDocumentTypeNames>;
+const NO_NAMES = { NATIONAL_ID: null, PASSPORT: null, RESIDENCE_PERMIT: null, TAX_ID: null, OTHER: null };
 
-const csv = () => new File(['tipo;doc\nCC;1'], 'pacientes.csv', { type: 'text/csv' });
+const csv = () => new File(['tipo;doc\nPasaporte;1'], 'pacientes.csv', { type: 'text/csv' });
 
 beforeEach(() => {
   jest.clearAllMocks();
   mockedList.mockResolvedValue({ items: [], total: 0, page: 1, pageSize: 20 });
+  mockedGetNames.mockResolvedValue(NO_NAMES);
 });
 
 async function upload(user: ReturnType<typeof userEvent.setup>) {
@@ -72,9 +77,70 @@ it('paso 1 → 2: lee el archivo y propone el mapeo de columnas con su ejemplo',
   expect(mockedInspect).toHaveBeenCalledWith('tok', expect.any(File), expect.any(Function));
   expect(await screen.findByText('pacientes.csv · 3 filas')).toBeInTheDocument();
   const doc = screen.getByLabelText(/número de documento/i);
-  expect(doc).toHaveValue('Cédula');
+  expect(doc).toHaveValue('Documento');
   expect(screen.getByLabelText(/^tipo de documento$/i)).toHaveValue('');
-  expect(screen.getByText('1020304050')).toBeInTheDocument();
+  expect(screen.getByText('DEMO-0001')).toBeInTheDocument();
+});
+
+describe('tipo de documento genérico (DX-327)', () => {
+  it('the default type starts empty', async () => {
+    mockedInspect.mockResolvedValue(inspectFixture());
+    mockedValidate.mockResolvedValue(batchFixture());
+    const user = userEvent.setup();
+    render(<PatientImportWizard token="tok" onBatchChange={jest.fn()} fmt={FMT} />);
+    await upload(user);
+    const fallback = (await screen.findByLabelText(/cuando la celda va vacía/i)) as HTMLSelectElement;
+    expect(fallback).toHaveValue('');
+    expect(fallback.selectedOptions[0]).toHaveTextContent('— Ninguno: la fila da error —');
+
+    await user.click(screen.getByRole('button', { name: 'Validar archivo' }));
+    expect(mockedValidate).toHaveBeenCalledWith(
+      'tok',
+      expect.any(File),
+      expect.any(Object),
+      null,
+      expect.any(Function),
+    );
+  });
+
+  it("the mapping offers the five types with the clinic's local names", async () => {
+    mockedGetNames.mockResolvedValue({ ...NO_NAMES, NATIONAL_ID: 'ID local' });
+    mockedInspect.mockResolvedValue(inspectFixture());
+    mockedValidate.mockResolvedValue(batchFixture());
+    const user = userEvent.setup();
+    render(<PatientImportWizard token="tok" onBatchChange={jest.fn()} fmt={FMT} />);
+    await upload(user);
+    const fallback = (await screen.findByLabelText(/cuando la celda va vacía/i)) as HTMLSelectElement;
+    await within(fallback).findByRole('option', { name: 'ID local' });
+    expect(Array.from(fallback.options).map((o) => [o.value, o.textContent])).toEqual([
+      ['', '— Ninguno: la fila da error —'],
+      ['NATIONAL_ID', 'ID local'],
+      ['PASSPORT', 'Pasaporte'],
+      ['RESIDENCE_PERMIT', 'Permiso de residencia'],
+      ['TAX_ID', 'Identificación fiscal'],
+      ['OTHER', 'Otro documento'],
+    ]);
+
+    await user.selectOptions(fallback, 'TAX_ID');
+    await user.click(screen.getByRole('button', { name: 'Validar archivo' }));
+    expect(mockedValidate.mock.calls[0][3]).toBe('TAX_ID');
+  });
+
+  it('the preview prints the document text', async () => {
+    mockedGetNames.mockResolvedValue({ ...NO_NAMES, NATIONAL_ID: 'ID local' });
+    mockedInspect.mockResolvedValue(inspectFixture());
+    mockedValidate.mockResolvedValue(batchFixture());
+    const user = userEvent.setup();
+    render(<PatientImportWizard token="tok" onBatchChange={jest.fn()} fmt={FMT} />);
+    await upload(user);
+    await within(
+      (await screen.findByLabelText(/cuando la celda va vacía/i)) as HTMLSelectElement,
+    ).findByRole('option', { name: 'ID local' });
+    await user.click(screen.getByRole('button', { name: 'Validar archivo' }));
+    const result = await screen.findByRole('region', { name: /resultado de la validación/i });
+    expect(result).toHaveTextContent('Ana Pérez · ID local DEMO-0001');
+    expect(result).not.toHaveTextContent('NATIONAL_ID');
+  });
 });
 
 it('un archivo de más de 5 MB se rechaza sin subirlo', async () => {
@@ -203,8 +269,8 @@ it('paso 2: valida con el mapeo elegido y muestra totales, errores por fila y vi
   expect(mockedValidate).toHaveBeenCalledWith(
     'tok',
     expect.any(File),
-    { docNumber: 'Cédula', firstName: 'Nombre', lastName: 'Apellidos' },
-    'CC',
+    { docNumber: 'Documento', firstName: 'Nombre', lastName: 'Apellidos' },
+    null,
     expect.any(Function),
   );
   const result = await screen.findByRole('region', {

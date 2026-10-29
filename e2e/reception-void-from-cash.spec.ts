@@ -53,7 +53,7 @@ async function patientWithPlan(
   const patient = await post<{ id: string }>('/patients', {
     firstName: 'Caja',
     lastName,
-    docType: 'CC',
+    docType: 'NATIONAL_ID',
     docNumber,
     sex: 'F',
   });

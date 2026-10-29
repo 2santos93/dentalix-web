@@ -92,14 +92,14 @@ test.beforeAll(async ({ request }) => {
   ({ id: patientId } = await apiPost<{ id: string }>(request, session, '/patients', {
     firstName: 'Camila',
     lastName,
-    docType: 'CC',
+    docType: 'NATIONAL_ID',
     docNumber: `CB${suffix}`.slice(0, 20),
     sex: 'F',
   }));
   ({ id: otherPatientId } = await apiPost<{ id: string }>(request, session, '/patients', {
     firstName: 'Bruno',
     lastName: otherLastName,
-    docType: 'CC',
+    docType: 'NATIONAL_ID',
     docNumber: `CBO${suffix}`.slice(0, 20),
     sex: 'M',
   }));

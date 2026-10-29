@@ -34,6 +34,9 @@ jest.mock('../../lib/patients/patients-api', () => ({
   listPatients: jest.fn(),
   createPatient: jest.fn(),
 }));
+jest.mock('../../lib/patients/document-type-names-api', () => ({
+  getDocumentTypeNames: jest.fn().mockRejectedValue(new Error('sin nombres: genéricos')),
+}));
 jest.mock('../../lib/appointments/appointment-types-api', () => ({
   listAppointmentTypes: jest.fn(),
 }));
@@ -83,7 +86,9 @@ const patientsPage = {
       tenantId: 't1',
       firstName: 'María',
       lastName: 'López',
-      docType: 'CC' as const,
+      docType: 'NATIONAL_ID' as const,
+      docTypeLabel: null,
+      docTypeName: 'ID local',
       docNumber: '123',
       birthDate: null,
       sex: 'F' as const,
@@ -100,7 +105,7 @@ const patientsPage = {
       tenantId: 't1',
       firstName: 'Carlos',
       lastName: 'Pérez',
-      docType: 'CC' as const,
+      docType: 'NATIONAL_ID' as const,
       docNumber: '456',
       birthDate: null,
       sex: 'M' as const,
@@ -123,7 +128,7 @@ const newPatient = {
   tenantId: 't1',
   firstName: 'Sofía',
   lastName: 'Ramírez',
-  docType: 'CC' as const,
+  docType: 'NATIONAL_ID' as const,
   docNumber: null,
   birthDate: null,
   sex: 'UNSPECIFIED' as const,
@@ -349,10 +354,20 @@ describe('AppointmentForm', () => {
     // The chosen-patient chip shows who's booked — no list to pick from.
     expect(await screen.findByRole('button', { name: /cambiar/i })).toBeInTheDocument();
     expect(screen.getByText('María López')).toBeInTheDocument();
-    expect(screen.getByText(/cc 123/i)).toBeInTheDocument();
+    expect(screen.getByText('ID local 123')).toBeInTheDocument();
     expect(screen.queryByRole('listbox')).not.toBeInTheDocument();
     // The search box collapses once a patient is chosen.
     expect(screen.queryByLabelText(/^paciente$/i)).not.toBeInTheDocument();
+  });
+
+  it('prints the docTypeName of the DTO, or the generic name when it is missing', async () => {
+    const user = userEvent.setup();
+    await renderFormAndWaitForLoad();
+    // pat-2 llega sin `docTypeName` (API anterior en el hueco): el genérico.
+    await user.type(screen.getByLabelText(/^paciente$/i), '456');
+    expect(await screen.findByRole('button', { name: /cambiar/i })).toBeInTheDocument();
+    expect(screen.getByText('Documento nacional 456')).toBeInTheDocument();
+    expect(screen.queryByText(/NATIONAL_ID/)).not.toBeInTheDocument();
   });
 
   it('DX-247: al elegir un paciente con profilaxis antibiótica avisa «Requiere premedicación» antes de agendar', async () => {
@@ -696,6 +711,7 @@ describe('AppointmentForm', () => {
       const dialog = await screen.findByRole('dialog');
       await user.type(within(dialog).getByLabelText(/^nombre$/i), 'Sofía');
       await user.type(within(dialog).getByLabelText(/apellido/i), 'Ramírez');
+      await user.selectOptions(within(dialog).getByLabelText(/tipo de documento/i), 'NATIONAL_ID');
 
       await user.click(within(dialog).getByRole('button', { name: /crear paciente/i }));
 
@@ -705,7 +721,7 @@ describe('AppointmentForm', () => {
       expect(input).toEqual({
         firstName: 'Sofía',
         lastName: 'Ramírez',
-        docType: 'CC',
+        docType: 'NATIONAL_ID',
         sex: 'UNSPECIFIED',
       });
 
@@ -723,6 +739,7 @@ describe('AppointmentForm', () => {
       const dialog = await screen.findByRole('dialog');
       await user.type(within(dialog).getByLabelText(/^nombre$/i), 'Sofía');
       await user.type(within(dialog).getByLabelText(/apellido/i), 'Ramírez');
+      await user.selectOptions(within(dialog).getByLabelText(/tipo de documento/i), 'NATIONAL_ID');
 
       await user.click(within(dialog).getByRole('button', { name: /crear paciente/i }));
 

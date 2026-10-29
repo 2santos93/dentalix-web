@@ -5,7 +5,16 @@ import { Check, Loader2, Search, X } from 'lucide-react';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { useDebouncedValue } from '@/lib/hooks/use-debounced-value';
 import { listPatients, type DocType, type Patient } from '@/lib/patients/patients-api';
-import { DOC_TYPE_SHORT } from '@/lib/patients/doc-type';
+import {
+  DOC_TYPES,
+  docTypeOptionLabel,
+  documentText,
+  dtoDocTypeName,
+  normalizeDocTypeLabel,
+} from '@/lib/patients/doc-type';
+import { DocTypeLabelField, docTypeLabelFieldError } from './doc-type-label-field';
+import { useDocumentTypeNames } from '@/lib/patients/use-document-type-names';
+import { isEmailAddress } from '@/lib/format/email';
 import {
   createResponsibleParty,
   RELATIONSHIP_LABELS,
@@ -45,6 +54,7 @@ export const responsibleDialogCopy = {
   docNumber: 'Número de documento',
   email: 'Email',
   emailHint: 'A él le llegan los avisos del paciente si es menor o no tiene email.',
+  emailInvalid: 'Revisa el email: le falta algo (p. ej. nombre@dominio.com).',
   phone: 'Teléfono',
   relationship: 'Parentesco',
   isPayer: 'Pagador principal',
@@ -57,15 +67,19 @@ export const responsibleDialogCopy = {
 };
 const copy = responsibleDialogCopy;
 
-const DOC_TYPES: DocType[] = ['CC', 'TI', 'CE', 'PASSPORT', 'OTHER'];
 const SEARCH_DEBOUNCE_MS = 300;
 const SEARCH_PAGE_SIZE = 8;
 
 interface Draft {
   kind: 'PATIENT' | 'CONTACT';
-  patient: Pick<Patient, 'id' | 'firstName' | 'lastName' | 'docType' | 'docNumber'> | null;
+  patient: Pick<
+    Patient,
+    'id' | 'firstName' | 'lastName' | 'docType' | 'docTypeLabel' | 'docTypeName' | 'docNumber'
+  > | null;
   fullName: string;
   docType: DocType | '';
+  /** R7: solo con tipo; un responsable paciente no lleva etiqueta. */
+  docTypeLabel: string;
   docNumber: string;
   email: string;
   phone: string;
@@ -80,6 +94,7 @@ function draftFrom(party: ResponsibleParty | null): Draft {
     patient: party?.responsiblePatient ?? null,
     fullName: party?.kind === 'CONTACT' ? party.fullName : '',
     docType: party?.kind === 'CONTACT' ? (party.docType ?? '') : '',
+    docTypeLabel: party?.kind === 'CONTACT' ? (party.docTypeLabel ?? '') : '',
     docNumber: party?.kind === 'CONTACT' ? (party.docNumber ?? '') : '',
     email: party?.kind === 'CONTACT' ? (party.email ?? '') : '',
     phone: party?.kind === 'CONTACT' ? (party.phone ?? '') : '',
@@ -89,8 +104,11 @@ function draftFrom(party: ResponsibleParty | null): Draft {
   };
 }
 
-const docLabel = (p: Pick<Patient, 'docType' | 'docNumber'>) =>
-  p.docNumber ? `${DOC_TYPE_SHORT[p.docType]} ${p.docNumber}` : DOC_TYPE_SHORT[p.docType];
+/** «{nombre visible} {número}» del DTO; sin número, solo el nombre. */
+function docLabel(p: Pick<Patient, 'docType' | 'docTypeLabel' | 'docTypeName' | 'docNumber'>): string {
+  const name = dtoDocTypeName(p);
+  return documentText(name, p.docNumber) ?? name;
+}
 
 interface ResponsiblePartyDialogProps {
   open: boolean;
@@ -120,6 +138,7 @@ export function ResponsiblePartyDialog({
   const ids = useId();
   const editing = party !== null;
   const [draft, setDraft] = useState<Draft>(() => draftFrom(party));
+  const docTypeNames = useDocumentTypeNames(token);
   const [query, setQuery] = useState('');
   const debouncedQuery = useDebouncedValue(query.trim(), SEARCH_DEBOUNCE_MS);
   const [results, setResults] = useState<Patient[]>([]);
@@ -127,6 +146,10 @@ export function ResponsiblePartyDialog({
   const [searchFailed, setSearchFailed] = useState(false);
   const [searchKey, setSearchKey] = useState(0);
   const [fieldError, setFieldError] = useState<string | null>(null);
+  const [labelError, setLabelError] = useState<string | null>(null);
+  const labelRef = React.useRef<HTMLInputElement>(null);
+  const [emailError, setEmailError] = useState<string | null>(null);
+  const emailRef = React.useRef<HTMLInputElement>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
 
@@ -170,6 +193,20 @@ export function ResponsiblePartyDialog({
       setFieldError(copy.nameRequired);
       return;
     }
+    // La regla de `@IsEmail()` de la API (el navegador acepta «ana@x»); el
+    // contacto viaja entero, así que se mira siempre.
+    if (draft.kind === 'CONTACT' && draft.email.trim() && !isEmailAddress(draft.email.trim())) {
+      setEmailError(copy.emailInvalid);
+      emailRef.current?.focus();
+      return;
+    }
+    const labelFieldError =
+      draft.kind === 'CONTACT' && draft.docType ? docTypeLabelFieldError(draft.docTypeLabel) : null;
+    if (labelFieldError) {
+      setLabelError(labelFieldError);
+      labelRef.current?.focus();
+      return;
+    }
     setSaving(true);
     setSaveError(null);
     const flags = {
@@ -182,6 +219,9 @@ export function ResponsiblePartyDialog({
         ? {
             fullName: draft.fullName.trim(),
             docType: draft.docType || null,
+            // Pre-flight I1: el contacto viaja entero, así que la etiqueta
+            // también (la actual, o null); omitirla no la conservaría.
+            docTypeLabel: draft.docType ? normalizeDocTypeLabel(draft.docTypeLabel) : null,
             docNumber: draft.docNumber.trim() || null,
             email: draft.email.trim() || null,
             phone: draft.phone.trim() || null,
@@ -360,13 +400,21 @@ export function ResponsiblePartyDialog({
               <select
                 id={`${ids}-doctype`}
                 value={draft.docType}
-                onChange={(e) => set('docType', e.target.value as DocType | '')}
+                onChange={(e) => {
+                  const next = e.target.value as DocType | '';
+                  const seeded = draftFrom(party);
+                  set('docType', next);
+                  // La etiqueta de un tipo no vale para otro (R7); volver al
+                  // tipo guardado recupera la suya, no la borra.
+                  set('docTypeLabel', next !== '' && next === seeded.docType ? seeded.docTypeLabel : '');
+                  setLabelError(null);
+                }}
                 className={cn(fieldClass, 'h-10')}
               >
                 <option value="">{copy.docTypeNone}</option>
                 {DOC_TYPES.map((t) => (
                   <option key={t} value={t}>
-                    {DOC_TYPE_SHORT[t]}
+                    {docTypeOptionLabel(t, docTypeNames)}
                   </option>
                 ))}
               </select>
@@ -380,15 +428,40 @@ export function ResponsiblePartyDialog({
                 onChange={(e) => set('docNumber', e.target.value)}
               />
             </FormField>
-            <FormField htmlFor={`${ids}-email`} label={copy.email} hint={copy.emailHint}>
+            {draft.docType ? (
+              <DocTypeLabelField
+                id={`${ids}-doctypelabel`}
+                inputRef={labelRef}
+                value={draft.docTypeLabel}
+                onChange={(value) => {
+                  set('docTypeLabel', value);
+                  setLabelError(null);
+                }}
+                error={labelError}
+                className="sm:col-span-2"
+              />
+            ) : null}
+            <FormField
+              htmlFor={`${ids}-email`}
+              label={copy.email}
+              hint={copy.emailHint}
+              hintId={`${ids}-email-hint`}
+              error={emailError}
+            >
               <Input
+                ref={emailRef}
                 id={`${ids}-email`}
                 type="email"
                 inputMode="email"
                 value={draft.email}
                 maxLength={254}
                 autoComplete="off"
-                onChange={(e) => set('email', e.target.value)}
+                onChange={(e) => {
+                  set('email', e.target.value);
+                  setEmailError(null);
+                }}
+                aria-invalid={emailError ? true : undefined}
+                aria-describedby={emailError ? fieldErrorId(`${ids}-email`) : `${ids}-email-hint`}
               />
             </FormField>
             <FormField htmlFor={`${ids}-phone`} label={copy.phone}>

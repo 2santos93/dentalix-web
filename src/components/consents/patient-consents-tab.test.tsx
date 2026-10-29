@@ -25,7 +25,7 @@ const consent = {
   title: 'Consentimiento de exodoncia',
   signerType: 'GUARDIAN' as const,
   signerName: 'Marta Pérez',
-  signerDocument: 'CC 999',
+  signerDocument: 'Documento A DOC-999',
   professionalName: 'Dra. Laura Gómez',
   contentHash: 'a'.repeat(64),
   signedAt: '2026-10-16T15:00:00.000Z',

@@ -70,14 +70,14 @@ async function seed(
   const patient = await send<{ id: string }>('post', '/patients', {
     firstName: 'Recepción',
     lastName,
-    docType: 'CC',
+    docType: 'NATIONAL_ID',
     docNumber: `DX67P${tag}`.slice(0, 20),
     sex: 'F',
   });
   const empty = await send<{ id: string }>('post', '/patients', {
     firstName: 'Recepción',
     lastName: `SinPlan${tag}`,
-    docType: 'CC',
+    docType: 'NATIONAL_ID',
     docNumber: `DX67E${tag}`.slice(0, 20),
     sex: 'M',
   });

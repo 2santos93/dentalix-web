@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { PatientResponsiblePartiesSection } from './patient-responsible-parties-section';
 import {
   createResponsibleParty,
@@ -9,6 +9,7 @@ import {
   type ResponsibleParty,
 } from '@/lib/patients/responsible-parties-api';
 import { listPatients } from '@/lib/patients/patients-api';
+import { getDocumentTypeNames } from '@/lib/patients/document-type-names-api';
 import { ApiError } from '@/lib/api/client';
 import { setupUser } from '@/lib/test/user';
 
@@ -23,6 +24,12 @@ jest.mock('../../lib/patients/patients-api', () => ({
   ...jest.requireActual('../../lib/patients/patients-api'),
   listPatients: jest.fn(),
 }));
+
+jest.mock('../../lib/patients/document-type-names-api', () => ({
+  getDocumentTypeNames: jest.fn(),
+}));
+const mockedGetNames = getDocumentTypeNames as jest.MockedFunction<typeof getDocumentTypeNames>;
+const NO_NAMES = { NATIONAL_ID: null, PASSPORT: null, RESIDENCE_PERMIT: null, TAX_ID: null, OTHER: null };
 
 const mockedGet = getPatientResponsibles as jest.MockedFunction<typeof getPatientResponsibles>;
 const mockedCreate = createResponsibleParty as jest.MockedFunction<typeof createResponsibleParty>;
@@ -56,13 +63,17 @@ const motherParty: ResponsibleParty = {
     id: 'mother',
     firstName: 'Claudia',
     lastName: 'Navarro',
-    docType: 'CC',
+    docType: 'NATIONAL_ID',
+    docTypeLabel: null,
+    docTypeName: 'Documento nacional',
     docNumber: '52987654',
     email: 'claudia@example.com',
     phone: null,
   },
   fullName: 'Claudia Navarro',
-  docType: 'CC',
+  docType: 'NATIONAL_ID',
+  docTypeLabel: null,
+  docTypeName: 'Documento nacional',
   docNumber: '52987654',
   email: 'claudia@example.com',
   phone: null,
@@ -78,7 +89,10 @@ const renderSection = () =>
   render(<PatientResponsiblePartiesSection token="tok" patientId="son" />);
 
 describe('PatientResponsiblePartiesSection (DX-203)', () => {
-  beforeEach(() => jest.resetAllMocks());
+  beforeEach(() => {
+    jest.resetAllMocks();
+    mockedGetNames.mockResolvedValue(NO_NAMES);
+  });
 
   it('carga: esqueleto con estado accesible', () => {
     mockedGet.mockReturnValue(new Promise(() => undefined));
@@ -205,6 +219,7 @@ describe('PatientResponsiblePartiesSection (DX-203)', () => {
         receivesNotices: true,
         fullName: 'Claudia Navarro',
         docType: null,
+        docTypeLabel: null,
         docNumber: null,
         email: 'claudia@example.com',
         phone: null,
@@ -214,12 +229,224 @@ describe('PatientResponsiblePartiesSection (DX-203)', () => {
     expect(await screen.findByTestId('responsible-row')).toBeInTheDocument();
   });
 
+  it('a contact offers no document and the five types', async () => {
+    mockedGetNames.mockResolvedValue({ ...NO_NAMES, RESIDENCE_PERMIT: 'ID local' });
+    mockedGet.mockResolvedValue(data());
+    renderSection();
+    const user = setupUser();
+    await user.click(await screen.findByRole('button', { name: 'Añadir responsable' }));
+    await user.click(screen.getByRole('radio', { name: 'Un contacto nuevo (sin ficha)' }));
+    const select = screen.getByLabelText('Tipo de documento') as HTMLSelectElement;
+    await within(select).findByRole('option', { name: 'ID local' });
+    expect(select).toHaveValue('');
+    expect(Array.from(select.options).map((o) => [o.value, o.textContent])).toEqual([
+      ['', 'Sin documento'],
+      ['NATIONAL_ID', 'Documento nacional'],
+      ['PASSPORT', 'Pasaporte'],
+      ['RESIDENCE_PERMIT', 'ID local'],
+      ['TAX_ID', 'Identificación fiscal'],
+      ['OTHER', 'Otro documento'],
+    ]);
+  });
+
+  it('a contact shows the label field only with a type', async () => {
+    mockedGet.mockResolvedValue(data());
+    renderSection();
+    const user = setupUser();
+    await user.click(await screen.findByRole('button', { name: 'Añadir responsable' }));
+    await user.click(screen.getByRole('radio', { name: 'Un contacto nuevo (sin ficha)' }));
+    expect(screen.queryByLabelText('Nombre del documento (opcional)')).not.toBeInTheDocument();
+
+    await user.selectOptions(screen.getByLabelText('Tipo de documento'), 'NATIONAL_ID');
+    expect(screen.getByLabelText('Nombre del documento (opcional)')).toHaveValue('');
+    expect(screen.getByText('Si lo escribes, se muestra en lugar del tipo en fichas y documentos.')).toBeInTheDocument();
+
+    await user.selectOptions(screen.getByLabelText('Tipo de documento'), '');
+    expect(screen.queryByLabelText('Nombre del documento (opcional)')).not.toBeInTheDocument();
+  });
+
+  it('the contact dialog always sends docTypeLabel with the contact', async () => {
+    const contact: ResponsibleParty = {
+      ...motherParty,
+      kind: 'CONTACT',
+      responsiblePatient: null,
+      docTypeLabel: 'ID local',
+      docTypeName: 'ID local',
+    };
+    mockedGet.mockResolvedValue(data({ parties: [contact] }));
+    mockedUpdate.mockResolvedValue(contact);
+    mockedCreate.mockResolvedValue(contact);
+    renderSection();
+    const user = setupUser();
+
+    // Edición sin tocar la etiqueta: viaja la actual.
+    await user.click(await screen.findByRole('button', { name: 'Editar a Claudia Navarro' }));
+    const label = screen.getByLabelText('Nombre del documento (opcional)');
+    expect(label).toHaveValue('ID local');
+    await user.click(screen.getByLabelText('Recibe los avisos'));
+    await user.click(screen.getByRole('button', { name: 'Guardar' }));
+    await waitFor(() => expect(mockedUpdate).toHaveBeenCalledTimes(1));
+    expect(mockedUpdate.mock.calls[0][3]).toMatchObject({ docType: 'NATIONAL_ID', docTypeLabel: 'ID local' });
+
+    // Vaciada: viaja null, nunca se omite.
+    await user.click(await screen.findByRole('button', { name: 'Editar a Claudia Navarro' }));
+    await user.clear(screen.getByLabelText('Nombre del documento (opcional)'));
+    await user.click(screen.getByRole('button', { name: 'Guardar' }));
+    await waitFor(() => expect(mockedUpdate).toHaveBeenCalledTimes(2));
+    expect(mockedUpdate.mock.calls[1][3]).toHaveProperty('docTypeLabel', null);
+
+    // Con otro tipo, la etiqueta del anterior no se arrastra.
+    await user.click(await screen.findByRole('button', { name: 'Editar a Claudia Navarro' }));
+    await user.selectOptions(screen.getByLabelText('Tipo de documento'), 'PASSPORT');
+    expect(screen.getByLabelText('Nombre del documento (opcional)')).toHaveValue('');
+    await user.type(screen.getByLabelText('Nombre del documento (opcional)'), '  Documento   A ');
+    await user.click(screen.getByRole('button', { name: 'Guardar' }));
+    await waitFor(() => expect(mockedUpdate).toHaveBeenCalledTimes(3));
+    expect(mockedUpdate.mock.calls[2][3]).toMatchObject({ docType: 'PASSPORT', docTypeLabel: 'Documento A' });
+  });
+
+  it('a contact: changing the type and back restores the saved label', async () => {
+    const contact: ResponsibleParty = {
+      ...motherParty,
+      kind: 'CONTACT',
+      responsiblePatient: null,
+      docTypeLabel: 'ID local',
+      docTypeName: 'ID local',
+    };
+    mockedGet.mockResolvedValue(data({ parties: [contact] }));
+    mockedUpdate.mockResolvedValue(contact);
+    renderSection();
+    const user = setupUser();
+
+    await user.click(await screen.findByRole('button', { name: 'Editar a Claudia Navarro' }));
+    const label = screen.getByLabelText('Nombre del documento (opcional)');
+    await user.selectOptions(screen.getByLabelText('Tipo de documento'), 'PASSPORT');
+    expect(label).toHaveValue('');
+    await user.selectOptions(screen.getByLabelText('Tipo de documento'), 'NATIONAL_ID');
+    expect(screen.getByLabelText('Nombre del documento (opcional)')).toHaveValue('ID local');
+    await user.click(screen.getByRole('button', { name: 'Guardar' }));
+    await waitFor(() => expect(mockedUpdate).toHaveBeenCalledTimes(1));
+    expect(mockedUpdate.mock.calls[0][3]).toMatchObject({ docType: 'NATIONAL_ID', docTypeLabel: 'ID local' });
+  });
+
+  it('a contact label with a control or format character is marked on its field', async () => {
+    mockedGet.mockResolvedValue(data());
+    renderSection();
+    const user = setupUser();
+    await user.click(await screen.findByRole('button', { name: 'Añadir responsable' }));
+    await user.click(screen.getByRole('radio', { name: 'Un contacto nuevo (sin ficha)' }));
+    await user.type(screen.getByLabelText('Nombre completo'), 'Claudia Navarro');
+    await user.selectOptions(screen.getByLabelText('Tipo de documento'), 'NATIONAL_ID');
+    const label = screen.getByLabelText('Nombre del documento (opcional)');
+    fireEvent.change(label, { target: { value: 'ID\u200Blocal' } });
+    await user.click(screen.getByRole('button', { name: 'Añadir' }));
+
+    expect(mockedCreate).not.toHaveBeenCalled();
+    expect(label).toHaveAttribute('aria-invalid', 'true');
+    expect(document.getElementById(label.getAttribute('aria-describedby')!)).toHaveTextContent(
+      'El nombre del documento no puede llevar caracteres de control.',
+    );
+    expect(label).toHaveFocus();
+  });
+
+  it('a contact email the API would reject («ana@x», no TLD) is marked on its field', async () => {
+    mockedGet.mockResolvedValue(data());
+    renderSection();
+    const user = setupUser();
+    await user.click(await screen.findByRole('button', { name: 'Añadir responsable' }));
+    await user.click(screen.getByRole('radio', { name: 'Un contacto nuevo (sin ficha)' }));
+    await user.type(screen.getByLabelText('Nombre completo'), 'Claudia Navarro');
+    const email = screen.getByLabelText('Email');
+    expect(email).toHaveAccessibleDescription(
+      'A él le llegan los avisos del paciente si es menor o no tiene email.',
+    );
+    await user.type(email, 'ana@x');
+    await user.click(screen.getByRole('button', { name: 'Añadir' }));
+
+    expect(mockedCreate).not.toHaveBeenCalled();
+    expect(email).toHaveAttribute('aria-invalid', 'true');
+    expect(email).toHaveAccessibleDescription('Revisa el email: le falta algo (p. ej. nombre@dominio.com).');
+    expect(email).toHaveFocus();
+
+    mockedCreate.mockResolvedValue(motherParty);
+    await user.type(email, '.co');
+    expect(email).not.toHaveAttribute('aria-invalid');
+    await user.click(screen.getByRole('button', { name: 'Añadir' }));
+    await waitFor(() => expect(mockedCreate).toHaveBeenCalledTimes(1));
+    expect(mockedCreate.mock.calls[0][2]).toMatchObject({ email: 'ana@x.co' });
+  });
+
+  it('a contact label over 40 characters is marked on its field', async () => {
+    mockedGet.mockResolvedValue(data());
+    renderSection();
+    const user = setupUser();
+    await user.click(await screen.findByRole('button', { name: 'Añadir responsable' }));
+    await user.click(screen.getByRole('radio', { name: 'Un contacto nuevo (sin ficha)' }));
+    await user.type(screen.getByLabelText('Nombre completo'), 'Claudia Navarro');
+    await user.selectOptions(screen.getByLabelText('Tipo de documento'), 'NATIONAL_ID');
+    const label = screen.getByLabelText('Nombre del documento (opcional)');
+    fireEvent.change(label, { target: { value: '\u{1D49C}'.repeat(41) } });
+    await user.click(screen.getByRole('button', { name: 'Añadir' }));
+
+    expect(mockedCreate).not.toHaveBeenCalled();
+    expect(label).toHaveAttribute('aria-invalid', 'true');
+    const errorId = label.getAttribute('aria-describedby');
+    expect(errorId).toBeTruthy();
+    expect(document.getElementById(errorId!)).toHaveTextContent('Hasta 40 caracteres.');
+    expect(label).toHaveFocus();
+    expect(screen.getByLabelText('Nombre completo')).not.toHaveAttribute('aria-invalid');
+
+    mockedCreate.mockResolvedValue(motherParty);
+    fireEvent.change(label, { target: { value: '\u{1D49C}'.repeat(40) } });
+    expect(label).not.toHaveAttribute('aria-invalid');
+    await user.click(screen.getByRole('button', { name: 'Añadir' }));
+    await waitFor(() => expect(mockedCreate).toHaveBeenCalledTimes(1));
+    expect(mockedCreate.mock.calls[0][2]).toMatchObject({ docTypeLabel: '\u{1D49C}'.repeat(40) });
+  });
+
+  it('a patient responsible never sends a label', async () => {
+    mockedGet.mockResolvedValue(data());
+    mockedList.mockResolvedValue({
+      items: [{ id: 'mother', firstName: 'Claudia', lastName: 'Navarro', docType: 'NATIONAL_ID', docNumber: '1' }],
+      total: 1,
+      page: 1,
+      pageSize: 8,
+    } as never);
+    mockedCreate.mockResolvedValue(motherParty);
+    renderSection();
+    const user = setupUser();
+    await user.click(await screen.findByRole('button', { name: 'Añadir responsable' }));
+    // Una etiqueta escrita como contacto no viaja si al final es un paciente.
+    await user.click(screen.getByRole('radio', { name: 'Un contacto nuevo (sin ficha)' }));
+    await user.selectOptions(screen.getByLabelText('Tipo de documento'), 'NATIONAL_ID');
+    await user.type(screen.getByLabelText('Nombre del documento (opcional)'), 'ID local');
+    await user.click(screen.getByRole('radio', { name: 'Un paciente de la clínica' }));
+    await user.type(screen.getByLabelText('Buscar paciente'), 'Clau');
+    await user.click(await screen.findByRole('button', { name: /Claudia Navarro/ }));
+    await user.click(screen.getByRole('button', { name: 'Añadir' }));
+    await waitFor(() => expect(mockedCreate).toHaveBeenCalledTimes(1));
+    expect(mockedCreate.mock.calls[0][2]).toEqual({
+      relationship: 'MOTHER',
+      isPayer: false,
+      receivesNotices: true,
+      responsiblePatientId: 'mother',
+    });
+  });
+
   it('alta buscando a un paciente de la clínica; el 422 del segundo pagador sale en el modal', async () => {
     mockedGet.mockResolvedValue(data());
     mockedList.mockResolvedValue({
       items: [
-        { id: 'mother', firstName: 'Claudia', lastName: 'Navarro', docType: 'CC', docNumber: '52987654' },
-        { id: 'son', firstName: 'Tomás', lastName: 'Ortiz', docType: 'TI', docNumber: '1' },
+        {
+          id: 'mother',
+          firstName: 'Claudia',
+          lastName: 'Navarro',
+          docType: 'NATIONAL_ID',
+          docTypeLabel: 'Documento A',
+          docTypeName: 'Documento A',
+          docNumber: '52987654',
+        },
+        { id: 'son', firstName: 'Tomás', lastName: 'Ortiz', docType: 'PASSPORT', docNumber: '1' },
       ],
       total: 2,
       page: 1,
@@ -234,6 +461,8 @@ describe('PatientResponsiblePartiesSection (DX-203)', () => {
     await user.type(screen.getByLabelText('Buscar paciente'), 'Clau');
     // El propio paciente no se ofrece.
     const option = await screen.findByRole('button', { name: /Claudia Navarro/ });
+    // El documento del resultado sale del `docTypeName` del DTO.
+    expect(within(option).getByText('Documento A 52987654')).toBeInTheDocument();
     expect(screen.queryByRole('button', { name: /Tomás Ortiz/ })).not.toBeInTheDocument();
     await user.click(option);
     await user.click(screen.getByLabelText('Pagador principal'));

@@ -80,7 +80,7 @@ const LEGACY_CO_MARKUP = [
   '<dt class="text-xs font-medium text-[#6b7280]">Documento',
   '</dt>',
   '<dd class="font-medium">',
-  '<span class="tabular-nums">CC 1020',
+  '<span class="tabular-nums">Documento nacional DOC-1020',
   '</span>',
   '</dd>',
   '</div>',
@@ -156,6 +156,8 @@ const LEGACY_CO_MARKUP = [
   '</footer>',
   '</article>',
 ];
+// Receta española anterior a DX-324, tal como se emitió: conserva «DNI/NIE»
+// (legacy-prescription-layout.ts, excepción R12).
 const LEGACY_ES_MARKUP = [
   '<article class="prescription-print-root relative mx-auto w-full max-w-[210mm] bg-white px-4 py-6 text-[#111827] sm:px-10 sm:py-10 print:max-w-none print:p-0">',
   '<header class="flex flex-col gap-4 border-b border-[#d1d5db] pb-4 sm:flex-row sm:items-start sm:justify-between print:flex-row">',
@@ -325,7 +327,7 @@ describe('PrescriptionDocument (A4)', () => {
       'Clínica DemoSede Principal · Cra 15 #90-20Fórmula médicaDecreto 780 de 2016, art. 2.5.3.10.16' +
         'Fecha de emisión10/16/2026 11:00 a. m.Fecha de la receta10/16/2026' +
         'Válida hasta11/14/2026 (30 días naturales)' +
-        'PacienteNombreAna PérezDocumentoCC 1020Nº de historia clínica1020' +
+        'PacienteNombreAna PérezDocumentoDocumento nacional DOC-1020Nº de historia clínica1020' +
         'Medicamentos1.Amoxicilina 500 mgCápsula · Vía oral1 cápsula, cada 8 horas, durante 7 días.' +
         'Cantidad total: 21 (veintiuno) cápsulas' +
         'Profesional que prescribeDra. Laura RuizRegistro profesionalRM-12345Contactolaura@example.com' +
@@ -395,7 +397,7 @@ describe('PrescriptionDocument (A4)', () => {
     expect(screen.getByText('Válida desde').nextSibling).toHaveTextContent('10/16/2026');
     expect(screen.getByText('Válida hasta').nextSibling).toHaveTextContent('10/25/2026');
     expect(screen.getByText('(10 días)')).toBeInTheDocument();
-    expect(screen.getByText('Documento').nextSibling).toHaveTextContent('CC 1020');
+    expect(screen.getByText('Documento').nextSibling).toHaveTextContent('Documento nacional DOC-1020');
     expect(screen.getByText('Nº de registro profesional').nextSibling).toHaveTextContent('RM-12345');
     // Bajo el título no hay nada: ni norma ni subtítulo.
     expect(screen.getByRole('heading', { name: 'Receta' }).nextElementSibling).toBeNull();

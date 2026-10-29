@@ -77,7 +77,7 @@ test.beforeAll(async ({ request }) => {
     const patient = await apiPost<{ id: string }>(request, session, '/patients', {
       firstName: name,
       lastName: last,
-      docType: 'CC',
+      docType: 'NATIONAL_ID',
       docNumber: `FLU${i}${suffix}`.slice(0, 20),
       sex: 'F',
     });
@@ -247,7 +247,7 @@ test('DX-242: prepara ocho estados reales para QA de accesibilidad', async ({req
   const members = await staff.json() as {userId:string; fullName:string}[];
   const providerId = members.find(m => m.fullName === qaDentist.fullName)!.userId;
   for (const [i,status] of qaStatuses.entries()) {
-    const patient = await apiPost<{id:string}>(request, session, '/patients', {firstName:`Estado ${i+1}`, lastName:'QA', docType:'CC', docNumber:`EST${i}${suffix}`.slice(0,20), sex:'F'});
+    const patient = await apiPost<{id:string}>(request, session, '/patients', {firstName:`Estado ${i+1}`, lastName:'QA', docType:'NATIONAL_ID', docNumber:`EST${i}${suffix}`.slice(0,20), sex:'F'});
     const hhmm = `${String(8 + Math.floor(i / 2)).padStart(2, '0')}:${i % 2 ? '30' : '00'}`;
     const minutes = i%2 ? 30:15;
     const draftStart = atSede(tomorrow, hhmm);

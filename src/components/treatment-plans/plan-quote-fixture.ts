@@ -12,7 +12,7 @@ export function planQuoteFixture(overrides: Partial<PlanQuote> = {}): PlanQuote 
     clinicName: 'Clínica Sonrisas',
     clinicLogoUrl: 'https://cdn.example.com/logo.png',
     location: { id: 'loc-1', name: 'Sede principal', address: 'Calle 93 # 14-20' },
-    patient: { name: 'Ana Pérez', document: 'CC 1020' },
+    patient: { name: 'Ana Pérez', document: 'Documento nacional DOC-1020' },
     professionalName: 'Dra. Laura Gómez',
     issuedOn: '2026-10-16',
     validUntil: '2026-11-15',

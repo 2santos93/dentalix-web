@@ -415,6 +415,30 @@ export interface paths {
         patch?: never;
         trace?: never;
     };
+    "/api/v1/patients/document-type-names": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Nombre local de cada tipo de documento de la clínica (DX-327)
+         * @description Null = sin nombre local: se usa el genérico. El nombre visible de un documento es la etiqueta del paciente, si no el nombre local de la clínica para su tipo, si no el genérico (R17). La importación de pacientes reconoce también estos nombres, antes que los genéricos (R19).
+         */
+        get: operations["PatientsController_documentTypeNames"];
+        /**
+         * Nombre local de cada tipo de documento de la clínica (DX-327)
+         * @description Sustituye los cinco nombres: una clave ausente o null queda sin nombre local. Hasta 60 caracteres. Dos tipos no pueden tener el mismo nombre ni el nombre genérico o el código de otro tipo (sin distinguir mayúsculas, tildes ni puntuación, en cualquier escritura). Cambia el nombre visible (R17) y lo que reconoce la importación (R19); no toca ningún paciente. Si nada cambia, 200 sin evento de auditoría.
+         */
+        put: operations["PatientsController_updateClinicDocumentTypeNames"];
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/patients/{id}": {
         parameters: {
             query?: never;
@@ -5013,6 +5037,8 @@ export interface components {
             avatarUrl: string;
         };
         /** @enum {string} */
+        DocType: "NATIONAL_ID" | "PASSPORT" | "RESIDENCE_PERMIT" | "TAX_ID" | "OTHER";
+        /** @enum {string} */
         DataConsentScope: "GENERAL" | "SENSITIVE_HEALTH" | "MARKETING";
         ConsentDecisionDto: {
             scope: components["schemas"]["DataConsentScope"];
@@ -5129,8 +5155,9 @@ export interface components {
         CreatePatientDto: {
             firstName: string;
             lastName: string;
-            /** @enum {string} */
-            docType: "CC" | "TI" | "CE" | "PASSPORT" | "OTHER";
+            docType: components["schemas"]["DocType"];
+            /** @description Nombre libre del documento que escribe la clínica (hasta 40 caracteres). Null = sin nombre propio. */
+            docTypeLabel?: string | null;
             docNumber?: string;
             /** Format: date-time */
             birthDate?: string;
@@ -5193,8 +5220,11 @@ export interface components {
             tenantId: string;
             firstName: string;
             lastName: string;
-            /** @enum {string} */
-            docType: "CC" | "TI" | "CE" | "PASSPORT" | "OTHER";
+            docType: components["schemas"]["DocType"];
+            /** @description Nombre libre del documento que escribe la clínica (hasta 40 caracteres). Null = sin nombre propio. */
+            docTypeLabel: string | null;
+            /** @description Nombre visible del tipo de documento: el nombre libre, si no el nombre local de la clínica para ese tipo, si no el genérico. */
+            docTypeName: string;
             docNumber: string | null;
             /** Format: date-time */
             birthDate: string | null;
@@ -5307,8 +5337,11 @@ export interface components {
             tenantId: string;
             firstName: string;
             lastName: string;
-            /** @enum {string} */
-            docType: "CC" | "TI" | "CE" | "PASSPORT" | "OTHER";
+            docType: components["schemas"]["DocType"];
+            /** @description Nombre libre del documento que escribe la clínica (hasta 40 caracteres). Null = sin nombre propio. */
+            docTypeLabel: string | null;
+            /** @description Nombre visible del tipo de documento: el nombre libre, si no el nombre local de la clínica para ese tipo, si no el genérico. */
+            docTypeName: string;
             docNumber: string | null;
             /** Format: date-time */
             birthDate: string | null;
@@ -5418,6 +5451,22 @@ export interface components {
              */
             majorityAge: number;
         };
+        DocumentTypeNamesValuesDto: {
+            /** @description Documento nacional */
+            NATIONAL_ID?: string | null;
+            /** @description Pasaporte */
+            PASSPORT?: string | null;
+            /** @description Permiso de residencia */
+            RESIDENCE_PERMIT?: string | null;
+            /** @description Identificación fiscal */
+            TAX_ID?: string | null;
+            /** @description Otro documento */
+            OTHER?: string | null;
+        };
+        DocumentTypeNamesDto: {
+            /** @description Nombre local de cada tipo. En el PUT se sustituyen los cinco: una clave ausente queda sin nombre. */
+            names: components["schemas"]["DocumentTypeNamesValuesDto"];
+        };
         OverdueAmountDto: {
             /** @example COP */
             currency: string;
@@ -5449,8 +5498,11 @@ export interface components {
             tenantId: string;
             firstName: string;
             lastName: string;
-            /** @enum {string} */
-            docType: "CC" | "TI" | "CE" | "PASSPORT" | "OTHER";
+            docType: components["schemas"]["DocType"];
+            /** @description Nombre libre del documento que escribe la clínica (hasta 40 caracteres). Null = sin nombre propio. */
+            docTypeLabel: string | null;
+            /** @description Nombre visible del tipo de documento: el nombre libre, si no el nombre local de la clínica para ese tipo, si no el genérico. */
+            docTypeName: string;
             docNumber: string | null;
             /** Format: date-time */
             birthDate: string | null;
@@ -5546,8 +5598,9 @@ export interface components {
         UpdatePatientDto: {
             firstName?: string;
             lastName?: string;
-            /** @enum {string} */
-            docType?: "CC" | "TI" | "CE" | "PASSPORT" | "OTHER";
+            docType?: components["schemas"]["DocType"];
+            /** @description Nombre libre del documento que escribe la clínica (hasta 40 caracteres). Null = sin nombre propio. */
+            docTypeLabel?: string | null;
             docNumber?: string | null;
             /** Format: date-time */
             birthDate?: string | null;
@@ -5689,14 +5742,16 @@ export interface components {
          * @enum {string}
          */
         ResponsiblePartyKind: "PATIENT" | "CONTACT";
-        /** @enum {string} */
-        DocType: "CC" | "TI" | "CE" | "PASSPORT" | "OTHER";
         ResponsiblePatientSummaryDto: {
             /** Format: uuid */
             id: string;
             firstName: string;
             lastName: string;
             docType: components["schemas"]["DocType"];
+            /** @description Nombre libre del documento que escribe la clínica (hasta 40 caracteres). Null = sin nombre propio. */
+            docTypeLabel: string | null;
+            /** @description Nombre visible del tipo de documento: el nombre libre, si no el nombre local de la clínica para ese tipo, si no el genérico. */
+            docTypeName: string;
             docNumber: string | null;
             email: string | null;
             phone: string | null;
@@ -5713,6 +5768,10 @@ export interface components {
             responsiblePatient: components["schemas"]["ResponsiblePatientSummaryDto"] | null;
             fullName: string;
             docType: components["schemas"]["DocType"] | null;
+            /** @description Nombre libre del documento que escribe la clínica (hasta 40 caracteres). Null = sin nombre propio. */
+            docTypeLabel: string | null;
+            /** @description Nombre visible del tipo de documento: el nombre libre, si no el nombre local de la clínica para ese tipo, si no el genérico. Null si no tiene tipo. */
+            docTypeName: string | null;
             docNumber: string | null;
             email: string | null;
             phone: string | null;
@@ -5762,6 +5821,8 @@ export interface components {
         CreateResponsiblePartyDto: {
             fullName?: string;
             docType?: components["schemas"]["DocType"] | null;
+            /** @description Nombre libre del documento que escribe la clínica (hasta 40 caracteres). Null = sin nombre propio. */
+            docTypeLabel?: string | null;
             docNumber?: string | null;
             email?: string | null;
             phone?: string | null;
@@ -5785,6 +5846,8 @@ export interface components {
         UpdateResponsiblePartyDto: {
             fullName?: string;
             docType?: components["schemas"]["DocType"] | null;
+            /** @description Nombre libre del documento que escribe la clínica (hasta 40 caracteres). Null = sin nombre propio. */
+            docTypeLabel?: string | null;
             docNumber?: string | null;
             email?: string | null;
             phone?: string | null;
@@ -8756,7 +8819,7 @@ export interface components {
         };
         PlanQuotePatientDto: {
             name: string;
-            /** @example CC 1020304050 */
+            /** @example Documento nacional DOC-0001 */
             document: string | null;
         };
         PlanQuoteAgreementDto: {
@@ -9427,7 +9490,7 @@ export interface components {
             name: string;
             /** @description Razón social (DX-019). */
             legalName: string | null;
-            /** @description NIT/NIF (DX-019). */
+            /** @description Identificador fiscal de la clínica (DX-019). */
             taxId: string | null;
             address: string | null;
         };
@@ -9443,8 +9506,11 @@ export interface components {
             id: string;
             /** @example Carolina Duque */
             fullName: string;
-            /** @enum {string} */
-            docType: "CC" | "TI" | "CE" | "PASSPORT" | "OTHER";
+            docType: components["schemas"]["DocType"];
+            /** @description Nombre libre del documento que escribe la clínica (hasta 40 caracteres). Null = sin nombre propio. */
+            docTypeLabel: string | null;
+            /** @description Nombre visible del tipo de documento: el nombre libre, si no el nombre local de la clínica para ese tipo, si no el genérico. Congelado al emitir el recibo; en los recibos anteriores, el nombre local de hoy o el genérico. */
+            docTypeName: string;
             /**
              * @description Documento enmascarado: nunca se guarda ni se sirve en claro.
              * @example ******5678
@@ -9508,7 +9574,7 @@ export interface components {
             version: 1;
             clinic: components["schemas"]["ReceiptClinicDto"];
             location: components["schemas"]["ReceiptLocationDto"];
-            /** @description Falta la razón social o el NIT/NIF: el recibo dice «Datos fiscales pendientes». */
+            /** @description Falta la razón social o el identificador fiscal: el recibo dice «Datos fiscales pendientes». */
             fiscalDataPending: boolean;
             patient: components["schemas"]["ReceiptPatientDto"];
             payment: components["schemas"]["ReceiptPaymentDto"];
@@ -9862,8 +9928,11 @@ export interface components {
             firstName: string;
             /** @example Gómez */
             lastName: string;
-            /** @enum {string} */
-            docType: "CC" | "TI" | "CE" | "PASSPORT" | "OTHER";
+            docType: components["schemas"]["DocType"];
+            /** @description Nombre libre del documento que escribe la clínica (hasta 40 caracteres). Null = sin nombre propio. */
+            docTypeLabel: string | null;
+            /** @description Nombre visible del tipo de documento: el nombre libre, si no el nombre local de la clínica para ese tipo, si no el genérico. */
+            docTypeName: string;
             docNumber: string | null;
         };
         /**
@@ -11993,8 +12062,11 @@ export interface components {
             id: string;
             firstName: string;
             lastName: string;
-            /** @enum {string} */
-            docType: "CC" | "TI" | "CE" | "PASSPORT" | "OTHER";
+            docType: components["schemas"]["DocType"];
+            /** @description Nombre libre del documento que escribe la clínica (hasta 40 caracteres). Null = sin nombre propio. */
+            docTypeLabel: string | null;
+            /** @description Nombre visible del tipo de documento: el nombre libre, si no el nombre local de la clínica para ese tipo, si no el genérico. */
+            docTypeName: string;
             docNumber: string | null;
         };
         PatientConsentDocumentDto: {
@@ -13162,7 +13234,7 @@ export interface components {
              * @example 10
              */
             lengthMm?: number;
-            /** @description Registro sanitario INVIMA (CO) o marcado CE (ES) */
+            /** @description Registro sanitario o certificación del producto (texto libre) */
             sanitaryRegistration?: string;
             notes?: string;
             /**
@@ -14618,6 +14690,62 @@ export interface operations {
                 content?: never;
             };
             /** @description Solo un administrador puede cambiar la mayoría de edad. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PatientsController_documentTypeNames: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentTypeNamesDto"];
+                };
+            };
+        };
+    };
+    PatientsController_updateClinicDocumentTypeNames: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["DocumentTypeNamesDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["DocumentTypeNamesDto"];
+                };
+            };
+            /** @description Nombre ambiguo, sin letras ni números o de más de 60 */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo un administrador puede cambiar los nombres de los documentos. */
             403: {
                 headers: {
                     [name: string]: unknown;
@@ -25919,7 +26047,7 @@ export interface operations {
                     /** @description JSON { campo: cabecera }; sin él, el mapeo sugerido */
                     mapping?: string;
                     /** @enum {string} */
-                    defaultDocType?: "CC" | "TI" | "CE" | "PASSPORT" | "OTHER";
+                    defaultDocType?: "NATIONAL_ID" | "PASSPORT" | "RESIDENCE_PERMIT" | "TAX_ID" | "OTHER";
                 };
             };
         };

@@ -1,12 +1,12 @@
 import * as React from 'react';
 import { SIGNER_TYPE_LABELS, type PatientConsentDocument } from '@/lib/consents/consents-api';
-import { DOC_TYPE_SHORT } from '@/lib/patients/doc-type';
+import { documentText, dtoDocTypeName } from '@/lib/patients/doc-type';
 import { formatDateTime } from '@/lib/format/date';
 
 const copy = {
   patient: 'Paciente',
   document: 'Documento',
-  documentValue: (type: string, number: string | null) => (number ? `${type} ${number}` : '—'),
+  noDocument: '—',
   signedAt: 'Firmado el',
   signaturesHeading: 'Firmas',
   professional: 'Profesional',
@@ -75,7 +75,7 @@ export function ConsentDocument({ consent }: ConsentDocumentProps) {
         <div>
           <dt className="text-xs font-medium text-[#6b7280]">{copy.document}</dt>
           <dd className="tabular-nums">
-            {copy.documentValue(DOC_TYPE_SHORT[patient.docType], patient.docNumber)}
+            {documentText(dtoDocTypeName(patient), patient.docNumber) ?? copy.noDocument}
           </dd>
         </div>
       </dl>

@@ -37,7 +37,7 @@ async function seedPatient(
     data: {
       firstName: 'Pablo',
       lastName: `Periodontal${suffix}`,
-      docType: 'CC',
+      docType: 'NATIONAL_ID',
       docNumber: `PE${suffix}`.slice(0, 20),
       sex: 'M',
     },

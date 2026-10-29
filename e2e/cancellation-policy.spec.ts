@@ -62,7 +62,7 @@ async function patientWithAppointment(
   const patient = await apiPost<{ id: string }>(request, session, '/patients', {
     firstName: 'Paula',
     lastName,
-    docType: 'CC',
+    docType: 'NATIONAL_ID',
     docNumber: `${lastName}`.slice(0, 20),
     sex: 'F',
   });

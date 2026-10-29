@@ -46,14 +46,6 @@ export const ISSUE_KIND_LABELS: Record<ImportIssue['kind'], string> = {
   EXISTING_BALANCE: 'Ya tenía saldo migrado',
 };
 
-export const DOC_TYPE_LABELS: Record<DocType, string> = {
-  CC: 'Cédula de ciudadanía (CC)',
-  TI: 'Tarjeta de identidad (TI)',
-  CE: 'Cédula de extranjería (CE)',
-  PASSPORT: 'Pasaporte',
-  OTHER: 'Otro',
-};
-
 /** ¿Sigue trabajando la cola? (la pantalla consulta el progreso). */
 export function isInProgress(status: ImportStatus): boolean {
   return status === 'QUEUED' || status === 'RUNNING';

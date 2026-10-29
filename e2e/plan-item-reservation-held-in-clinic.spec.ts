@@ -82,7 +82,7 @@ async function scenario(page: Page, name: string, base: number): Promise<Scenari
   const patient = await apiPost<{ id: string }>(request, session, '/patients', {
     firstName: name,
     lastName: last,
-    docType: 'CC',
+    docType: 'NATIONAL_ID',
     docNumber: `CUR${name}${suffix}`.slice(0, 20),
     sex: 'F',
   });

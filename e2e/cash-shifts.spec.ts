@@ -158,7 +158,7 @@ for (const viewport of [
     const patient = await post<{ id: string }>(page.request, admin, '/patients', {
       firstName: 'Turno',
       lastName: `Caja${tag}`,
-      docType: 'CC',
+      docType: 'NATIONAL_ID',
       docNumber: `27${Date.now().toString().slice(-8)}`,
       sex: 'F',
     });

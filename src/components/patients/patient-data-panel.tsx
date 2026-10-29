@@ -4,6 +4,7 @@ import type { Patient } from '@/lib/patients/patients-api';
 import { ageFrom } from '@/lib/patients/age';
 import { formatCivilDate } from '@/lib/format/date';
 import { Card, CardContent } from '@/components/ui/card';
+import { docTypeOptionLabel, type ClinicDocumentTypeNames } from '@/lib/patients/doc-type';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the app.
 const copy = {
@@ -12,6 +13,7 @@ const copy = {
   emergency: 'Emergencia',
   administrative: 'Administrativo',
   docType: 'Tipo de documento',
+  docTypeLabel: 'Nombre del documento',
   docNumber: 'Número de documento',
   birthDate: 'Fecha de nacimiento',
   sex: 'Sexo',
@@ -70,6 +72,8 @@ function Block({ title, fields }: { title: string; fields: Field[] }) {
 
 interface PatientDataPanelProps {
   patient: Patient;
+  /** Nombres locales de la clínica (los pide la página); `{}` = genéricos. */
+  docTypeNames?: ClinicDocumentTypeNames;
 }
 
 /**
@@ -82,7 +86,7 @@ interface PatientDataPanelProps {
  * Ahora es la acción primaria de la cabecera (`PatientRecordHeader`), donde
  * está a la vista desde cualquier pestaña.
  */
-export function PatientDataPanel({ patient }: PatientDataPanelProps) {
+export function PatientDataPanel({ patient, docTypeNames = {} }: PatientDataPanelProps) {
   const age = ageFrom(patient.birthDate);
   const birth = patient.birthDate
     ? `${formatCivilDate(patient.birthDate)}${age === null ? '' : ` · ${copy.years(age)}`}`
@@ -101,7 +105,11 @@ export function PatientDataPanel({ patient }: PatientDataPanelProps) {
         <Block
           title={copy.identification}
           fields={[
-            { label: copy.docType, value: patient.docType },
+            // El nombre de la clínica para el tipo, no el `docTypeName` del
+            // DTO: ese ya prefiere la etiqueta del paciente (pre-flight M15).
+            { label: copy.docType, value: docTypeOptionLabel(patient.docType, docTypeNames) },
+            // R7: el nombre libre del paciente, solo si tiene uno.
+            ...(patient.docTypeLabel ? [{ label: copy.docTypeLabel, value: patient.docTypeLabel }] : []),
             { label: copy.docNumber, value: patient.docNumber },
             { label: copy.birthDate, value: birth },
             { label: copy.sex, value: patient.sex },

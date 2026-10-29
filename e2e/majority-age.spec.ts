@@ -64,7 +64,7 @@ test.beforeAll(async ({ request }) => {
   ({ id: minorId } = await apiPost<{ id: string }>(request, session, '/patients', {
     firstName: 'Lucía',
     lastName,
-    docType: 'TI',
+    docType: 'NATIONAL_ID',
     docNumber: `ML${suffix}`.slice(0, 20),
     sex: 'F',
     birthDate: birthDateForAge(17),
@@ -80,7 +80,7 @@ test.beforeAll(async ({ request }) => {
   ({ id: youngAdultId } = await apiPost<{ id: string }>(request, session, '/patients', {
     firstName: 'Diego',
     lastName,
-    docType: 'CC',
+    docType: 'NATIONAL_ID',
     docNumber: `MD${suffix}`.slice(0, 20),
     sex: 'M',
     birthDate: birthDateForAge(19),

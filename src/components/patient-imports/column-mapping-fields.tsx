@@ -1,12 +1,16 @@
 'use client';
 import * as React from 'react';
 import {
-  DOC_TYPE_LABELS,
   type ColumnMapping,
   type DocType,
   type ImportFieldKey,
   type ImportInspect,
 } from '@/lib/patient-imports/patient-imports-api';
+import {
+  DOC_TYPES,
+  docTypeOptionLabel,
+  type ClinicDocumentTypeNames,
+} from '@/lib/patients/doc-type';
 
 const copy = {
   legend: 'Columnas del archivo',
@@ -30,6 +34,8 @@ interface ColumnMappingFieldsProps {
   onMappingChange: (mapping: ColumnMapping) => void;
   defaultDocType: DocType | null;
   onDefaultDocTypeChange: (value: DocType | null) => void;
+  /** Nombres locales de la clínica para las opciones (R17); `{}` = genéricos. */
+  docTypeNames: ClinicDocumentTypeNames;
   disabled?: boolean;
 }
 
@@ -45,6 +51,7 @@ export function ColumnMappingFields({
   onMappingChange,
   defaultDocType,
   onDefaultDocTypeChange,
+  docTypeNames,
   disabled,
 }: ColumnMappingFieldsProps) {
   const id = React.useId();
@@ -133,9 +140,9 @@ export function ColumnMappingFields({
           onChange={(e) => onDefaultDocTypeChange((e.target.value || null) as DocType | null)}
         >
           <option value="">{copy.defaultDocTypeNone}</option>
-          {(Object.keys(DOC_TYPE_LABELS) as DocType[]).map((t) => (
+          {DOC_TYPES.map((t) => (
             <option key={t} value={t}>
-              {DOC_TYPE_LABELS[t]}
+              {docTypeOptionLabel(t, docTypeNames)}
             </option>
           ))}
         </select>

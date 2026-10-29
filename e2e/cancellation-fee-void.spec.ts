@@ -83,7 +83,7 @@ async function chargedPatient(
     : await apiPost<{ id: string }>(request, session, '/patients', {
         firstName: 'Pablo',
         lastName,
-        docType: 'CC',
+        docType: 'NATIONAL_ID',
         docNumber: lastName.slice(0, 20),
         sex: 'M',
       });

@@ -58,7 +58,7 @@ async function seed(page: Page, origin: string, tag: string): Promise<Seeded> {
   const patient = await apiPost<{ id: string }>(request, admin, '/patients', {
     firstName: 'Irene',
     lastName: `Imputa${tag}`,
-    docType: 'CC',
+    docType: 'NATIONAL_ID',
     docNumber: `IM${tag}`.slice(0, 20),
     sex: 'F',
   });
@@ -331,7 +331,7 @@ async function seedUnconverted(
   const patient = await apiPost<{ id: string }>(request, admin, '/patients', {
     firstName: 'Teo',
     lastName: `SinTasa${tag}`,
-    docType: 'CC',
+    docType: 'NATIONAL_ID',
     docNumber: `ST${tag}`.slice(0, 20),
     sex: 'M',
   });

@@ -45,7 +45,7 @@ async function seedPatient(request: APIRequestContext, session: ApiSession): Pro
   const patient = await apiPost<{ id: string }>(request, session, '/patients', {
     firstName: patientFirstName,
     lastName: patientLastName,
-    docType: 'CC',
+    docType: 'NATIONAL_ID',
     docNumber: `CS${suffix}`.slice(0, 20),
     sex: 'F',
   });

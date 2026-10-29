@@ -8,7 +8,9 @@ function patient(overrides: Partial<Patient> = {}): Patient {
     tenantId: 't1',
     firstName: 'Carlos',
     lastName: 'Mejía',
-    docType: 'CC',
+    docType: 'NATIONAL_ID',
+    docTypeLabel: null,
+    docTypeName: 'Documento nacional',
     docNumber: '1002',
     birthDate: '1992-03-12T00:00:00.000Z',
     sex: 'M',
@@ -71,9 +73,38 @@ describe('PatientDataPanel', () => {
     jest.useFakeTimers().setSystemTime(new Date('2026-08-01T12:00:00.000Z'));
     render(<PatientDataPanel patient={patient()} />);
 
-    expect(screen.getByText('CC')).toBeInTheDocument();
+    expect(screen.getByText('Documento nacional')).toBeInTheDocument();
     expect(screen.getByText('1002')).toBeInTheDocument();
     expect(screen.getByText(/34 años/)).toBeInTheDocument();
+  });
+
+  it("shows the clinic's name for the type, or the generic one, never the code", () => {
+    const { rerender } = render(
+      <PatientDataPanel
+        patient={patient({ docType: 'RESIDENCE_PERMIT', docTypeLabel: 'Documento A', docTypeName: 'Documento A' })}
+        docTypeNames={{ RESIDENCE_PERMIT: 'ID local' }}
+      />,
+    );
+    // El nombre de la clínica para el tipo, no la etiqueta del paciente.
+    expect(screen.getByText('ID local')).toBeInTheDocument();
+    expect(screen.queryByText('RESIDENCE_PERMIT')).not.toBeInTheDocument();
+
+    rerender(<PatientDataPanel patient={patient({ docType: 'TAX_ID' })} />);
+    expect(screen.getByText('Identificación fiscal')).toBeInTheDocument();
+    expect(screen.queryByText('TAX_ID')).not.toBeInTheDocument();
+  });
+
+  it('shows the document name only when there is one', () => {
+    const { rerender } = render(
+      <PatientDataPanel patient={patient({ docTypeLabel: 'Documento A', docTypeName: 'Documento A' })} />,
+    );
+    const term = screen.getByText('Nombre del documento');
+    expect(term.tagName).toBe('DT');
+    expect(term.nextElementSibling).toHaveTextContent('Documento A');
+    expect(screen.getByText('Documento nacional')).toBeInTheDocument();
+
+    rerender(<PatientDataPanel patient={patient({ docTypeLabel: null })} />);
+    expect(screen.queryByText('Nombre del documento')).not.toBeInTheDocument();
   });
 
   it('formatea la fecha de nacimiento con día y mes en dos dígitos', () => {

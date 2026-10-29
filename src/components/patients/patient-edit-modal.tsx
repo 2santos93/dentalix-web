@@ -8,8 +8,17 @@ import {
   type UpdatePatientInput,
 } from '@/lib/patients/patients-api';
 import { FormModal } from '@/components/shared/form-modal';
-import { FormField } from '@/components/shared/form-field';
+import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { Input } from '@/components/ui/input';
+import {
+  DOC_TYPES,
+  docTypeOptionLabel,
+  normalizeDocTypeLabel,
+  type ClinicDocumentTypeNames,
+} from '@/lib/patients/doc-type';
+import { DocTypeLabelField, docTypeLabelFieldError } from './doc-type-label-field';
+import { normalizeDocType } from '@/lib/patients/legacy-doc-type';
+import { isEmailAddress } from '@/lib/format/email';
 
 // Copy as constants (i18n-ready) — es first.
 const copy = {
@@ -24,19 +33,12 @@ const copy = {
   administrative: 'Administrativo',
   docType: 'Tipo de documento',
   sex: 'Sexo',
+  emailInvalid: 'Revisa el correo electrónico: le falta algo (p. ej. nombre@dominio.com).',
 };
 
 // Native <select> styled like the Input atom (same class/rationale as staff-view.tsx).
 const fieldClass =
   'flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-50';
-
-const DOC_TYPES: { value: Patient['docType']; label: string }[] = [
-  { value: 'CC', label: 'Cédula de ciudadanía' },
-  { value: 'TI', label: 'Tarjeta de identidad' },
-  { value: 'CE', label: 'Cédula de extranjería' },
-  { value: 'PASSPORT', label: 'Pasaporte' },
-  { value: 'OTHER', label: 'Otro' },
-];
 
 const SEXES: { value: Patient['sex']; label: string }[] = [
   { value: 'M', label: 'Masculino' },
@@ -138,6 +140,19 @@ interface PatientEditModalProps {
   token: string;
   onOpenChange: (open: boolean) => void;
   onSaved: (patient: Patient) => void;
+  /**
+   * Nombres locales de la clínica para las opciones del tipo. Los pide la
+   * página de la ficha una vez (el modal está siempre montado); `{}` = genéricos.
+   */
+  docTypeNames?: ClinicDocumentTypeNames;
+}
+
+/**
+ * Tipo con el que se siembra el select: el genérico, aunque una réplica
+ * anterior de la API mande aún un código antiguo (fase 1 de DX-327).
+ */
+function seededDocType(patient: Patient): Patient['docType'] {
+  return normalizeDocType(patient.docType) ?? patient.docType;
 }
 
 /**
@@ -151,9 +166,15 @@ export function PatientEditModal({
   token,
   onOpenChange,
   onSaved,
+  docTypeNames = {},
 }: PatientEditModalProps) {
   const [text, setText] = useState<TextState>(() => textStateFrom(patient));
-  const [docType, setDocType] = useState<Patient['docType']>(patient.docType);
+  const [docType, setDocType] = useState<Patient['docType']>(() => seededDocType(patient));
+  const [docTypeLabel, setDocTypeLabel] = useState(patient.docTypeLabel ?? '');
+  const [docTypeLabelError, setDocTypeLabelError] = useState<string | null>(null);
+  const docTypeLabelRef = React.useRef<HTMLInputElement>(null);
+  const [emailError, setEmailError] = useState<string | null>(null);
+  const emailRef = React.useRef<HTMLInputElement>(null);
   const [sex, setSex] = useState<Patient['sex']>(patient.sex);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -172,7 +193,10 @@ export function PatientEditModal({
   if (patient !== seededPatient || (open && !wasOpen)) {
     setSeededPatient(patient);
     setText(textStateFrom(patient));
-    setDocType(patient.docType);
+    setDocType(seededDocType(patient));
+    setDocTypeLabel(patient.docTypeLabel ?? '');
+    setDocTypeLabelError(null);
+    setEmailError(null);
     setSex(patient.sex);
     setError(null);
   }
@@ -202,7 +226,10 @@ export function PatientEditModal({
   function buildPatch(): UpdatePatientInput {
     const seededText = textStateFrom(seededPatient);
     const patch: UpdatePatientInput = {};
-    if (docType !== seededPatient.docType) patch.docType = docType;
+    if (docType !== seededDocType(seededPatient)) patch.docType = docType;
+    // R7: viaja solo si cambió; vaciada = null (borra la etiqueta).
+    const label = normalizeDocTypeLabel(docTypeLabel);
+    if (label !== (seededPatient.docTypeLabel ?? null)) patch.docTypeLabel = label;
     if (sex !== seededPatient.sex) patch.sex = sex;
     for (const group of GROUPS) {
       for (const f of group.fields) {
@@ -221,6 +248,21 @@ export function PatientEditModal({
   async function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
+    // La regla de `@IsEmail()` de la API (el navegador acepta «ana@x»). Solo
+    // si cambió: un email guardado no viaja y no hay que frenar por él.
+    const email = text.email.trim();
+    const emailChanged = email !== textStateFrom(seededPatient).email;
+    if (emailChanged && email && !isEmailAddress(email)) {
+      setEmailError(copy.emailInvalid);
+      emailRef.current?.focus();
+      return;
+    }
+    const labelError = docTypeLabelFieldError(docTypeLabel);
+    if (labelError) {
+      setDocTypeLabelError(labelError);
+      docTypeLabelRef.current?.focus();
+      return;
+    }
     setSaving(true);
     try {
       const saved = await updatePatient(token, patient.id, buildPatch());
@@ -231,6 +273,28 @@ export function PatientEditModal({
     } finally {
       setSaving(false);
     }
+  }
+
+  function textField(f: TextFieldSpec) {
+    const id = `pe-${f.key}`;
+    const error = f.key === 'email' ? emailError : null;
+    return (
+      <FormField key={f.key} htmlFor={id} label={f.label} error={error}>
+        <Input
+          ref={f.key === 'email' ? emailRef : undefined}
+          id={id}
+          type={f.type ?? 'text'}
+          value={text[f.key]}
+          required={f.required}
+          aria-invalid={error ? true : undefined}
+          aria-describedby={error ? fieldErrorId(id) : undefined}
+          onChange={(e) => {
+            setText((prev) => ({ ...prev, [f.key]: e.target.value }));
+            if (f.key === 'email') setEmailError(null);
+          }}
+        />
+      </FormField>
+    );
   }
 
   return (
@@ -250,36 +314,46 @@ export function PatientEditModal({
           <section key={group.title} className="flex flex-col gap-3">
             <h3 className="text-sm font-medium text-muted">{group.title}</h3>
             <div className="grid gap-4 sm:grid-cols-2">
-              {group.fields.map((f) => (
-                <FormField key={f.key} htmlFor={`pe-${f.key}`} label={f.label}>
-                  <Input
-                    id={`pe-${f.key}`}
-                    type={f.type ?? 'text'}
-                    value={text[f.key]}
-                    required={f.required}
-                    onChange={(e) =>
-                      setText((prev) => ({ ...prev, [f.key]: e.target.value }))
-                    }
-                  />
-                </FormField>
-              ))}
-
-              {group.title === copy.identification && (
+              {group.title === copy.identification ? (
                 <>
+                  {group.fields.filter((f) => f.key === 'firstName' || f.key === 'lastName').map(textField)}
+                  {/* El tipo junto a su número, y su nombre libre debajo (R7). */}
                   <FormField htmlFor="pe-doc-type" label={copy.docType}>
                     <select
                       id="pe-doc-type"
                       value={docType}
-                      onChange={(e) => setDocType(e.target.value as Patient['docType'])}
+                      onChange={(e) => {
+                        const next = e.target.value as Patient['docType'];
+                        setDocType(next);
+                        // La etiqueta de un tipo no vale para otro (R7); volver
+                        // al tipo guardado recupera la suya, no la borra.
+                        setDocTypeLabel(
+                          next === seededDocType(seededPatient) ? (seededPatient.docTypeLabel ?? '') : '',
+                        );
+                        setDocTypeLabelError(null);
+                      }}
                       className={fieldClass}
                     >
-                      {DOC_TYPES.map((o) => (
-                        <option key={o.value} value={o.value}>
-                          {o.label}
+                      {DOC_TYPES.map((t) => (
+                        <option key={t} value={t}>
+                          {docTypeOptionLabel(t, docTypeNames)}
                         </option>
                       ))}
                     </select>
                   </FormField>
+                  {group.fields.filter((f) => f.key === 'docNumber').map(textField)}
+                  <DocTypeLabelField
+                    id="pe-docTypeLabel"
+                    inputRef={docTypeLabelRef}
+                    value={docTypeLabel}
+                    onChange={(value) => {
+                      setDocTypeLabel(value);
+                      setDocTypeLabelError(null);
+                    }}
+                    error={docTypeLabelError}
+                    className="sm:col-span-2"
+                  />
+                  {group.fields.filter((f) => f.key === 'birthDate').map(textField)}
                   <FormField htmlFor="pe-sex" label={copy.sex}>
                     <select
                       id="pe-sex"
@@ -295,6 +369,8 @@ export function PatientEditModal({
                     </select>
                   </FormField>
                 </>
+              ) : (
+                group.fields.map(textField)
               )}
             </div>
           </section>

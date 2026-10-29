@@ -20,7 +20,9 @@ export function paymentReceiptFixture(overrides: Partial<PaymentReceipt> = {}): 
       patient: {
         id: 'pat-1',
         fullName: 'Carolina Duque',
-        docType: 'CC',
+        docType: 'NATIONAL_ID',
+        docTypeLabel: null,
+        docTypeName: 'ID local',
         docNumberMasked: '******5678',
       },
       payment: {

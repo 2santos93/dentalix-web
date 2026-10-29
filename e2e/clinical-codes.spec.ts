@@ -77,7 +77,7 @@ for (const viewport of VIEWPORTS) {
     const patient = await api<{ id: string }>('post', '/patients', {
       firstName: 'Lucía',
       lastName: `Cie${tag}`,
-      docType: 'CC',
+      docType: 'NATIONAL_ID',
       docNumber: `CIE${tag}`.slice(0, 20),
       sex: 'F',
     });

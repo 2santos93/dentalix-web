@@ -23,7 +23,7 @@ function consentFixture(overrides: Partial<PatientConsentDocument> = {}): Patien
     body: 'Yo, Ana Pérez, autorizo.\n\nFecha: 16 de octubre de 2026.',
     signerType: 'PATIENT',
     signerName: 'Ana Pérez',
-    signerDocument: 'CC 1020',
+    signerDocument: 'ID local DOC-1020',
     professionalName: 'Dra. Laura Gómez',
     patientSignature: 'data:image/png;base64,AAA',
     professionalSignature: 'data:image/png;base64,BBB',
@@ -31,7 +31,7 @@ function consentFixture(overrides: Partial<PatientConsentDocument> = {}): Patien
     signedAt: '2026-10-16T15:00:00.000Z',
     recordedById: 'u1',
     clinic: { name: 'Clínica Sonrisas', logoUrl: 'https://cdn.example.com/logo.png' },
-    patient: { id: 'p1', firstName: 'Ana', lastName: 'Pérez', docType: 'CC', docNumber: '1020' },
+    patient: { id: 'p1', firstName: 'Ana', lastName: 'Pérez', docType: 'NATIONAL_ID', docTypeLabel: null, docTypeName: 'ID local', docNumber: 'DOC-1020' },
     integrityOk: true,
     ...overrides,
   };
@@ -56,7 +56,7 @@ describe('ConsentDocument', () => {
       'src',
       'data:image/png;base64,BBB',
     );
-    expect(screen.getByText('Paciente · CC 1020')).toBeInTheDocument();
+    expect(screen.getByText('Paciente · ID local DOC-1020')).toBeInTheDocument();
     expect(screen.getByText('f'.repeat(64))).toBeInTheDocument();
     expect(screen.queryByText(/pudo alterarse/)).not.toBeInTheDocument();
     // Raíz con la clase que pide A4 al imprimir (globals.css: @page consent).
@@ -71,10 +71,27 @@ describe('ConsentDocument', () => {
   it('nombra al tutor cuando firma un tutor', () => {
     render(
       <ConsentDocument
-        consent={consentFixture({ signerType: 'GUARDIAN', signerName: 'Marta', signerDocument: 'CC 9' })}
+        consent={consentFixture({ signerType: 'GUARDIAN', signerName: 'Marta', signerDocument: 'Documento A DOC-9' })}
       />,
     );
-    expect(screen.getByText('Tutor/a · CC 9')).toBeInTheDocument();
+    expect(screen.getByText('Tutor/a · Documento A DOC-9')).toBeInTheDocument();
+  });
+
+  it('prints the docTypeName of the DTO, or the generic name when it is missing', () => {
+    const { rerender } = render(<ConsentDocument consent={consentFixture()} />);
+    const header = () => screen.getByText('Documento').closest('div') as HTMLElement;
+    expect(header()).toHaveTextContent('ID local DOC-1020');
+
+    // API anterior en el hueco del despliegue: sin `docTypeName`, el genérico.
+    rerender(
+      <ConsentDocument
+        consent={consentFixture({
+          patient: { id: 'p1', firstName: 'Ana', lastName: 'Pérez', docType: 'RESIDENCE_PERMIT', docNumber: 'DOC-1020' } as never,
+        })}
+      />,
+    );
+    expect(header()).toHaveTextContent('Permiso de residencia DOC-1020');
+    expect(header()).not.toHaveTextContent('RESIDENCE_PERMIT');
   });
 });
 

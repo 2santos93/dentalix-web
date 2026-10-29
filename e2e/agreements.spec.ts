@@ -87,7 +87,7 @@ test.beforeAll(async ({ request }) => {
   ({ id: patientId } = await apiPost<{ id: string }>(request, session, '/patients', {
     firstName: 'Camila',
     lastName,
-    docType: 'CC',
+    docType: 'NATIONAL_ID',
     docNumber: `CV${suffix}`.slice(0, 20),
     sex: 'F',
   }));
@@ -338,7 +338,7 @@ test('SEC-049: la cobertura que registra RECEPCIÓN no habilita su convenio hast
   const { id: secondPatient } = await apiPost<{ id: string }>(request, session, '/patients', {
     firstName: 'Bruno',
     lastName,
-    docType: 'CC',
+    docType: 'NATIONAL_ID',
     docNumber: `CVB${suffix}`.slice(0, 20),
     sex: 'M',
   });
