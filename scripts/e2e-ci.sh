@@ -167,6 +167,10 @@ start_bg() {
 }
 
 phase_setup() {
+  if ! command -v pdftotext >/dev/null 2>&1; then
+    echo "Falta pdftotext: instala poppler-utils (Debian/Ubuntu) o ejecuta 'brew install poppler' (macOS) antes de la suite e2e." >&2
+    return 1
+  fi
   if [[ "$E2E_NPM_CI" == "1" ]]; then
     group "npm ci (API)"
     (cd "$API_DIR" && npm ci --no-audit --no-fund)
