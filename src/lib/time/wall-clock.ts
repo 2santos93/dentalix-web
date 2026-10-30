@@ -42,8 +42,17 @@ export function civilWeekStart(day: string): string {
 
 /**
  * Instante en que el reloj de `timeZone` marca el minuto `minute` (0–1440;
- * 1440 = las 00:00 del día siguiente) del día civil `day`. Dos pasadas
- * asientan un cambio de horario entre la medianoche y ese minuto.
+ * 1440 = las 00:00 del día siguiente) del día civil `day`. Con un cambio de
+ * horario, la misma regla que `Temporal` (`disambiguation: 'compatible'`):
+ *
+ * - Hora repetida (se atrasa el reloj): la primera vez que el reloj la marca.
+ * - Hora que no existe (se adelanta el reloj): se corre hacia delante tanto
+ *   como el salto (02:30 en Nueva York el día del cambio → 03:30). Así una
+ *   medianoche que no existe (Santiago de Chile, Beirut) da la primera hora
+ *   del día y nunca la última del anterior.
+ *
+ * Supone a lo sumo un cambio de horario en las 24 h de cada lado, como
+ * cualquier zona IANA actual.
  */
 export function wallInstant(day: string, minute: number, timeZone: string): Date {
   if (!Number.isInteger(minute) || minute < 0 || minute > MINUTES_PER_DAY) {
@@ -58,9 +67,16 @@ export function wallInstant(day: string, minute: number, timeZone: string): Date
     const floored = instant - (((instant % MS_PER_MINUTE) + MS_PER_MINUTE) % MS_PER_MINUTE);
     return Date.UTC(p.year, p.month - 1, p.day, p.hour, p.minute) - floored;
   };
-  let instant = asUtc - offsetAt(asUtc);
-  instant = asUtc - offsetAt(instant);
-  return new Date(instant);
+  const DAY_MS = MINUTES_PER_DAY * MS_PER_MINUTE;
+  const before = offsetAt(asUtc - DAY_MS);
+  const after = offsetAt(asUtc + DAY_MS);
+  // Los instantes en que el reloj marca de verdad ese minuto (0, 1 o 2).
+  const matches = [...new Set([before, after])]
+    .map((offset) => asUtc - offset)
+    .filter((instant) => offsetAt(instant) === asUtc - instant)
+    .sort((a, b) => a - b);
+  // Sin ninguno, el minuto cae en el salto: con el desfase de antes del cambio.
+  return new Date(matches[0] ?? asUtc - before);
 }
 
 /** El día civil `day` en `timeZone` como instantes ISO: de su medianoche a justo antes de la siguiente. */

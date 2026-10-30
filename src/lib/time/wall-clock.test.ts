@@ -45,6 +45,43 @@ describe('wallInstant', () => {
     expect(wallInstant('2026-03-29', 0, MADRID).toISOString()).toBe('2026-03-28T23:00:00.000Z');
   });
 
+  it('half-hour and 45-minute zones (Kolkata +05:30, Chatham +12:45/+13:45)', () => {
+    expect(wallInstant('2026-10-30', 9 * 60 + 15, 'Asia/Kolkata').toISOString()).toBe('2026-10-30T03:45:00.000Z');
+    expect(wallInstant('2026-10-30', 0, 'Asia/Kolkata').toISOString()).toBe('2026-10-29T18:30:00.000Z');
+    expect(wallInstant('2026-10-30', 9 * 60, 'Pacific/Chatham').toISOString()).toBe('2026-10-29T19:15:00.000Z');
+  });
+
+  it('a minute that does not exist (spring forward) moves forward by the jump, like Temporal "compatible"', () => {
+    // Nueva York, 08-03-2026: de 02:00 EST a 03:00 EDT. 02:30 → 03:30 EDT.
+    expect(wallInstant('2026-03-08', 2 * 60 + 30, 'America/New_York').toISOString()).toBe('2026-03-08T07:30:00.000Z');
+    // Lord Howe adelanta media hora: 02:15 → 02:45.
+    expect(wallMinuteOfDay(wallInstant('2026-10-04', 2 * 60 + 15, 'Australia/Lord_Howe'), 'Australia/Lord_Howe')).toBe(
+      2 * 60 + 45,
+    );
+  });
+
+  it('a midnight that does not exist (Santiago de Chile, Beirut) is the first hour of that day, never the day before', () => {
+    // Santiago, 06-09-2026: de 00:00 −04 a 01:00 −03.
+    const santiago = wallInstant('2026-09-06', 0, 'America/Santiago');
+    expect(santiago.toISOString()).toBe('2026-09-06T04:00:00.000Z');
+    expect(wallDay(santiago, 'America/Santiago')).toBe('2026-09-06');
+    expect(wallDayRange('2026-09-06', 'America/Santiago')).toEqual({
+      from: '2026-09-06T04:00:00.000Z',
+      to: '2026-09-07T02:59:59.999Z',
+    });
+    // Y el día anterior acaba justo antes: sin hueco ni solape entre los dos rangos.
+    expect(wallDayRange('2026-09-05', 'America/Santiago').to).toBe('2026-09-06T03:59:59.999Z');
+    expect(wallDay(wallInstant('2026-03-29', 0, 'Asia/Beirut'), 'Asia/Beirut')).toBe('2026-03-29');
+  });
+
+  it('a repeated minute (fall back) is its first occurrence; the day lasts 25 h', () => {
+    expect(wallInstant('2026-11-01', 60 + 30, 'America/New_York').toISOString()).toBe('2026-11-01T05:30:00.000Z');
+    expect(wallDayRange('2026-11-01', 'America/New_York')).toEqual({
+      from: '2026-11-01T04:00:00.000Z',
+      to: '2026-11-02T04:59:59.999Z',
+    });
+  });
+
   it('minute 1440 is midnight of the next day', () => {
     expect(wallInstant('2026-10-27', 24 * 60, CARACAS).toISOString()).toBe('2026-10-28T04:00:00.000Z');
   });
