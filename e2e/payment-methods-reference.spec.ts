@@ -104,7 +104,7 @@ for (const viewport of [
     await login(admin, origin, ADMIN_EMAIL);
     await admin.goto(`${origin}/settings/caja`);
     const section = admin.getByRole('region', { name: 'Medios de pago' });
-    await expect(section.getByText('Pago móvil').first()).toBeVisible({ timeout: 15_000 });
+    await expect(section.getByText('Pago móvil').filter({ visible: true }).first()).toBeVisible({ timeout: 15_000 });
     await section.getByRole('button', { name: 'Nuevo medio' }).click();
     const form = admin.getByRole('dialog', { name: 'Nuevo medio de pago' });
     await form.getByLabel('Nombre').fill(methodName);
@@ -112,7 +112,7 @@ for (const viewport of [
     await expect(form.getByLabel('Pide referencia')).toBeChecked();
     await form.getByRole('button', { name: 'Crear medio' }).click();
     await expect(form).toBeHidden({ timeout: 10_000 });
-    await expect(section.getByText(methodName).first()).toBeVisible();
+    await expect(section.getByText(methodName).filter({ visible: true }).first()).toBeVisible();
     await expectNoHorizontalScroll(admin);
     const patientId = await seedPatient(admin.request, origin, tag);
     await adminContext.close();
