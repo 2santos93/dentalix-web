@@ -19,7 +19,7 @@ export const rateBacklogCopy = {
     const what = count === 1 ? '1 abono sin tasa' : `${count} abonos sin tasa`;
     return since ? `${what} desde el ${since}` : `${what} desde hace más de 24 h`;
   },
-  body: 'El saldo y las imputaciones no los cuentan hasta que haya tasa de su día. Reintentamos solos; si la tasa no llega, regístrala o cambia la fuente.',
+  body: 'El saldo y las imputaciones no los cuentan hasta que haya tasa de su día. Reintentamos solos; si la tasa no llega, pasa a la tasa manual y registra la de ese día: al registrarla verás a cuántos de esos abonos servirá de respaldo.',
   link: 'Revisar la tasa de cambio',
   loadError: 'No pudimos comprobar si hay abonos sin tasa.',
 };
@@ -29,9 +29,10 @@ const copy = rateBacklogCopy;
 /**
  * Aviso DX-380 (OPS-045): solo para ADMIN, cuando la clínica tiene abonos que
  * llevan más de 24 h sin base de imputación o sin su tasa congelada. El barrido
- * los reintenta solo, cada vez más espaciado; si la tasa no llega, el ADMIN la
- * registra o cambia la fuente en Ajustes › Tasa de cambio, y eso adelanta el
- * reintento: el aviso desaparece cuando se resuelven. Solo el recuento y el
+ * los reintenta solo, cada vez más espaciado; si la tasa no llega, el ADMIN
+ * pasa a manual y registra la de ese día en Ajustes › Tasa de cambio (DX-402:
+ * la de un día anterior a «manual desde» sirve de respaldo a esos abonos), y
+ * eso adelanta el reintento: el aviso desaparece cuando se resuelven. Solo el recuento y el
  * día (de la sede) del más antiguo: ningún dato del abono ni del paciente.
  * Advertencia, no error: nada falló en esta pantalla (`section` con nombre,
  * como el aviso de sedes por revisar). Si no se puede leer, el contenido de la
