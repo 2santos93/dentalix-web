@@ -896,6 +896,14 @@ describe('arquitectura: país de la sede libre (DX-312)', () => {
     expect(rels.some((r) => r.startsWith('lib/test/') || r.includes('.test.') || r.includes('fixture'))).toBe(false);
   });
 
+  it('the generated list copies are skipped only for their "name" lines', () => {
+    for (const copy of GENERATED_LIST_COPIES) {
+      const hits = lineHits([join(SRC, copy)], namesCountryOutsideList);
+      expect([copy, hits.length > 0]).toEqual([copy, true]);
+      expect(hits.filter((h) => !/: "name": "[^"]+",?$/.test(h))).toEqual([]);
+    }
+  });
+
   it('country names come only from lib/locations/countries.ts', () => {
     const importers = sourceFiles(SRC)
       .filter(scanned)

@@ -1,4 +1,4 @@
-// Copia byte a byte de `prisma/reference/phone-regions-list.json` de la API: no se edita aquí.
+// Lee la copia byte a byte de `prisma/reference/phone-regions-list.json` de la API: no se edita aquí.
 // La fuente es la API; `scripts/check-api-reference-sync.mjs` (CI) falla si
 // divergen. Ver src/lib/money/README.md.
 import phoneRegionsList from './phone-regions-list.json';

@@ -192,7 +192,7 @@ test('the suite browser suggests no country', async ({ page }) => {
   await expect(countryField(dialog)).not.toHaveAccessibleDescription(new RegExp(SUGGESTED));
 });
 
-test("a location's phone hint names its country", async ({ page, request }) => {
+test("a location's phone hint names its default prefix", async ({ page, request }) => {
   const { id: patientId } = await apiPost<{ id: string }>(request, session, '/patients', {
     firstName: 'Mariela',
     lastName: `Pais${suffix}`,

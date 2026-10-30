@@ -1,9 +1,10 @@
-import { render, screen, waitFor, within } from '@testing-library/react';
+import { cleanup, render, screen, waitFor, within } from '@testing-library/react';
 import { LocationFormModal } from './location-form-modal';
 import { createLocation, updateLocationSettings, type ClinicLocation } from '@/lib/locations/locations-api';
 import { listCurrencies } from '@/lib/reference/currencies-api';
 import { browserCountry, browserHourCycle, browserLocale, browserTimeZone } from '@/lib/locations/regional-settings';
-import { countryName } from '@/lib/locations/countries';
+import { COUNTRIES, countryName } from '@/lib/locations/countries';
+import { isPhoneRegion, phoneRegionLabel } from '@/lib/locations/phone-regions';
 import { ApiError } from '@/lib/api/api-error';
 import { clinicLocation } from '@/lib/test/locations';
 import { setupUser } from '@/lib/test/user';
@@ -59,6 +60,27 @@ function setup(location: ClinicLocation | null = null) {
 
 async function currenciesLoaded(dialog: HTMLElement) {
   await within(dialog).findByRole('option', { name: 'Yen japonés (¥)' });
+}
+
+const PREFIX = 'Prefijo telefónico por defecto';
+const PREFIX_SUGGESTED = 'Sugerido por el país de la sede.';
+const PREFIX_HINT =
+  'Se añade a los teléfonos escritos sin +. Cambiarlo cambia cómo se leen los ya guardados sin +, pero no los reescribe.';
+const NO_PREFIX = 'Sin prefijo por defecto';
+
+/** Elige un prefijo en su combobox: escribe y pulsa la opción con su etiqueta. */
+async function choosePrefix(user: ReturnType<typeof setupUser>, dialog: HTMLElement, query: string, label: string) {
+  const field = within(dialog).getByLabelText(PREFIX);
+  await user.clear(field);
+  await user.type(field, query);
+  await user.click(within(dialog).getByRole('option', { name: label }));
+}
+
+/** Rellena lo obligatorio del alta (el país lo elige cada test). */
+async function fillCreate(dialog: HTMLElement, user: ReturnType<typeof setupUser>) {
+  await currenciesLoaded(dialog);
+  await user.type(within(dialog).getByLabelText('Nombre'), 'Sede Norte');
+  await user.selectOptions(within(dialog).getByLabelText('Moneda'), 'EUR');
 }
 
 describe('LocationFormModal (G1, spec §6.2)', () => {
@@ -128,6 +150,8 @@ describe('LocationFormModal (G1, spec §6.2)', () => {
       name: (within(dialog).getByLabelText('Nombre') as HTMLInputElement).value.trim(),
       // El campo muestra el nombre del país; se envía su código.
       country: (within(dialog).getByLabelText('País') as HTMLInputElement).value === countryName('ES') ? 'ES' : null,
+      defaultPhoneRegion:
+        (within(dialog).getByLabelText(PREFIX) as HTMLInputElement).value === phoneRegionLabel('ES') ? 'ES' : null,
       currency: (within(dialog).getByLabelText('Moneda') as HTMLSelectElement).value,
       timeZone: (zone as HTMLInputElement).value,
       locale: (locale as HTMLInputElement).value,
@@ -138,6 +162,7 @@ describe('LocationFormModal (G1, spec §6.2)', () => {
     expect(mockedCreate.mock.calls[0][1]).toEqual({
       name: 'Sede Tokio',
       country: 'ES',
+      defaultPhoneRegion: 'ES',
       currency: 'JPY',
       timeZone: 'Asia/Tokyo',
       locale: 'ja-JP',
@@ -542,5 +567,163 @@ describe('LocationFormModal (G1, spec §6.2)', () => {
     await waitFor(() => expect(mockedUpdate).toHaveBeenCalledTimes(1));
     expect(mockedUpdate.mock.calls[0][2]).toMatchObject({ timeZone: 'Asia/Tokyo' });
     expect(within(dialog).getByLabelText('Zona horaria')).not.toHaveAccessibleDescription(message);
+  });
+
+  describe('prefijo telefónico por defecto (DX-329, spec §6.3)', () => {
+    /** Un país de la lista que no es región de numeración. */
+    const NO_PHONE_COUNTRY = COUNTRIES.find((c) => !isPhoneRegion(c.code))!.code;
+
+    it("creating a location suggests the country's prefix and follows the country until touched", async () => {
+      const { dialog, user } = setup();
+      const prefix = within(dialog).getByLabelText(PREFIX);
+      // Sin país, nada que sugerir: sin prefijo y sin marca.
+      expect(prefix).toHaveValue(NO_PREFIX);
+      expect(prefix).not.toHaveAccessibleDescription(expect.stringContaining(PREFIX_SUGGESTED));
+      await chooseCountry(user, within(dialog).getByLabelText('País'), 'VE');
+      expect(prefix).toHaveValue(phoneRegionLabel('VE'));
+      expect(prefix).toHaveAccessibleDescription(`${PREFIX_SUGGESTED} ${PREFIX_HINT}`);
+      await chooseCountry(user, within(dialog).getByLabelText('País'), 'ES');
+      expect(prefix).toHaveValue(phoneRegionLabel('ES'));
+      expect(prefix).toHaveAccessibleDescription(expect.stringContaining(PREFIX_SUGGESTED));
+      await currenciesLoaded(dialog);
+    });
+
+    it('a country without phone metadata suggests no prefix', async () => {
+      const { dialog, user } = setup();
+      await chooseCountry(user, within(dialog).getByLabelText('País'), 'VE');
+      await chooseCountry(user, within(dialog).getByLabelText('País'), NO_PHONE_COUNTRY);
+      const prefix = within(dialog).getByLabelText(PREFIX);
+      expect(prefix).toHaveValue(NO_PREFIX);
+      expect(prefix).toHaveAccessibleDescription(expect.stringContaining(PREFIX_SUGGESTED));
+      await currenciesLoaded(dialog);
+    });
+
+    it('touching the prefix stops following the country and drops the mark', async () => {
+      const { dialog, user } = setup();
+      await chooseCountry(user, within(dialog).getByLabelText('País'), 'VE');
+      await choosePrefix(user, dialog, '+34', phoneRegionLabel('ES')!);
+      const prefix = within(dialog).getByLabelText(PREFIX);
+      expect(prefix).toHaveValue(phoneRegionLabel('ES'));
+      expect(prefix).toHaveAccessibleDescription(PREFIX_HINT);
+      await chooseCountry(user, within(dialog).getByLabelText('País'), 'CO');
+      expect(prefix).toHaveValue(phoneRegionLabel('ES'));
+      expect(prefix).toHaveAccessibleDescription(PREFIX_HINT);
+      await currenciesLoaded(dialog);
+    });
+
+    it('creating always sends defaultPhoneRegion, also null', async () => {
+      mockedCreate.mockResolvedValue(clinicLocation({ id: 'nueva' }));
+      let view = setup();
+      await fillCreate(view.dialog, view.user);
+      await chooseCountry(view.user, within(view.dialog).getByLabelText('País'), NO_PHONE_COUNTRY);
+      await view.user.click(within(view.dialog).getByRole('button', { name: 'Crear sede' }));
+      await waitFor(() => expect(mockedCreate).toHaveBeenCalledTimes(1));
+      expect(mockedCreate.mock.calls[0][1]).toHaveProperty('defaultPhoneRegion', null);
+
+      // «Sin prefijo por defecto» elegido a mano sobre un país que sí lo tiene: también null.
+      cleanup();
+      view = setup();
+      await fillCreate(view.dialog, view.user);
+      await chooseCountry(view.user, within(view.dialog).getByLabelText('País'), 'VE');
+      await choosePrefix(view.user, view.dialog, 'sin', NO_PREFIX);
+      await view.user.click(within(view.dialog).getByRole('button', { name: 'Crear sede' }));
+      await waitFor(() => expect(mockedCreate).toHaveBeenCalledTimes(2));
+      expect(mockedCreate.mock.calls[1][1]).toHaveProperty('defaultPhoneRegion', null);
+
+      cleanup();
+      view = setup();
+      await fillCreate(view.dialog, view.user);
+      await chooseCountry(view.user, within(view.dialog).getByLabelText('País'), 'VE');
+      await view.user.click(within(view.dialog).getByRole('button', { name: 'Crear sede' }));
+      await waitFor(() => expect(mockedCreate).toHaveBeenCalledTimes(3));
+      expect(mockedCreate.mock.calls[2][1]).toMatchObject({ country: 'VE', defaultPhoneRegion: 'VE' });
+    });
+
+    it("editing shows the stored prefix and changing the country proposes the new one only if it was the old country's", async () => {
+      // La región era la del país: cambiar el país propone la del nuevo, marcada.
+      let view = setup(clinicLocation({ country: 'CO', defaultPhoneRegion: 'CO' }));
+      let prefix = within(view.dialog).getByLabelText(PREFIX);
+      expect(prefix).toHaveValue(phoneRegionLabel('CO'));
+      expect(prefix).toHaveAccessibleDescription(PREFIX_HINT);
+      await chooseCountry(view.user, within(view.dialog).getByLabelText('País'), 'ES');
+      expect(prefix).toHaveValue(phoneRegionLabel('ES'));
+      expect(prefix).toHaveAccessibleDescription(`${PREFIX_SUGGESTED} ${PREFIX_HINT}`);
+      // Volver al país guardado vuelve a lo guardado, sin marca.
+      await chooseCountry(view.user, within(view.dialog).getByLabelText('País'), 'CO');
+      expect(prefix).toHaveValue(phoneRegionLabel('CO'));
+      expect(prefix).toHaveAccessibleDescription(PREFIX_HINT);
+      await currenciesLoaded(view.dialog);
+
+      // La región no era la del país: no se toca.
+      cleanup();
+      view = setup(clinicLocation({ country: 'CO', defaultPhoneRegion: 'VE' }));
+      prefix = within(view.dialog).getByLabelText(PREFIX);
+      await chooseCountry(view.user, within(view.dialog).getByLabelText('País'), 'ES');
+      expect(prefix).toHaveValue(phoneRegionLabel('VE'));
+      expect(prefix).toHaveAccessibleDescription(PREFIX_HINT);
+      await currenciesLoaded(view.dialog);
+
+      // Sin prefijo guardado: tampoco.
+      cleanup();
+      view = setup(clinicLocation({ country: 'CO', defaultPhoneRegion: null }));
+      prefix = within(view.dialog).getByLabelText(PREFIX);
+      expect(prefix).toHaveValue(NO_PREFIX);
+      await chooseCountry(view.user, within(view.dialog).getByLabelText('País'), 'ES');
+      expect(prefix).toHaveValue(NO_PREFIX);
+      expect(prefix).toHaveAccessibleDescription(PREFIX_HINT);
+      await currenciesLoaded(view.dialog);
+    });
+
+    it('editing sends defaultPhoneRegion only when it changed', async () => {
+      const sede = clinicLocation({ country: 'CO', defaultPhoneRegion: 'CO' });
+      mockedUpdate.mockResolvedValue(sede);
+      let view = setup(sede);
+      await currenciesLoaded(view.dialog);
+      await view.user.click(within(view.dialog).getByRole('button', { name: 'Guardar sede' }));
+      await waitFor(() => expect(mockedUpdate).toHaveBeenCalledTimes(1));
+      expect(mockedUpdate.mock.calls[0][2]).not.toHaveProperty('defaultPhoneRegion');
+
+      cleanup();
+      view = setup(sede);
+      await currenciesLoaded(view.dialog);
+      await choosePrefix(view.user, view.dialog, 'sin', NO_PREFIX);
+      await view.user.click(within(view.dialog).getByRole('button', { name: 'Guardar sede' }));
+      await waitFor(() => expect(mockedUpdate).toHaveBeenCalledTimes(2));
+      expect(mockedUpdate.mock.calls[1][2]).toHaveProperty('defaultPhoneRegion', null);
+
+      // La propuesta al cambiar el país también es un cambio.
+      cleanup();
+      view = setup(sede);
+      await currenciesLoaded(view.dialog);
+      await chooseCountry(view.user, within(view.dialog).getByLabelText('País'), 'VE');
+      await view.user.click(within(view.dialog).getByRole('button', { name: 'Guardar sede' }));
+      await waitFor(() => expect(mockedUpdate).toHaveBeenCalledTimes(3));
+      expect(mockedUpdate.mock.calls[2][2]).toMatchObject({ country: 'VE', defaultPhoneRegion: 'VE' });
+    });
+
+    it('the API error for the prefix shows under its field', async () => {
+      const message = 'El prefijo telefónico XX no está en la lista de regiones admitidas.';
+      mockedCreate.mockRejectedValue(new ApiError(400, message, { field: 'defaultPhoneRegion' }));
+      const { dialog, user } = setup();
+      await fillCreate(dialog, user);
+      await chooseCountry(user, within(dialog).getByLabelText('País'), 'VE');
+      await user.click(within(dialog).getByRole('button', { name: 'Crear sede' }));
+      const prefix = within(dialog).getByLabelText(PREFIX);
+      await waitFor(() => expect(prefix).toHaveAccessibleDescription(message));
+      expect(prefix).toHaveAttribute('aria-invalid', 'true');
+      expect(prefix).toHaveFocus();
+      expect(within(dialog).queryByRole('alert', { name: /No pudimos guardar/ })).not.toBeInTheDocument();
+      // Elegir otro prefijo quita el error.
+      await choosePrefix(user, dialog, '+34', phoneRegionLabel('ES')!);
+      expect(prefix).not.toHaveAttribute('aria-invalid');
+      expect(prefix).toHaveAccessibleDescription(PREFIX_HINT);
+    });
+
+    it('the prefix hint says how saved numbers are read and that they are not rewritten', async () => {
+      const { dialog } = setup(clinicLocation({ defaultPhoneRegion: 'CO' }));
+      expect(within(dialog).getByLabelText(PREFIX)).toHaveAccessibleDescription(PREFIX_HINT);
+      expect(within(dialog).getByText(PREFIX_HINT)).toBeInTheDocument();
+      await currenciesLoaded(dialog);
+    });
   });
 });

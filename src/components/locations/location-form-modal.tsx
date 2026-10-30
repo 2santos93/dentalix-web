@@ -11,6 +11,7 @@ import {
   type CreateLocationInput,
   type UpdateLocationSettingsInput,
 } from '@/lib/locations/locations-api';
+import { isPhoneRegion, PHONE_REGIONS, phoneRegionLabel, searchPhoneRegions, type PhoneRegionOption } from '@/lib/locations/phone-regions';
 import { useSessionLocations } from '@/lib/locations/session-locations';
 import {
   browserCountry,
@@ -28,6 +29,7 @@ import {
 import { FormModal } from '@/components/shared/form-modal';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
+import { COMBOBOX_NONE, CountryCombobox, phoneRegionComboboxCopy } from '@/components/shared/country-combobox';
 import { Input } from '@/components/ui/input';
 import { RegionalSettingsFields, regionalFieldId, type RegionalSuggestions } from './regional-settings-fields';
 
@@ -44,6 +46,11 @@ export const locationFormCopy = {
   address: 'Dirección',
   phone: 'Teléfono',
   phoneHint: 'Con indicativo internacional (+…).',
+  phoneRegion: 'Prefijo telefónico por defecto',
+  phoneRegionHint:
+    'Se añade a los teléfonos escritos sin +. Cambiarlo cambia cómo se leen los ya guardados sin +, pero no los reescribe.',
+  phoneRegionSuggested: 'Sugerido por el país de la sede.',
+  noPhoneRegion: 'Sin prefijo por defecto',
   create: 'Crear sede',
   save: 'Guardar sede',
   genericError: 'No pudimos guardar la sede. Intenta de nuevo.',
@@ -60,10 +67,10 @@ const ID = 'location-form';
 const UNCONFIRMED = 'LOCATION_REGIONAL_CHANGE_UNCONFIRMED';
 const CASH_OPEN = 'LOCATION_REGIONAL_CASH_OPEN';
 
-type FieldErrors = RegionalSettingsErrors & { name?: string; phone?: string };
+type FieldErrors = RegionalSettingsErrors & { name?: string; phone?: string; defaultPhoneRegion?: string };
 
 /** Campos a los que la API puede referir un 400 (`field`): el mensaje va junto a ellos. */
-const API_FIELDS = ['name', 'phone', ...REGIONAL_SETTINGS_FIELDS] as const;
+const API_FIELDS = ['name', 'phone', 'defaultPhoneRegion', ...REGIONAL_SETTINGS_FIELDS] as const;
 type ApiField = (typeof API_FIELDS)[number];
 
 interface LocationFormModalProps {
@@ -100,6 +107,13 @@ function initialSuggestions(location: ClinicLocation | null): RegionalSuggestion
   };
 }
 
+/** La región que el país de la sede sugiere: la suya si es región de numeración (como la API). */
+function suggestedPhoneRegion(country: string): string | null {
+  return isPhoneRegion(country) ? country : null;
+}
+
+const formatPhoneRegion = (region: PhoneRegionOption) => phoneRegionLabel(region.code) ?? region.code;
+
 function initialRegional(location: ClinicLocation | null, suggested: RegionalSuggestions): RegionalSettingsValues {
   return {
     country: location?.country || suggested.country || '',
@@ -128,11 +142,39 @@ export function LocationFormModal({ open, onOpenChange, token, location, onSaved
   const [phone, setPhone] = useState(location?.phone ?? '');
   const [suggestions] = useState(() => initialSuggestions(location));
   const [regional, setRegional] = useState<RegionalSettingsValues>(() => initialRegional(location, suggestions));
+  /** Prefijo elegido a mano; hasta que se toca, manda `phoneRegion` (abajo). */
+  const [chosenPhoneRegion, setChosenPhoneRegion] = useState<string | null>(null);
+  const [phoneRegionTouched, setPhoneRegionTouched] = useState(false);
   const [errors, setErrors] = useState<FieldErrors>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   /** Mensaje de la API que pide confirmar el cambio; `null` = diálogo cerrado. */
   const [confirmMessage, setConfirmMessage] = useState<string | null>(null);
+
+  // Spec §6.3: en el alta, el prefijo sigue al país hasta que se toca. En la
+  // edición se pinta el guardado, y solo si era el del país guardado se
+  // propone el del país nuevo cuando este cambia.
+  const phoneRegionFollowsCountry =
+    !phoneRegionTouched &&
+    (location === null ||
+      (location.defaultPhoneRegion !== null &&
+        location.defaultPhoneRegion === location.country &&
+        regional.country !== location.country));
+  const phoneRegion = phoneRegionTouched
+    ? chosenPhoneRegion
+    : phoneRegionFollowsCountry
+      ? suggestedPhoneRegion(regional.country)
+      : (location?.defaultPhoneRegion ?? null);
+  const phoneRegionSuggested = phoneRegionFollowsCountry && regional.country !== '';
+  const phoneRegionHint = phoneRegionSuggested
+    ? `${copy.phoneRegionSuggested} ${copy.phoneRegionHint}`
+    : copy.phoneRegionHint;
+
+  function changePhoneRegion(code: string) {
+    setChosenPhoneRegion(code === COMBOBOX_NONE ? null : code);
+    setPhoneRegionTouched(true);
+    setErrors((prev) => ({ ...prev, defaultPhoneRegion: undefined }));
+  }
 
   function changeRegional<F extends RegionalSettingsField>(field: F, value: RegionalSettingsValues[F]) {
     setRegional((prev) => ({ ...prev, [field]: value }));
@@ -153,7 +195,10 @@ export function LocationFormModal({ open, onOpenChange, token, location, onSaved
   }
 
   function focusField(field: ApiField) {
-    const id = field === 'name' || field === 'phone' ? `${ID}-${field}` : regionalFieldId(ID, field);
+    const id =
+      field === 'name' || field === 'phone' || field === 'defaultPhoneRegion'
+        ? `${ID}-${field}`
+        : regionalFieldId(ID, field);
     document.getElementById(id)?.focus();
   }
 
@@ -170,6 +215,8 @@ export function LocationFormModal({ open, onOpenChange, token, location, onSaved
       name: name.trim(),
       ...(trimmedAddress ? { address: trimmedAddress } : {}),
       ...(trimmedPhone ? { phone: trimmedPhone } : {}),
+      // Siempre en el alta, también `null`: la API no vuelve a sugerirlo.
+      defaultPhoneRegion: phoneRegion,
       country: regional.country,
       currency: regional.currency,
       timeZone: canonicalTimeZone(regional.timeZone) ?? regional.timeZone.trim(),
@@ -180,9 +227,11 @@ export function LocationFormModal({ open, onOpenChange, token, location, onSaved
   }
 
   function patch(confirmRegionalChange: boolean): UpdateLocationSettingsInput {
-    const { address: newAddress, phone: newPhone, ...rest } = body();
+    const { address: newAddress, phone: newPhone, defaultPhoneRegion, ...rest } = body();
     return {
       ...rest,
+      // Solo si cambió: sin el campo, la API lo deja como estaba.
+      ...(defaultPhoneRegion !== location?.defaultPhoneRegion ? { defaultPhoneRegion } : {}),
       // Vaciar un dato que tenía lo borra; si no tenía, no se envía.
       ...(newAddress !== undefined || location?.address ? { address: newAddress ?? '' } : {}),
       ...(newPhone !== undefined || location?.phone ? { phone: newPhone ?? null } : {}),
@@ -306,6 +355,31 @@ export function LocationFormModal({ open, onOpenChange, token, location, onSaved
               }}
               aria-invalid={errors.phone ? true : undefined}
               aria-describedby={errors.phone ? fieldErrorId(`${ID}-phone`) : `${ID}-phone-hint`}
+            />
+          </FormField>
+          <FormField
+            htmlFor={`${ID}-defaultPhoneRegion`}
+            label={copy.phoneRegion}
+            hint={phoneRegionHint}
+            hintId={`${ID}-defaultPhoneRegion-hint`}
+            error={errors.defaultPhoneRegion}
+            className="sm:col-span-2"
+          >
+            <CountryCombobox<PhoneRegionOption>
+              id={`${ID}-defaultPhoneRegion`}
+              value={phoneRegion ?? COMBOBOX_NONE}
+              onChange={changePhoneRegion}
+              invalid={errors.defaultPhoneRegion ? true : undefined}
+              ariaDescribedBy={
+                errors.defaultPhoneRegion
+                  ? fieldErrorId(`${ID}-defaultPhoneRegion`)
+                  : `${ID}-defaultPhoneRegion-hint`
+              }
+              options={PHONE_REGIONS}
+              search={searchPhoneRegions}
+              formatOption={formatPhoneRegion}
+              copy={phoneRegionComboboxCopy}
+              noneOption={{ label: copy.noPhoneRegion }}
             />
           </FormField>
         </div>

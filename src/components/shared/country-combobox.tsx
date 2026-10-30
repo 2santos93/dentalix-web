@@ -2,7 +2,7 @@
 import * as React from 'react';
 import { useEffect, useState } from 'react';
 import { Check, ChevronDown } from 'lucide-react';
-import { countryName, searchCountries, type CountryOption } from '@/lib/locations/countries';
+import { COUNTRIES, countrySearchKey, searchCountries, type CountryOption } from '@/lib/locations/countries';
 import { fieldClass } from '@/lib/ui/field-class';
 import { cn } from '@/lib/utils';
 
@@ -16,12 +16,28 @@ export const countryComboboxCopy = {
   results: (n: number) => (n === 1 ? '1 país' : `${n} países`),
 };
 
-const copy = countryComboboxCopy;
+export type CountryComboboxCopy = typeof countryComboboxCopy;
 
-interface CountryComboboxProps {
+/** Textos para elegir el prefijo telefónico por defecto de una sede (DX-329, spec §6.3). */
+export const phoneRegionComboboxCopy: CountryComboboxCopy = {
+  placeholder: 'Busca por nombre, código o prefijo (+…)',
+  noMatch: 'Ningún prefijo coincide.',
+  list: 'Prefijos telefónicos',
+  results: (n: number) => (n === 1 ? '1 prefijo' : `${n} prefijos`),
+};
+
+/** Valor de `noneOption`: una elección propia, distinta de `''` (sin elegir). */
+export const COMBOBOX_NONE = 'NONE';
+
+interface ComboboxOption {
+  code: string;
+  name: string;
+}
+
+interface CountryComboboxProps<T extends ComboboxOption> {
   /** id del control: el `<label htmlFor>` del campo lo nombra. */
   id: string;
-  /** Código ISO 3166-1 alfa-2 elegido; `''` = sin elegir. */
+  /** Código elegido (ISO 3166-1 alfa-2 por defecto); `''` = sin elegir; `COMBOBOX_NONE` = `noneOption`. */
   value: string;
   onChange: (code: string) => void;
   invalid?: boolean;
@@ -29,10 +45,28 @@ interface CountryComboboxProps {
   /** Ayuda o error del campo (el `FormField` que lo envuelve). */
   ariaDescribedBy?: string;
   placeholder?: string;
+  /** Todas las opciones, para pintar la elegida. Por defecto, los países. */
+  options?: readonly T[];
+  /** Opciones que casan con lo escrito (todas si no hay nada). Por defecto, `searchCountries`. */
+  search?: (query: string) => T[];
+  /** Texto de una opción, en la lista y en el campo. Por defecto, su nombre. */
+  formatOption?: (option: T) => string;
+  /** Textos de la lista. Por defecto, los de país. */
+  copy?: CountryComboboxCopy;
+  /** Opción fija al principio, con valor `COMBOBOX_NONE` y su texto en el campo cuando se elige. */
+  noneOption?: { label: string };
+}
+
+/** Una fila de la lista: su valor y el texto que se ve. */
+interface Item {
+  code: string;
+  label: string;
 }
 
 /**
- * País de una sede (DX-312, spec §6.3): combobox ARIA 1.2 con
+ * País de una sede (DX-312, spec §6.3); con `options`, `search`,
+ * `formatOption`, `copy` y `noneOption`, también su prefijo telefónico por
+ * defecto (DX-329, spec §6.3): combobox ARIA 1.2 con
  * `aria-activedescendant` sobre todos los países de la copia, sin banderas ni
  * países destacados. Busca en memoria por nombre (sin tildes ni mayúsculas) o
  * por código exacto. El campo muestra el nombre del país elegido; escribir
@@ -43,15 +77,20 @@ interface CountryComboboxProps {
  * elegir vuelve al último país elegido (o lo deja vacío si no había ninguno):
  * un texto suelto nunca es un país.
  */
-export function CountryCombobox({
+export function CountryCombobox<T extends ComboboxOption = CountryOption>({
   id,
   value,
   onChange,
   invalid,
   required,
   ariaDescribedBy,
+  options = COUNTRIES as unknown as readonly T[],
+  search = searchCountries as unknown as (query: string) => T[],
+  formatOption = (option) => option.name,
+  copy = countryComboboxCopy,
+  noneOption,
   placeholder = copy.placeholder,
-}: CountryComboboxProps) {
+}: CountryComboboxProps<T>) {
   // `null` = no se está escribiendo: el campo muestra el nombre de `value`, así
   // sigue al valor del padre (p. ej. la sugerencia que llega tras montar).
   const [query, setQuery] = useState<string | null>(null);
@@ -61,7 +100,17 @@ export function CountryCombobox({
   const statusId = `${id}-status`;
   const optionId = (code: string) => `${id}-option-${code}`;
 
-  const results: CountryOption[] = open ? searchCountries(query ?? '') : [];
+  /** La opción «ninguno» va primero con la lista entera, o si lo escrito está en su texto. */
+  function itemsFor(text: string): Item[] {
+    const key = countrySearchKey(text);
+    const none =
+      noneOption && (key === '' || countrySearchKey(noneOption.label).includes(key))
+        ? [{ code: COMBOBOX_NONE, label: noneOption.label }]
+        : [];
+    return [...none, ...search(text).map((option) => ({ code: option.code, label: formatOption(option) }))];
+  }
+
+  const results: Item[] = open ? itemsFor(query ?? '') : [];
   const activeOption = active >= 0 ? results[active] : undefined;
   const activeId = activeOption ? optionId(activeOption.code) : undefined;
 
@@ -72,7 +121,7 @@ export function CountryCombobox({
 
   /** Abre la lista con el país elegido resaltado (o la primera opción), o la última con `last`. */
   function openList(highlight: 'selected' | 'last') {
-    const list = searchCountries(query ?? '');
+    const list = itemsFor(query ?? '');
     setOpen(true);
     if (highlight === 'last') setActive(list.length - 1);
     else setActive(Math.max(list.findIndex((c) => c.code === value), list.length > 0 ? 0 : -1));
@@ -84,9 +133,9 @@ export function CountryCombobox({
     setQuery(null);
   }
 
-  function pick(country: CountryOption) {
+  function pick(item: Item) {
     close();
-    if (country.code !== value) onChange(country.code);
+    if (item.code !== value) onChange(item.code);
   }
 
   function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
@@ -132,7 +181,14 @@ export function CountryCombobox({
     }
   }
 
-  const shown = query ?? (value ? (countryName(value) ?? value) : '');
+  function labelOf(code: string): string {
+    if (code === '') return '';
+    if (code === COMBOBOX_NONE && noneOption) return noneOption.label;
+    const option = options.find((o) => o.code === code);
+    return option ? formatOption(option) : code;
+  }
+
+  const shown = query ?? labelOf(value);
   // Solo mientras se escribe: abrir la lista completa no anuncia «250 países».
   const status =
     open && query !== null && query.trim() !== ''
@@ -168,7 +224,7 @@ export function CountryCombobox({
           setQuery(next);
           setOpen(true);
           // Escribiendo, la primera coincidencia queda resaltada; con el campo vacío, ninguna.
-          setActive(next.trim() !== '' && searchCountries(next).length > 0 ? 0 : -1);
+          setActive(next.trim() !== '' && itemsFor(next).length > 0 ? 0 : -1);
         }}
         onBlur={close}
         onKeyDown={onKeyDown}
@@ -201,26 +257,26 @@ export function CountryCombobox({
             {copy.noMatch}
           </li>
         ) : null}
-        {results.map((country, index) => (
+        {results.map((item, index) => (
           <li
-            key={country.code}
-            id={optionId(country.code)}
+            key={item.code}
+            id={optionId(item.code)}
             role="option"
             // `aria-selected` marca el país elegido, no el resaltado (que va por
             // `aria-activedescendant`): el lector anuncia «seleccionado» en la
             // opción actual aunque las flechas se muevan por otras.
-            aria-selected={country.code === value}
+            aria-selected={item.code === value}
             // El foco no sale del campo: si no, su `onBlur` cerraría la lista
             // antes de que llegue el clic.
             onMouseDown={(e) => e.preventDefault()}
-            onClick={() => pick(country)}
+            onClick={() => pick(item)}
             className={cn(
               'flex min-h-11 cursor-pointer items-center justify-between gap-2 px-3 py-2 text-sm text-ink sm:min-h-9',
               index === active ? 'bg-primary/10' : 'hover:bg-surface-2',
             )}
           >
-            <span className="min-w-0 break-words">{country.name}</span>
-            {country.code === value ? <Check aria-hidden className="size-4 shrink-0 text-primary" /> : null}
+            <span className="min-w-0 break-words">{item.label}</span>
+            {item.code === value ? <Check aria-hidden className="size-4 shrink-0 text-primary" /> : null}
           </li>
         ))}
       </ul>
