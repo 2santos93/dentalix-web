@@ -2177,9 +2177,29 @@ export interface paths {
         put?: never;
         /**
          * Registra la tasa de cambio de un día y una moneda; queda en la auditoría
-         * @description DX-374. Unidades de la moneda por 1 USD. Se usa cuando la fuente de la clínica es MANUAL, para los días desde `manualSince` (se puede dejar registrada antes de cambiarla). Una tasa ya registrada para ese día y moneda no se sobrescribe.
+         * @description DX-374. Unidades de la moneda por 1 USD. Se usa cuando la fuente de la clínica es MANUAL, para los días desde `manualSince` (se puede dejar registrada antes de cambiarla). Una tasa ya registrada para ese día y moneda no se sobrescribe: si ningún abono la usó, se corrige con PUT /exchange/manual-rates/:id.
          */
         post: operations["ExchangeSettingsController_register"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/exchange/manual-rates/{id}": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        /**
+         * Corrige una tasa manual que ningún abono usó; queda en la auditoría
+         * @description DX-375. Solo cambia la tasa (unidades de la moneda por 1 USD); el día y la moneda no. Cada abono congela la tasa con que se convirtió al registrarse, así que una tasa que ya usa algún abono no se cambia: 409 MANUAL_EXCHANGE_RATE_IN_USE (también lo impide la BD). Corregir una sin usar sí afecta a los abonos que la congelen después.
+         */
+        put: operations["ExchangeSettingsController_correct"];
+        post?: never;
         delete?: never;
         options?: never;
         head?: never;
@@ -9264,6 +9284,11 @@ export interface components {
             createdBy: components["schemas"]["ManualExchangeRateAuthorDto"];
             /** Format: date-time */
             createdAt: string;
+            /**
+             * @description DX-375: algún abono ya congeló esta tasa (como moneda del abono o de destino), así que no se puede cambiar (PUT responde 409).
+             * @example false
+             */
+            inUse: boolean;
         };
         RegisterManualExchangeRateDto: {
             /**
@@ -9279,6 +9304,13 @@ export interface components {
             /**
              * @description Unidades de la moneda por 1 USD, mayor que 0 y con hasta 8 decimales.
              * @example 36.5
+             */
+            rate: number;
+        };
+        CorrectManualExchangeRateDto: {
+            /**
+             * @description La tasa corregida: unidades de la moneda por 1 USD, mayor que 0 y con hasta 8 decimales.
+             * @example 36.75
              */
             rate: number;
         };
@@ -9516,6 +9548,35 @@ export interface components {
             method?: "CASH" | "CARD" | "TRANSFER" | "OTHER";
             notes?: string;
         };
+        FrozenExchangeRateDto: {
+            /**
+             * @description Moneda de destino: la del plan (o la del saldo migrado)
+             * @example USD
+             */
+            currency: string;
+            /**
+             * @description Unidades de la moneda del abono por 1 USD, tal como las dio la fuente ese día (hasta 8 decimales)
+             * @example 4000
+             */
+            fromPerBase: number;
+            /**
+             * @description Unidades de `currency` por 1 USD, tal como las dio la fuente ese día (hasta 8 decimales)
+             * @example 1
+             */
+            toPerBase: number;
+            /** @description AUTOMATIC: la del proveedor; MANUAL: la que registró la clínica para ese día */
+            source: components["schemas"]["ExchangeRateSource"];
+            /**
+             * @description Día civil (AAAA-MM-DD) de la tasa: el del abono en su sede
+             * @example 2026-10-30
+             */
+            date: string;
+        };
+        /**
+         * @description DX-375: la tasa del abono. NOT_NEEDED: está en la moneda de su destino. FROZEN: congeló su tasa al registrarse (o el barrido, si se cobró sin tasa) y saldos y totales la usan siempre, aunque la tasa cambie después. MISSING: «sin tasa»: no había tasa de su día; no cuenta en el saldo del plan hasta que se registre (Ajustes › Tasa de cambio) y el barrido de cada minuto la congele. LEGACY: anterior a la tasa congelada y aún sin congelar: se convierte con la tasa de su día, como antes, hasta que el barrido la congele.
+         * @enum {string}
+         */
+        PaymentExchangeRateStatus: "NOT_NEEDED" | "FROZEN" | "MISSING" | "LEGACY";
         PaymentDto: {
             /** Format: uuid */
             id: string;
@@ -9561,6 +9622,31 @@ export interface components {
              * @example NOR-000123
              */
             receiptNumber: string | null;
+            /**
+             * @description DX-375: moneda a la que convierte la tasa del abono (la del plan o la del saldo migrado); null en un abono anterior a la tasa congelada aún sin congelar.
+             * @example USD
+             */
+            exchangeRateCurrency: string | null;
+            /** @description DX-375: la tasa que congeló el abono; null en su misma moneda, «sin tasa» o anterior aún sin congelar. */
+            frozenRate: components["schemas"]["FrozenExchangeRateDto"] | null;
+            /** @description DX-375: la tasa del abono. NOT_NEEDED: está en la moneda de su destino. FROZEN: congeló su tasa al registrarse (o el barrido, si se cobró sin tasa) y saldos y totales la usan siempre, aunque la tasa cambie después. MISSING: «sin tasa»: no había tasa de su día; no cuenta en el saldo del plan hasta que se registre (Ajustes › Tasa de cambio) y el barrido de cada minuto la congele. LEGACY: anterior a la tasa congelada y aún sin congelar: se convierte con la tasa de su día, como antes, hasta que el barrido la congele. */
+            exchangeRateStatus: components["schemas"]["PaymentExchangeRateStatus"];
+        };
+        PaymentWithoutRateDto: {
+            /** Format: uuid */
+            paymentId: string;
+            /**
+             * @description En la moneda del abono
+             * @example 150000
+             */
+            amount: number;
+            /** @example COP */
+            currency: string;
+            /**
+             * @description Día civil del abono en su sede: el de la tasa que falta
+             * @example 2026-10-30
+             */
+            paidOn: string;
         };
         /** @enum {string} */
         TreatmentPlanItemStatus: "PROPOSED" | "ACCEPTED" | "DONE";
@@ -9603,7 +9689,7 @@ export interface components {
              */
             billable: number;
             /**
-             * @description Sum of active payments, each converted to planCurrency at its own paidAt date
+             * @description Σ de los abonos vivos en planCurrency, cada uno con la tasa que congeló al registrarse (DX-375; con base de imputación, por su base). Un abono anterior aún sin congelar, con la tasa de su día. Los «sin tasa» (paymentsWithoutRate) no suman.
              * @example 100
              */
             paid: number;
@@ -9614,6 +9700,8 @@ export interface components {
             balance: number;
             /** @example 1 */
             paymentsCount: number;
+            /** @description DX-375: abonos vivos «sin tasa» (en otra moneda y sin tasa de su día): no cuentan en paid, así que el saldo está incompleto hasta que se registre la tasa (Ajustes › Tasa de cambio) y el barrido la congele. Vacío si no hay ninguno. */
+            paymentsWithoutRate: components["schemas"]["PaymentWithoutRateDto"][];
             /**
              * @description Σ de lo imputado a los ítems
              * @example 150
@@ -20223,7 +20311,60 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Ya hay una tasa registrada para esa moneda en ese día. Por ahora no se puede cambiar. */
+            /** @description Ya hay una tasa registrada para esa moneda en ese día. Si ningún abono la usó, corrígela en la lista. */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    ExchangeSettingsController_correct: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                id: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["CorrectManualExchangeRateDto"];
+            };
+        };
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["ManualExchangeRateDto"];
+                };
+            };
+            /** @description Tasa que no es > 0 con hasta 8 decimales */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Solo un administrador puede ver y cambiar la tasa de cambio de la clínica. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description No encontramos esa tasa de cambio en la clínica. */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Esta tasa ya la usa al menos un abono y no se puede cambiar: el saldo de esos abonos se calculó con ella. */
             409: {
                 headers: {
                     [name: string]: unknown;
