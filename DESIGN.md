@@ -1,53 +1,69 @@
 ---
 name: Dentalix
-description: Ficha clínica — International Typographic system for a multi-tenant dental SaaS
+description: Ficha clínica — International Typographic system for a multi-tenant dental SaaS (UX System v2, 2026-10-30)
 colors:
   primary: "#0E7490"
   primary-fg: "#FFFFFF"
-  accent: "#0E7490"
-  bg: "#F7F9FC"
+  primary-hover: "#06637C"
+  primary-text: "#06637C"
+  primary-subtle: "#E5F6FC"
+  primary-subtle-text: "#10556A"
+  primary-border: "#B2D8E7"
+  canvas: "#F7F9FC"
   surface: "#FFFFFF"
-  surface-2: "#F1F5F9"
-  ink: "#0F172A"
-  muted: "#64748B"
-  border: "#E2E8F0"
-  hairline: "#EEF2F7"
-  success: "#15803D"
-  warning: "#B45309"
-  danger: "#BE123C"
+  surface-sunken: "#F1F5F8"
+  surface-active: "#E8EDF3"
+  border-subtle: "#E5E9EE"
+  border: "#D8DFE6"
+  border-input: "#838D98"
+  ink: "#151C26"
+  muted: "#5B6472"
+  faint: "#6D7582"
+  success: "#287C42"
+  success-subtle: "#E5F9E8"
+  success-text: "#1C5F31"
+  warning: "#EFA831"
+  warning-subtle: "#FEF3DD"
+  warning-text: "#834B14"
+  danger: "#C52C2A"
   danger-fg: "#FFFFFF"
+  danger-subtle: "#FEEEEE"
+  danger-text: "#A92321"
+  info: "#2D6AC1"
+  info-subtle: "#ECF3FE"
+  info-text: "#1A52A1"
 typography:
   display:
-    fontFamily: "var(--font-sans)"
-    fontSize: "clamp(1.5rem, 1.1rem + 1.6vw, 2rem)"
-    fontWeight: 640
-    lineHeight: 1.1
-    letterSpacing: "-0.02em"
+    fontFamily: "Inter (var(--font-sans))"
+    fontSize: "1.5rem (1.75rem ≥ lg)"
+    fontWeight: 600
+    lineHeight: 1.25
+    letterSpacing: "-0.022em"
   title:
-    fontFamily: "var(--font-sans)"
-    fontSize: "1.125rem"
-    fontWeight: 620
-    lineHeight: 1.3
-    letterSpacing: "-0.01em"
+    fontFamily: "Inter"
+    fontSize: "1rem"
+    fontWeight: 600
+    lineHeight: 1.5
+    letterSpacing: "-0.011em"
   body:
-    fontFamily: "var(--font-sans)"
-    fontSize: "0.9375rem"
+    fontFamily: "Inter"
+    fontSize: "0.875rem (0.9375rem on pointer: coarse)"
     fontWeight: 400
-    lineHeight: 1.55
-    letterSpacing: "0"
+    lineHeight: 1.43
   label:
-    fontFamily: "var(--font-sans)"
-    fontSize: "0.75rem"
-    fontWeight: 560
-    lineHeight: 1.2
-    letterSpacing: "0.02em"
-  data:
-    fontFamily: "var(--font-sans)"
-    fontSize: "0.9375rem"
+    fontFamily: "Inter"
+    fontSize: "0.8125rem"
     fontWeight: 500
-    lineHeight: 1.4
-    letterSpacing: "0"
-    fontFeature: "'tnum' 1, 'cv01' 1"
+    lineHeight: 1.385
+  caption:
+    fontFamily: "Inter"
+    fontSize: "0.75rem"
+    fontWeight: 500
+    lineHeight: 1.333
+  data:
+    fontFamily: "Inter"
+    fontWeight: 500
+    fontFeature: "tabular-nums"
 rounded:
   sm: "6px"
   md: "8px"
@@ -60,35 +76,31 @@ spacing:
   "4": "16px"
   "6": "24px"
   "8": "32px"
+  "12": "48px"
 components:
   button-primary:
     backgroundColor: "{colors.primary}"
     textColor: "{colors.primary-fg}"
+    hover: "{colors.primary-hover}"
     rounded: "{rounded.md}"
-    padding: "0 16px"
-    height: "40px"
-  button-destructive:
-    backgroundColor: "{colors.danger}"
-    textColor: "{colors.danger-fg}"
-    rounded: "{rounded.md}"
-    padding: "0 16px"
-    height: "40px"
+    height: "40px (44px touch)"
   button-secondary:
     backgroundColor: "{colors.surface}"
+    border: "{colors.border}"
     textColor: "{colors.ink}"
     rounded: "{rounded.md}"
-    padding: "0 16px"
-    height: "40px"
+    height: "40px (44px touch)"
   input:
     backgroundColor: "{colors.surface}"
+    border: "{colors.border-input}"
     textColor: "{colors.ink}"
     rounded: "{rounded.md}"
-    padding: "0 12px"
-    height: "40px"
+    height: "40px (44px touch, 16px text)"
   card:
     backgroundColor: "{colors.surface}"
+    border: "{colors.border}"
     rounded: "{rounded.lg}"
-    padding: "24px"
+    padding: "16px mobile / 24px sm+"
 ---
 
 # Design System: Dentalix
@@ -141,57 +153,87 @@ denser desktop grids, never a desktop layout crammed onto a phone.
 
 ## Colors
 
-A cool clinical paper base with graphite ink and one tokenized accent. Neutrals are
-blue-tinted slates so the whole system reads clinical rather than warm.
+A cool clinical paper base with graphite ink, one tokenized accent and four fixed
+semantic hues. Authored in OKLCH (perceptually even lightness, so tenant colors
+derive predictably) and shipped as hex. Source of truth: `src/styles/tokens.css`.
+Every text pair is ≥ 4.5:1 and every control boundary ≥ 3:1, light and dark.
 
-### Primary
-- **Clinical Teal-Blue** (`#0E7490`, tenant-overridable): the single accent. Primary
-  buttons, active nav, links, focus rings, selected state. Never more than ~10% of a
-  screen. AA with white text. A tenant's `--color-primary` overrides it at runtime;
-  everything else stays cohesive.
+### Surfaces and lines
+| Token | Light | Dark | Use |
+|---|---|---|---|
+| `canvas` | `#F7F9FC` | `#0B0F14` | app background |
+| `surface` | `#FFFFFF` | `#13171F` | cards, panels, rows, inputs |
+| `surface-sunken` | `#F1F5F8` | `#0E1219` | table header, hovered row, quiet fill |
+| `surface-active` | `#E8EDF3` | `#1D232C` | selected row, pressed, neutral chip |
+| `border-subtle` | `#E5E9EE` | `#1F252D` | rules inside tables and lists |
+| `border` | `#D8DFE6` | `#292F39` | structure: cards, sections, secondary buttons |
+| `border-input` | `#838D98` | `#676F7C` | control boundary (3.36 / 3.54 : 1) |
 
-### Neutral
-- **Graphite Ink** (`#0F172A`): primary text and headings.
-- **Slate Muted** (`#64748B`): secondary text, labels, meta (AA on paper/surface).
-- **Cool Paper** (`#F7F9FC`): the app canvas.
-- **Surface** (`#FFFFFF`): cards, panels, rows.
-- **Surface-2** (`#F1F5F9`): insets, table headers, hovered rows, quiet fills.
-- **Border** (`#E2E8F0`): standard 1px dividers and control strokes.
-- **Hairline** (`#EEF2F7`): the lightest rule, for in-table and in-list separation.
+In dark mode surfaces **rise in lightness** instead of casting shadows.
 
-### Semantic
-- **Success** (`#15803D`), **Warning** (`#B45309`), **Danger** (`#BE123C`): status
-  only. On light chips, use a tint of the hue as background with the dark hue as text;
-  reserve solid danger for destructive confirmation, never as decoration.
-- **Danger-fg** (`#FFFFFF`; dark theme `#2B0A12`): text on solid danger. Dark theme
-  lightens danger to `#FB7185`, where white is 2.7:1; the deep rose-ink is 6.8:1
-  (5.7:1 on hover). Same pattern as primary-fg (`#FFFFFF`; dark `#052730`).
+### Text
+- **Ink** `#151C26` / `#EEF0F4` — primary text and headings (17:1).
+- **Muted** `#5B6472` / `#A2AAB6` — secondary text, labels, meta (≥ 5.1:1 on every surface incl. active).
+- **Faint** `#6D7582` / `#89919D` — placeholders and tertiary meta only (4.65:1).
 
-**The One Accent Rule.** The accent is tokenized and rare. If a screen reads as
-"the teal screen," it is overusing it — pull back to ink + neutrals and let the
-accent mark only the primary action, the active item, and focus.
+### Accent — the tenant's color
+Default **Clinical Teal** `#0E7490` (oklch .52 .094 223): 5.36:1 with white, and
+the only mid-chroma hue ≥ 70° away from danger, warning and success, so it never
+reads as a status. The accent is a **family**, not one value:
+`primary` (fill) · `primary-fg` (ink on fill) · `primary-hover` · `primary-text`
+(links, active nav label, focus ring) · `primary-subtle` (selected bg) ·
+`primary-subtle-text` · `primary-border`.
 
-**The White-Label Rule.** Never hardcode the accent hue in a component. Every accent
-use resolves `var(--color-primary)`. Secondary text on any colored surface is tinted
-from ink/hue, never pure gray on color.
+**The White-Label Rule.** A clinic picks one color; `src/lib/color/accent.ts`
+derives the whole family for light and dark on the server, keeping the exact hex
+when it passes 4.5:1 (with white, or with ink for light brands) and otherwise
+shifting OKLCH lightness only. The root layout injects it. Components never
+hardcode a hue and never put text in `primary` on a surface — text uses
+`primary-text`.
+
+**The One Accent Rule.** The accent marks the primary action, the active item,
+selection and focus — ≤ 10% of any screen. If a screen reads as "the teal
+screen", pull back to ink and neutrals.
+
+**The Status Rule.** The accent is never a status. Statuses use the fixed
+semantic tones below, so a red or orange clinic can never make "Confirmada"
+look like an alarm.
+
+### Semantic (fixed, never tenant)
+| Tone | Solid | Subtle bg | Text on subtle | Meaning |
+|---|---|---|---|---|
+| `success` | `#287C42` | `#E5F9E8` | `#1C5F31` | done, paid, attended |
+| `warning` | `#EFA831` (ink on it) | `#FEF3DD` | `#834B14` | pending, partial, due soon, waiting |
+| `danger` | `#C52C2A` | `#FEEEEE` | `#A92321` | no-show, overdue, rejected, clinical alert, destructive |
+| `info` | `#2D6AC1` | `#ECF3FE` | `#1A52A1` | confirmed, in chair, in progress |
+| `neutral` | — | `surface-active` | `ink` | draft, scheduled, cancelled, voided |
+
+Chips and callouts use **subtle bg + `-text`**; solid fills are for the single
+most urgent state or a destructive confirmation. Never white on amber.
 
 ## Typography
 
-**UI / Display Font:** the app sans (`--font-sans`; workhorse UI face + system stack).
-**Data:** same family with tabular numerals (`font-feature-settings: 'tnum'`).
+**Inter** (variable, optical-size axis) is the single UI family: largest
+x-height of the candidates measured (7.6px at 14px), text forms at UI sizes and
+display forms on headings from one file, 147 languages, slashed zero for IDs.
+`cv05` is on globally so I / l / 1 never collide in names, IDs and doses.
+Mono is the system stack, for code-like values only.
 
-**Character:** one family, earning hierarchy through size, weight, and tracking rather
-than through a second display face — the register a clinical document wants.
+### Hierarchy (roles, not sizes)
+- **Display** `.t-display` — 24/30 (28/36 ≥ lg), 600, -0.022em. Page titles and the patient name.
+- **Title** `.t-title` — 16/24, 600, -0.011em. Section and card headers.
+- **Body** — 14/20 desktop, **15/22 on touch** (`pointer: coarse`). Default UI copy and table cells.
+- **Label** `.t-label` — 13/18, 500. Form labels, column headers.
+- **Caption** `.t-caption` / `.t-overline` — 12/16, 500, muted. Meta, timestamps, group headings (sentence case, never all caps).
+- **Data** `.t-data` / `.tnum` — tabular numerals; `.t-id` adds slashed zero for documents, record numbers, lots.
 
-### Hierarchy
-- **Display** (640, `clamp(1.5rem, 1.1rem + 1.6vw, 2rem)`, 1.1, -0.02em): page titles only.
-- **Title** (620, 1.125rem, 1.3, -0.01em): section and card headers.
-- **Body** (400, 0.9375rem, 1.55): default text; measure 65–75ch in prose.
-- **Data** (500, 0.9375rem, tabular): numbers, dates, tooth numbers, money, IDs.
-- **Label** (560, 0.75rem, 0.02em): field labels, table headers, chips, meta.
+Fields render text at **16px on touch** so iOS never zooms on focus. Weights in
+routine use: 400, 500, 600. Spanish runs ~25% longer than English: no
+fixed-width buttons, and labels must survive +30%.
 
 **The Tabular Rule.** Every quantity, date, money value, and FDI tooth number uses
 tabular numerals so columns align and figures never jitter between states.
+Tables get it automatically.
 
 ## Layout
 
@@ -221,7 +263,7 @@ block, which reads as one gesture. Tables collapse to stacked labeled cards belo
 appears only for true overlays and transient state.
 
 ### Shadow Vocabulary
-- **Overlay** (`box-shadow: 0 8px 28px -8px rgb(15 23 42 / 0.18)`): dialogs, dropdowns, popovers.
+- **Overlay** (`--shadow-overlay`): dialogs, sheets, dropdowns, popovers, toasts — the only things that float.
 - **Hover-lift** (`box-shadow: 0 1px 2px rgb(15 23 42 / 0.06)`): the only rest-state shadow, for interactive cards on hover.
 
 **The Flat-By-Default Rule.** A card at rest has a border, not a shadow. Shadows are a
@@ -237,18 +279,23 @@ inputs, small cards), **12px** (lg — cards and panels), pill for status chips 
 ## Components
 
 ### Buttons
-- **Shape:** 8px radius, 40px height (36px `sm`, 44px touch on mobile primary), medium weight.
-- **Primary:** solid `var(--color-primary)` + primary-fg text; the one accent-colored element per view.
-- **Secondary:** surface bg + 1px border + ink text.
-- **Ghost:** transparent + ink/muted text; hover fills with surface-2.
-- **Hover/Focus:** subtle bg shift; focus-visible = 2px accent ring with 2px offset. Never remove focus.
-- **Destructive:** solid danger + danger-fg text (`#FFFFFF` on `#BE123C`; dark theme `#2B0A12` on `#FB7185`), only inside confirmation, not as a default row action.
+- **Shape:** 8px radius, medium weight; 40px (`sm` 32px, `lg` 44px), and **44px on touch** for every size (`pointer: coarse`).
+- **Primary** (`default`): `primary` fill + `primary-fg`, hover `primary-hover`. One per view.
+- **Secondary:** surface + 1px `border` + ink; hover `surface-sunken` with `border-input`.
+- **Outline / Ghost:** transparent; hover `surface-sunken`.
+- **Destructive:** solid `danger` + `danger-fg`, only inside a confirmation. **Destructive-ghost**
+  (`danger-text`, hover `danger-subtle`) is the row/menu form.
+- **Link:** `primary-text`, underline on hover.
+- **Focus:** 2px `primary-text` outline, 2px offset — the one focus ring of the product. Never removed.
 
 ### Inputs / Fields
-- **Style:** surface bg, 1px border, 8px radius, 40px height, ink text, muted placeholder (≥4.5:1).
-- **Focus:** border → accent + 2px accent ring (no glow).
-- **Error:** danger border + a message that names the problem and the fix.
-- **Disabled:** reduced opacity, no pointer.
+Built on `fieldClass` + `controlHeight` (`src/lib/ui/field-class.ts`) — the single recipe.
+- **Style:** surface bg, 1px **`border-input`** (≥ 3:1, so a field is findable), 8px radius,
+  40px (44px touch, 16px text), ink text, `faint` placeholder. Hover: border → `muted`.
+- **Focus:** border → `primary-text` + a 3px `primary/20` halo. No offset ring.
+- **Error:** `aria-invalid` → danger border (+ danger halo on focus) and an `InlineError`
+  that names the problem and the fix.
+- **Disabled:** `surface-sunken` fill, `border`, muted text — never opacity alone.
 
 ### Money Fields
 Every amount a person types goes through `<MoneyInput>` (`src/components/shared/money-input.tsx`)
@@ -285,8 +332,8 @@ A filter (e.g. Cartera's minimum balance) uses the same parser but no preview: n
 is saved.
 
 ### Cards / Containers
-- **Corner:** 12px. **Background:** surface. **Border:** 1px border token. **Shadow:** none at rest.
-- **Padding:** 24px (16px on mobile). No nested cards; use hairline sections inside instead.
+- **Corner:** 12px. **Background:** surface. **Border:** 1px `border`. **Shadow:** none at rest — ever.
+- **Padding:** 16px on phones, 24px from `sm`. No nested cards; use `border-subtle` sections inside.
 
 ### Chips / Badges
 - **Style:** pill, label type, tinted semantic bg + dark hue text (success/warning/danger),
