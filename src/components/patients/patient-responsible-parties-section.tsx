@@ -19,6 +19,8 @@ import { SectionError } from '@/components/errors/section-error';
 import { EmptyState } from '@/components/shared/empty-state';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { ResponsiblePartyDialog } from './responsible-party-dialog';
+import { SectionHeader } from '@/components/ui/section-header';
+import { DATA_SECTION_CLASS, DATA_SECTION_HEADER_CLASS } from './data-section';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the app.
 export const responsiblesCopy = {
@@ -161,9 +163,15 @@ export function PatientResponsiblePartiesSection({
     return (
       <div className="flex flex-col gap-4">
         {data.parties.length === 0 ? (
-          <EmptyState role="status" icon={<Users aria-hidden />} title={copy.emptyTitle} description={copy.emptyHint} />
+          <EmptyState
+            role="status"
+            size="inline"
+            icon={<Users aria-hidden />}
+            title={copy.emptyTitle}
+            description={copy.emptyHint}
+          />
         ) : (
-          <ul className="flex flex-col divide-y divide-hairline rounded-xl border border-border bg-surface">
+          <ul className="flex flex-col divide-y divide-border-subtle">
             {data.parties.map((party) => {
               const doc = partyDocument(party);
               const contactLine = [doc, party.email, party.phone].filter(Boolean).join(' · ');
@@ -171,7 +179,7 @@ export function PatientResponsiblePartiesSection({
                 <li
                   key={party.id}
                   data-testid="responsible-row"
-                  className="flex min-w-0 flex-col gap-3 px-4 py-3 sm:flex-row sm:items-start sm:justify-between"
+                  className="flex min-w-0 flex-col gap-3 py-3 first:pt-0 last:pb-0 sm:flex-row sm:items-start sm:justify-between"
                 >
                   <div className="flex min-w-0 flex-col gap-1">
                     <span className="flex min-w-0 flex-wrap items-center gap-2">
@@ -275,26 +283,28 @@ export function PatientResponsiblePartiesSection({
     <section
       aria-labelledby={`${ids}-heading`}
       data-testid="patient-responsibles"
-      className="flex min-w-0 flex-col gap-4 rounded-xl border border-border bg-surface p-4 sm:p-6"
+      className={DATA_SECTION_CLASS}
     >
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 id={`${ids}-heading`} className="text-base font-semibold text-ink">
-          {copy.heading}
-        </h3>
-        {data ? (
-          <Button
-            ref={addButtonRef}
-            type="button"
-            variant="secondary"
-            size="sm"
-            onClick={() => setDialog({ party: null })}
-            className="max-sm:h-11 max-sm:w-full"
-          >
-            <UserPlus aria-hidden />
-            {copy.add}
-          </Button>
-        ) : null}
-      </div>
+      <SectionHeader
+        as="h2"
+        titleId={`${ids}-heading`}
+        title={copy.heading}
+        className={DATA_SECTION_HEADER_CLASS}
+        actions={
+          data ? (
+            <Button
+              ref={addButtonRef}
+              type="button"
+              variant="secondary"
+              size="sm"
+              onClick={() => setDialog({ party: null })}
+            >
+              <UserPlus aria-hidden />
+              {copy.add}
+            </Button>
+          ) : undefined
+        }
+      />
       <p role="status" className={notice ? 'text-sm text-success-text' : 'sr-only'}>
         {notice}
       </p>

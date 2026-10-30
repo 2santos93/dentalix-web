@@ -33,6 +33,11 @@ interface AnamnesisLinkPanelProps {
   appointmentId?: string;
   /** Tras crearlo, p. ej. para releer el estado en la ficha. */
   onCreated?: (created: AnamnesisRequestCreated) => void;
+  /**
+   * Dentro de un diálogo que ya lleva el título («Anamnesis por enlace»): el
+   * `h3` repetiría el nombre del diálogo justo debajo.
+   */
+  hideHeading?: boolean;
 }
 
 /**
@@ -42,7 +47,13 @@ interface AnamnesisLinkPanelProps {
  * aquí: la API guarda su hash, así que al cerrar hay que generar otro (que
  * anula el anterior). Recepción también puede enviarlo.
  */
-export function AnamnesisLinkPanel({ token, patientId, appointmentId, onCreated }: AnamnesisLinkPanelProps) {
+export function AnamnesisLinkPanel({
+  token,
+  patientId,
+  appointmentId,
+  onCreated,
+  hideHeading = false,
+}: AnamnesisLinkPanelProps) {
   // DX-378: la caducidad, con la zona y el reloj de la sede.
   const sede = useSedeClock(token);
   const clock = sede.status === 'ready' ? sede.clock : null;
@@ -82,10 +93,16 @@ export function AnamnesisLinkPanel({ token, patientId, appointmentId, onCreated 
   }
 
   return (
-    <section aria-labelledby={`${ids}-heading`} className="flex flex-col gap-3">
-      <h3 id={`${ids}-heading`} className="text-sm font-semibold text-ink">
-        {copy.heading}
-      </h3>
+    <section
+      aria-labelledby={hideHeading ? undefined : `${ids}-heading`}
+      aria-label={hideHeading ? copy.heading : undefined}
+      className="flex flex-col gap-3"
+    >
+      {hideHeading ? null : (
+        <h3 id={`${ids}-heading`} className="text-sm font-semibold text-ink">
+          {copy.heading}
+        </h3>
+      )}
       <p className="text-sm text-muted">{copy.hint}</p>
       <Button
         type="button"

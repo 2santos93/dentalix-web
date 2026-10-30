@@ -279,9 +279,6 @@
     "select": 3,
     "textarea": 1
   },
-  "src/components/patients/patient-retention-section.tsx": {
-    "select": 1
-  },
   "src/components/patients/patients-view.tsx": {
     "select": 1
   },

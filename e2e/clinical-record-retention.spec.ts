@@ -36,6 +36,12 @@ function ddmmyyyy(isoDate: string): string {
   return `${d}/${m}/${y}`;
 }
 
+/** «Archivar paciente» está en el menú «⋯» («Más acciones») de la cabecera de la ficha. */
+async function openArchive(page: Page) {
+  await page.getByRole('button', { name: 'Más acciones' }).click();
+  await page.getByRole('menuitem', { name: 'Archivar paciente' }).click();
+}
+
 for (const viewport of VIEWPORTS) {
   test(`retención legal: badge, 409 en español al archivar y archivo sin atenciones (${viewport.name})`, async ({
     page,
@@ -87,7 +93,8 @@ for (const viewport of VIEWPORTS) {
     });
     await expectNoHorizontalScroll(page);
 
-    await section.getByRole('button', { name: 'Archivar paciente' }).click();
+    // Las acciones de ADMIN viven en el menú «⋯» de la cabecera (UX v2 · K3).
+    await openArchive(page);
     const dialog = page.getByRole('dialog', { name: 'Archivar paciente' });
     await expect(dialog).toBeVisible();
     await dialog.getByRole('button', { name: 'Archivar' }).click();
@@ -103,7 +110,7 @@ for (const viewport of VIEWPORTS) {
     await expect(
       section.getByText('Sin atenciones clínicas: sin retención legal'),
     ).toBeVisible({ timeout: 15_000 });
-    await section.getByRole('button', { name: 'Archivar paciente' }).click();
+    await openArchive(page);
     await page
       .getByRole('dialog', { name: 'Archivar paciente' })
       .getByRole('button', { name: 'Archivar' })
