@@ -439,10 +439,54 @@ that shares its fetch — those two look interchangeable and are not.
   scroll listener). A table that fits gets neither: no stray region, no dead tab stop.
 
 ### Navigation (App Shell)
-- **Left rail (md+):** surface, hairline right border; items = icon + label, 8px radius; active =
-  accent-tinted bg + accent text + ink weight; hover = surface-2. Wordmark top; user menu bottom.
-- **Mobile:** compact top bar with wordmark + user menu; primary section nav as a horizontal
-  scrollable row or bottom bar; primary actions stay thumb-reachable.
+Source of truth: `src/components/layouts/nav-config.ts` (groups, role gating, bottom-bar
+picks) and `app-shell.tsx`. Every entry's `roles` copies the API's `@Roles(...)` for the
+screen it opens; a group with no visible entries disappears.
+
+- **Information architecture.** Grouped by moment of work, not flat:
+  (no heading) Dashboard · Agenda · Pacientes — *Atención*: Presupuestos, Anamnesis (the
+  visible label is short; the accessible name and `title` stay «Anamnesis por revisar», with
+  its count) — *Finanzas*: Caja, Cartera, Gastos, Descuentos, Reportes — *Clínica*: Catálogo,
+  Inventario — *Administración*: Personal, Auditoría, Ajustes. New sections join a group;
+  they never become a sixth flat item.
+- **Brand.** The shell shows the **clinic's** brand (white-label): its logo, or an initials
+  tile (`primary-subtle` + `primary-subtle-text`) + name. «Dentalix» appears only when the
+  tenant has no name (the `Logo` SVG monogram, never an emoji). Public pages and paper use
+  `ClinicBrand` / `ClinicLogo` (`components/brand/clinic-brand.tsx`), never a hand-copied `<img>`.
+- **Desktop (≥1024px): grouped sidebar**, 240px, surface + right border, collapsible to a 64px
+  icon rail (preference remembered in `localStorage`). Group headings are `t-overline`
+  (muted, no tracking caps), 16px above each group; in the rail, a `border-subtle` rule
+  replaces the heading. Items: icon 16px + label, 36px min height, 6px radius, **never wrap**
+  (`whitespace-nowrap`, truncate). Active = `primary-subtle` bg + `primary-subtle-text`;
+  hover = `surface-sunken`. Header: brand + collapse control, then a search trigger showing
+  the shortcut (⌘K / Ctrl K). Footer: sede switcher above the account card; the role under the
+  name is `muted`, never the accent.
+- **Tablet (768–1023px):** the same sidebar, as the icon rail by default (names in
+  `aria-label` + `title`); it can be expanded for the moment without changing the desktop
+  preference.
+- **Phone (<768px):**
+  - *Top app bar* (56px + `env(safe-area-inset-top)`): clinic brand left, compact sede
+    switcher (icon-only under 380px), search button (opens the palette), account avatar. It
+    does **not** repeat the page title — the page's H1 is the title.
+  - *Bottom tab bar* (56px row inside a container padded with `env(safe-area-inset-bottom)`):
+    four role-based destinations + «Más», icon 20px + label always visible. ADMIN: Inicio,
+    Agenda, Pacientes, Caja. RECEPTION: Agenda, Pacientes, Presupuestos, Caja. Clinical roles:
+    Agenda, Pacientes, then Presupuestos → Anamnesis → Inventario → the next entry they can see.
+    Active tab = `primary-text` icon + label + a 2px indicator on top; «Más» takes the active
+    look when the current section lives in the sheet. The bar sits in the shell's flex column
+    (last row of a `100dvh` shell), so it never covers content and pages need no bottom
+    padding; it hides while the virtual keyboard is open (`visualViewport` heuristic).
+    Tabs are destinations, never actions (no centre «+»).
+  - *«Más» sheet*: bottom sheet, 75dvh, drag-handle look, grouped 48px rows (icon + label +
+    count) with the sections not in the bar, then *Cuenta*: Mi perfil, Tema oscuro (switch),
+    Cerrar sesión. The Android back button closes it (a history entry is pushed on open).
+- **Command palette** (⌘K / Ctrl+K anywhere; the sidebar trigger; the phone search button):
+  one input + grouped listbox — *Pacientes* (name or document, 200ms debounce, ≥2 chars),
+  *Ir a* (sections the role can open; settings screens while typing), *Acciones* (Nueva cita,
+  Nuevo paciente). Combobox/listbox ARIA with `aria-activedescendant`; arrows, Ctrl+Home/End,
+  Enter. Accent-insensitive matching. Full-screen on phones.
+- **System chrome:** `viewport-fit=cover` and a `theme-color` per scheme set to the canvas
+  token (light `#F7F9FC`, dark `#0B0F14`) — never the accent.
 
 ### Odontogram (signature)
 - FDI-numbered tooth map on a paper field; teeth are precise vector marks, 5 selectable surfaces

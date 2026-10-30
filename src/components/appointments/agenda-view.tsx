@@ -14,6 +14,7 @@ import { getLocationSchedule, type BusinessHours } from '@/lib/locations/schedul
 import { getRoster, type MinuteRangeDto, type Roster } from '@/lib/locations/provider-schedule-api';
 import { hiddenProviderIds, rosterDayOf } from '@/lib/locations/provider-schedule';
 import { getActiveLocationId } from '@/lib/locations/location-store';
+import { NEW_APPOINTMENT_EVENT, NEW_APPOINTMENT_PARAM } from '@/lib/ui/new-appointment';
 import type { ClinicLocation } from '@/lib/locations/locations-api';
 import { getTokenRole, getTokenUserId } from '@/lib/auth/token-role';
 import {
@@ -918,6 +919,26 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
     setDayPanelOpen(false);
     setShowForm(true);
   }
+
+  // A4: la paleta de comandos abre «Nueva cita» — con `?nueva=cita` si viene
+  // de otra pantalla, o con un evento si ya está en la Agenda. El parámetro se
+  // retira de la URL para que recargar no vuelva a abrir el formulario.
+  const openNewAppointmentRef = useRef(openNewAppointment);
+  useEffect(() => {
+    openNewAppointmentRef.current = openNewAppointment;
+  });
+  useEffect(() => {
+    const open = () => openNewAppointmentRef.current();
+    const params = new URLSearchParams(window.location.search);
+    if (params.get(NEW_APPOINTMENT_PARAM) === 'cita') {
+      params.delete(NEW_APPOINTMENT_PARAM);
+      const rest = params.toString();
+      window.history.replaceState(window.history.state, '', `${window.location.pathname}${rest ? `?${rest}` : ''}`);
+      open();
+    }
+    window.addEventListener(NEW_APPOINTMENT_EVENT, open);
+    return () => window.removeEventListener(NEW_APPOINTMENT_EVENT, open);
+  }, []);
 
   // The selected day's appointments, derived from the month's fetched set —
   // no extra request; the panel and the calendar share one source of truth.

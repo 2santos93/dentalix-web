@@ -1,6 +1,7 @@
 import * as React from 'react';
 import type { PostOpDeliveryDocument } from '@/lib/postop/postop-api';
 import { formatDate } from '@/lib/format/date';
+import { ClinicLogo } from '@/components/brand/clinic-brand';
 
 const copy = {
   phone: (phone: string) => `Tel. ${phone}`,
@@ -30,15 +31,7 @@ export function PostOpDocument({ delivery }: PostOpDocumentProps) {
         data-testid="postop-header"
         className="flex items-center gap-3 border-b border-[#d1d5db] pb-4"
       >
-        {clinic.logoUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element -- logo del tenant con host arbitrario, para imprimir; next/image no aporta nada aquí
-          <img
-            src={clinic.logoUrl}
-            alt={clinic.name}
-            referrerPolicy="no-referrer"
-            className="h-12 w-auto max-w-[160px] object-contain"
-          />
-        ) : null}
+        {clinic.logoUrl ? <ClinicLogo src={clinic.logoUrl} alt={clinic.name} variant="paper" /> : null}
         <div className="min-w-0">
           <p className="break-words text-base font-semibold">{clinic.name}</p>
           <p className="break-words text-sm text-[#4b5563]">

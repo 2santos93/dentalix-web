@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import * as DropdownMenuPrimitive from '@radix-ui/react-dropdown-menu';
@@ -38,6 +38,30 @@ async function revokeSession(): Promise<void> {
   } finally {
     clearTimeout(timer);
   }
+}
+
+/**
+ * Cerrar sesión (compartido por el menú de cuenta y la hoja «Más» del
+ * móvil): revoca primero el refresh token en la API (DX-061, FE-003) —en un
+ * ordenador compartido de recepción, un refresh copiado antes del logout no
+ * debe seguir sirviendo— y solo después limpia el store y va a /login, pase
+ * lo que pase con la llamada.
+ */
+export function useLogout(): { loggingOut: boolean; logout: () => Promise<void> } {
+  const router = useRouter();
+  const [loggingOut, setLoggingOut] = useState(false);
+  const logoutRef = useRef(false);
+  const doLogout = useCallback(async () => {
+    if (logoutRef.current) return;
+    logoutRef.current = true;
+    setLoggingOut(true);
+    // La cookie es HttpOnly: desde aquí no se sabe si existe, así que siempre
+    // se pide el logout (sin cookie, la API responde 204 igual).
+    await revokeSession();
+    useAuthStore.getState().clear();
+    router.push('/login');
+  }, [router]);
+  return { loggingOut, logout: doLogout };
 }
 
 const copy = {
@@ -147,13 +171,12 @@ export function UserMenu({
 }: {
   variant?: 'card' | 'compact' | 'rail';
 }) {
-  const router = useRouter();
   const accessToken = useAuthStore((s) => s.accessToken);
+  const { loggingOut, logout: handleLogout } = useLogout();
   const [name, setName] = useState<string | null>(null);
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [role, setRole] = useState<ClinicRole | null>(null);
   const [open, setOpen] = useState(false);
-  const [loggingOut, setLoggingOut] = useState(false);
 
   useEffect(() => {
     if (!accessToken) return;
@@ -174,20 +197,6 @@ export function UserMenu({
   }, [accessToken]);
 
   if (!accessToken) return null;
-
-  // Cerrar sesión revoca primero el refresh token en la API (DX-061, FE-003):
-  // en un ordenador compartido de recepción, un refresh copiado antes del
-  // logout no debe seguir sirviendo. Solo después se limpia el store y se
-  // redirige, pase lo que pase con la llamada.
-  async function handleLogout() {
-    if (loggingOut) return;
-    setLoggingOut(true);
-    // La cookie es HttpOnly: desde aquí no se sabe si existe, así que siempre
-    // se pide el logout (sin cookie, la API responde 204 igual).
-    await revokeSession();
-    useAuthStore.getState().clear();
-    router.push('/login');
-  }
 
   const roleLabel = role ? (ROLE_LABEL[role] ?? role) : null;
 
@@ -293,7 +302,7 @@ export function UserMenu({
           type="button"
           className={cn(
             'flex w-full items-center gap-3 rounded-lg border px-3 py-2 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
-            open ? 'border-primary bg-primary/5' : 'border-border hover:bg-bg',
+            open ? 'border-primary-border bg-primary-subtle' : 'border-border hover:bg-surface-sunken',
           )}
         >
           {avatar('size-9')}
@@ -301,7 +310,7 @@ export function UserMenu({
             <span className="block truncate text-sm font-semibold text-ink">
               {name ?? copy.account}
             </span>
-            {roleLabel && <span className="block truncate text-xs text-primary">{roleLabel}</span>}
+            {roleLabel && <span className="block truncate text-xs text-muted">{roleLabel}</span>}
           </span>
           <ChevronUp
             aria-hidden

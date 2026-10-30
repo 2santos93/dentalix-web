@@ -7,6 +7,7 @@ import {
   CardTitle,
   CardDescription,
 } from '@/components/ui/card';
+import { Logo } from '@/components/ui/logo';
 
 interface AuthLayoutProps {
   title: string;
@@ -29,15 +30,7 @@ export function AuthLayout({ title, subtitle, children, footer }: AuthLayoutProp
         className="pointer-events-none absolute inset-0 -z-10 bg-gradient-to-b from-primary/10 via-transparent to-transparent"
       />
       <div className="mb-6 flex w-full max-w-sm items-center justify-between">
-        <span className="flex items-center gap-2 text-sm font-semibold text-ink">
-          <span
-            aria-hidden
-            className="flex size-8 items-center justify-center rounded-lg bg-primary/10 text-base"
-          >
-            🦷
-          </span>
-          Dentalix
-        </span>
+        <Logo size={28} withWordmark className="text-sm" />
         <ThemeToggle />
       </div>
 

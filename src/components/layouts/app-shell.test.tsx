@@ -2,6 +2,7 @@ import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { AppShell } from './app-shell';
 import { getInClinic } from '@/lib/appointments/patient-flow';
+import { BrandingProvider } from '@/components/brand/branding-context';
 
 let mockPathname = '/patients';
 jest.mock('next/navigation', () => ({
@@ -239,63 +240,229 @@ describe('AppShell', () => {
     expect(sidebar.queryByText('Dentalix')).not.toBeInTheDocument();
   });
 
-  // DX-365: a 390 px el scroller de la barra superior cortaba «Dashboard» en
-  // «Dashboar». La barra móvil se reorganiza: el título de la sección va en su
-  // propia fila y se trunca con elipsis (texto entero en el DOM y en `title`),
-  // y la navegación es una fila de iconos que no puede partir una palabra.
-  describe('DX-365: barra superior móvil', () => {
-    function renderAt(pathname: string, role = 'ADMIN') {
+  // A4: barra lateral agrupada (SPEC «Navegación»). Los títulos de grupo y
+  // las entradas por rol; un grupo sin entradas desaparece.
+  describe('A4: barra lateral agrupada', () => {
+    function sidebarFor(role: string) {
       mockAccessToken = tokenForRole(role);
-      mockPathname = pathname;
       render(
         <AppShell>
           <p>contenido</p>
         </AppShell>,
       );
-      return within(screen.getByRole('banner'));
+      return within(document.querySelector('aside > nav') as HTMLElement);
     }
-    afterEach(() => {
-      mockPathname = '/patients';
+    const groupsOf = (nav: ReturnType<typeof sidebarFor>) =>
+      nav.getAllByRole('group').map((g) => [
+        g.getAttribute('aria-label'),
+        within(g).getAllByRole('link').map((a) => a.getAttribute('href')),
+      ]);
+
+    it('ADMIN ve los cinco grupos en el orden de la SPEC, con Ajustes en Administración', async () => {
+      const nav = sidebarFor('ADMIN');
+      await nav.findByRole('link', { name: 'Dashboard' });
+      expect(groupsOf(nav)).toEqual([
+        [null, ['/dashboard', '/agenda', '/patients']],
+        ['Atención', ['/presupuestos', '/anamnesis-por-revisar']],
+        ['Finanzas', ['/caja', '/caja/cartera', '/caja/gastos', '/caja/descuentos', '/reportes']],
+        ['Clínica', ['/catalog', '/inventory']],
+        ['Administración', ['/staff', '/settings/auditoria', '/settings']],
+      ]);
+      // Títulos de grupo con el estilo overline; el primero no lleva.
+      expect(nav.getByText('Finanzas')).toHaveClass('t-overline');
     });
+
+    it('RECEPTION: sin Clínica; Administración solo con Ajustes', async () => {
+      const nav = sidebarFor('RECEPTION');
+      await nav.findByRole('link', { name: 'Caja' });
+      expect(groupsOf(nav)).toEqual([
+        [null, ['/agenda', '/patients']],
+        ['Atención', ['/presupuestos']],
+        ['Finanzas', ['/caja', '/caja/cartera']],
+        ['Administración', ['/settings']],
+      ]);
+      expect(nav.queryByText('Clínica')).not.toBeInTheDocument();
+    });
+
+    it('DENTIST: sin Finanzas', async () => {
+      const nav = sidebarFor('DENTIST');
+      await nav.findByRole('link', { name: 'Catálogo' });
+      expect(groupsOf(nav).map(([label]) => label)).toEqual([null, 'Atención', 'Clínica', 'Administración']);
+      expect(nav.queryByText('Finanzas')).not.toBeInTheDocument();
+    });
+
+    it('«Anamnesis» se lee corta pero conserva el nombre completo', async () => {
+      const nav = sidebarFor('ADMIN');
+      const link = await nav.findByRole('link', { name: 'Anamnesis por revisar' });
+      expect(link).toHaveTextContent(/^Anamnesis$/);
+      expect(link).toHaveAttribute('title', 'Anamnesis por revisar');
+    });
+
+    it('activo con los tokens v2 y el rol bajo el nombre en gris, no en acento', async () => {
+      mockPathname = '/caja';
+      try {
+        const nav = sidebarFor('ADMIN');
+        const caja = await nav.findByRole('link', { name: 'Caja' });
+        expect(caja).toHaveClass('bg-primary-subtle', 'text-primary-subtle-text', 'whitespace-nowrap');
+        expect(nav.getByRole('link', { name: 'Cartera' })).toHaveClass('hover:bg-surface-sunken');
+        expect(await screen.findByText('Administrador/a')).toHaveClass('text-muted');
+      } finally {
+        mockPathname = '/patients';
+      }
+    });
+  });
+
+  // A4: barra inferior del teléfono — 4 destinos según el rol + «Más».
+  describe('A4: barra inferior del teléfono', () => {
+    async function tabsFor(role: string) {
+      mockAccessToken = tokenForRole(role);
+      render(
+        <AppShell>
+          <p>contenido</p>
+        </AppShell>,
+      );
+      const bar = within(screen.getByTestId('bottom-tab-bar'));
+      await waitFor(() => expect(bar.getAllByRole('link')).toHaveLength(4));
+      return bar;
+    }
 
     it.each([
-      ['/dashboard', 'Dashboard'],
-      ['/patients/p1', 'Pacientes'],
-      ['/caja/cartera', 'Cartera'],
-      ['/anamnesis-por-revisar', 'Anamnesis por revisar'],
-      ['/reportes', 'Reportes'],
-      ['/settings', 'Ajustes'],
-      ['/settings/plantillas-de-evolucion', 'Ajustes'],
-      ['/settings/auditoria', 'Auditoría'],
-      ['/settings/profile', 'Mi perfil'],
-    ])('en %s el título es «%s», truncable con elipsis y con `title`', async (pathname, title) => {
-      const banner = renderAt(pathname);
-      const heading = await banner.findByTestId('topbar-title');
-      expect(heading).toHaveTextContent(title);
-      expect(heading).toHaveAttribute('title', title);
-      // `truncate` = overflow hidden + text-overflow ellipsis + nowrap; con
-      // `min-w-0` el flex le deja encogerse por debajo de su texto.
-      expect(heading).toHaveClass('truncate', 'min-w-0');
-      // El texto entero se lee una sola vez: ni copia sr-only ni aria-label.
-      expect(heading).not.toHaveAttribute('aria-label');
-      expect(banner.getAllByText(title)).toHaveLength(1);
+      ['ADMIN', ['Inicio', 'Agenda', 'Pacientes', 'Caja']],
+      ['RECEPTION', ['Agenda', 'Pacientes', 'Presupuestos', 'Caja']],
+      // Presupuestos no es suyo: entra Anamnesis; Inventario tampoco: el
+      // siguiente que sí ve del menú, Catálogo.
+      ['DENTIST', ['Agenda', 'Pacientes', 'Anamnesis por revisar', 'Catálogo']],
+      ['ASSISTANT', ['Agenda', 'Pacientes', 'Anamnesis por revisar', 'Inventario']],
+    ])('%s: %j y «Más»', async (role, names) => {
+      const bar = await tabsFor(role);
+      expect(bar.getAllByRole('link').map((a) => a.getAttribute('aria-label') ?? a.textContent)).toEqual(names);
+      expect(bar.getByRole('button', { name: 'Más' })).toBeInTheDocument();
     });
 
-    it('el título sale del menú aunque el rol no tenga la entrada', async () => {
-      const banner = renderAt('/dashboard', 'DENTIST');
-      expect(await banner.findByTestId('topbar-title')).toHaveTextContent('Dashboard');
-    });
-
-    it('la navegación móvil es de iconos con nombre accesible y `title`, sin texto que cortar', async () => {
-      const banner = renderAt('/caja/cartera');
-      const nav = within(banner.getByRole('navigation'));
-      const cartera = await nav.findByRole('link', { name: 'Cartera' });
-      expect(cartera).toHaveAttribute('aria-current', 'page');
-      for (const name of ['Dashboard', 'Pacientes', 'Cartera', 'Anamnesis por revisar']) {
-        const link = nav.getByRole('link', { name });
-        expect(link).toHaveAttribute('title', name);
-        expect(nav.queryByText(name)).not.toBeInTheDocument();
+    it('si la sección actual vive en «Más», ninguna pestaña es la página y «Más» se marca', async () => {
+      mockPathname = '/caja/cartera';
+      try {
+        const bar = await tabsFor('RECEPTION');
+        bar.getAllByRole('link').forEach((a) => expect(a).not.toHaveAttribute('aria-current'));
+        expect(bar.getByRole('button', { name: 'Más' })).toHaveClass('text-primary-text');
+      } finally {
+        mockPathname = '/patients';
       }
+    });
+
+    it('la pestaña de la sección actual es la página', async () => {
+      const bar = await tabsFor('RECEPTION');
+      expect(bar.getByRole('link', { name: 'Pacientes' })).toHaveAttribute('aria-current', 'page');
+    });
+
+    it('«Más» abre la hoja con el resto, Ajustes, Mi perfil, tema y Cerrar sesión; atrás la cierra', async () => {
+      const user = userEvent.setup();
+      const bar = await tabsFor('ADMIN');
+      await user.click(bar.getByRole('button', { name: 'Más' }));
+      const sheet = within(await screen.findByTestId('more-sheet'));
+      for (const name of ['Presupuestos', 'Anamnesis por revisar', 'Cartera', 'Reportes', 'Inventario', 'Personal', 'Ajustes', 'Mi perfil']) {
+        expect(sheet.getByRole('link', { name })).toBeInTheDocument();
+      }
+      // Lo que ya está en la barra no se repite.
+      expect(sheet.queryByRole('link', { name: 'Agenda' })).not.toBeInTheDocument();
+      expect(sheet.getByRole('switch', { name: 'Tema oscuro' })).toBeInTheDocument();
+      expect(sheet.getByRole('button', { name: 'Cerrar sesión' })).toBeInTheDocument();
+      // Android «atrás»: la hoja apiló una entrada; el popstate la cierra.
+      window.dispatchEvent(new PopStateEvent('popstate'));
+      await waitFor(() => expect(screen.queryByTestId('more-sheet')).not.toBeInTheDocument());
+    });
+
+    it('la barra superior lleva la marca, la búsqueda y la cuenta, no el título', async () => {
+      mockAccessToken = tokenForRole('ADMIN');
+      render(
+        <AppShell>
+          <p>contenido</p>
+        </AppShell>,
+      );
+      const banner = within(screen.getByRole('banner'));
+      expect(banner.getByRole('button', { name: 'Buscar' })).toBeInTheDocument();
+      expect(banner.getByRole('button', { name: 'Cuenta' })).toBeInTheDocument();
+      // Sin marca de la clínica (sin provider), la de Dentalix.
+      expect(banner.getByText('Dentalix')).toBeInTheDocument();
+      expect(banner.queryByTestId('topbar-title')).not.toBeInTheDocument();
+    });
+  });
+
+  it('A4: con marca de la clínica, el shell enseña la clínica y no «Dentalix»', async () => {
+    mockAccessToken = tokenForRole('ADMIN');
+    render(
+      <BrandingProvider value={{ name: 'Clínica Sonrisa Norte', logoUrl: null }}>
+        <AppShell>
+          <p>contenido</p>
+        </AppShell>
+      </BrandingProvider>,
+    );
+    expect(within(screen.getByRole('banner')).getByText('Clínica Sonrisa Norte')).toBeInTheDocument();
+    expect(screen.queryByText('Dentalix')).not.toBeInTheDocument();
+  });
+
+  // A4: paleta de comandos.
+  describe('A4: paleta de comandos', () => {
+    it.each([
+      ['ADMIN', ['Dashboard', 'Caja', 'Personal', 'Ajustes'], [] as string[]],
+      ['RECEPTION', ['Agenda', 'Caja', 'Presupuestos', 'Ajustes'], ['Dashboard', 'Personal', 'Inventario', 'Auditoría']],
+    ])('%s: ⌘K la abre y «Ir a» solo lista lo que su rol puede abrir', async (role, visible, hidden) => {
+      const user = userEvent.setup();
+      mockAccessToken = tokenForRole(role);
+      render(
+        <AppShell>
+          <p>contenido</p>
+        </AppShell>,
+      );
+      expect(await screen.findAllByRole('link', { name: 'Caja' })).not.toHaveLength(0);
+      await user.keyboard('{Meta>}k{/Meta}');
+      const palette = within(await screen.findByTestId('command-palette'));
+      const input = palette.getByRole('combobox', { name: 'Buscar' });
+      expect(input).toHaveFocus();
+      const goTo = palette.getByRole('group', { name: 'Ir a' });
+      for (const name of visible) expect(within(goTo).getByRole('option', { name })).toBeInTheDocument();
+      for (const name of hidden) expect(within(goTo).queryByRole('option', { name })).not.toBeInTheDocument();
+      expect(palette.getByRole('option', { name: 'Nueva cita' })).toBeInTheDocument();
+      expect(palette.getByRole('option', { name: 'Nuevo paciente' })).toBeInTheDocument();
+    });
+
+    it('Ctrl+K también; las flechas mueven la opción activa y el texto filtra sin tildes', async () => {
+      const user = userEvent.setup();
+      mockAccessToken = tokenForRole('ADMIN');
+      render(
+        <AppShell>
+          <p>contenido</p>
+        </AppShell>,
+      );
+      await screen.findAllByRole('link', { name: 'Dashboard' });
+      await user.keyboard('{Control>}k{/Control}');
+      const palette = within(await screen.findByTestId('command-palette'));
+      const input = palette.getByRole('combobox');
+      const options = palette.getAllByRole('option');
+      expect(input).toHaveAttribute('aria-activedescendant', options[0].id);
+      expect(options[0]).toHaveAttribute('aria-selected', 'true');
+      await user.keyboard('{ArrowDown}');
+      expect(input).toHaveAttribute('aria-activedescendant', options[1].id);
+      await user.keyboard('{ArrowUp}{ArrowUp}');
+      expect(input).toHaveAttribute('aria-activedescendant', options.at(-1)!.id);
+      await user.type(input, 'auditoria');
+      expect(palette.getByRole('option', { name: /Auditoría/ })).toBeInTheDocument();
+      expect(palette.queryByRole('option', { name: 'Caja' })).not.toBeInTheDocument();
+    });
+
+    it('el botón de búsqueda de la barra lateral la abre', async () => {
+      const user = userEvent.setup();
+      render(
+        <AppShell>
+          <p>contenido</p>
+        </AppShell>,
+      );
+      const aside = within(document.querySelector('aside') as HTMLElement);
+      await user.click(aside.getByRole('button', { name: 'Buscar' }));
+      expect(await screen.findByTestId('command-palette')).toBeInTheDocument();
+      // Esc la cierra aunque el foco esté en el combobox expandido.
+      await user.keyboard('{Escape}');
+      await waitFor(() => expect(screen.queryByTestId('command-palette')).not.toBeInTheDocument());
     });
   });
 

@@ -37,7 +37,9 @@ const fieldClass =
  * - `variant="block"`: fila a lo ancho para el pie del sidebar (desktop), justo
  *   encima de la tarjeta de cuenta.
  * - `variant="rail"`: botón cuadrado de icono para el sidebar colapsado.
- * - `variant="inline"`: compacto, para el topbar móvil (donde no hay sidebar).
+ * - `variant="inline"`: en línea, con el nombre entero hasta 12rem.
+ * - `variant="compact"`: barra superior del teléfono (A4): hasta 8.5rem, para
+ *   dejar sitio a la marca, la búsqueda y la cuenta.
  *
  * Con sedes acotadas (claim `loc` del token, DX-089) solo se ofrecen las
  * permitidas y nunca «Todas las sedes»: con varias, la opción vacía pasa a ser
@@ -51,7 +53,7 @@ const fieldClass =
 export function LocationSwitcher({
   variant = 'inline',
 }: {
-  variant?: 'inline' | 'block' | 'rail';
+  variant?: 'inline' | 'block' | 'rail' | 'compact';
 }) {
   const token = useAuthStore((s) => s.accessToken);
   const requestLocations = useSessionLocations(token);
@@ -202,7 +204,9 @@ export function LocationSwitcher({
         onChange={(e) => handleChange(e.target.value)}
         className={cn(
           fieldClass,
-          variant === 'block' ? 'h-10 w-full' : 'max-w-[12rem]',
+          variant === 'block' && 'h-10 w-full',
+          variant === 'inline' && 'max-w-[12rem]',
+          variant === 'compact' && 'h-10 max-w-[8.5rem]',
         )}
       >
         {options}

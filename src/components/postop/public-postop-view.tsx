@@ -6,6 +6,7 @@ import { getPublicPostOp, markPublicPostOpOpened, type PublicPostOp } from '@/li
 import { PublicNotice as Notice, publicBrandStyle } from '@/components/shared/public-page';
 import { Skeleton } from '@/components/ui/skeleton';
 import { SectionError } from '@/components/errors/section-error';
+import { ClinicBrand } from '@/components/brand/clinic-brand';
 
 const copy = {
   loading: 'Cargando tus indicaciones…',
@@ -104,20 +105,7 @@ export function PublicPostOpView({ linkToken }: { linkToken: string }) {
 
         {state.kind === 'ready' && (
           <>
-            <header className="flex items-center gap-3">
-              {clinic?.logoUrl && (
-                // eslint-disable-next-line @next/next/no-img-element -- logo de la clínica en un host arbitrario; next/image exigiría whitelistear cada dominio
-                <img
-                  src={clinic.logoUrl}
-                  alt=""
-                  referrerPolicy="no-referrer"
-                  className="size-10 shrink-0 rounded-lg object-contain"
-                />
-              )}
-              <h1 className="min-w-0 break-words text-xl font-semibold tracking-tight text-ink">
-                {clinic?.name ?? copy.fallbackClinic}
-              </h1>
-            </header>
+            <ClinicBrand variant="public" name={clinic?.name ?? copy.fallbackClinic} logoUrl={clinic?.logoUrl} />
 
             <article
               aria-labelledby="postop-title"

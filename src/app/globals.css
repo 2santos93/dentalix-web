@@ -249,6 +249,10 @@
       animation: sheet-right-in 220ms cubic-bezier(0.16, 1, 0.3, 1);
     }
   }
+  /* Hoja que siempre sale de abajo (la «Más» del shell): gana al cajón de sm+. */
+  .sheet-content.sheet-bottom[data-state='open'] {
+    animation: sheet-bottom-in 220ms cubic-bezier(0.16, 1, 0.3, 1);
+  }
 
   /* Menú de acciones de fila. Nace desde el borde que lo ancla —Radix expone
    * ese borde en `data-side`— así que parece salir del botón de los tres
