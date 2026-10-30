@@ -11510,7 +11510,10 @@ export interface components {
             /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             method: components["schemas"]["PaymentMethod"] | null;
-            /** @example PRI-000012 */
+            /**
+             * @description Número del recibo del abono; una forma de pago de un cobro dividido lleva el del recibo único del cobro (DX-390). `null` si el abono es anterior a la numeración.
+             * @example PRI-000012
+             */
             receiptNumber: string | null;
             patient: components["schemas"]["CashPatientRefDto"];
             createdBy: components["schemas"]["CashStaffRefDto"] | null;
@@ -11529,7 +11532,10 @@ export interface components {
             /** @description Código ISO 4217 de 3 letras. */
             currency: string;
             method: components["schemas"]["PaymentMethod"] | null;
-            /** @example PRI-000012 */
+            /**
+             * @description Número del recibo del abono; una forma de pago de un cobro dividido lleva el del recibo único del cobro (DX-390). `null` si el abono es anterior a la numeración.
+             * @example PRI-000012
+             */
             receiptNumber: string | null;
             patient: components["schemas"]["CashPatientRefDto"];
             createdBy: components["schemas"]["CashStaffRefDto"] | null;
@@ -11593,6 +11599,7 @@ export interface components {
             patient: components["schemas"]["CashPatientRefDto"];
             /** @example 2026-10-16 */
             paidOn: string;
+            /** @description Número del recibo del abono; una forma de pago de un cobro dividido lleva el del recibo único del cobro (DX-390). `null` si el abono es anterior a la numeración. */
             receiptNumber: string | null;
         };
         CashAdjustmentExpensePaymentDto: {
@@ -22023,7 +22030,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Plan rechazado o cancelado (DX-109). `code: PAYMENT_REFERENCE_DUPLICATE` con `line` (desde 0) si la referencia de una línea ya está en otro abono vivo de ±90 días: se confirma con su `duplicateReferenceReason`. `code: SPLIT_PAYMENT_EXCEEDS_BALANCE` (con `total`, `pending` y `currency`, la del plan) si el total supera lo pendiente: se confirma con `confirmCreditBalance`. `code: SPLIT_PAYMENT_BALANCE_CHANGED` si, sin esa confirmación, otro abono entró al plan mientras se registraba el cobro: no se registra nada y se repite la petición (misma clave). Sin caja abierta, si la clínica la exige para el efectivo (DX-027). */
+            /** @description Plan rechazado o cancelado (DX-109). `code: PAYMENT_REFERENCE_DUPLICATE` con `line` (desde 0) si la referencia de una línea ya está en otro abono vivo de ±90 días: se confirma con su `duplicateReferenceReason`. `code: SPLIT_PAYMENT_EXCEEDS_BALANCE` (con `total`, `pending` —nunca bajo 0—, `excess` —lo que este cobro supera lo pendiente— y `currency`, la del plan) si el total supera lo pendiente: se confirma con `confirmCreditBalance`. `code: SPLIT_PAYMENT_BALANCE_CHANGED` si, sin esa confirmación, otro abono entró al plan mientras se registraba el cobro: no se registra nada y se repite la petición (misma clave). Sin caja abierta, si la clínica la exige para el efectivo (DX-027). */
             409: {
                 headers: {
                     [name: string]: unknown;
