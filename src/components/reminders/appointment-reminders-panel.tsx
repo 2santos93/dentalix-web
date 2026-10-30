@@ -1,7 +1,8 @@
 'use client';
 import { useEffect, useId, useState } from 'react';
 import { apiErrorMessage } from '@/lib/api/error-message';
-import { formatDate, formatTime } from '@/lib/format/date';
+import { NO_SEDE_FORMAT } from '@/lib/format/sede-number';
+import type { SedeClock } from '@/lib/locations/sede-clock';
 import {
   getAppointmentReminders,
   leadHoursLabel,
@@ -40,9 +41,12 @@ const copy = {
   },
 };
 
-/** `dd/mm HH:mm` en la hora del dispositivo, como la agenda. */
-function shortDateTime(iso: string | null): string {
-  return iso ? `${formatDate(iso).slice(0, 5)} ${formatTime(iso)}` : '';
+/** Día, mes y hora con el reloj de la sede de la cita, como la agenda (DX-378); «—» sin él. */
+function shortDateTime(iso: string | null, clock: SedeClock | null): string {
+  if (!iso) return '';
+  if (!clock) return NO_SEDE_FORMAT;
+  const instant = new Date(iso);
+  return `${clock.fmt.dayMonth(instant, clock.timeZone)} ${clock.fmt.time(instant, clock.timeZone)}`;
 }
 
 const BADGE: Record<AppointmentReminderItem['state'], BadgeProps['variant']> = {
@@ -54,12 +58,12 @@ const BADGE: Record<AppointmentReminderItem['state'], BadgeProps['variant']> = {
   MISSED: 'muted',
 };
 
-function stateLabel(item: AppointmentReminderItem): string {
+function stateLabel(item: AppointmentReminderItem, clock: SedeClock | null): string {
   switch (item.state) {
     case 'FAILED':
       return copy.failed;
     case 'SENT':
-      return copy.sent(shortDateTime(item.sentAt));
+      return copy.sent(shortDateTime(item.sentAt, clock));
     case 'PENDING':
       return copy.pending;
     case 'SENDING':
@@ -71,9 +75,9 @@ function stateLabel(item: AppointmentReminderItem): string {
   }
 }
 
-function detail(item: AppointmentReminderItem): string | null {
+function detail(item: AppointmentReminderItem, clock: SedeClock | null): string | null {
   if (item.state === 'FAILED') return copy.failedHint;
-  if (item.state === 'PENDING') return copy.pendingAt(shortDateTime(item.dueAt));
+  if (item.state === 'PENDING') return copy.pendingAt(shortDateTime(item.dueAt, clock));
   if (item.state === 'MISSED') return copy.missedHint;
   if (item.state === 'SENT' && item.emailDelivery) return copy.delivery[item.emailDelivery];
   return null;
@@ -82,6 +86,8 @@ function detail(item: AppointmentReminderItem): string | null {
 interface AppointmentRemindersPanelProps {
   token: string;
   appointmentId: string;
+  /** DX-378: reloj de la sede de la cita. */
+  clock: SedeClock | null;
 }
 
 /**
@@ -91,7 +97,7 @@ interface AppointmentRemindersPanelProps {
  * con una `key` por cita, hora y estado: así se relee tras reprogramarla o
  * cancelarla.
  */
-export function AppointmentRemindersPanel({ token, appointmentId }: AppointmentRemindersPanelProps) {
+export function AppointmentRemindersPanel({ token, appointmentId, clock }: AppointmentRemindersPanelProps) {
   const ids = useId();
   const [data, setData] = useState<AppointmentReminders | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -148,7 +154,7 @@ export function AppointmentRemindersPanel({ token, appointmentId }: AppointmentR
       <>
         <ul aria-label={copy.listLabel} className="flex flex-col divide-y divide-hairline">
           {data.items.map((item) => {
-            const extra = detail(item);
+            const extra = detail(item, clock);
             return (
               <li
                 key={`${item.appointmentStart}-${item.leadHours}`}
@@ -156,7 +162,7 @@ export function AppointmentRemindersPanel({ token, appointmentId }: AppointmentR
               >
                 <div className="flex flex-wrap items-center gap-x-2 gap-y-1">
                   <Badge variant={item.emailDelivery === 'FAILED' ? 'danger' : BADGE[item.state]}>
-                    {stateLabel(item)}
+                    {stateLabel(item, clock)}
                   </Badge>
                   <span className="text-sm tabular-nums text-ink">{leadHoursLabel(item.leadHours)}</span>
                 </div>

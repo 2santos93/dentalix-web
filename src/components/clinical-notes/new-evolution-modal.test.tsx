@@ -6,6 +6,10 @@ import { createClinicalEntry } from '@/lib/patients/clinical-api';
 import { prophylaxisTemplate, resinTemplate } from './fixtures';
 import { searchIcd10 } from '@/lib/reference/icd10-api';
 
+// DX-378: el día de la cita sale con la zona y el formato de la sede (Caracas, es-VE).
+jest.mock('../../lib/locations/locations-api', () => ({
+  listLocations: jest.fn(() => Promise.resolve([jest.requireActual('../../lib/test/sede-clock').caracasSede()])),
+}));
 jest.mock('../../lib/clinical-notes/note-templates-api', () => ({
   ...jest.requireActual('../../lib/clinical-notes/note-templates-api'),
   listNoteTemplates: jest.fn(),
@@ -182,7 +186,7 @@ describe('NewEvolutionModal (DX-170)', () => {
     expect(
       screen.getByRole('dialog', { name: /registrar evolución/i }),
     ).toBeInTheDocument();
-    expect(screen.getByText('Cita del 07/10 · Dra. Ríos')).toBeInTheDocument();
+    expect(await screen.findByText('Cita del 7/10 · Dra. Ríos')).toBeInTheDocument();
     expect(screen.queryByLabelText(/fecha de atención/i)).toBeNull();
     await screen.findByRole('radio', { name: /resina/i });
     await user.type(screen.getByLabelText(/texto de la evolución/i), 'Control sin novedad');

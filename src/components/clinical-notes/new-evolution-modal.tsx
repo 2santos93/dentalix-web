@@ -15,6 +15,7 @@ import {
   type PromptAnswer,
 } from '@/lib/clinical-notes/compose';
 import { appointmentLine } from '@/lib/clinical-notes/appointment-line';
+import { useSedeClock } from '@/lib/locations/sede-clock';
 import { FormModal } from '@/components/shared/form-modal';
 import { FormField } from '@/components/shared/form-field';
 import { FieldError } from '@/components/errors/field-error';
@@ -101,6 +102,9 @@ export function NewEvolutionModal({
   appointment,
   onCreated,
 }: NewEvolutionModalProps) {
+  // DX-378: el día de la cita, en la zona y con el formato de la sede.
+  const sede = useSedeClock(token);
+  const clock = sede.status === 'ready' ? sede.clock : null;
   const [templates, setTemplates] = useState<NoteTemplate[] | null>(null);
   const [templatesFailed, setTemplatesFailed] = useState(false);
   const [templatesReloadKey, setTemplatesReloadKey] = useState(0);
@@ -213,7 +217,7 @@ export function NewEvolutionModal({
         <p className="flex items-center gap-2 rounded-lg bg-surface-2 px-3 py-2 text-sm text-ink">
           <CalendarCheck aria-hidden className="size-4 shrink-0 text-muted" />
           <span className="tabular-nums">
-            {appointmentLine(appointment.start, appointment.providerName)}
+            {appointmentLine(appointment.start, appointment.providerName, clock)}
           </span>
         </p>
       ) : null}

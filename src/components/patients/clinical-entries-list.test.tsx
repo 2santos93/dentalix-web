@@ -10,6 +10,10 @@ import { listStaff } from '@/lib/staff/staff-api';
 
 // NOTE: jest.mock's string literal is not alias-rewritten by the SWC
 // transform — use a relative path (same convention as the other tests).
+// DX-378: el día de la cita sale con la zona y el formato de la sede (Caracas, es-VE).
+jest.mock('../../lib/locations/locations-api', () => ({
+  listLocations: jest.fn(() => Promise.resolve([jest.requireActual('../../lib/test/sede-clock').caracasSede()])),
+}));
 jest.mock('../../lib/patients/clinical-api', () => ({
   ...jest.requireActual('../../lib/patients/clinical-api'),
   listClinicalEntries: jest.fn(),
@@ -245,7 +249,7 @@ describe('ClinicalEntriesList', () => {
     ]);
     render(<ClinicalEntriesList token="tok" patientId="p1" />);
     // Tabla + tarjeta; la evolución suelta no lleva la línea.
-    expect(await screen.findAllByText('Cita del 01/02 · Dra. Ana Ríos')).toHaveLength(2);
+    expect(await screen.findAllByText('Cita del 1/2 · Dra. Ana Ríos')).toHaveLength(2);
   });
 
   it('shows an alert with the API error message when loading fails', async () => {

@@ -1608,6 +1608,7 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
                     key={`postop-${liveDetailAppointment.id}`}
                     token={token}
                     appointmentId={liveDetailAppointment.id}
+                    clock={clock.of(liveDetailAppointment.locationId)}
                   />
                 ) : null}
                 {/* DX-026: se relee al reprogramar o cambiar el estado (la API
@@ -1616,6 +1617,7 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
                   key={`${liveDetailAppointment.id}-${liveDetailAppointment.start}-${liveDetailAppointment.status}`}
                   token={token}
                   appointmentId={liveDetailAppointment.id}
+                  clock={clock.of(liveDetailAppointment.locationId)}
                 />
               </SheetBody>
             </SheetContent>

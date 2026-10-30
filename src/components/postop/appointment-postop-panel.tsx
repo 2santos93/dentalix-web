@@ -3,7 +3,8 @@ import { useEffect, useId, useRef, useState } from 'react';
 import { Mail, MessageCircle, Printer } from 'lucide-react';
 import { toast } from 'sonner';
 import { apiErrorMessage } from '@/lib/api/error-message';
-import { formatDateTime } from '@/lib/format/date';
+import { NO_SEDE_FORMAT } from '@/lib/format/sede-number';
+import type { SedeClock } from '@/lib/locations/sede-clock';
 import {
   deliverPostOp,
   getAppointmentPostOp,
@@ -62,6 +63,8 @@ const copy = {
 interface AppointmentPostOpPanelProps {
   token: string;
   appointmentId: string;
+  /** DX-378: reloj de la sede de la cita, para la hora de cada entrega. */
+  clock: SedeClock | null;
 }
 
 /** Abre la pestaña ya registrada la entrega; si el navegador la bloqueó, deja el enlace en el aviso. */
@@ -89,7 +92,7 @@ function finishInTab(
  * enlace de WhatsApp. Cada entrega queda registrada con la versión exacta de
  * la plantilla. El padre lo monta con `key` por cita.
  */
-export function AppointmentPostOpPanel({ token, appointmentId }: AppointmentPostOpPanelProps) {
+export function AppointmentPostOpPanel({ token, appointmentId, clock }: AppointmentPostOpPanelProps) {
   const ids = useId();
   const headingId = `${ids}-heading`;
   const emailHintId = `${ids}-email-hint`;
@@ -365,7 +368,7 @@ export function AppointmentPostOpPanel({ token, appointmentId }: AppointmentPost
                   {[
                     copy.version(d.templateCode, d.templateVersion),
                     copy.channel[d.channel],
-                    formatDateTime(d.deliveredAt),
+                    clock ? clock.fmt.dateTime(new Date(d.deliveredAt), clock.timeZone) : NO_SEDE_FORMAT,
                     d.deliveredByName,
                   ].join(' · ')}
                 </li>

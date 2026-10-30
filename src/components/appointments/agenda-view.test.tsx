@@ -1287,7 +1287,7 @@ describe('AgendaView', () => {
       const user = await openDetail(tokenFor('DENTIST'));
       await user.click(screen.getByRole('button', { name: 'Registrar evolución' }));
       const dialog = await screen.findByRole('dialog', { name: 'Registrar evolución' });
-      expect(within(dialog).getByText(/^Cita del \d{2}\/\d{2} · Dra\. Ana Ríos$/)).toBeInTheDocument();
+      expect(await within(dialog).findByText(/^Cita del \d{1,2}\/\d{1,2} · Dra\. Ana Ríos$/)).toBeInTheDocument();
     });
 
     it('RECEPTION no ve el botón', async () => {

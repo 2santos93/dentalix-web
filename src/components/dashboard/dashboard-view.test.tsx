@@ -248,6 +248,13 @@ describe('DashboardView', () => {
     expect(screen.queryByText(new RegExp(PATIENT_ID))).not.toBeInTheDocument();
   });
 
+  it('DX-378: la hora de las próximas citas, con la zona y el reloj de 12 h de la sede (como la agenda)', async () => {
+    mockedGetDashboard.mockResolvedValue(dashboard());
+    render(<DashboardView token="tok" />);
+    // 14:00 UTC son las 9:00 a. m. en Bogotá; el navegador de Jest (UTC) diría 14:00.
+    expect(await screen.findByText('9:00 a. m.')).toBeInTheDocument();
+  });
+
   it('falls back to the raw patientId/providerId when the API returned no name and staff has no match', async () => {
     mockedListStaff.mockResolvedValue([]);
     mockedGetDashboard.mockResolvedValue(
