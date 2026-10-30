@@ -32,8 +32,16 @@ SheetOverlay.displayName = 'SheetOverlay';
 
 const SheetContent = React.forwardRef<
   React.ComponentRef<typeof DialogPrimitive.Content>,
-  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content>
->(({ className, children, onOpenAutoFocus, onCloseAutoFocus, onEscapeKeyDown, ...props }, ref) => {
+  React.ComponentPropsWithoutRef<typeof DialogPrimitive.Content> & {
+    /**
+     * `auto` (por defecto): hoja inferior en móvil y cajón a la derecha desde
+     * `sm`. `bottom`: siempre hoja inferior (la hoja «Más» del shell).
+     */
+    side?: 'auto' | 'bottom';
+    /** Sin la X de cierre (la hoja la cierra su propio control o el gesto). */
+    hideClose?: boolean;
+  }
+>(({ className, children, onOpenAutoFocus, onCloseAutoFocus, onEscapeKeyDown, side = 'auto', hideClose = false, ...props }, ref) => {
   // Igual que `DialogContent`: las hojas se abren con `open` y sin
   // `SheetTrigger`, así que Radix no sabe a dónde devolver el foco al cerrar.
   // Se recuerda quién lo tenía al abrir y se le devuelve (WCAG 2.4.3).
@@ -64,16 +72,18 @@ const SheetContent = React.forwardRef<
           // Mobile: bottom sheet
           'inset-x-0 bottom-0 max-h-[85dvh] rounded-t-xl border-t',
           // sm+: right drawer, full height
-          'sm:inset-y-0 sm:right-0 sm:left-auto sm:h-full sm:max-h-none sm:w-[24rem] sm:rounded-none sm:border-l sm:border-t-0',
+          side === 'auto' &&
+            'sm:inset-y-0 sm:right-0 sm:left-auto sm:h-full sm:max-h-none sm:w-[24rem] sm:rounded-none sm:border-l sm:border-t-0',
+          side === 'bottom' && 'sheet-bottom',
           className,
         )}
         {...props}
       >
         {children}
-        <DialogPrimitive.Close className="absolute right-4 top-4 rounded-md p-1 text-muted transition-colors hover:bg-bg hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary print:hidden">
+        {!hideClose && <DialogPrimitive.Close className="absolute right-4 top-4 rounded-md p-1 text-muted transition-colors hover:bg-bg hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary print:hidden">
           <X className="size-4" />
           <span className="sr-only">Cerrar</span>
-        </DialogPrimitive.Close>
+        </DialogPrimitive.Close>}
       </DialogPrimitive.Content>
     </DialogPrimitive.Portal>
   );

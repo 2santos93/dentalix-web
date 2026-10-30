@@ -83,7 +83,7 @@ for (const scrollbar of ['native', 'classic'] as const) {
           for (const animation of el.getAnimations()) animation.finish();
         });
         const links = nav.getByRole('link');
-        await expect(links).toHaveCount(14);
+        await expect(links).toHaveCount(15);
         await expect(nav.getByRole('link', { name: 'Anamnesis por revisar · 12', exact: true })).toBeVisible();
         await links.first().focus();
         const initialScroll = await nav.evaluate((el) => el.scrollTop);

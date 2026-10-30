@@ -2,139 +2,55 @@
 import * as React from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import {
-  Users,
-  Calendar,
-  LayoutDashboard,
-  UserCog,
-  ClipboardList,
-  Package,
-  Wallet,
-  HandCoins,
-  BadgePercent,
-  ReceiptText,
-  History,
-  ChartColumn,
-  FileClock,
-  ClipboardCheck,
-  PanelLeftClose,
-  PanelLeftOpen,
-} from 'lucide-react';
-import { UserMenu } from '@/components/profile/user-menu';
+import { Ellipsis, PanelLeftClose, PanelLeftOpen, Search } from 'lucide-react';
+import { UserMenu, useLogout } from '@/components/profile/user-menu';
 import { useAuthStore } from '@/lib/auth/auth-store';
 import { useSessionBootstrap } from '@/lib/auth/use-session-bootstrap';
 import { getTokenRole } from '@/lib/auth/token-role';
 import type { ClinicRole } from '@/lib/me/me-api';
 import { LocationSwitcher } from '@/components/locations/location-switcher';
-import {
-  getSidebarCollapsed,
-  setSidebarCollapsed,
-} from '@/lib/ui/sidebar-store';
+import { getSidebarCollapsed, setSidebarCollapsed } from '@/lib/ui/sidebar-store';
 import { cn } from '@/lib/utils';
 import { SessionLocationsProvider } from '@/lib/locations/session-locations';
 import { InClinicProvider, useInClinic } from '@/components/appointments/use-in-clinic';
 import { waitingForYouLabel } from '@/lib/appointments/patient-flow';
 import { useAnamnesisInboxCount } from '@/components/anamnesis/use-anamnesis-inbox-count';
-
-const ANAMNESIS_HREF = '/anamnesis-por-revisar';
+import { useClinicBranding } from '@/components/brand/branding-context';
+import { ClinicBrand, ClinicLogo } from '@/components/brand/clinic-brand';
+import { Logo } from '@/components/ui/logo';
+import {
+  ALL_NAV_ITEMS,
+  ANAMNESIS_HREF,
+  bottomTabsFor,
+  longestMatch,
+  visibleNavGroups,
+  type NavGroup,
+} from './nav-config';
+import { CommandPalette, ShortcutHint } from './command-palette';
+import { MoreSheet } from './more-sheet';
+import { TABLET_QUERY, useMediaQuery, useVirtualKeyboardOpen } from './use-shell-media';
 
 const copy = {
   collapse: 'Colapsar menú',
   expand: 'Expandir menú',
+  search: 'Buscar',
+  searchLong: 'Buscar…',
+  more: 'Más',
+  mainNav: 'Principal',
+  sections: 'Secciones',
 };
 
-interface NavItem {
-  href: string;
-  label: string;
-  icon: React.ComponentType<{ className?: string }>;
-  /**
-   * Roles que ven la entrada. Sin `roles`, la ven todos. Debe copiar el
-   * `@Roles(...)` del endpoint que alimenta la pantalla: el menú solo evita
-   * enseñar un enlace que acabaría en 403, la frontera la pone la API.
-   */
-  roles?: readonly ClinicRole[];
-}
-
-// Las entradas sin `roles` (Pacientes, Agenda) son de los cuatro roles. Las
-// demás copian el set de la API; antes de DX-070 Dashboard, Catálogo,
-// Inventario y Personal no lo llevaban, y recepción veía enlaces que acababan
-// en 403.
-const NAV: NavItem[] = [
-  // DASHBOARD_ROLES: dato financiero agregado, solo gestión.
-  { href: '/dashboard', label: 'Dashboard', icon: LayoutDashboard, roles: ['ADMIN'] },
-  { href: '/patients', label: 'Pacientes', icon: Users },
-  { href: '/agenda', label: 'Agenda', icon: Calendar },
-  // Dato financiero: mismos roles que PAYMENT_ROLES en la API.
-  { href: '/caja', label: 'Caja', icon: Wallet, roles: ['ADMIN', 'RECEPTION'] },
-  // Cartera por antigüedad (DX-145): RECEIVABLES_ROLES en la API. Vive bajo
-  // /caja (es el mismo dato de cobro), pero con su propia entrada.
-  { href: '/caja/cartera', label: 'Cartera', icon: HandCoins, roles: ['ADMIN', 'RECEPTION'] },
-  // Informe de descuentos (DX-204): DISCOUNT_REPORT_ROLES en la API. Junto a
-  // la cartera, bajo /caja.
-  { href: '/caja/descuentos', label: 'Descuentos', icon: BadgePercent, roles: ['ADMIN'] },
-  // Gastos de la sede (DX-274): EXPENSE_ROLES en la API. Junto a cartera y
-  // descuentos, bajo /caja.
-  { href: '/caja/gastos', label: 'Gastos', icon: ReceiptText, roles: ['ADMIN'] },
-  // Reportes (DX-014): REPORT_ROLES en la API. «Comparar sedes» y los que
-  // vengan, en pestañas.
-  { href: '/reportes', label: 'Reportes', icon: ChartColumn, roles: ['ADMIN'] },
-  // Presupuestos por seguir (DX-040): TREATMENT_PLAN_FOLLOW_UP_ROLES en la API.
-  {
-    href: '/presupuestos',
-    label: 'Presupuestos',
-    icon: FileClock,
-    roles: ['ADMIN', 'RECEPTION'],
-  },
-  // DX-099: «Anamnesis por revisar» — la bandeja es dato clínico
-  // (CLINICAL_ROLES en la API), con su contador.
-  {
-    href: '/anamnesis-por-revisar',
-    label: 'Anamnesis por revisar',
-    icon: ClipboardCheck,
-    roles: ['ADMIN', 'DENTIST', 'ASSISTANT'],
-  },
-  // CATALOG_READ_ROLES: recepción no registra clínico.
-  {
-    href: '/catalog',
-    label: 'Catálogo',
-    icon: ClipboardList,
-    roles: ['ADMIN', 'DENTIST', 'ASSISTANT'],
-  },
-  // INVENTORY_ROLES.
-  { href: '/inventory', label: 'Inventario', icon: Package, roles: ['ADMIN', 'ASSISTANT'] },
-  // La pantalla lee `GET /staff/directory`: STAFF_WRITE_ROLES.
-  { href: '/staff', label: 'Personal', icon: UserCog, roles: ['ADMIN'] },
-  // Registro de auditoría (DX-009): AUDIT_READ_ROLES, lleva IP y user agent.
-  { href: '/settings/auditoria', label: 'Auditoría', icon: History, roles: ['ADMIN'] },
-];
-
 /**
- * DX-365: títulos de la barra superior móvil para las rutas que no tienen
- * entrada en el menú. Gana el prefijo más largo, como con el menú, así que
- * /settings/auditoria sigue siendo «Auditoría». Copian el título de su página.
- */
-const ROUTE_TITLES: { href: string; label: string }[] = [
-  { href: '/settings', label: 'Ajustes' },
-  { href: '/settings/profile', label: 'Mi perfil' },
-];
-
-/** Prefijo de ruta más largo que case con `pathname` (la propia ruta o un padre). */
-function longestMatch<T extends { href: string }>(items: readonly T[], pathname: string): T | undefined {
-  return items
-    .filter(({ href }) => pathname === href || pathname.startsWith(`${href}/`))
-    .sort((a, b) => b.href.length - a.href.length)[0];
-}
-
-/**
- * Template: the authenticated app chrome — persistent sidebar (md+), a topbar
- * solo para móvil, y un área de contenido scrollable. Nav highlights the active
- * section via usePathname. Contexto y sesión viven al pie del sidebar en
- * desktop (selector de sede + tarjeta de cuenta) y en el topbar en móvil
- * (selector de sede + avatar compacto).
+ * Template: el chrome autenticado (DESIGN.md → Navigation, SPEC «Navegación»).
  *
- * En desktop el sidebar se puede colapsar a un rail de iconos; la preferencia
- * se recuerda en localStorage y en rail nada se pierde: sede y cuenta siguen
- * ahí como iconos.
+ * - Escritorio (≥1024): barra lateral agrupada (Atención, Finanzas, Clínica,
+ *   Administración), plegable a raíl de iconos; la preferencia se recuerda.
+ * - Tableta (768–1023): la misma barra, en raíl por defecto; se despliega sin
+ *   tocar la preferencia de escritorio.
+ * - Teléfono (<768): barra superior compacta (marca de la clínica, sede,
+ *   búsqueda, cuenta) y barra inferior con cuatro destinos según el rol +
+ *   «Más» (hoja con el resto). El título de la página es su H1.
+ * - En todas: paleta de comandos con ⌘K / Ctrl+K.
  */
 export function AppShell({ children }: { children: React.ReactNode }) {
   const token = useAuthStore((s) => s.accessToken);
@@ -148,8 +64,8 @@ export function AppShell({ children }: { children: React.ReactNode }) {
 
 function AppShellContent({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const [collapsed, setCollapsed] = React.useState(false);
   const accessToken = useAuthStore((s) => s.accessToken);
+  const branding = useClinicBranding();
   // Todas las pantallas de la app pasan por aquí: al cargar, la sesión se
   // recupera de la cookie HttpOnly (DX-062). Las páginas esperan a que esté
   // resuelta (`_hasHydrated`) antes de mandar a /login.
@@ -166,7 +82,10 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
     }
     hydrate();
   }, [accessToken]);
-  const nav = NAV.filter((item) => !item.roles || (role !== null && item.roles.includes(role)));
+  const groups = visibleNavGroups(role);
+  const nav = groups.flatMap((g) => g.items);
+  const tabs = bottomTabsFor(role);
+
   // DX-200: «Te esperan N» del odontólogo — sus pacientes en espera en la sede
   // activa, con el mismo sondeo que el panel «En clínica». Sin sede, nada.
   const inClinic = useInClinic(accessToken, {
@@ -182,40 +101,77 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
     role === 'ADMIN' || role === 'DENTIST' || role === 'ASSISTANT',
     pathname,
   );
-  /** Nombre accesible de una entrada: la Agenda dice además quién espera. */
-  const navLabel = (href: string, label: string) =>
-    href === '/agenda' && waitingForYou > 0
-      ? `${label} · ${waitingForYouLabel(waitingForYou)}`
-      : href === ANAMNESIS_HREF && anamnesisCount > 0
-        ? `${label} · ${anamnesisCount}`
-        : label;
+  const fullLabel = (href: string) => {
+    const item = ALL_NAV_ITEMS.find((i) => i.href === href);
+    return item?.fullLabel ?? item?.label ?? href;
+  };
+  /** Nombre accesible de una entrada: nombre completo y, si lo hay, el contador. */
+  const navLabel = (href: string) => {
+    const label = fullLabel(href);
+    if (href === '/agenda' && waitingForYou > 0) return `${label} · ${waitingForYouLabel(waitingForYou)}`;
+    if (href === ANAMNESIS_HREF && anamnesisCount > 0) return `${label} · ${anamnesisCount}`;
+    return label;
+  };
   const hasCount = (href: string) =>
     (href === '/agenda' && waitingForYou > 0) || (href === ANAMNESIS_HREF && anamnesisCount > 0);
   // Activa la entrada MÁS específica que case: en /caja/cartera es «Cartera»,
   // no también «Caja».
   const activeHref = longestMatch(nav, pathname)?.href;
-  const isActive = (href: string) => href === activeHref;
-  // DX-365: título de la barra superior móvil. Sale del menú entero, no del
-  // filtrado por rol: quien abre /dashboard por URL sin la entrada sigue
-  // sabiendo dónde está (la pantalla ya le dice que no tiene permiso).
-  const topbarTitle = longestMatch([...NAV, ...ROUTE_TITLES], pathname)?.label ?? 'Dentalix';
 
+  // Raíl: en escritorio, la preferencia guardada; en tableta, raíl salvo que
+  // se despliegue a mano (sin guardarlo: es una decisión del momento).
+  const isTablet = useMediaQuery(TABLET_QUERY);
+  const [collapsedPref, setCollapsedPref] = React.useState(false);
+  const [tabletExpanded, setTabletExpanded] = React.useState(false);
   // Rehidratar la preferencia: localStorage no existe en SSR, así que no puede
-  // ser el estado inicial sin romper la hidratación — el primer render en
-  // cliente tiene que coincidir con el del servidor (expandido). La lectura va
-  // dentro de una función, como en el resto del proyecto.
+  // ser el estado inicial sin romper la hidratación.
   React.useEffect(() => {
     function hydrate() {
-      setCollapsed(getSidebarCollapsed());
+      setCollapsedPref(getSidebarCollapsed());
     }
     hydrate();
   }, []);
-
+  const collapsed = isTablet ? !tabletExpanded : collapsedPref;
   function toggleSidebar() {
-    const next = !collapsed;
-    setCollapsed(next);
+    if (isTablet) {
+      setTabletExpanded(!tabletExpanded);
+      return;
+    }
+    const next = !collapsedPref;
+    setCollapsedPref(next);
     setSidebarCollapsed(next);
   }
+
+  // Paleta de comandos: ⌘K / Ctrl+K desde cualquier pantalla.
+  const [paletteOpen, setPaletteOpen] = React.useState(false);
+  React.useEffect(() => {
+    function onKey(event: KeyboardEvent) {
+      if ((event.metaKey || event.ctrlKey) && !event.altKey && event.key.toLowerCase() === 'k') {
+        event.preventDefault();
+        setPaletteOpen((open) => !open);
+      }
+    }
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  const [moreOpen, setMoreOpen] = React.useState(false);
+  const keyboardOpen = useVirtualKeyboardOpen();
+  const { loggingOut, logout } = useLogout();
+  // «Más» lleva lo que no está en la barra inferior; grupos vacíos fuera.
+  const moreGroups: NavGroup[] = groups
+    .map((g) => ({ ...g, items: g.items.filter((i) => !tabs.includes(i)) }))
+    .filter((g) => g.items.length > 0);
+  const activeInMore = activeHref !== undefined && !tabs.some((t) => t.href === activeHref);
+
+  const countBadge = (href: string, variant: 'full' | 'rail' | 'inline') => (
+    <>
+      {href === ANAMNESIS_HREF && anamnesisCount > 0 && <InboxCount count={anamnesisCount} variant={variant} />}
+      {href === '/agenda' && waitingForYou > 0 && variant !== 'full' && (
+        <WaitingForYouCount count={waitingForYou} variant={variant} />
+      )}
+    </>
+  );
 
   return (
     // El shell se ata a la altura de la ventana (dvh, no vh: en móvil la barra
@@ -231,99 +187,128 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
           collapsed ? 'w-16' : 'w-60',
         )}
       >
-        {/* Cabecera: marca + control de colapso. En rail no caben las dos cosas
-            en 64px, así que la celda pasa a ser un único botón que muestra el
-            diente y lo cambia por el chevron al hover/focus: la marca no
-            desaparece y el control sigue estando donde estaba. */}
-        <div
-          className={cn(
-            'flex h-16 items-center',
-            collapsed ? 'justify-center px-2' : 'gap-2.5 px-6',
-          )}
-        >
+        {/* Cabecera: marca + control de colapso. En raíl no caben las dos
+            cosas en 64px, así que la celda pasa a ser un único botón que
+            muestra la marca y la cambia por el chevron al hover/focus. */}
+        <div className={cn('flex h-16 shrink-0 items-center', collapsed ? 'justify-center px-2' : 'gap-2 pl-4 pr-3')}>
           {collapsed ? (
             <button
               type="button"
               onClick={toggleSidebar}
               aria-label={copy.expand}
               title={copy.expand}
-              className="group flex size-10 items-center justify-center rounded-lg text-muted transition-colors hover:bg-bg hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+              className="group flex size-10 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface-sunken hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
             >
-              <span
-                aria-hidden
-                className="flex size-8 items-center justify-center rounded-lg bg-primary/10 text-base group-hover:hidden group-focus-visible:hidden"
-              >
-                🦷
+              <span aria-hidden className="flex group-hover:hidden group-focus-visible:hidden">
+                <BrandMark name={branding.name} logoUrl={branding.logoUrl} />
               </span>
-              <PanelLeftOpen
-                aria-hidden
-                className="hidden size-5 group-hover:block group-focus-visible:block"
-              />
+              <PanelLeftOpen aria-hidden className="hidden size-5 group-hover:block group-focus-visible:block" />
             </button>
           ) : (
             <>
-              <span
-                aria-hidden
-                className="flex size-8 items-center justify-center rounded-lg bg-primary/10 text-base"
-              >
-                🦷
-              </span>
-              <span className="text-lg font-semibold text-ink">Dentalix</span>
+              <div className="min-w-0 flex-1">
+                <ShellBrand name={branding.name} logoUrl={branding.logoUrl} />
+              </div>
               <button
                 type="button"
                 onClick={toggleSidebar}
                 aria-label={copy.collapse}
                 title={copy.collapse}
-                className="-mr-2 ml-auto flex size-8 items-center justify-center rounded-lg text-muted transition-colors hover:bg-bg hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+                className="flex size-8 shrink-0 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface-sunken hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
               >
                 <PanelLeftClose aria-hidden className="size-4" />
               </button>
             </>
           )}
         </div>
+        {/* Disparador discreto de la paleta, con el atajo a la vista. */}
+        <div className={cn('shrink-0 pb-2', collapsed ? 'flex justify-center px-2' : 'px-3')}>
+          <button
+            type="button"
+            onClick={() => setPaletteOpen(true)}
+            aria-label={copy.search}
+            aria-keyshortcuts="Meta+K Control+K"
+            title={collapsed ? `${copy.search} (⌘K / Ctrl K)` : undefined}
+            className={cn(
+              'flex items-center rounded-md border border-border bg-surface text-sm text-muted transition-colors hover:bg-surface-sunken hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
+              collapsed ? 'size-10 justify-center' : 'h-9 w-full gap-2 px-2.5',
+            )}
+          >
+            <Search aria-hidden className="size-4 shrink-0" />
+            {!collapsed && (
+              <>
+                <span className="flex-1 text-left">{copy.searchLong}</span>
+                <ShortcutHint />
+              </>
+            )}
+          </button>
+        </div>
         <nav
+          aria-label={copy.sections}
           className={cn(
             // El menú largo cede altura y se desplaza dentro del sidebar;
             // la marca y la cuenta permanecen dentro de la ventana.
-            'flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto scroll-py-2 py-2',
+            'flex min-h-0 flex-1 flex-col overflow-y-auto scroll-py-2 pb-2',
             // 63 px interiores − 15 px de barra clásica − 4 px de padding = 44 px útiles;
             // con h-11, cada enlace del carril es un objetivo táctil de 44×44.
             collapsed ? 'px-0.5' : 'px-3',
           )}
         >
-          {nav.map(({ href, label, icon: Icon }) => (
-            <div key={href} className={cn('relative flex items-center', !collapsed && 'gap-1')}>
-            <Link
-              href={href}
-              aria-current={isActive(href) ? 'page' : undefined}
-              // En rail el texto no está, así que el nombre accesible tiene que
-              // venir del aria-label; el title lo hace visible al hover.
-              aria-label={collapsed || hasCount(href) ? navLabel(href, label) : undefined}
-              title={collapsed ? navLabel(href, label) : undefined}
-              className={cn(
-                'relative flex items-center rounded-lg text-sm font-medium transition-colors',
-                collapsed ? 'h-11 w-full justify-center' : 'min-h-10 min-w-0 flex-1 gap-3 px-3 py-2',
-                isActive(href)
-                  ? 'bg-primary/10 text-primary'
-                  : 'text-muted hover:bg-bg hover:text-ink',
-              )}
-            >
-              <Icon className="size-4 shrink-0" />
-              {!collapsed && label}
-              {href === ANAMNESIS_HREF && anamnesisCount > 0 && (
-                <InboxCount count={anamnesisCount} variant={collapsed ? 'rail' : 'full'} />
-              )}
-            </Link>
-            {href === '/agenda' && waitingForYou > 0 && <Link href="/agenda/en-clinica" aria-label={waitingForYouLabel(waitingForYou)} className={cn('rounded-full focus-visible:outline-2 focus-visible:outline-primary', collapsed && 'absolute right-0 -top-1')}>
-              <WaitingForYouCount count={waitingForYou} variant={collapsed ? 'rail' : 'full'} />
-            </Link>}
+          {groups.map((group, index) => (
+            <div key={group.id} role="group" aria-label={group.label ?? undefined} className="flex flex-col gap-0.5">
+              {index > 0 &&
+                (collapsed ? (
+                  <hr aria-hidden className="mx-3 my-2 border-border-subtle" />
+                ) : (
+                  <p aria-hidden className="t-overline whitespace-nowrap px-3 pb-1 pt-4">
+                    {group.label}
+                  </p>
+                ))}
+              {group.items.map(({ href, label, fullLabel: long, icon: Icon }) => {
+                const active = href === activeHref;
+                const named = collapsed || hasCount(href) || !!long;
+                return (
+                  <div key={href} className={cn('relative flex items-center', !collapsed && 'gap-1')}>
+                    <Link
+                      href={href}
+                      aria-current={active ? 'page' : undefined}
+                      // En raíl el texto no está, así que el nombre accesible
+                      // viene del aria-label; el title lo hace visible al hover.
+                      aria-label={named ? navLabel(href) : undefined}
+                      title={collapsed || long ? navLabel(href) : undefined}
+                      className={cn(
+                        'relative flex items-center whitespace-nowrap rounded-md text-sm font-medium transition-colors',
+                        collapsed ? 'h-11 w-full justify-center' : 'min-h-9 min-w-0 flex-1 gap-3 px-3 py-1.5',
+                        active
+                          ? 'bg-primary-subtle text-primary-subtle-text'
+                          : 'text-muted hover:bg-surface-sunken hover:text-ink',
+                      )}
+                    >
+                      <Icon className="size-4 shrink-0" />
+                      {!collapsed && <span className="min-w-0 truncate">{label}</span>}
+                      {href === ANAMNESIS_HREF && anamnesisCount > 0 && (
+                        <InboxCount count={anamnesisCount} variant={collapsed ? 'rail' : 'full'} />
+                      )}
+                    </Link>
+                    {href === '/agenda' && waitingForYou > 0 && (
+                      <Link
+                        href="/agenda/en-clinica"
+                        aria-label={waitingForYouLabel(waitingForYou)}
+                        className={cn(
+                          'rounded-full focus-visible:outline-2 focus-visible:outline-primary',
+                          collapsed && 'absolute right-0 -top-1',
+                        )}
+                      >
+                        <WaitingForYouCount count={waitingForYou} variant={collapsed ? 'rail' : 'full'} />
+                      </Link>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           ))}
         </nav>
-        {/* Pie del sidebar: contexto (sede) encima de identidad (cuenta). El
-            selector se autooculta si la clínica solo tiene una sede, y al no
-            renderizar nada el `gap` desaparece con él — de ahí gap y no margen
-            en la tarjeta. */}
+        {/* Pie del sidebar: contexto (sede) encima de identidad (cuenta). */}
         <div
           className={cn(
             'mt-auto flex flex-col gap-2 border-t border-border p-3',
@@ -336,95 +321,161 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
       </aside>
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        {/* Topbar SOLO en móvil: ahí el sidebar está oculto y hace falta un
-            sitio para nav, sede y cuenta. En desktop el sidebar los tiene todos,
-            así que la barra sobraría — y una banda vacía de 64px le robaría alto
-            al contenido. */}
-        {/* DX-365: dos filas. Antes todo iba en una: el selector de sede y el
-            avatar dejaban al scroller del menú unos 120 px a 390 px y el
-            primer enlace se leía «Dashboar», cortado a media palabra.
-            Fila 1: dónde estoy (título de la sección), sede y cuenta. El
-            título es el único que cede ancho y, si no cabe, se trunca con
-            elipsis: el texto entero sigue en el DOM (lo lee el lector de
-            pantalla, una sola vez) y en `title`.
-            Fila 2: el menú como fila de iconos de 44×44 con nombre accesible y
-            `title`, como el rail del sidebar. Sigue desplazándose en
-            horizontal si no caben todos, pero lo que asoma en el borde es un
-            icono, nunca media palabra. */}
-        <header className="border-b border-border bg-surface md:hidden">
-          <div className="flex h-14 items-center gap-2 px-4">
-            <span className="shrink-0 text-lg" aria-hidden>
-              🦷
-            </span>
-            <p
-              data-testid="topbar-title"
-              title={topbarTitle}
-              className="min-w-0 flex-1 truncate text-base font-semibold text-ink"
-            >
-              {topbarTitle}
-            </p>
-            <div className="flex shrink-0 items-center gap-2">
-              {/* El selector con el nombre de la sede mide hasta 192 px; por
-                  debajo de 380 px no deja sitio al título y pasa a botón de
-                  icono (el del rail, con la sede en `title`). */}
-              <div className="hidden min-[380px]:contents">
-                <LocationSwitcher />
-              </div>
-              <div className="contents min-[380px]:hidden">
-                <LocationSwitcher variant="rail" />
-              </div>
-              <UserMenu variant="compact" />
-            </div>
+        {/* Barra superior SOLO en el teléfono: marca de la clínica, sede,
+            búsqueda y cuenta. El título de la pantalla es su propio H1 (no
+            se repite aquí). */}
+        <header className="flex shrink-0 items-center gap-1 border-b border-border bg-surface pl-4 pr-2 pt-[env(safe-area-inset-top)] md:hidden">
+          <div className="flex h-14 min-w-0 flex-1 items-center">
+            <ShellBrand name={branding.name} logoUrl={branding.logoUrl} />
           </div>
-          {/* Scrollable en horizontal: con todas las secciones los iconos suman
-              más que el ancho de un móvil, y sin esto desbordan la página. */}
-          <nav className="flex min-w-0 items-center gap-1 overflow-x-auto px-3 pb-1">
-            {nav.map(({ href, label, icon: Icon }) => (
-              <div key={href} className="flex shrink-0 items-center">
-              <Link
-                href={href}
-                aria-current={isActive(href) ? 'page' : undefined}
-                aria-label={navLabel(href, label)}
-                title={navLabel(href, label)}
-                className={cn(
-                  'relative flex size-11 shrink-0 items-center justify-center rounded-md transition-colors',
-                  isActive(href)
-                    ? 'bg-primary/10 text-primary'
-                    : 'text-muted hover:text-ink',
-                )}
-              >
-                <Icon className="size-5 shrink-0" />
-                {href === ANAMNESIS_HREF && anamnesisCount > 0 && (
-                  <InboxCount count={anamnesisCount} variant="rail" />
-                )}
-              </Link>
-              {href === '/agenda' && waitingForYou > 0 && <Link href="/agenda/en-clinica" aria-label={waitingForYouLabel(waitingForYou)} className="rounded-full focus-visible:outline-2 focus-visible:outline-primary">
-                <WaitingForYouCount count={waitingForYou} variant="inline" />
-              </Link>}
-              </div>
-            ))}
-          </nav>
+          {/* Por debajo de 380 px el selector con nombre no deja sitio a la
+              marca: pasa a botón de icono (la sede, en `title`). */}
+          <div className="hidden min-[380px]:contents">
+            <LocationSwitcher variant="compact" />
+          </div>
+          <div className="contents min-[380px]:hidden">
+            <LocationSwitcher variant="rail" />
+          </div>
+          <button
+            type="button"
+            onClick={() => setPaletteOpen(true)}
+            aria-label={copy.search}
+            className="flex size-11 shrink-0 items-center justify-center rounded-lg text-muted transition-colors hover:bg-surface-sunken hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+          >
+            <Search aria-hidden className="size-5" />
+          </button>
+          <UserMenu variant="compact" />
         </header>
 
         {/* `min-h-0` deja que main se encoja por debajo de su contenido; lo que
-            sobra scrollea aquí dentro, no en la página: la barra lateral y el
-            topbar se quedan fijos.
+            sobra scrollea aquí dentro, no en la página: la barra lateral, la
+            superior y la inferior se quedan fijas.
             `relative` no es decorativo: sin él, un descendiente `absolute` sin
             ancestro posicionado toma como bloque contenedor el documento y lo
-            estira. Pasaba con el `sr-only` (que es `position: absolute`) de la
-            región aria-live de `Pagination`: en una tabla larga caía fuera de
-            la ventana y devolvía el scroll a la página entera. */}
-        <main className="relative flex min-h-0 flex-1 flex-col overflow-y-auto bg-bg px-4 py-8 md:px-8">
+            estira (el `sr-only` de `Pagination`). */}
+        <main className="relative flex min-h-0 flex-1 flex-col overflow-y-auto bg-canvas px-4 py-6 md:px-8 md:py-8">
           <div className="mx-auto w-full max-w-6xl">{children}</div>
         </main>
+
+        {/* Barra inferior del teléfono. Va en el flujo del shell (última fila
+            de la columna de 100dvh), no `position: fixed`: así nunca tapa el
+            final de la página y no hace falta reservar su alto en cada
+            pantalla. El inset inferior va en la caja exterior y el alto fijo
+            (56 px) en la fila interior. Con el teclado abierto se oculta. */}
+        <nav
+          aria-label={copy.mainNav}
+          data-testid="bottom-tab-bar"
+          className={cn(
+            'shrink-0 border-t border-border bg-surface pb-[env(safe-area-inset-bottom)] md:hidden',
+            keyboardOpen && 'hidden',
+          )}
+        >
+          <ul className="grid h-14 grid-cols-5">
+            {tabs.map(({ href, label, tabLabel, fullLabel: long, icon: Icon }) => {
+              const active = href === activeHref;
+              const text = tabLabel ?? label;
+              return (
+                <li key={href} className="flex">
+                  <Link
+                    href={href}
+                    aria-current={active ? 'page' : undefined}
+                    aria-label={hasCount(href) || long ? navLabel(href) : undefined}
+                    className={cn(
+                      'relative flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 text-[0.6875rem] font-medium leading-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary',
+                      active ? 'text-primary-text' : 'text-muted hover:text-ink',
+                    )}
+                  >
+                    <TabIndicator active={active} />
+                    <span className="relative">
+                      <Icon className="size-5" />
+                      {hasCount(href) && (
+                        <span className="absolute -right-3 -top-1.5">{countBadge(href, 'inline')}</span>
+                      )}
+                    </span>
+                    <span className="max-w-full truncate px-0.5">{text}</span>
+                  </Link>
+                </li>
+              );
+            })}
+            <li className="flex">
+              <button
+                type="button"
+                onClick={() => setMoreOpen(true)}
+                aria-haspopup="dialog"
+                aria-expanded={moreOpen}
+                className={cn(
+                  'relative flex min-w-0 flex-1 flex-col items-center justify-center gap-0.5 text-[0.6875rem] font-medium leading-none transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-primary',
+                  activeInMore ? 'text-primary-text' : 'text-muted hover:text-ink',
+                )}
+              >
+                <TabIndicator active={activeInMore} />
+                <Ellipsis aria-hidden className="size-5" />
+                <span>{copy.more}</span>
+              </button>
+            </li>
+          </ul>
+        </nav>
       </div>
+
+      <MoreSheet
+        open={moreOpen}
+        onOpenChange={setMoreOpen}
+        groups={moreGroups}
+        activeHref={activeHref}
+        accessibleName={navLabel}
+        count={(href) => (hasCount(href) ? countBadge(href, 'inline') : null)}
+        onLogout={() => void logout()}
+        loggingOut={loggingOut}
+      />
+      <CommandPalette open={paletteOpen} onOpenChange={setPaletteOpen} token={accessToken} role={role} />
     </div>
   );
 }
 
+/** Rayita sobre el icono activo de la barra inferior. */
+function TabIndicator({ active }: { active: boolean }) {
+  return (
+    <span
+      aria-hidden
+      className={cn(
+        'absolute top-0 h-0.5 w-8 rounded-b-full bg-primary transition-opacity',
+        active ? 'opacity-100' : 'opacity-0',
+      )}
+    />
+  );
+}
+
+/**
+ * Marca del shell: la de la CLÍNICA (logo, o iniciales + nombre) cuando el
+ * tenant la tiene (white-label); si no, la de Dentalix.
+ */
+function ShellBrand({ name, logoUrl }: { name: string | null; logoUrl: string | null }) {
+  if (name) return <ClinicBrand variant="shell" name={name} logoUrl={logoUrl} />;
+  return <Logo size={28} withWordmark className="text-[0.9375rem]" />;
+}
+
+/** La marca en el raíl: cabe en 32 px. */
+function BrandMark({ name, logoUrl }: { name: string | null; logoUrl: string | null }) {
+  if (name && logoUrl) return <ClinicLogo src={logoUrl} alt="" variant="shell" className="size-8 object-contain" />;
+  if (name) {
+    const initials = name
+      .split(/\s+/)
+      .filter((w) => /\p{L}/u.test(w[0] ?? ''))
+      .slice(0, 2)
+      .map((w) => w[0]!.toUpperCase())
+      .join('');
+    return (
+      <span className="flex size-8 items-center justify-center rounded-lg bg-primary-subtle text-xs font-semibold text-primary-subtle-text">
+        {initials || '·'}
+      </span>
+    );
+  }
+  return <Logo size={28} decorative />;
+}
+
 /**
  * DX-200: contador «Te esperan N» del odontólogo en la navegación. Tinte de
- * peligro (no relleno): avisa, no es una acción destructiva. En el rail y en
+ * peligro (no relleno): avisa, no es una acción destructiva. En el raíl y en
  * el móvil, solo el número (el nombre accesible del enlace lo dice entero).
  */
 function WaitingForYouCount({
@@ -440,7 +491,7 @@ function WaitingForYouCount({
       data-testid="waiting-for-you-count"
       className={cn(
         'inline-flex items-center justify-center rounded-full border border-danger/40 bg-danger-subtle text-xs font-semibold tabular-nums text-danger-text',
-        variant === 'full' && 'ml-auto px-2 py-0.5',
+        variant === 'full' && 'ml-auto whitespace-nowrap px-2 py-0.5',
         variant === 'rail' && 'min-w-5 px-1',
         variant === 'inline' && 'min-w-5 px-1.5',
       )}
@@ -461,7 +512,7 @@ function InboxCount({ count, variant }: { count: number; variant: 'full' | 'rail
       aria-hidden
       data-testid="anamnesis-inbox-count"
       className={cn(
-        'inline-flex min-w-5 items-center justify-center rounded-full bg-warning-subtle px-1.5 text-xs font-semibold tabular-nums text-ink',
+        'inline-flex min-w-5 items-center justify-center rounded-full bg-warning-subtle px-1.5 text-xs font-semibold tabular-nums text-warning-text',
         variant === 'full' && 'ml-auto',
         variant === 'rail' && 'absolute right-0 -top-1',
       )}

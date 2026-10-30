@@ -3,12 +3,11 @@ import { securityHeaderRules } from "./src/lib/security/security-headers";
 import { API_PROXY_MAX_BODY_BYTES, apiRewrites } from "./src/lib/api/api-base";
 
 const nextConfig: NextConfig = {
-  // El indicador de dev de Next se planta abajo a la izquierda, justo encima del
-  // pie del sidebar: con el sidebar en rail cubre el botón de cuenta entero y lo
-  // deja inclicable. A la derecha no estorba a nada.
-  devIndicators: {
-    position: "bottom-right",
-  },
+  // Sin el indicador de dev de Next: con el shell v2 (A4) ya no queda esquina
+  // libre — abajo a la izquierda tapa la cuenta del sidebar, abajo a la derecha
+  // la pestaña «Más» del teléfono, arriba la marca/expandir y el avatar. Los
+  // errores de compilación y de ejecución se siguen mostrando.
+  devIndicators: false,
   // No anunciar el framework (`x-powered-by: Next.js`) — DX-061.
   poweredByHeader: false,
   // La web no usa `next/image` (las imágenes son `<img>`: logos del tenant en
