@@ -10,6 +10,8 @@ import {
 import { getTokenRole } from '@/lib/auth/token-role';
 import { ApiError } from '@/lib/api/client';
 import { SEDE_TIME_ZONE_ERROR, useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
+import { SEDE_LOCALE_ERROR, useSedeFormat } from '@/lib/locations/use-sede-format';
+import { regionalFormat } from '@/lib/format/regional-format';
 
 jest.mock('../../lib/discounts/discounts-api', () => ({
   getDiscountReport: jest.fn(),
@@ -29,7 +31,14 @@ jest.mock('../../lib/appointments/staff-api', () => ({
   ]),
 }));
 
+// DX-378 (FE-078): el formato de la sede. es-ES pinta igual que «es»: las cifras de estas pruebas no cambian.
+jest.mock('../../lib/locations/use-sede-format', () => ({
+  ...jest.requireActual('../../lib/locations/use-sede-format'),
+  useSedeFormat: jest.fn(),
+}));
+
 const mockedZone = useSedeTimeZone as jest.MockedFunction<typeof useSedeTimeZone>;
+const mockedFormat = useSedeFormat as jest.MockedFunction<typeof useSedeFormat>;
 const mockedReport = getDiscountReport as jest.MockedFunction<typeof getDiscountReport>;
 const mockedCsv = downloadDiscountReportCsv as jest.MockedFunction<typeof downloadDiscountReportCsv>;
 const mockedRole = getTokenRole as jest.MockedFunction<typeof getTokenRole>;
@@ -103,8 +112,27 @@ describe('DiscountReportView (DX-204)', () => {
   beforeEach(() => {
     mockedReport.mockReset();
     mockedZone.mockReturnValue({ status: 'ready', timeZone: 'America/Bogota' });
+    mockedFormat.mockReturnValue({ status: 'ready', fmt: regionalFormat({ locale: 'es-ES', hourCycle: 'h23' }) });
     mockedCsv.mockReset();
     mockedRole.mockReturnValue('ADMIN');
+  });
+
+  it('DX-378 (FE-078): importes, % y fechas con el formato de la sede (en-US), no con «es»', async () => {
+    mockedFormat.mockReturnValue({ status: 'ready', fmt: regionalFormat({ locale: 'en-US', hourCycle: 'h12' }) });
+    mockedReport.mockResolvedValue(report([row()]));
+    render(<DiscountReportView token="tok" />);
+    const summary = await screen.findByTestId('discount-total-COP');
+    expect(within(summary).getByText('15%')).toBeInTheDocument();
+    expect(within(summary).getByText(/180,000\.00/)).toBeInTheDocument();
+    expect(within(screen.getByTestId('discount-row')).getByText(/^\d{2}\/\d{2}\/\d{4}$/)).toBeInTheDocument();
+  });
+
+  it('DX-378: sin formato de la sede, su error con Reintentar en lugar del informe', async () => {
+    mockedFormat.mockReturnValue({ status: 'error', message: SEDE_LOCALE_ERROR, retry: jest.fn(), locationId: null });
+    mockedReport.mockResolvedValue(report([row()]));
+    render(<DiscountReportView token="tok" />);
+    expect(await screen.findByText(SEDE_LOCALE_ERROR)).toBeInTheDocument();
+    expect(screen.queryByTestId('discount-row')).not.toBeInTheDocument();
   });
 
   it('pide el mes en curso hasta hoy y muestra total, % sobre el bruto y el detalle', async () => {

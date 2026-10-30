@@ -14,7 +14,10 @@ import { isExternalPayer } from '@/lib/payers/payer-type';
 import { listPriceLists, type PriceList } from '@/lib/price-lists/price-lists-api';
 import { listCatalogItems } from '@/lib/odontogram/catalog-api';
 import { listLocations, type ClinicLocation } from '@/lib/locations/locations-api';
-import { formatCivilDate } from '@/lib/format/date';
+import type { RegionalFormat } from '@/lib/format/regional-format';
+import { NO_SEDE_FORMAT } from '@/lib/format/sede-number';
+import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
+import { SedeConfigError } from '@/components/locations/sede-config-error';
 import { AsyncSection } from '@/components/shared/async-section';
 import { EmptyState } from '@/components/shared/empty-state';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
@@ -61,13 +64,14 @@ const copy = {
   wholeClinic: 'Toda la clínica',
   unknownLocation: 'Sede',
   noLimit: 'Sin límite',
-  validity: (from: string | null, to: string | null) => {
-    if (from && to) return `${formatCivilDate(from)} – ${formatCivilDate(to)}`;
-    if (from) return `Desde ${formatCivilDate(from)}`;
-    if (to) return `Hasta ${formatCivilDate(to)}`;
+  /** Fechas con el formato de la sede (DX-378); sin él, «—». */
+  validity: (from: string | null, to: string | null, fmt: RegionalFormat | null) => {
+    const day = (d: string) => (fmt ? fmt.civilDate(d) : NO_SEDE_FORMAT);
+    if (from && to) return `${day(from)} – ${day(to)}`;
+    if (from) return `Desde ${day(from)}`;
+    if (to) return `Hasta ${day(to)}`;
     return copy.noLimit;
   },
-  generalPercent: (p: string) => `${p} %`,
   byCategory: (n: number) => (n === 1 ? '1 categoría con porcentaje propio' : `${n} categorías con porcentaje propio`),
   active: 'Activo',
   inactive: 'Inactivo',
@@ -83,8 +87,6 @@ const copy = {
   removeConfirm: 'Retirar convenio',
   removeError: 'No pudimos retirar el convenio.',
 };
-
-const percentFormat = new Intl.NumberFormat('es', { maximumFractionDigits: 2 });
 
 interface AgreementsManagerProps {
   token: string;
@@ -115,6 +117,8 @@ function distinctCategories(items: { category: string | null }[]): string[] {
  * pacientes asignados).
  */
 export function AgreementsManager({ token, allowed }: AgreementsManagerProps) {
+  const sedeFormat = useSedeFormat(token);
+  const fmt = readyFormat(sedeFormat);
   const [agreements, setAgreements] = useState<Agreement[]>([]);
   const [lookups, setLookups] = useState<Lookups>({
     payers: [],
@@ -183,7 +187,8 @@ export function AgreementsManager({ token, allowed }: AgreementsManagerProps) {
 
   function conditionText(a: Agreement): string {
     if (a.kind === 'PRICE_LIST') return a.priceList?.name ?? '—';
-    const general = a.percent === null ? '—' : copy.generalPercent(percentFormat.format(a.percent));
+    // DX-378 (FE-078): el % con el formato de la sede, no con «es».
+    const general = a.percent === null || !fmt ? NO_SEDE_FORMAT : fmt.percent(a.percent, 2);
     const n = Object.keys(a.percentByCategory ?? {}).length;
     return n > 0 ? `${general} · ${copy.byCategory(n)}` : general;
   }
@@ -298,6 +303,15 @@ export function AgreementsManager({ token, allowed }: AgreementsManagerProps) {
         </Button>
       </div>
 
+      {sedeFormat.status === 'error' ? (
+        <SedeConfigError
+          kind="locale"
+          variant="note"
+          description={sedeFormat.message}
+          onRetry={sedeFormat.retry}
+          locationId={sedeFormat.locationId}
+        />
+      ) : null}
       <AsyncSection
         loading={loading}
         error={error}
@@ -350,7 +364,7 @@ export function AgreementsManager({ token, allowed }: AgreementsManagerProps) {
                 <td className="px-4 py-3">{AGREEMENT_KIND_LABELS[a.kind]}</td>
                 <td className="px-4 py-3">{conditionText(a)}</td>
                 <td className="px-4 py-3">{locationLabel(a)}</td>
-                <td className="px-4 py-3 tabular-nums">{copy.validity(a.validFrom, a.validTo)}</td>
+                <td className="px-4 py-3 tabular-nums">{copy.validity(a.validFrom, a.validTo, fmt)}</td>
                 <td className="px-4 py-3 text-right tabular-nums">{a.assignedCount}</td>
                 <td className="px-4 py-3">{status(a)}</td>
                 <td className="px-4 py-3">{actions(a)}</td>
@@ -375,7 +389,7 @@ export function AgreementsManager({ token, allowed }: AgreementsManagerProps) {
               <InternalPayerNote agreement={a} />
               <p>{conditionText(a)}</p>
               <p className="text-xs text-muted">
-                {locationLabel(a)} · {copy.validity(a.validFrom, a.validTo)}
+                {locationLabel(a)} · {copy.validity(a.validFrom, a.validTo, fmt)}
               </p>
               {actions(a)}
             </li>

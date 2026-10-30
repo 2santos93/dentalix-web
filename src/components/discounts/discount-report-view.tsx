@@ -6,8 +6,9 @@ import { Building2, Download, Lock } from 'lucide-react';
 import { ApiError } from '@/lib/api/client';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { getTokenRole } from '@/lib/auth/token-role';
-import { formatCurrency } from '@/lib/format/currency';
-import { firstOfMonth, formatCivilDate } from '@/lib/format/date';
+import type { RegionalFormat } from '@/lib/format/regional-format';
+import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
+import { firstOfMonth } from '@/lib/format/date';
 import { readyTimeZone, sedeToday, useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
 import { SedeConfigError } from '@/components/locations/sede-config-error';
 import { listStaff, type StaffMember } from '@/lib/appointments/staff-api';
@@ -62,7 +63,6 @@ export const discountReportCopy = {
   agreementAssignedBy: (name: string) => `Convenio asignado por ${name}`,
   itemCreatedBy: (name: string) => `Ítem creado por ${name}`,
   items: (n: number) => (n === 1 ? '1 ítem' : `${n} ítems`),
-  percent: (n: number) => `${n.toLocaleString('es', { maximumFractionDigits: 2 })} %`,
   tableLabel: 'Descuentos del periodo, del más reciente al más antiguo',
   listLabel: 'Descuentos',
   colDate: 'Fecha',
@@ -114,9 +114,11 @@ function patientHref(item: DiscountReportItem): string {
 function DiscountSummary({
   totals,
   agreementTotals,
+  fmt,
 }: {
   totals: DiscountReportTotal[];
   agreementTotals: AgreementReductionTotal[];
+  fmt: RegionalFormat;
 }) {
   const headingId = React.useId();
   if (totals.length === 0 && agreementTotals.length === 0) return null;
@@ -139,16 +141,16 @@ function DiscountSummary({
             <div className="min-w-0">
               <dt className="t-label text-muted">{discountReportCopy.totalDiscount}</dt>
               <dd className="truncate font-medium tabular-nums text-ink">
-                {formatCurrency(total.discount, total.currency)}
+                {fmt.money(total.discount, total.currency)}
               </dd>
             </div>
             <div className="min-w-0">
               <dt className="t-label text-muted">{discountReportCopy.gross}</dt>
-              <dd className="truncate tabular-nums text-ink">{formatCurrency(total.gross, total.currency)}</dd>
+              <dd className="truncate tabular-nums text-ink">{fmt.money(total.gross, total.currency)}</dd>
             </div>
             <div className="min-w-0">
               <dt className="t-label text-muted">{discountReportCopy.percentOfGross}</dt>
-              <dd className="font-medium tabular-nums text-ink">{discountReportCopy.percent(total.percentOfGross)}</dd>
+              <dd className="font-medium tabular-nums text-ink">{fmt.percent(total.percentOfGross, 2)}</dd>
             </div>
           </dl>
         ))}
@@ -165,7 +167,7 @@ function DiscountSummary({
             <div className="min-w-0">
               <dt className="t-label text-muted">{discountReportCopy.agreementReduction}</dt>
               <dd className="truncate font-medium tabular-nums text-ink">
-                {formatCurrency(total.reduction, total.currency)}
+                {fmt.money(total.reduction, total.currency)}
               </dd>
             </div>
           </dl>
@@ -184,41 +186,49 @@ function DiscountSummary({
  * párrafo que parte líneas: dentro de un bloque que no se encoge desbordaba
  * 390 px (QA D1).
  */
-function AmountCell({ item, withAgreement = true }: { item: DiscountReportItem; withAgreement?: boolean }) {
+function AmountCell({
+  item,
+  fmt,
+  withAgreement = true,
+}: {
+  item: DiscountReportItem;
+  fmt: RegionalFormat;
+  withAgreement?: boolean;
+}) {
   const agreement = item.agreementReduction > 0;
   return (
     <>
       {item.discount > 0 || !agreement ? (
         <>
           <span className="block font-medium tabular-nums text-ink">
-            −{formatCurrency(item.discount, item.currency)}
+            −{fmt.money(item.discount, item.currency)}
           </span>
           <span className="block text-xs tabular-nums text-muted">
             {discountReportCopy.ofPrice(
-              formatCurrency(item.price + item.priceReduction, item.currency),
-              discountReportCopy.percent(item.percent),
+              fmt.money(item.price + item.priceReduction, item.currency),
+              fmt.percent(item.percent, 2),
             )}
           </span>
         </>
       ) : null}
       {item.priceReduction > 0 ? (
         <span className="block text-xs tabular-nums text-muted">
-          {discountReportCopy.priceReduced(formatCurrency(item.price, item.currency))}
+          {discountReportCopy.priceReduced(fmt.money(item.price, item.currency))}
         </span>
       ) : null}
       {agreement && withAgreement ? (
-        <span className="block text-xs tabular-nums text-ink">{agreementLine(item)}</span>
+        <span className="block text-xs tabular-nums text-ink">{agreementLine(item, fmt)}</span>
       ) : null}
     </>
   );
 }
 
-function agreementLine(item: DiscountReportItem): string {
+function agreementLine(item: DiscountReportItem, fmt: RegionalFormat): string {
   return discountReportCopy.agreementLine(
     item.agreementName ?? '',
-    formatCurrency(item.agreementReduction, item.currency),
-    discountReportCopy.percent(item.agreementPercent),
-    formatCurrency(item.basePrice ?? 0, item.currency),
+    fmt.money(item.agreementReduction, item.currency),
+    fmt.percent(item.agreementPercent, 2),
+    fmt.money(item.basePrice ?? 0, item.currency),
   );
 }
 
@@ -257,6 +267,9 @@ export function DiscountReportView({ token }: { token: string }) {
   const zone = useSedeTimeZone(token);
   const timeZone = readyTimeZone(zone);
   const today = timeZone ? sedeToday(timeZone) : null;
+  // DX-378 (FE-078): importes, % y fechas con el formato de la sede, no con «es».
+  const sedeFormat = useSedeFormat(token);
+  const fmt = readyFormat(sedeFormat);
   const [from, setFrom] = useState<string | null>(null);
   const [to, setTo] = useState<string | null>(null);
   const [professionalId, setProfessionalId] = useState('ALL');
@@ -451,6 +464,17 @@ export function DiscountReportView({ token }: { token: string }) {
           />
         ) : zone.status === 'error' && !filters ? (
           <SedeConfigError kind="timeZone" description={zone.message} onRetry={zone.retry} />
+        ) : !fmt ? (
+          sedeFormat.status === 'error' ? (
+            <SedeConfigError
+              kind="locale"
+              description={sedeFormat.message}
+              onRetry={sedeFormat.retry}
+              locationId={sedeFormat.locationId}
+            />
+          ) : (
+            <TableSkeleton rows={5} />
+          )
         ) : (
           <>
             {!showLoading && !loadError && data ? (
@@ -470,7 +494,7 @@ export function DiscountReportView({ token }: { token: string }) {
               emptyDescription={discountReportCopy.emptyHint}
               skeleton={<TableSkeleton rows={5} />}
             >
-              {data ? <DiscountSummary totals={data.totals} agreementTotals={data.agreementTotals} /> : null}
+              {data ? <DiscountSummary totals={data.totals} agreementTotals={data.agreementTotals} fmt={fmt} /> : null}
 
               {/* Escritorio: una tabla. */}
               <Card className="overflow-hidden p-0 max-sm:hidden">
@@ -491,7 +515,7 @@ export function DiscountReportView({ token }: { token: string }) {
                   <TableBody>
                     {items.map((item) => (
                       <TableRow key={item.itemId} data-testid="discount-row">
-                        <TableCell className="tabular-nums">{formatCivilDate(item.discountOn)}</TableCell>
+                        <TableCell className="tabular-nums">{fmt.civilDate(item.discountOn)}</TableCell>
                         <TableCell>
                           <Link
                             href={patientHref(item)}
@@ -506,11 +530,11 @@ export function DiscountReportView({ token }: { token: string }) {
                             {discountReportCopy.tooth(item.toothNumber, item.procedure)}
                           </span>
                           <span className="block text-xs text-muted">
-                            {discountReportCopy.planOf(formatCivilDate(item.planCreatedOn), item.planOptionLabel)}
+                            {discountReportCopy.planOf(fmt.civilDate(item.planCreatedOn), item.planOptionLabel)}
                           </span>
                         </TableCell>
                         <TableCell className="text-right">
-                          <AmountCell item={item} />
+                          <AmountCell item={item} fmt={fmt} />
                         </TableCell>
                         <TableCell className="max-w-[16rem]">
                           <ReasonCell item={item} />
@@ -547,16 +571,16 @@ export function DiscountReportView({ token }: { token: string }) {
                         {item.patientName}
                       </Link>
                       <span data-testid="discount-card-amount" className="shrink-0 text-right">
-                        <AmountCell item={item} withAgreement={false} />
+                        <AmountCell item={item} fmt={fmt} withAgreement={false} />
                       </span>
                     </div>
                     {item.agreementReduction > 0 ? (
-                      <p className="break-words text-xs tabular-nums text-ink">{agreementLine(item)}</p>
+                      <p className="break-words text-xs tabular-nums text-ink">{agreementLine(item, fmt)}</p>
                     ) : null}
                     <p className="text-ink">{discountReportCopy.tooth(item.toothNumber, item.procedure)}</p>
                     <p className="text-xs text-muted tabular-nums">
-                      {formatCivilDate(item.discountOn)} ·{' '}
-                      {discountReportCopy.planOf(formatCivilDate(item.planCreatedOn), item.planOptionLabel)}
+                      {fmt.civilDate(item.discountOn)} ·{' '}
+                      {discountReportCopy.planOf(fmt.civilDate(item.planCreatedOn), item.planOptionLabel)}
                     </p>
                     <div>
                       <ReasonCell item={item} />

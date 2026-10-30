@@ -1,3 +1,4 @@
+import { civilDateLabel } from '@/lib/format/date';
 import type { BadgeProps } from '@/components/ui/badge';
 import type { SingleFileRules } from '@/lib/files/upload-single-file';
 import type { Expense, ExpenseStatus, ExpenseStatusFilter } from './expenses-api';
@@ -100,11 +101,8 @@ export function daysInRange(from: string, to: string): number {
 export function summaryMonthLabel(month: string): string {
   const match = MONTH_PATTERN.exec(month);
   if (!match) return month;
-  const label = new Date(Date.UTC(Number(match[1]), Number(match[2]) - 1, 1)).toLocaleDateString('es', {
-    month: 'long',
-    year: 'numeric',
-    timeZone: 'UTC',
-  });
+  // DX-378 (FE-078): las palabras del mes, del idioma del producto (lib/format), sin «es» suelto.
+  const label = civilDateLabel(`${month}-01`, { month: 'long', year: 'numeric' });
   return label.charAt(0).toUpperCase() + label.slice(1);
 }
 

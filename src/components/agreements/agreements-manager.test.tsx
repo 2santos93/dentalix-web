@@ -143,7 +143,8 @@ describe('AgreementsManager (DX-105)', () => {
     expect(rows[1]).toHaveTextContent('Convenio Sanitas');
     expect(rows[1]).toHaveTextContent('Sanitas');
     expect(rows[1]).toHaveTextContent('Descuento porcentual');
-    expect(rows[1]).toHaveTextContent('15 % · 2 categorías con porcentaje propio');
+    // DX-378 (FE-078): el % con el formato de la sede (es-CO: «15%»), no con «es» («15 %»).
+    expect(rows[1]).toHaveTextContent('15% · 2 categorías con porcentaje propio');
     expect(rows[1]).toHaveTextContent('Toda la clínica');
     expect(rows[1]).toHaveTextContent('01/01/2026 – 31/12/2026');
     expect(rows[1]).toHaveTextContent('3');

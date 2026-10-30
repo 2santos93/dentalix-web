@@ -1,4 +1,4 @@
-import { formatAmount, formatCurrency } from '@/lib/format/currency';
+import type { RegionalFormat } from '@/lib/format/regional-format';
 import type { ComparisonRow, CurrencyMetric, KpiDefinition, KpiKey, LocationsComparison, Metric } from './reports-api';
 
 /** Columna por la que se ordena: la sede o un indicador. */
@@ -70,34 +70,35 @@ export function nextSort(current: SortState | null, key: SortKey): SortState {
   return { key, direction: key === 'name' ? 'ascending' : 'descending' };
 }
 
-const numberFormat = new Intl.NumberFormat('es', { maximumFractionDigits: 0 });
-const percentFormat = new Intl.NumberFormat('es', { maximumFractionDigits: 2 });
-const changeFormat = new Intl.NumberFormat('es', { maximumFractionDigits: 1 });
-
-/** Un valor según la unidad del indicador; «—» si no se puede calcular. */
-export function formatMetric(unit: KpiDefinition['unit'], value: number | null, currency?: string): string {
+/**
+ * Un valor según la unidad del indicador, con el formato de la sede (DX-378,
+ * FE-078); «—» si no se puede calcular.
+ */
+export function formatMetric(
+  unit: KpiDefinition['unit'],
+  value: number | null,
+  fmt: RegionalFormat,
+  currency?: string,
+): string {
   if (value === null) return '—';
   // Sin moneda, el importe sin símbolo (nunca una moneda de reserva).
-  if (unit === 'MONEY') return currency ? formatCurrency(value, currency) : formatAmount(value);
-  if (unit === 'PERCENT') return `${percentFormat.format(value)} %`;
-  return numberFormat.format(value);
+  if (unit === 'MONEY') return currency ? fmt.money(value, currency) : fmt.number(value, { min: 2, max: 2 });
+  if (unit === 'PERCENT') return fmt.percent(value, 2);
+  return fmt.number(value, { max: 0 });
 }
 
-const CHANGE_SUFFIX: Record<KpiDefinition['changeUnit'], string> = {
-  PERCENT: '%',
-  POINTS: 'p.p.',
-};
+const CHANGE_SUFFIX = { POINTS: 'p.p.' } as const;
 
 /**
  * La variación en la unidad del indicador (`changeUnit` de la API): «+20 %»
  * relativo, o «+2 p.p.» en los que ya son un % (no-show 8 % → 10 %). Signo
  * menos tipográfico.
  */
-export function formatChange(change: number, unit: KpiDefinition['changeUnit']): string {
-  const suffix = CHANGE_SUFFIX[unit];
-  if (change === 0) return `0 ${suffix}`;
-  const sign = change > 0 ? '+' : '−';
-  return `${sign}${changeFormat.format(Math.abs(change))} ${suffix}`;
+export function formatChange(change: number, unit: KpiDefinition['changeUnit'], fmt: RegionalFormat): string {
+  const sign = change > 0 ? '+' : change < 0 ? '−' : '';
+  const amount = Math.abs(change);
+  if (unit === 'PERCENT') return `${sign}${fmt.percent(amount, 1)}`;
+  return `${sign}${fmt.number(amount, { max: 1 })} ${CHANGE_SUFFIX.POINTS}`;
 }
 
 export const TREND_LABELS: Record<NonNullable<Metric['trend']>, string> = {

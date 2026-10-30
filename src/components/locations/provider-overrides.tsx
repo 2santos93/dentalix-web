@@ -15,7 +15,7 @@ import {
   validateOverrideRanges,
   type DraftRange,
 } from '@/lib/locations/provider-schedule';
-import { formatDateLabel } from '@/lib/format/date';
+import { civilDateLabel } from '@/lib/format/date';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { FormField } from '@/components/shared/form-field';
@@ -57,7 +57,7 @@ const fieldClass =
   'flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary';
 
 function dateLabel(date: string): string {
-  return formatDateLabel(date, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
+  return civilDateLabel(date, { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' });
 }
 
 interface ProviderOverridesProps {

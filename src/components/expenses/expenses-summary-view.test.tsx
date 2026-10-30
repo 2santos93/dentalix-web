@@ -276,9 +276,11 @@ describe('ExpensesSummaryView (DX-274)', () => {
     render(<ExpensesSummaryView token="t" />);
     expect(await screen.findByText(/No pudimos obtener la zona horaria de la sede/)).toBeInTheDocument();
     expect(mockedSummary).not.toHaveBeenCalled();
+    // DX-378: el formato de la sede también lee las sedes; lo que cuenta es que Reintentar vuelve a leerlas.
+    const readsBefore = mockRequestLocations.mock.calls.length;
     await user.click(screen.getByRole('button', { name: /reintentar/i }));
     expect(await screen.findByTestId('summary-row')).toBeInTheDocument();
-    expect(mockRequestLocations).toHaveBeenCalledTimes(2);
+    expect(mockRequestLocations.mock.calls.length).toBeGreaterThan(readsBefore);
   });
 
   it('una zona inválida no tiene respaldo y deja consultar un rango manual explícito', async () => {

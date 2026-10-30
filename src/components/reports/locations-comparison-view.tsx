@@ -4,8 +4,9 @@ import { useEffect, useState } from 'react';
 import { ArrowDown, ArrowUp, ArrowUpDown, Building2, Download, Lock } from 'lucide-react';
 import { ApiError } from '@/lib/api/client';
 import { apiErrorMessage } from '@/lib/api/error-message';
-import { formatCivilDate } from '@/lib/format/date';
 import { readyTimeZone, sedeToday, useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
+import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
+import type { RegionalFormat } from '@/lib/format/regional-format';
 import { SedeConfigError } from '@/components/locations/sede-config-error';
 import { saveCsv } from '@/lib/files/save-csv';
 import { isValidPeriod, PERIOD_PRESETS, periodFor, type PeriodPresetKey } from '@/lib/reports/period-presets';
@@ -109,7 +110,17 @@ function SortIcon({ sort, column }: { sort: SortState | null; column: SortKey })
 }
 
 /** Las monedas de una celda de dinero: una línea por moneda, nunca sumadas. */
-function MetricCell({ def, row, compare }: { def: KpiDefinition; row: ComparisonRow; compare: boolean }) {
+function MetricCell({
+  def,
+  row,
+  compare,
+  fmt,
+}: {
+  def: KpiDefinition;
+  row: ComparisonRow;
+  compare: boolean;
+  fmt: RegionalFormat;
+}) {
   const values = metricValues(row, def.key as KpiKey);
   if (values.length === 0) {
     return <span className="text-muted">{locationsComparisonCopy.noCurrency}</span>;
@@ -123,6 +134,7 @@ function MetricCell({ def, row, compare }: { def: KpiDefinition; row: Comparison
           changeUnit={def.changeUnit}
           metric={compare ? m : { ...m, trend: null }}
           currency={m.currency}
+          fmt={fmt}
         />
       ))}
     </span>
@@ -164,6 +176,9 @@ export function LocationsComparisonView({ token }: { token: string }) {
   // Sin zona de la sede no hay «hoy» ni período por defecto: `SedeConfigError`.
   const zone = useSedeTimeZone(token);
   const timeZone = readyTimeZone(zone);
+  // DX-378 (FE-078): cifras, % y fechas con el formato de la sede, no con «es».
+  const sedeFormat = useSedeFormat(token);
+  const fmt = readyFormat(sedeFormat);
   const today = timeZone ? sedeToday(timeZone) : null;
   const [preset, setPreset] = useState<PeriodPresetKey>('this_month');
   const [custom, setCustom] = useState<{ from: string; to: string } | null>(null);
@@ -355,20 +370,27 @@ export function LocationsComparisonView({ token }: { token: string }) {
 
       {invalidPeriod ? <InlineError id={periodErrorId}>{locationsComparisonCopy.badRequest}</InlineError> : null}
 
-      {data && !invalidPeriod && !showLoading && !loadError ? (
+      {data && fmt && !invalidPeriod && !showLoading && !loadError ? (
         <p className="text-sm text-muted tabular-nums">
-          {locationsComparisonCopy.periodLine(formatCivilDate(data.from), formatCivilDate(data.to))}
+          {locationsComparisonCopy.periodLine(fmt.civilDate(data.from), fmt.civilDate(data.to))}
           {data.previousFrom && data.previousTo
-            ? `, ${locationsComparisonCopy.comparedWith(formatCivilDate(data.previousFrom), formatCivilDate(data.previousTo))}`
+            ? `, ${locationsComparisonCopy.comparedWith(fmt.civilDate(data.previousFrom), fmt.civilDate(data.previousTo))}`
             : ''}
         </p>
       ) : null}
 
       {invalidPeriod ? null : zone.status === 'error' && !period ? (
         <SedeConfigError kind="timeZone" description={zone.message} onRetry={zone.retry} />
+      ) : sedeFormat.status === 'error' ? (
+        <SedeConfigError
+          kind="locale"
+          description={sedeFormat.message}
+          onRetry={sedeFormat.retry}
+          locationId={sedeFormat.locationId}
+        />
       ) : (
         <AsyncSection
-          loading={showLoading}
+          loading={showLoading || sedeFormat.status === 'loading'}
           error={loadError}
           onRetry={() => setReloadKey((k) => k + 1)}
           isEmpty={!data?.hasActivity}
@@ -376,7 +398,7 @@ export function LocationsComparisonView({ token }: { token: string }) {
           emptyDescription={locationsComparisonCopy.emptyHint}
           skeleton={<ComparisonSkeleton />}
         >
-          {data ? (
+          {data && fmt ? (
             <>
               {compared ? <p className="text-xs text-muted">{locationsComparisonCopy.legend}</p> : null}
               {unattributed ? (
@@ -443,7 +465,7 @@ export function LocationsComparisonView({ token }: { token: string }) {
                         </th>
                         {kpis.map((k) => (
                           <td key={k.key} className="px-3 py-3 text-right">
-                            <MetricCell def={k} row={row} compare={compared} />
+                            <MetricCell def={k} row={row} compare={compared} fmt={fmt} />
                           </td>
                         ))}
                       </tr>
@@ -456,7 +478,7 @@ export function LocationsComparisonView({ token }: { token: string }) {
                       </th>
                       {kpis.map((k) => (
                         <td key={k.key} className="px-3 py-3 text-right">
-                          <MetricCell def={k} row={data.total} compare={compared} />
+                          <MetricCell def={k} row={data.total} compare={compared} fmt={fmt} />
                         </td>
                       ))}
                     </tr>
@@ -511,7 +533,7 @@ export function LocationsComparisonView({ token }: { token: string }) {
                               <HowCalculated column={k.label} text={k.howItIsCalculated} />
                             </dt>
                             <dd className="mt-1">
-                              <MobileMetric def={k} row={row} compare={compared} />
+                              <MobileMetric def={k} row={row} compare={compared} fmt={fmt} />
                             </dd>
                           </div>
                         ))}
@@ -528,7 +550,17 @@ export function LocationsComparisonView({ token }: { token: string }) {
   );
 }
 
-function MobileMetric({ def, row, compare }: { def: KpiDefinition; row: ComparisonRow; compare: boolean }) {
+function MobileMetric({
+  def,
+  row,
+  compare,
+  fmt,
+}: {
+  def: KpiDefinition;
+  row: ComparisonRow;
+  compare: boolean;
+  fmt: RegionalFormat;
+}) {
   const values = metricValues(row, def.key as KpiKey);
   if (values.length === 0) return <span className="text-muted">{locationsComparisonCopy.noCurrency}</span>;
   return (
@@ -540,6 +572,7 @@ function MobileMetric({ def, row, compare }: { def: KpiDefinition; row: Comparis
           changeUnit={def.changeUnit}
           metric={compare ? m : { ...m, trend: null }}
           currency={m.currency}
+          fmt={fmt}
           align="start"
         />
       ))}

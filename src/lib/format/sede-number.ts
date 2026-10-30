@@ -10,3 +10,13 @@ export const NO_SEDE_FORMAT = '—';
 export function sedeNumber(value: number, fmt: RegionalFormat | null): string {
   return fmt ? fmt.number(value) : NO_SEDE_FORMAT;
 }
+
+/** Un importe con el formato de la sede (DX-378), o «—» sin él. */
+export function sedeMoney(amount: number, currency: string, fmt: RegionalFormat | null): string {
+  return fmt ? fmt.money(amount, currency) : NO_SEDE_FORMAT;
+}
+
+/** Un día civil `YYYY-MM-DD` con el formato de la sede (DX-378), o «—» sin él. */
+export function sedeCivilDate(day: string, fmt: RegionalFormat | null): string {
+  return fmt ? fmt.civilDate(day) : NO_SEDE_FORMAT;
+}

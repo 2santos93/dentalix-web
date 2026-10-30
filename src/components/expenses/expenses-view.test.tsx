@@ -82,6 +82,16 @@ describe('ExpensesView (DX-274)', () => {
     expect(mockedList).not.toHaveBeenCalled();
   });
 
+  it('DX-378 (FE-078): la fecha y los importes con el formato de la sede (en-US), no con «es»', async () => {
+    mockRequestLocations.mockResolvedValue(
+      expenseLocations.map((location) => ({ ...location, locale: 'en-US', hourCycle: 'h12' as const })),
+    );
+    render(<ExpensesView token="tok" />);
+    const row = await screen.findByTestId('expense-row');
+    expect(await within(row).findByText('10/20/2026')).toBeInTheDocument();
+    expect(within(row).getByText(/150,000\.00/)).toBeInTheDocument();
+  });
+
   it('carga el mes en curso hasta hoy y pinta la fila con su estado y el recuento', async () => {
     mockedList.mockResolvedValue(
       page([expenseFixture({ status: 'PARTIAL', overdue: true, paidAmount: 50_000, pendingAmount: 100_000 })]),
