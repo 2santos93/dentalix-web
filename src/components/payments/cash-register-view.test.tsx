@@ -578,6 +578,17 @@ describe('anular desde la caja (DX-057)', () => {
     expect(dialog).toHaveTextContent(
       'Es una de las 2 formas de pago de un mismo cobro: se anulan todas y su recibo.',
     );
+
+    // QA DX-390 (B5): la confirmación dice que se anuló el cobro entero.
+    mockedVoid.mockResolvedValue(undefined);
+    await user.click(within(dialog).getByLabelText(/motivo/i));
+    await user.paste(REASON);
+    await user.click(within(dialog).getByRole('button', { name: /anular abono/i }));
+    await waitFor(() => expect(screen.queryByRole('dialog')).not.toBeInTheDocument());
+    expect(
+      await screen.findByText('Cobro anulado: 2 formas de pago y su recibo · 15/10/2026 · Ana Gómez.'),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/abono anulado/i)).not.toBeInTheDocument();
   });
 
   it('anula con motivo, cierra el modal, avisa y recarga la caja', async () => {

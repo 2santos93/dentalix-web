@@ -19,6 +19,7 @@ import { statementCopy } from '@/lib/account-statement/presentation';
 import { sedeCivilDate, sedeMoney } from '@/lib/format/sede-number';
 import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
 import { Input } from '@/components/ui/input';
+import { cn } from '@/lib/utils';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { MoneyInput } from '@/components/shared/money-input';
 import { parseMoneyInput } from '@/lib/format/money';
@@ -35,12 +36,15 @@ import { SedeConfigError } from '@/components/locations/sede-config-error';
 import {
   PaymentMethodSelect,
   PaymentReferenceFields,
+  comparableReference,
   paymentMethodFieldsCopy,
   usePaymentMethodFields,
+  type PaymentMethodFieldsState,
 } from './payment-method-fields';
 import {
   SplitLineFields,
   SplitPaymentSummary,
+  excessOverPending,
   lineAmount,
   splitPaymentCopy,
   splitTotalOf,
@@ -80,6 +84,9 @@ export const recordPaymentCopy = {
   split: splitPaymentCopy,
 };
 const copy = recordPaymentCopy;
+
+/** La casilla del saldo a favor del cobro dividido (`SplitPaymentSummary`). */
+const CONFIRM_CREDIT_ID = 'rp-confirm-credit';
 
 /** Valor del selector de destino de un saldo migrado. */
 const OPENING_PREFIX = 'ob:';
@@ -137,7 +144,9 @@ interface RecordPaymentModalProps {
  *
  * Idempotencia: la clave se crea al abrir el modal y se reusa en cada reintento
  * del mismo envío (un fallo de red seguido de otro clic no cobra dos veces);
- * el siguiente abono abre el modal de nuevo y estrena clave.
+ * el siguiente abono abre el modal de nuevo y estrena clave. Si tras un fallo
+ * la persona cambia los datos, el reintento es otra petición y estrena clave
+ * (la API respondería 422 a la misma clave con otro cuerpo; QA DX-390).
  */
 export function RecordPaymentModal({
   open,
@@ -159,7 +168,10 @@ export function RecordPaymentModal({
   const timeZone = readyTimeZone(zone);
   const today = timeZone ? sedeToday(timeZone) : '';
   const [form, setForm] = useState<FormState>(() => initialForm(today));
-  const [idempotencyKey, setIdempotencyKey] = useState(() => crypto.randomUUID());
+  // La clave y lo que identifica la petición que ya viajó con ella (como la
+  // huella de la API: ni el motivo de una repetida ni la confirmación del
+  // saldo a favor cuentan, así el reintento tras esos 409 es la misma).
+  const idempotency = useRef<{ key: string; sent: string | null }>({ key: '', sent: null });
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [amountError, setAmountError] = useState<string | null>(null);
@@ -180,6 +192,26 @@ export function RecordPaymentModal({
     document.getElementById(pendingFocus.current)?.focus();
     pendingFocus.current = null;
   });
+  /** El foco a un campo con error: ya, o tras el render que lo monta. */
+  function focusField(id: string) {
+    const el = document.getElementById(id);
+    if (el) el.focus();
+    else pendingFocus.current = id;
+  }
+  // Cada apertura estrena clave (la primera petición la crea).
+  useEffect(() => {
+    if (open) idempotency.current = { key: '', sent: null };
+  }, [open]);
+  /** La clave para `request`: la misma si ya viajó esa petición, otra si cambió. */
+  function keyFor(request: unknown): string {
+    const shape = JSON.stringify(request);
+    const current = idempotency.current;
+    if (!current.key || (current.sent !== null && current.sent !== shape)) {
+      current.key = crypto.randomUUID();
+    }
+    current.sent = shape;
+    return current.key;
+  }
 
   // Si la persona aún no tocó la fecha, sigue a «hoy» de la sede cuando llega
   // su zona (DX-097).
@@ -197,7 +229,6 @@ export function RecordPaymentModal({
     if (open) {
       setForm(initialForm(today));
       setDateTouched(false);
-      setIdempotencyKey(crypto.randomUUID());
       setError(null);
       setAmountError(null);
       methodFields.reset();
@@ -262,9 +293,7 @@ export function RecordPaymentModal({
   const pending: number | 'loading' | 'error' =
     balance.status === 'ready' ? balance.balance.balance : balance.status === 'error' ? 'error' : 'loading';
   const splitExceeds =
-    splitTotal?.status === 'ready' &&
-    typeof pending === 'number' &&
-    Math.round(splitTotal.total * 100) > Math.max(0, Math.round(pending * 100));
+    splitTotal?.status === 'ready' && typeof pending === 'number' && excessOverPending(splitTotal.total, pending) > 0;
 
   /**
    * DX-390: el cobro dividido. Cada forma de pago valida como un abono (su
@@ -273,15 +302,15 @@ export function RecordPaymentModal({
    */
   async function submitSplit(planId: string, paidAt: string, first: number) {
     const lines: SplitPaymentLineInput[] = [];
-    let valid = true;
-    for (const line of split.lines) {
+    let firstInvalid: string | null = null;
+    for (const [index, line] of split.lines.entries()) {
       const lc = lineCurrency(line.currency);
       const parsed = parseMoneyInput(line.amount, lc);
       if (!parsed.ok || parsed.value <= 0) {
         split.patch(line.key, {
           amountError: parsed.ok || parsed.reason === 'empty' ? copy.invalidAmount : parsed.message,
         });
-        valid = false;
+        firstInvalid ??= `rp-line-${index + 2}-amount`;
         continue;
       }
       lines.push({
@@ -291,15 +320,49 @@ export function RecordPaymentModal({
         ...split.fields(line).body(),
       });
     }
-    if (!valid) return;
+    // B3 (QA DX-390): el error lleva el foco a su campo.
+    if (firstInvalid) {
+      focusField(firstInvalid);
+      return;
+    }
     if (!methodFields.validate({ requireMethod: true })) return;
     for (const line of split.lines) {
       if (!split.fields(line).validate({ requireMethod: true })) return;
     }
+    // La misma regla que la API (400): dos líneas con el mismo medio y la
+    // misma referencia. Se marca en la segunda, antes de enviar.
+    const allFields: PaymentMethodFieldsState[] = [methodFields, ...split.lines.map((l) => split.fields(l))];
+    const seen = new Set<string>();
+    for (const fields of allFields) {
+      const reference = comparableReference(fields.reference);
+      if (!fields.selected || reference === null) continue;
+      const pair = `${fields.selected.id}|${reference}`;
+      if (seen.has(pair)) {
+        fields.markReference(copy.split.sameReference);
+        return;
+      }
+      seen.add(pair);
+    }
     if (splitExceeds && !confirmCredit) {
       setConfirmError(copy.split.confirmCreditMissing);
+      focusField(CONFIRM_CREDIT_ID);
       return;
     }
+    const allLines: SplitPaymentLineInput[] = [
+      {
+        amount: first,
+        currency,
+        paymentMethodId: '',
+        ...methodFields.body(),
+      } as SplitPaymentLineInput,
+      ...lines,
+    ];
+    const key = keyFor([
+      'split',
+      planId,
+      paidAt,
+      allLines.map((l) => [l.amount, l.currency, l.paymentMethodId, l.reference ?? null]),
+    ]);
     setSubmitting(true);
     try {
       const saved = await recordSplitPayment(
@@ -308,17 +371,9 @@ export function RecordPaymentModal({
         {
           paidAt,
           ...(confirmCredit ? { confirmCreditBalance: true } : {}),
-          lines: [
-            {
-              amount: first,
-              currency,
-              paymentMethodId: '',
-              ...methodFields.body(),
-            } as SplitPaymentLineInput,
-            ...lines,
-          ],
+          lines: allLines,
         },
-        idempotencyKey,
+        key,
       );
       const savedPlan = plans.find((p) => p.id === planId) ?? plan;
       const head = saved.payments[0];
@@ -341,6 +396,8 @@ export function RecordPaymentModal({
       if (err instanceof ApiError && err.code === SPLIT_PAYMENT_EXCEEDS_BALANCE) {
         setConfirmError(copy.split.confirmCreditMissing);
         setBalanceRefresh((n) => n + 1);
+        // La casilla se monta con el error: el foco va a ella tras ese render.
+        pendingFocus.current = CONFIRM_CREDIT_ID;
         return;
       }
       // Otro abono entró a la vez: lo pendiente que se ve ya no vale.
@@ -367,10 +424,12 @@ export function RecordPaymentModal({
     const parsed = parseMoneyInput(form.amount, currency);
     if (!parsed.ok || parsed.value <= 0) {
       setAmountError(parsed.ok || parsed.reason === 'empty' ? copy.invalidAmount : parsed.message);
+      focusField('rp-amount');
       return;
     }
     if (opening && Math.round(parsed.value * 100) > Math.round(opening.pending * 100)) {
       setAmountError(copy.overPending(money(opening.pending, opening.currency)));
+      focusField('rp-amount');
       return;
     }
     setAmountError(null);
@@ -398,13 +457,20 @@ export function RecordPaymentModal({
         paidAt,
         ...methodFields.body(),
       };
+      const key = keyFor([
+        opening ? `ob:${opening.id}` : (plan as NonNullable<typeof plan>).id,
+        amount,
+        currency,
+        paidAt,
+        body.paymentMethodId ?? null,
+        body.reference ?? null,
+      ]);
       const saved = opening
-        ? await recordOpeningBalancePayment(token, opening.id, body, idempotencyKey)
-        : await recordPayment(token, (plan as NonNullable<typeof plan>).id, body, idempotencyKey);
+        ? await recordOpeningBalancePayment(token, opening.id, body, key)
+        : await recordPayment(token, (plan as NonNullable<typeof plan>).id, body, key);
       // El aviso sale de lo que la API GUARDÓ, no del formulario: si un envío
-      // anterior con esta misma clave sí se registró (respuesta perdida) y la
-      // persona cambió los datos antes de reintentar, la API devuelve el abono
-      // original y es ese el que hay que anunciar.
+      // anterior con esta misma clave sí se registró (respuesta perdida), la
+      // API devuelve el abono original y es ese el que hay que anunciar.
       const savedOpening = saved.openingBalanceId
         ? (openings.find((o) => o.id === saved.openingBalanceId) ?? opening)
         : null;
@@ -502,62 +568,81 @@ export function RecordPaymentModal({
           )}
           {plan || opening ? (
             <>
-              <div className="grid gap-4 sm:grid-cols-2">
-                <FormField htmlFor="rp-amount" label={copy.amount} error={amountError}>
-                  <MoneyInput
-                    id="rp-amount"
-                    currency={currency}
-                    requirePositive
-                    value={form.amount}
-                    onValueChange={(amount) => {
-                      patch({ amount });
-                      setAmountError(null);
-                    }}
-                    aria-invalid={amountError ? true : undefined}
-                    aria-describedby={amountError ? fieldErrorId('rp-amount') : undefined}
-                  />
-                </FormField>
-                <FormField htmlFor="rp-currency" label={copy.currency}>
-                  <CurrencySelect
-                    id="rp-currency"
-                    token={token}
-                    value={currency}
-                    onChange={(code) => patch({ currency: code })}
-                    disabled={opening !== null}
-                  />
-                </FormField>
-              </div>
-              {otherCurrency && plan && !isSplit ? (
-                <PaymentRatePreview
-                  state={rates}
-                  amount={previewAmount}
-                  paymentCurrency={currency}
-                  planCurrency={plan.currency}
-                  planBalance={previewBalance}
-                  date={form.date}
-                  fmt={fmt}
-                />
-              ) : null}
-              <div className="grid gap-4 sm:grid-cols-2">
-                <PaymentMethodSelect fields={methodFields} id="rp-method" />
-                <FormField htmlFor="rp-date" label={copy.date}>
-                  {zone.status === 'error' && !dateTouched ? (
-                    <SedeConfigError kind="timeZone" variant="field" retryId="rp-date" onRetry={zone.retry} />
-                  ) : (
-                    <Input
-                      id="rp-date"
-                      type="date"
-                      value={form.date}
-                      onChange={(e) => {
-                        setDateTouched(true);
-                        patch({ date: e.target.value });
+              {/* B9 (QA DX-390): con más de una forma de pago, la primera es
+                  también un grupo con título. El contenedor está siempre, así
+                  añadir o quitar líneas no vuelve a montar sus campos. */}
+              <div
+                role={isSplit ? 'group' : undefined}
+                aria-labelledby={isSplit ? 'rp-line-1-title' : undefined}
+                className={cn(
+                  'flex min-w-0 flex-col gap-4',
+                  isSplit && 'rounded-lg border border-border p-3',
+                )}
+              >
+                {isSplit ? (
+                  <p id="rp-line-1-title" className="t-label text-ink">
+                    {copy.split.lineTitle(1)}
+                  </p>
+                ) : null}
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <FormField htmlFor="rp-amount" label={copy.amount} error={amountError}>
+                    <MoneyInput
+                      id="rp-amount"
+                      currency={currency}
+                      requirePositive
+                      value={form.amount}
+                      disabled={submitting}
+                      onValueChange={(amount) => {
+                        patch({ amount });
+                        setAmountError(null);
                       }}
-                      className="tabular-nums"
+                      aria-invalid={amountError ? true : undefined}
+                      aria-describedby={amountError ? fieldErrorId('rp-amount') : undefined}
                     />
-                  )}
-                </FormField>
+                  </FormField>
+                  <FormField htmlFor="rp-currency" label={copy.currency}>
+                    <CurrencySelect
+                      id="rp-currency"
+                      token={token}
+                      value={currency}
+                      onChange={(code) => patch({ currency: code })}
+                      disabled={opening !== null || submitting}
+                    />
+                  </FormField>
+                </div>
+                {otherCurrency && plan && !isSplit ? (
+                  <PaymentRatePreview
+                    state={rates}
+                    amount={previewAmount}
+                    paymentCurrency={currency}
+                    planCurrency={plan.currency}
+                    planBalance={previewBalance}
+                    date={form.date}
+                    fmt={fmt}
+                  />
+                ) : null}
+                <div className="grid gap-4 sm:grid-cols-2">
+                  <PaymentMethodSelect fields={methodFields} id="rp-method" disabled={submitting} />
+                  <FormField htmlFor="rp-date" label={copy.date}>
+                    {zone.status === 'error' && !dateTouched ? (
+                      <SedeConfigError kind="timeZone" variant="field" retryId="rp-date" onRetry={zone.retry} />
+                    ) : (
+                      <Input
+                        id="rp-date"
+                        type="date"
+                        value={form.date}
+                        disabled={submitting}
+                        onChange={(e) => {
+                          setDateTouched(true);
+                          patch({ date: e.target.value });
+                        }}
+                        className="tabular-nums"
+                      />
+                    )}
+                  </FormField>
+                </div>
+                <PaymentReferenceFields fields={methodFields} idPrefix="rp" disabled={submitting} />
               </div>
-              <PaymentReferenceFields fields={methodFields} idPrefix="rp" />
               {plan && !opening
                 ? split.lines.map((line, index) => (
                     <SplitLineFields

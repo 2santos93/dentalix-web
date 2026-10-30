@@ -397,3 +397,169 @@ it('el 409 de «lo pendiente cambió» (otro abono a la vez) sale en el resumen 
   await waitFor(() => expect(getPlanBalance).toHaveBeenCalledTimes(2));
   expect(onRecorded).not.toHaveBeenCalled();
 });
+
+// Correcciones de la QA en navegador (DX-390).
+describe('correcciones de QA (DX-390)', () => {
+  it('B2: con saldo a favor previo, el excedente es solo lo que este cobro supera lo pendiente', async () => {
+    (getPlanBalance as jest.Mock).mockResolvedValue(copBalance(-15000));
+    const { dialog } = renderModal();
+    const { user, second } = await fillTwoLines(dialog);
+    await user.selectOptions(within(second).getByLabelText('Método'), 'pm-cash');
+
+    const summary = within(dialog).getByTestId('split-summary');
+    await waitFor(() => expect(text(summary.textContent)).toContain('Total del cobroCOP 300.000,00'));
+    expect(text(summary.textContent)).toContain('Pendiente del planCOP 0,00');
+    // El saldo a favor tras el cobro sí suma el previo; el excedente, no.
+    expect(text(summary.textContent)).toContain('Saldo a favor tras el cobroCOP 315.000,00');
+    expect(text(summary.textContent)).toContain('supera lo pendiente en COP 300.000,00');
+  });
+
+  it('B4: mientras se envía, también la primera forma de pago queda bloqueada', async () => {
+    let fail: (err: unknown) => void = () => undefined;
+    mockedSplit.mockImplementationOnce(
+      () =>
+        new Promise((_, reject) => {
+          fail = reject;
+        }),
+    );
+    const { dialog } = renderModal();
+    const { user, second } = await fillTwoLines(dialog);
+    await user.selectOptions(document.getElementById('rp-method') as HTMLElement, 'pm-transfer');
+    await user.type(document.getElementById('rp-reference') as HTMLElement, 'TR-1');
+    await user.selectOptions(within(second).getByLabelText('Método'), 'pm-transfer');
+    await user.type(within(second).getByLabelText('Referencia (obligatoria)'), 'TR-2');
+
+    await user.click(within(dialog).getByRole('button', { name: 'Registrar abono' }));
+    await waitFor(() => expect(mockedSplit).toHaveBeenCalledTimes(1));
+    for (const id of ['rp-amount', 'rp-currency', 'rp-method', 'rp-reference', 'rp-date', 'rp-line-2-reference']) {
+      expect(document.getElementById(id)).toBeDisabled();
+    }
+    fail(new ApiError(500, 'boom'));
+    await within(dialog).findByRole('alert');
+    expect(document.getElementById('rp-amount')).not.toBeDisabled();
+  });
+
+  it('B4: tras un fallo, el reintento sin cambios reusa la clave y con datos cambiados estrena otra', async () => {
+    mockedSplit.mockRejectedValueOnce(new ApiError(500, 'boom')).mockRejectedValueOnce(new ApiError(500, 'boom'));
+    const { dialog } = renderModal();
+    const { user, second } = await fillTwoLines(dialog);
+    await user.selectOptions(within(second).getByLabelText('Método'), 'pm-cash');
+    const submit = () => user.click(within(dialog).getByRole('button', { name: 'Registrar abono' }));
+
+    await submit();
+    await within(dialog).findByRole('alert');
+    await submit();
+    await waitFor(() => expect(mockedSplit).toHaveBeenCalledTimes(2));
+    expect(mockedSplit.mock.calls[1][3]).toBe(mockedSplit.mock.calls[0][3]);
+
+    const amount = document.getElementById('rp-amount') as HTMLElement;
+    await user.clear(amount);
+    await user.type(amount, '90000');
+    await submit();
+    await waitFor(() => expect(mockedSplit).toHaveBeenCalledTimes(3));
+    expect(mockedSplit.mock.calls[2][2].lines[0].amount).toBe(90000);
+    expect(mockedSplit.mock.calls[2][3]).toMatch(/^[0-9a-f-]{36}$/);
+    expect(mockedSplit.mock.calls[2][3]).not.toBe(mockedSplit.mock.calls[0][3]);
+  });
+
+  it('B3: el importe vacío o 0 lleva el foco a su campo (la primera o la añadida)', async () => {
+    const { dialog } = renderModal();
+    const { user, second } = await fillTwoLines(dialog);
+    await user.selectOptions(within(second).getByLabelText('Método'), 'pm-cash');
+    const secondAmount = within(second).getByLabelText('Importe');
+    await user.clear(secondAmount);
+    await user.type(secondAmount, '0');
+
+    await user.click(within(dialog).getByRole('button', { name: 'Registrar abono' }));
+    await waitFor(() => expect(secondAmount).toHaveAttribute('aria-invalid', 'true'));
+    expect(secondAmount).toHaveFocus();
+
+    const first = document.getElementById('rp-amount') as HTMLElement;
+    await user.clear(first);
+    await user.click(within(dialog).getByRole('button', { name: 'Registrar abono' }));
+    await waitFor(() => expect(first).toHaveAttribute('aria-invalid', 'true'));
+    expect(first).toHaveFocus();
+    expect(mockedSplit).not.toHaveBeenCalled();
+  });
+
+  it('B3: el mismo medio y la misma referencia en dos formas de pago se marca en la segunda, con el foco', async () => {
+    const { dialog } = renderModal();
+    const { user, second } = await fillTwoLines(dialog);
+    await user.selectOptions(document.getElementById('rp-method') as HTMLElement, 'pm-transfer');
+    await user.type(document.getElementById('rp-reference') as HTMLElement, 'TR-9');
+    await user.selectOptions(within(second).getByLabelText('Método'), 'pm-transfer');
+    const reference = within(second).getByLabelText('Referencia (obligatoria)');
+    await user.type(reference, 'tr 9');
+
+    await user.click(within(dialog).getByRole('button', { name: 'Registrar abono' }));
+    await waitFor(() => expect(reference).toHaveAttribute('aria-invalid', 'true'));
+    expect(reference).toHaveFocus();
+    expect(within(second).getByText(splitPaymentCopy.sameReference)).toBeInTheDocument();
+    expect(mockedSplit).not.toHaveBeenCalled();
+  });
+
+  it('B3: «Confirma el saldo a favor» lleva el foco a la casilla', async () => {
+    (getPlanBalance as jest.Mock).mockResolvedValue(copBalance(250000));
+    const { dialog } = renderModal();
+    const { user, second } = await fillTwoLines(dialog);
+    await user.selectOptions(within(second).getByLabelText('Método'), 'pm-cash');
+    const summary = within(dialog).getByTestId('split-summary');
+    await waitFor(() => expect(text(summary.textContent)).toContain('supera lo pendiente'));
+
+    await user.click(within(dialog).getByRole('button', { name: 'Registrar abono' }));
+    const confirm = within(summary).getByLabelText(splitPaymentCopy.confirmCredit);
+    await waitFor(() => expect(confirm).toHaveAttribute('aria-invalid', 'true'));
+    expect(confirm).toHaveFocus();
+  });
+
+  it('B3: el 409 de saldo a favor de la API también lleva el foco a la casilla', async () => {
+    (getPlanBalance as jest.Mock).mockRejectedValue(new Error('boom'));
+    mockedSplit.mockRejectedValueOnce(
+      new ApiError(409, 'El total del cobro supera lo pendiente del plan.', {
+        code: 'SPLIT_PAYMENT_EXCEEDS_BALANCE',
+      }),
+    );
+    const { dialog } = renderModal();
+    const { user, second } = await fillTwoLines(dialog);
+    await user.selectOptions(within(second).getByLabelText('Método'), 'pm-cash');
+    await user.click(within(dialog).getByRole('button', { name: 'Registrar abono' }));
+    const confirm = await within(dialog).findByLabelText(splitPaymentCopy.confirmCredit);
+    await waitFor(() => expect(confirm).toHaveFocus());
+  });
+
+  it('B9: el lector de pantalla no dice «Calculando el total…» del pendiente cuando ya hay total', async () => {
+    (getPlanBalance as jest.Mock).mockReturnValue(new Promise(() => undefined));
+    const { dialog } = renderModal();
+    const { user, second } = await fillTwoLines(dialog);
+    await user.selectOptions(within(second).getByLabelText('Método'), 'pm-cash');
+    const summary = within(dialog).getByTestId('split-summary');
+    await waitFor(() => expect(text(summary.textContent)).toContain('Total del cobroCOP 300.000,00'));
+    expect(within(summary).queryByText(splitPaymentCopy.loading)).toBeNull();
+    expect(within(summary).getByText(splitPaymentCopy.loadingPending)).toBeInTheDocument();
+  });
+
+  it('B9: con más de una forma de pago, la primera es el grupo «Forma de pago 1»', async () => {
+    const user = userEvent.setup();
+    const { dialog } = renderModal();
+    await within(dialog).findByLabelText('Plan');
+    expect(within(dialog).queryByRole('group', { name: splitPaymentCopy.lineTitle(1) })).toBeNull();
+    await user.click(within(dialog).getByRole('button', { name: splitPaymentCopy.addLine }));
+    const first = within(dialog).getByRole('group', { name: splitPaymentCopy.lineTitle(1) });
+    expect(within(first).getByLabelText('Importe')).toHaveAttribute('id', 'rp-amount');
+    expect(within(first).getByLabelText('Método')).toHaveAttribute('id', 'rp-method');
+  });
+
+  // B9: el aviso usa el mismo helper que el resto del modal (`sedeMoney`, DX-386:
+  // formato de la sede y SIEMPRE el código ISO, nunca «US$»), también sin total.
+  it('B9: el aviso de éxito formatea cada importe con el formato de la sede y su código ISO', async () => {
+    mockedSplit.mockResolvedValue({ ...savedSplit(), total: null });
+    const { dialog, onRecorded } = renderModal();
+    const { user, second } = await fillTwoLines(dialog);
+    await user.selectOptions(within(second).getByLabelText('Método'), 'pm-cash');
+    await user.click(within(dialog).getByRole('button', { name: 'Registrar abono' }));
+    await waitFor(() => expect(onRecorded).toHaveBeenCalledTimes(1));
+    expect(text(onRecorded.mock.calls[0][0])).toBe(
+      'Cobro registrado: COP 100.000,00 + USD 50,00 en 2 formas de pago · 30/10/2026 · Plan del 01/08/2026 · recibo PRI-000007.',
+    );
+  });
+});

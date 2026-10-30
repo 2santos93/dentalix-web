@@ -48,6 +48,15 @@ export function isBlankReference(value: string): boolean {
   return value.replace(REFERENCE_SEPARATORS, '') === '';
 }
 
+/**
+ * DX-390: la referencia como la compara la API (`normalizeReference`: sin
+ * separadores y en mayúsculas), o `null` si no hay nada que comparar.
+ */
+export function comparableReference(value: string): string | null {
+  const normalized = value.replace(REFERENCE_SEPARATORS, '').toUpperCase();
+  return normalized === '' ? null : normalized;
+}
+
 type MethodBody = Pick<RecordPaymentInput, 'paymentMethodId' | 'reference' | 'duplicateReferenceReason'>;
 
 export interface PaymentMethodFieldsState {
@@ -83,6 +92,11 @@ export interface PaymentMethodFieldsState {
    * su campo (`aria-invalid`) y el campo recibe el foco (DX-395).
    */
   validate: (options?: { requireMethod?: boolean }) => boolean;
+  /**
+   * DX-390: marca la referencia con un error que se ve antes de enviar (p. ej.
+   * la misma en dos formas de pago del cobro), con el foco en ella.
+   */
+  markReference: (message: string) => void;
   /** Lo que se añade al cuerpo del abono. */
   body: () => MethodBody;
   /** `true` si el error es el 409 de referencia repetida (ya avisado). */
@@ -187,6 +201,7 @@ export function methodFieldsOf(
       }
       return true;
     },
+    markReference: (message) => update((s) => withFocus({ ...s, referenceError: message }, 'reference')),
     body: () => {
       const trimmed = state.reference.trim();
       const reason = state.duplicateReason.trim();
@@ -276,7 +291,16 @@ export function PaymentMethodSelect({
  * `required` nativo: el formulario valida con sus propios mensajes en español
  * (DX-395), y `aria-required` sigue diciendo que el campo es obligatorio.
  */
-export function PaymentReferenceFields({ fields, idPrefix }: { fields: PaymentMethodFieldsState; idPrefix: string }) {
+export function PaymentReferenceFields({
+  fields,
+  idPrefix,
+  disabled,
+}: {
+  fields: PaymentMethodFieldsState;
+  idPrefix: string;
+  /** Mientras se envía el abono (DX-390). */
+  disabled?: boolean;
+}) {
   const { selected, referenceError, duplicate, duplicateReasonError, focusRequest } = fields;
   const referenceRef = useRef<HTMLInputElement>(null);
   const reasonRef = useRef<HTMLInputElement>(null);
@@ -308,6 +332,7 @@ export function PaymentReferenceFields({ fields, idPrefix }: { fields: PaymentMe
             value={fields.reference}
             maxLength={60}
             autoComplete="off"
+            disabled={disabled}
             aria-required={selected.requiresReference || undefined}
             onChange={(e) => fields.setReference(e.target.value)}
             aria-invalid={referenceError ? true : undefined}
@@ -331,6 +356,7 @@ export function PaymentReferenceFields({ fields, idPrefix }: { fields: PaymentMe
               ref={reasonRef}
               value={fields.duplicateReason}
               maxLength={300}
+              disabled={disabled}
               onChange={(e) => fields.setDuplicateReason(e.target.value)}
               aria-required
               aria-invalid={duplicateReasonError ? true : undefined}

@@ -35,6 +35,7 @@ export const splitPaymentCopy = {
   pendingAfter: 'Pendiente tras el cobro',
   inFavorAfter: 'Saldo a favor tras el cobro',
   loading: 'Calculando el total…',
+  loadingPending: 'Calculando lo pendiente…',
   balanceUnavailable: 'No se pudo leer el saldo del plan: lo pendiente se verá al guardar.',
   ratesUnavailable:
     'Sin la tasa de algún importe en otra moneda: el total se verá al guardar y esa forma de pago queda «sin tasa» hasta que la haya.',
@@ -42,6 +43,9 @@ export const splitPaymentCopy = {
     `El cobro supera lo pendiente en ${excess}. Confirma que el excedente queda como saldo a favor del paciente.`,
   confirmCredit: 'Registrar el excedente como saldo a favor',
   confirmCreditMissing: 'Confirma el saldo a favor para registrar el cobro.',
+  // El mismo texto que el 400 de la API, ya junto a la referencia repetida.
+  sameReference:
+    'Dos formas de pago del cobro tienen el mismo medio y la misma referencia. Revisa la referencia de cada una.',
 };
 const copy = splitPaymentCopy;
 
@@ -174,7 +178,7 @@ export function SplitLineFields({
         </FormField>
       </div>
       <PaymentMethodSelect fields={fields} id={`${prefix}-method`} disabled={disabled} />
-      <PaymentReferenceFields fields={fields} idPrefix={prefix} />
+      <PaymentReferenceFields fields={fields} idPrefix={prefix} disabled={disabled} />
     </fieldset>
   );
 }
@@ -219,6 +223,15 @@ export function splitTotalOf(
 }
 
 /**
+ * Lo que el cobro supera lo pendiente del plan, al céntimo, o 0. Lo pendiente
+ * nunca baja de 0: un saldo a favor previo no se suma al excedente de este
+ * cobro. La misma cuenta que `excessOverPending` de la API (QA DX-390).
+ */
+export function excessOverPending(total: number, pending: number): number {
+  return Math.max(0, Math.round(total * 100) - Math.max(0, Math.round(pending * 100))) / 100;
+}
+
+/**
  * Total y pendiente del cobro dividido en la moneda del plan, y la
  * confirmación del saldo a favor si el total lo supera (DX-390).
  */
@@ -245,7 +258,8 @@ export function SplitPaymentSummary({
   const money = (value: number) => sedeMoney(value, planCurrency, fmt);
   const known = total.status === 'ready' && typeof pending === 'number';
   const after = known ? Math.round((pending - total.total) * 100) / 100 : null;
-  const exceeds = after !== null && after < 0;
+  const excess = known ? excessOverPending(total.total, pending) : 0;
+  const exceeds = excess > 0;
   return (
     <section
       data-testid="split-summary"
@@ -277,7 +291,7 @@ export function SplitPaymentSummary({
             ) : pending === 'loading' ? (
               <span className="inline-flex items-center gap-2 text-muted">
                 <Loader2 aria-hidden className="size-4 animate-spin" />
-                <span className="sr-only">{copy.loading}</span>
+                <span className="sr-only">{copy.loadingPending}</span>
               </span>
             ) : (
               '—'
@@ -286,7 +300,7 @@ export function SplitPaymentSummary({
         </div>
         {after !== null ? (
           <div className="min-w-0">
-            <dt className="text-muted">{exceeds ? copy.inFavorAfter : copy.pendingAfter}</dt>
+            <dt className="text-muted">{after < 0 ? copy.inFavorAfter : copy.pendingAfter}</dt>
             <dd className="font-semibold tabular-nums">{money(Math.abs(after))}</dd>
           </div>
         ) : null}
@@ -300,7 +314,7 @@ export function SplitPaymentSummary({
       {pending === 'error' ? <p className="text-muted">{copy.balanceUnavailable}</p> : null}
       {exceeds || confirmError ? (
         <div className="flex flex-col gap-2 rounded-lg border border-warning/40 bg-warning/10 p-3">
-          {exceeds && after !== null ? <p>{copy.exceeds(money(Math.abs(after)))}</p> : null}
+          {exceeds ? <p>{copy.exceeds(money(excess))}</p> : null}
           <label htmlFor="rp-confirm-credit" className="flex min-h-11 items-center gap-2 sm:min-h-0">
             <input
               id="rp-confirm-credit"
