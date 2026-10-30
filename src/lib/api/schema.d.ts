@@ -9974,6 +9974,16 @@ export interface components {
             treatmentPlan: components["schemas"]["CashTreatmentPlanRefDto"] | null;
             /** @description Saldo migrado del abono (DX-262); null si es a un plan */
             openingBalance: components["schemas"]["CashOpeningBalanceRefDto"] | null;
+            /**
+             * Format: uuid
+             * @description DX-390: el cobro dividido del abono (el id de su línea 1); `null` en un abono de una sola forma de pago. Anular una línea anula el cobro entero.
+             */
+            splitId: string | null;
+            /**
+             * @description DX-390: cuántas formas de pago tiene su cobro dividido (también las que el filtro no muestra); `null` en un abono suelto.
+             * @example 2
+             */
+            splitLines: number | null;
         };
         CashScopeDto: {
             /** @description Sede activa del request (X-Location-Id), o null = todas las sedes. */
@@ -11024,6 +11034,16 @@ export interface components {
              * @example ABC 123
              */
             reference: string | null;
+            /**
+             * Format: uuid
+             * @description DX-390: el cobro dividido del abono (el id de su línea 1); `null` en un abono de una sola forma de pago. Anular una línea anula el cobro entero.
+             */
+            splitId: string | null;
+            /**
+             * @description DX-390: cuántas formas de pago tiene su cobro dividido; `null` en un abono suelto.
+             * @example 2
+             */
+            splitLines: number | null;
             location: components["schemas"]["AccountStatementLocationRefDto"];
             /**
              * Format: uuid
@@ -22003,7 +22023,7 @@ export interface operations {
                 };
                 content?: never;
             };
-            /** @description Plan rechazado o cancelado (DX-109). `code: PAYMENT_REFERENCE_DUPLICATE` con `line` (desde 0) si la referencia de una línea ya está en otro abono vivo de ±90 días: se confirma con su `duplicateReferenceReason`. `code: SPLIT_PAYMENT_EXCEEDS_BALANCE` (con `total`, `pending` y `currency`, la del plan) si el total supera lo pendiente: se confirma con `confirmCreditBalance`. Sin caja abierta, si la clínica la exige para el efectivo (DX-027). */
+            /** @description Plan rechazado o cancelado (DX-109). `code: PAYMENT_REFERENCE_DUPLICATE` con `line` (desde 0) si la referencia de una línea ya está en otro abono vivo de ±90 días: se confirma con su `duplicateReferenceReason`. `code: SPLIT_PAYMENT_EXCEEDS_BALANCE` (con `total`, `pending` y `currency`, la del plan) si el total supera lo pendiente: se confirma con `confirmCreditBalance`. `code: SPLIT_PAYMENT_BALANCE_CHANGED` si, sin esa confirmación, otro abono entró al plan mientras se registraba el cobro: no se registra nada y se repite la petición (misma clave). Sin caja abierta, si la clínica la exige para el efectivo (DX-027). */
             409: {
                 headers: {
                     [name: string]: unknown;
