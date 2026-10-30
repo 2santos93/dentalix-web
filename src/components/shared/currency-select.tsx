@@ -33,6 +33,8 @@ type CurrencySelectProps = CurrencySource & {
   /** Para `aria-invalid`/`aria-required` desde el `FormField` que lo envuelve. */
   invalid?: boolean;
   required?: boolean;
+  /** Códigos que no se ofrecen (p. ej. la moneda base de las tasas, que da la API). */
+  exclude?: readonly string[];
 };
 
 export function CurrencySelect({
@@ -48,6 +50,7 @@ export function CurrencySelect({
   placeholder,
   invalid,
   required,
+  exclude,
 }: CurrencySelectProps) {
   const [currencies, setCurrencies] = useState<Currency[]>([]);
   const [failed, setFailed] = useState(false);
@@ -87,7 +90,8 @@ export function CurrencySelect({
 
   // Until the list loads, keep `value` selectable so the control is never
   // empty and never loses the current selection.
-  const options = currencies.length > 0 ? currencies : [{ code: value, name: value, symbol: '' }];
+  const loaded = currencies.length > 0 ? currencies : [{ code: value, name: value, symbol: '' }];
+  const options = exclude?.length ? loaded.filter((c) => !exclude.includes(c.code)) : loaded;
 
   return (
     <select

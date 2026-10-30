@@ -111,6 +111,8 @@ export const AUDIT_RESOURCE_LABELS: Record<AuditResourceType, string> = {
   CLINIC_SETTINGS: 'Ajustes de la clínica',
   // DX-316: días hábiles y festivos de una sede (el resourceId es la sede).
   LOCATION_CALENDAR: 'Calendario de la sede',
+  // DX-374: tasa de cambio manual registrada por el ADMIN (el resourceId es la tasa).
+  EXCHANGE_RATE: 'Tasa de cambio',
 };
 
 export const AUDIT_RESOURCE_OPTIONS = Object.keys(AUDIT_RESOURCE_LABELS) as AuditResourceType[];
@@ -463,6 +465,19 @@ function documentTypeNamesDetail(changedFields: string[] | undefined): string | 
  * edad («Mayoría de edad: 18 → 16 años»). DX-324: los ajustes de la receta.
  * null si el evento no es de uno de esos ajustes.
  */
+const EXCHANGE_RATE_SOURCE_LABELS: Record<string, string> = {
+  AUTOMATIC: 'automática',
+  MANUAL: 'manual',
+};
+
+/** DX-374: fuente de la tasa de cambio antes y después, o null con códigos desconocidos. */
+function exchangeRateSourceDetail(from: string, to: string): string | null {
+  const before = EXCHANGE_RATE_SOURCE_LABELS[from];
+  const after = EXCHANGE_RATE_SOURCE_LABELS[to];
+  if (!before || !after) return null;
+  return `Tasa de cambio: ${before} → ${after}`;
+}
+
 export function clinicSettingsDetail(metadata: AuditMetadata): string | null {
   // DX-327: sin `statusChange` ni valores (son texto libre); va antes del
   // `return null` de abajo o no llegaría nunca.
@@ -472,6 +487,7 @@ export function clinicSettingsDetail(metadata: AuditMetadata): string | null {
   if (!metadata.statusChange) return null;
   const { from, to } = metadata.statusChange;
   if (metadata.reason === 'PRESCRIPTION_SETTINGS') return prescriptionSettingsDetail(from, to);
+  if (metadata.reason === 'EXCHANGE_RATE_SOURCE') return exchangeRateSourceDetail(from, to);
   if (metadata.reason !== 'MAJORITY_AGE_SETTINGS') return null;
   const before = ageOf(from);
   const after = ageOf(to);
