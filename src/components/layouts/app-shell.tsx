@@ -109,6 +109,23 @@ const NAV: NavItem[] = [
 ];
 
 /**
+ * DX-365: títulos de la barra superior móvil para las rutas que no tienen
+ * entrada en el menú. Gana el prefijo más largo, como con el menú, así que
+ * /settings/auditoria sigue siendo «Auditoría». Copian el título de su página.
+ */
+const ROUTE_TITLES: { href: string; label: string }[] = [
+  { href: '/settings', label: 'Ajustes' },
+  { href: '/settings/profile', label: 'Mi perfil' },
+];
+
+/** Prefijo de ruta más largo que case con `pathname` (la propia ruta o un padre). */
+function longestMatch<T extends { href: string }>(items: readonly T[], pathname: string): T | undefined {
+  return items
+    .filter(({ href }) => pathname === href || pathname.startsWith(`${href}/`))
+    .sort((a, b) => b.href.length - a.href.length)[0];
+}
+
+/**
  * Template: the authenticated app chrome — persistent sidebar (md+), a topbar
  * solo para móvil, y un área de contenido scrollable. Nav highlights the active
  * section via usePathname. Contexto y sesión viven al pie del sidebar en
@@ -176,11 +193,12 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
     (href === '/agenda' && waitingForYou > 0) || (href === ANAMNESIS_HREF && anamnesisCount > 0);
   // Activa la entrada MÁS específica que case: en /caja/cartera es «Cartera»,
   // no también «Caja».
-  const activeHref = nav
-    .map((item) => item.href)
-    .filter((href) => pathname === href || pathname.startsWith(`${href}/`))
-    .sort((a, b) => b.length - a.length)[0];
+  const activeHref = longestMatch(nav, pathname)?.href;
   const isActive = (href: string) => href === activeHref;
+  // DX-365: título de la barra superior móvil. Sale del menú entero, no del
+  // filtrado por rol: quien abre /dashboard por URL sin la entrada sigue
+  // sabiendo dónde está (la pantalla ya le dice que no tiene permiso).
+  const topbarTitle = longestMatch([...NAV, ...ROUTE_TITLES], pathname)?.label ?? 'Dentalix';
 
   // Rehidratar la preferencia: localStorage no existe en SSR, así que no puede
   // ser el estado inicial sin romper la hidratación — el primer render en
@@ -322,30 +340,62 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
             sitio para nav, sede y cuenta. En desktop el sidebar los tiene todos,
             así que la barra sobraría — y una banda vacía de 64px le robaría alto
             al contenido. */}
-        <header className="flex h-16 items-center justify-between gap-4 border-b border-border bg-surface px-4 md:hidden">
-          {/* Scrollable en horizontal: con 7 secciones los ítems suman más que
-              el ancho de un móvil, y sin esto desbordan la página entera. */}
-          <nav className="-mx-1 flex min-w-0 items-center gap-1 overflow-x-auto px-1">
-            <span className="mr-1 shrink-0 text-lg" aria-hidden>
+        {/* DX-365: dos filas. Antes todo iba en una: el selector de sede y el
+            avatar dejaban al scroller del menú unos 120 px a 390 px y el
+            primer enlace se leía «Dashboar», cortado a media palabra.
+            Fila 1: dónde estoy (título de la sección), sede y cuenta. El
+            título es el único que cede ancho y, si no cabe, se trunca con
+            elipsis: el texto entero sigue en el DOM (lo lee el lector de
+            pantalla, una sola vez) y en `title`.
+            Fila 2: el menú como fila de iconos de 44×44 con nombre accesible y
+            `title`, como el rail del sidebar. Sigue desplazándose en
+            horizontal si no caben todos, pero lo que asoma en el borde es un
+            icono, nunca media palabra. */}
+        <header className="border-b border-border bg-surface md:hidden">
+          <div className="flex h-14 items-center gap-2 px-4">
+            <span className="shrink-0 text-lg" aria-hidden>
               🦷
             </span>
+            <p
+              data-testid="topbar-title"
+              title={topbarTitle}
+              className="min-w-0 flex-1 truncate text-base font-semibold text-ink"
+            >
+              {topbarTitle}
+            </p>
+            <div className="flex shrink-0 items-center gap-2">
+              {/* El selector con el nombre de la sede mide hasta 192 px; por
+                  debajo de 380 px no deja sitio al título y pasa a botón de
+                  icono (el del rail, con la sede en `title`). */}
+              <div className="hidden min-[380px]:contents">
+                <LocationSwitcher />
+              </div>
+              <div className="contents min-[380px]:hidden">
+                <LocationSwitcher variant="rail" />
+              </div>
+              <UserMenu variant="compact" />
+            </div>
+          </div>
+          {/* Scrollable en horizontal: con todas las secciones los iconos suman
+              más que el ancho de un móvil, y sin esto desbordan la página. */}
+          <nav className="flex min-w-0 items-center gap-1 overflow-x-auto px-3 pb-1">
             {nav.map(({ href, label, icon: Icon }) => (
               <div key={href} className="flex shrink-0 items-center">
               <Link
                 href={href}
                 aria-current={isActive(href) ? 'page' : undefined}
-                aria-label={hasCount(href) ? navLabel(href, label) : undefined}
+                aria-label={navLabel(href, label)}
+                title={navLabel(href, label)}
                 className={cn(
-                  'flex h-11 shrink-0 items-center gap-1.5 rounded-md px-2.5 text-sm font-medium transition-colors',
+                  'relative flex size-11 shrink-0 items-center justify-center rounded-md transition-colors',
                   isActive(href)
                     ? 'bg-primary/10 text-primary'
                     : 'text-muted hover:text-ink',
                 )}
               >
-                <Icon className="size-4 shrink-0" />
-                <span>{label}</span>
+                <Icon className="size-5 shrink-0" />
                 {href === ANAMNESIS_HREF && anamnesisCount > 0 && (
-                  <InboxCount count={anamnesisCount} variant="inline" />
+                  <InboxCount count={anamnesisCount} variant="rail" />
                 )}
               </Link>
               {href === '/agenda' && waitingForYou > 0 && <Link href="/agenda/en-clinica" aria-label={waitingForYouLabel(waitingForYou)} className="rounded-full focus-visible:outline-2 focus-visible:outline-primary">
@@ -354,10 +404,6 @@ function AppShellContent({ children }: { children: React.ReactNode }) {
               </div>
             ))}
           </nav>
-          <div className="flex shrink-0 items-center gap-2">
-            <LocationSwitcher />
-            <UserMenu variant="compact" />
-          </div>
         </header>
 
         {/* `min-h-0` deja que main se encoja por debajo de su contenido; lo que
