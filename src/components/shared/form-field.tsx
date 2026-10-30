@@ -8,6 +8,16 @@ export function fieldErrorId(htmlFor: string): string {
   return `${htmlFor}-error`;
 }
 
+/**
+ * id of a `FormField`'s label. A control that is not a labelable element (the
+ * segmented `DateField`/`DatePicker`/`TimeField` groups) is named with
+ * `aria-labelledby={fieldLabelId(htmlFor)}` — the date primitives do it on
+ * their own when they get `id`.
+ */
+export function fieldLabelId(htmlFor: string): string {
+  return `${htmlFor}-field-label`;
+}
+
 interface FormFieldProps {
   /** id of the control this field labels (ties <Label htmlFor> to the input). */
   htmlFor: string;
@@ -36,7 +46,9 @@ export function FormField({
 }: FormFieldProps) {
   return (
     <div className={cn('flex flex-col gap-1.5', className)}>
-      <Label htmlFor={htmlFor}>{label}</Label>
+      <Label id={fieldLabelId(htmlFor)} htmlFor={htmlFor}>
+        {label}
+      </Label>
       {children}
       {hint && !error ? <p id={hintId} className="text-xs text-muted">{hint}</p> : null}
       {error ? (

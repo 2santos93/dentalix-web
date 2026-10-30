@@ -1,4 +1,4 @@
-import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
+import { render, screen, waitFor, within } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { DashboardView } from './dashboard-view';
 import { ApiError } from '@/lib/api/client';
@@ -96,8 +96,28 @@ const FROZEN_NOW = new Date('2026-08-15T12:00:00.000Z');
 const TENTH_OF_MONTH = '2026-08-10';
 /** Su cota exclusiva (+1 día), que es lo que el componente debe enviar como `to`. */
 const ELEVENTH_OF_MONTH = '2026-08-11';
-/** Mañana: estrictamente DESPUÉS del "Hasta" por defecto (hoy) -> dispara la guarda. */
-const TOMORROW = '2026-08-16';
+
+/**
+ * Los segmentos (día, mes, año) de un extremo del «Periodo»: el filtro es un
+ * `DateRangePicker` escrito por segmentos, con el locale de la sede (es:
+ * dd/mm/aaaa), no un `<input type="date">`.
+ */
+function rangePart(part: 'Desde' | 'Hasta'): HTMLElement[] {
+  const group = screen.getByRole('group', { name: 'Periodo' });
+  return within(group).getAllByRole('spinbutton', { name: new RegExp(`, ${part},`) });
+}
+
+/** El valor ISO que muestra un extremo del periodo. */
+function rangePartIso(part: 'Desde' | 'Hasta'): string {
+  const [day, month, year] = rangePart(part).map((segment) => segment.textContent ?? '');
+  return `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+}
+
+/** Escribe `digits` en un segmento (0 = día, 1 = mes, 2 = año) de un extremo. */
+async function typeInRange(user: ReturnType<typeof userEvent.setup>, part: 'Desde' | 'Hasta', segment: number, digits: string) {
+  await user.click(rangePart(part)[segment]);
+  await user.keyboard(digits);
+}
 
 function dashboard(overrides: Partial<Dashboard> = {}): Dashboard {
   return {
@@ -299,12 +319,9 @@ describe('DashboardView', () => {
     expect(firstParams.to).toBe('2026-08-16');
 
     mockedGetDashboard.mockClear();
-    const fromInput = screen.getByLabelText('Desde');
-    // A single `fireEvent.change` (rather than `userEvent.type`, which fires
-    // one change event per keystroke — each of which is itself a distinct
-    // `from` value and therefore its own refetch, per this component's
-    // effect) so the assertion below can pin down exactly one resulting call.
-    fireEvent.change(fromInput, { target: { value: '2026-06-01' } });
+    // Solo el mes de «Desde» (01/08 → 01/06): «0» deja el mes a medias y «6»
+    // lo completa, así que hay exactamente un `from` nuevo y una consulta.
+    await typeInRange(userEvent.setup(), 'Desde', 1, '06');
 
     await waitFor(() => expect(mockedGetDashboard).toHaveBeenCalledTimes(1));
     const [, params] = mockedGetDashboard.mock.calls[0];
@@ -318,14 +335,13 @@ describe('DashboardView', () => {
     await waitFor(() => expect(mockedGetDashboard).toHaveBeenCalledTimes(1));
 
     mockedGetDashboard.mockClear();
-    const toInput = screen.getByLabelText('Hasta') as HTMLInputElement;
-    fireEvent.change(toInput, { target: { value: TENTH_OF_MONTH } });
+    // Día «10» en «Hasta»: el «1» ya es un día completo (consulta intermedia),
+    // así que se mira la ÚLTIMA consulta, la del 10.
+    await typeInRange(userEvent.setup(), 'Hasta', 0, '10');
 
-    await waitFor(() => expect(mockedGetDashboard).toHaveBeenCalledTimes(1));
-    const [, params] = mockedGetDashboard.mock.calls[0];
-    expect(params.to).toBe(ELEVENTH_OF_MONTH);
-    // The input itself still reflects the user's selected (inclusive) date.
-    expect(toInput.value).toBe(TENTH_OF_MONTH);
+    await waitFor(() => expect(mockedGetDashboard.mock.calls.at(-1)?.[1].to).toBe(ELEVENTH_OF_MONTH));
+    // The field itself still reflects the user's selected (inclusive) date.
+    expect(rangePartIso('Hasta')).toBe(TENTH_OF_MONTH);
   });
 
   it('refetches with the new currency when the currency select changes', async () => {
@@ -404,8 +420,8 @@ describe('DashboardView', () => {
     await waitFor(() => expect(mockedGetDashboard).toHaveBeenCalledTimes(1));
 
     mockedGetDashboard.mockClear();
-    const fromInput = screen.getByLabelText('Desde');
-    fireEvent.change(fromInput, { target: { value: TOMORROW } });
+    // «Hasta» un mes antes de «Desde» (15/07 < 01/08): un solo cambio, el mes.
+    await typeInRange(userEvent.setup(), 'Hasta', 1, '07');
 
     const alert = await screen.findByRole('alert');
     expect(alert).toHaveTextContent(/desde.*hasta|hasta.*desde/i);
@@ -451,7 +467,7 @@ describe('DashboardView · días de la sede (DX-097)', () => {
 
     await waitFor(() => expect(mockedGetDashboard).toHaveBeenCalledTimes(1));
     expect(mockedGetDashboard.mock.calls[0][1]).toMatchObject({ from: '2026-10-01', to: '2026-11-01' });
-    expect((screen.getByLabelText('Hasta') as HTMLInputElement).value).toBe('2026-10-31');
+    expect(rangePartIso('Hasta')).toBe('2026-10-31');
     expect(screen.getByTestId('dashboard-zone-note')).toHaveTextContent('Días en hora de Bogotá.');
   });
 

@@ -12,6 +12,9 @@ import {
 import { Wizard, WizardNav, type WizardStep } from '@/components/ui/wizard';
 import { ClinicalHistoryFields } from '@/components/clinical/clinical-history-fields';
 import { Input } from '@/components/ui/input';
+import { DateField } from '@/components/ui/date-field';
+import { useDateLocale } from '@/components/ui/date-locale';
+import { todayDate } from '@/lib/dates/iso';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { InlineError } from '@/components/errors/inline-error';
 import { fieldClass } from '@/lib/ui/field-class';
@@ -149,6 +152,9 @@ export function PatientCreateWizard({ token, canWriteClinicalHistory }: PatientC
   }, [focusRequest]);
   const [docNumber, setDocNumber] = useState('');
   const [birthDate, setBirthDate] = useState('');
+  // Nadie nace mañana: un día futuro marca el campo inválido (hoy, en la zona de la sede).
+  const { timeZone } = useDateLocale();
+  const todayIso = React.useMemo(() => todayDate(timeZone).toString(), [timeZone]);
   const [sex, setSex] = useState<Sex>('UNSPECIFIED');
   const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
@@ -349,12 +355,13 @@ export function PatientCreateWizard({ token, canWriteClinicalHistory }: PatientC
 
             <div className="grid gap-5 sm:grid-cols-2">
               <FormField htmlFor="pcw-birth-date" label={copy.birthDateLabel}>
-                <Input
+                <DateField
                   id="pcw-birth-date"
                   name="birthDate"
-                  type="date"
-                  value={birthDate}
-                  onChange={(e) => setBirthDate(e.target.value)}
+                  value={birthDate || null}
+                  onChange={(value) => setBirthDate(value ?? '')}
+                  max={todayIso}
+                  showAge
                 />
               </FormField>
               <FormField htmlFor="pcw-sex" label={copy.sexLabel}>
