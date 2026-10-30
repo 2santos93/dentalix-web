@@ -1266,6 +1266,124 @@ export interface paths {
         patch: operations["AnesthesiaController_rejectPatch"];
         trace?: never;
     };
+    "/api/v1/patients/{patientId}/sedation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /** Hojas de sedación de las evoluciones del paciente (ficha) */
+        get: operations["SedationController_listByPatient"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{patientId}/clinical-entries/{entryId}/sedation": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Hoja de sedación de una evolución y su plantilla
+         * @description Sin hoja, `sheet` es null y `template` es la plantilla con la que se abriría. `sheet.watch` dice si se pasó el intervalo de constantes sin toma.
+         */
+        get: operations["SedationController_getEntry"];
+        /** No permitido: la hoja de sedación no se edita */
+        put: operations["SedationController_rejectPut"];
+        /**
+         * Abre la hoja con la valoración previa (inalterable)
+         * @description ASA I–V + E, ayuno, Mallampati, peso, talla, acompañante y consentimiento según la plantilla. El servidor calcula el IMC y los reversores por peso. Con ASA III o más exige interconsulta o justificación.
+         */
+        post: operations["SedationController_assess"];
+        /** No permitido: la hoja de sedación no se borra */
+        delete: operations["SedationController_rejectDelete"];
+        options?: never;
+        head?: never;
+        /** No permitido: la hoja de sedación no se edita */
+        patch: operations["SedationController_rejectPatch"];
+        trace?: never;
+    };
+    "/api/v1/patients/{patientId}/clinical-entries/{entryId}/sedation/checklist": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Checklist previo (hora del servidor y quien lo marca) */
+        post: operations["SedationController_check"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{patientId}/clinical-entries/{entryId}/sedation/agents": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /** Fármaco de sedación: N2O (% y flujo), oral u otro */
+        post: operations["SedationController_addAgent"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{patientId}/clinical-entries/{entryId}/sedation/vitals": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Toma de constantes basal o intraoperatoria
+         * @description También la registra la asistente que monitoriza. La intraoperatoria exige el checklist.
+         */
+        post: operations["SedationController_addVitals"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/patients/{patientId}/clinical-entries/{entryId}/sedation/discharge": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        get?: never;
+        put?: never;
+        /**
+         * Egreso: cierra la hoja (firma el operador que lo registra)
+         * @description Criterios de alta (o Aldrete modificado ≥ 9), constantes al alta, hora, a quién se entrega, indicaciones entregadas y quien monitorizó. En sedación moderada, si quien monitoriza es el operador, exige justificación.
+         */
+        post: operations["SedationController_discharge"];
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
     "/api/v1/patients/{patientId}/tooth-records": {
         parameters: {
             query?: never;
@@ -4997,7 +5115,7 @@ export interface components {
         /** @enum {string} */
         AuditAction: "VIEW" | "CREATE" | "UPDATE" | "DELETE" | "SIGN" | "VOID" | "LOGIN" | "LOGIN_FAILED" | "PASSWORD_RESET" | "EXPORT" | "PRINT" | "SEND" | "PASSWORD_CHANGE";
         /** @enum {string} */
-        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION" | "POSTOP_TEMPLATE" | "POSTOP_DELIVERY" | "PATIENT_DOCUMENT" | "MEDICAL_HISTORY_SUBMISSION" | "AGREEMENT" | "PRICE_LIST" | "PROVIDER_SCHEDULE" | "PATIENT_IMPORT_BATCH" | "EXPENSE" | "CANCELLATION_POLICY" | "PAYMENT_ALLOCATION" | "CLINIC_SETTINGS" | "LOCATION_CALENDAR" | "EXCHANGE_RATE" | "STAFF_INVITATION" | "CLINIC" | "PAYMENT_METHOD" | "ANESTHETIC_PRODUCT" | "ANESTHESIA_ADMINISTRATION";
+        AuditResourceType: "SESSION" | "PATIENT" | "MEDICAL_HISTORY" | "CLINICAL_ENTRY" | "ODONTOGRAM" | "PERIO_EXAM" | "CONSENT" | "DATA_CONSENT" | "PRESCRIPTION" | "TREATMENT_PLAN" | "TREATMENT_PLAN_ITEM" | "PAYMENT" | "PAYMENT_PLAN" | "ACCOUNT_STATEMENT" | "CLINICAL_ENTRY_ADDENDUM" | "APPOINTMENT" | "SCHEDULE_BLOCK" | "WAITLIST_ENTRY" | "STAFF_MEMBER" | "PAYMENT_RECEIPT" | "CLINICAL_NOTE_TEMPLATE" | "PATIENT_IMPLANT" | "TENANT_DOMAIN" | "COLLECTION_NOTE" | "PAYMENT_PROMISE" | "DISCOUNT_POLICY" | "WAITLIST_OFFER" | "CASH_SESSION" | "DENTAL_CATALOG_ITEM" | "LOCATION" | "POSTOP_TEMPLATE" | "POSTOP_DELIVERY" | "PATIENT_DOCUMENT" | "MEDICAL_HISTORY_SUBMISSION" | "AGREEMENT" | "PRICE_LIST" | "PROVIDER_SCHEDULE" | "PATIENT_IMPORT_BATCH" | "EXPENSE" | "CANCELLATION_POLICY" | "PAYMENT_ALLOCATION" | "CLINIC_SETTINGS" | "LOCATION_CALENDAR" | "EXCHANGE_RATE" | "STAFF_INVITATION" | "CLINIC" | "PAYMENT_METHOD" | "ANESTHETIC_PRODUCT" | "ANESTHESIA_ADMINISTRATION" | "SEDATION_RECORD";
         /**
          * @description Rol con el que actuó (del token). `null` en un login fallido.
          * @enum {string}
@@ -7427,6 +7545,329 @@ export interface components {
             message: string;
             summary: components["schemas"]["AnesthesiaDoseSummaryDto"];
             safetyAlerts: components["schemas"]["DoseAlertDto"][];
+        };
+        /** @enum {string} */
+        SedationGrade: "MINIMAL" | "MODERATE";
+        /** @enum {string} */
+        AsaClass: "I" | "II" | "III" | "IV" | "V";
+        SedationActorDto: {
+            /** Format: uuid */
+            id: string;
+            name: string | null;
+        };
+        SedationChecklistItemDto: {
+            code: string;
+            label: string;
+            checked: boolean;
+        };
+        SedationChecklistRowDto: {
+            /** Format: uuid */
+            id: string;
+            items: components["schemas"]["SedationChecklistItemDto"][];
+            author: components["schemas"]["SedationActorDto"];
+            /**
+             * Format: date-time
+             * @description Hora del servidor
+             */
+            checkedAt: string;
+        };
+        /** @enum {string} */
+        SedationAgentKind: "NITROUS_OXIDE" | "ORAL" | "OTHER";
+        /** @enum {string} */
+        SedationDoseUnit: "MG" | "MCG" | "ML";
+        /** @enum {string} */
+        SedationRoute: "INHALED" | "ORAL" | "SUBLINGUAL" | "INTRANASAL" | "INTRAMUSCULAR" | "INTRAVENOUS" | "SUBMUCOSAL";
+        SedationAgentRowDto: {
+            /** Format: uuid */
+            id: string;
+            kind: components["schemas"]["SedationAgentKind"];
+            drugName: string | null;
+            dose: number | null;
+            doseUnit: components["schemas"]["SedationDoseUnit"] | null;
+            route: components["schemas"]["SedationRoute"];
+            n2oPercent: number | null;
+            flowLpm: number | null;
+            /** Format: date-time */
+            administeredAt: string;
+            author: components["schemas"]["SedationActorDto"];
+            /** Format: date-time */
+            createdAt: string;
+        };
+        /** @enum {string} */
+        SedationVitalsPhase: "BASELINE" | "INTRA" | "DISCHARGE";
+        /** @enum {string} */
+        SedationLevel: "AWAKE" | "MINIMAL" | "MODERATE" | "DEEP";
+        SedationVitalsRowDto: {
+            /** Format: uuid */
+            id: string;
+            phase: components["schemas"]["SedationVitalsPhase"];
+            /** Format: date-time */
+            takenAt: string;
+            spo2: number | null;
+            heartRate: number | null;
+            systolic: number | null;
+            diastolic: number | null;
+            respiratoryRate: number | null;
+            etco2: number | null;
+            sedationLevel: components["schemas"]["SedationLevel"] | null;
+            author: components["schemas"]["SedationActorDto"];
+            /** Format: date-time */
+            createdAt: string;
+        };
+        SedationDischargeCriterionDto: {
+            code: string;
+            label: string;
+            met: boolean;
+        };
+        SedationDischargeRowDto: {
+            /** Format: uuid */
+            id: string;
+            criteria: components["schemas"]["SedationDischargeCriterionDto"][];
+            aldreteScore: number | null;
+            /**
+             * Format: uuid
+             * @description Toma de constantes al alta
+             */
+            vitalsId: string;
+            /** Format: date-time */
+            dischargedAt: string;
+            handedOverToName: string;
+            handedOverToRelationship: string;
+            instructionsDelivered: boolean;
+            /** @description Firma el egreso */
+            operator: components["schemas"]["SedationActorDto"];
+            monitor: components["schemas"]["SedationActorDto"];
+            sameMonitorJustification: string | null;
+            /** Format: date-time */
+            createdAt: string;
+        };
+        SedationVitalsWatchDto: {
+            intervalMinutes: number;
+            /** @description Sedación en curso (checklist, inicio y sin egreso) */
+            active: boolean;
+            /** Format: date-time */
+            startedAt: string | null;
+            /** Format: date-time */
+            lastTakenAt: string | null;
+            /** Format: date-time */
+            nextDueAt: string | null;
+            /** @description Se pasó el intervalo sin toma */
+            overdue: boolean;
+            overdueMinutes: number;
+            /** @description Huecos pasados mayores que el intervalo */
+            missedIntervals: number;
+        };
+        SedationSheetDto: {
+            /** Format: uuid */
+            id: string;
+            /** Format: uuid */
+            patientId: string;
+            /** Format: uuid */
+            clinicalEntryId: string;
+            /** Format: uuid */
+            locationId: string | null;
+            templateVersion: string;
+            rulesVersion: string;
+            vitalsIntervalMinutes: number;
+            /** @enum {string} */
+            status: "ASSESSED" | "CHECKED" | "IN_PROGRESS" | "DISCHARGED";
+            grade: components["schemas"]["SedationGrade"];
+            asaClass: components["schemas"]["AsaClass"] | null;
+            asaEmergency: boolean;
+            highAsaInterconsultation: string | null;
+            highAsaJustification: string | null;
+            fastingClearLiquidsHours: number | null;
+            fastingSolidsHours: number | null;
+            mallampati: number | null;
+            weightKg: number | null;
+            heightCm: number | null;
+            /** @description Calculado */
+            bmi: number | null;
+            /** @description Naloxona 0,1 mg/kg, máx. 2 mg */
+            naloxoneMg: number | null;
+            /** @description Flumazenil 0,01 mg/kg, máx. 0,2 mg */
+            flumazenilMg: number | null;
+            escortName: string | null;
+            escortRelationship: string | null;
+            consentConfirmed: boolean;
+            /** Format: uuid */
+            consentId: string | null;
+            author: components["schemas"]["SedationActorDto"];
+            /** Format: date-time */
+            createdAt: string;
+            checklist: components["schemas"]["SedationChecklistRowDto"] | null;
+            agents: components["schemas"]["SedationAgentRowDto"][];
+            vitals: components["schemas"]["SedationVitalsRowDto"][];
+            discharge: components["schemas"]["SedationDischargeRowDto"] | null;
+            watch: components["schemas"]["SedationVitalsWatchDto"];
+        };
+        SedationChecklistItemDefDto: {
+            code: string;
+            label: string;
+            required: boolean;
+        };
+        SedationDischargeCriterionDefDto: {
+            code: string;
+            label: string;
+        };
+        SedationTemplateDto: {
+            /** @example SEDATION_PLATFORM_V1 */
+            version: string;
+            /**
+             * @description Hoy siempre PLATFORM; la plantilla por clínica llega en DX-409
+             * @enum {string}
+             */
+            source: "PLATFORM" | "CLINIC";
+            /** @example 5 */
+            vitalsIntervalMinutes: number;
+            requiredAssessment: ("ASA" | "FASTING" | "MALLAMPATI" | "WEIGHT" | "HEIGHT" | "ESCORT" | "CONSENT")[];
+            checklist: components["schemas"]["SedationChecklistItemDefDto"][];
+            requiredVitals: ("SPO2" | "HEART_RATE" | "BLOOD_PRESSURE" | "RESPIRATORY_RATE" | "ETCO2" | "SEDATION_LEVEL")[];
+            dischargeCriteria: components["schemas"]["SedationDischargeCriterionDefDto"][];
+            /** @example 9 */
+            aldreteMinimum: number;
+        };
+        EntrySedationDto: {
+            template: components["schemas"]["SedationTemplateDto"];
+            sheet: components["schemas"]["SedationSheetDto"] | null;
+        };
+        SedationAssessmentDto: {
+            grade: components["schemas"]["SedationGrade"];
+            asaClass?: components["schemas"]["AsaClass"];
+            /** @description Sufijo «E» de la ASA (urgencia) */
+            asaEmergency: boolean;
+            /** @description Con ASA III o más: nota de la interconsulta médica */
+            highAsaInterconsultation?: string;
+            /** @description Con ASA III o más, sin interconsulta: justificación */
+            highAsaJustification?: string;
+            /** @description Horas */
+            fastingClearLiquidsHours?: number;
+            /** @description Horas */
+            fastingSolidsHours?: number;
+            mallampati?: number;
+            /** @description Peso medido hoy en el sillón (kg) */
+            weightKg?: number;
+            /** @description Talla (cm) */
+            heightCm?: number;
+            /** @description Acompañante adulto */
+            escortName?: string;
+            /** @example Madre */
+            escortRelationship?: string;
+            /** @description El consentimiento de sedación está firmado */
+            consentConfirmed: boolean;
+            /**
+             * Format: uuid
+             * @description Consentimiento firmado del paciente (patient_consents)
+             */
+            consentId?: string;
+        };
+        SedationProblemDto: {
+            /** @example MALLAMPATI */
+            code: string;
+            message: string;
+        };
+        SedationProblemsDto: {
+            /** @example 400 */
+            statusCode: number;
+            /** @description Lo que falta, en español */
+            message: string;
+            problems: components["schemas"]["SedationProblemDto"][];
+        };
+        SedationMarkDto: {
+            /** @example MONITORS_TESTED */
+            code: string;
+            checked: boolean;
+        };
+        SedationChecklistDto: {
+            items: components["schemas"]["SedationMarkDto"][];
+        };
+        SedationAgentDto: {
+            kind: components["schemas"]["SedationAgentKind"];
+            /** @description Oral u otro */
+            drugName?: string;
+            dose?: number;
+            doseUnit?: components["schemas"]["SedationDoseUnit"];
+            /** @description N2O: inhalada; oral: por defecto oral */
+            route?: components["schemas"]["SedationRoute"];
+            /** @description N2O: % */
+            n2oPercent?: number;
+            /** @description N2O: flujo total en l/min */
+            flowLpm?: number;
+            /**
+             * Format: date-time
+             * @description Hora de la administración; por defecto, ahora
+             */
+            administeredAt?: string;
+        };
+        SedationVitalsDto: {
+            /** @description SpO2 (%) */
+            spo2?: number;
+            /** @description lpm */
+            heartRate?: number;
+            /** @description mmHg */
+            systolic?: number;
+            /** @description mmHg */
+            diastolic?: number;
+            /** @description rpm */
+            respiratoryRate?: number;
+            /** @description CO2 espirado (mmHg), opcional */
+            etco2?: number;
+            sedationLevel?: components["schemas"]["SedationLevel"];
+            /**
+             * @description La toma al alta va con el egreso
+             * @enum {string}
+             */
+            phase: "BASELINE" | "INTRA";
+            /**
+             * Format: date-time
+             * @description Hora de la toma; por defecto, ahora
+             */
+            takenAt?: string;
+        };
+        SedationCriterionMarkDto: {
+            /** @example AIRWAY_PATENT */
+            code: string;
+            met: boolean;
+        };
+        SedationVitalsValuesDto: {
+            /** @description SpO2 (%) */
+            spo2?: number;
+            /** @description lpm */
+            heartRate?: number;
+            /** @description mmHg */
+            systolic?: number;
+            /** @description mmHg */
+            diastolic?: number;
+            /** @description rpm */
+            respiratoryRate?: number;
+            /** @description CO2 espirado (mmHg), opcional */
+            etco2?: number;
+            sedationLevel?: components["schemas"]["SedationLevel"];
+        };
+        SedationDischargeDto: {
+            criteria: components["schemas"]["SedationCriterionMarkDto"][];
+            /** @description Aldrete modificado; ≥ 9 sustituye a los criterios */
+            aldreteScore?: number;
+            /** @description Constantes al alta */
+            vitals: components["schemas"]["SedationVitalsValuesDto"];
+            /**
+             * Format: date-time
+             * @description Hora del egreso; por defecto, ahora
+             */
+            dischargedAt?: string;
+            /** @description A quién se entrega */
+            handedOverToName: string;
+            /** @example Madre */
+            handedOverToRelationship: string;
+            /** @description Indicaciones entregadas al acompañante */
+            instructionsDelivered: boolean;
+            /**
+             * Format: uuid
+             * @description Quien monitorizó (miembro clínico de la clínica)
+             */
+            monitorId: string;
+            /** @description Sedación moderada con el operador como monitor: justificación (≥ 10 caracteres) */
+            sameMonitorJustification?: string;
         };
         CreateToothRecordDto: {
             /**
@@ -18164,6 +18605,366 @@ export interface operations {
         responses: {
             /** @description La anestesia registrada no se puede modificar. Añade una adenda a la evolución. */
             405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    SedationController_listByPatient: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SedationSheetDto"][];
+                };
+            };
+            /** @description Paciente no encontrado */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    SedationController_getEntry: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+                entryId: string;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["EntrySedationDto"];
+                };
+            };
+            /** @description Paciente o evolución no encontrados */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    SedationController_rejectPut: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entryId: unknown;
+                patientId: unknown;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description La hoja de sedación no se puede modificar. Añade una adenda a la evolución. */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    SedationController_assess: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+                entryId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SedationAssessmentDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SedationSheetDto"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SedationProblemsDto"];
+                };
+            };
+            /** @description Paciente, evolución o consentimiento no encontrados */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description La evolución ya tiene hoja */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    SedationController_rejectDelete: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entryId: unknown;
+                patientId: unknown;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description La hoja de sedación no se puede modificar. Añade una adenda a la evolución. */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    SedationController_rejectPatch: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                entryId: unknown;
+                patientId: unknown;
+            };
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            /** @description La hoja de sedación no se puede modificar. Añade una adenda a la evolución. */
+            405: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    SedationController_check: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+                entryId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SedationChecklistDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SedationSheetDto"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SedationProblemsDto"];
+                };
+            };
+            /** @description Paciente, evolución u hoja no encontrados */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Ya registrado o egreso firmado */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    SedationController_addAgent: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+                entryId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SedationAgentDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SedationSheetDto"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SedationProblemsDto"];
+                };
+            };
+            /** @description Paciente, evolución u hoja no encontrados */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sin checklist o egreso firmado */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    SedationController_addVitals: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+                entryId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SedationVitalsDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SedationSheetDto"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SedationProblemsDto"];
+                };
+            };
+            /** @description Paciente, evolución u hoja no encontrados */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sin checklist o egreso firmado */
+            409: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    SedationController_discharge: {
+        parameters: {
+            query?: never;
+            header?: never;
+            path: {
+                patientId: string;
+                entryId: string;
+            };
+            cookie?: never;
+        };
+        requestBody: {
+            content: {
+                "application/json": components["schemas"]["SedationDischargeDto"];
+            };
+        };
+        responses: {
+            201: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SedationSheetDto"];
+                };
+            };
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["SedationProblemsDto"];
+                };
+            };
+            /** @description Paciente, evolución u hoja no encontrados */
+            404: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+            /** @description Sin checklist o egreso ya firmado */
+            409: {
                 headers: {
                     [name: string]: unknown;
                 };

@@ -27,6 +27,7 @@ import {
   locationNameMap,
   type LocationNames,
   cashSessionDetail,
+  sedationDetail,
   scheduleChangeDetail,
   cancellationDetail,
   healthRegistrationDetail,
@@ -527,6 +528,7 @@ function AuditRow({
     staffLoginDetail(event.metadata) ??
     staffDetail(event.metadata, locationNames) ??
     cashSessionDetail(event.metadata) ??
+    sedationDetail(event.metadata) ??
     scheduleChangeDetail(event.metadata) ??
     cancellationDetail(event.metadata) ??
     patientFlowDetail(event.metadata) ??

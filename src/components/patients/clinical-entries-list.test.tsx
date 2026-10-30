@@ -8,6 +8,8 @@ import {
 } from '@/lib/patients/clinical-api';
 import { listStaff } from '@/lib/staff/staff-api';
 import { listPatientAnesthesia } from '@/lib/anesthesia/anesthesia-api';
+import { listPatientSedation } from '@/lib/sedation/sedation-api';
+import { checkedSheet } from '@/lib/test/sedation-sheet';
 
 // NOTE: jest.mock's string literal is not alias-rewritten by the SWC
 // transform — use a relative path (same convention as the other tests).
@@ -29,6 +31,11 @@ jest.mock('../../lib/staff/staff-api', () => ({
 jest.mock('../../lib/anesthesia/anesthesia-api', () => ({
   ...jest.requireActual('../../lib/anesthesia/anesthesia-api'),
   listPatientAnesthesia: jest.fn().mockResolvedValue([]),
+}));
+// DX-407: las hojas de sedación también se piden aparte (fail soft).
+jest.mock('../../lib/sedation/sedation-api', () => ({
+  ...jest.requireActual('../../lib/sedation/sedation-api'),
+  listPatientSedation: jest.fn().mockResolvedValue([]),
 }));
 // DX-170: el modal «Nueva evolución» pide las plantillas al abrirse.
 jest.mock('../../lib/clinical-notes/note-templates-api', () => ({
@@ -486,5 +493,39 @@ describe('ClinicalEntriesList', () => {
     (listPatientAnesthesia as jest.Mock).mockRejectedValueOnce(new Error('red'));
     render(<ClinicalEntriesList token="token" patientId="p1" />);
     expect(await screen.findByText(/no pudimos cargar la anestesia registrada/i)).toBeInTheDocument();
+  });
+
+  it('DX-407: la hoja de sedación sale bajo su evolución y avisa si va tarde', async () => {
+    mockedList.mockResolvedValue(entries);
+    (listPatientSedation as jest.Mock).mockResolvedValueOnce([
+      checkedSheet({
+        status: 'IN_PROGRESS',
+        watch: {
+          intervalMinutes: 5,
+          active: true,
+          startedAt: '2026-02-01T15:00:00.000Z',
+          lastTakenAt: '2026-02-01T15:04:00.000Z',
+          nextDueAt: '2026-02-01T15:09:00.000Z',
+          overdue: true,
+          overdueMinutes: 3,
+          missedIntervals: 0,
+        },
+      }),
+    ]);
+    render(<ClinicalEntriesList token="token" patientId="p1" />);
+    expect(
+      (await screen.findAllByText('Moderada (consciente) · ASA II · En curso')).length,
+    ).toBeGreaterThan(0);
+    expect(screen.getAllByText('Pasó el intervalo de constantes sin toma').length).toBeGreaterThan(0);
+    expect(
+      screen.getAllByRole('button', { name: /hoja de sedación de la evolución/i }).length,
+    ).toBeGreaterThan(0);
+  });
+
+  it('DX-407: si las hojas de sedación no cargan lo dice', async () => {
+    mockedList.mockResolvedValue(entries);
+    (listPatientSedation as jest.Mock).mockRejectedValueOnce(new Error('red'));
+    render(<ClinicalEntriesList token="token" patientId="p1" />);
+    expect(await screen.findByText(/no pudimos cargar las hojas de sedación/i)).toBeInTheDocument();
   });
 });

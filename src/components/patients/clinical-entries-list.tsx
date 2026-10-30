@@ -24,7 +24,14 @@ import {
   type AnesthesiaAdministration,
 } from '@/lib/anesthesia/anesthesia-api';
 import { sedeTime } from '@/lib/locations/sede-clock';
-import { getTokenRole } from '@/lib/auth/token-role';
+import { getTokenRole, getTokenUserId } from '@/lib/auth/token-role';
+import { SedationModal } from '@/components/sedation/sedation-modal';
+import {
+  GRADE_LABELS,
+  STATUS_LABELS,
+  listPatientSedation,
+  type SedationSheet,
+} from '@/lib/sedation/sedation-api';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
@@ -66,6 +73,14 @@ const copy = {
   anesthesiaOverride: 'Confirmado con motivo:',
   anesthesiaLoadError:
     'No pudimos cargar la anestesia registrada en las evoluciones. Ábrela con «Anestesia» en cada evolución o reintenta.',
+  // DX-407: hoja de sedación de la evolución.
+  sedation: 'Sedación',
+  sedationFor: (entryDate: string) => `Hoja de sedación de la evolución del ${entryDate}`,
+  sedationLine: (s: SedationSheet) =>
+    `${GRADE_LABELS[s.grade]}${s.asaClass ? ` · ASA ${s.asaClass}${s.asaEmergency ? 'E' : ''}` : ''} · ${STATUS_LABELS[s.status]}`,
+  sedationOverdue: 'Pasó el intervalo de constantes sin toma',
+  sedationLoadError:
+    'No pudimos cargar las hojas de sedación de las evoluciones. Ábrelas con «Sedación» en cada evolución o reintenta.',
   retry: 'Reintentar',
   tooth: (fdi: string) => `diente ${fdi}`,
 };
@@ -114,6 +129,11 @@ export function ClinicalEntriesList({ token, patientId }: ClinicalEntriesListPro
   // Si falla, se dice: una lista sin anestesia no debe parecer «no la hubo».
   const [anesthesiaFailed, setAnesthesiaFailed] = useState(false);
   const [anesthesiaReload, setAnesthesiaReload] = useState(0);
+  // DX-407: hojas de sedación (fail soft, como la anestesia) y modal abierto.
+  const [sedation, setSedation] = useState<SedationSheet[]>([]);
+  const [sedationFor, setSedationFor] = useState<ClinicalEntry | null>(null);
+  const [sedationFailed, setSedationFailed] = useState(false);
+  const [sedationReload, setSedationReload] = useState(0);
   const role = getTokenRole(token);
   const canRecordAnesthesia = role === 'DENTIST' || role === 'ADMIN';
 
@@ -173,6 +193,64 @@ export function ClinicalEntriesList({ token, patientId }: ClinicalEntriesListPro
       cancelled = true;
     };
   }, [token, patientId, reloadKey, anesthesiaReload]);
+
+  useEffect(() => {
+    let cancelled = false;
+    listPatientSedation(token, patientId)
+      .then((data) => {
+        if (cancelled) return;
+        setSedation(data ?? []);
+        setSedationFailed(false);
+      })
+      .catch(() => {
+        if (!cancelled) setSedationFailed(true);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [token, patientId, reloadKey, sedationReload]);
+
+  const sedationByEntry = useMemo(
+    () => new Map(sedation.map((s) => [s.clinicalEntryId, s])),
+    [sedation],
+  );
+
+  /** DX-407: grado, ASA y estado de la hoja; si va tarde, lo dice. */
+  function renderSedation(entry: ClinicalEntry) {
+    const sheet = sedationByEntry.get(entry.id);
+    if (!sheet) return null;
+    return (
+      <p className="mt-2 text-sm text-ink">
+        <span className="text-xs font-medium text-muted">{copy.sedation} </span>
+        {copy.sedationLine(sheet)}
+        {sheet.watch.overdue ? (
+          <span className="block text-xs font-medium text-danger">{copy.sedationOverdue}</span>
+        ) : null}
+      </p>
+    );
+  }
+
+  function renderSedationButton(entry: ClinicalEntry) {
+    // Recepción no ve la historia clínica: el botón ni aparece.
+    if (role === 'RECEPTION') return null;
+    return (
+      <Button
+        type="button"
+        variant="secondary"
+        size="sm"
+        className="min-h-11 sm:min-h-0"
+        aria-label={copy.sedationFor(formatCivilDate(entry.entryDate))}
+        onClick={() => setSedationFor(entry)}
+      >
+        {copy.sedation}
+      </Button>
+    );
+  }
+
+  /** La hoja que devolvió el servidor sustituye a la de esa evolución. */
+  function handleSedationSaved(sheet: SedationSheet) {
+    setSedation((prev) => [...prev.filter((s) => s.id !== sheet.id), sheet]);
+  }
 
   const anesthesiaByEntry = useMemo(() => {
     const map = new Map<string, AnesthesiaAdministration[]>();
@@ -394,6 +472,24 @@ export function ClinicalEntriesList({ token, patientId }: ClinicalEntriesListPro
             </Button>
           </div>
         ) : null}
+        {sedationFailed ? (
+          <div
+            role="status"
+            className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-warning/40 bg-warning/5 px-3 py-2 text-sm text-ink"
+          >
+            <AlertTriangle aria-hidden className="size-4 shrink-0 text-warning" />
+            <span className="min-w-0 flex-1">{copy.sedationLoadError}</span>
+            <Button
+              type="button"
+              variant="secondary"
+              size="sm"
+              className="min-h-11 sm:min-h-0"
+              onClick={() => setSedationReload((k) => k + 1)}
+            >
+              {copy.retry}
+            </Button>
+          </div>
+        ) : null}
         {/* Desktop table. `md:table` y no `md:block`: `display:block` sobre una
             `<table>` descarta la maquetación de tabla en el motor de layout
             aunque los roles sobrevivan. */}
@@ -429,6 +525,7 @@ export function ClinicalEntriesList({ token, patientId }: ClinicalEntriesListPro
                   {entry.notes}
                   {renderDiagnoses(entry)}
                   {renderAnesthesia(entry)}
+                  {renderSedation(entry)}
                   {renderAddenda(entry)}
                 </td>
                 {/* Subordinado: es la procedencia del asiento, no su contenido. */}
@@ -436,6 +533,7 @@ export function ClinicalEntriesList({ token, patientId }: ClinicalEntriesListPro
                   <p>{recordLine(entry.performedById, entry.createdAt)}</p>
                   <div className="mt-2 flex flex-wrap gap-2">
                     {renderAnesthesiaButton(entry)}
+                    {renderSedationButton(entry)}
                     {renderAddButton(entry)}
                   </div>
                 </td>
@@ -459,12 +557,14 @@ export function ClinicalEntriesList({ token, patientId }: ClinicalEntriesListPro
               <p className="mt-2 whitespace-pre-line break-words text-ink">{entry.notes}</p>
               {renderDiagnoses(entry)}
               {renderAnesthesia(entry)}
+              {renderSedation(entry)}
               {renderAddenda(entry)}
               <p className="mt-3 border-t border-hairline pt-2 text-xs text-muted">
                 {recordLine(entry.performedById, entry.createdAt)}
               </p>
               <div className="mt-2 flex flex-col items-start gap-2">
                 {renderAnesthesiaButton(entry)}
+                {renderSedationButton(entry)}
                 {renderAddButton(entry)}
               </div>
             </div>
@@ -500,6 +600,24 @@ export function ClinicalEntriesList({ token, patientId }: ClinicalEntriesListPro
           canManageCatalog={role === 'ADMIN'}
           clock={clock}
           onRecorded={(record) => setAnesthesia((prev) => [...prev, record])}
+        />
+      ) : null}
+
+      {sedationFor ? (
+        <SedationModal
+          open
+          onOpenChange={(open) => {
+            if (!open) setSedationFor(null);
+          }}
+          token={token}
+          patientId={patientId}
+          entryId={sedationFor.id}
+          entryDateLabel={formatCivilDate(sedationFor.entryDate)}
+          role={role}
+          userId={getTokenUserId(token)}
+          staff={staff}
+          clock={clock}
+          onSaved={handleSedationSaved}
         />
       ) : null}
 
