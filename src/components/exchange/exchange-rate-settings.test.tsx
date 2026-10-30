@@ -204,7 +204,7 @@ describe('ExchangeRateSettingsView (DX-374)', () => {
   it('un 409 (ya hay tasa ese día) se enseña arriba del modal con el texto de la API', async () => {
     mockedGet.mockResolvedValue(MANUAL);
     mockedList.mockResolvedValue([]);
-    const conflict = 'Ya hay una tasa registrada para esa moneda en ese día. Por ahora no se puede cambiar.';
+    const conflict = 'Ya hay una tasa registrada para esa moneda en ese día. Si ningún abono la usó, corrígela en la lista.';
     mockedRegister.mockRejectedValue(new ApiError(409, conflict));
     const user = setupUser();
     renderView();

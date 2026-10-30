@@ -134,7 +134,7 @@ for (const viewport of VIEWPORTS) {
     // El abono lleva «Sin tasa» en la lista de abonos.
     const fold = panel.getByRole('button', { name: /^Abonos y saldo/ });
     if ((await fold.getAttribute('aria-expanded')) !== 'true') await fold.click();
-    await expect(panel.getByText('Sin tasa', { exact: true }).locator('visible=true').first()).toBeVisible();
+    await expect(panel.getByText(/^Sin tasa/).locator('visible=true').first()).toBeVisible();
 
     await notice.getByRole('link', { name: 'Registrar la tasa en Ajustes › Tasa de cambio' }).click();
     await expect(page).toHaveURL(/\/settings\/tasa-de-cambio$/);

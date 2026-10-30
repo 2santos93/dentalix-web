@@ -460,7 +460,8 @@ test('DX-051 axe: ítems del plan, «Ver por ítem» y el modal «Imputar abono�
 
       // Sin tasa: el abono en EUR no se puede imputar todavía.
       const other = await openPlan(page, origin, unconverted.patientId);
-      await expect(other.getByText('1 abono todavía sin convertir a la moneda del plan: no se imputa a ítems.')).toBeVisible();
+      // DX-375: el abono sin tasa lo dice el aviso «sin tasa» junto al saldo.
+      await expect(other.getByText('1 abono sin tasa')).toBeVisible();
       await openPayments(other);
       await other.getByRole('button', { name: 'Imputación' }).locator('visible=true').first().click();
       dialog = page.getByRole('dialog', { name: 'Imputar abono' });
