@@ -396,9 +396,76 @@ allowlist of not-yet-migrated files only shrinks.
 - **Corner:** 12px. **Background:** surface. **Border:** 1px `border`. **Shadow:** none at rest — ever.
 - **Padding:** 16px on phones, 24px from `sm`. No nested cards; use `border-subtle` sections inside.
 
+### Status tones (one vocabulary)
+Every domain status gets its tone and label from ONE map, `src/lib/status/tones.ts`,
+typed with the API enums (a new backend status breaks `tsc` until it is placed here).
+Screens never pick a status color. Five tones, fixed, never the tenant accent:
+
+| Tone | Means | Examples |
+|---|---|---|
+| `success` | done and fine | Completada, Pagada, Realizado, Vigente, Verificado, Emitida |
+| `warning` | needs an action or a wait | Pendiente, Parcial, En espera, Listo para cobrar, Presentado, Reabierta |
+| `danger` | went wrong or expired | No asistió, Vencida, Rechazado, Incumplido, Con errores, Correo: Falló |
+| `info` | in progress, acknowledged | Confirmada, En sillón, Aceptado, Abierta, Importando |
+| `neutral` | nothing yet, or closed without judgment | Agendada, Borrador, Cancelada, Anulado, Inactivo |
+
+- One word, one tone, everywhere: «Anulado» is neutral (an immutable record withdrawn,
+  not an error); «Pendiente» and «Parcial» are warning; «Vencido» is danger.
+- Rejected ≠ cancelled: the patient said no (danger) vs. the plan was withdrawn (neutral).
+- Payment methods are categories, not statuses: neutral chip, no dot.
+- Labels are adjectives in sentence case and reuse the copy the UI already showed.
+- A chip whose text carries detail («Enviado 12 oct 10:30») passes its own text; the
+  tone still comes from the map.
+
 ### Chips / Badges
-- **Style:** pill, label type, tinted semantic bg + dark hue text (success/warning/danger),
-  or surface-2 + muted for neutral. Status like `●completado / ○planeado` reads at a glance.
+- **`StatusBadge kind status`** for any domain status: pill, tinted bg + same-hue text,
+  leading dot so color is never the only cue. `Badge variant` (`neutral | info | success |
+  warning | danger`) for non-status flags («Saldo vencido», «Adelantar si hay hueco»).
+- `primary` badges mark brand/selection only («Actual», «Tú»), never a status.
+- Counters on buttons are neutral (surface-active + ink), not accent.
+
+### Segmented control
+`SegmentedControl`: pick ONE of 2–5 sibling views (Mes/Semana/Día, the cash period,
+dentition). Sunken track, selected segment on surface with ink — never a solid accent.
+`radio` semantics by default (radiogroup, one tab stop, arrows select); `toggle`
+(`aria-pressed` buttons) where e2e already finds them as buttons; `activation="manual"`
+when choosing opens a confirmation. `size sm | md`, `fullWidthOnMobile`. Sections with
+their own content use Tabs, not this.
+
+### Tabs
+`Tabs`/`TabsList`/`TabsTrigger`/`TabsContent` (Radix), or `TabBar` when the page renders
+the panels itself (URL-synced tabs: caja, gastos, reportes, horarios, patient record).
+Underline in ink on the active tab, muted labels otherwise. Manual activation: arrows
+move focus, Enter/click select (panels fetch on mount). When tabs overflow, the strip
+scrolls sideways with faded edges — a clipped tab must never look like the last one —
+and the active tab is always scrolled into view.
+
+### Callout
+`Callout tone title icon action`: something the user must know or do on THIS screen
+(rate missing, late cancellation, chart shown at a past date). Tinted bg of the tone,
+ink text, tone icon. `warning`/`danger` default to `role="status"`; pass `role="alert"`
+only when it appears in response to an action. Not for load/save failures — those use
+the error ladder below.
+
+### Description list
+`DescriptionList` (`columns 1–3`, `layout stacked | inline`) + `DescriptionItem`
+(`numeric` → tabular, `wide`). Label `t-overline`, value ink. Replaces every local
+`Field`/`Fact`/`Row`/`Detail` helper; paper documents keep their print CSS.
+
+### Section header
+`SectionHeader title description actions as`: the heading of a block inside a page
+(`t-title`), with its actions on the right (below on mobile). `PageHeader` is the page's.
+
+### Avatar
+`Avatar initials src size` with `initials()` from `lib/format/initials`. Neutral circle
+(surface-active + ink), photo when available. Never the accent: a row of brand-tinted
+circles spends the accent budget on decoration.
+
+### Tooltip and Popover
+`Tooltip content`: a short label for icon-only controls, shown on hover AND keyboard
+focus (`title=` does neither on touch/keyboard). Never the only accessible name.
+`Popover`: anchored interactive layer (filters, pickers). Both float: surface + border +
+`shadow-overlay`.
 
 ### Error States
 Severity follows what a user can still do, not how bad the failure sounds. The

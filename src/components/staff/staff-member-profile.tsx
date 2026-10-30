@@ -18,7 +18,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import { StatusBadge } from '@/components/ui/status-badge';
 import { FormField } from '@/components/shared/form-field';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { AsyncSection } from '@/components/shared/async-section';
@@ -351,9 +351,9 @@ export function StaffMemberProfile({ token, userId }: StaffMemberProfileProps) {
           <div className="flex flex-col gap-6">
             <div className="flex items-center gap-3">
               <h2 className="text-lg font-semibold text-ink">{member.fullName}</h2>
-              <Badge variant={member.status === 'ACTIVE' ? 'success' : 'secondary'}>
+              <StatusBadge kind="staff" status={member.status === 'ACTIVE' ? 'ACTIVE' : 'INACTIVE'}>
                 {member.status === 'ACTIVE' ? copy.statusActive : copy.statusInactive}
-              </Badge>
+              </StatusBadge>
             </div>
 
             <Card className="p-5">

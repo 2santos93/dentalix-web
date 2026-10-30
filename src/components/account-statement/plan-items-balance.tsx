@@ -2,10 +2,9 @@
 import { useEffect, useState } from 'react';
 import { getPlanBalance, type PlanBalance } from '@/lib/payments/payments-api';
 import { allocationCopy } from '@/lib/payments/allocation-copy';
-import { ITEM_STATUS_BADGE_VARIANT, ITEM_STATUS_LABELS } from '@/lib/treatment-plans/item-status';
 import { formatCurrency } from '@/lib/format/currency';
 import { AsyncSection, TableSkeleton } from '@/components/shared/async-section';
-import { Badge } from '@/components/ui/badge';
+import { StatusBadge } from '@/components/ui/status-badge';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { ItemBillableValue, ItemPaidValue, ItemPendingValue } from '@/components/treatment-plans/item-paid-cell';
 import { WithoutRateNotice } from '@/components/payments/without-rate-notice';
@@ -100,9 +99,7 @@ export function PlanItemsBalance({ token, planId }: { token: string; planId: str
                         {item.toothNumber || <span className="text-muted">{copy.noTooth}</span>}
                       </TableCell>
                       <TableCell data-label={copy.colStatus}>
-                        <Badge variant={ITEM_STATUS_BADGE_VARIANT[item.status]}>
-                          {ITEM_STATUS_LABELS[item.status]}
-                        </Badge>
+                        <StatusBadge kind="treatmentPlanItem" status={item.status} />
                       </TableCell>
                       <TableCell className="text-right tabular-nums" data-label={copy.colBillable}>
                         <ItemBillableValue item={item} currency={balance.planCurrency} />

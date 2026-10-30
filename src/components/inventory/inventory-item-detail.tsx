@@ -17,6 +17,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { StatusBadge } from '@/components/ui/status-badge';
 import { FormField } from '@/components/shared/form-field';
 import { SectionError } from '@/components/errors/section-error';
 import { InlineError } from '@/components/errors/inline-error';
@@ -298,7 +299,11 @@ export function InventoryItem({ token, id }: InventoryItemDetailProps) {
               <span className="text-sm text-muted">{copy.stockLabel}:</span>
               <span className="text-2xl font-semibold tabular-nums text-ink">{item.stock}</span>
               <span className="text-sm text-muted">{item.unit}</span>
-              {item.lowStock && <Badge variant="warning">{copy.lowStockBadge}</Badge>}
+              {item.lowStock && (
+                  <StatusBadge kind="inventoryStock" status="LOW">
+                    {copy.lowStockBadge}
+                  </StatusBadge>
+                )}
             </div>
             <dl className="mt-1 grid gap-x-8 gap-y-1 text-sm sm:grid-cols-2">
               <div className="flex gap-2">

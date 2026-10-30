@@ -11,6 +11,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { SectionError } from '@/components/errors/section-error';
 import { EmptyState } from '@/components/shared/empty-state';
 import { cn } from '@/lib/utils';
+import { Badge } from '@/components/ui/badge';
 
 const copy = {
   prevWeek: 'Semana anterior',
@@ -169,9 +170,9 @@ export function ScheduleRoster({ token, today }: ScheduleRosterProps) {
                               {e.text}
                             </span>
                             {e.override ? (
-                              <span className="mt-0.5 rounded-full bg-warning-subtle px-1.5 text-[0.6875rem] font-medium text-warning-text">
+                              <Badge variant="warning" className="mt-0.5">
                                 {copy.override}
-                              </span>
+                              </Badge>
                             ) : null}
                           </span>
                         ),

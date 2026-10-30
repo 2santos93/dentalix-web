@@ -19,6 +19,7 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { cn } from '@/lib/utils';
+import { DescriptionItem } from '@/components/ui/description-list';
 
 const copy = {
   titleClosed: 'Informe de cierre de caja',
@@ -416,12 +417,7 @@ export function CashSessionReport({ session, linkSessions = true }: CashSessionR
 }
 
 function Fact({ label, children }: { label: string; children: React.ReactNode }) {
-  return (
-    <div className="min-w-0">
-      <dt className="t-label text-muted">{label}</dt>
-      <dd className="mt-0.5 break-words">{children}</dd>
-    </div>
-  );
+  return <DescriptionItem label={label}>{children}</DescriptionItem>;
 }
 
 function Section({ title, children }: { title: string; children: React.ReactNode }) {

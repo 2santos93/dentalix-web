@@ -20,7 +20,7 @@ import { formatDate, formatDateTime } from '@/lib/format/date';
 import { AsyncSection, TableSkeleton } from '@/components/shared/async-section';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
 import { FormModal } from '@/components/shared/form-modal';
-import { Badge } from '@/components/ui/badge';
+import { StatusBadge } from '@/components/ui/status-badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import {
@@ -274,10 +274,9 @@ export function DataConsentsTab({ token, patientId }: DataConsentsTabProps) {
   );
 }
 
-function StatusBadge({ granted }: { granted: boolean | null }) {
-  if (granted === true) return <Badge variant="success">{copy.granted}</Badge>;
-  if (granted === false) return <Badge variant="warning">{copy.denied}</Badge>;
-  return <Badge variant="muted">{copy.pending}</Badge>;
+function DecisionBadge({ granted }: { granted: boolean | null }) {
+  const status = granted === true ? 'GRANTED' : granted === false ? 'DENIED' : 'UNDECIDED';
+  return <StatusBadge kind="dataConsent" status={status} />;
 }
 
 function versionLabel(row: DataConsentRecord): string {
@@ -308,7 +307,7 @@ function CurrentRow({
         ) : null}
       </div>
       <div className="flex items-center gap-3">
-        <StatusBadge granted={status.granted} />
+        <DecisionBadge granted={status.granted} />
         {onRevoke ? (
           <Button variant="secondary" size="sm" onClick={onRevoke}>
             {copy.revokeMarketing}
@@ -342,9 +341,9 @@ function HistoryTable({ rows }: { rows: DataConsentRecord[] }) {
               </TableCell>
               <TableCell data-label={copy.colScope}>{SCOPE_LABELS[row.scope]}</TableCell>
               <TableCell data-label={copy.colDecision}>
-                <Badge variant={row.granted ? 'success' : 'warning'}>
+                <StatusBadge kind="dataConsent" status={row.granted ? 'GRANTED' : 'DENIED'}>
                   {row.granted ? copy.decisionGranted : copy.decisionDenied}
-                </Badge>
+                </StatusBadge>
               </TableCell>
               <TableCell className="tabular-nums" data-label={copy.colVersion}>
                 {versionLabel(row)}

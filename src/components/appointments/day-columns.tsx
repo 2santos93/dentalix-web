@@ -44,6 +44,7 @@ import {
   patientLabel,
 } from '@/components/appointments/appointment-display';
 import { Button } from '@/components/ui/button';
+import { SegmentedControl } from '@/components/ui/segmented-control';
 import { Skeleton } from '@/components/ui/skeleton';
 import { SectionError } from '@/components/errors/section-error';
 import { cn } from '@/lib/utils';
@@ -341,28 +342,14 @@ export function DayColumns({
   return (
     <div className="flex flex-col gap-3">
       {/* Móvil: una columna; el selector se desliza en horizontal. */}
-      <div
-        role="group"
+      <SegmentedControl
+        semantics="toggle"
+        className="sm:hidden"
         aria-label={copy.providerPicker}
-        className="-mx-1 flex gap-2 overflow-x-auto px-1 pb-1 sm:hidden"
-      >
-        {providers.map((p) => (
-          <button
-            key={p.userId}
-            type="button"
-            aria-pressed={p.userId === active}
-            onClick={() => setActiveProviderId(p.userId)}
-            className={cn(
-              'h-9 shrink-0 rounded-full border px-3.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
-              p.userId === active
-                ? 'border-primary bg-primary/10 text-ink'
-                : 'border-border bg-surface text-muted hover:text-ink',
-            )}
-          >
-            {p.fullName}
-          </button>
-        ))}
-      </div>
+        value={active ?? ''}
+        onValueChange={setActiveProviderId}
+        options={providers.map((p) => ({ value: p.userId, label: p.fullName }))}
+      />
 
       <div
         role="region"

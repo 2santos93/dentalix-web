@@ -5,6 +5,7 @@ import { ageFrom } from '@/lib/patients/age';
 import { formatCivilDate } from '@/lib/format/date';
 import { Card, CardContent } from '@/components/ui/card';
 import { docTypeOptionLabel, type ClinicDocumentTypeNames } from '@/lib/patients/doc-type';
+import { DescriptionItem } from '@/components/ui/description-list';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the app.
 const copy = {
@@ -60,10 +61,9 @@ function Block({ title, fields }: { title: string; fields: Field[] }) {
       <h3 className="text-sm font-medium text-muted">{title}</h3>
       <dl className="grid gap-3 sm:grid-cols-2">
         {fields.map((f) => (
-          <div key={f.label} className="min-w-0">
-            <dt className="text-sm text-muted">{f.label}</dt>
-            <dd className="break-words text-ink">{f.value ?? copy.fallback}</dd>
-          </div>
+          <DescriptionItem key={f.label} label={f.label}>
+            {f.value ?? copy.fallback}
+          </DescriptionItem>
         ))}
       </dl>
     </section>

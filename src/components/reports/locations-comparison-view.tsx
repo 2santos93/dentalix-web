@@ -24,6 +24,7 @@ import {
 import { InlineError } from '@/components/errors/inline-error';
 import { notifyError } from '@/components/errors/notify';
 import { Button } from '@/components/ui/button';
+import { Callout } from '@/components/ui/callout';
 import { Card } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -402,15 +403,9 @@ export function LocationsComparisonView({ token }: { token: string }) {
             <>
               {compared ? <p className="text-xs text-muted">{locationsComparisonCopy.legend}</p> : null}
               {unattributed ? (
-                <p
-                  role="note"
-                  className="flex max-w-[80ch] items-start gap-1.5 self-start rounded-lg border border-warning/40 bg-warning-subtle px-3 py-2 text-sm text-ink"
-                >
-                  <span aria-hidden className="font-semibold text-warning-text">
-                    *
-                  </span>
-                  <span>{locationsComparisonCopy.unattributedNote}</span>
-                </p>
+                <Callout tone="warning" role="note" className="max-w-[80ch] self-start">
+                  {locationsComparisonCopy.unattributedNote}
+                </Callout>
               ) : null}
 
               {/* Escritorio: una tabla con cabeceras ordenables. */}

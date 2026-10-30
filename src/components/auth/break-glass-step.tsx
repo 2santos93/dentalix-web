@@ -3,6 +3,7 @@ import * as React from 'react';
 import { useEffect, useRef, useState } from 'react';
 import { ArrowLeft, Loader2, ShieldAlert } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Callout } from '@/components/ui/callout';
 import { Input } from '@/components/ui/input';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { InlineError } from '@/components/errors/inline-error';
@@ -81,13 +82,9 @@ export function BreakGlassStep({
 
   return (
     <form onSubmit={handleSubmit} className="flex flex-col gap-4" noValidate>
-      <p
-        role="note"
-        className="flex items-start gap-1.5 rounded-lg border border-warning/30 bg-warning-subtle px-3 py-2 text-sm font-medium text-warning-text"
-      >
-        <ShieldAlert className="mt-0.5 size-4 shrink-0" aria-hidden />
-        <span>{copy.notice}</span>
-      </p>
+      <Callout tone="warning" role="note" icon={ShieldAlert}>
+        {copy.notice}
+      </Callout>
 
       <FormField htmlFor="break-glass-code" label={copy.codeLabel} hint={copy.codeHint} error={codeError}>
         <Input

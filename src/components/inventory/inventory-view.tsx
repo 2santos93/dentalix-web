@@ -22,6 +22,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { Badge, type BadgeProps } from '@/components/ui/badge';
+import { StatusBadge } from '@/components/ui/status-badge';
 import { FormField } from '@/components/shared/form-field';
 import { FormModal } from '@/components/shared/form-modal';
 import { ConfirmDialog } from '@/components/shared/confirm-dialog';
@@ -683,13 +684,10 @@ export function InventoryView({ token }: InventoryViewProps) {
                       </TableCell>
                       <TableCell className="tabular-nums" data-label={copy.colMinStock}>{item.minStock}</TableCell>
                       <TableCell data-label={copy.colStatus}>
-                        {item.lowStock === undefined ? (
-                          <Badge variant="muted">{copy.unknownValue}</Badge>
-                        ) : item.lowStock ? (
-                          <Badge variant="danger">{copy.lowStock}</Badge>
-                        ) : (
-                          <Badge variant="success">{copy.ok}</Badge>
-                        )}
+                        <StatusBadge
+                          kind="inventoryStock"
+                          status={item.lowStock === undefined ? 'UNKNOWN' : item.lowStock ? 'LOW' : 'OK'}
+                        />
                       </TableCell>
                       <TableCell className="text-right" data-label={copy.colActions}>
                         <RowActions

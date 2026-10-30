@@ -2,6 +2,7 @@ import { ShieldAlert } from 'lucide-react';
 import type { CoverageSummary } from '@/lib/patients/patients-api';
 import { COVERAGE_EXPIRED_LABEL, coverageChipText } from '@/lib/patients/coverage-presentation';
 import { cn } from '@/lib/utils';
+import { Badge } from '@/components/ui/badge';
 
 export { COVERAGE_EXPIRED_LABEL };
 
@@ -25,7 +26,7 @@ export function CoverageMarker({
   if (!text) return null;
   return (
     <span data-testid="coverage-marker" title={text} className={cn('inline-flex shrink-0', className)}>
-      <ShieldAlert aria-hidden className="size-3.5 text-warning-text" />
+      <ShieldAlert aria-hidden className="size-3.5 text-danger-text" />
       {srText ? <span className="sr-only">{text}</span> : null}
     </span>
   );
@@ -49,17 +50,10 @@ export function CoverageChip({
   const text = coverageChipText(coverage);
   if (!text) return null;
   return (
-    <span
-      data-testid="coverage-chip"
-      title={text}
-      className={cn(
-        'inline-flex max-w-full items-center gap-1 rounded-full px-2 py-0.5 text-xs font-medium text-warning-text tabular-nums',
-        compact ? 'border border-warning/40 bg-surface' : 'bg-warning-subtle',
-        className,
-      )}
-    >
+    // «Vencido» es danger en todo el producto (DESIGN.md → Status tones).
+    <Badge variant="danger" data-testid="coverage-chip" title={text} className={cn('tabular-nums', className)}>
       {compact ? null : <ShieldAlert aria-hidden className="size-3.5 shrink-0" />}
       <span className="min-w-0 truncate">{text}</span>
-    </span>
+    </Badge>
   );
 }

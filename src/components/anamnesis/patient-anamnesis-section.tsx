@@ -2,14 +2,13 @@
 import { useEffect, useId, useState } from 'react';
 import Link from 'next/link';
 import { apiErrorMessage } from '@/lib/api/error-message';
-import {
-  SUBMISSION_STATUS_LABELS,
+import { 
   listPatientAnamnesisRequests,
   revokeAnamnesisRequest,
-  type AnamnesisSubmission,
+  type AnamnesisSubmission
 } from '@/lib/anamnesis/anamnesis-api';
 import { formatDateTime } from '@/lib/format/date';
-import { Badge } from '@/components/ui/badge';
+import { StatusBadge } from '@/components/ui/status-badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { SectionError } from '@/components/errors/section-error';
@@ -28,14 +27,6 @@ const copy = {
   revoke: 'Anular enlace',
   revoked: 'Enlace anulado.',
   revokeError: 'No pudimos anular el enlace.',
-};
-
-const BADGE: Record<AnamnesisSubmission['status'], 'warning' | 'muted' | 'success' | 'danger' | 'secondary'> = {
-  SUBMITTED: 'warning',
-  PENDING_PATIENT: 'secondary',
-  ACCEPTED: 'success',
-  REJECTED: 'danger',
-  EXPIRED: 'muted',
 };
 
 function detail(s: AnamnesisSubmission): string | null {
@@ -141,9 +132,7 @@ export function PatientAnamnesisSection({
           {visible.map((item) => (
             <li key={item.id} className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
               <div className="flex flex-col gap-1">
-                <Badge variant={BADGE[item.status]} className="self-start">
-                  {SUBMISSION_STATUS_LABELS[item.status]}
-                </Badge>
+                <StatusBadge kind="anamnesisSubmission" status={item.status} className="self-start" />
                 {detail(item) && <p className="text-sm text-muted tabular-nums">{detail(item)}</p>}
               </div>
               {item.status === 'SUBMITTED' && canReview && (

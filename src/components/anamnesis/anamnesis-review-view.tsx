@@ -24,6 +24,7 @@ import { ClinicalHistoryFields } from '@/components/clinical/clinical-history-fi
 import { SectionError } from '@/components/errors/section-error';
 import { InlineError } from '@/components/errors/inline-error';
 import { Badge } from '@/components/ui/badge';
+import { StatusBadge } from '@/components/ui/status-badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -97,9 +98,9 @@ function DiffRow({ entry }: { entry: HistoryDiffEntry }) {
         <p className="break-words font-medium text-ink">
           {entry.label}
           {entry.affirmative && (
-            <span className="ml-2 rounded-full bg-danger-subtle px-2 py-0.5 text-xs font-semibold text-danger-text">
+            <Badge variant="danger" className="ml-2 align-middle">
               {copy.yes}
-            </span>
+            </Badge>
           )}
         </p>
         <p className="break-words text-sm text-muted">
@@ -293,7 +294,7 @@ export function AnamnesisReviewView({
         </div>
       ) : !pending ? (
         <div className="flex flex-col items-start gap-2 rounded-xl border border-border bg-surface p-6">
-          <Badge variant="muted">{SUBMISSION_STATUS_LABELS[submission.status]}</Badge>
+          <StatusBadge kind="anamnesisSubmission" status={submission.status} />
           <p className="text-sm text-muted">
             {copy.reviewed(
               SUBMISSION_STATUS_LABELS[submission.status],

@@ -6,19 +6,11 @@ import {
   type ConfirmationIndicator,
 } from '@/lib/appointments/confirmation-message';
 import { cn } from '@/lib/utils';
+import { Badge } from '@/components/ui/badge';
+import { statusLabels, statusTone, statusTones, TONE_CLASSES } from '@/lib/status/tones';
 
-/** es status labels — shared by `DayAgenda` and `WeekAgenda` (and their status <select>s). */
-export const STATUS_LABELS: Record<AppointmentStatus, string> = {
-  SCHEDULED: 'Agendada',
-  CONFIRMED: 'Confirmada',
-  COMPLETED: 'Completada',
-  CANCELLED: 'Cancelada',
-  NO_SHOW: 'No asistió',
-  // DX-200: el paciente en la clínica.
-  ARRIVED: 'En espera',
-  IN_CHAIR: 'En sillón',
-  READY_FOR_CHECKOUT: 'Listo para cobrar',
-};
+/** Etiquetas de estado de cita — del mapa único `@/lib/status/tones`; las comparten agenda, selects y textos. */
+export const STATUS_LABELS: Record<AppointmentStatus, string> = statusLabels('appointment');
 
 /** Formas distintas para reconocer los estados también sin matiz. */
 const STATUS_ICONS = {
@@ -40,24 +32,17 @@ export function AppointmentStatusLabel({ status, compact = false }: { status: Ap
   </span>;
 }
 
-// Fondo/borde semánticos por estado; texto en tinta para conservar contraste
-// también en los tintes claros. Nunca una utilidad de color literal
-// (`bg-*-500`, `text-[#...]`). SCHEDULED/CONFIRMED use the neutral/brand
-// tokens (nothing has happened yet / it's been acknowledged); COMPLETED maps
-// to success, CANCELLED to danger, NO_SHOW to warning (attention-worthy but
-// not an error).
-export const STATUS_BADGE_CLASSES: Record<AppointmentStatus, string> = {
-  SCHEDULED: 'border-muted bg-muted/10 text-ink',
-  CONFIRMED: 'border-primary bg-primary/10 text-ink',
-  COMPLETED: 'border-success bg-success-subtle text-ink',
-  CANCELLED: 'border-danger bg-danger-subtle text-ink',
-  NO_SHOW: 'border-warning bg-warning-subtle text-ink',
-  // DX-200: en la clínica. En espera, tinta (está aquí, nada clínico aún); en
-  // el sillón, el acento; listo para cobrar, el éxito sin relleno (casi hecho).
-  ARRIVED: 'border-ink/40 bg-surface-2 text-ink',
-  IN_CHAIR: 'border-primary bg-primary/15 text-ink',
-  READY_FOR_CHECKOUT: 'border-success bg-surface text-ink',
-};
+/**
+ * Fondo y borde del bloque/chip de la cita por estado, derivados del tono del
+ * mapa único (`@/lib/status/tones`): nunca el acento de la clínica. Texto en
+ * tinta para conservar el contraste sobre el tinte.
+ */
+export const STATUS_BADGE_CLASSES = Object.fromEntries(
+  Object.entries(statusTones('appointment')).map(([status, tone]) => [
+    status,
+    `${TONE_CLASSES[tone].border} ${TONE_CLASSES[tone].subtle} text-ink`,
+  ]),
+) as Record<AppointmentStatus, string>;
 
 /**
  * Display name for an appointment's patient. Prefers the name the API joins
@@ -80,15 +65,12 @@ export function patientLabel(
   return patientNames?.[appointment.patientId] ?? appointment.patientId;
 }
 
-/** Read-only colored status pill — shared by the day and week agenda views. */
+/** Chip de estado de la cita (solo lectura) — agenda del día y de la semana. */
 export function StatusBadge({ status }: { status: AppointmentStatus }) {
   return (
-    <span
-      data-testid="appointment-status-badge"
-      className={`inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium ${STATUS_BADGE_CLASSES[status]}`}
-    >
+    <Badge variant={statusTone('appointment', status)} data-testid="appointment-status-badge">
       <AppointmentStatusLabel status={status} />
-    </span>
+    </Badge>
   );
 }
 
@@ -119,10 +101,6 @@ export function ConfirmationBadge({
   if (!indicator) return null;
   const Icon = indicator === 'callback' ? Phone : Send;
   const label = CONFIRMATION_INDICATOR_LABELS[indicator];
-  const tone =
-    indicator === 'callback'
-      ? 'border-warning bg-warning-subtle text-warning-text'
-      : 'border-border bg-surface-2 text-muted';
   if (compact) {
     return (
       <span
@@ -137,17 +115,14 @@ export function ConfirmationBadge({
     );
   }
   return (
-    <span
+    <Badge
+      variant={indicator === 'callback' ? 'warning' : 'neutral'}
       data-testid="appointment-confirmation-indicator"
       data-indicator={indicator}
-      className={cn(
-        'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium',
-        tone,
-        className,
-      )}
+      className={className}
     >
       <Icon aria-hidden className="size-3" />
       {label}
-    </span>
+    </Badge>
   );
 }

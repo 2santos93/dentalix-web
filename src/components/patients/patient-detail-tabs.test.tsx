@@ -89,12 +89,18 @@ describe('PatientDetailTabs', () => {
     }
   });
 
-  it('is a single tab stop: only the selected tab is in the Tab order', () => {
+  it('is a single tab stop: Tab lands on the selected tab and the next Tab leaves the tablist', async () => {
+    const user = userEvent.setup();
     render(<Harness />);
 
-    expect(screen.getByRole('tab', { name: 'Datos' })).toHaveAttribute('tabindex', '0');
     for (const name of TAB_NAMES.slice(1)) {
       expect(screen.getByRole('tab', { name })).toHaveAttribute('tabindex', '-1');
+    }
+    await user.tab();
+    expect(screen.getByRole('tab', { name: 'Datos' })).toHaveFocus();
+    await user.tab();
+    for (const name of TAB_NAMES) {
+      expect(screen.getByRole('tab', { name })).not.toHaveFocus();
     }
   });
 
@@ -281,7 +287,8 @@ describe('PatientDetailTabs — pestaña opcional «Estado de cuenta»', () => {
 
   it('el tablist se desplaza de lado en vez de ensanchar la página', () => {
     renderTabs('Estado de cuenta');
-    expect(screen.getByRole('tablist').className).toMatch(/overflow-x-auto/);
+    // La franja desplazable envuelve al tablist (con máscaras en los bordes, `ui/tabs`).
+    expect(screen.getByRole('tablist').parentElement!.className).toMatch(/overflow-x-auto/);
   });
 });
 

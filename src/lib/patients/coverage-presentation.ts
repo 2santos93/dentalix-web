@@ -1,3 +1,4 @@
+import { statusPresentation, type StatusTone } from '@/lib/status/tones';
 import { formatCivilDate } from '@/lib/format/date';
 import type { PatientCoverage } from '@/lib/patients/coverages-api';
 import type { CoverageSummary } from '@/lib/patients/patients-api';
@@ -28,14 +29,14 @@ export function coverageValidityLabel(c: CoverageValidity): string {
 
 export interface CoverageBadge {
   label: string;
-  variant: 'warning' | 'secondary';
+  variant: StatusTone;
 }
 
 /** Insignia de estado de la fila; `null` para una cobertura vigente (no hay nada que marcar). */
 export function coverageStatusBadge(c: Pick<PatientCoverage, 'status'>): CoverageBadge | null {
-  if (c.status === 'EXPIRED') return { label: 'Vencida', variant: 'warning' };
-  if (c.status === 'NOT_STARTED') return { label: 'Pendiente de inicio', variant: 'secondary' };
-  return null;
+  if (c.status === 'ACTIVE') return null;
+  const { tone, label } = statusPresentation('coverage', c.status);
+  return { label, variant: tone };
 }
 
 /**

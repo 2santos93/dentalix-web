@@ -94,6 +94,7 @@ import {
   statusOptionsFor,
 } from '@/lib/appointments/patient-flow';
 import { Button } from '@/components/ui/button';
+import { SegmentedControl } from '@/components/ui/segmented-control';
 import {
   Dialog,
   DialogContent,
@@ -1087,31 +1088,13 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
             input that duplicates the "Nueva cita" form. */}
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-3">
-            <div
-              role="group"
+            <SegmentedControl
+              semantics="toggle"
               aria-label={copy.viewLabel}
-              className="inline-flex rounded-lg border border-border bg-surface-2 p-0.5"
-            >
-              {VIEW_MODES.map((m) => {
-                const active = viewMode === m;
-                return (
-                  <button
-                    key={m}
-                    type="button"
-                    aria-pressed={active}
-                    onClick={() => selectView(m)}
-                    className={cn(
-                      'h-8 rounded-md px-3.5 text-sm font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 focus-visible:ring-offset-surface-2',
-                      active
-                        ? 'bg-surface text-ink shadow-sm'
-                        : 'text-ink/80 hover:text-ink',
-                    )}
-                  >
-                    {VIEW_LABEL[m]}
-                  </button>
-                );
-              })}
-            </div>
+              value={viewMode}
+              onValueChange={selectView}
+              options={VIEW_MODES.map((m) => ({ value: m, label: VIEW_LABEL[m] }))}
+            />
             {staffError ? (
               <FieldError
                 label={copy.staffFieldError}
@@ -1160,7 +1143,7 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
               >
                 <Armchair aria-hidden /> {copy.inClinicButton}
                 {inClinicTotal ? (
-                  <span className="rounded-full bg-primary/10 px-1.5 text-xs font-semibold tabular-nums text-primary">
+                  <span className="rounded-full bg-surface-active px-1.5 text-xs font-semibold tabular-nums text-ink">
                     {inClinicTotal}
                   </span>
                 ) : null}
@@ -1176,7 +1159,7 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
             >
               <ListTodo aria-hidden /> {copy.waitlistButton}
               {waitlistCount ? (
-                <span className="rounded-full bg-primary/10 px-1.5 text-xs font-semibold tabular-nums text-primary">
+                <span className="rounded-full bg-surface-active px-1.5 text-xs font-semibold tabular-nums text-ink">
                   {waitlistCount}
                 </span>
               ) : null}
@@ -1277,26 +1260,18 @@ function AgendaScreen({ token, clock }: AgendaViewProps & { clock: AgendaClock }
               onNext={() => setSelectedDate(addCivilDays(selectedDate, 1))}
               onToday={() => setSelectedDate(today)}
             />
-            <div
-              role="group"
+            <SegmentedControl
+              semantics="toggle"
+              size="sm"
+              className="self-start"
               aria-label={copy.dayLayoutLabel}
-              className="inline-flex self-start rounded-lg border border-border bg-surface-2 p-0.5"
-            >
-              {(['columns', 'list'] as DayLayout[]).map((layout) => (
-                <button
-                  key={layout}
-                  type="button"
-                  aria-pressed={dayLayout === layout}
-                  onClick={() => setDayLayout(layout)}
-                  className={cn(
-                    'h-7 rounded-md px-3 text-xs font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
-                    dayLayout === layout ? 'bg-surface text-ink shadow-sm' : 'text-ink/80 hover:text-ink',
-                  )}
-                >
-                  {layout === 'columns' ? copy.dayColumns : copy.dayList}
-                </button>
-              ))}
-            </div>
+              value={dayLayout}
+              onValueChange={setDayLayout}
+              options={[
+                { value: 'columns' as const, label: copy.dayColumns },
+                { value: 'list' as const, label: copy.dayList },
+              ]}
+            />
             {columnsMode && offToday.length > 0 ? (
               <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm">
                 <span className="text-muted">{copy.hiddenProviders(offToday.length)}</span>

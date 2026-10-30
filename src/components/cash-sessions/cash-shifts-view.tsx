@@ -18,8 +18,7 @@ import {
 import {
   differenceText,
   moneyList,
-  sessionStatusLabel,
-  sessionStatusVariant,
+  sessionStatusKey,
 } from '@/lib/cash-sessions/presentation';
 import { listLocations, type ClinicLocation } from '@/lib/locations/locations-api';
 import { onLocationChange } from '@/lib/locations/location-store';
@@ -36,7 +35,7 @@ import { Pagination } from '@/components/shared/pagination';
 import { ResultCount, toolbarFieldClass } from '@/components/shared/list-toolbar';
 import { SectionError } from '@/components/errors/section-error';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Badge } from '@/components/ui/badge';
+import { StatusBadge } from '@/components/ui/status-badge';
 import { Button } from '@/components/ui/button';
 import { Card } from '@/components/ui/card';
 import {
@@ -342,7 +341,7 @@ export function CashShiftsView({ token, tabs }: CashShiftsViewProps) {
                         <TableCell data-label={copy.colLocation}>{item.location.name}</TableCell>
                         <TableCell data-label={copy.colOpenedBy}>{item.openedBy.fullName ?? '—'}</TableCell>
                         <TableCell data-label={copy.colStatus}>
-                          <Badge variant={sessionStatusVariant(item)}>{sessionStatusLabel(item)}</Badge>
+                          <StatusBadge kind="cashSession" status={sessionStatusKey(item)} />
                         </TableCell>
                         <TableCell className="text-right tabular-nums" data-label={copy.colFloat}>
                           {moneyList(item.floats)}

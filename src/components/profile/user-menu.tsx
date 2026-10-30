@@ -16,6 +16,8 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { cn } from '@/lib/utils';
+import { Avatar } from '@/components/ui/avatar';
+import { initials } from '@/lib/format/initials';
 
 // Tope de espera a la revocación en el servidor al cerrar sesión: la API suele
 // responder en milisegundos; si la red está caída no se deja al usuario
@@ -81,15 +83,6 @@ const ROLE_LABEL: Record<ClinicRole, string> = {
   ASSISTANT: 'Asistente',
   RECEPTION: 'Recepción',
 };
-
-function initials(name: string): string {
-  return name
-    .split(' ')
-    .filter(Boolean)
-    .slice(0, 2)
-    .map((w) => w[0]?.toUpperCase())
-    .join('');
-}
 
 /**
  * Clases de los ítems del menú de cuenta. Bajo `md` llegan a 44 px de alto
@@ -200,24 +193,11 @@ export function UserMenu({
 
   const roleLabel = role ? (ROLE_LABEL[role] ?? role) : null;
 
-  const avatar = (size: string) =>
-    avatarUrl ? (
-      // eslint-disable-next-line @next/next/no-img-element
-      <img src={avatarUrl} alt="" className={cn('shrink-0 rounded-full object-cover', size)} />
-    ) : (
-      <span
-        aria-hidden
-        className={cn(
-          // Iniciales en tinta, no en el acento: sobre su propio tinte (y más aún
-          // con el tinte de la tarjeta abierta o en hover) el acento no llega a
-          // 4,5:1 (axe, DX-282), y con el color de otra clínica, menos.
-          'flex shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-ink',
-          size,
-        )}
-      >
-        {name ? initials(name) : '·'}
-      </span>
-    );
+  // Neutro (superficie activa + tinta), nunca el acento: con el color de otra
+  // clínica o sobre el tinte del hover, el acento no llega a 4,5:1 (DX-282).
+  const avatar = (size: string) => (
+    <Avatar size="sm" className={size} initials={name ? initials(name) : '·'} src={avatarUrl} />
+  );
 
   const menu = (
     <DropdownMenuContent

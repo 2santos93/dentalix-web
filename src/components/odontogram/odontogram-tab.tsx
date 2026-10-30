@@ -32,13 +32,14 @@ import { listCatalogItems, type DentalCatalogItem } from '@/lib/odontogram/catal
 import { getTokenRole, getTokenUserId } from '@/lib/auth/token-role';
 import { formatCivilDate } from '@/lib/format/date';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Callout } from '@/components/ui/callout';
 import { Button } from '@/components/ui/button';
+import { SegmentedControl } from '@/components/ui/segmented-control';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { FormModal } from '@/components/shared/form-modal';
 import { SectionError } from '@/components/errors/section-error';
 import { notifyError } from '@/components/errors/notify';
-import { cn } from '@/lib/utils';
 
 // Copy as constants (i18n-ready) — matches page.tsx's convention until
 // next-intl wiring lands.
@@ -368,38 +369,18 @@ export function OdontogramTab({
               <span id="odo-dentition-switch" className="t-label text-muted">
                 {copy.dentitionSwitch}
               </span>
-              <div
-                role="radiogroup"
+              <SegmentedControl
+                // Elegir abre la confirmación: las flechas solo mueven el foco.
+                activation="manual"
                 aria-labelledby="odo-dentition-switch"
-                className="inline-flex rounded-lg border border-border bg-surface p-0.5"
-              >
-                {DENTITION_ORDER.map((option) => {
-                  const checked = overall === option;
-                  return (
-                    <button
-                      key={option}
-                      type="button"
-                      role="radio"
-                      aria-checked={checked}
-                      disabled={readOnly}
-                      onClick={() => {
-                        if (!checked) {
-                          setPresetError(null);
-                          setPreset(option);
-                        }
-                      }}
-                      className={cn(
-                        'h-9 rounded-md px-3 text-sm font-medium transition-colors',
-                        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary',
-                        'disabled:cursor-not-allowed disabled:opacity-60',
-                        checked ? 'bg-primary text-primary-foreground' : 'text-ink hover:bg-surface-2',
-                      )}
-                    >
-                      {DENTITION_LABELS[option]}
-                    </button>
-                  );
-                })}
-              </div>
+                value={overall}
+                disabled={readOnly}
+                onValueChange={(option) => {
+                  setPresetError(null);
+                  setPreset(option);
+                }}
+                options={DENTITION_ORDER.map((option) => ({ value: option, label: DENTITION_LABELS[option] }))}
+              />
             </div>
             {!readOnly ? (
               <Button type="button" variant="outline" onClick={() => openDentitionDialog(selectedTooth)}>
@@ -431,12 +412,9 @@ export function OdontogramTab({
         </div>
 
         {shownAsOf ? (
-          <p
-            role="status"
-            className="rounded-lg border border-warning/40 bg-warning-subtle px-3 py-2 text-sm text-ink"
-          >
+          <Callout tone="warning" role="status">
             {copy.asOfNotice(formatCivilDate(`${shownAsOf}T00:00:00.000Z`))}
-          </p>
+          </Callout>
         ) : null}
 
         {/* The chart and its key read as one object: the field, then its

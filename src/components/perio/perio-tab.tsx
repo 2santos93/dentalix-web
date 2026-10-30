@@ -2,19 +2,18 @@
 import * as React from 'react';
 import { useEffect, useState } from 'react';
 import { Activity, Plus } from 'lucide-react';
-import {
-  PERIO_STATUS_LABELS,
+import { 
   listPerioExams,
   type PerioExamDetail,
   type PerioExamSummary,
-  perioErrorMessage,
+  perioErrorMessage
 } from '@/lib/perio/perio-api';
 import { formatCivilDate } from '@/lib/format/date';
 import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
 import { perioPercent } from '@/lib/perio/perio-percent';
 import { SedeConfigError } from '@/components/locations/sede-config-error';
 import { AsyncSection } from '@/components/shared/async-section';
-import { Badge } from '@/components/ui/badge';
+import { StatusBadge } from '@/components/ui/status-badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { NewPerioExamModal } from './new-perio-exam-modal';
@@ -128,9 +127,7 @@ export function PerioTab({ token, patientId }: PerioTabProps) {
 
   function statusBadge(exam: PerioExamSummary) {
     return (
-      <Badge variant={exam.status === 'FINAL' ? 'success' : 'warning'}>
-        {PERIO_STATUS_LABELS[exam.status]}
-      </Badge>
+      <StatusBadge kind="perioExam" status={exam.status} />
     );
   }
 

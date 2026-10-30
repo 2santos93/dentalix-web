@@ -6,6 +6,7 @@ import { getTokenRole } from '@/lib/auth/token-role';
 import { canManageExchangeRates } from '@/lib/exchange/exchange-settings-api';
 import { sedeCivilDate, sedeMoney } from '@/lib/format/sede-number';
 import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
+import { Callout } from '@/components/ui/callout';
 
 export type PaymentWithoutRate = components['schemas']['PaymentWithoutRateDto'];
 
@@ -37,35 +38,28 @@ export function WithoutRateNotice({ token, payments }: { token: string; payments
   if (payments.length === 0) return null;
   const canRegister = canManageExchangeRates(getTokenRole(token));
   return (
-    <div
-      role="status"
-      className="flex items-start gap-2 rounded-lg border border-warning/30 bg-warning-subtle px-3 py-2 text-sm text-ink"
-    >
-      <TriangleAlert aria-hidden className="mt-0.5 size-4 shrink-0 text-warning-text" />
-      <div className="min-w-0 flex-1">
-        <p className="font-medium">{withoutRateCopy.title(payments.length)}</p>
-        <p>{withoutRateCopy.body}</p>
-        <ul className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 tabular-nums">
-          {payments.map((p) => (
-            <li key={p.paymentId}>
-              {withoutRateCopy.item(sedeMoney(p.amount, p.currency, fmt), sedeCivilDate(p.paidOn, fmt))}
-            </li>
-          ))}
-        </ul>
-        {canRegister ? (
-          <p className="mt-1">
-            <Link
-              href={EXCHANGE_RATE_SETTINGS_HREF}
-              className="inline-flex min-h-11 items-center font-medium text-primary underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg sm:min-h-0"
-            >
-              {withoutRateCopy.adminLink}
-            </Link>
-            <span className="block text-xs">{withoutRateCopy.adminHint}</span>
-          </p>
-        ) : (
-          <p className="mt-1">{withoutRateCopy.otherRoles}</p>
-        )}
-      </div>
-    </div>
+    <Callout tone="warning" role="status" icon={TriangleAlert} title={withoutRateCopy.title(payments.length)}>
+      <p>{withoutRateCopy.body}</p>
+      <ul className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 tabular-nums">
+        {payments.map((p) => (
+          <li key={p.paymentId}>
+            {withoutRateCopy.item(sedeMoney(p.amount, p.currency, fmt), sedeCivilDate(p.paidOn, fmt))}
+          </li>
+        ))}
+      </ul>
+      {canRegister ? (
+        <p className="mt-1">
+          <Link
+            href={EXCHANGE_RATE_SETTINGS_HREF}
+            className="inline-flex min-h-11 items-center font-medium text-primary underline underline-offset-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg sm:min-h-0"
+          >
+            {withoutRateCopy.adminLink}
+          </Link>
+          <span className="block text-xs">{withoutRateCopy.adminHint}</span>
+        </p>
+      ) : (
+        <p className="mt-1">{withoutRateCopy.otherRoles}</p>
+      )}
+    </Callout>
   );
 }
