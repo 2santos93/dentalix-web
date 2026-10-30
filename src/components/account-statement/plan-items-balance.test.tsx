@@ -10,6 +10,12 @@ import { withoutRateCopy } from '@/components/payments/without-rate-notice';
 jest.mock('../../lib/payments/payments-api', () => ({
   getPlanBalance: jest.fn(),
 }));
+// DX-378: el aviso «sin tasa» pinta importe y día con el formato de la sede
+// (fixture explícito es-CO).
+jest.mock('../../lib/locations/locations-api', () => ({
+  ...jest.requireActual('../../lib/locations/locations-api'),
+  listLocations: jest.fn().mockResolvedValue([jest.requireActual('../../lib/test/locations').clinicLocation()]),
+}));
 
 const mockedBalance = getPlanBalance as jest.MockedFunction<typeof getPlanBalance>;
 
@@ -135,7 +141,7 @@ it('abonos sin tasa: aviso con la lista y, para recepción, a quién pedir la ta
   );
   render(<PlanItemsBalance token={tokenForRole('RECEPTION')} planId="plan-1" />);
   const notice = (await screen.findByText(withoutRateCopy.title(1))).closest('[role="status"]');
-  expect(notice).toHaveTextContent('30/10/2026');
+  expect(await within(notice as HTMLElement).findByText('USD 50,00 del 30/10/2026')).toBeInTheDocument();
   expect(notice).toHaveTextContent(withoutRateCopy.otherRoles);
   expect(screen.queryByText(/todavía sin convertir/)).not.toBeInTheDocument();
 });

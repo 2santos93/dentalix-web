@@ -4,8 +4,8 @@ import { TriangleAlert } from 'lucide-react';
 import type { components } from '@/lib/api/schema';
 import { getTokenRole } from '@/lib/auth/token-role';
 import { canManageExchangeRates } from '@/lib/exchange/exchange-settings-api';
-import { formatCurrency } from '@/lib/format/currency';
-import { formatCivilDate } from '@/lib/format/date';
+import { sedeCivilDate, sedeMoney } from '@/lib/format/sede-number';
+import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
 
 export type PaymentWithoutRate = components['schemas']['PaymentWithoutRateDto'];
 
@@ -29,9 +29,11 @@ export const withoutRateCopy = {
  * Ajustes › Tasa de cambio; al resto le dice a quién pedírselo. No es un error
  * (nada falló): tono de advertencia y `role="status"`, sin interrumpir. Todo
  * el texto va en `ink`: `muted` sobre el tinte de advertencia no llega a
- * 4,5:1 (axe en claro).
+ * 4,5:1 (axe en claro). Importe y día con el formato de la sede y el código
+ * ISO de la moneda (DX-378): mientras carga, o sin formato, «—».
  */
 export function WithoutRateNotice({ token, payments }: { token: string; payments: PaymentWithoutRate[] }) {
+  const fmt = readyFormat(useSedeFormat(token));
   if (payments.length === 0) return null;
   const canRegister = canManageExchangeRates(getTokenRole(token));
   return (
@@ -46,7 +48,7 @@ export function WithoutRateNotice({ token, payments }: { token: string; payments
         <ul className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 tabular-nums">
           {payments.map((p) => (
             <li key={p.paymentId}>
-              {withoutRateCopy.item(formatCurrency(p.amount, p.currency), formatCivilDate(p.paidOn))}
+              {withoutRateCopy.item(sedeMoney(p.amount, p.currency, fmt), sedeCivilDate(p.paidOn, fmt))}
             </li>
           ))}
         </ul>

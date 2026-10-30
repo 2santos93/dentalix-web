@@ -16,6 +16,7 @@ import {
   type ManualExchangeRate,
 } from '@/lib/exchange/exchange-settings-api';
 import type { RegionalFormat } from '@/lib/format/regional-format';
+import { sedeCivilDate } from '@/lib/format/sede-number';
 import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
 import { readyTimeZone, sedeToday, useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
 import { EmptyState } from '@/components/shared/empty-state';
@@ -322,7 +323,7 @@ export function ExchangeRateSettingsView({ token, allowed }: { token: string; al
                         >
                           {copy.correct}
                           <span className="sr-only">
-                            {copy.correctContext(rate.currency, fmt ? fmt.civilDate(rate.date) : rate.date)}
+                            {copy.correctContext(rate.currency, sedeCivilDate(rate.date, fmt))}
                           </span>
                         </Button>
                       )}
@@ -369,7 +370,7 @@ export function ExchangeRateSettingsView({ token, allowed }: { token: string; al
           token={token}
           baseCurrency={state.baseCurrency}
           rate={correcting.rate}
-          dateLabel={fmt ? fmt.civilDate(correcting.rate.date) : correcting.rate.date}
+          dateLabel={sedeCivilDate(correcting.rate.date, fmt)}
           onSaved={(saved) => {
             setState((prev) =>
               prev

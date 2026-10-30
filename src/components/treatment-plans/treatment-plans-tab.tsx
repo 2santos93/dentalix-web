@@ -84,6 +84,8 @@ import { notifyError } from '@/components/errors/notify';
 import { cn } from '@/lib/utils';
 import { formatCivilDate, formatDateTime } from '@/lib/format/date';
 import { readyTimeZone, sedeToday, useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
+import { readyFormat, useSedeFormat } from '@/lib/locations/use-sede-format';
+import type { RegionalFormat } from '@/lib/format/regional-format';
 import { SedeConfigError } from '@/components/locations/sede-config-error';
 import { SURFACE_LABELS, SURFACE_ORDER } from '@/lib/odontogram/surface-labels';
 import { getDiscountPolicy } from '@/lib/discounts/discounts-api';
@@ -663,9 +665,9 @@ function PaymentMissingRateBadge({ payment }: { payment: Payment }) {
   );
 }
 
-/** DX-375: la tasa que congeló un abono en otra moneda, bajo su importe. */
-function PaymentFrozenRate({ payment }: { payment: Payment }) {
-  const label = frozenRateLabel(payment);
+/** DX-375: la tasa que congeló un abono en otra moneda, bajo su importe, con el formato de la sede (DX-378). */
+function PaymentFrozenRate({ payment, fmt }: { payment: Payment; fmt: RegionalFormat | null }) {
+  const label = frozenRateLabel(payment, fmt);
   if (!label) return null;
   return <span className="mt-0.5 block text-xs font-normal text-muted tabular-nums">{label}</span>;
 }
@@ -1037,6 +1039,8 @@ interface PaymentsListProps {
   manualPaymentIds?: ReadonlySet<string>;
   /** DX-051: abre «Imputar abono»; solo ADMIN y en un plan que se cobra. */
   onAllocate?: (paymentId: string, trigger: HTMLElement) => void;
+  /** DX-375/DX-378: formato de la sede para la tasa congelada; `null` mientras carga («—»). */
+  fmt: RegionalFormat | null;
 }
 
 /** Desktop table + mobile cards for the abonos list — same responsive split as `ItemsTable`. */
@@ -1048,6 +1052,7 @@ function PaymentsList({
   billable = true,
   manualPaymentIds,
   onAllocate,
+  fmt,
 }: PaymentsListProps) {
   if (payments.length === 0) {
     return (
@@ -1094,7 +1099,7 @@ function PaymentsList({
                       ) : null}
                       <PaymentMissingRateBadge payment={payment} />
                     </span>
-                    <PaymentFrozenRate payment={payment} />
+                    <PaymentFrozenRate payment={payment} fmt={fmt} />
                   </TableCell>
                   <TableCell>
                     {payment.method ? (
@@ -1169,7 +1174,7 @@ function PaymentsList({
                 ) : null}
                 <PaymentMissingRateBadge payment={payment} />
               </p>
-              <PaymentFrozenRate payment={payment} />
+              <PaymentFrozenRate payment={payment} fmt={fmt} />
               <p className="mt-1 text-sm text-muted tabular-nums">
                 {copy.paymentReceiptMobile(payment.receiptNumber)}
               </p>
@@ -1263,6 +1268,8 @@ export function TreatmentPlansTab({
   // DX-097: la fecha por defecto del abono es hoy en la zona de la sede. Sin
   // su zona, la fecha empieza vacía (nunca se cuenta en otra zona).
   const sedeZone = useSedeTimeZone(token);
+  // DX-375/DX-378: la tasa congelada de cada abono, con el formato de la sede.
+  const sedeFmt = readyFormat(useSedeFormat(token));
   // DX-051: saldo y abonos solo para los roles de cobro (los mismos
   // PAYMENT_ROLES que la API). DENTIST y ASSISTANT no ven datos de pago: ni se
   // piden (serían 403 y un toast en cada acción) ni se pinta su sección.
@@ -2713,6 +2720,7 @@ export function TreatmentPlansTab({
                               billable={billable}
                               manualPaymentIds={manualPaymentIds}
                               onAllocate={role === 'ADMIN' && billable ? openAllocation : undefined}
+                              fmt={sedeFmt}
                             />
                           </Disclosure>
 

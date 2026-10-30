@@ -724,7 +724,8 @@ describe('TreatmentPlansTab', () => {
     const paymentsTable = await openPaymentsTable(user);
 
     expect(
-      within(paymentsTable).getByText(/Tasa congelada: 1 USD = 4\.?000,00\sCOP · manual · 05\/01\/2026/),
+      // DX-378: con el formato de la sede (es-CO del fixture) y el código ISO.
+      await within(paymentsTable).findByText(/Tasa congelada: 1 USD = COP\s4\.000,00 · manual · 05\/01\/2026/),
     ).toBeInTheDocument();
     expect(within(paymentsTable).getByText(paymentRateCopy.missing)).toBeInTheDocument();
   });
