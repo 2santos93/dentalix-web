@@ -626,6 +626,21 @@ const LOCATION_CALENDAR_REASONS: Record<string, string> = {
   HOLIDAYS_IMPORTED: 'Festivos importados',
 };
 
+/**
+ * DX-402: el barrido congeló en un abono, como tasa de respaldo, la tasa
+ * manual de un día anterior a «manual desde» (un día sin tasa del proveedor).
+ * Las monedas y el origen; los días van en la metadata (sin formato de sede
+ * aquí, no se muestran).
+ */
+export function exchangeRateBackupDetail(metadata: AuditMetadata): string | null {
+  if (metadata.reason !== 'EXCHANGE_RATE_BACKUP') return null;
+  const currencies = metadata.exchangeRateBackup?.currencies ?? [];
+  const what = `Tasa de respaldo: la manual de un día anterior a «manual desde»${
+    currencies.length > 0 ? ` (${currencies.join(', ')})` : ''
+  }`;
+  return metadata.origin ? `${what} · ${ORIGIN_LABELS[metadata.origin]}` : what;
+}
+
 /** DX-316: qué cambió en el calendario de una sede, o null si el evento no es de él. */
 export function locationCalendarDetail(metadata: AuditMetadata): string | null {
   return (metadata.reason && LOCATION_CALENDAR_REASONS[metadata.reason]) ?? null;

@@ -10,6 +10,7 @@ import {
   type ManualExchangeRate,
 } from '@/lib/exchange/exchange-settings-api';
 import { listCurrencies } from '@/lib/reference/currencies-api';
+import { getRateBacklogDay } from '@/lib/payments/rate-backlog-api';
 import { ApiError } from '@/lib/api/api-error';
 import { regionalFormat } from '@/lib/format/regional-format';
 import { setupUser } from '@/lib/test/user';
@@ -23,6 +24,10 @@ jest.mock('../../lib/exchange/exchange-settings-api', () => ({
   correctManualExchangeRate: jest.fn(),
 }));
 jest.mock('../../lib/reference/currencies-api', () => ({ listCurrencies: jest.fn() }));
+jest.mock('../../lib/payments/rate-backlog-api', () => ({
+  ...jest.requireActual('../../lib/payments/rate-backlog-api'),
+  getRateBacklogDay: jest.fn(),
+}));
 jest.mock('../../lib/locations/use-sede-time-zone', () => ({
   ...jest.requireActual('../../lib/locations/use-sede-time-zone'),
   useSedeTimeZone: jest.fn(() => ({ status: 'ready', timeZone: 'America/Caracas' })),
@@ -42,6 +47,7 @@ const mockedList = jest.mocked(listManualExchangeRates);
 const mockedRegister = jest.mocked(registerManualExchangeRate);
 const mockedCorrect = jest.mocked(correctManualExchangeRate);
 const mockedCurrencies = jest.mocked(listCurrencies);
+const mockedDay = jest.mocked(getRateBacklogDay);
 const copy = exchangeRateCopy;
 const fmt = regionalFormat({ locale: 'es-VE', hourCycle: 'h12' });
 const AUTO = { source: 'AUTOMATIC', manualSince: null, baseCurrency: 'USD' } as const;
@@ -316,13 +322,123 @@ describe('ExchangeRateSettingsView (DX-374)', () => {
   });
 
   it('ningún texto de la pantalla nombra un país ni un banco central', () => {
+    const backup = rateFormCopy.backup;
     const texts = JSON.stringify({
       exchangeRateCopy,
       rateFormCopy,
       RATE_INPUT_COPY,
       correctRateCopy,
-      fns: [copy.ratesHint('USD'), copy.colRate('USD'), rateFormCopy.rateHint('USD'), copy.manualSince('30/10/2026')],
+      fns: [
+        copy.ratesHint('USD'),
+        copy.colRate('USD'),
+        rateFormCopy.rateHint('USD'),
+        copy.manualSince('30/10/2026'),
+        backup.heading('30/10/2026'),
+        backup.applies(1, 'VES'),
+        backup.applies(3, 'VES'),
+        backup.none('VES'),
+      ],
     });
     expect(texts).not.toMatch(/venezuela|colombia|españa|méxico|banco central|bcv|estadounidense/i);
+  });
+});
+
+// DX-402: la tasa manual de un día anterior a «manual desde» sirve de respaldo
+// a los abonos de ese día que siguen sin tasa. El formulario lo dice, con
+// cuántos abonos la tomarán, o avisa de que no se usará.
+describe('Registrar una tasa de un día anterior a «manual desde» (DX-402)', () => {
+  const backup = rateFormCopy.backup;
+  const SINCE = fmt.civilDate('2026-10-30');
+
+  async function openForm(settings: typeof MANUAL | typeof AUTO = MANUAL) {
+    mockedGet.mockResolvedValue(settings);
+    mockedList.mockResolvedValue([]);
+    const user = setupUser();
+    renderView();
+    await user.click(await screen.findByRole('button', { name: copy.register }));
+    const dialog = await screen.findByRole('dialog', { name: rateFormCopy.title });
+    const select = within(dialog).getByLabelText(rateFormCopy.currency);
+    await waitFor(() => expect(within(select).getByRole('option', { name: /Bolívar/ })).toBeInTheDocument());
+    const date = within(dialog).getByLabelText(rateFormCopy.date);
+    return { user, dialog, select, date };
+  }
+
+  it('el día de inicio o posterior no lleva aviso ni pide nada', async () => {
+    const { user, dialog, select } = await openForm();
+    await user.selectOptions(select, 'VES');
+    expect(within(dialog).queryByText(backup.heading(SINCE))).not.toBeInTheDocument();
+    expect(mockedDay).not.toHaveBeenCalled();
+  });
+
+  it('con un día anterior y sin moneda explica la regla y pide la moneda', async () => {
+    const { user, dialog, date } = await openForm();
+    await user.clear(date);
+    await user.type(date, '2026-10-28');
+    const notice = within(dialog).getByTestId('manual-rate-backup-notice');
+    expect(notice).toHaveTextContent(backup.heading(SINCE));
+    expect(notice).toHaveTextContent(backup.pickCurrency);
+    expect(mockedDay).not.toHaveBeenCalled();
+  });
+
+  it('dice a cuántos abonos sin tasa de ese día se aplicará', async () => {
+    mockedDay.mockResolvedValue({ date: '2026-10-28', currency: 'VES', count: 2, providerRateSaved: false });
+    const { user, dialog, date, select } = await openForm();
+    await user.clear(date);
+    await user.type(date, '2026-10-28');
+    await user.selectOptions(select, 'VES');
+    const notice = within(dialog).getByTestId('manual-rate-backup-notice');
+    expect(notice).toHaveAttribute('role', 'status');
+    await waitFor(() => expect(notice).toHaveTextContent(backup.applies(2, 'VES')));
+    expect(notice).toHaveTextContent(backup.heading(SINCE));
+    expect(mockedDay).toHaveBeenLastCalledWith('tok', '2026-10-28', 'VES');
+  });
+
+  it('sin abonos pendientes ese día, avisa de que la tasa no se usará', async () => {
+    mockedDay.mockResolvedValue({ date: '2026-10-28', currency: 'VES', count: 0, providerRateSaved: false });
+    const { user, dialog, date, select } = await openForm();
+    await user.clear(date);
+    await user.type(date, '2026-10-28');
+    await user.selectOptions(select, 'VES');
+    await waitFor(() =>
+      expect(within(dialog).getByTestId('manual-rate-backup-notice')).toHaveTextContent(backup.none('VES')),
+    );
+  });
+
+  it('si el proveedor ya tiene la tasa de ese día, avisa de que no se usará', async () => {
+    mockedDay.mockResolvedValue({ date: '2026-10-28', currency: 'VES', count: 1, providerRateSaved: true });
+    const { user, dialog, date, select } = await openForm();
+    await user.clear(date);
+    await user.type(date, '2026-10-28');
+    await user.selectOptions(select, 'VES');
+    await waitFor(() =>
+      expect(within(dialog).getByTestId('manual-rate-backup-notice')).toHaveTextContent(backup.provider),
+    );
+  });
+
+  it('si no se puede comprobar, explica la regla sin prometer nada', async () => {
+    mockedDay.mockRejectedValue(new ApiError(500, 'boom'));
+    const { user, dialog, date, select } = await openForm();
+    await user.clear(date);
+    await user.type(date, '2026-10-28');
+    await user.selectOptions(select, 'VES');
+    await waitFor(() =>
+      expect(within(dialog).getByTestId('manual-rate-backup-notice')).toHaveTextContent(backup.unknown),
+    );
+  });
+
+  it('con la fuente automática dice que la tasa no se usa y no pide nada', async () => {
+    const { user, dialog, date, select } = await openForm(AUTO);
+    await user.clear(date);
+    await user.type(date, '2026-10-28');
+    await user.selectOptions(select, 'VES');
+    expect(within(dialog).getByText(rateFormCopy.automaticNote)).toBeInTheDocument();
+    expect(mockedDay).not.toHaveBeenCalled();
+  });
+
+  it('los textos de la fuente no prometen que la fuente nueva resuelva todo abono sin tasa', () => {
+    expect(copy.sourceDialogDescription).not.toMatch(/la toman de la fuente nueva/);
+    expect(copy.sourceDialogDescription).toMatch(/respaldo/);
+    expect(copy.sourceHints.MANUAL).toMatch(/respaldo/);
+    expect(copy.ratesHint('USD')).toMatch(/respaldo/);
   });
 });

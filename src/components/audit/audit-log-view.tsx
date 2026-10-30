@@ -31,6 +31,7 @@ import {
   cancellationDetail,
   healthRegistrationDetail,
   clinicSettingsDetail,
+  exchangeRateBackupDetail,
   locationCalendarDetail,
   patientFlowDetail,
   importBatchDetail,
@@ -534,6 +535,7 @@ function AuditRow({
     healthRegistrationDetail(event.metadata) ??
     clinicSettingsDetail(event.metadata) ??
     locationCalendarDetail(event.metadata) ??
+    exchangeRateBackupDetail(event.metadata) ??
     anamnesisDetail(event.metadata);
   return (
     <TableRow>

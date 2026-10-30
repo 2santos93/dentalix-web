@@ -21,12 +21,16 @@ export const withoutRateCopy = {
   // Fuente manual (ADMIN): la tasa la registra la clínica.
   adminLink: 'Registrar la tasa en Ajustes › Tasa de cambio',
   adminHint: 'En cuanto la registres, el saldo los cuenta en un minuto.',
-  // DX-386: con la fuente automática (o un día anterior al paso a manual) la
-  // tasa la da el proveedor: registrar una manual no sirve.
+  // DX-402: un abono de un día anterior al paso a manual toma la manual de su
+  // día como respaldo si el proveedor no la da.
+  backupHint:
+    'Para un abono de antes del paso a manual, la tasa que registres para su día le sirve de respaldo si el proveedor no la da: el saldo lo cuenta en un minuto.',
+  // DX-386: con la fuente automática la tasa la da el proveedor: registrar
+  // una manual no sirve mientras no se pase a manual.
   automatic: 'La tasa del proveedor aún no está disponible; reintentamos solos y el saldo los cuenta en cuanto llegue.',
   switchToManualLink: 'Pasar a tasa manual en Ajustes › Tasa de cambio',
   switchToManualHint:
-    'Solo si no puedes esperar: con la tasa manual la clínica registra la de cada día desde el día del cambio; los días anteriores siguen con la del proveedor.',
+    'Solo si no puedes esperar: pasa a la tasa manual y registra la de su día; servirá de respaldo a estos abonos si el proveedor no la da. Desde el cambio, la clínica registra la tasa de cada día.',
   // ADMIN sin la fuente (no se pudo leer): no se da por hecha ninguna.
   settingsLink: 'Revisar la tasa en Ajustes › Tasa de cambio',
   // El resto de roles no puede leer la fuente: texto válido para las dos.
@@ -39,12 +43,15 @@ const linkClass =
 /**
  * De dónde sale la tasa del día de cada abono: manual desde `manualSince`
  * (si la clínica está en manual), del proveedor en cualquier otro caso — la
- * misma regla con la que la API congela la tasa (DX-374).
+ * misma regla con la que la API congela la tasa (DX-374). DX-402: con manual,
+ * un abono de un día anterior también puede tomar la manual de su día como
+ * respaldo (`backup`).
  */
 function rateDays(payments: PaymentWithoutRate[], settings: ExchangeRateSettings) {
   const since = settings.source === 'MANUAL' ? settings.manualSince : null;
   const manual = since !== null ? payments.filter((p) => p.paidOn >= since).length : 0;
-  return { manual: manual > 0, provider: manual < payments.length };
+  const provider = manual < payments.length;
+  return { manual: manual > 0, provider, backup: since !== null && provider };
 }
 
 /**
@@ -111,12 +118,13 @@ function AdminAction({ settings, payments }: { settings: ExchangeRateSettingsSta
   return (
     <>
       {days.provider ? <p className="mt-1">{withoutRateCopy.automatic}</p> : null}
-      {days.manual ? (
+      {days.manual || days.backup ? (
         <p className="mt-1">
           <Link href={EXCHANGE_RATE_SETTINGS_HREF} className={linkClass}>
             {withoutRateCopy.adminLink}
           </Link>
-          <span className="block text-xs">{withoutRateCopy.adminHint}</span>
+          {days.manual ? <span className="block text-xs">{withoutRateCopy.adminHint}</span> : null}
+          {days.backup ? <span className="block text-xs">{withoutRateCopy.backupHint}</span> : null}
         </p>
       ) : null}
       {automatic ? (

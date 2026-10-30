@@ -80,7 +80,9 @@ describe('WithoutRateNotice (DX-375)', () => {
     expect(screen.queryByText(withoutRateCopy.adminHint)).not.toBeInTheDocument();
   });
 
-  it('con fuente manual, un abono de antes del paso a manual sigue esperando al proveedor', async () => {
+  // DX-402: con la fuente manual, la tasa manual del día de un abono anterior
+  // al paso a manual le sirve de respaldo si el proveedor no la da.
+  it('con fuente manual, un abono de antes del paso a manual espera al proveedor o toma la manual de su día como respaldo', async () => {
     render(
       <WithoutRateNotice
         token={tokenForRole('ADMIN')}
@@ -88,20 +90,33 @@ describe('WithoutRateNotice (DX-375)', () => {
       />,
     );
     expect(await screen.findByText(withoutRateCopy.automatic)).toBeInTheDocument();
-    // Ya es manual: no hay a qué cambiar, y registrar una tasa de ese día no serviría.
-    expect(screen.queryByRole('link')).not.toBeInTheDocument();
+    expect(screen.getByRole('link', { name: withoutRateCopy.adminLink })).toHaveAttribute(
+      'href',
+      '/settings/tasa-de-cambio',
+    );
+    expect(screen.getByText(withoutRateCopy.backupHint)).toBeInTheDocument();
+    expect(screen.queryByText(withoutRateCopy.adminHint)).not.toBeInTheDocument();
+    // Ya es manual: no hay a qué cambiar.
+    expect(screen.queryByRole('link', { name: withoutRateCopy.switchToManualLink })).not.toBeInTheDocument();
   });
 
-  it('con fuente manual y abonos de antes y después del cambio, dice las dos cosas', async () => {
+  it('con fuente manual y abonos de antes y después del cambio, dice las dos cosas con un solo enlace', async () => {
     render(
       <WithoutRateNotice
         token={tokenForRole('ADMIN')}
         payments={[...ONE, { paymentId: 'p0', amount: 20, currency: 'USD', paidOn: '2026-09-30' }]}
       />,
     );
-    expect(await screen.findByRole('link', { name: withoutRateCopy.adminLink })).toBeInTheDocument();
+    expect(await screen.findAllByRole('link', { name: withoutRateCopy.adminLink })).toHaveLength(1);
     expect(screen.getByText(withoutRateCopy.automatic)).toBeInTheDocument();
+    expect(screen.getByText(withoutRateCopy.adminHint)).toBeInTheDocument();
+    expect(screen.getByText(withoutRateCopy.backupHint)).toBeInTheDocument();
     expect(screen.queryByRole('link', { name: withoutRateCopy.switchToManualLink })).not.toBeInTheDocument();
+  });
+
+  it('con fuente automática, pasar a manual promete solo lo que hace la regla (DX-402)', () => {
+    expect(withoutRateCopy.switchToManualHint).toMatch(/respaldo/);
+    expect(withoutRateCopy.switchToManualHint).not.toMatch(/los días anteriores siguen con la del proveedor/);
   });
 
   it('mientras lee la fuente no propone nada todavía', () => {

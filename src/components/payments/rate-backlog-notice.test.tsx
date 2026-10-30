@@ -86,4 +86,11 @@ describe('RateBacklogNotice (DX-380)', () => {
     act(() => options.action.onClick());
     expect(await screen.findByText('1 abono sin tasa desde el 28/10/2026')).toBeInTheDocument();
   });
+
+  // DX-402: el remedio del aviso es el que resuelve el caso (pasar a manual y
+  // registrar la tasa de ese día, que sirve de respaldo).
+  it('el texto propone lo que resuelve el caso: la tasa manual de ese día como respaldo', () => {
+    expect(rateBacklogCopy.body).toMatch(/respaldo/);
+    expect(rateBacklogCopy.body).not.toMatch(/cambia la fuente/);
+  });
 });

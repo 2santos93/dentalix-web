@@ -1,4 +1,5 @@
 import {
+  exchangeRateBackupDetail,
   cancellationDetail,
   importBatchDetail,
   AUDIT_ACTION_LABELS,
@@ -570,5 +571,22 @@ describe('staffDetail (DX-359)', () => {
   it('null para otra reason o sin reason', () => {
     expect(staffDetail({ reason: 'LOGIN_UNLOCKED' })).toBeNull();
     expect(staffDetail({})).toBeNull();
+  });
+});
+
+describe('exchangeRateBackupDetail (DX-402)', () => {
+  it('dice que el barrido usó una tasa manual de un día anterior a «manual desde» como respaldo', () => {
+    expect(
+      exchangeRateBackupDetail({
+        reason: 'EXCHANGE_RATE_BACKUP',
+        origin: 'JOB',
+        exchangeRateBackup: { rateDate: '2026-10-28', manualSince: '2026-10-30', currencies: ['COP', 'USD'] },
+      }),
+    ).toBe('Tasa de respaldo: la manual de un día anterior a «manual desde» (COP, USD) · proceso automático');
+  });
+
+  it('null para otra reason', () => {
+    expect(exchangeRateBackupDetail({ reason: 'RECEIPT_ISSUED' })).toBeNull();
+    expect(exchangeRateBackupDetail({})).toBeNull();
   });
 });
