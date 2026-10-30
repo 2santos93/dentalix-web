@@ -40,6 +40,8 @@ export interface VoidPaymentTarget {
   /** Día civil del pago en la zona de su sede (`paidOn`, YYYY-MM-DD; DX-097). */
   paidOn: string;
   patientName?: string;
+  /** DX-390: formas de pago de su cobro dividido (se anulan juntas); `null`/ausente si es suelto. */
+  splitLines?: number | null;
 }
 
 export function voidPaymentSubject(target: VoidPaymentTarget): string {

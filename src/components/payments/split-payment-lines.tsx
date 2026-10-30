@@ -123,14 +123,20 @@ export function SplitLineFields({
 }) {
   const n = index + 1;
   const prefix = `rp-line-${n}`;
+  const titleId = `${prefix}-title`;
   const currency = line.currency || defaultCurrency;
+  // Un <legend> dentro de un <div> no nombra el <fieldset>: el título visible
+  // lo nombra con aria-labelledby.
   return (
     <fieldset
       data-testid={`split-line-${n}`}
+      aria-labelledby={titleId}
       className="flex min-w-0 flex-col gap-4 rounded-lg border border-border p-3"
     >
       <div className="flex items-center justify-between gap-2">
-        <legend className="t-label text-ink">{copy.lineTitle(n)}</legend>
+        <p id={titleId} className="t-label text-ink">
+          {copy.lineTitle(n)}
+        </p>
         <Button
           type="button"
           variant="ghost"
@@ -138,7 +144,7 @@ export function SplitLineFields({
           onClick={onRemove}
           disabled={disabled}
           aria-label={copy.removeLine(n)}
-          className="text-muted hover:text-ink"
+          className="text-muted hover:text-ink max-sm:h-11"
         >
           <Trash2 aria-hidden />
           {copy.remove}
@@ -151,6 +157,7 @@ export function SplitLineFields({
             currency={currency}
             requirePositive
             value={line.amount}
+            disabled={disabled}
             onValueChange={(amount) => onPatch({ amount, amountError: null })}
             aria-invalid={line.amountError ? true : undefined}
             aria-describedby={line.amountError ? fieldErrorId(`${prefix}-amount`) : undefined}
@@ -161,6 +168,7 @@ export function SplitLineFields({
             id={`${prefix}-currency`}
             token={token}
             value={currency}
+            disabled={disabled}
             onChange={(code) => onPatch({ currency: code })}
           />
         </FormField>

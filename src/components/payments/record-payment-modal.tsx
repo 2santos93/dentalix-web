@@ -1,9 +1,10 @@
 'use client';
 import * as React from 'react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Plus } from 'lucide-react';
 import {
   SPLIT_MAX_LINES,
+  SPLIT_PAYMENT_BALANCE_CHANGED,
   SPLIT_PAYMENT_EXCEEDS_BALANCE,
   recordOpeningBalancePayment,
   recordPayment,
@@ -169,6 +170,16 @@ export function RecordPaymentModal({
   const split = useSplitLines(methodFields.methods);
   const [confirmCredit, setConfirmCredit] = useState(false);
   const [confirmError, setConfirmError] = useState<string | null>(null);
+  // Tras un 409 de «lo pendiente cambió» se vuelve a leer el saldo del plan.
+  const [balanceRefresh, setBalanceRefresh] = useState(0);
+  // El foco tras añadir (su importe) o quitar (el botón de añadir) una forma
+  // de pago: el botón pulsado desaparece o queda lejos del campo nuevo.
+  const pendingFocus = useRef<string | null>(null);
+  useEffect(() => {
+    if (pendingFocus.current === null) return;
+    document.getElementById(pendingFocus.current)?.focus();
+    pendingFocus.current = null;
+  });
 
   // Si la persona aún no tocó la fecha, sigue a «hoy» de la sede cuando llega
   // su zona (DX-097).
@@ -220,7 +231,7 @@ export function RecordPaymentModal({
   const rates = useExchangeRates(token, form.date, open && (otherCurrency || splitOtherCurrency));
   // Lo pendiente sale del saldo del plan con los abonos en otra moneda ya
   // convertidos: `plan.balance` (lista de cobrables) no los descuenta.
-  const balance = usePlanBalance(token, plan?.id ?? null, open && (otherCurrency || isSplit));
+  const balance = usePlanBalance(token, plan?.id ?? null, open && (otherCurrency || isSplit), balanceRefresh);
   const previewBalance: PreviewPlanBalance =
     balance.status === 'ready'
       ? { balance: balance.balance.balance, paymentsWithoutRate: balance.balance.paymentsWithoutRate.length }
@@ -329,7 +340,12 @@ export function RecordPaymentModal({
       // La clave NO cambia: el reintento de este cobro la reusa.
       if (err instanceof ApiError && err.code === SPLIT_PAYMENT_EXCEEDS_BALANCE) {
         setConfirmError(copy.split.confirmCreditMissing);
+        setBalanceRefresh((n) => n + 1);
         return;
+      }
+      // Otro abono entró a la vez: lo pendiente que se ve ya no vale.
+      if (err instanceof ApiError && err.code === SPLIT_PAYMENT_BALANCE_CHANGED) {
+        setBalanceRefresh((n) => n + 1);
       }
       if (err instanceof ApiError && err.line !== null && err.line > 0) {
         const line = split.lines[err.line - 1];
@@ -556,6 +572,7 @@ export function RecordPaymentModal({
                       onRemove={() => {
                         split.remove(line.key);
                         setConfirmError(null);
+                        pendingFocus.current = 'rp-add-line';
                       }}
                     />
                   ))
@@ -563,9 +580,13 @@ export function RecordPaymentModal({
               {plan && !opening ? (
                 split.lines.length + 1 < SPLIT_MAX_LINES ? (
                   <Button
+                    id="rp-add-line"
                     type="button"
                     variant="outline"
-                    onClick={split.add}
+                    onClick={() => {
+                      split.add();
+                      pendingFocus.current = `rp-line-${split.lines.length + 2}-amount`;
+                    }}
                     disabled={submitting}
                     className="w-full sm:w-auto sm:self-start"
                   >

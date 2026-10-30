@@ -362,3 +362,38 @@ it('FE-082: si los medios no cargan, el selector se sustituye por FieldError (es
   await waitFor(() => expect(within(dialog).getByLabelText('Método').tagName).toBe('SELECT'));
   expect(mockedMethods).toHaveBeenCalledTimes(2);
 });
+
+// Revisión DX-390 (tech lead).
+it('cada forma de pago añadida es un grupo con nombre; añadir lleva el foco a su importe y quitar, a «Añadir otra forma de pago»', async () => {
+  const user = userEvent.setup();
+  const { dialog } = renderModal();
+  await within(dialog).findByLabelText('Plan');
+  await user.click(within(dialog).getByRole('button', { name: splitPaymentCopy.addLine }));
+  const group = within(dialog).getByRole('group', { name: splitPaymentCopy.lineTitle(2) });
+  await waitFor(() => expect(within(group).getByLabelText('Importe')).toHaveFocus());
+
+  await user.click(within(dialog).getByRole('button', { name: splitPaymentCopy.removeLine(2) }));
+  await waitFor(() =>
+    expect(within(dialog).getByRole('button', { name: splitPaymentCopy.addLine })).toHaveFocus(),
+  );
+});
+
+it('el 409 de «lo pendiente cambió» (otro abono a la vez) sale en el resumen y vuelve a leer el saldo del plan', async () => {
+  mockedSplit.mockRejectedValueOnce(
+    new ApiError(
+      409,
+      'Lo pendiente del plan cambió mientras se registraba el cobro (entró otro abono). No se registró nada: revisa el total y vuelve a intentarlo.',
+      { code: 'SPLIT_PAYMENT_BALANCE_CHANGED' },
+    ),
+  );
+  const { dialog, onRecorded } = renderModal();
+  const { user, second } = await fillTwoLines(dialog);
+  await user.selectOptions(within(second).getByLabelText('Método'), 'pm-cash');
+  await waitFor(() => expect(getPlanBalance).toHaveBeenCalledTimes(1));
+
+  await user.click(within(dialog).getByRole('button', { name: 'Registrar abono' }));
+  const alert = await within(dialog).findByRole('alert');
+  expect(alert).toHaveTextContent('Lo pendiente del plan cambió');
+  await waitFor(() => expect(getPlanBalance).toHaveBeenCalledTimes(2));
+  expect(onRecorded).not.toHaveBeenCalled();
+});

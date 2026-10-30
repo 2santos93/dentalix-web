@@ -264,6 +264,26 @@ describe('anular desde el estado de cuenta (DX-057)', () => {
   });
 });
 
+describe('anular una forma de pago de un cobro dividido (revisión DX-390)', () => {
+  it('avisa antes de anular que se anula el cobro entero y su recibo', async () => {
+    const user = userEvent.setup();
+    const fixture = accountStatementFixture();
+    mockedGet.mockResolvedValue({
+      ...fixture,
+      movements: fixture.movements.map((m) =>
+        m.id === 'pay-2' ? { ...m, splitId: 'pay-2', splitLines: 3 } : m,
+      ),
+    });
+    render(<AccountStatementView token="tok" patientId="pat-1" />);
+    const table = await screen.findByRole('table', { name: /movimientos/i });
+    await user.click(within(table).getByRole('button', { name: /anular abono/i }));
+    const dialog = await screen.findByRole('dialog', { name: /anular este abono/i });
+    expect(dialog).toHaveTextContent(
+      'Es una de las 3 formas de pago de un mismo cobro: se anulan todas y su recibo.',
+    );
+  });
+});
+
 describe('cobrar desde el estado de cuenta (DX-067)', () => {
   const RECEPTION = tokenForRole('RECEPTION');
   const billablePlan: BillablePlan = {

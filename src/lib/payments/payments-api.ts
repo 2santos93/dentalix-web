@@ -57,6 +57,8 @@ export const SPLIT_MAX_LINES = 5;
 
 /** DX-390: 409 del cobro cuyo total supera lo pendiente sin confirmar el saldo a favor. */
 export const SPLIT_PAYMENT_EXCEEDS_BALANCE = 'SPLIT_PAYMENT_EXCEEDS_BALANCE';
+/** Revisión DX-390: otro abono entró al plan entre la lectura de lo pendiente y el cobro (409). */
+export const SPLIT_PAYMENT_BALANCE_CHANGED = 'SPLIT_PAYMENT_BALANCE_CHANGED';
 
 /**
  * `POST /treatment-plans/:id/split-payments` (DX-390): un cobro en 2–5 formas

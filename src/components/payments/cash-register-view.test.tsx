@@ -92,6 +92,8 @@ const anaCash: CashPayment = {
     createdAt: '2026-09-01T15:00:00.000Z',
   },
   openingBalance: null,
+  splitId: null,
+  splitLines: null,
 };
 const betoCard: CashPayment = {
   ...anaCash,
@@ -563,6 +565,19 @@ describe('anular desde la caja (DX-057)', () => {
     ).toBeInTheDocument();
     const beto = within(table).getByRole('row', { name: /beto ruiz/i });
     expect(within(beto).queryByRole('button', { name: /anular/i })).not.toBeInTheDocument();
+  });
+
+  it('revisión DX-390: una forma de pago de un cobro dividido avisa que se anula el cobro entero', async () => {
+    const user = userEvent.setup();
+    mockedList.mockResolvedValue(
+      response({ items: [{ ...anaCash, splitId: 'pay-1', splitLines: 2 }], total: 1 }),
+    );
+    render(<CashRegisterView token="tok" />);
+    await user.click(await screen.findByRole('button', { name: /anular abono de ana gómez/i }));
+    const dialog = await screen.findByRole('dialog', { name: /anular este abono/i });
+    expect(dialog).toHaveTextContent(
+      'Es una de las 2 formas de pago de un mismo cobro: se anulan todas y su recibo.',
+    );
   });
 
   it('anula con motivo, cierra el modal, avisa y recarga la caja', async () => {
