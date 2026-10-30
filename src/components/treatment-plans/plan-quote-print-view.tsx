@@ -7,7 +7,12 @@ import { getPlanQuote, type PlanQuote } from '@/lib/treatment-plans/plan-quote-a
 import { SectionError } from '@/components/errors/section-error';
 import { EmptyState } from '@/components/shared/empty-state';
 import { Button } from '@/components/ui/button';
-import { PlanQuoteDocument } from './plan-quote-document';
+import { PlanQuoteDocument, type QuoteSecondCurrency } from './plan-quote-document';
+import { CurrencySelect } from '@/components/shared/currency-select';
+import { FieldError } from '@/components/errors/field-error';
+import { useExchangeRates, type ExchangeRatesState } from '@/components/payments/use-exchange-rates';
+import { ratePreviewCopy } from '@/components/payments/payment-rate-preview';
+import { readyTimeZone, sedeToday, useSedeTimeZone } from '@/lib/locations/use-sede-time-zone';
 
 const copy = {
   toolbar: 'Acciones del presupuesto',
@@ -20,7 +25,30 @@ const copy = {
   forbiddenTitle: 'Tu rol no tiene acceso a este presupuesto.',
   forbiddenHint: 'Pide a la administración de la clínica que revise tu rol.',
   documentTitle: (name: string) => `Presupuesto · ${name}`,
+  // DX-376: 2.ª moneda opcional, con la tasa de hoy de la clínica.
+  secondCurrency: 'Segunda moneda (opcional)',
+  secondNone: 'Sin segunda moneda',
+  secondLoading: 'Consultando la tasa de hoy…',
+  secondMissing: (currency: string) =>
+    `No hay tasa de ${currency} para hoy: el presupuesto se imprime sin la segunda moneda.`,
 };
+
+/** La 2.ª moneda lista para el documento, o el motivo de que no la haya. */
+function secondCurrencyOf(
+  state: ExchangeRatesState,
+  planCurrency: string,
+  second: string,
+  date: string,
+): { value: QuoteSecondCurrency } | { missing: string } | null {
+  if (state.status !== 'ready') return null;
+  const { base, source, rates } = state.rates;
+  const perBase = (code: string): number | undefined => (code === base ? 1 : rates[code]);
+  const fromPerBase = perBase(planCurrency);
+  const toPerBase = perBase(second);
+  if (fromPerBase === undefined) return { missing: planCurrency };
+  if (toPerBase === undefined) return { missing: second };
+  return { value: { currency: second, fromPerBase, toPerBase, source, date } };
+}
 
 interface PlanQuotePrintViewProps {
   token: string;
@@ -51,6 +79,12 @@ export function PlanQuotePrintView({
   const [reloadKey, setReloadKey] = useState(0);
   const printed = useRef(false);
   const forbidden = !allowed || deniedByApi;
+  // DX-376: la tasa es la de hoy en la sede; sin zona no se pide ninguna.
+  const [second, setSecond] = useState('');
+  const timeZone = readyTimeZone(useSedeTimeZone(token));
+  const today = timeZone ? sedeToday(timeZone) : '';
+  const rates = useExchangeRates(token, today, second !== '' && data !== null);
+  const secondResult = data && second ? secondCurrencyOf(rates, data.currency, second, today) : null;
 
   useEffect(() => {
     if (!allowed) return;
@@ -103,16 +137,53 @@ export function PlanQuotePrintView({
             {copy.back}
           </Link>
         </Button>
-        <Button type="button" onClick={() => window.print()} disabled={!data}>
-          <Printer aria-hidden />
-          {copy.print}
-        </Button>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+          {data ? (
+            <div className="flex flex-col gap-1 sm:flex-row sm:items-center sm:gap-2">
+              <label htmlFor="quote-second-currency" className="text-sm text-ink">
+                {copy.secondCurrency}
+              </label>
+              <CurrencySelect
+                id="quote-second-currency"
+                token={token}
+                value={second}
+                onChange={setSecond}
+                exclude={[data.currency]}
+                noneLabel={copy.secondNone}
+                className="sm:w-56"
+              />
+            </div>
+          ) : null}
+          <Button type="button" onClick={() => window.print()} disabled={!data}>
+            <Printer aria-hidden />
+            {copy.print}
+          </Button>
+        </div>
       </div>
+      {data && second ? (
+        <div role="status" aria-live="polite" className="px-4 pt-3 text-sm text-ink print:hidden">
+          {rates.status === 'loading' || (rates.status === 'idle' && !today) ? (
+            <p className="text-muted">{copy.secondLoading}</p>
+          ) : rates.status === 'error' ? (
+            <FieldError
+              label={ratePreviewCopy.error}
+              onRetry={rates.retry}
+              retryLabel={ratePreviewCopy.retry}
+              className="w-full sm:w-auto"
+            />
+          ) : secondResult && 'missing' in secondResult ? (
+            <p>{copy.secondMissing(secondResult.missing)}</p>
+          ) : null}
+        </div>
+      ) : null}
 
       <main className="flex-1 px-0 py-0 sm:px-4 sm:py-8 print:p-0">
         {data ? (
           <div className="mx-auto max-w-[210mm] shadow-sm print:shadow-none">
-            <PlanQuoteDocument quote={data} />
+            <PlanQuoteDocument
+              quote={data}
+              secondCurrency={secondResult && 'value' in secondResult ? secondResult.value : null}
+            />
           </div>
         ) : forbidden ? (
           <div className="mx-auto max-w-xl px-4 py-8">
