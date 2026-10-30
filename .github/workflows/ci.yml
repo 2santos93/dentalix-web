@@ -41,5 +41,8 @@ jobs:
       # `npm run lint` es `eslint` a secas (sin --fix): sirve tal cual en CI.
       - run: npm run lint
       - run: npx tsc --noEmit
+      # DX-297: Jest resolves compiled form colors in real Chromium.
+      - name: Instalar Chromium para las pruebas de contraste
+        run: npx playwright install --with-deps chromium
       - run: npx jest --ci
       - run: npm run build

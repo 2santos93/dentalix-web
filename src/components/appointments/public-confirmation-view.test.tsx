@@ -56,6 +56,7 @@ describe('PublicConfirmationView', () => {
 
     expect(screen.getByRole('status')).toHaveTextContent(/cargando/i);
     expect(await screen.findByRole('heading', { name: 'Clínica Sonrisa' })).toBeInTheDocument();
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
     expect(screen.getByText(/hola ana/i)).toBeInTheDocument();
     expect(screen.getByText(/martes, 20 de octubre/i)).toBeInTheDocument();
     expect(screen.getByText('14:00–14:30')).toBeInTheDocument();
@@ -112,6 +113,7 @@ describe('PublicConfirmationView', () => {
     get.mockResolvedValueOnce(view({ status: 'EXPIRED', appointment: null }));
     render(<PublicConfirmationView confirmationToken="tok-1" />);
     expect(await screen.findByRole('heading', { name: /enlace ya no es válido/i })).toBeInTheDocument();
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
     expect(screen.queryByRole('button')).not.toBeInTheDocument();
   });
 
@@ -119,6 +121,7 @@ describe('PublicConfirmationView', () => {
     get.mockRejectedValueOnce(new ApiError(404, 'Confirmation link not found'));
     render(<PublicConfirmationView confirmationToken="nope" />);
     expect(await screen.findByRole('heading', { name: /enlace no válido/i })).toBeInTheDocument();
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
   });
 
   it('error de red al cargar: error de sección con reintento', async () => {
@@ -129,6 +132,7 @@ describe('PublicConfirmationView', () => {
     expect(await screen.findByRole('alert')).toHaveTextContent(/no pudimos cargar tu cita/i);
     fireEvent.click(screen.getByRole('button', { name: /reintentar/i }));
     expect(await screen.findByRole('heading', { name: 'Clínica Sonrisa' })).toBeInTheDocument();
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
     expect(get).toHaveBeenCalledTimes(2);
   });
 
@@ -164,6 +168,7 @@ describe('PublicConfirmationView', () => {
     fireEvent.click(await screen.findByRole('button', { name: 'Cancelar cita' }));
 
     expect(await screen.findByRole('heading', { name: /enlace ya no es válido/i })).toBeInTheDocument();
+    expect(screen.getAllByRole('heading', { level: 1 })).toHaveLength(1);
   });
 
   describe('política de cancelación (DX-291)', () => {
