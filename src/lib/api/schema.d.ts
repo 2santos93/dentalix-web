@@ -5818,7 +5818,11 @@ export interface components {
             phoneE164: string | null;
             /** @description MISSING: sin móvil. INVALID: no es un móvil válido para el país de la sede (no puede ser canal WhatsApp). */
             phoneStatus: components["schemas"]["MobileStatus"];
-            /** @description País (ISO 3166-1 alfa-2) con el que se valida un número sin indicativo: el de la sede activa o la principal (sin sedes, el del paciente). null si no hay país o si ese país no tiene indicativo por defecto (hasta DX-329): el número se escribe con +. */
+            /** @description true si los dígitos se pueden leer como dos números válidos distintos: hay que escribirlo con + y el prefijo del país. */
+            phoneAmbiguous: boolean;
+            /** @description Número válido en formato internacional de la librería, con su extensión si la tiene. null si no es válido. */
+            phoneInternational: string | null;
+            /** @description Región (ISO 3166-1 alfa-2) cuyo prefijo se añade a un número escrito sin +: la de la sede activa o la principal. null si la sede no tiene prefijo por defecto. */
             phoneCountry: string | null;
             email: string | null;
             whatsappOptIn: components["schemas"]["WhatsappOptInDto"] | null;
@@ -6427,6 +6431,8 @@ export interface components {
             showHealthRegistrationNumber: boolean;
             /** @description DX-222: teléfono de la sede o null. */
             phone: string | null;
+            /** @description Región cuyo prefijo telefónico se añade a los números escritos sin +. Se sugiere desde el país al crear la sede. null: sin prefijo por defecto. */
+            defaultPhoneRegion: string | null;
             isActive: boolean;
             /**
              * @description G1: moneda ISO 4217 de la sede (3 letras; se pasa a mayúsculas). Tiene que estar en GET /currencies. null = sede sin configurar (fase 1).
@@ -6487,6 +6493,8 @@ export interface components {
             hourCycle?: "h12" | "h23";
             /** @description DX-222: teléfono de la sede que ven los pacientes en las indicaciones postoperatorias ({{telefono_sede}}). Hasta 40 caracteres. */
             phone?: string;
+            /** @description Región cuyo prefijo telefónico se añade a los números escritos sin +. Se sugiere desde el país al crear la sede. null: sin prefijo por defecto. Sin el campo se sugiere el país si admite prefijo. */
+            defaultPhoneRegion?: string | null;
         };
         UpdateLocationDto: {
             name?: string;
@@ -6502,6 +6510,8 @@ export interface components {
             showHealthRegistrationNumber?: boolean;
             /** @description DX-222: teléfono de la sede que ven los pacientes en las indicaciones postoperatorias ({{telefono_sede}}). Hasta 40 caracteres. Vacío o null lo quita; sin el campo no cambia. */
             phone?: string | null;
+            /** @description Región cuyo prefijo telefónico se añade a los números escritos sin +. Se sugiere desde el país al crear la sede. null: sin prefijo por defecto. Vacío o null lo quita; sin el campo no cambia, tampoco al cambiar el país. */
+            defaultPhoneRegion?: string | null;
             /**
              * @description G1: moneda ISO 4217 de la sede (3 letras; se pasa a mayúsculas). Tiene que estar en GET /currencies.
              * @example EUR

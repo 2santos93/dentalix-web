@@ -540,6 +540,9 @@ const DOC_TYPE_LEGACY_NORMALIZER = 'lib/patients/legacy-doc-type.ts';
 const LEGACY_FILES = [DOC_TYPE_LEGACY_NORMALIZER, PRESCRIPTION_LEGACY_LAYOUT];
 // DX-312 (R8, R10): copia byte a byte de la lista generada en la API; `scripts/check-api-reference-sync.mjs` la vigila.
 const COUNTRY_LIST_COPY = 'lib/locations/iso3166-countries.json';
+// DX-329 (§3.2): igual, la lista de regiones de numeración; también la vigila el script de sincronía.
+const PHONE_REGION_LIST_COPY = 'lib/locations/phone-regions-list.json';
+const GENERATED_LIST_COPIES = [COUNTRY_LIST_COPY, PHONE_REGION_LIST_COPY];
 const COUNTRY_DOCUMENT = /[Cc][ée]dula|[Tt]arjeta de identidad|[Ee]xtranjer[ií]a|\b(?:CC|TI|CE)\b|INVIMA/;
 /** Siglas de documentos de otros países: en cualquier caja, como palabra. */
 const COUNTRY_DOCUMENT_ACRONYM = /\b(?:NIT|NIF|RIF|DNI|NIE|RUT|CURP|CPF|RUC|CUIL|CUIT|NUIP)\b/i;
@@ -572,7 +575,7 @@ function documentScanFiles(dir: string = SRC): string[] {
     if (!/\.(ts|tsx|js|jsx|mjs|json|css|md)$/.test(entry.name)) return [];
     const rel = relative(SRC, path).split(sep).join('/');
     if (/\.(test|spec)\./.test(rel) || rel.startsWith('lib/test/')) return [];
-    return LEGACY_FILES.includes(rel) || rel === COUNTRY_LIST_COPY ? [] : [path];
+    return LEGACY_FILES.includes(rel) || GENERATED_LIST_COPIES.includes(rel) ? [] : [path];
   });
 }
 
@@ -645,13 +648,14 @@ describe('arquitectura: tipos de documento sin país (DX-327)', () => {
     expect(mentions).toEqual([]);
   });
 
-  it('only the country list copy is skipped, and it is skipped only for its country codes', () => {
-    expect(existsSync(join(SRC, COUNTRY_LIST_COPY))).toBe(true);
+  it('only the country and phone region list copies are skipped, and only for their region codes', () => {
     const rels = documentScanFiles().map((f) => relative(SRC, f).split(sep).join('/'));
-    expect(rels).not.toContain(COUNTRY_LIST_COPY);
     expect(rels).toEqual(expect.arrayContaining(['lib/locations/iana-zone-names.json', 'lib/locations/countries.ts']));
-    const hits = countryDocumentHits(COUNTRY_LIST_COPY, readFileSync(join(SRC, COUNTRY_LIST_COPY), 'utf8'));
-    expect(hits.every((h) => /: "code": "[A-Z]{2}",$/.test(h))).toBe(true);
+    for (const copy of GENERATED_LIST_COPIES) {
+      expect([copy, existsSync(join(SRC, copy)), rels.includes(copy)]).toEqual([copy, true, false]);
+      const hits = countryDocumentHits(copy, readFileSync(join(SRC, copy), 'utf8'));
+      expect(hits.every((h) => /: "code": "[A-Z]{2}",$/.test(h))).toBe(true);
+    }
   });
 
   it('every named line exception still exists, so a closed ticket takes its exception with it', () => {
@@ -838,12 +842,13 @@ describe('arquitectura: tipos de documento sin país (DX-327)', () => {
  * `COUNTRY_NAMES`, `phoneCountryName`) ni el enum `ClinicCountry` (fuera de
  * los comentarios), ni nombra Colombia, España o Venezuela (comentarios
  * incluidos, sin tildes ni mayúsculas). Se salta los tests, `lib/test/**`, los
- * `*fixture*`, `lib/api/schema.d.ts` (generado), la copia de la lista de
- * países (datos generados) y la receta legada de R12 (W13).
+ * `*fixture*`, `lib/api/schema.d.ts` (generado), las copias de las listas de
+ * países y de regiones de numeración (datos generados) y la receta legada de
+ * R12 (W13).
  */
 const COUNTRY_LABEL_CODE = /COUNTRY_LABELS|COUNTRY_NAMES|ClinicCountry|phoneCountryName/;
 const COUNTRY_NAME = /colombi|espa[ñn]a|venezuel/i;
-const COUNTRY_NAME_EXCEPTIONS = [COUNTRY_LIST_COPY, PRESCRIPTION_LEGACY_LAYOUT];
+const COUNTRY_NAME_EXCEPTIONS = [...GENERATED_LIST_COPIES, PRESCRIPTION_LEGACY_LAYOUT];
 const COUNTRY_NAMES_LIB = 'lib/locations/countries.ts';
 const REGIONAL_FIELDS = 'components/locations/regional-settings-fields.tsx';
 

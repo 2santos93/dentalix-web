@@ -7,7 +7,6 @@ import { apiErrorMessage } from '@/lib/api/error-message';
 import { formatDate } from '@/lib/format/date';
 import {
   CHANNEL_LABELS,
-  formatE164,
   getPatientCommunication,
   OPT_IN_SOURCE_LABELS,
   OPT_OUT_SOURCE_LABELS,
@@ -17,7 +16,7 @@ import {
   type UpdatePatientCommunicationInput,
   type WhatsappOptInSource,
 } from '@/lib/patients/communication-api';
-import { countryName } from '@/lib/locations/countries';
+import { phoneRegionLabel } from '@/lib/locations/phone-regions';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -40,6 +39,8 @@ const copy = {
   mobileValid: 'Móvil válido',
   mobileInvalid: 'Móvil no válido',
   mobileInvalidHint: 'No sirve para WhatsApp: revisa el número o escríbelo con + y su indicativo.',
+  // DX-329 (C1): los dígitos admiten dos lecturas válidas distintas; la API no elige ninguna.
+  mobileAmbiguousHint: 'Ese número se puede leer de dos formas. Escríbelo con + y el prefijo del país.',
   email: 'Correo',
   noEmail: 'Sin correo',
   noEmailHint: 'Con canal Email y sin correo no le llegan los recordatorios.',
@@ -55,10 +56,10 @@ const copy = {
   modalTitle: 'Comunicaciones del paciente',
   modalDescription:
     'Canal de los avisos automáticos de las citas. No es la autorización de marketing. Cada cambio queda en la auditoría con quién lo hizo.',
-  mobileHint: (country: string | null) =>
-    country
-      ? `Sin indicativo se toma el de ${country}. Se guarda con el formato internacional.`
-      : 'Escríbelo con + y el indicativo del país.',
+  mobileHint: (region: string | null) =>
+    region
+      ? `Sin + se usa el prefijo de la sede: ${region}. Se guarda en formato internacional.`
+      : 'Escríbelo con + y el prefijo del país.',
   mobileRequired: 'Para elegir WhatsApp escribe el móvil del paciente.',
   optInLabel: 'Acepta que la clínica le escriba por WhatsApp',
   optInHint: 'Regístralo solo si el paciente lo aceptó. Se guarda la fecha, el origen y quién lo anotó.',
@@ -144,7 +145,7 @@ interface PatientCommunicationSectionProps {
 
 /**
  * Bloque «Comunicaciones» de la ficha (DX-128): canal de los recordatorios
- * automáticos, móvil validado con el país de la sede, opt-in de WhatsApp y baja
+ * automáticos, móvil validado con el prefijo por defecto de la sede, opt-in de WhatsApp y baja
  * de recordatorios. Carga lo suyo (skeleton → error con reintento → datos);
  * la edición va en un modal, solo para recepción y ADMIN.
  */
@@ -256,15 +257,15 @@ export function PatientCommunicationSection({
             ) : (
               <span className="flex flex-col gap-1">
                 <span className="flex flex-wrap items-center gap-2">
-                  <span className="tabular-nums">
-                    {data.phoneE164 ? formatE164(data.phoneE164) : data.phone}
-                  </span>
+                  <span className="tabular-nums">{data.phoneInternational ?? data.phone}</span>
                   <Badge variant={data.phoneStatus === 'VALID' ? 'success' : 'warning'}>
                     {data.phoneStatus === 'VALID' ? copy.mobileValid : copy.mobileInvalid}
                   </Badge>
                 </span>
                 {data.phoneStatus === 'INVALID' ? (
-                  <span className="text-sm text-muted">{copy.mobileInvalidHint}</span>
+                  <span className="text-sm text-muted">
+                    {data.phoneAmbiguous ? copy.mobileAmbiguousHint : copy.mobileInvalidHint}
+                  </span>
                 ) : null}
               </span>
             )}
@@ -318,7 +319,7 @@ export function PatientCommunicationSection({
     );
   }
 
-  const country = countryName(data?.phoneCountry ?? null);
+  const phoneRegion = phoneRegionLabel(data?.phoneCountry ?? null);
   const alreadyOptedIn = data?.whatsappOptIn !== null && data?.whatsappOptIn !== undefined;
 
   return (
@@ -367,7 +368,7 @@ export function PatientCommunicationSection({
           <FormField
             htmlFor={`${ids}-phone`}
             label={copy.mobile}
-            hint={copy.mobileHint(country)}
+            hint={copy.mobileHint(phoneRegion)}
             error={phoneError}
           >
             <Input

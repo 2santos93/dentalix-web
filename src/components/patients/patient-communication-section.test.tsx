@@ -32,6 +32,8 @@ function comms(over: Partial<PatientCommunication> = {}): PatientCommunication {
     phone: '+573101234567',
     phoneE164: '+573101234567',
     phoneStatus: 'VALID',
+    phoneAmbiguous: false,
+    phoneInternational: '+57 310 1234567',
     phoneCountry: 'CO',
     email: 'ana@example.com',
     whatsappOptIn: null,
@@ -79,7 +81,7 @@ describe('PatientCommunicationSection (DX-128)', () => {
     expect(screen.getByRole('status', { name: 'Cargando comunicaciones' })).toBeInTheDocument();
 
     const section = screen.getByRole('region', { name: 'Comunicaciones' });
-    expect(await within(section).findByText('+57 310 123 4567')).toBeInTheDocument();
+    expect(await within(section).findByText('+57 310 1234567')).toBeInTheDocument();
     expect(within(section).getByText('Canal de los recordatorios').nextSibling).toHaveTextContent(
       'WhatsApp',
     );
@@ -90,14 +92,14 @@ describe('PatientCommunicationSection (DX-128)', () => {
   });
 
   it('sin móvil: estado vacío «Sin móvil registrado»', async () => {
-    mockedGet.mockResolvedValue(comms({ phone: null, phoneE164: null, phoneStatus: 'MISSING' }));
+    mockedGet.mockResolvedValue(comms({ phone: null, phoneE164: null, phoneInternational: null, phoneStatus: 'MISSING' }));
     renderSection();
     expect(await screen.findByText('Sin móvil registrado')).toBeInTheDocument();
   });
 
   it('un móvil inválido avisa que no sirve para WhatsApp', async () => {
     mockedGet.mockResolvedValue(
-      comms({ phone: '601 234 5678', phoneE164: null, phoneStatus: 'INVALID' }),
+      comms({ phone: '601 234 5678', phoneE164: null, phoneInternational: null, phoneStatus: 'INVALID' }),
     );
     renderSection();
     expect(await screen.findByText('601 234 5678')).toBeInTheDocument();
@@ -105,6 +107,63 @@ describe('PatientCommunicationSection (DX-128)', () => {
     expect(
       screen.getByText('No sirve para WhatsApp: revisa el número o escríbelo con + y su indicativo.'),
     ).toBeInTheDocument();
+  });
+
+  it('the number is shown as the API formats it', async () => {
+    mockedGet.mockResolvedValue(
+      comms({
+        phone: '0412-1234567',
+        phoneE164: '+584121234567',
+        phoneInternational: '+58 412-1234567',
+        phoneCountry: 'VE',
+      }),
+    );
+    renderSection();
+    expect(await screen.findByText('+58 412-1234567')).toBeInTheDocument();
+    expect(screen.queryByText('0412-1234567')).not.toBeInTheDocument();
+  });
+
+  it('the mobile hint names the location\'s prefix', async () => {
+    mockedGet.mockResolvedValue(comms({ phoneCountry: 'VE' }));
+    const user = setupUser();
+    renderSection();
+    await user.click(await screen.findByRole('button', { name: 'Editar comunicaciones' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveTextContent(
+      'Sin + se usa el prefijo de la sede: Venezuela (+58). Se guarda en formato internacional.',
+    );
+  });
+
+  it('without a prefix the hint asks for +', async () => {
+    mockedGet.mockResolvedValue(comms({ phoneCountry: null }));
+    const user = setupUser();
+    renderSection();
+    await user.click(await screen.findByRole('button', { name: 'Editar comunicaciones' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog).toHaveTextContent('Escríbelo con + y el prefijo del país.');
+    expect(dialog).not.toHaveTextContent('Sin + se usa el prefijo de la sede');
+  });
+
+  it('an ambiguous number asks to write it with +', async () => {
+    mockedGet.mockResolvedValue(
+      comms({
+        phone: '49 151 23456789',
+        phoneE164: null,
+        phoneInternational: null,
+        phoneStatus: 'INVALID',
+        phoneAmbiguous: true,
+        phoneCountry: 'DE',
+      }),
+    );
+    renderSection();
+    expect(await screen.findByText('49 151 23456789')).toBeInTheDocument();
+    expect(screen.getByText('Móvil no válido')).toBeInTheDocument();
+    expect(
+      screen.getByText('Ese número se puede leer de dos formas. Escríbelo con + y el prefijo del país.'),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText('No sirve para WhatsApp: revisa el número o escríbelo con + y su indicativo.'),
+    ).not.toBeInTheDocument();
   });
 
   it('muestra la baja con su fecha y origen', async () => {
@@ -136,7 +195,7 @@ describe('PatientCommunicationSection (DX-128)', () => {
   });
 
   it('recepción cambia a WhatsApp con opt-in en persona: manda solo lo que cambió', async () => {
-    mockedGet.mockResolvedValue(comms({ phone: null, phoneE164: null, phoneStatus: 'MISSING' }));
+    mockedGet.mockResolvedValue(comms({ phone: null, phoneE164: null, phoneInternational: null, phoneStatus: 'MISSING' }));
     mockedUpdate.mockResolvedValue(
       comms({
         contactChannel: 'WHATSAPP',
@@ -166,7 +225,7 @@ describe('PatientCommunicationSection (DX-128)', () => {
   });
 
   it('WhatsApp sin móvil: lo explica en español sin llamar a la API', async () => {
-    mockedGet.mockResolvedValue(comms({ phone: null, phoneE164: null, phoneStatus: 'MISSING' }));
+    mockedGet.mockResolvedValue(comms({ phone: null, phoneE164: null, phoneInternational: null, phoneStatus: 'MISSING' }));
     const user = setupUser();
     renderSection();
     await user.click(await screen.findByRole('button', { name: 'Editar comunicaciones' }));
@@ -179,7 +238,7 @@ describe('PatientCommunicationSection (DX-128)', () => {
   });
 
   it('el 400 de la API (móvil inválido) se muestra en el formulario, que sigue abierto', async () => {
-    mockedGet.mockResolvedValue(comms({ phone: '123', phoneE164: null, phoneStatus: 'INVALID' }));
+    mockedGet.mockResolvedValue(comms({ phone: '123', phoneE164: null, phoneInternational: null, phoneStatus: 'INVALID' }));
     mockedUpdate.mockRejectedValue(
       new ApiError(400, NEEDS_MOBILE, { messages: [NEEDS_MOBILE] }),
     );
@@ -211,7 +270,7 @@ describe('PatientCommunicationSection (DX-128)', () => {
   });
 
   it('avisa a la ficha del cambio guardado (el teléfono de «Datos» no se queda viejo)', async () => {
-    mockedGet.mockResolvedValue(comms({ phone: null, phoneE164: null, phoneStatus: 'MISSING' }));
+    mockedGet.mockResolvedValue(comms({ phone: null, phoneE164: null, phoneInternational: null, phoneStatus: 'MISSING' }));
     const saved = comms({ phone: '+573101234567' });
     mockedUpdate.mockResolvedValue(saved);
     const onChanged = jest.fn();
@@ -228,7 +287,7 @@ describe('PatientCommunicationSection (DX-128)', () => {
   it('un adulto no muestra destinatario; un menor, que los avisos van a su responsable (DX-203)', async () => {
     mockedGet.mockResolvedValueOnce(comms());
     const { unmount } = renderSection();
-    expect(await screen.findByText('+57 310 123 4567')).toBeInTheDocument();
+    expect(await screen.findByText('+57 310 1234567')).toBeInTheDocument();
     expect(screen.queryByText('Destinatario de los avisos')).not.toBeInTheDocument();
     unmount();
 

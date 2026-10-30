@@ -93,7 +93,7 @@ test('escritorio: recepción pasa a WhatsApp con opt-in en persona y el móvil i
   await expect(dialog).toBeHidden();
 
   await expect(block).toContainText('WhatsApp');
-  await expect(block).toContainText('+57 310 123 4567');
+  await expect(block).toContainText('+57 310 1234567');
   await expect(block.getByText('Móvil válido')).toBeVisible();
   await expect(block).toContainText(`En persona · lo registró ${reception.fullName}`);
 });

@@ -207,7 +207,7 @@ test("a location's phone hint names its country", async ({ page, request }) => {
   await block.getByRole('button', { name: 'Editar comunicaciones' }).click();
   const dialog = page.getByRole('dialog', { name: 'Comunicaciones del paciente' });
   const phone = dialog.getByLabel('Móvil');
-  await expect(dialog).toContainText('Sin indicativo se toma el de Venezuela.');
+  await expect(dialog).toContainText('Sin + se usa el prefijo de la sede: Venezuela (+58). Se guarda en formato internacional.');
   await phone.fill('0412-1234567');
   await shoot(page, 'phone-hint', phone);
 

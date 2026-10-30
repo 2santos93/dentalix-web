@@ -60,18 +60,6 @@ export async function updatePatientCommunication(
 }
 
 /**
- * E.164 legible: `+57` agrupa 3-3-4 (`+57 310 123 4567`), `+34` 3-2-2-2
- * (`+34 612 34 56 78`); otro indicativo, sin agrupar tras él.
- */
-export function formatE164(e164: string): string {
-  const co = /^\+57(\d{3})(\d{3})(\d{4})$/.exec(e164);
-  if (co) return `+57 ${co[1]} ${co[2]} ${co[3]}`;
-  const es = /^\+34(\d{3})(\d{2})(\d{2})(\d{2})$/.exec(e164);
-  if (es) return `+34 ${es[1]} ${es[2]} ${es[3]} ${es[4]}`;
-  return e164;
-}
-
-/**
  * La ficha con lo que acaba de guardar el bloque «Comunicaciones»: el teléfono
  * (que «Datos» muestra y «Editar» siembra) y la preferencia. El resto, igual.
  */
