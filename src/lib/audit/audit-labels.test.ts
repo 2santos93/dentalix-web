@@ -349,6 +349,17 @@ describe('clinicSettingsDetail (DX-328)', () => {
     expect(clinicSettingsDetail({ reason: 'PRESCRIPTION_SETTINGS', statusChange: { from, to } })).toBeNull();
   });
 
+  it.each([
+    ['AUTOMATIC', 'MANUAL', 'Tasa de cambio: automática → manual'],
+    ['MANUAL', 'AUTOMATIC', 'Tasa de cambio: manual → automática'],
+  ])('EXCHANGE_RATE_SOURCE %s → %s (DX-374)', (from, to, text) => {
+    expect(clinicSettingsDetail({ reason: 'EXCHANGE_RATE_SOURCE', statusChange: { from, to } })).toBe(text);
+  });
+
+  it('EXCHANGE_RATE_SOURCE with an unknown code → null (DX-374)', () => {
+    expect(clinicSettingsDetail({ reason: 'EXCHANGE_RATE_SOURCE', statusChange: { from: 'AUTOMATIC', to: 'OTRA' } })).toBeNull();
+  });
+
   it('PRESCRIPTION_SETTINGS without statusChange → null; majority-age codes stay its own', () => {
     expect(clinicSettingsDetail({ reason: 'PRESCRIPTION_SETTINGS' })).toBeNull();
     expect(
