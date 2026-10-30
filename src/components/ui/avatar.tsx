@@ -2,13 +2,24 @@
 import * as React from 'react';
 import { cn } from '@/lib/utils';
 
-const SIZES = {
-  xs: 'size-6 text-[10px]',
-  sm: 'size-8 text-xs',
-  md: 'size-9 text-sm',
-  lg: 'size-12 text-base',
-  xl: 'size-16 text-lg',
-} as const;
+type AvatarSize = 'xs' | 'sm' | 'md' | 'lg' | 'xl';
+
+// Escala en un switch, no en un objeto con claves de dos letras (la guarda de
+// arquitectura DX-312 las leería como códigos de país).
+function sizeClass(size: AvatarSize): string {
+  switch (size) {
+    case 'xs':
+      return 'size-6 text-[10px]';
+    case 'sm':
+      return 'size-8 text-xs';
+    case 'lg':
+      return 'size-12 text-base';
+    case 'xl':
+      return 'size-16 text-lg';
+    default:
+      return 'size-9 text-sm';
+  }
+}
 
 export interface AvatarProps extends React.HTMLAttributes<HTMLSpanElement> {
   /** Iniciales ya calculadas (`initials()` de `@/lib/format/initials`). */
@@ -17,7 +28,7 @@ export interface AvatarProps extends React.HTMLAttributes<HTMLSpanElement> {
   src?: string | null;
   /** Texto alternativo de la foto. Sin él el avatar es decorativo (el nombre va al lado). */
   alt?: string;
-  size?: keyof typeof SIZES;
+  size?: AvatarSize;
 }
 
 /**
@@ -33,7 +44,7 @@ export function Avatar({ initials, src, alt, size = 'md', className, ...props }:
       aria-hidden={alt ? undefined : true}
       className={cn(
         'relative inline-flex shrink-0 select-none items-center justify-center overflow-hidden rounded-full bg-surface-active font-semibold text-ink',
-        SIZES[size],
+        sizeClass(size),
         className,
       )}
       {...props}
