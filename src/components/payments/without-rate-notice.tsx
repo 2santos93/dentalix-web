@@ -27,7 +27,9 @@ export const withoutRateCopy = {
  * que no tenían tasa de su día se guardaron, pero el saldo no los cuenta hasta
  * que se registre la tasa (y el barrido la congele). Al ADMIN le enlaza a
  * Ajustes › Tasa de cambio; al resto le dice a quién pedírselo. No es un error
- * (nada falló): tono de advertencia y `role="status"`, sin interrumpir.
+ * (nada falló): tono de advertencia y `role="status"`, sin interrumpir. Todo
+ * el texto va en `ink`: `muted` sobre el tinte de advertencia no llega a
+ * 4,5:1 (axe en claro).
  */
 export function WithoutRateNotice({ token, payments }: { token: string; payments: PaymentWithoutRate[] }) {
   if (payments.length === 0) return null;
@@ -56,10 +58,10 @@ export function WithoutRateNotice({ token, payments }: { token: string; payments
             >
               {withoutRateCopy.adminLink}
             </Link>
-            <span className="block text-xs text-muted">{withoutRateCopy.adminHint}</span>
+            <span className="block text-xs">{withoutRateCopy.adminHint}</span>
           </p>
         ) : (
-          <p className="mt-1 text-muted">{withoutRateCopy.otherRoles}</p>
+          <p className="mt-1">{withoutRateCopy.otherRoles}</p>
         )}
       </div>
     </div>
