@@ -27,7 +27,7 @@ describe('isHumanSpanish — heurística de idioma', () => {
     'Fuera del horario del profesional: no trabaja en Sede Norte el jueves 22/10. La clínica no permite citar fuera del horario del profesional.',
     // SEC-050 y DX-382: los 409 de «Anular cargo».
     'El cargo ya está cobrado: los abonos de «Cargos administrativos» lo cubren. Anula antes el abono y después el cargo.',
-    'Hay abonos sin convertir; registra la tasa del día antes de anular',
+    'Hay abonos todavía sin convertir a la moneda del plan; registra la tasa del día o espera un minuto y vuelve a intentarlo',
   ])('reconoce como español: %s', (msg) => {
     expect(isHumanSpanish(msg)).toBe(true);
   });

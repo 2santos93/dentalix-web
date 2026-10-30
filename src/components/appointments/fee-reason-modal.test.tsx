@@ -16,7 +16,7 @@ const voidFee = voidCancellationFee as jest.Mock;
 // tasa (el servidor ya no decide con importes en otra moneda). El mensaje del
 // servidor llega tal cual al aviso del formulario (escalón 4 de DESIGN.md,
 // `InlineError`, role="alert") y el diálogo deja de poder enviarse (DX-343).
-const UNCONVERTED = 'Hay abonos sin convertir; registra la tasa del día antes de anular';
+const UNCONVERTED = 'Hay abonos todavía sin convertir a la moneda del plan; registra la tasa del día o espera un minuto y vuelve a intentarlo';
 const PAID =
   'El cargo ya está cobrado: los abonos de «Cargos administrativos» lo cubren. Anula antes el abono y después el cargo.';
 
