@@ -98,9 +98,9 @@ function DiffRow({ entry }: { entry: HistoryDiffEntry }) {
         <p className="break-words font-medium text-ink">
           {entry.label}
           {entry.affirmative && (
-            <span className="ml-2 rounded-full bg-danger-subtle px-2 py-0.5 text-xs font-semibold text-danger-text">
+            <Badge variant="danger" className="ml-2 align-middle">
               {copy.yes}
-            </span>
+            </Badge>
           )}
         </p>
         <p className="break-words text-sm text-muted">
