@@ -124,4 +124,36 @@ describe('PaymentMethodsManager (DX-377)', () => {
     expect(nameInput).toHaveFocus();
     expect(mockedCreate).not.toHaveBeenCalled();
   });
+
+  it('DX-395: nombre sin escribir: mensaje propio en el campo, sin el globo nativo del navegador', async () => {
+    const user = setupUser();
+    render(<PaymentMethodsManager token="tok" allowed />);
+    await screen.findByRole('table', { name: 'Medios de pago' });
+    await user.click(screen.getByRole('button', { name: 'Nuevo medio' }));
+    const dialog = await screen.findByRole('dialog');
+    const nameInput = within(dialog).getByLabelText('Nombre');
+    expect(nameInput).not.toHaveAttribute('required');
+    expect(nameInput).toHaveAttribute('aria-required', 'true');
+    await user.click(within(dialog).getByRole('button', { name: 'Crear medio' }));
+    expect(nameInput).toHaveAttribute('aria-invalid', 'true');
+    expect(nameInput).toHaveAccessibleDescription('Escribe un nombre (hasta 60 caracteres).');
+    expect(nameInput).toHaveFocus();
+    expect(mockedCreate).not.toHaveBeenCalled();
+  });
+
+  it('DX-395: a 390 px «Nuevo medio», «Editar», «Desactivar» y el modal miden al menos 44 px', async () => {
+    const user = setupUser();
+    render(<PaymentMethodsManager token="tok" allowed />);
+    await screen.findByRole('table', { name: 'Medios de pago' });
+    // jsdom no mide: se comprueba la altura táctil por debajo de sm.
+    for (const name of ['Nuevo medio', 'Editar «Efectivo»', 'Desactivar «Efectivo»']) {
+      for (const button of screen.getAllByRole('button', { name })) {
+        expect(button.className).toContain('max-sm:h-11');
+      }
+    }
+    await user.click(screen.getByRole('button', { name: 'Nuevo medio' }));
+    const dialog = await screen.findByRole('dialog');
+    expect(dialog.className).toContain('max-sm:[&_select]:h-11');
+    expect(within(dialog).getByRole('button', { name: 'Cerrar' }).className).toContain('max-sm:size-11');
+  });
 });

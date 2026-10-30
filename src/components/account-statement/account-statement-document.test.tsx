@@ -110,3 +110,13 @@ it('DX-262: el documento lista el saldo migrado con su fecha de corte', () => {
   // QA D2: «Destino», no «Plan».
   expect(within(movements).getByRole('columnheader', { name: 'Destino' })).toBeInTheDocument();
 });
+
+it('DX-395: el impreso nombra el medio de la clínica y la referencia, no el método antiguo', () => {
+  render(<AccountStatementDocument statement={accountStatementFixture()} />);
+  const movements = screen.getByRole('table', { name: /movimientos/i });
+  const row = within(movements).getByRole('row', { name: /Pago móvil/ });
+  expect(row).toHaveTextContent('Pago móvil · Ref. ABC 123');
+  expect(row).not.toHaveTextContent('Transferencia');
+  expect(movements).toHaveTextContent('Tarjeta');
+  expect(movements).toHaveTextContent('Sin método');
+});

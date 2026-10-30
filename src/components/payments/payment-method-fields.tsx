@@ -1,6 +1,6 @@
 'use client';
 import * as React from 'react';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ApiError } from '@/lib/api/client';
 import { apiErrorMessage } from '@/lib/api/error-message';
 import { PAYMENT_REFERENCE_DUPLICATE, type ClinicPaymentMethod } from '@/lib/payments/payment-methods-api';
@@ -32,6 +32,19 @@ const copy = paymentMethodFieldsCopy;
 const fieldClass =
   'flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-50';
 
+/**
+ * DX-395: los separadores que la API quita al comparar la referencia
+ * (`normalizeReference`: espacios, puntos y guiones, también los tipográficos
+ * y el signo menos). Una referencia hecha solo de ellos no es referencia: la
+ * API la rechaza con 400, así que el campo la marca como vacía antes.
+ */
+const REFERENCE_SEPARATORS = /[\s.\-\u2010-\u2015\u2212]+/g;
+
+/** `true` si la referencia no tiene nada que comparar (vacía o solo separadores). */
+export function isBlankReference(value: string): boolean {
+  return value.replace(REFERENCE_SEPARATORS, '') === '';
+}
+
 type MethodBody = Pick<RecordPaymentInput, 'paymentMethodId' | 'reference' | 'duplicateReferenceReason'>;
 
 export interface PaymentMethodFieldsState {
@@ -43,16 +56,25 @@ export interface PaymentMethodFieldsState {
   /** Mensaje del 409 de referencia repetida; con él se pide el motivo. */
   duplicate: string | null;
   duplicateReason: string;
+  /** DX-395: el motivo que falta, junto a su campo. */
+  duplicateReasonError: string | null;
+  /**
+   * DX-395: el campo que debe recibir el foco (la referencia o el motivo que
+   * faltan, o el motivo al llegar el aviso de repetida). `seq` cambia en cada
+   * petición, para volver a enfocar el mismo campo.
+   */
+  focusRequest: { field: 'reference' | 'reason'; seq: number } | null;
   selectMethod: (id: string) => void;
   setReference: (value: string) => void;
   setDuplicateReason: (value: string) => void;
   /** Vacía el medio, la referencia y el aviso (cada apertura del formulario). */
   reset: () => void;
   /**
-   * Antes de enviar: `false` si falta la referencia (el error va junto al
-   * campo) o el motivo de la repetida (`formError`, para el formulario).
+   * Antes de enviar: `false` si falta la referencia o el motivo de la
+   * repetida. El error va junto a su campo (`aria-invalid`) y el campo recibe
+   * el foco (DX-395).
    */
-  validate: () => { ok: boolean; formError: string | null };
+  validate: () => boolean;
   /** Lo que se añade al cuerpo del abono. */
   body: () => MethodBody;
   /** `true` si el error es el 409 de referencia repetida (ya avisado). */
@@ -71,6 +93,10 @@ export function usePaymentMethodFields(token: string, enabled: boolean): Payment
   const [duplicateReason, setDuplicateReason] = useState('');
   const [referenceError, setReferenceError] = useState<string | null>(null);
   const [duplicate, setDuplicate] = useState<string | null>(null);
+  const [duplicateReasonError, setDuplicateReasonError] = useState<string | null>(null);
+  const [focusRequest, setFocusRequest] = useState<PaymentMethodFieldsState['focusRequest']>(null);
+  const requestFocus = (field: 'reference' | 'reason') =>
+    setFocusRequest((prev) => ({ field, seq: (prev?.seq ?? 0) + 1 }));
   const selected = methods.methods.find((m) => m.id === paymentMethodId) ?? null;
 
   // Cambiar el medio o la referencia retira el aviso de repetida.
@@ -78,6 +104,7 @@ export function usePaymentMethodFields(token: string, enabled: boolean): Payment
     setReferenceError(null);
     setDuplicate(null);
     setDuplicateReason('');
+    setDuplicateReasonError(null);
   }
 
   return {
@@ -88,6 +115,8 @@ export function usePaymentMethodFields(token: string, enabled: boolean): Payment
     referenceError,
     duplicate,
     duplicateReason,
+    duplicateReasonError,
+    focusRequest,
     selectMethod: (id) => {
       setPaymentMethodId(id);
       clearDuplicate();
@@ -96,21 +125,28 @@ export function usePaymentMethodFields(token: string, enabled: boolean): Payment
       setReferenceValue(value);
       clearDuplicate();
     },
-    setDuplicateReason,
+    setDuplicateReason: (value) => {
+      setDuplicateReason(value);
+      setDuplicateReasonError(null);
+    },
     reset: () => {
       setPaymentMethodId('');
       setReferenceValue('');
       clearDuplicate();
+      setFocusRequest(null);
     },
     validate: () => {
-      if (selected?.requiresReference && reference.trim() === '') {
+      if (selected?.requiresReference && isBlankReference(reference)) {
         setReferenceError(copy.referenceMissing);
-        return { ok: false, formError: null };
+        requestFocus('reference');
+        return false;
       }
       if (duplicate && duplicateReason.trim() === '') {
-        return { ok: false, formError: copy.duplicateReasonMissing };
+        setDuplicateReasonError(copy.duplicateReasonMissing);
+        requestFocus('reason');
+        return false;
       }
-      return { ok: true, formError: null };
+      return true;
     },
     body: () => {
       const trimmed = reference.trim();
@@ -124,6 +160,8 @@ export function usePaymentMethodFields(token: string, enabled: boolean): Payment
     catchDuplicate: (err) => {
       if (!(err instanceof ApiError) || err.code !== PAYMENT_REFERENCE_DUPLICATE) return false;
       setDuplicate(apiErrorMessage(err, copy.duplicateFallback));
+      // DX-395: el aviso pide el motivo: el foco va a él.
+      requestFocus('reason');
       return true;
     },
   };
@@ -171,10 +209,27 @@ export function PaymentMethodSelect({
   );
 }
 
-/** La referencia (si hay medio) y, tras el 409, el aviso con el motivo. */
+/**
+ * La referencia (si hay medio) y, tras el 409, el aviso con el motivo. Sin
+ * `required` nativo: el formulario valida con sus propios mensajes en español
+ * (DX-395), y `aria-required` sigue diciendo que el campo es obligatorio.
+ */
 export function PaymentReferenceFields({ fields, idPrefix }: { fields: PaymentMethodFieldsState; idPrefix: string }) {
-  const { selected, referenceError, duplicate } = fields;
+  const { selected, referenceError, duplicate, duplicateReasonError, focusRequest } = fields;
+  const referenceRef = useRef<HTMLInputElement>(null);
+  const reasonRef = useRef<HTMLInputElement>(null);
   const referenceId = `${idPrefix}-reference`;
+  const referenceHintId = `${referenceId}-hint`;
+  const reasonId = `${idPrefix}-duplicate-reason`;
+  const reasonHintId = `${reasonId}-hint`;
+
+  // DX-395: el foco va al campo que falta (o al motivo que pide el aviso de
+  // repetida), ya montado tras el render que lo pidió.
+  useEffect(() => {
+    if (!focusRequest) return;
+    (focusRequest.field === 'reference' ? referenceRef : reasonRef).current?.focus();
+  }, [focusRequest]);
+
   return (
     <>
       {selected ? (
@@ -182,17 +237,19 @@ export function PaymentReferenceFields({ fields, idPrefix }: { fields: PaymentMe
           htmlFor={referenceId}
           label={selected.requiresReference ? copy.referenceRequired : copy.reference}
           hint={copy.referenceHint}
+          hintId={referenceHintId}
           error={referenceError}
         >
           <Input
             id={referenceId}
+            ref={referenceRef}
             value={fields.reference}
             maxLength={60}
             autoComplete="off"
             aria-required={selected.requiresReference || undefined}
             onChange={(e) => fields.setReference(e.target.value)}
             aria-invalid={referenceError ? true : undefined}
-            aria-describedby={referenceError ? fieldErrorId(referenceId) : undefined}
+            aria-describedby={referenceError ? fieldErrorId(referenceId) : referenceHintId}
             className="font-mono"
           />
         </FormField>
@@ -201,16 +258,21 @@ export function PaymentReferenceFields({ fields, idPrefix }: { fields: PaymentMe
         <div role="alert" className="flex flex-col gap-3 rounded-lg border border-warning/40 bg-warning/10 p-3">
           <p className="text-sm text-ink">{duplicate}</p>
           <FormField
-            htmlFor={`${idPrefix}-duplicate-reason`}
+            htmlFor={reasonId}
             label={copy.duplicateReason}
             hint={copy.duplicateReasonHint}
+            hintId={reasonHintId}
+            error={duplicateReasonError}
           >
             <Input
-              id={`${idPrefix}-duplicate-reason`}
+              id={reasonId}
+              ref={reasonRef}
               value={fields.duplicateReason}
               maxLength={300}
               onChange={(e) => fields.setDuplicateReason(e.target.value)}
-              required
+              aria-required
+              aria-invalid={duplicateReasonError ? true : undefined}
+              aria-describedby={duplicateReasonError ? fieldErrorId(reasonId) : reasonHintId}
             />
           </FormField>
         </div>

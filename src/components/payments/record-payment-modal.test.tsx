@@ -385,6 +385,89 @@ it('DX-377: referencia repetida (409): avisa, pide motivo y reintenta con él y 
   expect(second[3]).toBe(first[3]);
 });
 
+it('DX-395: la referencia que falta marca aria-invalid, describe el error y recibe el foco', async () => {
+  const user = userEvent.setup();
+  mockedList.mockResolvedValue([copPlan]);
+  renderModal();
+  const dialog = screen.getByRole('dialog');
+  await within(dialog).findByLabelText('Plan');
+  await user.type(within(dialog).getByLabelText('Importe'), '1000');
+  await user.selectOptions(within(dialog).getByLabelText('Método'), 'Pago móvil');
+  await user.click(within(dialog).getByRole('button', { name: 'Registrar abono' }));
+
+  const reference = within(dialog).getByLabelText('Referencia (obligatoria)');
+  await waitFor(() => expect(reference).toHaveFocus());
+  expect(reference).toHaveAttribute('aria-invalid', 'true');
+  expect(reference).toHaveAccessibleDescription('Este medio de pago pide la referencia del pago.');
+  // Sin el globo nativo: el mensaje es el propio, y el campo no lleva `required`.
+  expect(reference).not.toHaveAttribute('required');
+  expect(reference).toHaveAttribute('aria-required', 'true');
+});
+
+it('DX-395: una referencia de solo guiones, puntos o espacios cuenta como vacía (la API la rechaza)', async () => {
+  const user = userEvent.setup();
+  mockedList.mockResolvedValue([copPlan]);
+  renderModal();
+  const dialog = screen.getByRole('dialog');
+  await within(dialog).findByLabelText('Plan');
+  await user.type(within(dialog).getByLabelText('Importe'), '1000');
+  await user.selectOptions(within(dialog).getByLabelText('Método'), 'Pago móvil');
+  const reference = within(dialog).getByLabelText('Referencia (obligatoria)');
+  await user.type(reference, ' -. – ');
+  await user.click(within(dialog).getByRole('button', { name: 'Registrar abono' }));
+
+  await waitFor(() => expect(reference).toHaveFocus());
+  expect(reference).toHaveAttribute('aria-invalid', 'true');
+  expect(reference).toHaveAccessibleDescription('Este medio de pago pide la referencia del pago.');
+  expect(mockedRecord).not.toHaveBeenCalled();
+});
+
+it('DX-395: el aviso de repetida lleva el foco al motivo; sin motivo, el campo lo dice', async () => {
+  const user = userEvent.setup();
+  mockedList.mockResolvedValue([copPlan]);
+  mockedRecord.mockRejectedValueOnce(
+    new ApiError(409, 'Esta referencia ya se usó con este medio de pago en otro abono de los últimos 90 días.', {
+      code: 'PAYMENT_REFERENCE_DUPLICATE',
+    }),
+  );
+  renderModal();
+  const dialog = screen.getByRole('dialog');
+  await within(dialog).findByLabelText('Plan');
+  await user.type(within(dialog).getByLabelText('Importe'), '1000');
+  await user.selectOptions(within(dialog).getByLabelText('Método'), 'Pago móvil');
+  await user.type(within(dialog).getByLabelText('Referencia (obligatoria)'), '123-456');
+  await user.click(within(dialog).getByRole('button', { name: 'Registrar abono' }));
+
+  const reason = await within(dialog).findByLabelText('Motivo para registrarla igualmente');
+  await waitFor(() => expect(reason).toHaveFocus());
+  expect(reason).not.toHaveAttribute('required');
+  expect(reason).toHaveAccessibleDescription('Queda guardado con el abono y en la auditoría.');
+
+  // Se aleja el foco y se intenta sin motivo: error en el campo y foco de vuelta.
+  await user.click(within(dialog).getByLabelText('Importe'));
+  await user.click(within(dialog).getByRole('button', { name: 'Registrar igualmente' }));
+  await waitFor(() => expect(reason).toHaveFocus());
+  expect(reason).toHaveAttribute('aria-invalid', 'true');
+  expect(reason).toHaveAccessibleDescription('Escribe el motivo para registrar la referencia repetida.');
+  expect(mockedRecord).toHaveBeenCalledTimes(1);
+
+  // Escribirlo retira el error.
+  await user.type(reason, 'Dos cuotas');
+  expect(reason).not.toHaveAttribute('aria-invalid');
+});
+
+it('DX-395: a 390 px los controles y la X del modal miden al menos 44 px', async () => {
+  mockedList.mockResolvedValue([copPlan]);
+  renderModal();
+  const dialog = screen.getByRole('dialog');
+  await within(dialog).findByLabelText('Plan');
+  // jsdom no mide: se comprueba que llevan la altura táctil por debajo de sm.
+  expect(dialog.className).toContain('max-sm:[&_input:not([type=checkbox]):not([type=radio])]:h-11');
+  expect(dialog.className).toContain('max-sm:[&_select]:h-11');
+  expect(dialog.className).toContain('max-sm:[&_button]:min-h-11');
+  expect(within(dialog).getByRole('button', { name: 'Cerrar' }).className).toContain('max-sm:size-11');
+});
+
 it('valida el importe en español sin llamar a la API', async () => {
   const user = userEvent.setup();
   mockedList.mockResolvedValue([copPlan]);

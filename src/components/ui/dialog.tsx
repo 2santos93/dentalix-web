@@ -72,6 +72,8 @@ const DialogContent = React.forwardRef<
           onClick={closeDisabled ? (e) => e.preventDefault() : undefined}
           className={cn(
             'absolute right-4 top-4 rounded-md p-1 text-muted transition-colors hover:bg-bg hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary print:hidden',
+            // DX-395: en móvil, «Cerrar» con el área táctil mínima (44 px).
+            'max-sm:right-2 max-sm:top-2 max-sm:inline-flex max-sm:size-11 max-sm:items-center max-sm:justify-center',
             closeDisabled && 'cursor-not-allowed opacity-50 hover:bg-transparent hover:text-muted',
           )}
         >
@@ -85,7 +87,9 @@ const DialogContent = React.forwardRef<
 DialogContent.displayName = DialogPrimitive.Content.displayName;
 
 function DialogHeader({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn('flex flex-col gap-1.5', className)} {...props} />;
+  // DX-395: en móvil la «X» mide 44×44 (right-2/top-2): el título no pasa por
+  // debajo de ella.
+  return <div className={cn('flex flex-col gap-1.5 max-sm:pr-8', className)} {...props} />;
 }
 
 /**

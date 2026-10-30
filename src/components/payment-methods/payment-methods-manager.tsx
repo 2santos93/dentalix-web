@@ -136,6 +136,7 @@ export function PaymentMethodsManager({ token, allowed }: PaymentMethodsManagerP
           size="sm"
           onClick={() => openModal(method)}
           aria-label={copy.actionFor(copy.edit, method.name)}
+          className="max-sm:h-11 max-sm:flex-1"
         >
           {copy.edit}
         </Button>
@@ -146,6 +147,7 @@ export function PaymentMethodsManager({ token, allowed }: PaymentMethodsManagerP
           loading={pendingId === method.id}
           onClick={() => void toggleActive(method)}
           aria-label={copy.actionFor(toggleLabel, method.name)}
+          className="max-sm:h-11 max-sm:flex-1"
         >
           {toggleLabel}
         </Button>
@@ -173,7 +175,7 @@ export function PaymentMethodsManager({ token, allowed }: PaymentMethodsManagerP
         <p className="text-sm text-muted" aria-live="polite">
           {loading || error ? '' : copy.count(methods.length)}
         </p>
-        <Button type="button" onClick={() => openModal(null)} className="w-full sm:w-auto">
+        <Button type="button" onClick={() => openModal(null)} className="w-full max-sm:h-11 sm:w-auto">
           <Plus aria-hidden />
           {copy.newMethod}
         </Button>

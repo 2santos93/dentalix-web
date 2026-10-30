@@ -224,11 +224,9 @@ export function RecordPaymentModal({
     // guarda al mediodía de la sede, así cae en ese día de caja en su zona
     // (medianoche UTC sería la tarde del día anterior en Bogotá).
     const paidAt = form.date;
-    const methodCheck = methodFields.validate();
-    if (!methodCheck.ok) {
-      if (methodCheck.formError) setError(methodCheck.formError);
-      return;
-    }
+    // DX-395: la referencia o el motivo que faltan se marcan en su campo,
+    // que recibe el foco.
+    if (!methodFields.validate()) return;
     setSubmitting(true);
     try {
       const body = {
@@ -280,6 +278,7 @@ export function RecordPaymentModal({
       submitDisabled={plan === null && opening === null}
       error={error}
       size="lg"
+      touchTargets
     >
       {/* La sede a la que se atribuye se lee antes de escribir el importe. */}
       {locationHint && (!noPlans || openings.length > 0) ? (
