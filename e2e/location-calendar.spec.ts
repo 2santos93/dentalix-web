@@ -42,8 +42,8 @@ const dentistEmail = `odonto.cal.${suffix}@example.com`;
 const QA_DIR = process.env.E2E_QA_DIR;
 const ICS = readFileSync(join(__dirname, 'fixtures', 'holidays-12.ics'));
 
-const SEDE_A = { name: 'Sede A', country: 'CO', currency: 'USD', timeZone: 'America/New_York', locale: 'en-US', hourCycle: 'h12' } satisfies RegionalSettings & { name: string };
-const SEDE_B = { name: 'Sede B', country: 'ES', currency: 'EUR', timeZone: 'Europe/Berlin', locale: 'de-DE', hourCycle: 'h23' } satisfies RegionalSettings & { name: string };
+const SEDE_A = { name: 'Sede A', country: 'US', currency: 'USD', timeZone: 'America/New_York', locale: 'en-US', hourCycle: 'h12' } satisfies RegionalSettings & { name: string };
+const SEDE_B = { name: 'Sede B', country: 'DE', currency: 'EUR', timeZone: 'Europe/Berlin', locale: 'de-DE', hourCycle: 'h23' } satisfies RegionalSettings & { name: string };
 
 const VIEWPORTS = [
   { width: 1440, height: 900 },

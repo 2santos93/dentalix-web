@@ -1,5 +1,5 @@
 import { regionalFormat, type HourCycle } from '@/lib/format/regional-format';
-import type { ClinicCountry } from './location-country';
+import { isCountryCode } from './countries';
 // Copia byte a byte de `prisma/reference/iana-zone-names.json` de la API: no se edita aquí.
 // La fuente es la API; `scripts/check-api-reference-sync.mjs` (CI) falla si
 // divergen. Ver src/lib/money/README.md.
@@ -13,7 +13,8 @@ import { isUsableTimeZone } from './location-settings';
  * nada se deduce del país (R2) ni el reloj del formato.
  */
 export interface RegionalSettingsValues {
-  country: ClinicCountry | '';
+  /** Código ISO 3166-1 alfa-2 de la lista de países (DX-312); `''` = sin elegir. */
+  country: string;
   currency: string;
   timeZone: string;
   locale: string;
@@ -43,6 +44,7 @@ export function isHourCycle(value: unknown): value is HourCycle {
 /** Los mismos textos que la API (spec G1 §3.1, G1-B §4.1), para que el error no cambie según quién lo detecte. */
 export const regionalSettingsMessages = {
   countryMissing: 'Elige el país de la sede.',
+  countryUnknown: (code: string) => `El país «${code}» no está en la lista de países.`,
   currencyMissing: 'Elige la moneda de la sede.',
   timeZoneMissing: 'Elige la zona horaria de la sede.',
   timeZoneUnknown: (zone: string) => `La zona horaria «${zone}» no existe.`,
@@ -159,11 +161,34 @@ export function browserHourCycle(intl: typeof Intl = Intl): HourCycle | null {
   }
 }
 
+/**
+ * País de la sede sugerido por el navegador (DX-312 R11, P1): la región
+ * **explícita** del idioma principal (`navigator.languages[0]`), si está en la
+ * lista de países (`es-VE` → `VE`). Los idiomas secundarios no cuentan: con
+ * `['es-419', 'en-US']` no se sugiere Estados Unidos. Nunca se deduce del
+ * idioma: `es` y `es-419` no sugieren nada, y no se usa `maximize()`. `null` =
+ * sin sugerencia (el campo empieza vacío). `languages` se inyecta en los tests.
+ */
+export function browserCountry(languages?: readonly string[]): string | null {
+  const [primary] = languages ?? navigatorLanguages();
+  if (!primary) return null;
+  let region: string | undefined;
+  try {
+    region = new Intl.Locale(primary).region;
+  } catch {
+    return null;
+  }
+  return region && isCountryCode(region) ? region : null;
+}
+
+function navigatorLanguages(): readonly string[] {
+  if (typeof navigator === 'undefined') return [];
+  return navigator.languages?.length ? navigator.languages : [navigator.language];
+}
+
 /** Los formatos que el navegador declara (`navigator.languages`), canonicalizados y sin repetir. */
 export function browserLocales(): string[] {
-  if (typeof navigator === 'undefined') return [];
-  const raw = navigator.languages?.length ? navigator.languages : [navigator.language];
-  return unique(raw.map((l) => canonicalLocale(l)));
+  return unique(navigatorLanguages().map((l) => canonicalLocale(l)));
 }
 
 /**
@@ -224,6 +249,7 @@ export function hourCycleExamples(locale: string, timeZone: string, at: Date): R
 export function validateRegionalSettings(values: RegionalSettingsValues): RegionalSettingsErrors {
   const errors: RegionalSettingsErrors = {};
   if (values.country === '') errors.country = regionalSettingsMessages.countryMissing;
+  else if (!isCountryCode(values.country)) errors.country = regionalSettingsMessages.countryUnknown(values.country);
   if (values.currency.trim() === '') errors.currency = regionalSettingsMessages.currencyMissing;
   const zone = values.timeZone.trim();
   if (zone === '') errors.timeZone = regionalSettingsMessages.timeZoneMissing;

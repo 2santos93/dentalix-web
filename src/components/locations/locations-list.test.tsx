@@ -13,7 +13,8 @@ import { useAuthStore } from '@/lib/auth/auth-store';
 import { clinicLocation } from '@/lib/test/locations';
 import { tokenFor } from '@/lib/test/prescriptions';
 import { setupUser } from '@/lib/test/user';
-import { browserHourCycle } from '@/lib/locations/regional-settings';
+import { browserCountry, browserHourCycle } from '@/lib/locations/regional-settings';
+import { chooseCountry } from '@/lib/test/country';
 
 jest.mock('../../lib/locations/locations-api', () => ({
   ...jest.requireActual('../../lib/locations/locations-api'),
@@ -25,6 +26,7 @@ jest.mock('../../lib/reference/currencies-api', () => ({ listCurrencies: jest.fn
 // El reloj sugerido se fija aquí: los tests no dependen del `Intl` del entorno.
 jest.mock('../../lib/locations/regional-settings', () => ({
   ...jest.requireActual('../../lib/locations/regional-settings'),
+  browserCountry: jest.fn(),
   browserHourCycle: jest.fn(),
 }));
 
@@ -47,6 +49,7 @@ beforeEach(() => {
   jest.clearAllMocks();
   window.localStorage.clear();
   jest.mocked(browserHourCycle).mockReturnValue('h23');
+  jest.mocked(browserCountry).mockReturnValue(null);
   jest
     .mocked(listCurrencies)
     .mockResolvedValue([
@@ -56,10 +59,15 @@ beforeEach(() => {
 });
 
 describe('LocationsList (G1, spec §6.3)', () => {
-  it('lists each location with country, currency, zone and format', async () => {
-    mockedList.mockResolvedValue([norte]);
+  it('lists each location with its country name', async () => {
+    const caracas = clinicLocation({ id: 'ccs', name: 'Sede Caracas', country: 'VE', currency: 'VES', timeZone: 'America/Caracas', locale: 'es-VE' });
+    // Un código que no está en la copia compartida se pinta tal cual.
+    const unknown = clinicLocation({ id: 'zz', name: 'Sede Sin Lista', country: 'ZZ' });
+    mockedList.mockResolvedValue([norte, caracas, unknown]);
     render(<LocationsList token={ADMIN} canEdit />);
     const row = (await screen.findByText('Sede Norte')).closest('li')!;
+    expect(screen.getByText('Sede Caracas').closest('li')).toHaveTextContent('Venezuela');
+    expect(screen.getByText('Sede Sin Lista').closest('li')).toHaveTextContent('ZZ');
     expect(row).toHaveTextContent('España');
     expect(row).toHaveTextContent('EUR');
     expect(row).toHaveTextContent('Europe/Madrid');
@@ -192,7 +200,7 @@ describe('LocationsList (G1, spec §6.3)', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Nueva sede' });
     await within(dialog).findByRole('option', { name: 'Yen japonés (¥)' });
     await user.type(within(dialog).getByLabelText('Nombre'), 'Sede Tokio');
-    await user.selectOptions(within(dialog).getByLabelText('País'), 'ES');
+    await chooseCountry(user, within(dialog).getByLabelText('País'), 'ES');
     await user.selectOptions(within(dialog).getByLabelText('Moneda'), 'JPY');
     await user.clear(within(dialog).getByLabelText('Zona horaria'));
     await user.type(within(dialog).getByLabelText('Zona horaria'), 'Asia/Tokyo');
@@ -256,7 +264,7 @@ describe('LocationsList (G1, spec §6.3)', () => {
     const dialog = await screen.findByRole('dialog', { name: 'Nueva sede' });
     await within(dialog).findByRole('option', { name: 'Yen japonés (¥)' });
     await user.type(within(dialog).getByLabelText('Nombre'), 'Sede Tokio');
-    await user.selectOptions(within(dialog).getByLabelText('País'), 'ES');
+    await chooseCountry(user, within(dialog).getByLabelText('País'), 'ES');
     await user.selectOptions(within(dialog).getByLabelText('Moneda'), 'JPY');
     await user.click(within(dialog).getByRole('button', { name: 'Crear sede' }));
 

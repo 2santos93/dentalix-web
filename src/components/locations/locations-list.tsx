@@ -7,7 +7,7 @@ import type { ClinicLocation } from '@/lib/locations/locations-api';
 import { useSessionLocations } from '@/lib/locations/session-locations';
 import { getTokenRole } from '@/lib/auth/token-role';
 import { canManageLocationCalendar } from '@/lib/locations/location-calendar';
-import { COUNTRY_LABELS } from '@/lib/locations/location-country';
+import { countryName } from '@/lib/locations/countries';
 import { locationCurrency, locationTimeZone } from '@/lib/locations/location-settings';
 import { canonicalLocale, HOUR_CYCLE_LABELS, isHourCycle } from '@/lib/locations/regional-settings';
 import { AsyncSection } from '@/components/shared/async-section';
@@ -194,7 +194,7 @@ export function LocationsList({
                   {needsRegionalReview(location) ? <Badge variant="outline">{copy.pendingReview}</Badge> : null}
                 </div>
                 <dl className="grid grid-cols-2 gap-x-6 gap-y-1 text-sm sm:grid-cols-3 lg:grid-cols-5">
-                  <Detail label={copy.country} value={COUNTRY_LABELS[location.country]} />
+                  <Detail label={copy.country} value={countryName(location.country)} />
                   <Detail label={copy.currency} value={location.currency} usable={locationCurrency(location) !== null} />
                   <Detail label={copy.timeZone} value={location.timeZone} usable={locationTimeZone(location) !== null} />
                   <Detail label={copy.locale} value={location.locale} usable={canonicalLocale(location.locale) !== null} />

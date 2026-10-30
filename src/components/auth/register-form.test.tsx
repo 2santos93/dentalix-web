@@ -2,7 +2,8 @@ import { render, screen, fireEvent, waitFor, within } from '@testing-library/rea
 import { RegisterForm } from './register-form';
 import { apiFetch, ApiError } from '../../lib/api/client';
 import { setupUser } from '@/lib/test/user';
-import { browserHourCycle, browserLocale } from '@/lib/locations/regional-settings';
+import { browserCountry, browserHourCycle, browserLocale } from '@/lib/locations/regional-settings';
+import { chooseCountry } from '@/lib/test/country';
 
 jest.mock('next/navigation', () => ({ useRouter: () => ({ push: jest.fn() }) }));
 // NOTE: jest.mock's string literal is not alias-rewritten by the SWC
@@ -16,6 +17,7 @@ jest.mock('../../lib/api/client', () => ({
 // La sugerencia del navegador se fija en cada test (nunca se espía `Intl`).
 jest.mock('../../lib/locations/regional-settings', () => ({
   ...jest.requireActual('../../lib/locations/regional-settings'),
+  browserCountry: jest.fn(),
   browserLocale: jest.fn(),
   browserHourCycle: jest.fn(),
 }));
@@ -45,7 +47,9 @@ async function fillRequiredFields() {
   });
   fireEvent.change(screen.getByLabelText(/contraseña/i), { target: { value: 'secret123' } });
   await screen.findByRole('option', { name: 'Euro (€)' });
+  // El país se elige en el combobox: se escribe el código y se elige la opción.
   fireEvent.change(screen.getByLabelText('País'), { target: { value: 'ES' } });
+  fireEvent.click(screen.getByRole('option', { name: 'España' }));
   fireEvent.change(screen.getByLabelText('Moneda'), { target: { value: 'EUR' } });
   fireEvent.change(screen.getByLabelText('Zona horaria'), { target: { value: 'Europe/Madrid' } });
   fireEvent.change(screen.getByLabelText('Formato regional'), { target: { value: 'es-ES' } });
@@ -53,6 +57,8 @@ async function fillRequiredFields() {
 
 beforeEach(() => {
   mockedFetch.mockReset();
+  // Sin región explícita en el navegador: ningún país sugerido (DX-312 P1).
+  jest.mocked(browserCountry).mockReturnValue(null);
   jest.mocked(browserLocale).mockReturnValue('en-US');
   jest.mocked(browserHourCycle).mockReturnValue('h12');
 });
@@ -132,7 +138,7 @@ describe('RegisterForm', () => {
     expect(mockedFetch).toHaveBeenCalledWith('/public/currencies');
     // Ninguna llamada lleva token: el registro es anónimo.
     for (const [, options] of mockedFetch.mock.calls) expect(options?.token).toBeUndefined();
-    // País y moneda empiezan vacíos; nada se deduce de nada (R10).
+    // Sin región explícita en el navegador, país y moneda empiezan vacíos; nada se deduce de nada (R10).
     expect(within(group).getByLabelText('País')).toHaveValue('');
     expect(within(group).getByLabelText('Moneda')).toHaveValue('');
   });
@@ -168,7 +174,7 @@ describe('RegisterForm', () => {
     );
     expect(within(group).getByLabelText('País')).toHaveFocus();
 
-    await user.selectOptions(within(group).getByLabelText('País'), 'ES');
+    await chooseCountry(user, within(group).getByLabelText('País'), 'ES');
     await user.selectOptions(within(group).getByLabelText('Moneda'), 'JPY');
     await user.type(within(group).getByLabelText('Zona horaria'), 'Asia/Tokyo');
     await user.type(within(group).getByLabelText('Formato regional'), 'ja-jp');
@@ -251,6 +257,32 @@ describe('RegisterForm', () => {
     );
     expect(within(group).getByLabelText('Formato regional')).toHaveValue('en-US');
     await within(group).findByRole('option', { name: 'Euro (€)' });
+  });
+
+  it('suggests the country of an explicit browser region, marked and editable (DX-312 P1)', async () => {
+    jest.mocked(browserCountry).mockReturnValue('VE');
+    mockApi(() => Promise.resolve({ message: 'genérico' }));
+    const user = setupUser();
+    render(<RegisterForm tenant={null} />);
+    const group = screen.getByRole('group', { name: 'Tu sede' });
+    const country = within(group).getByLabelText('País');
+    await waitFor(() => expect(country).toHaveValue('Venezuela'));
+    expect(country).toHaveAccessibleDescription(expect.stringContaining('Sugerido por tu navegador.'));
+    // La moneda nunca se deduce del país.
+    expect(within(group).getByLabelText('Moneda')).toHaveValue('');
+    await chooseCountry(user, country, 'PE');
+    expect(country).toHaveValue('Perú');
+    expect(country).not.toHaveAccessibleDescription(expect.stringContaining('Sugerido'));
+  });
+
+  it('the location intro says which fields may come suggested, the country included', () => {
+    mockApi(() => Promise.resolve({ message: 'genérico' }));
+    render(<RegisterForm tenant={null} />);
+    expect(
+      screen.getByText(
+        'La primera sede de tu clínica. La zona, el formato, el reloj y, si tu navegador lo indica, el país vienen sugeridos: revísalos. Podrás cambiarlos y añadir más sedes en Ajustes → Sedes.',
+      ),
+    ).toBeInTheDocument();
   });
 
   it('a 400 for a location field from the API shows next to that field', async () => {

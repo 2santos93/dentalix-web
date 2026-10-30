@@ -11,13 +11,13 @@ import {
   getPatientCommunication,
   OPT_IN_SOURCE_LABELS,
   OPT_OUT_SOURCE_LABELS,
-  phoneCountryName,
   updatePatientCommunication,
   type ContactChannel,
   type PatientCommunication,
   type UpdatePatientCommunicationInput,
   type WhatsappOptInSource,
 } from '@/lib/patients/communication-api';
+import { countryName } from '@/lib/locations/countries';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -318,7 +318,7 @@ export function PatientCommunicationSection({
     );
   }
 
-  const country = phoneCountryName(data?.phoneCountry ?? null);
+  const country = countryName(data?.phoneCountry ?? null);
   const alreadyOptedIn = data?.whatsappOptIn !== null && data?.whatsappOptIn !== undefined;
 
   return (

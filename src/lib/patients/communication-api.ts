@@ -59,17 +59,9 @@ export async function updatePatientCommunication(
   );
 }
 
-const COUNTRY_NAMES: Record<string, string> = { CO: 'Colombia', ES: 'España' };
-
-/** Nombre del país de la sede con el que se valida el móvil («Colombia»). */
-export function phoneCountryName(code: string | null): string | null {
-  if (!code) return null;
-  return COUNTRY_NAMES[code] ?? code;
-}
-
 /**
- * E.164 legible: `+57 310 123 4567` (Colombia, 3-3-4), `+34 612 34 56 78`
- * (España, 3-2-2-2); otro indicativo, sin agrupar tras él.
+ * E.164 legible: `+57` agrupa 3-3-4 (`+57 310 123 4567`), `+34` 3-2-2-2
+ * (`+34 612 34 56 78`); otro indicativo, sin agrupar tras él.
  */
 export function formatE164(e164: string): string {
   const co = /^\+57(\d{3})(\d{3})(\d{4})$/.exec(e164);

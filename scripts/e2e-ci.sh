@@ -8,7 +8,7 @@
 #   scripts/e2e-ci.sh setup|sync|db|api|web|test|skips|stop   # una fase
 #
 # `sync` (DX-350) falla si una lista que la API posee y la web copia byte a
-# byte (moneda sin decimales, zonas IANA, vectores de formato) diverge de la
+# byte (moneda sin decimales, zonas IANA, vectores de formato, países) diverge de la
 # de $API_DIR (scripts/check-api-reference-sync.mjs).
 #
 # `skips` (DX-252) falla si el informe de `test` tiene tests saltados fuera de

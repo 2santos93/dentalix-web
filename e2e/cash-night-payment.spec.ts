@@ -3,6 +3,7 @@ import { test, expect, type Page } from './support/test';
 import { loginAs } from './support/auth';
 import { apiPost, registerClinicViaApi, type ApiSession } from './support/api';
 import { atSede, sedeDayFromToday } from './support/clock';
+import { E2E_BROWSER_LOCALE } from './support/regional';
 
 /**
  * e2e (DX-097): un abono cobrado a las 20:00 en Bogotá sale en la caja de
@@ -106,7 +107,7 @@ for (const viewport of [
 }
 
 test('con el navegador en UTC, «Hoy» sigue siendo el día de la sede', async ({ browser }) => {
-  const context = await browser.newContext({ timezoneId: 'UTC', locale: 'es-CO', viewport: { width: 1440, height: 900 } });
+  const context = await browser.newContext({ timezoneId: 'UTC', locale: E2E_BROWSER_LOCALE, viewport: { width: 1440, height: 900 } });
   const page = await context.newPage();
   try {
     const seeded = await seedNightPayment(page, 'utc');

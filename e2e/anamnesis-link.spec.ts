@@ -5,6 +5,7 @@ import { loginAs } from './support/auth';
 import { atSede, sedeDayFromToday } from './support/clock';
 import { expectNoHorizontalScroll } from './support/layout';
 import { API_URL, tenantOrigin } from './support/urls';
+import { E2E_BROWSER_LOCALE } from './support/regional';
 
 /**
  * e2e DX-099: anamnesis previa a la cita por enlace seguro.
@@ -115,7 +116,7 @@ test('recepción envía el enlace desde la ficha (1440)', async ({ page }) => {
 test('la paciente responde a 390 px sin sesión, con su autorización, y el enlace no sirve dos veces', async ({
   browser,
 }) => {
-  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, locale: 'es-CO' });
+  const context = await browser.newContext({ viewport: { width: 390, height: 844 }, locale: E2E_BROWSER_LOCALE });
   const page = await context.newPage();
   const response = await page.goto(link);
   const headers = response!.headers();

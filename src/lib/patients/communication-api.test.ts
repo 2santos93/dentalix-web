@@ -3,13 +3,13 @@ import {
   formatE164,
   getPatientCommunication,
   getPatientOptOutWarnings,
-  phoneCountryName,
   updatePatientCommunication,
   withCommunication,
   type PatientCommunication,
 } from './communication-api';
 import type { Patient } from './patients-api';
 import { apiFetch } from '../api/client';
+import { countryName } from '../locations/countries';
 
 jest.mock('../api/client', () => ({ apiFetch: jest.fn() }));
 const mockedFetch = apiFetch as jest.MockedFunction<typeof apiFetch>;
@@ -49,11 +49,10 @@ describe('communication-api (DX-128)', () => {
     expect(formatE164(e164)).toBe(label);
   });
 
-  it('nombra el país de la sede', () => {
-    expect(phoneCountryName('CO')).toBe('Colombia');
-    expect(phoneCountryName('ES')).toBe('España');
-    expect(phoneCountryName('MX')).toBe('MX');
-    expect(phoneCountryName(null)).toBeNull();
+  it('the phone hint names the country with the shared name', () => {
+    expect(countryName('VE')).toBe('Venezuela');
+    expect(countryName('ZZ')).toBe('ZZ');
+    expect(countryName(null)).toBeNull();
   });
 
   it('lleva a la ficha lo que cambió el bloque, sin tocar el resto', () => {

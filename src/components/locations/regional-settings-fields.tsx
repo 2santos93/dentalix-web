@@ -2,7 +2,6 @@
 import { useEffect, useState } from 'react';
 import type { Currency } from '@/lib/reference/currencies-api';
 import type { HourCycle } from '@/lib/format/regional-format';
-import { COUNTRY_LABELS, type ClinicCountry } from '@/lib/locations/location-country';
 import {
   browserLocales,
   HOUR_CYCLE_LABELS,
@@ -16,15 +15,14 @@ import {
 } from '@/lib/locations/regional-settings';
 import { FormField, fieldErrorId } from '@/components/shared/form-field';
 import { InlineError } from '@/components/errors/inline-error';
+import { CountryCombobox } from '@/components/shared/country-combobox';
 import { CurrencySelect } from '@/components/shared/currency-select';
 import { Input } from '@/components/ui/input';
-import { fieldClass } from '@/lib/ui/field-class';
 import { cn } from '@/lib/utils';
 
 export const regionalSettingsFieldsCopy = {
   country: 'País',
-  countryPlaceholder: 'Elige el país',
-  countryHint: 'Decide los campos legales de la receta. No cambia la moneda, la zona ni el formato.',
+  countryHint: 'País donde está la sede. No cambia la moneda, la zona ni el formato.',
   currency: 'Moneda',
   currencyPlaceholder: 'Elige la moneda',
   timeZone: 'Zona horaria',
@@ -41,12 +39,12 @@ export const regionalSettingsFieldsCopy = {
 
 const copy = regionalSettingsFieldsCopy;
 
-const COUNTRIES = Object.keys(COUNTRY_LABELS) as ClinicCountry[];
-
 const HOUR_CYCLES: readonly HourCycle[] = ['h12', 'h23'];
 
 /** Sugerencias del navegador: `null` = no hay (el campo empieza vacío o con el valor guardado). */
 export interface RegionalSuggestions {
+  /** Solo de una región explícita del idioma del navegador (`es-VE` → `VE`; DX-312 P1). */
+  country: string | null;
   timeZone: string | null;
   locale: string | null;
   hourCycle: HourCycle | null;
@@ -83,10 +81,11 @@ export function regionalFieldId(idPrefix: string, field: RegionalSettingsField):
 
 /**
  * País, moneda, zona horaria, formato regional y reloj de una sede (G1, spec
- * §6.2 y §6.7; G1-B §9). Lo comparten el modal de sede y el registro. País y
- * moneda empiezan vacíos y nunca se sugieren; elegir país no toca ningún otro
- * campo (R2, R10). El reloj se elige entre 12 h y 24 h, cada opción con su
- * ejemplo en vivo con el formato y la zona elegidos.
+ * §6.2 y §6.7; G1-B §9). Lo comparten el modal de sede y el registro. La
+ * moneda empieza vacía y nunca se sugiere; el país solo se sugiere desde una
+ * región explícita del idioma principal del navegador (DX-312 P1) y elegirlo
+ * no toca ningún otro campo (R2, R10). El reloj se elige entre 12 h y 24 h,
+ * cada opción con su ejemplo en vivo con el formato y la zona elegidos.
  */
 export function RegionalSettingsFields({
   idPrefix,
@@ -123,6 +122,7 @@ export function RegionalSettingsFields({
   const locales = unique([values.locale.trim(), suggestions?.locale, ...browserLists.locales]);
   const preview = regionalPreview(values.locale, values.timeZone, values.hourCycle, previewAt);
   const examples = hourCycleExamples(values.locale, values.timeZone, previewAt);
+  const countrySuggested = Boolean(suggestions?.country) && values.country === suggestions?.country;
   const zoneSuggested = Boolean(suggestions?.timeZone) && values.timeZone === suggestions?.timeZone;
   const localeSuggested = Boolean(suggestions?.locale) && values.locale === suggestions?.locale;
   const hourCycleSuggested = Boolean(suggestions?.hourCycle) && values.hourCycle === suggestions?.hourCycle;
@@ -130,25 +130,21 @@ export function RegionalSettingsFields({
 
   return (
     <div className={stacked ? 'flex flex-col gap-4' : 'grid gap-4 sm:grid-cols-2'}>
-      <FormField htmlFor={id('country')} label={copy.country} error={errors.country} hint={copy.countryHint} hintId={`${id('country')}-hint`}>
-        <select
+      <FormField
+        htmlFor={id('country')}
+        label={copy.country}
+        error={errors.country}
+        hint={countrySuggested ? `${copy.suggested} ${copy.countryHint}` : copy.countryHint}
+        hintId={`${id('country')}-hint`}
+      >
+        <CountryCombobox
           id={id('country')}
           value={values.country}
-          onChange={(e) => onChange('country', e.target.value as ClinicCountry | '')}
-          aria-required
-          aria-invalid={invalid('country')}
-          aria-describedby={describedBy('country', `${id('country')}-hint`)}
-          className={cn(fieldClass, 'h-10')}
-        >
-          <option value="" disabled>
-            {copy.countryPlaceholder}
-          </option>
-          {COUNTRIES.map((c) => (
-            <option key={c} value={c}>
-              {COUNTRY_LABELS[c]}
-            </option>
-          ))}
-        </select>
+          onChange={(code) => onChange('country', code)}
+          invalid={invalid('country')}
+          required
+          ariaDescribedBy={describedBy('country', `${id('country')}-hint`)}
+        />
       </FormField>
 
       <FormField htmlFor={id('currency')} label={copy.currency} error={errors.currency}>

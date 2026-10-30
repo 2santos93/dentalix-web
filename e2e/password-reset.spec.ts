@@ -4,6 +4,7 @@ import { join } from 'node:path';
 import { test, expect } from './support/test';
 import { loginAs } from './support/auth';
 import { registerClinicViaApi } from './support/api';
+import { E2E_BROWSER_LOCALE } from './support/regional';
 
 /**
  * DX-010: recuperar la contraseña por email.
@@ -79,7 +80,7 @@ test.describe('Recuperar la contraseña', () => {
 
     // Otra sesión abierta (otro dispositivo) antes del restablecimiento.
     const otherDevice = await browser.newContext({
-      locale: 'es-CO',
+      locale: E2E_BROWSER_LOCALE,
       timezoneId: 'America/Bogota',
     });
     try {

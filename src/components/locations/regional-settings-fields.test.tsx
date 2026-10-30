@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { render, screen, within } from '@testing-library/react';
 import type { HourCycle } from '@/lib/format/regional-format';
-import { RegionalSettingsFields } from './regional-settings-fields';
+import { RegionalSettingsFields, regionalSettingsFieldsCopy } from './regional-settings-fields';
+import { COUNTRIES } from '@/lib/locations/countries';
 import { listCurrencies } from '@/lib/reference/currencies-api';
 import {
   canonicalLocale,
@@ -12,6 +13,7 @@ import {
   type RegionalSettingsValues,
 } from '@/lib/locations/regional-settings';
 import { setupUser } from '@/lib/test/user';
+import { chooseCountry } from '@/lib/test/country';
 
 jest.mock('../../lib/reference/currencies-api', () => ({ listCurrencies: jest.fn() }));
 
@@ -24,7 +26,7 @@ function Harness({
   errors = {},
 }: {
   initial?: RegionalSettingsValues;
-  suggestions?: { timeZone: string | null; locale: string | null; hourCycle: HourCycle | null };
+  suggestions?: { country?: string | null; timeZone: string | null; locale: string | null; hourCycle: HourCycle | null };
   loader?: () => Promise<{ code: string; name: string; symbol: string }[]>;
   errors?: RegionalSettingsErrors;
 }) {
@@ -37,7 +39,7 @@ function Harness({
         onChange={(field, value) => setValues((prev) => ({ ...prev, [field]: value }))}
         errors={errors}
         {...(loader ? { currencyLoader: loader } : { token: 'tok' })}
-        suggestions={suggestions}
+        suggestions={suggestions && { country: null, ...suggestions }}
       />
     </form>
   );
@@ -48,16 +50,93 @@ beforeEach(() => {
 });
 
 describe('RegionalSettingsFields', () => {
-  it('country and currency start empty and are never suggested', async () => {
-    render(<Harness suggestions={{ timeZone: 'Asia/Tokyo', locale: 'ja-JP', hourCycle: 'h23' }} />);
+  it('currency starts empty and the country is suggested only from an explicit browser region', async () => {
+    // Sin región explícita no hay sugerencia: el país empieza vacío.
+    const { unmount } = render(<Harness suggestions={{ timeZone: 'Asia/Tokyo', locale: 'ja-JP', hourCycle: 'h23' }} />);
     await screen.findByRole('option', { name: 'Euro (€)' });
     expect(screen.getByLabelText('País')).toHaveValue('');
+    expect(screen.getByLabelText('País')).not.toHaveAccessibleDescription(expect.stringContaining('Sugerido'));
     expect(screen.getByLabelText('Moneda')).toHaveValue('');
-    expect(within(screen.getByLabelText('País')).getAllByRole('option').map((o) => o.textContent)).toEqual([
-      'Elige el país',
-      'Colombia',
-      'España',
-    ]);
+    unmount();
+
+    // Con la región del navegador (es-VE → VE), el país llega sugerido; la moneda nunca.
+    render(
+      <Harness
+        initial={{ ...EMPTY, country: 'VE' }}
+        suggestions={{ country: 'VE', timeZone: null, locale: null, hourCycle: null }}
+      />,
+    );
+    await screen.findByRole('option', { name: 'Euro (€)' });
+    expect(screen.getByLabelText('País')).toHaveValue('Venezuela');
+    expect(screen.getByLabelText('Moneda')).toHaveValue('');
+  });
+
+  it('the country picker offers every country of the shared list by name', async () => {
+    const user = setupUser();
+    render(<Harness />);
+    await screen.findByRole('option', { name: 'Euro (€)' });
+    const country = screen.getByRole('combobox', { name: 'País' });
+    await user.click(country);
+    const options = within(screen.getByRole('listbox')).getAllByRole('option');
+    expect(options.map((o) => o.textContent)).toEqual(COUNTRIES.map((c) => c.name));
+    expect(options).toHaveLength(250);
+    await chooseCountry(user, country, 'VE');
+    expect(country).toHaveValue('Venezuela');
+  });
+
+  it('the country hint promises nothing about phones and changes nothing else', async () => {
+    render(<Harness />);
+    await screen.findByRole('option', { name: 'Euro (€)' });
+    const hint = 'País donde está la sede. No cambia la moneda, la zona ni el formato.';
+    expect(regionalSettingsFieldsCopy.countryHint).toBe(hint);
+    expect(screen.getByLabelText('País')).toHaveAccessibleDescription(hint);
+    expect(hint).not.toMatch(/receta|tel[eé]fono|indicativo/i);
+  });
+
+  it('a suggested country carries the mark until changed', async () => {
+    const user = setupUser();
+    render(
+      <Harness
+        initial={{ ...EMPTY, country: 'VE' }}
+        suggestions={{ country: 'VE', timeZone: null, locale: null, hourCycle: null }}
+      />,
+    );
+    await screen.findByRole('option', { name: 'Euro (€)' });
+    const country = screen.getByLabelText('País');
+    expect(country).toHaveAccessibleDescription(
+      'Sugerido por tu navegador. País donde está la sede. No cambia la moneda, la zona ni el formato.',
+    );
+    await chooseCountry(user, country, 'PE');
+    expect(country).toHaveValue('Perú');
+    expect(country).toHaveAccessibleDescription('País donde está la sede. No cambia la moneda, la zona ni el formato.');
+  });
+
+  it('choosing a country changes nothing else', async () => {
+    const user = setupUser();
+    const initial: RegionalSettingsValues = {
+      country: '',
+      currency: 'EUR',
+      timeZone: 'Asia/Tokyo',
+      locale: 'ja-JP',
+      hourCycle: 'h23',
+    };
+    render(<Harness initial={initial} />);
+    await screen.findByRole('option', { name: 'Euro (€)' });
+    for (const code of ['VE', 'ES']) {
+      await chooseCountry(user, screen.getByLabelText('País'), code);
+      expect(screen.getByLabelText('Moneda')).toHaveValue('EUR');
+      expect(screen.getByLabelText('Zona horaria')).toHaveValue('Asia/Tokyo');
+      expect(screen.getByLabelText('Formato regional')).toHaveValue('ja-JP');
+      expect(within(screen.getByRole('radiogroup', { name: 'Reloj' })).getByRole('radio', { name: '24 h' })).toBeChecked();
+    }
+  });
+
+  it('a country error is announced on the field', async () => {
+    render(<Harness errors={{ country: 'Elige el país de la sede.' }} />);
+    await screen.findByRole('option', { name: 'Euro (€)' });
+    const country = screen.getByRole('combobox', { name: 'País' });
+    expect(country).toHaveAttribute('aria-invalid', 'true');
+    expect(country).toHaveAccessibleDescription('Elige el país de la sede.');
   });
 
   it('shows a live preview with the chosen format and zone', async () => {
@@ -220,5 +299,13 @@ describe('regional-settings helpers', () => {
         hourCycle: 'h11' as RegionalSettingsValues['hourCycle'],
       }),
     ).toEqual({ hourCycle: 'El reloj «h11» no es válido: elige 12 h o 24 h.' });
+  });
+
+  it('validateRegionalSettings rejects a code that is not in the list with the API message', () => {
+    const valid = { currency: 'EUR', timeZone: 'UTC', locale: 'de-DE', hourCycle: 'h23' } as const;
+    expect(validateRegionalSettings({ ...valid, country: 'VE' })).toEqual({});
+    expect(validateRegionalSettings({ ...valid, country: 'ZZ' })).toEqual({
+      country: 'El país «ZZ» no está en la lista de países.',
+    });
   });
 });

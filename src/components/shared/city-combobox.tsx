@@ -167,6 +167,14 @@ export function CityCombobox({ id, token, countryCode, value, onChange, disabled
           if (countryCode) setOpen(true);
         }}
         onBlur={() => setOpen(false)}
+        onKeyDown={(e) => {
+          // Escape cierra la lista; con ella abierta, el diálogo que contiene el
+          // campo no se cierra (`ui/dialog.tsx`), así que lo hace aquí.
+          if (e.key === 'Escape' && open) {
+            e.preventDefault();
+            setOpen(false);
+          }
+        }}
         onChange={(e) => {
           const next = e.target.value;
           setText(next);

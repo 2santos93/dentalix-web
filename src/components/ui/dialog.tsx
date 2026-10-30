@@ -3,6 +3,7 @@ import * as React from 'react';
 import * as DialogPrimitive from '@radix-ui/react-dialog';
 import { X } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { keepOpenWhileComboboxExpanded } from './combobox-escape';
 
 const Dialog = DialogPrimitive.Root;
 const DialogTrigger = DialogPrimitive.Trigger;
@@ -30,7 +31,7 @@ const DialogContent = React.forwardRef<
      */
     closeDisabled?: boolean;
   }
->(({ className, children, onOpenAutoFocus, onCloseAutoFocus, closeDisabled = false, ...props }, ref) => {
+>(({ className, children, onOpenAutoFocus, onCloseAutoFocus, onEscapeKeyDown, closeDisabled = false, ...props }, ref) => {
   // Los diálogos de la app se abren con `open` y sin `DialogTrigger`, así que
   // Radix no sabe a dónde devolver el foco al cerrar y lo deja en <body>. Se
   // recuerda el elemento que tenía el foco al abrir y se le devuelve al cerrar
@@ -50,6 +51,10 @@ const DialogContent = React.forwardRef<
           const active = document.activeElement;
           returnFocusRef.current = active instanceof HTMLElement && active !== document.body ? active : null;
           onOpenAutoFocus?.(event);
+        }}
+        onEscapeKeyDown={(event) => {
+          onEscapeKeyDown?.(event);
+          keepOpenWhileComboboxExpanded(event);
         }}
         onCloseAutoFocus={(event) => {
           onCloseAutoFocus?.(event);

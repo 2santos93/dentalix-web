@@ -13,6 +13,7 @@ import {
 } from '@/lib/locations/locations-api';
 import { useSessionLocations } from '@/lib/locations/session-locations';
 import {
+  browserCountry,
   browserHourCycle,
   browserLocale,
   browserTimeZone,
@@ -34,7 +35,7 @@ export const locationFormCopy = {
   createTitle: 'Nueva sede',
   editTitle: 'Editar sede',
   createDescription:
-    'País, moneda, zona horaria, formato y reloj son obligatorios. La zona, el formato y el reloj se sugieren desde tu navegador: revísalos.',
+    'País, moneda, zona horaria, formato y reloj son obligatorios. La zona, el formato, el reloj y, si tu navegador lo indica, el país vienen sugeridos: revísalos.',
   editDescription:
     'Guardar confirma la moneda, la zona horaria, el formato y el reloj de la sede, aunque no cambies nada.',
   name: 'Nombre',
@@ -76,16 +77,23 @@ interface LocationFormModalProps {
 
 /**
  * Lo que el navegador propone al abrir el modal (spec G1 R10, G1-B §9):
- * - alta: zona, formato y reloj;
+ * - alta: país (solo de una región explícita, DX-312 P1), zona, formato y reloj;
  * - sede por configurar: formato y reloj, solo los que están vacíos (el valor
- *   guardado se muestra siempre, nunca la sugerencia);
+ *   guardado se muestra siempre, nunca la sugerencia); el país de una sede
+ *   que ya lo tiene nunca se sustituye por la sugerencia;
  * - sede configurada: nada.
  */
 function initialSuggestions(location: ClinicLocation | null): RegionalSuggestions {
   if (!location) {
-    return { timeZone: browserTimeZone(), locale: browserLocale(), hourCycle: browserHourCycle() };
+    return {
+      country: browserCountry(),
+      timeZone: browserTimeZone(),
+      locale: browserLocale(),
+      hourCycle: browserHourCycle(),
+    };
   }
   return {
+    country: location.country ? null : browserCountry(),
     timeZone: null,
     locale: location.locale ? null : browserLocale(),
     hourCycle: location.hourCycle ? null : browserHourCycle(),
@@ -94,7 +102,7 @@ function initialSuggestions(location: ClinicLocation | null): RegionalSuggestion
 
 function initialRegional(location: ClinicLocation | null, suggested: RegionalSuggestions): RegionalSettingsValues {
   return {
-    country: location?.country ?? '',
+    country: location?.country || suggested.country || '',
     currency: location?.currency ?? '',
     timeZone: location?.timeZone ?? suggested.timeZone ?? '',
     locale: location?.locale ?? suggested.locale ?? '',
@@ -162,7 +170,7 @@ export function LocationFormModal({ open, onOpenChange, token, location, onSaved
       name: name.trim(),
       ...(trimmedAddress ? { address: trimmedAddress } : {}),
       ...(trimmedPhone ? { phone: trimmedPhone } : {}),
-      country: regional.country as CreateLocationInput['country'],
+      country: regional.country,
       currency: regional.currency,
       timeZone: canonicalTimeZone(regional.timeZone) ?? regional.timeZone.trim(),
       locale: canonicalLocale(regional.locale) ?? regional.locale.trim(),

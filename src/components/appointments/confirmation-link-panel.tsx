@@ -27,7 +27,7 @@ const copy = {
   copyFailed: 'No pudimos copiar automáticamente: cópialo a mano desde el campo.',
   whatsapp: 'Abrir WhatsApp',
   noPhone:
-    'El paciente no tiene un teléfono con indicativo de país (p. ej. +57…). Agrégalo en su ficha o copia el enlace.',
+    'El paciente no tiene un teléfono con indicativo internacional (+…). Agrégalo en su ficha o copia el enlace.',
   notConfirmable: (status: string) =>
     `La cita está ${status.toLowerCase()}: no hay nada que confirmar.`,
   started: 'La cita ya empezó: el enlace nacería caducado.',

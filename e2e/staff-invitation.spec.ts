@@ -3,6 +3,7 @@ import { test, expect } from './support/test';
 import { loginAs, sessionCookie } from './support/auth';
 import { registerClinicViaApi } from './support/api';
 import { invitationLinkFor } from './support/mail';
+import { E2E_BROWSER_LOCALE } from './support/regional';
 
 /**
  * DX-070 (TST-004): invitar a una persona del equipo y que ACEPTE en otra
@@ -72,7 +73,7 @@ test('un ADMIN invita, otra sesión acepta en /invitacion/[token] y entra con su
 
   // --- 2. Otra sesión (otro contexto, sin cookies del ADMIN) acepta ---
   const inviteeContext = await browser.newContext({
-    locale: 'es-CO',
+    locale: E2E_BROWSER_LOCALE,
     timezoneId: 'America/Bogota',
   });
   try {
@@ -167,7 +168,7 @@ test('«Reenviar invitación» pide confirmación, avisa y deja inservible el en
   await expect.poll(() => invitationLinkFor(invitee.email)).not.toBe(oldLink);
 
   // El enlace anterior ya no sirve.
-  const other = await browser.newContext({ locale: 'es-CO', timezoneId: 'America/Bogota' });
+  const other = await browser.newContext({ locale: E2E_BROWSER_LOCALE, timezoneId: 'America/Bogota' });
   try {
     const visitor = await other.newPage();
     await visitor.goto(oldLink);
