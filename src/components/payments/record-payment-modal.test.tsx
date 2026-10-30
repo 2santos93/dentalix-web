@@ -404,6 +404,24 @@ it('DX-395: la referencia que falta marca aria-invalid, describe el error y reci
   expect(reference).toHaveAttribute('aria-required', 'true');
 });
 
+it('DX-395: una referencia de solo guiones, puntos o espacios cuenta como vacía (la API la rechaza)', async () => {
+  const user = userEvent.setup();
+  mockedList.mockResolvedValue([copPlan]);
+  renderModal();
+  const dialog = screen.getByRole('dialog');
+  await within(dialog).findByLabelText('Plan');
+  await user.type(within(dialog).getByLabelText('Importe'), '1000');
+  await user.selectOptions(within(dialog).getByLabelText('Método'), 'Pago móvil');
+  const reference = within(dialog).getByLabelText('Referencia (obligatoria)');
+  await user.type(reference, ' -. – ');
+  await user.click(within(dialog).getByRole('button', { name: 'Registrar abono' }));
+
+  await waitFor(() => expect(reference).toHaveFocus());
+  expect(reference).toHaveAttribute('aria-invalid', 'true');
+  expect(reference).toHaveAccessibleDescription('Este medio de pago pide la referencia del pago.');
+  expect(mockedRecord).not.toHaveBeenCalled();
+});
+
 it('DX-395: el aviso de repetida lleva el foco al motivo; sin motivo, el campo lo dice', async () => {
   const user = userEvent.setup();
   mockedList.mockResolvedValue([copPlan]);

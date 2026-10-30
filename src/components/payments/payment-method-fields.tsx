@@ -32,6 +32,19 @@ const copy = paymentMethodFieldsCopy;
 const fieldClass =
   'flex h-10 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink shadow-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2 focus-visible:ring-offset-bg disabled:cursor-not-allowed disabled:opacity-50';
 
+/**
+ * DX-395: los separadores que la API quita al comparar la referencia
+ * (`normalizeReference`: espacios, puntos y guiones, también los tipográficos
+ * y el signo menos). Una referencia hecha solo de ellos no es referencia: la
+ * API la rechaza con 400, así que el campo la marca como vacía antes.
+ */
+const REFERENCE_SEPARATORS = /[\s.\-\u2010-\u2015\u2212]+/g;
+
+/** `true` si la referencia no tiene nada que comparar (vacía o solo separadores). */
+export function isBlankReference(value: string): boolean {
+  return value.replace(REFERENCE_SEPARATORS, '') === '';
+}
+
 type MethodBody = Pick<RecordPaymentInput, 'paymentMethodId' | 'reference' | 'duplicateReferenceReason'>;
 
 export interface PaymentMethodFieldsState {
@@ -123,7 +136,7 @@ export function usePaymentMethodFields(token: string, enabled: boolean): Payment
       setFocusRequest(null);
     },
     validate: () => {
-      if (selected?.requiresReference && reference.trim() === '') {
+      if (selected?.requiresReference && isBlankReference(reference)) {
         setReferenceError(copy.referenceMissing);
         requestFocus('reference');
         return false;

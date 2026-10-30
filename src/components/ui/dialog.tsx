@@ -87,7 +87,9 @@ const DialogContent = React.forwardRef<
 DialogContent.displayName = DialogPrimitive.Content.displayName;
 
 function DialogHeader({ className, ...props }: React.HTMLAttributes<HTMLDivElement>) {
-  return <div className={cn('flex flex-col gap-1.5', className)} {...props} />;
+  // DX-395: en móvil la «X» mide 44×44 (right-2/top-2): el título no pasa por
+  // debajo de ella.
+  return <div className={cn('flex flex-col gap-1.5 max-sm:pr-8', className)} {...props} />;
 }
 
 /**
