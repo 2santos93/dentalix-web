@@ -8,8 +8,9 @@ web
 
 ## Users
 
-**Audiencia primaria — personal de clínicas y consultorios odontológicos de LATAM** (español
-primario; también inglés y portugués/Brasil). Un mismo usuario puede pertenecer a varias
+**Audiencia primaria — personal de clínicas y consultorios odontológicos de cualquier país.**
+Dentalix es un **producto mundial: nada es nacional salvo la moneda**. Primer mercado: **Venezuela**.
+Español primario; también inglés y portugués previstos. Un mismo usuario puede pertenecer a varias
 clínicas. Cuatro roles, siempre **por clínica** (`ClinicMembership`), con permisos distintos:
 
 - **ADMIN** — rol máximo dentro de la clínica (confirmado 2026-08-07).
@@ -47,11 +48,13 @@ branding (color + logo). Diferenciadores del producto:
 
 - **Odontograma interactivo** como proyección de eventos inmutables por diente (historial diente
   por diente), en notación FDI/ISO-3950.
-- **Enfoque LATAM** (es/pt/en previstos desde el día 1).
+- **Producto mundial, sin supuestos de país**: país, moneda, zona horaria, festivos y formatos
+  vienen de la sede; ningún texto, regla ni validación nombra un país, una ley o un documento
+  nacional (es/pt/en previstos desde el día 1). Primer mercado: Venezuela.
 - **Multi-moneda con tasas históricas por fecha**: cada pago congela la tasa vigente en su fecha,
   para totales históricamente exactos.
 - **Multi-sede con ficha de paciente centralizada** (ver Operating Context), que es lo que la
-  competencia LATAM ofrece y el punto de comparación del análisis de mercado.
+  competencia ofrece y el punto de comparación del análisis de mercado.
 
 ## Operating Context
 
