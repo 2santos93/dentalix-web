@@ -2184,7 +2184,7 @@ export interface paths {
         get: operations["ExchangeSettingsController_settings"];
         /**
          * Cambia la fuente de la tasa de cambio de la clínica; queda en la auditoría
-         * @description DX-374. Pasar a MANUAL fija `manualSince` = hoy en la sede principal: desde ese día la tasa sale de las manuales y los días anteriores siguen con la automática, así que los saldos de antes del cambio no se mueven. Guardar MANUAL otra vez conserva el día. Volver a AUTOMATIC lo limpia: los días del periodo manual vuelven a la tasa automática hasta que cada abono congele su tasa (DX-375). Evento CLINIC_SETTINGS con reason EXCHANGE_RATE_SOURCE y el antes y el después; si la fuente no cambia, 200 sin evento.
+         * @description DX-374. Pasar a MANUAL fija `manualSince` = hoy en la sede principal: desde ese día la tasa sale de las manuales y los días anteriores siguen con la automática, así que los saldos de antes del cambio no se mueven. Guardar MANUAL otra vez conserva el día. Volver a AUTOMATIC lo limpia: los días del periodo manual vuelven a la tasa automática hasta que cada abono congele su tasa (DX-375). DX-402: con MANUAL, la tasa manual de un día anterior a `manualSince` sirve de tasa de respaldo a los abonos de ese día que siguen sin tasa (si el proveedor no tiene la de ese día). Evento CLINIC_SETTINGS con reason EXCHANGE_RATE_SOURCE y el antes y el después; si la fuente no cambia, 200 sin evento.
          */
         put: operations["ExchangeSettingsController_updateClinicSettings"];
         post?: never;
@@ -2209,7 +2209,7 @@ export interface paths {
         put?: never;
         /**
          * Registra la tasa de cambio de un día y una moneda; queda en la auditoría
-         * @description DX-374. Unidades de la moneda por 1 USD. Se usa cuando la fuente de la clínica es MANUAL, para los días desde `manualSince` (se puede dejar registrada antes de cambiarla). Una tasa ya registrada para ese día y moneda no se sobrescribe: si ningún abono la usó, se corrige con PUT /exchange/manual-rates/:id.
+         * @description DX-374. Unidades de la moneda por 1 USD. Se usa cuando la fuente de la clínica es MANUAL, para los días desde `manualSince` (se puede dejar registrada antes de cambiarla). DX-402: la de un día anterior a `manualSince` sirve, con MANUAL, de tasa de respaldo a los abonos de ese día que siguen sin tasa si el proveedor no tiene la de ese día (GET /payments/rate-backlog/day dice cuántos); nunca cambia una tasa ya congelada. Una tasa ya registrada para ese día y moneda no se sobrescribe: si ningún abono la usó, se corrige con PUT /exchange/manual-rates/:id.
          */
         post: operations["ExchangeSettingsController_register"];
         delete?: never;
@@ -2592,6 +2592,26 @@ export interface paths {
          * @description Abonos vivos de la clínica que siguen sin base de imputación o sin su tasa congelada pasadas 24 h: el barrido los reintenta con backoff (1 min, 5, 30, 2 h, 24 h). Registrar la tasa del día en Ajustes › Tasa de cambio, corregirla o cambiar la fuente adelanta el reintento al barrido siguiente. Sin datos del abono ni del paciente.
          */
         get: operations["PaymentRateBacklogController_backlog"];
+        put?: never;
+        post?: never;
+        delete?: never;
+        options?: never;
+        head?: never;
+        patch?: never;
+        trace?: never;
+    };
+    "/api/v1/payments/rate-backlog/day": {
+        parameters: {
+            query?: never;
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        /**
+         * Abonos sin tasa de un día que necesitan la tasa de una moneda (DX-402, solo ADMIN)
+         * @description Para el aviso del formulario de tasa manual. Con la fuente MANUAL, la tasa manual de un día anterior a `manualSince` es la tasa de respaldo de los abonos pendientes de ese día (sin tasa congelada) si el proveedor no tiene tasa guardada de él: el barrido siguiente la congela, crea la base y lo deja en la auditoría (EXCHANGE_RATE_BACKUP). Nunca cambia una tasa ya congelada. Solo el recuento.
+         */
+        get: operations["PaymentRateBacklogController_day"];
         put?: never;
         post?: never;
         delete?: never;
@@ -4974,6 +4994,22 @@ export interface components {
             before?: components["schemas"]["AuditStaffAccessSideDto"];
             after?: components["schemas"]["AuditStaffAccessSideDto"];
         };
+        AuditExchangeRateBackupDto: {
+            /**
+             * Format: date
+             * @description Día civil de la tasa (el del abono en su sede).
+             * @example 2026-10-28
+             */
+            rateDate: string;
+            /**
+             * Format: date
+             * @description Desde qué día rige la tasa manual de la clínica (posterior a rateDate).
+             * @example 2026-10-30
+             */
+            manualSince: string;
+            /** @description Las monedas de la cotización (ISO 4217). */
+            currencies: string[];
+        };
         AuditMetadataDto: {
             /** @description UPDATE: nombres de los campos enviados (nunca sus valores). */
             changedFields?: string[];
@@ -5005,6 +5041,8 @@ export interface components {
             healthRegistration?: components["schemas"]["AuditHealthRegistrationChangeDto"];
             /** @description DX-359: accesos de un miembro antes y después (rol, sedes, nº de registro profesional, especialidad): solo lo que cambió, o un lado en un alta (invitación, aceptación, registro). Nunca el nombre, el email ni nada de la contraseña. */
             staffAccess?: components["schemas"]["AuditStaffAccessChangeDto"];
+            /** @description DX-402: el barrido congeló en un abono (`reason` EXCHANGE_RATE_BACKUP, `origin` JOB, sin usuario) la tasa manual de un día anterior a «manual desde», como tasa de respaldo de un día sin tasa del proveedor. Solo días y monedas; ni importes ni la tasa. */
+            exchangeRateBackup?: components["schemas"]["AuditExchangeRateBackupDto"];
         };
         AuditEventDto: {
             /** Format: uuid */
@@ -10168,6 +10206,25 @@ export interface components {
              * @example 2026-10-28T14:05:00.000Z
              */
             oldestSince: string | null;
+        };
+        PaymentRateBacklogDayDto: {
+            /**
+             * Format: date
+             * @example 2026-10-28
+             */
+            date: string;
+            /** @description Código ISO 4217 de 3 letras. */
+            currency: string;
+            /**
+             * @description Abonos vivos de la clínica de ese día (en su sede) que esperan su tasa y están en esa moneda o van a un plan (o saldo migrado) en esa moneda.
+             * @example 1
+             */
+            count: number;
+            /**
+             * @description Hay tasa del proveedor guardada para ese día: manda la automática y la manual de un día anterior a «manual desde» no se usa.
+             * @example false
+             */
+            providerRateSaved: boolean;
         };
         CreatePaymentPlanDto: {
             /**
@@ -21434,6 +21491,44 @@ export interface operations {
                 content: {
                     "application/json": components["schemas"]["PaymentRateBacklogDto"];
                 };
+            };
+            /** @description Solo un administrador puede ver los abonos sin tasa de la clínica. */
+            403: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
+            };
+        };
+    };
+    PaymentRateBacklogController_day: {
+        parameters: {
+            query: {
+                /** @description Día civil de la tasa (AAAA-MM-DD, un día que exista). */
+                date: string;
+                /** @description Moneda de la tasa (ISO 4217, tres letras mayúsculas). */
+                currency: string;
+            };
+            header?: never;
+            path?: never;
+            cookie?: never;
+        };
+        requestBody?: never;
+        responses: {
+            200: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content: {
+                    "application/json": components["schemas"]["PaymentRateBacklogDayDto"];
+                };
+            };
+            /** @description Día que no existe o moneda que no es un código de tres letras */
+            400: {
+                headers: {
+                    [name: string]: unknown;
+                };
+                content?: never;
             };
             /** @description Solo un administrador puede ver los abonos sin tasa de la clínica. */
             403: {
