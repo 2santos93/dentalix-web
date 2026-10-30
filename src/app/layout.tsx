@@ -1,7 +1,8 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
 import { headers } from "next/headers";
 import { ThemeProvider } from "@/components/theme/theme-provider";
+import { BrandingProvider } from "@/components/brand/branding-context";
 import { Toaster } from "@/components/errors/toaster";
 import { fetchBranding } from "@/lib/branding";
 import { accentStyleSheet } from "@/lib/color/accent";
@@ -22,6 +23,20 @@ export const metadata: Metadata = {
   description: "Plataforma de gestión odontológica",
 };
 
+// A4: `viewport-fit=cover` hace que `env(safe-area-inset-*)` resuelva (barra
+// inferior del móvil sobre el indicador de inicio de iOS). El color de la barra
+// del sistema es el lienzo (`--color-canvas` de tokens.css, claro y oscuro), no
+// el acento: una barra de estado teñida pelearía con la calma clínica.
+export const viewport: Viewport = {
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#F7F9FC" },
+    { media: "(prefers-color-scheme: dark)", color: "#0B0F14" },
+  ],
+};
+
 export default async function RootLayout({
   children,
 }: Readonly<{
@@ -32,7 +47,7 @@ export default async function RootLayout({
   // `x-tenant`); fall back to parsing `host` directly so this still works
   // when middleware didn't run (e.g. unit tests, static rendering contexts).
   const tenant = h.get("x-tenant") ?? parseTenantFromHost(h.get("host"));
-  const branding = await fetchBranding(tenant);
+  const branding = await fetchBranding(tenant, h.get("host"));
   // Nonce de la CSP de esta petición (lo genera proxy.ts, DX-062).
   const nonce = h.get("x-nonce") ?? undefined;
   // The tenant picks ONE color; the whole accent family (fill, ink on it,
@@ -60,7 +75,9 @@ export default async function RootLayout({
       </head>
       <body className="min-h-full flex flex-col bg-canvas text-ink">
         <ThemeProvider nonce={nonce}>
-          {children}
+          <BrandingProvider value={{ name: branding.name, logoUrl: branding.logoUrl }}>
+            {children}
+          </BrandingProvider>
           <Toaster />
         </ThemeProvider>
       </body>

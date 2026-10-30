@@ -28,6 +28,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { SectionError } from '@/components/errors/section-error';
 import { InlineError } from '@/components/errors/inline-error';
+import { ClinicBrand } from '@/components/brand/clinic-brand';
 
 // Copy as constants (i18n-ready) — es first, matches the rest of the copy
 // until next-intl wiring lands.
@@ -274,20 +275,7 @@ export function PublicConfirmationView({ confirmationToken }: { confirmationToke
 
         {state.kind === 'ready' && (
           <>
-            <header className="flex items-center gap-3">
-              {clinic?.logoUrl && (
-                // eslint-disable-next-line @next/next/no-img-element -- logo de la clínica en un host arbitrario; next/image exigiría whitelistear cada dominio
-                <img
-                  src={clinic.logoUrl}
-                  alt=""
-                  referrerPolicy="no-referrer"
-                  className="size-10 shrink-0 rounded-lg object-contain"
-                />
-              )}
-              <h1 className="min-w-0 break-words text-xl font-semibold tracking-tight text-ink">
-                {clinic?.name ?? copy.fallbackClinic}
-              </h1>
-            </header>
+            <ClinicBrand variant="public" name={clinic?.name ?? copy.fallbackClinic} logoUrl={clinic?.logoUrl} />
 
             {state.data.status === 'EXPIRED' && (
               <Notice icon={CalendarX} title={copy.expiredTitle} message={copy.expiredMessage} />

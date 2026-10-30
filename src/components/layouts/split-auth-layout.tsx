@@ -1,6 +1,7 @@
 import * as React from 'react';
 import { ThemeToggle } from '@/components/theme/theme-toggle';
 import type { HeroImage } from '@/lib/auth/hero-images';
+import { Logo } from '@/components/ui/logo';
 
 interface SplitAuthLayoutProps {
   title: string;
@@ -30,15 +31,7 @@ export function SplitAuthLayout({
       {/* Panel izquierdo: marca + formulario */}
       <div className="relative flex w-full flex-col px-6 py-8 lg:w-[45%] lg:px-12">
         <div className="flex items-center justify-between">
-          <span className="flex items-center gap-2 text-sm font-semibold text-ink">
-            <span
-              aria-hidden
-              className="flex size-8 items-center justify-center rounded-lg bg-primary/10 text-base"
-            >
-              🦷
-            </span>
-            Dentalix
-          </span>
+          <Logo size={28} withWordmark className="text-sm" />
           <ThemeToggle />
         </div>
 
